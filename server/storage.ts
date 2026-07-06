@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
-  playerStats, bankAccounts, items, loans, transactions,
-  type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
+  playerStats, bankAccounts, items, loans, transactions, zoneSessions,
+  type PlayerStats, type BankAccount, type Item, type Loan, type Transaction, type ZoneSession,
   type DepositRequest, type TransferRequest, type LoanRequest, type CreateItemRequest,
   PatenteKR, KRC_TO_USD, Rarity, ItemType
 } from "@shared/schema";
@@ -31,19 +31,24 @@ export interface IStorage {
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   
+  // Zone Session (BP_SafeZone)
+  getActiveZoneSession(): Promise<ZoneSession | undefined>;
+  createZoneSession(centerX: number, centerY: number): Promise<ZoneSession>;
+  updateZoneSession(id: number, updates: Partial<ZoneSession>): Promise<ZoneSession>;
+  stopAllZoneSessions(): Promise<void>;
+  applyZoneDamage(userId: string, damage: number): Promise<PlayerStats>;
+  healPlayer(userId: string, amount: number): Promise<PlayerStats>;
+  
   // Initialization
   initializeUser(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
   async initializeUser(userId: string) {
-    // Ensure stats exist
     const [stats] = await db.select().from(playerStats).where(eq(playerStats.userId, userId));
     if (!stats) {
       await db.insert(playerStats).values({ userId });
     }
-    
-    // Ensure bank account exists
     const [bank] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
     if (!bank) {
       await db.insert(bankAccounts).values({ userId });
@@ -95,10 +100,7 @@ export class DatabaseStorage implements IStorage {
 
   // Loans
   async getLoans(userId: string): Promise<Loan[]> {
-    return await db.select()
-      .from(loans)
-      .where(eq(loans.userId, userId))
-      .orderBy(desc(loans.createdAt));
+    return await db.select().from(loans).where(eq(loans.userId, userId)).orderBy(desc(loans.createdAt));
   }
 
   async getLoan(id: number): Promise<Loan | undefined> {
@@ -112,10 +114,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLoan(id: number, updates: Partial<Loan>): Promise<Loan> {
-    const [updated] = await db.update(loans)
-      .set(updates)
-      .where(eq(loans.id, id))
-      .returning();
+    const [updated] = await db.update(loans).set(updates).where(eq(loans.id, id)).returning();
     return updated;
   }
 
@@ -135,11 +134,59 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateItem(id: number, updates: Partial<Item>): Promise<Item> {
-    const [updated] = await db.update(items)
+    const [updated] = await db.update(items).set(updates).where(eq(items.id, id)).returning();
+    return updated;
+  }
+
+  // === ZONE SESSION (BP_SafeZone) ===
+
+  async getActiveZoneSession(): Promise<ZoneSession | undefined> {
+    const [session] = await db.select()
+      .from(zoneSessions)
+      .where(eq(zoneSessions.isActive, true))
+      .orderBy(desc(zoneSessions.createdAt))
+      .limit(1);
+    return session;
+  }
+
+  async createZoneSession(centerX: number, centerY: number): Promise<ZoneSession> {
+    // Stop any existing active sessions first
+    await this.stopAllZoneSessions();
+    const [session] = await db.insert(zoneSessions).values({
+      isActive: true,
+      currentPhase: 1,
+      phaseStartedAt: new Date(),
+      isShrinking: false,
+      centerX,
+      centerY,
+    }).returning();
+    return session;
+  }
+
+  async updateZoneSession(id: number, updates: Partial<ZoneSession>): Promise<ZoneSession> {
+    const [updated] = await db.update(zoneSessions)
       .set(updates)
-      .where(eq(items.id, id))
+      .where(eq(zoneSessions.id, id))
       .returning();
     return updated;
+  }
+
+  async stopAllZoneSessions(): Promise<void> {
+    await db.update(zoneSessions).set({ isActive: false }).where(eq(zoneSessions.isActive, true));
+  }
+
+  // Apply zone damage to player (equivalent to Apply Damage node in Unreal)
+  async applyZoneDamage(userId: string, damage: number): Promise<PlayerStats> {
+    const stats = await this.getPlayerStats(userId);
+    const newHealth = Math.max(0, stats.health - damage);
+    return await this.updatePlayerStats(userId, { health: newHealth });
+  }
+
+  // Heal player (for testing / respawn)
+  async healPlayer(userId: string, amount: number): Promise<PlayerStats> {
+    const stats = await this.getPlayerStats(userId);
+    const newHealth = Math.min(stats.maxHealth, stats.health + amount);
+    return await this.updatePlayerStats(userId, { health: newHealth });
   }
 }
 
