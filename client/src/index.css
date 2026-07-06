@@ -1,53 +1,81 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Cyberpunk Military Palette */
-  --background: 240 10% 4%;
-  --foreground: 140 10% 90%; /* Off-white for readability */
-  
-  --card: 240 10% 6%;
-  --card-foreground: 140 10% 90%;
-  
-  --popover: 240 10% 6%;
-  --popover-foreground: 140 10% 90%;
-  
-  /* Primary Green - "Terminal Green" */
-  --primary: 142 70% 50%; 
-  --primary-foreground: 240 10% 4%;
-  
-  /* Secondary - "Dark Slate" */
-  --secondary: 240 5% 15%;
-  --secondary-foreground: 140 10% 90%;
-  
-  /* Muted - "Dimmed Text" */
-  --muted: 240 5% 20%;
-  --muted-foreground: 240 5% 60%;
-  
-  /* Accent - "Cyber Blue" (optional usage) or "Alert Red" */
-  --accent: 190 90% 50%;
-  --accent-foreground: 240 10% 4%;
-  
-  /* Destructive - "Critical Red" */
-  --destructive: 0 85% 60%;
-  --destructive-foreground: 0 0% 100%;
+  /* KHAAOS RUN BATTLE MILLION — Mystic Chaos Palette */
+  --background: 260 25% 5%;
+  --foreground: 40 20% 88%;
 
-  --border: 142 30% 20%; /* Subtle green tint on borders */
-  --input: 240 5% 15%;
-  --ring: 142 70% 50%;
-  
-  --radius: 2px; /* Sharp corners for military feel */
+  --card: 260 20% 7%;
+  --card-foreground: 40 20% 88%;
+  --card-border: 270 30% 18%;
+
+  --popover: 260 20% 7%;
+  --popover-foreground: 40 20% 88%;
+  --popover-border: 270 30% 18%;
+
+  /* Primary — Volcanic Orange */
+  --primary: 25 95% 55%;
+  --primary-foreground: 260 25% 5%;
+  --primary-border: hsl(25 95% 55% / 0.4);
+
+  /* Secondary — Deep Purple */
+  --secondary: 270 30% 14%;
+  --secondary-foreground: 40 20% 88%;
+  --secondary-border: hsl(270 30% 25% / 0.5);
+
+  /* Muted — Dim Ash */
+  --muted: 265 15% 18%;
+  --muted-foreground: 260 10% 55%;
+  --muted-border: hsl(265 15% 25% / 0.4);
+
+  /* Accent — Metallic Gold */
+  --accent: 45 90% 55%;
+  --accent-foreground: 260 25% 5%;
+  --accent-border: hsl(45 90% 55% / 0.4);
+
+  /* Destructive — Blood Red */
+  --destructive: 0 80% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-border: hsl(0 80% 55% / 0.4);
+
+  --border: 270 25% 18%;
+  --input: 265 20% 12%;
+  --ring: 25 95% 55%;
+
+  --radius: 2px;
+
+  /* Sidebar */
+  --sidebar: 260 25% 5%;
+  --sidebar-foreground: 40 20% 88%;
+  --sidebar-border: 270 25% 18%;
+  --sidebar-ring: 25 95% 55%;
+  --sidebar-primary: 25 95% 55%;
+  --sidebar-primary-foreground: 260 25% 5%;
+  --sidebar-primary-border: hsl(25 95% 55% / 0.4);
+  --sidebar-accent: 45 90% 55%;
+  --sidebar-accent-foreground: 260 25% 5%;
+  --sidebar-accent-border: hsl(45 90% 55% / 0.4);
 
   /* Custom Font Variables */
-  --font-display: 'Share Tech Mono', monospace;
+  --font-display: 'Cinzel', serif;
   --font-body: 'Rajdhani', sans-serif;
-  
-  /* Custom Effects */
-  --glow-primary: 0 0 10px hsla(142, 70%, 50%, 0.3);
-  --glow-destructive: 0 0 10px hsla(0, 85%, 60%, 0.3);
+  --font-mono: 'Share Tech Mono', monospace;
+
+  /* Glow Effects */
+  --glow-primary: 0 0 15px hsla(25, 95%, 55%, 0.35);
+  --glow-accent: 0 0 15px hsla(45, 90%, 55%, 0.35);
+  --glow-destructive: 0 0 12px hsla(0, 80%, 55%, 0.3);
+
+  /* Chart colors */
+  --chart-1: 25 95% 55%;
+  --chart-2: 45 90% 55%;
+  --chart-3: 270 60% 55%;
+  --chart-4: 0 80% 55%;
+  --chart-5: 200 70% 50%;
 }
 
 @layer base {
@@ -56,41 +84,37 @@
   }
   body {
     @apply bg-background text-foreground font-body;
-    background-image: 
-      radial-gradient(circle at 50% 50%, rgba(20, 30, 25, 0.4) 0%, rgba(5, 5, 10, 1) 100%),
-      linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px);
-    background-size: 100% 100%, 40px 40px, 40px 40px;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(80, 20, 120, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(180, 60, 10, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 50% 100%, rgba(40, 10, 80, 0.3) 0%, rgba(8, 5, 15, 1) 100%);
+    background-attachment: fixed;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-widest uppercase;
+    @apply font-display tracking-wider uppercase;
   }
 }
 
 @layer utilities {
-  .text-glow {
-    text-shadow: 0 0 5px currentColor;
+  .text-glow-primary {
+    text-shadow: 0 0 8px hsla(25, 95%, 55%, 0.6), 0 0 20px hsla(25, 95%, 55%, 0.2);
   }
-  .border-glow {
-    box-shadow: 0 0 10px currentColor;
+  .text-glow-gold {
+    text-shadow: 0 0 8px hsla(45, 90%, 55%, 0.6), 0 0 20px hsla(45, 90%, 55%, 0.2);
   }
-  
-  /* Custom Scrollbar for Webkit */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  .border-glow-primary {
+    box-shadow: 0 0 12px -2px hsla(25, 95%, 55%, 0.4), inset 0 0 8px -4px hsla(25, 95%, 55%, 0.1);
   }
-  ::-webkit-scrollbar-track {
-    background: #0f0f12; 
+  .border-glow-gold {
+    box-shadow: 0 0 12px -2px hsla(45, 90%, 55%, 0.4), inset 0 0 8px -4px hsla(45, 90%, 55%, 0.1);
   }
-  ::-webkit-scrollbar-thumb {
-    background: #2a3530; 
-    border-radius: 0px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #00ff41; 
-  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: hsl(260 25% 5%); }
+  ::-webkit-scrollbar-thumb { background: hsl(270 25% 22%); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(25 95% 55%); }
 }
 
 /* Animations */
@@ -98,15 +122,23 @@
   0% { transform: translateY(-100%); }
   100% { transform: translateY(100%); }
 }
+@keyframes ember-float {
+  0%, 100% { opacity: 0.3; transform: translateY(0px) scale(1); }
+  50% { opacity: 0.7; transform: translateY(-4px) scale(1.05); }
+}
+@keyframes rune-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.45; }
+}
 
 .animate-scanline::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(to bottom, transparent, rgba(0, 255, 65, 0.1), transparent);
-  animation: scanline 4s linear infinite;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: linear-gradient(to bottom, transparent, rgba(220, 100, 20, 0.06), transparent);
+  animation: scanline 6s linear infinite;
   pointer-events: none;
 }
+.animate-ember { animation: ember-float 3s ease-in-out infinite; }
+.animate-rune { animation: rune-pulse 4s ease-in-out infinite; }
