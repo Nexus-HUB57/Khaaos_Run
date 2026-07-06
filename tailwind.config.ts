@@ -86,6 +86,8 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        body: ["Rajdhani", "sans-serif"],
+        display: ["Share Tech Mono", "monospace"],
       },
       keyframes: {
         "accordion-down": {
