@@ -12,6 +12,7 @@ import Bank from "@/pages/bank";
 import Inventory from "@/pages/inventory";
 import Market from "@/pages/market";
 import Profile from "@/pages/profile";
+import Mundos from "@/pages/mundos";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/mundos">
+        <ProtectedRoute component={Mundos} />
       </Route>
       <Route component={NotFound} />
     </Switch>

@@ -11,6 +11,7 @@ import {
   Zap,
   LayoutDashboard,
   Flame,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -26,6 +27,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/", label: "QG-WAR'I", icon: LayoutDashboard },
+    { href: "/mundos", label: "MUNDOS", icon: Globe },
     { href: "/bank", label: "BANKHAAOS", icon: Wallet },
     { href: "/inventory", label: "WAR'I", icon: Shield },
     { href: "/market", label: "FORJA DO ARMEIRO", icon: Crosshair },
