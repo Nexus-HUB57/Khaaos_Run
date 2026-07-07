@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -15,16 +16,19 @@ import {
   Radio,
   Package,
   Swords,
+  Train,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { usePlayer } from "@/hooks/use-player";
+import { BoardingAnimation } from "@/components/boarding-animation";
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const { data: playerData } = usePlayer();
+  const [boarding, setBoarding] = useState(false);
 
   if (!user) return <>{children}</>;
 
@@ -51,6 +55,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
+    <>
+    {boarding && <BoardingAnimation onClose={() => setBoarding(false)} />}
     <div className="min-h-screen flex flex-col md:flex-row font-body text-foreground bg-background selection:bg-primary selection:text-black">
       {/* Mobile Header */}
       <div className="md:hidden h-16 border-b border-border bg-card/60 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-50">
@@ -159,19 +165,37 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
         {/* Top HUD Bar */}
-        <header className="h-14 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between px-6 z-10">
-          <div className="flex items-center gap-3">
+        <header className="h-14 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between px-6 z-10 gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_6px_hsla(25,95%,55%,0.8)]" />
             <span className="hidden md:inline text-xs font-mono text-muted-foreground tracking-widest">SISTEMA: ONLINE</span>
           </div>
 
-          {playerData && (
-            <div className="flex items-center gap-3">
-              <StatBadge icon={Activity} value={`${playerData.stats.health}/${playerData.stats.maxHealth}`} label="VIT" color="text-red-400" />
-              <StatBadge icon={Zap} value={`${playerData.stats.energy}/${playerData.stats.maxEnergy}`} label="NRG" color="text-accent" />
-              <StatBadge icon={Shield} value={playerData.stats.xp} label="XP (Accur)" color="text-purple-400" />
-            </div>
-          )}
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            {playerData && (
+              <>
+                <StatBadge icon={Activity} value={`${playerData.stats.health}/${playerData.stats.maxHealth}`} label="VIT" color="text-red-400" />
+                <StatBadge icon={Zap} value={`${playerData.stats.energy}/${playerData.stats.maxEnergy}`} label="NRG" color="text-accent" />
+                <StatBadge icon={Shield} value={playerData.stats.xp} label="XP (Accur)" color="text-purple-400" />
+              </>
+            )}
+
+            {/* EMBARQUE button */}
+            <button
+              data-testid="button-embarque"
+              onClick={() => setBoarding(true)}
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-1.5 rounded-sm font-display tracking-widest text-xs font-bold",
+                "bg-primary/20 border border-primary/50 text-primary",
+                "hover:bg-primary/30 hover:border-primary hover:shadow-[0_0_16px_rgba(220,100,20,0.5)]",
+                "active:scale-95 transition-all duration-150",
+                "after:content-[''] after:absolute after:inset-0 after:rounded-sm after:animate-pulse after:bg-primary/5"
+              )}
+            >
+              <Train className="w-3.5 h-3.5 shrink-0" />
+              EMBARQUE
+            </button>
+          </div>
         </header>
 
         {/* Content Scroll Area */}
@@ -189,5 +213,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
     </div>
+    </>
   );
 }
