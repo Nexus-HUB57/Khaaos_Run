@@ -14,6 +14,8 @@ import Market from "@/pages/market";
 import Profile from "@/pages/profile";
 import Mundos from "@/pages/mundos";
 import Zona from "@/pages/zona";
+import Loot from "@/pages/loot";
+import Batalha from "@/pages/batalha";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -64,6 +66,12 @@ function Router() {
       </Route>
       <Route path="/zona">
         <ProtectedRoute component={Zona} />
+      </Route>
+      <Route path="/loot">
+        <ProtectedRoute component={Loot} />
+      </Route>
+      <Route path="/batalha">
+        <ProtectedRoute component={Batalha} />
       </Route>
       <Route component={NotFound} />
     </Switch>
