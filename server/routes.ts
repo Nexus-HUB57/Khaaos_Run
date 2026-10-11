@@ -384,6 +384,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(generateMatchContent(roomId));
   });
 
+  // ── MATCHMAKING ──────────────────────────────────────────────────────────
+  app.get("/api/matchmaking/status", requireAuth, (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const status = roomManager.getMatchmakingStatus(userId);
+      res.json({
+        queued: !!status,
+        queueSize: roomManager.getMatchmakingQueueSize(),
+        ...(status ?? {}),
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to read matchmaking status" });
+    }
+  });
+
+  app.get("/api/matchmaking/queue-size", requireAuth, (_req, res) => {
+    res.json({ queueSize: roomManager.getMatchmakingQueueSize() });
+  });
+
   // ── PERSISTENT RANKING / LEADERBOARD ─────────────────────────────────────
   app.get("/api/ranking/leaderboard", requireAuth, async (req, res) => {
     try {

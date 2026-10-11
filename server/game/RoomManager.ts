@@ -27,6 +27,7 @@ import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
+import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,8 @@ export type ClientMessage =
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
   | { type: "attack"; targetId: string; clientTimestamp?: number }
+  | { type: "queue"; mode?: QueueMode }
+  | { type: "dequeue" }
   | { type: "ready" }
   | { type: "start" }; // only host / admin
 
@@ -112,7 +115,11 @@ export type ServerMessage =
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
   | { type: "error"; message: string }
-  | { type: "countdown"; seconds: number };
+  | { type: "countdown"; seconds: number }
+  | { type: "queue_joined"; position: number; rating: number; mode: QueueMode }
+  | { type: "queue_left" }
+  | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
+  | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
 interface SerializedPlayer {
   userId: string;
@@ -145,10 +152,19 @@ class RoomManager {
   private userToRoom = new Map<string, string>(); // userId → roomId
   private wss: WebSocketServer | null = null;
   private nextLootId = 1;
+  private matchmaking: MatchmakingService;
 
   /** Attach to existing HTTP server */
+  constructor() {
+    this.matchmaking = new MatchmakingService(
+      (ws, msg) => this.send(ws, msg as ServerMessage),
+      (players) => this.createLobbyFromMatchmaking(players),
+    );
+  }
+
   attach(httpServer: Server) {
     this.wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+    this.matchmaking.start();
 
     this.wss.on("connection", (ws, req) => {
       // Extract userId from query or wait for first message
@@ -220,6 +236,14 @@ class RoomManager {
         this.handleAttack(userId, msg.targetId, msg.clientTimestamp);
         break;
       }
+      case "queue": {
+        await this.enqueuePlayer(userId, displayName, ws, msg.mode ?? "solo");
+        break;
+      }
+      case "dequeue": {
+        this.matchmaking.dequeue(userId);
+        break;
+      }
       case "ready":
       case "start": {
         const roomId = this.userToRoom.get(userId);
@@ -267,7 +291,11 @@ class RoomManager {
   }
 
   async joinRoom(userId: string, displayName: string, ws: WebSocket, roomId: string) {
-    // Leave previous if any
+    // Leave matchmaking queue if present
+    this.matchmaking.dequeue(userId);
+    this.matchmaking.rebindWs(userId, ws);
+
+    // Leave previous room if any
     if (this.userToRoom.has(userId)) {
       this.leaveRoom(userId);
     }
@@ -343,6 +371,10 @@ class RoomManager {
   }
 
   onDisconnect(userId: string) {
+    // Stay in matchmaking queue on brief disconnect (ws rebound on rejoin);
+    // only clear ws ref. Full dequeue happens on explicit dequeue or match.
+    this.matchmaking.rebindWs(userId, null as any);
+
     const roomId = this.userToRoom.get(userId);
     if (!roomId) return;
     const room = this.rooms.get(roomId);
@@ -866,6 +898,121 @@ class RoomManager {
     if (!room) return;
     if (room.tickHandle) clearInterval(room.tickHandle);
     this.rooms.delete(roomId);
+  }
+
+  // ─── Matchmaking integration ─────────────────────────────────────────────
+
+  private async enqueuePlayer(
+    userId: string,
+    displayName: string,
+    ws: WebSocket,
+    mode: QueueMode,
+  ) {
+    // Cannot queue while already in an active match
+    const existingRoom = this.userToRoom.get(userId);
+    if (existingRoom) {
+      const room = this.rooms.get(existingRoom);
+      if (room && (room.status === "IN_PROGRESS" || room.status === "COUNTDOWN")) {
+        this.send(ws, { type: "error", message: "Already in a match" });
+        return;
+      }
+      // Leave idle lobby before queuing
+      this.leaveRoom(userId);
+    }
+
+    const stats = await storage.getPlayerStats(userId);
+    const rating = (stats as any).rating ?? 1000;
+    this.matchmaking.enqueue(userId, displayName, rating, ws, mode);
+  }
+
+  /**
+   * Called by MatchmakingService when a skill-matched group is ready.
+   * Creates a dedicated lobby and seats all players.
+   */
+  async createLobbyFromMatchmaking(
+    players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[],
+  ): Promise<string> {
+    const id = `mm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const room: BattleRoom = {
+      id,
+      status: "LOBBY",
+      maxPlayers: Math.max(50, players.length),
+      players: new Map(),
+      currentPhase: 1,
+      phaseStartedAt: Date.now(),
+      isShrinking: false,
+      centerX: 50 + Math.floor(Math.random() * 20 - 10),
+      centerY: 50 + Math.floor(Math.random() * 20 - 10),
+      loot: [],
+      playerGrid: new SpatialGrid(15),
+      lootGrid: new SpatialGrid(12),
+      createdAt: Date.now(),
+      startedAt: null,
+      finishedAt: null,
+      winnerId: null,
+      tickHandle: null,
+      countdownSeconds: 10,
+    };
+    this.rooms.set(id, room);
+
+    for (const p of players) {
+      // Seat without going through public join (already authenticated)
+      if (this.userToRoom.has(p.userId)) {
+        this.leaveRoom(p.userId);
+      }
+
+      let stats;
+      try {
+        stats = await storage.getPlayerStats(p.userId);
+      } catch {
+        stats = { health: 100, maxHealth: 100, status: "VIVO", kills: 0 } as any;
+      }
+
+      const player: RoomPlayer = {
+        userId: p.userId,
+        displayName: p.displayName,
+        ws: p.ws,
+        posX: 20 + Math.random() * 60,
+        posY: 20 + Math.random() * 60,
+        health: stats.health ?? 100,
+        maxHealth: stats.maxHealth ?? 100,
+        status: "VIVO",
+        kills: 0,
+        isConnected: !!p.ws,
+        lastSeenAt: Date.now(),
+        equippedDamage: 15,
+        equippedRange: 8,
+        lastAttackAt: 0,
+        posHistory: new PositionHistory(1000),
+        damageDealt: 0,
+        joinedMatchAt: Date.now(),
+      };
+
+      room.players.set(p.userId, player);
+      room.playerGrid.insert({ ...player, id: p.userId });
+      this.userToRoom.set(p.userId, id);
+
+      if (p.ws) {
+        this.send(p.ws, { type: "welcome", userId: p.userId, roomId: id });
+      }
+    }
+
+    this.broadcastRoomState(room);
+
+    // Auto-start countdown when matchmaking fills a lobby
+    if (room.players.size >= 2) {
+      this.tryStartMatch(id, players[0].userId);
+    }
+
+    return id;
+  }
+
+  getMatchmakingStatus(userId: string) {
+    return this.matchmaking.getStatus(userId);
+  }
+
+  getMatchmakingQueueSize() {
+    return this.matchmaking.getQueueSize();
   }
 
   // ─── Public helpers for REST ─────────────────────────────────────────────

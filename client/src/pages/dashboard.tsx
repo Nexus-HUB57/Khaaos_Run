@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { data: bankData, isLoading: isBankLoading } = useBank();
   const { mutate: claimSalary, isPending: isClaiming } = useClaimDailySalary();
   const { toast } = useToast();
-  const { connected, room, countdown, startMatch, players } = useBattleRoom();
+  const { connected, room, countdown, startMatch, players, inQueue, queueInfo, joinQueue, leaveQueue } = useBattleRoom();
 
   const handleClaim = () => {
     claimSalary(undefined, {
@@ -71,9 +71,11 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-xs font-mono text-muted-foreground mt-1">
                   {connected
-                    ? room
-                      ? `SALA ${room.id.slice(-6).toUpperCase()} • ${room.status} • ${room.playerCount}/${room.maxPlayers} operativos`
-                      : "Conectado — aguardando sala..."
+                    ? inQueue
+                      ? `FILA MM • pos ${queueInfo?.position ?? "?"} • ${queueInfo?.playersInQueue ?? 0} na fila • rating window ±${queueInfo?.currentDelta ?? 100}`
+                      : room
+                        ? `SALA ${room.id.slice(-6).toUpperCase()} • ${room.status} • ${room.playerCount}/${room.maxPlayers} operativos`
+                        : "Conectado — use BUSCAR PARTIDA ou entre numa sala"
                     : "Desconectado do mesh tático"}
                 </p>
                 {countdown != null && countdown > 0 && (
@@ -81,7 +83,26 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {inQueue ? (
+                <Button
+                  size="sm"
+                  onClick={leaveQueue}
+                  variant="outline"
+                  className="font-display tracking-wider border-amber-500/50 text-amber-300"
+                >
+                  NA FILA #{queueInfo?.position ?? "?"} · ~{queueInfo?.estimatedWaitSec ?? "?"}s · Δ{queueInfo?.currentDelta ?? "?"}
+                  <span className="ml-2 opacity-70">CANCELAR</span>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => joinQueue("solo")}
+                  className="font-display tracking-wider bg-amber-600 hover:bg-amber-500"
+                >
+                  <Play className="w-4 h-4 mr-1" /> BUSCAR PARTIDA
+                </Button>
+              )}
               {room?.status === "LOBBY" && (
                 <Button
                   size="sm"

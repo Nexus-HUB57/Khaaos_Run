@@ -70,7 +70,11 @@ type ServerMessage =
   | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number }[] }
   | { type: "error"; message: string }
-  | { type: "countdown"; seconds: number };
+  | { type: "countdown"; seconds: number }
+  | { type: "queue_joined"; position: number; rating: number; mode: string }
+  | { type: "queue_left" }
+  | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
+  | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
 export function useBattleRoom() {
   const { user } = useAuth();
@@ -83,6 +87,15 @@ export function useBattleRoom() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [eliminations, setEliminations] = useState<{ userId: string; cause: string }[]>([]);
+  const [inQueue, setInQueue] = useState(false);
+  const [queueInfo, setQueueInfo] = useState<{
+    position: number;
+    estimatedWaitSec: number;
+    currentDelta: number;
+    playersInQueue: number;
+    rating?: number;
+    mode?: string;
+  } | null>(null);
 
   const send = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -163,6 +176,34 @@ export function useBattleRoom() {
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
             break;
+          case "queue_joined":
+            setInQueue(true);
+            setQueueInfo({
+              position: msg.position,
+              estimatedWaitSec: 30,
+              currentDelta: 100,
+              playersInQueue: msg.position,
+              rating: msg.rating,
+              mode: msg.mode,
+            });
+            break;
+          case "queue_update":
+            setInQueue(true);
+            setQueueInfo({
+              position: msg.position,
+              estimatedWaitSec: msg.estimatedWaitSec,
+              currentDelta: msg.currentDelta,
+              playersInQueue: msg.playersInQueue,
+            });
+            break;
+          case "queue_left":
+            setInQueue(false);
+            setQueueInfo(null);
+            break;
+          case "match_found":
+            setInQueue(false);
+            setQueueInfo(null);
+            break;
           case "error":
             setLastError(msg.message);
             break;
@@ -213,6 +254,13 @@ export function useBattleRoom() {
     [send],
   );
 
+  const joinQueue = useCallback(
+    (mode: "solo" | "duo" | "squad" = "solo") => send({ type: "queue", mode }),
+    [send],
+  );
+
+  const leaveQueue = useCallback(() => send({ type: "dequeue" }), [send]);
+
   return {
     connected,
     room,
@@ -222,10 +270,14 @@ export function useBattleRoom() {
     lastError,
     winnerId,
     eliminations,
+    inQueue,
+    queueInfo,
     updatePosition,
     pickupLoot,
     startMatch,
     leave,
     attack,
+    joinQueue,
+    leaveQueue,
   };
 }
