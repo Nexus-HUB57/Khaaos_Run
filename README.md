@@ -1,248 +1,365 @@
 # Khaaos Run
 
-**Khaaos Run** é um projeto de battle royale multiplayer para o Campo de Instrução de Guerra Khaaos Ville (CIGKV). O repositório reúne a aplicação web/API em execução, um runtime de jogo JavaScript isolado, algoritmos de matchmaking de referência em JavaScript/Python e uma fundação inicial em Unreal Engine 5.8.
+**Um Jogo · Uma Chance · Um Legado**
 
-Este README descreve o sistema tal como está implementado. Ele distingue comportamento validado, configuração de implantação e itens de roadmap; não trata protótipos locais como serviços de produção prontos.
+> Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.  
+> O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
+
+Este repositório contém a implementação authoritative TypeScript (web/API + runtime de simulação), algoritmos de matchmaking de referência e a fundação inicial em Unreal Engine 5.8. O README distingue o que já está implementado, o que é design canônico e o que permanece roadmap.
+
+---
 
 ## Sumário
 
-- [Escopo e módulos](#escopo-e-módulos)
-- [Arquitetura](#arquitetura)
-- [Fluxo de uma partida](#fluxo-de-uma-partida)
-- [Modelo de dados](#modelo-de-dados)
-- [Autenticação e limites de confiança](#autenticação-e-limites-de-confiança)
+- [Ontologia dos Mundos](#ontologia-dos-mundos)
+- [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
+- [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
+- [Mundos Oficiais (W1–W4)](#mundos-oficiais-w1w4)
+- [Protocolos de Ingresso (Zu)](#protocolos-de-ingresso-zu)
+- [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
+- [Arquitetura Técnica](#arquitetura-técnica)
+- [Fluxo de uma Partida](#fluxo-de-uma-partida)
+- [Modelo de Dados](#modelo-de-dados)
+- [Autenticação e Limites de Confiança](#autenticação-e-limites-de-confiança)
 - [API e WebSocket](#api-e-websocket)
-- [Desenvolvimento local](#desenvolvimento-local)
-- [Qualidade e validação](#qualidade-e-validação)
-- [Build e implantação](#build-e-implantação)
-- [Limitações conhecidas](#limitações-conhecidas)
+- [Desenvolvimento Local](#desenvolvimento-local)
+- [Qualidade e Validação](#qualidade-e-validação)
+- [Build e Implantação](#build-e-implantação)
+- [Limitações Conhecidas](#limitações-conhecidas)
 - [Roadmap](docs/ROADMAP.md)
-- [Análise Lighthouse](docs/LIGHTHOUSE_PERFORMANCE.md)
 
-## Escopo e módulos
+---
 
-| Caminho | Responsabilidade | Ferramentas principais |
-|---|---|---|
-| `client/` | Interface React, telas, hooks de dados e cliente WebSocket | React 18, TypeScript, Vite, Wouter, TanStack Query, Tailwind |
-| `server/` | API HTTP, sessões OIDC, salas e simulação authoritative | Node.js, Express 5, `ws`, Passport, PostgreSQL |
-| `shared/` | Schema Drizzle, tipos e contratos compartilhados cliente/servidor | Drizzle ORM, Zod |
-| `game-runtime/` | Runtime JavaScript separado para simulação, replay e testes de infraestrutura | Node.js, Vite, `node:test` |
-| `Unreal/KhaaosRun/` | Projeto UE5.8 e headers C++ iniciais para gameplay/server authoritative | Unreal Engine 5.8, C++20, GAS/Iris/EOS declarados |
-| `server/game/matchmaking-algorithm.js` | Implementação de referência do algoritmo skill-based queue | JavaScript puro |
-| `server/game/matchmaking_algorithm.py` | Implementação de referência em Python para comparação/experimentos | Python 3 |
-| `tests/official/` | Testes da aplicação web/API principal | `node:test`, `tsx` |
-| `docs/` | Fluxos, segurança, cobertura, CI e roadmap | Markdown |
+## Ontologia dos Mundos
 
-O `game-runtime/` não substitui `server/game/RoomManager.ts` nem é o servidor de produção da aplicação web. `Unreal/` é uma base inicial de portabilidade arquitetural: headers/configuração foram adicionados, mas não há evidência de que o projeto UE5 compile, contenha assets/mapas jogáveis ou esteja conectado a EOS. Seus testes e artefatos são distintos dos testes React/Express/Drizzle.
+O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência de *Rings* (ambientes de batalha) organizados em estágios de intensidade crescente. Cada Ring é, simultaneamente:
 
-## Arquitetura
+1. **Campo de combate** (mecânicas, loot, zona, eliminação);
+2. **Filtro psicológico** (melancolia, paranoia, asfixia, isolamento);
+3. **Instrumento de coleta de dados** (balanceamento, taxa de retenção, padrões de risco);
+4. **Mecanismo de persistência seletiva** (conquistas, Tokens de Veterano, KRC).
+
+| Estágio | Identificador | Nome Canônico | Função Primária | Duração-alvo |
+|---------|---------------|---------------|-----------------|--------------|
+| Pré-lançamento | **CIGKV** | Khaaos Ville — Campo de Instrução de Guerra | Treinamento, coleta de dados, campanha de massa | Até 1.000.000 de alistamentos |
+| Ciclo 1 | **W1/C1** | Barburhen — Mundo da Destruição | Brutalidade urbana pós-guerra | 7 dias (12 h/dia) |
+| Ciclo 2 | **W2/C2** | Priadus — Floresta da Escuridão | Sanidade sob invisibilidade e neblina | 7 dias |
+| Ciclo 3 | **W3/C3** | Ckesalth — Deserto das Almas Esquecidas | Fragilidade da vaidade / ambiente em extinção | 7 dias |
+| Ciclo 4 | **W4/C4** | Arukheea — Ilha dos Gritos Calados | Isolamento absoluto e pressão hidráulica | 7 dias |
+
+O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimensão de segurança (tecnologia → estômago → sanidade → vaidade → refúgio) até restar apenas o sobrevivente capaz de ocupar o helicóptero de extração final.
+
+---
+
+## Arquitetura de Ciclos e Rings
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GUERRA DO KHAAOS (Ciclos)                    │
+├──────────────┬──────────────┬──────────────┬────────────────────┤
+│   CIGKV      │   W1/C1      │   W2/C2      │  W3/C3 → W4/C4     │
+│  (Treinamento│  Barburhen   │  Priadus     │  Ckesalth →        │
+│   + Campanha)│  (Urbano)    │  (Selva)     │  Arukheea (Ilha)   │
+└──────────────┴──────────────┴──────────────┴────────────────────┘
+         │              │              │              │
+         ▼              ▼              ▼              ▼
+   Protocolo CIGKV   Anel de       Emboscada      Tsunami /
+   Ring 3 h          Conflito      Verde          Assassino
+   50 players        10 min        10 min         Silencioso
+   Fluxo contínuo    Zona →        Zona →         Zona →
+                     Parque        Templo         Prisão
+```
+
+Cada Ring possui:
+
+- **Perímetros fracionados** (frações de ⅛ a ⅜ do mapa) com funções táticas distintas;
+- **Plus +** (vantagens posicionais: bunkers, sniper points, veículos, kits médicos);
+- **Plus −** (perigos ambientais: chuva ácida, neblina alucinógena, areia movediça, flora carnívora, tsunami);
+- **Zonas de Extração de XP (ZEX)** — terminais que permitem persistir parte das conquistas;
+- **Dinâmica de inatividade** — “dedo-duro” (ratos, mosquitos, gafanhotos, gaivotas) que pune o jogador que evita combate.
+
+---
+
+## Protocolo CIGKV — Campo de Treinamento
+
+O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experimental* aberto após o alistamento. Ele permanece ativo até a marca de **1.000.000 de inscrições confirmadas** (sigla **EXCO** — Excesso e Contingente).
+
+### Ambientes (perímetro total = 1)
+
+| Setor | Fração | Função |
+|-------|--------|--------|
+| Pátio de Armamento (Armory Hub) | ⅛ | Zona neutra de loadout sem restrição de patente |
+| Setor de Testes (Proving Grounds) | ⅜ | Urbano denso, prédios destrutíveis, túneis |
+| Parque Abandonado | ⁴⁄₈ | Vegetação, riachos, emboscadas |
+| 15 Zonas de Extração de XP (ZEX) | dispersas | Persistência seletiva de conquistas |
+
+### Dinâmica de Ring
+
+- **Capacidade**: 50 jogadores.
+- **Duração**: 3 horas (Ring de Longa Duração).
+- **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
+- **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
+- **Arsenal sem limites de patente**: Recruta pode testar equipamento de nível General — objetivo é coleta de dados de balanceamento.
+
+### Desafio de Gigantes (pós-EXCO)
+
+Os 50 melhores do CIGKV são convocados para a “Guerra dos Filhos da Escuridão” (batalha noturna, transmissão YouTube). Recebem:
+
+- Insígnia **Mérito KR**;
+- **Código KR-N1** (manual de instrução);
+- 1000 KRC + kits;
+- **Token de Veterano** conversível em pack diferenciado no W1/C1 oficial.
+
+Os 1000 melhores pontuados do período experimental recebem persistência parcial de itens/KRC/medalhas/skins.
+
+---
+
+## Mundos Oficiais (W1–W4)
+
+### W1/C1 — Barburhen (Mundo da Destruição)
+
+Ambiente urbano pós-guerra: construções inacabadas, carros abandonados, corpos que **não desaparecem** e apodrecem. O cenário degrada dia após dia (chuva ácida, desabamentos, fumaça).
+
+| Setor | Fração |
+|-------|--------|
+| Área Urbana e Comercial | ²⁄₈ |
+| Setor Industrial (desembarque) | ⅜ |
+| Parque Abandonado (centro) | ⅜ |
+| Zona de Extração (estação ferroviária) | — |
+
+**Dinâmica**: “Água da Morte” — anel de conflito fecha em 10 min em direção ao Parque; quem não corre é consumido pela chuva ácida.
+
+### W2/C2 — Priadus (Floresta da Escuridão)
+
+Selva hostil, neblina alucinógena, pântanos, flora carnívora, jacarés. Teste de sanidade mental diante do invisível.
+
+| Setor | Fração |
+|-------|--------|
+| Área Pantanosa | ²⁄₈ |
+| Bosque (desembarque) | ⅜ |
+| Área de Caça + Templo Antigo | ⅜ |
+| Zona de Extração (matadouro) | — |
+
+**Dinâmica**: “Emboscada Verde” — anel fecha no templo; neblina com esporos tóxicos pune atraso.
+
+### W3/C3 — Ckesalth (Deserto das Almas Esquecidas)
+
+Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça. Lição sobre a fragilidade da vaidade.
+
+| Setor | Fração |
+|-------|--------|
+| Resort Abandonado | ⅜ |
+| Vilarejo dos Beduínos | ²⁄₈ |
+| Refinaria de Petróleo (centro) | ⅜ |
+| Zona de Extração (expedição) | — |
+
+**Dinâmica**: “Assassino Silencioso” — a partir de 5 min o anel fecha na Vila Sombria sob fumaça tóxica.
+
+### W4/C4 — Arukheea (Ilha dos Gritos Calados)
+
+Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarões. Pressão hidráulica e claustrofobia em céu aberto.
+
+| Setor | Fração |
+|-------|--------|
+| Bosque dos Perdidos | ⁴⁄₈ |
+| Prisão do Sol da Noite | ⅜ |
+| Fábrica / Cemitério das Baleias | ⅛ |
+| Extração final (heliporto da torre) | — |
+
+**Dinâmica**: “Tsunami” — anel fecha na Prisão; quem não sobe no helicóptero torna-se “grito calado”.
+
+---
+
+## Protocolos de Ingresso (Zu)
+
+Todo Ring possui **três variantes de Zu** (entrada cinematográfica). O jogador recebe um pop-up de decisão que determina dano inicial e posicionamento.
+
+| Mundo | Zu 1 | Zu 2 | Zu 3 |
+|-------|------|------|------|
+| **CIGKV** | Caminhão atropela bois → apertar cinto | Capota com rocha → saltar | Cai da ponte → máscara O₂ |
+| **W1/C1** | Trem descarrila → cinto | Colisão frontal → saltar | Incêndio elétrico → máscara |
+| **W2/C2** | Fim de trilho → cinto | Homens-bomba → saltar | Neblina tóxica → máscara |
+| **W3/C3** | Tempestade de areia → cinto | Explosão no túnel → saltar | Caminhão-tanque em chamas → máscara |
+| **W4/C4** | Trilho desmorona → cinto | Colisão com tanque → saltar no mar | Bombas de gás por drones → máscara |
+
+Em todos os casos:
+
+- Decisão correta → 0 dano + possível atordoamento/visão embaçada (5–7 s);
+- Decisão incorreta → até −30 % de vitalidade;
+- Caixotes de armamento caem no perímetro (1 item por jogador).
+
+---
+
+## Modelo Econômico e Persistência
+
+- **KRC** (Khaaos Run Coin) — criptomoeda de jogo. Adquirida por sobrevivência, eliminações, captura de Data Cores e ranking de convites.
+- **Bankhaoos** — conta bancária automática ao alistamento + endereço de depósito.
+- **Fundo de Investimentos KR** — acumula o prêmio de US$ 1.000.000 destinado ao(à) grande vencedor(a).
+- **Forja do Armeiro** — marketplace de equipamentos e upgrades pagos em KRC.
+- **Persistência seletiva**: conquistas do CIGKV não migram integralmente; apenas Tokens de Veterano, packs e os 1000 melhores pontuados recebem transferência parcial para W1/C1.
+- **Zonas de Extração de XP**: terminais no mapa que “salvam” progresso para o inventário War’I, desde que o jogador não seja eliminado antes.
+
+> **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+
+---
+
+## Arquitetura Técnica
+
+| Caminho | Responsabilidade | Stack |
+|---------|------------------|-------|
+| `client/` | SPA React, telas, hooks, cliente WebSocket | React 18, TypeScript, Vite, Wouter, TanStack Query, Tailwind |
+| `server/` | API HTTP, sessões OIDC, salas, simulação authoritative | Node.js, Express 5, `ws`, Passport, PostgreSQL |
+| `shared/` | Schema Drizzle, tipos e contratos | Drizzle ORM, Zod |
+| `game-runtime/` | Runtime JS isolado (simulação, replay, testes) | Node.js, Vite, `node:test` |
+| `Unreal/KhaaosRun/` | Fundação UE5.8 (GameMode, GAS, Iris, EOS declarados) | Unreal Engine 5.8, C++20 |
+| `server/game/matchmaking-*.{js,py}` | Algoritmos de referência skill-based | JS / Python 3 |
 
 ```mermaid
 flowchart LR
   Browser[React SPA] -->|HTTPS + cookie OIDC| API[Express API]
   Browser -->|GET ws-token| API
-  Browser -->|WSS /ws + token assinado| Rooms[RoomManager]
+  Browser -->|WSS /ws + token| Rooms[RoomManager]
   API --> Auth[Passport / Replit OIDC]
   API --> DB[(PostgreSQL via Drizzle)]
   Rooms --> DB
   Rooms --> MM[MatchmakingService]
-  Rooms --> Sim[Zona, combate, loot e ranking]
+  Rooms --> Sim[Zona · Combate · Loot · Ranking]
   Sim --> DB
 ```
 
-### Aplicação web
+O `RoomManager` é a fonte de verdade da partida live. O `game-runtime/` é um laboratório isolado; o projeto Unreal é fundação de portabilidade e ainda não compila nem possui mapas jogáveis.
 
-`client/src/App.tsx` registra as rotas Wouter. As telas são importadas com `React.lazy`, de modo que o navegador baixa o chunk da página acessada em vez de empacotar todas as telas no JavaScript inicial. O shell, o provedor de sessão de batalha, os modais globais e os componentes compartilhados ficam no carregamento comum.
+---
 
-TanStack Query concentra leitura e invalidação de dados HTTP. Os hooks por domínio ficam em `client/src/hooks/`; `client/src/lib/queryClient.ts` define `credentials: include` e o comportamento comum de erros.
+## Fluxo de uma Partida
 
-### API e domínio
+Documentado em detalhe em [`docs/E2E_BATTLE_FLOW.md`](docs/E2E_BATTLE_FLOW.md):
 
-`server/index.ts` monta JSON/URL-encoded parsing, logging HTTP, rotas, WebSocket e o servidor de desenvolvimento/arquivos estáticos. `server/routes.ts` agrupa os handlers HTTP. `server/storage.ts` implementa a fronteira de persistência `IStorage` sobre Drizzle; `shared/schema.ts` é a fonte do schema PostgreSQL e dos tipos de domínio.
+1. Autenticação OIDC → estatísticas e conta bancária inicializadas.
+2. Cliente obtém token WebSocket de curta duração (`GET /api/auth/ws-token`).
+3. `BattleRoomProvider` mantém conexão compartilhada; identidade derivada exclusivamente do token assinado.
+4. Entrada na fila (`queue`) → matchmaking por modo/rating → lobby.
+5. Host controla readiness, convites e countdown.
+6. Em partida o cliente envia **intenções** (posição, ataque, pickup); o servidor é authoritative para saúde, dano, loot e eliminação.
+7. Zone ticks, combate, lag compensation e spatial grid executados no servidor.
+8. `RankingService` persiste placement, rating/ELO, XP e patente.
 
-Os módulos de jogo têm responsabilidades delimitadas:
+---
 
-- `RoomManager.ts`: ciclo de vida de lobby/partida, jogadores conectados, zone ticks, combate, loot, mensagens e snapshots.
-- `MatchmakingService.ts`: fila por modo e rating, janela de rating progressiva, agrupamento regional e eventos de matchmaking.
-- `RankingService.ts`: cálculo de placement, rating/ELO, XP e promoção de patente após a partida.
-- `LagCompensation.ts`: histórico de posições e compensação temporal de ataques.
-- `SpatialGrid.ts`: consulta espacial para reduzir entidades e atualizações relevantes.
-- `ProceduralGenerator.ts`: conteúdo determinístico por seed, mapas e loot.
-- `EconomyEngine.ts` e `MonteCarloEconomy.ts`: cotações, regras de economia e simulações.
+## Modelo de Dados
 
-### Runtime isolado
+Fonte canônica: `shared/schema.ts`.
 
-`game-runtime/` conserva uma implementação JS com autenticação própria de testes, simulação reproduzível, snapshots, replay, persistência e adapters. As duas implementações têm escopos e contratos distintos; mudanças de regra devem declarar qual runtime é a fonte de verdade antes de sincronizar comportamento entre elas.
+- `users` — identidade OIDC
+- `player_stats` — patente, XP, saúde/energia, eliminações
+- `bank_accounts`, `transactions`, `loans` — economia de jogo
+- `items` — inventário, raridade, durabilidade, stats JSON
+- `zone_sessions`, `loot_items` — estado de zona e pickups
+- `eliminations` — eventos de eliminação
+- `match_results` — placement, kills, dano, rating, XP
 
-### Fundação Unreal Engine 5.8
+Schema aplicado via `npm run db:push` (Drizzle Kit). Migrações versionadas ainda são roadmap.
 
-`Unreal/KhaaosRun/KhaaosRun.uproject` declara Engine Association 5.8. O commit de fundação adicionou estruturas C++ para GameMode/GameState, estado do jogador, atributos/GAS, projétil, zona, loot, grade espacial, bridge econômico, AI controller e SaveGame. [`Unreal/README.md`](Unreal/README.md) descreve o mapeamento pretendido da implementação TypeScript para C++.
+---
 
-Esses artefatos são ponto de partida, não prova de build ou execução. Não há conteúdo de mapas/personagens, implementação EOS completa, testes Unreal/Automation nem validação em UnrealBuildTool registrada no CI atual. Mantenha o backend TypeScript como implementação comprovada e trate o port UE como trilha de desenvolvimento até que compile, tenha testes e passe validação multiplayer. Veja a seção Unreal do roadmap.
+## Autenticação e Limites de Confiança
 
-## Fluxo de uma partida
+- **Sessão HTTP**: cookie `httpOnly` + `secure`, store PostgreSQL, renovação OIDC.
+- **WebSocket**: token HMAC-SHA256 (finalidade `khaaos-websocket`, TTL 60 s) enviado como subprotocolo. Identidade = `sub` assinado; mensagens do cliente não podem forjá-la.
+- **Operadores de zona**: allowlist `ZONE_OPERATOR_IDS` (deny-by-default).
+- Toda mutação de recurso verifica ownership no servidor.
 
-O caminho ranqueado principal está descrito em [`docs/E2E_BATTLE_FLOW.md`](docs/E2E_BATTLE_FLOW.md):
+Detalhes: [`docs/REALTIME_AUTH.md`](docs/REALTIME_AUTH.md).
 
-1. O usuário autentica via OIDC e a aplicação inicializa estatísticas e conta bancária quando necessário.
-2. O cliente obtém uma credencial WebSocket curta por `GET /api/auth/ws-token`.
-3. O `BattleRoomProvider` mantém uma conexão WebSocket compartilhada; o token é apresentado como subprotocolo durante o handshake.
-4. O cliente entra na fila com `queue`; o servidor escolhe jogadores compatíveis por modo/rating e cria um lobby.
-5. O lobby controla host, readiness, convite privado e countdown. O host pode iniciar ou cancelar de acordo com o estado da sala.
-6. Em partida, o cliente envia intenções — posição, ataque, coleta ou ações de lobby — e não estado autoritativo de saúde, dano, loot ou identidade.
-7. `RoomManager` valida e processa ações, atualiza o estado no servidor e envia mensagens/snapshots. A zona, o combate e a eliminação são calculados no servidor.
-8. Ao concluir, `RankingService` persiste resultados/rating/XP e o cliente apresenta o resultado, atualiza ranking e histórico.
-
-A simulação da zona legada também possui rotas HTTP e polling, fora de uma partida live. As rotas globais de ativação/desativação são restritas a operadores por allowlist; a partida live usa o estado gerido pela sala.
-
-## Modelo de dados
-
-As tabelas são declaradas em `shared/schema.ts` e configuradas para PostgreSQL em `drizzle.config.ts`.
-
-- `users`: identidade OIDC, gerenciada pelo adapter de autenticação.
-- `player_stats`: patente, XP, saúde/energia, eliminações e estatísticas competitivas.
-- `bank_accounts`, `transactions` e `loans`: saldos, ledger de transações e obrigações da economia de jogo.
-- `items`: inventário do usuário, tipo, raridade, durabilidade e stats JSON.
-- `zone_sessions` e `loot_items`: estado de zona e pickups disponíveis/consumidos.
-- `eliminations`: eventos de eliminação e causa.
-- `match_results`: placement, kills, dano, sobrevivência, rating antes/depois e XP por jogador.
-
-Os valores financeiros do jogo usam `numeric` no PostgreSQL e são convertidos para números em alguns handlers. Antes de usar valores de dinheiro real ou uma carteira, será necessário rever precisão decimal, atomicidade, ledger imutável, idempotência e compliance. O sistema atual é uma economia de jogo, não um sistema financeiro.
-
-O comando atual `npm run db:push` aplica o schema via Drizzle Kit. Ele não equivale a um fluxo revisado de migrações versionadas; veja o roadmap antes de tratar deploy de schema como operação sem risco.
-
-## Autenticação e limites de confiança
-
-### Sessão HTTP
-
-O login OIDC é registrado por `server/replit_integrations/auth/replitAuth.ts`. A sessão usa cookie `httpOnly`, `secure` e store PostgreSQL. `GET /api/auth/user` devolve o usuário autenticado; `isAuthenticated` valida/renova tokens OIDC para esse fluxo.
-
-### WebSocket
-
-`GET /api/auth/ws-token` exige sessão válida e emite um token HMAC-SHA256 com finalidade `khaaos-websocket` e validade de 60 segundos. O cliente o envia no cabeçalho `Sec-WebSocket-Protocol`, junto a `khaaos-v1`. `RoomManager` verifica assinatura, finalidade e expiração no handshake e deriva o `userId` exclusivamente do `sub` assinado. Mensagens do cliente não podem estabelecer nem substituir essa identidade.
-
-O token curto autentica o handshake; não implementa revogação de conexões ativas. Os tokens não devem ser colocados em URLs ou logs.
-
-### Controles administrativos
-
-As rotas de iniciar/parar a zona e a interface consultam a permissão em `/api/zone/permissions`. O servidor autoriza apenas IDs incluídos em `ZONE_OPERATOR_IDS`; sem allowlist, nega por padrão. A validação no cliente é apenas UX, não fronteira de segurança.
-
-Operações de item/empréstimo fazem lookup escopado ao proprietário autenticado antes de atualizar ou cobrar recursos. Outros endpoints devem manter o mesmo padrão: identidade obtida da sessão/token validado, autorização verificada no servidor, entrada limitada por schema e falha sem mutação parcial.
+---
 
 ## API e WebSocket
 
-Todos os caminhos HTTP protegidos usam cookie de sessão OIDC, salvo login/callback. A lista exata está nos handlers de `server/routes.ts` e `server/replit_integrations/auth/routes.ts`.
-
 | Grupo | Exemplos | Propósito |
-|---|---|---|
-| Auth | `GET /api/auth/user`, `GET /api/auth/ws-token` | Usuário atual e token WS temporário |
-| Player | `GET /api/player/me`, `POST /api/player/daily`, `POST /api/player/respawn` | Perfil e estado do jogador |
-| Bank/loans | `/api/bank/*`, `/api/loans/*` | Saldos, transferências, ledger e empréstimos |
-| Inventory/loot | `/api/items/*`, `/api/loot/*` | Inventário, uso, reparo e pickup |
-| Zone | `/api/zone/status`, `/api/zone/start`, `/api/zone/stop` | Estado e operação autorizada da zona |
-| Rooms/matchmaking | `/api/rooms/*`, `/api/matchmaking/*`, WS `/ws` | Estado público da sala e sessão multiplayer |
-| Ranking | `/api/ranking/me`, `/api/ranking/history`, `/api/ranking/leaderboard` | Rating, histórico e leaderboard |
-| Design/diagnostics | `/api/procgen/*`, `/api/economy/*`, `/api/eliminations` | Prévia procedural, cotações e métricas de jogo |
+|-------|----------|-----------|
+| Auth | `/api/auth/user`, `/api/auth/ws-token` | Sessão e token WS |
+| Player | `/api/player/me`, `/api/player/daily` | Perfil e estado |
+| Bank / Loans | `/api/bank/*`, `/api/loans/*` | Economia |
+| Inventory / Loot | `/api/items/*`, `/api/loot/*` | Inventário e pickups |
+| Zone | `/api/zone/status`, `/api/zone/start` | Operação de zona |
+| Rooms / Matchmaking | `/api/rooms/*`, `/api/matchmaking/*`, WS `/ws` | Multiplayer |
+| Ranking | `/api/ranking/*` | Leaderboard e histórico |
 
-O protocolo WebSocket é JSON com discriminador `type`. Mensagens de cliente incluem `join`, `queue`, `dequeue`, `position`, `attack`, `pickup`, `leave`, `set_ready`, `start`, `create_lobby`, `join_code`, `kick` e `cancel_countdown`. Mensagens de servidor incluem `welcome`, `room_state`, `zone_tick`, `interest_update`, `match_found`, `countdown`, `damage_dealt`, `loot_picked`, `player_eliminated`, `match_finished`, `queue_update` e `error`.
+Protocolo WS: JSON com discriminador `type`. Contrato vivo em `RoomManager.ts` + `use-battle-room.ts`.
 
-O `ClientMessage` e os tipos `ServerMessage`/estado serializado em `server/game/RoomManager.ts`, junto de `client/src/hooks/use-battle-room.ts`, são o contrato vivo. Mudanças de protocolo devem atualizar os dois lados e adicionar um teste de integração.
+---
 
-## Desenvolvimento local
-
-### Pré-requisitos
-
-- Node.js 22 e npm 10+ para a aplicação principal.
-- PostgreSQL para execução autenticada e persistência.
-- Credenciais OIDC/Replit para testar login real.
-- Python 3 somente para executar os algoritmos de referência Python.
-
-### Instalação e comandos
+## Desenvolvimento Local
 
 ```bash
 npm ci
 npm ci --prefix game-runtime
 npm run check
-npm run dev
+npm run dev          # porta PORT ou 5000
 ```
 
-`npm run dev` inicia o servidor Express/Vite em desenvolvimento na porta `PORT` ou 5000. O backend exige `DATABASE_URL`; a autenticação requer `SESSION_SECRET` e `REPL_ID`, além de issuer OIDC se não for o padrão. O login real também depende de callback OIDC e domínio corretamente configurados. Nunca inclua credenciais reais em commits.
+Variáveis obrigatórias: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`.  
+Recomendadas: `WS_TOKEN_SECRET` (≥ 32 bytes), `ZONE_OPERATOR_IDS`.
 
-Comandos comuns:
+Comandos de verificação:
 
 ```bash
-npm run check          # TypeScript da aplicação principal
-npm run test:official  # testes Node/TS da aplicação e testes JS oficiais
-npm run test:game      # testes do runtime isolado
-npm run test:game:infra
-npm run test:game:stress
-npm run build          # client + server para dist/
-npm start              # executar dist/index.cjs em produção
-npm run db:push        # sincronizar schema Drizzle com DATABASE_URL
-npm run verify:all     # typecheck/build/teste/stress de ambos os projetos
+npm run test:official
+npm run test:game
+npm run verify:all
 ```
 
-### Variáveis de ambiente
+---
 
-| Variável | Necessidade | Uso |
-|---|---|---|
-| `DATABASE_URL` | Obrigatória | PostgreSQL para usuário, sessões e domínio |
-| `SESSION_SECRET` | Obrigatória para sessão | Assina cookies de sessão; use valor aleatório forte (mínimo recomendado: 32 bytes) |
-| `REPL_ID` | Obrigatória para OIDC Replit | Client ID usado na discovery e nos callbacks |
-| `ISSUER_URL` | Opcional | Issuer OIDC; padrão configurado no código é `https://replit.com/oidc` |
-| `WS_TOKEN_SECRET` | Recomendado | Segredo HMAC do token WS; fallback para `SESSION_SECRET`; mínimo 32 bytes |
-| `ZONE_OPERATOR_IDS` | Opcional, deny-by-default | IDs OIDC separados por vírgula para iniciar/parar a zona global |
-| `PORT` | Opcional | Porta HTTP; padrão 5000, host `0.0.0.0` |
-| `NODE_ENV` | Ambiente | `development` ativa Vite; `production` serve `dist/public` |
+## Qualidade e Validação
 
-Gere segredos em um gerenciador seguro; por exemplo, `openssl rand -hex 32` gera 32 bytes aleatórios codificados em hexadecimal. Em implantação, use o Secret Store do host, não o repositório, logs ou frontend.
+CI (`.github/workflows/ci.yml`) executa `npm run verify:all` em todo push/PR para `main`:
 
-## Qualidade e validação
+- Typecheck + build da aplicação principal
+- Testes oficiais HTTP/auth/storage/WebSocket/matchmaking
+- Build + testes + stress do `game-runtime/`
+- (Unreal ainda não entra no pipeline)
 
-O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa `npm run verify:all` em pushes para `main` e pull requests para `main`. O script `scripts/verify-all.mjs` executa em paralelo:
+Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
 
-1. `tsc` e build da aplicação principal.
-2. Testes oficiais HTTP/auth/storage/WebSocket/matchmaking e validação de caminho core end-to-end.
-3. Build, testes e stress tests do `game-runtime/`.
-4. O CI atual não invoca UnrealBuildTool nem compila o projeto UE5.8.
+---
 
-Na validação após as integrações E2E de core, economia/procgen e spatial/lag, passaram 11 testes TypeScript oficiais, 38 testes JavaScript, 12 testes do runtime e 1 teste de stress. O estado pode crescer após novas alterações; execute os comandos do CI em vez de depender desses números fixos.
+## Build e Implantação
 
-Não há percentual de cobertura instrumentado configurado. Portanto, número de testes aprovados não deve ser interpretado como percentual de statements, branches ou functions. O inventário e as lacunas estão em [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
+- **Replit Autoscale**: `npm run build` → `node ./dist/index.cjs`
+- **Render**: Blueprint `render.yaml` + Deploy Hook (opt-in via `RENDER_DEPLOY_ENABLED`)
 
-## Build e implantação
+Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
-A configuração `.replit` declara **Autoscale**, executa `npm run build` e inicia `node ./dist/index.cjs`. O build emite a SPA em `dist/public/` e o servidor em `dist/index.cjs`; o servidor serve ambos na mesma porta.
+---
 
-Para uma implantação manual em Replit Autoscale:
+## Autenticação no Render
 
-1. Provisionar PostgreSQL e preparar schema no ambiente correto.
-2. Definir `DATABASE_URL`, `SESSION_SECRET`, `WS_TOKEN_SECRET`, `REPL_ID` e os IDs operacionais em `ZONE_OPERATOR_IDS` nos Secrets do Replit.
-3. Confirmar callback OIDC, domínio, HTTPS e portas.
-4. Executar `npm run verify:all`, depois `npm run build`.
-5. Publicar pela configuração de Autoscale e verificar login, `/api/auth/user`, emissão do token WS, matchmaking, partida e persistência do resultado.
+A documentação oficial do Replit Auth não confirma suporte a hosting externo em Render. O callback gerado pelo código não comprova que o issuer autorize `onrender.com`; valide login, callback, cookie e logout em staging antes de migrar usuários ou tráfego. Veja [`docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md`](docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md).
 
-Além do deployment Replit existente, o repositório agora contém configuração para um Web Service no Render. O GitHub Actions valida o push para `main`, chama o Render Deploy Hook com o SHA verificado e espera `/healthz.json` reportar aquele SHA. O job fica opt-in até `RENDER_DEPLOY_ENABLED=true`; para ativar, crie/aplique o Blueprint `render.yaml`, configure o secret `RENDER_DEPLOY_HOOK_URL` e as variables `RENDER_SERVICE_URL` e `RENDER_DEPLOY_ENABLED` conforme [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md). Até então, CI permanece ativo sem tentar publicar.
+---
 
-**Atenção:** a documentação do Replit Auth garante suporte para apps em Replit e domínios customizados anexados a Published Apps Replit; ela não afirma suporte a hospedagem externa em Render. O código gera callback usando o hostname da requisição, mas isso não prova que o issuer Replit autorizará o domínio `onrender.com`. Valide login/callback/logout no domínio Render antes de transferir usuários ou tráfego real. Consulte [`docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md`](docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md); se o issuer rejeitar o domínio, mantenha o serviço no Replit ou planeje uma migração de identidade revisada, sem contornar validação de redirect.
+## Limitações Conhecidas
 
-## Limitações conhecidas
+- Economia ainda sem ledger atômico completo — não usar para valor real.
+- `RoomManager` e matchmaking em memória — scaling horizontal exige coordenador e pub/sub.
+- Projeto Unreal é fundação; não há evidência de build, mapas ou integração EOS.
+- Ausência de suite browser completa e coverage percentual instrumentado.
+- Persistência multi-mundo (CIGKV → W1–W4) e protocolos Zu ainda estão no domínio de design; a implementação atual concentra-se no runtime de combate genérico e no CIGKV como primeiro Ring operacional.
 
-- Storage da aplicação principal é PostgreSQL, mas algumas operações econômicas ainda fazem leitura e escrita em chamadas separadas, sem uma transação atômica de ledger. Evite concorrência financeira real.
-- O schema está configurado para Drizzle `db:push`; migrações versionadas, rollout/rollback e compatibilidade entre versões ainda precisam de desenho.
-- `RoomManager` e matchmaking têm estado ativo em memória. Escalar horizontalmente requer coordenador, presença compartilhada, pub/sub e ownership explícito de salas.
-- Existe um runtime de jogo isolado com primitivas adicionais; não presumir paridade automática com o servidor Express.
-- Não há suite browser completa para React, teste OIDC com provider real ou coverage percentual.
-- Produção requer monitoramento de latência/jitter, rate limits, reconexões, erros de autenticação e integridade de ranking.
-- Antes de economia com valor real, são necessários revisão legal/compliance, segurança, prevenção de fraude e controles de auditoria. A moeda KRC atual é de jogo.
+---
 
-## Referências de desenvolvimento
+## Referências
 
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
-- [Autenticação realtime e controles da zona](docs/REALTIME_AUTH.md)
-- [Baseline e lacunas da cobertura](docs/TEST_COVERAGE_BASELINE.md)
-- [Comparação Lighthouse antes/depois do code splitting](docs/LIGHTHOUSE_PERFORMANCE.md)
-- [Setup de deploy Render pós-CI](docs/RENDER_DEPLOYMENT.md)
+- [Autenticação realtime](docs/REALTIME_AUTH.md)
+- [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)
+- [Lighthouse / code-splitting](docs/LIGHTHOUSE_PERFORMANCE.md)
+- [Deploy Render](docs/RENDER_DEPLOYMENT.md)
 - [Roadmap de engenharia](docs/ROADMAP.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
+
+---
+
+<sub>Khaaos Run · Plataforma Battle Royale multi-mundo · Equipe Nexus</sub>
