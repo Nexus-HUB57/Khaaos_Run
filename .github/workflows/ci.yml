@@ -36,3 +36,44 @@ jobs:
 
       - name: Verify both projects
         run: npm run verify:all
+
+  notify:
+    name: Notify on CI failure
+    needs: verify
+    if: failure() && needs.verify.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send Discord and/or Slack notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          message="CI falhou em ${REPOSITORY} (${BRANCH}, commit ${COMMIT:0:7}). Detalhes: ${RUN_URL}"
+          sent=false
+
+          if [[ -n "${DISCORD_WEBHOOK_URL}" ]]; then
+            payload=$(jq -n --arg content "$message" '{content: $content}')
+            curl --fail --silent --show-error --max-time 15 \
+              -H 'Content-Type: application/json' \
+              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null
+            sent=true
+          fi
+
+          if [[ -n "${SLACK_WEBHOOK_URL}" ]]; then
+            payload=$(jq -n --arg text "$message" '{text: $text}')
+            curl --fail --silent --show-error --max-time 15 \
+              -H 'Content-Type: application/json' \
+              -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+            sent=true
+          fi
+
+          if [[ "$sent" != true ]]; then
+            echo 'Nenhum webhook configurado. Adicione DISCORD_WEBHOOK_URL e/ou SLACK_WEBHOOK_URL nos Actions secrets do repositório.'
+          fi

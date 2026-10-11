@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const checks = [
   { name: "App oficial · TypeScript", cwd: root, args: ["run", "check"] },
   { name: "App oficial · build", cwd: root, args: ["run", "build"] },
+  { name: "App oficial · testes", cwd: root, args: ["run", "test:official"] },
   { name: "Runtime · build", cwd: path.join(root, "game-runtime"), args: ["run", "build"] },
   { name: "Runtime · testes", cwd: path.join(root, "game-runtime"), args: ["test"] },
   { name: "Runtime · stress", cwd: path.join(root, "game-runtime"), args: ["run", "test:stress"] },

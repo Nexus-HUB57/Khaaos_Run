@@ -9,14 +9,16 @@ export interface IAuthStorage {
   upsertUser(user: UpsertUser): Promise<User>;
 }
 
-class AuthStorage implements IAuthStorage {
+export class AuthStorage implements IAuthStorage {
+  constructor(private readonly database: typeof db = db) {}
+
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await this.database.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
+    const [user] = await this.database
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
