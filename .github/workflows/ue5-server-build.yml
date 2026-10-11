@@ -1,0 +1,390 @@
+# =============================================================================
+# Khaaos Run — UE5 Dedicated Server Build Pipeline | Devs Ph.D
+# Copyright Nexus-HUB57. All Rights Reserved.
+# =============================================================================
+name: UE5 Dedicated Server Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/**'
+      - '.github/workflows/ue5-server-build.yml'
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options:
+          - Development
+          - Shipping
+        default: Shipping
+      push_image:
+        description: 'Push Docker image to GHCR'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/khaaos-server
+  UE5_VERSION: "5.8"
+  PROJECT_DIR: Unreal/KhaaosRun
+  PROJECT_FILE: Unreal/KhaaosRun/KhaaosRun.uproject
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Build UE5 Linux Dedicated Server
+  # ---------------------------------------------------------------------------
+  build-server:
+    name: Build Dedicated Server (${{ github.event.inputs.configuration || 'Shipping' }})
+    runs-on: ubuntu-l-4xlarge  # 16-core, 64GB RAM for UE5 compilation
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Validate LFS objects
+        run: |
+          set -euo pipefail
+          echo "::group::LFS Validation"
+          git lfs ls-files | head -20
+          LFS_COUNT=$(git lfs ls-files | wc -l)
+          echo "LFS objects: ${LFS_COUNT}"
+          if [[ ${LFS_COUNT} -eq 0 ]]; then
+            echo "::warning::No LFS objects found — verify .gitattributes"
+          fi
+          echo "::endgroup::"
+
+      - name: Validate .uproject
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import json, sys
+          proj = json.load(open('${{ env.PROJECT_FILE }}'))
+          engine = proj.get('EngineAssociation', '')
+          print(f'Engine: {engine}')
+          if engine != '${{ env.UI5_VERSION }}':
+              print(f'::warning::Engine association {engine} != expected ${{ env.UI5_VERSION }}')
+          plugins = [p['Name'] for p in proj.get('Plugins', [])]
+          required = ['GameplayAbilities', 'Iris', 'SignificanceManager', 'OnlineSubsystem']
+          for r in required:
+              if r not in plugins:
+                  print(f'::error::Missing required plugin: {r}')
+                  sys.exit(1)
+              print(f'✅ Plugin {r} present')
+          print('✅ .uproject validation passed')
+          "
+
+      # ── UE5 Engine Cache ────────────────────────────────────────────────────
+      - name: Cache UE5 Engine
+        id: cache-ue5
+        uses: actions/cache@v4
+        with:
+          path: ~/UnrealEngine
+          key: ue5-engine-${{ env.UI5_VERSION }}-linux-v1
+          restore-keys: |
+            ue5-engine-${{ env.UI5_VERSION }}-linux-
+
+      - name: Setup UE5 Engine
+        if: steps.cache-ue5.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          echo "::group::Clone UE5 Source"
+          git clone --depth 1 -b ${{ env.UI5_VERSION }}-release \
+            https://github.com/EpicGames/UnrealEngine.git ~/UnrealEngine
+          echo "::endgroup::"
+
+          echo "::group::Build UE5 from Source"
+          cd ~/UnrealEngine
+          ./Setup.sh
+          ./GenerateProjectFiles.sh
+          make -j$(nproc)
+          echo "::endgroup::"
+
+      # ── Build Cache ─────────────────────────────────────────────────────────
+      - name: Cache Build Intermediates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PROJECT_DIR }}/Intermediate
+            ${{ env.PROJECT_DIR }}/Binaries
+          key: khaaos-build-${{ env.UI5_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            khaaos-build-${{ env.UI5_VERSION }}-
+
+      # ── Generate Project Files ─────────────────────────────────────────────
+      - name: Generate Project Files
+        run: |
+          set -euo pipefail
+          ~/UnrealEngine/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh \
+            -project="${{ env.PROJECT_FILE }}" \
+            -game \
+            -engine
+
+      # ── Build Dedicated Server ─────────────────────────────────────────────
+      - name: Build Dedicated Server
+        env:
+          BUILD_CONFIG: ${{ github.event.inputs.configuration || 'Shipping' }}
+        run: |
+          set -euo pipefail
+          echo "::group::Build KhaaosRunServer (${BUILD_CONFIG})"
+          BUILD_START=$(date +%s)
+
+          ~/UnrealEngine/Engine/Build/BatchFiles/Linux/Build.sh \
+            KhaaosRunServer Linux ${BUILD_CONFIG} \
+            -project="${{ env.PROJECT_FILE }}" \
+            -WaitMutex -FromDist
+
+          BUILD_END=$(date +%s)
+          BUILD_DURATION=$((BUILD_END - BUILD_START))
+          echo "Build completed in ${BUILD_DURATION}s"
+          echo "build_duration=${BUILD_DURATION}" >> $GITHUB_ENV
+          echo "::endgroup::"
+
+      # ── Package Server ──────────────────────────────────────────────────────
+      - name: Package Dedicated Server
+        run: |
+          set -euo pipefail
+          echo "::group::Package Server"
+          ~/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh \
+            BuildCookRun \
+            -project="${{ env.PROJECT_FILE }}" \
+            -noP4 \
+            -platform=Linux \
+            -target=KhaaosRunServer \
+            -serverconfig \
+            -cook \
+            -build \
+            -stage \
+            -pak \
+            -archive \
+            -archivedirectory=${{ env.PROJECT_DIR }}/PackagedServer
+          echo "::endgroup::"
+
+      - name: List packaged artifacts
+        run: |
+          set -euo pipefail
+          find ${{ env.PROJECT_DIR }}/PackagedServer -type f | head -50
+          TOTAL_SIZE=$(du -sh ${{ env.PROJECT_DIR }}/PackagedServer | cut -f1)
+          echo "Total package size: ${TOTAL_SIZE}"
+
+      # ── Smoke Test ──────────────────────────────────────────────────────────
+      - name: Server Smoke Test
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          echo "::group::Smoke Test — Launch Server"
+          SERVER_BIN="${{ env.PROJECT_DIR }}/PackagedServer/LinuxServer/KhaaosRun/Binaries/Linux/KhaaosRunServer"
+
+          if [[ ! -f "${SERVER_BIN}" ]]; then
+            echo "::error::Server binary not found"
+            exit 1
+          fi
+
+          # Start server in background
+          ${SERVER_BIN} Main?listen?MaxPlayers=2 -log -unattended -NullRHI -RenderOffScreen &
+          SERVER_PID=$!
+
+          # Wait for server to initialize (up to 30s)
+          for i in $(seq 1 30); do
+            if ! kill -0 ${SERVER_PID} 2>/dev/null; then
+              echo "::error::Server process died during startup"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # Check server is running
+          if kill -0 ${SERVER_PID} 2>/dev/null; then
+            echo "✅ Server started successfully (PID: ${SERVER_PID})"
+            kill ${SERVER_PID} 2>/dev/null || true
+            wait ${SERVER_PID} 2>/dev/null || true
+          else
+            echo "::error::Server process not running"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+      # ── Upload Build Artifact ───────────────────────────────────────────────
+      - name: Upload Server Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: khaaos-server-linux-${{ github.sha }}
+          path: ${{ env.PROJECT_DIR }}/PackagedServer/
+          retention-days: 7
+          if-no-files-found: error
+
+      # ── Docker Build & Push ─────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        if: github.event.inputs.push_image != 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event.inputs.push_image != 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        if: github.event.inputs.push_image != 'false'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        if: github.event.inputs.push_image != 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.PROJECT_DIR }}
+          file: ${{ env.PROJECT_DIR }}/Build/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Security Scan ───────────────────────────────────────────────────────
+      - name: Security Scan — Trivy
+        if: github.event.inputs.push_image != 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0  # Don't fail build on findings, just report
+
+      - name: Upload Trivy scan results
+        if: always() && github.event.inputs.push_image != 'false'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Run Launch Checklist (validate production readiness)
+  # ---------------------------------------------------------------------------
+  validate-launch-readiness:
+    name: Validate Launch Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-server
+    if: success()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate production INI
+        run: |
+          set -euo pipefail
+          INI="Unreal/KhaaosRun/Config/DefaultProduction.ini"
+          if [[ -f "$INI" ]]; then
+            echo "✅ DefaultProduction.ini found"
+            # Check critical settings
+            if grep -q "bIsProduction=True" "$INI"; then
+              echo "✅ bIsProduction=True"
+            else
+              echo "::error::bIsProduction not set to True"
+              exit 1
+            fi
+            if grep -q "bRequireAntiCheat=True" "$INI"; then
+              echo "✅ Anti-cheat required"
+            else
+              echo "::warning::Anti-cheat not required in production INI"
+            fi
+            if grep -q "bEnableDDoSProtection=True" "$INI"; then
+              echo "✅ DDoS protection enabled"
+            else
+              echo "::warning::DDoS protection not enabled in production INI"
+            fi
+          else
+            echo "::error::DefaultProduction.ini not found"
+            exit 1
+          fi
+
+      - name: Validate server config
+        run: |
+          set -euo pipefail
+          echo "::group::Validate Server Build Files"
+          FILES=(
+            "Unreal/KhaaosRun/Build/Dockerfile"
+            "Unreal/KhaaosRun/Build/docker-compose.yml"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Server/KhaaosServerConfig.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Server/KhaaosServerConfig.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosAntiCheat.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosAntiCheat.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosMovementValidator.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosMovementValidator.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosLaunchChecklist.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosLaunchChecklist.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosProductionConfig.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosProductionConfig.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosRateLimiter.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosRateLimiter.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosDDoSProtection.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosDDoSProtection.cpp"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosMonitorDashboard.h"
+            "Unreal/KhaaosRun/Source/KhaaosRun/Game/Launch/KhaaosMonitorDashboard.cpp"
+            "scripts/build-server.sh"
+          )
+
+          MISSING=0
+          for F in "${FILES[@]}"; do
+            if [[ -f "$F" ]]; then
+              echo "✅ $F"
+            else
+              echo "::error::$F not found"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [[ ${MISSING} -gt 0 ]]; then
+            echo "::error::${MISSING} files missing"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Deployment Notification
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [build-server, validate-launch-readiness]
+    if: success()
+
+    steps:
+      - name: Send notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          CONFIG: ${{ github.event.inputs.configuration || 'Shipping' }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${DISCORD_WEBHOOK_URL}" ]]; then
+            message="🚀 Khaaos Run server build succeeded (${CONFIG}) — commit ${COMMIT:0:7}"
+            payload=$(jq -n --arg content "$message" '{content: $content}')
+            curl --fail --silent --show-error --max-time 15 \
+              -H 'Content-Type: application/json' \
+              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null
+            echo "✅ Notification sent"
+          else
+            echo "No webhook configured — skipping notification"
+          fi
