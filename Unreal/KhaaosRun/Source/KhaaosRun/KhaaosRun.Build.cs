@@ -48,6 +48,8 @@ public class KhaaosRun : ModuleRules
                         "Http",
                         "Json",
                         "JsonUtilities",
+                        // ─── Added for CIGKV Level + Map Data ──────────────────
+                        "DeveloperSettings",
                 });
 
                 if (Target.bBuildEditor)
