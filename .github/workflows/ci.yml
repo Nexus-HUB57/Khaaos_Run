@@ -80,7 +80,7 @@ jobs:
             echo 'Missing GitHub Actions variable: RENDER_SERVICE_URL' >&2
             exit 1
           fi
-          health_url="${RENDER_SERVICE_URL%/}/healthz"
+          health_url="${RENDER_SERVICE_URL%/}/healthz.json"
           for attempt in $(seq 1 180); do
             body=$(curl --fail --silent --show-error --max-time 10 \
               "${health_url}" 2>/dev/null || true)

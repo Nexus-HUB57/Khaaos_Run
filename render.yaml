@@ -3,10 +3,12 @@ services:
     name: khaaos-run
     runtime: node
     branch: main
-    buildCommand: npm ci --no-audit --no-fund && npm run build
+    buildCommand: >-
+      npm ci --no-audit --no-fund && npm run build &&
+      node scripts/write-render-health.mjs
     startCommand: npm start
     autoDeployTrigger: "off"
-    healthCheckPath: /healthz
+    healthCheckPath: /healthz.json
     envVars:
       - key: NODE_ENV
         value: production
