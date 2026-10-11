@@ -38,6 +38,7 @@ export class GameSimulation {
     const terminal=this.terminals.find(t=>t.active&&distance(t,p)<35); if(terminal){terminal.active=false;p.extracted++;p.xp+=250;this.emit('extract',{count:p.extracted});}
   }
   craft() { const i=this.player.inventory;if((i.wood||0)>=2&&(i.metal||0)>=2){i.wood-=2;i.metal-=2;i.weapon='sucata';this.player.weapon='sucata';this.player.xp+=80;this.emit('craft',{item:WEAPONS.sucata.name});return true;}return false; }
+  applySnapshot(snapshot) { if(!snapshot)return; this.seed=snapshot.seed??this.seed; this.tick=snapshot.tick??this.tick; this.time=snapshot.time??this.time; this.ring={...this.ring,...snapshot.ring}; if(snapshot.player)this.player=structuredClone(snapshot.player); this.bots=(snapshot.bots??[]).map(b=>({...b})); this.bullets=(snapshot.bullets??[]).map(b=>({...b})); this.loot=(snapshot.loot??this.loot).map(i=>({...i})); this.terminals=(snapshot.terminals??this.terminals).map(t=>({...t})); }
   snapshot() { return { seed:this.seed,tick:this.tick,time:this.time,ring:{...this.ring},player:structuredClone(this.player),bots:this.bots.map(b=>({...b})),bullets:this.bullets.map(b=>({...b})),loot:this.loot.map(i=>({...i})),terminals:this.terminals.map(t=>({...t})),replayLength:this.replay.length }; }
   exportReplay() { return { version:1, seed:this.seed, tickRate:this.tickRate, inputs:this.replay }; }
 }

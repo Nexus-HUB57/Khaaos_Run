@@ -1,52 +1,48 @@
 # Khaaos Run
 
-Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)** com simulação modular, seeds reproduzíveis, catálogo de armas, loot ponderado e servidor WebSocket authoritative.
+Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)** com simulação modular, seeds reproduzíveis, catálogo de armas, loot ponderado e backend authoritative multiplayer.
 
-## Rodar o cliente
+## Cliente local e online
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abra o endereço exibido pelo Vite. O campo `SEED` no HUD inicia a mesma partida procedural. Para build:
+- Modo local: abra o endereço padrão do Vite.
+- Modo online authoritative: abra `/?online=1`. O cliente conecta em `/ws`, entra no matchmaking, envia apenas inputs e interpola a posição entre snapshots do servidor.
+- O campo `SEED` no HUD controla o modo local. No modo online a seed é definida pela sala.
+
+## Servidor e matchmaking
 
 ```bash
-npm run build
+ADMIN_TOKEN=troque-esta-chave MATCH_SEED=CIGKV-ONLINE PORT=8787 npm run server
 ```
 
-## Rodar o servidor authoritative
+O servidor escuta HTTP e WebSocket em `:8787`. Salas são criadas automaticamente, com capacidade padrão de 16 jogadores. Cada cliente recebe uma sala, um estado authoritative e snapshots a 20 Hz. A posição, dano, munição, tiro, loot e Ring são decididos no backend; o navegador nunca é a fonte de verdade.
 
-Em outro terminal:
+## Painel anti-cheat
 
-```bash
-MATCH_SEED=CIGKV-REPLAY-01 npm run server
-```
+Abra `http://localhost:8787/admin.html`, informe `ADMIN_TOKEN` e conecte. O painel atualiza a cada segundo com conexões, mensagens, rejeições, violações, bans, filas, salas, jogadores e clientes suspeitos. A API protegida é `GET /admin/metrics?token=...`; em produção, substitua o token simples por autenticação administrativa real e HTTPS.
 
-O servidor escuta `ws://localhost:8787`, executa o tick fixo de 20 Hz, controla a simulação, aceita inputs com sequência monotônica e rejeita vetores de movimento, mira, timing e mensagens inválidas. O servidor mantém a autoridade sobre posição, munição, dano, loot, ring e resultado.
+## Replay e seeds
 
-## Sistema de replay
-
-O domínio compartilhado em `src/shared/simulation.js` grava cada input com tick, seed e taxa de simulação. No console do navegador:
+No modo local, use no console do navegador:
 
 ```js
 const replay = window.KhaaosReplay.export();
-// salvar JSON.stringify(replay)
 window.KhaaosReplay.load(replay);
 ```
 
-A mesma seed produz o mesmo spawn de bots, loot e evolução procedural. O replay deve ser usado como evidência de partida e base para testes de regressão.
-
-## Catálogo e loot
-
-`src/shared/weapons.js` define pistola 9MM, M4, MP5, Barrett MRAD MK22, rifle de pulso e lança de sucata, com dano, cadência, alcance, munição, carregador, raridade e peso. O loot é rolado por zona (`armory`, `industrial`, `park`, `extraction`) com raridade ponderada e seed determinística.
+A mesma seed reproduz spawn de bots, loot e evolução procedural.
 
 ## Testes
 
 ```bash
 npm test
+npm run test:stress
 ```
 
-Os testes cobrem RNG, loot por seed, raridade, reconstrução de replay e validação anti-cheat.
+Os testes cobrem RNG, loot, replay, anti-cheat, matchmaking concorrente e snapshots para múltiplos jogadores. O stress test abre 24 clientes simultâneos e verifica a distribuição em salas.
 
-Este projeto ainda é um protótipo local: não há conta, blockchain, dinheiro real ou persistência de inventário. A camada multiplayer atual é uma fundação authoritative de desenvolvimento e precisa de autenticação, matchmaking, persistência e observabilidade antes de produção.
+O sistema é uma fundação de desenvolvimento: ainda precisa de autenticação, matchmaking com regras de região/ping, persistência, escalabilidade horizontal, rate limit distribuído, observabilidade e revisão de segurança antes de produção.

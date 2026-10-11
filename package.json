@@ -1,12 +1,13 @@
 {
   "name": "khaaos-run",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test test/*.test.js",
+    "test:stress": "node --test test/stress.test.js",
     "server": "node server/server.js",
     "preview": "vite preview --host 0.0.0.0"
   },
