@@ -10,7 +10,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "test:game": "npm --prefix game-runtime test",
-    "test:official": "node --import tsx --test tests/official/*.test.ts; node --test tests/official/*.test.js",
+    "test:official": "node --import tsx --test tests/official/*.test.ts && node --test tests/official/*.test.js",
     "test:game:infra": "npm --prefix game-runtime run test:infra",
     "test:game:stress": "npm --prefix game-runtime run test:stress",
     "verify:all": "node scripts/verify-all.mjs"

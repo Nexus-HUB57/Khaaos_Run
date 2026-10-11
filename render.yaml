@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: khaaos-run
+    runtime: node
+    branch: main
+    buildCommand: >-
+      npm ci --no-audit --no-fund && npm run build &&
+      node scripts/write-render-health.mjs
+    startCommand: npm start
+    autoDeployTrigger: "off"
+    healthCheckPath: /healthz.json
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: WS_TOKEN_SECRET
+        sync: false
+      - key: REPL_ID
+        sync: false
+      - key: ZONE_OPERATOR_IDS
+        sync: false
