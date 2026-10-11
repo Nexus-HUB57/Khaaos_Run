@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ZoneStatus } from "@shared/schema";
 import { ZONE_PHASES } from "@shared/schema";
+import { useBattleRoom, type BattlePlayer, type RoomLoot } from "@/hooks/use-battle-room";
 
 // ─── Canvas drawing (BP_SafeZone visual equivalent) ──────────────────────────
 
@@ -29,6 +30,9 @@ function drawZoneCanvas(
   isShrinking: boolean,
   isOutside: boolean,
   tick: number,
+  otherPlayers: BattlePlayer[] = [],
+  lootItems: RoomLoot[] = [],
+  localUserId?: string,
 ) {
   const cx = (centerX / 100) * w;
   const cy = (centerY / 100) * h;
@@ -212,6 +216,44 @@ function drawZoneCanvas(
   ctx.textAlign = "left";
   ctx.fillText(`R: ${currentRadius.toFixed(1)}%`, cx + curR + 8, cy + 4);
 
+  // ── Loot markers (procedural / room loot) ──
+  for (const loot of lootItems) {
+    if (loot.isPickedUp) continue;
+    const lx = (loot.posX / 100) * w;
+    const ly = (loot.posY / 100) * h;
+    const rarityColor: Record<string, string> = {
+      COMUM: "#9ca3af", RARO: "#3b82f6", EPICO: "#a855f7", LENDARIO: "#f59e0b", MITICO: "#ef4444",
+    };
+    const col = rarityColor[loot.rarity] || "#9ca3af";
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // ── Other players (multiplayer) ──
+  for (const op of otherPlayers) {
+    if (localUserId && op.userId === localUserId) continue;
+    if (op.status !== "VIVO") continue;
+    const ox = (op.posX / 100) * w;
+    const oy = (op.posY / 100) * h;
+    ctx.beginPath();
+    ctx.arc(ox, oy, 8, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,255,180,0.35)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#00ffb4";
+    ctx.fill();
+    ctx.font = "9px 'Share Tech Mono', monospace";
+    ctx.fillStyle = "rgba(0,255,180,0.85)";
+    ctx.textAlign = "center";
+    ctx.fillText(op.displayName.slice(0, 10), ox, oy - 10);
+  }
+
   // ── "FORA DA ZONA" warning ──
   if (outside) {
     const alpha = 0.7 + 0.3 * Math.sin(tick * 0.2);
@@ -229,6 +271,22 @@ interface DamageEvent { id: number; damage: number; newHealth: number; time: Dat
 export default function ZonaPage() {
   const qc = useQueryClient();
   const { data: playerData, refetch: refetchPlayer } = usePlayer();
+
+  // ── Real-time Room (authoritative) ──────────────────────────────────────
+  const {
+    connected: wsConnected,
+    room: battleRoom,
+    zone: wsZone,
+    players: battlePlayers,
+    countdown,
+    updatePosition,
+    pickupLoot,
+    startMatch,
+    lastError: wsError,
+  } = useBattleRoom();
+
+  const inLiveRoom = wsConnected && !!battleRoom && (battleRoom.status === "IN_PROGRESS" || battleRoom.status === "COUNTDOWN");
+  const localUserId = (playerData as any)?.user?.id || (playerData as any)?.stats?.userId;
 
   // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -249,11 +307,14 @@ export default function ZonaPage() {
   const damageTimerRef = useRef<NodeJS.Timeout | null>(null);
   const logIdRef = useRef(0);
 
-  // Poll zone status every 2 seconds
-  const { data: zoneStatus } = useQuery<ZoneStatus>({
+  // Poll zone status every 2 seconds (fallback when not in live room)
+  const { data: httpZoneStatus } = useQuery<ZoneStatus>({
     queryKey: ["/api/zone/status"],
-    refetchInterval: 2000,
+    refetchInterval: inLiveRoom ? false : 2000,
   });
+
+  // Prefer authoritative WebSocket zone when in a live room
+  const zoneStatus: ZoneStatus | undefined | null = inLiveRoom && wsZone ? wsZone : httpZoneStatus;
 
   const startZone = useMutation({
     mutationFn: () => apiRequest("POST", "/api/zone/start", { centerX: 50, centerY: 50 }),
@@ -307,9 +368,10 @@ export default function ZonaPage() {
     }
   }, [zoneStatus]);
 
-  // Damage timer — Set Timer by Event equivalent (1 second tick)
+  // Damage timer — only in legacy HTTP mode (server is authoritative in live rooms)
   useEffect(() => {
     if (damageTimerRef.current) clearInterval(damageTimerRef.current);
+    if (inLiveRoom) return; // server tick owns damage
     if (!zoneStatus?.isActive) return;
 
     damageTimerRef.current = setInterval(() => {
@@ -319,7 +381,7 @@ export default function ZonaPage() {
     }, 1000);
 
     return () => { if (damageTimerRef.current) clearInterval(damageTimerRef.current); };
-  }, [zoneStatus?.isActive, zoneStatus?.damagePerTick]);
+  }, [zoneStatus?.isActive, zoneStatus?.damagePerTick, inLiveRoom]);
 
   // Canvas animation loop (requestAnimationFrame — Timeline equivalent)
   useEffect(() => {
@@ -359,13 +421,15 @@ export default function ZonaPage() {
       const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
       const frameOutside = isActive && dist > curR;
 
-      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, frameOutside, tick);
+      const others = inLiveRoom ? battlePlayers : [];
+      const loot = inLiveRoom && battleRoom ? battleRoom.loot : [];
+      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, frameOutside, tick, others, loot, localUserId);
       animRef.current = requestAnimationFrame(draw);
     };
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, [zoneStatus]);
+  }, [zoneStatus, inLiveRoom, battlePlayers, battleRoom, localUserId]);
 
   // Canvas click → move player (Get Distance To equivalent)
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -377,6 +441,11 @@ export default function ZonaPage() {
     const clamped = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
     setPlayerPos(clamped);
     playerPosRef.current = clamped;
+
+    // Send authoritative position to RoomManager (0-100 space)
+    if (inLiveRoom) {
+      updatePosition(clamped.x * 100, clamped.y * 100);
+    }
 
     // Recompute outside status
     if (zoneStatus) {
@@ -393,7 +462,7 @@ export default function ZonaPage() {
       setIsOutside(outside);
       isOutsideRef.current = outside;
     }
-  }, [zoneStatus]);
+  }, [zoneStatus, inLiveRoom, updatePosition]);
 
   const health = playerData?.stats?.health ?? 100;
   const maxHealth = playerData?.stats?.maxHealth ?? 100;
@@ -426,11 +495,28 @@ export default function ZonaPage() {
           </div>
           <p className="text-xs text-muted-foreground font-mono tracking-widest">
             BP_SAFEZONE · CÍRCULO DO MAPA · {ZONE_PHASES.length} FASES
+            {inLiveRoom && (
+              <span className="ml-3 text-cyan-400">
+                · MESH AO VIVO · {battleRoom?.playerCount ?? 0} OPERATIVOS
+                {countdown != null && countdown > 0 ? ` · INÍCIO ${countdown}s` : ""}
+              </span>
+            )}
+            {wsError && <span className="ml-2 text-red-400">· {wsError}</span>}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {!zoneStatus?.isActive ? (
+          {battleRoom?.status === "LOBBY" && (
+            <Button
+              onClick={startMatch}
+              className="bg-cyan-600/30 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-600/50 font-display tracking-widest text-xs gap-2"
+              variant="outline"
+            >
+              <Play className="w-4 h-4" />
+              INICIAR MATCH AO VIVO
+            </Button>
+          )}
+          {!zoneStatus?.isActive && !inLiveRoom ? (
             <Button
               data-testid="button-start-zone"
               onClick={() => startZone.mutate()}
@@ -439,7 +525,7 @@ export default function ZonaPage() {
               variant="outline"
             >
               <Play className="w-4 h-4" />
-              ATIVAR ZONA
+              ATIVAR ZONA (SOLO)
             </Button>
           ) : (
             <Button

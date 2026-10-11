@@ -23,6 +23,7 @@ import {
   type ZoneStatus,
   type PlayerStats,
 } from "@shared/schema";
+import { generateMatchContent } from "./ProceduralGenerator";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -351,33 +352,14 @@ class RoomManager {
     room.phaseStartedAt = Date.now();
     room.isShrinking = false;
 
-    // Spawn loot from presets + some procedural
-    room.loot = LOOT_PRESETS.map((p) => ({
+    // Procedural match content (seeded by room id — reproducible)
+    const generated = generateMatchContent(room.id, 28);
+    room.centerX = generated.zone.centerX;
+    room.centerY = generated.zone.centerY;
+    room.loot = generated.loot.map((l) => ({
+      ...l,
       id: this.nextLootId++,
-      name: p.name,
-      type: p.type,
-      rarity: p.rarity,
-      posX: p.posX,
-      posY: p.posY,
-      stats: p.stats as Record<string, number>,
-      isPickedUp: false,
     }));
-
-    // Extra procedural loot
-    for (let i = 0; i < 8; i++) {
-      const rarities = ["COMUM", "COMUM", "RARO", "EPICO"];
-      const types = ["ARMA", "DEFESA", "CURATIVO", "UTILIDADE"];
-      room.loot.push({
-        id: this.nextLootId++,
-        name: `Loot Procedural #${i + 1}`,
-        type: types[Math.floor(Math.random() * types.length)],
-        rarity: rarities[Math.floor(Math.random() * rarities.length)],
-        posX: Math.floor(Math.random() * 90) + 5,
-        posY: Math.floor(Math.random() * 90) + 5,
-        stats: { damage: 10 + Math.floor(Math.random() * 40) },
-        isPickedUp: false,
-      });
-    }
 
     // Reset players to alive
     for (const p of room.players.values()) {

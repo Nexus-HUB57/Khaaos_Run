@@ -8,6 +8,8 @@ import * as schema from "@shared/schema";
 import { ZONE_PHASES, PlayerStatus } from "@shared/schema";
 import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/RoomManager";
+import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
+import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -319,6 +321,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const summary = roomManager.getRoomSummary(req.params.id);
     if (!summary) return res.status(404).json({ message: "Room not found" });
     res.json(summary);
+  });
+
+  // ── ECONOMY ENGINE (formal market quotes + health) ───────────────────────
+  app.get("/api/economy/quote", requireAuth, (req, res) => {
+    try {
+      const type = String(req.query.type || "ARMA");
+      const rarity = String(req.query.rarity || "COMUM");
+      const circulating = parseInt(String(req.query.circulating || "0"), 10);
+      res.json(quoteItem(type, rarity, circulating));
+    } catch {
+      res.status(400).json({ message: "Invalid quote params" });
+    }
+  });
+
+  app.get("/api/economy/health", requireAuth, async (_req, res) => {
+    // Lightweight probe — production would aggregate from DB
+    res.json(
+      probeEconomyHealth({
+        totalWeaponsBalance: 0,
+        totalBonusBalance: 0,
+        activePlayers: 10,
+        purchasesLast24h: 25,
+        avgPurchaseKrc: 150,
+      }),
+    );
+  });
+
+  app.post("/api/economy/loan-preview", requireAuth, (req, res) => {
+    try {
+      const principal = Number(req.body.principal);
+      const days = Number(req.body.days);
+      res.json(computeLoan(principal, days));
+    } catch {
+      res.status(400).json({ message: "Invalid loan params" });
+    }
+  });
+
+  // ── PROCEDURAL PREVIEW (debug / design tools) ────────────────────────────
+  app.get("/api/procgen/loot", requireAuth, (req, res) => {
+    const seed = String(req.query.seed || "preview");
+    const count = parseInt(String(req.query.count || "16"), 10);
+    res.json(generateLootField(seed, count));
+  });
+
+  app.get("/api/procgen/match", requireAuth, (req, res) => {
+    const roomId = String(req.query.roomId || "preview_room");
+    res.json(generateMatchContent(roomId));
   });
 
   return httpServer;
