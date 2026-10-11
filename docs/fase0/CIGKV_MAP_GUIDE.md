@@ -109,6 +109,8 @@ Edit in Editor: configure all spawn points, loot points, environment markers
 - KhaaosLootPickup templates at loot spawn points
 - KhaaosSafeZone actor for zone shrinking
 - Niagara emitters for climate effects
+- Assign `NS_CIGKV_ZoneShrink` to `KhaaosSafeZone.ZoneBoundarySystem`
+- Configure Niagara user parameters `User.ZoneCenter` (Vector), `User.ZoneRadius` (Float), and `User.ZoneColor` (Linear Color)
 - Light sources + PostProcess volumes
 - NavMeshBoundsVolume for AI navigation
 - Audio volumes for KhaaosZoneAudio
@@ -127,7 +129,8 @@ GameMode → HUD: KhaaosHUD
 
 ```
 - PIE (Play In Editor) with 2+ players
-- Verify zone shrinking visual (Niagara)
+- Verify the Niagara zone boundary follows replicated center/radius on server and clients
+- Verify players outside the world-space zone take server-authoritative damage
 - Test ZEX interaction
 - Test Zu entry sequences
 - Verify loot spawning per phase

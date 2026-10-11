@@ -50,7 +50,7 @@
 | **Load Testing** | ✅ Implementado | 100-bot stress test, behavior profiles, JSON reports |
 | **Launch Readiness** | ✅ Implementado | Rate limiting, DDoS protection, monitoring, 14-point checklist |
 | **Build UE5 (compilação)** | ⏳ Pendente | Requer UE5.8 Editor + 50 GB+ SDK para compilar |
-| **3D Assets / Mapas** | ⏳ Pendente | Sem mapas jogáveis ou assets 3D ainda |
+| **3D Assets / Mapas** | ⏳ Pendente | Lógica e dados CIGKV iniciados; `.umap`, meshes e sistemas Niagara precisam ser criados/atribuídos no UE Editor |
 | **EAC Integration** | ⏳ Pendente | Easy Anti-Cheat requer build compilado + SDK |
 
 ---
@@ -730,7 +730,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | # | Tarefa | Prioridade | Critério de Aceite |
 |---|--------|------------|-------------------|
 | 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions |
-| 1.2 | Implementar Zone shrinking visual (Niagara VFX) | P0 | Anel visível, damage dentro, safe outside |
+| 1.2 | Implementar Zone shrinking visual (Niagara VFX) | P0 | Código de replicação/interpolação pronto; falta criar e atribuir `NS_CIGKV_ZoneShrink` no UE Editor |
 | 1.3 | Integrar KhaaosSafeZone com mapa real | P0 | Zone timer + phase advance funcionais |
 | 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 20+ loot points com rarity distribuída |
 | 1.5 | Protocolo Zu cinematográfico (sequência de entrada) | P1 | 3 variantes por mundo, decisão → dano/posicionamento |

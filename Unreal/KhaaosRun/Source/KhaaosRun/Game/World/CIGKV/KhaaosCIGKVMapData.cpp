@@ -16,8 +16,8 @@ TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVect
     TArray<const FCIGKVLootSpawnPoint*> ValidPoints;
     for (const FCIGKVLootSpawnPoint& Point : LootSpawnPoints)
     {
-        float Dist = FVector::Dist(Point.Location, ZoneCenter);
-        if (Dist <= ZoneRadius)
+        const float DistanceSquared = FVector::DistSquared2D(Point.Location, ZoneCenter);
+        if (DistanceSquared <= FMath::Square(ZoneRadius))
         {
             ValidPoints.Add(&Point);
         }

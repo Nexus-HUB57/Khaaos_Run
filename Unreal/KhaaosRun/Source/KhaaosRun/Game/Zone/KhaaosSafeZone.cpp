@@ -8,6 +8,9 @@
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -23,12 +26,19 @@ AKhaaosSafeZone::AKhaaosSafeZone()
         ShrinkRate       = 0.0f;
         CurrentPhase     = 0;
         bIsShrinking     = false;
-        bIsActive        = false;
-        DamagePerTick    = 0.0f;
+		bIsActive        = false;
+		DamagePerTick    = 0.0f;
+		WorldZoneCenter  = FVector::ZeroVector;
+		WorldZoneRadius  = 0.0f;
+		bWorldSpaceZone  = false;
+		bReplicates      = true;
+		NetUpdateFrequency = 10.0f;
 
         // ── Configuration ──
-        MapSize           = 10000.0f;
-        DamageTickInterval = 1.0f;
+		MapSize           = 10000.0f;
+		DamageTickInterval = 1.0f;
+		WorldMapMin       = FVector2D(-5000.0f, -5000.0f);
+		WorldMapMax       = FVector2D(10000.0f, 5000.0f);
 
         // ── Internal state ──
         WaitTimeRemaining  = 0.0f;
@@ -43,19 +53,41 @@ AKhaaosSafeZone::AKhaaosSafeZone()
 
 void AKhaaosSafeZone::BeginPlay()
 {
-        Super::BeginPlay();
+		Super::BeginPlay();
+		RefreshZoneVisual();
 }
 
 void AKhaaosSafeZone::Tick(float DeltaSeconds)
 {
         Super::Tick(DeltaSeconds);
 
-        if (!bIsActive || GetLocalRole() != ROLE_Authority)
-        {
-                return;
-        }
+		if (!bIsActive || GetLocalRole() != ROLE_Authority)
+		{
+				return;
+		}
 
-        // Phase wait period
+		if (bWorldSpaceZone && bWorldZoneTransition)
+		{
+				WorldZoneTransitionElapsed = FMath::Min(WorldZoneTransitionElapsed + DeltaSeconds, WorldZoneTransitionDuration);
+				const float Alpha = WorldZoneTransitionDuration > 0.0f
+					? FMath::Clamp(WorldZoneTransitionElapsed / WorldZoneTransitionDuration, 0.0f, 1.0f)
+					: 1.0f;
+				WorldZoneCenter = FMath::Lerp(WorldZoneStartCenter, WorldZoneTargetCenter, Alpha);
+				WorldZoneRadius = FMath::Lerp(WorldZoneStartRadius, WorldZoneTargetRadius, Alpha);
+				UpdateNormalizedZoneState();
+				ShrinkTimeRemaining = FMath::Max(0.0f, WorldZoneTransitionDuration - WorldZoneTransitionElapsed);
+				if (Alpha >= 1.0f)
+				{
+						bWorldZoneTransition = false;
+						bIsShrinking = false;
+				}
+				if (GetNetMode() != NM_DedicatedServer)
+				{
+						RefreshZoneVisual();
+				}
+		}
+
+		// Phase wait period
         if (!bIsShrinking && WaitTimeRemaining > 0.0f)
         {
                 WaitTimeRemaining -= DeltaSeconds;
@@ -101,17 +133,22 @@ void AKhaaosSafeZone::Tick(float DeltaSeconds)
 
 void AKhaaosSafeZone::OnRep_ZoneCenter()
 {
-        // Client-side zone center visual update
+		RefreshZoneVisual();
 }
 
 void AKhaaosSafeZone::OnRep_ZoneRadius()
 {
-        // Client-side zone ring visual update
+		RefreshZoneVisual();
 }
 
 void AKhaaosSafeZone::OnRep_Phase()
 {
-        // Client-side phase UI notification
+		// Client-side phase UI notification
+}
+
+void AKhaaosSafeZone::OnRep_ZoneVisual()
+{
+		RefreshZoneVisual();
 }
 
 // ─── Server Methods ─────────────────────────────────────────────────────────────
@@ -123,11 +160,12 @@ void AKhaaosSafeZone::ActivateZone()
                 return;
         }
 
-        bIsActive = true;
-        CurrentPhase = 0;
-
-        // Start first phase
-        AdvancePhase();
+		bIsActive = true;
+		if (!bWorldSpaceZone)
+		{
+				CurrentPhase = 0;
+				AdvancePhase();
+		}
 
         // Start damage tick timer
         if (UWorld* World = GetWorld())
@@ -140,8 +178,10 @@ void AKhaaosSafeZone::ActivateZone()
 
 void AKhaaosSafeZone::DeactivateZone()
 {
-        bIsActive = false;
-        bIsShrinking = false;
+		bIsActive = false;
+		bIsShrinking = false;
+		bWorldZoneTransition = false;
+		RefreshZoneVisual();
 
         if (UWorld* World = GetWorld())
         {
@@ -162,6 +202,126 @@ float AKhaaosSafeZone::DistanceToZoneEdge(const FVector2D& Position) const
 {
         float Distance = FVector2D::Distance(Position, ZoneCenter);
         return Distance - ZoneRadius; // Negative = inside
+}
+
+void AKhaaosSafeZone::SetWorldZone(const FVector& Center, float Radius, float InDamagePerSecond, float TransitionSeconds)
+{
+		if (!HasAuthority() || !FMath::IsFinite(Center.X) || !FMath::IsFinite(Center.Y) ||
+				!FMath::IsFinite(Center.Z) || !FMath::IsFinite(Radius) || !FMath::IsFinite(InDamagePerSecond) || Radius < 0.0f)
+		{
+				return;
+		}
+
+		const bool bCanTransition = bWorldSpaceZone && bIsActive && WorldZoneRadius > 0.0f && TransitionSeconds > 0.0f;
+		bWorldSpaceZone = true;
+		bIsActive = true;
+		DamagePerTick = FMath::Max(0.0f, InDamagePerSecond);
+		const float WorldWidth = FMath::Max(WorldMapMax.X - WorldMapMin.X, KINDA_SMALL_NUMBER);
+		const float WorldHeight = FMath::Max(WorldMapMax.Y - WorldMapMin.Y, KINDA_SMALL_NUMBER);
+		const float MaxRadius = FMath::Max(FMath::Min(WorldWidth, WorldHeight) * 0.5f, KINDA_SMALL_NUMBER);
+		TargetRadius = FMath::Clamp(Radius / MaxRadius * 100.0f, 0.0f, 100.0f);
+
+		if (bCanTransition)
+		{
+				WorldZoneStartCenter = WorldZoneCenter;
+				WorldZoneTargetCenter = Center;
+				WorldZoneStartRadius = WorldZoneRadius;
+				WorldZoneTargetRadius = Radius;
+				WorldZoneTransitionElapsed = 0.0f;
+				WorldZoneTransitionDuration = TransitionSeconds;
+				bWorldZoneTransition = true;
+				bIsShrinking = Radius < WorldZoneRadius;
+				ShrinkStartRadius = ZoneRadius;
+				ShrinkTimeRemaining = TransitionSeconds;
+		}
+		else
+		{
+				WorldZoneCenter = Center;
+				WorldZoneRadius = Radius;
+				WorldZoneTargetCenter = Center;
+				WorldZoneTargetRadius = Radius;
+				WorldZoneTransitionElapsed = 0.0f;
+				WorldZoneTransitionDuration = 0.0f;
+				bWorldZoneTransition = false;
+				bIsShrinking = false;
+				ShrinkTimeRemaining = 0.0f;
+				UpdateNormalizedZoneState();
+		}
+
+		ForceNetUpdate();
+		RefreshZoneVisual();
+}
+
+bool AKhaaosSafeZone::IsInsideWorldZone(const FVector& Position) const
+{
+		return bWorldSpaceZone && bIsActive &&
+				FVector::DistSquared2D(Position, WorldZoneCenter) <= FMath::Square(WorldZoneRadius);
+}
+
+void AKhaaosSafeZone::UpdateNormalizedZoneState()
+{
+		const float Width = FMath::Max(WorldMapMax.X - WorldMapMin.X, KINDA_SMALL_NUMBER);
+		const float Height = FMath::Max(WorldMapMax.Y - WorldMapMin.Y, KINDA_SMALL_NUMBER);
+		const float MaxRadius = FMath::Max(FMath::Min(Width, Height) * 0.5f, KINDA_SMALL_NUMBER);
+
+		ZoneCenter.X = FMath::Clamp((WorldZoneCenter.X - WorldMapMin.X) / Width * 100.0f, 0.0f, 100.0f);
+		ZoneCenter.Y = FMath::Clamp((WorldZoneCenter.Y - WorldMapMin.Y) / Height * 100.0f, 0.0f, 100.0f);
+		ZoneRadius = FMath::Clamp(WorldZoneRadius / MaxRadius * 100.0f, 0.0f, 100.0f);
+}
+
+void AKhaaosSafeZone::RefreshZoneVisual()
+{
+		if (!bWorldSpaceZone || !bIsActive)
+		{
+				if (ZoneBoundaryComponent)
+				{
+						ZoneBoundaryComponent->DeactivateImmediate();
+				}
+				return;
+		}
+
+		if (GetNetMode() == NM_DedicatedServer || !GetWorld())
+		{
+				return;
+		}
+
+		UNiagaraSystem* BoundarySystem = ZoneBoundarySystem.Get();
+		if (!BoundarySystem)
+		{
+				BoundarySystem = ZoneBoundarySystem.LoadSynchronous();
+		}
+		if (!BoundarySystem)
+		{
+				if (!bMissingBoundaryAssetWarningLogged && !ZoneBoundarySystem.IsNull())
+				{
+						UE_LOG(LogKhaaosRun, Warning, TEXT("KhaaosSafeZone: failed to load Niagara boundary asset"));
+						bMissingBoundaryAssetWarningLogged = true;
+				}
+				return;
+		}
+
+		if (!ZoneBoundaryComponent || ZoneBoundaryComponent->GetAsset() != BoundarySystem)
+		{
+				if (ZoneBoundaryComponent)
+				{
+						ZoneBoundaryComponent->DestroyComponent();
+				}
+				ZoneBoundaryComponent = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+						GetWorld(), BoundarySystem, WorldZoneCenter + FVector(0.0f, 0.0f, ZoneVisualHeightOffset),
+						FRotator::ZeroRotator, FVector::OneVector, false, false, ENCPoolMethod::None, false);
+		}
+
+		if (ZoneBoundaryComponent)
+		{
+				ZoneBoundaryComponent->SetWorldLocation(WorldZoneCenter + FVector(0.0f, 0.0f, ZoneVisualHeightOffset));
+				ZoneBoundaryComponent->SetVariableVec3(ZoneCenterParameter, WorldZoneCenter);
+				ZoneBoundaryComponent->SetVariableFloat(ZoneRadiusParameter, WorldZoneRadius);
+				ZoneBoundaryComponent->SetVariableLinearColor(ZoneColorParameter, ZoneBoundaryColor);
+				if (!ZoneBoundaryComponent->IsActive())
+				{
+						ZoneBoundaryComponent->Activate(true);
+				}
+		}
 }
 
 void AKhaaosSafeZone::GetZoneStatus(float& OutRadiusPct, float& OutTargetPct, int32& OutPhase, bool& OutShrinking, float& OutDamage, float& OutWaitRemaining, float& OutShrinkRemaining) const
@@ -187,8 +347,11 @@ void AKhaaosSafeZone::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
         DOREPLIFETIME(AKhaaosSafeZone, ShrinkRate);
         DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosSafeZone, CurrentPhase, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME(AKhaaosSafeZone, bIsShrinking);
-        DOREPLIFETIME(AKhaaosSafeZone, bIsActive);
-        DOREPLIFETIME(AKhaaosSafeZone, DamagePerTick);
+		DOREPLIFETIME(AKhaaosSafeZone, bIsActive);
+		DOREPLIFETIME(AKhaaosSafeZone, DamagePerTick);
+		DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosSafeZone, WorldZoneCenter, COND_None, REPNOTIFY_Always);
+		DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosSafeZone, WorldZoneRadius, COND_None, REPNOTIFY_Always);
+		DOREPLIFETIME(AKhaaosSafeZone, bWorldSpaceZone);
 }
 
 // ─── Internal ───────────────────────────────────────────────────────────────────

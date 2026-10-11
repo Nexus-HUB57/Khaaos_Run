@@ -5,6 +5,9 @@
 #include "GameFramework/Actor.h"
 #include "KhaaosSafeZone.generated.h"
 
+class UNiagaraComponent;
+class UNiagaraSystem;
+
 // ─── Zone Phase Config (from schema.ts ZONE_PHASES) ───────────────────────────
 
 /**
@@ -95,12 +98,22 @@ public:
 	uint8 bIsShrinking : 1;
 
 	/** Whether the zone system is active. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Zone")
+	UPROPERTY(ReplicatedUsing = OnRep_ZoneVisual, BlueprintReadOnly, Category = "Khaaos|Zone")
 	uint8 bIsActive : 1;
 
 	/** Damage per tick for players outside the zone. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Zone")
 	float DamagePerTick;
+
+	/** World-space zone state used by the CIGKV map. */
+	UPROPERTY(ReplicatedUsing = OnRep_ZoneVisual, BlueprintReadOnly, Category = "Khaaos|Zone|World")
+	FVector WorldZoneCenter;
+
+	UPROPERTY(ReplicatedUsing = OnRep_ZoneVisual, BlueprintReadOnly, Category = "Khaaos|Zone|World")
+	float WorldZoneRadius;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Zone|World")
+	uint8 bWorldSpaceZone : 1;
 
 	// ─── Configuration ──────────────────────────────────────────────────────
 
@@ -116,6 +129,32 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone")
 	float DamageTickInterval;
 
+	/** XY bounds of the CIGKV map, used to publish normalized minimap coordinates. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|World")
+	FVector2D WorldMapMin;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|World")
+	FVector2D WorldMapMax;
+
+	/** Niagara boundary asset; its user parameters are configurable below. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX")
+	TSoftObjectPtr<UNiagaraSystem> ZoneBoundarySystem;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX")
+	FName ZoneCenterParameter = TEXT("User.ZoneCenter");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX")
+	FName ZoneRadiusParameter = TEXT("User.ZoneRadius");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX")
+	FName ZoneColorParameter = TEXT("User.ZoneColor");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX")
+	FLinearColor ZoneBoundaryColor = FLinearColor(0.08f, 0.75f, 1.0f, 1.0f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Zone|VFX", meta = (ClampMin = "0.0"))
+	float ZoneVisualHeightOffset = 150.0f;
+
 	// ─── RepNotify ──────────────────────────────────────────────────────────
 
 	UFUNCTION()
@@ -126,6 +165,9 @@ public:
 
 	UFUNCTION()
 	void OnRep_Phase();
+
+	UFUNCTION()
+	void OnRep_ZoneVisual();
 
 	// ─── Delegates ──────────────────────────────────────────────────────────
 
@@ -148,6 +190,17 @@ public:
 	/** Deactivate the zone (match end). */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Zone")
 	void DeactivateZone();
+
+	/** Configure a server-authoritative safe zone using world-space units. */
+	UFUNCTION(BlueprintCallable, Category = "Khaaos|Zone|World")
+	void SetWorldZone(const FVector& Center, float Radius, float DamagePerSecond, float TransitionSeconds = 0.0f);
+
+	/** Test a world-space position against the CIGKV safe zone. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Zone|World")
+	bool IsInsideWorldZone(const FVector& Position) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Zone|World")
+	bool UsesWorldSpaceZone() const { return bWorldSpaceZone; }
 
 	/** Check if a position is inside the safe zone. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Zone")
@@ -176,6 +229,22 @@ protected:
 	/** Radius at the start of current shrink (for interpolation). */
 	UPROPERTY()
 	float ShrinkStartRadius;
+
+	FVector WorldZoneStartCenter = FVector::ZeroVector;
+	FVector WorldZoneTargetCenter = FVector::ZeroVector;
+	float WorldZoneStartRadius = 0.0f;
+	float WorldZoneTargetRadius = 0.0f;
+	float WorldZoneTransitionElapsed = 0.0f;
+	float WorldZoneTransitionDuration = 0.0f;
+	bool bWorldZoneTransition = false;
+	bool bMissingBoundaryAssetWarningLogged = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraComponent> ZoneBoundaryComponent;
+
+	/** Refresh the client-side Niagara boundary and normalized map coordinates. */
+	void RefreshZoneVisual();
+	void UpdateNormalizedZoneState();
 
 	/** Randomly pick a new zone center for the next phase. */
 	void PickNextZoneCenter();
