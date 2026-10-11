@@ -1,0 +1,28 @@
+Para baixar o Lyra Starter Game, você vai utilizar o Epic Games Launcher (o mesmo programa usado para jogar Fortnite ou baixar a própria Unreal Engine).
+Siga este passo a passo para instalar o projeto de exemplo:
+
+Passo 1: Abrir o Marketplace da Unreal
+
+1. Abra o Epic Games Launcher no seu computador.
+2. No menu lateral esquerdo, clique na aba Unreal Engine.
+3. Na barra de navegação superior, clique em Marketplace (Loja).
+
+Passo 2: Buscar e Adicionar o Lyra à Biblioteca
+
+1. No campo de busca do Marketplace, digite Lyra Starter Game.
+2. Clique no projeto (ele é desenvolvido pela própria Epic Games e é totalmente gratuito).
+3. Clique no botão Grátis (ou Adicionar ao Carrinho / Obter) para vinculá-lo à sua conta.
+
+Passo 3: Criar o Projeto
+
+1. Após adquirir, vá para a aba Biblioteca (Library) dentro da seção da Unreal Engine.
+2. Role a página até a seção Cofre (Vault), onde ficam os seus pacotes baixados.
+3. Procure por Lyra Starter Game e clique no botão Criar Projeto (Create Project).
+4. Escolha a versão da Unreal Engine que você tem instalada (recomenda-se a mais recente) e a pasta do seu computador onde o projeto será salvo.
+
+O que fazer assim que o projeto abrir?
+
+Assim que o download terminar e você abrir o projeto na Unreal Engine, mude para o modo de jogo focado em eliminação para começar a estudar a estrutura de um Battle Royale:
+• No painel de arquivos (Content Browser), navegue até: Plugins -> LyraElectraPlay (ou procure pelos mapas de Shooter).
+• Abra o mapa chamado L-ShooterGym (um mapa de testes com armas e alvos).
+• Clique no botão Play no topo do editor. Você já poderá correr, pular, coletar armas e atirar em um ambiente multiplayer perfeitamente replicado em rede.
