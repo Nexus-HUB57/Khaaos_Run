@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations,
+  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
-  type ZoneSession, type LootItem, type Elimination,
+  type ZoneSession, type LootItem, type Elimination, type MatchResult,
   PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS,
 } from "@shared/schema";
 import { eq, desc, and, isNull } from "drizzle-orm";
@@ -45,6 +45,14 @@ export interface IStorage {
   respawnPlayer(userId: string): Promise<PlayerStats>;
   getEliminations(limit?: number): Promise<Elimination[]>;
   logElimination(data: Partial<Elimination> & { eliminatedUserId: string; cause: string }): Promise<Elimination>;
+  // Ranking
+  createMatchResult(data: {
+    roomId: string; userId: string; placement: number; kills: number;
+    damageDealt: number; survivedMs: number; ratingBefore: number; ratingAfter: number; xpGained: number;
+  }): Promise<MatchResult>;
+  getLeaderboard(limit?: number): Promise<PlayerStats[]>;
+  getMatchHistory(userId: string, limit?: number): Promise<MatchResult[]>;
+  addKill(userId: string): Promise<void>;
   // Init
   initializeUser(userId: string): Promise<void>;
 }
@@ -273,6 +281,30 @@ export class DatabaseStorage implements IStorage {
   async logElimination(data: Partial<Elimination> & { eliminatedUserId: string; cause: string }): Promise<Elimination> {
     const [elim] = await db.insert(eliminations).values(data as any).returning();
     return elim;
+  }
+
+  async createMatchResult(data: {
+    roomId: string; userId: string; placement: number; kills: number;
+    damageDealt: number; survivedMs: number; ratingBefore: number; ratingAfter: number; xpGained: number;
+  }): Promise<MatchResult> {
+    const [row] = await db.insert(matchResults).values(data as any).returning();
+    return row;
+  }
+
+  async getLeaderboard(limit = 50): Promise<PlayerStats[]> {
+    return await db.select().from(playerStats).orderBy(desc(playerStats.rating)).limit(limit);
+  }
+
+  async getMatchHistory(userId: string, limit = 20): Promise<MatchResult[]> {
+    return await db.select().from(matchResults)
+      .where(eq(matchResults.userId, userId))
+      .orderBy(desc(matchResults.createdAt))
+      .limit(limit);
+  }
+
+  async addKill(userId: string): Promise<void> {
+    const stats = await this.getPlayerStats(userId);
+    await this.updatePlayerStats(userId, { kills: stats.kills + 1 });
   }
 }
 

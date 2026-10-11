@@ -81,6 +81,12 @@ export const playerStats = pgTable("player_stats", {
   kills: integer("kills").notNull().default(0),
   deaths: integer("deaths").notNull().default(0),
   lastSalaryDate: timestamp("last_salary_date"),
+  // Persistent competitive ranking
+  rating: integer("rating").notNull().default(1000), // ELO-like
+  matchesPlayed: integer("matches_played").notNull().default(0),
+  wins: integer("wins").notNull().default(0),
+  top5: integer("top5").notNull().default(0),
+  seasonKills: integer("season_kills").notNull().default(0),
 });
 
 export const bankAccounts = pgTable("bank_accounts", {
@@ -166,6 +172,21 @@ export const eliminations = pgTable("eliminations", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Match results for ranking history / leaderboard
+export const matchResults = pgTable("match_results", {
+  id: serial("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  userId: text("user_id").notNull(),
+  placement: integer("placement").notNull(), // 1 = winner
+  kills: integer("kills").notNull().default(0),
+  damageDealt: integer("damage_dealt").notNull().default(0),
+  survivedMs: integer("survived_ms").notNull().default(0),
+  ratingBefore: integer("rating_before").notNull(),
+  ratingAfter: integer("rating_after").notNull(),
+  xpGained: integer("xp_gained").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const playerStatsRelations = relations(playerStats, ({ one }) => ({
   user: one(users, { fields: [playerStats.userId], references: [users.id] }),
@@ -197,7 +218,28 @@ export type PlayerStats = typeof playerStats.$inferSelect;
 export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
+export type MatchResult = typeof matchResults.$inferSelect;
 export type Rank = keyof typeof PatenteKR;
+
+/** XP thresholds for patente progression */
+export const RANK_XP_THRESHOLDS: Record<string, number> = {
+  ZHEERS: 0,
+  ONITH: 200,
+  SKEETW: 500,
+  HURAN: 1000,
+  VENEX: 2000,
+  KHAEL: 4000,
+  MALAKOR: 8000,
+  OVERLORD: 15000,
+};
+
+export function rankFromXp(xp: number): string {
+  const order = ["OVERLORD", "MALAKOR", "KHAEL", "VENEX", "HURAN", "SKEETW", "ONITH", "ZHEERS"];
+  for (const r of order) {
+    if (xp >= (RANK_XP_THRESHOLDS[r] ?? 0)) return r;
+  }
+  return "ZHEERS";
+}
 
 export interface DepositRequest { amountUsd: number; }
 export interface TransferRequest { amountKrc: number; destination: "fbm" | "weapons" | "bonus"; }

@@ -384,6 +384,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(generateMatchContent(roomId));
   });
 
+  // ── PERSISTENT RANKING / LEADERBOARD ─────────────────────────────────────
+  app.get("/api/ranking/leaderboard", requireAuth, async (req, res) => {
+    try {
+      const limit = Math.min(100, parseInt(String(req.query.limit || "50"), 10));
+      res.json(await storage.getLeaderboard(limit));
+    } catch {
+      res.status(500).json({ message: "Failed to load leaderboard" });
+    }
+  });
+
+  app.get("/api/ranking/history", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const limit = Math.min(50, parseInt(String(req.query.limit || "20"), 10));
+      res.json(await storage.getMatchHistory(userId, limit));
+    } catch {
+      res.status(500).json({ message: "Failed to load match history" });
+    }
+  });
+
+  app.get("/api/ranking/me", requireAuth, async (req, res) => {
+    try {
+      const stats = await storage.getPlayerStats(getUserId(req));
+      res.json({
+        rating: stats.rating,
+        rank: stats.rank,
+        xp: stats.xp,
+        matchesPlayed: stats.matchesPlayed,
+        wins: stats.wins,
+        top5: stats.top5,
+        seasonKills: stats.seasonKills,
+        kills: stats.kills,
+        deaths: stats.deaths,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to load ranking" });
+    }
+  });
+
   // ── MONTE-CARLO ECONOMY SIMULATION ───────────────────────────────────────
   app.post("/api/economy/simulate", requireAuth, (req, res) => {
     try {

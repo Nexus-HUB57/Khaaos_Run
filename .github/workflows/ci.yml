@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify official app and game runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            game-runtime/package-lock.json
+
+      - name: Install official app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install game runtime dependencies
+        working-directory: game-runtime
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify both projects
+        run: npm run verify:all

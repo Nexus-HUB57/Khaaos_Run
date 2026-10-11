@@ -208,7 +208,8 @@ export function useBattleRoom() {
   const leave = useCallback(() => send({ type: "leave" }), [send]);
 
   const attack = useCallback(
-    (targetId: string) => send({ type: "attack", targetId }),
+    (targetId: string) =>
+      send({ type: "attack", targetId, clientTimestamp: Date.now() }),
     [send],
   );
 

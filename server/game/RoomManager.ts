@@ -25,6 +25,8 @@ import {
 } from "@shared/schema";
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
+import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
+import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,9 @@ export interface RoomPlayer {
   equippedDamage: number;   // from equipped weapon stats
   equippedRange: number;    // attack range in map %
   lastAttackAt: number;     // epoch ms — fire rate gate
+  posHistory: PositionHistory;
+  damageDealt: number;
+  joinedMatchAt: number;
 }
 
 export interface RoomLoot {
@@ -93,7 +98,7 @@ export type ClientMessage =
   | { type: "leave" }
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
-  | { type: "attack"; targetId: string }
+  | { type: "attack"; targetId: string; clientTimestamp?: number }
   | { type: "ready" }
   | { type: "start" }; // only host / admin
 
@@ -105,7 +110,7 @@ export type ServerMessage =
   | { type: "loot_picked"; lootId: number; by: string }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
-  | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number }[] }
+  | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
   | { type: "error"; message: string }
   | { type: "countdown"; seconds: number };
 
@@ -212,7 +217,7 @@ class RoomManager {
         break;
       }
       case "attack": {
-        this.handleAttack(userId, msg.targetId);
+        this.handleAttack(userId, msg.targetId, msg.clientTimestamp);
         break;
       }
       case "ready":
@@ -301,6 +306,9 @@ class RoomManager {
       equippedDamage: 15, // baseline unarmed / starter
       equippedRange: 8,
       lastAttackAt: 0,
+      posHistory: new PositionHistory(1000),
+      damageDealt: 0,
+      joinedMatchAt: Date.now(),
     };
 
     room.players.set(userId, player);
@@ -399,6 +407,10 @@ class RoomManager {
       p.health = p.maxHealth;
       p.kills = 0;
       p.lastAttackAt = 0;
+      p.damageDealt = 0;
+      p.joinedMatchAt = Date.now();
+      p.posHistory.clear();
+      p.posHistory.push(p.posX, p.posY);
       room.playerGrid.insert({ ...p, id: p.userId });
     }
 
@@ -525,16 +537,55 @@ class RoomManager {
         room.tickHandle = null;
       }
 
-      const rankings = [...room.players.values()]
-        .map((p) => ({ userId: p.userId, kills: p.kills }))
-        .sort((a, b) => b.kills - a.kills);
+      // Build placement list: winner first, then by kills, then by survival
+      const all = [...room.players.values()];
+      const winner = alive[0] ?? null;
+      const others = all
+        .filter((p) => p.userId !== winner?.userId)
+        .sort((a, b) => b.kills - a.kills || (b.joinedMatchAt - a.joinedMatchAt));
 
-      this.broadcast(room, {
-        type: "match_finished",
-        winnerId: room.winnerId,
-        rankings,
-      });
-      this.broadcastRoomState(room);
+      const ordered = winner ? [winner, ...others] : others;
+      const participants: MatchParticipant[] = ordered.map((p, idx) => ({
+        userId: p.userId,
+        kills: p.kills,
+        damageDealt: p.damageDealt,
+        survivedMs: (room.finishedAt ?? Date.now()) - p.joinedMatchAt,
+        placement: idx + 1,
+        isWinner: p.userId === room.winnerId,
+      }));
+
+      // Persist ranking asynchronously then broadcast enriched results
+      applyMatchRankings(room.id, participants)
+        .then((results) => {
+          const rankings = results.map((r) => ({
+            userId: r.userId,
+            kills: r.kills,
+            placement: r.placement,
+            xpGained: r.xpGained,
+            ratingAfter: r.ratingAfter,
+            rankAfter: r.rankAfter,
+            promoted: r.promoted,
+          }));
+          this.broadcast(room, {
+            type: "match_finished",
+            winnerId: room.winnerId,
+            rankings,
+          });
+          this.broadcastRoomState(room);
+        })
+        .catch((err) => {
+          console.error("[Ranking] failed", err);
+          this.broadcast(room, {
+            type: "match_finished",
+            winnerId: room.winnerId,
+            rankings: ordered.map((p, i) => ({
+              userId: p.userId,
+              kills: p.kills,
+              placement: i + 1,
+            })),
+          });
+          this.broadcastRoomState(room);
+        });
     }
   }
 
@@ -552,6 +603,7 @@ class RoomManager {
     player.posX = Math.max(0, Math.min(100, x));
     player.posY = Math.max(0, Math.min(100, y));
     player.lastSeenAt = Date.now();
+    player.posHistory.push(player.posX, player.posY, player.lastSeenAt);
     room.playerGrid.update({ ...player, id: userId });
 
     // Interest management: push nearby entities only to this client
@@ -608,7 +660,11 @@ class RoomManager {
    * Authoritative PvP attack.
    * Range check via spatial grid + fire-rate gate + damage application.
    */
-  handleAttack(attackerId: string, targetId: string) {
+  /**
+   * Authoritative PvP attack with lag compensation.
+   * Rewinds target position history to client shot time (clamped).
+   */
+  handleAttack(attackerId: string, targetId: string, clientTimestamp?: number) {
     const roomId = this.userToRoom.get(attackerId);
     if (!roomId) return;
     const room = this.rooms.get(roomId);
@@ -620,26 +676,38 @@ class RoomManager {
     if (attacker.status !== "VIVO" || target.status !== "VIVO") return;
     if (attackerId === targetId) return;
 
-    // Fire rate: min 800ms between attacks
     const now = Date.now();
     if (now - attacker.lastAttackAt < 800) {
       if (attacker.ws) this.send(attacker.ws, { type: "error", message: "Fire rate limited" });
       return;
     }
 
-    // Range check
-    const dx = attacker.posX - target.posX;
-    const dy = attacker.posY - target.posY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
     const range = attacker.equippedRange || 8;
-    if (dist > range) {
-      if (attacker.ws) this.send(attacker.ws, { type: "error", message: "Target out of range" });
+    const result = lagCompensatedHit({
+      attackerHistory: attacker.posHistory,
+      targetHistory: target.posHistory,
+      attackerCurrent: { x: attacker.posX, y: attacker.posY },
+      targetCurrent: { x: target.posX, y: target.posY },
+      range,
+      serverReceiveTime: now,
+      clientTimestamp,
+      estimatedOneWayMs: 50,
+    });
+
+    if (!result.hit) {
+      if (attacker.ws) {
+        this.send(attacker.ws, {
+          type: "error",
+          message: `Miss (lag-comp dist check, rewind ${result.rewindMs}ms)`,
+        });
+      }
       return;
     }
 
     attacker.lastAttackAt = now;
     const damage = Math.max(5, attacker.equippedDamage || 15);
     target.health = Math.max(0, target.health - damage);
+    attacker.damageDealt += damage;
 
     this.broadcast(room, {
       type: "damage_dealt",
@@ -654,11 +722,9 @@ class RoomManager {
       attacker.kills += 1;
       room.playerGrid.update({ ...target, id: target.userId });
 
-      storage
-        .eliminatePlayer(target.userId, "PVP", target.displayName)
-        .catch(console.error);
+      storage.eliminatePlayer(target.userId, "PVP", target.displayName).catch(console.error);
+      storage.addKill(attacker.userId).catch(console.error);
 
-      // Award kill XP-equivalent: small KRC later via economy
       this.broadcast(room, {
         type: "player_eliminated",
         userId: target.userId,
