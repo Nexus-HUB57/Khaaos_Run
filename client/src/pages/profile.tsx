@@ -131,16 +131,6 @@ export default function Profile() {
           })}
         </div>
       </CyberCard>
-    </div>
-  );
-}
-
-function StatBox({ label, value, icon: Icon, color }: any) {
-  return (
-    <div className="bg-black/30 p-3 border border-border/40 flex flex-col items-center justify-center gap-1">
-      <Icon className={`w-4 h-4 ${color}`} />
-      <span className="text-sm font-bold font-display text-foreground">{value}</span>
-      <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-widest">{label}</span>
 
       {/* Competitive ranking summary */}
       {ranking && (
@@ -175,6 +165,17 @@ function StatBox({ label, value, icon: Icon, color }: any) {
           </div>
         </CyberCard>
       )}
+    </div>
+  );
+}
+
+function StatBox({ label, value, icon: Icon, color }: any) {
+  return (
+    <div className="bg-black/30 p-3 border border-border/40 flex flex-col items-center justify-center gap-1">
+      <Icon className={`w-4 h-4 ${color}`} />
+      <span className="text-sm font-bold font-display text-foreground">{value}</span>
+      <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-widest">{label}</span>
+
     </div>
   );
 }

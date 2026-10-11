@@ -28,6 +28,7 @@ import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
+import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -185,31 +186,41 @@ class RoomManager {
   }
 
   attach(httpServer: Server) {
-    this.wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+    this.wss = new WebSocketServer({
+      server: httpServer,
+      path: "/ws",
+      handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
+      verifyClient: ({ req }, done) => {
+        const offeredProtocols = (req.headers["sec-websocket-protocol"] ?? "")
+          .split(",")
+          .map((protocol) => protocol.trim());
+        const tokenProtocol = offeredProtocols.find((protocol) => protocol.startsWith("khaaos-token."));
+        const token = tokenProtocol?.slice("khaaos-token.".length);
+        const userId = token ? verifyWsAccessToken(token) : null;
+        if (!offeredProtocols.includes("khaaos-v1") || !userId) {
+          done(false, 401, "Unauthorized");
+          return;
+        }
+        (req as typeof req & { khaaosUserId?: string }).khaaosUserId = userId;
+        done(true);
+      },
+    });
     this.matchmaking.start();
 
     this.wss.on("connection", (ws, req) => {
-      // Extract userId from query or wait for first message
-      // For simplicity we expect the client to send { type: "auth", userId, token } first
-      // In production use session cookie or JWT verification.
-      let userId: string | null = null;
+      const userId = (req as typeof req & { khaaosUserId?: string }).khaaosUserId;
+      if (!userId) {
+        ws.close(1008, "Unauthorized");
+        return;
+      }
       let displayName = "Operativo";
 
       ws.on("message", async (raw) => {
         try {
-          const msg = JSON.parse(raw.toString()) as ClientMessage & { userId?: string; displayName?: string };
-
-          // First message carries auth (join always includes userId)
-          if (!userId && msg.userId) {
-            userId = String(msg.userId);
-            displayName = msg.displayName || "Operativo";
+          const msg = JSON.parse(raw.toString()) as ClientMessage;
+          if (msg.type === "join" && typeof msg.displayName === "string") {
+            displayName = msg.displayName.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 32) || "Operativo";
           }
-
-          if (!userId) {
-            this.send(ws, { type: "error", message: "Auth required: send userId first" });
-            return;
-          }
-
           await this.handleMessage(userId, displayName, ws, msg);
         } catch (err: any) {
           this.send(ws, { type: "error", message: err.message || "Invalid message" });
@@ -217,15 +228,19 @@ class RoomManager {
       });
 
       ws.on("close", () => {
-        if (userId) this.onDisconnect(userId);
+        this.onDisconnect(userId);
       });
 
       ws.on("error", () => {
-        if (userId) this.onDisconnect(userId);
+        this.onDisconnect(userId);
       });
     });
 
     console.log("[RoomManager] WebSocket server attached at /ws");
+  }
+
+  stop() {
+    this.matchmaking.stop();
   }
 
   // ─── Message Handler ─────────────────────────────────────────────────────

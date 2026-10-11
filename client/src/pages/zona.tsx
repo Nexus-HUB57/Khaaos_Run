@@ -314,6 +314,9 @@ export default function ZonaPage() {
     queryKey: ["/api/zone/status"],
     refetchInterval: inLiveRoom ? false : 2000,
   });
+  const { data: zonePermissions } = useQuery<{ canManageZone: boolean }>({
+    queryKey: ["/api/zone/permissions"],
+  });
 
   // Prefer authoritative WebSocket zone when in a live room
   const zoneStatus: ZoneStatus | undefined | null = inLiveRoom && wsZone ? wsZone : httpZoneStatus;
@@ -540,28 +543,30 @@ export default function ZonaPage() {
               INICIAR MATCH AO VIVO
             </Button>
           )}
-          {!zoneStatus?.isActive && !inLiveRoom ? (
-            <Button
-              data-testid="button-start-zone"
-              onClick={() => startZone.mutate()}
-              disabled={startZone.isPending}
-              className="bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 font-display tracking-widest text-xs gap-2"
-              variant="outline"
-            >
-              <Play className="w-4 h-4" />
-              ATIVAR ZONA (SOLO)
-            </Button>
-          ) : (
-            <Button
-              data-testid="button-stop-zone"
-              onClick={() => stopZone.mutate()}
-              disabled={stopZone.isPending}
-              variant="outline"
-              className="border-red-500/40 text-red-400 hover:bg-red-500/10 font-display tracking-widest text-xs gap-2"
-            >
-              <Square className="w-4 h-4" />
-              DESATIVAR
-            </Button>
+          {zonePermissions?.canManageZone && !inLiveRoom && (
+            !zoneStatus?.isActive ? (
+              <Button
+                data-testid="button-start-zone"
+                onClick={() => startZone.mutate()}
+                disabled={startZone.isPending}
+                className="bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 font-display tracking-widest text-xs gap-2"
+                variant="outline"
+              >
+                <Play className="w-4 h-4" />
+                ATIVAR ZONA (SOLO)
+              </Button>
+            ) : (
+              <Button
+                data-testid="button-stop-zone"
+                onClick={() => stopZone.mutate()}
+                disabled={stopZone.isPending}
+                variant="outline"
+                className="border-red-500/40 text-red-400 hover:bg-red-500/10 font-display tracking-widest text-xs gap-2"
+              >
+                <Square className="w-4 h-4" />
+                DESATIVAR
+              </Button>
+            )
           )}
           <Button
             data-testid="button-heal-player"

@@ -20,11 +20,13 @@ export interface IStorage {
   // Loans
   getLoans(userId: string): Promise<Loan[]>;
   getLoan(id: number): Promise<Loan | undefined>;
+  getLoanForUser(id: number, userId: string): Promise<Loan | undefined>;
   createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
   updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   // Items
   getItems(userId: string): Promise<Item[]>;
   getItem(id: number): Promise<Item | undefined>;
+  getItemForUser(id: number, userId: string): Promise<Item | undefined>;
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   // Zone
@@ -105,6 +107,11 @@ export class DatabaseStorage implements IStorage {
     return loan;
   }
 
+  async getLoanForUser(id: number, userId: string): Promise<Loan | undefined> {
+    const [loan] = await db.select().from(loans).where(and(eq(loans.id, id), eq(loans.userId, userId)));
+    return loan;
+  }
+
   async createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan> {
     const [newLoan] = await db.insert(loans).values(loan as any).returning();
     return newLoan;
@@ -121,6 +128,11 @@ export class DatabaseStorage implements IStorage {
 
   async getItem(id: number): Promise<Item | undefined> {
     const [item] = await db.select().from(items).where(eq(items.id, id));
+    return item;
+  }
+
+  async getItemForUser(id: number, userId: string): Promise<Item | undefined> {
+    const [item] = await db.select().from(items).where(and(eq(items.id, id), eq(items.userId, userId)));
     return item;
   }
 

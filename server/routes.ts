@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import * as schema from "@shared/schema";
@@ -11,6 +11,8 @@ import { roomManager } from "./game/RoomManager";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
+import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
+import { isZoneOperator } from "./game/zoneAuthorization";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -28,6 +30,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     next();
   };
+
+  const requireZoneOperator = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    if (!isZoneOperator(getUserId(req))) return res.status(403).json({ message: "Apenas operadores autorizados podem controlar a zona" });
+    next();
+  };
+
+  app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(createWsAccessToken(getUserId(req)));
+    } catch {
+      res.status(503).json({ message: "Autenticação WebSocket indisponível" });
+    }
+  });
+
+  app.get("/api/zone/permissions", requireAuth, (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ canManageZone: isZoneOperator(getUserId(req)) });
+  });
 
   const parseRouteId = (value: string | string[]): number | null => {
     const rawValue = Array.isArray(value) ? value[0] : value;
@@ -111,7 +133,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
-      const loan = await storage.getLoan(id);
+      const loan = await storage.getLoanForUser(id, userId);
       if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
       const bank = await storage.getBankAccount(userId);
       const due = Number(loan.totalDue);
@@ -154,7 +176,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
-      const item = await storage.getItem(id);
+      const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       let effect: any = {};
       if (item.type === "CURATIVO") { await storage.healPlayer(userId, 25); effect = { healed: 25 }; }
@@ -171,7 +193,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const input = api.items.repair.input.parse(req.body);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
-      const item = await storage.getItem(id);
+      const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       const bank = await storage.getBankAccount(userId);
       if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
@@ -252,7 +274,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/zone/start", requireAuth, async (req, res) => {
+  app.post("/api/zone/start", requireZoneOperator, async (req, res) => {
     try {
       const session = await storage.createZoneSession(req.body.centerX ?? 50, req.body.centerY ?? 50);
       await storage.spawnLootPresets(session.id);
@@ -260,7 +282,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Erro ao iniciar zona" }); }
   });
 
-  app.post("/api/zone/stop", requireAuth, async (req, res) => {
+  app.post("/api/zone/stop", requireZoneOperator, async (req, res) => {
     try { await storage.stopAllZoneSessions(); res.json({ message: "Zona desativada" }); }
     catch { res.status(500).json({ message: "Erro" }); }
   });
@@ -269,7 +291,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = getUserId(req);
       const userName = (req.user as any)?.claims?.first_name ?? undefined;
-      const damage = parseInt(req.body.damage) || 5;
+      const parsedDamage = z.coerce.number().int().min(1).max(100).safeParse(req.body?.damage ?? 5);
+      if (!parsedDamage.success) return res.status(400).json({ message: "Dano deve ser um inteiro entre 1 e 100" });
+      const damage = parsedDamage.data;
       const stats = await storage.applyZoneDamage(userId, damage, userName);
       res.json({ newHealth: stats.health, maxHealth: stats.maxHealth, damageTaken: damage, status: stats.status });
     } catch { res.status(500).json({ message: "Erro ao aplicar dano" }); }

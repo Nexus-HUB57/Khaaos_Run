@@ -104,6 +104,9 @@ export interface LastMatchResult {
 export function useBattleRoom() {
   const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
+  const activeRef = useRef(false);
+  const connectingRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [zone, setZone] = useState<ZoneStatus | null>(null);
@@ -129,23 +132,39 @@ export function useBattleRoom() {
     }
   }, []);
 
-  const connect = useCallback(() => {
-    if (!user || wsRef.current?.readyState === WebSocket.OPEN) return;
+  const connect = useCallback(async () => {
+    if (!user || !activeRef.current || connectingRef.current) return;
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) return;
+    connectingRef.current = true;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    wsRef.current = ws;
+    let ws: WebSocket;
+    try {
+      const tokenResponse = await fetch("/api/auth/ws-token", { credentials: "include", cache: "no-store" });
+      if (!tokenResponse.ok) throw new Error(`Autenticação WebSocket indisponível (${tokenResponse.status})`);
+      const { token } = await tokenResponse.json() as { token: string; expiresAt: number };
+      if (!token || !activeRef.current) return;
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) return;
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws`, ["khaaos-v1", `khaaos-token.${token}`]);
+      wsRef.current = ws;
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : "Falha de autenticação WebSocket");
+      if (activeRef.current) {
+        reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
+      }
+      return;
+    } finally {
+      connectingRef.current = false;
+    }
 
     ws.onopen = () => {
       setConnected(true);
       setLastError(null);
-      // Auth + join — user comes from Replit Auth model (id / firstName)
-      const uid = (user as any).id || (user as any).claims?.sub;
       const name = (user as any).firstName || (user as any).claims?.first_name || "Operativo";
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: "join",
-          userId: uid,
           displayName: name,
         }));
       }
@@ -245,21 +264,27 @@ export function useBattleRoom() {
     };
 
     ws.onclose = () => {
-      setConnected(false);
-      // Auto-reconnect after 2s
-      setTimeout(() => {
-        if (user) connect();
-      }, 2000);
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+        setConnected(false);
+      }
+      if (activeRef.current) {
+        reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
+      }
     };
 
     ws.onerror = () => {
       setLastError("WebSocket error");
     };
-  }, [user, send]);
+  }, [user]);
 
   useEffect(() => {
-    if (user) connect();
+    activeRef.current = !!user;
+    if (user) void connect();
     return () => {
+      activeRef.current = false;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
       wsRef.current?.close();
       wsRef.current = null;
     };

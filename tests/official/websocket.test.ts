@@ -4,8 +4,13 @@ import { test } from "node:test";
 import WebSocket from "ws";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
+process.env.WS_TOKEN_SECRET = "official-websocket-integration-test-key-32-bytes-minimum";
 
-const { roomManager } = await import("../../server/game/RoomManager.ts");
+const [{ roomManager }, { storage }, { createWsAccessToken }] = await Promise.all([
+  import("../../server/game/RoomManager.ts"),
+  import("../../server/storage.ts"),
+  import("../../server/replit_integrations/auth/ws-token.ts"),
+]);
 
 async function withTimeout<T>(promise: Promise<T>, message: string, milliseconds = 5_000): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -21,7 +26,7 @@ async function withTimeout<T>(promise: Promise<T>, message: string, milliseconds
   }
 }
 
-test("WebSocket oficial: rejeita join sem identidade antes de consultar persistência", async () => {
+test("WebSocket oficial: handshake exige token e ignora userId forjado pelo cliente", async () => {
   const httpServer = createServer();
   await new Promise<void>((resolve, reject) => {
     httpServer.once("error", reject);
@@ -31,31 +36,61 @@ test("WebSocket oficial: rejeita join sem identidade antes de consultar persist�
 
   const address = httpServer.address();
   assert.ok(address && typeof address !== "string");
-  const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
+  const url = `ws://127.0.0.1:${address.port}/ws`;
+  const originalGetPlayerStats = storage.getPlayerStats;
+  storage.getPlayerStats = async () => ({
+    health: 100,
+    maxHealth: 100,
+    status: "VIVO",
+    kills: 0,
+    rating: 1000,
+  } as Awaited<ReturnType<typeof storage.getPlayerStats>>);
 
+  const unauthorizedWs = new WebSocket(url);
+  unauthorizedWs.on("error", () => undefined);
+
+  let authenticatedWs: WebSocket | undefined;
   try {
+    const rejectedStatus = await withTimeout(new Promise<number>((resolve, reject) => {
+      unauthorizedWs.once("unexpected-response", (_request, response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      });
+      unauthorizedWs.once("open", () => reject(new Error("Conexão sem token não deveria abrir")));
+    }), "Handshake sem token não foi rejeitado");
+    assert.equal(rejectedStatus, 401);
+
+    const { token } = createWsAccessToken("user-validado-no-servidor");
+    authenticatedWs = new WebSocket(url, ["khaaos-v1", `khaaos-token.${token}`]);
     await withTimeout(new Promise<void>((resolve, reject) => {
-      ws.once("open", resolve);
-      ws.once("error", reject);
-    }), "WebSocket open timeout");
+      authenticatedWs!.once("open", resolve);
+      authenticatedWs!.once("error", reject);
+    }), "WebSocket autenticado não abriu");
 
-    const nextMessage = new Promise<[WebSocket.RawData]>((resolve) => {
-      ws.once("message", (raw) => resolve([raw]));
+    const welcome = new Promise<{ type: string; userId?: string; roomId?: string }>((resolve, reject) => {
+      authenticatedWs!.once("message", (raw) => resolve(JSON.parse(raw.toString())));
+      authenticatedWs!.once("error", reject);
     });
-    ws.send(JSON.stringify({ type: "join" }));
-    const [raw] = await withTimeout(nextMessage, "WebSocket response timeout");
-    const response = JSON.parse(raw.toString());
+    authenticatedWs.send(JSON.stringify({
+      type: "join",
+      userId: "user-forjado-pelo-cliente",
+      displayName: "Operativo teste",
+    }));
 
-    assert.deepEqual(response, {
-      type: "error",
-      message: "Auth required: send userId first",
-    });
+    const message = await withTimeout(welcome, "Servidor não enviou welcome");
+    assert.equal(message.type, "welcome");
+    assert.equal(message.userId, "user-validado-no-servidor");
+    assert.ok(message.roomId);
   } finally {
-    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-      const closed = new Promise<void>((resolve) => ws.once("close", () => resolve()));
-      ws.close();
-      await withTimeout(closed, "WebSocket close timeout", 1_000).catch(() => undefined);
+    storage.getPlayerStats = originalGetPlayerStats;
+    if (authenticatedWs && authenticatedWs.readyState !== WebSocket.CLOSED) {
+      const closed = new Promise<void>((resolve) => authenticatedWs!.once("close", () => resolve()));
+      authenticatedWs.close();
+      await withTimeout(closed, "WebSocket autenticado não fechou", 1_000).catch(() => undefined);
     }
+    if (unauthorizedWs.readyState !== WebSocket.CLOSED) unauthorizedWs.terminate();
+    roomManager.leaveRoom("user-validado-no-servidor");
+    roomManager.stop();
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   }
 });
