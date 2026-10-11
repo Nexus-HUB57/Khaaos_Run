@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayer, useClaimDailySalary } from "@/hooks/use-player";
-import { useBank } from "@/hooks/use-bank";
+import { useBank, useTransactions } from "@/hooks/use-bank";
+import { RecentTransactions } from "@/components/recent-transactions";
 import { CyberCard } from "@/components/cyber-card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -8,7 +9,6 @@ import {
   Shield,
   TrendingUp,
   Award,
-  Clock,
   DollarSign,
   Coins,
   Flame,
@@ -16,7 +16,6 @@ import {
   HeartPulse,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { Radio, Users, Play } from "lucide-react";
@@ -26,6 +25,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: playerData, isLoading: isPlayerLoading } = usePlayer();
   const { data: bankData, isLoading: isBankLoading } = useBank();
+  const { data: transactions, isLoading: areTransactionsLoading } = useTransactions();
   const { mutate: claimSalary, isPending: isClaiming } = useClaimDailySalary();
   const { toast } = useToast();
   const { connected, room, countdown, startMatch, players, inQueue, queueInfo, joinQueue, leaveQueue } = useSharedBattleRoom();
@@ -255,31 +255,9 @@ export default function Dashboard() {
         </div>
       </CyberCard>
 
-      {/* Logs / Recent Activity */}
-      <CyberCard title="LOGS DO SISTEMA" subtitle="ATIVIDADE RECENTE" className="col-span-1">
-        <div className="space-y-0 divide-y divide-border/30">
-          {[1, 2, 3].map((_, i) => (
-            <div key={i} className="py-3 flex items-start gap-3">
-              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary/60 shadow-[0_0_4px_hsla(25,95%,55%,0.6)]" />
-              <div>
-                <p className="text-sm font-mono text-foreground">Login no QG-War'I detectado</p>
-                <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono mt-0.5 tracking-widest">
-                  <Clock className="w-3 h-3" />
-                  {format(new Date(), 'HH:mm:ss')} — {format(new Date(), 'dd MMM yyyy')}
-                </p>
-              </div>
-            </div>
-          ))}
-          {!lastSalary && (
-            <div className="py-3 flex items-start gap-3">
-              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent/60 shadow-[0_0_4px_hsla(45,90%,55%,0.6)]" />
-              <div>
-                <p className="text-sm font-mono text-foreground">Alistamento concluído</p>
-                <p className="text-[10px] text-muted-foreground font-mono tracking-widest">Conta criada — Posto: ZHEERS</p>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Recent account activity */}
+      <CyberCard title="ATIVIDADE FINANCEIRA" subtitle="TRANSAÇÕES RECENTES" className="col-span-1">
+        <RecentTransactions transactions={transactions} isLoading={areTransactionsLoading} />
       </CyberCard>
     </div>
   );
