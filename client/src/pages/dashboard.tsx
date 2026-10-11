@@ -18,6 +18,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBattleRoom } from "@/hooks/use-battle-room";
+import { Radio, Users, Play } from "lucide-react";
+import { Link } from "wouter";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -25,6 +28,7 @@ export default function Dashboard() {
   const { data: bankData, isLoading: isBankLoading } = useBank();
   const { mutate: claimSalary, isPending: isClaiming } = useClaimDailySalary();
   const { toast } = useToast();
+  const { connected, room, countdown, startMatch, players } = useBattleRoom();
 
   const handleClaim = () => {
     claimSalary(undefined, {
@@ -55,6 +59,63 @@ export default function Dashboard() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* ── REAL-TIME BATTLE ROOM (Systemic Core) ── */}
+      <div className="col-span-1 md:col-span-3">
+        <CyberCard className="border-cyan-500/30 bg-gradient-to-r from-black/80 to-cyan-950/20">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${connected ? "bg-cyan-400 animate-pulse" : "bg-red-500"}`} />
+              <div>
+                <h2 className="font-display font-bold tracking-widest text-cyan-300 flex items-center gap-2">
+                  <Radio className="w-4 h-4" /> CANAL DE BATALHA
+                </h2>
+                <p className="text-xs font-mono text-muted-foreground mt-1">
+                  {connected
+                    ? room
+                      ? `SALA ${room.id.slice(-6).toUpperCase()} • ${room.status} • ${room.playerCount}/${room.maxPlayers} operativos`
+                      : "Conectado — aguardando sala..."
+                    : "Desconectado do mesh tático"}
+                </p>
+                {countdown != null && countdown > 0 && (
+                  <p className="text-lg font-mono text-amber-400 mt-1">INÍCIO EM {countdown}s</p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {room?.status === "LOBBY" && (
+                <Button
+                  size="sm"
+                  onClick={startMatch}
+                  className="font-display tracking-wider bg-cyan-600 hover:bg-cyan-500"
+                >
+                  <Play className="w-4 h-4 mr-1" /> INICIAR MATCH
+                </Button>
+              )}
+              <Link href="/zona">
+                <Button size="sm" variant="outline" className="font-display tracking-wider border-cyan-500/50 text-cyan-300">
+                  <Users className="w-4 h-4 mr-1" /> ENTRAR NA ZONA
+                </Button>
+              </Link>
+            </div>
+          </div>
+          {players.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {players.slice(0, 12).map((p) => (
+                <span
+                  key={p.userId}
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    p.status === "VIVO"
+                      ? "border-emerald-500/40 text-emerald-400"
+                      : "border-red-500/40 text-red-400 line-through"
+                  }`}
+                >
+                  {p.displayName} [{p.health}HP]
+                </span>
+              ))}
+            </div>
+          )}
+        </CyberCard>
+      </div>
       {/* Welcome Banner */}
       <div className="col-span-1 md:col-span-3">
         <CyberCard className="relative overflow-hidden"

@@ -7,10 +7,14 @@ import { z } from "zod";
 import * as schema from "@shared/schema";
 import { ZONE_PHASES, PlayerStatus } from "@shared/schema";
 import type { ZoneStatus } from "@shared/schema";
+import { roomManager } from "./game/RoomManager";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
+  roomManager.attach(httpServer);
 
   const getUserId = (req: any): string => {
     if (!req.user?.claims?.sub) throw new Error("Unauthorized");
@@ -304,6 +308,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const stats = await storage.respawnPlayer(getUserId(req));
       res.json({ message: "Operativo respawnado", newHealth: stats.health, status: stats.status });
     } catch { res.status(500).json({ message: "Erro ao respawnar" }); }
+  });
+
+  // ── BATTLE ROOMS (REST discovery) ─────────────────────────────────────────
+  app.get("/api/rooms", requireAuth, (_req, res) => {
+    res.json(roomManager.listLobbies());
+  });
+
+  app.get("/api/rooms/:id", requireAuth, (req, res) => {
+    const summary = roomManager.getRoomSummary(req.params.id);
+    if (!summary) return res.status(404).json({ message: "Room not found" });
+    res.json(summary);
   });
 
   return httpServer;
