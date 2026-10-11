@@ -18,6 +18,9 @@ export interface BattlePlayer {
   status: string;
   kills: number;
   isConnected: boolean;
+  isReady?: boolean;
+  isHost?: boolean;
+  rating?: number;
 }
 
 export interface RoomLoot {
@@ -58,6 +61,11 @@ export interface RoomState {
   loot: RoomLoot[];
   countdownSeconds?: number;
   winnerId?: string | null;
+  hostId?: string | null;
+  isPrivate?: boolean;
+  inviteCode?: string | null;
+  readyCount?: number;
+  minPlayersToStart?: number;
 }
 
 type ServerMessage =
@@ -261,6 +269,32 @@ export function useBattleRoom() {
 
   const leaveQueue = useCallback(() => send({ type: "dequeue" }), [send]);
 
+  const setReady = useCallback(
+    (ready: boolean) => send({ type: "set_ready", ready }),
+    [send],
+  );
+
+  const createLobby = useCallback(
+    (opts?: { private?: boolean; maxPlayers?: number }) =>
+      send({ type: "create_lobby", private: opts?.private, maxPlayers: opts?.maxPlayers }),
+    [send],
+  );
+
+  const joinByCode = useCallback(
+    (code: string) => send({ type: "join_code", code }),
+    [send],
+  );
+
+  const kickPlayer = useCallback(
+    (targetId: string) => send({ type: "kick", targetId }),
+    [send],
+  );
+
+  const cancelCountdown = useCallback(
+    () => send({ type: "cancel_countdown" }),
+    [send],
+  );
+
   return {
     connected,
     room,
@@ -279,5 +313,10 @@ export function useBattleRoom() {
     attack,
     joinQueue,
     leaveQueue,
+    setReady,
+    createLobby,
+    joinByCode,
+    kickPlayer,
+    cancelCountdown,
   };
 }

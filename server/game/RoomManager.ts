@@ -52,6 +52,10 @@ export interface RoomPlayer {
   posHistory: PositionHistory;
   damageDealt: number;
   joinedMatchAt: number;
+  // Lobby
+  isReady: boolean;
+  isHost: boolean;
+  rating: number;
 }
 
 export interface RoomLoot {
@@ -89,6 +93,12 @@ export interface BattleRoom {
   winnerId: string | null;
   tickHandle: NodeJS.Timeout | null;
   countdownSeconds: number;
+  // Lobby meta
+  hostId: string | null;
+  isPrivate: boolean;
+  inviteCode: string | null;
+  countdownHandle: NodeJS.Timeout | null;
+  minPlayersToStart: number;
 }
 
 /** Adapter so SpatialGrid can key by userId/id */
@@ -102,8 +112,12 @@ export type ClientMessage =
   | { type: "attack"; targetId: string; clientTimestamp?: number }
   | { type: "queue"; mode?: QueueMode }
   | { type: "dequeue" }
-  | { type: "ready" }
-  | { type: "start" }; // only host / admin
+  | { type: "set_ready"; ready: boolean }
+  | { type: "start" }           // host force-start or all-ready start
+  | { type: "cancel_countdown" } // host only
+  | { type: "kick"; targetId: string } // host only
+  | { type: "create_lobby"; private?: boolean; maxPlayers?: number }
+  | { type: "join_code"; code: string };
 
 export type ServerMessage =
   | { type: "welcome"; userId: string; roomId: string }
@@ -131,6 +145,9 @@ interface SerializedPlayer {
   status: string;
   kills: number;
   isConnected: boolean;
+  isReady: boolean;
+  isHost: boolean;
+  rating: number;
 }
 
 interface SerializedRoom {
@@ -143,6 +160,11 @@ interface SerializedRoom {
   loot: RoomLoot[];
   countdownSeconds?: number;
   winnerId?: string | null;
+  hostId?: string | null;
+  isPrivate?: boolean;
+  inviteCode?: string | null;
+  readyCount?: number;
+  minPlayersToStart?: number;
 }
 
 // ─── RoomManager ─────────────────────────────────────────────────────────────
@@ -244,10 +266,29 @@ class RoomManager {
         this.matchmaking.dequeue(userId);
         break;
       }
-      case "ready":
+      case "set_ready": {
+        this.setPlayerReady(userId, !!msg.ready);
+        break;
+      }
       case "start": {
         const roomId = this.userToRoom.get(userId);
         if (roomId) this.tryStartMatch(roomId, userId);
+        break;
+      }
+      case "cancel_countdown": {
+        this.hostCancelCountdown(userId);
+        break;
+      }
+      case "kick": {
+        this.hostKick(userId, msg.targetId);
+        break;
+      }
+      case "create_lobby": {
+        await this.createPrivateLobby(userId, displayName, ws, !!msg.private, msg.maxPlayers);
+        break;
+      }
+      case "join_code": {
+        await this.joinByInviteCode(userId, displayName, ws, msg.code);
         break;
       }
       default:
@@ -285,6 +326,11 @@ class RoomManager {
       winnerId: null,
       tickHandle: null,
       countdownSeconds: 10,
+      hostId: null,
+      isPrivate: false,
+      inviteCode: null,
+      countdownHandle: null,
+      minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
     return id;
@@ -337,7 +383,15 @@ class RoomManager {
       posHistory: new PositionHistory(1000),
       damageDealt: 0,
       joinedMatchAt: Date.now(),
+      isReady: false,
+      isHost: room.players.size === 0 || room.hostId === null,
+      rating: (stats as any).rating ?? 1000,
     };
+
+    if (!room.hostId) {
+      room.hostId = userId;
+      player.isHost = true;
+    }
 
     room.players.set(userId, player);
     room.playerGrid.insert({ ...player, id: userId });
@@ -345,11 +399,6 @@ class RoomManager {
 
     this.send(ws, { type: "welcome", userId, roomId });
     this.broadcastRoomState(room);
-
-    // Auto-start if enough players (demo: 2+)
-    if (room.players.size >= 2 && room.status === "LOBBY") {
-      // Optional: auto countdown. For now wait for explicit start.
-    }
   }
 
   leaveRoom(userId: string) {
@@ -358,13 +407,30 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return;
 
+    const wasHost = room.hostId === userId;
     room.players.delete(userId);
     room.playerGrid.remove(userId);
     this.userToRoom.delete(userId);
 
     if (room.players.size === 0) {
+      if (room.countdownHandle) clearInterval(room.countdownHandle);
       this.destroyRoom(roomId);
     } else {
+      if (wasHost) {
+        // Transfer host to oldest remaining connected player
+        const next = [...room.players.values()].find((p) => p.isConnected) || [...room.players.values()][0];
+        if (next) {
+          room.hostId = next.userId;
+          next.isHost = true;
+          for (const p of room.players.values()) {
+            if (p.userId !== next.userId) p.isHost = false;
+          }
+        }
+      }
+      // If countdown and players dropped below min, cancel
+      if (room.status === "COUNTDOWN" && room.players.size < room.minPlayersToStart) {
+        this.cancelCountdown(room);
+      }
       this.broadcastRoomState(room);
       this.checkVictory(room);
     }
@@ -393,21 +459,58 @@ class RoomManager {
   tryStartMatch(roomId: string, requesterId: string) {
     const room = this.rooms.get(roomId);
     if (!room || room.status !== "LOBBY") return;
-    if (room.players.size < 1) return; // allow solo for testing
+
+    const requester = room.players.get(requesterId);
+    const isHost = room.hostId === requesterId || requester?.isHost;
+    const readyCount = [...room.players.values()].filter((p) => p.isReady).length;
+    const allReady =
+      room.players.size >= room.minPlayersToStart &&
+      readyCount === room.players.size;
+
+    // Host can force-start with ≥1 player; otherwise require all ready
+    if (!isHost && !allReady) {
+      if (requester?.ws) {
+        this.send(requester.ws, {
+          type: "error",
+          message: "Aguardando todos prontos ou ação do host",
+        });
+      }
+      return;
+    }
+    if (room.players.size < 1) return;
+
+    this.beginCountdown(room);
+  }
+
+  private beginCountdown(room: BattleRoom) {
+    if (room.countdownHandle) clearInterval(room.countdownHandle);
 
     room.status = "COUNTDOWN";
     room.countdownSeconds = 10;
     this.broadcastRoomState(room);
 
-    const countdown = setInterval(() => {
+    room.countdownHandle = setInterval(() => {
       room.countdownSeconds -= 1;
       this.broadcast(room, { type: "countdown", seconds: room.countdownSeconds });
 
       if (room.countdownSeconds <= 0) {
-        clearInterval(countdown);
+        if (room.countdownHandle) clearInterval(room.countdownHandle);
+        room.countdownHandle = null;
         this.beginMatch(room);
       }
     }, 1000);
+  }
+
+  private cancelCountdown(room: BattleRoom) {
+    if (room.countdownHandle) {
+      clearInterval(room.countdownHandle);
+      room.countdownHandle = null;
+    }
+    room.status = "LOBBY";
+    room.countdownSeconds = 10;
+    // Reset ready so players confirm again
+    for (const p of room.players.values()) p.isReady = false;
+    this.broadcastRoomState(room);
   }
 
   private beginMatch(room: BattleRoom) {
@@ -669,6 +772,9 @@ class RoomManager {
       status: p.status,
       kills: p.kills,
       isConnected: p.isConnected,
+      isReady: p.isReady ?? false,
+      isHost: p.isHost ?? false,
+      rating: p.rating ?? 1000,
     }));
 
     this.send(observer.ws, {
@@ -835,6 +941,9 @@ class RoomManager {
       status: p.status,
       kills: p.kills,
       isConnected: p.isConnected,
+      isReady: p.isReady,
+      isHost: p.isHost || p.userId === room.hostId,
+      rating: p.rating ?? 1000,
     }));
   }
 
@@ -873,6 +982,11 @@ class RoomManager {
         loot: room.loot.filter((l) => !l.isPickedUp),
         countdownSeconds: room.status === "COUNTDOWN" ? room.countdownSeconds : undefined,
         winnerId: room.winnerId,
+        hostId: room.hostId,
+        isPrivate: room.isPrivate,
+        inviteCode: room.inviteCode,
+        readyCount: [...room.players.values()].filter((p) => p.isReady).length,
+        minPlayersToStart: room.minPlayersToStart,
       },
     };
     this.broadcast(room, payload);
@@ -897,7 +1011,118 @@ class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room) return;
     if (room.tickHandle) clearInterval(room.tickHandle);
+    if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
+  }
+
+  // ─── Lobby controls ──────────────────────────────────────────────────────
+
+  private setPlayerReady(userId: string, ready: boolean) {
+    const roomId = this.userToRoom.get(userId);
+    if (!roomId) return;
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== "LOBBY") return;
+    const player = room.players.get(userId);
+    if (!player) return;
+
+    player.isReady = ready;
+    this.broadcastRoomState(room);
+
+    // Auto-start when everyone is ready and min players met
+    const readyCount = [...room.players.values()].filter((p) => p.isReady).length;
+    if (
+      room.players.size >= room.minPlayersToStart &&
+      readyCount === room.players.size
+    ) {
+      this.beginCountdown(room);
+    }
+  }
+
+  private hostCancelCountdown(hostId: string) {
+    const roomId = this.userToRoom.get(hostId);
+    if (!roomId) return;
+    const room = this.rooms.get(roomId);
+    if (!room || room.hostId !== hostId) return;
+    if (room.status !== "COUNTDOWN") return;
+    this.cancelCountdown(room);
+  }
+
+  private hostKick(hostId: string, targetId: string) {
+    const roomId = this.userToRoom.get(hostId);
+    if (!roomId) return;
+    const room = this.rooms.get(roomId);
+    if (!room || room.hostId !== hostId) return;
+    if (room.status !== "LOBBY" && room.status !== "COUNTDOWN") return;
+    if (targetId === hostId) return;
+
+    const target = room.players.get(targetId);
+    if (target?.ws) {
+      this.send(target.ws, { type: "error", message: "Você foi removido do lobby pelo host" });
+    }
+    this.leaveRoom(targetId);
+  }
+
+  private async createPrivateLobby(
+    userId: string,
+    displayName: string,
+    ws: WebSocket,
+    isPrivate: boolean,
+    maxPlayers?: number,
+  ) {
+    if (this.userToRoom.has(userId)) this.leaveRoom(userId);
+    this.matchmaking.dequeue(userId);
+
+    const id = `lobby_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const code = isPrivate
+      ? Math.random().toString(36).slice(2, 8).toUpperCase()
+      : null;
+
+    const room: BattleRoom = {
+      id,
+      status: "LOBBY",
+      maxPlayers: Math.min(50, Math.max(2, maxPlayers ?? 16)),
+      players: new Map(),
+      currentPhase: 1,
+      phaseStartedAt: Date.now(),
+      isShrinking: false,
+      centerX: 50,
+      centerY: 50,
+      loot: [],
+      playerGrid: new SpatialGrid(15),
+      lootGrid: new SpatialGrid(12),
+      createdAt: Date.now(),
+      startedAt: null,
+      finishedAt: null,
+      winnerId: null,
+      tickHandle: null,
+      countdownSeconds: 10,
+      hostId: userId,
+      isPrivate,
+      inviteCode: code,
+      countdownHandle: null,
+      minPlayersToStart: 2,
+    };
+    this.rooms.set(id, room);
+    await this.joinRoom(userId, displayName, ws, id);
+  }
+
+  private async joinByInviteCode(
+    userId: string,
+    displayName: string,
+    ws: WebSocket,
+    code: string,
+  ) {
+    const normalized = code.trim().toUpperCase();
+    const room = [...this.rooms.values()].find(
+      (r) =>
+        r.inviteCode === normalized &&
+        (r.status === "LOBBY" || r.status === "COUNTDOWN"),
+    );
+    if (!room) {
+      this.send(ws, { type: "error", message: "Código de lobby inválido ou expirado" });
+      return;
+    }
+    await this.joinRoom(userId, displayName, ws, room.id);
   }
 
   // ─── Matchmaking integration ─────────────────────────────────────────────
@@ -952,6 +1177,11 @@ class RoomManager {
       winnerId: null,
       tickHandle: null,
       countdownSeconds: 10,
+      hostId: players[0]?.userId ?? null,
+      isPrivate: false,
+      inviteCode: null,
+      countdownHandle: null,
+      minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
 
@@ -986,6 +1216,9 @@ class RoomManager {
         posHistory: new PositionHistory(1000),
         damageDealt: 0,
         joinedMatchAt: Date.now(),
+        isReady: true, // matchmaking players arrive ready
+        isHost: p.userId === room.hostId,
+        rating: p.rating ?? 1000,
       };
 
       room.players.set(p.userId, player);

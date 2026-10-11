@@ -17,6 +17,7 @@ import {
   Package,
   Swords,
   Train,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -35,6 +36,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", label: "QG-WAR'I", icon: LayoutDashboard },
     { href: "/mundos", label: "MUNDOS", icon: Globe },
+    { href: "/lobby", label: "LOBBY", icon: Users },
     { href: "/zona", label: "ZONA SEGURA", icon: Radio },
     { href: "/loot", label: "LOOT", icon: Package },
     { href: "/batalha", label: "BATALHA", icon: Swords },

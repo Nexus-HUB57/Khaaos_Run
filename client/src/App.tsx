@@ -16,6 +16,7 @@ import Mundos from "@/pages/mundos";
 import Zona from "@/pages/zona";
 import Loot from "@/pages/loot";
 import Batalha from "@/pages/batalha";
+import Lobby from "@/pages/lobby";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -69,6 +70,9 @@ function Router() {
       </Route>
       <Route path="/loot">
         <ProtectedRoute component={Loot} />
+      </Route>
+      <Route path="/lobby">
+        <ProtectedRoute component={Lobby} />
       </Route>
       <Route path="/batalha">
         <ProtectedRoute component={Batalha} />

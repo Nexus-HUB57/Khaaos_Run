@@ -112,6 +112,11 @@ export default function Dashboard() {
                   <Play className="w-4 h-4 mr-1" /> INICIAR MATCH
                 </Button>
               )}
+              <Link href="/lobby">
+                <Button size="sm" variant="outline" className="font-display tracking-wider border-purple-500/50 text-purple-300">
+                  <Users className="w-4 h-4 mr-1" /> LOBBY
+                </Button>
+              </Link>
               <Link href="/zona">
                 <Button size="sm" variant="outline" className="font-display tracking-wider border-cyan-500/50 text-cyan-300">
                   <Users className="w-4 h-4 mr-1" /> ENTRAR NA ZONA
