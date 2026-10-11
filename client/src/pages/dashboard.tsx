@@ -18,7 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBattleRoom } from "@/hooks/use-battle-room";
+import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { Radio, Users, Play } from "lucide-react";
 import { Link } from "wouter";
 
@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { data: bankData, isLoading: isBankLoading } = useBank();
   const { mutate: claimSalary, isPending: isClaiming } = useClaimDailySalary();
   const { toast } = useToast();
-  const { connected, room, countdown, startMatch, players, inQueue, queueInfo, joinQueue, leaveQueue } = useBattleRoom();
+  const { connected, room, countdown, startMatch, players, inQueue, queueInfo, joinQueue, leaveQueue } = useSharedBattleRoom();
 
   const handleClaim = () => {
     claimSalary(undefined, {

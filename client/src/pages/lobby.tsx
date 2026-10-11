@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { useBattleRoom } from "@/hooks/use-battle-room";
+import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ export default function LobbyPage() {
     kickPlayer,
     cancelCountdown,
     leave,
-  } = useBattleRoom();
+  } = useSharedBattleRoom();
 
   const [codeInput, setCodeInput] = useState("");
   const [copied, setCopied] = useState(false);

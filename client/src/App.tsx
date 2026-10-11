@@ -20,6 +20,9 @@ import Lobby from "@/pages/lobby";
 import Ranking from "@/pages/ranking";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
+import { BattleRoomProvider } from "@/hooks/battle-room-context";
+import { MatchResultsModal } from "@/components/match-results-modal";
+import { BattleFlowNavigator } from "@/components/battle-flow-navigator";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -90,8 +93,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
+        <BattleRoomProvider>
+          <Toaster />
+          <BattleFlowNavigator />
+          <MatchResultsModal />
+          <Router />
+        </BattleRoomProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

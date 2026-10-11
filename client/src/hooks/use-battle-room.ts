@@ -76,13 +76,30 @@ type ServerMessage =
   | { type: "loot_picked"; lootId: number; by: string }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
-  | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number }[] }
+  | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement?: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
   | { type: "error"; message: string }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: string }
   | { type: "queue_left" }
   | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
   | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
+
+
+export interface MatchRankingRow {
+  userId: string;
+  kills: number;
+  placement?: number;
+  xpGained?: number;
+  ratingAfter?: number;
+  rankAfter?: string;
+  promoted?: boolean;
+}
+
+export interface LastMatchResult {
+  winnerId: string | null;
+  rankings: MatchRankingRow[];
+  finishedAt: number;
+}
 
 export function useBattleRoom() {
   const { user } = useAuth();
@@ -95,6 +112,7 @@ export function useBattleRoom() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [eliminations, setEliminations] = useState<{ userId: string; cause: string }[]>([]);
+  const [lastMatchResult, setLastMatchResult] = useState<LastMatchResult | null>(null);
   const [inQueue, setInQueue] = useState(false);
   const [queueInfo, setQueueInfo] = useState<{
     position: number;
@@ -183,6 +201,11 @@ export function useBattleRoom() {
           case "match_finished":
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
+            setLastMatchResult({
+              winnerId: msg.winnerId,
+              rankings: msg.rankings || [],
+              finishedAt: Date.now(),
+            });
             break;
           case "queue_joined":
             setInQueue(true);
@@ -318,5 +341,7 @@ export function useBattleRoom() {
     joinByCode,
     kickPlayer,
     cancelCountdown,
+    lastMatchResult,
+    clearLastMatchResult: () => setLastMatchResult(null),
   };
 }

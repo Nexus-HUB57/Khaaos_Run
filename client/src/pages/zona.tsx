@@ -12,7 +12,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { ZoneStatus } from "@shared/schema";
 import { ZONE_PHASES } from "@shared/schema";
-import { useBattleRoom, type BattlePlayer, type RoomLoot } from "@/hooks/use-battle-room";
+import { useSharedBattleRoom } from "@/hooks/battle-room-context";
+import type { BattlePlayer, RoomLoot } from "@/hooks/use-battle-room";
 
 // ─── Canvas drawing (BP_SafeZone visual equivalent) ──────────────────────────
 
@@ -284,7 +285,7 @@ export default function ZonaPage() {
     startMatch,
     attack,
     lastError: wsError,
-  } = useBattleRoom();
+  } = useSharedBattleRoom();
 
   const inLiveRoom = wsConnected && !!battleRoom && (battleRoom.status === "IN_PROGRESS" || battleRoom.status === "COUNTDOWN");
   const localUserId = (playerData as any)?.user?.id || (playerData as any)?.stats?.userId;
