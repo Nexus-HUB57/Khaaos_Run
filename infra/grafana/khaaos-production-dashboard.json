@@ -1,0 +1,91 @@
+{
+  "annotations": { "list": [] },
+  "description": "Khaaos Run — Production Monitoring Dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Active Players",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "khaaos_players_active_total", "legendFormat": "Total" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 25 }, { "color": "red", "value": 45 }] } } }
+    },
+    {
+      "title": "Active Matches",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "khaaos_matches_active_total", "legendFormat": "Matches" }]
+    },
+    {
+      "title": "Server RTT p95 (ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(khaaos_net_rtt_bucket[5m]))", "legendFormat": "p95" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 80 }, { "color": "red", "value": 150 }] } } }
+    },
+    {
+      "title": "Anti-Cheat Violations",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "rate(khaaos_anticheat_violations_total[5m])", "legendFormat": "Violations/s" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "title": "Player Count Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "khaaos_players_active_total", "legendFormat": "Total" },
+        { "expr": "khaaos_players_active_total{region=\"sa1\"}", "legendFormat": "SA" },
+        { "expr": "khaaos_players_active_total{region=\"na1\"}", "legendFormat": "NA" },
+        { "expr": "khaaos_players_active_total{region=\"eu1\"}", "legendFormat": "EU" }
+      ]
+    },
+    {
+      "title": "Network RTT Distribution",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, rate(khaaos_net_rtt_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(khaaos_net_rtt_bucket[5m]))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, rate(khaaos_net_rtt_bucket[5m]))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "title": "KRC Economy Flow",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(khaaos_economy_krc_earned_total[5m])", "legendFormat": "Earned/s" },
+        { "expr": "rate(khaaos_economy_krc_spent_total[5m])", "legendFormat": "Spent/s" },
+        { "expr": "rate(khaaos_economy_transactions_total[5m])", "legendFormat": "Tx/s" }
+      ]
+    },
+    {
+      "title": "DDoS / Rate Limit Blocks",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "rate(khaaos_ddos_blocks_total[5m])", "legendFormat": "DDoS Blocks/s" },
+        { "expr": "rate(khaaos_ratelimit_rejected_total[5m])", "legendFormat": "Rate Limit Rejected/s" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["khaaos", "production"],
+  "templating": {
+    "list": [
+      { "name": "region", "type": "query", "query": "sa1,na1,eu1", "current": { "text": "All", "value": "$__all" } }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Khaaos Run — Production",
+  "uid": "khaaos-production",
+  "version": 1
+}
