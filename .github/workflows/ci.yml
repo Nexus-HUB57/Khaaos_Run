@@ -37,10 +37,70 @@ jobs:
       - name: Verify both projects
         run: npm run verify:all
 
-  notify:
-    name: Notify on CI failure
+  deploy:
+    name: Deploy verified commit to Render
     needs: verify
-    if: failure() && needs.verify.result == 'failure'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RENDER_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: render-production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Trigger Render deploy for this commit
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RENDER_DEPLOY_HOOK_URL}" ]]; then
+            echo 'Missing GitHub Actions secret: RENDER_DEPLOY_HOOK_URL' >&2
+            exit 1
+          fi
+          response=$(curl --fail --silent --show-error --max-time 20 \
+            --request POST --get \
+            --data-urlencode "ref=${COMMIT_SHA}" \
+            "${RENDER_DEPLOY_HOOK_URL}")
+          deploy_id=$(jq -r '.deploy.id // empty' <<<"${response}")
+          if [[ -n "${deploy_id}" ]]; then
+            echo "Render accepted deploy ${deploy_id} for ${COMMIT_SHA}."
+          else
+            echo "Render accepted or queued deploy for ${COMMIT_SHA}; the health check will verify completion."
+          fi
+
+      - name: Wait for the exact commit to pass Render health check
+        env:
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RENDER_SERVICE_URL}" ]]; then
+            echo 'Missing GitHub Actions variable: RENDER_SERVICE_URL' >&2
+            exit 1
+          fi
+          health_url="${RENDER_SERVICE_URL%/}/healthz"
+          for attempt in $(seq 1 180); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              "${health_url}" 2>/dev/null || true)
+            if [[ -n "${body}" ]] && jq -e \
+              --arg sha "${COMMIT_SHA}" \
+              '.status == "ok" and .commit == $sha' \
+              <<<"${body}" >/dev/null; then
+              echo "Render is healthy on commit ${COMMIT_SHA}."
+              exit 0
+            fi
+            echo "Waiting for Render to serve ${COMMIT_SHA} (attempt ${attempt}/180)."
+            sleep 10
+          done
+          echo "Render did not report healthy commit ${COMMIT_SHA} within 30 minutes." >&2
+          exit 1
+
+  notify:
+    name: Notify on pipeline failure
+    needs: [verify, deploy]
+    if: always() && (needs.verify.result == 'failure' || needs.deploy.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

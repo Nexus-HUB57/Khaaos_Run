@@ -4,6 +4,12 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 
 const app = express();
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    commit: process.env.RENDER_GIT_COMMIT ?? null,
+  });
+});
 const httpServer = createServer(app);
 
 declare module "http" {

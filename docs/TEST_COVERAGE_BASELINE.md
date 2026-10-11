@@ -1,35 +1,36 @@
 # Baseline de cobertura de testes — aplicação oficial
 
-**Data da análise:** 2026-10-11 (UTC)  
-**Escopo:** `client/src/`, `server/` e `shared/` do repositório oficial. O runtime legado em `game-runtime/` foi excluído da contagem.
+**Inventário atualizado:** 2026-10-11 (UTC). Escopo: `client/src/`, `server/` e `shared/` da aplicação principal. O runtime independente em `game-runtime/` é contabilizado à parte.
 
-## Resultado medido
+## Medição disponível
 
 | Indicador | Resultado |
 |---|---:|
-| Arquivos de produção TypeScript/TSX no escopo | 92 |
-| Arquivos de teste `.test.*` / `.spec.*` no escopo | 3 |
-| Testes iniciais do app oficial (auth, adapter de persistência e WebSocket) | 6 |
-| Relatórios/instrumentação de cobertura configurados para o app oficial | Não encontrados |
-| Percentual de cobertura de linhas/branches/functions | **Não mensurável no estado atual** |
+| Arquivos de produção `.ts`/`.tsx` no escopo | 103 |
+| Arquivos `.test.ts`/`.test.js` diretamente em `tests/official/` | 9 |
+| Testes TypeScript oficiais aprovados na execução registrada | 11 |
+| Testes JavaScript oficiais (core E2E, economia/procgen, spatial/lag e matchmaking) aprovados | 38 |
+| Instrumentação de coverage de linhas/branches/functions | Não configurada |
+| Percentual de coverage | **Não mensurável** |
 
-Foi criada uma suíte inicial executada por `npm run test:official`: 3 testes de middleware de autenticação, 2 testes do adapter de persistência de usuário com Drizzle simulado e 1 teste de integração WebSocket. Não há ferramenta/configuração de coverage ligada à suíte. Portanto, atribuir um percentual de linhas/branches/functions seria enganoso: **a cobertura percentual permanece não mensurável**. Os testes em `game-runtime/test/` exercitam o runtime JavaScript isolado e não contam como cobertura do app React/Express/Drizzle.
+`npm run test:official` executa as duas suítes em sequência e usa `&&`, para propagar falhas de ambas ao CI. A contagem de testes não é uma estimativa do percentual de código coberto.
 
-## Pontos críticos remanescentes (prioridade sugerida)
+## Escopo exercitado e lacunas
 
-1. **Autenticação e autorização — crítica:** `server/replit_integrations/auth/`, `server/replit_integrations/auth/replitAuth.ts`, `server/replit_integrations/auth/routes.ts`, `server/replit_integrations/auth/storage.ts`, `shared/models/auth.ts`, `client/src/hooks/use-auth.ts`. Já cobertos: sessão válida, sessão ausente, sessão expirada sem refresh e contratos get/upsert do adapter. Ainda falta testar login/logout OIDC real, refresh token, isolamento por usuário e bloqueio de todas as rotas protegidas.
-2. **Economia, saldo e persistência — crítica:** `server/routes.ts`, `server/storage.ts`, `server/db.ts`, `server/game/EconomyEngine.ts`, `client/src/hooks/use-bank.ts`, `client/src/hooks/use-loans.ts`, `client/src/hooks/use-items.ts`. Testar concorrência/atomicidade, saldo insuficiente, precisão numérica, transações falhas e propriedade dos registros.
-3. **Salas e WebSocket da aplicação oficial — crítica:** `server/game/RoomManager.ts`, `server/game/SpatialGrid.ts`, `client/src/hooks/use-battle-room.ts`. Já coberto: recusa de `join` sem `userId`. **Risco crítico encontrado:** o handler aceita `userId` enviado pelo próprio cliente como identidade inicial (comentário do código reconhece que a validação de sessão/JWT fica para produção); um cliente pode tentar se passar por outro usuário. Não exponha o endpoint WebSocket a tráfego não confiável até validar cookie de sessão/token no servidor. Testar autenticação real, reconexão, entrada/saída, snapshots, isolamento de salas/regiões, carga e mensagens inválidas. Os testes análogos do runtime não substituem estes testes.
-4. **Zona, loot, eliminação e geração — alta:** `server/game/ProceduralGenerator.ts`, `server/game/MonteCarloEconomy.ts`, rotas correspondentes e páginas/hooks. Cobrir transições de estado, limites, seeds e invariantes de gameplay.
-5. **Interface e fluxos de usuário — alta:** páginas em `client/src/pages/`, hooks React Query e `client/src/components/boarding-animation.tsx`. Adicionar testes de renderização/interação para caminhos de batalha, inventário, banco e perfil, incluindo erros HTTP e estados vazios.
+1. **Sessão, autenticação e WebSocket:** há testes para sessão presente/ausente/expirada, token WS assinado, expiração/adulteração, subject, recusa de handshake sem token e resistência a `userId` forjado. Ainda faltam fluxo OIDC real com provider, renovação/token refresh ponta a ponta, logout, revogação de sockets ativos, Origin/CSRF e testes sistemáticos de todas as rotas privadas.
+2. **Persistência e economia:** testes de contrato do adapter de usuários existem, mas é prioritário cobrir banco PostgreSQL real, isolamento de proprietário em todas as mutações, transações concorrentes, saldos insuficientes, idempotência, rollback e precisão de valores.
+3. **WebSocket e salas:** a autenticação do handshake está coberta. Ainda faltam ciclos abrangentes de lobby/reconnect/leave/kick, snapshots, isolamento entre salas/regiões, malformed messages e concorrência/carga do RoomManager principal.
+4. **Zona, loot e eliminação:** autorização deny-by-default dos operadores está testada; faltam cenários de transições, limites, recolha simultânea, eliminação, respawn e consistência em persistência real.
+5. **UI:** não há inventário significativo de testes de componentes/interação React. Priorizar login/onboarding, fluxo lobby→zona→resultado, banco, inventário, estados vazios/erros e acessibilidade.
+6. **Matchmaking de referência:** a suíte JavaScript valida janela de rating, modos, desempate por proximidade, dequeue e expansão da janela. A implementação de referência Python e a equivalência com o algoritmo de produção devem receber testes dedicados.
 
-## Próximos passos recomendados
+Os testes `game-runtime/test/` verificam apenas o runtime JavaScript isolado e não substituem testes do servidor Express, banco Drizzle ou componentes React.
 
-- Definir ambiente de teste com banco isolado (ou adapters de storage substituíveis) para cobrir operações de persistência reais e rotas.
-- Expandir `node:test`/`tsx` para módulos TypeScript; adotar React Testing Library para componentes, Supertest para endpoints Express e cliente WebSocket de teste para salas.
-- Começar por testes unitários de `EconomyEngine` e `ProceduralGenerator`, depois integração de autenticação/banco/rotas, e por fim fluxos de interface.
-- Integrar uma ferramenta compatível de coverage e publicar relatório de statements/branches/functions no CI. Estabelecer limites progressivos depois de coletar a primeira cobertura real, sem bloquear o CI com metas não medidas.
+## Próximos passos de cobertura
 
-## Método de inventário
+- Configurar PostgreSQL efêmero e executar testes de integração das rotas e transações.
+- Adotar React Testing Library para UI, Supertest para rotas Express e cliente WebSocket de teste para os fluxos de salas.
+- Acrescentar coverage instrumentado no CI e publicar relatórios como artefatos.
+- Estabelecer metas de statements/branches/functions somente após a primeira medição reproduzível; aumentar os limites progressivamente sem contar código gerado.
 
-Contagem realizada sobre `client/src`, `server` e `shared`: 92 arquivos `.ts`/`.tsx`. Os três arquivos de teste ficam em `tests/official/` para separar os testes do escopo de produção. A suíte existente mede comportamento selecionado, mas ainda não há coleta percentual instrumentada.
+Consulte [`ROADMAP.md`](ROADMAP.md) para prioridades de engenharia e critérios de aceite.
