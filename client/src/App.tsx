@@ -17,6 +17,7 @@ import Zona from "@/pages/zona";
 import Loot from "@/pages/loot";
 import Batalha from "@/pages/batalha";
 import Lobby from "@/pages/lobby";
+import Ranking from "@/pages/ranking";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -73,6 +74,9 @@ function Router() {
       </Route>
       <Route path="/lobby">
         <ProtectedRoute component={Lobby} />
+      </Route>
+      <Route path="/ranking">
+        <ProtectedRoute component={Ranking} />
       </Route>
       <Route path="/batalha">
         <ProtectedRoute component={Batalha} />

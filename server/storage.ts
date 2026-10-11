@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults,
+  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
   PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS,
@@ -291,8 +291,38 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getLeaderboard(limit = 50): Promise<PlayerStats[]> {
-    return await db.select().from(playerStats).orderBy(desc(playerStats.rating)).limit(limit);
+  async getLeaderboard(limit = 50): Promise<(PlayerStats & { displayName?: string })[]> {
+    const rows = await db
+      .select({
+        id: playerStats.id,
+        userId: playerStats.userId,
+        rank: playerStats.rank,
+        xp: playerStats.xp,
+        health: playerStats.health,
+        maxHealth: playerStats.maxHealth,
+        energy: playerStats.energy,
+        maxEnergy: playerStats.maxEnergy,
+        status: playerStats.status,
+        kills: playerStats.kills,
+        deaths: playerStats.deaths,
+        lastSalaryDate: playerStats.lastSalaryDate,
+        rating: playerStats.rating,
+        matchesPlayed: playerStats.matchesPlayed,
+        wins: playerStats.wins,
+        top5: playerStats.top5,
+        seasonKills: playerStats.seasonKills,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(playerStats)
+      .leftJoin(users, eq(playerStats.userId, users.id))
+      .orderBy(desc(playerStats.rating))
+      .limit(limit);
+
+    return rows.map((r) => ({
+      ...r,
+      displayName: [r.firstName, r.lastName].filter(Boolean).join(" ") || r.userId.slice(0, 8),
+    })) as any;
   }
 
   async getMatchHistory(userId: string, limit = 20): Promise<MatchResult[]> {

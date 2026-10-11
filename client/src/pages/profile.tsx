@@ -1,7 +1,9 @@
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayer } from "@/hooks/use-player";
 import { CyberCard } from "@/components/cyber-card";
-import { User, Activity, Shield, Hash, Star, Swords, HeartPulse } from "lucide-react";
+import { User, Activity, Shield, Hash, Star, Swords, HeartPulse, Trophy, TrendingUp } from "lucide-react";
+import { useMyRanking, winRate, kdRatio } from "@/hooks/use-ranking";
+import { Link } from "wouter";
 
 const RANK_DESCRIPTIONS: Record<string, string> = {
   ZHEERS: "Recruta — Início do alistamento. O caminho começa aqui.",
@@ -19,6 +21,7 @@ const RANK_ORDER = ["ZHEERS","ONITH","SKEETW","HURAN","VENEX","KHAEL","MALAKOR",
 export default function Profile() {
   const { user } = useAuth();
   const { data: playerData } = usePlayer();
+  const { data: ranking } = useMyRanking();
 
   if (!playerData) {
     return (
@@ -66,6 +69,11 @@ export default function Profile() {
               <span className="font-mono text-accent bg-accent/10 border border-accent/20 px-3 py-1 text-xs tracking-widest">
                 POSTO: {stats.rank}
               </span>
+              {ranking && (
+                <span className="font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs tracking-widest">
+                  ELO: {ranking.rating}
+                </span>
+              )}
             </div>
 
             {/* Rank Progress */}
@@ -133,6 +141,40 @@ function StatBox({ label, value, icon: Icon, color }: any) {
       <Icon className={`w-4 h-4 ${color}`} />
       <span className="text-sm font-bold font-display text-foreground">{value}</span>
       <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-widest">{label}</span>
+
+      {/* Competitive ranking summary */}
+      {ranking && (
+        <CyberCard className="border-amber-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display tracking-widest text-xs text-amber-300 flex items-center gap-2">
+              <Trophy className="w-4 h-4" /> RANKING COMPETITIVO
+            </h2>
+            <Link href="/ranking">
+              <span className="text-[10px] font-mono text-cyan-400 hover:underline cursor-pointer">
+                VER LEADERBOARD →
+              </span>
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+            <div>
+              <div className="text-xl font-display font-bold text-amber-300">{ranking.rating}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">ELO</div>
+            </div>
+            <div>
+              <div className="text-xl font-display font-bold text-emerald-400">{winRate(ranking.wins, ranking.matchesPlayed)}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">{ranking.wins}W / {ranking.matchesPlayed}P</div>
+            </div>
+            <div>
+              <div className="text-xl font-display font-bold">{kdRatio(ranking.kills, ranking.deaths)}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">K/D</div>
+            </div>
+            <div>
+              <div className="text-xl font-display font-bold text-cyan-400">{ranking.top5}</div>
+              <div className="text-[10px] font-mono text-muted-foreground">TOP 5</div>
+            </div>
+          </div>
+        </CyberCard>
+      )}
     </div>
   );
 }
