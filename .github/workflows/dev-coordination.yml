@@ -1,0 +1,89 @@
+# =============================================================================
+# Khaaos Run — Branch Protection & Dev Coordination
+# Ensures cautious development alongside other Devs
+# =============================================================================
+name: Dev Coordination
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Warn if PR touches files other Devs are working on
+  # ---------------------------------------------------------------------------
+  conflict-awareness:
+    name: Check Other Devs' Activity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR changed files
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          separator: '|'
+
+      - name: Check for overlapping branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prFiles = '${{ steps.changed.outputs.all_changed_files }}'.split('|');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Get all open PRs
+            const prs = await github.rest.pulls.list({
+              owner, repo, state: 'open', per_page: 50
+            });
+
+            const overlaps = [];
+            for (const pr of prs.data) {
+              if (pr.number === context.issue.number) continue;
+
+              // Get files for each PR
+              const prFilesList = await github.rest.pulls.listFiles({
+                owner, repo, pull_number: pr.number
+              });
+
+              const theirFiles = prFilesList.data.map(f => f.filename);
+              const overlap = prFiles.filter(f => theirFiles.includes(f));
+
+              if (overlap.length > 0) {
+                overlaps.push({
+                  pr: pr.number,
+                  branch: pr.head.ref,
+                  author: pr.user.login,
+                  files: overlap
+                });
+              }
+            }
+
+            if (overlaps.length > 0) {
+              let msg = '## ⚠️ Overlapping Changes Detected\n\n';
+              msg += 'This PR modifies files that other Devs are also working on:\n\n';
+              for (const o of overlaps) {
+                msg += `- **PR #${o.pr}** (${o.branch}) by @${o.author}:\n`;
+                for (const f of o.files) {
+                  msg += `  - \`${f}\`\n`;
+                }
+              }
+              msg += '\n**Coordinate with the Devs above before merging.**\n';
+
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body: msg
+              });
+            } else {
+              console.log('✅ No overlapping changes detected');
+            }
