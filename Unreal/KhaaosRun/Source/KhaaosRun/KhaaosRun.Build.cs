@@ -34,7 +34,6 @@ public class KhaaosRun : ModuleRules
                         "ModularGameplayActors",
                         "CommonUI",
                         "UIExtension",
-                        "GameplayDebugger",
                 });
 
                 PrivateDependencyModuleNames.AddRange(new string[]
@@ -44,9 +43,11 @@ public class KhaaosRun : ModuleRules
                         "PCG",
                         "Metasound",
                         "AudioMixer",
-                        "AudioExtensions",
                         "Chaos",
                         "PhysicsCore",
+                        "Http",
+                        "Json",
+                        "JsonUtilities",
                 });
 
                 if (Target.bBuildEditor)
