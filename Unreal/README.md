@@ -22,7 +22,7 @@ KhaaosRun/
 │   │   │   ├── Zone/                 # 5-phase shrinking zone
 │   │   │   ├── Loot/                 # Server-authoritative pickup
 │   │   │   ├── Spatial/             # O(1) spatial hash grid
-│   │   │   ├── Economy/             # HTTP bridge to Node.js microservice
+│   │   │   ├── Economy/             # HTTP bridge to Node.js application API
 │   │   │   ├── AI/                  # StateTree + BT + EQS
 │   │   │   └── UI/                  # UMG HUD widgets
 │   │   ├── Player/
@@ -49,7 +49,7 @@ KhaaosRun/
 | Sistema TS | Arquivo C++ | Status |
 |---|---|---|
 | `RoomManager.ts` | `KhaaosGameMode.h` | Header criado |
-| `EconomyEngine.ts` | `EconomyBridge.h` (microservice) | Header criado |
+| `EconomyEngine.ts` | `EconomyBridge.h` (HTTP API Node.js) | Header criado |
 | `MonteCarloEconomy.ts` | EconomyBridge (via API) | Header criado |
 | `ProceduralGenerator.ts` | UE PCG Framework | Pendente (Fase 2) |
 | `SpatialGrid.ts` | `SpatialGrid.h` | Header criado |
@@ -59,6 +59,12 @@ KhaaosRun/
 | Schema: PatenteKR | `KhaaosPlayerState.h` | Header criado |
 | Schema: ZONE_PHASES | `KhaaosSafeZone.h` | Header criado |
 | Schema: LOOT_PRESETS | `KhaaosLootPickup.h` | Header criado |
+
+## Imagem de servidor e contexto Docker
+
+`server/` contém código TypeScript do backend, mas não é um pacote Node autônomo: `package.json`, `shared/`, o build do cliente e o schema ficam na raiz do repositório. Portanto, `server/Dockerfile` é o arquivo da imagem e o **contexto de build é a raiz (`.`)**. A imagem publicada em GHCR é a aplicação Node completa (API e arquivos estáticos do cliente), não um microserviço de economia separado.
+
+O workflow `UE5 CD` valida em PR e constrói a imagem sem publicá-la. Em `main`, primeiro roda `npm run verify:all` e só então publica as tags SHA e `main` em `ghcr.io/nexus-hub57/khaaos-run-server`. O `GITHUB_TOKEN` recebe `packages: write` apenas no job de build; segredos de execução são fornecidos pelo ambiente de deploy, nunca copiados para a imagem.
 
 ## Novos Sistemas dos Devs (NÃO MODIFICAR)
 

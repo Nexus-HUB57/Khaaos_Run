@@ -25,10 +25,12 @@ export interface IStorage {
   updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   // Items
   getItems(userId: string): Promise<Item[]>;
+  getEquippedItems(userId: string): Promise<Item[]>;
   getItem(id: number): Promise<Item | undefined>;
   getItemForUser(id: number, userId: string): Promise<Item | undefined>;
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
+  setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined>;
   // Zone
   getActiveZoneSession(): Promise<ZoneSession | undefined>;
   createZoneSession(centerX: number, centerY: number): Promise<ZoneSession>;
@@ -126,6 +128,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(items).where(eq(items.userId, userId));
   }
 
+  async getEquippedItems(userId: string): Promise<Item[]> {
+    return await db.select().from(items)
+      .where(and(eq(items.userId, userId), eq(items.isEquipped, true)));
+  }
+
   async getItem(id: number): Promise<Item | undefined> {
     const [item] = await db.select().from(items).where(eq(items.id, id));
     return item;
@@ -143,6 +150,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateItem(id: number, updates: Partial<Item>): Promise<Item> {
     const [updated] = await db.update(items).set(updates).where(eq(items.id, id)).returning();
+    return updated;
+  }
+
+  async setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined> {
+    const [updated] = await db.update(items)
+      .set({ isEquipped })
+      .where(and(eq(items.id, id), eq(items.userId, userId)))
+      .returning();
     return updated;
   }
 

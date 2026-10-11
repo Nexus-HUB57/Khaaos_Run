@@ -333,6 +333,12 @@ Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
 ---
 
+## Autenticação no Render
+
+A documentação oficial do Replit Auth não confirma suporte a hosting externo em Render. O callback gerado pelo código não comprova que o issuer autorize `onrender.com`; valide login, callback, cookie e logout em staging antes de migrar usuários ou tráfego. Veja [`docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md`](docs/REPLIT_AUTH_RENDER_COMPATIBILITY.md).
+
+---
+
 ## Limitações Conhecidas
 
 - Economia ainda sem ledger atômico completo — não usar para valor real.

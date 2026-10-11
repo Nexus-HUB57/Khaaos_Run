@@ -25,7 +25,7 @@ O Deploy Hook responde quando Render aceita/agenda o deploy, não quando a aplic
 
 ## Login OIDC: gate obrigatório antes de produção
 
-O backend atual descobre `https://replit.com/oidc` e monta o callback como `https://<req.hostname>/api/callback`. A documentação de Replit Auth garante suporte para Development e Published Apps (`replit.dev`, `replit.app` e domínios customizados Replit), mas não afirma que um deployment em Render seja suportado. **Não presuma que login Replit funcionará em `onrender.com`.**
+O backend atual descobre `https://replit.com/oidc` e monta o callback como `https://<req.hostname>/api/callback`. A documentação de Replit Auth garante suporte para Development e Published Apps (`replit.dev`, `replit.app` e domínios customizados Replit), mas não afirma que um deployment em Render seja suportado. **Não presuma que login Replit funcionará em `onrender.com`.** Veja também a [análise de compatibilidade e plano de verificação](REPLIT_AUTH_RENDER_COMPATIBILITY.md).
 
 Antes de liberar tráfego real em Render, valide com a equipe/configuração do Replit que o `REPL_ID` pode autorizar o callback `https://<host-render>/api/callback` e post-logout URI `https://<host-render>`. Faça o teste de login/callback/logout e cookie Secure atrás do proxy. Se o issuer recusar domínio externo, não contorne validação de redirect: mantenha a produção no Replit ou planeje uma migração explícita para um provedor de identidade compatível, com estratégia de migração/ligação de usuários e testes. O deploy pode compilar e iniciar mesmo quando esse gate de autenticação falha.
 
@@ -38,4 +38,4 @@ No **GitHub Actions** ficam o secret `RENDER_DEPLOY_HOOK_URL` e as variables nã
 - [Deploy Hooks do Render](https://render.com/docs/deploy-hooks)
 - [Deploys e auto-deploy do Render](https://render.com/docs/deploys)
 - [Blueprint YAML Reference](https://render.com/docs/blueprint-spec)
-- [Replit Auth](https://docs.replit.com/features/auth-and-identity/authentication)
+- [Replit Auth](https://docs.replit.com/features/auth-and-identity/authentication) e [Custom Domains](https://docs.replit.com/features/publishing/custom-domains) do Replit

@@ -153,6 +153,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(await storage.getItems(getUserId(req)));
   });
 
+  app.post(api.items.equip.path, requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseRouteId(req.params.id);
+      if (id === null) return res.status(400).json({ message: "ID de item inválido" });
+      const { isEquipped } = api.items.equip.input.parse(req.body);
+      const item = await storage.setItemEquipped(id, userId, isEquipped);
+      if (!item) return res.status(404).json({ message: "Item não encontrado" });
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post(api.items.purchase.path, requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
