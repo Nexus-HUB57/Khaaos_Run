@@ -1,0 +1,137 @@
+# =============================================================================
+# Khaaos Run — UE5 CD Pipeline
+# Deployment automation for dedicated server builds and economy microservice
+# =============================================================================
+name: UE5 CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/**'
+      - 'server/**'
+      - '.github/workflows/ue5-cd.yml'
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/khaaos-server
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Build Economy Microservice Docker Image
+  # ---------------------------------------------------------------------------
+  build-economy-service:
+    name: Build Economy Microservice
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Validate Dedicated Server Configuration
+  # ---------------------------------------------------------------------------
+  validate-server-config:
+    name: Validate Server Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate DefaultGame.ini
+        run: |
+          set -euo pipefail
+          INI="Unreal/KhaaosRun/Config/DefaultGame.ini"
+          if [[ -f "$INI" ]]; then
+            echo "✅ DefaultGame.ini found"
+            # Verify economy endpoint is not localhost in production
+            if grep -q "localhost" "$INI" 2>/dev/null; then
+              echo "::warning::DefaultGame.ini contains localhost — ensure override for production"
+            fi
+          else
+            echo "::warning::DefaultGame.ini not found (may not be committed yet)"
+          fi
+
+      - name: Validate .uproject for dedicated server
+        run: |
+          set -euo pipefail
+          PROJ="Unreal/KhaaosRun/KhaaosRun.uproject"
+          if [[ -f "$PROJ" ]]; then
+            python3 -c "
+            import json
+            proj = json.load(open('$PROJ'))
+            # Check for server-specific plugins
+            plugins = [p['Name'] for p in proj.get('Plugins', [])]
+            required = ['GameplayAbilities', 'Iris', 'SignificanceManager']
+            for r in required:
+                if r not in plugins:
+                    print(f'::warning::Missing server plugin: {r}')
+                else:
+                    print(f'✅ Plugin {r} present')
+            "
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Deploy notification
+  # ---------------------------------------------------------------------------
+  notify-deploy:
+    name: Notify Deployment
+    needs: [build-economy-service, validate-server-config]
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send deployment notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          IMAGE_TAG: ${{ needs.build-economy-service.outputs.image-tag }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${DISCORD_WEBHOOK_URL}" ]]; then
+            message="🚀 Deploy de ${REPOSITORY} concluído (commit ${COMMIT:0:7}). Image: ${IMAGE_TAG}"
+            payload=$(jq -n --arg content "$message" '{content: $content}')
+            curl --fail --silent --show-error --max-time 15 \
+              -H 'Content-Type: application/json' \
+              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null
+            echo "✅ Notification sent"
+          else
+            echo "No Discord webhook configured — skipping notification"
+          fi

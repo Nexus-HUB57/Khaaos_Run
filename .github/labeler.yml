@@ -1,0 +1,48 @@
+# =============================================================================
+# Khaaos Run — PR Auto-Labeler Configuration
+# Maps changed file paths to labels
+# =============================================================================
+ue5:
+  - changed-files:
+      - any-glob-to-any-file: 'Unreal/**'
+
+cpp:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Unreal/**/Source/**/*.h'
+          - 'Unreal/**/Source/**/*.cpp'
+
+gameplay:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Unreal/**/Game/**'
+
+economy:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Unreal/**/Economy/**'
+          - 'server/**'
+
+ai:
+  - changed-files:
+      - any-glob-to-any-file: 'Unreal/**/AI/**'
+
+client:
+  - changed-files:
+      - any-glob-to-any-file: 'client/**'
+
+ci-cd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - 'scripts/**'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
