@@ -40,6 +40,31 @@ export function usePurchaseItem() {
   });
 }
 
+export function useSetItemEquipped() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isEquipped }: { id: number; isEquipped: boolean }) => {
+      const validated = api.items.equip.input.parse({ isEquipped });
+      const res = await fetch(buildUrl(api.items.equip.path, { id }), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validated),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Item não encontrado no seu War’I");
+        throw new Error("Não foi possível atualizar a PackBack");
+      }
+      return api.items.equip.responses[200].parse(await res.json());
+    },
+    onSuccess: (updatedItem) => {
+      queryClient.setQueryData<Item[]>([api.items.list.path], (current) =>
+        current?.map((item) => item.id === updatedItem.id ? updatedItem : item),
+      );
+    },
+  });
+}
+
 export function useUseItem() {
   const queryClient = useQueryClient();
   return useMutation({

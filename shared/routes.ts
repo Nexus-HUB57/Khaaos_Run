@@ -134,6 +134,16 @@ export const api = {
         402: errorSchemas.insufficientFunds,
       },
     },
+    equip: {
+      method: 'POST' as const,
+      path: '/api/items/:id/equip',
+      input: z.object({ isEquipped: z.boolean() }),
+      responses: {
+        200: z.custom<typeof items.$inferSelect>(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
     use: {
       method: 'POST' as const,
       path: '/api/items/:id/use',

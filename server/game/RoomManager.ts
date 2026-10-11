@@ -26,6 +26,7 @@ import {
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
+import { deriveCombatLoadout } from "./loadout";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
@@ -49,6 +50,7 @@ export interface RoomPlayer {
   // Combat
   equippedDamage: number;   // from equipped weapon stats
   equippedRange: number;    // attack range in map %
+  packbackItemIds: number[]; // durable, selected War'I items snapshotted for this match
   lastAttackAt: number;     // epoch ms — fire rate gate
   posHistory: PositionHistory;
   damageDealt: number;
@@ -372,6 +374,11 @@ class RoomManager {
       return;
     }
 
+    if (room.status === "COUNTDOWN" && room.countdownSeconds <= 0) {
+      this.send(ws, { type: "error", message: "Partida em preparação; aguarde a próxima sala" });
+      return;
+    }
+
     if (room.players.size >= room.maxPlayers) {
       this.send(ws, { type: "error", message: "Room full" });
       return;
@@ -394,6 +401,7 @@ class RoomManager {
       lastSeenAt: Date.now(),
       equippedDamage: 15, // baseline unarmed / starter
       equippedRange: 8,
+      packbackItemIds: [],
       lastAttackAt: 0,
       posHistory: new PositionHistory(1000),
       damageDealt: 0,
@@ -528,7 +536,30 @@ class RoomManager {
     this.broadcastRoomState(room);
   }
 
-  private beginMatch(room: BattleRoom) {
+  private async beginMatch(room: BattleRoom): Promise<void> {
+    if (room.status !== "COUNTDOWN" || this.rooms.get(room.id) !== room) return;
+
+    let loadouts: Map<string, ReturnType<typeof deriveCombatLoadout>>;
+    try {
+      const prepared = await Promise.all([...room.players.values()].map(async (player) => {
+        const equippedItems = await storage.getEquippedItems(player.userId);
+        return [player.userId, deriveCombatLoadout(equippedItems, player.maxHealth)] as const;
+      }));
+      loadouts = new Map(prepared);
+    } catch (error) {
+      console.error(`[RoomManager] Failed to prepare PackBack for ${room.id}:`, error);
+      if (room.status === "COUNTDOWN" && this.rooms.get(room.id) === room) {
+        this.cancelCountdown(room);
+        for (const player of room.players.values()) {
+          if (player.ws) this.send(player.ws, { type: "error", message: "Não foi possível validar a PackBack. A partida foi pausada; tente novamente." });
+        }
+      }
+      return;
+    }
+
+    // A participant may have left while the database reads were in flight.
+    if (room.status !== "COUNTDOWN" || this.rooms.get(room.id) !== room) return;
+
     room.status = "IN_PROGRESS";
     room.startedAt = Date.now();
     room.currentPhase = 1;
@@ -553,6 +584,11 @@ class RoomManager {
 
     // Reset players to alive + re-index
     for (const p of room.players.values()) {
+      const loadout = loadouts.get(p.userId);
+      p.packbackItemIds = loadout?.itemIds ?? [];
+      p.equippedDamage = loadout?.equippedDamage ?? 15;
+      p.equippedRange = loadout?.equippedRange ?? 8;
+      p.maxHealth = loadout?.maxHealth ?? p.maxHealth;
       p.status = "VIVO";
       p.health = p.maxHealth;
       p.kills = 0;
@@ -1227,6 +1263,7 @@ class RoomManager {
         lastSeenAt: Date.now(),
         equippedDamage: 15,
         equippedRange: 8,
+        packbackItemIds: [],
         lastAttackAt: 0,
         posHistory: new PositionHistory(1000),
         damageDealt: 0,

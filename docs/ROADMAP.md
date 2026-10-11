@@ -98,6 +98,9 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 - [x] Fazer code splitting das páginas com lazy imports.
 - [x] Atualizar `caniuse-lite`/Browserslist.
 - [x] Reduzir o chunk inicial de aproximadamente 613 kB minificados para aproximadamente 386 kB minificados no build medido.
+- [x] Implementar no War’I os filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes do item e seleção persistida da PackBack com atualização limitada ao proprietário.
+- [x] Carregar no fim do countdown apenas a PackBack persistida do próprio usuário; arma durável define dano/alcance, defesa durável acrescenta vida máxima (limite 200) e falha de leitura pausa a partida.
+- [ ] Definir slots/regras de balanceamento e conectar consumíveis/utilidades a ações autoritativas de combate, com consumo persistente e validação de durabilidade.
 - [ ] Manter testes de Lighthouse em runner estável para mobile e desktop, com percentis/variação documentados.
 - [ ] Definir limites de regressão de LCP, INP, CLS e JavaScript inicial após recolher baseline repetível.
 - [ ] Adicionar testes de interação e acessibilidade para lobby, zona, inventário, banco e pós-partida.
