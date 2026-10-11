@@ -1,6 +1,6 @@
 {
   "name": "khaaos-run",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "vite build",
     "test": "node --test test/*.test.js",
     "test:stress": "node --test test/stress.test.js",
+    "test:infra": "node --test test/infrastructure.test.js",
     "server": "node server/server.js",
     "preview": "vite preview --host 0.0.0.0"
   },

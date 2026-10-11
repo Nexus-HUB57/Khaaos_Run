@@ -1,0 +1,10 @@
+import crypto from 'node:crypto';
+
+const b64=v=>Buffer.from(v).toString('base64url');
+const unb64=v=>Buffer.from(v,'base64url').toString('utf8');
+export function hashPassword(password,salt=crypto.randomBytes(16).toString('hex')){const hash=crypto.scryptSync(String(password),salt,32).toString('hex');return `scrypt:${salt}:${hash}`;}
+export function verifyPassword(password,encoded){try{const [,salt,expected]=String(encoded).split(':');const actual=crypto.scryptSync(String(password),salt,32).toString('hex');return crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expected));}catch{return false;}}
+export function signToken(payload,secret,ttlSeconds=3600){const header=b64(JSON.stringify({alg:'HS256',typ:'JWT'}));const body=b64(JSON.stringify({...payload,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+ttlSeconds,jti:crypto.randomUUID()}));const signature=b64(crypto.createHmac('sha256',secret).update(`${header}.${body}`).digest());return `${header}.${body}.${signature}`;}
+export function verifyToken(token,secret){try{const [header,body,signature]=String(token).split('.');const expected=b64(crypto.createHmac('sha256',secret).update(`${header}.${body}`).digest());if(!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))return null;const payload=JSON.parse(unb64(body));if(payload.exp<=Math.floor(Date.now()/1000))return null;return payload;}catch{return null;}}
+export function hasRole(identity,role){const order={player:1,moderator:2,admin:3};return (order[identity?.role]||0)>=(order[role]||99);}
+export class AuthService{constructor({secret=process.env.AUTH_SECRET||'dev-only-change-me',users=[]}={}){this.secret=secret;this.users=new Map(users.map(u=>[u.username,{...u}]));}login(username,password){const user=this.users.get(username);if(!user||!verifyPassword(password,user.passwordHash))return null;return {token:signToken({sub:user.id,username:user.username,role:user.role,region:user.region},this.secret,3600),user:{id:user.id,username:user.username,role:user.role,region:user.region}};}verify(token){return verifyToken(token,this.secret);}}

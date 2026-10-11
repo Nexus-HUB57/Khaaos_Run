@@ -1,17 +1,18 @@
 # Khaaos Run — Backlog de Produção
 
-- [x] Entregar vertical slice jogável do CIGKV no navegador.
+- [x] Entregar vertical slice jogável do CIGKV.
 - [x] Modularizar simulação, RNG, armas, loot e replay.
-- [x] Criar servidor authoritative com tick fixo e anti-cheat.
-- [x] Integrar cliente ao WebSocket com modo `?online=1`.
-- [x] Adicionar matchmaking automático por salas com capacidade configurável.
-- [x] Aplicar snapshots remotos e interpolação no cliente.
-- [x] Adicionar teste concorrente com 24 jogadores simultâneos.
-- [x] Criar painel administrativo protegido por token e métricas em tempo real.
-- [ ] Trocar token administrativo por SSO/RBAC e auditar acessos.
-- [ ] Adicionar autenticação, reconexão, matchmaking por região e medição de ping.
-- [ ] Persistir inventário e resultados com idempotência.
-- [ ] Escalar salas por processo/worker e adicionar backpressure.
-- [ ] Adicionar rate limit distribuído, assinatura de mensagens e telemetria.
-- [ ] Criar catálogo completo de armas, mapas por ciclo e regras de progressão.
+- [x] Criar servidor authoritative com anti-cheat.
+- [x] Integrar cliente online com snapshots e interpolação.
+- [x] Adicionar matchmaking por salas e regiões.
+- [x] Implementar tokens assinados, hash scrypt e RBAC base.
+- [x] Implementar reconexão por resume token com janela de 15 segundos.
+- [x] Implementar persistência atômica de sessões.
+- [x] Implementar rate limit com adapter compartilhável.
+- [x] Adicionar testes de autenticação, persistência, reconexão, regiões e concorrência.
+- [ ] Substituir DurableJsonStore por banco transacional com migrações.
+- [ ] Conectar adapter Redis/KeyDB real com atomicidade cross-process.
+- [ ] Adicionar TLS, rotação de chaves, revogação e SSO.
+- [ ] Implementar RBAC com auditoria e permissões por recurso.
+- [ ] Adicionar ping real, health checks, backpressure e autoscaling por região.
 - [ ] Definir economia e compliance antes de conectar qualquer valor real ou carteira.

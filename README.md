@@ -2,47 +2,47 @@
 
 Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)** com simulação modular, seeds reproduzíveis, catálogo de armas, loot ponderado e backend authoritative multiplayer.
 
-## Cliente local e online
+## Autenticação e RBAC
+
+O servidor usa tokens assinados HMAC-SHA256 com expiração, hash de senha `scrypt` e papéis `player`, `moderator` e `admin`. Configure produção com `AUTH_SECRET` forte e `KR_USERS_JSON` contendo usuários pré-provisionados com `passwordHash` gerado por `hashPassword`.
+
+```bash
+AUTH_SECRET='segredo-longo' ADMIN_TOKEN='chave-legada-temporaria' KR_STORE=/var/lib/khaaos/state.json npm run server
+```
+
+O login é feito em `POST /auth/login` com `{ "username": "...", "password": "..." }`. WebSocket exige `?token=...`. O painel administrativo exige token JWT com role `admin`; o `ADMIN_TOKEN` existe apenas como compatibilidade operacional temporária.
+
+## Cliente online, reconexão e regiões
 
 ```bash
 npm install
 npm run dev
 ```
 
-- Modo local: abra o endereço padrão do Vite.
-- Modo online authoritative: abra `/?online=1`. O cliente conecta em `/ws`, entra no matchmaking, envia apenas inputs e interpola a posição entre snapshots do servidor.
-- O campo `SEED` no HUD controla o modo local. No modo online a seed é definida pela sala.
+Abra `/?online=1` depois de salvar o JWT em `localStorage.kr_token`, ou use `NetworkClient.login('/...', username, password)`. O cliente envia somente inputs, conecta no `/ws`, guarda o `resumeToken` e reconecta automaticamente com backoff. Sessões ficam reservadas por 15 segundos para retomada.
 
-## Servidor e matchmaking
+O matchmaking usa `region` do token (`sa-east`, `us-east` ou `eu-west`) e latências reportadas, agrupando jogadores apenas em salas compatíveis. Salas têm capacidade padrão de 16.
 
-```bash
-ADMIN_TOKEN=troque-esta-chave MATCH_SEED=CIGKV-ONLINE PORT=8787 npm run server
-```
+## Persistência e rate limiting
 
-O servidor escuta HTTP e WebSocket em `:8787`. Salas são criadas automaticamente, com capacidade padrão de 16 jogadores. Cada cliente recebe uma sala, um estado authoritative e snapshots a 20 Hz. A posição, dano, munição, tiro, loot e Ring são decididos no backend; o navegador nunca é a fonte de verdade.
+Sessões de reconexão são gravadas por `DurableJsonStore` com escrita atômica e sobrevivem à recriação do processo. O rate limiter usa um adapter com operação `incr` atômica; `SharedMemoryRateStore` é adequado para testes e uma única instância. Em produção, conecte o mesmo contrato a Redis/KeyDB com `INCR` + expiração para compartilhar contadores entre réplicas.
 
 ## Painel anti-cheat
 
-Abra `http://localhost:8787/admin.html`, informe `ADMIN_TOKEN` e conecte. O painel atualiza a cada segundo com conexões, mensagens, rejeições, violações, bans, filas, salas, jogadores e clientes suspeitos. A API protegida é `GET /admin/metrics?token=...`; em produção, substitua o token simples por autenticação administrativa real e HTTPS.
-
-## Replay e seeds
-
-No modo local, use no console do navegador:
-
-```js
-const replay = window.KhaaosReplay.export();
-window.KhaaosReplay.load(replay);
+```bash
+http://localhost:8787/admin.html
 ```
 
-A mesma seed reproduz spawn de bots, loot e evolução procedural.
+Com JWT admin, o painel atualiza a cada segundo com conexões, autenticações falhas, rate limits, violações, bans, sessões, fila, regiões, salas e clientes suspeitos. A API é `GET /admin/metrics` com `Authorization: Bearer <jwt>`.
 
 ## Testes
 
 ```bash
 npm test
+npm run test:infra
 npm run test:stress
 ```
 
-Os testes cobrem RNG, loot, replay, anti-cheat, matchmaking concorrente e snapshots para múltiplos jogadores. O stress test abre 24 clientes simultâneos e verifica a distribuição em salas.
+Os testes cobrem assinatura/RBAC, persistência, reconexão, escolha regional, rate limiting compartilhado entre duas instâncias e 24 conexões WebSocket autenticadas em múltiplas salas.
 
-O sistema é uma fundação de desenvolvimento: ainda precisa de autenticação, matchmaking com regras de região/ping, persistência, escalabilidade horizontal, rate limit distribuído, observabilidade e revisão de segurança antes de produção.
+Antes de produção ainda é necessário substituir o arquivo JSON por storage transacional, conectar um adapter Redis real, usar TLS, adicionar rotação de chaves, SSO/RBAC operacional, matchmaking por ping real e observabilidade distribuída.
