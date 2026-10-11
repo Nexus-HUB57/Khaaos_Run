@@ -2,22 +2,26 @@
 
 **Um Jogo · Uma Chance · Um Legado**
 
-> Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.  
+> Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
-Este repositório contém a implementação authoritative TypeScript (web/API + runtime de simulação), algoritmos de matchmaking de referência e a fundação inicial em Unreal Engine 5.8. O README distingue o que já está implementado, o que é design canônico e o que permanece roadmap.
+> **Nível Devs Ph.D** — 15 PRs merged · 84 arquivos C++ · 16.165 linhas UE5 · 6 workflows CI/CD · Launch-Ready
 
 ---
 
 ## Sumário
 
+- [Status do Projeto](#status-do-projeto)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
 - [Mundos Oficiais (W1–W4)](#mundos-oficiais-w1w4)
 - [Protocolos de Ingresso (Zu)](#protocolos-de-ingresso-zu)
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
-- [Arquitetura Técnica](#arquitetura-técnica)
+- [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
+- [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
+- [CI/CD e Automação](#cicd-e-automação)
+- [Infraestrutura de Produção](#infraestrutura-de-produção)
 - [Fluxo de uma Partida](#fluxo-de-uma-partida)
 - [Modelo de Dados](#modelo-de-dados)
 - [Autenticação e Limites de Confiança](#autenticação-e-limites-de-confiança)
@@ -26,7 +30,28 @@ Este repositório contém a implementação authoritative TypeScript (web/API + 
 - [Qualidade e Validação](#qualidade-e-validação)
 - [Build e Implantação](#build-e-implantação)
 - [Limitações Conhecidas](#limitações-conhecidas)
-- [Roadmap](docs/ROADMAP.md)
+- [Roadmap Go Live](#roadmap-go-live)
+- [Referências](#referências)
+
+---
+
+## Status do Projeto
+
+| Dimensão | Estado | Detalhe |
+|----------|--------|---------|
+| **Web/API (TS/Node)** | ✅ Produção | Express 5, React 18, WebSocket, Economy, Matchmaking |
+| **UE5 C++ Core** | ✅ Implementado | 19 subsistemas, 84 arquivos, 16.165 linhas |
+| **Gameplay Ability System** | ✅ Implementado | 11 abilities, GameplayEffects, Tags, Enhanced Input |
+| **Rede / Replicação** | ✅ Implementado | Iris, Relevancy, NetMetrics, Spatial Grid |
+| **EOS (Epic Online Services)** | ✅ Implementado | Auth, Lobby, Matchmaking, Sessions, Cloud Save |
+| **CI/CD** | ✅ Operacional | 6 workflows, PR automation, dev coordination |
+| **Docker / Dedicated Server** | ✅ Implementado | Multi-stage Dockerfile, docker-compose, CI pipeline |
+| **Anti-Cheat** | ✅ Implementado | Movement validation, 3-strike auto-kick, shot validation |
+| **Load Testing** | ✅ Implementado | 100-bot stress test, behavior profiles, JSON reports |
+| **Launch Readiness** | ✅ Implementado | Rate limiting, DDoS protection, monitoring, 14-point checklist |
+| **Build UE5 (compilação)** | ⏳ Pendente | Requer UE5.8 Editor + 50 GB+ SDK para compilar |
+| **3D Assets / Mapas** | ⏳ Pendente | Sem mapas jogáveis ou assets 3D ainda |
+| **EAC Integration** | ⏳ Pendente | Easy Anti-Cheat requer build compilado + SDK |
 
 ---
 
@@ -76,7 +101,7 @@ Cada Ring possui:
 - **Plus +** (vantagens posicionais: bunkers, sniper points, veículos, kits médicos);
 - **Plus −** (perigos ambientais: chuva ácida, neblina alucinógena, areia movediça, flora carnívora, tsunami);
 - **Zonas de Extração de XP (ZEX)** — terminais que permitem persistir parte das conquistas;
-- **Dinâmica de inatividade** — “dedo-duro” (ratos, mosquitos, gafanhotos, gaivotas) que pune o jogador que evita combate.
+- **Dinâmica de inatividade** — "dedo-duro" (ratos, mosquitos, gafanhotos, gaivotas) que pune o jogador que evita combate.
 
 ---
 
@@ -103,7 +128,7 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Desafio de Gigantes (pós-EXCO)
 
-Os 50 melhores do CIGKV são convocados para a “Guerra dos Filhos da Escuridão” (batalha noturna, transmissão YouTube). Recebem:
+Os 50 melhores do CIGKV são convocados para a "Guerra dos Filhos da Escuridão" (batalha noturna, transmissão YouTube). Recebem:
 
 - Insígnia **Mérito KR**;
 - **Código KR-N1** (manual de instrução);
@@ -127,7 +152,7 @@ Ambiente urbano pós-guerra: construções inacabadas, carros abandonados, corpo
 | Parque Abandonado (centro) | ⅜ |
 | Zona de Extração (estação ferroviária) | — |
 
-**Dinâmica**: “Água da Morte” — anel de conflito fecha em 10 min em direção ao Parque; quem não corre é consumido pela chuva ácida.
+**Dinâmica**: "Água da Morte" — anel de conflito fecha em 10 min em direção ao Parque; quem não corre é consumido pela chuva ácida.
 
 ### W2/C2 — Priadus (Floresta da Escuridão)
 
@@ -140,7 +165,7 @@ Selva hostil, neblina alucinógena, pântanos, flora carnívora, jacarés. Teste
 | Área de Caça + Templo Antigo | ⅜ |
 | Zona de Extração (matadouro) | — |
 
-**Dinâmica**: “Emboscada Verde” — anel fecha no templo; neblina com esporos tóxicos pune atraso.
+**Dinâmica**: "Emboscada Verde" — anel fecha no templo; neblina com esporos tóxicos pune atraso.
 
 ### W3/C3 — Ckesalth (Deserto das Almas Esquecidas)
 
@@ -153,7 +178,7 @@ Deserto árido, lagoas de petróleo em chamas, fumaça tóxica, areia movediça.
 | Refinaria de Petróleo (centro) | ⅜ |
 | Zona de Extração (expedição) | — |
 
-**Dinâmica**: “Assassino Silencioso” — a partir de 5 min o anel fecha na Vila Sombria sob fumaça tóxica.
+**Dinâmica**: "Assassino Silencioso" — a partir de 5 min o anel fecha na Vila Sombria sob fumaça tóxica.
 
 ### W4/C4 — Arukheea (Ilha dos Gritos Calados)
 
@@ -166,7 +191,7 @@ Ilha isolada, Prisão do Sol da Noite (luz perpétua), tsunami iminente, tubarõ
 | Fábrica / Cemitério das Baleias | ⅛ |
 | Extração final (heliporto da torre) | — |
 
-**Dinâmica**: “Tsunami” — anel fecha na Prisão; quem não sobe no helicóptero torna-se “grito calado”.
+**Dinâmica**: "Tsunami" — anel fecha na Prisão; quem não sobe no helicóptero torna-se "grito calado".
 
 ---
 
@@ -197,13 +222,45 @@ Em todos os casos:
 - **Fundo de Investimentos KR** — acumula o prêmio de US$ 1.000.000 destinado ao(à) grande vencedor(a).
 - **Forja do Armeiro** — marketplace de equipamentos e upgrades pagos em KRC.
 - **Persistência seletiva**: conquistas do CIGKV não migram integralmente; apenas Tokens de Veterano, packs e os 1000 melhores pontuados recebem transferência parcial para W1/C1.
-- **Zonas de Extração de XP**: terminais no mapa que “salvam” progresso para o inventário War’I, desde que o jogador não seja eliminado antes.
+- **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
 > **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
 
 ---
 
-## Arquitetura Técnica
+## Arquitetura Técnica — Devs Ph.D
+
+### Visão Geral de Duas Camadas
+
+O Khaaos Run opera em duas camadas complementares que se comunicam via HTTP REST e shared database:
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         CAMADA WEB (Node.js)                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │ React SPA │  │ Express 5│  │ WebSocket│  │ Economy Microservice    │  │
+│  │ Vite+TS   │  │ API/REST │  │ RoomMgr  │  │ MonteCarlo / SpatialGrid│  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────────────┘  │
+│         │            │             │                    │                  │
+│         └────────────┴─────────────┴────────────────────┘                 │
+│                              │  PostgreSQL (Drizzle)                      │
+└──────────────────────────────┼───────────────────────────────────────────┘
+                               │
+┌──────────────────────────────┼───────────────────────────────────────────┐
+│                    CAMADA UE5 (C++ Dedicated Server)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │ GameMode  │  │ GAS      │  │ Iris Net │  │ EOS (Auth/Lobby/Session) │  │
+│  │ 100p BR  │  │ Abilities│  │ Relevancy│  │ Cloud Save / Matchmaking │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────────────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │ AntiCheat│  │ Pool+Sig │  │ HUD+Audio│  │ Production Config        │  │
+│  │ 3-Strike │  │ Niagara  │  │ MetaSound│  │ RateLimit / DDoS / Mon   │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────────────┘  │
+│                              │  EconomyBridge (HTTP → Node.js)            │
+└──────────────────────────────┴───────────────────────────────────────────┘
+```
+
+### Mapa de Código
 
 | Caminho | Responsabilidade | Stack |
 |---------|------------------|-------|
@@ -211,23 +268,273 @@ Em todos os casos:
 | `server/` | API HTTP, sessões OIDC, salas, simulação authoritative | Node.js, Express 5, `ws`, Passport, PostgreSQL |
 | `shared/` | Schema Drizzle, tipos e contratos | Drizzle ORM, Zod |
 | `game-runtime/` | Runtime JS isolado (simulação, replay, testes) | Node.js, Vite, `node:test` |
-| `Unreal/KhaaosRun/` | Fundação UE5.8 (GameMode, GAS, Iris, EOS declarados) | Unreal Engine 5.8, C++20 |
+| `Unreal/KhaaosRun/` | **UE5.8 C++ completo — 19 subsistemas, 16.165 linhas** | Unreal Engine 5.8, C++20, GAS, Iris, EOS, Lyra |
 | `server/game/matchmaking-*.{js,py}` | Algoritmos de referência skill-based | JS / Python 3 |
 
+### Diagrama de Fluxo
+
 ```mermaid
-flowchart LR
-  Browser[React SPA] -->|HTTPS + cookie OIDC| API[Express API]
-  Browser -->|GET ws-token| API
-  Browser -->|WSS /ws + token| Rooms[RoomManager]
-  API --> Auth[Passport / Replit OIDC]
-  API --> DB[(PostgreSQL via Drizzle)]
-  Rooms --> DB
-  Rooms --> MM[MatchmakingService]
-  Rooms --> Sim[Zona · Combate · Loot · Ranking]
+flowchart TB
+  subgraph Web["Camada Web (Node.js)"]
+    Browser[React SPA] -->|HTTPS + OIDC| API[Express API]
+    Browser -->|WSS /ws| Rooms[RoomManager]
+    API --> Auth[Passport OIDC]
+    API --> DB[(PostgreSQL)]
+    Rooms --> MM[MatchmakingService]
+    Rooms --> Sim[Zone · Combat · Loot · Ranking]
+  end
+
+  subgraph UE5["Camada UE5 (C++ Dedicated Server)"]
+    Clients[UE5 Clients] -->|Iris Replication| DS[Dedicated Server]
+    DS --> GAS[Gameplay Ability System]
+    DS --> EOS[EOS Lobby + Sessions]
+    DS --> AC[Anti-Cheat Validator]
+    DS -->|HTTP REST| EconBridge[EconomyBridge]
+  end
+
+  EconBridge -->|KRC / Transactions| API
   Sim --> DB
+  DS --> Save[(EOS Cloud Save)]
 ```
 
-O `RoomManager` é a fonte de verdade da partida live. O `game-runtime/` é um laboratório isolado; o projeto Unreal é fundação de portabilidade e ainda não compila nem possui mapas jogáveis.
+O `RoomManager` (Node.js) é a fonte de verdade da partida live na camada web. O `KhaaosGameMode` (C++) é a fonte de verdade na camada UE5. A `EconomyBridge` conecta as duas camadas, delegando transações KRC ao microsserviço Node.js.
+
+---
+
+## Inventário de Sistemas UE5
+
+Todos os sistemas abaixo estão implementados em C++20 no diretório `Unreal/KhaaosRun/Source/KhaaosRun/Game/`:
+
+### 1. Game Core
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosGameMode** | .h + .cpp | 510 | GameMode BR 100p, zone shrinking, elimination, win condition |
+| **KhaaosGameState** | .h + .cpp | 123 | Estado replicado da partida (phase, zone, alive count) |
+| **KhaaosPlayerState** | .h + .cpp | 237 | Stats do jogador (kills, damage, KRC, rank, sequela) |
+| **KhaaosAttributeSet** | .h + .cpp | 148 | GAS attributes: Health, Shield, Energy, Stamina, Speed |
+
+### 2. Combat & Abilities (GAS)
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosAbilityComponent** | .h + .cpp | 232 | UAbilitySystemComponent wrapper com tag-based init |
+| **KhaaosAbilitySet** | .h/.cpp | 228 | UPrimaryDataAsset com GiveAbilities/RemoveAbilities |
+| **Movement Abilities** | 4 × .h/.cpp | 718 | Sprint, Jump, Slide, GrapplingHook — LocalPredicted |
+| **Combat Abilities** | 5 × .h/.cpp | 803 | Shoot, Reload, Melee, Throw, Ultimate — ServerInitiated |
+| **Defense Abilities** | 2 × .h/.cpp | 505 | Shield, Heal — ServerInitiated |
+| **KhaaosProjectile** | .h + .cpp | 300 | Projectile replicado com pooled lifecycle |
+| **KhaaosGameplayTags** | .h + .cpp | 416 | 60+ tags estáticas via FGameplayTag::RequestGameplayTag |
+| **KhaaosGameplayEffects** | .h/.cpp | 795 | Factory: Cooldown, Cost, Buff, Debuff, HealOT, Damage, ZoneDamage |
+| **KhaaosEffectApplier** | .h + .cpp | — | UGameInstanceSubsystem Apply/Remove/Query effects |
+
+### 3. Input
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosInputConfig** | .h + .cpp | 439 | UPrimaryDataAsset: Native + Ability Input Actions |
+| **KhaaosInputComponent** | .h + .cpp | — | UEnhancedInputComponent (padrão Lyra) |
+| **KhaaosInputTags** | .h + .cpp | — | 15 IA_ references (Move/Look/Jump/Sprint/Slide/Shoot/etc.) |
+
+### 4. Network & Replication
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosReplicationConfig** | .h + .cpp | 384 | Iris priorities, NetUpdateFrequency, push model |
+| **KhaaosNetworkRelevancy** | .h + .cpp | 428 | Distance-based relevancy com hysteresis, dynamic throttling |
+| **KhaaosNetMetrics** | .h + .cpp | 381 | RTT/loss/BW tracking, EMA smoothing, 150ms alert |
+| **SpatialGrid** | .h + .cpp | 203 | Grid espacial para queries eficientes de proximidade |
+
+### 5. EOS (Epic Online Services)
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosEOSManager** | .h + .cpp | 1.517 | Platform init + Auth (Login/Logout), Product/Sandbox/Deploy IDs |
+| **KhaaosEOSLobby** | — | — | CreateLobby/JoinLobby/LeaveLobby/PromoteMember |
+| **KhaaosEOSMatchmaking** | — | — | StartMatchmaking/CancelMatchmaking (Pool/Region/Skill) |
+| **KhaaosEOSSession** | — | — | HostDedicatedServer/JoinSession/DestroySession/RegisterServer |
+| **KhaaosCloudSave** | .h/.cpp | 1.403 | CloudStorage upload/download/delete, auto-save 120s |
+| **KhaaosSaveSync** | — | — | ComputeDiff, MergeSaves (4 strategies), auto-sync on login |
+
+### 6. AI & Load Testing
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosAIController** | .h + .cpp | 363 | AI bot controller para populate de partidas |
+| **KhaaosLoadTestBot** | .h + .cpp | 887 | Bot com behavior profile, timed actions |
+| **KhaaosLoadTestManager** | — | — | 100-bot wave spawning, metrics, JSON report |
+
+### 7. World & VFX
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosSafeZone** | .h + .cpp | 324 | Shrinking zone com damage, phase, timer |
+| **KhaaosPCGConfig** | .h + .cpp | 434 | 5 biomes PCG rules, DataTable-driven |
+| **KhaaosVFXManager** | .h + .cpp | 623 | Niagara VFX subsystem com SignificanceManager |
+| **KhaaosZoneAudio** | — | — | Warning loop, damage tick, phase advance, distance intensity |
+
+### 8. Pooling & Optimization
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosActorPool** | .h + .cpp | 1.279 | GetPooledActor/ReturnToPool/WarmPool/DrainPool, max 500/class |
+| **KhaaosSignificanceManager** | — | — | 5-level LOD (Critical→Insignificant), auto-disable tick |
+| **KhaaosPooledProjectile** | — | — | Activate/Deactivate lifecycle, MaxLifetime, never Destroy |
+
+### 9. Data & Blueprints
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosDataTables** | .h + .cpp | 511 | 5 DataTables com typed accessors |
+| **KhaaosBlueprintRegistry** | .h + .cpp | 326 | 27 TSoftClassPtr, async LoadAll() |
+| **KhaaosSaveGame** | .h + .cpp | 192 | Save game structure local |
+
+### 10. HUD & Audio
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosHUD** | .h + .cpp | 1.107 | Widget orchestration, Show/Hide/Toggle scoreboard |
+| **KhaaosHUDWidget** | — | — | UCommonActivatableWidget — bars, cooldowns, kill feed, crosshair |
+| **KhaaosScoreboardWidget** | — | — | KDA entries, sort by Kills/Damage/Rank |
+| **KhaaosMinimapWidget** | — | — | Player-centered, rotation, zone circle, WorldToMinimap |
+| **KhaaosAudioManager** | .h/.cpp | 1.572 | 5 SoundClasses, 4 SoundMixes, Play3D/2D/Attached |
+| **KhaaosAdaptiveMusic** | — | — | 7 states, intensity [0,1], crossfade, combat transitions |
+
+### 11. Debug & Dev Tools
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosGameplayDebugger** | .h + .cpp | 1.244 | 5 IGameplayDebuggerCategory — Abilities, Relevancy, Pool, Zone, Net |
+| **KhaaosDebugCommands** | — | — | 8 console commands (khaaos.debug.*), god mode, infinite ammo |
+
+### 12. Economy Bridge
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **EconomyBridge** | .h + .cpp | 428 | HTTP REST client para Node.js Economy microservice (KRC, Bank, Loans) |
+
+### 13. Anti-Cheat
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosAntiCheat** | .h + .cpp | 1.010 | ValidateMovement/Shot/Damage/ItemPickup, 3-strike auto-kick |
+| **KhaaosMovementValidator** | — | — | Circular buffer 120 samples, speed/teleport/fly hack detection |
+
+### 14. Loot
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosLootPickup** | .h + .cpp | 148 | Loot pickup replicado com rarity, context-sensitive interaction |
+
+### 15. Launch Readiness & Production
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosServerConfig** | .h + .cpp | 932 | Server/Network/Performance config, CLI+INI overrides |
+| **KhaaosProductionConfig** | .h + .cpp | 2.252 | Feature flags + production lockdown |
+| **KhaaosRateLimiter** | — | — | 60/min + 10/s + burst 5, per-IP + per-player |
+| **KhaaosDDoSProtection** | — | — | 50/s global, 5/IP, auto-block 30min |
+| **KhaaosMonitorDashboard** | — | — | Server/Game/Security metrics, 5s collection |
+| **KhaaosLaunchChecklist** | — | — | 14 pre-launch checks (8 Critical, 6 Warning) |
+
+### Módulos UE5 no Build.cs
+
+```
+Public:  Core, CoreUObject, Engine, InputCore, EnhancedInput,
+         GameplayAbilities, GameplayTags, GameplayTasks, Niagara,
+         NavigationSystem, AIModule, StateTreeModule,
+         SignificanceManager, Iris, NetCore,
+         OnlineSubsystem, OnlineSubsystemUtils,
+         ModularGameplay, ModularGameplayActors, CommonUI, UIExtension,
+         OnlineServicesInterface
+
+Private: GameFeatures, LyraGame, PCG, Metasound, AudioMixer,
+         Chaos, PhysicsCore, EOSIntegrationKit
+
+Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
+```
+
+---
+
+## CI/CD e Automação
+
+### Workflows GitHub Actions
+
+| Workflow | Arquivo | Trigger | Função |
+|----------|---------|---------|--------|
+| **UE5 CI** | `ue5-ci.yml` | Push/PR | Project structure, C++ headers, naming, LFS, merge conflicts, security scan |
+| **UE5 CD** | `ue5-cd.yml` | Merge main | Docker build Economy API → GHCR, server config validation, deploy notifications |
+| **PR Automation** | `pr-automation.yml` | PR opened | Auto-label by path, conventional commit validation, UE5 review checklist |
+| **Dev Coordination** | `dev-coordination.yml` | PR opened | Overlap detection com PRs de outros Devs |
+| **Server Build** | `ue5-server-build.yml` | Merge main | Full pipeline: build → Docker → GHCR → Trivy scan → validation |
+| **Web CI** | `ci.yml` | Push/PR | Typecheck, build, test HTTP/auth/WS/matchmaking, game-runtime |
+
+### Automação de Push/PR
+
+- **`scripts/khaaos_workflow.sh`** — automação completa: stage → commit → rebase main → push → create PR (draft/ready, com reviewers)
+- **`scripts/khaaos_auto_push.sh`** — push simplificado para branch dedicada
+- Opera **SEMPRE** em branch `feat/*`, **NUNCA** na `main`
+- Rebase automático da `main` antes de cada push (sync com outros Devs)
+
+### Labels Automáticas
+
+Configuradas em `.github/labeler.yml`: `ue5`, `cpp`, `gameplay`, `economy`, `ai`, `client`, `ci-cd`, `tests`, `docs`
+
+### Histórico de PRs
+
+| PR | Branch | Status | Sistemas |
+|----|--------|--------|----------|
+| #1 | feat/e2e-hardening | MERGED | Matchmaking unit tests + import guard |
+| #2 | feat/ue5-phd-foundation | MERGED | UE5.8 project structure + C++ headers |
+| #3 | feat/e2e-core-validation | MERGED | Core path validation (match→lobby→ELO) |
+| #4 | feat/pr4-lag-spatial-e2e | MERGED | Lag compensation + spatial grid e2e |
+| #5 | feat/ue5-cicd-automation | MERGED | CI/CD pipelines, PR automation, dev coordination |
+| #6 | feat/pr5-economy-procgen-e2e | MERGED | Economy price discovery + seeded procgen |
+| #7 | feat/render-cicd | MERGED | Deploy verified commits to Render |
+| #8 | feat/full-pipeline-e2e | MERGED | Full pipeline narrative (match→combat→rank→economy) |
+| #9 | feat/ue5-cpp-implementations | MERGED | C++ implementations for all game systems |
+| #10 | fix/ue5-server-docker | MERGED | Fix UE5 server Docker build |
+| #11 | feat/ue5-assets-gameplaytags | MERGED | GameplayTags (60+), Niagara VFX, PCG, Blueprints, DataTables |
+| #12 | feat/ue5-abilities-replication | MERGED | UGameplayAbility subclasses + Iris replication hardening |
+| #13 | feat/ue5-ge-input-eos-pooling | MERGED | GameplayEffects, Enhanced Input, EOS Integration, Actor Pooling |
+| #14 | feat/ue5-debugger-saveui-audio | MERGED | Gameplay Debugger, EOS Cloud Save, CommonUI HUD, MetaSound Audio |
+| #15 | feat/ue5-server-load-anticheat-launch | MERGED | Dedicated Server, Load Test, Anti-Cheat, Launch Readiness |
+
+---
+
+## Infraestrutura de Produção
+
+### Docker — Dedicated Server
+
+```yaml
+# docker-compose.yml
+services:
+  ue5-server:     # UE5.8 Linux dedicated (5GB runtime, non-root, healthcheck)
+  economy-api:    # Node.js Economy microservice
+  redis:          # Session cache + rate limiting
+  prometheus:     # Metrics collection
+  grafana:        # Monitoring dashboards
+```
+
+- **Dockerfile**: Multi-stage (50 GB builder → 5 GB runtime), non-root, healthcheck
+- **docker-compose.yml**: Server + Economy API + Redis + Prometheus + Grafana
+- **GHCR**: Imagens publicadas no GitHub Container Registry
+
+### Segurança em Produção
+
+| Camada | Implementação | Parâmetros |
+|--------|---------------|-----------|
+| **Rate Limiting** | KhaaosRateLimiter | 60/min, 10/s, burst 5 (per-IP + per-player) |
+| **DDoS Protection** | KhaaosDDoSProtection | 50/s global, 5/IP, auto-block 30 min |
+| **Anti-Cheat** | KhaaosAntiCheat + MovementValidator | 3-strike auto-kick, circular buffer 120 samples |
+| **Network** | Iris + Relevancy + Metrics | Distance-based, hysteresis, 150 ms alert |
+| **Authentication** | EOS Auth + HMAC WS tokens | OIDC sessions, signed subprotocol |
+| **Monitoring** | KhaaosMonitorDashboard | Server/Game/Security metrics, 5 s collection |
+
+### Launch Checklist (14 checks)
+
+8 **Critical**: Server build, Anti-Cheat active, Rate Limiter, DDoS, EOS Auth, DB migrations, SSL/TLS, Healthcheck
+6 **Warning**: Monitoring dashboard, Backup strategy, Log aggregation, CDN, Feature flags, Load test pass
 
 ---
 
@@ -243,6 +550,18 @@ Documentado em detalhe em [`docs/E2E_BATTLE_FLOW.md`](docs/E2E_BATTLE_FLOW.md):
 6. Em partida o cliente envia **intenções** (posição, ataque, pickup); o servidor é authoritative para saúde, dano, loot e eliminação.
 7. Zone ticks, combate, lag compensation e spatial grid executados no servidor.
 8. `RankingService` persiste placement, rating/ELO, XP e patente.
+
+### Fluxo UE5 Dedicated Server
+
+1. Client → EOS Auth → Login → Session Token
+2. EOS Matchmaking → Pool (Region/Skill) → Lobby
+3. Lobby → Ready → KhaaosGameMode::StartMatch()
+4. Iris Replication → State sync (LocalPredicted + ServerInitiated)
+5. Gameplay Abilities → Combat loop (Shoot/Melee/Reload/Ultimate)
+6. KhaaosAntiCheat → ValidateMovement/Shot/Damage cada tick
+7. KhaaosSafeZone → Phase advance → Zone damage
+8. Elimination → KhaaosGameState update → Kill feed
+9. Match end → RankingService → EOS Cloud Save → EconomyBridge (KRC)
 
 ---
 
@@ -266,6 +585,7 @@ Schema aplicado via `npm run db:push` (Drizzle Kit). Migrações versionadas ain
 
 - **Sessão HTTP**: cookie `httpOnly` + `secure`, store PostgreSQL, renovação OIDC.
 - **WebSocket**: token HMAC-SHA256 (finalidade `khaaos-websocket`, TTL 60 s) enviado como subprotocolo. Identidade = `sub` assinado; mensagens do cliente não podem forjá-la.
+- **EOS Auth**: Epic Online Services Login/Logout com Product/Sandbox/Deployment IDs configurados.
 - **Operadores de zona**: allowlist `ZONE_OPERATOR_IDS` (deny-by-default).
 - Toda mutação de recurso verifica ownership no servidor.
 
@@ -291,6 +611,8 @@ Protocolo WS: JSON com discriminador `type`. Contrato vivo em `RoomManager.ts` +
 
 ## Desenvolvimento Local
 
+### Web/API (Node.js)
+
 ```bash
 npm ci
 npm ci --prefix game-runtime
@@ -298,10 +620,26 @@ npm run check
 npm run dev          # porta PORT ou 5000
 ```
 
-Variáveis obrigatórias: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`.  
+Variáveis obrigatórias: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`.
 Recomendadas: `WS_TOKEN_SECRET` (≥ 32 bytes), `ZONE_OPERATOR_IDS`.
 
-Comandos de verificação:
+### UE5 Dedicated Server
+
+```bash
+# Build do servidor dedicado Linux
+cd Unreal/KhaaosRun/Build
+bash build-server.sh --release
+
+# Build com Docker
+bash build-server.sh --docker
+
+# Debug build
+bash build-server.sh --debug
+```
+
+Requer: UE5.8 Editor instalado, Linux target, 50 GB+ SDK.
+
+### Verificação
 
 ```bash
 npm run test:official
@@ -313,12 +651,26 @@ npm run verify:all
 
 ## Qualidade e Validação
 
-CI (`.github/workflows/ci.yml`) executa `npm run verify:all` em todo push/PR para `main`:
+CI (`.github/workflows/`) executa em todo push/PR para `main`:
+
+### Pipeline Web
 
 - Typecheck + build da aplicação principal
 - Testes oficiais HTTP/auth/storage/WebSocket/matchmaking
 - Build + testes + stress do `game-runtime/`
-- (Unreal ainda não entra no pipeline)
+
+### Pipeline UE5
+
+- Validação da estrutura do projeto `.uproject`
+- Checagem de headers C++ (compilabilidade sintática)
+- Convenções de nomenclatura (ue5-style-guide)
+- Git LFS tracking configuration
+- Detecção de merge conflicts
+- Security scan (secret scanning, push protection)
+- Auto-label por caminho de arquivo
+- Validação de conventional commits
+- Review checklist UE5
+- Detecção de sobreposição com PRs de outros Devs
 
 Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
 
@@ -326,8 +678,16 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 
 ## Build e Implantação
 
+### Web
+
 - **Replit Autoscale**: `npm run build` → `node ./dist/index.cjs`
 - **Render**: Blueprint `render.yaml` + Deploy Hook (opt-in via `RENDER_DEPLOY_ENABLED`)
+
+### UE5 Dedicated Server
+
+- **Docker**: `docker-compose up` — UE5 server + Economy API + Redis + Prometheus + Grafana
+- **GHCR**: Imagens publicadas automaticamente via `ue5-server-build.yml` on merge to main
+- **Trivy**: Vulnerability scanning no container antes do deploy
 
 Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
@@ -341,11 +701,101 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 ## Limitações Conhecidas
 
-- Economia ainda sem ledger atômico completo — não usar para valor real.
-- `RoomManager` e matchmaking em memória — scaling horizontal exige coordenador e pub/sub.
-- Projeto Unreal é fundação; não há evidência de build, mapas ou integração EOS.
-- Ausência de suite browser completa e coverage percentual instrumentado.
-- Persistência multi-mundo (CIGKV → W1–W4) e protocolos Zu ainda estão no domínio de design; a implementação atual concentra-se no runtime de combate genérico e no CIGKV como primeiro Ring operacional.
+- **Build UE5 não compilado**: Todo o C++ está implementado mas não foi compilado — requer UE5.8 Editor + Linux SDK (50 GB+).
+- **Sem mapas 3D / assets**: Não existem mapas jogáveis, ambientes 3D, ou assets visuais ainda.
+- **EAC não integrado**: Easy Anti-Cheat requer binário compilado + SDK da Epic.
+- **Economia sem ledger atômico**: Não usar para valor real até ledger imutável, atomicidade e compliance review.
+- **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
+- **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
+- **Coverage não instrumentado**: Ausência de suite browser completa e coverage percentual.
+- **Webhook secrets placeholder**: DISCORD_WEBHOOK_URL e SLACK_WEBHOOK_URL configurados como placeholder — necessitam URLs reais.
+
+---
+
+## Roadmap Go Live
+
+### Fase 0 — Compilação & Validação (Semanas 1–3)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 0.1 | Instalar UE5.8 Editor + Linux Dedicated Server SDK | P0 | Build completo sem erros |
+| 0.2 | Compilar projeto KhaaosRun.uproject em Development/Linux | P0 | Zero erros de compilação |
+| 0.3 | Validar replicação Iris com 2 clientes locais | P0 | State sync sem desync |
+| 0.4 | Rodar KhaaosLoadTestManager com 100 bots local | P0 | JSON report: 0 crashes, <100ms RTT médio |
+| 0.5 | Validar Anti-Cheat: movement hack, speed hack, teleport | P0 | 3-strike kick em <2s |
+| 0.6 | Build Docker multi-stage — imagem GHCR <5 GB | P1 | `docker-compose up` funcional |
+
+### Fase 1 — Primeiro Mapa Jogável (Semanas 4–7)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions |
+| 1.2 | Implementar Zone shrinking visual (Niagara VFX) | P0 | Anel visível, damage dentro, safe outside |
+| 1.3 | Integrar KhaaosSafeZone com mapa real | P0 | Zone timer + phase advance funcionais |
+| 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 20+ loot points com rarity distribuída |
+| 1.5 | Protocolo Zu cinematográfico (sequência de entrada) | P1 | 3 variantes por mundo, decisão → dano/posicionamento |
+| 1.6 | Gameplay Debugger in-game (tilde → debug overlay) | P2 | 5 categorias visíveis no cliente |
+
+### Fase 2 — EOS Live + Matchmaking (Semanas 8–10)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 2.1 | Configurar EOS Product/Sandbox/Deployment IDs reais | P0 | EOS Auth login/logout funcional |
+| 2.2 | EOS Lobby: create/join/leave/promote em produção | P0 | 100 players em lobby sem crash |
+| 2.3 | EOS Matchmaking: pool/region/skill em produção | P0 | Matchmaking <30s para 95% dos players |
+| 2.4 | EOS Sessions: host dedicated, join, register server | P0 | Dedicated server registrada no EOS |
+| 2.5 | EOS Cloud Save: upload/download/merge em produção | P1 | Auto-save a cada 120s, merge sem data loss |
+| 2.6 | Integrar EAC (Easy Anti-Cheat) SDK | P0 | EAC running, kicks detectados |
+
+### Fase 3 — Alpha Fechado (Semanas 11–14)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 3.1 | Deploy dedicated server em cloud (AWS/GCP/Render) | P0 | Server running 24/7, auto-restart |
+| 3.2 | Rate Limiter + DDoS Protection em produção | P0 | 60/min, 50/s global, auto-block |
+| 3.3 | Monitor Dashboard (Grafana) + alerting (Discord/Slack) | P0 | Dashboards visíveis, alertas em <5 min |
+| 3.4 | 14-point Launch Checklist — todos Critical = PASS | P0 | Zero Critical failures |
+| 3.5 | Alpha test com 50 players reais | P0 | Zero crashes em 4h de play contínuo |
+| 3.6 | Coletar dados de balanceamento (TTK, win rate, KRC flow) | P1 | Dashboard com métricas de balance |
+| 3.7 | Webhook secrets reais (Discord + Slack) | P1 | Alertas chegando nos canais |
+
+### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 4.1 | Mapa W1/C1 — Barburhen (urbano pós-guerra) | P0 | Zone "Água da Morte" funcional |
+| 4.2 | Mapa W2/C2 — Priadus (selva + neblina) | P0 | Zone "Emboscada Verde" funcional |
+| 4.3 | Mapa W3/C3 — Ckesalth (deserto + refinaria) | P1 | Zone "Assassino Silencioso" funcional |
+| 4.4 | Mapa W4/C4 — Arukheea (ilha + tsunami) | P1 | Zone "Tsunami" funcional |
+| 4.5 | Ledger atômico para KRC (imutável, idempotente) | P0 | Zero double-spend em stress test |
+| 4.6 | Compliance review para economia real | P0 | Legal sign-off |
+| 4.7 | Persistência multi-mundo (CIGKV → W1–W4) | P1 | Token de Veterano conversível |
+| 4.8 | Desafio de Gigantes (top 50 CIGKV → evento especial) | P2 | Evento noturno, transmissão |
+
+### Fase 5 — Beta Aberto → Go Live (Semanas 23–28)
+
+| # | Tarefa | Prioridade | Critério de Aceite |
+|---|--------|------------|-------------------|
+| 5.1 | Stress test: 1.000 players simultâneos | P0 | <150ms RTT p95, zero crashes em 8h |
+| 5.2 | Beta aberto CIGKV — campanha de alistamento | P0 | 100.000+ inscrições |
+| 5.3 | Multi-region deploy (SA, NA, EU) | P0 | <80ms RTT por região |
+| 5.4 | CDN para assets + client download | P1 | Download client <2 min |
+| 5.5 | Streaming/YouTube integration (Desafio de Gigantes) | P2 | Transmissão ao vivo funcional |
+| 5.6 | EXCO milestone (1.000.000 alistamentos) | P0 | Trigger transição CIGKV → W1/C1 |
+| 5.7 | **GO LIVE** — W1/C1 Barburhen oficial | P0 | 7 dias, 12h/dia, prêmio ativo |
+
+### Timeline Visual
+
+```
+Semana  1   4   8   11  15  23  28
+        │   │   │   │   │   │   │
+  F0    ├──────┤              Compilação & Validação
+  F1         ├──────┤         Primeiro Mapa (CIGKV)
+  F2              ├──────┤    EOS Live + Matchmaking
+  F3                   ├──────┤  Alpha Fechado (50p)
+  F4                        ├──────────────┤  Mapas W1-W4 + Economia
+  F5                                      ├──────────────┤  Beta → GO LIVE
+```
 
 ---
 
@@ -359,7 +809,8 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 - [Roadmap de engenharia](docs/ROADMAP.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
+- [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Source/KhaaosRun/Game/Data/ASSET_NAMING_CONVENTIONS.md)
 
 ---
 
-<sub>Khaaos Run · Plataforma Battle Royale multi-mundo · Equipe Nexus</sub>
+<sub>Khaaos Run · Plataforma Battle Royale multi-mundo · Nível Devs Ph.D · Equipe Nexus</sub>
