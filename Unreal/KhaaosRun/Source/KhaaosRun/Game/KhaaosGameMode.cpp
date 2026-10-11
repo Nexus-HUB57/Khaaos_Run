@@ -11,6 +11,7 @@
 
 #include "Engine/World.h"
 #include "Engine/EngineTypes.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -455,11 +456,15 @@ void AKhaaosGameMode::ApplyZoneDamage()
                         if (APlayerState* PS = PC->PlayerState)
                         {
                                 AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PS);
-                                if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
-                                {
-                                        // Check if player is outside safe zone
-                                        if (!SafeZone->IsInsideZone(KPS->MapPosition))
-                                        {
+							if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
+							{
+								// Check if player is outside safe zone
+								const APawn* PlayerPawn = PC->GetPawn();
+								const bool bInsideSafeZone = SafeZone->UsesWorldSpaceZone()
+									? (!PlayerPawn || SafeZone->IsInsideWorldZone(PlayerPawn->GetActorLocation()))
+									: SafeZone->IsInsideZone(KPS->MapPosition);
+								if (!bInsideSafeZone)
+								{
                                                 float ZoneDamage = SafeZone->DamagePerTick;
                                                 KPS->ApplyDamage(ZoneDamage, nullptr);
 

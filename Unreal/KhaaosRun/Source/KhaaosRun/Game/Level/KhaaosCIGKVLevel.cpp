@@ -109,13 +109,22 @@ void AKhaaosCIGKVLevel::StartZoneSequence()
     CurrentZonePhase = 0;
     UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zone sequence started — %d phases"), ZonePhases.Num());
 
+    const FCIGKVZonePhase& InitialPhase = ZonePhases[CurrentZonePhase];
+    if (SafeZone)
+    {
+        SafeZone->SetWorldZone(InitialPhase.ZoneCenter, InitialPhase.ZoneRadius, InitialPhase.ZoneDamagePerSecond);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[CIGKV] No AKhaaosSafeZone actor found; zone damage and visual are unavailable"));
+    }
+
     // Set timer for first phase advancement
     if (ZonePhases.Num() > 1)
     {
-        float NextPhaseTime = ZonePhases[1].PhaseStartTime;
+        const float TimeUntilNextPhase = FMath::Max(0.0f, ZonePhases[1].PhaseStartTime - ElapsedTime);
         GetWorldTimerManager().SetTimer(ZonePhaseTimer, this,
-            &AKhaaosCIGKVLevel::AdvanceZonePhase,
-            NextPhaseTime, false);
+            &AKhaaosCIGKVLevel::AdvanceZonePhase, TimeUntilNextPhase, false);
     }
 }
 
@@ -133,12 +142,20 @@ void AKhaaosCIGKVLevel::AdvanceZonePhase()
     UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zone phase %d — Center=(%s), Radius=%.0f, Damage=%.1f/s"),
         Phase.PhaseIndex, *Phase.ZoneCenter.ToString(), Phase.ZoneRadius, Phase.ZoneDamagePerSecond);
 
-    // Update SafeZone if available
+    // Update the server-authoritative world zone and animate to the next radius.
     if (SafeZone)
     {
-        SafeZone->SetZoneCenter(Phase.ZoneCenter);
-        SafeZone->SetZoneRadius(Phase.ZoneRadius);
-        SafeZone->SetZoneDamage(Phase.ZoneDamagePerSecond);
+        float TransitionSeconds = 0.0f;
+        if (CurrentZonePhase + 1 < ZonePhases.Num())
+        {
+            TransitionSeconds = FMath::Max(0.0f,
+                ZonePhases[CurrentZonePhase + 1].PhaseStartTime - Phase.PhaseStartTime);
+        }
+        else
+        {
+            TransitionSeconds = FMath::Max(0.0f, RingDuration - Phase.PhaseStartTime);
+        }
+        SafeZone->SetWorldZone(Phase.ZoneCenter, Phase.ZoneRadius, Phase.ZoneDamagePerSecond, TransitionSeconds);
     }
 
     // Spawn loot for this phase
@@ -167,7 +184,11 @@ void AKhaaosCIGKVLevel::SpawnPhaseLoot()
     if (!MapData) return;
 
     // Get random loot spawn points from map data
-    TArray<FVector> SpawnPoints = MapData->GetRandomLootSpawnPoints(Phase.LootDropCount, Phase.ZoneCenter, Phase.ZoneRadius);
+    const FVector LootZoneCenter = SafeZone && SafeZone->UsesWorldSpaceZone()
+        ? SafeZone->WorldZoneCenter : Phase.ZoneCenter;
+    const float LootZoneRadius = SafeZone && SafeZone->UsesWorldSpaceZone()
+        ? SafeZone->WorldZoneRadius : Phase.ZoneRadius;
+    TArray<FVector> SpawnPoints = MapData->GetRandomLootSpawnPoints(Phase.LootDropCount, LootZoneCenter, LootZoneRadius);
 
     for (const FVector& Point : SpawnPoints)
     {
@@ -183,12 +204,12 @@ void AKhaaosCIGKVLevel::SpawnPhaseLoot()
 
 void AKhaaosCIGKVLevel::SpawnPulsoKhaaosDrop()
 {
-    if (!MapData) return;
+    if (!MapData || ZonePhases.Num() == 0 || CurrentZonePhase >= ZonePhases.Num()) return;
 
     // Pulso drops a legendary item at a random position within the current zone
     FVector DropLocation = MapData->GetRandomPointInZone(
-        ZonePhases[CurrentZonePhase].ZoneCenter,
-        ZonePhases[CurrentZonePhase].ZoneRadius);
+        SafeZone && SafeZone->UsesWorldSpaceZone() ? SafeZone->WorldZoneCenter : ZonePhases[CurrentZonePhase].ZoneCenter,
+        SafeZone && SafeZone->UsesWorldSpaceZone() ? SafeZone->WorldZoneRadius : ZonePhases[CurrentZonePhase].ZoneRadius);
 
     AKhaaosLootPickup* Loot = SpawnLootAt(DropLocation, FRotator::ZeroRotator);
     if (Loot)
@@ -217,13 +238,18 @@ void AKhaaosCIGKVLevel::UpdateZEXActivation()
 {
     if (CurrentZonePhase >= ZonePhases.Num()) return;
 
-    const FCIGKVZonePhase& Phase = ZonePhases[CurrentZonePhase];
-
     for (FCIGKVZEX& ZEX : ZEXPoints)
     {
         // ZEX is active only if it's inside the current safe zone
-        float DistToCenter = FVector::Dist(ZEX.Location, Phase.ZoneCenter);
-        ZEX.bIsActive = (DistToCenter <= Phase.ZoneRadius);
+        if (SafeZone && SafeZone->UsesWorldSpaceZone())
+        {
+            ZEX.bIsActive = SafeZone->IsInsideWorldZone(ZEX.Location);
+        }
+        else
+        {
+            const FCIGKVZonePhase& Phase = ZonePhases[CurrentZonePhase];
+            ZEX.bIsActive = FVector::DistSquared2D(ZEX.Location, Phase.ZoneCenter) <= FMath::Square(Phase.ZoneRadius);
+        }
     }
 }
 
@@ -368,6 +394,7 @@ void AKhaaosCIGKVLevel::InitializeMapData()
     if (!MapData)
     {
         MapData = NewObject<UKhaaosCIGKVMapData>(this);
+        MapData->InitializeDefaults();
     }
 
     // If ZonePhases not configured, create default CIGKV phases
