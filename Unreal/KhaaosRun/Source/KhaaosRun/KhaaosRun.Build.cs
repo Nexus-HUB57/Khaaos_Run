@@ -6,65 +6,67 @@ using System;
 
 public class KhaaosRun : ModuleRules
 {
-	public KhaaosRun(ReadOnlyTargetRules Target) : base(Target)
-	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        public KhaaosRun(ReadOnlyTargetRules Target) : base(Target)
+        {
+                PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[]
-		{
-			"Core",
-			"CoreUObject",
-			"Engine",
-			"InputCore",
-			"EnhancedInput",
-			"GameplayAbilities",
-			"GameplayTags",
-			"GameplayTasks",
-			"Niagara",
-			"NavigationSystem",
-			"AIModule",
-			"StateTreeModule",
-			"SignificanceManager",
-			"Iris",
-			"DeveloperSettings",
-			"NetCore",
-			"OnlineSubsystem",
-			"OnlineSubsystemUtils",
-			"ModularGameplay",
-			"ModularGameplayActors",
-			"CommonUI",
-			"UIExtension",
-		});
+                PublicDependencyModuleNames.AddRange(new string[]
+                {
+                        "Core",
+                        "CoreUObject",
+                        "Engine",
+                        "InputCore",
+                        "EnhancedInput",
+                        "GameplayAbilities",
+                        "GameplayTags",
+                        "GameplayTasks",
+                        "Niagara",
+                        "NavigationSystem",
+                        "AIModule",
+                        "StateTreeModule",
+                        "SignificanceManager",
+                        "Iris",
+                        "DeveloperSettings",
+                        "NetCore",
+                        "OnlineSubsystem",
+                        "OnlineSubsystemUtils",
+                        "ModularGameplay",
+                        "ModularGameplayActors",
+                        "CommonUI",
+                        "UIExtension",
+                        "GameplayDebugger",
+                });
 
-		PrivateDependencyModuleNames.AddRange(new string[]
-		{
-			"GameFeatures",
-			"LyraGame",
-			"PCG",
-			"Metasound",
-			"AudioMixer",
-			"Chaos",
-			"PhysicsCore",
-		});
+                PrivateDependencyModuleNames.AddRange(new string[]
+                {
+                        "GameFeatures",
+                        "LyraGame",
+                        "PCG",
+                        "Metasound",
+                        "AudioMixer",
+                        "AudioExtensions",
+                        "Chaos",
+                        "PhysicsCore",
+                });
 
-		if (Target.bBuildEditor)
-		{
-			PrivateDependencyModuleNames.AddRange(new string[]
-			{
-				"UnrealEd",
-				"EditorFramework",
-				"KhaaosRunEditor",
-			});
-		}
+                if (Target.bBuildEditor)
+                {
+                        PrivateDependencyModuleNames.AddRange(new string[]
+                        {
+                                "UnrealEd",
+                                "EditorFramework",
+                                "KhaaosRunEditor",
+                        });
+                }
 
-		// Iris replication support
-		bIrisSupport = true;
+                // Iris replication support
+                bIrisSupport = true;
 
-		// C++20 for concepts, ranges, constexpr
-		CppStandard = CppStandardVersion.Cpp20;
+                // C++20 for concepts, ranges, constexpr
+                CppStandard = CppStandardVersion.Cpp20;
 
-		// Enforce strict type safety
-		bUseUnity = false;
-		bEnforceIWYU = true;
-	}
+                // Enforce strict type safety
+                bUseUnity = false;
+                bEnforceIWYU = true;
+        }
 }
