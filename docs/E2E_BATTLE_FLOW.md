@@ -40,3 +40,14 @@ npm run dev        # ou build + start
 ```
 
 Abrir dois browsers (duas contas) → BUSCAR PARTIDA → lobby → zona → fim → ranking.
+
+## Testes de matchmaking (algoritmo de referência)
+
+```bash
+node --test tests/official/matchmaking-algorithm.test.js
+# ou
+npm run test:official
+```
+
+Cobre: match dentro da janela, rejeição fora da janela, modo solo≠duo,
+preferência por ELO próximo, dequeue, crescimento de delta.

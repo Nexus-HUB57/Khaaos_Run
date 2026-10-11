@@ -281,9 +281,11 @@ function demo() {
   console.log(`Restam na fila: ${mm.size}`);
 }
 
-// ESM export
 export { MatchmakingAlgorithm, DEFAULT_CONFIG };
 
-// Run demo: node server/game/matchmaking-algorithm.js
-const isDirect = process.argv[1] && process.argv[1].includes("matchmaking-algorithm");
-if (isDirect) demo();
+// Run demo only when executed directly:
+//   node server/game/matchmaking-algorithm.js
+import { pathToFileURL } from "node:url";
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  demo();
+}
