@@ -34,8 +34,7 @@ public class KhaaosRun : ModuleRules
                         "ModularGameplayActors",
                         "CommonUI",
                         "UIExtension",
-                        // ─── Added for GE/Input/EOS/Pool systems ───────────────
-                        "OnlineServicesInterface",
+                        "GameplayDebugger",
                 });
 
                 PrivateDependencyModuleNames.AddRange(new string[]
@@ -45,10 +44,9 @@ public class KhaaosRun : ModuleRules
                         "PCG",
                         "Metasound",
                         "AudioMixer",
+                        "AudioExtensions",
                         "Chaos",
                         "PhysicsCore",
-                        // ─── Added for EOS Integration ────────────────────────
-                        "EOSIntegrationKit",
                 });
 
                 if (Target.bBuildEditor)
