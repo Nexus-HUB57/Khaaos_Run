@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { items, loans, transactions, bankAccounts, playerStats } from './schema';
 
+export type {
+  BankAccount,
+  Transaction,
+  Loan,
+  Item,
+  PlayerStats,
+  DepositRequest,
+  TransferRequest,
+  LoanRequest,
+} from './schema';
+
 export const errorSchemas = {
   validation: z.object({
     message: z.string(),

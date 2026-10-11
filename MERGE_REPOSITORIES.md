@@ -7,5 +7,6 @@ O repositório oficial `Khaaos_Run` é a aplicação principal (React/TypeScript
 - Aplicação principal: `npm run dev`, `npm run check` e `npm run build` na raiz.
 - Runtime de jogo: `cd game-runtime && npm install && npm run dev`.
 - Testes do runtime: `npm run test:game` na raiz (instale antes as dependências dentro de `game-runtime/`).
+- Verificação completa: `npm run verify:all` executa em paralelo o typecheck e build do app oficial, além do build, suíte completa e teste de estresse do runtime.
 
 Os dois projetos conservam seus próprios `package.json`, lockfiles, configurações, documentação e testes. O `package.json` raiz continua sendo a fonte dos comandos da aplicação oficial.

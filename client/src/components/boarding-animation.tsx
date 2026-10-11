@@ -370,6 +370,7 @@ export function BoardingAnimation({ onClose }: BoardingAnimationProps) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const drawingContext: CanvasRenderingContext2D = ctx;
 
     startRef.current = performance.now();
 
@@ -413,7 +414,7 @@ export function BoardingAnimation({ onClose }: BoardingAnimationProps) {
       } else if (current.phase === "BRAKE") {
         const shake = Math.sin(phaseT * Math.PI * 14) * (1 - phaseT) * 5;
         trainX = trainParkedX + shake;
-      } else if (current.phase === "IDLE" || current.phase === "ARRIVING") {
+      } else if (current.phase === "IDLE") {
         trainX = trainStartX;
       } else if (current.phase === "DEPARTING") {
         trainX = lerp(trainParkedX, trainEndX, easeIn(phaseT));
@@ -444,7 +445,7 @@ export function BoardingAnimation({ onClose }: BoardingAnimationProps) {
       let fadeAlpha = 0;
       if (current.phase === "FADEOUT") fadeAlpha = phaseT;
 
-      draw(ctx, W, H, current.phase, phaseT, elapsed, trainX, doorOpen, avatarX, avatarAlpha, fadeAlpha);
+      draw(drawingContext, W, H, current.phase, phaseT, elapsed, trainX, doorOpen, avatarX, avatarAlpha, fadeAlpha);
 
       animRef.current = requestAnimationFrame(frame);
     }

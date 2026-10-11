@@ -29,6 +29,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     next();
   };
 
+  const parseRouteId = (value: string | string[]): number | null => {
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    if (!rawValue || !/^\d+$/.test(rawValue)) return null;
+    const id = Number(rawValue);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  };
+
   // ── BANK ─────────────────────────────────────────────────────────────────
 
   app.get(api.bank.get.path, requireAuth, async (req, res) => {
@@ -102,7 +109,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.loans.pay.path, requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const loan = await storage.getLoan(parseInt(req.params.id));
+      const id = parseRouteId(req.params.id);
+      if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
+      const loan = await storage.getLoan(id);
       if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
       const bank = await storage.getBankAccount(userId);
       const due = Number(loan.totalDue);
@@ -143,7 +152,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.items.use.path, requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const item = await storage.getItem(parseInt(req.params.id));
+      const id = parseRouteId(req.params.id);
+      if (id === null) return res.status(400).json({ message: "ID de item inválido" });
+      const item = await storage.getItem(id);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       let effect: any = {};
       if (item.type === "CURATIVO") { await storage.healPlayer(userId, 25); effect = { healed: 25 }; }
@@ -158,7 +169,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = getUserId(req);
       const input = api.items.repair.input.parse(req.body);
-      const item = await storage.getItem(parseInt(req.params.id));
+      const id = parseRouteId(req.params.id);
+      if (id === null) return res.status(400).json({ message: "ID de item inválido" });
+      const item = await storage.getItem(id);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       const bank = await storage.getBankAccount(userId);
       if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
