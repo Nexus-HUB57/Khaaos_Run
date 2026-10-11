@@ -66,6 +66,8 @@ type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: BattlePlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
+  | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number }[] }
   | { type: "error"; message: string }
   | { type: "countdown"; seconds: number };
@@ -141,6 +143,22 @@ export function useBattleRoom() {
                 : prev,
             );
             break;
+          case "damage_dealt":
+            setPlayers((prev) =>
+              prev.map((p) =>
+                p.userId === msg.targetId
+                  ? { ...p, health: msg.targetHealth, status: msg.targetHealth <= 0 ? "ELIMINADO" : p.status }
+                  : p.userId === msg.attackerId && msg.targetHealth <= 0
+                    ? { ...p, kills: p.kills + 1 }
+                    : p,
+              ),
+            );
+            break;
+          case "interest_update":
+            // AOI: replace visible set with nearby entities
+            setPlayers(msg.players);
+            setRoom((prev) => (prev ? { ...prev, loot: msg.loot } : prev));
+            break;
           case "match_finished":
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
@@ -189,6 +207,11 @@ export function useBattleRoom() {
 
   const leave = useCallback(() => send({ type: "leave" }), [send]);
 
+  const attack = useCallback(
+    (targetId: string) => send({ type: "attack", targetId }),
+    [send],
+  );
+
   return {
     connected,
     room,
@@ -202,5 +225,6 @@ export function useBattleRoom() {
     pickupLoot,
     startMatch,
     leave,
+    attack,
   };
 }

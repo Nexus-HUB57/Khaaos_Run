@@ -10,6 +10,7 @@ import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/RoomManager";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
+import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -368,6 +369,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/procgen/match", requireAuth, (req, res) => {
     const roomId = String(req.query.roomId || "preview_room");
     res.json(generateMatchContent(roomId));
+  });
+
+  // ── MONTE-CARLO ECONOMY SIMULATION ───────────────────────────────────────
+  app.post("/api/economy/simulate", requireAuth, (req, res) => {
+    try {
+      const agents = Math.min(500, Math.max(10, Number(req.body.agents) || 200));
+      const days = Math.min(90, Math.max(7, Number(req.body.days) || 30));
+      const seed = req.body.seed ?? Date.now();
+      const result = runMonteCarlo({ agents, days, seed });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Simulation failed" });
+    }
+  });
+
+  app.post("/api/economy/simulate-batch", requireAuth, (req, res) => {
+    try {
+      const runs = Math.min(10, Math.max(2, Number(req.body.runs) || 5));
+      const agents = Math.min(300, Math.max(10, Number(req.body.agents) || 150));
+      const days = Math.min(60, Math.max(7, Number(req.body.days) || 21));
+      const result = runMonteCarloBatch(runs, { agents, days });
+      // Don't send full per-run daily arrays to keep payload small
+      res.json({
+        runs: result.runs.map((r) => ({
+          finalHealth: r.finalHealth,
+          wealthPercentiles: r.wealthPercentiles,
+          rarityDistribution: r.rarityDistribution,
+          recommendation: r.recommendation,
+          lastDay: r.daily[r.daily.length - 1],
+        })),
+        aggregateRecommendation: result.aggregateRecommendation,
+        meanFinalKrc: result.meanFinalKrc,
+        meanGini: result.meanGini,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Batch simulation failed" });
+    }
   });
 
   return httpServer;

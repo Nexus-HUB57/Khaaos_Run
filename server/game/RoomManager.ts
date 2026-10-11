@@ -24,6 +24,7 @@ import {
   type PlayerStats,
 } from "@shared/schema";
 import { generateMatchContent } from "./ProceduralGenerator";
+import { SpatialGrid } from "./SpatialGrid";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,10 @@ export interface RoomPlayer {
   kills: number;
   isConnected: boolean;
   lastSeenAt: number;
+  // Combat
+  equippedDamage: number;   // from equipped weapon stats
+  equippedRange: number;    // attack range in map %
+  lastAttackAt: number;     // epoch ms — fire rate gate
 }
 
 export interface RoomLoot {
@@ -68,6 +73,9 @@ export interface BattleRoom {
   centerY: number;
   // Loot
   loot: RoomLoot[];
+  // Spatial interest management
+  playerGrid: SpatialGrid<RoomPlayer & SpatialEntityAdapter>;
+  lootGrid: SpatialGrid<RoomLoot & SpatialEntityAdapter>;
   // Meta
   createdAt: number;
   startedAt: number | null;
@@ -77,11 +85,15 @@ export interface BattleRoom {
   countdownSeconds: number;
 }
 
+/** Adapter so SpatialGrid can key by userId/id */
+type SpatialEntityAdapter = { id: string | number };
+
 export type ClientMessage =
   | { type: "join"; roomId?: string; displayName?: string }
   | { type: "leave" }
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
+  | { type: "attack"; targetId: string }
   | { type: "ready" }
   | { type: "start" }; // only host / admin
 
@@ -91,6 +103,8 @@ export type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: SerializedPlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
+  | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number }[] }
   | { type: "error"; message: string }
   | { type: "countdown"; seconds: number };
@@ -197,6 +211,10 @@ class RoomManager {
         await this.pickupLoot(userId, msg.lootId);
         break;
       }
+      case "attack": {
+        this.handleAttack(userId, msg.targetId);
+        break;
+      }
       case "ready":
       case "start": {
         const roomId = this.userToRoom.get(userId);
@@ -230,6 +248,8 @@ class RoomManager {
       centerX: 50 + Math.floor(Math.random() * 20 - 10),
       centerY: 50 + Math.floor(Math.random() * 20 - 10),
       loot: [],
+      playerGrid: new SpatialGrid(15),
+      lootGrid: new SpatialGrid(12),
       createdAt: Date.now(),
       startedAt: null,
       finishedAt: null,
@@ -278,9 +298,13 @@ class RoomManager {
       kills: stats.kills,
       isConnected: true,
       lastSeenAt: Date.now(),
+      equippedDamage: 15, // baseline unarmed / starter
+      equippedRange: 8,
+      lastAttackAt: 0,
     };
 
     room.players.set(userId, player);
+    room.playerGrid.insert({ ...player, id: userId });
     this.userToRoom.set(userId, roomId);
 
     this.send(ws, { type: "welcome", userId, roomId });
@@ -299,6 +323,7 @@ class RoomManager {
     if (!room) return;
 
     room.players.delete(userId);
+    room.playerGrid.remove(userId);
     this.userToRoom.delete(userId);
 
     if (room.players.size === 0) {
@@ -361,11 +386,20 @@ class RoomManager {
       id: this.nextLootId++,
     }));
 
-    // Reset players to alive
+    // Rebuild spatial indices
+    room.playerGrid.clear();
+    room.lootGrid.clear();
+    for (const l of room.loot) {
+      room.lootGrid.insert({ ...l, id: l.id });
+    }
+
+    // Reset players to alive + re-index
     for (const p of room.players.values()) {
       p.status = "VIVO";
       p.health = p.maxHealth;
       p.kills = 0;
+      p.lastAttackAt = 0;
+      room.playerGrid.insert({ ...p, id: p.userId });
     }
 
     this.broadcastRoomState(room);
@@ -518,6 +552,124 @@ class RoomManager {
     player.posX = Math.max(0, Math.min(100, x));
     player.posY = Math.max(0, Math.min(100, y));
     player.lastSeenAt = Date.now();
+    room.playerGrid.update({ ...player, id: userId });
+
+    // Interest management: push nearby entities only to this client
+    this.pushInterest(room, player);
+  }
+
+  /** Area-of-Interest update — only nearby players & loot */
+  private pushInterest(room: BattleRoom, observer: RoomPlayer) {
+    if (!observer.ws || observer.ws.readyState !== WebSocket.OPEN) return;
+    const INTEREST_RADIUS = 28; // % of map
+    const nearPlayers = room.playerGrid
+      .queryRadius(observer.posX, observer.posY, INTEREST_RADIUS)
+      .filter((p) => p.userId !== observer.userId || true) // include self
+      .map((p) => {
+        const full = room.players.get(typeof p.id === "string" ? p.id : p.userId);
+        return full ?? p;
+      });
+
+    const nearLoot = room.lootGrid
+      .queryRadius(observer.posX, observer.posY, INTEREST_RADIUS)
+      .filter((l) => !l.isPickedUp);
+
+    // Serialize
+    const players: SerializedPlayer[] = nearPlayers.map((p) => ({
+      userId: p.userId,
+      displayName: p.displayName,
+      posX: p.posX,
+      posY: p.posY,
+      health: p.health,
+      maxHealth: p.maxHealth,
+      status: p.status,
+      kills: p.kills,
+      isConnected: p.isConnected,
+    }));
+
+    this.send(observer.ws, {
+      type: "interest_update",
+      players,
+      loot: nearLoot.map((l) => ({
+        id: l.id as number,
+        name: l.name,
+        type: l.type,
+        rarity: l.rarity,
+        posX: l.posX,
+        posY: l.posY,
+        stats: l.stats,
+        isPickedUp: l.isPickedUp,
+        pickedUpBy: l.pickedUpBy,
+      })),
+    });
+  }
+
+  /**
+   * Authoritative PvP attack.
+   * Range check via spatial grid + fire-rate gate + damage application.
+   */
+  handleAttack(attackerId: string, targetId: string) {
+    const roomId = this.userToRoom.get(attackerId);
+    if (!roomId) return;
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== "IN_PROGRESS") return;
+
+    const attacker = room.players.get(attackerId);
+    const target = room.players.get(targetId);
+    if (!attacker || !target) return;
+    if (attacker.status !== "VIVO" || target.status !== "VIVO") return;
+    if (attackerId === targetId) return;
+
+    // Fire rate: min 800ms between attacks
+    const now = Date.now();
+    if (now - attacker.lastAttackAt < 800) {
+      if (attacker.ws) this.send(attacker.ws, { type: "error", message: "Fire rate limited" });
+      return;
+    }
+
+    // Range check
+    const dx = attacker.posX - target.posX;
+    const dy = attacker.posY - target.posY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const range = attacker.equippedRange || 8;
+    if (dist > range) {
+      if (attacker.ws) this.send(attacker.ws, { type: "error", message: "Target out of range" });
+      return;
+    }
+
+    attacker.lastAttackAt = now;
+    const damage = Math.max(5, attacker.equippedDamage || 15);
+    target.health = Math.max(0, target.health - damage);
+
+    this.broadcast(room, {
+      type: "damage_dealt",
+      attackerId,
+      targetId,
+      damage,
+      targetHealth: target.health,
+    });
+
+    if (target.health <= 0) {
+      target.status = "ELIMINADO";
+      attacker.kills += 1;
+      room.playerGrid.update({ ...target, id: target.userId });
+
+      storage
+        .eliminatePlayer(target.userId, "PVP", target.displayName)
+        .catch(console.error);
+
+      // Award kill XP-equivalent: small KRC later via economy
+      this.broadcast(room, {
+        type: "player_eliminated",
+        userId: target.userId,
+        cause: "PVP",
+        eliminatorId: attackerId,
+      });
+
+      this.checkVictory(room);
+    } else {
+      room.playerGrid.update({ ...target, id: target.userId });
+    }
   }
 
   async pickupLoot(userId: string, lootId: number) {
@@ -541,10 +693,21 @@ class RoomManager {
 
     loot.isPickedUp = true;
     loot.pickedUpBy = userId;
+    room.lootGrid.remove(lootId);
 
     // Heal if curativo
     if (loot.type === "CURATIVO" && loot.stats?.heal) {
       player.health = Math.min(player.maxHealth, player.health + loot.stats.heal);
+    }
+
+    // Equip weapon/defense for PvP
+    if (loot.type === "ARMA" && loot.stats?.damage) {
+      player.equippedDamage = loot.stats.damage;
+      player.equippedRange = Math.min(20, 6 + (loot.stats.damage / 10));
+    }
+    if (loot.type === "DEFESA" && loot.stats?.defense) {
+      // Defense reduces incoming damage implicitly later; for now boost maxHealth slightly
+      player.maxHealth = Math.min(200, player.maxHealth + Math.floor(loot.stats.defense / 4));
     }
 
     // Persist to inventory (async)

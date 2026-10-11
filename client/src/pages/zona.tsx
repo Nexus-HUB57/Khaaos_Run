@@ -282,6 +282,7 @@ export default function ZonaPage() {
     updatePosition,
     pickupLoot,
     startMatch,
+    attack,
     lastError: wsError,
   } = useBattleRoom();
 
@@ -464,6 +465,28 @@ export default function ZonaPage() {
     }
   }, [zoneStatus, inLiveRoom, updatePosition]);
 
+  // Double-click nearest enemy to attack (PvP)
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!inLiveRoom || !attack) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+    const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    let nearest: { id: string; dist: number } | null = null;
+    for (const p of battlePlayers) {
+      if (p.userId === localUserId || p.status !== "VIVO") continue;
+      const dx = p.posX - clickX;
+      const dy = p.posY - clickY;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 12 && (!nearest || d < nearest.dist)) {
+        nearest = { id: p.userId, dist: d };
+      }
+    }
+    if (nearest) attack(nearest.id);
+  }, [inLiveRoom, attack, battlePlayers, localUserId]);
+
   const health = playerData?.stats?.health ?? 100;
   const maxHealth = playerData?.stats?.maxHealth ?? 100;
   const healthPct = (health / maxHealth) * 100;
@@ -564,6 +587,7 @@ export default function ZonaPage() {
               height={480}
               data-testid="canvas-safe-zone"
               onClick={handleCanvasClick}
+              onDoubleClick={handleCanvasDoubleClick}
               className="w-full h-full cursor-crosshair"
               style={{ imageRendering: "pixelated" }}
             />
