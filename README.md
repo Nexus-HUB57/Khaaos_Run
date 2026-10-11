@@ -1,29 +1,52 @@
 # Khaaos Run
 
-Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)**, baseado na documentação de lore, mundos e sistemas existente neste repositório.
+Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)** com simulação modular, seeds reproduzíveis, catálogo de armas, loot ponderado e servidor WebSocket authoritative.
 
-## Rodar localmente
+## Rodar o cliente
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abra o endereço exibido pelo Vite. Para build de produção:
+Abra o endereço exibido pelo Vite. O campo `SEED` no HUD inicia a mesma partida procedural. Para build:
 
 ```bash
 npm run build
 ```
 
-## Loop atual
+## Rodar o servidor authoritative
 
-1. Escolha o protocolo de entrada **ZU-01**: apertar o cinto ou saltar no caos.
-2. Mova com `WASD`, mire com o mouse e ataque segurando o botão esquerdo.
-3. Colete materiais e equipamentos aproximando-se dos marcadores e pressionando `E`.
-4. Extraia XP nos terminais verdes usando `E`.
-5. Use a Oficina de Campo pelo botão `FABRICAR` ou pela tecla `F`.
-6. Sobreviva ao fechamento do Ring e aos operadores rivais.
+Em outro terminal:
 
-## Estado do projeto
+```bash
+MATCH_SEED=CIGKV-REPLAY-01 npm run server
+```
 
-Este é um protótipo de combate local, sem backend, matchmaking, conta, blockchain ou dinheiro real. Os documentos de design originais foram preservados e o backlog em `TODO.md` descreve a evolução para produção.
+O servidor escuta `ws://localhost:8787`, executa o tick fixo de 20 Hz, controla a simulação, aceita inputs com sequência monotônica e rejeita vetores de movimento, mira, timing e mensagens inválidas. O servidor mantém a autoridade sobre posição, munição, dano, loot, ring e resultado.
+
+## Sistema de replay
+
+O domínio compartilhado em `src/shared/simulation.js` grava cada input com tick, seed e taxa de simulação. No console do navegador:
+
+```js
+const replay = window.KhaaosReplay.export();
+// salvar JSON.stringify(replay)
+window.KhaaosReplay.load(replay);
+```
+
+A mesma seed produz o mesmo spawn de bots, loot e evolução procedural. O replay deve ser usado como evidência de partida e base para testes de regressão.
+
+## Catálogo e loot
+
+`src/shared/weapons.js` define pistola 9MM, M4, MP5, Barrett MRAD MK22, rifle de pulso e lança de sucata, com dano, cadência, alcance, munição, carregador, raridade e peso. O loot é rolado por zona (`armory`, `industrial`, `park`, `extraction`) com raridade ponderada e seed determinística.
+
+## Testes
+
+```bash
+npm test
+```
+
+Os testes cobrem RNG, loot por seed, raridade, reconstrução de replay e validação anti-cheat.
+
+Este projeto ainda é um protótipo local: não há conta, blockchain, dinheiro real ou persistência de inventário. A camada multiplayer atual é uma fundação authoritative de desenvolvimento e precisa de autenticação, matchmaking, persistência e observabilidade antes de produção.

@@ -1,14 +1,15 @@
 {
   "name": "khaaos-run",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "test": "node --test test/*.test.js",
+    "server": "node server/server.js",
     "preview": "vite preview --host 0.0.0.0"
   },
-  "devDependencies": {
-    "vite": "^6.1.0"
-  }
+  "dependencies": { "ws": "^8.18.0" },
+  "devDependencies": { "vite": "^6.1.0" }
 }
