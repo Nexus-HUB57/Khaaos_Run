@@ -15,7 +15,9 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # ── Defaults ──
-REPO_DIR="/home/z/my-project/Khaaos_Run/repos/Khaaos_Run"
+# Resolve repo root from script location (portable — no hardcoded machine paths)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BASE_BRANCH="main"
 PR_DRAFT=true
 PR_REVIEWERS=""
@@ -85,18 +87,23 @@ log_info "━━━━━━━━━━━━━━━━━━━━━━━�
 [[ -d "$REPO_DIR" ]] || die "Repo directory not found: $REPO_DIR"
 cd "$REPO_DIR"
 
-# Check gh CLI
+# Check gh CLI (optional in --dry-run until push/PR steps)
 if ! command -v gh &>/dev/null; then
-  # Try local install
-  export PATH="/home/z/my-project/.local/bin:$PATH"
+  if [[ -d "${HOME}/.local/bin" ]]; then
+    export PATH="${HOME}/.local/bin:$PATH"
+  fi
+fi
+if [[ "$DRY_RUN" != "true" ]]; then
   if ! command -v gh &>/dev/null; then
     die "gh CLI not found. Install: https://cli.github.com/"
   fi
-fi
-
-# Verify gh auth
-if ! gh auth status &>/dev/null; then
-  die "gh CLI not authenticated. Run: gh auth login"
+  if ! gh auth status &>/dev/null; then
+    die "gh CLI not authenticated. Run: gh auth login"
+  fi
+else
+  if ! command -v gh &>/dev/null; then
+    log_warn "gh CLI not found — dry-run will skip PR creation steps"
+  fi
 fi
 
 # Verify git repo
