@@ -38,13 +38,13 @@ jobs:
         run: npm run verify:all
 
   deploy:
-    name: Deploy verified commit to Render
+    name: Deploy verified commit to Render staging
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RENDER_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     concurrency:
-      group: render-production-deploy
+      group: render-staging-deploy
       cancel-in-progress: false
     steps:
       - name: Trigger Render deploy for this commit

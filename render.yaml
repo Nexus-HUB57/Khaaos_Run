@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: khaaos-run
+    name: khaaos-run-staging
     runtime: node
     branch: main
     buildCommand: >-
-      npm ci --no-audit --no-fund && npm run build &&
+      npm ci --include=dev --no-audit --no-fund && npm run build &&
       node scripts/write-render-health.mjs
     startCommand: npm start
     autoDeployTrigger: "off"
