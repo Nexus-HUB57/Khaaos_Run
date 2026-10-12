@@ -8,6 +8,7 @@
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Game/Loot/KhaaosLootPickup.h"
 #include "Game/World/CIGKV/KhaaosCIGKVMapData.h"
+#include "Game/World/CIGKV/CIGKVLootRules.h"
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
@@ -186,24 +187,35 @@ void AKhaaosCIGKVLevel::SpawnPhaseLoot()
     const FCIGKVZonePhase& Phase = ZonePhases[CurrentZonePhase];
     if (!MapData) return;
 
-    // Get random loot spawn points from map data
+    // Preserve each point's rarity weights and rotation through the spawn.
     const FVector LootZoneCenter = SafeZone && SafeZone->UsesWorldSpaceZone()
         ? SafeZone->WorldZoneCenter : Phase.ZoneCenter;
     const float LootZoneRadius = SafeZone && SafeZone->UsesWorldSpaceZone()
         ? SafeZone->WorldZoneRadius : Phase.ZoneRadius;
-    TArray<FVector> SpawnPoints = MapData->GetRandomLootSpawnPoints(
+    const TArray<FCIGKVLootSpawnPoint> SpawnEntries = MapData->GetRandomLootSpawnEntries(
         Phase.LootDropCount, LootZoneCenter, LootZoneRadius, Phase.PhaseIndex);
 
-    for (const FVector& Point : SpawnPoints)
+    int32 SpawnedCount = 0;
+    const int32 MaxRarityTiers = static_cast<int32>(ELootRarity::Mitico) + 1;
+    for (const FCIGKVLootSpawnPoint& Entry : SpawnEntries)
     {
-        AKhaaosLootPickup* Loot = SpawnLootAt(Point, FRotator::ZeroRotator);
+        const int32 WeightCount = FMath::Min(Entry.RarityWeights.Num(), MaxRarityTiers);
+        const int32 RarityIndex = KhaaosCIGKVRules::SelectWeightedLootTier(
+            Entry.RarityWeights.GetData(), static_cast<std::size_t>(WeightCount), FMath::FRand());
+        const ELootRarity Rarity = RarityIndex >= 0 && RarityIndex < MaxRarityTiers
+            ? static_cast<ELootRarity>(RarityIndex)
+            : ELootRarity::Comum;
+
+        AKhaaosLootPickup* Loot = SpawnLootAt(Entry.Location, Entry.Rotation, Rarity);
         if (Loot)
         {
             ActiveLootPickups.Add(Loot);
+            ++SpawnedCount;
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[CIGKV] Spawned %d loot items for phase %d"), SpawnPoints.Num(), Phase.PhaseIndex);
+    UE_LOG(LogTemp, Log, TEXT("[CIGKV] Spawned %d/%d loot items for phase %d"),
+        SpawnedCount, SpawnEntries.Num(), Phase.PhaseIndex);
 }
 
 void AKhaaosCIGKVLevel::SpawnPulsoKhaaosDrop()
@@ -215,23 +227,42 @@ void AKhaaosCIGKVLevel::SpawnPulsoKhaaosDrop()
         SafeZone && SafeZone->UsesWorldSpaceZone() ? SafeZone->WorldZoneCenter : ZonePhases[CurrentZonePhase].ZoneCenter,
         SafeZone && SafeZone->UsesWorldSpaceZone() ? SafeZone->WorldZoneRadius : ZonePhases[CurrentZonePhase].ZoneRadius);
 
-    AKhaaosLootPickup* Loot = SpawnLootAt(DropLocation, FRotator::ZeroRotator);
+    AKhaaosLootPickup* Loot = SpawnLootAt(DropLocation, FRotator::ZeroRotator, ELootRarity::Lendario);
     if (Loot)
     {
-        // Override rarity to Legendary for Pulso drops
-        Loot->SetRarity(EItemRarity::Legendary);
         ActiveLootPickups.Add(Loot);
         UE_LOG(LogTemp, Log, TEXT("[CIGKV] Pulso Khaaos: Legendary drop at (%s)"), *DropLocation.ToString());
     }
 }
 
-AKhaaosLootPickup* AKhaaosCIGKVLevel::SpawnLootAt(const FVector& Location, const FRotator& Rotation)
+AKhaaosLootPickup* AKhaaosCIGKVLevel::SpawnLootAt(
+    const FVector& Location, const FRotator& Rotation, ELootRarity Rarity)
 {
+    UClass* PickupClass = LootPickupClass.Get();
+    if (!PickupClass || PickupClass->HasAnyClassFlags(CLASS_Abstract))
+    {
+        if (!bMissingLootPickupClassWarningLogged)
+        {
+            UE_LOG(LogTemp, Error, TEXT("[CIGKV] Assign a concrete LootPickupClass on the level actor before spawning loot"));
+            bMissingLootPickupClassWarningLogged = true;
+        }
+        return nullptr;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return nullptr;
+    }
+
     FActorSpawnParameters SpawnParams;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    AKhaaosLootPickup* Loot = GetWorld()->SpawnActor<AKhaaosLootPickup>(
-        AKhaaosLootPickup::StaticClass(), Location, Rotation, SpawnParams);
+    AKhaaosLootPickup* Loot = World->SpawnActor<AKhaaosLootPickup>(PickupClass, Location, Rotation, SpawnParams);
+    if (Loot)
+    {
+        Loot->SetRarity(Rarity);
+    }
 
     return Loot;
 }
