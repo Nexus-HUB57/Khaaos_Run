@@ -223,9 +223,9 @@ public:
 
     // ─── Utility Functions ────────────────────────────────────────────────────
 
-    /** Get N random loot spawn points within a zone */
+    /** Get N random loot spawn points within a zone that are unlocked for the phase. */
     UFUNCTION(BlueprintCallable, Category = "CIGKV|Utility")
-    TArray<FVector> GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius) const;
+    TArray<FVector> GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex = 0) const;
 
     /** Get a random point within the zone (for Pulso drops) */
     UFUNCTION(BlueprintCallable, Category = "CIGKV|Utility")

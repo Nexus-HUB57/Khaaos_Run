@@ -8,7 +8,7 @@
 
 // ─── Utility Functions ────────────────────────────────────────────────────────
 
-TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius) const
+TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex) const
 {
     TArray<FVector> Result;
 
@@ -17,7 +17,7 @@ TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVect
     for (const FCIGKVLootSpawnPoint& Point : LootSpawnPoints)
     {
         const float DistanceSquared = FVector::DistSquared2D(Point.Location, ZoneCenter);
-        if (DistanceSquared <= FMath::Square(ZoneRadius))
+        if (Point.MinPhase <= PhaseIndex && DistanceSquared <= FMath::Square(ZoneRadius))
         {
             ValidPoints.Add(&Point);
         }
