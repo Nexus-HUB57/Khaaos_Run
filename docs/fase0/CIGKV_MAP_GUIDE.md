@@ -55,7 +55,7 @@ Single source of truth para layout do mapa:
 | 2 | 2h | (500,500,0) | 2000 | 5 | 10 | Fog |
 | 3 | 2h45 | (300,300,0) | 800 | 10 | 5 | Storm |
 
-Loot points with `MinPhase` greater than the current phase remain locked; each phase selects only eligible points inside its active zone.
+Loot points with `MinPhase` greater than the current phase remain locked; each phase selects only eligible points inside its active zone. `RarityWeights` is sampled per point in enum order (Comum → Incomum → Raro → Épico → Lendário; a sixth weight enables Mítico).
 
 ## Passo a Passo para Criar o Mapa no UE5 Editor
 
@@ -108,7 +108,7 @@ Edit in Editor: configure all spawn points, loot points, environment markers
 
 ```
 - PlayerStart actors at all 50+ spawn points
-- KhaaosLootPickup templates at loot spawn points
+- Create a concrete Blueprint subclass of `AKhaaosLootPickup` and assign it to `AKhaaosCIGKVLevel.LootPickupClass` (the C++ base class is abstract)
 - KhaaosSafeZone actor for zone shrinking
 - Niagara emitters for climate effects
 - Assign `NS_CIGKV_ZoneShrink` to `KhaaosSafeZone.ZoneBoundarySystem`

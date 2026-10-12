@@ -223,7 +223,11 @@ public:
 
     // ─── Utility Functions ────────────────────────────────────────────────────
 
-    /** Get N random loot spawn points within a zone that are unlocked for the phase. */
+    /** Get N full loot spawn entries within a zone, preserving weights and rotation. */
+    UFUNCTION(BlueprintCallable, Category = "CIGKV|Utility")
+    TArray<FCIGKVLootSpawnPoint> GetRandomLootSpawnEntries(int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex = 0) const;
+
+    /** Get N random loot spawn locations within a zone that are unlocked for the phase. */
     UFUNCTION(BlueprintCallable, Category = "CIGKV|Utility")
     TArray<FVector> GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex = 0) const;
 

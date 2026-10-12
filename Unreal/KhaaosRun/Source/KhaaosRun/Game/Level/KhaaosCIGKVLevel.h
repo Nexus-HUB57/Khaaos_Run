@@ -254,6 +254,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Config")
     bool bArsenalNoPatenteLimits = true;
 
+    /** Concrete Blueprint/native pickup class used for world loot spawns. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Loot")
+    TSubclassOf<AKhaaosLootPickup> LootPickupClass;
+
     // ─── Zone Phases (configured per-map) ────────────────────────────────────
 
     /** Zone shrinking phases */
@@ -307,7 +311,12 @@ private:
     void InitializeMapData();
 
     /** Spawn loot at a specific location */
-    AKhaaosLootPickup* SpawnLootAt(const FVector& Location, const FRotator& Rotation);
+    AKhaaosLootPickup* SpawnLootAt(
+        const FVector& Location,
+        const FRotator& Rotation,
+        ELootRarity Rarity = ELootRarity::Comum);
+
+    bool bMissingLootPickupClassWarningLogged = false;
 
     /** Get lifetime for replicated properties */
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

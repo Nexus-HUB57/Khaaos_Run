@@ -159,7 +159,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
 	void InitFromPreset(int32 InItemId, const FString& InName, EItemType InType, ELootRarity InRarity, float InPosX, float InPosY, const FLootStats& InStats);
 
-	// ─── Client RPC ─────────────────────────────────────────────────────────
+	/** Server-only: set the replicated rarity before the pickup is collected. */
+	UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
+	bool SetRarity(ELootRarity InRarity);
+
+	// ─── Client RPC ──────────────────────────────────────────────────────────────
 
 	/** Client-side pickup effect (sound, VFX, UI feedback). */
 	UFUNCTION(Client, Reliable)
