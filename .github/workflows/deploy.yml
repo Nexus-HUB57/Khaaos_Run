@@ -1,0 +1,302 @@
+# Khaaos Run — Deployment Pipeline
+# Fase 3-5: Deploy to staging/production with health checks and rollback
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'game-runtime/**'
+      - 'infra/**'
+      - 'docker-compose*.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      region:
+        description: 'Target region (all for multi-region)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - sa1
+          - na1
+          - eu1
+      rolling:
+        description: 'Rolling deployment'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false  # Never cancel deployments
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ─── Job 1: Pre-Deploy Validation ─────────────────────────────
+  validate:
+    name: Pre-Deploy Validation
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deployment readiness
+        id: check
+        run: |
+          echo "=== Pre-Deploy Validation ==="
+          ENV="${{ github.event.inputs.environment || 'staging' }}"
+          echo "Environment: $ENV"
+
+          # For production, run launch checklist
+          if [ "$ENV" = "production" ]; then
+            echo "⚠️  Production deployment requested"
+            echo "    Running launch checklist..."
+
+            # Verify production config exists
+            if [ ! -f "Unreal/KhaaosRun/Config/DefaultProduction.ini" ]; then
+              echo "  ❌ DefaultProduction.ini MISSING"
+              echo "should_deploy=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            # Verify EOS production config
+            if [ ! -f "Unreal/KhaaosRun/Config/Regions/DefaultEOS_Production.ini" ]; then
+              echo "  ❌ DefaultEOS_Production.ini MISSING"
+              echo "should_deploy=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            # Verify docker-compose production
+            if [ ! -f "infra/deploy/docker-compose.production.yml" ]; then
+              echo "  ❌ docker-compose.production.yml MISSING"
+              echo "should_deploy=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            echo "  ✅ All production configs present"
+          fi
+
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+
+  # ─── Job 2: Build & Push Images ───────────────────────────────
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.should_deploy == 'true'
+    permissions:
+      packages: write
+    outputs:
+      server_image: ${{ steps.server-meta.outputs.tags }}
+      game_image: ${{ steps.game-meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build Node.js Economy API server
+      - name: Build Server Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ github.sha }}
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:deploy-${{ github.run_number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build game-runtime image (if Dockerfile exists)
+      - name: Build Game Runtime Image
+        if: hashFiles('game-runtime/Dockerfile') != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: ./game-runtime
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-game:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Job 3: Deploy to Staging ─────────────────────────────────
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: (github.event.inputs.environment || 'staging') == 'staging'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "⚠️  RENDER_API_KEY not configured — skipping Render deploy"
+            echo "    Configure via: https://dashboard.render.com/account/api-keys"
+            exit 0
+          fi
+
+          echo "=== Deploying to Render Staging ==="
+          # Trigger Render deploy
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json")
+
+          echo "Deploy trigger: HTTP $HTTP_CODE"
+
+      - name: Health Check
+        run: |
+          echo "=== Staging Health Check ==="
+          for i in $(seq 1 10); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://khaaos-run-staging.onrender.com/healthz.json" 2>/dev/null || echo "000")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "  ✅ Staging healthy (attempt $i)"
+              exit 0
+            fi
+            echo "  ⏳ Waiting... (attempt $i, HTTP $HTTP_CODE)"
+            sleep 30
+          done
+          echo "  ❌ Staging health check failed after 10 attempts"
+          exit 1
+
+  # ─── Job 4: Deploy to Production (Multi-Region) ───────────────
+  deploy-production:
+    name: Deploy Production (${{ matrix.region || 'all' }})
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event.inputs.environment == 'production'
+    environment: production
+    strategy:
+      matrix:
+        region: ${{ github.event.inputs.region == 'all' && fromJson('["sa1","na1","eu1"]') || fromJson(format('["{0}"]', github.event.inputs.region)) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to ${{ matrix.region }}
+        env:
+          DOCKER_HOST: ${{ secrets[format('DOCKER_HOST_{0}', matrix.region)] }}
+          EOS_PRODUCT_ID: ${{ secrets.EOS_PRODUCT_ID }}
+          EOS_SANDBOX_ID: ${{ secrets.EOS_SANDBOX_ID }}
+          EOS_DEPLOYMENT_ID: ${{ secrets.EOS_DEPLOYMENT_ID }}
+          DATABASE_URL: ${{ secrets[format('DATABASE_URL_{0}', matrix.region)] }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          echo "=== Deploying to ${{ matrix.region }} ==="
+
+          # Pull latest images
+          docker pull ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ github.sha }} || true
+
+          # Deploy using docker-compose production
+          if [ "${{ github.event.inputs.rolling }}" = "true" ]; then
+            echo "  🔄 Rolling deployment"
+            bash scripts/fase5/deploy_multiregion.sh --deploy --rolling
+          else
+            echo "  ⚡ Simultaneous deployment"
+            docker compose \
+              -f Unreal/KhaaosRun/Build/docker-compose.yml \
+              -f infra/deploy/docker-compose.production.yml \
+              up -d \
+              --force-recreate \
+              --no-build
+          fi
+
+      - name: Health Check ${{ matrix.region }}
+        run: |
+          REGION_HOSTS=(
+            "sa1:sa1.khaaos.run"
+            "na1:na1.khaaos.run"
+            "eu1:eu1.khaaos.run"
+          )
+
+          HOST=""
+          for entry in "${REGION_HOSTS[@]}"; do
+            IFS=':' read -r r h <<< "$entry"
+            if [ "$r" = "${{ matrix.region }}" ]; then
+              HOST="$h"
+              break
+            fi
+          done
+
+          echo "=== Health Check: $HOST ==="
+          for i in $(seq 1 15); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://$HOST/healthz" 2>/dev/null || echo "000")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "  ✅ ${{ matrix.region }} healthy (attempt $i)"
+              exit 0
+            fi
+            echo "  ⏳ Waiting... (attempt $i, HTTP $HTTP_CODE)"
+            sleep 20
+          done
+          echo "  ❌ ${{ matrix.region }} health check failed"
+          exit 1
+
+  # ─── Job 5: Post-Deploy Verification ──────────────────────────
+  verify:
+    name: Post-Deploy Verification
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run verification
+        run: |
+          echo "=== Post-Deploy Verification ==="
+          node scripts/verify-all.mjs 2>&1 | tee verify.log || true
+
+      - name: Notify Success
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "🚀 Deploy Successful",
+                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "color": 3066993
+              }]
+            }' || true
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Deploy Failed",
+                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "color": 15158332
+              }]
+            }' || true

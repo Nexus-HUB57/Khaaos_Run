@@ -1,0 +1,197 @@
+# Khaaos Run — UE5 Dedicated Server Build Pipeline
+# Fase 2+: Build UE5.8 Linux dedicated server, package, push Docker image
+name: UE5 Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/**'
+      - 'Unreal/KhaaosRun/Config/**'
+      - 'Unreal/KhaaosRun/Build/Dockerfile'
+      - 'Unreal/KhaaosRun/*.uproject'
+  workflow_dispatch:
+    inputs:
+      map_name:
+        description: 'Map to build (e.g., KhaaosCIGKV)'
+        required: false
+        default: 'KhaaosCIGKV'
+      max_players:
+        description: 'Max players'
+        required: false
+        default: '50'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nexus-hub57/khaaos-dedicated-server
+  UE5_VERSION: '5.8'
+
+jobs:
+  # ─── Job 1: Validate UE5 Project ──────────────────────────────
+  validate:
+    name: Validate UE5 Project
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check .uproject
+        id: check
+        run: |
+          if [ ! -f "Unreal/KhaaosRun/KhaaosRun.uproject" ]; then
+            echo "❌ .uproject not found"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Verify EngineAssociation
+          ENGINE=$(jq -r '.EngineAssociation' Unreal/KhaaosRun/KhaaosRun.uproject)
+          echo "Engine association: $ENGINE"
+
+          # Count C++ files changed
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'Unreal/KhaaosRun/Source/' | wc -l)
+          echo "C++ files changed: $CHANGED"
+
+          if [ "$CHANGED" -gt 0 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ─── Job 2: Build Dedicated Server ────────────────────────────
+  build-server:
+    name: Build UE5 Dedicated Server
+    runs-on: [self-hosted, ue5]  # Requires self-hosted runner with UE5.8
+    needs: validate
+    if: needs.validate.outputs.should_build == 'true'
+    timeout-minutes: 120
+    env:
+      MAP_NAME: ${{ github.event.inputs.map_name || 'KhaaosCIGKV' }}
+      MAX_PLAYERS: ${{ github.event.inputs.max_players || '50' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup UE5 Environment
+        run: |
+          if [ -z "$UE5_ROOT" ]; then
+            echo "❌ UE5_ROOT not set on self-hosted runner"
+            echo "Run: scripts/setup_ue5_editor.sh --install"
+            exit 1
+          fi
+          echo "UE5_ROOT=$UE5_ROOT"
+          ls "$UE5_ROOT/Engine/Binaries/Linux/"
+
+      - name: Generate Project Files
+        run: |
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealBuildTool" \
+            -project="$(pwd)/Unreal/KhaaosRun/KhaaosRun.uproject" \
+            -targettype=Editor \
+            -platform=Linux \
+            GenerateProjectFiles
+
+      - name: Build Server Target
+        run: |
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealBuildTool" \
+            KhaaosRunServer \
+            Linux \
+            Development \
+            -project="$(pwd)/Unreal/KhaaosRun/KhaaosRun.uproject" \
+            -stagingdirectory="$(pwd)/Build/Staging" \
+            -BuildTarget=Server
+
+      - name: Package Server
+        run: |
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealPackager" \
+            "$(pwd)/Unreal/KhaaosRun/KhaaosRun.uproject" \
+            Linux \
+            "$(pwd)/Build/Staging" \
+            -server \
+            -map="$MAP_NAME" \
+            -NoDebugInfo \
+            -compressed
+
+      - name: Verify Server Binary
+        run: |
+          SERVER_BIN="Build/Staging/Linux/KhaaosRun/Binaries/Linux/KhaaosRunServer"
+          if [ -f "$SERVER_BIN" ]; then
+            SIZE=$(stat -f%z "$SERVER_BIN" 2>/dev/null || stat -c%s "$SERVER_BIN")
+            echo "✅ Server binary: $(numfmt --to=iec $SIZE)"
+          else
+            echo "❌ Server binary not found"
+            exit 1
+          fi
+
+      - name: Upload Server Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ue5-server-build
+          path: Build/Staging/
+          retention-days: 7
+
+  # ─── Job 3: Docker Build & Push ───────────────────────────────
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: build-server
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download server build
+        uses: actions/download-artifact@v4
+        with:
+          name: ue5-server-build
+          path: Build/Staging/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Unreal/KhaaosRun/Build
+          file: ./Unreal/KhaaosRun/Build/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            MAP_NAME=${{ github.event.inputs.map_name || 'KhaaosCIGKV' }}
+            MAX_PLAYERS=${{ github.event.inputs.max_players || '50' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Job 4: Notify ────────────────────────────────────────────
+  notify:
+    name: Notify Build Status
+    runs-on: ubuntu-latest
+    needs: [validate, build-server, docker]
+    if: always()
+    steps:
+      - name: Discord Notification
+        run: |
+          STATUS="✅ Success"
+          if [ "${{ needs.build-server.result }}" = "failure" ] || [ "${{ needs.docker.result }}" = "failure" ]; then
+            STATUS="❌ Failed"
+          fi
+
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"UE5 Build: $STATUS\",
+                \"description\": \"Commit: ${{ github.sha }}\\nMap: ${{ github.event.inputs.map_name || 'KhaaosCIGKV' }}\\nImage: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\",
+                \"color\": ${{ needs.build-server.result == 'success' && '3066993' || '15158332' }}
+              }]
+            }" || true

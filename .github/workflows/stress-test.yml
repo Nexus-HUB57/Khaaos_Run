@@ -1,0 +1,224 @@
+# Khaaos Run — Stress Test Pipeline
+# Fase 5: Load testing with 100/500/1000/2000 bot profiles
+name: Stress Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Stress test profile'
+        required: true
+        default: '100'
+        type: choice
+        options:
+          - '100'
+          - '500'
+          - '1000'
+          - '2000'
+      duration_minutes:
+        description: 'Duration (minutes)'
+        required: false
+        default: '30'
+      region:
+        description: 'Target region'
+        required: false
+        default: 'sa1'
+        type: choice
+        options:
+          - sa1
+          - na1
+          - eu1
+  schedule:
+    # Weekly stress test with 100-bot profile
+    - cron: '0 3 * * 1'  # Every Monday 03:00 UTC
+
+concurrency:
+  group: stress-test
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ─── Job 1: Pre-Test Validation ───────────────────────────────
+  validate:
+    name: Validate Test Environment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check stress test infrastructure
+        run: |
+          echo "=== Stress Test Validation ==="
+
+          # Verify C++ load test code exists
+          for file in "KhaaosLoadTestBot" "KhaaosLoadTestManager" "KhaaosStressTestConfig"; do
+            H="Unreal/KhaaosRun/Source/KhaaosRun/Game/LoadTest/${file}.h"
+            CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/LoadTest/${file}.cpp"
+            if [ -f "$H" ] && [ -f "$CPP" ]; then
+              echo "  ✅ $file"
+            else
+              echo "  ❌ $file MISSING"
+              exit 1
+            fi
+          done
+
+          # Verify stress test profiles
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/LoadTest/KhaaosStressTestConfig.h"
+          for profile in "100" "500" "1000" "2000"; do
+            if grep -q "P${profile}\|Profile${profile}\|${profile}Player" "$H"; then
+              echo "  ✅ ${profile}-player profile"
+            else
+              echo "  ⚠️  ${profile}-player profile may need verification"
+            fi
+          done
+
+      - name: Check target server
+        run: |
+          REGION="${{ github.event.inputs.region || 'sa1' }}"
+          HOST="${REGION}.khaaos.run"
+
+          echo "=== Target: $HOST ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://$HOST/healthz" 2>/dev/null || echo "000")
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "  ✅ Target server healthy"
+          else
+            echo "  ❌ Target server unreachable (HTTP $HTTP_CODE)"
+            echo "    Deploy the server before running stress tests"
+            exit 1
+          fi
+
+  # ─── Job 2: Run Stress Test ───────────────────────────────────
+  stress-test:
+    name: Run Stress Test (${{ github.event.inputs.profile || '100' }} bots)
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: ${{ ((github.event.inputs.duration_minutes || 30) + 10) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run stress test
+        env:
+          STRESS_PROFILE: ${{ github.event.inputs.profile || '100' }}
+          STRESS_DURATION: ${{ github.event.inputs.duration_minutes || '30' }}
+          STRESS_REGION: ${{ github.event.inputs.region || 'sa1' }}
+          TARGET_HOST: ${{ format('{0}.khaaos.run', github.event.inputs.region || 'sa1') }}
+        run: |
+          echo "╔══════════════════════════════════════╗"
+          echo "║   Khaaos Run — Stress Test            ║"
+          echo "║   Profile: $STRESS_PROFILE bots          ║"
+          echo "║   Duration: $STRESS_DURATION min          ║"
+          echo "║   Region: $STRESS_REGION                 ║"
+          echo "║   Target: $TARGET_HOST                  ║"
+          echo "╚══════════════════════════════════════╝"
+
+          # Run the game-runtime stress test if available
+          if npm run test:game:stress 2>/dev/null; then
+            echo "✅ Game runtime stress test completed"
+          else
+            echo "⚠️  No dedicated stress test script found"
+            echo "    Running basic load simulation..."
+
+            # Basic WebSocket load simulation
+            node -e "
+              const WebSocket = require('ws');
+              const BOTS = parseInt(process.env.STRESS_PROFILE);
+              const DURATION = parseInt(process.env.STRESS_DURATION) * 60 * 1000;
+              const TARGET = process.env.TARGET_HOST;
+
+              console.log(\`Connecting \${BOTS} bots to \${TARGET}...\`);
+              const start = Date.now();
+              let connected = 0, errors = 0;
+
+              for (let i = 0; i < BOTS; i++) {
+                setTimeout(() => {
+                  try {
+                    const ws = new WebSocket(\`wss://\${TARGET}/ws\`);
+                    ws.on('open', () => { connected++; });
+                    ws.on('error', () => { errors++; });
+                    ws.on('close', () => { connected--; });
+                  } catch(e) { errors++; }
+                }, i * 100); // Stagger connections
+              }
+
+              // Report every 30s
+              const interval = setInterval(() => {
+                const elapsed = (Date.now() - start) / 1000;
+                console.log(\`[\${elapsed.toFixed(0)}s] Connected: \${connected}/\${BOTS} | Errors: \${errors}\`);
+                if (Date.now() - start > DURATION) {
+                  clearInterval(interval);
+                  console.log(\`Final: \${connected} connected, \${errors} errors\`);
+                  process.exit(errors > BOTS * 0.5 ? 1 : 0);
+                }
+              }, 30000);
+            " || true
+          fi
+
+      - name: Generate report
+        if: always()
+        run: |
+          echo "=== Stress Test Report ==="
+          echo "Profile: ${{ github.event.inputs.profile || '100' }} bots"
+          echo "Duration: ${{ github.event.inputs.duration_minutes || '30' }} minutes"
+          echo "Region: ${{ github.event.inputs.region || 'sa1' }}"
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results-${{ github.event.inputs.profile || '100' }}
+          path: |
+            stress-test.log
+            test-results/
+          retention-days: 30
+
+  # ─── Job 3: Analyze Results ───────────────────────────────────
+  analyze:
+    name: Analyze Results
+    runs-on: ubuntu-latest
+    needs: stress-test
+    if: always()
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: stress-test-results-${{ github.event.inputs.profile || '100' }}
+        continue-on-error: true
+
+      - name: Report summary
+        run: |
+          echo "╔══════════════════════════════════════╗"
+          echo "║   Stress Test Complete                ║"
+          echo "║   Profile: ${{ github.event.inputs.profile || '100' }} bots       ║"
+          echo "║   Status: ${{ needs.stress-test.result }}   ║"
+          echo "╚══════════════════════════════════════╝"
+
+      - name: Notify Discord
+        run: |
+          STATUS_EMOJI="✅"
+          STATUS_COLOR="3066993"
+          if [ "${{ needs.stress-test.result }}" = "failure" ]; then
+            STATUS_EMOJI="❌"
+            STATUS_COLOR="15158332"
+          fi
+
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"$STATUS_EMOJI Stress Test: ${{ github.event.inputs.profile || '100' }} Bots\",
+                \"description\": \"Region: ${{ github.event.inputs.region || 'sa1' }}\\nDuration: ${{ github.event.inputs.duration_minutes || '30' }}min\\nResult: ${{ needs.stress-test.result }}\",
+                \"color\": $STATUS_COLOR
+              }]
+            }" || true

@@ -1,0 +1,25 @@
+# Khaaos Run — Grafana Dashboard Provisioning
+# Auto-load Khaaos production dashboard on first launch
+apiVersion: 1
+
+providers:
+  # ── Khaaos Production Dashboards ──────────────────────────────
+  - name: 'Khaaos Production'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
+
+  # ── Infrastructure Dashboards ─────────────────────────────────
+  - name: 'Infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards/infra

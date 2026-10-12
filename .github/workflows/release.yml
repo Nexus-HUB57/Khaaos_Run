@@ -1,0 +1,205 @@
+# Khaaos Run — Release Pipeline
+# Automated versioning, changelog, GitHub Release, and production promotion
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.5.0)'
+        required: true
+      prerelease:
+        description: 'Pre-release?'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ─── Job 1: Version & Changelog ───────────────────────────────
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            # Auto-increment patch from package.json
+            CURRENT=$(jq -r '.version' package.json 2>/dev/null || echo "0.0.0")
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Release version: $VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="$LAST_TAG..HEAD"
+          else
+            RANGE="HEAD~20..HEAD"
+          fi
+
+          echo "Generating changelog for $RANGE"
+
+          # Categorize commits
+          FEAT=$(git log "$RANGE" --oneline --grep="feat" 2>/dev/null || true)
+          FIX=$(git log "$RANGE" --oneline --grep="fix" 2>/dev/null || true)
+          REFACTOR=$(git log "$RANGE" --oneline --grep="refactor" 2>/dev/null || true)
+          OTHER=$(git log "$RANGE" --oneline --invert-grep --grep="feat" --invert-grep --grep="fix" --invert-grep --grep="refactor" "$RANGE" 2>/dev/null || true)
+
+          {
+            echo "content<<CHANGELOG_EOF"
+            echo "## Khaaos Run v${{ steps.version.outputs.version }}"
+            echo ""
+            echo "### 🚀 Features"
+            if [ -n "$FEAT" ]; then echo "$FEAT"; else echo "- None"; fi
+            echo ""
+            echo "### 🐛 Bug Fixes"
+            if [ -n "$FIX" ]; then echo "$FIX"; else echo "- None"; fi
+            echo ""
+            echo "### 🔧 Refactoring"
+            if [ -n "$REFACTOR" ]; then echo "$REFACTOR"; else echo "- None"; fi
+            echo ""
+            echo "### 📋 Other"
+            if [ -n "$OTHER" ]; then echo "$OTHER" | head -10; else echo "- None"; fi
+            echo ""
+            echo "---"
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${RANGE}"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
+  # ─── Job 2: Build All Artifacts ───────────────────────────────
+  build:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build server
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package release
+        run: |
+          mkdir -p release/
+          cp -r dist/ release/server-dist/
+          cp -r server/ release/server/ 2>/dev/null || true
+          cp -r game-runtime/ release/game-runtime/ 2>/dev/null || true
+          cp -r scripts/ release/scripts/
+          cp -r infra/ release/infra/
+          cp -r Unreal/KhaaosRun/Config/ release/ue5-config/
+          cp package.json release/
+          cp render.yaml release/ 2>/dev/null || true
+
+      - name: Create release archive
+        run: |
+          tar -czf khaaos-run-${{ needs.prepare.outputs.version }}.tar.gz release/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ needs.prepare.outputs.version }}
+          path: khaaos-run-${{ needs.prepare.outputs.version }}.tar.gz
+
+  # ─── Job 3: Docker Images ─────────────────────────────────────
+  docker:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Server Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Job 4: Create GitHub Release ─────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, build, docker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.prepare.outputs.version }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: Khaaos Run v${{ needs.prepare.outputs.version }}
+          body: ${{ needs.prepare.outputs.changelog }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease || true }}
+          files: |
+            khaaos-run-${{ needs.prepare.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"📦 Release v${{ needs.prepare.outputs.version }}\",
+                \"description\": \"Khaaos Run v${{ needs.prepare.outputs.version }} released\\nPre-release: ${{ github.event.inputs.prerelease || true }}\\n[Download](https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare.outputs.version }})\",
+                \"color\": 5763719
+              }]
+            }" || true
