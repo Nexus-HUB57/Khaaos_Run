@@ -1,0 +1,213 @@
+{
+  "manifest_version": "1.0",
+  "project": "Khaaos Run",
+  "description": "Asset manifest — all 3D assets, textures, materials, VFX, and audio required for MVP",
+
+  "concept_art_references": {
+    "character_zheers": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/f4c16c907ad4.png",
+    "weapon_rifle_blueprint": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/374a1870cdf3.jpg",
+    "weapon_rifle_alt": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/49f666b8997b.jpg"
+  },
+
+  "characters": [
+    {
+      "id": "CHR_Zheers_Base",
+      "name": "Zheers Warrior Base",
+      "type": "character",
+      "skeleton": "UE5_Mannequin",
+      "lod_count": 4,
+      "components": ["SkeletalMesh*Mesh", "Material_Override", "AnimationBlueprint"],
+      "textures": ["T_Zheers_D", "T_Zheers_N", "T_Zheers_ORM", "T_Zheers_E"],
+      "animations": [
+        "Anim_Idle", "Anim_Walk", "Anim_Run", "Anim_Sprint",
+        "Anim_Crouch", "Anim_Slide", "Anim_Jump", "Anim_Dash",
+        "Anim_Melee", "Anim_Shoot", "Anim_Reload", "Anim_Heal",
+        "Anim_WarI_Cinto", "Anim_WarI_Saltar", "Anim_WarI_Mascara",
+        "Anim_Downed", "Anim_Dead"
+      ],
+      "variants": ["Zheers_Assault", "Zheers_Tactical", "Zheers_Support"],
+      "target_polycount": 80000,
+      "priority": "P0",
+      "status": "concept_art"
+    }
+  ],
+
+  "weapons": [
+    {
+      "id": "WPN_AssaultRifle_MK1",
+      "name": "Assault Rifle MK1",
+      "type": "weapon",
+      "category": "assault_rifle",
+      "slot": "primary",
+      "damage": 28,
+      "fire_rate_rpm": 600,
+      "magazine_size": 30,
+      "reload_time_s": 2.1,
+      "effective_range_m": 80,
+      "attachments": ["sight_red_dot", "grip_vertical", "suppressor"],
+      "target_polycount": 12000,
+      "priority": "P0",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_Shotgun_Breach",
+      "name": "Breach Shotgun",
+      "type": "weapon",
+      "category": "shotgun",
+      "slot": "primary",
+      "damage": 120,
+      "fire_rate_rpm": 60,
+      "magazine_size": 2,
+      "reload_time_s": 3.5,
+      "effective_range_m": 15,
+      "pellet_count": 8,
+      "target_polycount": 8000,
+      "priority": "P0",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_Sniper_DMR",
+      "name": "DMR Sniper",
+      "type": "weapon",
+      "category": "sniper",
+      "slot": "primary",
+      "damage": 65,
+      "fire_rate_rpm": 180,
+      "magazine_size": 10,
+      "reload_time_s": 2.8,
+      "effective_range_m": 200,
+      "headshot_multiplier": 2.0,
+      "target_polycount": 10000,
+      "priority": "P0",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_Pistol_Sidearm",
+      "name": "Sidearm Pistol",
+      "type": "weapon",
+      "category": "pistol",
+      "slot": "secondary",
+      "damage": 22,
+      "fire_rate_rpm": 400,
+      "magazine_size": 15,
+      "reload_time_s": 1.5,
+      "effective_range_m": 30,
+      "target_polycount": 5000,
+      "priority": "P1",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_SMG_Compact",
+      "name": "Compact SMG",
+      "type": "weapon",
+      "category": "smg",
+      "slot": "primary",
+      "damage": 18,
+      "fire_rate_rpm": 900,
+      "magazine_size": 25,
+      "reload_time_s": 1.8,
+      "effective_range_m": 40,
+      "target_polycount": 7000,
+      "priority": "P1",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_LMG_Support",
+      "name": "Support LMG",
+      "type": "weapon",
+      "category": "lmg",
+      "slot": "primary",
+      "damage": 24,
+      "fire_rate_rpm": 750,
+      "magazine_size": 100,
+      "reload_time_s": 4.5,
+      "effective_range_m": 60,
+      "target_polycount": 14000,
+      "priority": "P1",
+      "status": "concept_art"
+    },
+    {
+      "id": "WPN_Melee_Knife",
+      "name": "Combat Knife",
+      "type": "weapon",
+      "category": "melee",
+      "slot": "melee",
+      "damage": 50,
+      "attack_rate": 2.0,
+      "effective_range_m": 2,
+      "target_polycount": 3000,
+      "priority": "P0",
+      "status": "concept_art"
+    }
+  ],
+
+  "loot_items": [
+    {"id": "LOOT_MedKit_Small",  "name": "Small Med Kit",    "type": "health",   "heal_amount": 25,  "use_time_s": 3,   "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_MedKit_Medium", "name": "Medium Med Kit",   "type": "health",   "heal_amount": 50,  "use_time_s": 5,   "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_MedKit_Large",  "name": "Large Med Kit",    "type": "health",   "heal_amount": 75,  "use_time_s": 8,   "icon_size": "256x256", "priority": "P1"},
+    {"id": "LOOT_Bandage",       "name": "Bandage",          "type": "health",   "heal_amount": 10,  "use_time_s": 1.5, "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_Shield_Lv1",    "name": "Shield Cell Lv1",  "type": "shield",   "shield_amount": 25, "use_time_s": 2,   "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_Shield_Lv2",    "name": "Shield Cell Lv2",  "type": "shield",   "shield_amount": 50, "use_time_s": 3,   "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_Shield_Lv3",    "name": "Shield Cell Lv3",  "type": "shield",   "shield_amount": 75, "use_time_s": 5,   "icon_size": "256x256", "priority": "P1"},
+    {"id": "LOOT_Ammo_556",      "name": "5.56 Ammo Box",    "type": "ammo",     "amount": 30,       "icon_size": "128x128", "priority": "P0"},
+    {"id": "LOOT_Ammo_762",      "name": "7.62 Ammo Box",    "type": "ammo",     "amount": 20,       "icon_size": "128x128", "priority": "P0"},
+    {"id": "LOOT_Ammo_9mm",      "name": "9mm Ammo Box",     "type": "ammo",     "amount": 40,       "icon_size": "128x128", "priority": "P0"},
+    {"id": "LOOT_Ammo_12G",      "name": "12 Gauge Box",     "type": "ammo",     "amount": 8,        "icon_size": "128x128", "priority": "P0"},
+    {"id": "LOOT_Grenade_Frag",  "name": "Frag Grenade",     "type": "utility",  "damage": 80,  "radius_m": 8,   "icon_size": "128x128", "priority": "P0"},
+    {"id": "LOOT_Grenade_Smoke", "name": "Smoke Grenade",    "type": "utility",  "duration_s": 15,   "icon_size": "128x128", "priority": "P1"},
+    {"id": "LOOT_Backpack_Small","name": "Small Backpack",   "type": "utility",  "slots": 4,         "icon_size": "256x256", "priority": "P0"},
+    {"id": "LOOT_Backpack_Medium","name":"Medium Backpack",  "type": "utility",  "slots": 6,         "icon_size": "256x256", "priority": "P1"},
+    {"id": "LOOT_Backpack_Large","name": "Large Backpack",   "type": "utility",  "slots": 8,         "icon_size": "256x256", "priority": "P1"}
+  ],
+
+  "environment": [
+    {"id": "ENV_CIGKV_ArmoryHub",      "type": "level_stream",  "sublevel": "CIGKV_ArmoryHub",      "priority": "P0"},
+    {"id": "ENV_CIGKV_ProvingGrounds",  "type": "level_stream",  "sublevel": "CIGKV_ProvingGrounds",  "priority": "P0"},
+    {"id": "ENV_CIGKV_Park",          "type": "level_stream",  "sublevel": "CIGKV_Park",          "priority": "P0"},
+    {"id": "ENV_Building_Destructible",  "type": "static_mesh",   "count": 45,  "target_polycount": 5000, "priority": "P0"},
+    {"id": "ENV_Vehicle_AbandonedCar",   "type": "static_mesh",   "count": 20,  "target_polycount": 3000, "priority": "P1"},
+    {"id": "ENV_Tree_Dead",              "type": "foliage",       "count": 200, "target_polycount": 1000, "priority": "P0"},
+    {"id": "ENV_Rock_Formation",         "type": "static_mesh",   "count": 50,  "target_polycount": 2000, "priority": "P1"},
+    {"id": "ENV_Water_Stream",           "type": "water_body",    "count": 4,   "priority": "P1"}
+  ],
+
+  "vfx": [
+    {"id": "VFX_MuzzleFlash_Assault",   "type": "niagara", "priority": "P0"},
+    {"id": "VFX_MuzzleFlash_Shotgun",   "type": "niagara", "priority": "P0"},
+    {"id": "VFX_MuzzleFlash_Sniper",    "type": "niagara", "priority": "P0"},
+    {"id": "VFX_Bullet_Impact",           "type": "niagara", "priority": "P0"},
+    {"id": "VFX_Zone_Clear",             "type": "niagara", "priority": "P1"},
+    {"id": "VFX_Zone_Rain",              "type": "niagara", "priority": "P0"},
+    {"id": "VFX_Zone_Fog",               "type": "niagara", "priority": "P0"},
+    {"id": "VFX_Zone_Storm",             "type": "niagara", "priority": "P0"},
+    {"id": "VFX_WarI_Cinto_Portal",      "type": "niagara", "priority": "P1"},
+    {"id": "VFX_WarI_Saltar_Landing",    "type": "niagara", "priority": "P1"},
+    {"id": "VFX_DedoDuro_Rats",          "type": "niagara", "priority": "P2"},
+    {"id": "VFX_Loot_Pickup",            "type": "niagara", "priority": "P0"}
+  ],
+
+  "audio": [
+    {"id": "SFX_WeaponFire_Assault",   "type": "meta_sound", "priority": "P0"},
+    {"id": "SFX_WeaponFire_Shotgun",   "type": "meta_sound", "priority": "P0"},
+    {"id": "SFX_WeaponFire_Sniper",    "type": "meta_sound", "priority": "P0"},
+    {"id": "SFX_Zone_Rain_Ambient",    "type": "meta_sound", "priority": "P1"},
+    {"id": "SFX_Zone_Storm_Thunder",   "type": "meta_sound", "priority": "P1"},
+    {"id": "SFX_Footstep_Grass",       "type": "meta_sound", "priority": "P0"},
+    {"id": "SFX_Footstep_Concrete",    "type": "meta_sound", "priority": "P0"},
+    {"id": "MUS_Adaptive_Combat",      "type": "meta_sound", "priority": "P1"},
+    {"id": "MUS_Adaptive_Menu",        "type": "meta_sound", "priority": "P2"}
+  ],
+
+  "summary": {
+    "total_assets": 82,
+    "p0_count": 38,
+    "p1_count": 30,
+    "p2_count": 5,
+    "characters": 1,
+    "weapons": 7,
+    "loot_items": 16,
+    "environment": 8,
+    "vfx": 12,
+    "audio": 9
+  }
+}
