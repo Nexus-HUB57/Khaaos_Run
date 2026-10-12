@@ -119,6 +119,9 @@ void AKhaaosCIGKVLevel::StartZoneSequence()
         UE_LOG(LogTemp, Warning, TEXT("[CIGKV] No AKhaaosSafeZone actor found; zone damage and visual are unavailable"));
     }
 
+    // Phase 0 is the live opening state; do not wait until phase 1 to populate loot.
+    SpawnPhaseLoot();
+
     // Set timer for first phase advancement
     if (ZonePhases.Num() > 1)
     {
@@ -188,7 +191,8 @@ void AKhaaosCIGKVLevel::SpawnPhaseLoot()
         ? SafeZone->WorldZoneCenter : Phase.ZoneCenter;
     const float LootZoneRadius = SafeZone && SafeZone->UsesWorldSpaceZone()
         ? SafeZone->WorldZoneRadius : Phase.ZoneRadius;
-    TArray<FVector> SpawnPoints = MapData->GetRandomLootSpawnPoints(Phase.LootDropCount, LootZoneCenter, LootZoneRadius);
+    TArray<FVector> SpawnPoints = MapData->GetRandomLootSpawnPoints(
+        Phase.LootDropCount, LootZoneCenter, LootZoneRadius, Phase.PhaseIndex);
 
     for (const FVector& Point : SpawnPoints)
     {

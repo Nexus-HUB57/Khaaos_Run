@@ -48,12 +48,14 @@ Single source of truth para layout do mapa:
 
 ### Zone Phases (Default)
 
-| Phase | Time | Center | Radius | Damage/s | Climate |
-|-------|------|--------|--------|----------|---------|
-| 0 | 0h | (0,0,0) | 5000 | 1 | Clear |
-| 1 | 1h | (1000,0,0) | 3500 | 3 | Rain |
-| 2 | 2h | (500,500,0) | 2000 | 5 | Fog |
-| 3 | 2h45 | (300,300,0) | 800 | 10 | Storm |
+| Phase | Time | Center | Radius | Damage/s | Loot drops | Climate |
+|-------|------|--------|--------|----------|------------|---------|
+| 0 | 0h | (0,0,0) | 5000 | 1 | 20 (spawned on Ring start) | Clear |
+| 1 | 1h | (1000,0,0) | 3500 | 3 | 15 | Rain |
+| 2 | 2h | (500,500,0) | 2000 | 5 | 10 | Fog |
+| 3 | 2h45 | (300,300,0) | 800 | 10 | 5 | Storm |
+
+Loot points with `MinPhase` greater than the current phase remain locked; each phase selects only eligible points inside its active zone.
 
 ## Passo a Passo para Criar o Mapa no UE5 Editor
 
