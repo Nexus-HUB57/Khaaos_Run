@@ -4,7 +4,10 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
+import { api } from "@shared/routes";
+import type { WarIActionItem } from "@shared/war-i";
 
 export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 
@@ -13,6 +16,10 @@ export interface BattlePlayer {
   displayName: string;
   posX: number;
   posY: number;
+  carryCapacity?: number;
+  carriedWeight?: number;
+  speedBoostUntil?: number;
+  speedMultiplier?: number;
   health: number;
   maxHealth: number;
   status: string;
@@ -75,6 +82,9 @@ type ServerMessage =
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
+  | { type: "packback_ready"; items: WarIActionItem[] }
+  | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
+  | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement?: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
   | { type: "error"; message: string }
@@ -84,6 +94,18 @@ type ServerMessage =
   | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
   | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
+export interface PackBackScan {
+  expiresAt: number;
+  players: { userId: string; displayName: string; posX: number; posY: number }[];
+  loot: { id: number; name: string; type: string; posX: number; posY: number }[];
+}
+
+export interface PackBackUseResult {
+  itemId: number;
+  name: string;
+  durability: string;
+  message: string;
+}
 
 export interface MatchRankingRow {
   userId: string;
@@ -103,6 +125,7 @@ export interface LastMatchResult {
 
 export function useBattleRoom() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const activeRef = useRef(false);
   const connectingRef = useRef(false);
@@ -116,6 +139,10 @@ export function useBattleRoom() {
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [eliminations, setEliminations] = useState<{ userId: string; cause: string }[]>([]);
   const [lastMatchResult, setLastMatchResult] = useState<LastMatchResult | null>(null);
+  const [packbackItems, setPackbackItems] = useState<WarIActionItem[]>([]);
+  const [lastPackbackUse, setLastPackbackUse] = useState<PackBackUseResult | null>(null);
+  const [packbackScan, setPackbackScan] = useState<PackBackScan | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [inQueue, setInQueue] = useState(false);
   const [queueInfo, setQueueInfo] = useState<{
     position: number;
@@ -181,6 +208,13 @@ export function useBattleRoom() {
             setRoom(msg.room);
             setPlayers(msg.room.players);
             setZone(msg.room.zone);
+            if (msg.room.status === "LOBBY" || msg.room.status === "FINISHED") {
+              setPackbackItems([]);
+              setPackbackScan(null);
+              setLastPackbackUse(null);
+              if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+              scanTimerRef.current = null;
+            }
             if (msg.room.countdownSeconds != null) setCountdown(msg.room.countdownSeconds);
             if (msg.room.winnerId) setWinnerId(msg.room.winnerId);
             break;
@@ -217,9 +251,38 @@ export function useBattleRoom() {
             setPlayers(msg.players);
             setRoom((prev) => (prev ? { ...prev, loot: msg.loot } : prev));
             break;
+          case "packback_ready":
+            setPackbackItems(msg.items);
+            setLastPackbackUse(null);
+            setPackbackScan(null);
+            break;
+          case "packback_item_used":
+            setPackbackItems((current) => current.map((item) =>
+              item.id === msg.itemId ? { ...item, durability: msg.durability } : item,
+            ));
+            setLastPackbackUse(msg);
+            void queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
+            break;
+          case "packback_scan": {
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+            setPackbackScan({
+              expiresAt: Date.now() + Math.max(0, msg.durationMs),
+              players: msg.players,
+              loot: msg.loot,
+            });
+            scanTimerRef.current = setTimeout(() => {
+              setPackbackScan(null);
+              scanTimerRef.current = null;
+            }, Math.max(0, msg.durationMs));
+            break;
+          }
           case "match_finished":
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
+            setPackbackItems([]);
+            setPackbackScan(null);
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+            scanTimerRef.current = null;
             setLastMatchResult({
               winnerId: msg.winnerId,
               rankings: msg.rankings || [],
@@ -276,7 +339,7 @@ export function useBattleRoom() {
     ws.onerror = () => {
       setLastError("WebSocket error");
     };
-  }, [user]);
+  }, [user, queryClient]);
 
   useEffect(() => {
     activeRef.current = !!user;
@@ -285,6 +348,8 @@ export function useBattleRoom() {
       activeRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
       wsRef.current?.close();
       wsRef.current = null;
     };
@@ -307,6 +372,11 @@ export function useBattleRoom() {
   const attack = useCallback(
     (targetId: string) =>
       send({ type: "attack", targetId, clientTimestamp: Date.now() }),
+    [send],
+  );
+
+  const usePackBackItem = useCallback(
+    (itemId: number) => send({ type: "use_packback_item", itemId }),
     [send],
   );
 
@@ -359,6 +429,10 @@ export function useBattleRoom() {
     startMatch,
     leave,
     attack,
+    usePackBackItem,
+    packbackItems,
+    lastPackbackUse,
+    packbackScan,
     joinQueue,
     leaveQueue,
     setReady,

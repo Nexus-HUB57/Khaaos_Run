@@ -12,8 +12,9 @@ import {
 import { cn } from "@/lib/utils";
 import type { ZoneStatus } from "@shared/schema";
 import { ZONE_PHASES } from "@shared/schema";
+import { getWarIUseKind } from "@shared/war-i";
 import { useSharedBattleRoom } from "@/hooks/battle-room-context";
-import type { BattlePlayer, RoomLoot } from "@/hooks/use-battle-room";
+import type { BattlePlayer, PackBackScan, RoomLoot } from "@/hooks/use-battle-room";
 
 // ─── Canvas drawing (BP_SafeZone visual equivalent) ──────────────────────────
 
@@ -34,6 +35,7 @@ function drawZoneCanvas(
   otherPlayers: BattlePlayer[] = [],
   lootItems: RoomLoot[] = [],
   localUserId?: string,
+  packbackScan?: PackBackScan | null,
 ) {
   const cx = (centerX / 100) * w;
   const cy = (centerY / 100) * h;
@@ -255,6 +257,34 @@ function drawZoneCanvas(
     ctx.fillText(op.displayName.slice(0, 10), ox, oy - 10);
   }
 
+  if (packbackScan && packbackScan.expiresAt > Date.now()) {
+    for (const scanned of packbackScan.players) {
+      if (scanned.userId === localUserId) continue;
+      const sx = (scanned.posX / 100) * w;
+      const sy = (scanned.posY / 100) * h;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 11, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,70,220,0.95)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "bold 9px 'Share Tech Mono', monospace";
+      ctx.fillStyle = "#ff70dc";
+      ctx.textAlign = "center";
+      ctx.fillText(`SCAN ${scanned.displayName.slice(0, 10)}`, sx, sy - 15);
+    }
+    for (const scanned of packbackScan.loot) {
+      const sx = (scanned.posX / 100) * w;
+      const sy = (scanned.posY / 100) * h;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,210,70,0.95)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
   // ── "FORA DA ZONA" warning ──
   if (outside) {
     const alpha = 0.7 + 0.3 * Math.sin(tick * 0.2);
@@ -284,6 +314,10 @@ export default function ZonaPage() {
     pickupLoot,
     startMatch,
     attack,
+    usePackBackItem,
+    packbackItems,
+    lastPackbackUse,
+    packbackScan,
     lastError: wsError,
   } = useSharedBattleRoom();
 
@@ -301,6 +335,21 @@ export default function ZonaPage() {
   // Player position on canvas (normalized 0-1)
   const [playerPos, setPlayerPos] = useState({ x: 0.5, y: 0.5 });
   const playerPosRef = useRef({ x: 0.5, y: 0.5 });
+  const localBattlePlayer = battlePlayers.find((player) => player.userId === localUserId);
+  const nearbyBattleLoot = inLiveRoom && battleRoom?.status === "IN_PROGRESS" && localBattlePlayer
+    ? battleRoom.loot
+      .filter((loot) => !loot.isPickedUp)
+      .map((loot) => ({ loot, distance: Math.hypot(loot.posX - localBattlePlayer.posX, loot.posY - localBattlePlayer.posY) }))
+      .filter((entry) => entry.distance <= 8)
+      .sort((a, b) => a.distance - b.distance)[0]?.loot
+    : undefined;
+
+  useEffect(() => {
+    if (!inLiveRoom || !localBattlePlayer) return;
+    const authoritative = { x: localBattlePlayer.posX / 100, y: localBattlePlayer.posY / 100 };
+    playerPosRef.current = authoritative;
+    setPlayerPos(authoritative);
+  }, [inLiveRoom, localBattlePlayer?.posX, localBattlePlayer?.posY]);
 
   // Damage system
   const [damageLog, setDamageLog] = useState<DamageEvent[]>([]);
@@ -428,13 +477,13 @@ export default function ZonaPage() {
 
       const others = inLiveRoom ? battlePlayers : [];
       const loot = inLiveRoom && battleRoom ? battleRoom.loot : [];
-      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, frameOutside, tick, others, loot, localUserId);
+      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, frameOutside, tick, others, loot, localUserId, packbackScan);
       animRef.current = requestAnimationFrame(draw);
     };
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, [zoneStatus, inLiveRoom, battlePlayers, battleRoom, localUserId]);
+  }, [zoneStatus, inLiveRoom, battlePlayers, battleRoom, localUserId, packbackScan]);
 
   // Canvas click → move player (Get Distance To equivalent)
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -444,16 +493,16 @@ export default function ZonaPage() {
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     const clamped = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
-    setPlayerPos(clamped);
-    playerPosRef.current = clamped;
-
     // Send authoritative position to RoomManager (0-100 space)
     if (inLiveRoom) {
       updatePosition(clamped.x * 100, clamped.y * 100);
+    } else {
+      setPlayerPos(clamped);
+      playerPosRef.current = clamped;
     }
 
-    // Recompute outside status
-    if (zoneStatus) {
+    // The live match recomputes danger from authoritative position snapshots.
+    if (zoneStatus && !inLiveRoom) {
       const w = canvas.width;
       const h = canvas.height;
       const cx2 = (zoneStatus.centerX / 100) * w;
@@ -491,9 +540,13 @@ export default function ZonaPage() {
     if (nearest) attack(nearest.id);
   }, [inLiveRoom, attack, battlePlayers, localUserId]);
 
-  const health = playerData?.stats?.health ?? 100;
-  const maxHealth = playerData?.stats?.maxHealth ?? 100;
+  const health = inLiveRoom ? (localBattlePlayer?.health ?? playerData?.stats?.health ?? 100) : (playerData?.stats?.health ?? 100);
+  const maxHealth = inLiveRoom ? (localBattlePlayer?.maxHealth ?? playerData?.stats?.maxHealth ?? 100) : (playerData?.stats?.maxHealth ?? 100);
   const healthPct = (health / maxHealth) * 100;
+  const packbackActions = packbackItems.flatMap((item) => {
+    const kind = getWarIUseKind(item.type, item.stats);
+    return kind ? [{ item, kind }] : [];
+  });
 
   const phaseConfig = zoneStatus ? ZONE_PHASES[Math.min(zoneStatus.currentPhase - 1, ZONE_PHASES.length - 1)] : ZONE_PHASES[0];
 
@@ -568,16 +621,18 @@ export default function ZonaPage() {
               </Button>
             )
           )}
-          <Button
-            data-testid="button-heal-player"
-            onClick={() => healPlayer.mutate()}
-            disabled={healPlayer.isPending}
-            variant="outline"
-            className="border-green-500/40 text-green-400 hover:bg-green-500/10 font-display tracking-widest text-xs gap-2"
-          >
-            <Heart className="w-4 h-4" />
-            CURAR
-          </Button>
+          {zonePermissions?.canManageZone && !inLiveRoom && (
+            <Button
+              data-testid="button-heal-player"
+              onClick={() => healPlayer.mutate()}
+              disabled={healPlayer.isPending}
+              variant="outline"
+              className="border-green-500/40 text-green-400 hover:bg-green-500/10 font-display tracking-widest text-xs gap-2"
+            >
+              <Heart className="w-4 h-4" />
+              CURAR
+            </Button>
+          )}
         </div>
       </div>
 
@@ -645,6 +700,62 @@ export default function ZonaPage() {
               </div>
             )}
           </div>
+
+          {battleRoom?.status === "IN_PROGRESS" && (
+            <div data-testid="panel-packback-actions" className="rounded border border-amber-500/30 bg-card/60 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-300" />
+                <span className="text-xs font-display tracking-widest text-amber-200">WAR’I · AÇÕES DA PACKBACK</span>
+              </div>
+              {packbackActions.length === 0 ? (
+                <p className="text-[11px] font-mono text-muted-foreground">Nenhum consumível ou utilidade ativa carregada neste match.</p>
+              ) : (
+                <div className="space-y-2">
+                  {packbackActions.map(({ item, kind }) => {
+                    const icon = kind === "HEAL" ? <Heart className="w-4 h-4 shrink-0" /> : kind === "GRENADE" ? <Zap className="w-4 h-4 shrink-0" /> : <Radio className="w-4 h-4 shrink-0" />;
+                    const hasAdrenaline = kind === "HEAL" && Number(item.stats.speed) > 0;
+                    const actionLabel = hasAdrenaline ? "USAR ADRENALINA" : kind === "HEAL" ? "USAR CURA" : kind === "GRENADE" ? "LANÇAR GRANADA" : "ATIVAR DRONE";
+                    const disabled = Number(item.durability) <= 0
+                      || localBattlePlayer?.status !== "VIVO"
+                      || (kind === "HEAL" && health >= maxHealth && !hasAdrenaline);
+                    return (
+                      <Button
+                        key={item.id}
+                        data-testid={`button-use-packback-${item.id}`}
+                        onClick={() => usePackBackItem(item.id)}
+                        disabled={disabled}
+                        variant="outline"
+                        className="w-full justify-between border-amber-500/30 text-amber-100 hover:bg-amber-500/10 font-mono text-xs"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">{icon}<span className="truncate">{actionLabel} · {item.name}</span></span>
+                        <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">{Number(item.durability).toFixed(0)}/{Number(item.maxDurability).toFixed(0)}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+              {lastPackbackUse && <p role="status" aria-live="polite" className="text-[11px] font-mono text-cyan-300">{lastPackbackUse.message}</p>}
+              {localBattlePlayer && <p className="text-[11px] font-mono text-muted-foreground">CARGA: {localBattlePlayer.carriedWeight ?? 0}/{localBattlePlayer.carryCapacity ?? 0} pts</p>}
+              {localBattlePlayer && (localBattlePlayer.speedBoostUntil ?? 0) > Date.now() && <p role="status" className="text-[11px] font-mono text-green-300">ADRENALINA ATIVA · +{Math.round(((localBattlePlayer.speedMultiplier ?? 1) - 1) * 100)}% · {Math.ceil(((localBattlePlayer.speedBoostUntil ?? 0) - Date.now()) / 1000)}s</p>}
+            </div>
+          )}
+
+          {battleRoom?.status === "IN_PROGRESS" && nearbyBattleLoot && (
+            <div data-testid="panel-nearby-loot" className="rounded border border-cyan-500/30 bg-card/60 p-4 space-y-2">
+              <div className="text-xs font-display tracking-widest text-cyan-200">LOOT AO ALCANCE</div>
+              <div className="text-sm font-mono text-foreground">{nearbyBattleLoot.name}</div>
+              <Button
+                data-testid={`button-pickup-live-loot-${nearbyBattleLoot.id}`}
+                onClick={() => pickupLoot(nearbyBattleLoot.id)}
+                disabled={localBattlePlayer?.status !== "VIVO"}
+                variant="outline"
+                className="w-full border-cyan-500/40 text-cyan-100 hover:bg-cyan-500/10 font-mono text-xs"
+              >
+                COLETAR · {nearbyBattleLoot.type}
+              </Button>
+            </div>
+          )}
+          {inLiveRoom && wsError && <p role="alert" className="text-xs font-mono text-red-300">{wsError}</p>}
 
           {/* Zone phase info */}
           <div className="rounded border border-border bg-card/60 p-4 space-y-3">

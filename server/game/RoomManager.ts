@@ -26,7 +26,9 @@ import {
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
-import { deriveCombatLoadout } from "./loadout";
+import { deriveCombatLoadout, getLootWeight, hasValidDurability } from "./loadout";
+import { planPackBackAction } from "./packback-actions";
+import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
@@ -41,6 +43,13 @@ export interface RoomPlayer {
   ws: WebSocket | null;
   posX: number; // 0-100
   posY: number;
+  targetPosX: number;
+  targetPosY: number;
+  lastMovementAt: number;
+  speedMultiplier: number;
+  speedBoostUntil: number;
+  carryCapacity: number;
+  carriedWeight: number;
   health: number;
   maxHealth: number;
   status: keyof typeof PlayerStatus;
@@ -51,6 +60,7 @@ export interface RoomPlayer {
   equippedDamage: number;   // from equipped weapon stats
   equippedRange: number;    // attack range in map %
   packbackItemIds: number[]; // durable, selected War'I items snapshotted for this match
+  lastPackBackUseAt: number;
   lastAttackAt: number;     // epoch ms — fire rate gate
   posHistory: PositionHistory;
   damageDealt: number;
@@ -113,6 +123,7 @@ export type ClientMessage =
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
   | { type: "attack"; targetId: string; clientTimestamp?: number }
+  | { type: "use_packback_item"; itemId: number }
   | { type: "queue"; mode?: QueueMode }
   | { type: "dequeue" }
   | { type: "set_ready"; ready: boolean }
@@ -129,6 +140,9 @@ export type ServerMessage =
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
+  | { type: "packback_ready"; items: WarIActionItem[] }
+  | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
+  | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
   | { type: "error"; message: string }
@@ -143,6 +157,10 @@ interface SerializedPlayer {
   displayName: string;
   posX: number;
   posY: number;
+  carryCapacity?: number;
+  carriedWeight?: number;
+  speedBoostUntil?: number;
+  speedMultiplier?: number;
   health: number;
   maxHealth: number;
   status: string;
@@ -175,6 +193,7 @@ interface SerializedRoom {
 class RoomManager {
   private rooms = new Map<string, BattleRoom>();
   private userToRoom = new Map<string, string>(); // userId → roomId
+  private packBackUseLocks = new Set<string>();
   private wss: WebSocketServer | null = null;
   private nextLootId = 1;
   private matchmaking: MatchmakingService;
@@ -245,6 +264,12 @@ class RoomManager {
     this.matchmaking.stop();
   }
 
+  isInLiveMatch(userId: string): boolean {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    return room?.status === "COUNTDOWN" || room?.status === "IN_PROGRESS";
+  }
+
   // ─── Message Handler ─────────────────────────────────────────────────────
 
   private async handleMessage(
@@ -273,6 +298,10 @@ class RoomManager {
       }
       case "attack": {
         this.handleAttack(userId, msg.targetId, msg.clientTimestamp);
+        break;
+      }
+      case "use_packback_item": {
+        await this.usePackBackItem(userId, msg.itemId);
         break;
       }
       case "queue": {
@@ -386,26 +415,37 @@ class RoomManager {
 
     // Load or init player stats
     const stats = await storage.getPlayerStats(userId);
+    const initialPosX = 20 + Math.random() * 60;
+    const initialPosY = 20 + Math.random() * 60;
+    const joinedAt = Date.now();
 
     const player: RoomPlayer = {
       userId,
       displayName,
       ws,
-      posX: 20 + Math.random() * 60,
-      posY: 20 + Math.random() * 60,
+      posX: initialPosX,
+      posY: initialPosY,
+      targetPosX: initialPosX,
+      targetPosY: initialPosY,
+      lastMovementAt: joinedAt,
+      speedMultiplier: 1,
+      speedBoostUntil: 0,
+      carryCapacity: 50,
+      carriedWeight: 0,
       health: stats.health,
       maxHealth: stats.maxHealth,
       status: stats.status as any,
       kills: stats.kills,
       isConnected: true,
-      lastSeenAt: Date.now(),
+      lastSeenAt: joinedAt,
       equippedDamage: 15, // baseline unarmed / starter
       equippedRange: 8,
       packbackItemIds: [],
+      lastPackBackUseAt: 0,
       lastAttackAt: 0,
       posHistory: new PositionHistory(1000),
       damageDealt: 0,
-      joinedMatchAt: Date.now(),
+      joinedMatchAt: joinedAt,
       isReady: false,
       isHost: room.players.size === 0 || room.hostId === null,
       rating: (stats as any).rating ?? 1000,
@@ -539,13 +579,25 @@ class RoomManager {
   private async beginMatch(room: BattleRoom): Promise<void> {
     if (room.status !== "COUNTDOWN" || this.rooms.get(room.id) !== room) return;
 
-    let loadouts: Map<string, ReturnType<typeof deriveCombatLoadout>>;
+    let preparedLoadouts: Map<string, { loadout: ReturnType<typeof deriveCombatLoadout>; actionItems: WarIActionItem[] }>;
     try {
       const prepared = await Promise.all([...room.players.values()].map(async (player) => {
         const equippedItems = await storage.getEquippedItems(player.userId);
-        return [player.userId, deriveCombatLoadout(equippedItems, player.maxHealth)] as const;
+        const readyItems = equippedItems.filter((item) => item.isEquipped === true && hasValidDurability(item));
+        const actionItems: WarIActionItem[] = readyItems
+          .filter((item) => getWarIUseKind(item.type, item.stats) !== null)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            rarity: item.rarity,
+            durability: item.durability,
+            maxDurability: item.maxDurability,
+            stats: item.stats ?? {},
+          }));
+        return [player.userId, { loadout: deriveCombatLoadout(equippedItems, player.maxHealth), actionItems }] as const;
       }));
-      loadouts = new Map(prepared);
+      preparedLoadouts = new Map(prepared);
     } catch (error) {
       console.error(`[RoomManager] Failed to prepare PackBack for ${room.id}:`, error);
       if (room.status === "COUNTDOWN" && this.rooms.get(room.id) === room) {
@@ -584,20 +636,30 @@ class RoomManager {
 
     // Reset players to alive + re-index
     for (const p of room.players.values()) {
-      const loadout = loadouts.get(p.userId);
+      const prepared = preparedLoadouts.get(p.userId);
+      const loadout = prepared?.loadout;
       p.packbackItemIds = loadout?.itemIds ?? [];
       p.equippedDamage = loadout?.equippedDamage ?? 15;
       p.equippedRange = loadout?.equippedRange ?? 8;
       p.maxHealth = loadout?.maxHealth ?? p.maxHealth;
       p.status = "VIVO";
       p.health = p.maxHealth;
+      p.carryCapacity = loadout?.carryCapacity ?? 50;
+      p.carriedWeight = 0;
+      p.targetPosX = p.posX;
+      p.targetPosY = p.posY;
+      p.lastMovementAt = Date.now();
+      p.speedMultiplier = 1;
+      p.speedBoostUntil = 0;
       p.kills = 0;
       p.lastAttackAt = 0;
+      p.lastPackBackUseAt = 0;
       p.damageDealt = 0;
       p.joinedMatchAt = Date.now();
       p.posHistory.clear();
       p.posHistory.push(p.posX, p.posY);
       room.playerGrid.insert({ ...p, id: p.userId });
+      if (p.ws) this.send(p.ws, { type: "packback_ready", items: prepared?.actionItems ?? [] });
     }
 
     this.broadcastRoomState(room);
@@ -612,6 +674,7 @@ class RoomManager {
     if (room.status !== "IN_PROGRESS") return;
 
     const now = Date.now();
+    this.advancePlayerMovement(room, now);
     const phaseConfig = ZONE_PHASES[room.currentPhase - 1] || ZONE_PHASES[ZONE_PHASES.length - 1];
     const elapsedSeconds = (now - room.phaseStartedAt) / 1000;
 
@@ -704,10 +767,33 @@ class RoomManager {
     }
 
     // Broadcast tick
-    const players = this.serializePlayers(room);
-    this.broadcast(room, { type: "zone_tick", zone, players });
+    for (const recipient of room.players.values()) {
+      if (recipient.ws && recipient.ws.readyState === WebSocket.OPEN) {
+        this.send(recipient.ws, { type: "zone_tick", zone, players: this.serializePlayers(room, recipient.userId) });
+      }
+    }
 
     this.checkVictory(room);
+  }
+
+  private advancePlayerMovement(room: BattleRoom, now: number) {
+    const baseSpeed = 10; // map percentage points per second
+    for (const player of room.players.values()) {
+      const elapsedSeconds = Math.max(0, Math.min(1.5, (now - player.lastMovementAt) / 1000));
+      player.lastMovementAt = now;
+      if (player.status !== "VIVO") continue;
+      if (player.speedBoostUntil <= now) player.speedMultiplier = 1;
+      const dx = player.targetPosX - player.posX;
+      const dy = player.targetPosY - player.posY;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 0.001 || elapsedSeconds <= 0) continue;
+      const step = Math.min(distance, baseSpeed * player.speedMultiplier * elapsedSeconds);
+      player.posX = Math.max(0, Math.min(100, player.posX + dx / distance * step));
+      player.posY = Math.max(0, Math.min(100, player.posY + dy / distance * step));
+      player.lastSeenAt = now;
+      player.posHistory.push(player.posX, player.posY, now);
+      room.playerGrid.update({ ...player, id: player.userId });
+    }
   }
 
   private checkVictory(room: BattleRoom) {
@@ -785,15 +871,11 @@ class RoomManager {
     const player = room.players.get(userId);
     if (!player || player.status !== "VIVO") return;
 
-    // Clamp + basic anti-cheat (teleport detection can be added later)
-    player.posX = Math.max(0, Math.min(100, x));
-    player.posY = Math.max(0, Math.min(100, y));
-    player.lastSeenAt = Date.now();
-    player.posHistory.push(player.posX, player.posY, player.lastSeenAt);
-    room.playerGrid.update({ ...player, id: userId });
-
-    // Interest management: push nearby entities only to this client
-    this.pushInterest(room, player);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    // Position messages set a destination only. The server advances the player
+    // at the authoritative base speed or active Adrenalina multiplier.
+    player.targetPosX = Math.max(0, Math.min(100, x));
+    player.targetPosY = Math.max(0, Math.min(100, y));
   }
 
   /** Area-of-Interest update — only nearby players & loot */
@@ -818,6 +900,12 @@ class RoomManager {
       displayName: p.displayName,
       posX: p.posX,
       posY: p.posY,
+      ...(p.userId === observer.userId ? {
+        carryCapacity: p.carryCapacity,
+        carriedWeight: p.carriedWeight,
+        speedBoostUntil: p.speedBoostUntil,
+        speedMultiplier: p.speedMultiplier,
+      } : {}),
       health: p.health,
       maxHealth: p.maxHealth,
       status: p.status,
@@ -895,13 +983,18 @@ class RoomManager {
 
     attacker.lastAttackAt = now;
     const damage = Math.max(5, attacker.equippedDamage || 15);
+    this.applyCombatDamage(room, attacker, target, damage);
+    this.checkVictory(room);
+  }
+
+  private applyCombatDamage(room: BattleRoom, attacker: RoomPlayer, target: RoomPlayer, damage: number) {
     target.health = Math.max(0, target.health - damage);
     attacker.damageDealt += damage;
 
     this.broadcast(room, {
       type: "damage_dealt",
-      attackerId,
-      targetId,
+      attackerId: attacker.userId,
+      targetId: target.userId,
       damage,
       targetHealth: target.health,
     });
@@ -918,12 +1011,123 @@ class RoomManager {
         type: "player_eliminated",
         userId: target.userId,
         cause: "PVP",
-        eliminatorId: attackerId,
+        eliminatorId: attacker.userId,
       });
-
-      this.checkVictory(room);
     } else {
       room.playerGrid.update({ ...target, id: target.userId });
+    }
+  }
+
+  private async usePackBackItem(userId: string, itemId: number) {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    const player = room?.players.get(userId);
+    if (!room || room.status !== "IN_PROGRESS" || !player || player.status !== "VIVO") {
+      if (player?.ws) this.send(player.ws, { type: "error", message: "A PackBack só pode ser usada por um operativo vivo em combate." });
+      return;
+    }
+    if (!Number.isSafeInteger(itemId) || itemId <= 0) {
+      if (player.ws) this.send(player.ws, { type: "error", message: "ID de item inválido." });
+      return;
+    }
+    if (!player.packbackItemIds.includes(itemId)) {
+      if (player.ws) this.send(player.ws, { type: "error", message: "Este item não fazia parte da PackBack carregada no início da partida." });
+      return;
+    }
+
+    const lockKey = `${room.id}:${userId}`;
+    if (this.packBackUseLocks.has(lockKey)) {
+      if (player.ws) this.send(player.ws, { type: "error", message: "Aguarde a confirmação do uso anterior." });
+      return;
+    }
+
+    this.packBackUseLocks.add(lockKey);
+    try {
+      const item = await storage.getItemForUser(itemId, userId);
+      if (!item || !hasValidDurability(item)) {
+        if (player.ws) this.send(player.ws, { type: "error", message: "Item indisponível ou sem durabilidade." });
+        return;
+      }
+
+      const plan = planPackBackAction(item, player.health, player.maxHealth);
+      if (plan.kind === "UNAVAILABLE") {
+        if (player.ws) this.send(player.ws, { type: "error", message: plan.reason });
+        return;
+      }
+
+      const now = Date.now();
+      if (now - player.lastPackBackUseAt < 1200) {
+        if (player.ws) this.send(player.ws, { type: "error", message: "A PackBack está em recarga; aguarde um instante." });
+        return;
+      }
+
+      const consumed = await storage.consumeItemDurability(itemId, userId, 10);
+      if (!consumed) {
+        if (player.ws) this.send(player.ws, { type: "error", message: "Item sem durabilidade disponível." });
+        return;
+      }
+      player.lastPackBackUseAt = now;
+
+      let resultMessage: string;
+      if (plan.kind === "HEAL") {
+        if (plan.amount > 0) player.health = Math.min(player.maxHealth, player.health + plan.amount);
+        if (plan.speedMultiplier && plan.speedDurationMs) {
+          player.speedMultiplier = Math.min(1.5, plan.speedMultiplier);
+          player.speedBoostUntil = now + plan.speedDurationMs;
+        }
+        room.playerGrid.update({ ...player, id: player.userId });
+        const effects = [
+          ...(plan.amount > 0 ? [`+${plan.amount} de vitalidade (${player.health}/${player.maxHealth})`] : []),
+          ...(plan.speedMultiplier && plan.speedDurationMs ? [`+${Math.round((plan.speedMultiplier - 1) * 100)}% de velocidade por ${Math.round(plan.speedDurationMs / 1000)}s`] : []),
+        ];
+        resultMessage = `${item.name}: ${effects.join(" · ")}.`;
+      } else if (plan.kind === "GRENADE") {
+        const targets = [...room.players.values()].filter((target) => {
+          if (target.userId === player.userId || target.status !== "VIVO") return false;
+          return Math.hypot(target.posX - player.posX, target.posY - player.posY) <= plan.radius;
+        });
+        for (const target of targets) this.applyCombatDamage(room, player, target, plan.damage);
+        resultMessage = targets.length
+          ? `${item.name}: atingiu ${targets.length} operativo(s) por ${plan.damage} de dano.`
+          : `${item.name}: detonada; nenhum operativo no raio.`;
+        this.checkVictory(room);
+      } else {
+        const players = [...room.players.values()]
+          .filter((target) => target.userId !== player.userId && target.status === "VIVO")
+          .filter((target) => Math.hypot(target.posX - player.posX, target.posY - player.posY) <= plan.radius)
+          .map((target) => ({
+            userId: target.userId,
+            displayName: target.displayName,
+            posX: target.posX,
+            posY: target.posY,
+          }));
+        const loot = room.loot
+          .filter((entry) => !entry.isPickedUp)
+          .filter((entry) => Math.hypot(entry.posX - player.posX, entry.posY - player.posY) <= plan.radius)
+          .map((entry) => ({ id: entry.id, name: entry.name, type: entry.type, posX: entry.posX, posY: entry.posY }));
+        if (player.ws) this.send(player.ws, {
+          type: "packback_scan",
+          itemId,
+          durationMs: 8000,
+          players,
+          loot,
+        });
+        resultMessage = `${item.name}: ${players.length} operativo(s) e ${loot.length} item(ns) detectado(s) por 8s.`;
+      }
+
+      if (player.ws) this.send(player.ws, {
+        type: "packback_item_used",
+        itemId,
+        name: item.name,
+        durability: consumed.durability,
+        message: resultMessage,
+      });
+      this.broadcastRoomState(room);
+    } catch (error) {
+      console.error(`[RoomManager] Failed to use PackBack item ${itemId} for ${userId}:`, error);
+      if (player.ws) this.send(player.ws, { type: "error", message: "Não foi possível usar este item agora." });
+    } finally {
+      this.packBackUseLocks.delete(lockKey);
     }
   }
 
@@ -946,8 +1150,18 @@ class RoomManager {
       return;
     }
 
+    const lootWeight = getLootWeight(loot.type, loot.stats);
+    if (player.carriedWeight + lootWeight > player.carryCapacity) {
+      if (player.ws) this.send(player.ws, {
+        type: "error",
+        message: `PackBack cheia: este item pesa ${lootWeight}; carga ${player.carriedWeight}/${player.carryCapacity}.`,
+      });
+      return;
+    }
+
     loot.isPickedUp = true;
     loot.pickedUpBy = userId;
+    player.carriedWeight += lootWeight;
     room.lootGrid.remove(lootId);
 
     // Heal if curativo
@@ -977,16 +1191,23 @@ class RoomManager {
       .catch(console.error);
 
     this.broadcast(room, { type: "loot_picked", lootId, by: userId });
+    this.broadcastRoomState(room);
   }
 
   // ─── Serialization & Broadcast ───────────────────────────────────────────
 
-  private serializePlayers(room: BattleRoom): SerializedPlayer[] {
+  private serializePlayers(room: BattleRoom, viewerUserId?: string): SerializedPlayer[] {
     return [...room.players.values()].map((p) => ({
       userId: p.userId,
       displayName: p.displayName,
       posX: p.posX,
       posY: p.posY,
+      ...(p.userId === viewerUserId ? {
+        carryCapacity: p.carryCapacity,
+        carriedWeight: p.carriedWeight,
+        speedBoostUntil: p.speedBoostUntil,
+        speedMultiplier: p.speedMultiplier,
+      } : {}),
       health: p.health,
       maxHealth: p.maxHealth,
       status: p.status,
@@ -1021,26 +1242,29 @@ class RoomManager {
   }
 
   private broadcastRoomState(room: BattleRoom) {
-    const payload: ServerMessage = {
-      type: "room_state",
-      room: {
-        id: room.id,
-        status: room.status,
-        maxPlayers: room.maxPlayers,
-        playerCount: room.players.size,
-        players: this.serializePlayers(room),
-        zone: this.computeZoneStatus(room),
-        loot: room.loot.filter((l) => !l.isPickedUp),
-        countdownSeconds: room.status === "COUNTDOWN" ? room.countdownSeconds : undefined,
-        winnerId: room.winnerId,
-        hostId: room.hostId,
-        isPrivate: room.isPrivate,
-        inviteCode: room.inviteCode,
-        readyCount: [...room.players.values()].filter((p) => p.isReady).length,
-        minPlayersToStart: room.minPlayersToStart,
-      },
-    };
-    this.broadcast(room, payload);
+    for (const recipient of room.players.values()) {
+      if (!recipient.ws || recipient.ws.readyState !== WebSocket.OPEN) continue;
+      const payload: ServerMessage = {
+        type: "room_state",
+        room: {
+          id: room.id,
+          status: room.status,
+          maxPlayers: room.maxPlayers,
+          playerCount: room.players.size,
+          players: this.serializePlayers(room, recipient.userId),
+          zone: this.computeZoneStatus(room),
+          loot: room.loot.filter((l) => !l.isPickedUp),
+          countdownSeconds: room.status === "COUNTDOWN" ? room.countdownSeconds : undefined,
+          winnerId: room.winnerId,
+          hostId: room.hostId,
+          isPrivate: room.isPrivate,
+          inviteCode: room.inviteCode,
+          readyCount: [...room.players.values()].filter((p) => p.isReady).length,
+          minPlayersToStart: room.minPlayersToStart,
+        },
+      };
+      this.send(recipient.ws, payload);
+    }
   }
 
   private broadcast(room: BattleRoom, msg: ServerMessage) {
@@ -1249,25 +1473,36 @@ class RoomManager {
         stats = { health: 100, maxHealth: 100, status: "VIVO", kills: 0 } as any;
       }
 
+      const initialPosX = 20 + Math.random() * 60;
+      const initialPosY = 20 + Math.random() * 60;
+      const joinedAt = Date.now();
       const player: RoomPlayer = {
         userId: p.userId,
         displayName: p.displayName,
         ws: p.ws,
-        posX: 20 + Math.random() * 60,
-        posY: 20 + Math.random() * 60,
+        posX: initialPosX,
+        posY: initialPosY,
+        targetPosX: initialPosX,
+        targetPosY: initialPosY,
+        lastMovementAt: joinedAt,
+        speedMultiplier: 1,
+        speedBoostUntil: 0,
+        carryCapacity: 50,
+        carriedWeight: 0,
         health: stats.health ?? 100,
         maxHealth: stats.maxHealth ?? 100,
         status: "VIVO",
         kills: 0,
         isConnected: !!p.ws,
-        lastSeenAt: Date.now(),
+        lastSeenAt: joinedAt,
         equippedDamage: 15,
         equippedRange: 8,
         packbackItemIds: [],
+        lastPackBackUseAt: 0,
         lastAttackAt: 0,
         posHistory: new PositionHistory(1000),
         damageDealt: 0,
-        joinedMatchAt: Date.now(),
+        joinedMatchAt: joinedAt,
         isReady: true, // matchmaking players arrive ready
         isHost: p.userId === room.hostId,
         rating: p.rating ?? 1000,

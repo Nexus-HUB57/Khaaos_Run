@@ -5,7 +5,7 @@ import {
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
   PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS,
 } from "@shared/schema";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
@@ -21,6 +21,7 @@ export interface IStorage {
   getLoans(userId: string): Promise<Loan[]>;
   getLoan(id: number): Promise<Loan | undefined>;
   getLoanForUser(id: number, userId: string): Promise<Loan | undefined>;
+  updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined>;
   createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
   updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   // Items
@@ -28,8 +29,10 @@ export interface IStorage {
   getEquippedItems(userId: string): Promise<Item[]>;
   getItem(id: number): Promise<Item | undefined>;
   getItemForUser(id: number, userId: string): Promise<Item | undefined>;
+  consumeItemDurability(id: number, userId: string, amount: number): Promise<Item | undefined>;
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
+  updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined>;
   setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined>;
   // Zone
   getActiveZoneSession(): Promise<ZoneSession | undefined>;
@@ -114,6 +117,13 @@ export class DatabaseStorage implements IStorage {
     return loan;
   }
 
+  async updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined> {
+    const [updated] = await db.update(loans).set(updates)
+      .where(and(eq(loans.id, id), eq(loans.userId, userId)))
+      .returning();
+    return updated;
+  }
+
   async createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan> {
     const [newLoan] = await db.insert(loans).values(loan as any).returning();
     return newLoan;
@@ -143,6 +153,15 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  async consumeItemDurability(id: number, userId: string, amount: number): Promise<Item | undefined> {
+    if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(amount) || amount <= 0) return undefined;
+    const [updated] = await db.update(items)
+      .set({ durability: sql`GREATEST(0, ${items.durability} - ${amount})` })
+      .where(and(eq(items.id, id), eq(items.userId, userId), gt(items.durability, "0")))
+      .returning();
+    return updated;
+  }
+
   async createItem(item: Partial<Item> & { userId: string }): Promise<Item> {
     const [newItem] = await db.insert(items).values(item as any).returning();
     return newItem;
@@ -150,6 +169,13 @@ export class DatabaseStorage implements IStorage {
 
   async updateItem(id: number, updates: Partial<Item>): Promise<Item> {
     const [updated] = await db.update(items).set(updates).where(eq(items.id, id)).returning();
+    return updated;
+  }
+
+  async updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined> {
+    const [updated] = await db.update(items).set(updates)
+      .where(and(eq(items.id, id), eq(items.userId, userId)))
+      .returning();
     return updated;
   }
 

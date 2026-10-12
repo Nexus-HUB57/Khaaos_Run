@@ -22,6 +22,8 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 - [ ] Cobrir testes negativos: ausência de sessão, usuário de outro dono, IDs inexistentes e valores fora de faixa.
 - [ ] Separar operações de jogador, moderador e operador/admin; nunca inferir role do corpo ou query do cliente.
 
+**Entrega parcial desta rodada:** a zona e o spawn global de loot exigem a allowlist de operador; reparo/uso de item e pagamento de empréstimo fazem a mutação SQL com filtro de proprietário; entradas das mutações cobertas agora são estritas e limitadas por Zod. Capacidade de carga e Adrenalina também passam a ser regras autoritativas de partida. Isso não fecha o aceite 0.1: falta a suíte HTTP negativa abrangente, além da autorização/validação das rotas ainda não cobertas.
+
 **Aceite:** toda rota privada tem teste de negação; nenhuma rota altera recurso de outro usuário; nenhuma ação com input inválido causa write parcial.
 
 ### 0.2 Atomicidade da economia de jogo
@@ -100,7 +102,8 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 - [x] Reduzir o chunk inicial de aproximadamente 613 kB minificados para aproximadamente 386 kB minificados no build medido.
 - [x] Implementar no War’I os filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes do item e seleção persistida da PackBack com atualização limitada ao proprietário.
 - [x] Carregar no fim do countdown apenas a PackBack persistida do próprio usuário; arma durável define dano/alcance, defesa durável acrescenta vida máxima (limite 200) e falha de leitura pausa a partida.
-- [ ] Definir slots/regras de balanceamento e conectar consumíveis/utilidades a ações autoritativas de combate, com consumo persistente e validação de durabilidade.
+- [x] Conectar cura (`CURATIVO`), granada em área e reconhecimento temporário (`UTILIDADE`) a ações autoritativas no combate; validar snapshot/ownership, limitar frequência e consumir durabilidade atomicamente, com feedback no HUD e cobertura unitária/de integração.
+- [x] Definir regras de gameplay server-authoritative para capacidade (50 pts base, bônus de itens utilitários equipados até 150; pesos por categoria e rejeição de pickup acima do limite) e Adrenalina (+20% por 10s por padrão, limitada a +50%, com movimento avançado no tick do servidor).
 - [ ] Manter testes de Lighthouse em runner estável para mobile e desktop, com percentis/variação documentados.
 - [ ] Definir limites de regressão de LCP, INP, CLS e JavaScript inicial após recolher baseline repetível.
 - [ ] Adicionar testes de interação e acessibilidade para lobby, zona, inventário, banco e pós-partida.

@@ -12,7 +12,16 @@ import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/E
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
-import { isZoneOperator } from "./game/zoneAuthorization";
+import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
+import {
+  emptyMutationInput,
+  zoneStartInput,
+  zoneDamageInput,
+  zoneHealInput,
+  loanPreviewInput,
+  economySimulationInput,
+  economyBatchSimulationInput,
+} from "./game/mutationSchemas";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -31,11 +40,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     next();
   };
 
-  const requireZoneOperator = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    if (!isZoneOperator(getUserId(req))) return res.status(403).json({ message: "Apenas operadores autorizados podem controlar a zona" });
-    next();
-  };
+  const requireZoneOperator = createZoneOperatorGuard();
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {
@@ -56,6 +61,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!rawValue || !/^\d+$/.test(rawValue)) return null;
     const id = Number(rawValue);
     return Number.isSafeInteger(id) && id > 0 ? id : null;
+  };
+
+  const parseMutationBody = <T extends z.ZodTypeAny>(req: any, res: any, inputSchema: T): z.infer<T> | null => {
+    const parsed = inputSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Entrada inválida" });
+      return null;
+    }
+    return parsed.data;
   };
 
   // ── BANK ─────────────────────────────────────────────────────────────────
@@ -130,16 +144,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post(api.loans.pay.path, requireAuth, async (req, res) => {
     try {
+      if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
       const loan = await storage.getLoanForUser(id, userId);
       if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
+      if (loan.isPaid) return res.status(409).json({ message: "Empréstimo já pago" });
       const bank = await storage.getBankAccount(userId);
       const due = Number(loan.totalDue);
       if (Number(bank.weaponsBalance) < due) return res.status(402).json({ message: "Saldo insuficiente", required: due, available: Number(bank.weaponsBalance) });
       await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - due).toString() });
-      await storage.updateLoan(loan.id, { isPaid: true });
+      const updatedLoan = await storage.updateLoanForUser(loan.id, userId, { isPaid: true });
+      if (!updatedLoan) return res.status(404).json({ message: "Empréstimo não encontrado" });
       await storage.createTransaction({ userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: due.toString(), description: `Repaid loan #${loan.id}` });
       res.json({ message: "Empréstimo pago" });
     } catch (err) {
@@ -188,15 +205,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post(api.items.use.path, requireAuth, async (req, res) => {
     try {
+      if (!parseMutationBody(req, res, api.items.use.input)) return;
       const userId = getUserId(req);
+      if (roomManager.isInLiveMatch(userId)) {
+        return res.status(409).json({ message: "Durante a partida, use os itens pelos controles da PackBack." });
+      }
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      let effect: any = {};
-      if (item.type === "CURATIVO") { await storage.healPlayer(userId, 25); effect = { healed: 25 }; }
-      await storage.updateItem(item.id, { durability: Math.max(0, Number(item.durability) - 10).toString() });
-      res.json({ message: `${item.name} usado`, newDurability: Math.max(0, Number(item.durability) - 10).toString(), effect });
+      if (item.type !== "CURATIVO" || !Number.isFinite(item.stats?.heal) || Number(item.stats?.heal) <= 0) {
+        return res.status(409).json({ message: "Este item não possui uso legado fora do combate." });
+      }
+      if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
+        return res.status(409).json({ message: "Item sem durabilidade disponível." });
+      }
+      const consumed = await storage.consumeItemDurability(id, userId, 10);
+      if (!consumed) return res.status(409).json({ message: "Item sem durabilidade disponível." });
+      const healAmount = Math.min(100, Math.max(1, Math.floor(Number(item.stats?.heal))));
+      const before = await storage.getPlayerStats(userId);
+      const stats = await storage.healPlayer(userId, healAmount);
+      res.json({ message: `${item.name} usado`, newDurability: consumed.durability, effect: { healed: stats.health - before.health } });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -214,10 +243,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
       const newDur = Math.min(Number(item.maxDurability), Number(item.durability) + input.amountKrc * 0.5);
       await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - input.amountKrc).toString() });
-      await storage.updateItem(item.id, { durability: newDur.toString() });
+      const updatedItem = await storage.updateItemForUser(item.id, userId, { durability: newDur.toString() });
+      if (!updatedItem) return res.status(404).json({ message: "Item não encontrado" });
       await storage.createTransaction({ userId, type: "REPARO", amountKrc: input.amountKrc.toString(), description: `Repaired ${item.name}` });
-      res.json({ message: `Reparado ${item.name}`, newDurability: newDur.toString() });
+      res.json({ message: `Reparado ${item.name}`, newDurability: updatedItem.durability });
     } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -230,6 +261,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {
+    if (!parseMutationBody(req, res, emptyMutationInput)) return;
     const userId = getUserId(req);
     const stats = await storage.getPlayerStats(userId);
     const now = new Date();
@@ -291,13 +323,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/zone/start", requireZoneOperator, async (req, res) => {
     try {
-      const session = await storage.createZoneSession(req.body.centerX ?? 50, req.body.centerY ?? 50);
+      const input = parseMutationBody(req, res, zoneStartInput);
+      if (!input) return;
+      const session = await storage.createZoneSession(input.centerX, input.centerY);
       await storage.spawnLootPresets(session.id);
       res.json({ message: "Zona Segura + Loot ativados", sessionId: session.id });
     } catch { res.status(500).json({ message: "Erro ao iniciar zona" }); }
   });
 
   app.post("/api/zone/stop", requireZoneOperator, async (req, res) => {
+    if (!parseMutationBody(req, res, emptyMutationInput)) return;
     try { await storage.stopAllZoneSessions(); res.json({ message: "Zona desativada" }); }
     catch { res.status(500).json({ message: "Erro" }); }
   });
@@ -306,17 +341,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = getUserId(req);
       const userName = (req.user as any)?.claims?.first_name ?? undefined;
-      const parsedDamage = z.coerce.number().int().min(1).max(100).safeParse(req.body?.damage ?? 5);
-      if (!parsedDamage.success) return res.status(400).json({ message: "Dano deve ser um inteiro entre 1 e 100" });
-      const damage = parsedDamage.data;
+      const input = parseMutationBody(req, res, zoneDamageInput);
+      if (!input) return;
+      const damage = input.damage;
       const stats = await storage.applyZoneDamage(userId, damage, userName);
       res.json({ newHealth: stats.health, maxHealth: stats.maxHealth, damageTaken: damage, status: stats.status });
     } catch { res.status(500).json({ message: "Erro ao aplicar dano" }); }
   });
 
-  app.post("/api/zone/heal", requireAuth, async (req, res) => {
+  app.post("/api/zone/heal", requireZoneOperator, async (req, res) => {
     try {
-      const stats = await storage.healPlayer(getUserId(req), parseInt(req.body.amount) || 100);
+      const input = parseMutationBody(req, res, zoneHealInput);
+      if (!input) return;
+      const stats = await storage.healPlayer(getUserId(req), input.amount);
       res.json({ newHealth: stats.health, maxHealth: stats.maxHealth });
     } catch { res.status(500).json({ message: "Erro ao curar" }); }
   });
@@ -328,8 +365,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Erro ao buscar loot" }); }
   });
 
-  app.post("/api/loot/spawn", requireAuth, async (req, res) => {
+  app.post("/api/loot/spawn", requireZoneOperator, async (req, res) => {
     try {
+      if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const items = await storage.spawnLootPresets();
       res.json({ message: `${items.length} itens spawnou no mapa`, count: items.length });
     } catch { res.status(500).json({ message: "Erro ao spawnar loot" }); }
@@ -339,7 +377,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/loot/:id/pickup", requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const lootId = parseInt(req.params.id);
+      if (!parseMutationBody(req, res, emptyMutationInput)) return;
+      if (roomManager.isInLiveMatch(userId)) return res.status(409).json({ message: "Durante a partida, colete loot pelos controles autoritativos do combate." });
+      const lootId = parseRouteId(req.params.id);
+      if (lootId === null) return res.status(400).json({ message: "ID de loot inválido" });
       const userName = (req.user as any)?.claims?.first_name ?? undefined;
       const { loot, item } = await storage.pickupLoot(lootId, userId, userName);
       res.json({ message: `${loot.name} coletado!`, loot, item });
@@ -360,6 +401,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Respawn (Spawn Spectator → Possess → back to game)
   app.post("/api/player/respawn", requireAuth, async (req, res) => {
     try {
+      if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const stats = await storage.respawnPlayer(getUserId(req));
       res.json({ message: "Operativo respawnado", newHealth: stats.health, status: stats.status });
     } catch { res.status(500).json({ message: "Erro ao respawnar" }); }
@@ -403,9 +445,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/economy/loan-preview", requireAuth, (req, res) => {
     try {
-      const principal = Number(req.body.principal);
-      const days = Number(req.body.days);
-      res.json(computeLoan(principal, days));
+      const input = parseMutationBody(req, res, loanPreviewInput);
+      if (!input) return;
+      res.json(computeLoan(input.principal, input.days));
     } catch {
       res.status(400).json({ message: "Invalid loan params" });
     }
@@ -484,10 +526,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── MONTE-CARLO ECONOMY SIMULATION ───────────────────────────────────────
   app.post("/api/economy/simulate", requireAuth, (req, res) => {
     try {
-      const agents = Math.min(500, Math.max(10, Number(req.body.agents) || 200));
-      const days = Math.min(90, Math.max(7, Number(req.body.days) || 30));
-      const seed = req.body.seed ?? Date.now();
-      const result = runMonteCarlo({ agents, days, seed });
+      const input = parseMutationBody(req, res, economySimulationInput);
+      if (!input) return;
+      const result = runMonteCarlo({ ...input, seed: input.seed ?? Date.now() });
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Simulation failed" });
@@ -496,10 +537,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/economy/simulate-batch", requireAuth, (req, res) => {
     try {
-      const runs = Math.min(10, Math.max(2, Number(req.body.runs) || 5));
-      const agents = Math.min(300, Math.max(10, Number(req.body.agents) || 150));
-      const days = Math.min(60, Math.max(7, Number(req.body.days) || 21));
-      const result = runMonteCarloBatch(runs, { agents, days });
+      const input = parseMutationBody(req, res, economyBatchSimulationInput);
+      if (!input) return;
+      const { runs, ...simulation } = input;
+      const result = runMonteCarloBatch(runs, simulation);
       // Don't send full per-run daily arrays to keep payload small
       res.json({
         runs: result.runs.map((r) => ({

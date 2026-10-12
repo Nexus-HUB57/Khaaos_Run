@@ -45,8 +45,8 @@ export const api = {
       method: 'POST' as const,
       path: '/api/bank/deposit',
       input: z.object({
-        amountUsd: z.number().min(1),
-      }),
+        amountUsd: z.number().finite().min(1).max(10000),
+      }).strict(),
       responses: {
         200: z.object({
           newBalance: z.string(),
@@ -59,9 +59,9 @@ export const api = {
       method: 'POST' as const,
       path: '/api/bank/transfer',
       input: z.object({
-        amountKrc: z.number().min(1),
+        amountKrc: z.number().finite().min(0.01).max(1000000),
         destination: z.enum(['fbm', 'weapons']),
-      }),
+      }).strict(),
       responses: {
         200: z.object({
           message: z.string(),
@@ -93,9 +93,9 @@ export const api = {
       method: 'POST' as const,
       path: '/api/loans',
       input: z.object({
-        amountKrc: z.number().min(100).max(10000),
-        days: z.number().min(1).max(30),
-      }),
+        amountKrc: z.number().finite().int().min(100).max(10000),
+        days: z.number().finite().int().min(1).max(30),
+      }).strict(),
       responses: {
         201: z.custom<typeof loans.$inferSelect>(),
         400: errorSchemas.validation,
@@ -127,8 +127,8 @@ export const api = {
       path: '/api/items/purchase',
       input: z.object({
         type: z.enum(['ARMA', 'DEFESA', 'CURATIVO', 'UTILIDADE']),
-        name: z.string(), // For simplicity, we'll just buy generic items or have a preset list
-      }),
+        name: z.string().trim().min(1).max(64),
+      }).strict(),
       responses: {
         201: z.custom<typeof items.$inferSelect>(),
         402: errorSchemas.insufficientFunds,
@@ -137,7 +137,7 @@ export const api = {
     equip: {
       method: 'POST' as const,
       path: '/api/items/:id/equip',
-      input: z.object({ isEquipped: z.boolean() }),
+      input: z.object({ isEquipped: z.boolean() }).strict(),
       responses: {
         200: z.custom<typeof items.$inferSelect>(),
         400: errorSchemas.validation,
@@ -147,6 +147,7 @@ export const api = {
     use: {
       method: 'POST' as const,
       path: '/api/items/:id/use',
+      input: z.object({}).strict(),
       responses: {
         200: z.object({
           message: z.string(),
@@ -160,8 +161,8 @@ export const api = {
       method: 'POST' as const,
       path: '/api/items/:id/repair',
       input: z.object({
-        amountKrc: z.number().min(1),
-      }),
+        amountKrc: z.number().finite().min(1).max(100000),
+      }).strict(),
       responses: {
         200: z.object({
           message: z.string(),
