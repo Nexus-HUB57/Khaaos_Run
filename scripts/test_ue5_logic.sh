@@ -12,3 +12,9 @@ trap 'rm -rf "${TEMP_DIR}"' EXIT
 CXX="${CXX:-g++}"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" -I"${INCLUDE_DIR}" "${TEST_SOURCE}" "${RULES_SOURCE}" -o "${TEMP_DIR}/cigkv-loot-rules-test"
 "${TEMP_DIR}/cigkv-loot-rules-test"
+
+MAP_DATA_TEST_SOURCE="${ROOT_DIR}/tests/ue5/cigkv_map_data_integration_test.cpp"
+MAP_DATA_SOURCE="${ROOT_DIR}/Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/KhaaosCIGKVMapData.cpp"
+TEST_STUB_DIR="${ROOT_DIR}/tests/ue5/stubs"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${INCLUDE_DIR}" "${MAP_DATA_TEST_SOURCE}" "${MAP_DATA_SOURCE}" "${RULES_SOURCE}" -o "${TEMP_DIR}/cigkv-map-data-integration-test"
+"${TEMP_DIR}/cigkv-map-data-integration-test"
