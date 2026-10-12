@@ -1,0 +1,448 @@
+# =============================================================================
+# Khaaos Run — CDN Configuration (Fase 5)
+# =============================================================================
+# CDN configuration for client assets across all regions.
+# Regions: sa1 (São Paulo), na1 (Virginia), eu1 (Frankfurt)
+# Asset types: game client, patches, UI, audio, VFX
+# =============================================================================
+
+cdn:
+  name: khaaos-run-cdn
+  domain: cdn.khaaos.run
+  provider: multi  # CloudFront + Cloudflare for DDoS
+
+  # ─── Origin Servers ────────────────────────────────────────────────────────────
+  origins:
+    sa1:
+      domain: origin-sa1.khaaos.run
+      protocol: https
+      port: 443
+      path: /assets
+      region: sa-east-1
+      latitude: -23.5505
+      longitude: -46.6333
+      health_check:
+        path: /health
+        interval_seconds: 10
+        timeout_seconds: 5
+        healthy_threshold: 3
+        unhealthy_threshold: 2
+
+    na1:
+      domain: origin-na1.khaaos.run
+      protocol: https
+      port: 443
+      path: /assets
+      region: us-east-1
+      latitude: 37.4316
+      longitude: -78.6569
+      health_check:
+        path: /health
+        interval_seconds: 10
+        timeout_seconds: 5
+        healthy_threshold: 3
+        unhealthy_threshold: 2
+
+    eu1:
+      domain: origin-eu1.khaaos.run
+      protocol: https
+      port: 443
+      path: /assets
+      region: eu-central-1
+      latitude: 50.1109
+      longitude: 8.6821
+      health_check:
+        path: /health
+        interval_seconds: 10
+        timeout_seconds: 5
+        healthy_threshold: 3
+        unhealthy_threshold: 2
+
+  # ─── Geographic Routing ────────────────────────────────────────────────────────
+  geo_routing:
+    enabled: true
+    default_origin: na1  # Fallback if geo-lookup fails
+    rules:
+      # South America → sa1
+      - continents: [SA]
+        countries: [BR, AR, CL, CO, PE, UY, PY, BO, EC, VE, GF]
+        origin: sa1
+        weight: 100
+
+      # North America → na1
+      - continents: [NA]
+        countries: [US, CA, MX, GT, HN, SV, NI, CR, PA, CU, DO, PR, JM]
+        origin: na1
+        weight: 100
+
+      # Europe → eu1
+      - continents: [EU]
+        countries: [DE, FR, GB, IT, ES, PT, NL, BE, AT, CH, PL, SE, NO, FI, DK, IE, CZ, HU, RO, BG, HR, SK, SI, LT, LV, EE, GR, CY, LU, MT]
+        origin: eu1
+        weight: 100
+
+      # Africa → eu1 (closest)
+      - continents: [AF]
+        origin: eu1
+        weight: 80
+
+      # Asia → na1 (via Pacific)
+      - continents: [AS]
+        origin: na1
+        weight: 60
+
+      # Oceania → na1
+      - continents: [OC]
+        origin: na1
+        weight: 50
+
+  # ─── Cache Rules ──────────────────────────────────────────────────────────────
+  cache:
+    # Default TTL for uncategorized assets
+    default_ttl: 3600  # 1 hour
+
+    rules:
+      # ── Game Client (large binaries) ────────────────────────────────────────
+      - name: game-client
+        path_pattern: /client/*.exe
+        content_type: application/octet-stream
+        ttl: 2592000  # 30 days
+        stale_while_revalidate: 86400  # 1 day
+        stale_if_error: 604800  # 7 days
+        vary: [Accept-Encoding]
+        immutable: true  # Versioned via filename
+
+      - name: game-client-patches
+        path_pattern: /patches/*.patch
+        content_type: application/octet-stream
+        ttl: 2592000  # 30 days
+        stale_while_revalidate: 86400
+        stale_if_error: 604800
+        immutable: true
+
+      # ── Versioned Assets (hash-based filenames) ────────────────────────────
+      - name: versioned-assets
+        path_pattern: /assets/v/*.*
+        ttl: 31536000  # 1 year (immutable — filename has content hash)
+        stale_while_revalidate: 0
+        stale_if_error: 0
+        immutable: true
+        vary: [Accept-Encoding]
+
+      # ── UI Assets ──────────────────────────────────────────────────────────
+      - name: ui-images
+        path_pattern: /assets/ui/images/*.*
+        content_type: image/*
+        ttl: 86400  # 1 day
+        stale_while_revalidate: 3600
+        vary: [Accept-Encoding]
+
+      - name: ui-fonts
+        path_pattern: /assets/ui/fonts/*.*
+        content_type: font/*
+        ttl: 31536000  # 1 year (fonts rarely change)
+        immutable: true
+        vary: [Accept-Encoding]
+
+      - name: ui-styles
+        path_pattern: /assets/ui/css/*.*
+        content_type: text/css
+        ttl: 86400  # 1 day
+        stale_while_revalidate: 3600
+        vary: [Accept-Encoding]
+
+      - name: ui-scripts
+        path_pattern: /assets/ui/js/*.*
+        content_type: application/javascript
+        ttl: 86400
+        stale_while_revalidate: 3600
+        vary: [Accept-Encoding]
+
+      # ── Audio Assets ───────────────────────────────────────────────────────
+      - name: audio-music
+        path_pattern: /assets/audio/music/*.*
+        content_type: audio/*
+        ttl: 2592000  # 30 days
+        stale_while_revalidate: 86400
+        immutable: true
+        vary: [Accept-Encoding]
+
+      - name: audio-sfx
+        path_pattern: /assets/audio/sfx/*.*
+        content_type: audio/*
+        ttl: 2592000  # 30 days
+        stale_while_revalidate: 86400
+        immutable: true
+
+      - name: audio-vo
+        path_pattern: /assets/audio/vo/*.*
+        content_type: audio/*
+        ttl: 2592000
+        stale_while_revalidate: 86400
+
+      # ── VFX Assets ─────────────────────────────────────────────────────────
+      - name: vfx-textures
+        path_pattern: /assets/vfx/textures/*.*
+        content_type: image/*
+        ttl: 2592000  # 30 days
+        immutable: true
+        vary: [Accept-Encoding]
+
+      - name: vfx-particles
+        path_pattern: /assets/vfx/particles/*.*
+        ttl: 2592000
+        immutable: true
+
+      - name: vfx-shaders
+        path_pattern: /assets/vfx/shaders/*.*
+        ttl: 2592000
+        immutable: true
+
+      # ── Map/Level Data ─────────────────────────────────────────────────────
+      - name: map-data
+        path_pattern: /assets/maps/*.*
+        ttl: 2592000  # 30 days
+        stale_while_revalidate: 86400
+        immutable: true
+        vary: [Accept-Encoding]
+
+      # ── API (no cache) ────────────────────────────────────────────────────
+      - name: api-no-cache
+        path_pattern: /api/*.*
+        ttl: 0
+        no_cache: true
+        no_store: true
+        must_revalidate: true
+        vary: [Authorization, Accept-Encoding]
+
+      - name: api-health
+        path_pattern: /health
+        ttl: 0
+        no_cache: true
+
+      # ── EOS Endpoints (no cache) ───────────────────────────────────────────
+      - name: eos-api
+        path_pattern: /eos/*.*
+        ttl: 0
+        no_cache: true
+        no_store: true
+
+      # ── Leaderboard/Stats (short cache) ────────────────────────────────────
+      - name: leaderboards
+        path_pattern: /api/leaderboard/*.*
+        ttl: 60  # 1 minute
+        stale_while_revalidate: 30
+        vary: [Accept-Encoding]
+
+  # ─── Compression ──────────────────────────────────────────────────────────────
+  compression:
+    enabled: true
+
+    # Gzip compression
+    gzip:
+      enabled: true
+      level: 6  # Balance between speed and compression ratio
+      min_size_bytes: 256  # Don't compress files smaller than 256 bytes
+      content_types:
+        - text/html
+        - text/css
+        - text/javascript
+        - text/xml
+        - text/plain
+        - application/javascript
+        - application/json
+        - application/xml
+        - application/wasm
+        - font/woff2
+        - font/woff
+        - font/ttf
+        - font/otf
+        - image/svg+xml
+
+    # Brotli compression (better ratio than gzip, modern browsers)
+    brotli:
+      enabled: true
+      level: 4  # Balance between speed and compression ratio
+      min_size_bytes: 256
+      content_types:
+        - text/html
+        - text/css
+        - text/javascript
+        - text/xml
+        - text/plain
+        - application/javascript
+        - application/json
+        - application/xml
+        - application/wasm
+        - font/woff2
+        - font/woff
+        - font/ttf
+        - font/otf
+        - image/svg+xml
+
+    # Files that should NOT be compressed (already compressed)
+    no_compress:
+      extensions:
+        - .zip
+        - .gz
+        - .bz2
+        - .xz
+        - .png
+        - .jpg
+        - .jpeg
+        - .webp
+        - .ogg
+        - .opus
+        - .mp3
+        - .mp4
+        - .pak  # UE4/5 pak files are already compressed
+
+  # ─── TLS Configuration ────────────────────────────────────────────────────────
+  tls:
+    enabled: true
+    minimum_version: TLS1.2
+    preferred_version: TLS1.3
+    hsts:
+      enabled: true
+      max_age: 31536000  # 1 year
+      include_subdomains: true
+      preload: true
+    certificates:
+      primary:
+        domain: "*.khaaos.run"
+        provider: lets-encrypt
+        auto_renew: true
+        renew_before_days: 30
+      backup:
+        domain: "*.khaaos.run"
+        provider: cloudflare-origin
+    cipher_suites:
+      - ECDHE-ECDSA-AES256-GCM-SHA384
+      - ECDHE-RSA-AES256-GCM-SHA384
+      - ECDHE-ECDSA-CHACHA20-POLY1305
+      - ECDHE-RSA-CHACHA20-POLY1305
+      - ECDHE-ECDSA-AES128-GCM-SHA256
+      - ECDHE-RSA-AES128-GCM-SHA256
+
+  # ─── DDoS Protection ──────────────────────────────────────────────────────────
+  ddos_protection:
+    enabled: true
+    provider: cloudflare
+
+    # Rate limiting at CDN level
+    rate_limiting:
+      # Global rate limit (all endpoints)
+      global:
+        requests_per_second: 1000
+        requests_per_minute: 50000
+        burst_allowance: 2000
+
+      # Per-IP rate limit
+      per_ip:
+        requests_per_second: 50
+        requests_per_minute: 2000
+        burst_allowance: 100
+
+      # API-specific rate limit
+      api:
+        path_pattern: /api/*
+        requests_per_second: 10
+        requests_per_minute: 60
+
+      # Asset download rate limit
+      assets:
+        path_pattern: /assets/*
+        requests_per_second: 100
+        requests_per_minute: 5000
+        bandwidth_limit_mbps: 50
+
+    # WAF (Web Application Firewall) rules
+    waf:
+      enabled: true
+      mode: block  # block or challenge
+      rules:
+        - name: sql-injection
+          action: block
+          severity: critical
+
+        - name: xss
+          action: block
+          severity: critical
+
+        - name: path-traversal
+          action: block
+          severity: high
+
+        - name: bot-protection
+          action: challenge
+          severity: medium
+          exceptions:
+            - user_agent: "EpicGamesLauncher/*"
+            - user_agent: "KhaaosRun/*"
+
+        - name: geo-block
+          action: allow
+          # No geographic blocks — game is global
+
+    # Bot protection
+    bot_protection:
+      enabled: true
+      verified_bots:
+        - user_agent: "EpicGamesLauncher/*"
+          description: "Epic Games Launcher"
+        - user_agent: "KhaaosRun/*"
+          description: "Khaaos Run Client"
+        - user_agent: "Googlebot"
+          description: "Google Search"
+      challenge_mode: js_challenge  # For unverified bots
+
+    # Under-attack mode (manual activation)
+    under_attack_mode:
+      enabled: false  # Enable during active DDoS attacks
+      challenge_ttl: 30  # seconds
+
+  # ─── Asset Types Summary ──────────────────────────────────────────────────────
+  asset_types:
+    game_client:
+      path: /client/
+      max_file_size: 5GB
+      estimated_total: 15GB  # Full game client
+      cdn_required: true
+      priority: critical
+
+    patches:
+      path: /patches/
+      max_file_size: 2GB
+      estimated_total: 10GB  # Cumulative patches
+      cdn_required: true
+      priority: critical
+
+    ui_assets:
+      path: /assets/ui/
+      max_file_size: 10MB
+      estimated_total: 200MB
+      cdn_required: true
+      priority: high
+
+    audio:
+      path: /assets/audio/
+      max_file_size: 50MB
+      estimated_total: 2GB
+      cdn_required: true
+      priority: high
+
+    vfx:
+      path: /assets/vfx/
+      max_file_size: 100MB
+      estimated_total: 3GB
+      cdn_required: true
+      priority: medium
+
+    maps:
+      path: /assets/maps/
+      max_file_size: 500MB
+      estimated_total: 5GB  # 5 Mundos
+      cdn_required: true
+      priority: critical
+
+    # Total estimated CDN storage: ~35GB
