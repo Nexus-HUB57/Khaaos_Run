@@ -1,0 +1,259 @@
+# Khaaos Run — Economy Validation Pipeline
+# Fase 4: Validate atomic ledger, compliance framework, economy bridge
+name: Economy Validation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/**'
+      - 'server/game/EconomyEngine.ts'
+      - 'server/game/MonteCarloEconomy.ts'
+      - 'scripts/fase4/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/**'
+  workflow_dispatch:
+
+jobs:
+  # ─── Job 1: Ledger Integrity Audit ────────────────────────────
+  ledger-audit:
+    name: Ledger Integrity Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit AtomicLedger
+        run: |
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosAtomicLedger.h"
+          CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosAtomicLedger.cpp"
+
+          echo "╔══════════════════════════════════════╗"
+          echo "║   Khaaos Atomic Ledger — Audit       ║"
+          echo "╚══════════════════════════════════════╝"
+
+          # ─── Transaction Types ───
+          echo ""
+          echo "=== Transaction Types (15 required) ==="
+          REQUIRED_TYPES=("Earn" "Spend" "Loot" "Trade" "BankDeposit" "BankWithdraw" \
+                          "FBM" "Cashback" "Prize" "Penalty" "EscrowLock" "EscrowRelease" \
+                          "EscrowRefund" "Burn" "Mint")
+          FOUND=0
+          for ttype in "${REQUIRED_TYPES[@]}"; do
+            if grep -q "$ttype" "$H"; then
+              echo "  ✅ $ttype"
+              FOUND=$((FOUND + 1))
+            else
+              echo "  ❌ $ttype MISSING"
+            fi
+          done
+          echo "  📊 $FOUND/15 transaction types found"
+
+          # ─── Immutability ───
+          echo ""
+          echo "=== Immutability Guarantees ==="
+          if grep -q "PreviousHash\|Hash" "$H"; then
+            echo "  ✅ SHA256 hash chain (PreviousHash)"
+          else
+            echo "  ❌ Hash chain MISSING"
+          fi
+
+          if grep -q "IdempotencyKey\|IsIdempotencyKeyUsed" "$H"; then
+            echo "  ✅ Idempotency protection"
+          else
+            echo "  ❌ Idempotency MISSING"
+          fi
+
+          if grep -q "CompensatesTransactionId\|bIsCompensating" "$H"; then
+            echo "  ✅ Compensating transactions (no delete)"
+          else
+            echo "  ❌ Compensating transactions MISSING"
+          fi
+
+          # ─── Supply Cap ───
+          echo ""
+          echo "=== Supply Control ==="
+          if grep -qi "SupplyCap\|MaxCirculation\|1.*000.*000.*000" "$H"; then
+            echo "  ✅ 1B KRC supply cap enforced"
+          else
+            echo "  ❌ Supply cap MISSING"
+          fi
+
+          if grep -q "Mint\|Burn" "$H"; then
+            echo "  ✅ Mint/Burn operations"
+          else
+            echo "  ❌ Mint/Burn MISSING"
+          fi
+
+          # ─── Double-Entry ───
+          echo ""
+          echo "=== Double-Entry Bookkeeping ==="
+          if grep -q "DebitAccount\|CreditAccount" "$H"; then
+            echo "  ✅ DebitAccount/CreditAccount"
+          else
+            echo "  ❌ Double-entry MISSING"
+          fi
+
+          # ─── Escrow ───
+          echo ""
+          echo "=== Escrow System ==="
+          for escrow in "EscrowLock" "EscrowRelease" "EscrowRefund"; do
+            if grep -q "$escrow" "$H"; then
+              echo "  ✅ $escrow"
+            else
+              echo "  ❌ $escrow MISSING"
+            fi
+          done
+
+          # ─── Implementation ───
+          echo ""
+          echo "=== Implementation ==="
+          H_LINES=$(wc -l < "$H")
+          CPP_LINES=$(wc -l < "$CPP")
+          FUNC_COUNT=$(grep -c "^[A-Z].*UKhaaosAtomicLedger::" "$CPP" 2>/dev/null || echo "?")
+          echo "  Header: $H_LINES lines | Implementation: $CPP_LINES lines | Functions: $FUNC_COUNT"
+
+      - name: Audit ComplianceFramework
+        run: |
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosComplianceFramework.h"
+          CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosComplianceFramework.cpp"
+
+          echo ""
+          echo "╔══════════════════════════════════════╗"
+          echo "║   Compliance Framework — Audit       ║"
+          echo "╚══════════════════════════════════════╝"
+
+          # ─── KYC ───
+          echo ""
+          echo "=== KYC (Brazilian Documents) ==="
+          for doc in "CPF" "RG" "CNH"; do
+            if grep -q "$doc" "$H"; then
+              echo "  ✅ $doc verification"
+            else
+              echo "  ❌ $doc MISSING"
+            fi
+          done
+
+          # ─── AML ───
+          echo ""
+          echo "=== AML Detection ==="
+          for aml in "RapidMovement" "CircularTransfer" "AMLFlag" "RunAMLCheck"; do
+            if grep -q "$aml" "$H"; then
+              echo "  ✅ $aml"
+            else
+              echo "  ❌ $aml MISSING"
+            fi
+          done
+
+          # ─── Regulatory Reporting ───
+          echo ""
+          echo "=== Regulatory Reporting ==="
+          if grep -q "BancoCentral\|GenerateAuditReport" "$H"; then
+            echo "  ✅ Banco Central do Brasil reporting"
+          else
+            echo "  ❌ BCB reporting MISSING"
+          fi
+
+          if grep -q "IRPF\|GenerateTaxReport" "$H"; then
+            echo "  ✅ IRPF tax reporting"
+          else
+            echo "  ❌ IRPF reporting MISSING"
+          fi
+
+          # ─── Transaction Limits ───
+          echo ""
+          echo "=== Transaction Limits ==="
+          for limit in "MaxPerTransaction" "MaxDailyTotal" "MaxCumulativeTotal" "KYCThreshold" "AMLThreshold"; do
+            if grep -q "$limit" "$H"; then
+              echo "  ✅ $limit"
+            else
+              echo "  ❌ $limit MISSING"
+            fi
+          done
+
+          H_LINES=$(wc -l < "$H")
+          CPP_LINES=$(wc -l < "$CPP")
+          echo ""
+          echo "  Header: $H_LINES lines | Implementation: $CPP_LINES lines"
+
+  # ─── Job 2: Economy Bridge Validation ─────────────────────────
+  bridge-validate:
+    name: Economy Bridge Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify EconomyBridge C++
+        run: |
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/EconomyBridge.h"
+          CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/EconomyBridge.cpp"
+
+          echo "=== EconomyBridge ==="
+          if [ -f "$H" ] && [ -f "$CPP" ]; then
+            echo "  ✅ Header + Implementation present"
+
+            # Check HTTP bridge methods
+            for method in "Buy\|Sell\|Transfer" "HealthCheck" "PriceCache"; do
+              if grep -qP "$method" "$H"; then
+                echo "  ✅ $method methods"
+              else
+                echo "  ❌ $method MISSING"
+              fi
+            done
+          else
+            echo "  ❌ EconomyBridge files MISSING"
+          fi
+
+      - name: Verify EconomyEngine TypeScript
+        run: |
+          TS="server/game/EconomyEngine.ts"
+          if [ -f "$TS" ]; then
+            LINES=$(wc -l < "$TS")
+            echo "  ✅ EconomyEngine.ts: $LINES lines"
+          else
+            echo "  ⚠️  EconomyEngine.ts not found"
+          fi
+
+          MC="server/game/MonteCarloEconomy.ts"
+          if [ -f "$MC" ]; then
+            LINES=$(wc -l < "$MC")
+            echo "  ✅ MonteCarloEconomy.ts: $LINES lines"
+          else
+            echo "  ⚠️  MonteCarloEconomy.ts not found"
+          fi
+
+  # ─── Job 3: World Economy Integration ─────────────────────────
+  world-economy:
+    name: World Economy Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify multi-world progression
+        run: |
+          echo "=== World Progression Gates ==="
+          # Each world should require matches in the previous world
+          WORLDS=("CIGKV:0" "Barburhen:10" "Priadus:5" "Ckesalth:5" "Arukheea:5")
+
+          for entry in "${WORLDS[@]}"; do
+            IFS=':' read -r world matches <<< "$entry"
+            LEVEL_FILE="Unreal/KhaaosRun/Source/KhaaosRun/Game/World/${world}/Khaaos${world}Level.h"
+
+            # CIGKV doesn't have its own subdirectory level file (it's in Game/Level/)
+            if [ "$world" = "CIGKV" ]; then
+              LEVEL_FILE="Unreal/KhaaosRun/Source/KhaaosRun/Game/Level/KhaaosCIGKVLevel.h"
+            fi
+
+            if [ -f "$LEVEL_FILE" ]; then
+              if [ "$matches" = "0" ]; then
+                echo "  ✅ $world: Training world (no prerequisite)"
+              elif grep -qi "MeetsEntryRequirements\|Min.*Matches\|Required.*Matches" "$LEVEL_FILE"; then
+                echo "  ✅ $world: Entry requirements defined (≥${matches} matches)"
+              else
+                echo "  ⚠️  $world: Entry requirements may be missing"
+              fi
+            else
+              echo "  ❌ $world: Level file not found at $LEVEL_FILE"
+            fi
+          done

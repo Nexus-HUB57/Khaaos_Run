@@ -1,0 +1,86 @@
+# Khaaos Run — Git Attributes
+# LFS tracking for binary assets + diff/merge config for UE5
+
+# ─── UE5 Binary Assets ─────────────────────────────────────────
+*.uasset filter=lfs diff=lfs merge=lfs -text
+*.umap filter=lfs diff=lfs merge=lfs -text
+*.uproject linguist-generated
+
+# ─── 3D Models ─────────────────────────────────────────────────
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.obj filter=lfs diff=lfs merge=lfs -text
+*.gltf filter=lfs diff=lfs merge=lfs -text
+*.glb filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text
+*.max filter=lfs diff=lfs merge=lfs -text
+*.ma filter=lfs diff=lfs merge=lfs -text
+*.mb filter=lfs diff=lfs merge=lfs -text
+
+# ─── Textures ──────────────────────────────────────────────────
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.tga filter=lfs diff=lfs merge=lfs -text
+*.bmp filter=lfs diff=lfs merge=lfs -text
+*.exr filter=lfs diff=lfs merge=lfs -text
+*.hdr filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+
+# ─── Audio ─────────────────────────────────────────────────────
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.ogg filter=lfs diff=lfs merge=lfs -text
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.flac filter=lfs diff=lfs merge=lfs -text
+*.aif filter=lfs diff=lfs merge=lfs -text
+
+# ─── Video ─────────────────────────────────────────────────────
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.avi filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
+*.mkv filter=lfs diff=lfs merge=lfs -text
+
+# ─── UE5 Compiled Binaries ─────────────────────────────────────
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.so filter=lfs diff=lfs merge=lfs -text
+*.dylib filter=lfs diff=lfs merge=lfs -text
+*.pak filter=lfs diff=lfs merge=lfs -text
+*.exp filter=lfs diff=lfs merge=lfs -text
+*.lib filter=lfs diff=lfs merge=lfs -text
+
+# ─── Docker Images / Archives ──────────────────────────────────
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.7z filter=lfs diff=lfs merge=lfs -text
+
+# ─── EAC SDK Binary ────────────────────────────────────────────
+*.bin filter=lfs diff=lfs merge=lfs -text
+
+# ─── LFS Locking (exclusive checkout) ──────────────────────────
+# Uncomment when team grows beyond 1 dev:
+# *.uasset lockable
+# *.umap lockable
+# *.blend lockable
+# *.fbx lockable
+
+# ─── Text/Code Files (no LFS) ──────────────────────────────────
+*.h text eol=lf
+*.cpp text eol=lf
+*.cs text eol=lf
+*.ini text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.tf text eol=lf
+*.tfvars text eol=lf
+
+# ─── Secrets (never diff) ──────────────────────────────────────
+.env diff=false
+.env.* diff=false
+*.pem diff=false
+*.key diff=false
+*.p12 diff=false
