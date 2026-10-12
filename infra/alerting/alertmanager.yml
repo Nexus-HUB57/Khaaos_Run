@@ -1,0 +1,243 @@
+# =============================================================================
+# Khaaos Run — AlertManager Configuration | Devs Ph.D
+# Copyright Nexus-HUB57. All Rights Reserved.
+# =============================================================================
+# Routes alerts from Prometheus to Discord, Slack, and security channels.
+# Critical alerts go 24/7 to both Discord + Slack.
+# Warning alerts go to Slack only during business hours.
+# Security alerts go to dedicated #security Discord channel.
+#
+# Usage:
+#   alertmanager --config.file=alertmanager.yml
+# =============================================================================
+
+global:
+  # ── Global SMTP (fallback for P1 incidents) ─────────────────────────────────
+  smtp_smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+  smtp_from: "alerts@khaaos.run"
+  smtp_require_tls: true
+
+  # ── Resolve timeout ──────────────────────────────────────────────────────────
+  # How long to wait before marking an alert as resolved if no new data arrives
+  resolve_timeout: 5m
+
+# ── Templates ────────────────────────────────────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# ── Time Intervals ──────────────────────────────────────────────────────────────
+time_intervals:
+  # Critical alerts are routed 24/7 — no time restrictions
+  - name: always
+    time_intervals:
+      - times:
+          - start_time: "00:00"
+            end_time: "24:00"
+
+  # Warning alerts only during business hours (BR timezone BRT = UTC-3)
+  # 09:00-18:00 BRT = 12:00-21:00 UTC
+  - name: business_hours
+    time_intervals:
+      - times:
+          - start_time: "12:00"
+            end_time: "21:00"
+        weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+        location: "UTC"
+
+  # Extended hours — includes weekends for alpha testing
+  - name: extended_hours
+    time_intervals:
+      - times:
+          - start_time: "10:00"
+            end_time: "23:00"
+        weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        location: "UTC"
+
+# ── Route Tree ───────────────────────────────────────────────────────────────────
+route:
+  # Default receiver — catches anything unmatched
+  receiver: "discord-default"
+
+  # Group alerts by name and region to reduce noise
+  group_by: ["alertname", "region"]
+
+  # How long to wait before sending the first notification for a new group
+  group_wait: 30s
+
+  # How long to wait before sending a notification about a new alert
+  # that is added to an existing group
+  group_interval: 5m
+
+  # How long to wait before re-sending a notification for an alert
+  # that has not changed state (resend interval)
+  repeat_interval: 4h
+
+  routes:
+    # ── Security Alerts → Discord #security + Slack #security ────────────────
+    - matchers:
+        - severity="critical"
+        - team="security"
+      receiver: "security-urgent"
+      group_by: ["alertname", "region"]
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 5m
+      routes:
+        - matchers:
+            - alertname=~"KhaaosAntiCheatSpike|KhaaosDDoSAttack"
+          receiver: "security-urgent"
+          repeat_interval: 3m
+
+    # ── Critical Alerts → Discord + Slack (24/7) ─────────────────────────────
+    - matchers:
+        - severity="critical"
+      receiver: "critical-both"
+      group_by: ["alertname", "region"]
+      group_wait: 15s
+      group_interval: 2m
+      repeat_interval: 5m
+      active_time_intervals:
+        - always
+
+    # ── Warning Alerts → Slack only (business hours) ────────────────────────
+    - matchers:
+        - severity="warning"
+      receiver: "slack-warnings"
+      group_by: ["alertname", "region"]
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 30m
+      active_time_intervals:
+        - business_hours
+
+    # ── Warning Alerts → Slack only (extended hours during alpha) ───────────
+    - matchers:
+        - severity="warning"
+        - environment=~"alpha|staging"
+      receiver: "slack-warnings"
+      group_by: ["alertname", "region"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 15m
+      active_time_intervals:
+        - extended_hours
+
+# ── Inhibition Rules ─────────────────────────────────────────────────────────────
+# If a critical alert fires, suppress warning alerts for the same alertname + region
+inhibit_rules:
+  # Critical inhibits warning for same alert + region
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ["alertname", "region"]
+
+  # Security critical inhibits all other alerts on the same instance
+  - source_matchers:
+      - severity="critical"
+      - team="security"
+    target_matchers:
+      - severity="warning"
+    equal: ["alertname", "instance"]
+
+  # Server down inhibits all other alerts from that instance
+  - source_match:
+      alertname: "KhaaosServerDown"
+    target_matchers:
+      - severity=~"warning|info"
+    equal: ["instance"]
+
+# ── Receivers ────────────────────────────────────────────────────────────────────
+receivers:
+  # ── Discord — Default (catch-all) ──────────────────────────────────────────
+  - name: "discord-default"
+    webhook_configs:
+      - url: "${DISCORD_WEBHOOK_URL}"
+        send_resolved: true
+        max_alerts: 10
+
+  # ── Discord + Slack — Critical Alerts ──────────────────────────────────────
+  - name: "critical-both"
+    webhook_configs:
+      # Discord webhook for critical alerts
+      - url: "${DISCORD_CRITICAL_WEBHOOK_URL}"
+        send_resolved: true
+        max_alerts: 20
+    slack_configs:
+      # Slack webhook for critical alerts
+      - api_url: "${SLACK_CRITICAL_WEBHOOK_URL}"
+        channel: "#khaaos-critical"
+        username: "Khaaos Bot"
+        icon_emoji: ":rotating_light:"
+        title: "[CRITICAL] {{ .GroupLabels.alertname }}"
+        text: |-
+          *Alert:* {{ .GroupLabels.alertname }} ({{ .GroupLabels.region }})
+          *Severity:* CRITICAL
+          *Count:* {{ .Alerts | len }}
+          {{ range .Alerts }}
+          > {{ .Annotations.summary }}
+          > {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+        color: "{{ if eq .Status \"firing\" }}danger{{ else }}good{{ end }}"
+        footer: "Khaaos Run AlertManager | Nexus-HUB57"
+        actions:
+          - type: button
+            text: "Grafana Dashboard"
+            url: "${GRAFANA_URL}/d/khaaos-production"
+          - type: button
+            text: "Runbook"
+            url: "${RUNBOOK_URL}/{{ .GroupLabels.alertname }}"
+
+  # ── Slack — Warning Alerts ─────────────────────────────────────────────────
+  - name: "slack-warnings"
+    slack_configs:
+      - api_url: "${SLACK_WARNING_WEBHOOK_URL}"
+        channel: "#khaaos-alerts"
+        username: "Khaaos Bot"
+        icon_emoji: ":warning:"
+        title: "[WARNING] {{ .GroupLabels.alertname }}"
+        text: |-
+          *Alert:* {{ .GroupLabels.alertname }} ({{ .GroupLabels.region }})
+          *Severity:* WARNING
+          *Count:* {{ .Alerts | len }}
+          {{ range .Alerts }}
+          > {{ .Annotations.summary }}
+          > {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+        color: "{{ if eq .Status \"firing\" }}warning{{ else }}good{{ end }}"
+        footer: "Khaaos Run AlertManager | Nexus-HUB57"
+
+  # ── Security — Urgent (Discord #security + Slack #security) ────────────────
+  - name: "security-urgent"
+    webhook_configs:
+      # Discord security channel webhook
+      - url: "${DISCORD_SECURITY_WEBHOOK_URL}"
+        send_resolved: true
+        max_alerts: 30
+    slack_configs:
+      - api_url: "${SLACK_SECURITY_WEBHOOK_URL}"
+        channel: "#khaaos-security"
+        username: "Khaaos Security"
+        icon_emoji: ":shield:"
+        title: "[SECURITY] {{ .GroupLabels.alertname }}"
+        text: |-
+          :rotating_light: *SECURITY ALERT* :rotating_light:
+          *Alert:* {{ .GroupLabels.alertname }} ({{ .GroupLabels.region }})
+          *Count:* {{ .Alerts | len }}
+          {{ range .Alerts }}
+          > {{ .Annotations.summary }}
+          > {{ .Annotations.description }}
+          {{ end }}
+          *Action Required:* Investigate immediately. Check Grafana security dashboard.
+        send_resolved: true
+        color: "danger"
+        footer: "Khaaos Run Security | Nexus-HUB57"
+        actions:
+          - type: button
+            text: "Security Dashboard"
+            url: "${GRAFANA_URL}/d/khaaos-security"
+          - type: button
+            text: "Block IP"
+            url: "${ADMIN_API_URL}/security/block"

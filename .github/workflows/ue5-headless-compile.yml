@@ -1,0 +1,126 @@
+# =============================================================================
+# Khaaos Run — UE5 Headless Compilation CI (Self-Hosted Runner)
+# =============================================================================
+# This workflow compiles the KhaaosRun project on a self-hosted runner
+# with UE5.8 installed. Use for Fase 0 step 0.2.
+#
+# SETUP:
+#   1. Install UE5.8 on a Linux machine (see docs/fase0/UE5_SETUP_GUIDE.md)
+#   2. Register as self-hosted runner: Settings → Actions → Runners → New
+#   3. Add runner labels: [self-hosted, linux, ue5.8, x64]
+#   4. Set secrets: UE5_INSTALL_DIR (path to Engine)
+# =============================================================================
+
+name: UE5 Headless Compile
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options: [Development, Shipping]
+        default: Development
+      target:
+        description: 'Build target'
+        type: choice
+        options: [Editor, Server]
+        default: Server
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/**'
+      - 'Unreal/KhaaosRun/Config/**'
+      - '.github/workflows/ue5-headless-compile.yml'
+
+concurrency:
+  group: ue5-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compile KhaaosRun (${{ github.event.inputs.configuration || 'Development' }}/${{ github.event.inputs.target || 'Server' }})
+    runs-on: [self-hosted, linux, ue5.8, x64]
+    timeout-minutes: 120
+
+    env:
+      UE_INSTALL_DIR: ${{ secrets.UE5_INSTALL_DIR || '/opt/UnrealEngine' }}
+      UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify UE5 Installation
+        run: |
+          if [[ ! -d "${UE_INSTALL_DIR}/Engine" ]]; then
+            echo "::error::UE5 Engine not found at ${UE_INSTALL_DIR}"
+            echo "Install UE5.8 and set UE5_INSTALL_DIR secret"
+            exit 1
+          fi
+          echo "UE5 found: ${UE_INSTALL_DIR}"
+          ls "${UE_INSTALL_DIR}/Engine/Binaries/Linux/" | head -5
+
+      - name: Generate Project Files
+        run: |
+          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
+            -project="${UPROJECT}" -game -engine
+
+      - name: Compile (Editor)
+        if: github.event.inputs.target == 'Editor' || github.event.inputs.target == ''
+        run: |
+          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/Build.sh" \
+            KhaaosRunEditor Linux ${{ github.event.inputs.configuration || 'Development' }} \
+            "${UPROJECT}" -waitmutex
+
+      - name: Compile (Server)
+        if: github.event.inputs.target == 'Server'
+        run: |
+          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/Build.sh" \
+            KhaaosRunServer Linux ${{ github.event.inputs.configuration || 'Development' }} \
+            "${UPROJECT}" -waitmutex
+
+      - name: Compilation Summary
+        if: always()
+        run: |
+          echo "## Compilation Result" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Config | ${{ github.event.inputs.configuration || 'Development' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | ${{ github.event.inputs.target || 'Server' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| UE5 | $(cat ${UE_INSTALL_DIR}/Engine/Build/Build.version 2>/dev/null | grep MajorVersion || echo '5.8') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+
+  validate-replication:
+    name: Validate Iris Replication
+    runs-on: [self-hosted, linux, ue5.8, x64]
+    needs: compile
+    if: success()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run 2-Client Replication Test
+        run: |
+          # Launch dedicated server + 2 clients, validate state sync
+          echo "Replication validation requires UE5 running — placeholder for Fase 0.3"
+          echo "Manual test: Launch server → connect 2 clients → verify no desync"
+
+  load-test:
+    name: 100-Bot Load Test
+    runs-on: [self-hosted, linux, ue5.8, x64]
+    needs: compile
+    if: success() && (github.event.inputs.target == 'Server' || github.event.inputs.target == '')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Load Test
+        run: |
+          echo "Load test with 100 bots — placeholder for Fase 0.4"
+          echo "Requires: dedicated server running + KhaaosLoadTestManager"
+          echo "Expected: 0 crashes, <100ms RTT median, JSON report"
