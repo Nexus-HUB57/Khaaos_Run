@@ -583,7 +583,7 @@ Fonte canônica: `shared/schema.ts`.
 - `eliminations` — eventos de eliminação
 - `match_results` — placement, kills, dano, rating, XP
 
-Schema aplicado via `npm run db:push` (Drizzle Kit). Migrações versionadas ainda são roadmap.
+Mudanças no schema devem gerar uma migration revisável com `npm run db:generate`; aplique somente migrations commitadas com `npm run db:migrate` e `DATABASE_URL` definido. O CI valida as migrations contra um PostgreSQL efêmero criado do zero. O deploy normal não altera o schema; `RUN_DB_MIGRATIONS=true` é um opt-in temporário para procedimento controlado e deve voltar a `false` após a aplicação.
 
 ---
 
