@@ -35,9 +35,11 @@
 ## Deploy checklist
 
 ```bash
-npm run db:push    # colunas rating / match_results
+npm run db:migrate # aplica apenas migrations versionadas; requer DATABASE_URL
 npm run dev        # ou build + start
 ```
+
+Quando o schema mudar, gere e revise a migration antes do commit com `npm run db:generate`.
 
 Abrir dois browsers (duas contas) → BUSCAR PARTIDA → lobby → zona → fim → ranking.
 

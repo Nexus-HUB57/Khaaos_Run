@@ -1,7 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+const databaseUrl = process.env.DATABASE_URL;
+const isGenerateCommand = process.argv.includes("generate");
+
+if (!databaseUrl && !isGenerateCommand) {
+  throw new Error("DATABASE_URL must be set for database migration commands");
 }
 
 export default defineConfig({
@@ -9,6 +12,7 @@ export default defineConfig({
   schema: "./shared/schema.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    // `generate` only compares schema files; it does not open a connection.
+    url: databaseUrl ?? "postgresql://127.0.0.1/khaaos",
   },
 });

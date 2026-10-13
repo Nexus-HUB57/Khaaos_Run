@@ -84,8 +84,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Apply versioned database migrations
+        run: npm run db:migrate
+
       - name: Run unit tests
-        run: npm test -- --coverage --coverageReporters=text-summary 2>&1 | tee test-unit.log
+        run: npm run test:official 2>&1 | tee test-unit.log
 
       - name: Upload test results
         if: always()

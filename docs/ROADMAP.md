@@ -40,7 +40,7 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 
 ### 1.1 Migrações e contratos de banco
 
-- [ ] Substituir `db:push` operacional por migrações Drizzle revisadas e versionadas em `migrations/`.
+- [x] Substituir `db:push` operacional por migrações Drizzle revisadas e versionadas em `migrations/`.
 - [ ] Definir migração expand/contract, backup, rollback e verificação de compatibilidade entre versões.
 - [ ] Aplicar constraints e índices para campos consultados em sala, usuário, rating e histórico.
 - [ ] Usar banco isolado nos testes de integração de API e persistência.
