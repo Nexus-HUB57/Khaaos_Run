@@ -134,6 +134,9 @@ GameMode → HUD: KhaaosHUD
 - Apply the effect through `UKhaaosEffectApplier::ApplyZoneDamage(ASC, Damage, SafeZone)`. The applier rejects non-`AKhaaosSafeZone` causers and sets both the Gameplay Effect instigator and `EffectCauser` to the SafeZone actor in the effect context.
 - When authoritative Health reaches zero, `UKhaaosAttributeSet::OnOutOfHealth` routes to `AKhaaosGameMode::EliminatePlayer`; the GameMode records `ZONA`, updates status/stats, and broadcasts elimination once.
 - Do not separately call `EliminatePlayer` after applying the zone effect; death is driven by the GAS attribute event.
+- The instant effect carries `GameplayCue.Damage.Zone`. `AKhaaosPlayerState` handles that tag through `IGameplayCueInterface` and forwards it only to its owning local HUD; no separate GameplayCue Blueprint asset is required for this handler. The cue is cosmetic and never drives damage or elimination.
+- The HUD triggers the Blueprint event `PlayZoneDamageVignette` and loops `Content/Audio/SFX/SFX_ZoneWarningBeep.wav` locally. The interval scales from 0.90 s at full Health down to 0.18 s at zero Health, with a small pitch rise; it stops 1.65 s after the last cue or immediately when the player is eliminated.
+- The WAV is source audio. On first project open, Unreal imports it as `/Game/Audio/SFX/SFX_ZoneWarningBeep`; the widget's soft reference already points to that asset. Override the reference in the HUD widget Blueprint if the project uses a different import path, and implement `PlayZoneDamageVignette` in that widget Blueprint.
 
 ### 7. Test & Iterate
 
@@ -141,12 +144,21 @@ GameMode → HUD: KhaaosHUD
 - PIE (Play In Editor) with 2+ players
 - Verify the Niagara zone boundary follows replicated center/radius on server and clients
 - Verify players outside the world-space zone take server-authoritative damage and the effect context reports the SafeZone as `EffectCauser`
+- Confirm the owning client gets one vignette/beep response per SafeZone damage cue; another player's HUD must not receive it, and the beep should stop after leaving the damage area
 - Verify Health replication to clients and one-time elimination with cause `ZONA` when Health reaches zero
 - Test ZEX interaction
 - Test Zu entry sequences
 - Verify loot spawning per phase
 - Run standalone dedicated server test
 ```
+
+Run the C++ automation checks from the Unreal Editor console with:
+
+```text
+Automation RunTests Khaaos.GAS.SafeZone
+```
+
+`Khaaos.GAS.SafeZone.GameplayCueDispatch` applies the actual instant zone Gameplay Effect to a transient ASC target and asserts that the native interface receives the expected `Executed` tag once, alongside the Health reduction. `Khaaos.GAS.SafeZone.WarningCadence` checks that the beep interval decreases with Health and remains clamped at its configured limits. Both tests live under `Source/KhaaosRun/Private/Tests` and run in the Editor context.
 
 ## Convenções de Nomenclatura
 
