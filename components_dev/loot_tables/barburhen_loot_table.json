@@ -1,0 +1,31 @@
+{
+  "world": "Barburhen",
+  "max_players": 100,
+  "rarity_weights": {
+    "COMUM": 55,
+    "RARO": 28,
+    "EPICO": 12,
+    "LENDARIO": 4,
+    "MITICO": 1
+  },
+  "rarity_multiplier": {
+    "COMUM": 1,
+    "RARO": 2.8,
+    "EPICO": 7.5,
+    "LENDARIO": 22,
+    "MITICO": 65
+  },
+  "loot_pool": [
+    "LOOT_MedKit_Small",
+    "LOOT_MedKit_Medium",
+    "LOOT_Colete_Khaaos",
+    "LOOT_Shield_Lv1",
+    "LOOT_Grappling_Hook",
+    "LOOT_Drone_Recon",
+    "LOOT_AmmoBox_556",
+    "LOOT_AmmoBox_762",
+    "LOOT_Material_Metal",
+    "LOOT_Material_Cristal"
+  ],
+  "spawn_density": 10.0
+}

@@ -1,0 +1,37 @@
+{
+  "manifest_version": "2.0.0",
+  "project": "Khaaos Run",
+  "copyright": "Nexus-HUB57",
+  "generated_at": "2026-10-13T01:07:39.823541+00:00",
+  "e2e_completion": "COMPLETE",
+  "components": {
+    "species": 6,
+    "weapons": 11,
+    "loot_items": 26,
+    "world_loot_tables": 5,
+    "data_assets": 5,
+    "lyra_bridges": 8,
+    "ci_workflows": 14,
+    "integration_tests": 3,
+    "editor_scripts": 2
+  },
+  "vm_requirements": {
+    "cores": 8,
+    "ram_gb": 16,
+    "ssd_gb": 80,
+    "os": "Ubuntu 22.04 LTS"
+  },
+  "deployment_order": [
+    "01-provision-vm",
+    "02-install-ue58-toolchain",
+    "03-build-dedicated-server",
+    "04-deploy-economy-api",
+    "05-configure-eos-sdk",
+    "06-import-data-assets",
+    "07-seed-loot-tables",
+    "08-launch-dedicated-server",
+    "09-health-check-verify"
+  ],
+  "files_generated": 112,
+  "completed_at": "2026-10-13T01:07:39.828626+00:00"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_AmmoBox_762",
+  "name": "AmmoBox 7.62",
+  "type": "Recurso",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 15,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_AmmoBox_556",
+  "name": "AmmoBox 5.56",
+  "type": "Recurso",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 15,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

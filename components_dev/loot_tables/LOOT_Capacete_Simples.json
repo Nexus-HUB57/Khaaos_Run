@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Capacete_Simples",
+  "name": "Capacete Simples",
+  "type": "Defesa",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 15,
+  "auto_revive": false,
+  "price": 30,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

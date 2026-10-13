@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Colete_Khaaos",
+  "name": "Colete Khaaos",
+  "type": "Defesa",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 40,
+  "auto_revive": false,
+  "price": 168,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

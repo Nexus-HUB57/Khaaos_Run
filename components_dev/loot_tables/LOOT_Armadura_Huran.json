@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Armadura_Huran",
+  "name": "Armadura Huran",
+  "type": "Defesa",
+  "rarity": "LENDARIO",
+  "heal": 0,
+  "defense": 90,
+  "auto_revive": false,
+  "price": 880,
+  "rarity_weight": 4,
+  "rarity_multiplier": 22
+}

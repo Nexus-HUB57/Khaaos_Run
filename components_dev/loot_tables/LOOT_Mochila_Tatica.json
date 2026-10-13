@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Mochila_Tatica",
+  "name": "Mochila Tática",
+  "type": "Utilidade",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 40,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

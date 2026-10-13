@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Shotgun_Breach",
+  "name": "Shotgun Breach",
+  "slot": "PRIMARY",
+  "category": "SHOTGUN",
+  "damage": 80,
+  "fire_rate": 70,
+  "accuracy": 40,
+  "range": 15,
+  "mag": 6,
+  "reload": 3.0,
+  "rarity": "RARO",
+  "price": 224,
+  "headshot": 1.5,
+  "speed_mod": 0.9,
+  "ammo": "12gauge"
+}

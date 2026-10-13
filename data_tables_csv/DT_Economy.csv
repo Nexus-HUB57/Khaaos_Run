@@ -1,0 +1,8 @@
+TransactionType,KRCAmount,Description,BurnRate
+Purchase,variable,Player purchases item from shop,0.05
+Sale,variable,Player sells item to shop,0.00
+MatchReward,50-500,KRC earned per match based on placement,0.00
+Burn,variable,KRC burned on premium transactions,1.00
+Mint,admin_only,KRC minted by system (controlled),0.00
+Loan,max_500,KRC loan with 10% interest,0.00
+Repayment,variable,KRC loan repayment,0.00

@@ -1,0 +1,502 @@
+{
+  "manifest_version": "2.0",
+  "project": "Khaaos Run",
+  "description": "MVP Asset Manifest — Step 4: 10+ 3D Assets (Character + 3 Weapons + 7 Loot Items + VFX)",
+  "pipeline_step": "step4_3d_assets",
+  "generated_at": "2025-01-01T00:00:00Z",
+
+  "concept_art_references": {
+    "character_zheers": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/f4c16c907ad4.png",
+    "weapon_rifle_blueprint": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/374a1870cdf3.jpg",
+    "weapon_rifle_alt": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/49f666b8997b.jpg"
+  },
+
+  "characters": [
+    {
+      "id": "CHR_Zheers_Base",
+      "name": "Zheers Warrior Base",
+      "category": "character",
+      "subcategory": "humanoid",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae",
+      "dest_path": "/Game/Characters/Zheers/",
+      "format": "dae",
+      "skeleton": "UE5_Mannequin",
+      "lod_levels": 4,
+      "collision_type": "capsule",
+      "target_polycount": 80000,
+      "dimensions_cm": { "width": 60, "depth": 40, "height": 180 },
+      "dependencies": [],
+      "components": {
+        "skeletal_mesh": "SK_Zheers_Base",
+        "material_override": "MI_Zheers_Base_Default",
+        "animation_blueprint": "ABP_Zheers_Base"
+      },
+      "textures": [
+        { "id": "T_Zheers_D",   "type": "diffuse",  "resolution": "2048x2048" },
+        { "id": "T_Zheers_N",   "type": "normal",   "resolution": "2048x2048" },
+        { "id": "T_Zheers_ORM", "type": "orm",      "resolution": "2048x2048" },
+        { "id": "T_Zheers_E",   "type": "emissive", "resolution": "2048x2048" }
+      ],
+      "animations": [
+        "AS_Idle", "AS_Walk", "AS_Run", "AS_Sprint",
+        "AS_Crouch", "AS_Slide", "AS_Jump", "AS_Dash",
+        "AS_Melee", "AS_Shoot", "AS_Reload", "AS_Heal",
+        "AS_WarI_Cinto", "AS_WarI_Saltar", "AS_WarI_Mascara",
+        "AS_Downed", "AS_Dead"
+      ],
+      "variants": ["Zheers_Assault", "Zheers_Tactical", "Zheers_Support"],
+      "materials": [
+        {
+          "id": "M_Zheers_Base",
+          "instance": "MI_Zheers_Base_Default",
+          "shader": "PBR",
+          "properties": {
+            "base_color": { "r": 0.7, "g": 0.65, "b": 0.6 },
+            "roughness": 0.55,
+            "metallic": 0.1
+          }
+        }
+      ]
+    }
+  ],
+
+  "weapons": [
+    {
+      "id": "WPN_AssaultRifle_MK1",
+      "name": "Assault Rifle MK1",
+      "category": "weapon",
+      "subcategory": "assault_rifle",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/weapons/WPN_AssaultRifle_MK1/WPN_AssaultRifle_MK1.fbx",
+      "dest_path": "/Game/Weapons/AR/",
+      "format": "fbx",
+      "slot": "primary",
+      "lod_levels": 3,
+      "collision_type": "box",
+      "target_polycount": 12000,
+      "dimensions_cm": { "width": 5, "depth": 85, "height": 18 },
+      "dependencies": ["VFX_MuzzleFlash_Assault", "SFX_WeaponFire_Assault"],
+      "mesh": {
+        "id": "SM_AssaultRifle_MK1",
+        "format": "fbx",
+        "polycount_target": 12000
+      },
+      "materials": [
+        {
+          "id": "M_AssaultRifle_MK1",
+          "instance": "MI_AssaultRifle_MK1_Default",
+          "shader": "PBR",
+          "properties": {
+            "base_color": { "r": 0.2, "g": 0.2, "b": 0.22 },
+            "roughness": 0.4,
+            "metallic": 0.85
+          }
+        }
+      ],
+      "textures": [
+        { "id": "T_AssaultRifle_MK1_D",   "type": "diffuse",  "resolution": "1024x1024" },
+        { "id": "T_AssaultRifle_MK1_N",   "type": "normal",   "resolution": "1024x1024" },
+        { "id": "T_AssaultRifle_MK1_ORM", "type": "orm",      "resolution": "1024x1024" }
+      ],
+      "vfx": [
+        { "id": "VFX_MuzzleFlash_Assault", "type": "niagara" },
+        { "id": "VFX_BulletImpact_Concrete", "type": "niagara" }
+      ],
+      "audio": [
+        { "id": "SFX_WeaponFire_Assault", "type": "meta_sound" },
+        { "id": "SFX_WeaponReload_AR", "type": "meta_sound" }
+      ],
+      "gameplay": {
+        "damage": 28,
+        "fire_rate_rpm": 600,
+        "magazine_size": 30,
+        "reload_time_s": 2.1,
+        "effective_range_m": 80,
+        "ammo_type": "5.56x45mm",
+        "attachments": ["sight_red_dot", "grip_vertical", "suppressor"]
+      }
+    },
+    {
+      "id": "WPN_Shotgun_Breach",
+      "name": "Breach Shotgun",
+      "category": "weapon",
+      "subcategory": "shotgun",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/weapons/WPN_Shotgun_Breach/WPN_Shotgun_Breach.fbx",
+      "dest_path": "/Game/Weapons/Shotgun/",
+      "format": "fbx",
+      "slot": "primary",
+      "lod_levels": 3,
+      "collision_type": "box",
+      "target_polycount": 8000,
+      "dimensions_cm": { "width": 5, "depth": 95, "height": 18 },
+      "dependencies": ["VFX_MuzzleFlash_Shotgun", "SFX_WeaponFire_Shotgun"],
+      "mesh": {
+        "id": "SM_Shotgun_Breach",
+        "format": "fbx",
+        "polycount_target": 8000
+      },
+      "materials": [
+        {
+          "id": "M_Shotgun_Breach",
+          "instance": "MI_Shotgun_Breach_Default",
+          "shader": "PBR",
+          "properties": {
+            "base_color": { "r": 0.45, "g": 0.3, "b": 0.15 },
+            "roughness": 0.7,
+            "metallic": 0.3
+          }
+        }
+      ],
+      "textures": [
+        { "id": "T_Shotgun_Breach_D",   "type": "diffuse",  "resolution": "1024x1024" },
+        { "id": "T_Shotgun_Breach_N",   "type": "normal",   "resolution": "1024x1024" },
+        { "id": "T_Shotgun_Breach_ORM", "type": "orm",      "resolution": "1024x1024" }
+      ],
+      "vfx": [
+        { "id": "VFX_MuzzleFlash_Shotgun", "type": "niagara" },
+        { "id": "VFX_BulletImpact_Concrete", "type": "niagara" }
+      ],
+      "audio": [
+        { "id": "SFX_WeaponFire_Shotgun", "type": "meta_sound" },
+        { "id": "SFX_WeaponReload_Shotgun", "type": "meta_sound" }
+      ],
+      "gameplay": {
+        "damage": 120,
+        "fire_rate_rpm": 60,
+        "magazine_size": 2,
+        "reload_time_s": 3.5,
+        "effective_range_m": 15,
+        "ammo_type": "12_Gauge",
+        "pellet_count": 8
+      }
+    },
+    {
+      "id": "WPN_Sniper_DMR",
+      "name": "DMR Sniper",
+      "category": "weapon",
+      "subcategory": "sniper",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/weapons/WPN_Sniper_DMR/WPN_Sniper_DMR.fbx",
+      "dest_path": "/Game/Weapons/Sniper/",
+      "format": "fbx",
+      "slot": "primary",
+      "lod_levels": 3,
+      "collision_type": "box",
+      "target_polycount": 10000,
+      "dimensions_cm": { "width": 5, "depth": 110, "height": 20 },
+      "dependencies": ["VFX_MuzzleFlash_Sniper", "SFX_WeaponFire_Sniper"],
+      "mesh": {
+        "id": "SM_Sniper_DMR",
+        "format": "fbx",
+        "polycount_target": 10000
+      },
+      "materials": [
+        {
+          "id": "M_Sniper_DMR",
+          "instance": "MI_Sniper_DMR_Default",
+          "shader": "PBR",
+          "properties": {
+            "base_color": { "r": 0.15, "g": 0.25, "b": 0.12 },
+            "roughness": 0.5,
+            "metallic": 0.7
+          }
+        }
+      ],
+      "textures": [
+        { "id": "T_Sniper_DMR_D",   "type": "diffuse",  "resolution": "1024x1024" },
+        { "id": "T_Sniper_DMR_N",   "type": "normal",   "resolution": "1024x1024" },
+        { "id": "T_Sniper_DMR_ORM", "type": "orm",      "resolution": "1024x1024" }
+      ],
+      "vfx": [
+        { "id": "VFX_MuzzleFlash_Sniper", "type": "niagara" },
+        { "id": "VFX_BulletImpact_Concrete", "type": "niagara" }
+      ],
+      "audio": [
+        { "id": "SFX_WeaponFire_Sniper", "type": "meta_sound" },
+        { "id": "SFX_WeaponReload_Sniper", "type": "meta_sound" }
+      ],
+      "gameplay": {
+        "damage": 65,
+        "fire_rate_rpm": 180,
+        "magazine_size": 10,
+        "reload_time_s": 2.8,
+        "effective_range_m": 200,
+        "ammo_type": "7.62x51mm",
+        "headshot_multiplier": 2.0
+      }
+    }
+  ],
+
+  "loot_items": [
+    {
+      "id": "LOOT_MedKit_Small",
+      "name": "Small Med Kit",
+      "category": "loot",
+      "subcategory": "health",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_MedKit_Small/LOOT_MedKit_Small.fbx",
+      "dest_path": "/Game/Loot/Health/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "box",
+      "target_polycount": 500,
+      "dimensions_cm": { "width": 12, "depth": 8, "height": 6 },
+      "dependencies": [],
+      "mesh": { "id": "SM_MedKit_Small", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_MedKit_Small",
+          "instance": "MI_MedKit_Small",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 1.0, "g": 0.2, "b": 0.2 }, "roughness": 0.6, "metallic": 0.0 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_MedKit_Small", "type": "icon", "resolution": "256x256" }
+      ],
+      "gameplay": { "heal_amount": 25, "use_time_s": 3, "type": "health" }
+    },
+    {
+      "id": "LOOT_MedKit_Medium",
+      "name": "Medium Med Kit",
+      "category": "loot",
+      "subcategory": "health",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_MedKit_Medium/LOOT_MedKit_Medium.fbx",
+      "dest_path": "/Game/Loot/Health/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "box",
+      "target_polycount": 600,
+      "dimensions_cm": { "width": 18, "depth": 12, "height": 8 },
+      "dependencies": [],
+      "mesh": { "id": "SM_MedKit_Medium", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_MedKit_Medium",
+          "instance": "MI_MedKit_Medium",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.9, "g": 0.15, "b": 0.15 }, "roughness": 0.6, "metallic": 0.0 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_MedKit_Medium", "type": "icon", "resolution": "256x256" }
+      ],
+      "gameplay": { "heal_amount": 50, "use_time_s": 5, "type": "health" }
+    },
+    {
+      "id": "LOOT_Bandage",
+      "name": "Bandage",
+      "category": "loot",
+      "subcategory": "health",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_Bandage/LOOT_Bandage.fbx",
+      "dest_path": "/Game/Loot/Health/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "box",
+      "target_polycount": 200,
+      "dimensions_cm": { "width": 8, "depth": 5, "height": 3 },
+      "dependencies": [],
+      "mesh": { "id": "SM_Bandage", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_Bandage",
+          "instance": "MI_Bandage",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.95, "g": 0.95, "b": 0.9 }, "roughness": 0.8, "metallic": 0.0 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_Bandage", "type": "icon", "resolution": "256x256" }
+      ],
+      "gameplay": { "heal_amount": 10, "use_time_s": 1.5, "type": "health" }
+    },
+    {
+      "id": "LOOT_Shield_Lv1",
+      "name": "Shield Cell Lv1",
+      "category": "loot",
+      "subcategory": "shield",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_Shield_Lv1/LOOT_Shield_Lv1.fbx",
+      "dest_path": "/Game/Loot/Shield/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "convex",
+      "target_polycount": 400,
+      "dimensions_cm": { "width": 10, "depth": 10, "height": 14 },
+      "dependencies": [],
+      "mesh": { "id": "SM_Shield_Lv1", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_Shield_Lv1",
+          "instance": "MI_Shield_Lv1",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.2, "g": 0.5, "b": 1.0 }, "roughness": 0.3, "metallic": 0.6 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_Shield_Lv1", "type": "icon", "resolution": "256x256" }
+      ],
+      "gameplay": { "shield_amount": 25, "use_time_s": 2, "type": "shield" }
+    },
+    {
+      "id": "LOOT_Shield_Lv2",
+      "name": "Shield Cell Lv2",
+      "category": "loot",
+      "subcategory": "shield",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_Shield_Lv2/LOOT_Shield_Lv2.fbx",
+      "dest_path": "/Game/Loot/Shield/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "convex",
+      "target_polycount": 500,
+      "dimensions_cm": { "width": 12, "depth": 12, "height": 16 },
+      "dependencies": [],
+      "mesh": { "id": "SM_Shield_Lv2", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_Shield_Lv2",
+          "instance": "MI_Shield_Lv2",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.4, "g": 0.3, "b": 1.0 }, "roughness": 0.3, "metallic": 0.6 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_Shield_Lv2", "type": "icon", "resolution": "256x256" }
+      ],
+      "gameplay": { "shield_amount": 50, "use_time_s": 3, "type": "shield" }
+    },
+    {
+      "id": "LOOT_AmmoBox_556",
+      "name": "5.56mm Ammo Box",
+      "category": "loot",
+      "subcategory": "ammo",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_AmmoBox_556/LOOT_AmmoBox_556.fbx",
+      "dest_path": "/Game/Loot/Ammo/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "box",
+      "target_polycount": 300,
+      "dimensions_cm": { "width": 15, "depth": 8, "height": 10 },
+      "dependencies": [],
+      "mesh": { "id": "SM_AmmoBox_556", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_AmmoBox_556",
+          "instance": "MI_AmmoBox_556",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.6, "g": 0.5, "b": 0.2 }, "roughness": 0.7, "metallic": 0.1 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_AmmoBox_556", "type": "icon", "resolution": "128x128" }
+      ],
+      "gameplay": { "amount": 30, "ammo_type": "5.56x45mm", "type": "ammo" }
+    },
+    {
+      "id": "LOOT_AmmoBox_762",
+      "name": "7.62mm Ammo Box",
+      "category": "loot",
+      "subcategory": "ammo",
+      "priority": "P0",
+      "source_path": "mvp_output/assets/loot/LOOT_AmmoBox_762/LOOT_AmmoBox_762.fbx",
+      "dest_path": "/Game/Loot/Ammo/",
+      "format": "fbx",
+      "lod_levels": 1,
+      "collision_type": "box",
+      "target_polycount": 300,
+      "dimensions_cm": { "width": 15, "depth": 8, "height": 10 },
+      "dependencies": [],
+      "mesh": { "id": "SM_AmmoBox_762", "format": "fbx" },
+      "materials": [
+        {
+          "id": "M_AmmoBox_762",
+          "instance": "MI_AmmoBox_762",
+          "shader": "PBR",
+          "properties": { "base_color": { "r": 0.5, "g": 0.35, "b": 0.15 }, "roughness": 0.7, "metallic": 0.1 }
+        }
+      ],
+      "icons": [
+        { "id": "T_Icon_AmmoBox_762", "type": "icon", "resolution": "128x128" }
+      ],
+      "gameplay": { "amount": 20, "ammo_type": "7.62x51mm", "type": "ammo" }
+    }
+  ],
+
+  "vfx": [
+    { "id": "VFX_MuzzleFlash_Assault",     "type": "niagara", "category": "vfx", "subcategory": "muzzle_flash", "priority": "P0" },
+    { "id": "VFX_MuzzleFlash_Shotgun",     "type": "niagara", "category": "vfx", "subcategory": "muzzle_flash", "priority": "P0" },
+    { "id": "VFX_MuzzleFlash_Sniper",      "type": "niagara", "category": "vfx", "subcategory": "muzzle_flash", "priority": "P0" },
+    { "id": "VFX_BulletImpact_Concrete",   "type": "niagara", "category": "vfx", "subcategory": "impact_decal", "priority": "P0" },
+    { "id": "VFX_BulletImpact_Metal",      "type": "niagara", "category": "vfx", "subcategory": "impact_decal", "priority": "P0" },
+    { "id": "VFX_BulletImpact_Dirt",       "type": "niagara", "category": "vfx", "subcategory": "impact_decal", "priority": "P0" },
+    { "id": "VFX_Loot_Pickup",            "type": "niagara", "category": "vfx", "subcategory": "pickup",      "priority": "P0" }
+  ],
+
+  "audio": [
+    { "id": "SFX_WeaponFire_Assault",  "type": "meta_sound", "category": "audio", "subcategory": "weapon_fire", "priority": "P0" },
+    { "id": "SFX_WeaponFire_Shotgun",  "type": "meta_sound", "category": "audio", "subcategory": "weapon_fire", "priority": "P0" },
+    { "id": "SFX_WeaponFire_Sniper",   "type": "meta_sound", "category": "audio", "subcategory": "weapon_fire", "priority": "P0" },
+    { "id": "SFX_WeaponReload_AR",     "type": "meta_sound", "category": "audio", "subcategory": "weapon_reload", "priority": "P1" },
+    { "id": "SFX_WeaponReload_Shotgun","type": "meta_sound", "category": "audio", "subcategory": "weapon_reload", "priority": "P1" },
+    { "id": "SFX_WeaponReload_Sniper", "type": "meta_sound", "category": "audio", "subcategory": "weapon_reload", "priority": "P1" },
+    { "id": "SFX_Footstep_Grass",     "type": "meta_sound", "category": "audio", "subcategory": "footstep",  "priority": "P0" },
+    { "id": "SFX_Footstep_Concrete",  "type": "meta_sound", "category": "audio", "subcategory": "footstep",  "priority": "P0" },
+    { "id": "SFX_Loot_Pickup",        "type": "meta_sound", "category": "audio", "subcategory": "loot",      "priority": "P0" }
+  ],
+
+  "import_order": [
+    {
+      "order": 1,
+      "description": "VFX placeholders (dependencies for weapons)",
+      "assets": ["VFX_MuzzleFlash_Assault", "VFX_MuzzleFlash_Shotgun", "VFX_MuzzleFlash_Sniper", "VFX_BulletImpact_Concrete", "VFX_BulletImpact_Metal", "VFX_BulletImpact_Dirt", "VFX_Loot_Pickup"]
+    },
+    {
+      "order": 2,
+      "description": "Audio placeholders (dependencies for weapons)",
+      "assets": ["SFX_WeaponFire_Assault", "SFX_WeaponFire_Shotgun", "SFX_WeaponFire_Sniper", "SFX_Footstep_Grass", "SFX_Footstep_Concrete", "SFX_Loot_Pickup"]
+    },
+    {
+      "order": 3,
+      "description": "Character (skeletal mesh + animations)",
+      "assets": ["CHR_Zheers_Base"]
+    },
+    {
+      "order": 4,
+      "description": "Weapons (static meshes)",
+      "assets": ["WPN_AssaultRifle_MK1", "WPN_Shotgun_Breach", "WPN_Sniper_DMR"]
+    },
+    {
+      "order": 5,
+      "description": "Loot items (static meshes)",
+      "assets": ["LOOT_MedKit_Small", "LOOT_MedKit_Medium", "LOOT_Bandage", "LOOT_Shield_Lv1", "LOOT_Shield_Lv2", "LOOT_AmmoBox_556", "LOOT_AmmoBox_762"]
+    }
+  ],
+
+  "summary": {
+    "total_assets": 30,
+    "p0_count": 22,
+    "p1_count": 8,
+    "p2_count": 0,
+    "categories": {
+      "characters": 1,
+      "weapons": 3,
+      "loot_items": 7,
+      "vfx": 7,
+      "audio": 9
+    },
+    "mesh_assets": 11,
+    "mvp_requirement": {
+      "minimum_mesh_assets": 10,
+      "actual_mesh_assets": 11,
+      "requirement_satisfied": true
+    },
+    "total_target_polycount": 112800,
+    "lod_total": 17
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Grappling_Hook",
+  "name": "Grappling Hook",
+  "type": "Utilidade",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 168,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

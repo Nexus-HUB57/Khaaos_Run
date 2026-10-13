@@ -1,0 +1,17 @@
+{
+  "id": "WPN_AssaultRifle_MK1",
+  "name": "Assault Rifle MK1",
+  "slot": "PRIMARY",
+  "category": "ASSAULT_RIFLE",
+  "damage": 35,
+  "fire_rate": 600,
+  "accuracy": 72,
+  "range": 80,
+  "mag": 30,
+  "reload": 2.0,
+  "rarity": "RARO",
+  "price": 336,
+  "headshot": 2.0,
+  "speed_mod": 0.92,
+  "ammo": "5.56mm"
+}

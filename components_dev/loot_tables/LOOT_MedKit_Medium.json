@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_MedKit_Medium",
+  "name": "MedKit Medium",
+  "type": "Curativo",
+  "rarity": "RARO",
+  "heal": 50,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 112,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

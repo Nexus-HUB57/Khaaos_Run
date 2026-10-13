@@ -1,0 +1,156 @@
+{
+  "id": "SPC_Skeetw",
+  "name": "Skeetw",
+  "type": "avian",
+  "base_health": 80,
+  "base_energy": 120,
+  "base_speed": 1.3,
+  "height_cm": 170,
+  "weight_kg": 55,
+  "skeleton": "SK_Gwen",
+  "passive": "Voo Planado — velocidade +15% após queda",
+  "skins": [
+    {
+      "id": "SKN_Skeetw_Recruta",
+      "name": "Recruta",
+      "rarity": "COMUM",
+      "color_primary": "#06B6D4",
+      "color_accent": "#A5F3FC",
+      "unlock_rank": "RECRUTA"
+    },
+    {
+      "id": "SKN_Skeetw_Veterano",
+      "name": "Veterano",
+      "rarity": "RARO",
+      "color_primary": "#0891B2",
+      "color_accent": "#67E8F9",
+      "unlock_rank": "HURAN"
+    },
+    {
+      "id": "SKN_Skeetw_CIGKV_Elite",
+      "name": "CIGKV Elite",
+      "rarity": "EPICO",
+      "color_primary": "#7C3AED",
+      "color_accent": "#C4B5FD",
+      "unlock_rank": "VENEX"
+    },
+    {
+      "id": "SKN_Skeetw_Guarda_Overlord",
+      "name": "Guarda Overlord",
+      "rarity": "LENDARIO",
+      "color_primary": "#F59E0B",
+      "color_accent": "#FDE68A",
+      "unlock_rank": "ONITH"
+    },
+    {
+      "id": "SKN_Skeetw_Khaaos_Prime",
+      "name": "Khaaos Prime",
+      "rarity": "MITICO",
+      "color_primary": "#EF4444",
+      "color_accent": "#FCA5A5",
+      "unlock_rank": "MALAKOR"
+    }
+  ],
+  "animations": [
+    {
+      "id": "ANM_SPC_Skeetw_01",
+      "name": "idle",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_02",
+      "name": "walk",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_03",
+      "name": "run",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_04",
+      "name": "sprint",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_05",
+      "name": "slide",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_06",
+      "name": "jump_start",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_07",
+      "name": "jump_loop",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_08",
+      "name": "jump_land",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_09",
+      "name": "shoot_rifle",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_10",
+      "name": "shoot_sniper",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_11",
+      "name": "shoot_shotgun",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_12",
+      "name": "reload",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_13",
+      "name": "melee",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_14",
+      "name": "downed",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_15",
+      "name": "eliminated",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_16",
+      "name": "revive",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_17",
+      "name": "grappling_hook",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_18",
+      "name": "shield_activate",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_19",
+      "name": "heal_use",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Skeetw_20",
+      "name": "loot_pickup",
+      "skeleton": "SK_Gwen"
+    }
+  ]
+}

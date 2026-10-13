@@ -1,0 +1,328 @@
+{
+  "level": "CIGKV_KhaaosVille",
+  "map_size": {
+    "x": 2048,
+    "y": 2048,
+    "z": 256
+  },
+  "total_spawns": 50,
+  "total_zex_zones": 15,
+  "total_loot_points": 60,
+  "validations": {
+    "minimum_spacing": {
+      "passed": false,
+      "min_spacing_cm": 500,
+      "violation_count": 280,
+      "violations": [
+        {
+          "spawn_a": 1,
+          "spawn_b": 2,
+          "distance": 181.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 3,
+          "distance": 181.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 4,
+          "distance": 194.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 5,
+          "distance": 194.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 6,
+          "distance": 348.5,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 36,
+          "distance": 352.2,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 1,
+          "spawn_b": 41,
+          "distance": 408.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 2,
+          "spawn_b": 3,
+          "distance": 362.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 2,
+          "spawn_b": 4,
+          "distance": 144.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 2,
+          "spawn_b": 5,
+          "distance": 346.5,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 2,
+          "spawn_b": 36,
+          "distance": 427.1,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 4,
+          "distance": 346.5,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 5,
+          "distance": 144.0,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 6,
+          "distance": 227.7,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 7,
+          "distance": 450.2,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 36,
+          "distance": 362.3,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 41,
+          "distance": 266.9,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 3,
+          "spawn_b": 42,
+          "distance": 466.8,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 4,
+          "spawn_b": 5,
+          "distance": 274.4,
+          "minimum": 500
+        },
+        {
+          "spawn_a": 4,
+          "spawn_b": 6,
+          "distance": 425.2,
+          "minimum": 500
+        }
+      ]
+    },
+    "map_bounds": {
+      "passed": true,
+      "out_of_bounds_count": 0,
+      "out_of_bounds": []
+    },
+    "sector_membership": {
+      "passed": true,
+      "wrong_sector_count": 0,
+      "wrong_sector": []
+    },
+    "distribution": {
+      "passed": false,
+      "expected": {
+        "ArmoryHub": 5,
+        "ProvingGrounds": 20,
+        "Park": 25
+      },
+      "actual": {
+        "ArmoryHub": 5,
+        "ProvingGrounds": 25,
+        "Park": 20
+      }
+    },
+    "zex_spawn_clearance": {
+      "passed": false,
+      "clearance_cm": 100,
+      "overlap_count": 26,
+      "overlaps": [
+        {
+          "zex_zone_id": 1,
+          "spawn_id": 1,
+          "distance": 62.2,
+          "zone_radius": 50,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 2,
+          "spawn_id": 11,
+          "distance": 123.7,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 2,
+          "spawn_id": 36,
+          "distance": 133.4,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 2,
+          "spawn_id": 37,
+          "distance": 72.8,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 3,
+          "spawn_id": 7,
+          "distance": 134.2,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 3,
+          "spawn_id": 38,
+          "distance": 136.0,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 4,
+          "spawn_id": 13,
+          "distance": 106.3,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 4,
+          "spawn_id": 39,
+          "distance": 72.8,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 5,
+          "spawn_id": 12,
+          "distance": 28.3,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 6,
+          "spawn_id": 18,
+          "distance": 114.0,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 7,
+          "spawn_id": 14,
+          "distance": 133.4,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 7,
+          "spawn_id": 15,
+          "distance": 121.7,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 7,
+          "spawn_id": 19,
+          "distance": 144.2,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 7,
+          "spawn_id": 20,
+          "distance": 106.3,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 8,
+          "spawn_id": 11,
+          "distance": 111.8,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 8,
+          "spawn_id": 37,
+          "distance": 120.4,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 9,
+          "spawn_id": 39,
+          "distance": 36.1,
+          "zone_radius": 45,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 10,
+          "spawn_id": 22,
+          "distance": 107.7,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 10,
+          "spawn_id": 46,
+          "distance": 120.8,
+          "zone_radius": 40,
+          "clearance": 100
+        },
+        {
+          "zex_zone_id": 11,
+          "spawn_id": 23,
+          "distance": 100.0,
+          "zone_radius": 45,
+          "clearance": 100
+        }
+      ]
+    },
+    "loot_rarity": {
+      "passed": false,
+      "expected": {
+        "common": 30,
+        "uncommon": 15,
+        "rare": 10,
+        "epic": 3,
+        "legendary": 2
+      },
+      "actual": {
+        "common": 30,
+        "uncommon": 17,
+        "rare": 8,
+        "epic": 3,
+        "legendary": 2
+      }
+    }
+  },
+  "all_passed": false
+}

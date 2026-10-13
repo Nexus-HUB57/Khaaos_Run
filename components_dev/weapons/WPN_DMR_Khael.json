@@ -1,0 +1,17 @@
+{
+  "id": "WPN_DMR_Khael",
+  "name": "DMR Khael",
+  "slot": "PRIMARY",
+  "category": "DMR",
+  "damage": 55,
+  "fire_rate": 180,
+  "accuracy": 88,
+  "range": 120,
+  "mag": 10,
+  "reload": 2.5,
+  "rarity": "EPICO",
+  "price": 675,
+  "headshot": 2.5,
+  "speed_mod": 0.88,
+  "ammo": "7.62mm"
+}

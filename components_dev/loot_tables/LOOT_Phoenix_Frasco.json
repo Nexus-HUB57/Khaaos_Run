@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Phoenix_Frasco",
+  "name": "Phoenix Frasco",
+  "type": "Curativo",
+  "rarity": "LENDARIO",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": true,
+  "price": 880,
+  "rarity_weight": 4,
+  "rarity_multiplier": 22
+}

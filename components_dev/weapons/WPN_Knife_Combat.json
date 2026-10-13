@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Knife_Combat",
+  "name": "Knife Combat",
+  "slot": "MELEE",
+  "category": "KNIFE",
+  "damage": 45,
+  "fire_rate": 0,
+  "accuracy": 100,
+  "range": 2,
+  "mag": 1,
+  "reload": 0,
+  "rarity": "COMUM",
+  "price": 40,
+  "headshot": 1.0,
+  "speed_mod": 1.05,
+  "ammo": "melee"
+}

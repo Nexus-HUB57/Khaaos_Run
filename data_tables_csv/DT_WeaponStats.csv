@@ -1,0 +1,12 @@
+ID,Name,Slot,Category,Damage,FireRate,Accuracy,Range,Mag,Reload,Rarity,Price,HeadshotMult,SpeedMod,Ammo
+WPN_Pistol_Onith,Pistol Onith,SECONDARY,PISTOL,22,400,80,30,12,1.5,RARO,168,2.0,0.98,9mm
+WPN_SMG_Huran,SMG Huran,PRIMARY,SMG,18,900,65,40,30,2.2,RARO,168,1.5,0.95,9mm
+WPN_AssaultRifle_MK1,Assault Rifle MK1,PRIMARY,ASSAULT_RIFLE,35,600,72,80,30,2.0,RARO,336,2.0,0.92,5.56mm
+WPN_Carbine_Venex,Carbine Venex,PRIMARY,CARBINE,28,750,78,60,25,1.8,RARO,252,1.8,0.94,5.56mm
+WPN_Sniper_DMR,Sniper DMR,PRIMARY,SNIPER,90,40,95,200,5,3.5,EPICO,675,3.0,0.85,7.62mm
+WPN_DMR_Khael,DMR Khael,PRIMARY,DMR,55,180,88,120,10,2.5,EPICO,675,2.5,0.88,7.62mm
+WPN_Shotgun_Breach,Shotgun Breach,PRIMARY,SHOTGUN,80,70,40,15,6,3.0,RARO,224,1.5,0.9,12gauge
+WPN_LMG_Skeetw,LMG Skeetw,PRIMARY,LMG,30,800,55,70,100,4.5,EPICO,675,1.8,0.85,5.56mm
+WPN_Knife_Combat,Knife Combat,MELEE,KNIFE,45,0,100,2,1,0,COMUM,40,1.0,1.05,melee
+WPN_Espada_Overlord,Espada Overlord,MELEE,SWORD,75,0,100,3,1,0,LENDARIO,1760,1.5,1.02,melee
+WPN_Canhao_KhaaosPrime,Canhão Khaaos Prime,PRIMARY,EXOTIC,120,20,70,150,3,5.0,MITICO,5200,4.0,0.8,exotic

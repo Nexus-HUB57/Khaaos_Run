@@ -1,0 +1,37 @@
+{
+  "manifest_version": "1.0.0",
+  "generated_at": "2026-10-13T01:07:39.820375+00:00",
+  "species_count": 6,
+  "species": [
+    {
+      "id": "SPC_Zheers",
+      "name": "Zheers",
+      "type": "humanoid"
+    },
+    {
+      "id": "SPC_Onith",
+      "name": "Onith",
+      "type": "reptile"
+    },
+    {
+      "id": "SPC_Skeetw",
+      "name": "Skeetw",
+      "type": "avian"
+    },
+    {
+      "id": "SPC_Huran",
+      "name": "Huran",
+      "type": "amphibian"
+    },
+    {
+      "id": "SPC_Venex",
+      "name": "Venex",
+      "type": "cyborg"
+    },
+    {
+      "id": "SPC_Khael",
+      "name": "Khael",
+      "type": "mystic"
+    }
+  ]
+}

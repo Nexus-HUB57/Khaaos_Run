@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Carbine_Venex",
+  "name": "Carbine Venex",
+  "slot": "PRIMARY",
+  "category": "CARBINE",
+  "damage": 28,
+  "fire_rate": 750,
+  "accuracy": 78,
+  "range": 60,
+  "mag": 25,
+  "reload": 1.8,
+  "rarity": "RARO",
+  "price": 252,
+  "headshot": 1.8,
+  "speed_mod": 0.94,
+  "ammo": "5.56mm"
+}

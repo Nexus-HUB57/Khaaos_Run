@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Shield_Lv1",
+  "name": "Shield Lv1",
+  "type": "Defesa",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 30,
+  "auto_revive": false,
+  "price": 140,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

@@ -1,0 +1,29 @@
+{
+  "world": "CIGKV",
+  "max_players": 50,
+  "rarity_weights": {
+    "COMUM": 55,
+    "RARO": 28,
+    "EPICO": 12,
+    "LENDARIO": 4,
+    "MITICO": 1
+  },
+  "rarity_multiplier": {
+    "COMUM": 1,
+    "RARO": 2.8,
+    "EPICO": 7.5,
+    "LENDARIO": 22,
+    "MITICO": 65
+  },
+  "loot_pool": [
+    "LOOT_Bandage",
+    "LOOT_MedKit_Small",
+    "LOOT_AmmoBox_556",
+    "LOOT_AmmoBox_9mm",
+    "LOOT_Capacete_Simples",
+    "LOOT_Granada_Frag",
+    "LOOT_Mochila_Tatica",
+    "LOOT_Knife_Combat"
+  ],
+  "spawn_density": 5.0
+}

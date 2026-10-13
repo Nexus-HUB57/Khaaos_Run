@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Seringa_Venex",
+  "name": "Seringa Venex",
+  "type": "Curativo",
+  "rarity": "RARO",
+  "heal": 75,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 168,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

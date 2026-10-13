@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_AmmoBox_9mm",
+  "name": "AmmoBox 9mm",
+  "type": "Recurso",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 10,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

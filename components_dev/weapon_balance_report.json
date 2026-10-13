@@ -1,0 +1,111 @@
+{
+  "generated_at": "2026-10-13T01:07:39.824227+00:00",
+  "weapons": [
+    {
+      "id": "WPN_Pistol_Onith",
+      "dps": 146.67,
+      "ttk_100hp": 0.682,
+      "headshot_dps": 293.33,
+      "mag_dps_burst": 264,
+      "sustain_dps": 80.0,
+      "range": 30
+    },
+    {
+      "id": "WPN_SMG_Huran",
+      "dps": 270.0,
+      "ttk_100hp": 0.37,
+      "headshot_dps": 405.0,
+      "mag_dps_burst": 540,
+      "sustain_dps": 128.57,
+      "range": 40
+    },
+    {
+      "id": "WPN_AssaultRifle_MK1",
+      "dps": 350.0,
+      "ttk_100hp": 0.286,
+      "headshot_dps": 700.0,
+      "mag_dps_burst": 1050,
+      "sustain_dps": 210.0,
+      "range": 80
+    },
+    {
+      "id": "WPN_Carbine_Venex",
+      "dps": 350.0,
+      "ttk_100hp": 0.286,
+      "headshot_dps": 630.0,
+      "mag_dps_burst": 700,
+      "sustain_dps": 184.21,
+      "range": 60
+    },
+    {
+      "id": "WPN_Sniper_DMR",
+      "dps": 60.0,
+      "ttk_100hp": 1.667,
+      "headshot_dps": 180.0,
+      "mag_dps_burst": 450,
+      "sustain_dps": 40.91,
+      "range": 200
+    },
+    {
+      "id": "WPN_DMR_Khael",
+      "dps": 165.0,
+      "ttk_100hp": 0.606,
+      "headshot_dps": 412.5,
+      "mag_dps_burst": 550,
+      "sustain_dps": 94.29,
+      "range": 120
+    },
+    {
+      "id": "WPN_Shotgun_Breach",
+      "dps": 93.33,
+      "ttk_100hp": 1.071,
+      "headshot_dps": 140.0,
+      "mag_dps_burst": 480,
+      "sustain_dps": 58.95,
+      "range": 15
+    },
+    {
+      "id": "WPN_LMG_Skeetw",
+      "dps": 400.0,
+      "ttk_100hp": 0.25,
+      "headshot_dps": 720.0,
+      "mag_dps_burst": 3000,
+      "sustain_dps": 250.0,
+      "range": 70
+    },
+    {
+      "id": "WPN_Knife_Combat",
+      "dps": 45,
+      "ttk_100hp": 2.222,
+      "headshot_dps": 45.0,
+      "mag_dps_burst": 45,
+      "sustain_dps": 45,
+      "range": 2
+    },
+    {
+      "id": "WPN_Espada_Overlord",
+      "dps": 75,
+      "ttk_100hp": 1.333,
+      "headshot_dps": 112.5,
+      "mag_dps_burst": 75,
+      "sustain_dps": 75,
+      "range": 3
+    },
+    {
+      "id": "WPN_Canhao_KhaaosPrime",
+      "dps": 40.0,
+      "ttk_100hp": 2.5,
+      "headshot_dps": 160.0,
+      "mag_dps_burst": 360,
+      "sustain_dps": 25.71,
+      "range": 150
+    }
+  ],
+  "balance_summary": {
+    "max_dps": 400.0,
+    "min_dps": 40.0,
+    "dps_ratio_max_min": 10.0,
+    "avg_dps": 181.36,
+    "balance_status": "VALID"
+  }
+}

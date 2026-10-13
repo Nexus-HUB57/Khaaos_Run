@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_MedKit_Small",
+  "name": "MedKit Small",
+  "type": "Curativo",
+  "rarity": "COMUM",
+  "heal": 25,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 50,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

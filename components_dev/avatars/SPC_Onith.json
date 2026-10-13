@@ -1,0 +1,156 @@
+{
+  "id": "SPC_Onith",
+  "name": "Onith",
+  "type": "reptile",
+  "base_health": 120,
+  "base_energy": 80,
+  "base_speed": 0.9,
+  "height_cm": 190,
+  "weight_kg": 95,
+  "skeleton": "SK_Manny",
+  "passive": "Escamas Refletivas — +15% defesa contra projéteis",
+  "skins": [
+    {
+      "id": "SKN_Onith_Recruta",
+      "name": "Recruta",
+      "rarity": "COMUM",
+      "color_primary": "#22C55E",
+      "color_accent": "#86EFAC",
+      "unlock_rank": "RECRUTA"
+    },
+    {
+      "id": "SKN_Onith_Veterano",
+      "name": "Veterano",
+      "rarity": "RARO",
+      "color_primary": "#16A34A",
+      "color_accent": "#BBF7D0",
+      "unlock_rank": "HURAN"
+    },
+    {
+      "id": "SKN_Onith_CIGKV_Elite",
+      "name": "CIGKV Elite",
+      "rarity": "EPICO",
+      "color_primary": "#7C3AED",
+      "color_accent": "#C4B5FD",
+      "unlock_rank": "VENEX"
+    },
+    {
+      "id": "SKN_Onith_Guarda_Overlord",
+      "name": "Guarda Overlord",
+      "rarity": "LENDARIO",
+      "color_primary": "#F59E0B",
+      "color_accent": "#FDE68A",
+      "unlock_rank": "ONITH"
+    },
+    {
+      "id": "SKN_Onith_Khaaos_Prime",
+      "name": "Khaaos Prime",
+      "rarity": "MITICO",
+      "color_primary": "#EF4444",
+      "color_accent": "#FCA5A5",
+      "unlock_rank": "MALAKOR"
+    }
+  ],
+  "animations": [
+    {
+      "id": "ANM_SPC_Onith_01",
+      "name": "idle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_02",
+      "name": "walk",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_03",
+      "name": "run",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_04",
+      "name": "sprint",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_05",
+      "name": "slide",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_06",
+      "name": "jump_start",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_07",
+      "name": "jump_loop",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_08",
+      "name": "jump_land",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_09",
+      "name": "shoot_rifle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_10",
+      "name": "shoot_sniper",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_11",
+      "name": "shoot_shotgun",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_12",
+      "name": "reload",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_13",
+      "name": "melee",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_14",
+      "name": "downed",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_15",
+      "name": "eliminated",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_16",
+      "name": "revive",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_17",
+      "name": "grappling_hook",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_18",
+      "name": "shield_activate",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_19",
+      "name": "heal_use",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Onith_20",
+      "name": "loot_pickup",
+      "skeleton": "SK_Manny"
+    }
+  ]
+}

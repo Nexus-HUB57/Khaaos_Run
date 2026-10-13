@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_AmmoBox_12g",
+  "name": "AmmoBox 12g",
+  "type": "Recurso",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 12,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

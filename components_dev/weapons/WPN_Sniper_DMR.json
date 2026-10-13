@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Sniper_DMR",
+  "name": "Sniper DMR",
+  "slot": "PRIMARY",
+  "category": "SNIPER",
+  "damage": 90,
+  "fire_rate": 40,
+  "accuracy": 95,
+  "range": 200,
+  "mag": 5,
+  "reload": 3.5,
+  "rarity": "EPICO",
+  "price": 675,
+  "headshot": 3.0,
+  "speed_mod": 0.85,
+  "ammo": "7.62mm"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Pistol_Onith",
+  "name": "Pistol Onith",
+  "slot": "SECONDARY",
+  "category": "PISTOL",
+  "damage": 22,
+  "fire_rate": 400,
+  "accuracy": 80,
+  "range": 30,
+  "mag": 12,
+  "reload": 1.5,
+  "rarity": "RARO",
+  "price": 168,
+  "headshot": 2.0,
+  "speed_mod": 0.98,
+  "ammo": "9mm"
+}

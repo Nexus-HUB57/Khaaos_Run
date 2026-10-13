@@ -1,0 +1,41 @@
+{
+  "FileVersion": 3,
+  "Name": "KhaaosGameFeature",
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Khaaos Run Game Feature",
+  "Description": "Khaaos Run Battle Royale game feature plugin \u2014 multi-world, species, weapons, economy.",
+  "Category": "Game",
+  "CreatedBy": "Nexus-HUB57",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "IsExperimentalVersion": false,
+  "Installed": false,
+  "Modules": [],
+  "Plugins": [
+    {
+      "Name": "GameplayAbilities",
+      "Enabled": true
+    },
+    {
+      "Name": "GameplayTags",
+      "Enabled": true
+    },
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    },
+    {
+      "Name": "Niagara",
+      "Enabled": true
+    },
+    {
+      "Name": "PCG",
+      "Enabled": true
+    }
+  ]
+}

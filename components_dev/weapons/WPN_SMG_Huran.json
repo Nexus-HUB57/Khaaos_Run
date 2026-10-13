@@ -1,0 +1,17 @@
+{
+  "id": "WPN_SMG_Huran",
+  "name": "SMG Huran",
+  "slot": "PRIMARY",
+  "category": "SMG",
+  "damage": 18,
+  "fire_rate": 900,
+  "accuracy": 65,
+  "range": 40,
+  "mag": 30,
+  "reload": 2.2,
+  "rarity": "RARO",
+  "price": 168,
+  "headshot": 1.5,
+  "speed_mod": 0.95,
+  "ammo": "9mm"
+}

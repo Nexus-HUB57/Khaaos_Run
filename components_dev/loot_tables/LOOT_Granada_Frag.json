@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Granada_Frag",
+  "name": "Granada Frag",
+  "type": "Utilidade",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 35,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

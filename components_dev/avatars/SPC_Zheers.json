@@ -1,0 +1,156 @@
+{
+  "id": "SPC_Zheers",
+  "name": "Zheers",
+  "type": "humanoid",
+  "base_health": 100,
+  "base_energy": 100,
+  "base_speed": 1.0,
+  "height_cm": 180,
+  "weight_kg": 75,
+  "skeleton": "SK_Manny",
+  "passive": "Adaptabilidade — +10% resistência ao ambiente local",
+  "skins": [
+    {
+      "id": "SKN_Zheers_Recruta",
+      "name": "Recruta",
+      "rarity": "COMUM",
+      "color_primary": "#4A90D9",
+      "color_accent": "#FFFFFF",
+      "unlock_rank": "RECRUTA"
+    },
+    {
+      "id": "SKN_Zheers_Veterano",
+      "name": "Veterano",
+      "rarity": "RARO",
+      "color_primary": "#2563EB",
+      "color_accent": "#93C5FD",
+      "unlock_rank": "HURAN"
+    },
+    {
+      "id": "SKN_Zheers_CIGKV_Elite",
+      "name": "CIGKV Elite",
+      "rarity": "EPICO",
+      "color_primary": "#7C3AED",
+      "color_accent": "#C4B5FD",
+      "unlock_rank": "VENEX"
+    },
+    {
+      "id": "SKN_Zheers_Guarda_Overlord",
+      "name": "Guarda Overlord",
+      "rarity": "LENDARIO",
+      "color_primary": "#F59E0B",
+      "color_accent": "#FDE68A",
+      "unlock_rank": "ONITH"
+    },
+    {
+      "id": "SKN_Zheers_Khaaos_Prime",
+      "name": "Khaaos Prime",
+      "rarity": "MITICO",
+      "color_primary": "#EF4444",
+      "color_accent": "#FCA5A5",
+      "unlock_rank": "MALAKOR"
+    }
+  ],
+  "animations": [
+    {
+      "id": "ANM_SPC_Zheers_01",
+      "name": "idle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_02",
+      "name": "walk",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_03",
+      "name": "run",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_04",
+      "name": "sprint",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_05",
+      "name": "slide",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_06",
+      "name": "jump_start",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_07",
+      "name": "jump_loop",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_08",
+      "name": "jump_land",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_09",
+      "name": "shoot_rifle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_10",
+      "name": "shoot_sniper",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_11",
+      "name": "shoot_shotgun",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_12",
+      "name": "reload",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_13",
+      "name": "melee",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_14",
+      "name": "downed",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_15",
+      "name": "eliminated",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_16",
+      "name": "revive",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_17",
+      "name": "grappling_hook",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_18",
+      "name": "shield_activate",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_19",
+      "name": "heal_use",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Zheers_20",
+      "name": "loot_pickup",
+      "skeleton": "SK_Manny"
+    }
+  ]
+}

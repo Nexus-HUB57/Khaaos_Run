@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Canhao_KhaaosPrime",
+  "name": "Canhão Khaaos Prime",
+  "slot": "PRIMARY",
+  "category": "EXOTIC",
+  "damage": 120,
+  "fire_rate": 20,
+  "accuracy": 70,
+  "range": 150,
+  "mag": 3,
+  "reload": 5.0,
+  "rarity": "MITICO",
+  "price": 5200,
+  "headshot": 4.0,
+  "speed_mod": 0.8,
+  "ammo": "exotic"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "WPN_LMG_Skeetw",
+  "name": "LMG Skeetw",
+  "slot": "PRIMARY",
+  "category": "LMG",
+  "damage": 30,
+  "fire_rate": 800,
+  "accuracy": 55,
+  "range": 70,
+  "mag": 100,
+  "reload": 4.5,
+  "rarity": "EPICO",
+  "price": 675,
+  "headshot": 1.8,
+  "speed_mod": 0.85,
+  "ammo": "5.56mm"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Escudo_Khael",
+  "name": "Escudo Khael",
+  "type": "Defesa",
+  "rarity": "EPICO",
+  "heal": 0,
+  "defense": 65,
+  "auto_revive": false,
+  "price": 488,
+  "rarity_weight": 12,
+  "rarity_multiplier": 7.5
+}

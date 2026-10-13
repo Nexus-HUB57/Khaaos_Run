@@ -1,0 +1,156 @@
+{
+  "id": "SPC_Huran",
+  "name": "Huran",
+  "type": "amphibian",
+  "base_health": 110,
+  "base_energy": 90,
+  "base_speed": 1.0,
+  "height_cm": 175,
+  "weight_kg": 70,
+  "skeleton": "SK_Manny",
+  "passive": "Regeneração Anfíbia — +5 HP/s na água",
+  "skins": [
+    {
+      "id": "SKN_Huran_Recruta",
+      "name": "Recruta",
+      "rarity": "COMUM",
+      "color_primary": "#84CC16",
+      "color_accent": "#D9F99D",
+      "unlock_rank": "RECRUTA"
+    },
+    {
+      "id": "SKN_Huran_Veterano",
+      "name": "Veterano",
+      "rarity": "RARO",
+      "color_primary": "#65A30D",
+      "color_accent": "#BEF264",
+      "unlock_rank": "HURAN"
+    },
+    {
+      "id": "SKN_Huran_CIGKV_Elite",
+      "name": "CIGKV Elite",
+      "rarity": "EPICO",
+      "color_primary": "#7C3AED",
+      "color_accent": "#C4B5FD",
+      "unlock_rank": "VENEX"
+    },
+    {
+      "id": "SKN_Huran_Guarda_Overlord",
+      "name": "Guarda Overlord",
+      "rarity": "LENDARIO",
+      "color_primary": "#F59E0B",
+      "color_accent": "#FDE68A",
+      "unlock_rank": "ONITH"
+    },
+    {
+      "id": "SKN_Huran_Khaaos_Prime",
+      "name": "Khaaos Prime",
+      "rarity": "MITICO",
+      "color_primary": "#EF4444",
+      "color_accent": "#FCA5A5",
+      "unlock_rank": "MALAKOR"
+    }
+  ],
+  "animations": [
+    {
+      "id": "ANM_SPC_Huran_01",
+      "name": "idle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_02",
+      "name": "walk",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_03",
+      "name": "run",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_04",
+      "name": "sprint",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_05",
+      "name": "slide",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_06",
+      "name": "jump_start",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_07",
+      "name": "jump_loop",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_08",
+      "name": "jump_land",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_09",
+      "name": "shoot_rifle",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_10",
+      "name": "shoot_sniper",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_11",
+      "name": "shoot_shotgun",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_12",
+      "name": "reload",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_13",
+      "name": "melee",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_14",
+      "name": "downed",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_15",
+      "name": "eliminated",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_16",
+      "name": "revive",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_17",
+      "name": "grappling_hook",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_18",
+      "name": "shield_activate",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_19",
+      "name": "heal_use",
+      "skeleton": "SK_Manny"
+    },
+    {
+      "id": "ANM_SPC_Huran_20",
+      "name": "loot_pickup",
+      "skeleton": "SK_Manny"
+    }
+  ]
+}

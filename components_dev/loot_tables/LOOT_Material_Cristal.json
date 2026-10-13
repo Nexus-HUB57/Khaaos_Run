@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Material_Cristal",
+  "name": "Material Cristal",
+  "type": "Recurso",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 84,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8
+}

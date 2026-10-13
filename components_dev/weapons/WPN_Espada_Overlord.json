@@ -1,0 +1,17 @@
+{
+  "id": "WPN_Espada_Overlord",
+  "name": "Espada Overlord",
+  "slot": "MELEE",
+  "category": "SWORD",
+  "damage": 75,
+  "fire_rate": 0,
+  "accuracy": 100,
+  "range": 3,
+  "mag": 1,
+  "reload": 0,
+  "rarity": "LENDARIO",
+  "price": 1760,
+  "headshot": 1.5,
+  "speed_mod": 1.02,
+  "ammo": "melee"
+}

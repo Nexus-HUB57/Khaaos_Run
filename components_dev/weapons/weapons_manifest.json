@@ -1,0 +1,84 @@
+{
+  "manifest_version": "1.0.0",
+  "generated_at": "2026-10-13T01:07:39.821254+00:00",
+  "weapon_count": 11,
+  "weapons": [
+    {
+      "id": "WPN_Pistol_Onith",
+      "name": "Pistol Onith",
+      "slot": "SECONDARY",
+      "category": "PISTOL",
+      "rarity": "RARO"
+    },
+    {
+      "id": "WPN_SMG_Huran",
+      "name": "SMG Huran",
+      "slot": "PRIMARY",
+      "category": "SMG",
+      "rarity": "RARO"
+    },
+    {
+      "id": "WPN_AssaultRifle_MK1",
+      "name": "Assault Rifle MK1",
+      "slot": "PRIMARY",
+      "category": "ASSAULT_RIFLE",
+      "rarity": "RARO"
+    },
+    {
+      "id": "WPN_Carbine_Venex",
+      "name": "Carbine Venex",
+      "slot": "PRIMARY",
+      "category": "CARBINE",
+      "rarity": "RARO"
+    },
+    {
+      "id": "WPN_Sniper_DMR",
+      "name": "Sniper DMR",
+      "slot": "PRIMARY",
+      "category": "SNIPER",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "WPN_DMR_Khael",
+      "name": "DMR Khael",
+      "slot": "PRIMARY",
+      "category": "DMR",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "WPN_Shotgun_Breach",
+      "name": "Shotgun Breach",
+      "slot": "PRIMARY",
+      "category": "SHOTGUN",
+      "rarity": "RARO"
+    },
+    {
+      "id": "WPN_LMG_Skeetw",
+      "name": "LMG Skeetw",
+      "slot": "PRIMARY",
+      "category": "LMG",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "WPN_Knife_Combat",
+      "name": "Knife Combat",
+      "slot": "MELEE",
+      "category": "KNIFE",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "WPN_Espada_Overlord",
+      "name": "Espada Overlord",
+      "slot": "MELEE",
+      "category": "SWORD",
+      "rarity": "LENDARIO"
+    },
+    {
+      "id": "WPN_Canhao_KhaaosPrime",
+      "name": "Canhão Khaaos Prime",
+      "slot": "PRIMARY",
+      "category": "EXOTIC",
+      "rarity": "MITICO"
+    }
+  ]
+}

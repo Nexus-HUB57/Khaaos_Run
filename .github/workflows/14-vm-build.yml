@@ -1,0 +1,32 @@
+{
+  "name": "14 — VM Build",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "world": {
+          "description": "World to build",
+          "required": false,
+          "default": "CIGKV"
+        }
+      }
+    }
+  },
+  "jobs": {
+    "vm-build": {
+      "runs-on": "self-hosted",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "name": "Provision VM",
+          "run": "bash infra/vm_deploy/provision.sh"
+        },
+        {
+          "name": "Health Check",
+          "run": "bash infra/vm_deploy/health_check.sh"
+        }
+      ]
+    }
+  }
+}

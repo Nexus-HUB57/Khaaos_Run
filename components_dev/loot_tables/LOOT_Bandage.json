@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Bandage",
+  "name": "Bandage",
+  "type": "Curativo",
+  "rarity": "COMUM",
+  "heal": 10,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 25,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1
+}

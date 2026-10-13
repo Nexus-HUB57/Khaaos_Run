@@ -1,0 +1,12 @@
+{
+  "id": "LOOT_Mina_Khaaos",
+  "name": "Mina Khaaos",
+  "type": "Utilidade",
+  "rarity": "EPICO",
+  "heal": 0,
+  "defense": 0,
+  "auto_revive": false,
+  "price": 375,
+  "rarity_weight": 12,
+  "rarity_multiplier": 7.5
+}
