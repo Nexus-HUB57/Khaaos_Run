@@ -127,12 +127,21 @@ GameMode → PlayerState: KhaaosPlayerState
 GameMode → HUD: KhaaosHUD
 ```
 
+#### SafeZone damage and elimination
+
+- `AKhaaosGameMode` applies one instant `CreateZoneDamageEffect` to each player outside the active zone, on the server only.
+- `AKhaaosPlayerState` owns the replicated Ability System Component and `UKhaaosAttributeSet`; `Health` and `MaxHealth` replicate through GAS.
+- Apply the effect through `UKhaaosEffectApplier::ApplyZoneDamage(ASC, Damage, SafeZone)`. The applier rejects non-`AKhaaosSafeZone` causers and sets both the Gameplay Effect instigator and `EffectCauser` to the SafeZone actor in the effect context.
+- When authoritative Health reaches zero, `UKhaaosAttributeSet::OnOutOfHealth` routes to `AKhaaosGameMode::EliminatePlayer`; the GameMode records `ZONA`, updates status/stats, and broadcasts elimination once.
+- Do not separately call `EliminatePlayer` after applying the zone effect; death is driven by the GAS attribute event.
+
 ### 7. Test & Iterate
 
 ```
 - PIE (Play In Editor) with 2+ players
 - Verify the Niagara zone boundary follows replicated center/radius on server and clients
-- Verify players outside the world-space zone take server-authoritative damage
+- Verify players outside the world-space zone take server-authoritative damage and the effect context reports the SafeZone as `EffectCauser`
+- Verify Health replication to clients and one-time elimination with cause `ZONA` when Health reaches zero
 - Test ZEX interaction
 - Test Zu entry sequences
 - Verify loot spawning per phase

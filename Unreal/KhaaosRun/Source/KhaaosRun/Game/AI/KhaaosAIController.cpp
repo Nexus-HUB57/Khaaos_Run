@@ -300,7 +300,10 @@ bool AKhaaosAIController::ShouldRetreat() const
         // Retreat if health below threshold
         if (CachedAttributeSet)
         {
-                float HealthFraction = CachedAttributeSet->Health / CachedAttributeSet->MaxHealth;
+			const float MaxHealth = CachedAttributeSet->GetMaxHealth();
+			const float HealthFraction = MaxHealth > 0.0f
+				? CachedAttributeSet->GetHealth() / MaxHealth
+				: 0.0f;
                 if (HealthFraction < RetreatHealthThreshold)
                 {
                         return true;

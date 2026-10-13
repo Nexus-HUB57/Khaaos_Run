@@ -358,7 +358,7 @@ void AKhaaosGameMode::Logout(AController* Exiting)
 
 void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Eliminator, const FString& Cause)
 {
-        if (!Victim)
+        if (!HasAuthority() || !Victim)
         {
                 return;
         }
@@ -369,10 +369,8 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
                 return;
         }
 
-        // Set victim status
-        VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
-
-        // Set elimination cause
+        // Set attribution before broadcasting the status transition so listeners
+        // observe a complete elimination record.
         if (Cause == TEXT("ZONA"))
         {
                 VictimPS->EliminationCause = EEliminationCause::Zona;
@@ -385,19 +383,20 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
         {
                 VictimPS->EliminationCause = EEliminationCause::Queda;
         }
+        VictimPS->EliminatorId.Empty();
+        VictimPS->Deaths++;
 
-        // Credit eliminator with kill
         if (Eliminator && Eliminator != Victim)
         {
-                AKhaaosPlayerState* ElimPS = Cast<AKhaaosPlayerState>(Eliminator);
-                if (ElimPS)
+                if (AKhaaosPlayerState* ElimPS = Cast<AKhaaosPlayerState>(Eliminator))
                 {
                         ElimPS->Kills++;
                         VictimPS->EliminatorId = ElimPS->GetUniqueId().ToString();
                 }
         }
 
-        // Broadcast elimination
+        VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+
         if (KhaaosGameState)
         {
                 KhaaosGameState->OnPlayerEliminated.Broadcast(
@@ -464,16 +463,9 @@ void AKhaaosGameMode::ApplyZoneDamage()
 									? (!PlayerPawn || SafeZone->IsInsideWorldZone(PlayerPawn->GetActorLocation()))
 									: SafeZone->IsInsideZone(KPS->MapPosition);
 								if (!bInsideSafeZone)
-								{
-                                                float ZoneDamage = SafeZone->DamagePerTick;
-                                                KPS->ApplyDamage(ZoneDamage, nullptr);
-
-                                                // If killed by zone damage, eliminate
-                                                if (KPS->Health <= 0.0f)
-                                                {
-                                                        EliminatePlayer(PS, nullptr, TEXT("ZONA"));
-                                                }
-                                        }
+									{
+										KPS->ApplyZoneDamage(SafeZone->DamagePerTick, SafeZone);
+	                                        }
                                 }
                         }
                 }
