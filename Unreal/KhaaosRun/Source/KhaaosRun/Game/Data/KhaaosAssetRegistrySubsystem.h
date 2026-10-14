@@ -58,6 +58,14 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Species")
     UKhaaosSpeciesDataAsset* GetSpecies(FName SpeciesID) const;
 
+    /** Get species data by ID (alias for Blueprint compat). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Species")
+    UKhaaosSpeciesDataAsset* GetSpeciesByID(FName SpeciesID) const { return GetSpecies(SpeciesID); }
+
+    /** Get species available in a specific world. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Species")
+    TArray<UKhaaosSpeciesDataAsset*> GetSpeciesForWorld(FName WorldID) const;
+
     /** Get all species. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Species")
     const TArray<UKhaaosSpeciesDataAsset*>& GetAllSpecies() const;
@@ -67,6 +75,10 @@ public:
     /** Get weapon data by ID. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Weapon")
     UKhaaosWeaponDataAsset* GetWeapon(FName WeaponID) const;
+
+    /** Get weapon data by ID (alias for Blueprint compat). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Weapon")
+    UKhaaosWeaponDataAsset* GetWeaponByID(FName WeaponID) const { return GetWeapon(WeaponID); }
 
     /** Get all weapons. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Weapon")
@@ -78,6 +90,10 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Loot")
     UKhaaosLootItemDataAsset* GetLootItem(FName ItemID) const;
 
+    /** Get loot item data by ID (alias for Blueprint compat). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Loot")
+    UKhaaosLootItemDataAsset* GetLootItemByID(FName ItemID) const { return GetLootItem(ItemID); }
+
     /** Get all loot items. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|Loot")
     const TArray<UKhaaosLootItemDataAsset*>& GetAllLootItems() const;
@@ -87,6 +103,10 @@ public:
     /** Get world config by ID. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|World")
     UKhaaosWorldConfigDataAsset* GetWorldConfig(FName WorldID) const;
+
+    /** Get world config by ID (alias for Blueprint compat). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|World")
+    UKhaaosWorldConfigDataAsset* GetWorldConfigByID(FName WorldID) const { return GetWorldConfig(WorldID); }
 
     /** Get all world configs. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Registry|World")
