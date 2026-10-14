@@ -29,18 +29,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);
+  registerApiRoutes(app);
+  return httpServer;
+}
 
+// Kept separate from OIDC setup so HTTP authorization boundaries can be tested
+// without discovery, session storage, or a live identity provider.
+export function registerApiRoutes(app: Express): void {
   const getUserId = (req: any): string => {
     if (!req.user?.claims?.sub) throw new Error("Unauthorized");
     return req.user.claims.sub as string;
   };
 
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    next();
-  };
-
-  const requireZoneOperator = createZoneOperatorGuard();
+  const requireAuth = isAuthenticated;
+  const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {
@@ -321,7 +323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/zone/start", requireZoneOperator, async (req, res) => {
+  app.post("/api/zone/start", ...requireZoneOperator, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, zoneStartInput);
       if (!input) return;
@@ -331,7 +333,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Erro ao iniciar zona" }); }
   });
 
-  app.post("/api/zone/stop", requireZoneOperator, async (req, res) => {
+  app.post("/api/zone/stop", ...requireZoneOperator, async (req, res) => {
     if (!parseMutationBody(req, res, emptyMutationInput)) return;
     try { await storage.stopAllZoneSessions(); res.json({ message: "Zona desativada" }); }
     catch { res.status(500).json({ message: "Erro" }); }
@@ -349,7 +351,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Erro ao aplicar dano" }); }
   });
 
-  app.post("/api/zone/heal", requireZoneOperator, async (req, res) => {
+  app.post("/api/zone/heal", ...requireZoneOperator, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, zoneHealInput);
       if (!input) return;
@@ -365,7 +367,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Erro ao buscar loot" }); }
   });
 
-  app.post("/api/loot/spawn", requireZoneOperator, async (req, res) => {
+  app.post("/api/loot/spawn", ...requireZoneOperator, async (req, res) => {
     try {
       if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const items = await storage.spawnLootPresets();
@@ -413,7 +415,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/rooms/:id", requireAuth, (req, res) => {
-    const summary = roomManager.getRoomSummary(req.params.id);
+    const roomId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const summary = roomManager.getRoomSummary(roomId);
     if (!summary) return res.status(404).json({ message: "Room not found" });
     res.json(summary);
   });
@@ -558,6 +561,4 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: err.message || "Batch simulation failed" });
     }
   });
-
-  return httpServer;
 }
