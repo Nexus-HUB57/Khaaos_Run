@@ -1,0 +1,148 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Khaaos Run \u2014 World Metrics Dashboard",
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "title": "Players per World",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "khaaos_world_players{world=\"CIGKV\"}",
+          "legendFormat": "CIGKV (50p)"
+        },
+        {
+          "expr": "khaaos_world_players{world=\"Barburhen\"}",
+          "legendFormat": "W1 Barburhen (100p)"
+        },
+        {
+          "expr": "khaaos_world_players{world=\"Priadus\"}",
+          "legendFormat": "W2 Priadus (75p)"
+        },
+        {
+          "expr": "khaaos_world_players{world=\"Ckesalth\"}",
+          "legendFormat": "W3 Ckesalth (60p)"
+        },
+        {
+          "expr": "khaaos_world_players{world=\"Arukheea\"}",
+          "legendFormat": "W4 Arukheea (80p)"
+        }
+      ]
+    },
+    {
+      "title": "Loot Density per World",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "khaaos_world_loot_spawned{world=\"CIGKV\"}",
+          "legendFormat": "CIGKV"
+        },
+        {
+          "expr": "khaaos_world_loot_spawned{world=\"Barburhen\"}",
+          "legendFormat": "Barburhen"
+        },
+        {
+          "expr": "khaaos_world_loot_spawned{world=\"Priadus\"}",
+          "legendFormat": "Priadus"
+        },
+        {
+          "expr": "khaaos_world_loot_spawned{world=\"Ckesalth\"}",
+          "legendFormat": "Ckesalth"
+        },
+        {
+          "expr": "khaaos_world_loot_spawned{world=\"Arukheea\"}",
+          "legendFormat": "Arukheea"
+        }
+      ]
+    },
+    {
+      "title": "Pulso Khaaos Events per World",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_pulso_events_total{world=\"CIGKV\"}[5m])",
+          "legendFormat": "CIGKV"
+        },
+        {
+          "expr": "rate(khaaos_pulso_events_total{world=\"Barburhen\"}[5m])",
+          "legendFormatB": "Barburhen"
+        },
+        {
+          "expr": "rate(khaaos_pulso_events_total{world=\"Priadus\"}[5m])",
+          "legendFormat": "Priadus"
+        },
+        {
+          "expr": "rate(khaaos_pulso_events_total{world=\"Ckesalth\"}[5m])",
+          "legendFormat": "Ckesalth"
+        },
+        {
+          "expr": "rate(khaaos_pulso_events_total{world=\"Arukheea\"}[5m])",
+          "legendFormat": "Arukheea"
+        }
+      ]
+    },
+    {
+      "title": "World Transition Funnel",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(khaaos_world_transitions_total{from=\"CIGKV\"})",
+          "legendFormat": "CIGKV\u2192W1"
+        },
+        {
+          "expr": "sum(khaaos_world_transitions_total{from=\"Barburhen\"})",
+          "legendFormat": "W1\u2192W2"
+        },
+        {
+          "expr": "sum(khaaos_world_transitions_total{from=\"Priadus\"})",
+          "legendFormat": "W2\u2192W3"
+        },
+        {
+          "expr": "sum(khaaos_world_transitions_total{from=\"Ckesalth\"})",
+          "legendFormat": "W3\u2192W4"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "khaaos",
+    "world",
+    "production"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Khaaos Run \u2014 World Metrics",
+  "uid": "khaaos-world",
+  "version": 1
+}

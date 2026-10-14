@@ -33,5 +33,63 @@
     "09-health-check-verify"
   ],
   "files_generated": 112,
-  "completed_at": "2026-10-13T01:07:39.828626+00:00"
+  "completed_at": "2026-10-13T01:07:39.828626+00:00",
+  "phase2_generated_at": "2026-10-14T22:34:29Z",
+  "phase2_artifacts": {
+    "terraform": {
+      "variables_tf": true,
+      "outputs_tf": true,
+      "main_tf_enhanced": true,
+      "3_regions": [
+        "sa1",
+        "na1",
+        "eu1"
+      ],
+      "ecs_fargate": true,
+      "rds_postgresql_16": true,
+      "elasticache_redis_7": true,
+      "cloudflare_dns": true,
+      "acm_certificate": true
+    },
+    "grafana_dashboards": {
+      "production": true,
+      "match_detail": true,
+      "economy_detail": true,
+      "world_metrics": true,
+      "total_panels": 30
+    },
+    "prometheus_alerts": {
+      "critical": true,
+      "warning": true,
+      "economy_ledger": true,
+      "database": true,
+      "total_rules": 20
+    },
+    "eos_cloudsave_bridge": true,
+    "gamemode_enhanced": {
+      "data_asset_driven": true,
+      "species_selection": true,
+      "weapon_loadout": true,
+      "loot_distribution": true,
+      "world_transition": true,
+      "pulso_khaaos_event": true,
+      "world_sequence": [
+        "CIGKV",
+        "Barburhen",
+        "Priadus",
+        "Ckesalth",
+        "Arukheea"
+      ]
+    },
+    "blueprint_library": {
+      "species_helpers": true,
+      "weapon_helpers": true,
+      "loot_helpers": true,
+      "world_helpers": true,
+      "rarity_helpers": true,
+      "economy_helpers": true
+    }
+  },
+  "total_phase2_files": 14,
+  "e2e_status": "PHASE2_COMPLETE"
 }

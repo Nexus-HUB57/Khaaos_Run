@@ -1,0 +1,111 @@
+# ============================================================================
+# Khaaos Run — Prometheus Economy Alerting Rules
+# Economy-specific: ledger integrity, supply cap, inflation, loan defaults
+# ============================================================================
+
+groups:
+  # ─── Economy Ledger Alerts ────────────────────────────────────────────────
+  - name: khaaos_economy_ledger
+    rules:
+      - alert: KhaaosLedgerIntegrityFail
+        expr: khaaos_economy_ledger_integrity_check == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: economy
+        annotations:
+          summary: "KRC ledger integrity check FAILED"
+          description: "SHA-256 hash chain broken — possible tampering or data corruption."
+
+      - alert: KhaaosSupplyCapApproaching
+        expr: (khaaos_economy_krc_circulating / 1000000(08)0) > 0.85
+        for: 30m
+        labels:
+          severity: warning
+          team: economy
+        annotations:
+          summary: "KRC supply cap >85%"
+          description: "Circulation at {{ $value | humanizePercentage }} of 1B cap."
+
+      - alert: KhaaosSupplyCapCritical
+        expr: (khaaos_economy_krc_circulating / 1000000000) > 0.95
+        for: 10m
+        labels:
+          severity: critical
+          team: economy
+        annotations:
+          summary: "KRC supply cap >95% — CRITICAL"
+          description: "Minting must be throttled. Supply: {{ $value | humanizePercentage }} of 1B."
+
+      - alert: KhaaosInflationSpike
+        expr: rate(khaaos_economy_krc_earned_total[1h]) > rate(khaaos_economy_krc_spent_total[1h]) * 3
+        for: 15m
+        labels:
+          severity: warning
+          team: economy
+        annotations:
+          summary: "KRC inflation >3x burn rate"
+          description: "Earning rate far exceeds spending — possible exploit."
+
+      - alert: KhaaosLoanDefaultsRising
+        expr: rate(khaaos_economy_loans_defaulted_total[1h]) > 5
+        for: 30m
+        labels:
+          severity: warning
+          team: economy
+        annotations:
+          summary: "Loan defaults rising"
+          description: "{{ $value }} defaults/hour — check interest rates."
+
+      - alert: KhaaosEconomyAPIErrorRate
+        expr: rate(khaaos_economy_api_errors_total[5m]) / rate(khaaos_economy_api_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          team: economy
+        annotations:
+          summary: "Economy API error rate >1%"
+          description: "{{ $value | humanizePercentage }} error rate on /api/economy endpoints."
+
+  # ─── Database Alerts ──────────────────────────────────────────────────────
+  - name: khaaos_database
+    rules:
+      - alert: KhaaosPostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "PostgreSQL is DOWN"
+          description: "Database {{ $labels.instance }} unreachable."
+
+      - alert: KhaaosPostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_exec_seconds{datname="khaaos_run"}[5m]) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Mean exec time {{ $value }}s — investigate query performance."
+
+      - alert: KhaaosRedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Redis is DOWN"
+          description: "Redis {{ $labels.instance }} unreachable."
+
+      - alert: KhaaosRedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Redis memory >90%"
+          description: "Memory at {{ $value | humanizePercentage }} — consider eviction policy review."
