@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayCueInterface.h"
 #include "KhaaosPlayerState.generated.h"
 
 class UAbilitySystemComponent;
@@ -53,7 +54,7 @@ enum class EEliminationCause : uint8
  * scoreboard and matchmaking.
  */
 UCLASS(Abstract)
-class AKhaaosPlayerState : public APlayerState, public IAbilitySystemInterface
+class AKhaaosPlayerState : public APlayerState, public IAbilitySystemInterface, public IGameplayCueInterface
 {
 	GENERATED_BODY()
 
@@ -63,6 +64,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	virtual void HandleGameplayCue(AActor* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
 	/** GAS owner for persistent player attributes/effects. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Abilities")

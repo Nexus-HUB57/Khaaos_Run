@@ -7,9 +7,12 @@
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/KhaaosGameMode.h"
+#include "Game/UI/KhaaosHUD.h"
+#include "Game/UI/Widgets/KhaaosHUDWidget.h"
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 
 // ─── Static XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ───────────────────
@@ -116,6 +119,54 @@ UAbilitySystemComponent* AKhaaosPlayerState::GetAbilitySystemComponent() const
 	return AbilitySystemComponent;
 }
 
+void AKhaaosPlayerState::HandleGameplayCue(
+	AActor* Self,
+	FGameplayTag GameplayCueTag,
+	EGameplayCueEvent::Type EventType,
+	const FGameplayCueParameters& Parameters)
+{
+	(void)Parameters;
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	if (Self != this || GameplayCueTag != Tags.GameplayCue_Damage_Zone ||
+		EventType != EGameplayCueEvent::Executed)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PlayerController = It->Get();
+		if (!PlayerController || !PlayerController->IsLocalController() || PlayerController->PlayerState != this)
+		{
+			continue;
+		}
+
+		if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(PlayerController->GetHUD()))
+		{
+			if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
+			{
+				const float CurrentHealth = KhaaosAttributeSet ? KhaaosAttributeSet->GetHealth() : Health;
+				const float CurrentMaxHealth = KhaaosAttributeSet ? KhaaosAttributeSet->GetMaxHealth() : MaxHealth;
+				if (PlayerStatus != EPlayerStatus::Vivo || CurrentHealth <= 0.0f)
+				{
+					HUDWidget->StopSafeZoneWarningAudio();
+				}
+				else
+				{
+					HUDWidget->NotifySafeZoneDamageCue(CurrentHealth, CurrentMaxHealth);
+				}
+			}
+		}
+		break;
+	}
+}
+
 void AKhaaosPlayerState::HandleAttributeChanged(
 	UKhaaosAttributeSet* AttributeSet,
 	const FString& AttributeName,
@@ -172,6 +223,31 @@ void AKhaaosPlayerState::OnRep_PlayerStatus()
 {
         // Client-side status indicator update
         OnPlayerStatusChanged.Broadcast(PlayerStatus, PlayerStatus);
+	if (PlayerStatus == EPlayerStatus::Vivo)
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* PlayerController = It->Get();
+			if (!PlayerController || !PlayerController->IsLocalController() || PlayerController->PlayerState != this)
+			{
+				continue;
+			}
+
+			if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(PlayerController->GetHUD()))
+			{
+				if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
+				{
+					HUDWidget->StopSafeZoneWarningAudio();
+				}
+			}
+			break;
+		}
+	}
 }
 
 // ─── Server Authority Methods ───────────────────────────────────────────────────

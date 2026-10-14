@@ -86,6 +86,7 @@ void FKhaaosGameplayTags::InitializeTags()
 	GameplayTags.Effect_Damage_Fire       = RequestTag(GameplayTags.Effect_Damage_Fire,       "Effect.Damage.Fire");
 	GameplayTags.Effect_Damage_Melee      = RequestTag(GameplayTags.Effect_Damage_Melee,      "Effect.Damage.Melee");
 	GameplayTags.Effect_Damage_Zone       = RequestTag(GameplayTags.Effect_Damage_Zone,       "Effect.Damage.Zone");
+	GameplayTags.GameplayCue_Damage_Zone  = RequestTag(GameplayTags.GameplayCue_Damage_Zone,  "GameplayCue.Damage.Zone");
 
 	// ─── Effect.Buff ─────────────────────────────────────────────────────
 

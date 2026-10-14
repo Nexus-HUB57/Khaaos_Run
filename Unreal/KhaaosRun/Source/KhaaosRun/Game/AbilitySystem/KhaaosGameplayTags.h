@@ -143,6 +143,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|Effect|Damage")
 	FGameplayTag Effect_Damage_Zone;
 
+	// ─── GameplayCue ────────────────────────────────────────────────────────
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|GameplayCue")
+	FGameplayTag GameplayCue_Damage_Zone;
+
 	// ─── Effect.Buff ─────────────────────────────────────────────────────
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|Effect|Buff")

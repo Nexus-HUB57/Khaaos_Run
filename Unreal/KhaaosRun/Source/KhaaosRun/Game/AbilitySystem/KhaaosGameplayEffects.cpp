@@ -246,6 +246,10 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerH
 	GrantedTags.AddTag(Tags.Effect_Damage_Zone);
 	Effect->GrantedTags = GrantedTags;
 
+	FGameplayEffectCue ZoneDamageCue;
+	ZoneDamageCue.GameplayCueTag = Tags.GameplayCue_Damage_Zone;
+	Effect->GameplayCues.Add(ZoneDamageCue);
+
 	// Single modifier: subtract this tick's damage from Health.
 	FGameplayModifierInfo ModifierInfo;
 	ModifierInfo.Attribute = UKhaaosAttributeSet::GetHealthAttribute();

@@ -134,6 +134,18 @@ GameMode → HUD: KhaaosHUD
 - Apply the effect through `UKhaaosEffectApplier::ApplyZoneDamage(ASC, Damage, SafeZone)`. The applier rejects non-`AKhaaosSafeZone` causers and sets both the Gameplay Effect instigator and `EffectCauser` to the SafeZone actor in the effect context.
 - When authoritative Health reaches zero, `UKhaaosAttributeSet::OnOutOfHealth` routes to `AKhaaosGameMode::EliminatePlayer`; the GameMode records `ZONA`, updates status/stats, and broadcasts elimination once.
 - Do not separately call `EliminatePlayer` after applying the zone effect; death is driven by the GAS attribute event.
+- The instant effect carries `GameplayCue.Damage.Zone`. `AKhaaosPlayerState` handles that tag through `IGameplayCueInterface` and forwards it only to its owning local HUD; no separate GameplayCue Blueprint asset is required for this handler. The cue is cosmetic and never drives damage or elimination.
+- The HUD triggers the Blueprint event `PlayZoneDamageVignette` and loops `Content/Audio/SFX/SFX_ZoneWarningBeep.wav` locally. The interval scales from 0.90 s at full Health down to 0.18 s at zero Health, with a small pitch rise; it stops 1.65 s after the last cue or immediately when the player is eliminated.
+- The WAV is source audio. On first project open, Unreal imports it as `/Game/Audio/SFX/SFX_ZoneWarningBeep`; the widget's soft reference already points to that asset. Override the reference in the HUD widget Blueprint if the project uses a different import path, and implement `PlayZoneDamageVignette` in that widget Blueprint.
+
+#### Configure the warning Sound Cue in Unreal Editor
+
+1. In the Content Browser, create a **Sound Cue** under `Content/Audio/SFX` and name it `SC_ZoneWarningBeep`.
+2. Open the cue and build `Wave Player (SFX_ZoneWarningBeep) → Modulator → Output`. For a restrained random pitch variation, set `Pitch Min = 0.98` and `Pitch Max = 1.02`; set `Volume Min = 0.95` and `Volume Max = 1.0`. Preview it with **Play Cue** and save.
+3. Open the HUD Widget Blueprint derived from `KhaaosHUDWidget`. In **Class Defaults**, set `ZoneWarningBeepSound` to `SC_ZoneWarningBeep`, then compile and save. The property is a `USoundBase` soft reference, so it accepts either the imported Sound Wave or the Sound Cue. The cue's small pitch randomization is layered with the C++ pitch multiplier (1.0–1.35) based on Health; use `Pitch Min = Pitch Max = 1.0` if the combined modulation sounds too strong.
+4. For an optional spatial variant, create a **Sound Attenuation** asset such as `SA_ZoneWarningBeep`, choose a Sphere shape, enable volume attenuation and spatialization, and set the inner radius/falloff to suit the level. Assign it in the Sound Cue Output's **Attenuation Settings** (or use an Attenuation node).
+
+**Important:** the current HUD calls `UGameplayStatics::PlaySound2D`, which intentionally plays UI audio without attenuation. Therefore, `SA_ZoneWarningBeep` will not make this warning quieter with distance. Keep the current warning 2D for consistent local feedback. To use the attenuation asset, change the playback path to a world-positioned sound (for example `PlaySoundAtLocation` or an attached Audio Component) and provide a meaningful source location; that is a separate spatial-audio behavior, not just an Editor asset setting.
 
 ### 7. Test & Iterate
 
@@ -141,12 +153,21 @@ GameMode → HUD: KhaaosHUD
 - PIE (Play In Editor) with 2+ players
 - Verify the Niagara zone boundary follows replicated center/radius on server and clients
 - Verify players outside the world-space zone take server-authoritative damage and the effect context reports the SafeZone as `EffectCauser`
+- Confirm the owning client gets one vignette/beep response per SafeZone damage cue; another player's HUD must not receive it, and the beep should stop after leaving the damage area
 - Verify Health replication to clients and one-time elimination with cause `ZONA` when Health reaches zero
 - Test ZEX interaction
 - Test Zu entry sequences
 - Verify loot spawning per phase
 - Run standalone dedicated server test
 ```
+
+Run the C++ automation checks from the Unreal Editor console with:
+
+```text
+Automation RunTests Khaaos.GAS.SafeZone
+```
+
+`Khaaos.GAS.SafeZone.GameplayCueDispatch` applies the actual instant zone Gameplay Effect to a transient ASC target and asserts that the native interface receives the expected `Executed` tag once, alongside the Health reduction. `Khaaos.GAS.SafeZone.WarningCadence` checks that the beep interval decreases with Health and remains clamped at its configured limits. Both tests live under `Source/KhaaosRun/Private/Tests` and run in the Editor context.
 
 ## Convenções de Nomenclatura
 
@@ -165,3 +186,7 @@ GameMode → HUD: KhaaosHUD
 - Level Actor: `Game/Level/KhaaosCIGKVLevel.h`
 - Map Data: `Game/World/CIGKV/KhaaosCIGKVMapData.h`
 - Config: `Config/DefaultCIGKV.ini`
+- [Sound Cue Editor](https://dev.epicgames.com/documentation/unreal-engine/sound-cue-editor-in-unreal-engine)
+- [Sound Cue Reference (Modulator and Attenuation nodes)](https://dev.epicgames.com/documentation/unreal-engine/sound-cue-reference-for-unreal-engine)
+- [Sound Attenuation](https://dev.epicgames.com/documentation/unreal-engine/sound-attenuation-in-unreal-engine)
+- [`UGameplayStatics::PlaySound2D`](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/UGameplayStatics/PlaySound2D)
