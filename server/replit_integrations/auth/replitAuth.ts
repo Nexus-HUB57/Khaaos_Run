@@ -60,13 +60,23 @@ async function upsertUser(claims: any) {
   });
 }
 
-export async function setupAuth(app: Express) {
+export type AuthSetupOptions = {
+  sessionMiddleware?: RequestHandler;
+  upsertUser?: (claims: any) => Promise<unknown>;
+  oidcConfig?: client.Configuration;
+};
+
+export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
+  if (process.env.NODE_ENV === "production" &&
+    (options.sessionMiddleware || options.upsertUser || options.oidcConfig)) {
+    throw new Error("Auth test overrides are not allowed in production");
+  }
   app.set("trust proxy", 1);
-  app.use(getSession());
+  app.use(options.sessionMiddleware ?? getSession());
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  const config = options.oidcConfig ?? await getOidcConfig();
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -74,7 +84,7 @@ export async function setupAuth(app: Express) {
   ) => {
     const user = {};
     updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
+    await (options.upsertUser ?? upsertUser)(tokens.claims());
     verified(null, user);
   };
 
