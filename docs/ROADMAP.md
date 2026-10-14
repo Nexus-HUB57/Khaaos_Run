@@ -102,7 +102,7 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 - [x] Reduzir o chunk inicial de aproximadamente 613 kB minificados para aproximadamente 386 kB minificados no build medido.
 - [x] Implementar no War’I os filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes do item e seleção persistida da PackBack com atualização limitada ao proprietário.
 - [x] Carregar no fim do countdown apenas a PackBack persistida do próprio usuário; arma durável define dano/alcance, defesa durável acrescenta vida máxima (limite 200) e falha de leitura pausa a partida.
-- [x] Conectar cura (`CURATIVO`), granada em área e reconhecimento temporário (`UTILIDADE`) a ações autoritativas no combate; validar snapshot/ownership, limitar frequência e consumir durabilidade atomicamente, com feedback no HUD e cobertura unitária/de integração.
+- [x] Conectar cura (`CURATIVO`), granada em área e reconhecimento temporário (`UTILIDADE`) a ações autoritativas no combate; validar snapshot/ownership, limitar frequência e consumir durabilidade atomicamente, com feedback no HUD, testes unitários/de integração e jornada E2E via WebSocket autenticado (match → ação → dano/ack; persistência isolada por fixture).
 - [x] Definir regras de gameplay server-authoritative para capacidade (50 pts base, bônus de itens utilitários equipados até 150; pesos por categoria e rejeição de pickup acima do limite) e Adrenalina (+20% por 10s por padrão, limitada a +50%, com movimento avançado no tick do servidor).
 - [ ] Manter testes de Lighthouse em runner estável para mobile e desktop, com percentis/variação documentados.
 - [ ] Definir limites de regressão de LCP, INP, CLS e JavaScript inicial após recolher baseline repetível.

@@ -29,12 +29,16 @@ async function prepareMatch(item: any, playerCount = 2) {
   const originalCreateItem = storage.createItem;
   const ownerSocket = fakeSocket();
   let consumed = 0;
+  let itemReads = 0;
 
   storage.getPlayerStats = async () => ({
     health: 100, maxHealth: 100, status: "VIVO", kills: 0, rating: 1000,
   } as Awaited<ReturnType<typeof storage.getPlayerStats>>);
   storage.getEquippedItems = async (userId) => userId === ownerId ? [item] as any : [];
-  storage.getItemForUser = async (id, userId) => id === item.id && userId === ownerId ? item : undefined;
+  storage.getItemForUser = async (id, userId) => {
+    itemReads += 1;
+    return id === item.id && userId === ownerId ? item : undefined;
+  };
   storage.consumeItemDurability = async (id, userId, amount) => {
     if (id !== item.id || userId !== ownerId || amount !== 10 || Number(item.durability) <= 0) return undefined;
     consumed += 1;
@@ -61,6 +65,7 @@ async function prepareMatch(item: any, playerCount = 2) {
     owner: room.players.get(ownerId),
     ownerSocket,
     get consumed() { return consumed; },
+    get itemReads() { return itemReads; },
     async use(userId: string, id: number) {
       await (roomManager as any).handleMessage(userId, "Operativo", ownerSocket.socket, { type: "use_packback_item", itemId: id });
     },
@@ -147,12 +152,17 @@ test("recon utility returns a temporary private scan of nearby opponents and loo
   }
 });
 
-test("an item outside the player's match-start PackBack is rejected before storage access or consumption", async () => {
+test("an item outside the player's match-start PackBack is rejected before storage read or consumption", async () => {
   const item = makeItem(304, "owner", "CURATIVO", { heal: 25 });
   const match = await prepareMatch(item);
   try {
-    await match.use(match.otherIds[0], item.id);
+    const itemOutsideSnapshot = item.id + 1000;
+    await match.use(match.ownerId, itemOutsideSnapshot);
+    assert.equal(match.owner.packbackItemIds.includes(itemOutsideSnapshot), false);
+    assert.equal(match.itemReads, 0);
     assert.equal(match.consumed, 0);
+    assert.ok(match.ownerSocket.messages.some((message) =>
+      message.type === "error" && message.message.includes("não fazia parte da PackBack")));
   } finally {
     match.cleanup();
   }
