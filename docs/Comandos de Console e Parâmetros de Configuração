@@ -1,0 +1,53 @@
+⚙️ Comandos de Console e Parâmetros de Configuração (Base para o Khaaos Run)
+O Free Fire permite ajustes profundos via SetEdit (app de edição de banco de dados) e ADB, que alteram o comportamento do motor do jogo. Estes são os parâmetros de referência para replicar no Khaaos Run:
+
+Parâmetro (Free Fire)	Valor de Referência	Função Técnica	Aplicação no Khaaos Run
+Dalvik.vm.heapstartsize / heapsize	5m / 512m	Alocação de memória para o motor.	Ajustar o pool de memória da engine para evitar stutters em cenas densas.
+GraphicsQuality / ShadowQuality	2 / 0	Reduz complexidade de shaders e sombras.	Implementar um sistema de escalabilidade de renderização dinâmica.
+Touch.screen.delay	0.00	Zera o delay de input do toque.	Priorizar a latência de input na pipeline de gameplay.
+GyroscopeSensitivity	3.5	Sensibilidade do giroscópio para mira.	Mapear sensibilidade de dispositivos de input (gamepad, mouse) para o giroscópio virtual.
+user_refresh_rate / peak_refresh_rate	90 / 90	Força a taxa de atualização da tela.	Sincronizar a taxa de quadros do jogo com a taxa de atualização do display.
+net.dns	9.9.9.9	DNS alternativo para reduzir ping.	Otimizar a camada de rede para roteamento de baixa latência.
+Referências: Comandos de performance e rede.
+
+🎯 Algoritmos de Mira Assistida e Sensibilidade
+O sistema de Aim Assist do Free Fire é um algoritmo de "puxão magnético" baseado em proximidade. Para replicá-lo no Khaaos Run, é necessário implementar uma lógica de priorização de alvos e fatores de sensibilidade:
+
+Lógica de Aim Assist (Baseado em Área Sensorial): O sistema cria uma "caixa imaginária" ao redor do inimigo. Quando a mira entra nessa área, o algoritmo aplica uma força de atração em direção ao centro de massa do alvo (prioritariamente o tórax, por ter maior área de superfície). A força do magnetismo deve ser inversamente proporcional à distância: forte a curta distância, fraca a longa distância.
+
+Parâmetros de Sensibilidade (Referência para o Khaaos Run): A sensibilidade é dividida por tipo de mira. Os valores abaixo servem como ponto de partida para calibrar o input do seu novo console:
+
+Tipo de Mira	Faixa de Sensibilidade (Free Fire)	Observação Técnica
+Geral / Free Look	90 - 100	Sensibilidade base para movimentação de câmera.
+Ponto Vermelho (Red Dot)	85 - 95	Afeta a precisão em combate de curta distância sem scope.
+Mira 2x	75 - 85	Equilíbrio entre mobilidade e precisão.
+Mira 4x	65 - 75	Requer movimentos mais finos para não perder o alvo.
+Mira AWM (Sniper)	50 - 60	Sensibilidade baixa para estabilidade em longas distâncias.
+Olhadinha (Free Look)	30 - 50	Sensibilidade reduzida para varredura de ambiente.
+Referências: Mecânica do Aim Assist e faixas de sensibilidade.
+
+Modo de Precisão de Mira (Aim Precision): No Free Fire, a configuração "Default" é a mais eficaz, pois permite que o aim assist funcione tanto dentro quanto fora do escopo. Para o Khaaos Run, implemente três modos: Full Control (desliga assistência), Precision Aim (assistência só fora do escopo) e Default (assistência sempre ativa).
+
+🧠 Sistema de Habilidades e Algoritmo de Balanceamento
+O Free Fire estrutura suas habilidades em Ativas (1 slot) e Passivas (3 slots). Para o Khaaos Run, o algoritmo de balanceamento deve seguir a mesma lógica baseada em taxa de escolha (pick rate) e taxa de vitória (win rate).
+
+Tipo de Habilidade	Mecânica	Exemplo (Free Fire)	Implementação no Khaaos Run
+Ativa	Ativada manualmente, com cooldown. Efeito de curta duração e alto impacto.	Alok – Drop the Beat: Aura que restaura HP e aumenta velocidade.	Criar um GameplayAbility com Cooldown e Duration. O efeito deve ser um GameplayEffect que aplica um buff de velocidade e regeneração.
+Passiva	Sempre ativa, sem cooldown. Buffs consistentes.	Kelly – Dash: Aumento permanente de velocidade de corrida.	Implementar como um GameplayEffect infinito (Infinite) que modifica o atributo de MovementSpeed.
+Awakening	Versão aprimorada da habilidade, desbloqueada por missão.	Hayato – Firebrand: Aumenta a penetração de armadura conforme o HP diminui.	Criar uma variação do GameplayAbility base com parâmetros de Modifier mais agressivos, condicionada a uma flag de Unlock.
+Algoritmo de Balanceamento: A Epic/Garena utiliza um ciclo de feedback: Coleta de Dados (Pick/Win Rate) → Análise → Rework (Ajuste de Stats ou Redesign de Mecânica) → Validação. No Khaaos Run, você deve implementar um sistema de telemetria que registre a escolha de habilidades e o resultado das partidas, e uma ferramenta de ajuste remoto (hotfix) para modificar os valores de Cooldown, Duration, Magnitude dos efeitos sem necessidade de atualização do cliente.
+
+Referências: Estrutura de habilidades ativas/passivas e processo de balanceamento da Garena.
+
+🚀 Diretrizes de Aplicação no "Khaaos Run"
+Para aplicar esses parâmetros no seu novo console, siga este fluxo:
+
+Camada de Configuração: Crie um arquivo de configuração global (ex: KhaaosRun.ini) que exponha os parâmetros da tabela acima. Permita que sejam modificados em tempo de execução via console de desenvolvimento (ex: KhaaosRun.Set GraphicsQuality 2).
+
+Módulo de Input: Implemente uma classe AimAssistComponent que recebe a Sensitivity como multiplicador. A lógica de magnetismo deve ser um SphereTrace a cada frame para detectar alvos próximos e aplicar uma força de rotação na câmera.
+
+Framework de Habilidades: Use um sistema baseado em Gameplay Ability System (GAS) da Unreal Engine (ou similar). Defina cada habilidade como um Ability com tags de Cooldown, Cost e Effect. O balanceamento deve ser feito via Data Tables que possam ser atualizadas dinamicamente.
+
+Telemetria: Implemente um AnalyticsSubsystem que envie eventos de AbilityActivated, Kill, Death e MatchEnd. Use esses dados para alimentar o algoritmo de balanceamento automático.
+
+Este guia fornece a base técnica para replicar a sensação de jogo e a profundidade estratégica do Free Fire no seu novo console, adaptando os parâmetros e algoritmos para uma arquitetura de jogo nativa.
