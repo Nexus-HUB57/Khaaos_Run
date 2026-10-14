@@ -1,5 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uniqueIndex, index, check, uuid, bigserial } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -203,7 +203,11 @@ export const bankAccounts = pgTable("bank_accounts", {
   weaponsBalance: numeric("weapons_balance").notNull().default("0"),
   bonusBalance: numeric("bonus_balance").notNull().default("0"),
   fbmBalance: numeric("fbm_balance").notNull().default("0"),
-});
+}, (table) => ({
+  weaponsNonnegative: check("bank_weapons_nonnegative", sql`${table.weaponsBalance} >= 0`),
+  bonusNonnegative: check("bank_bonus_nonnegative", sql`${table.bonusBalance} >= 0`),
+  fbmNonnegative: check("bank_fbm_nonnegative", sql`${table.fbmBalance} >= 0`),
+}));
 
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
@@ -212,8 +216,50 @@ export const transactions = pgTable("transactions", {
   amountKrc: numeric("amount_krc").notNull(),
   amountUsd: numeric("amount_usd"),
   description: text("description"),
+  operationId: uuid("operation_id"),
   timestamp: timestamp("timestamp").defaultNow(),
-});
+}, (table) => ({
+  amountKrcNonnegative: check("transactions_amount_krc_nonnegative", sql`${table.amountKrc} >= 0`),
+  amountUsdNonnegative: check("transactions_amount_usd_nonnegative", sql`${table.amountUsd} IS NULL OR ${table.amountUsd} >= 0`),
+}));
+
+export const economyIdempotency = pgTable("economy_idempotency", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  responseStatus: integer("response_status"),
+  responseBody: jsonb("response_body").$type<Record<string, unknown>>(),
+  operationId: uuid("operation_id").notNull().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userKeyUnique: uniqueIndex("economy_idempotency_user_key_unique").on(table.userId, table.idempotencyKey),
+  operationIdUnique: uniqueIndex("economy_idempotency_operation_id_unique").on(table.operationId),
+  createdAtIndex: index("economy_idempotency_created_at_idx").on(table.createdAt),
+  requestHashSha256: check("economy_idem_hash_sha256", sql`length(${table.requestHash}) = 64`),
+  responseStatusValid: check("economy_idem_response_status_valid", sql`${table.responseStatus} IS NULL OR ${table.responseStatus} BETWEEN 100 AND 599`),
+}));
+
+export const economyLedgerEntries = pgTable("economy_ledger_entries", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  operationId: uuid("operation_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  userId: text("user_id").notNull(),
+  lineNumber: integer("line_number").notNull(),
+  accountCode: text("account_code").notNull(),
+  side: text("side").notNull(),
+  amountKrc: numeric("amount_krc").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  operationLineUnique: uniqueIndex("economy_ledger_operation_line_unique").on(table.operationId, table.lineNumber),
+  userKeyLineUnique: uniqueIndex("economy_ledger_user_key_line_unique").on(table.userId, table.idempotencyKey, table.lineNumber),
+  userAccountTime: index("economy_ledger_user_account_time_idx").on(table.userId, table.accountCode, table.createdAt, table.id),
+  positiveLineNumber: check("economy_ledger_line_number_positive", sql`${table.lineNumber} > 0`),
+  validSide: check("economy_ledger_side_valid", sql`${table.side} IN ('DEBIT', 'CREDIT')`),
+  positiveAmount: check("economy_ledger_amount_positive", sql`${table.amountKrc} > 0`),
+  validAccount: check("economy_ledger_account_valid", sql`${table.accountCode} IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'equity.opening_balance')`),
+}));
 
 export const loans = pgTable("loans", {
   id: serial("id").primaryKey(),
@@ -224,7 +270,13 @@ export const loans = pgTable("loans", {
   daysRemaining: integer("days_remaining").notNull(),
   isPaid: boolean("is_paid").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  principalNonnegative: check("loans_principal_nonnegative", sql`${table.principal} >= 0`),
+  interestNonnegative: check("loans_interest_nonnegative", sql`${table.interest} >= 0`),
+  totalDueNonnegative: check("loans_total_due_nonnegative", sql`${table.totalDue} >= 0`),
+  daysRemainingNonnegative: check("loans_days_remaining_nonnegative", sql`${table.daysRemaining} >= 0`),
+  isPaidPresent: check("loans_is_paid_present", sql`${table.isPaid} IS NOT NULL`),
+}));
 
 export const items = pgTable("items", {
   id: serial("id").primaryKey(),
@@ -238,7 +290,11 @@ export const items = pgTable("items", {
   stats: jsonb("stats").$type<Record<string, number>>(),
   imageUrl: text("image_url"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  durabilityNonnegative: check("items_durability_nonnegative", sql`${table.durability} >= 0`),
+  maxDurabilityNonnegative: check("items_max_durability_nonnegative", sql`${table.maxDurability} >= 0`),
+  durabilityWithinMaximum: check("items_durability_within_maximum", sql`${table.durability} <= ${table.maxDurability}`),
+}));
 
 // BP_SafeZone Actor equivalent
 export const zoneSessions = pgTable("zone_sessions", {
@@ -320,6 +376,7 @@ export const insertItemSchema = createInsertSchema(items).omit({ id: true, creat
 // === TYPES ===
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
+export type EconomyIdempotency = typeof economyIdempotency.$inferSelect;
 export type Loan = typeof loans.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type PlayerStats = typeof playerStats.$inferSelect;
@@ -327,8 +384,8 @@ export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
 export type MatchResult = typeof matchResults.$inferSelect;
-export interface DepositRequest { amountUsd: number; }
-export interface TransferRequest { amountKrc: number; destination: "fbm" | "weapons" | "bonus"; }
+export interface DepositRequest { amountUsd: number | string; }
+export interface TransferRequest { amountKrc: number | string; destination: "fbm" | "bonus"; }
 export interface LoanRequest { amountKrc: number; days: number; }
 export interface CreateItemRequest { name: string; type: keyof typeof ItemType; rarity?: keyof typeof Rarity; }
 

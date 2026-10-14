@@ -28,13 +28,31 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 
 ### 0.2 Atomicidade da economia de jogo
 
-- [ ] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
-- [ ] Usar decimal exato ou unidades inteiras mínimas; eliminar aritmética monetária baseada em `Number`.
-- [ ] Adicionar idempotency key nas mutações que o cliente pode repetir após timeout.
-- [ ] Definir constraints/checks de saldo, status e ownership no banco, não somente na camada Express.
-- [ ] Escrever testes concorrentes para compra, transferência, pagamento e salário.
+- [x] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
+- [x] Usar decimal exato ou unidades inteiras mínimas nas mutações econômicas; saldos usam `numeric` no SQL e entradas usam centavos inteiros.
+- [x] Adicionar idempotency key nas mutações econômicas com persistência e replay de resposta.
+- [x] Definir checks no banco para saldos não negativos, lançamentos, durabilidade e estado dos empréstimos (migration 0003, `NOT VALID` até auditoria).
+- [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
+- [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
+
+**Entrega inicial desta rodada:** depósito, transferência, empréstimo, pagamento, compra, reparo e salário usam o serviço transacional/idempotente. O schema e as migrations foram aplicados e os testes concorrentes passaram em PostgreSQL local descartável; não foi alterado nenhum banco da aplicação, pois não há `DATABASE_URL` disponível. Os checks `NOT VALID` protegem novos/alterados registros; a validação dos dados legados e FKs de ownership continuam pendentes. O rollout está descrito em [`docs/ECONOMY_TRANSACTIONS.md`](./ECONOMY_TRANSACTIONS.md).
 
 **Aceite:** sob chamadas concorrentes, o saldo e o ledger reconciliam; retries não duplicam crédito/débito; falha intermediária reverte tudo.
+
+### 0.3 Auditoria e reconciliação da economia
+
+Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões pendentes de ownership/retention da 0.2.
+
+- [x] Definir contrato de ledger append-only com `operation_id`/chave de idempotência correlacionáveis e lançamentos explícitos por conta de origem/destino; migration 0004 preserva histórico antigo e cria saldos de abertura por carteira.
+- [ ] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
+- [ ] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; só então implementar limpeza monitorada e segura.
+- [ ] Definir fluxo de ajustes administrativos por lançamentos compensatórios append-only, com capability, motivo, ator, horário e trilha de auditoria; proibir correção por update/delete de histórico.
+- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0002 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
+- [ ] Executar migrações e testes PostgreSQL num banco efêmero obrigatório no CI; medir reconciliação antes/depois de carga concorrente e de falhas injetadas.
+
+**Aceite:** todo saldo é explicável por lançamentos correlacionados; reconciliação detecta drift sem mutação automática; ajustes são auditáveis e compensatórios; retries continuam seguros dentro da retenção estabelecida; migrações e checks passam do zero em CI.
+
+**Implementação iniciada:** o contrato e a migration aditiva 0004 agora gravam postings balanceados no mesmo commit econômico, relacionam a claim de idempotência e o evento legado via UUID, e protegem UPDATE/DELETE/TRUNCATE no ledger. As migrations `0000`–`0004` estão registradas na journal Drizzle e foram aplicadas desde banco vazio descartável. A cobertura inclui reconciliação de carteiras em PostgreSQL descartável. Nenhuma migration foi aplicada a banco de produto; a role de runtime ainda precisa ser separada do owner para fortalecer a imutabilidade. Relatório operacional de drift, retenção, ajustes compensatórios e CI com banco efêmero seguem pendentes.
 
 ## Prioridade 1 — entrega reproduzível e dados seguros
 

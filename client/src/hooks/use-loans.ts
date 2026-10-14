@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Loan, type LoanRequest, buildUrl, errorSchemas } from "@shared/routes";
+import { idempotentFetch } from "@/lib/queryClient";
 
 export function useLoans() {
   return useQuery({
@@ -17,7 +18,7 @@ export function useRequestLoan() {
   return useMutation({
     mutationFn: async (data: LoanRequest) => {
       const validated = api.loans.request.input.parse(data);
-      const res = await fetch(api.loans.request.path, {
+      const res = await idempotentFetch(api.loans.request.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),
@@ -42,7 +43,7 @@ export function usePayLoan() {
   return useMutation({
     mutationFn: async (id: number) => {
       const url = buildUrl(api.loans.pay.path, { id });
-      const res = await fetch(url, { method: "POST", credentials: "include" });
+      const res = await idempotentFetch(url, { method: "POST", credentials: "include" });
       if (!res.ok) {
         if (res.status === 402) {
            const error = errorSchemas.insufficientFunds.parse(await res.json());

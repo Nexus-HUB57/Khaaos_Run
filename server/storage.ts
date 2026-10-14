@@ -14,16 +14,11 @@ export interface IStorage {
   updatePlayerStats(userId: string, updates: Partial<PlayerStats>): Promise<PlayerStats>;
   // Bank
   getBankAccount(userId: string): Promise<BankAccount>;
-  updateBankAccount(userId: string, updates: Partial<BankAccount>): Promise<BankAccount>;
-  createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction>;
   getTransactions(userId: string): Promise<Transaction[]>;
   // Loans
   getLoans(userId: string): Promise<Loan[]>;
   getLoan(id: number): Promise<Loan | undefined>;
   getLoanForUser(id: number, userId: string): Promise<Loan | undefined>;
-  updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined>;
-  createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
-  updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   // Items
   getItems(userId: string): Promise<Item[]>;
   getEquippedItems(userId: string): Promise<Item[]>;
@@ -89,16 +84,6 @@ export class DatabaseStorage implements IStorage {
     return bank;
   }
 
-  async updateBankAccount(userId: string, updates: Partial<BankAccount>): Promise<BankAccount> {
-    const [updated] = await db.update(bankAccounts).set(updates).where(eq(bankAccounts.userId, userId)).returning();
-    return updated;
-  }
-
-  async createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction> {
-    const [newTx] = await db.insert(transactions).values(tx as any).returning();
-    return newTx;
-  }
-
   async getTransactions(userId: string): Promise<Transaction[]> {
     return await db.select().from(transactions).where(eq(transactions.userId, userId)).orderBy(desc(transactions.timestamp)).limit(50);
   }
@@ -115,23 +100,6 @@ export class DatabaseStorage implements IStorage {
   async getLoanForUser(id: number, userId: string): Promise<Loan | undefined> {
     const [loan] = await db.select().from(loans).where(and(eq(loans.id, id), eq(loans.userId, userId)));
     return loan;
-  }
-
-  async updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined> {
-    const [updated] = await db.update(loans).set(updates)
-      .where(and(eq(loans.id, id), eq(loans.userId, userId)))
-      .returning();
-    return updated;
-  }
-
-  async createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan> {
-    const [newLoan] = await db.insert(loans).values(loan as any).returning();
-    return newLoan;
-  }
-
-  async updateLoan(id: number, updates: Partial<Loan>): Promise<Loan> {
-    const [updated] = await db.update(loans).set(updates).where(eq(loans.id, id)).returning();
-    return updated;
   }
 
   async getItems(userId: string): Promise<Item[]> {

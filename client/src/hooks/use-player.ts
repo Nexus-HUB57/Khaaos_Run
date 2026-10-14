@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type PlayerStats } from "@shared/routes";
+import { idempotentFetch } from "@/lib/queryClient";
 
 export function usePlayer() {
   return useQuery({
@@ -20,9 +21,9 @@ export function useClaimDailySalary() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch(api.player.daily.path, { 
+      const res = await idempotentFetch(api.player.daily.path, {
         method: "POST",
-        credentials: "include" 
+        credentials: "include"
       });
       if (!res.ok) {
         if (res.status === 400) throw new Error("Salary already claimed today");
