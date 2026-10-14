@@ -138,6 +138,15 @@ GameMode → HUD: KhaaosHUD
 - The HUD triggers the Blueprint event `PlayZoneDamageVignette` and loops `Content/Audio/SFX/SFX_ZoneWarningBeep.wav` locally. The interval scales from 0.90 s at full Health down to 0.18 s at zero Health, with a small pitch rise; it stops 1.65 s after the last cue or immediately when the player is eliminated.
 - The WAV is source audio. On first project open, Unreal imports it as `/Game/Audio/SFX/SFX_ZoneWarningBeep`; the widget's soft reference already points to that asset. Override the reference in the HUD widget Blueprint if the project uses a different import path, and implement `PlayZoneDamageVignette` in that widget Blueprint.
 
+#### Configure the warning Sound Cue in Unreal Editor
+
+1. In the Content Browser, create a **Sound Cue** under `Content/Audio/SFX` and name it `SC_ZoneWarningBeep`.
+2. Open the cue and build `Wave Player (SFX_ZoneWarningBeep) → Modulator → Output`. For a restrained random pitch variation, set `Pitch Min = 0.98` and `Pitch Max = 1.02`; set `Volume Min = 0.95` and `Volume Max = 1.0`. Preview it with **Play Cue** and save.
+3. Open the HUD Widget Blueprint derived from `KhaaosHUDWidget`. In **Class Defaults**, set `ZoneWarningBeepSound` to `SC_ZoneWarningBeep`, then compile and save. The property is a `USoundBase` soft reference, so it accepts either the imported Sound Wave or the Sound Cue. The cue's small pitch randomization is layered with the C++ pitch multiplier (1.0–1.35) based on Health; use `Pitch Min = Pitch Max = 1.0` if the combined modulation sounds too strong.
+4. For an optional spatial variant, create a **Sound Attenuation** asset such as `SA_ZoneWarningBeep`, choose a Sphere shape, enable volume attenuation and spatialization, and set the inner radius/falloff to suit the level. Assign it in the Sound Cue Output's **Attenuation Settings** (or use an Attenuation node).
+
+**Important:** the current HUD calls `UGameplayStatics::PlaySound2D`, which intentionally plays UI audio without attenuation. Therefore, `SA_ZoneWarningBeep` will not make this warning quieter with distance. Keep the current warning 2D for consistent local feedback. To use the attenuation asset, change the playback path to a world-positioned sound (for example `PlaySoundAtLocation` or an attached Audio Component) and provide a meaningful source location; that is a separate spatial-audio behavior, not just an Editor asset setting.
+
 ### 7. Test & Iterate
 
 ```
@@ -177,3 +186,7 @@ Automation RunTests Khaaos.GAS.SafeZone
 - Level Actor: `Game/Level/KhaaosCIGKVLevel.h`
 - Map Data: `Game/World/CIGKV/KhaaosCIGKVMapData.h`
 - Config: `Config/DefaultCIGKV.ini`
+- [Sound Cue Editor](https://dev.epicgames.com/documentation/unreal-engine/sound-cue-editor-in-unreal-engine)
+- [Sound Cue Reference (Modulator and Attenuation nodes)](https://dev.epicgames.com/documentation/unreal-engine/sound-cue-reference-for-unreal-engine)
+- [Sound Attenuation](https://dev.epicgames.com/documentation/unreal-engine/sound-attenuation-in-unreal-engine)
+- [`UGameplayStatics::PlaySound2D`](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/UGameplayStatics/PlaySound2D)
