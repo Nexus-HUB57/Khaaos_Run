@@ -3,27 +3,20 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - 'game-runtime/**'
-      - 'infra/**'
-      - 'docker-compose*.yml'
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: "Target environment"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - staging
           - production
       region:
-        description: 'Target region (all for multi-region)'
+        description: "Target region (all for multi-region)"
         required: false
-        default: 'all'
+        default: "all"
         type: choice
         options:
           - all
@@ -31,14 +24,14 @@ on:
           - na1
           - eu1
       rolling:
-        description: 'Rolling deployment'
+        description: "Rolling deployment"
         required: false
         default: false
         type: boolean
 
 concurrency:
   group: deploy-${{ github.event.inputs.environment || 'staging' }}
-  cancel-in-progress: false  # Never cancel deployments
+  cancel-in-progress: false # Never cancel deployments
 
 env:
   REGISTRY: ghcr.io
@@ -120,7 +113,7 @@ jobs:
       - name: Build Server Image
         uses: docker/build-push-action@v5
         with:
-          context: ./server
+          context: .
           file: ./server/Dockerfile
           push: true
           tags: |

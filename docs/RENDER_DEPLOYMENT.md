@@ -2,9 +2,9 @@
 
 ## Fluxo de CI e deploy
 
-O workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) executa lint, testes unitários e de runtime, migrations sobre um PostgreSQL efêmero e builds em pushes para `main`/`develop` e pull requests.
+O workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) executa lint, testes unitários e de runtime, migrations sobre um PostgreSQL efêmero e builds em pushes para `main`/`develop` e pull requests. Em push para `main`, o job `Deploy to Render (after full CI)` só inicia depois que **todos** os jobs de validação/build passam; então aciona o Deploy Hook e aguarda `/healthz.json` confirmar o SHA exato publicado.
 
-O workflow [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) publica no staging quando há push em `main` que altera `server/**`, `game-runtime/**`, `infra/**` ou `docker-compose*.yml`, e também aceita execução manual (`workflow_dispatch`). Ele faz sua própria validação/build, chama a API do Render e verifica `/healthz.json`. **Esse workflow não depende do resultado do workflow CI separado.** Para o bootstrap, confira que o CI passou antes de iniciar um deploy manual; não trate o gatilho atual de push como um gate de testes.
+O workflow legado [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) permanece disponível apenas via `workflow_dispatch`; o gatilho automático de push foi removido para não contornar o gate de CI nem disparar um segundo deploy. A execução manual ainda faz seu próprio build e chama a API do Render, portanto confira o CI do mesmo SHA antes de usá-la. O Dockerfile em `server/` exige contexto de build na raiz do repositório.
 
 O Blueprint [`render.yaml`](../render.yaml) configura o Web Service de staging na branch `main`, plano Free, região Oregon, build `npm ci --include=dev --no-audit --no-fund && npm run build && node scripts/write-render-health.mjs`, start `npm start`, health check `/healthz.json` e Auto-Deploy Off. O script de configuração também alinha o build command e o health check do serviço que já existe; essa alteração de configuração do serviço não inicia um deploy. A mudança de variáveis pode ter efeito de publicação: confirme o estado dos deploys no Render antes de iniciar um segundo.
 
@@ -30,7 +30,13 @@ Antes de liberar tráfego real em Render, valide que o `REPL_ID` pode autorizar 
 
 ## Secrets e credenciais
 
-O secret `API_KEY_RENDER` do GitHub Actions é usado pelos workflows para chamar a API do Render; o workflow de bootstrap não escreve a chave nem a URL do banco nos logs. `DATABASE_URL`, chaves de sessão/WS e `REPL_ID` ficam no ambiente do Render. O service ID de staging é um identificador público e está fixado no workflow. Webhooks de Discord/Slack são opcionais e só necessários se a notificação de falha configurada for desejada.
+Para habilitar o deploy automático gated, configure em **GitHub → Settings → Secrets and variables → Actions**:
+
+- **Repository variable `RENDER_DEPLOY_ENABLED`**: `true` (defina apenas depois que serviço, hook, URL e variáveis de runtime estiverem validados).
+- **Repository variable `RENDER_SERVICE_URL`**: origem HTTPS pública do serviço, sem barra final; o CI exige que `/healthz.json` confirme o SHA do push.
+- **Repository secret `RENDER_DEPLOY_HOOK_URL`**: URL do Deploy Hook gerado pelo serviço Render. Não compartilhe esse valor no chat nem o grave no repositório.
+
+O secret `API_KEY_RENDER` continua usado apenas pelos workflows manuais de bootstrap/API do Render; o CI automático não precisa da API key da conta. O workflow de bootstrap não escreve a chave nem a URL do banco nos logs. `DATABASE_URL`, chaves de sessão/WS e `REPL_ID` ficam no ambiente do Render. O service ID de staging é um identificador público e está fixado no workflow legado manual. Webhooks de Discord/Slack são opcionais e não determinam o sucesso do deploy da imagem.
 
 ## Referências oficiais
 
