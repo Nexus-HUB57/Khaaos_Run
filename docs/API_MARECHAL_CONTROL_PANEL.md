@@ -175,3 +175,10 @@ Formato uniforme:
 - Testes HTTP: sem sessão, operador fora da allowlist, origem CSRF inválida, payload inválido, overview, conselho, idempotência, owner-scope e acesso à proposta.
 - Testes assíncronos: erro `ECONNRESET`, análise/revisão incompletas, timeout nas duas fases e falha fechada.
 - Nenhuma resposta autoriza escrita de jogo ou de carteira.
+
+## 10. Interface web do operador
+
+- A interface autenticada fica em `/marshal-console`; o link aparece no menu somente quando a leitura de overview confirma a allowlist. A rota HTTP continua sendo a autoridade de acesso, inclusive para navegação direta.
+- A página permite selecionar um mundo, revisar o catálogo, enviar sinais agregados opcionais, solicitar um conselho, acompanhar o processamento e consultar os detalhes das propostas.
+- A visão operacional deve ser apresentada como catálogo desatualizado até a integração explícita com telemetria do runtime. A página identifica os adapters como determinísticos e locais, não como agentes LLM.
+- A interface não contém ação de aprovação, execução, deploy ou mutação de jogo. Propostas permanecem consultivas e exigem um fluxo humano separado.
