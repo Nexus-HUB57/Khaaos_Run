@@ -1,17 +1,147 @@
 {
   "id": "WPN_SMG_Huran",
-  "name": "SMG Huran",
-  "slot": "PRIMARY",
+  "name": "SMG Huran PDW-9",
+  "codename": "HURAN_SMG_PDW9",
+  "slot": "SECONDARY",
   "category": "SMG",
-  "damage": 18,
-  "fire_rate": 900,
-  "accuracy": 65,
-  "range": 40,
-  "mag": 30,
-  "reload": 2.2,
+  "category_tag": "Weapon.Category.SMG",
   "rarity": "RARO",
-  "price": 168,
-  "headshot": 1.5,
-  "speed_mod": 0.95,
-  "ammo": "9mm"
+  "rarity_tag": "Loot.Rarity.RARO",
+  "fire_mode": "Auto",
+  "damage": 22,
+  "fire_rate": 800,
+  "accuracy": 68,
+  "range": 35,
+  "mag": 30,
+  "reload": 1.8,
+  "headshot_multiplier": 1.5,
+  "speed_modifier": 0.95,
+  "ammo_type": "9mm",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 350,
+    "drag_coefficient": 0.015,
+    "gravity_scale": 1.0,
+    "penetration_depth_cm": 12
+  },
+  "recoil": {
+    "pitch_per_shot": 0.35,
+    "yaw_range": 0.25,
+    "recovery_speed": 4.5,
+    "pattern": [
+      0.35,
+      0.3799,
+      0.3864,
+      0.3623,
+      0.3192,
+      0.2792,
+      0.262,
+      0.2725,
+      0.2991,
+      0.3212,
+      0.3216,
+      0.297,
+      0.259,
+      0.2268,
+      0.215,
+      0.2253,
+      0.2463,
+      0.2608,
+      0.2564,
+      0.2328,
+      0.2009,
+      0.176,
+      0.1681,
+      0.1767,
+      0.1914,
+      0.199,
+      0.1914,
+      0.1702,
+      0.1448,
+      0.1264
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 12,
+    "far_range_m": 35,
+    "falloff_curve": "linear",
+    "min_damage_percent": 60
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_SMG",
+    "tracer": "VFX_Tracer_9mm",
+    "shell_eject": "VFX_Shell_9mm",
+    "impact_default": "VFX_Impact_Concrete",
+    "impact_flesh": "VFX_Impact_Flesh_Small"
+  },
+  "sfx": {
+    "fire": "SFX_SMG_Huran_Fire",
+    "fire_suppressed": "SFX_SMG_Huran_Supp",
+    "reload_magout": "SFX_SMG_MagOut",
+    "reload_magin": "SFX_SMG_MagIn",
+    "reload_charge": "SFX_SMG_Charge",
+    "dryfire": "SFX_Dryfire_Small",
+    "equip": "SFX_SMG_Equip"
+  },
+  "attachments": {
+    "optic": [
+      {
+        "id": "ATT_Holo_Compact",
+        "name": "Compact Holo",
+        "modifiers": {
+          "accuracy": 4
+        }
+      }
+    ],
+    "barrel": [
+      {
+        "id": "ATT_Supp_9mm",
+        "name": "Suppressor 9mm",
+        "modifiers": {
+          "range": -5,
+          "damage": -2
+        }
+      }
+    ],
+    "foregrip": [
+      {
+        "id": "ATT_Grip_Angled",
+        "name": "Angled Grip",
+        "modifiers": {
+          "accuracy": 3,
+          "recoil": -0.05
+        }
+      }
+    ],
+    "stock": [],
+    "magazine": [
+      {
+        "id": "ATT_Mag_9mm_Ext",
+        "name": "Extended Mag 9mm",
+        "modifiers": {
+          "mag": 10,
+          "reload": 0.4
+        }
+      }
+    ]
+  },
+  "economy": {
+    "price": 293,
+    "krc_cost": 220,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 5
+      },
+      {
+        "id": "LOOT_Material_Cristal",
+        "count": 1
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
 }

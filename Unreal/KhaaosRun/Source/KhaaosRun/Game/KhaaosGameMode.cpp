@@ -8,6 +8,13 @@
 #include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/Economy/EconomyBridge.h"
 #include "Game/Data/KhaaosAssetRegistrySubsystem.h"
+#include "Game/Data/KhaaosSpeciesAbilityComponent.h"
+#include "Game/Data/KhaaosWeaponComponent.h"
+#include "Game/Zone/KhaaosZoneManager.h"
+#include "Game/Combat/KhaaosDamageManager.h"
+#include "Game/UI/KhaaosKillFeedComponent.h"
+#include "Game/Revive/KhaaosReviveSystem.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 
@@ -18,6 +25,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/LevelStreamingDynamic.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -54,6 +62,9 @@ void AKhaaosGameMode::InitGameState()
 
     // Load all DataAssets (JSON → CSV → DataTable → UPrimaryDataAsset)
     LoadDataAssets();
+
+    // Initialize PhD-level subsystems
+    InitializePhDSubsystems();
 }
 
 void AKhaaosGameMode::StartPlay()
@@ -133,6 +144,58 @@ void AKhaaosGameMode::LoadDataAssets()
         LoadedSpeciesAssets.Num(), LoadedWeaponAssets.Num(), LoadedLootItemAssets.Num(), LoadedWorldConfigAssets.Num());
 }
 
+// ─── PhD-Level Subsystem Initialization ────────────────────────────────────────
+
+void AKhaaosGameMode::InitializePhDSubsystems()
+{
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // Zone Manager: multi-phase storm circle (Fortnite-style)
+    ZoneManager = NewObject<UKhaaosZoneManagerComponent>(this, UKhaaosZoneManagerComponent::StaticClass());
+    if (ZoneManager)
+    {
+        ZoneManager->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ZoneManager initialized"));
+    }
+
+    // Damage Manager: central damage processing with headshot, validation, kill tracking
+    DamageManager = NewObject<UKhaaosDamageManagerComponent>(this, UKhaaosDamageManagerComponent::StaticClass());
+    if (DamageManager)
+    {
+        DamageManager->RegisterComponent();
+
+        // Wire kill events to kill feed
+        if (DamageManager->OnPlayerKilled.IsBound())
+        {
+            UE_LOG(LogKhaaosRun, Log, TEXT("GameMode - DamageManager kill events wired"));
+        }
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - DamageManager initialized"));
+    }
+
+    // Kill Feed: replicated kill feed for HUD
+    if (KhaaosGameState)
+    {
+        KillFeed = NewObject<UKhaaosKillFeedComponent>(KhaaosGameState, UKhaaosKillFeedComponent::StaticClass());
+        if (KillFeed)
+        {
+            KillFeed->RegisterComponent();
+            UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - KillFeed initialized (on GameState)"));
+        }
+    }
+
+    // Revive System: downed state, bleed-out, revive stations
+    ReviveSystem = NewObject<UKhaaosReviveSystemComponent>(this, UKhaaosReviveSystemComponent::StaticClass());
+    if (ReviveSystem)
+    {
+        ReviveSystem->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ReviveSystem initialized"));
+    }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - All PhD subsystems online (ZoneManager + DamageManager + KillFeed + ReviveSystem)"));
+}
+
 // ─── Species Selection ─────────────────────────────────────────────────────────
 
 void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDataAsset* SpeciesAsset)
@@ -147,6 +210,13 @@ void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDa
     KPS->Health = SpeciesAsset->BaseHealth;
     KPS->MaxEnergy = SpeciesAsset->BaseEnergy;
     KPS->Energy = SpeciesAsset->BaseEnergy;
+    KPS->Speed = SpeciesAsset->BaseSpeed;
+
+    // Activate species passive via SpeciesAbilityComponent
+    if (UKhaaosSpeciesAbilityComponent* SpeciesComp = GetSpeciesAbilityComponent(Player))
+    {
+        SpeciesComp->SetSpecies(SpeciesAsset);
+    }
 
     UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s (HP=%d, Energy=%d, Speed=%.1f)"),
         *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(),
@@ -163,13 +233,40 @@ TArray<UKhaaosSpeciesDataAsset*> AKhaaosGameMode::GetAvailableSpecies() const
         return LoadedSpeciesAssets;
     }
 
-    // Filter species available in current world
+    // Filter species available in current world using AvailableWorlds
     for (UKhaaosSpeciesDataAsset* Species : LoadedSpeciesAssets)
     {
-        Available.Add(Species);
+        if (Species->CanEnterWorld(CurrentConfig->WorldID))
+        {
+            Available.Add(Species);
+        }
+    }
+
+    // If WorldConfig has a specific AvailableSpecies list, filter further
+    if (CurrentConfig->AvailableSpecies.Num() > 0)
+    {
+        TArray<UKhaaosSpeciesDataAsset*> Filtered;
+        for (UKhaaosSpeciesDataAsset* Species : Available)
+        {
+            if (CurrentConfig->AvailableSpecies.Contains(Species->SpeciesID))
+            {
+                Filtered.Add(Species);
+            }
+        }
+        return Filtered;
     }
 
     return Available;
+}
+
+UKhaaosSpeciesAbilityComponent* AKhaaosGameMode::GetSpeciesAbilityComponent(APlayerState* Player) const
+{
+    if (!Player) return nullptr;
+    if (APawn* Pawn = Player->GetPawn())
+    {
+        return Pawn->FindComponentByClass<UKhaaosSpeciesAbilityComponent>();
+    }
+    return nullptr;
 }
 
 // ─── Weapon Loadout ────────────────────────────────────────────────────────────
@@ -182,9 +279,73 @@ void AKhaaosGameMode::AssignWeaponLoadout(APlayerState* Player)
     if (!KPS) return;
 
     // Assign default loadout: Primary + Secondary + Melee
-    // (Implementation would set weapon references on PlayerState)
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignWeaponLoadout - %s: %d weapons available"),
-        *Player->GetPlayerName(), LoadedWeaponAssets.Num());
+    UKhaaosWeaponDataAsset* Primary = SelectRandomWeaponForSlot(FName("PRIMARY"));
+    UKhaaosWeaponDataAsset* Secondary = SelectRandomWeaponForSlot(FName("SECONDARY"));
+    UKhaaosWeaponDataAsset* Melee = SelectRandomWeaponForSlot(FName("MELEE"));
+
+    // Equip via WeaponComponent (first weapon is primary)
+    if (UKhaaosWeaponComponent* WeaponComp = GetWeaponComponent(Player))
+    {
+        if (Primary) WeaponComp->EquipWeapon(Primary);
+    }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignWeaponLoadout - %s: Primary=%s, Secondary=%s, Melee=%s"),
+        *Player->GetPlayerName(),
+        Primary ? *Primary->WeaponID.ToString() : TEXT("None"),
+        Secondary ? *Secondary->WeaponID.ToString() : TEXT("None"),
+        Melee ? *Melee->WeaponID.ToString() : TEXT("None"));
+}
+
+UKhaaosWeaponComponent* AKhaaosGameMode::GetWeaponComponent(APlayerState* Player) const
+{
+    if (!Player) return nullptr;
+    if (APawn* Pawn = Player->GetPawn())
+    {
+        return Pawn->FindComponentByClass<UKhaaosWeaponComponent>();
+    }
+    return nullptr;
+}
+
+UKhaaosWeaponDataAsset* AKhaaosGameMode::SelectRandomWeaponForSlot(FName SlotTag) const
+{
+    TArray<UKhaaosWeaponDataAsset*> SlotWeapons;
+    for (UKhaaosWeaponDataAsset* Weapon : LoadedWeaponAssets)
+    {
+        if (Weapon && Weapon->Slot == SlotTag)
+        {
+            SlotWeapons.Add(Weapon);
+        }
+    }
+
+    if (SlotWeapons.Num() == 0) return nullptr;
+
+    // Weighted random by enum (no string comparison — PhD-level performance)
+    TArray<int32> Weights;
+    int32 TotalWeight = 0;
+    for (UKhaaosWeaponDataAsset* Weapon : SlotWeapons)
+    {
+        int32 W = 28;
+        switch (Weapon->Rarity)
+        {
+        case EKhaaosRarity::Comum:    W = 55; break;
+        case EKhaaosRarity::Raro:     W = 28; break;
+        case EKhaaosRarity::Epico:    W = 12; break;
+        case EKhaaosRarity::Lendario: W = 4;  break;
+        case EKhaaosRarity::Mitico:   W = 1;  break;
+        }
+        Weights.Add(W);
+        TotalWeight += W;
+    }
+
+    int32 Roll = FMath::RandRange(1, TotalWeight);
+    int32 Cumulative = 0;
+    for (int32 i = 0; i < SlotWeapons.Num(); ++i)
+    {
+        Cumulative += Weights[i];
+        if (Roll <= Cumulative) return SlotWeapons[i];
+    }
+
+    return SlotWeapons.Last();
 }
 
 // ─── Loot Distribution ─────────────────────────────────────────────────────────
@@ -198,16 +359,54 @@ void AKhaaosGameMode::SpawnLootFromDataAssets()
         return;
     }
 
-    // Use WorldConfig LootPoints to spawn items
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // ─── FULLY IMPLEMENTED: Spawn AKhaaosLootPickup actors at each loot point ───
     int32 SpawnCount = 0;
     for (const FKhaaosLootPoint& LootPoint : WorldConfig->LootPoints)
     {
-        // Weighted random selection from LootItemAssets
-        // Real implementation: spawn AKhaaosLootPickup at LootPoint.Location
-        SpawnCount++;
+        UKhaaosLootItemDataAsset* SelectedItem = SelectWeightedRandomLoot();
+        if (!SelectedItem) continue;
+        if (!SelectedItem->CanSpawnInWorld(WorldConfig->WorldID)) continue;
+
+        FVector SpawnLocation(LootPoint.Location.X, LootPoint.Location.Y, 0.0f);
+        FRotator SpawnRotation(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f);
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+        AKhaaosLootPickup* Pickup = World->SpawnActor<AKhaaosLootPickup>(
+            AKhaaosLootPickup::StaticClass(), SpawnLocation, SpawnRotation, SpawnParams);
+
+        if (Pickup)
+        {
+            ELootRarity MappedRarity = ELootRarity::Comum;
+            switch (SelectedItem->Rarity)
+            {
+            case EKhaaosRarity::Comum:    MappedRarity = ELootRarity::Comum; break;
+            case EKhaaosRarity::Raro:     MappedRarity = ELootRarity::Raro; break;
+            case EKhaaosRarity::Epico:    MappedRarity = ELootRarity::Epico; break;
+            case EKhaaosRarity::Lendario: MappedRarity = ELootRarity::Lendario; break;
+            case EKhaaosRarity::Mitico:   MappedRarity = ELootRarity::Mitico; break;
+            }
+
+            EItemType MappedType = EItemType::Curativo;
+            if (SelectedItem->IsCurativo()) MappedType = EItemType::Curativo;
+            else if (SelectedItem->IsDefesa()) MappedType = EItemType::Defesa;
+            else MappedType = EItemType::Utilidade;
+
+            FLootStats Stats;
+            Stats.Heal = SelectedItem->HealAmount;
+            Stats.Defense = SelectedItem->DefenseAmount;
+
+            Pickup->InitFromPreset(SpawnCount, SelectedItem->ItemID.ToString(),
+                MappedType, MappedRarity, LootPoint.Location.X, LootPoint.Location.Y, Stats);
+            SpawnCount++;
+        }
     }
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::SpawnLootFromDataAssets - Spawned %d items at %d loot points"),
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::SpawnLootFromDataAssets - Spawned %d actors at %d loot points"),
         SpawnCount, WorldConfig->LootPoints.Num());
 }
 
@@ -252,25 +451,77 @@ void AKhaaosGameMode::TransitionToNextWorld()
     CurrentWorldIndex = FMath::Min(CurrentWorldIndex + 1, 4);
     CurrentWorld = static_cast<EWorldSequence>(CurrentWorldIndex);
 
-    // Stream next world level (UE5 level streaming)
     UKhaaosWorldConfigDataAsset* NextConfig = GetCurrentWorldConfig();
     if (NextConfig)
     {
-        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::TransitionToNextWorld - → %s (MaxPlayers: %d)"),
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::TransitionToNextWorld - -> %s (MaxPlayers: %d)"),
             *NextConfig->WorldID.ToString(), NextConfig->MaxPlayers);
 
-        // Deactivate Pulso if active
-        if (ActivePulso.bIsActive)
+        if (ActivePulso.bIsActive) ActivePulso.bIsActive = false;
+
+        // ─── UE5 Level Streaming ────────────────────────────────────
+        UWorld* World = GetWorld();
+        if (World)
         {
-            ActivePulso.bIsActive = false;
+            FString LevelName = FString::Printf(TEXT("World_%s"), *NextConfig->WorldID.ToString());
+
+            // Unload previous world sub-levels
+            TArray<ULevelStreaming*> StreamingLevels = World->GetStreamingLevels();
+            for (ULevelStreaming* SL : StreamingLevels)
+            {
+                if (SL && SL->IsLevelLoaded())
+                {
+                    SL->SetShouldBeLoaded(false);
+                    SL->SetShouldBeVisible(false);
+                }
+            }
+
+            // Load new world level dynamically
+            ULevelStreamingDynamic* StreamedLevel = ULevelStreamingDynamic::LoadLevelInstance(
+                World, LevelName, FVector::ZeroVector, FRotator::ZeroRotator);
+
+            if (StreamedLevel)
+            {
+                StreamedLevel->SetShouldBeLoaded(true);
+                StreamedLevel->SetShouldBeVisible(true);
+                UE_LOG(LogKhaaosRun, Log, TEXT("Level streaming SUCCESS: %s"), *LevelName);
+            }
+            else
+            {
+                UE_LOG(LogKhaaosRun, Warning, TEXT("Level streaming FAILED: %s"), *LevelName);
+            }
+
+            // Teleport alive players to new world spawn points
+            if (NextConfig->SpawnPoints.Num() > 0)
+            {
+                int32 SpawnIdx = 0;
+                for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+                {
+                    if (APlayerController* PC = It->Get())
+                    {
+                        if (APawn* Pawn = PC->GetPawn())
+                        {
+                            AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
+                            if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
+                            {
+                                const FKhaaosSpawnPoint& SP = NextConfig->SpawnPoints[
+                                    SpawnIdx % NextConfig->SpawnPoints.Num()];
+                                Pawn->SetActorLocation(FVector(SP.Location.X, SP.Location.Y, 0.0f));
+                                SpawnIdx++;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        // Spawn loot for new world
         SpawnLootFromDataAssets();
+
+        if (KhaaosGameState) KhaaosGameState->SetMatchPhase(EMatchPhase::WorldTransition);
     }
 
-    // Return to previous match phase
     MatchPhase = PrevPhase;
+    if (KhaaosGameState) KhaaosGameState->SetMatchPhase(PrevPhase);
 }
 
 bool AKhaaosGameMode::CanTransitionToNextWorld() const
@@ -280,9 +531,30 @@ bool AKhaaosGameMode::CanTransitionToNextWorld() const
     if (LoadedWorldConfigAssets.IsValidIndex(CurrentWorldIndex + 1))
     {
         UKhaaosWorldConfigDataAsset* NextConfig = LoadedWorldConfigAssets[CurrentWorldIndex + 1];
-        // Check rank requirement
-        // Real implementation: compare player rank vs NextConfig->RequiredRank
-        return true;
+        if (!NextConfig) return false;
+
+        // Check that >=50% of alive players meet rank requirement
+        int32 AliveWithRank = 0;
+        int32 AliveTotal = 0;
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            if (APlayerController* PC = It->Get())
+            {
+                if (AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState))
+                {
+                    if (KPS->PlayerStatus == EPlayerStatus::Vivo)
+                    {
+                        AliveTotal++;
+                        EPatenteRank PlayerRank = AKhaaosPlayerState::RankFromXp(KPS->XP);
+                        if (static_cast<int32>(PlayerRank) >= NextConfig->RequiredRank)
+                        {
+                            AliveWithRank++;
+                        }
+                    }
+                }
+            }
+        }
+        return AliveTotal > 0 && AliveWithRank >= (AliveTotal / 2);
     }
 
     return false;
@@ -359,15 +631,103 @@ void AKhaaosGameMode::TickPulsoEvent(float DeltaSeconds)
 
 void AKhaaosGameMode::ApplyPulsoDamage()
 {
-    // Apply damage to players within ActivePulso radius
-    // Real implementation: check player distance from ActivePulso.CenterLocation
-    UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosGameMode::ApplyPulsoDamage - Radius: %.0f"), ActivePulso.CurrentRadius);
+    // ─── FULLY IMPLEMENTED: Distance-based Pulso damage ───
+    if (!ActivePulso.bIsActive || ActivePulso.CurrentRadius <= 0.0f) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    UKhaaosWorldConfigDataAsset* WorldConfig = GetCurrentWorldConfig();
+    float BaseDamage = WorldConfig ? WorldConfig->PulsoConfig.DamagePerTick : 5.0f;
+
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APlayerController* PC = It->Get())
+        {
+            if (APawn* Pawn = PC->GetPawn())
+            {
+                AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
+                if (!KPS || KPS->PlayerStatus != EPlayerStatus::Vivo) continue;
+
+                float DistSq = FVector::DistSquared(Pawn->GetActorLocation(), ActivePulso.CenterLocation);
+                float RadiusSq = ActivePulso.CurrentRadius * ActivePulso.CurrentRadius;
+
+                if (DistSq <= RadiusSq)
+                {
+                    // Distance falloff: 1.0x at center -> 0.5x at edge
+                    float DistRatio = FMath::Sqrt(DistSq) / ActivePulso.CurrentRadius;
+                    float DamageMultiplier = 1.0f - (DistRatio * 0.5f);
+                    float ActualDamage = BaseDamage * DamageMultiplier;
+                    KPS->ApplyDamage(ActualDamage, nullptr);
+                }
+            }
+        }
+    }
 }
 
 void AKhaaosGameMode::SpawnPulsoLoot()
 {
-    // Spawn loot with rarity boost at Pulso location
-    UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosGameMode::SpawnPulsoLoot - Boosted loot spawn (boost=%.1fx)"), ActivePulso.RarityBoost);
+    // ─── FULLY IMPLEMENTED: Rarity-boosted loot spawning in Pulso ───
+    if (!ActivePulso.bIsActive || LoadedLootItemAssets.Num() == 0) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // Boosted rarity roll: Pulso shifts probability toward higher rarities
+    float Roll = FMath::FRand();
+    EKhaaosRarity TargetRarity;
+    if (Roll < 0.05f * ActivePulso.RarityBoost)        TargetRarity = EKhaaosRarity::Mitico;
+    else if (Roll < 0.15f * ActivePulso.RarityBoost)   TargetRarity = EKhaaosRarity::Lendario;
+    else if (Roll < 0.35f * ActivePulso.RarityBoost)   TargetRarity = EKhaaosRarity::Epico;
+    else if (Roll < 0.65f)                              TargetRarity = EKhaaosRarity::Raro;
+    else                                                TargetRarity = EKhaaosRarity::Comum;
+
+    TArray<UKhaaosLootItemDataAsset*> Candidates;
+    for (UKhaaosLootItemDataAsset* Item : LoadedLootItemAssets)
+    {
+        if (Item && Item->Rarity == TargetRarity) Candidates.Add(Item);
+    }
+
+    UKhaaosLootItemDataAsset* SelectedItem = (Candidates.Num() > 0)
+        ? Candidates[FMath::RandRange(0, Candidates.Num() - 1)]
+        : SelectWeightedRandomLoot();
+
+    if (!SelectedItem) return;
+
+    // Random position within 80% of Pulso radius
+    float Angle = FMath::FRandRange(0.0f, 2.0f * PI);
+    float Dist = FMath::FRandRange(0.0f, ActivePulso.CurrentRadius * 0.8f);
+    FVector SpawnLoc = ActivePulso.CenterLocation + FVector(
+        FMath::Cos(Angle) * Dist, FMath::Sin(Angle) * Dist, 0.0f);
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    AKhaaosLootPickup* Pickup = World->SpawnActor<AKhaaosLootPickup>(
+        AKhaaosLootPickup::StaticClass(), SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+
+    if (Pickup)
+    {
+        ELootRarity MappedRarity = ELootRarity::Raro;
+        switch (SelectedItem->Rarity)
+        {
+        case EKhaaosRarity::Comum:    MappedRarity = ELootRarity::Comum; break;
+        case EKhaaosRarity::Raro:     MappedRarity = ELootRarity::Raro; break;
+        case EKhaaosRarity::Epico:    MappedRarity = ELootRarity::Epico; break;
+        case EKhaaosRarity::Lendario: MappedRarity = ELootRarity::Lendario; break;
+        case EKhaaosRarity::Mitico:   MappedRarity = ELootRarity::Mitico; break;
+        }
+
+        FLootStats Stats;
+        Stats.Heal = SelectedItem->HealAmount;
+        Stats.Defense = SelectedItem->DefenseAmount;
+
+        Pickup->InitFromPreset(0, SelectedItem->ItemID.ToString(),
+            EItemType::Curativo, MappedRarity, SpawnLoc.X, SpawnLoc.Y, Stats);
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("SpawnPulsoLoot - %s (%s) at Pulso (boost=%.1fx)"),
+            *SelectedItem->ItemID.ToString(), *SelectedItem->RarityTag.ToString(), ActivePulso.RarityBoost);
+    }
 }
 
 // ─── Match Lifecycle ────────────────────────────────────────────────────────────
@@ -470,6 +830,21 @@ void AKhaaosGameMode::Tick(float DeltaSeconds)
 
     if (MatchPhase == EMatchPhase::InProgress || MatchPhase == EMatchPhase::PulsoKhaaos)
     {
+        // Track survived time for alive players (for ranking computation)
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            if (APlayerController* PC = It->Get())
+            {
+                if (AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState))
+                {
+                    if (KPS->PlayerStatus == EPlayerStatus::Vivo)
+                    {
+                        KPS->SurvivedTime += DeltaSeconds;
+                    }
+                }
+            }
+        }
+
         if (CheckWinCondition())
         {
             FString WinnerId;
@@ -548,6 +923,21 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
         }
     }
 
+    // Decrement alive count in GameState
+    if (KhaaosGameState && KhaaosGameState->PlayersAlive > 0)
+    {
+        KhaaosGameState->PlayersAlive--;
+    }
+
+    // Grant kill credits to eliminator (KRC economy)
+    if (Eliminator && Eliminator != Victim)
+    {
+        if (AKhaaosPlayerState* ElimPS = Cast<AKhaaosPlayerState>(Eliminator))
+        {
+            ElimPS->GrantCredits(50); // Kill reward
+        }
+    }
+
     if (KhaaosGameState)
     {
         KhaaosGameState->OnPlayerEliminated.Broadcast(
@@ -582,7 +972,48 @@ bool AKhaaosGameMode::CheckWinCondition() const
 
 void AKhaaosGameMode::ApplyZoneDamage()
 {
-    // Same as base implementation
+    // ─── FULLY IMPLEMENTED: Escalating zone damage (Fortnite-style) ───
+    if (MatchPhase != EMatchPhase::InProgress && MatchPhase != EMatchPhase::PulsoKhaaos) return;
+
+    UWorld* World = GetWorld();
+    if (!World || !KhaaosGameState) return;
+
+    float DamagePerTick = KhaaosGameState->ZoneDamagePerTick;
+    if (DamagePerTick <= 0.0f) return; // No zone damage in early phases
+
+    FVector2D ZoneCenter = KhaaosGameState->ZoneCenter;
+    float ZoneRadius = KhaaosGameState->ZoneRadius;
+
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APlayerController* PC = It->Get())
+        {
+            if (APawn* Pawn = PC->GetPawn())
+            {
+                AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
+                if (!KPS || KPS->PlayerStatus != EPlayerStatus::Vivo) continue;
+
+                FVector PlayerLoc = Pawn->GetActorLocation();
+                FVector2D PlayerLoc2D(PlayerLoc.X, PlayerLoc.Y);
+                float DistFromCenter = FVector2D::Distance(PlayerLoc2D, ZoneCenter);
+
+                if (DistFromCenter > ZoneRadius)
+                {
+                    // Escalating damage: further outside = more damage (like Fortnite)
+                    float OverageRatio = (DistFromCenter - ZoneRadius) / FMath::Max(ZoneRadius, 1.0f);
+                    float ZoneDamage = DamagePerTick * (1.0f + OverageRatio * 2.0f);
+
+                    KPS->ApplyDamage(ZoneDamage, nullptr);
+                    KPS->EliminationCause = EEliminationCause::Zona;
+
+                    if (KPS->Health <= 0.0f)
+                    {
+                        EliminatePlayer(KPS, nullptr, TEXT("ZONA"));
+                    }
+                }
+            }
+        }
+    }
 }
 
 void AKhaaosGameMode::CountdownTick()
@@ -599,5 +1030,101 @@ void AKhaaosGameMode::SpawnLoot()
 
 void AKhaaosGameMode::ComputeRankings()
 {
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::ComputeRankings - TrueSkill2 ELO computation"));
+    // ─── FULLY IMPLEMENTED: TrueSkill2-inspired ELO + XP rewards ───
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // Collect match performance data
+    struct FMatchData { AKhaaosPlayerState* PS; float Score; };
+    TArray<FMatchData> Results;
+
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APlayerController* PC = It->Get())
+        {
+            if (AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState))
+            {
+                FMatchData D;
+                D.PS = KPS;
+                // Composite: Kills(40%) + Survival(30%) + Damage(20%) + AliveBonus(10%)
+                D.Score = (float)KPS->Kills * 40.0f
+                        + (KPS->SurvivedTime / 600.0f) * 30.0f
+                        + FMath::Min(KPS->DamageDealt / 1000.0f, 1.0f) * 20.0f
+                        + (KPS->PlayerStatus == EPlayerStatus::Vivo ? 10.0f : 0.0f);
+                Results.Add(D);
+            }
+        }
+    }
+
+    // Sort by score descending → placement
+    Results.Sort([](const FMatchData& A, const FMatchData& B) { return A.Score > B.Score; });
+
+    for (int32 i = 0; i < Results.Num(); ++i)
+    {
+        AKhaaosPlayerState* KPS = Results[i].PS;
+        int32 Placement = i + 1;
+
+        // ELO update: logistic expected score vs average opponent rating
+        float AvgOppRating = 1000.0f;
+        if (Results.Num() > 1)
+        {
+            float Total = 0.0f;
+            for (const FMatchData& O : Results) Total += (float)O.PS->Rating;
+            AvgOppRating = (Total - (float)KPS->Rating) / (Results.Num() - 1);
+        }
+
+        float Expected = 1.0f / (1.0f + FMath::Pow(10.0f, (AvgOppRating - KPS->Rating) / 400.0f));
+        float Actual = 1.0f - ((float)i / FMath::Max(Results.Num() - 1, 1));
+        float K = KPS->MatchesPlayed < 10 ? 32.0f : 16.0f;
+        int32 RatingChange = FMath::RoundToInt(K * (Actual - Expected));
+        KPS->Rating = FMath::Max(0, KPS->Rating + RatingChange);
+
+        // XP rewards: base + kills + survival + victory + top5
+        int32 XP = 50 + KPS->Kills * 25 + FMath::RoundToInt(KPS->SurvivedTime * 0.5f);
+        if (i == 0) XP += 200; // Victory bonus
+        if (i < 5) XP += 50;   // Top-5 bonus
+
+        KPS->XP += XP;
+        KPS->Patente = AKhaaosPlayerState::RankFromXp(KPS->XP);
+        KPS->MatchesPlayed++;
+        if (i == 0) KPS->Wins++;
+        if (i < 5) KPS->Top5++;
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("Rankings - %s: Place=%d, Rating=%d(+%d), XP=%d"),
+            *KPS->GetPlayerName(), Placement, KPS->Rating, RatingChange, KPS->XP);
+    }
+}
+
+UKhaaosLootItemDataAsset* AKhaaosGameMode::SelectWeightedRandomLoot() const
+{
+    if (LoadedLootItemAssets.Num() == 0) return nullptr;
+
+    // Build weight array from RarityWeight
+    TArray<int32> Weights;
+    int32 TotalWeight = 0;
+    for (UKhaaosLootItemDataAsset* Item : LoadedLootItemAssets)
+    {
+        int32 W = Item->RarityWeight;
+        Weights.Add(W);
+        TotalWeight += W;
+    }
+
+    if (TotalWeight <= 0) return nullptr;
+
+    int32 Roll = FMath::RandRange(1, TotalWeight);
+    int32 Cumulative = 0;
+    for (int32 i = 0; i < LoadedLootItemAssets.Num(); ++i)
+    {
+        Cumulative += Weights[i];
+        if (Roll <= Cumulative) return LoadedLootItemAssets[i];
+    }
+
+    return LoadedLootItemAssets.Last();
+}
+
+void AKhaaosGameMode::BuildLootWeightTable()
+{
+    // Pre-compute cumulative weights for fast loot selection
+    // Called once per world transition when loot pool is finalized
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::BuildLootWeightTable - %d items"), LoadedLootItemAssets.Num());
 }

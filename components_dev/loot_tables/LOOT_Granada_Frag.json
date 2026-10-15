@@ -1,12 +1,21 @@
 {
   "id": "LOOT_Granada_Frag",
   "name": "Granada Frag",
-  "type": "Utilidade",
+  "type": "Defesa",
   "rarity": "COMUM",
   "heal": 0,
-  "defense": 0,
+  "defense": -15,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 4,
   "price": 35,
   "rarity_weight": 55,
-  "rarity_multiplier": 1
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_Grenade_Frag_Explosion",
+  "sfx_use": "SFX_Grenade_Frag_Explosion",
+  "description": "Granada fragmentacao. 15 dano AoE, raio 5m.",
+  "world_specific": []
 }

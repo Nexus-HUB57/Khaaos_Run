@@ -5,8 +5,17 @@
   "rarity": "COMUM",
   "heal": 0,
   "defense": 0,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 10,
   "price": 20,
   "rarity_weight": 55,
-  "rarity_multiplier": 1
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_None",
+  "sfx_use": "SFX_Material_Pickup",
+  "description": "Metal reciclado. Usado em crafting de armas.",
+  "world_specific": []
 }

@@ -3,10 +3,23 @@
   "name": "Adrenalina Khael",
   "type": "Curativo",
   "rarity": "EPICO",
-  "heal": 100,
+  "heal": 0,
   "defense": 0,
+  "use_time": 1.5,
   "auto_revive": false,
+  "stack_max": 2,
   "price": 375,
   "rarity_weight": 12,
-  "rarity_multiplier": 7.5
+  "rarity_multiplier": 7.5,
+  "cooldown": 30.0,
+  "combo": {
+    "trigger_item": "LOOT_Seringa_Venex",
+    "effect": "speed_boost_heal",
+    "description": "Adrenalina + Seringa: +25% speed + heal boost por 10s"
+  },
+  "vfx_pickup": "VFX_Loot_Pickup_Epic",
+  "vfx_use": "VFX_Boost_Adrenalina",
+  "sfx_use": "SFX_Adrenalina_Use",
+  "description": "Adrenalina Khael. +20% speed, +15% fire rate por 10s. Nao cura.",
+  "world_specific": []
 }

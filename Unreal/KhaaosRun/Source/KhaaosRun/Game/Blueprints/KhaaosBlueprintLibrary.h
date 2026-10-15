@@ -68,6 +68,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Khaaos|Weapon")
     static float CalculateDPS(const UKhaaosWeaponDataAsset* Weapon);
 
+    /** Calculate time to empty a magazine. */
+    UFUNCTION(BlueprintPure, Category = "Khaaos|Weapon")
+    static float TimeToEmptyMagazine(const UKhaaosWeaponDataAsset* Weapon);
+
+    /** Get weapons by slot (PRIMARY, SECONDARY, MELEE). */
+    UFUNCTION(BlueprintPure, Category = "Khaaos|Weapon", meta = (WorldContext = "WorldContextObject"))
+    static TArray<UKhaaosWeaponDataAsset*> GetWeaponsBySlot(UObject* WorldContextObject, FName SlotTag);
+
+    /** Get the fire mode display name for a weapon. */
+    UFUNCTION(BlueprintPure, Category = "Khaaos|Weapon")
+    static FText GetFireModeDisplayName(EWeaponFireMode FireMode);
+
     // ─── Loot Item Helpers ────────────────────────────────────────────────────
 
     /** Find a loot item by ID. */

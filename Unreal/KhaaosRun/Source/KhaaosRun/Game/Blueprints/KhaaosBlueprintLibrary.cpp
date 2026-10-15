@@ -104,6 +104,48 @@ float UKhaaosBlueprintLibrary::CalculateDPS(const UKhaaosWeaponDataAsset* Weapon
     return Weapon->CalculateDPS();
 }
 
+float UKhaaosBlueprintLibrary::TimeToEmptyMagazine(const UKhaaosWeaponDataAsset* Weapon)
+{
+    if (!Weapon) return 0.0f;
+    return Weapon->TimeToEmptyMagazine();
+}
+
+TArray<UKhaaosWeaponDataAsset*> UKhaaosBlueprintLibrary::GetWeaponsBySlot(UObject* WorldContextObject, FName SlotTag)
+{
+    UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
+    if (!World) return {};
+
+    UKhaaosAssetRegistrySubsystem* Registry = World->GetSubsystem<UKhaaosAssetRegistrySubsystem>();
+    if (!Registry) return {};
+
+    TArray<UKhaaosWeaponDataAsset*> Result;
+    for (UKhaaosWeaponDataAsset* Weapon : Registry->GetAllWeapons())
+    {
+        if (Weapon && Weapon->Slot == SlotTag)
+        {
+            Result.Add(Weapon);
+        }
+    }
+    return Result;
+}
+
+FText UKhaaosBlueprintLibrary::GetFireModeDisplayName(EWeaponFireMode FireMode)
+{
+    static const TMap<EWeaponFireMode, FText> Names = {
+        { EWeaponFireMode::Semi,   FText::FromString("Semi") },
+        { EWeaponFireMode::Auto,   FText::FromString("Auto") },
+        { EWeaponFireMode::Burst,  FText::FromString("Burst") },
+        { EWeaponFireMode::Melee,  FText::FromString("Melee") },
+        { EWeaponFireMode::Charge, FText::FromString("Charge") }
+    };
+
+    if (const FText* Found = Names.Find(FireMode))
+    {
+        return *Found;
+    }
+    return FText::FromString("Unknown");
+}
+
 // ─── Loot Item Helpers ─────────────────────────────────────────────────────────
 
 UKhaaosLootItemDataAsset* UKhaaosBlueprintLibrary::GetLootItemByID(UObject* WorldContextObject, FName ItemID)

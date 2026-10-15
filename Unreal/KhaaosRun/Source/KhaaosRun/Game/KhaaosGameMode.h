@@ -17,6 +17,12 @@ class USpatialGridSubsystem;
 class UKhaaosAttributeSet;
 class AKhaaosGameState;
 class UEconomyBridgeSubsystem;
+class UKhaaosSpeciesAbilityComponent;
+class UKhaaosWeaponComponent;
+class UKhaaosZoneManagerComponent;
+class UKhaaosDamageManagerComponent;
+class UKhaaosKillFeedComponent;
+class UKhaaosReviveSystemComponent;
 
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
@@ -129,29 +135,46 @@ public:
 
     // ─── Species Selection (DataAsset-Driven) ────────────────────────────────
 
-    /** Assign a species to a player from SpeciesDataAsset. */
+    /** Assign a species to a player from SpeciesDataAsset.
+     *  Applies stats to PlayerState and activates passive ability
+     *  via KhaaosSpeciesAbilityComponent. */
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Species")
     void AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDataAsset* SpeciesAsset);
 
-    /** Get all available species for the current world. */
+    /** Get all available species for the current world (filtered by WorldConfig). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Species")
     TArray<UKhaaosSpeciesDataAsset*> GetAvailableSpecies() const;
 
+    /** Get the species ability component for a player (if assigned). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Species")
+    UKhaaosSpeciesAbilityComponent* GetSpeciesAbilityComponent(APlayerState* Player) const;
+
     // ─── Weapon Loadout (DataAsset-Driven) ───────────────────────────────────
 
-    /** Assign weapon loadout from WeaponDataAsset pool. */
+    /** Assign weapon loadout from WeaponDataAsset pool.
+     *  Assigns Primary + Secondary + Melee based on rarity weighting
+     *  and equips via KhaaosWeaponComponent. */
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Weapon")
     void AssignWeaponLoadout(APlayerState* Player);
 
+    /** Get the weapon component for a player (if assigned). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Weapon")
+    UKhaaosWeaponComponent* GetWeaponComponent(APlayerState* Player) const;
+
     // ─── Loot Distribution (DataAsset-Driven) ────────────────────────────────
 
-    /** Spawn loot across the map using WorldConfigDataAsset loot points. */
+    /** Spawn loot across the map using WorldConfigDataAsset loot points.
+     *  Uses weighted random selection based on RarityWeight and RarityMultiplier. */
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
     void SpawnLootFromDataAssets();
 
     /** Get loot items by type and rarity for current world. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Loot")
     TArray<UKhaaosLootItemDataAsset*> GetLootPool(FName TypeTag, FName RarityTag) const;
+
+    /** Select a random loot item using weighted rarity distribution. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
+    UKhaaosLootItemDataAsset* SelectWeightedRandomLoot() const;
 
     // ─── World Transition ────────────────────────────────────────────────────
 
@@ -261,6 +284,24 @@ protected:
     FTimerHandle CountdownTimerHandle;
     FTimerHandle PulsoTimerHandle;
 
+    // ─── PhD-Level Subsystems (Non-Breaking Additions) ───────────────────
+
+    /** Multi-phase zone manager (Fortnite-style storm circle). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosZoneManagerComponent* ZoneManager;
+
+    /** Central damage processing with headshot, validation, kill tracking. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosDamageManagerComponent* DamageManager;
+
+    /** Replicated kill feed for HUD. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosKillFeedComponent* KillFeed;
+
+    /** Downed/revive/reboot system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosReviveSystemComponent* ReviveSystem;
+
     // ─── Internal Methods ───────────────────────────────────────────────────
 
     void ApplyZoneDamage();
@@ -271,6 +312,9 @@ protected:
     /** Load all soft references to DataAssets. */
     void LoadDataAssets();
 
+    /** Initialize PhD-level subsystems. */
+    void InitializePhDSubsystems();
+
     /** Tick the Pulso Khaaos event (shrink, damage, loot). */
     void TickPulsoEvent(float DeltaSeconds);
 
@@ -279,4 +323,10 @@ protected:
 
     /** Spawn boosted loot at Pulso center. */
     void SpawnPulsoLoot();
+
+    /** Select a random weapon for loadout assignment by slot. */
+    UKhaaosWeaponDataAsset* SelectRandomWeaponForSlot(FName SlotTag) const;
+
+    /** Build cumulative weight array for weighted random loot selection. */
+    void BuildLootWeightTable();
 };

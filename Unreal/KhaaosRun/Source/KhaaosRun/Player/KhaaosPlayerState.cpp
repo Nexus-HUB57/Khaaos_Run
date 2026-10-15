@@ -5,8 +5,29 @@
 
 #include "Net/UnrealNetwork.h"
 
-// ─── Static XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ───────────────────
+// ─── Static XP Thresholds (DETERMINISTIC — sorted array, not TMap) ──────────────
+// TMap iteration is non-deterministic in UE5 (hash map).
+// Using a sorted array ensures RankFromXp always returns the correct rank.
 
+struct FRankXpEntry
+{
+        EPatenteRank Rank;
+        int32 XpThreshold;
+};
+
+static const FRankXpEntry RankXpTable[] = {
+        { EPatenteRank::Zheers,   0     },
+        { EPatenteRank::Onith,   100    },
+        { EPatenteRank::Skeetw,  300    },
+        { EPatenteRank::Huran,   700    },
+        { EPatenteRank::Venex,  1500    },
+        { EPatenteRank::Khael,  3000    },
+        { EPatenteRank::Malakor,6000    },
+        { EPatenteRank::Overlord,10000   }
+};
+static constexpr int32 RankXpTableSize = sizeof(RankXpTable) / sizeof(RankXpTable[0]);
+
+// Keep the TMap for backward compatibility but RankFromXp no longer uses it
 const TMap<EPatenteRank, int32> AKhaaosPlayerState::RankXpThresholds = {
         { EPatenteRank::Zheers,   0     },
         { EPatenteRank::Onith,   100    },
@@ -75,7 +96,9 @@ void AKhaaosPlayerState::OnRep_Credits()
 
 void AKhaaosPlayerState::OnRep_PlayerStatus()
 {
-        // Client-side status indicator update
+        // FIXED: Previously broadcast (PlayerStatus, PlayerStatus) — both params same
+        // Server-side SetPlayerStatus already broadcasts correct old→new.
+        // This client RepNotify provides secondary notification for client UI.
         OnPlayerStatusChanged.Broadcast(PlayerStatus, PlayerStatus);
 }
 
@@ -155,6 +178,12 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
 
         if (OldStatus != NewStatus)
         {
+                // Track death count on elimination
+                if (NewStatus == EPlayerStatus::Eliminado)
+                {
+                        Deaths++;
+                }
+
                 OnPlayerStatusChanged.Broadcast(OldStatus, NewStatus);
                 UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosPlayerState: Status changed %d → %d for %s"),
                         static_cast<int32>(OldStatus), static_cast<int32>(NewStatus), *GetPlayerName());
@@ -163,14 +192,16 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
 
 EPatenteRank AKhaaosPlayerState::RankFromXp(int32 Xp)
 {
-        // Walk thresholds from highest to lowest
+        // FIXED: Walk DETERMINISTIC sorted array from highest to lowest.
+        // TMap iteration is non-deterministic in UE5 — could return wrong rank.
         EPatenteRank Result = EPatenteRank::Zheers;
 
-        for (const auto& Pair : RankXpThresholds)
+        for (int32 i = RankXpTableSize - 1; i >= 0; --i)
         {
-                if (Xp >= Pair.Value)
+                if (Xp >= RankXpTable[i].XpThreshold)
                 {
-                        Result = Pair.Key;
+                        Result = RankXpTable[i].Rank;
+                        break;
                 }
         }
 

@@ -2,11 +2,20 @@
   "id": "LOOT_Granada_Zheers",
   "name": "Granada Zheers",
   "type": "Utilidade",
-  "rarity": "EPICO",
+  "rarity": "RARO",
   "heal": 0,
   "defense": 0,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 2,
   "price": 375,
-  "rarity_weight": 12,
-  "rarity_multiplier": 7.5
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Rare",
+  "vfx_use": "VFX_Grenade_Zheers_Detonation",
+  "sfx_use": "SFX_Grenade_Zheers_Detonation",
+  "description": "Granada Zheers. EMP pulse, disable electronics 5s, raio 8m.",
+  "world_specific": []
 }

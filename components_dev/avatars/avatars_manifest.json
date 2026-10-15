@@ -1,37 +1,55 @@
 {
-  "manifest_version": "1.0.0",
-  "generated_at": "2026-10-13T01:07:39.820375+00:00",
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-15T00:55:55.789010+00:00",
   "species_count": 6,
   "species": [
     {
       "id": "SPC_Zheers",
       "name": "Zheers",
-      "type": "humanoid"
+      "type": "humanoid",
+      "hp": 100,
+      "passive": "Adaptabilidade",
+      "rarity": "COMUM"
     },
     {
       "id": "SPC_Onith",
       "name": "Onith",
-      "type": "reptile"
+      "type": "reptile",
+      "hp": 120,
+      "passive": "Pele Escamosa",
+      "rarity": "RARO"
     },
     {
       "id": "SPC_Skeetw",
       "name": "Skeetw",
-      "type": "avian"
+      "type": "avian",
+      "hp": 80,
+      "passive": "Voo Planador",
+      "rarity": "RARO"
     },
     {
       "id": "SPC_Huran",
       "name": "Huran",
-      "type": "amphibian"
+      "type": "amphibian",
+      "hp": 110,
+      "passive": "Regeneracao Aquatica",
+      "rarity": "EPICO"
     },
     {
       "id": "SPC_Venex",
       "name": "Venex",
-      "type": "cyborg"
+      "type": "cyborg",
+      "hp": 90,
+      "passive": "Overclock Neural",
+      "rarity": "EPICO"
     },
     {
       "id": "SPC_Khael",
       "name": "Khael",
-      "type": "mystic"
+      "type": "mystic",
+      "hp": 85,
+      "passive": "Canalizacao Mistica",
+      "rarity": "LENDARIO"
     }
   ]
 }

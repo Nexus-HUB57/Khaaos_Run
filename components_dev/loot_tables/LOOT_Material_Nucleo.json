@@ -1,12 +1,23 @@
 {
   "id": "LOOT_Material_Nucleo",
-  "name": "Material Núcleo",
+  "name": "Material Nucleo",
   "type": "Recurso",
   "rarity": "EPICO",
   "heal": 0,
   "defense": 0,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 3,
   "price": 375,
   "rarity_weight": 12,
-  "rarity_multiplier": 7.5
+  "rarity_multiplier": 7.5,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Epic",
+  "vfx_use": "VFX_None",
+  "sfx_use": "SFX_Material_Pickup",
+  "description": "Nucleo Khaaos. Material epico para armas lendarias/miticas.",
+  "world_specific": [
+    "Arukheea"
+  ]
 }

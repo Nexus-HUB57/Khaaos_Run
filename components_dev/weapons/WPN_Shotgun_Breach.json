@@ -1,17 +1,101 @@
 {
   "id": "WPN_Shotgun_Breach",
-  "name": "Shotgun Breach",
+  "name": "Shotgun Breach SG-12",
+  "codename": "BREACH_SG12_SHOTGUN",
   "slot": "PRIMARY",
   "category": "SHOTGUN",
-  "damage": 80,
-  "fire_rate": 70,
-  "accuracy": 40,
+  "category_tag": "Weapon.Category.SHOTGUN",
+  "rarity": "RARO",
+  "rarity_tag": "Loot.Rarity.RARO",
+  "fire_mode": "Semi",
+  "damage": 12,
+  "fire_rate": 80,
+  "accuracy": 45,
   "range": 15,
   "mag": 6,
-  "reload": 3.0,
-  "rarity": "RARO",
-  "price": 224,
-  "headshot": 1.5,
-  "speed_mod": 0.9,
-  "ammo": "12gauge"
+  "reload": 4.2,
+  "headshot_multiplier": 1.2,
+  "speed_modifier": 0.93,
+  "ammo_type": "12g",
+  "burst_count": 1,
+  "pellet_count": 9,
+  "ballistic": {
+    "muzzle_velocity_ms": 400,
+    "drag_coefficient": 0.025,
+    "gravity_scale": 1.2,
+    "penetration_depth_cm": 8
+  },
+  "recoil": {
+    "pitch_per_shot": 3.0,
+    "yaw_range": 0.5,
+    "recovery_speed": 2.5,
+    "pattern": [
+      3.0,
+      2.9905,
+      2.7598,
+      2.3128,
+      1.7842,
+      1.3297
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 5,
+    "far_range_m": 15,
+    "falloff_curve": "quadratic",
+    "min_damage_percent": 30
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_Shotgun",
+    "tracer": "VFX_Tracer_12g",
+    "shell_eject": "VFX_Shell_12g",
+    "impact_default": "VFX_Impact_Concrete_Large",
+    "impact_flesh": "VFX_Impact_Flesh_Large"
+  },
+  "sfx": {
+    "fire": "SFX_SG_Breach_Fire",
+    "fire_suppressed": "SFX_SG_Breach_Supp",
+    "reload_magout": "SFX_SG_PumpBack",
+    "reload_magin": "SFX_SG_PumpForward",
+    "reload_charge": "SFX_SG_ShellInsert",
+    "dryfire": "SFX_Dryfire_12g",
+    "equip": "SFX_SG_Equip"
+  },
+  "attachments": {
+    "optic": [
+      {
+        "id": "ATT_RDS_Micro",
+        "name": "Micro RDS",
+        "modifiers": {
+          "accuracy": 5
+        }
+      }
+    ],
+    "barrel": [
+      {
+        "id": "ATT_Choke_Full",
+        "name": "Full Choke",
+        "modifiers": {
+          "range": 3,
+          "pellet_spread": -15
+        }
+      }
+    ],
+    "foregrip": [],
+    "stock": [],
+    "magazine": []
+  },
+  "economy": {
+    "price": 196,
+    "krc_cost": 150,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 6
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
 }

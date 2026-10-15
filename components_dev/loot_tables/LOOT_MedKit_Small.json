@@ -5,8 +5,17 @@
   "rarity": "COMUM",
   "heal": 25,
   "defense": 0,
+  "use_time": 5.0,
   "auto_revive": false,
+  "stack_max": 3,
   "price": 50,
   "rarity_weight": 55,
-  "rarity_multiplier": 1
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_Heal_Med",
+  "sfx_use": "SFX_MedKit_Small_Use",
+  "description": "Kit medico compacto. Restaura 25 HP em 5s.",
+  "world_specific": []
 }

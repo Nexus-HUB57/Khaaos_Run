@@ -1,17 +1,85 @@
 {
   "id": "WPN_Canhao_KhaaosPrime",
-  "name": "Canhão Khaaos Prime",
+  "name": "Canhao Khaaos Prime",
+  "codename": "KHAOS_PRIME_CANNON",
   "slot": "PRIMARY",
   "category": "EXOTIC",
-  "damage": 120,
-  "fire_rate": 20,
-  "accuracy": 70,
+  "category_tag": "Weapon.Category.EXOTIC",
+  "rarity": "MITICO",
+  "rarity_tag": "Loot.Rarity.MITICO",
+  "fire_mode": "Charge",
+  "damage": 150,
+  "fire_rate": 30,
+  "accuracy": 60,
   "range": 150,
   "mag": 3,
-  "reload": 5.0,
-  "rarity": "MITICO",
-  "price": 5200,
-  "headshot": 4.0,
-  "speed_mod": 0.8,
-  "ammo": "exotic"
+  "reload": 6.0,
+  "headshot_multiplier": 2.0,
+  "speed_modifier": 0.75,
+  "ammo_type": "KhaaosEnergy",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 1200,
+    "drag_coefficient": 0.003,
+    "gravity_scale": 0.5,
+    "penetration_depth_cm": 60
+  },
+  "recoil": {
+    "pitch_per_shot": 5.0,
+    "yaw_range": 0.8,
+    "recovery_speed": 2.0,
+    "pattern": [
+      5.0,
+      4.4304,
+      3.4498
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 60,
+    "far_range_m": 150,
+    "falloff_curve": "exponential",
+    "min_damage_percent": 85
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_Cannon_Energy",
+    "tracer": "VFX_Tracer_KhaaosEnergy",
+    "shell_eject": "VFX_None",
+    "impact_default": "VFX_Impact_Energy_Large",
+    "impact_flesh": "VFX_Impact_Energy_Flesh"
+  },
+  "sfx": {
+    "fire": "SFXBFX_Cannon_Prime_Fire",
+    "fire_suppressed": "SFX_None",
+    "reload_magout": "SFX_Cannon_CoreOut",
+    "reload_magin": "SFX_Cannon_CoreIn",
+    "reload_charge": "SFX_Cannon_ChargeUp",
+    "dryfire": "SFX_Cannon_Dry",
+    "equip": "SFX_Cannon_Equip"
+  },
+  "attachments": {
+    "optic": [],
+    "barrel": [],
+    "foregrip": [],
+    "stock": [],
+    "magazine": []
+  },
+  "economy": {
+    "price": 9750,
+    "krc_cost": 7500,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Nucleo",
+        "count": 10
+      },
+      {
+        "id": "LOOT_Material_Cristal",
+        "count": 20
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
 }
