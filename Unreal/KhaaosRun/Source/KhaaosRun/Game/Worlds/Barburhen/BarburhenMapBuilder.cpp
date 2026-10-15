@@ -1,8 +1,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Worlds/Barburhen/BarburhenMapBuilder.h"
-#include "Worlds/Barburhen/BarburhenRingController.h"
-#include "Worlds/Barburhen/BarburhenAcidRainVolume.h"
+#include "Game/Worlds/Barburhen/BarburhenMapBuilder.h"
+#include "Game/Worlds/Barburhen/BarburhenRingController.h"
+#include "Game/Worlds/Barburhen/BarburhenAcidRainVolume.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
 

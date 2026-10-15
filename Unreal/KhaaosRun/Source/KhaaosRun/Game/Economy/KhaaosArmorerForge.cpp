@@ -1,8 +1,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Economy/KhaaosArmorerForge.h"
-#include "Economy/KhaaosBankhaoosComponent.h"
-#include "Economy/KhaaosForgeItem.h"
+#include "Game/Economy/KhaaosArmorerForge.h"
+#include "Game/Economy/KhaaosBankhaoosComponent.h"
+#include "Game/Economy/KhaaosForgeItem.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"

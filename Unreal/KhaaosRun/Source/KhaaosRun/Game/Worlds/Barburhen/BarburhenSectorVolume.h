@@ -6,7 +6,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/BoxComponent.h"
-#include "Worlds/Barburhen/BarburhenTypes.h"
+#include "Game/Worlds/Barburhen/BarburhenTypes.h"
 #include "BarburhenSectorVolume.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerEnterSector, APawn*, Player, EBarburhenSector, Sector);

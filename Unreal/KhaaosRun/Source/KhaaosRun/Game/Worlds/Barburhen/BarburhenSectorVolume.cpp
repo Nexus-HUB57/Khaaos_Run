@@ -1,6 +1,6 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Worlds/Barburhen/BarburhenSectorVolume.h"
+#include "Game/Worlds/Barburhen/BarburhenSectorVolume.h"
 #include "GameFramework/Pawn.h"
 
 ABarburhenSectorVolume::ABarburhenSectorVolume()

@@ -1,7 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Worlds/Barburhen/BarburhenAcidRainVolume.h"
-#include "Player/KhaaosVitalityComponent.h"
+#include "Game/Worlds/Barburhen/BarburhenAcidRainVolume.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
 #include "Components/AudioComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
