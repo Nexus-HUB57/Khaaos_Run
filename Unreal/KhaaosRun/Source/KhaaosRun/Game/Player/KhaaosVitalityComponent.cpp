@@ -1,6 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Player/KhaaosVitalityComponent.h"
+#include "Game/AbilitySystem/KhaaosAbilityComponent.h"
 #include "KhaaosAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
@@ -235,7 +236,8 @@ void UKhaaosVitalityComponent::ApplyStun(float Duration)
 	ActiveDebuffs.Add(StunTag);
 	OnDebuffApplied.Broadcast(StunTag, Duration);
 
-	if (ACharacter* Char = Cast<ACharacter>(GetOwner()))
+	AActor* Owner = GetOwner();
+	if (ACharacter* Char = Cast<ACharacter>(Owner))
 	{
 		if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
 		{
@@ -243,16 +245,31 @@ void UKhaaosVitalityComponent::ApplyStun(float Duration)
 		}
 	}
 
+	// Integração GAS: cancela abilities ativas (tiro, sprint, etc.)
+	if (Owner)
+	{
+		Owner->Tags.AddUnique(FName(TEXT("State.Stunned")));
+		if (UKhaaosAbilityComponent* AbComp = Owner->FindComponentByClass<UKhaaosAbilityComponent>())
+		{
+			AbComp->CancelAllActions();
+		}
+	}
+
 	GetWorld()->GetTimerManager().ClearTimer(StunTimerHandle);
 	GetWorld()->GetTimerManager().SetTimer(StunTimerHandle, this, &UKhaaosVitalityComponent::ClearStun, Duration, false);
 
-	UE_LOG(LogTemp, Log, TEXT("[Vitality] Stun applied for %.1fs"), Duration);
+	UE_LOG(LogTemp, Log, TEXT("[Vitality] Stun applied for %.1fs (abilities cancelled)"), Duration);
 }
 
 void UKhaaosVitalityComponent::ClearStun()
 {
 	ActiveDebuffs.Remove(StunTag);
 	OnDebuffRemoved.Broadcast(StunTag);
+
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->Tags.Remove(FName(TEXT("State.Stunned")));
+	}
 
 	if (ACharacter* Char = Cast<ACharacter>(GetOwner()))
 	{
