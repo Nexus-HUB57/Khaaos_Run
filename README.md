@@ -12,6 +12,7 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -56,6 +57,53 @@
 | **Build UE5 (compilação)** | ⏳ Pendente | Requer UE5.8 Editor + 50 GB+ SDK para compilar |
 | **3D Assets / Mapas** | ⏳ Pendente | Lógica + dados CIGKV/W1-W4 completos; `.umap`, meshes e Niagara precisam ser criados no UE Editor |
 | **EAC SDK Binary** | ⏳ Pendente | Easy Anti-Cheat requer SDK binary + build compilado |
+
+---
+
+
+## Desenvolvimento recente — CIGKV + Barburhen (PR #45)
+
+Branch: `feat/cigkv-barburhen-e2e`
+
+### CIGKV (treino)
+| Sistema | Path | Função |
+|---------|------|--------|
+| Zu 1 / 2 / 3 | `Game/CIGKV/` | Ingresso cinematográfico, pop-up, debuffs |
+| Vitalidade | `Game/Player/KhaaosVitalityComponent` | % dano, fome/sede/medo, Sync GAS Health |
+| Bankhaoos | `Game/Economy/KhaaosBankhaoosComponent` | Conta + **1000 KRC** no Zu 1 |
+| Transfer 20 % | `Game/Economy/KhaaosTransferSystem` | ZEX → W1 + Token Veterano (top 50) |
+| ZEX | `Game/CIGKV/KhaaosZEXTerminal` | Luz azul, crédito KRC + registro transfer |
+| Forja | `Game/Economy/KhaaosArmorerForge` | Loja KRC (DataTable catálogo) |
+
+### Barburhen W1/C1
+| Sistema | Função |
+|---------|--------|
+| `ABarburhenRingController` | Água da Morte: 250 m → 40 m / 10 min; **fora do anel ≈ −5 %/s** vitalidade |
+| `ABarburhenAcidRainVolume` | Chuva ácida: **−1 % / 10 s** (sem tag `HasAcidProtection`) |
+| `ABarburhenMapBuilder` | Lê DT e spawna Ring + Rain + ZEX |
+| Content | CSV pontos, OBJ/glTF, HTML 3D, SVG |
+
+### Fórmula chuva ácida (sincronizada)
+
+```
+DamagePercentPerTick = AcidRainDamagePerSecond × AcidRainTickInterval
+                     = 0.001 × 10
+                     = 0.01   →  −1 % MaxVitality por tick
+
+ApplyRainTick (a cada 10 s):
+  ∀ Character player no volume
+    se NÃO HasAcidProtection
+      Vitality.ApplyPercentageDamage(0.01)
+      Fear += 2
+      → SyncToGASHealth (UKhaaosAttributeSet)
+```
+
+Ring e chuva **acumulam**. Colete/máscara (tag `HasAcidProtection`) só bloqueia chuva, não o ring.
+
+### Assets mapa
+`Unreal/KhaaosRun/Content/Barburhen/` — importar `Barburhen_Map.obj` (metros) no Level + MapBuilder.
+
+Docs: `Docs/CIGKV_Barburhen/`
 
 ---
 
