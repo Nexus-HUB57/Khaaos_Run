@@ -10,6 +10,8 @@
     "check": "tsc",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "economy:reconcile": "tsx scripts/economy-reconcile.ts",
+    "economy:idempotency:prune": "tsx scripts/prune-economy-idempotency.ts",
     "test:game": "npm --prefix game-runtime test",
     "test:official": "node --import tsx --test tests/official/*.test.ts tests/official/dashboard-transactions.test.tsx && node --test tests/official/*.test.js",
     "test:ue5:logic": "bash scripts/test_ue5_logic.sh",

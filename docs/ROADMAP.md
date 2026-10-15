@@ -41,18 +41,18 @@ Este roadmap é uma sequência técnica orientada a risco e critérios de aceite
 
 ### 0.3 Auditoria e reconciliação da economia
 
-Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões pendentes de ownership/retention da 0.2.
+Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito ainda aberto: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões de ownership/FK da 0.2.
 
 - [x] Definir contrato de ledger append-only com `operation_id`/chave de idempotência correlacionáveis e lançamentos explícitos por conta de origem/destino; migration 0004 preserva histórico antigo e cria saldos de abertura por carteira.
-- [ ] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
-- [ ] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; só então implementar limpeza monitorada e segura.
+- [x] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
+- [x] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; disponibilizar limpeza controlável e segura em dry-run por padrão.
 - [ ] Definir fluxo de ajustes administrativos por lançamentos compensatórios append-only, com capability, motivo, ator, horário e trilha de auditoria; proibir correção por update/delete de histórico.
-- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0002 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
+- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0003 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
 - [ ] Executar migrações e testes PostgreSQL num banco efêmero obrigatório no CI; medir reconciliação antes/depois de carga concorrente e de falhas injetadas.
 
 **Aceite:** todo saldo é explicável por lançamentos correlacionados; reconciliação detecta drift sem mutação automática; ajustes são auditáveis e compensatórios; retries continuam seguros dentro da retenção estabelecida; migrações e checks passam do zero em CI.
 
-**Implementação iniciada:** o contrato e a migration aditiva 0004 agora gravam postings balanceados no mesmo commit econômico, relacionam a claim de idempotência e o evento legado via UUID, e protegem UPDATE/DELETE/TRUNCATE no ledger. As migrations `0000`–`0004` estão registradas na journal Drizzle e foram aplicadas desde banco vazio descartável. A cobertura inclui reconciliação de carteiras em PostgreSQL descartável. Nenhuma migration foi aplicada a banco de produto; a role de runtime ainda precisa ser separada do owner para fortalecer a imutabilidade. Relatório operacional de drift, retenção, ajustes compensatórios e CI com banco efêmero seguem pendentes.
+**Implementação desta rodada:** além do ledger correlacionável e append-only, `npm run economy:reconcile` gera relatório read-only para drift de carteira, operações desbalanceadas, transações sem ledger e claims incompletos, respeitando o marco de adoção do ledger para dados históricos. A janela de retry do cliente é 90 dias; claims completos ficam 365 dias e `economy:idempotency:prune` só apaga mediante `--execute`, em lotes com `SKIP LOCKED`, excluindo respostas incompletas e qualquer sucesso sem posting. Testes PostgreSQL confirmam detecção sem autocorreção, pruning dry-run/execução e rejeição de replay antigo sem novo débito/crédito. Tudo foi testado em banco descartável; nenhum banco de produto foi acessado. Ajustes compensatórios, auditoria de registros legados em produção, CI com banco efêmero obrigatório e separação da role runtime/owner permanecem pendentes.
 
 ## Prioridade 1 — entrega reproduzível e dados seguros
 

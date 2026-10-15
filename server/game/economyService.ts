@@ -86,6 +86,27 @@ export class EconomyService {
         };
       }
 
+      const [previousLedgerUse] = await tx.select({ operationId: economyLedgerEntries.operationId })
+        .from(economyLedgerEntries)
+        .where(and(
+          eq(economyLedgerEntries.userId, userId),
+          eq(economyLedgerEntries.idempotencyKey, idempotencyKey),
+        ))
+        .limit(1);
+      if (previousLedgerUse) {
+        const responseBody = {
+          code: "IDEMPOTENCY_KEY_EXPIRED",
+          message: "A janela de replay desta chave expirou; a operação já consta no ledger e não será executada novamente.",
+          operationId: previousLedgerUse.operationId,
+        };
+        await tx.update(economyIdempotency).set({
+          operationId: previousLedgerUse.operationId,
+          responseStatus: 409,
+          responseBody,
+        }).where(eq(economyIdempotency.id, claim.id));
+        return { status: 409, body: responseBody, replayed: false };
+      }
+
       const result = await work(tx, { userId, idempotencyKey, operationId: claim.operationId });
       const responseBody = { ...result.body, operationId: claim.operationId };
       await tx.update(economyIdempotency).set({

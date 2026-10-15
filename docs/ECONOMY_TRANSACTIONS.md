@@ -8,7 +8,7 @@ As rotas de depósito, transferência, solicitação/pagamento de empréstimo, c
 - A tabela `economy_idempotency` persiste o hash canônico do método/operação e payload, além do status/corpo da resposta. Um retry idêntico reproduz a resposta; a mesma chave com payload diferente retorna `409`.
 - A inserção da chave, as escritas de domínio e o registro da resposta acontecem na mesma transação. A unique index `(user_id, idempotency_key)` serializa retries concorrentes; `FOR UPDATE` no registro bancário serializa alterações de saldo e limites por usuário.
 - Valores de entrada são limitados a centavos e convertidos para `bigint` em unidades menores. Adição, subtração e comparação de saldos ocorrem em `numeric` no PostgreSQL, arredondando o saldo para duas casas; não há cálculo de saldo em `Number`.
-- O navegador reusa a chave para o mesmo método/URL/payload após falha de rede ou `5xx`, inclusive após recarregar a aba. Uma resposta de sucesso ou erro `4xx` conclui aquela tentativa local.
+- O navegador reusa a chave para o mesmo método/URL/payload após falha de rede ou `5xx`, inclusive após recarregar a aba, por até 90 dias desde a primeira tentativa ambígua. Uma resposta de sucesso ou erro `4xx` conclui aquela tentativa local.
 - Transferências debitam a conta Weapons e creditam Bonus ou FBM. O destino inválido `weapons` foi removido, pois permitiria debitar sem creditar uma terceira conta.
 
 ## Schema e rollout
@@ -17,9 +17,9 @@ O novo schema está em `shared/schema.ts`; as migrações aditivas estão em `mi
 
 As migrations `0000`–`0004` estão registradas em `migrations/meta/_journal.json`, com breakpoints Drizzle entre statements e snapshot final alinhado ao schema. `npm run db:migrate` é o caminho versionado para aplicá-las. A journal foi validada desde um banco vazio: `drizzle-kit migrate` aplicou as cinco entradas e criou as tabelas do ledger/idempotência; `drizzle-kit check` passou e `drizzle-kit generate` não identificou diff adicional. Esses testes usaram apenas bancos locais descartáveis.
 
-**Validação final da 0002 (2026-10-14):** aplicada desde schema vazio e reaplicada no mesmo banco descartável; um saldo legado inválido foi preservado pela instalação `NOT VALID`, alterações ainda inválidas foram rejeitadas, a correção para valor válido foi permitida, e as constraints foram então validadas. Testes também rejeitaram saldo negativo novo, estado nulo de empréstimo e durabilidade acima do máximo. Nenhum banco de aplicação foi acessado.
+**Validação final da 0003 (2026-10-14):** aplicada desde schema vazio e reaplicada no mesmo banco descartável; um saldo legado inválido foi preservado pela instalação `NOT VALID`, alterações ainda inválidas foram rejeitadas, a correção para valor válido foi permitida, e as constraints foram então validadas. Testes também rejeitaram saldo negativo novo, estado nulo de empréstimo e durabilidade acima do máximo. Nenhum banco de aplicação foi acessado.
 
-Não execute os dois mecanismos em paralelo sem comparar o estado do schema. As migrações são reexecutáveis com segurança: 0001 usa `IF NOT EXISTS` e 0002 ignora constraints já existentes.
+Não execute os dois mecanismos em paralelo sem comparar o estado do schema. As migrações econômicas são reexecutáveis com segurança: 0002 usa `IF NOT EXISTS`, 0003 ignora constraints já existentes e 0004 protege o snapshot de abertura contra replay.
 
 ## Ledger correlacionável — início da Priority 0.3
 
@@ -36,12 +36,19 @@ As entradas usam KRC `numeric` positivo, `DEBIT`/`CREDIT`, número de linha e c�
 | Compra/reparo | Débito em Weapons; crédito em vendas/serviços. |
 | Salário | Crédito em Bonus; débito em despesa salarial. |
 
-Para as carteiras existentes, a migration cria postings de abertura uma única vez por usuário/conta, contra `equity.opening_balance`, e grava um marcador de migration para evitar que uma reexecução posterior interprete saldos já transacionados como novos saldos iniciais; isso estabelece a base de reconciliação sem reinterpretar o histórico antigo, que não discriminava carteiras. As migrations 0001–0003 foram exercitadas apenas num PostgreSQL local descartável. O trigger impede `UPDATE`, `DELETE` e `TRUNCATE` via o caminho SQL comum; um dono/superuser do banco ainda pode desabilitar triggers, então a separação de privilégios da role de runtime permanece requisito operacional.
+Para as carteiras existentes, a migration cria postings de abertura uma única vez por usuário/conta, contra `equity.opening_balance`, e grava um marcador de migration para evitar que uma reexecução posterior interprete saldos já transacionados como novos saldos iniciais; isso estabelece a base de reconciliação sem reinterpretar o histórico antigo, que não discriminava carteiras. As migrations econômicas 0002–0004 foram exercitadas apenas num PostgreSQL local descartável. O trigger impede `UPDATE`, `DELETE` e `TRUNCATE` via o caminho SQL comum; um dono/superuser do banco ainda pode desabilitar triggers, então a separação de privilégios da role de runtime permanece requisito operacional.
 
-**Verificação:** `economy-postgres.test.ts` aplica e reaplica a 0003, confere snapshot inicial sem duplicação, replay de `operation_id`, vínculo evento→idempotência→ledger, balanced postings, bloqueio de mutação e reconciliação exata das carteiras com KRC `numeric`.
+**Verificação:** `economy-postgres.test.ts` aplica 0002–0004 e reaplica a migration do ledger, confere snapshot inicial sem duplicação, replay de `operation_id`, vínculo evento→idempotência→ledger, balanced postings, bloqueio de mutação e reconciliação exata das carteiras com KRC `numeric`.
+
+## Auditoria e retenção operacionais — Priority 0.3
+
+`npm run economy:reconcile` emite um relatório JSON somente leitura: compara cada carteira com créditos menos débitos do ledger, detecta operações desbalanceadas, eventos com `operation_id` sem posting, claims 2xx sem ledger desde o marcador de baseline da migration 0004 e claims sem resposta completa. Claims 2xx anteriores à criação do ledger são legado histórico, não falsos positivos de drift. Sai com código 0 se estiver limpo, 2 se houver anomalia e 1 se a consulta falhar. O relatório nunca ajusta saldos nem altera histórico e não imprime valores brutos de `Idempotency-Key`.
+
+A política é: o cliente conserva a chave de retry por 90 dias; claims idempotentes completos ficam por 365 dias, prazo validado como estritamente superior à janela do cliente. `npm run economy:idempotency:prune` é dry-run por padrão; informa elegíveis, claims incompletos e sucessos sem ledger sem apagar. A limpeza requer `--execute`, processa lotes limitados com `SKIP LOCKED` e exclui claims sem status/corpo de resposta. Qualquer claim 2xx sem posting — inclusive sucessos históricos pré-ledger — fica preservado e sinalizado para revisão manual, para não apagar sua proteção contra duplicidade; CLI retorna código 2 se houver claims incompletos ou sucessos sem ledger. Chaves antigas de operações que ainda constem no ledger retornam `409 IDEMPOTENCY_KEY_EXPIRED` sem executar novo débito/crédito. O ledger append-only mantém a chave opaca como metadado de correlação; ela não é credencial de autenticação.
+
+Exemplos: `npm run economy:reconcile`; `npm run economy:idempotency:prune`; após revisar o relatório, `npm run economy:idempotency:prune -- --execute --batch-size=1000`. Todos os testes e comandos desta rodada usaram banco PostgreSQL descartável; nenhum banco de produto foi consultado ou alterado.
 
 ## Lacunas que permanecem na Priority 0.2
 
 1. Auditar saldos negativos, ledger, empréstimos e durabilidade antes de `VALIDATE CONSTRAINT`; avaliar FKs de ownership com a tabela de usuários real. Enquanto isso, ownership das mutações permanece filtrado dentro do SQL da operação.
 2. Tornar o PostgreSQL de integração obrigatório no CI/deploy de teste: `economy-postgres.test.ts` já valida as constraints, concorrência de transferência, compra, pagamento, empréstimo e salário, replay, chave com payload diferente e rollback por falha injetada. Execução local: `TEST_DATABASE_URL=<URL de banco descartável *_test> node --import tsx --test tests/official/economy-postgres.test.ts`.
-3. Definir retenção/limpeza da tabela de idempotência. No estado atual, as chaves permanecem para sempre, o que preserva replay indefinido, mas exige uma política operacional de crescimento.

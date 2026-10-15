@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { createEconomyAuditReport } from "../../server/game/economyAudit";
+import { pruneEconomyIdempotencyClaims } from "../../server/game/economyRetention";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
@@ -107,6 +109,11 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
         ($1, 100, 0, 0), ($2, 500, 0, 0), ($3, 100, 0, 0),
         ($4, 0, 0, 0), ($5, 0, 0, 0), ($6, 500, 0, 0), ($7, 50, 0, 0)
     `, [transferUser, purchaseUser, payLoanUser, salaryUser, loanCapUser, rollbackUser, repairUser]);
+    const legacySuccessKey = `legacy-success-${randomUUID()}`;
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
+      VALUES ($1, $2, $3, 200, '{"ok":true}'::jsonb, TIMESTAMP '2000-01-01')
+    `, [legacyUser, legacySuccessKey, "d".repeat(64)]);
 
     const ledgerMigration = await readFile(new URL("../../migrations/0004_correlated_append_only_ledger.sql", import.meta.url), "utf8");
     await pool.query(ledgerMigration);
@@ -349,6 +356,98 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     ] as const) {
       await pool.query(`ALTER TABLE ${table} VALIDATE CONSTRAINT ${constraint}`);
     }
+
+    const cleanAudit = await createEconomyAuditReport(pool);
+    assert.equal(cleanAudit.status, "clean");
+    assert.equal(cleanAudit.counts.walletDrifts, 0);
+    assert.equal(cleanAudit.counts.unbalancedOperations, 0);
+    assert.equal(cleanAudit.counts.transactionsWithoutLedger, 0);
+    assert.equal(cleanAudit.counts.successfulClaimsWithoutLedger, 0);
+    assert.equal(cleanAudit.counts.incompleteIdempotencyClaims, 0);
+
+    await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance + 1 WHERE user_id = $1", [salaryUser]);
+    const [orphanEvent] = (await pool.query(`
+      INSERT INTO transactions (user_id, type, amount_krc, operation_id, description)
+      VALUES ($1, 'AUDIT_TEST', 1, $2, 'event without ledger') RETURNING id
+    `, [salaryUser, randomUUID()])).rows;
+    const orphanClaimKey = `audit-claim-${randomUUID()}`;
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body)
+      VALUES ($1, $2, $3, 200, '{"ok":true}'::jsonb)
+    `, [salaryUser, orphanClaimKey, "c".repeat(64)]);
+    const driftAudit = await createEconomyAuditReport(pool);
+    assert.equal(driftAudit.status, "needs_attention");
+    assert.equal(driftAudit.counts.walletDrifts, 1);
+    assert.equal(driftAudit.walletDrifts[0].account_code, "wallet.bonus");
+    assert.equal(driftAudit.walletDrifts[0].difference_krc, "1.00");
+    assert.equal(driftAudit.counts.transactionsWithoutLedger, 1);
+    assert.equal(driftAudit.counts.successfulClaimsWithoutLedger, 1);
+    const stillDrifted = await pool.query("SELECT bonus_balance::text FROM bank_accounts WHERE user_id = $1", [salaryUser]);
+    assert.equal(stillDrifted.rows[0].bonus_balance, "101.00", "audit reports drift without silently changing balances");
+    await pool.query("DELETE FROM transactions WHERE id = $1", [orphanEvent.id]);
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [orphanClaimKey]);
+    await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance - 1 WHERE user_id = $1", [salaryUser]);
+    assert.equal((await createEconomyAuditReport(pool)).status, "clean");
+
+    await pool.query("UPDATE economy_idempotency SET created_at = TIMESTAMP '2000-01-01' WHERE user_id = $1 AND idempotency_key = $2", [transferUser, transferKey]);
+    const completeExpiredKey = `retention-complete-${randomUUID()}`;
+    const incompleteExpiredKey = `retention-incomplete-${randomUUID()}`;
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
+      VALUES ($1, $2, $3, 400, '{"message":"rejected"}'::jsonb, TIMESTAMP '2000-01-01')
+    `, [salaryUser, completeExpiredKey, "a".repeat(64)]);
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
+      VALUES ($1, $2, $3, NULL, NULL, TIMESTAMP '2000-01-01')
+    `, [salaryUser, incompleteExpiredKey, "b".repeat(64)]);
+    await assert.rejects(pruneEconomyIdempotencyClaims(pool, { retentionDays: 90 }), /maior que a janela de retry/);
+    const dryRun = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1 });
+    assert.equal(dryRun.mode, "dry_run");
+    assert.equal(dryRun.eligibleClaimsAtStart, 2);
+    assert.equal(dryRun.incompleteClaimsNotDeleted, 1);
+    assert.equal(dryRun.successfulClaimsWithoutLedgerNotDeleted, 1);
+    assert.equal(dryRun.deletedClaims, 0);
+    const eligibleAfterDryRun = await pool.query(`
+      SELECT count(*)::int AS count FROM economy_idempotency
+      WHERE created_at < TIMESTAMP '2025-01-01' AND response_status IS NOT NULL AND response_body IS NOT NULL
+        AND idempotency_key IN ($1, $2)
+    `, [transferKey, completeExpiredKey]);
+    assert.equal(eligibleAfterDryRun.rows[0].count, 2, "dry-run must not delete eligible claims");
+    const pruned = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
+    assert.equal(pruned.mode, "executed");
+    assert.equal(pruned.deletedClaims, 2);
+    assert.equal(pruned.batches, 2);
+    assert.equal(pruned.successfulClaimsWithoutLedgerNotDeleted, 1);
+    const remainingIncomplete = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [incompleteExpiredKey],
+    );
+    assert.equal(remainingIncomplete.rows[0].count, 1, "incomplete claims are never deleted by retention cleanup");
+    const remainingLegacySuccess = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [legacySuccessKey],
+    );
+    assert.equal(remainingLegacySuccess.rows[0].count, 1, "pre-ledger successful claims retain their dedupe protection until manual review");
+
+    const balanceBeforeExpiredRetry = await pool.query("SELECT weapons_balance::text FROM bank_accounts WHERE user_id = $1", [transferUser]);
+    const ledgerBeforeExpiredRetry = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_ledger_entries WHERE user_id = $1 AND idempotency_key = $2",
+      [transferUser, transferKey],
+    );
+    const expiredRetry = await service.transfer(transferUser, transferKey, "10.00", "fbm");
+    assert.equal(expiredRetry.status, 409);
+    assert.equal(expiredRetry.body.code, "IDEMPOTENCY_KEY_EXPIRED");
+    assert.equal(expiredRetry.body.operationId, transferResults[0].body.operationId);
+    const balanceAfterExpiredRetry = await pool.query("SELECT weapons_balance::text FROM bank_accounts WHERE user_id = $1", [transferUser]);
+    const ledgerAfterExpiredRetry = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_ledger_entries WHERE user_id = $1 AND idempotency_key = $2",
+      [transferUser, transferKey],
+    );
+    assert.equal(balanceAfterExpiredRetry.rows[0].weapons_balance, balanceBeforeExpiredRetry.rows[0].weapons_balance);
+    assert.equal(ledgerAfterExpiredRetry.rows[0].count, ledgerBeforeExpiredRetry.rows[0].count);
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [incompleteExpiredKey]);
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [legacySuccessKey]);
+    assert.equal((await createEconomyAuditReport(pool)).status, "clean");
   } finally {
     await pool.query("DROP TRIGGER IF EXISTS fail_test_purchase_ledger_trigger ON transactions").catch(() => undefined);
     await pool.query("DROP FUNCTION IF EXISTS fail_test_purchase_ledger()").catch(() => undefined);
