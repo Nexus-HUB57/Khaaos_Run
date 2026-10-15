@@ -258,48 +258,57 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
                 return;
         }
 
-        // 1) Prefer Vitality pipeline (CIGKV/Barburhen survival layer)
-        if (UKhaaosVitalityComponent* Vitality = Target->FindComponentByClass<UKhaaosVitalityComponent>())
+        auto ApplyToOne = [this](AActor* Victim, float Amount)
         {
-                Vitality->ApplyDamage(Damage, InstigatorActor.Get());
-                return;
-        }
-
-        // 2) Prefer AttributeSet Health via ASC
-        if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
-        {
-                if (const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>())
+                if (!Victim || Amount <= 0.f) return;
+                if (UKhaaosVitalityComponent* Vitality = Victim->FindComponentByClass<UKhaaosVitalityComponent>())
                 {
-                        UKhaaosAttributeSet* Attr = const_cast<UKhaaosAttributeSet*>(ConstAttr);
-                        Attr->ApplyDamage(Damage, InstigatorActor.Get());
+                        Vitality->ApplyDamage(Amount, InstigatorActor.Get());
                         return;
                 }
-        }
-
-        // 3) Fallback engine damage
-        if (DamageRadius > 0.0f)
-        {
-                UGameplayStatics::ApplyRadialDamage(
-                        GetWorld(),
-                        Damage,
-                        Hit.Location,
-                        DamageRadius,
-                        UDamageType::StaticClass(),
-                        TArray<AActor*>(),
-                        InstigatorActor.Get(),
-                        true
-                );
-        }
-        else
-        {
+                if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Victim))
+                {
+                        if (const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>())
+                        {
+                                const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamage(Amount, InstigatorActor.Get());
+                                return;
+                        }
+                }
                 UGameplayStatics::ApplyDamage(
-                        Target,
-                        Damage,
+                        Victim,
+                        Amount,
                         InstigatorActor ? InstigatorActor->GetInstigatorController() : nullptr,
                         this,
                         UDamageType::StaticClass()
                 );
+        };
+
+        // Area damage: apply to all pawns in radius (Vitality-aware)
+        if (DamageRadius > 0.0f)
+        {
+                TArray<FOverlapResult> Overlaps;
+                FCollisionQueryParams Params(SCENE_QUERY_STAT(KhaaosProjectileRadial), false, this);
+                GetWorld()->OverlapMultiByChannel(
+                        Overlaps,
+                        Hit.Location,
+                        FQuat::Identity,
+                        ECC_Pawn,
+                        FCollisionShape::MakeSphere(DamageRadius),
+                        Params
+                );
+                for (const FOverlapResult& Ov : Overlaps)
+                {
+                        if (AActor* Victim = Ov.GetActor())
+                        {
+                                ApplyToOne(Victim, Damage);
+                        }
+                }
+                // Always include primary target
+                ApplyToOne(Target, Damage);
+                return;
         }
+
+        ApplyToOne(Target, Damage);
 }
 
 void AKhaaosProjectile::ClientSpawnImpactFX_Implementation(const FHitResult& Hit)
