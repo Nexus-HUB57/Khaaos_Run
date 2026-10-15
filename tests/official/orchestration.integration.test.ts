@@ -85,6 +85,36 @@ describe("Special Class asynchronous integration", () => {
     assert.ok(Date.now() - startedAt < 1_000);
   });
 
+  it("treats a simulated network reset during analysis as a partial council", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    adapters["ambassador-uryan"].analyze = async () => { throw Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }); };
+    const result = await runSpecialClassCouncil(request, adapters);
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.failedAgents, ["ambassador-uryan"]);
+    assert.ok(result.reasonCodes.includes("AGENT_ANALYSIS_INCOMPLETE"));
+    assert.ok(result.reasonCodes.includes("HUMAN_REVIEW_REQUIRED"));
+  });
+
+  it("treats a simulated network reset during peer review as a partial council", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    adapters["king-krapulla"].review = async () => { throw Object.assign(new Error("upstream unavailable"), { code: "ECONNRESET" }); };
+    const result = await runSpecialClassCouncil(request, adapters);
+    assert.equal(result.status, "partial");
+    assert.equal(result.roundsCompleted, 1);
+    assert.deepEqual(result.failedAgents, ["king-krapulla"]);
+    assert.ok(result.reasonCodes.includes("AGENT_REVIEW_INCOMPLETE"));
+  });
+
+  it("times out a stalled peer-review response and never treats it as approval", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    adapters["ambassador-uryan"].review = () => new Promise<GovernanceFinding>(() => {});
+    const result = await runSpecialClassCouncil(request, adapters, { timeoutMs: 50 });
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.failedAgents, ["ambassador-uryan"]);
+    assert.ok(result.findings.find((finding) => finding.agentId === "ambassador-uryan")?.position === "hold");
+    assert.ok(result.reasonCodes.includes("HUMAN_REVIEW_REQUIRED"));
+  });
+
   it("rejects a finding outside an agent's authority domain", async () => {
     const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
     adapters["king-krapulla"].analyze = async () => ({

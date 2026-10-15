@@ -1,14 +1,16 @@
 # API do Painel de Controle do Marechal
 
-**Status: especificação proposta, ainda não conectada a rotas HTTP.** O código de domínio do conselho está em `server/game/orchestration.ts`; esta documentação não significa que os endpoints abaixo estejam ativos. Não envie segredos, dados pessoais ou comandos de shell. O servidor permanece a única autoridade sobre estado de mundo e permissões.
+**Status: rotas HTTP ativas no backend.** Implementação em `server/game/marshalConsole.ts`, montada em `server/routes.ts`; o domínio do conselho está em `server/game/orchestration.ts`. A API é consultiva: não altera partida, saldo KRC, inventário, alianças ou publica mensagens externas. Não envie segredos, dados pessoais ou comandos de shell.
 
 ## 1. Contrato de segurança
 
-- Prefixo planejado: `/api/console/v1`.
+- Prefixo: `/api/console/v1`.
 - Transporte: HTTPS em produção; JSON UTF-8; limite sugerido de corpo: 16 KiB.
 - Autenticação: sessão OIDC já autenticada, cookie `httpOnly` e proteção CSRF nas operações `POST`; nunca confiar em `actorId`, `role` ou `agentId` do corpo para autenticar/autorizar.
-- Autorização: deny-by-default, role operacional atribuída no servidor, escopo por mundo, rate limit e auditoria com correlation ID.
-- Idempotência: `Idempotency-Key` UUID obrigatório em solicitações de conselho/proposta; mesma chave e mesmo corpo retorna a mesma decisão, chave igual com corpo diferente retorna `409 IDEMPOTENCY_KEY_REUSED`.
+- Autorização: deny-by-default, sessão OIDC e allowlist de IDs OIDC em `MARSHAL_CONSOLE_OPERATOR_IDS`; identidade nunca vem do payload.
+- Proteção CSRF no `POST`: `Origin` obrigatório e igual à origem efetiva do serviço; solicitações `Sec-Fetch-Site: cross-site` são negadas.
+- Idempotência: `Idempotency-Key` UUID obrigatório; a mesma chave e mesmo corpo retorna o mesmo recurso, chave igual com corpo diferente retorna `409 IDEMPOTENCY_KEY_REUSED`.
+- Limite: 10 novos conselhos/minuto por ator; corpo máximo 16 KiB; no máximo 1.000 registros ativos no processo.
 - Agentes respondem com leituras e propostas. Nenhum endpoint executa mutação de partida, transação KRC, publicação externa ou operação irreversível.
 - Toda proposta de mudança fica pendente de decisão humana em fluxo futuro separado, autenticado, auditado e com revisão de estado. A API v1 **não define endpoint de aprovação**.
 
@@ -16,12 +18,12 @@
 
 | Método e caminho | Finalidade | Efeito esperado |
 |---|---|---|
-| `GET /api/console/v1/marshal/overview` | estado agregado dos mundos visíveis ao operador | leitura |
+| `GET /api/console/v1/marshal/overview?worldId=W2` | catálogo do mundo e estado operacional agregado | leitura; campos sem fonte instrumentada retornam `null` e `stale: true` |
 | `POST /api/console/v1/marshal/councils` | solicitar conselho assíncrono da Classe Especial | cria execução consultiva; sem mutação de jogo |
 | `GET /api/console/v1/marshal/councils/{requestId}` | consultar estado e resultado da deliberação | leitura |
 | `GET /api/console/v1/marshal/proposals/{proposalId}` | obter detalhes/auditoria de uma proposta | leitura |
 
-O endpoint de criação retorna `202 Accepted`; o cliente consulta o recurso em `Location` ou acompanha eventos pelo mecanismo realtime autenticado existente, se aprovado no desenho final. Não pressupor WebSocket/event stream dedicado antes da sua implementação.
+O endpoint de criação retorna `202 Accepted` com `status: running`; o cliente consulta o recurso pelo caminho em `Location`. Quando o conselho concluir, GET retorna `200` com `status: complete`, `partial` ou `failed`. Não há WebSocket/event stream dedicado.
 
 ## 3. Solicitar um conselho
 
@@ -29,7 +31,7 @@ O endpoint de criação retorna `202 Accepted`; o cliente consulta o recurso em 
 POST /api/console/v1/marshal/councils HTTP/1.1
 Content-Type: application/json
 Idempotency-Key: 4ef6c9c0-4b5f-4c6b-a143-c81a432a3210
-X-CSRF-Token: <token-da-sessao>
+Origin: https://game.example.com
 Cookie: <sessao-autenticada>
 ```
 
@@ -40,47 +42,49 @@ Cookie: <sessao-autenticada>
   "context": {
     "occupancyPct": 82,
     "queueP95Seconds": 94,
+    "marketVolatilityPct": 48,
     "configRevision": "world-config-12"
   }
 }
 ```
 
-`actorId` é obtido da sessão no servidor e não deve ser enviado pelo painel. `context` aceita somente métricas agregadas aprovadas por schema; dados extras, pessoais ou acima dos limites são rejeitados.
+`actorId` é obtido da sessão no servidor e não deve ser enviado pelo painel. `context` aceita apenas `occupancyPct` (0–100), `queueP95Seconds` (0–3600), `activeIncidents` (0–100), `marketVolatilityPct` (0–1000), `marketDataStale`, `activeTreatyConflict` e `configRevision` (até 80 caracteres). Dados extras, pessoais ou acima dos limites são rejeitados. **Esses campos são sinais agregados informados pelo operador, não telemetria autoritativa;** as respostas ficam identificadas como consultivas e não são executáveis.
 
 Resposta inicial:
 
 ```http
 HTTP/1.1 202 Accepted
-Location: /api/console/v1/marshal/councils/council_20261014_001
-Retry-After: 2
+Location: /api/console/v1/marshal/councils/a19623d4-2d6c-4d00-a0e5-c4d8e9ab0914
+Retry-After: 1
 ```
 
 ```json
 {
-  "requestId": "council_20261014_001",
-  "status": "queued",
+  "requestId": "a19623d4-2d6c-4d00-a0e5-c4d8e9ab0914",
+  "status": "running",
   "createdAt": "2026-10-14T21:20:00Z",
   "correlationId": "corr_20261014_001",
-  "links": { "self": "/api/console/v1/marshal/councils/council_20261014_001" }
+  "links": { "self": "/api/console/v1/marshal/councils/a19623d4-2d6c-4d00-a0e5-c4d8e9ab0914" }
 }
 ```
 
 ## 4. Consultar resultado do conselho
 
 ```http
-GET /api/console/v1/marshal/councils/council_20261014_001 HTTP/1.1
+GET /api/console/v1/marshal/councils/a19623d4-2d6c-4d00-a0e5-c4d8e9ab0914 HTTP/1.1
 Cookie: <sessao-autenticada>
 ```
 
 ```json
 {
-  "requestId": "council_20261014_001",
+  "requestId": "a19623d4-2d6c-4d00-a0e5-c4d8e9ab0914",
   "status": "complete",
   "roundsCompleted": 2,
+  "scope": { "worldId": "W2" },
   "agents": [
-    { "agentId": "marshal-henricks", "name": "Henricks Hunterheads III", "domain": "operations", "position": "support", "confidence": 0.86, "rationale": "A fila observada justifica sugerir ampliação temporária." },
-    { "agentId": "king-krapulla", "name": "King Krapulla", "domain": "economy", "position": "hold", "confidence": 0.72, "rationale": "O impacto agregado no mercado precisa de revisão." },
-    { "agentId": "ambassador-uryan", "name": "Uryan Horks", "domain": "diplomacy", "position": "support", "confidence": 0.65, "rationale": "A janela proposta não altera compromissos diplomáticos conhecidos." }
+    { "agentId": "marshal-henricks", "name": "Henricks Hunterheads III", "domain": "operations", "position": "support", "confidence": 0.65, "rationale": "Sinais recebidos dentro dos limites configurados; recomendação consultiva." },
+    { "agentId": "king-krapulla", "name": "King Krapulla", "domain": "economy", "position": "hold", "confidence": 0.65, "rationale": "Sinal de mercado desatualizado ou volátil; não recomendar ajuste sem revisão." },
+    { "agentId": "ambassador-uryan", "name": "Uryan Horks", "domain": "diplomacy", "position": "support", "confidence": 0.65, "rationale": "Sinais recebidos dentro dos limites configurados; recomendação consultiva." }
   ],
   "governance": [
     {
@@ -93,6 +97,7 @@ Cookie: <sessao-autenticada>
   ],
   "failedAgents": [],
   "reasonCodes": [],
+  "proposalIds": ["prop_8c1b7a90-5c5e-4a19-b3bd-ff1a3dced424"],
   "correlationId": "corr_20261014_001",
   "dataRevision": "world-config-12"
 }
@@ -111,17 +116,17 @@ Cookie: <sessao-autenticada>
 {
   "worldId": "W2",
   "name": "Priadus",
-  "operationalState": "running",
-  "occupancy": { "current": 61, "capacity": 75, "percent": 81.3 },
-  "queueP95Seconds": 94,
-  "activeIncidents": 0,
-  "configRevision": "world-config-12",
+  "operationalState": "unknown",
+  "occupancy": { "current": null, "capacity": 75, "percent": null },
+  "queueP95Seconds": null,
+  "activeIncidents": null,
+  "configRevision": "world-catalog-v1",
   "observedAt": "2026-10-14T21:19:58Z",
-  "stale": false
+  "stale": true
 }
 ```
 
-Resposta agregada e limitada ao escopo autorizado do operador. Campos de saúde operacional devem vir de serviços existentes; dados indisponíveis aparecem como `null` com indicação de frescor, nunca como zero fabricado.
+Resposta de catálogo limitada ao escopo autorizado. A API ainda não recebe telemetria por mundo do `RoomManager`; estado/ocupação/fila/incidentes permanecem `null`, com `stale: true`. A capacidade vem do catálogo documentado e não indica que o mundo esteja ativo.
 
 ## 6. Política de governança e resolução
 
@@ -149,19 +154,24 @@ Formato uniforme:
 | HTTP | Código | Condição |
 |---:|---|---|
 | 400 | `INVALID_REQUEST` | JSON/schemas/campos inválidos |
-| 401 | `AUTHENTICATION_REQUIRED` | sessão ausente/inválida |
+| 401 | `AUTHENTICATION_REQUIRED` | sessão ausente/inválida; middleware OIDC atual responde `{ "message": "Unauthorized" }` |
 | 403 | `INSUFFICIENT_SCOPE` | usuário autenticado sem escopo de console/mundo |
 | 404 | `RESOURCE_NOT_FOUND` | council/proposal inexistente ou fora do escopo |
-| 409 | `IDEMPOTENCY_KEY_REUSED` / `STALE_REVISION` | colisão da chave ou revisão obsoleta |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | chave de idempotência repetida com conteúdo diferente |
 | 413 | `PAYLOAD_TOO_LARGE` | corpo maior que limite |
 | 429 | `RATE_LIMITED` | limite por usuário excedido |
 | 503 | `COUNCIL_UNAVAILABLE` | serviço indisponível; repetir com a mesma chave |
 
-## 8. Validações mínimas de implementação
+## 8. Estado operacional e retenção
 
-- Testes HTTP: sem sessão, role insuficiente, escopo inválido e acesso cruzado a council/proposal.
-- Testes concorrentes de idempotência; nenhuma execução duplicada para a mesma chave.
-- Schema estrito, limites de tamanho/intervalo, CSRF e rate limit.
-- Verificar serialização de `partial`, veto, empate e timeout; nenhuma resposta autoriza escrita.
-- Auditoria registra ator autenticado, chave hash/identificador, revisão de dados, participantes, reason codes e resultado; não registra cookies, tokens nem conteúdo pessoal.
-- As rotas permanecem desabilitadas até implementação dos controles e testes acima.
+- Conselhos, chaves de idempotência e propostas ficam em memória do processo por até 24 h; não são gravados no PostgreSQL e não alteram perfis/carteiras. Reinício do serviço remove esses registros; réplicas distintas não compartilham idempotência/estado. Use uma única instância para esse recurso até a futura adoção de um repositório compartilhado.
+- O buffer aceita até 1.000 conselhos ativos; ao atingir o limite retorna `503 COUNCIL_UNAVAILABLE`.
+- `GET overview` descreve o catálogo, não telemetria ao vivo; integrar métricas do runtime requer associação explícita e revisada entre `roomId` e `worldId`.
+- Os adapters iniciais são determinísticos e locais (não chamam LLM nem serviço externo); avaliam apenas os sinais agregados permitidos no corpo. Erros/timeout dos adapters retornam resultado `partial` e exigem revisão humana.
+- Para habilitar operadores no deploy, definir `MARSHAL_CONSOLE_OPERATOR_IDS` como lista separada por vírgula de subjects OIDC confiáveis. Valor ausente/vazio mantém todas as rotas privadas em 403 após autenticação. Render declara a variável como configuração externa (`sync: false`); não foi alterado nenhum valor de produção.
+
+## 9. Cobertura
+
+- Testes HTTP: sem sessão, operador fora da allowlist, origem CSRF inválida, payload inválido, overview, conselho, idempotência, owner-scope e acesso à proposta.
+- Testes assíncronos: erro `ECONNRESET`, análise/revisão incompletas, timeout nas duas fases e falha fechada.
+- Nenhuma resposta autoriza escrita de jogo ou de carteira.
