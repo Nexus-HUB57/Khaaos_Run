@@ -1,7 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "CIGKV/Zu3ChoiceWidget.h"
-#include "CIGKV/Zu3CigkvImpact.h"
+#include "Game/CIGKV/Zu3ChoiceWidget.h"
+#include "Game/CIGKV/Zu3CigkvImpact.h"
 
 void UZu3ChoiceWidget::NativeConstruct()
 {

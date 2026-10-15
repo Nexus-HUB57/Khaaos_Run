@@ -1,7 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Worlds/Barburhen/BarburhenRingController.h"
-#include "Player/KhaaosVitalityComponent.h"
+#include "Game/Worlds/Barburhen/BarburhenRingController.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"

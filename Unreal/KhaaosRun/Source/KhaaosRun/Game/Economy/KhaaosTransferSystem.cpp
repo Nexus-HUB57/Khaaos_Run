@@ -1,7 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Economy/KhaaosTransferSystem.h"
-#include "Economy/KhaaosBankhaoosComponent.h"
+#include "Game/Economy/KhaaosTransferSystem.h"
+#include "Game/Economy/KhaaosBankhaoosComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 

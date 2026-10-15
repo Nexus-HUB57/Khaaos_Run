@@ -1,6 +1,6 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Economy/KhaaosBankhaoosComponent.h"
+#include "Game/Economy/KhaaosBankhaoosComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 

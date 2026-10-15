@@ -1,8 +1,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Worlds/Barburhen/BarburhenMapBuilder.h"
-#include "Worlds/Barburhen/BarburhenRingController.h"
-#include "Worlds/Barburhen/BarburhenAcidRainVolume.h"
+#include "Game/Worlds/Barburhen/BarburhenMapBuilder.h"
+#include "Game/Worlds/Barburhen/BarburhenRingController.h"
+#include "Game/Worlds/Barburhen/BarburhenAcidRainVolume.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
 
@@ -70,10 +70,18 @@ void ABarburhenMapBuilder::SpawnSystems(const FBarburhenWorldConfig& Config)
 		AActor* RainActor = GetWorld()->SpawnActor<AActor>(AcidRainVolumeClass, Config.ParkCenter, FRotator::ZeroRotator, Params);
 		if (ABarburhenAcidRainVolume* Rain = Cast<ABarburhenAcidRainVolume>(RainActor))
 		{
+			// Sincroniza fórmula: %/tick = DPS × intervalo (oficial −1 % / 10 s)
 			Rain->DamagePercentPerTick = Config.AcidRainDamagePerSecond > 0.f
 				? Config.AcidRainDamagePerSecond * Config.AcidRainTickInterval
 				: 0.01f;
-			Rain->TickInterval = Config.AcidRainTickInterval;
+			Rain->TickInterval = Config.AcidRainTickInterval > 0.f
+				? Config.AcidRainTickInterval
+				: 10.f;
+			Rain->SetRainActive(true);
+			UE_LOG(LogTemp, Log, TEXT("[Barburhen] AcidRain sync: %.1f%% / %.0fs (eq DPS %.4f)"),
+				Rain->DamagePercentPerTick * 100.f,
+				Rain->TickInterval,
+				Rain->GetEquivalentDamagePerSecond());
 		}
 	}
 }

@@ -8,7 +8,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
-#include "Economy/KhaaosForgeItem.h"
+#include "Game/Economy/KhaaosForgeItem.h"
 #include "NiagaraSystem.h"
 #include "Sound/SoundCue.h"
 #include "KhaaosArmorerForge.generated.h"

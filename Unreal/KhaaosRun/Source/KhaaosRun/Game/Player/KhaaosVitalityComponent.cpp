@@ -1,6 +1,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Player/KhaaosVitalityComponent.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
+#include "KhaaosAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Character.h"
@@ -58,12 +59,23 @@ void UKhaaosVitalityComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UKhaaosVitalityComponent::InitializeFromASC(UAbilitySystemComponent* ASC)
 {
 	AbilitySystemComp = ASC;
-	// Aqui você pode ler MaxHealth do AttributeSet se quiser sincronizar:
-	// if (const UKhaaosAttributeSet* Attr = ASC->GetSet<UKhaaosAttributeSet>())
-	// {
-	//     MaxVitality = Attr->GetMaxHealth();
-	//     CurrentVitality = Attr->GetHealth();
-	// }
+	if (!ASC)
+	{
+		return;
+	}
+
+	if (const UKhaaosAttributeSet* Attr = ASC->GetSet<UKhaaosAttributeSet>())
+	{
+		const float MaxH = Attr->GetMaxHealth();
+		const float H = Attr->GetHealth();
+		if (MaxH > 0.f)
+		{
+			MaxVitality = MaxH;
+			CurrentVitality = FMath::Clamp(H, 0.f, MaxH);
+			NotifyVitalityChanged();
+		}
+	}
+}
 }
 
 void UKhaaosVitalityComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -168,14 +180,37 @@ void UKhaaosVitalityComponent::ClampVitality()
 
 void UKhaaosVitalityComponent::SyncToGASHealth()
 {
-	// Quando o AttributeSet real existir, sincronize aqui:
-	// if (UAbilitySystemComponent* ASC = AbilitySystemComp.Get())
-	// {
-	//     if (UKhaaosAttributeSet* Attr = const_cast<UKhaaosAttributeSet*>(ASC->GetSet<UKhaaosAttributeSet>()))
-	//     {
-	//         Attr->SetHealth(CurrentVitality);
-	//     }
-	// }
+	UAbilitySystemComponent* ASC = AbilitySystemComp.Get();
+	if (!ASC)
+	{
+		return;
+	}
+
+	const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>();
+	if (!ConstAttr)
+	{
+		return;
+	}
+
+	UKhaaosAttributeSet* Attr = const_cast<UKhaaosAttributeSet*>(ConstAttr);
+	const float MaxH = Attr->GetMaxHealth();
+	if (MaxH <= 0.f)
+	{
+		return;
+	}
+
+	const float TargetHealth = GetVitalityPercent() * MaxH;
+	const float CurrentHealth = Attr->GetHealth();
+	const float Delta = TargetHealth - CurrentHealth;
+
+	if (Delta < -KINDA_SMALL_NUMBER)
+	{
+		Attr->ApplyDamage(-Delta, GetOwner());
+	}
+	else if (Delta > KINDA_SMALL_NUMBER)
+	{
+		Attr->Heal(Delta);
+	}
 }
 
 void UKhaaosVitalityComponent::NotifyVitalityChanged()

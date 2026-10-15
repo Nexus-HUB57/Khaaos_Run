@@ -5,7 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Worlds/Barburhen/BarburhenTypes.h"
+#include "Game/Worlds/Barburhen/BarburhenTypes.h"
 #include "BarburhenMapBuilder.generated.h"
 
 class UDataTable;

@@ -1,8 +1,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 // Zu 3 CIGKV – Queda na Ponte
 
-#include "CIGKV/Zu3CigkvImpact.h"
-#include "Player/KhaaosVitalityComponent.h"
+#include "Game/CIGKV/Zu3CigkvImpact.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "NiagaraFunctionLibrary.h"

@@ -1,9 +1,9 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 // Zu 1 CIGKV – Caminhão Atropelando Bois
 
-#include "CIGKV/Zu1CigkvImpact.h"
-#include "Player/KhaaosVitalityComponent.h"
-#include "Economy/KhaaosBankhaoosComponent.h"
+#include "Game/CIGKV/Zu1CigkvImpact.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
+#include "Game/Economy/KhaaosBankhaoosComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "NiagaraFunctionLibrary.h"

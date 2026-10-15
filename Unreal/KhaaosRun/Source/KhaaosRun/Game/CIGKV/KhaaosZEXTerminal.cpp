@@ -1,8 +1,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "CIGKV/KhaaosZEXTerminal.h"
-#include "Economy/KhaaosTransferSystem.h"
-#include "Economy/KhaaosBankhaoosComponent.h"
+#include "Game/CIGKV/KhaaosZEXTerminal.h"
+#include "Game/Economy/KhaaosTransferSystem.h"
+#include "Game/Economy/KhaaosBankhaoosComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
