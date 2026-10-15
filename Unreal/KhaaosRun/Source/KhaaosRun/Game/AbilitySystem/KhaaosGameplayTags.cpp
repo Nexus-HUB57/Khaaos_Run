@@ -146,5 +146,5 @@ void FKhaaosGameplayTags::InitializeTags()
 	GameplayTags.AI_Difficulty_Elite = RequestTag(GameplayTags.AI_Difficulty_Elite, "AI.Difficulty.Elite");
 
 	bTagsInitialized = true;
-	UE_LOG(LogTemp, Log, TEXT("KhaaosGameplayTags: All %d gameplay tags initialized")), 122);
+	UE_LOG(LogTemp, Log, TEXT("KhaaosGameplayTags: All %d gameplay tags initialized"), 122);
 }
