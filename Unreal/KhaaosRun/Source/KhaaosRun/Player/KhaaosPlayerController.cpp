@@ -4,6 +4,7 @@
 #include "Game/Level/KhaaosCIGKVLevel.h"
 #include "Game/UI/KhaaosHUD.h"
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Game/World/CIGKV/KhaaosZuCinematicComponent.h"
 #include "Kismet/GameplayStatics.h"
 
 void AKhaaosPlayerController::ServerSubmitZuChoice_Implementation(uint8 ChoiceIndex)
@@ -29,8 +30,26 @@ void AKhaaosPlayerController::ClientBeginZuEntry_Implementation(
     float CinematicDuration,
     float ResponseTimeout)
 {
+    // 1) Spawn (or reuse) the local-only cinematic component and drive it.
+    //    Component lives on the PlayerController so the cinematic survives a
+    //    pawn swap (pawn is teleported by the level on BeginPlay).
+    UKhaaosZuCinematicComponent* Cinematic = FindComponentByClass<UKhaaosZuCinematicComponent>();
+    if (!Cinematic)
+    {
+        Cinematic = NewObject<UKhaaosZuCinematicComponent>(this, TEXT("KhaaosZuCinematic"));
+        Cinematic->RegisterComponent();
+    }
+    if (Cinematic)
+    {
+        const EKhaaosZuCinematicVariant Variant =
+            UKhaaosZuCinematicComponent::VariantFromByte(VariantIndex);
+        Cinematic->BeginCinematic(this, Variant, CinematicDuration);
+    }
+
+    // 2) BP override still fires so existing Blueprints (if any) keep working.
     PlayZuEntryCinematic(VariantIndex, CinematicDuration);
 
+    // 3) HUD prompt (existing behaviour — unchanged).
     if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(GetHUD()))
     {
         if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
@@ -45,6 +64,11 @@ void AKhaaosPlayerController::ClientBeginZuEntry_Implementation(
 
 void AKhaaosPlayerController::ClientEndZuEntry_Implementation()
 {
+    if (UKhaaosZuCinematicComponent* Cinematic = FindComponentByClass<UKhaaosZuCinematicComponent>())
+    {
+        Cinematic->EndCinematic();
+    }
+
     if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(GetHUD()))
     {
         if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
