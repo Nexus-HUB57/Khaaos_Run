@@ -23,3 +23,10 @@ MAP_DATA_SOURCE="${ROOT_DIR}/Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/
 TEST_STUB_DIR="${ROOT_DIR}/tests/ue5/stubs"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${INCLUDE_DIR}" "${MAP_DATA_TEST_SOURCE}" "${MAP_DATA_SOURCE}" "${RULES_SOURCE}" -o "${TEMP_DIR}/cigkv-map-data-integration-test"
 "${TEMP_DIR}/cigkv-map-data-integration-test"
+
+# Standalone smoke test for the Zu cinematic variant mapping. The full
+# component depends on UE5 runtime types (UNiagaraSystem, UAudioComponent)
+# and is exercised by the regular UE5 headless compile + PIE flow.
+ZU_CINEMATIC_TEST_SOURCE="${ROOT_DIR}/tests/ue5/cigkv_zu_cinematic_stub_test.cpp"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic "${ZU_CINEMATIC_TEST_SOURCE}" -o "${TEMP_DIR}/cigkv-zu-cinematic-test"
+"${TEMP_DIR}/cigkv-zu-cinematic-test"
