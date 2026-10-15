@@ -31,7 +31,7 @@ Controla toda a lógica do Ring CIGKV:
 | Zone Management | `StartZoneSequence()`, `AdvanceZonePhase()` | 4 fases de shrinking |
 | Loot Spawning | `SpawnPhaseLoot()`, `SpawnPulsoKhaaosDrop()` | Drops por fase + legendary pulso |
 | ZEX Management | `UpdateZEXActivation()`, `PlayerExtractAtZEX()` | 15 Zonas de Extração de XP |
-| Zu Entry | `StartZuEntry()`, `ResolveZuDecision()` | 3 variantes cinematográficas |
+| Zu Entry | `StartZuEntry()`, `ResolveZuDecision()`, `CancelZuEntry()` | 3 variantes cinematográficas, escolha por RPC, dano GAS e timeout no servidor |
 | Player Flow | `CanPlayerEnter()`, `GetAlivePlayerCount()` | Fluxo contínuo, block últimos 5 min |
 | Inactivity | `ProcessInactivityPunishment()` | "Dedo-duro" (rats, mosquitoes, etc.) |
 
@@ -122,10 +122,19 @@ Edit in Editor: configure all spawn points, loot points, environment markers
 
 ```
 World Settings → GameMode Override: KhaaosGameMode
+GameMode → PlayerController: AKhaaosPlayerController (configurado pelo C++ do GameMode)
 GameMode → GameState: KhaaosGameState
 GameMode → PlayerState: KhaaosPlayerState
 GameMode → HUD: KhaaosHUD
 ```
+
+#### Zu entry protocol (server authoritative)
+
+- The GameMode calls StartZuEntry after the normal player restart only when an AKhaaosCIGKVLevel is present. The CIGKV defaults currently define three variants; the server stores the selected variant and accepts one response per controller.
+- The owning client first receives PlayZuEntryCinematic(variant, duration) on AKhaaosPlayerController, then ShowZuEntryPrompt on its KhaaosHUDWidget. Implement the cinematic event in a Blueprint subclass of the controller and configure that subclass in the active GameMode if camera/audio/world effects are needed. Implement the HUD event in the project HUD widget: display the prompt and two buttons, then call SubmitZuEntryChoice(0) for the first/protective option or SubmitZuEntryChoice(1) for the second/unsafe option. HideZuEntryPrompt is called at resolution.
+- The response travels through AKhaaosPlayerController::ServerSubmitZuChoice; the server derives correctness from the selected variant, rejects invalid/duplicate/stale responses, and applies the configured unsafe-choice damage through AKhaaosPlayerState::ApplyDamage/GAS. Damage fraction is clamped to 0–30% of MaxHealth.
+- The choice window opens after the cinematic duration. ZuDecisionTimeout defaults to 6 seconds; a timeout resolves as the unsafe option. Disconnecting cancels the pending timer.
+- This repository does not contain the HUD Blueprint asset, so its visual layout/button bindings still need to be implemented in Unreal Editor.
 
 #### SafeZone damage and elimination
 

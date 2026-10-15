@@ -1,6 +1,8 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/KhaaosGameMode.h"
+#include "Game/Level/KhaaosCIGKVLevel.h"
+#include "Player/KhaaosPlayerController.h"
 #include "Game/KhaaosGameState.h"
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Game/Loot/KhaaosLootPickup.h"
@@ -21,6 +23,7 @@
 
 AKhaaosGameMode::AKhaaosGameMode()
 {
+        PlayerControllerClass = AKhaaosPlayerController::StaticClass();
         PrimaryActorTick.bCanEverTick = true;
         PrimaryActorTick.bStartWithTickEnabled = true;
 
@@ -336,12 +339,47 @@ void AKhaaosGameMode::OnPostLogin(AController* NewPlayer)
         }
 }
 
+void AKhaaosGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+        Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+        if (!HasAuthority() || !NewPlayer || !GetWorld())
+        {
+                return;
+        }
+
+        TArray<AActor*> CIGKVLevels;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AKhaaosCIGKVLevel::StaticClass(), CIGKVLevels);
+        for (AActor* Actor : CIGKVLevels)
+        {
+                if (AKhaaosCIGKVLevel* CIGKVLevel = Cast<AKhaaosCIGKVLevel>(Actor))
+                {
+                        CIGKVLevel->StartZuEntry(NewPlayer);
+                        break;
+                }
+        }
+}
+
 void AKhaaosGameMode::Logout(AController* Exiting)
 {
         if (!Exiting)
         {
                 Super::Logout(Exiting);
                 return;
+        }
+
+        if (APlayerController* PlayerController = Cast<APlayerController>(Exiting))
+        {
+                TArray<AActor*> CIGKVLevels;
+                UGameplayStatics::GetAllActorsOfClass(GetWorld(), AKhaaosCIGKVLevel::StaticClass(), CIGKVLevels);
+                for (AActor* Actor : CIGKVLevels)
+                {
+                        if (AKhaaosCIGKVLevel* CIGKVLevel = Cast<AKhaaosCIGKVLevel>(Actor))
+                        {
+                                CIGKVLevel->CancelZuEntry(PlayerController);
+                                break;
+                        }
+                }
         }
 
         // Remove from spatial grid

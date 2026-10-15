@@ -12,6 +12,7 @@ class AKhaaosLootPickup;
 class USpatialGridSubsystem;
 class UKhaaosAttributeSet;
 class AKhaaosGameState;
+class APlayerController;
 
 // ─── Match Phase Enum (mirrors TS RoomStatus) ─────────────────────────────────
 
@@ -72,6 +73,7 @@ public:
 	// ─── Player Management ──────────────────────────────────────────────────
 
 	virtual void OnPostLogin(AController* NewPlayer) override;
+	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
 
 	/** Handle player elimination (death). */
