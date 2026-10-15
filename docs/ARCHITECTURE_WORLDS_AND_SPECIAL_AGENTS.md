@@ -137,6 +137,20 @@ score = round(25 * (0.45*severity + 0.35*impact + 0.20*4*confidence) * (1 - 0.5*
 - `write`: somente endpoint interno explicitamente permitido, ator autorizado, validação do domínio, trilha de auditoria e checagem de revisão. Não disponível a estes três agentes na implementação inicial.
 - `irreversible` / financeiro / publicação externa: recusado neste módulo e encaminhado a fluxo próprio de autorização humana.
 
+### Conselho assíncrono da Classe Especial
+
+`runSpecialClassCouncil()` executa duas rodadas paralelas por adapters injetados: (1) Marechal, King Krapulla e Uryan emitem pareceres iniciais; (2) cada agente recebe o próprio parecer e os dois pareceres pares, podendo revisar sua posição. Cada chamada tem deadline configurável (padrão 5 s; faixa permitida 50–60.000 ms). Exceção, timeout ou parecer inválido produz resultado `partial`, inclui posição conservadora `hold` para o agente ausente e exige revisão humana. Contexto inválido é rejeitado antes de invocar qualquer adapter.
+
+Política de conflito no `resolveGovernanceConflicts()`:
+
+1. **Segurança (500):** `hold` ou `oppose` veta a proposta (`safety-veto`).
+2. **Integridade competitiva (400):** `hold` ou `oppose` veta a proposta (`integrity-veto`).
+3. **Operações (300), economia (200), diplomacia (100):** divergência permite selecionar uma recomendação superior apenas como `preferred-proposal`; empate no nível de maior precedência ou conflito puramente diplomático escala para pessoa (`escalated-human-review`).
+4. A precedência não pode ser alterada por confiança, ordem de chegada ou cargo ficcional. Competência por agente é verificada: Marechal (segurança/integridade/operações), King (economia), Uryan (diplomacia).
+5. Todos os resultados carregam `executable: false`; não há escrita nem resolução automática de saldo, partida, aliança ou publicação. Falhas e casos parciais sempre falham fechados.
+
+Contrato HTTP planejado e exemplos de payload do painel: [`API_MARECHAL_CONTROL_PANEL.md`](API_MARECHAL_CONTROL_PANEL.md). Rotas ainda não estão implementadas.
+
 ### Defesa contra abuso e falhas
 
 - Allowlist fechada de comandos e schema estrito; texto narrativo não é executável.
@@ -177,6 +191,7 @@ Resposta padrão: `{ "status": "ok|rejected|proposal", "agentId": "king-krapulla
 
 - `server/game/orchestration.ts`: agentes, allowlist, validação, escore e recomendações puros/determinísticos.
 - `tests/official/orchestration.test.ts`: testes de roteamento, escopo, bloqueio de escrita, ranking e payloads inválidos.
+- `tests/official/orchestration.integration.test.ts`: comunicação assíncrona em duas rodadas, falha parcial, vetos e empate escalado.
 - `docs/fase4/WORLDS_DESIGN.md`: cânone atual dos mundos.
 - `Unreal/KhaaosRun/Config/Default*.ini`: configuração da camada UE5; alinhar usando `configRevision` no futuro.
 
@@ -189,4 +204,6 @@ Próxima etapa para serviço real: definir DTOs compartilhados em `shared/`, lig
 3. Nenhum agente produz efeito de escrita, financeiro ou externo; apenas leitura agregada ou proposta tipada.
 4. Pontuação e ordenação são determinísticas para os mesmos dados.
 5. Casos de retry não duplicam propostas quando o mesmo request id é utilizado no adaptador.
-6. TypeScript compila e testes unitários passam sem alterar configurações locais da Unreal.
+6. Conselho consulta os três agentes paralelamente, compartilha pareceres na revisão, aplica deadline e falha fechado.
+7. Vetos de segurança/integridade, limites de competência e escalação humana são determinísticos; nenhuma decisão é executável.
+8. TypeScript compila e testes unitários/de integração passam sem alterar configurações locais da Unreal.
