@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { checkMarshalConsoleAccess } from "@/lib/marshal-console-api";
 import {
   Shield,
   Wallet,
@@ -30,6 +32,13 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const { data: playerData } = usePlayer();
+  const { data: canAccessMarshalConsole = false } = useQuery({
+    queryKey: ["marshal-console-access", user?.id],
+    queryFn: checkMarshalConsoleAccess,
+    enabled: Boolean(user?.id),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
   const [boarding, setBoarding] = useState(false);
 
   if (!user) return <>{children}</>;
@@ -47,6 +56,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/market", label: "FORJA DO ARMEIRO", icon: Crosshair },
     { href: "/profile", label: "OPERATIVO", icon: User },
   ];
+  if (canAccessMarshalConsole) {
+    navItems.splice(1, 0, { href: "/marshal-console", label: "MARECHAL", icon: Shield });
+  }
 
   const StatBadge = ({ icon: Icon, value, label, color = "text-primary" }: any) => (
     <div className="flex items-center gap-2 px-3 py-1 bg-black/50 border border-white/5 rounded-sm">
