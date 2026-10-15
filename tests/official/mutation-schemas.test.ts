@@ -24,6 +24,8 @@ test("bank/loan/item inputs reject non-finite, out-of-range, fractional and extr
   rejects(api.items.purchase.input, { type: "ARMA", name: "   " });
   rejects(api.items.equip.input, { isEquipped: true, userId: "victim" });
   rejects(api.items.repair.input, { amountKrc: 100001 });
+  rejects(api.player.specialization.input, { specializationId: "ADMIN" });
+  rejects(api.player.specialization.input, { specializationId: "INFANTARIA", userId: "victim" });
 });
 
 test("zone, heal, loan preview and simulation mutations reject invalid ranges and unknown keys", () => {

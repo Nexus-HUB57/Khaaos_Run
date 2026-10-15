@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { items, loans, transactions, bankAccounts, playerStats } from './schema';
+import { items, loans, transactions, bankAccounts, playerStats, SPECIALIZATION_IDS } from './schema';
 
 export type {
   BankAccount,
@@ -196,6 +196,18 @@ export const api = {
           amount: z.number(),
         }),
         400: z.object({ message: z.string() }), // Already claimed
+      },
+    },
+    specialization: {
+      method: 'POST' as const,
+      path: '/api/player/specialization',
+      input: z.object({
+        specializationId: z.enum(SPECIALIZATION_IDS),
+      }).strict(),
+      responses: {
+        200: z.object({ specializationId: z.string() }),
+        400: errorSchemas.validation,
+        403: errorSchemas.validation,
       },
     },
   },

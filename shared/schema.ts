@@ -14,6 +14,113 @@ export const PatenteKR = {
   VENEX: "VENEX", KHAEL: "KHAEL", MALAKOR: "MALAKOR", OVERLORD: "OVERLORD",
 } as const;
 
+export type Rank = keyof typeof PatenteKR;
+
+/** Canonical EP555 command ladder. Keep the same cutoffs in the UE5 config. */
+export const EP555_RANKS = [
+  { id: "ZHEERS", xpRequired: 0, designation: "Unidade de Infantaria de Base" },
+  { id: "ONITH", xpRequired: 15_000, designation: "Operador Tático de Incursão" },
+  { id: "SKEETW", xpRequired: 45_000, designation: "SubOficial de Operações" },
+  { id: "HURAN", xpRequired: 100_000, designation: "Líder de Esquadrão" },
+  { id: "VENEX", xpRequired: 250_000, designation: "Comandante de Regimento" },
+  { id: "KHAEL", xpRequired: 500_000, designation: "Estrategista de Divisão" },
+  { id: "MALAKOR", xpRequired: 1_000_000, designation: "Alto Comissário de Guerra" },
+  { id: "OVERLORD", xpRequired: 5_000_000, designation: "General Supremo do Khaaos" },
+] as const satisfies readonly { id: Rank; xpRequired: number; designation: string }[];
+
+export const RANK_XP_THRESHOLDS = Object.fromEntries(
+  EP555_RANKS.map(({ id, xpRequired }) => [id, xpRequired]),
+) as Record<Rank, number>;
+
+export interface RankProgress {
+  rank: Rank;
+  currentXp: number;
+  currentThreshold: number;
+  nextRank: Rank | null;
+  nextThreshold: number | null;
+  xpToNext: number;
+  progressPct: number;
+}
+
+export function getRankProgress(xp: number): RankProgress {
+  const currentXp = Number.isFinite(xp) ? Math.max(0, Math.floor(xp)) : 0;
+  let currentIndex = 0;
+  for (let index = 1; index < EP555_RANKS.length; index += 1) {
+    if (currentXp < EP555_RANKS[index].xpRequired) break;
+    currentIndex = index;
+  }
+
+  const current = EP555_RANKS[currentIndex];
+  const next = EP555_RANKS[currentIndex + 1] ?? null;
+  const span = next ? next.xpRequired - current.xpRequired : 0;
+
+  return {
+    rank: current.id,
+    currentXp,
+    currentThreshold: current.xpRequired,
+    nextRank: next?.id ?? null,
+    nextThreshold: next?.xpRequired ?? null,
+    xpToNext: next ? Math.max(0, next.xpRequired - currentXp) : 0,
+    progressPct: next
+      ? Math.min(100, Math.max(0, ((currentXp - current.xpRequired) / span) * 100))
+      : 100,
+  };
+}
+
+export function rankFromXp(xp: number): Rank {
+  return getRankProgress(xp).rank;
+}
+
+export const SPECIALIZATION_IDS = [
+  "INFANTARIA",
+  "FUZILEIROS",
+  "RASTREADORES",
+  "COMUNICACOES_HACKER",
+  "PILOTO_AERONAVES",
+  "SNIPER",
+  "ENGENHARIA_TATICA",
+  "COMANDOS_SELVA",
+  "MOTORISTA_PESADOS",
+  "PARAQUEDISTAS",
+  "ANTI_BOMBAS",
+  "MEDICO_COMBATE",
+] as const;
+
+export type SpecializationId = typeof SPECIALIZATION_IDS[number];
+
+/** EP555 minimum rank and Morth requirements; Morth currently maps to confirmed PvP kills. */
+export const EP555_SPECIALIZATIONS = [
+  { id: "INFANTARIA", name: "Infantaria", callsign: "Uuivo", rank: "ZHEERS", morthRequired: 25, focus: "Combate corpo a corpo" },
+  { id: "FUZILEIROS", name: "Fuzileiros", callsign: "Avalanche", rank: "ZHEERS", morthRequired: 50, focus: "Operações táticas" },
+  { id: "RASTREADORES", name: "Rastreadores", callsign: "Ferro", rank: "ZHEERS", morthRequired: 50, focus: "Exploração e adaptação" },
+  { id: "COMUNICACOES_HACKER", name: "Comunicações / Hacker", callsign: "Abismo", rank: "ZHEERS", morthRequired: 75, focus: "IA e espionagem avançada" },
+  { id: "PILOTO_AERONAVES", name: "Piloto de Aeronaves", callsign: "Asa", rank: "ONITH", morthRequired: 100, focus: "Ataques aéreos" },
+  { id: "SNIPER", name: "Sniper de Elite", callsign: "Mira", rank: "SKEETW", morthRequired: 150, focus: "Precisão de longo alcance" },
+  { id: "ENGENHARIA_TATICA", name: "Engenharia Tática", callsign: "Névoa", rank: "HURAN", morthRequired: 200, focus: "Ações estratégicas" },
+  { id: "COMANDOS_SELVA", name: "Comandos Selva", callsign: "ComNoes", rank: "VENEX", morthRequired: 250, focus: "Perímetros e emboscadas" },
+  { id: "MOTORISTA_PESADOS", name: "Motorista de Pesados", callsign: "Couraça", rank: "VENEX", morthRequired: 300, focus: "Blindados e logística" },
+  { id: "PARAQUEDISTAS", name: "Paraquedistas", callsign: "Raio", rank: "KHAEL", morthRequired: 500, focus: "Ação secreta e infiltração" },
+  { id: "ANTI_BOMBAS", name: "Anti-Bombas", callsign: "Nulo", rank: "MALAKOR", morthRequired: 750, focus: "Explosivos e demolição" },
+  { id: "MEDICO_COMBATE", name: "Médico de Combate", callsign: "Égide", rank: "OVERLORD", morthRequired: 1_000, focus: "Salvamento e suporte" },
+] as const satisfies readonly {
+  id: SpecializationId;
+  name: string;
+  callsign: string;
+  rank: Rank;
+  morthRequired: number;
+  focus: string;
+}[];
+
+export function canUnlockSpecialization(
+  specialization: typeof EP555_SPECIALIZATIONS[number],
+  xp: number,
+  morth: number,
+): boolean {
+  const currentRankIndex = EP555_RANKS.findIndex(({ id }) => id === rankFromXp(xp));
+  const requiredRankIndex = EP555_RANKS.findIndex(({ id }) => id === specialization.rank);
+  return currentRankIndex >= requiredRankIndex && morth >= specialization.morthRequired;
+}
+
 export const Rarity = {
   COMUM: "COMUM", RARO: "RARO", EPICO: "EPICO", LENDARIO: "LENDARIO", MITICO: "MITICO",
 } as const;
@@ -81,6 +188,7 @@ export const playerStats = pgTable("player_stats", {
   kills: integer("kills").notNull().default(0),
   deaths: integer("deaths").notNull().default(0),
   lastSalaryDate: timestamp("last_salary_date"),
+  specializationId: text("specialization_id"),
   // Persistent competitive ranking
   rating: integer("rating").notNull().default(1000), // ELO-like
   matchesPlayed: integer("matches_played").notNull().default(0),
@@ -219,28 +327,6 @@ export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
 export type MatchResult = typeof matchResults.$inferSelect;
-export type Rank = keyof typeof PatenteKR;
-
-/** XP thresholds for patente progression */
-export const RANK_XP_THRESHOLDS: Record<string, number> = {
-  ZHEERS: 0,
-  ONITH: 200,
-  SKEETW: 500,
-  HURAN: 1000,
-  VENEX: 2000,
-  KHAEL: 4000,
-  MALAKOR: 8000,
-  OVERLORD: 15000,
-};
-
-export function rankFromXp(xp: number): string {
-  const order = ["OVERLORD", "MALAKOR", "KHAEL", "VENEX", "HURAN", "SKEETW", "ONITH", "ZHEERS"];
-  for (const r of order) {
-    if (xp >= (RANK_XP_THRESHOLDS[r] ?? 0)) return r;
-  }
-  return "ZHEERS";
-}
-
 export interface DepositRequest { amountUsd: number; }
 export interface TransferRequest { amountKrc: number; destination: "fbm" | "weapons" | "bonus"; }
 export interface LoanRequest { amountKrc: number; days: number; }

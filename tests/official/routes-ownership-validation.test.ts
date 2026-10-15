@@ -98,6 +98,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "spawn de loot com proprietário forjado", path: "/api/loot/spawn", userId: "operator-allowed", body: { userId: "victim" } },
     { name: "pickup com campo extra", path: "/api/loot/1/pickup", body: { userId: "victim" } },
     { name: "salário diário com campo extra", path: "/api/player/daily-salary", body: { userId: "victim" } },
+    { name: "especialização desconhecida", path: "/api/player/specialization", body: { specializationId: "ADMIN" } },
+    { name: "especialização com usuário forjado", path: "/api/player/specialization", body: { specializationId: "INFANTARIA", userId: "victim" } },
     { name: "respawn com campo extra", path: "/api/player/respawn", body: { userId: "victim" } },
     { name: "prévia de empréstimo fora do limite", path: "/api/economy/loan-preview", body: { principal: 0, days: 1 } },
     { name: "simulação fora do limite", path: "/api/economy/simulate", body: { agents: 501, days: 30 } },
@@ -253,4 +255,34 @@ test("mutações de empréstimos e itens ocultam recursos alheios e inexistentes
   ]);
   assert.deepEqual(mutations, [], "tentativas de outro usuário não devem alterar os recursos");
   assert.equal(blockedStorageCalls.length, 0, "nenhum débito, crédito ou ledger deve ocorrer");
+});
+
+test("especialização exige os requisitos EP555 e grava apenas no perfil da sessão", async () => {
+  const updates: { userId: string; specializationId?: string | null }[] = [];
+  let kills = 24;
+  stubStorage("getPlayerStats", async (userId: string) => ({
+    userId,
+    xp: 0,
+    kills,
+    rank: "ZHEERS",
+  }));
+  stubStorage("updatePlayerStats", async (userId: string, values: { specializationId?: string | null }) => {
+    updates.push({ userId, ...values });
+    return { userId, xp: 0, kills, rank: "ZHEERS", ...values };
+  });
+
+  const locked = await request("POST", "/api/player/specialization", "player-1", {
+    specializationId: "INFANTARIA",
+  });
+  assert.equal(locked.status, 403);
+  assert.deepEqual(await locked.json(), { message: "Requisitos de patente e Morth ainda não atingidos" });
+  assert.deepEqual(updates, [], "não deve salvar uma especialização bloqueada");
+
+  kills = 25;
+  const selected = await request("POST", "/api/player/specialization", "player-1", {
+    specializationId: "INFANTARIA",
+  });
+  assert.equal(selected.status, 200);
+  assert.deepEqual(await selected.json(), { specializationId: "INFANTARIA" });
+  assert.deepEqual(updates, [{ userId: "player-1", specializationId: "INFANTARIA" }]);
 });
