@@ -18,6 +18,7 @@ import { generateMatchContent, generateLootField } from "./game/ProceduralGenera
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
+import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
 import {
   emptyMutationInput,
   zoneStartInput,
@@ -48,6 +49,7 @@ export function registerApiRoutes(app: Express): void {
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
+  registerMarshalConsoleRoutes(app);
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {
