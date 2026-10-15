@@ -21,6 +21,7 @@
 #include "Game/Performance/KhaaosPerformanceBudget.h"
 #include "Game/Performance/KhaaosLODStrategy.h"
 #include "Game/Network/KhaaosReplicationBudget.h"
+#include "Game/MatchFlow/KhaaosMatchTimeline.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
@@ -260,7 +261,15 @@ void AKhaaosGameMode::InitializePhDSubsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ReplicationBudget initialized"));
     }
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ALL E2E subsystems online (11 total)"));
+    // Match Timeline: event log, match summary, JSON serialize
+    MatchTimeline = NewObject<UKhaaosMatchTimelineComponent>(this, UKhaaosMatchTimelineComponent::StaticClass());
+    if (MatchTimeline)
+    {
+        MatchTimeline->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - MatchTimeline initialized"));
+    }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ALL E2E subsystems online (12 total)"));
 }
 
 // ─── Species Selection ─────────────────────────────────────────────────────────
@@ -517,6 +526,16 @@ void AKhaaosGameMode::TransitionToNextWorld()
     // Advance world index: CIGKV(0) → Barburhen(1) → Priadus(2) → Ckesalth(3) → Arukheea(4)
     CurrentWorldIndex = FMath::Min(CurrentWorldIndex + 1, 4);
     CurrentWorld = static_cast<EWorldSequence>(CurrentWorldIndex);
+
+    // Record world transition event on timeline
+    if (MatchTimeline)
+    {
+        FKhaaosTimelineEvent TransitionEvent;
+        TransitionEvent.EventType = EKhaaosTimelineEventType::WorldTransition;
+        TransitionEvent.Description = FString::Printf(TEXT("Transition to world index %d"), CurrentWorldIndex);
+        TransitionEvent.Data.Add(TEXT("WorldIndex"), FString::FromInt(CurrentWorldIndex));
+        MatchTimeline->RecordEvent(TransitionEvent);
+    }
 
     UKhaaosWorldConfigDataAsset* NextConfig = GetCurrentWorldConfig();
     if (NextConfig)
@@ -857,6 +876,15 @@ void AKhaaosGameMode::StartMatch()
         KhaaosGameState->TotalPlayers = GetNumPlayers();
         KhaaosGameState->PlayersAlive = GetNumPlayers();
     }
+
+    // Record match start event on timeline
+    if (MatchTimeline)
+    {
+        FKhaaosTimelineEvent StartEvent;
+        StartEvent.EventType = EKhaaosTimelineEventType::MatchStart;
+        StartEvent.Description = FString::Printf(TEXT("Match started with %d players"), GetNumPlayers());
+        MatchTimeline->RecordEvent(StartEvent);
+    }
 }
 
 void AKhaaosGameMode::FinishMatch(const FString& WinnerId)
@@ -1009,6 +1037,24 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
     {
         KhaaosGameState->OnPlayerEliminated.Broadcast(
             VictimPS->GetUniqueId().ToString(), Cause, VictimPS->EliminatorId);
+    }
+
+    // Record elimination event on timeline
+    if (MatchTimeline)
+    {
+        FKhaaosTimelineEvent ElimEvent;
+        ElimEvent.EventType = EKhaaosTimelineEventType::PlayerEliminated;
+        ElimEvent.Description = FString::Printf(TEXT("%s eliminated by %s (%s)"),
+            *VictimPS->GetPlayerName(),
+            Eliminator ? *Eliminator->GetPlayerName() : TEXT("Zone"),
+            *Cause);
+        ElimEvent.Data.Add(TEXT("VictimId"), VictimPS->GetUniqueId().ToString());
+        if (Eliminator)
+        {
+            ElimEvent.Data.Add(TEXT("EliminatorId"), Eliminator->GetUniqueId().ToString());
+        }
+        ElimEvent.Data.Add(TEXT("Cause"), Cause);
+        MatchTimeline->RecordEvent(ElimEvent);
     }
 }
 

@@ -30,6 +30,7 @@ class UKhaaosCirclePredictionComponent;
 class UKhaaosPerformanceBudgetComponent;
 class UKhaaosLODStrategyComponent;
 class UKhaaosReplicationBudgetComponent;
+class UKhaaosMatchTimelineComponent;
 
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
@@ -338,6 +339,10 @@ protected:
     /** Replication bandwidth budget manager. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosReplicationBudgetComponent* ReplicationBudget;
+
+    /** Match timeline recorder (event log, match summary, JSON serialize). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosMatchTimelineComponent* MatchTimeline;
 
     // ─── Internal Methods ───────────────────────────────────────────────────
 
