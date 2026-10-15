@@ -107,6 +107,12 @@ Docs: `Docs/CIGKV_Barburhen/`
 
 ---
 
+
+### Combate ↔ Vitalidade (integração)
+- Projéteis (`AKhaaosProjectile`) aplicam dano na ordem: **Vitality → AttributeSet → Engine fallback**
+- Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
+- Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
+
 ## Ontologia dos Mundos
 
 O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência de *Rings* (ambientes de batalha) organizados em estágios de intensidade crescente. Cada Ring é, simultaneamente:

@@ -10,6 +10,10 @@
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
+#include "KhaaosAttributeSet.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -254,10 +258,27 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
                 return;
         }
 
-        // Area damage
+        // 1) Prefer Vitality pipeline (CIGKV/Barburhen survival layer)
+        if (UKhaaosVitalityComponent* Vitality = Target->FindComponentByClass<UKhaaosVitalityComponent>())
+        {
+                Vitality->ApplyDamage(Damage, InstigatorActor.Get());
+                return;
+        }
+
+        // 2) Prefer AttributeSet Health via ASC
+        if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
+        {
+                if (const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>())
+                {
+                        UKhaaosAttributeSet* Attr = const_cast<UKhaaosAttributeSet*>(ConstAttr);
+                        Attr->ApplyDamage(Damage, InstigatorActor.Get());
+                        return;
+                }
+        }
+
+        // 3) Fallback engine damage
         if (DamageRadius > 0.0f)
         {
-                // Apply radial damage
                 UGameplayStatics::ApplyRadialDamage(
                         GetWorld(),
                         Damage,
@@ -271,7 +292,6 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
         }
         else
         {
-                // Single-target damage
                 UGameplayStatics::ApplyDamage(
                         Target,
                         Damage,
