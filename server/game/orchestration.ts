@@ -137,3 +137,169 @@ export function scoreAlert(signal: AlertSignal): number {
 export function prioritizeAlerts<T extends AlertSignal>(alerts: readonly T[]): T[] {
   return [...alerts].sort((a, b) => scoreAlert(b) - scoreAlert(a) || a.createdAt - b.createdAt);
 }
+
+// Governance vocabulary for the Submundo KR council. Recommendations remain proposals.
+export type GovernanceDomain = "safety" | "competitive-integrity" | "operations" | "economy" | "diplomacy";
+export type GovernancePosition = "support" | "hold" | "oppose";
+export interface GovernanceFinding {
+  agentId: AgentId;
+  domain: GovernanceDomain;
+  subject: string;
+  position: GovernancePosition;
+  confidence: number;
+  rationale: string;
+}
+export interface CouncilRequest {
+  requestId: string;
+  actorId: string;
+  subject: string;
+  context: Readonly<Record<string, unknown>>;
+}
+export interface AgentReviewInput {
+  request: CouncilRequest;
+  ownFinding: GovernanceFinding;
+  peerFindings: readonly GovernanceFinding[];
+}
+export interface CouncilAgentAdapter {
+  analyze(request: CouncilRequest): Promise<GovernanceFinding>;
+  review(input: AgentReviewInput): Promise<GovernanceFinding>;
+}
+export interface ConflictResolution {
+  subject: string;
+  status: "no-conflict" | "preferred-proposal" | "escalated-human-review" | "safety-veto" | "integrity-veto";
+  preferredAgent: AgentId | null;
+  positions: Array<{ agentId: AgentId; domain: GovernanceDomain; position: GovernancePosition }>;
+  reasonCode: string;
+  executable: false;
+}
+export interface CouncilResult {
+  requestId: string;
+  status: "complete" | "partial" | "rejected";
+  findings: GovernanceFinding[];
+  conflicts: ConflictResolution[];
+  failedAgents: AgentId[];
+  roundsCompleted: 0 | 1 | 2;
+  reasonCodes: string[];
+}
+
+const GOVERNANCE_PRIORITY: Record<GovernanceDomain, number> = {
+  safety: 500,
+  "competitive-integrity": 400,
+  operations: 300,
+  economy: 200,
+  diplomacy: 100,
+};
+const AGENT_DOMAINS: Record<AgentId, readonly GovernanceDomain[]> = {
+  "marshal-henricks": ["safety", "competitive-integrity", "operations"],
+  "king-krapulla": ["economy"],
+  "ambassador-uryan": ["diplomacy"],
+};
+const AGENT_ORDER: readonly AgentId[] = ["marshal-henricks", "king-krapulla", "ambassador-uryan"];
+const isFinding = (value: GovernanceFinding, agentId: AgentId, subject: string): boolean =>
+  !!value && Object.hasOwn(AGENT_DOMAINS, agentId) && value.agentId === agentId && value.subject === subject &&
+  Object.hasOwn(GOVERNANCE_PRIORITY, value.domain) && AGENT_DOMAINS[agentId].includes(value.domain) &&
+  ["support", "hold", "oppose"].includes(value.position) &&
+  Number.isFinite(value.confidence) && value.confidence >= 0 && value.confidence <= 1 &&
+  typeof value.rationale === "string" && value.rationale.length <= 500;
+
+/**
+ * Resolve disagreements by fixed policy precedence, never by agent seniority or confidence.
+ * Safety/integrity conflict is always escalated; no resolution is executable.
+ */
+export function resolveGovernanceConflicts(findings: readonly GovernanceFinding[]): ConflictResolution[] {
+  const grouped = new Map<string, GovernanceFinding[]>();
+  for (const finding of findings) {
+    if (!finding || !isFinding(finding, finding.agentId, finding.subject))
+      throw new RangeError("Parecer inválido ou fora da competência do agente");
+    const group = grouped.get(finding.subject) ?? [];
+    group.push(finding);
+    grouped.set(finding.subject, group);
+  }
+  const resolutions: ConflictResolution[] = [];
+  for (const [subject, group] of grouped) {
+    const positions = group.map(({ agentId, domain, position }) => ({ agentId, domain, position }));
+    const stances = new Set(group.map((finding) => finding.position));
+    if (stances.size < 2) {
+      resolutions.push({ subject, status: "no-conflict", preferredAgent: null, positions, reasonCode: "COUNCIL_CONSENSUS", executable: false });
+      continue;
+    }
+    const veto = group.find((finding) => finding.domain === "safety" && finding.position !== "support") ??
+      group.find((finding) => finding.domain === "competitive-integrity" && finding.position !== "support");
+    if (veto) {
+      resolutions.push({ subject, status: veto.domain === "safety" ? "safety-veto" : "integrity-veto", preferredAgent: null, positions, reasonCode: veto.domain === "safety" ? "SAFETY_POLICY_VETO" : "COMPETITIVE_INTEGRITY_VETO", executable: false });
+      continue;
+    }
+    const sorted = [...group].sort((a, b) => GOVERNANCE_PRIORITY[b.domain] - GOVERNANCE_PRIORITY[a.domain] || AGENT_ORDER.indexOf(a.agentId) - AGENT_ORDER.indexOf(b.agentId));
+    const topPriority = GOVERNANCE_PRIORITY[sorted[0].domain];
+    const topPositions = new Set(sorted.filter((finding) => GOVERNANCE_PRIORITY[finding.domain] === topPriority).map((finding) => finding.position));
+    if (topPositions.size > 1 || topPriority <= GOVERNANCE_PRIORITY.diplomacy) {
+      resolutions.push({ subject, status: "escalated-human-review", preferredAgent: null, positions, reasonCode: "CONFLICT_REQUIRES_HUMAN_REVIEW", executable: false });
+    } else {
+      resolutions.push({ subject, status: "preferred-proposal", preferredAgent: sorted[0].agentId, positions, reasonCode: "PRECEDENCE_SELECTED_PROPOSAL_ONLY", executable: false });
+    }
+  }
+  return resolutions;
+}
+
+const unavailableFinding = (agentId: AgentId, subject: string): GovernanceFinding => ({
+  agentId, domain: AGENT_DOMAINS[agentId][0], subject, position: "hold", confidence: 0,
+  rationale: "Agente indisponível; decisão bloqueada até revisão humana.",
+});
+
+function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("Agent deadline exceeded")), timeoutMs);
+  });
+  return Promise.race([task, deadline]).finally(() => clearTimeout(timer!));
+}
+
+/**
+ * Two asynchronous rounds: all agents analyze in parallel, then review anonymized peer
+ * findings in parallel. Adapters are injected ports; this module itself has no side effects.
+ */
+export async function runSpecialClassCouncil(
+  request: CouncilRequest,
+  adapters: Readonly<Record<AgentId, CouncilAgentAdapter>>,
+  options: { timeoutMs?: number } = {},
+): Promise<CouncilResult> {
+  if (!request || !/^[A-Za-z0-9_-]{8,80}$/.test(request.requestId) ||
+      typeof request.actorId !== "string" || request.actorId.length < 1 || request.actorId.length > 128 ||
+      typeof request.subject !== "string" || request.subject.trim().length < 2 || request.subject.length > 120 ||
+      !request.context || typeof request.context !== "object" || Array.isArray(request.context) ||
+      Object.keys(request.context).length > 24 ||
+      (options.timeoutMs !== undefined && (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 50 || options.timeoutMs > 60_000))) {
+    return { requestId: request?.requestId ?? "invalid-request", status: "rejected", findings: [], conflicts: [], failedAgents: [], roundsCompleted: 0, reasonCodes: ["INVALID_COUNCIL_REQUEST"] };
+  }
+  const initial = await Promise.all(AGENT_ORDER.map(async (agentId) => {
+    try {
+      const finding = await withDeadline(adapters[agentId].analyze(request), options.timeoutMs ?? 5_000);
+      return isFinding(finding, agentId, request.subject) ? { agentId, finding } : { agentId, finding: null };
+    } catch {
+      return { agentId, finding: null };
+    }
+  }));
+  const initialFindings = initial.flatMap((entry) => entry.finding ? [entry.finding] : []);
+  const initialFailed = initial.filter((entry) => !entry.finding).map((entry) => entry.agentId);
+  if (initialFindings.length !== AGENT_ORDER.length) {
+    const findings = AGENT_ORDER.map((agentId) => initialFindings.find((finding) => finding.agentId === agentId) ?? unavailableFinding(agentId, request.subject));
+    return { requestId: request.requestId, status: "partial", findings, conflicts: resolveGovernanceConflicts(findings), failedAgents: initialFailed, roundsCompleted: 1, reasonCodes: ["AGENT_ANALYSIS_INCOMPLETE", "HUMAN_REVIEW_REQUIRED"] };
+  }
+  const reviewed = await Promise.all(AGENT_ORDER.map(async (agentId) => {
+    try {
+      const ownFinding = initialFindings.find((finding) => finding.agentId === agentId)!;
+      const peers = initialFindings.filter((finding) => finding.agentId !== agentId);
+      const revised = await withDeadline(adapters[agentId].review({ request, ownFinding, peerFindings: peers }), options.timeoutMs ?? 5_000);
+      return isFinding(revised, agentId, request.subject) ? { agentId, finding: revised } : { agentId, finding: null };
+    } catch {
+      return { agentId, finding: null };
+    }
+  }));
+  const finalFindings = reviewed.flatMap((entry) => entry.finding ? [entry.finding] : []);
+  const failedAgents = reviewed.filter((entry) => !entry.finding).map((entry) => entry.agentId);
+  if (failedAgents.length) {
+    const complete = AGENT_ORDER.map((agentId) => finalFindings.find((finding) => finding.agentId === agentId) ?? unavailableFinding(agentId, request.subject));
+    return { requestId: request.requestId, status: "partial", findings: complete, conflicts: resolveGovernanceConflicts(complete), failedAgents, roundsCompleted: 1, reasonCodes: ["AGENT_REVIEW_INCOMPLETE", "HUMAN_REVIEW_REQUIRED"] };
+  }
+  return { requestId: request.requestId, status: "complete", findings: finalFindings, conflicts: resolveGovernanceConflicts(finalFindings), failedAgents: [], roundsCompleted: 2, reasonCodes: [] };
+}
