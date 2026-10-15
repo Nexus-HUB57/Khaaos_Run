@@ -1,27 +1,24 @@
 import { useAuth } from "@/hooks/use-auth";
-import { usePlayer } from "@/hooks/use-player";
+import { usePlayer, useSelectSpecialization } from "@/hooks/use-player";
 import { CyberCard } from "@/components/cyber-card";
+import { Button } from "@/components/ui/button";
 import { User, Activity, Shield, Hash, Star, Swords, HeartPulse, Trophy, TrendingUp } from "lucide-react";
 import { useMyRanking, winRate, kdRatio } from "@/hooks/use-ranking";
+import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-
-const RANK_DESCRIPTIONS: Record<string, string> = {
-  ZHEERS: "Recruta — Início do alistamento. O caminho começa aqui.",
-  ONITH: "Soldado — Primeiros combates, primeiros ciclos vencidos.",
-  SKEETW: "Especialista — Habilidade reconhecida em batalha.",
-  HURAN: "Sargento — Comando tático e experiência em campo.",
-  VENEX: "Tenente — Liderança provada. Poucos chegam aqui.",
-  KHAEL: "Capitão — Mestre da guerra. Respeitado por todos.",
-  MALAKOR: "Comandante — A elite dos sobreviventes.",
-  OVERLORD: "Overlord — O Soberano do Khaaos. Lenda viva.",
-};
-
-const RANK_ORDER = ["ZHEERS","ONITH","SKEETW","HURAN","VENEX","KHAEL","MALAKOR","OVERLORD"];
+import {
+  canUnlockSpecialization,
+  EP555_RANKS,
+  EP555_SPECIALIZATIONS,
+  getRankProgress,
+} from "@shared/schema";
 
 export default function Profile() {
   const { user } = useAuth();
   const { data: playerData } = usePlayer();
   const { data: ranking } = useMyRanking();
+  const { mutate: selectSpecialization, isPending: isSelecting } = useSelectSpecialization();
+  const { toast } = useToast();
 
   if (!playerData) {
     return (
@@ -32,9 +29,17 @@ export default function Profile() {
   }
 
   const { stats } = playerData;
-  const rankIdx = RANK_ORDER.indexOf(stats.rank);
-  const rankProgress = rankIdx >= 0 ? ((rankIdx + 1) / RANK_ORDER.length) * 100 : 12.5;
-  const rankDesc = RANK_DESCRIPTIONS[stats.rank] || "Posto desconhecido.";
+  const progression = getRankProgress(stats.xp ?? 0);
+  const rankIdx = EP555_RANKS.findIndex(({ id }) => id === progression.rank);
+  const currentRank = EP555_RANKS[rankIdx];
+  const activeSpecialization = EP555_SPECIALIZATIONS.find(({ id }) => id === stats.specializationId);
+
+  const handleSelectSpecialization = (specializationId: string) => {
+    selectSpecialization(specializationId, {
+      onSuccess: () => toast({ title: "CERTIFICAÇÃO REGISTRADA", description: "Especialidade atualizada no seu QG-WAR'I." }),
+      onError: (error) => toast({ title: "REQUISITOS NÃO ATINGIDOS", description: error.message, variant: "destructive" }),
+    });
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -54,7 +59,7 @@ export default function Profile() {
           >
             <div className="absolute top-0 left-0 w-3 h-3 border-l-2 border-t-2 border-accent/60" />
             <div className="absolute bottom-0 right-0 w-3 h-3 border-r-2 border-b-2 border-accent/60" />
-            <span className="text-3xl font-display font-bold text-accent">{stats.rank.substring(0, 2)}</span>
+            <span className="text-3xl font-display font-bold text-accent">{progression.rank.substring(0, 2)}</span>
             <span className="text-[9px] font-mono text-muted-foreground tracking-widest mt-1">AVATAR</span>
           </div>
 
@@ -67,7 +72,7 @@ export default function Profile() {
                 ID: {user?.id?.split('-')[0].toUpperCase()}
               </span>
               <span className="font-mono text-accent bg-accent/10 border border-accent/20 px-3 py-1 text-xs tracking-widest">
-                POSTO: {stats.rank}
+                POSTO: {progression.rank}
               </span>
               {ranking && (
                 <span className="font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs tracking-widest">
@@ -80,22 +85,27 @@ export default function Profile() {
             <div className="mb-5 max-w-md mx-auto md:mx-0">
               <div className="flex justify-between text-[10px] font-mono text-muted-foreground tracking-widest mb-1.5">
                 <span>PROGRESSÃO DE POSTO</span>
-                <span className="text-accent">{rankIdx + 1} / {RANK_ORDER.length}</span>
+                <span className="text-accent">{rankIdx + 1} / {EP555_RANKS.length}</span>
               </div>
               <div className="h-1.5 bg-black/60 rounded-none overflow-hidden">
                 <div
                   className="h-full transition-all"
                   style={{
-                    width: `${rankProgress}%`,
+                    width: `${progression.progressPct}%`,
                     background: "linear-gradient(90deg, hsl(25 95% 55%), hsl(45 90% 55%))"
                   }}
                 />
               </div>
-              <p className="text-xs text-muted-foreground font-mono mt-2 leading-relaxed tracking-wide">{rankDesc}</p>
+              <p className="text-xs text-muted-foreground font-mono mt-2 leading-relaxed tracking-wide">
+                {currentRank.designation}
+                {progression.nextRank
+                  ? ` · ${progression.currentXp.toLocaleString("pt-BR")} / ${progression.nextThreshold?.toLocaleString("pt-BR")} XP · faltam ${progression.xpToNext.toLocaleString("pt-BR")} XP para ${progression.nextRank}`
+                  : ` · ${progression.currentXp.toLocaleString("pt-BR")} XP · patente máxima`}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatBox label="POSTO" value={stats.rank} icon={Hash} color="text-primary" />
+              <StatBox label="POSTO" value={progression.rank} icon={Hash} color="text-primary" />
               <StatBox label="XP (Accur)" value={`${stats.xp}`} icon={Star} color="text-accent" />
               <StatBox label="VL (Life)" value={stats.maxHealth} icon={HeartPulse} color="text-red-400" />
               <StatBox label="NRG" value={stats.maxEnergy} icon={Swords} color="text-amber-400" />
@@ -107,12 +117,12 @@ export default function Profile() {
       {/* Rank Ladder */}
       <CyberCard title="POSTOS DE COMANDO" subtitle="HIERARQUIA DO KHAAOS RUN">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {RANK_ORDER.map((rank, i) => {
-            const isCurrentRank = rank === stats.rank;
+          {EP555_RANKS.map((rank, i) => {
+            const isCurrentRank = rank.id === progression.rank;
             const isPast = i < rankIdx;
             return (
               <div
-                key={rank}
+                key={rank.id}
                 className={`p-3 border text-center transition-all ${
                   isCurrentRank
                     ? "border-primary/60 bg-primary/10 shadow-[0_0_12px_-3px_hsla(25,95%,55%,0.3)]"
@@ -122,10 +132,59 @@ export default function Profile() {
                 }`}
               >
                 <div className={`text-lg font-display font-bold mb-0.5 ${isCurrentRank ? "text-primary text-glow-primary" : isPast ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-                  {rank.substring(0, 2)}
+                  {rank.id.substring(0, 2)}
                 </div>
-                <div className={`text-[10px] font-mono tracking-widest ${isCurrentRank ? "text-primary" : "text-muted-foreground"}`}>{rank}</div>
+                <div className={`text-[10px] font-mono tracking-widest ${isCurrentRank ? "text-primary" : "text-muted-foreground"}`}>{rank.id}</div>
+                <div className="mt-1 text-[9px] font-mono text-muted-foreground">{rank.xpRequired.toLocaleString("pt-BR")} XP</div>
                 {isCurrentRank && <div className="mt-1 text-[9px] font-mono text-primary/60 tracking-widest">← ATUAL</div>}
+              </div>
+            );
+          })}
+        </div>
+      </CyberCard>
+
+      <CyberCard title="CERTIFICAÇÕES DE COMBATE" subtitle="ESPECIALIZAÇÕES EP555 · REQUISITOS DE PATENTE + MORTH">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-muted-foreground">
+          <span>MORTH REGISTRADO: {stats.kills ?? 0}</span>
+          <span>
+            ESPECIALIDADE ATIVA: {activeSpecialization
+              ? `${activeSpecialization.name} · ${activeSpecialization.callsign}`
+              : "NENHUMA"}
+          </span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {EP555_SPECIALIZATIONS.map((specialization) => {
+            const eligible = canUnlockSpecialization(specialization, stats.xp ?? 0, stats.kills ?? 0);
+            const isActive = specialization.id === stats.specializationId;
+            return (
+              <div
+                key={specialization.id}
+                className={`flex min-h-36 flex-col justify-between border p-3 ${
+                  isActive ? "border-cyan-400/60 bg-cyan-950/20" : eligible ? "border-primary/40 bg-primary/5" : "border-border/30 bg-black/20"
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-display text-sm font-bold text-foreground">{specialization.name}</h3>
+                      <p className="mt-0.5 text-[10px] font-mono tracking-widest text-cyan-300">{specialization.callsign}</p>
+                    </div>
+                    <Shield className={`h-4 w-4 shrink-0 ${eligible ? "text-primary" : "text-muted-foreground/50"}`} />
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{specialization.focus}</p>
+                  <p className="mt-2 text-[10px] font-mono text-muted-foreground">
+                    PATENTE {specialization.rank} · {specialization.morthRequired.toLocaleString("pt-BR")} MORTH
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant={isActive ? "outline" : "default"}
+                  className="mt-3 w-full font-mono text-[10px] tracking-widest"
+                  disabled={!eligible || isActive || isSelecting}
+                  onClick={() => handleSelectSpecialization(specialization.id)}
+                >
+                  {isActive ? "EM SERVIÇO" : eligible ? "ASSUMIR ESPECIALIDADE" : "REQUISITOS PENDENTES"}
+                </Button>
               </div>
             );
           })}

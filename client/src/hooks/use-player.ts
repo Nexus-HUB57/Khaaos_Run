@@ -36,3 +36,23 @@ export function useClaimDailySalary() {
     },
   });
 }
+
+export function useSelectSpecialization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (specializationId: string) => {
+      const res = await fetch(api.player.specialization.path, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specializationId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Não foi possível assumir a especialização");
+      return api.player.specialization.responses[200].parse(body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.player.me.path] });
+    },
+  });
+}

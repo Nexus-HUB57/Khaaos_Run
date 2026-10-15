@@ -67,6 +67,7 @@ const protectedRoutes = [
   ["POST", "/api/items/1/repair"],
   ["GET", "/api/player/me"],
   ["POST", "/api/player/daily-salary"],
+  ["POST", "/api/player/specialization"],
   ["GET", "/api/zone/status"],
   ["POST", "/api/zone/start"],
   ["POST", "/api/zone/stop"],

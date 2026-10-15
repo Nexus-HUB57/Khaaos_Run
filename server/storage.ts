@@ -3,7 +3,7 @@ import {
   playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
-  PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS,
+  PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
 import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -75,12 +75,12 @@ export class DatabaseStorage implements IStorage {
   async getPlayerStats(userId: string): Promise<PlayerStats> {
     await this.initializeUser(userId);
     const [stats] = await db.select().from(playerStats).where(eq(playerStats.userId, userId));
-    return stats;
+    return { ...stats, rank: rankFromXp(stats.xp ?? 0) };
   }
 
   async updatePlayerStats(userId: string, updates: Partial<PlayerStats>): Promise<PlayerStats> {
     const [updated] = await db.update(playerStats).set(updates).where(eq(playerStats.userId, userId)).returning();
-    return updated;
+    return { ...updated, rank: rankFromXp(updated.xp ?? 0) };
   }
 
   async getBankAccount(userId: string): Promise<BankAccount> {
@@ -374,6 +374,7 @@ export class DatabaseStorage implements IStorage {
 
     return rows.map((r) => ({
       ...r,
+      rank: rankFromXp(r.xp ?? 0),
       displayName: [r.firstName, r.lastName].filter(Boolean).join(" ") || r.userId.slice(0, 8),
     })) as any;
   }

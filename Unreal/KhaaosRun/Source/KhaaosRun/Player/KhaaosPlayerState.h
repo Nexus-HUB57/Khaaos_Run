@@ -246,5 +246,5 @@ private:
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 
-	static const TMap<EPatenteRank, int32> RankXpThresholds;
+	static const TArray<TPair<EPatenteRank, int32>> RankXpThresholds;
 };

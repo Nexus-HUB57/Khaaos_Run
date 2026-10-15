@@ -5,7 +5,12 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { api } from "@shared/routes";
 import { z } from "zod";
 import * as schema from "@shared/schema";
-import { ZONE_PHASES, PlayerStatus } from "@shared/schema";
+import {
+  ZONE_PHASES,
+  PlayerStatus,
+  EP555_SPECIALIZATIONS,
+  canUnlockSpecialization,
+} from "@shared/schema";
 import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/RoomManager";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
@@ -260,6 +265,30 @@ export function registerApiRoutes(app: Express): void {
   app.get(api.player.me.path, requireAuth, async (req, res) => {
     const stats = await storage.getPlayerStats(getUserId(req));
     res.json({ stats, user: req.user });
+  });
+
+  app.post(api.player.specialization.path, requireAuth, async (req, res) => {
+    const parsed = api.player.specialization.input.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Especialização inválida" });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const stats = await storage.getPlayerStats(userId);
+      const specialization = EP555_SPECIALIZATIONS.find(({ id }) => id === parsed.data.specializationId);
+      if (!specialization) return res.status(400).json({ message: "Especialização inválida" });
+      if (!canUnlockSpecialization(specialization, stats.xp ?? 0, stats.kills ?? 0)) {
+        return res.status(403).json({ message: "Requisitos de patente e Morth ainda não atingidos" });
+      }
+
+      const updated = await storage.updatePlayerStats(userId, {
+        specializationId: specialization.id,
+      });
+      res.json({ specializationId: updated.specializationId ?? specialization.id });
+    } catch {
+      res.status(500).json({ message: "Não foi possível registrar a especialização" });
+    }
   });
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {

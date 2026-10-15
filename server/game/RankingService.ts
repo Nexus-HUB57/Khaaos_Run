@@ -102,7 +102,7 @@ export async function applyMatchRankings(
   for (const p of participants) {
     const stats = statsMap.get(p.userId)!;
     const ratingBefore = stats.rating ?? 1000;
-    const rankBefore = stats.rank;
+    const rankBefore = rankFromXp(stats.xp ?? 0);
 
     const delta = computeRatingDelta(
       ratingBefore,
