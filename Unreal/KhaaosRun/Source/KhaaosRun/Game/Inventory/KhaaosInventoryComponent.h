@@ -169,11 +169,15 @@ public:
 
 protected:
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
     TArray<FKhaaosInventorySlot> Slots;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
     EKhaaosInventorySlot ActiveSlot = EKhaaosInventorySlot::Primary;
+
+    // ─── Replication ──────────────────────────────────────────────────────
+
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     /** Find slot index by type. Returns -1 if not found. */
     int32 FindSlotIndex(EKhaaosInventorySlot SlotType) const;

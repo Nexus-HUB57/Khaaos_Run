@@ -6,6 +6,7 @@
 
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,17 @@ void UKhaaosSpectatorComponent::FollowKiller(const FString& KillerId)
             }
         }
     }
+}
+
+// ─── Replication ────────────────────────────────────────────────────────────────
+
+void UKhaaosSpectatorComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME_CONDITION(UKhaaosSpectatorComponent, CurrentMode, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosSpectatorComponent, SpectateTarget, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosSpectatorComponent, FreeCamSpeed, COND_None);
 }
 
 // ─── Tick ────────────────────────────────────────────────────────────────────────

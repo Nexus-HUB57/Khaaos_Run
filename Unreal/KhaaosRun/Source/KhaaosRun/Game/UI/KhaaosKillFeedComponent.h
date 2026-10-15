@@ -64,8 +64,10 @@ public:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|KillFeed")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|KillFeed")
     TArray<FKhaaosKillFeedEntry> RecentKills;
 };

@@ -14,6 +14,13 @@
 #include "Game/Combat/KhaaosDamageManager.h"
 #include "Game/UI/KhaaosKillFeedComponent.h"
 #include "Game/Revive/KhaaosReviveSystem.h"
+#include "Game/MatchFlow/KhaaosMatchFlowStateMachine.h"
+#include "Game/Airdrop/KhaaosAirdropSystem.h"
+#include "Game/Deploy/KhaaosDeploySystem.h"
+#include "Game/UI/KhaaosCirclePrediction.h"
+#include "Game/Performance/KhaaosPerformanceBudget.h"
+#include "Game/Performance/KhaaosLODStrategy.h"
+#include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
@@ -194,6 +201,66 @@ void AKhaaosGameMode::InitializePhDSubsystems()
     }
 
     UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - All PhD subsystems online (ZoneManager + DamageManager + KillFeed + ReviveSystem)"));
+
+    // ─── E2E Phase 1-3 Subsystems ────────────────────────────────────────
+
+    // Match Flow State Machine: Lobby→Deploy→Combat→Endgame→Results
+    MatchFlow = NewObject<UKhaaosMatchFlowStateMachineComponent>(this, UKhaaosMatchFlowStateMachineComponent::StaticClass());
+    if (MatchFlow)
+    {
+        MatchFlow->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - MatchFlow initialized"));
+    }
+
+    // Airdrop System: Free Fire-style supply drops
+    AirdropSystem = NewObject<UKhaaosAirdropSystemComponent>(this, UKhaaosAirdropSystemComponent::StaticClass());
+    if (AirdropSystem)
+    {
+        AirdropSystem->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - AirdropSystem initialized"));
+    }
+
+    // Deploy System: Parachute deployment
+    DeploySystem = NewObject<UKhaaosDeploySystemComponent>(this, UKhaaosDeploySystemComponent::StaticClass());
+    if (DeploySystem)
+    {
+        DeploySystem->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - DeploySystem initialized"));
+    }
+
+    // Circle Prediction: Minimap UI white circle (Fortnite-style)
+    CirclePrediction = NewObject<UKhaaosCirclePredictionComponent>(this, UKhaaosCirclePredictionComponent::StaticClass());
+    if (CirclePrediction)
+    {
+        CirclePrediction->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - CirclePrediction initialized"));
+    }
+
+    // Performance Budget: Console quality/performance management
+    PerformanceBudget = NewObject<UKhaaosPerformanceBudgetComponent>(this, UKhaaosPerformanceBudgetComponent::StaticClass());
+    if (PerformanceBudget)
+    {
+        PerformanceBudget->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - PerformanceBudget initialized"));
+    }
+
+    // LOD Strategy: Distance-based LOD for battle royale actors
+    LODStrategy = NewObject<UKhaaosLODStrategyComponent>(this, UKhaaosLODStrategyComponent::StaticClass());
+    if (LODStrategy)
+    {
+        LODStrategy->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - LODStrategy initialized"));
+    }
+
+    // Replication Budget: Network bandwidth management
+    ReplicationBudget = NewObject<UKhaaosReplicationBudgetComponent>(this, UKhaaosReplicationBudgetComponent::StaticClass());
+    if (ReplicationBudget)
+    {
+        ReplicationBudget->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ReplicationBudget initialized"));
+    }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - ALL E2E subsystems online (11 total)"));
 }
 
 // ─── Species Selection ─────────────────────────────────────────────────────────

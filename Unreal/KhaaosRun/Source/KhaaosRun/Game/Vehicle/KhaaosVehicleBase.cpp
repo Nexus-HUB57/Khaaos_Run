@@ -139,4 +139,5 @@ void AKhaaosVehicleBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
     DOREPLIFETIME(AKhaaosVehicleBase, CurrentFuel);
     DOREPLIFETIME(AKhaaosVehicleBase, VehicleVelocity);
     DOREPLIFETIME(AKhaaosVehicleBase, VehicleRotation);
+    DOREPLIFETIME(AKhaaosVehicleBase, Seats);
 }

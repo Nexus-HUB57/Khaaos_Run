@@ -184,35 +184,37 @@ public:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
 
     // ─── Replicated Zone State ──────────────────────────────────────────────
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     FVector2D ZoneCenter = FVector2D::ZeroVector;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     float ZoneRadius = 10000.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     FVector2D TargetCenter = FVector2D::ZeroVector;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     float TargetRadius = 10000.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     float CurrentDamagePerTick = 0.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     int32 CurrentPhase = -1;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     uint8 bIsShrinking : 1;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     float ShrinkProgress = 0.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Zone")
     float PhaseTimeRemaining = 0.0f;
 
     // ─── Internal State ─────────────────────────────────────────────────────

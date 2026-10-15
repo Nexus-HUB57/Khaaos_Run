@@ -3,6 +3,8 @@
 #include "Game/UI/KhaaosKillFeedComponent.h"
 #include "KhaaosRun.h"
 
+#include "Net/UnrealNetwork.h"
+
 UKhaaosKillFeedComponent::UKhaaosKillFeedComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -41,4 +43,13 @@ void UKhaaosKillFeedComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
     RecentKills.RemoveAll([this, CurrentTime](const FKhaaosKillFeedEntry& E) {
         return (CurrentTime - E.Timestamp) > EntryLifetimeSeconds;
     });
+}
+
+// ─── Replication ────────────────────────────────────────────────────────────────
+
+void UKhaaosKillFeedComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME_CONDITION(UKhaaosKillFeedComponent, RecentKills, COND_None);
 }

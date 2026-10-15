@@ -96,7 +96,7 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Vehicle")
     float FuelConsumptionPerSecond = 1.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Vehicle")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Vehicle")
     TArray<FKhaaosVehicleSeat> Seats;
 
     UPROPERTY(BlueprintAssignable, Category = "Khaaos|Vehicle")

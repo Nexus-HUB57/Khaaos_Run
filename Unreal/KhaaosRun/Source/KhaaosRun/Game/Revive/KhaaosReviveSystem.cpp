@@ -3,6 +3,8 @@
 #include "Game/Revive/KhaaosReviveSystem.h"
 #include "KhaaosRun.h"
 
+#include "Net/UnrealNetwork.h"
+
 UKhaaosReviveSystemComponent::UKhaaosReviveSystemComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -19,6 +21,8 @@ void UKhaaosReviveSystemComponent::DownPlayer(const FString& PlayerId)
     PlayerReviveStates.Add(PlayerId, EKhaaosReviveState::Downed);
     DownedTimers.Add(PlayerId, DownedTimeLimit);
 
+    SyncReplicatedPlayerStates();
+
     OnPlayerDowned.Broadcast(PlayerId);
     UE_LOG(LogKhaaosRun, Log, TEXT("ReviveSystem::DownPlayer - %s downed (%.0fs to bleed out)"),
         *PlayerId, DownedTimeLimit);
@@ -32,6 +36,8 @@ void UKhaaosReviveSystemComponent::RevivePlayer(const FString& PlayerId, const F
     *State = EKhaaosReviveState::Alive;
     DownedTimers.Remove(PlayerId);
 
+    SyncReplicatedPlayerStates();
+
     OnPlayerRevived.Broadcast(PlayerId);
     UE_LOG(LogKhaaosRun, Log, TEXT("ReviveSystem::RevivePlayer - %s revived by %s"), *PlayerId, *ReviverId);
 }
@@ -43,6 +49,8 @@ void UKhaaosReviveSystemComponent::KillDownedPlayer(const FString& PlayerId)
 
     *State = EKhaaosReviveState::Dead;
     DownedTimers.Remove(PlayerId);
+
+    SyncReplicatedPlayerStates();
 
     UE_LOG(LogKhaaosRun, Log, TEXT("ReviveSystem::KillDownedPlayer - %s bled out"), *PlayerId);
 }
@@ -73,6 +81,41 @@ EKhaaosReviveState UKhaaosReviveSystemComponent::GetReviveState(const FString& P
 {
     const EKhaaosReviveState* State = PlayerReviveStates.Find(PlayerId);
     return State ? *State : EKhaaosReviveState::Alive;
+}
+
+// ─── Replication ────────────────────────────────────────────────────────────────
+
+void UKhaaosReviveSystemComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME_CONDITION(UKhaaosReviveSystemComponent, ReviveStations, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosReviveSystemComponent, ReplicatedPlayerStates, COND_None);
+}
+
+void UKhaaosReviveSystemComponent::OnRep_PlayerReviveStates()
+{
+    // Rebuild the PlayerReviveStates map from the replicated array on client
+    PlayerReviveStates.Empty();
+    for (const FKhaaosPlayerRevivePair& Pair : ReplicatedPlayerStates)
+    {
+        PlayerReviveStates.Add(Pair.PlayerId, Pair.State);
+    }
+}
+
+void UKhaaosReviveSystemComponent::SyncReplicatedPlayerStates()
+{
+    // Server-side: mirror the TMap into the replicated TArray
+    if (GetOwnerRole() != ROLE_Authority) return;
+
+    ReplicatedPlayerStates.Empty(PlayerReviveStates.Num());
+    for (const auto& Pair : PlayerReviveStates)
+    {
+        FKhaaosPlayerRevivePair Entry;
+        Entry.PlayerId = Pair.Key;
+        Entry.State    = Pair.Value;
+        ReplicatedPlayerStates.Add(Entry);
+    }
 }
 
 void UKhaaosReviveSystemComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

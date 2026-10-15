@@ -3,6 +3,8 @@
 #include "Game/Inventory/KhaaosInventoryComponent.h"
 #include "KhaaosRun.h"
 
+#include "Net/UnrealNetwork.h"
+
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
 UKhaaosInventoryComponent::UKhaaosInventoryComponent()
@@ -173,6 +175,16 @@ int32 UKhaaosInventoryComponent::GetUtilityStackMax() const
         Max += BackpackStackBonus;
     }
     return Max;
+}
+
+// ─── Replication ────────────────────────────────────────────────────────────────
+
+void UKhaaosInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME_CONDITION(UKhaaosInventoryComponent, Slots, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosInventoryComponent, ActiveSlot, COND_None);
 }
 
 // ─── Internal ───────────────────────────────────────────────────────────────────

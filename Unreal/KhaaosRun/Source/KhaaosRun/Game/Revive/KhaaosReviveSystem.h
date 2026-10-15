@@ -36,6 +36,20 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerDowned, const FString&, Pla
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerRevived, const FString&, PlayerId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnReviveStationUsed, FName, StationID);
 
+// ─── Replicated Player-Revive Pair (TMap cannot replicate directly) ─────────────
+
+USTRUCT(BlueprintType)
+struct FKhaaosPlayerRevivePair
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
+    FString PlayerId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
+    EKhaaosReviveState State = EKhaaosReviveState::Alive;
+};
+
 UCLASS(BlueprintType, ClassGroup=(Khaaos), meta=(BlueprintSpawnableComponent))
 class UKhaaosReviveSystemComponent : public UActorComponent
 {
@@ -71,7 +85,7 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Revive")
     float ReviveStationRadius = 300.0f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
     TArray<FKhaaosReviveStation> ReviveStations;
 
     UPROPERTY(BlueprintAssignable, Category = "Khaaos|Revive")
@@ -86,7 +100,20 @@ public:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
+
+    /** Replicated array mirroring PlayerReviveStates (TMap can't replicate directly). */
+    UPROPERTY(ReplicatedUsing = OnRep_PlayerReviveStates, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
+    TArray<FKhaaosPlayerRevivePair> ReplicatedPlayerStates;
+
+    /** Client-side callback: rebuild PlayerReviveStates from replicated array. */
+    UFUNCTION()
+    void OnRep_PlayerReviveStates();
+
+    /** Server-side: sync ReplicatedPlayerStates from PlayerReviveStates map. */
+    void SyncReplicatedPlayerStates();
 
     TMap<FString, EKhaaosReviveState> PlayerReviveStates;
 

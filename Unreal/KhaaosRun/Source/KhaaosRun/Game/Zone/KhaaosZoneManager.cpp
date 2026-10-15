@@ -3,6 +3,8 @@
 #include "Game/Zone/KhaaosZoneManager.h"
 #include "KhaaosRun.h"
 
+#include "Net/UnrealNetwork.h"
+
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
 UKhaaosZoneManagerComponent::UKhaaosZoneManagerComponent()
@@ -252,6 +254,23 @@ void UKhaaosZoneManagerComponent::TickComponent(float DeltaTime, ELevelTick Tick
             AdvancePhase();
         }
     }
+}
+
+// ─── Replication ────────────────────────────────────────────────────────────────
+
+void UKhaaosZoneManagerComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, ZoneCenter, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, ZoneRadius, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, TargetCenter, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, TargetRadius, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, CurrentDamagePerTick, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, CurrentPhase, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, bIsShrinking, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, ShrinkProgress, COND_None);
+    DOREPLIFETIME_CONDITION(UKhaaosZoneManagerComponent, PhaseTimeRemaining, COND_None);
 }
 
 // ─── Cubic Ease-In-Out ──────────────────────────────────────────────────────────

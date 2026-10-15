@@ -23,6 +23,13 @@ class UKhaaosZoneManagerComponent;
 class UKhaaosDamageManagerComponent;
 class UKhaaosKillFeedComponent;
 class UKhaaosReviveSystemComponent;
+class UKhaaosMatchFlowStateMachineComponent;
+class UKhaaosAirdropSystemComponent;
+class UKhaaosDeploySystemComponent;
+class UKhaaosCirclePredictionComponent;
+class UKhaaosPerformanceBudgetComponent;
+class UKhaaosLODStrategyComponent;
+class UKhaaosReplicationBudgetComponent;
 
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
@@ -301,6 +308,36 @@ protected:
     /** Downed/revive/reboot system. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosReviveSystemComponent* ReviveSystem;
+
+    // ─── E2E Phase 1-3 Subsystems (Non-Breaking Additions) ──────────────
+
+    /** Match flow state machine (Lobby→Deploy→Combat→Endgame→Results). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosMatchFlowStateMachineComponent* MatchFlow;
+
+    /** Free Fire-style airdrop/supply drop system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosAirdropSystemComponent* AirdropSystem;
+
+    /** Deploy/parachute system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosDeploySystemComponent* DeploySystem;
+
+    /** Circle prediction for minimap UI (Fortnite white circle). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosCirclePredictionComponent* CirclePrediction;
+
+    /** Console performance budget manager. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosPerformanceBudgetComponent* PerformanceBudget;
+
+    /** LOD strategy for battle royale actors. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosLODStrategyComponent* LODStrategy;
+
+    /** Replication bandwidth budget manager. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosReplicationBudgetComponent* ReplicationBudget;
 
     // ─── Internal Methods ───────────────────────────────────────────────────
 

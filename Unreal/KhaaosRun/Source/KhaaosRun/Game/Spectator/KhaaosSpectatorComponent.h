@@ -116,20 +116,22 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Khaaos|Spectator")
     FOnSpectateTargetChanged OnSpectateTargetChanged;
 
-    // ─── Tick ────────────────────────────────────────────────────────────────
+    // ─── Tick & Replication ────────────────────────────────────────────────
 
     virtual void TickComponent(float DeltaTime, ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
     ESpectatorMode CurrentMode = ESpectatorMode::FollowPlayer;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
     APlayerState* SpectateTarget = nullptr;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Spectator")
     float FreeCamSpeed = 1200.0f;
 
     /** Cached list of alive player states for cycling. */
