@@ -1,0 +1,78 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun Barburhen Map Export"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "Barburhen_Map"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Barburhen_Geometry",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 1498,
+      "type": "VEC3",
+      "max": [
+        251.0,
+        35.5,
+        251.0
+      ],
+      "min": [
+        -251.0,
+        0,
+        -251.0
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5125,
+      "count": 6858,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 17976,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 17976,
+      "byteLength": 27432,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 45408,
+      "uri": "Barburhen_Map.bin"
+    }
+  ]
+}
