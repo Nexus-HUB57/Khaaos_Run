@@ -3,12 +3,17 @@ import { api, type Item, buildUrl, errorSchemas } from "@shared/routes";
 import { idempotentFetch } from "@/lib/queryClient";
 import { z } from "zod";
 
+async function apiErrorMessage(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null) as { message?: unknown } | null;
+  return typeof body?.message === "string" && body.message.trim() ? body.message : fallback;
+}
+
 export function useItems() {
   return useQuery({
     queryKey: [api.items.list.path],
     queryFn: async () => {
       const res = await fetch(api.items.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch inventory");
+      if (!res.ok) throw new Error(await apiErrorMessage(res, "Não foi possível carregar o War’I."));
       return api.items.list.responses[200].parse(await res.json());
     },
   });
@@ -30,7 +35,7 @@ export function usePurchaseItem() {
           const error = errorSchemas.insufficientFunds.parse(await res.json());
           throw new Error(error.message);
         }
-        throw new Error("Purchase failed");
+        throw new Error(await apiErrorMessage(res, "Não foi possível concluir a compra."));
       }
       return api.items.purchase.responses[201].parse(await res.json());
     },
@@ -54,7 +59,7 @@ export function useSetItemEquipped() {
       });
       if (!res.ok) {
         if (res.status === 404) throw new Error("Item não encontrado no seu War’I");
-        throw new Error("Não foi possível atualizar a PackBack");
+        throw new Error(await apiErrorMessage(res, "Não foi possível atualizar a PackBack."));
       }
       return api.items.equip.responses[200].parse(await res.json());
     },
@@ -72,7 +77,7 @@ export function useUseItem() {
     mutationFn: async (id: number) => {
       const url = buildUrl(api.items.use.path, { id });
       const res = await fetch(url, { method: "POST", credentials: "include" });
-      if (!res.ok) throw new Error("Failed to use item");
+      if (!res.ok) throw new Error(await apiErrorMessage(res, "Não foi possível usar este item."));
       return api.items.use.responses[200].parse(await res.json());
     },
     onSuccess: () => {
@@ -94,8 +99,8 @@ export function useRepairItem() {
         credentials: "include"
       });
       if (!res.ok) {
-        if (res.status === 402) throw new Error("Insufficient funds for repair");
-        throw new Error("Repair failed");
+        if (res.status === 402) throw new Error(await apiErrorMessage(res, "Saldo insuficiente para o reparo."));
+        throw new Error(await apiErrorMessage(res, "Não foi possível reparar o item."));
       }
       return api.items.repair.responses[200].parse(await res.json());
     },

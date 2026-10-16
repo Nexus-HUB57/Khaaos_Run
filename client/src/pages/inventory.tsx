@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useItems, useSetItemEquipped, useUseItem, useRepairItem } from "@/hooks/use-items";
 import type { Item } from "@shared/routes";
-import { getWarICategory, type WarICategory } from "@shared/war-i";
+import { canUseItemOutsideMatch, getWarICategory, getWarIUseKind, type WarICategory } from "@shared/war-i";
+import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +49,8 @@ function countFor(compartment: string, items: Item[]) {
 
 export default function Inventory() {
   const { data: items = [], isLoading, isError, refetch } = useItems();
+  const { room } = useSharedBattleRoom();
+  const loadoutLocked = room?.status === "COUNTDOWN" || room?.status === "IN_PROGRESS";
   const [activeCompartment, setActiveCompartment] = useState<(typeof COMPARTMENTS)[number]["id"]>("TODOS");
   const [search, setSearch] = useState("");
   const selectedItems = items.filter((item) => item.isEquipped);
@@ -103,7 +106,7 @@ export default function Inventory() {
             <div>
               <h2 className="font-display font-bold tracking-widest text-sm">PACKBACK TÁTICA</h2>
               <p className="mt-1 text-xs text-muted-foreground font-mono leading-relaxed">
-                Armas e defesas íntegras definem seus atributos ao iniciar o match. Consumíveis e utilidades ainda não têm uso ativo durante a partida.
+                O loadout é congelado no countdown. Cura, granadas e reconhecimento são acionados pela interface da Zona durante o match.
               </p>
             </div>
           </div>
@@ -179,7 +182,7 @@ export default function Inventory() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {visibleItems.map((item) => <ItemCard key={item.id} item={item} />)}
+          {visibleItems.map((item) => <ItemCard key={item.id} item={item} loadoutLocked={loadoutLocked} />)}
         </div>
       )}
       <p className="text-[10px] font-mono text-muted-foreground/60 tracking-widest">
@@ -198,7 +201,7 @@ function Summary({ value, label, accent = false }: { value: number; label: strin
   );
 }
 
-function ItemCard({ item }: { item: Item }) {
+function ItemCard({ item, loadoutLocked }: { item: Item; loadoutLocked: boolean }) {
   const [showDetails, setShowDetails] = useState(false);
   const { mutate: useItem, isPending: isUsing } = useUseItem();
   const { mutate: repairItem, isPending: isRepairing } = useRepairItem();
@@ -212,6 +215,7 @@ function ItemCard({ item }: { item: Item }) {
   const durabilityPct = Math.max(0, Math.min(100, (currentDurability / maxDurability) * 100));
   const durabilityColor = durabilityPct > 60 ? "bg-primary" : durabilityPct > 30 ? "bg-amber-500" : "bg-destructive";
   const compartment = getWarICategory(item.type);
+  const canUseOutsideMatch = canUseItemOutsideMatch(item.type, item.stats);
 
   const handleEquip = () => setEquipped({ id: item.id, isEquipped: !item.isEquipped }, {
     onSuccess: (updated) => toast({
@@ -292,11 +296,13 @@ function ItemCard({ item }: { item: Item }) {
               variant="outline"
               className={cn("w-full font-display tracking-widest text-xs", item.isEquipped ? "border-primary/40 text-primary" : "border-border")}
               onClick={handleEquip}
-              disabled={isUpdatingLoadout}
+              disabled={isUpdatingLoadout || loadoutLocked}
               data-testid={`button-packback-${item.id}`}
             >
               {item.isEquipped ? <><Check className="w-3.5 h-3.5 mr-2" /> NA PACKBACK — REMOVER</> : <><Backpack className="w-3.5 h-3.5 mr-2" /> ADICIONAR À PACKBACK</>}
             </Button>
+            {loadoutLocked && <p role="status" className="text-[10px] font-mono text-amber-300">LOADOUT CONGELADO DURANTE O COUNTDOWN E A PARTIDA.</p>}
+            {loadoutLocked && getWarIUseKind(item.type, item.stats) && <p className="text-[10px] font-mono text-muted-foreground">Ação de combate disponível em ZONA → AÇÕES DA PACKBACK.</p>}
             {currentDurability < maxDurability && (
               <div className="p-2.5 border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-200 font-mono tracking-widest">CUSTO DE REPARO: 50 KRC</div>
             )}
@@ -308,13 +314,15 @@ function ItemCard({ item }: { item: Item }) {
                 <Wrench className="w-3 h-3 mr-1" /> REPARAR
               </Button>
             )}
-            <Button
-              className="flex-1 font-display tracking-widest text-xs border-0"
-              style={{ background: "linear-gradient(135deg, hsl(25 95% 55%), hsl(15 90% 45%))", color: "hsl(260 25% 5%)" }}
-              onClick={handleUse}
-              disabled={isUsing || currentDurability <= 0}
-              data-testid={`button-use-item-${item.id}`}
-            >USAR</Button>
+            {canUseOutsideMatch && !loadoutLocked && (
+              <Button
+                className="flex-1 font-display tracking-widest text-xs border-0"
+                style={{ background: "linear-gradient(135deg, hsl(25 95% 55%), hsl(15 90% 45%))", color: "hsl(260 25% 5%)" }}
+                onClick={handleUse}
+                disabled={isUsing || currentDurability <= 0}
+                data-testid={`button-use-item-${item.id}`}
+              >USAR CURA</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

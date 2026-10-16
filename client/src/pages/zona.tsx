@@ -15,6 +15,7 @@ import { ZONE_PHASES } from "@shared/schema";
 import { getWarIUseKind } from "@shared/war-i";
 import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import type { BattlePlayer, PackBackScan, RoomLoot } from "@/hooks/use-battle-room";
+import { isOutsideSafeZone, zoneEllipseRadii } from "@/lib/safe-zone-geometry";
 
 // ─── Canvas drawing (BP_SafeZone visual equivalent) ──────────────────────────
 
@@ -30,7 +31,6 @@ function drawZoneCanvas(
   centerY: number,
   isActive: boolean,
   isShrinking: boolean,
-  isOutside: boolean,
   tick: number,
   otherPlayers: BattlePlayer[] = [],
   lootItems: RoomLoot[] = [],
@@ -39,11 +39,12 @@ function drawZoneCanvas(
 ) {
   const cx = (centerX / 100) * w;
   const cy = (centerY / 100) * h;
-  const maxR = Math.min(w, h) * 0.48;
-  const curR = (currentRadius / 100) * maxR;
-  const tgtR = (targetRadius / 100) * maxR;
+  const { x: maxRx, y: maxRy } = zoneEllipseRadii(50, w, h);
+  const { x: curRx, y: curRy } = zoneEllipseRadii(currentRadius, w, h);
+  const { x: tgtRx, y: tgtRy } = zoneEllipseRadii(targetRadius, w, h);
   const px = playerX * w;
   const py = playerY * h;
+  const outside = isActive && isOutsideSafeZone(playerX * 100, playerY * 100, centerX, centerY, currentRadius);
 
   // ── Background ──
   ctx.fillStyle = "#0a0610";
@@ -78,7 +79,7 @@ function drawZoneCanvas(
   if (!isActive) {
     // Idle state — show full zone outline only
     ctx.beginPath();
-    ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, maxRx, maxRy, 0, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(120,80,220,0.3)";
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 8]);
@@ -100,21 +101,21 @@ function drawZoneCanvas(
   }
 
   // ── Outside-zone danger fill ──
-  if (isOutside) {
+  if (outside) {
     const pulse = 0.08 + 0.04 * Math.sin(tick * 0.15);
     ctx.fillStyle = `rgba(220,30,30,${pulse})`;
     ctx.fillRect(0, 0, w, h);
     // Clip safe zone out of danger fill
     ctx.globalCompositeOperation = "destination-out";
     ctx.beginPath();
-    ctx.arc(cx, cy, curR, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, curRx, curRy, 0, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(0,0,0,1)";
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
     // Re-draw background inside safe zone
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, curR, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, curRx, curRy, 0, 0, Math.PI * 2);
     ctx.clip();
     ctx.fillStyle = "#0a0610";
     ctx.fillRect(0, 0, w, h);
@@ -136,9 +137,9 @@ function drawZoneCanvas(
   }
 
   // ── Next zone circle (target — dashed orange) ──
-  if (isShrinking && tgtR < curR) {
+  if (isShrinking && targetRadius < currentRadius) {
     ctx.beginPath();
-    ctx.arc(cx, cy, tgtR, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, tgtRx, tgtRy, 0, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(220,100,20,0.7)";
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
@@ -149,30 +150,33 @@ function drawZoneCanvas(
     ctx.font = "10px 'Share Tech Mono', monospace";
     ctx.fillStyle = "rgba(220,100,20,0.8)";
     ctx.textAlign = "center";
-    ctx.fillText("PRÓXIMA ZONA", cx, cy - tgtR - 6);
+    ctx.fillText("PRÓXIMA ZONA", cx, cy - tgtRy - 6);
   }
 
   // ── Current zone gradient fill (safe area) ──
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, curR);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, curRx, curRy, 0, 0, Math.PI * 2);
+  ctx.clip();
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(curRx, curRy));
   grad.addColorStop(0, "rgba(0,160,220,0.04)");
   grad.addColorStop(0.7, "rgba(0,160,220,0.02)");
   grad.addColorStop(1, "rgba(0,180,255,0.08)");
-  ctx.beginPath();
-  ctx.arc(cx, cy, curR, 0, Math.PI * 2);
   ctx.fillStyle = grad;
-  ctx.fill();
+  ctx.fillRect(cx - curRx, cy - curRy, curRx * 2, curRy * 2);
+  ctx.restore();
 
   // ── Zone boundary wall (glowing blue line) ──
   const wallPulse = 0.8 + 0.2 * Math.sin(tick * 0.08);
   // Outer glow
   ctx.beginPath();
-  ctx.arc(cx, cy, curR, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, curRx, curRy, 0, 0, Math.PI * 2);
   ctx.strokeStyle = `rgba(0,160,255,${0.2 * wallPulse})`;
   ctx.lineWidth = 12;
   ctx.stroke();
   // Core line
   ctx.beginPath();
-  ctx.arc(cx, cy, curR, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, curRx, curRy, 0, 0, Math.PI * 2);
   ctx.strokeStyle = `rgba(0,200,255,${0.9 * wallPulse})`;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -189,8 +193,6 @@ function drawZoneCanvas(
   ctx.fill();
 
   // ── Player dot ──
-  const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
-  const outside = dist > curR;
   const playerColor = outside ? "#ff3333" : "#ff8800";
   const playerGlow = outside ? "rgba(255,50,50,0.5)" : "rgba(255,136,0,0.5)";
 
@@ -217,7 +219,7 @@ function drawZoneCanvas(
   ctx.font = "11px 'Share Tech Mono', monospace";
   ctx.fillStyle = "rgba(0,200,255,0.8)";
   ctx.textAlign = "left";
-  ctx.fillText(`R: ${currentRadius.toFixed(1)}%`, cx + curR + 8, cy + 4);
+  ctx.fillText(`R: ${currentRadius.toFixed(1)}%`, cx + curRx + 8, cy + 4);
 
   // ── Loot markers (procedural / room loot) ──
   for (const loot of lootItems) {
@@ -306,6 +308,7 @@ export default function ZonaPage() {
   // ── Real-time Room (authoritative) ──────────────────────────────────────
   const {
     connected: wsConnected,
+    connectionState: wsConnectionState,
     room: battleRoom,
     zone: wsZone,
     players: battlePlayers,
@@ -321,7 +324,7 @@ export default function ZonaPage() {
     lastError: wsError,
   } = useSharedBattleRoom();
 
-  const inLiveRoom = wsConnected && !!battleRoom && (battleRoom.status === "IN_PROGRESS" || battleRoom.status === "COUNTDOWN");
+  const inLiveRoom = !!battleRoom && (battleRoom.status === "IN_PROGRESS" || battleRoom.status === "COUNTDOWN");
   const localUserId = (playerData as any)?.user?.id || (playerData as any)?.stats?.userId;
 
   // Canvas refs
@@ -401,26 +404,19 @@ export default function ZonaPage() {
 
   // Sync lerp target when zone status updates
   useEffect(() => {
-    if (zoneStatus) {
-      // Update outside detection
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const w = canvas.width;
-        const h = canvas.height;
-        const cx = (zoneStatus.centerX / 100) * w;
-        const cy = (zoneStatus.centerY / 100) * h;
-        const maxR = Math.min(w, h) * 0.48;
-        const curR = (zoneStatus.currentRadiusPct / 100) * maxR;
-        const { x, y } = playerPosRef.current;
-        const px = x * w;
-        const py = y * h;
-        const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
-        const outside = zoneStatus.isActive && dist > curR;
-        setIsOutside(outside);
-        isOutsideRef.current = outside;
-      }
-    }
-  }, [zoneStatus]);
+    if (!zoneStatus) return;
+    const xPct = inLiveRoom && localBattlePlayer ? localBattlePlayer.posX : playerPosRef.current.x * 100;
+    const yPct = inLiveRoom && localBattlePlayer ? localBattlePlayer.posY : playerPosRef.current.y * 100;
+    const outside = zoneStatus.isActive && isOutsideSafeZone(
+      xPct,
+      yPct,
+      zoneStatus.centerX,
+      zoneStatus.centerY,
+      zoneStatus.currentRadiusPct,
+    );
+    setIsOutside(outside);
+    isOutsideRef.current = outside;
+  }, [zoneStatus, inLiveRoom, localBattlePlayer?.posX, localBattlePlayer?.posY]);
 
   // Damage timer — only in legacy HTTP mode (server is authoritative in live rooms)
   useEffect(() => {
@@ -466,18 +462,9 @@ export default function ZonaPage() {
       const isShrinking = status?.isShrinking ?? false;
 
       // Recompute outside status every frame for smooth feedback
-      const cx = (centerX / 100) * w;
-      const cy = (centerY / 100) * h;
-      const maxR = Math.min(w, h) * 0.48;
-      const curR = (currentRadius / 100) * maxR;
-      const px = x * w;
-      const py = y * h;
-      const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
-      const frameOutside = isActive && dist > curR;
-
       const others = inLiveRoom ? battlePlayers : [];
       const loot = inLiveRoom && battleRoom ? battleRoom.loot : [];
-      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, frameOutside, tick, others, loot, localUserId, packbackScan);
+      drawZoneCanvas(ctx, w, h, currentRadius, targetRadius, x, y, centerX, centerY, isActive, isShrinking, tick, others, loot, localUserId, packbackScan);
       animRef.current = requestAnimationFrame(draw);
     };
 
@@ -495,6 +482,7 @@ export default function ZonaPage() {
     const clamped = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
     // Send authoritative position to RoomManager (0-100 space)
     if (inLiveRoom) {
+      if (!wsConnected) return;
       updatePosition(clamped.x * 100, clamped.y * 100);
     } else {
       setPlayerPos(clamped);
@@ -503,24 +491,61 @@ export default function ZonaPage() {
 
     // The live match recomputes danger from authoritative position snapshots.
     if (zoneStatus && !inLiveRoom) {
-      const w = canvas.width;
-      const h = canvas.height;
-      const cx2 = (zoneStatus.centerX / 100) * w;
-      const cy2 = (zoneStatus.centerY / 100) * h;
-      const maxR = Math.min(w, h) * 0.48;
-      const curR = (zoneStatus.currentRadiusPct / 100) * maxR;
-      const px = clamped.x * w;
-      const py = clamped.y * h;
-      const dist2 = Math.sqrt((px - cx2) ** 2 + (py - cy2) ** 2);
-      const outside = zoneStatus.isActive && dist2 > curR;
+      const outside = zoneStatus.isActive && isOutsideSafeZone(
+        clamped.x * 100,
+        clamped.y * 100,
+        zoneStatus.centerX,
+        zoneStatus.centerY,
+        zoneStatus.currentRadiusPct,
+      );
       setIsOutside(outside);
       isOutsideRef.current = outside;
     }
-  }, [zoneStatus, inLiveRoom, updatePosition]);
+  }, [zoneStatus, inLiveRoom, wsConnected, updatePosition]);
+
+  const handleCanvasKeyDown = useCallback((e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    const deltas: Record<string, { x: number; y: number }> = {
+      ArrowUp: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 },
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+    };
+    const delta = deltas[e.key];
+    if (!delta) return;
+    e.preventDefault();
+    if (inLiveRoom && !wsConnected) return;
+
+    const step = e.shiftKey ? 0.05 : 0.02;
+    const current = inLiveRoom && localBattlePlayer
+      ? { x: localBattlePlayer.posX / 100, y: localBattlePlayer.posY / 100 }
+      : playerPosRef.current;
+    const next = {
+      x: Math.max(0, Math.min(1, current.x + delta.x * step)),
+      y: Math.max(0, Math.min(1, current.y + delta.y * step)),
+    };
+    if (inLiveRoom) {
+      updatePosition(next.x * 100, next.y * 100);
+      return;
+    }
+
+    setPlayerPos(next);
+    playerPosRef.current = next;
+    if (zoneStatus) {
+      const outside = zoneStatus.isActive && isOutsideSafeZone(
+        next.x * 100,
+        next.y * 100,
+        zoneStatus.centerX,
+        zoneStatus.centerY,
+        zoneStatus.currentRadiusPct,
+      );
+      setIsOutside(outside);
+      isOutsideRef.current = outside;
+    }
+  }, [inLiveRoom, wsConnected, localBattlePlayer?.posX, localBattlePlayer?.posY, updatePosition, zoneStatus]);
 
   // Double-click nearest enemy to attack (PvP)
   const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!inLiveRoom || !attack) return;
+    if (!inLiveRoom || !wsConnected || !attack) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -538,7 +563,7 @@ export default function ZonaPage() {
       }
     }
     if (nearest) attack(nearest.id);
-  }, [inLiveRoom, attack, battlePlayers, localUserId]);
+  }, [inLiveRoom, wsConnected, attack, battlePlayers, localUserId]);
 
   const health = inLiveRoom ? (localBattlePlayer?.health ?? playerData?.stats?.health ?? 100) : (playerData?.stats?.health ?? 100);
   const maxHealth = inLiveRoom ? (localBattlePlayer?.maxHealth ?? playerData?.stats?.maxHealth ?? 100) : (playerData?.stats?.maxHealth ?? 100);
@@ -581,6 +606,16 @@ export default function ZonaPage() {
                 {countdown != null && countdown > 0 ? ` · INÍCIO ${countdown}s` : ""}
               </span>
             )}
+            {inLiveRoom && (
+              <span
+                data-testid="ws-connection-state"
+                role="status"
+                aria-live="polite"
+                className={cn("ml-2", wsConnectionState === "connected" ? "text-green-400" : "text-amber-300")}
+              >
+                · {wsConnectionState === "connected" ? "SINCRONIZADO" : wsConnectionState === "reconnecting" ? "RECONECTANDO" : wsConnectionState === "connecting" ? "CONECTANDO" : "OFFLINE"}
+              </span>
+            )}
             {wsError && <span className="ml-2 text-red-400">· {wsError}</span>}
           </p>
         </div>
@@ -589,6 +624,7 @@ export default function ZonaPage() {
           {battleRoom?.status === "LOBBY" && (
             <Button
               onClick={startMatch}
+              disabled={!wsConnected}
               className="bg-cyan-600/30 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-600/50 font-display tracking-widest text-xs gap-2"
               variant="outline"
             >
@@ -649,12 +685,18 @@ export default function ZonaPage() {
               data-testid="canvas-safe-zone"
               onClick={handleCanvasClick}
               onDoubleClick={handleCanvasDoubleClick}
-              className="w-full h-full cursor-crosshair"
+              onKeyDown={handleCanvasKeyDown}
+              role="application"
+              aria-label={`Mapa tático interativo. Sua posição X ${inLiveRoom && localBattlePlayer ? localBattlePlayer.posX.toFixed(0) : (playerPos.x * 100).toFixed(0)}, Y ${inLiveRoom && localBattlePlayer ? localBattlePlayer.posY.toFixed(0) : (playerPos.y * 100).toFixed(0)}. ${isOutside ? "Fora da zona segura." : "Dentro da zona segura."} Clique ou use as setas para mover. Duplo clique em um adversário para atacar.`}
+              aria-describedby="safe-zone-canvas-help"
+              aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
+              tabIndex={0}
+              className="w-full h-full cursor-crosshair focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
               style={{ imageRendering: "pixelated" }}
             />
             {/* Overlay instructions */}
-            <div className="absolute bottom-3 left-3 text-[10px] font-mono text-muted-foreground/60 select-none">
-              CLIQUE NO MAPA PARA MOVER OPERATIVO
+            <div id="safe-zone-canvas-help" className="absolute bottom-3 left-3 text-[10px] font-mono text-muted-foreground/60 select-none">
+              CLIQUE OU SETAS PARA MOVER · SHIFT + SETAS: PASSO MAIOR · DUPLO CLIQUE: ATACAR
             </div>
             {/* Outside danger overlay label */}
             {isOutside && (
@@ -716,6 +758,7 @@ export default function ZonaPage() {
                     const hasAdrenaline = kind === "HEAL" && Number(item.stats.speed) > 0;
                     const actionLabel = hasAdrenaline ? "USAR ADRENALINA" : kind === "HEAL" ? "USAR CURA" : kind === "GRENADE" ? "LANÇAR GRANADA" : "ATIVAR DRONE";
                     const disabled = Number(item.durability) <= 0
+                      || !wsConnected
                       || localBattlePlayer?.status !== "VIVO"
                       || (kind === "HEAL" && health >= maxHealth && !hasAdrenaline);
                     return (
@@ -747,7 +790,7 @@ export default function ZonaPage() {
               <Button
                 data-testid={`button-pickup-live-loot-${nearbyBattleLoot.id}`}
                 onClick={() => pickupLoot(nearbyBattleLoot.id)}
-                disabled={localBattlePlayer?.status !== "VIVO"}
+                disabled={!wsConnected || localBattlePlayer?.status !== "VIVO"}
                 variant="outline"
                 className="w-full border-cyan-500/40 text-cyan-100 hover:bg-cyan-500/10 font-mono text-xs"
               >

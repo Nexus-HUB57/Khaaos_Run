@@ -18,9 +18,7 @@ import { generateMatchContent, generateLootField } from "./game/ProceduralGenera
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
-import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
-import { economyService } from "./game/economyService";
-import { isValidIdempotencyKey } from "./game/economyMoney";
+import { canUseItemOutsideMatch } from "@shared/war-i";
 import {
   emptyMutationInput,
   zoneStartInput,
@@ -182,6 +180,9 @@ export function registerApiRoutes(app: Express): void {
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const { isEquipped } = api.items.equip.input.parse(req.body);
+      if (roomManager.isInLiveMatch(userId)) {
+        return res.status(409).json({ message: "Loadout congelado: altere a PackBack antes de iniciar o countdown." });
+      }
       const item = await storage.setItemEquipped(id, userId, isEquipped);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       res.json(item);
@@ -217,7 +218,7 @@ export function registerApiRoutes(app: Express): void {
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      if (item.type !== "CURATIVO" || !Number.isFinite(item.stats?.heal) || Number(item.stats?.heal) <= 0) {
+      if (!canUseItemOutsideMatch(item.type, item.stats)) {
         return res.status(409).json({ message: "Este item não possui uso legado fora do combate." });
       }
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {

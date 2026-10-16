@@ -87,7 +87,7 @@ type ServerMessage =
   | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement?: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: string }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: string }
   | { type: "queue_left" }
@@ -123,14 +123,41 @@ export interface LastMatchResult {
   finishedAt: number;
 }
 
+export type BattleConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
+
+function roomSessionKey(userId: string | null) {
+  return userId ? `khaaos:room:${userId}` : null;
+}
+
+function readSavedRoomId(userId: string | null) {
+  const key = roomSessionKey(userId);
+  if (!key || typeof window === "undefined") return null;
+  try { return window.sessionStorage.getItem(key); } catch { return null; }
+}
+
+function saveRoomId(userId: string | null, roomId: string | null) {
+  const key = roomSessionKey(userId);
+  if (!key || typeof window === "undefined") return;
+  try {
+    if (roomId) window.sessionStorage.setItem(key, roomId);
+    else window.sessionStorage.removeItem(key);
+  } catch { /* storage can be unavailable in private browsing */ }
+}
+
 export function useBattleRoom() {
   const { user } = useAuth();
+  const userId = typeof (user as any)?.id === "string"
+    ? (user as any).id as string
+    : typeof (user as any)?.claims?.sub === "string"
+      ? (user as any).claims.sub as string
+      : null;
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const activeRef = useRef(false);
   const connectingRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<BattleConnectionState>("connecting");
   const [room, setRoom] = useState<RoomState | null>(null);
   const [zone, setZone] = useState<ZoneStatus | null>(null);
   const [players, setPlayers] = useState<BattlePlayer[]>([]);
@@ -156,13 +183,17 @@ export function useBattleRoom() {
   const send = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
+      return true;
     }
+    setLastError("Sem conexão com a partida. Reconectando; a ação ainda não foi enviada.");
+    return false;
   }, []);
 
   const connect = useCallback(async () => {
     if (!user || !activeRef.current || connectingRef.current) return;
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) return;
     connectingRef.current = true;
+    setConnectionState("connecting");
 
     let ws: WebSocket;
     try {
@@ -177,6 +208,7 @@ export function useBattleRoom() {
       wsRef.current = ws;
     } catch (error) {
       setLastError(error instanceof Error ? error.message : "Falha de autenticação WebSocket");
+      setConnectionState(activeRef.current ? "reconnecting" : "offline");
       if (activeRef.current) {
         reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
       }
@@ -185,15 +217,16 @@ export function useBattleRoom() {
       connectingRef.current = false;
     }
 
+    const displayName = (user as any).firstName || (user as any).claims?.first_name || "Operativo";
     ws.onopen = () => {
       setConnected(true);
+      setConnectionState("connected");
       setLastError(null);
-      const name = (user as any).firstName || (user as any).claims?.first_name || "Operativo";
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "join",
-          displayName: name,
-        }));
+        const savedRoomId = readSavedRoomId(userId);
+        ws.send(JSON.stringify(savedRoomId
+          ? { type: "resume", roomId: savedRoomId }
+          : { type: "join", displayName }));
       }
     };
 
@@ -202,9 +235,11 @@ export function useBattleRoom() {
         const msg = JSON.parse(ev.data) as ServerMessage;
         switch (msg.type) {
           case "welcome":
-            // roomId known
+            saveRoomId(userId, msg.roomId);
             break;
           case "room_state":
+            setLastError(null);
+            saveRoomId(userId, msg.room.status === "FINISHED" ? null : msg.room.id);
             setRoom(msg.room);
             setPlayers(msg.room.players);
             setZone(msg.room.zone);
@@ -277,6 +312,7 @@ export function useBattleRoom() {
             break;
           }
           case "match_finished":
+            saveRoomId(userId, null);
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
             setPackbackItems([]);
@@ -319,6 +355,12 @@ export function useBattleRoom() {
             break;
           case "error":
             setLastError(msg.message);
+            if (msg.code === "ROOM_RESUME_UNAVAILABLE") {
+              saveRoomId(userId, null);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "join", displayName }));
+              }
+            }
             break;
         }
       } catch {
@@ -331,6 +373,7 @@ export function useBattleRoom() {
         wsRef.current = null;
         setConnected(false);
       }
+      setConnectionState(activeRef.current ? "reconnecting" : "offline");
       if (activeRef.current) {
         reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
       }
@@ -339,11 +382,12 @@ export function useBattleRoom() {
     ws.onerror = () => {
       setLastError("WebSocket error");
     };
-  }, [user, queryClient]);
+  }, [user, userId, queryClient]);
 
   useEffect(() => {
     activeRef.current = !!user;
     if (user) void connect();
+    else setConnectionState("offline");
     return () => {
       activeRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
@@ -367,7 +411,10 @@ export function useBattleRoom() {
 
   const startMatch = useCallback(() => send({ type: "start" }), [send]);
 
-  const leave = useCallback(() => send({ type: "leave" }), [send]);
+  const leave = useCallback(() => {
+    const sent = send({ type: "leave" });
+    if (sent) saveRoomId(userId, null);
+  }, [send, userId]);
 
   const attack = useCallback(
     (targetId: string) =>
@@ -415,6 +462,7 @@ export function useBattleRoom() {
 
   return {
     connected,
+    connectionState,
     room,
     zone,
     players,

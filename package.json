@@ -14,6 +14,7 @@
     "economy:idempotency:prune": "tsx scripts/prune-economy-idempotency.ts",
     "test:game": "npm --prefix game-runtime test",
     "test:official": "node --import tsx --test tests/official/*.test.ts tests/official/dashboard-transactions.test.tsx && node --test tests/official/*.test.js",
+    "test:postgres": "node --import tsx --test tests/integration/*.test.ts",
     "test:ue5:logic": "bash scripts/test_ue5_logic.sh",
     "test:game:infra": "npm --prefix game-runtime run test:infra",
     "test:game:stress": "npm --prefix game-runtime run test:stress",
