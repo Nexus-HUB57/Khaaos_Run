@@ -32,12 +32,21 @@ O roadmap não considera a presença de arquivos ou stubs como implementação c
 - [ ] Definir política de Origin/CSRF para mutações HTTP e allowlist de Origin para handshake WebSocket.
 - [ ] Rever logs para remover tokens, cookies, PII desnecessária e payloads sensíveis.
 - [ ] Definir invariantes explícitos para `LOBBY → COUNTDOWN → IN_PROGRESS → FINISHED`, eliminação, abandono e vitória.
+**Entrega parcial desta rodada:** a zona e o spawn global de loot exigem a allowlist de operador; reparo/uso de item e pagamento de empréstimo fazem a mutação SQL com filtro de proprietário; entradas das mutações cobertas são estritas e limitadas por Zod. As suítes HTTP verificam que as 41 rotas privadas rejeitam sessões ausentes e expiradas, os quatro controles globais da zona rejeitam jogadores comuns mesmo com role forjado no corpo, leituras de conta/inventário/empréstimos/histórico usam o proprietário da sessão e mutações de itens/empréstimos ocultam recursos alheios ou inexistentes. Entradas inválidas em mutações financeiras, de itens, zona e jogador retornam 400 sem chamar o storage. O aceite 0.1 ainda exige inventário contínuo das rotas e ampliação da cobertura de ownership/IDs para os demais recursos, além de garantir atomicidade quando uma persistência falhar entre etapas.
 
 **Entregue parcialmente:** há controles de zona/spawn por allowlist, escopo por usuário em operações de item e empréstimo, limites Zod em mutações cobertas e identidade WS autenticada. A suíte negativa abrangente e auditoria de todas as rotas ainda não fecham esta fase.
 
 **Gate de aceite:** cada endpoint privado tem teste positivo e negativo; uma identidade não altera recursos de outra; entrada inválida, timeout e retry não deixam estado parcial; logs e mensagens não revelam segredos.
 
 ## Fase 1 — PostgreSQL, migrações reproduzíveis e CI
+- [x] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
+- [x] Usar decimal exato ou unidades inteiras mínimas nas mutações econômicas; saldos usam `numeric` no SQL e entradas usam centavos inteiros.
+- [x] Adicionar idempotency key nas mutações econômicas com persistência e replay de resposta.
+- [x] Definir checks no banco para saldos não negativos, lançamentos, durabilidade e estado dos empréstimos (migration 0003, `NOT VALID` até auditoria).
+- [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
+- [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
+
+**Entrega inicial desta rodada:** depósito, transferência, empréstimo, pagamento, compra, reparo e salário usam o serviço transacional/idempotente. O schema e as migrations foram aplicados e os testes concorrentes passaram em PostgreSQL local descartável; não foi alterado nenhum banco da aplicação, pois não há `DATABASE_URL` disponível. Os checks `NOT VALID` protegem novos/alterados registros; a validação dos dados legados e FKs de ownership continuam pendentes. O rollout está descrito em [`docs/ECONOMY_TRANSACTIONS.md`](./ECONOMY_TRANSACTIONS.md).
 
 **Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
 
@@ -52,6 +61,22 @@ O roadmap não considera a presença de arquivos ou stubs como implementação c
 - [ ] Escrever testes concorrentes de compra, transferência, pagamento, ledger e rollback multi-tabela.
 - [ ] Definir backup, restore testado, retenção, RPO/RTO e procedimento de rollback de migração.
 - [ ] Adicionar constraints e índices somente após conferir query plans e padrões reais de consulta.
+### 0.3 Auditoria e reconciliação da economia
+
+Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito ainda aberto: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões de ownership/FK da 0.2.
+
+- [x] Definir contrato de ledger append-only com `operation_id`/chave de idempotência correlacionáveis e lançamentos explícitos por conta de origem/destino; migration 0004 preserva histórico antigo e cria saldos de abertura por carteira.
+- [x] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
+- [x] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; disponibilizar limpeza controlável e segura em dry-run por padrão.
+- [ ] Definir fluxo de ajustes administrativos por lançamentos compensatórios append-only, com capability, motivo, ator, horário e trilha de auditoria; proibir correção por update/delete de histórico.
+- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0003 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
+- [ ] Executar migrações e testes PostgreSQL num banco efêmero obrigatório no CI; medir reconciliação antes/depois de carga concorrente e de falhas injetadas.
+
+**Aceite:** todo saldo é explicável por lançamentos correlacionados; reconciliação detecta drift sem mutação automática; ajustes são auditáveis e compensatórios; retries continuam seguros dentro da retenção estabelecida; migrações e checks passam do zero em CI.
+
+**Implementação desta rodada:** além do ledger correlacionável e append-only, `npm run economy:reconcile` gera relatório read-only para drift de carteira, operações desbalanceadas, transações sem ledger e claims incompletos, respeitando o marco de adoção do ledger para dados históricos. A janela de retry do cliente é 90 dias; claims completos ficam 365 dias e `economy:idempotency:prune` só apaga mediante `--execute`, em lotes com `SKIP LOCKED`, excluindo respostas incompletas e qualquer sucesso sem posting. Testes PostgreSQL confirmam detecção sem autocorreção, pruning dry-run/execução e rejeição de replay antigo sem novo débito/crédito. Tudo foi testado em banco descartável; nenhum banco de produto foi acessado. Ajustes compensatórios, auditoria de registros legados em produção, CI com banco efêmero obrigatório e separação da role runtime/owner permanecem pendentes.
+
+## Prioridade 1 — entrega reproduzível e dados seguros
 
 **Gate de aceite:** database limpo é migrado do zero no CI; testes demonstram leitura de volta e concorrência; falha de migração impede deploy; backup pode ser restaurado em ambiente isolado. O gate atual cobre persistência básica de jogador/conta/item, mas não substitui testes de ledger, backup ou rollback.
 

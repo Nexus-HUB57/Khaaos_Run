@@ -24,3 +24,5 @@ services:
         sync: false
       - key: ZONE_OPERATOR_IDS
         sync: false
+      - key: MARSHAL_CONSOLE_OPERATOR_IDS
+        sync: false

@@ -15,17 +15,17 @@
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 
-// ─── Static XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ───────────────────
+// ─── EP555 XP thresholds, ordered high-to-low to make RankFromXp deterministic ──
 
-const TMap<EPatenteRank, int32> AKhaaosPlayerState::RankXpThresholds = {
-        { EPatenteRank::Zheers,   0     },
-        { EPatenteRank::Onith,   100    },
-        { EPatenteRank::Skeetw,  300    },
-        { EPatenteRank::Huran,   700    },
-        { EPatenteRank::Venex,  1500    },
-        { EPatenteRank::Khael,  3000    },
-        { EPatenteRank::Malakor,6000    },
-        { EPatenteRank::Overlord,10000   }
+const TArray<TPair<EPatenteRank, int32>> AKhaaosPlayerState::RankXpThresholds = {
+        { EPatenteRank::Overlord, 5000000 },
+        { EPatenteRank::Malakor,  1000000 },
+        { EPatenteRank::Khael,     500000 },
+        { EPatenteRank::Venex,     250000 },
+        { EPatenteRank::Huran,     100000 },
+        { EPatenteRank::Skeetw,     45000 },
+        { EPatenteRank::Onith,      15000 },
+        { EPatenteRank::Zheers,         0 }
 };
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
@@ -360,18 +360,15 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
 
 EPatenteRank AKhaaosPlayerState::RankFromXp(int32 Xp)
 {
-        // Walk thresholds from highest to lowest
-        EPatenteRank Result = EPatenteRank::Zheers;
-
         for (const auto& Pair : RankXpThresholds)
         {
                 if (Xp >= Pair.Value)
                 {
-                        Result = Pair.Key;
+                        return Pair.Key;
                 }
         }
 
-        return Result;
+        return EPatenteRank::Zheers;
 }
 
 FString AKhaaosPlayerState::PatenteToString(EPatenteRank Rank)

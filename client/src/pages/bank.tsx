@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowRightLeft, Upload, Wallet, Award, Coins, AlertTriangle, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { KRC_TO_USD } from "@shared/schema";
+import { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits } from "@shared/money";
 import { cn } from "@/lib/utils";
 
 export default function Bank() {
@@ -187,7 +188,7 @@ function DepositDialog() {
   const { toast } = useToast();
 
   const handleDeposit = () => {
-    mutate({ amountUsd: parseFloat(amount) }, {
+    mutate({ amountUsd: amount }, {
       onSuccess: () => {
         toast({ title: "DEPÓSITO CONFIRMADO", description: "Fundos adicionados à sua conta.", className: "border-primary text-primary" });
         setOpen(false);
@@ -197,8 +198,11 @@ function DepositDialog() {
     });
   };
 
-  const krcAmount = (parseFloat(amount || "0") * KRC_TO_USD).toFixed(2);
-  const bonusAmount = parseFloat(krcAmount).toFixed(2);
+  let depositKrcMinor = 0n;
+  try { depositKrcMinor = toMinorUnits(amount || "0") * BigInt(KRC_TO_USD); } catch { /* Ignore incomplete input while editing. */ }
+  const krcAmount = fromMinorUnits(depositKrcMinor);
+  const bonusAmount = krcAmount;
+  const totalDeposit = fromMinorUnits(depositKrcMinor * 2n);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -224,6 +228,7 @@ function DepositDialog() {
             <Label className="font-mono text-xs tracking-widest text-muted-foreground">VALOR (USD)</Label>
             <Input
               type="number"
+              step="0.01"
               placeholder="0.00"
               className="bg-black/50 border-border/40 font-mono text-lg rounded-none"
               value={amount}
@@ -243,7 +248,7 @@ function DepositDialog() {
             <div className="h-px bg-border/40 my-1" />
             <div className="flex justify-between text-sm font-mono tracking-widest">
               <span className="text-muted-foreground">TOTAL CREDITADO</span>
-              <span className="text-foreground font-bold font-display">{(parseFloat(krcAmount) * 2).toFixed(2)} KRC</span>
+              <span className="text-foreground font-bold font-display">{totalDeposit} KRC</span>
             </div>
           </div>
         </div>
@@ -266,12 +271,12 @@ function DepositDialog() {
 
 function TransferPanel() {
   const [amount, setAmount] = useState("");
-  const [destination, setDestination] = useState<"fbm" | "weapons">("weapons");
+  const [destination, setDestination] = useState<"fbm" | "bonus">("bonus");
   const { mutate, isPending } = useTransfer();
   const { toast } = useToast();
 
   const handleTransfer = () => {
-    mutate({ amountKrc: parseFloat(amount), destination }, {
+    mutate({ amountKrc: amount, destination }, {
       onSuccess: () => {
         toast({ title: "TRANSFERÊNCIA EXECUTADA", description: "Fundos movidos com sucesso.", className: "border-primary text-primary" });
         setAmount("");
@@ -302,7 +307,7 @@ function TransferPanel() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-card border-border rounded-none">
-                <SelectItem value="weapons">WEAPONS ACC</SelectItem>
+                <SelectItem value="bonus">BÔNUS ACCOUNT</SelectItem>
                 <SelectItem value="fbm">FBM — FUNDO BÉLICO</SelectItem>
               </SelectContent>
             </Select>
@@ -330,7 +335,7 @@ function LoansPanel({ loans }: { loans: any[] }) {
   const { toast } = useToast();
 
   const handleRequest = () => {
-    requestLoan({ amountKrc: parseFloat(amount), days: parseInt(days) }, {
+    requestLoan({ amountKrc: Number(amount), days: Number.parseInt(days, 10) }, {
       onSuccess: () => {
         toast({ title: "EMPRÉSTIMO APROVADO", description: "Fundos liberados na sua conta.", className: "border-primary text-primary" });
         setAmount("");
@@ -346,7 +351,10 @@ function LoansPanel({ loans }: { loans: any[] }) {
     });
   };
 
-  const interest = amount ? (parseFloat(amount) * 0.05 * parseInt(days)).toFixed(2) : "0.00";
+  let interest = "0.00";
+  try {
+    if (amount && days) interest = fromMinorUnits(calculateLoanInterestMinorUnits(amount, Number.parseInt(days, 10)));
+  } catch { /* Incomplete input while editing. */ }
 
   return (
     <div className="space-y-5">
@@ -356,6 +364,7 @@ function LoansPanel({ loans }: { loans: any[] }) {
             <Label className="font-mono text-xs tracking-widest text-muted-foreground">PRINCIPAL (KRC)</Label>
             <Input
               type="number"
+              step="1"
               placeholder="Mín. 100"
               className="bg-black/50 border-border/40 font-mono rounded-none"
               value={amount}

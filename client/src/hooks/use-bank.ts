@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type BankAccount, type Transaction, type DepositRequest, type TransferRequest, errorSchemas } from "@shared/routes";
-import { z } from "zod";
+import { idempotentFetch } from "@/lib/queryClient";
 
 export function useBank() {
   return useQuery({
@@ -29,7 +29,7 @@ export function useDeposit() {
   return useMutation({
     mutationFn: async (data: DepositRequest) => {
       const validated = api.bank.deposit.input.parse(data);
-      const res = await fetch(api.bank.deposit.path, {
+      const res = await idempotentFetch(api.bank.deposit.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),
@@ -56,7 +56,7 @@ export function useTransfer() {
   return useMutation({
     mutationFn: async (data: TransferRequest) => {
       const validated = api.bank.transfer.input.parse(data);
-      const res = await fetch(api.bank.transfer.path, {
+      const res = await idempotentFetch(api.bank.transfer.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),

@@ -51,6 +51,18 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD|SafeZone")
 	void PlayZoneDamageVignette(float Intensity);
 
+	/** Show the local Zu choice prompt; option 0 is the protective action, option 1 is unsafe. */
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD|Zu")
+	void ShowZuEntryPrompt(uint8 VariantIndex, const FText& Prompt, const FText& OptionA, const FText& OptionB, float CinematicDuration, float ResponseTimeout);
+
+	/** Hide the Zu choice prompt after a valid choice or timeout. */
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD|Zu")
+	void HideZuEntryPrompt();
+
+	/** Submit a button choice to the owning server-authoritative controller. */
+	UFUNCTION(BlueprintCallable, Category = "Khaaos|HUD|Zu")
+	void SubmitZuEntryChoice(uint8 ChoiceIndex);
+
 	/** Start/update local SafeZone warning cadence after a replicated damage cue. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|HUD|SafeZone")
 	void NotifySafeZoneDamageCue(float Current, float Max);

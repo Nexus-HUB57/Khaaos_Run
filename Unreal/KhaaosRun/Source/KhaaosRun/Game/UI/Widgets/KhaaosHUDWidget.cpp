@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Player/KhaaosPlayerController.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
@@ -29,6 +30,14 @@ UKhaaosHUDWidget::UKhaaosHUDWidget()
 	// CommonUI widget setup
 	// BP implements the visual layout and UpdateHealth/UpdateShield/etc.
 	// events are dispatched to BP for UMG property updates.
+}
+
+void UKhaaosHUDWidget::SubmitZuEntryChoice(uint8 ChoiceIndex)
+{
+	if (AKhaaosPlayerController* PlayerController = Cast<AKhaaosPlayerController>(GetOwningPlayer()))
+	{
+		PlayerController->ServerSubmitZuChoice(ChoiceIndex);
+	}
 }
 
 float UKhaaosHUDWidget::GetZoneWarningBeepInterval(float Current, float Max)

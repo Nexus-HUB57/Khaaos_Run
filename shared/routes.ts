@@ -1,5 +1,23 @@
 import { z } from 'zod';
-import { items, loans, transactions, bankAccounts, playerStats } from './schema';
+import { items, loans, transactions, bankAccounts, playerStats, SPECIALIZATION_IDS } from './schema';
+import { fromMinorUnits, toMinorUnits } from './money';
+
+const moneyAmountInput = (minimum: bigint, maximum: bigint) => z.union([
+  z.number().finite(),
+  z.string().trim(),
+]).transform((value) => {
+  const text = String(value);
+  return text.startsWith('.') ? `0${text}` : text;
+}).refine((value) => /^\d+(?:\.\d{0,2})?$/.test(value), "Informe um valor positivo com até duas casas decimais")
+  .refine((value) => {
+    try {
+      const cents = toMinorUnits(value);
+      return cents >= minimum && cents <= maximum;
+    } catch {
+      return false;
+    }
+  }, "Valor monetário fora da faixa permitida")
+  .transform((value) => fromMinorUnits(toMinorUnits(value)));
 
 export type {
   BankAccount,
@@ -25,8 +43,8 @@ export const errorSchemas = {
   }),
   insufficientFunds: z.object({
     message: z.string(),
-    required: z.number(),
-    available: z.number(),
+    required: z.union([z.string(), z.number()]),
+    available: z.union([z.string(), z.number()]),
   }),
 };
 
@@ -45,12 +63,13 @@ export const api = {
       method: 'POST' as const,
       path: '/api/bank/deposit',
       input: z.object({
-        amountUsd: z.number().finite().min(1).max(10000),
+        amountUsd: moneyAmountInput(100n, 1_000_000n),
       }).strict(),
       responses: {
         200: z.object({
           newBalance: z.string(),
           transactionId: z.number(),
+          operationId: z.string().uuid(),
         }),
         400: errorSchemas.validation,
       },
@@ -59,13 +78,14 @@ export const api = {
       method: 'POST' as const,
       path: '/api/bank/transfer',
       input: z.object({
-        amountKrc: z.number().finite().min(0.01).max(1000000),
-        destination: z.enum(['fbm', 'weapons']),
+        amountKrc: moneyAmountInput(1n, 100_000_000n),
+        destination: z.enum(['fbm', 'bonus']),
       }).strict(),
       responses: {
         200: z.object({
           message: z.string(),
           newBalance: z.string(),
+          operationId: z.string().uuid(),
         }),
         400: errorSchemas.validation,
         402: errorSchemas.insufficientFunds,
@@ -97,7 +117,7 @@ export const api = {
         days: z.number().finite().int().min(1).max(30),
       }).strict(),
       responses: {
-        201: z.custom<typeof loans.$inferSelect>(),
+        201: z.object({ operationId: z.string().uuid() }).passthrough().and(z.custom<typeof loans.$inferSelect>()),
         400: errorSchemas.validation,
         403: z.object({ message: z.string() }), // Max loans reached
       },
@@ -106,7 +126,7 @@ export const api = {
       method: 'POST' as const,
       path: '/api/loans/:id/pay',
       responses: {
-        200: z.object({ message: z.string() }),
+        200: z.object({ message: z.string(), operationId: z.string().uuid() }),
         404: errorSchemas.notFound,
         402: errorSchemas.insufficientFunds,
       },
@@ -130,7 +150,7 @@ export const api = {
         name: z.string().trim().min(1).max(64),
       }).strict(),
       responses: {
-        201: z.custom<typeof items.$inferSelect>(),
+        201: z.object({ operationId: z.string().uuid() }).passthrough().and(z.custom<typeof items.$inferSelect>()),
         402: errorSchemas.insufficientFunds,
       },
     },
@@ -161,12 +181,13 @@ export const api = {
       method: 'POST' as const,
       path: '/api/items/:id/repair',
       input: z.object({
-        amountKrc: z.number().finite().min(1).max(100000),
+        amountKrc: moneyAmountInput(100n, 10_000_000n),
       }).strict(),
       responses: {
         200: z.object({
           message: z.string(),
           newDurability: z.string(),
+          operationId: z.string().uuid(),
         }),
         404: errorSchemas.notFound,
         402: errorSchemas.insufficientFunds,
@@ -193,9 +214,22 @@ export const api = {
       responses: {
         200: z.object({
           message: z.string(),
-          amount: z.number(),
+          amount: z.string(),
+          operationId: z.string().uuid(),
         }),
         400: z.object({ message: z.string() }), // Already claimed
+      },
+    },
+    specialization: {
+      method: 'POST' as const,
+      path: '/api/player/specialization',
+      input: z.object({
+        specializationId: z.enum(SPECIALIZATION_IDS),
+      }).strict(),
+      responses: {
+        200: z.object({ specializationId: z.string() }),
+        400: errorSchemas.validation,
+        403: errorSchemas.validation,
       },
     },
   },

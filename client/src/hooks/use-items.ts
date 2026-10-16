@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Item, buildUrl, errorSchemas } from "@shared/routes";
+import { idempotentFetch } from "@/lib/queryClient";
 import { z } from "zod";
 
 async function apiErrorMessage(response: Response, fallback: string) {
@@ -23,7 +24,7 @@ export function usePurchaseItem() {
   return useMutation({
     mutationFn: async (data: { type: string, name: string }) => {
       const validated = api.items.purchase.input.parse(data);
-      const res = await fetch(api.items.purchase.path, {
+      const res = await idempotentFetch(api.items.purchase.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),
@@ -91,7 +92,7 @@ export function useRepairItem() {
   return useMutation({
     mutationFn: async ({ id, amountKrc }: { id: number, amountKrc: number }) => {
       const url = buildUrl(api.items.repair.path, { id });
-      const res = await fetch(url, {
+      const res = await idempotentFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amountKrc }),

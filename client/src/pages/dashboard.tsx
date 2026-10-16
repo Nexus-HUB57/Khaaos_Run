@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { Radio, Users, Play } from "lucide-react";
 import { Link } from "wouter";
+import { EP555_RANKS, EP555_SPECIALIZATIONS, getRankProgress } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -53,6 +54,9 @@ export default function Dashboard() {
 
   const { stats } = playerData || { stats: {} as any };
   const bank = bankData || { weaponsBalance: "0", bonusBalance: "0", fbmBalance: "0" };
+  const rankProgress = getRankProgress(stats.xp ?? 0);
+  const currentRank = EP555_RANKS.find(({ id }) => id === rankProgress.rank);
+  const activeSpecialization = EP555_SPECIALIZATIONS.find(({ id }) => id === stats.specializationId);
 
   const lastSalary = stats.lastSalaryDate ? new Date(stats.lastSalaryDate) : null;
   const canClaim = !lastSalary || (new Date().getTime() - lastSalary.getTime() > 24 * 60 * 60 * 1000);
@@ -157,7 +161,7 @@ export default function Dashboard() {
               </h1>
               <p className="text-muted-foreground font-mono text-xs flex items-center gap-2 tracking-widest">
                 <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                POSTO: {stats.rank || 'ZHEERS'} // QG-WAR'I ONLINE
+                 POSTO: {rankProgress.rank} // QG-WAR'I ONLINE
               </p>
             </div>
 
@@ -181,6 +185,41 @@ export default function Dashboard() {
           </div>
         </CyberCard>
       </div>
+
+      <CyberCard title="PROGRESSÃO EP555" subtitle="PRÓXIMO POSTO & CERTIFICAÇÃO" className="col-span-1 md:col-span-3 border-purple-500/25">
+        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="font-display text-lg font-bold text-accent">{rankProgress.rank}</span>
+              <span className="text-xs font-mono text-muted-foreground">{currentRank?.designation}</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden bg-purple-950/60">
+              <div
+                className="h-full bg-gradient-to-r from-purple-700 to-purple-400 transition-all"
+                style={{ width: `${rankProgress.progressPct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs font-mono text-muted-foreground">
+              {rankProgress.nextRank
+                ? `${rankProgress.currentXp.toLocaleString("pt-BR")} / ${rankProgress.nextThreshold?.toLocaleString("pt-BR")} XP · faltam ${rankProgress.xpToNext.toLocaleString("pt-BR")} XP para ${rankProgress.nextRank}`
+                : `${rankProgress.currentXp.toLocaleString("pt-BR")} XP · patente máxima`}
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t border-border/40 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+            <div>
+              <p className="text-[10px] font-mono tracking-widest text-muted-foreground">ESPECIALIDADE ATIVA</p>
+              <p className="mt-1 font-display font-bold text-cyan-300">
+                {activeSpecialization ? `${activeSpecialization.name} · ${activeSpecialization.callsign}` : "Nenhuma certificação"}
+              </p>
+            </div>
+            <Link href="/profile">
+              <Button variant="outline" size="sm" className="shrink-0 border-purple-500/40 text-purple-200">
+                HIERARQUIA
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CyberCard>
 
       {/* BanKhaaos Overview */}
       <CyberCard title="BANKHAAOS" subtitle="SALDO ATUAL — WALLET KRC" className="col-span-1">
@@ -235,9 +274,14 @@ export default function Dashboard() {
             <div className="h-2 rounded-none bg-purple-950/60 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-purple-700 to-purple-400 transition-all"
-                style={{ width: `${Math.min((stats.xp / 1000) * 100, 100)}%` }}
+                style={{ width: `${rankProgress.progressPct}%` }}
               />
             </div>
+            <p className="text-[10px] font-mono text-muted-foreground">
+              {rankProgress.nextRank
+                ? `${rankProgress.xpToNext.toLocaleString("pt-BR")} XP para ${rankProgress.nextRank}`
+                : "PATENTE MÁXIMA ALCANÇADA"}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-2">
@@ -248,7 +292,7 @@ export default function Dashboard() {
             </div>
             <div className="bg-black/40 p-3 border border-border/40 text-center">
               <TrendingUp className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-              <div className="text-sm font-bold font-display text-primary">{stats.rank || 'ZHEERS'}</div>
+              <div className="text-sm font-bold font-display text-primary">{rankProgress.rank}</div>
               <div className="text-[10px] text-muted-foreground font-mono tracking-widest">POSTO</div>
             </div>
           </div>

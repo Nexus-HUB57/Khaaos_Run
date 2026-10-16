@@ -1,0 +1,2 @@
+---,RingCloseDurationSeconds,RingStartRadius,RingEndRadius,AcidRainDamagePerSecond,AcidRainTickInterval,MaxPlayers,ParkCenter_X,ParkCenter_Y,ParkCenter_Z
+Default,600.0,25000.0,4000.0,0.001,10.0,100,0.0,0.0,0.0
