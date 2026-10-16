@@ -60,6 +60,7 @@ export interface RoomPlayer {
   equippedDamage: number;   // from equipped weapon stats
   equippedRange: number;    // attack range in map %
   packbackItemIds: number[]; // durable, selected War'I items snapshotted for this match
+  packbackItems: WarIActionItem[]; // private action snapshot, resent after an authenticated reconnect
   lastPackBackUseAt: number;
   lastAttackAt: number;     // epoch ms — fire rate gate
   posHistory: PositionHistory;
@@ -119,6 +120,7 @@ type SpatialEntityAdapter = { id: string | number };
 
 export type ClientMessage =
   | { type: "join"; roomId?: string; displayName?: string }
+  | { type: "resume"; roomId: string }
   | { type: "leave" }
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
@@ -145,7 +147,7 @@ export type ServerMessage =
   | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: string }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: QueueMode }
   | { type: "queue_left" }
@@ -249,11 +251,11 @@ class RoomManager {
       });
 
       ws.on("close", () => {
-        this.onDisconnect(userId);
+        this.onDisconnect(userId, ws);
       });
 
       ws.on("error", () => {
-        this.onDisconnect(userId);
+        this.onDisconnect(userId, ws);
       });
     });
 
@@ -282,6 +284,14 @@ class RoomManager {
       case "join": {
         const roomId = msg.roomId || this.findOrCreateLobby();
         await this.joinRoom(userId, displayName, ws, roomId);
+        break;
+      }
+      case "resume": {
+        if (typeof msg.roomId !== "string" || msg.roomId.length > 128) {
+          this.send(ws, { type: "error", code: "ROOM_RESUME_UNAVAILABLE", message: "A sala anterior não está mais disponível." });
+          break;
+        }
+        this.resumeRoom(userId, ws, msg.roomId);
         break;
       }
       case "leave": {
@@ -441,6 +451,7 @@ class RoomManager {
       equippedDamage: 15, // baseline unarmed / starter
       equippedRange: 8,
       packbackItemIds: [],
+      packbackItems: [],
       lastPackBackUseAt: 0,
       lastAttackAt: 0,
       posHistory: new PositionHistory(1000),
@@ -462,6 +473,30 @@ class RoomManager {
 
     this.send(ws, { type: "welcome", userId, roomId });
     this.broadcastRoomState(room);
+  }
+
+  private resumeRoom(userId: string, ws: WebSocket, requestedRoomId: string) {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    const player = room?.players.get(userId);
+    if (!room || !player || roomId !== requestedRoomId || room.status === "FINISHED") {
+      this.send(ws, {
+        type: "error",
+        code: "ROOM_RESUME_UNAVAILABLE",
+        message: "A sala anterior não está mais disponível. Entre em uma nova sala.",
+      });
+      return;
+    }
+
+    player.ws = ws;
+    player.isConnected = true;
+    player.lastSeenAt = Date.now();
+    this.matchmaking.rebindWs(userId, ws);
+    this.send(ws, { type: "welcome", userId, roomId: room.id });
+    this.broadcastRoomState(room);
+    if (room.status === "IN_PROGRESS") {
+      this.send(ws, { type: "packback_ready", items: player.packbackItems });
+    }
   }
 
   leaveRoom(userId: string) {
@@ -499,16 +534,17 @@ class RoomManager {
     }
   }
 
-  onDisconnect(userId: string) {
-    // Stay in matchmaking queue on brief disconnect (ws rebound on rejoin);
-    // only clear ws ref. Full dequeue happens on explicit dequeue or match.
-    this.matchmaking.rebindWs(userId, null as any);
-
+  onDisconnect(userId: string, disconnectedSocket?: WebSocket) {
     const roomId = this.userToRoom.get(userId);
-    if (!roomId) return;
-    const room = this.rooms.get(roomId);
-    if (!room) return;
-    const player = room.players.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    const player = room?.players.get(userId);
+    // A delayed close from the old socket must not clear a newly rebound socket.
+    if (disconnectedSocket && player?.ws && player.ws !== disconnectedSocket) return;
+
+    // Stay in matchmaking queue on brief disconnect; full dequeue happens on
+    // explicit dequeue or when a match is created.
+    this.matchmaking.rebindWs(userId, null as any);
+    if (!roomId || !room) return;
     if (player) {
       player.isConnected = false;
       player.ws = null;
@@ -639,6 +675,7 @@ class RoomManager {
       const prepared = preparedLoadouts.get(p.userId);
       const loadout = prepared?.loadout;
       p.packbackItemIds = loadout?.itemIds ?? [];
+      p.packbackItems = prepared?.actionItems ?? [];
       p.equippedDamage = loadout?.equippedDamage ?? 15;
       p.equippedRange = loadout?.equippedRange ?? 8;
       p.maxHealth = loadout?.maxHealth ?? p.maxHealth;
@@ -659,7 +696,7 @@ class RoomManager {
       p.posHistory.clear();
       p.posHistory.push(p.posX, p.posY);
       room.playerGrid.insert({ ...p, id: p.userId });
-      if (p.ws) this.send(p.ws, { type: "packback_ready", items: prepared?.actionItems ?? [] });
+      if (p.ws) this.send(p.ws, { type: "packback_ready", items: p.packbackItems });
     }
 
     this.broadcastRoomState(room);
@@ -1066,6 +1103,9 @@ class RoomManager {
         if (player.ws) this.send(player.ws, { type: "error", message: "Item sem durabilidade disponível." });
         return;
       }
+      player.packbackItems = player.packbackItems.map((entry) =>
+        entry.id === itemId ? { ...entry, durability: consumed.durability } : entry,
+      );
       player.lastPackBackUseAt = now;
 
       let resultMessage: string;
@@ -1163,32 +1203,35 @@ class RoomManager {
     loot.pickedUpBy = userId;
     player.carriedWeight += lootWeight;
     room.lootGrid.remove(lootId);
-
-    // Heal if curativo
-    if (loot.type === "CURATIVO" && loot.stats?.heal) {
-      player.health = Math.min(player.maxHealth, player.health + loot.stats.heal);
-    }
-
-    // Equip weapon/defense for PvP
-    if (loot.type === "ARMA" && loot.stats?.damage) {
-      player.equippedDamage = loot.stats.damage;
-      player.equippedRange = Math.min(20, 6 + (loot.stats.damage / 10));
-    }
-    if (loot.type === "DEFESA" && loot.stats?.defense) {
-      // Defense reduces incoming damage implicitly later; for now boost maxHealth slightly
-      player.maxHealth = Math.min(200, player.maxHealth + Math.floor(loot.stats.defense / 4));
-    }
-
-    // Persist to inventory (async)
-    storage
-      .createItem({
+    try {
+      await storage.createItem({
         userId,
         name: loot.name,
         type: loot.type,
         rarity: loot.rarity,
         stats: loot.stats,
-      })
-      .catch(console.error);
+      });
+    } catch (error) {
+      loot.isPickedUp = false;
+      delete loot.pickedUpBy;
+      player.carriedWeight = Math.max(0, player.carriedWeight - lootWeight);
+      room.lootGrid.insert({ ...loot, id: loot.id });
+      console.error(`[RoomManager] Failed to persist loot ${lootId} for ${userId}:`, error);
+      if (player.ws) this.send(player.ws, { type: "error", message: "Falha ao persistir o loot. Tente coletar novamente." });
+      return;
+    }
+
+    // Apply the gameplay effect only after the inventory write has succeeded.
+    if (loot.type === "CURATIVO" && loot.stats?.heal) {
+      player.health = Math.min(player.maxHealth, player.health + loot.stats.heal);
+    }
+    if (loot.type === "ARMA" && loot.stats?.damage) {
+      player.equippedDamage = loot.stats.damage;
+      player.equippedRange = Math.min(20, 6 + (loot.stats.damage / 10));
+    }
+    if (loot.type === "DEFESA" && loot.stats?.defense) {
+      player.maxHealth = Math.min(200, player.maxHealth + Math.floor(loot.stats.defense / 4));
+    }
 
     this.broadcast(room, { type: "loot_picked", lootId, by: userId });
     this.broadcastRoomState(room);
@@ -1221,20 +1264,34 @@ class RoomManager {
 
   private computeZoneStatus(room: BattleRoom): ZoneStatus | null {
     if (room.status !== "IN_PROGRESS" && room.status !== "FINISHED") return null;
-    // Simplified snapshot
     const phaseConfig = ZONE_PHASES[room.currentPhase - 1] || ZONE_PHASES[0];
+    const elapsedSeconds = Math.max(0, (Date.now() - room.phaseStartedAt) / 1000);
+    const prevRadiusPct = room.currentPhase === 1
+      ? 100
+      : ZONE_PHASES[room.currentPhase - 2]?.radiusPct ?? 100;
+    let currentRadiusPct = prevRadiusPct;
+    let waitTimeRemaining = 0;
+    let shrinkTimeRemaining = 0;
+    let shrinkProgress = 0;
+    if (room.isShrinking) {
+      shrinkProgress = Math.min(1, elapsedSeconds / phaseConfig.shrinkSeconds);
+      currentRadiusPct = prevRadiusPct + (phaseConfig.radiusPct - prevRadiusPct) * shrinkProgress;
+      shrinkTimeRemaining = Math.max(0, phaseConfig.shrinkSeconds - elapsedSeconds);
+    } else {
+      waitTimeRemaining = Math.max(0, phaseConfig.waitSeconds - elapsedSeconds);
+    }
     return {
       isActive: room.status === "IN_PROGRESS",
       sessionId: null,
       currentPhase: room.currentPhase,
       totalPhases: ZONE_PHASES.length,
       isShrinking: room.isShrinking,
-      currentRadiusPct: phaseConfig.radiusPct,
+      currentRadiusPct,
       targetRadiusPct: phaseConfig.radiusPct,
-      prevRadiusPct: room.currentPhase > 1 ? ZONE_PHASES[room.currentPhase - 2].radiusPct : 100,
-      waitTimeRemaining: 0,
-      shrinkTimeRemaining: 0,
-      shrinkProgress: 0,
+      prevRadiusPct,
+      waitTimeRemaining,
+      shrinkTimeRemaining,
+      shrinkProgress,
       damagePerTick: phaseConfig.damagePerTick,
       centerX: room.centerX,
       centerY: room.centerY,
@@ -1498,6 +1555,7 @@ class RoomManager {
         equippedDamage: 15,
         equippedRange: 8,
         packbackItemIds: [],
+        packbackItems: [],
         lastPackBackUseAt: 0,
         lastAttackAt: 0,
         posHistory: new PositionHistory(1000),

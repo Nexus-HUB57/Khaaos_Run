@@ -96,6 +96,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     getEquippedItems: storage.getEquippedItems,
     getItemForUser: storage.getItemForUser,
     consumeItemDurability: storage.consumeItemDurability,
+    createItem: storage.createItem,
   };
   let durabilityWrites = 0;
   storage.getPlayerStats = async () => ({
@@ -120,8 +121,10 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
 
   const httpServer = createServer();
   let ownerSocket: WebSocket | undefined;
+  let previousOwnerSocket: WebSocket | undefined;
   let rivalSocket: WebSocket | undefined;
   let roomId: string | undefined;
+  let releaseLootPersistence: (() => void) | undefined;
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -198,7 +201,101 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     assert.equal(used.durability, "90");
     assert.equal(durabilityWrites, 1);
     assert.equal(grenade.durability, "90");
+
+    // A loot pickup is not acknowledged or broadcast until persistence resolves.
+    const lootId = Math.floor(Math.random() * 1_000_000_000) + 1;
+    const loot = {
+      id: lootId,
+      name: "Fixture de coleta",
+      type: "CURATIVO",
+      rarity: "COMUM",
+      posX: 50,
+      posY: 50,
+      stats: { heal: 10 },
+      isPickedUp: false,
+    };
+    room.loot.push(loot);
+    room.lootGrid.insert({ ...loot });
+    let signalPersistenceStarted!: () => void;
+    const persistenceStarted = new Promise<void>((resolve) => { signalPersistenceStarted = resolve; });
+    let allowPersistence!: () => void;
+    const persistenceGate = new Promise<void>((resolve) => { allowPersistence = resolve; });
+    releaseLootPersistence = allowPersistence;
+    storage.createItem = async (input) => {
+      signalPersistenceStarted();
+      await persistenceGate;
+      return { ...input, id: lootId } as any;
+    };
+    let lootBroadcastSeen = false;
+    const monitorLootBroadcast = (raw: WebSocket.RawData) => {
+      try {
+        const message = JSON.parse(raw.toString());
+        if (message.type === "loot_picked" && message.lootId === lootId) lootBroadcastSeen = true;
+      } catch { /* ignore other packets */ }
+    };
+    ownerSocket.on("message", monitorLootBroadcast);
+    const lootPickedPromise = waitForMessage(
+      ownerSocket,
+      (message) => message.type === "loot_picked" && message.lootId === lootId,
+      "broadcast de coleta persistida",
+    );
+    ownerSocket.send(JSON.stringify({ type: "pickup", lootId }));
+    await persistenceStarted;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(lootBroadcastSeen, false, "não transmitir loot antes do commit da gravação");
+    allowPersistence();
+    releaseLootPersistence = undefined;
+    await lootPickedPromise;
+    assert.equal(lootBroadcastSeen, true);
+    ownerSocket.off("message", monitorLootBroadcast);
+    assert.equal(loot.isPickedUp, true);
+
+    // A failed inventory write restores the loot and carried-weight reservation.
+    const failedLootId = lootId + 1;
+    const failedLoot = { ...loot, id: failedLootId, name: "Fixture de rollback", isPickedUp: false };
+    room.loot.push(failedLoot);
+    room.lootGrid.insert({ ...failedLoot });
+    const carriedWeightBefore = owner.carriedWeight;
+    storage.createItem = async () => { throw new Error("fixture: PostgreSQL indisponível"); };
+    const persistenceErrorPromise = waitForMessage(
+      ownerSocket,
+      (message) => message.type === "error" && message.message.includes("Falha ao persistir o loot"),
+      "erro de persistência da coleta",
+    );
+    ownerSocket.send(JSON.stringify({ type: "pickup", lootId: failedLootId }));
+    await persistenceErrorPromise;
+    assert.equal(failedLoot.isPickedUp, false);
+    assert.equal(owner.carriedWeight, carriedWeightBefore);
+    assert.ok(room.lootGrid.queryRadius(owner.posX, owner.posY, 8).some((item: any) => item.id === failedLootId));
+
+    // Authenticated resume restores the same room/PackBack snapshot. A delayed
+    // close event from the previous socket must not mark the rebound player offline.
+    previousOwnerSocket = ownerSocket;
+    const resumedSocket = await connectAuthenticated(url, ownerId);
+    const resumedWelcomePromise = waitForMessage(resumedSocket, (message) => message.type === "welcome", "welcome da reconexão");
+    const resumedRoomPromise = waitForMessage(resumedSocket, (message) => message.type === "room_state" && message.room.id === roomId, "snapshot da sala retomada");
+    const resumedPackbackPromise = waitForMessage(resumedSocket, (message) => message.type === "packback_ready", "snapshot PackBack retomada");
+    resumedSocket.send(JSON.stringify({ type: "resume", roomId }));
+    const [resumedWelcome, resumedRoom, resumedPackback] = await Promise.all([
+      resumedWelcomePromise,
+      resumedRoomPromise,
+      resumedPackbackPromise,
+    ]);
+    assert.equal(resumedWelcome.roomId, roomId);
+    assert.equal(resumedRoom.room.status, "IN_PROGRESS");
+    assert.equal(resumedRoom.room.players.find((player: any) => player.userId === ownerId)?.isConnected, true);
+    assert.equal(resumedPackback.items[0]?.id, grenadeId);
+    const reboundServerSocket = room.players.get(ownerId)?.ws;
+    assert.ok(reboundServerSocket, "a sala deve vincular um socket do lado do servidor após resume");
+    assert.equal(reboundServerSocket.readyState, WebSocket.OPEN);
+    ownerSocket = resumedSocket;
+    const oldSocketClosed = new Promise<void>((resolve) => previousOwnerSocket!.once("close", () => resolve()));
+    previousOwnerSocket.close();
+    await withTimeout(oldSocketClosed, "socket anterior não fechou", 1_500);
+    assert.equal(room.players.get(ownerId)?.ws, reboundServerSocket);
+    assert.equal(room.players.get(ownerId)?.isConnected, true);
   } finally {
+    releaseLootPersistence?.();
     const activeRoom = roomId ? (roomManager as any).rooms.get(roomId) : undefined;
     if (activeRoom) {
       activeRoom.status = "LOBBY";
@@ -211,7 +308,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     roomManager.leaveRoom(rivalId);
     roomManager.stop();
 
-    for (const socket of [ownerSocket, rivalSocket]) {
+    for (const socket of [ownerSocket, previousOwnerSocket, rivalSocket]) {
       if (socket && socket.readyState !== WebSocket.CLOSED) {
         const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
         socket.close();
@@ -229,5 +326,6 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     storage.getEquippedItems = originals.getEquippedItems;
     storage.getItemForUser = originals.getItemForUser;
     storage.consumeItemDurability = originals.consumeItemDurability;
+    storage.createItem = originals.createItem;
   }
 });
