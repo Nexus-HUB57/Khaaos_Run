@@ -112,7 +112,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379
+      REDIS_REQUIRED: "true"
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       KRC_SINK_RATE: ${KRC_SINK_RATE:-0.95}
@@ -151,8 +152,6 @@ services:
       POSTGRES_USER: ${DB_USER:-khaaos}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "5432:5432"
     logging: *common-logging
     deploy:
       <<: *common-deploy
@@ -183,7 +182,7 @@ services:
       --appendonly yes
       --maxmemory ${REDIS_MAX_MEMORY:-512mb}
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:-}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       --save 60 1000
       --save 300 100
       --save 900 1
@@ -198,7 +197,7 @@ services:
           cpus: "0.25"
           memory: 128M
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5

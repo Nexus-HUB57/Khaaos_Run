@@ -35,9 +35,29 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
   });
+}
+
+function getPublicOrigin(req: { hostname: string; protocol: string }): string {
+  const configured = process.env.PUBLIC_ORIGIN;
+  if (configured) {
+    const origin = new URL(configured);
+    if (origin.protocol !== "https:" && process.env.NODE_ENV === "production") {
+      throw new Error("PUBLIC_ORIGIN must use HTTPS in production");
+    }
+    const requestHost = req.hostname.toLowerCase();
+    if (origin.hostname.toLowerCase() !== requestHost) {
+      throw new Error("Untrusted request host");
+    }
+    return origin.origin;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("PUBLIC_ORIGIN must be configured in production");
+  }
+  return `${req.protocol}://${req.hostname}`;
 }
 
 function updateUserSession(
@@ -88,24 +108,23 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     verified(null, user);
   };
 
-  // Keep track of registered strategies
-  const registeredStrategies = new Set<string>();
+  const strategyName = "replitauth:default";
+  let strategyRegistered = false;
 
-  // Helper function to ensure strategy exists for a domain
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
-    if (!registeredStrategies.has(strategyName)) {
+  const ensureStrategy = (req: { hostname: string; protocol: string }) => {
+    const origin = getPublicOrigin(req);
+    if (!strategyRegistered) {
       const strategy = new Strategy(
         {
           name: strategyName,
           config,
           scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
+          callbackURL: `${origin}/api/callback`,
         },
         verify
       );
       passport.use(strategy);
-      registeredStrategies.add(strategyName);
+      strategyRegistered = true;
     }
   };
 
@@ -113,27 +132,41 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    try {
+      ensureStrategy(req);
+    } catch {
+      return res.status(400).json({ message: "Untrusted request host" });
+    }
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    try {
+      ensureStrategy(req);
+    } catch {
+      return res.status(400).json({ message: "Untrusted request host" });
+    }
+    passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
+    let origin: string;
+    try {
+      origin = getPublicOrigin(req);
+    } catch {
+      return res.status(400).json({ message: "Untrusted request host" });
+    }
     req.logout(() => {
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          post_logout_redirect_uri: origin,
         }).href
       );
     });
