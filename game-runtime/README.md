@@ -35,6 +35,8 @@ http://localhost:8787/admin.html
 
 Com JWT admin, o painel atualiza a cada segundo com conexões, autenticações falhas, rate limits, violações, bans, sessões, fila, regiões, salas e clientes suspeitos. A API é `GET /admin/metrics` com `Authorization: Bearer <jwt>`.
 
+Para observabilidade de infraestrutura, `GET /healthz` é um liveness público e não consulta dependências lentas. `GET /readyz` é um readiness público que confirma a presença dos adapters obrigatórios de sessão e rate limit. O WebSocket limita payloads a 16 KiB, desativa compressão por mensagem e encerra conexões que acumularem mais de 256 KiB de saída pendente.
+
 ## Testes
 
 ```bash
