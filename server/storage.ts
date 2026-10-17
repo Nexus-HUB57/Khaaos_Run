@@ -16,6 +16,8 @@ export interface IStorage {
   getBankAccount(userId: string): Promise<BankAccount>;
   updateBankAccount(userId: string, updates: Partial<BankAccount>): Promise<BankAccount>;
   createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction>;
+  depositFunds(userId: string, amountKrc: string, amountUsd: string): Promise<{ bank: BankAccount; transaction: Transaction }>;
+  transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons"): Promise<{ bank: BankAccount; transaction: Transaction }>;
   getTransactions(userId: string): Promise<Transaction[]>;
   // Loans
   getLoans(userId: string): Promise<Loan[]>;
@@ -24,6 +26,8 @@ export interface IStorage {
   updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined>;
   createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
   updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
+  requestLoanAtomic(userId: string, amountKrc: string, days: number): Promise<Loan>;
+  payLoanAtomic(userId: string, loanId: number): Promise<{ bank: BankAccount; loan: Loan; transaction: Transaction }>;
   // Items
   getItems(userId: string): Promise<Item[]>;
   getEquippedItems(userId: string): Promise<Item[]>;
@@ -34,6 +38,8 @@ export interface IStorage {
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined>;
   setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined>;
+  purchaseItemAtomic(userId: string, name: string, type: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
+  repairItemAtomic(userId: string, itemId: number, amountKrc: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
   // Zone
   getActiveZoneSession(): Promise<ZoneSession | undefined>;
   createZoneSession(centerX: number, centerY: number): Promise<ZoneSession>;
@@ -60,6 +66,7 @@ export interface IStorage {
   getLeaderboard(limit?: number): Promise<PlayerStats[]>;
   getMatchHistory(userId: string, limit?: number): Promise<MatchResult[]>;
   addKill(userId: string): Promise<void>;
+  claimDailySalaryAtomic(userId: string, salary: number): Promise<{ bank: BankAccount; stats: PlayerStats; transaction: Transaction }>;
   // Init
   initializeUser(userId: string): Promise<void>;
 }
@@ -97,6 +104,170 @@ export class DatabaseStorage implements IStorage {
   async createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction> {
     const [newTx] = await db.insert(transactions).values(tx as any).returning();
     return newTx;
+  }
+
+  private async lockBankAccount(tx: any, userId: string): Promise<BankAccount> {
+    await tx.insert(bankAccounts).values({ userId }).onConflictDoNothing({ target: bankAccounts.userId });
+    const [bank] = await tx.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)).for("update");
+    if (!bank) throw new Error("Conta bancária não encontrada");
+    return bank;
+  }
+
+  async depositFunds(userId: string, amountKrc: string, amountUsd: string) {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} + ${amountKrc}::numeric`,
+        bonusBalance: sql`${bankAccounts.bonusBalance} + ${amountKrc}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "DEPOSITO", amountKrc, amountUsd, description: `Deposit $${amountUsd}`,
+      }).returning();
+      return { bank: updatedBank, transaction };
+    });
+  }
+
+  async transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons") {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const amount = Number(amountKrc);
+      const available = Number(bank.weaponsBalance);
+      if (available < amount) {
+        const error = new Error("Saldo insuficiente");
+        (error as any).code = "INSUFFICIENT_FUNDS";
+        (error as any).required = amount;
+        (error as any).available = available;
+        throw error;
+      }
+      const target = destination === "fbm" ? bankAccounts.fbmBalance : bankAccounts.bonusBalance;
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${amountKrc}::numeric`,
+        [destination === "fbm" ? "fbmBalance" : "bonusBalance"]: sql`${target} + ${amountKrc}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "TRANSFERENCIA", amountKrc, description: `Transfer to ${destination}`,
+      }).returning();
+      return { bank: updatedBank, transaction };
+    });
+  }
+
+  async requestLoanAtomic(userId: string, amountKrc: string, days: number) {
+    return db.transaction(async (tx) => {
+      await this.lockBankAccount(tx, userId);
+      const activeLoans = await tx.select({ id: loans.id }).from(loans)
+        .where(and(eq(loans.userId, userId), eq(loans.isPaid, false))).for("update");
+      if (activeLoans.length >= 3) {
+        const error = new Error("Limite de 3 empréstimos ativos atingido");
+        (error as any).code = "LOAN_LIMIT";
+        throw error;
+      }
+      const amount = Number(amountKrc);
+      const interest = amount * 0.05 * days;
+      const [loan] = await tx.insert(loans).values({
+        userId, principal: amountKrc, interest: interest.toString(), totalDue: (amount + interest).toString(), daysRemaining: days,
+      }).returning();
+      await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} + ${amountKrc}::numeric`,
+      }).where(eq(bankAccounts.userId, userId));
+      await tx.insert(transactions).values({ userId, type: "EMPRESTIMO", amountKrc, description: `Loan for ${days} days` });
+      return loan;
+    });
+  }
+
+  async payLoanAtomic(userId: string, loanId: number) {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const [loan] = await tx.select().from(loans).where(and(eq(loans.id, loanId), eq(loans.userId, userId))).for("update");
+      if (!loan) throw new Error("Empréstimo não encontrado");
+      if (loan.isPaid) throw new Error("Empréstimo já pago");
+      const due = Number(loan.totalDue);
+      const available = Number(bank.weaponsBalance);
+      if (available < due) {
+        const error = new Error("Saldo insuficiente");
+        (error as any).code = "INSUFFICIENT_FUNDS";
+        (error as any).required = due;
+        (error as any).available = available;
+        throw error;
+      }
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${loan.totalDue}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [updatedLoan] = await tx.update(loans).set({ isPaid: true }).where(eq(loans.id, loanId)).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: loan.totalDue, description: `Repaid loan #${loanId}`,
+      }).returning();
+      return { bank: updatedBank, loan: updatedLoan, transaction };
+    });
+  }
+
+  async purchaseItemAtomic(userId: string, name: string, type: string) {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const prices: Record<string, number> = { ARMA: 500, DEFESA: 300, CURATIVO: 150, UTILIDADE: 200 };
+      const price = prices[type] ?? 500;
+      if (Number(bank.weaponsBalance) < price) {
+        const error = new Error("Saldo insuficiente");
+        (error as any).code = "INSUFFICIENT_FUNDS";
+        (error as any).required = price;
+        (error as any).available = Number(bank.weaponsBalance);
+        throw error;
+      }
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${price}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [item] = await tx.insert(items).values({ userId, name, type }).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "COMPRA", amountKrc: price.toString(), description: `Purchased ${name}`,
+      }).returning();
+      return { bank: updatedBank, item, transaction };
+    });
+  }
+
+  async repairItemAtomic(userId: string, itemId: number, amountKrc: string) {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const [item] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.userId, userId))).for("update");
+      if (!item) throw new Error("Item não encontrado");
+      const amount = Number(amountKrc);
+      if (Number(bank.weaponsBalance) < amount) {
+        const error = new Error("Saldo insuficiente");
+        (error as any).code = "INSUFFICIENT_FUNDS";
+        (error as any).required = amount;
+        (error as any).available = Number(bank.weaponsBalance);
+        throw error;
+      }
+      const newDurability = Math.min(Number(item.maxDurability), Number(item.durability) + amount * 0.5);
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${amountKrc}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [updatedItem] = await tx.update(items).set({ durability: newDurability.toString() }).where(eq(items.id, itemId)).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "REPARO", amountKrc, description: `Repaired ${item.name}`,
+      }).returning();
+      return { bank: updatedBank, item: updatedItem, transaction };
+    });
+  }
+
+  async claimDailySalaryAtomic(userId: string, salary: number) {
+    return db.transaction(async (tx) => {
+      const bank = await this.lockBankAccount(tx, userId);
+      const [stats] = await tx.select().from(playerStats).where(eq(playerStats.userId, userId)).for("update");
+      if (!stats) throw new Error("Estatísticas do jogador não encontradas");
+      const now = new Date();
+      if (stats.lastSalaryDate && now.getTime() - new Date(stats.lastSalaryDate).getTime() < 24 * 60 * 60 * 1000) {
+        const error = new Error("Salário já recebido hoje");
+        (error as any).code = "SALARY_ALREADY_CLAIMED";
+        throw error;
+      }
+      const [updatedBank] = await tx.update(bankAccounts).set({
+        weaponsBalance: sql`${bankAccounts.weaponsBalance} + ${salary}::numeric`,
+      }).where(eq(bankAccounts.userId, userId)).returning();
+      const [updatedStats] = await tx.update(playerStats).set({ lastSalaryDate: now }).where(eq(playerStats.userId, userId)).returning();
+      const [transaction] = await tx.insert(transactions).values({
+        userId, type: "SALARIO", amountKrc: salary.toString(), description: "Daily salary",
+      }).returning();
+      return { bank: updatedBank, stats: updatedStats, transaction };
+    });
   }
 
   async getTransactions(userId: string): Promise<Transaction[]> {

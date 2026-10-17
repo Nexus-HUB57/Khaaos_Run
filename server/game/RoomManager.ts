@@ -15,6 +15,8 @@
 
 import { WebSocket, WebSocketServer } from "ws";
 import type { Server } from "http";
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
 import { storage } from "../storage";
 import {
   ZONE_PHASES,
@@ -32,6 +34,7 @@ import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
+import { distributedState } from "./DistributedState";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +136,23 @@ export type ClientMessage =
   | { type: "create_lobby"; private?: boolean; maxPlayers?: number }
   | { type: "join_code"; code: string };
 
+const clientMessageSchema = z.object({
+  type: z.enum(["join", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code"]),
+  roomId: z.string().trim().max(128).optional(),
+  displayName: z.string().max(64).optional(),
+  x: z.number().finite().min(0).max(100).optional(),
+  y: z.number().finite().min(0).max(100).optional(),
+  lootId: z.number().int().positive().optional(),
+  targetId: z.string().max(256).optional(),
+  clientTimestamp: z.number().finite().optional(),
+  itemId: z.number().int().positive().optional(),
+  mode: z.enum(["solo", "duo", "squad"]).optional(),
+  ready: z.boolean().optional(),
+  private: z.boolean().optional(),
+  maxPlayers: z.number().int().min(2).max(50).optional(),
+  code: z.string().trim().max(32).optional(),
+}).strip();
+
 export type ServerMessage =
   | { type: "welcome"; userId: string; roomId: string }
   | { type: "room_state"; room: SerializedRoom }
@@ -210,6 +230,8 @@ class RoomManager {
     this.wss = new WebSocketServer({
       server: httpServer,
       path: "/ws",
+      maxPayload: 16 * 1024,
+      perMessageDeflate: false,
       handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
       verifyClient: ({ req }, done) => {
         const offeredProtocols = (req.headers["sec-websocket-protocol"] ?? "")
@@ -235,24 +257,37 @@ class RoomManager {
         return;
       }
       let displayName = "Operativo";
+      let messagesThisSecond = 0;
+      const rateReset = setInterval(() => { messagesThisSecond = 0; }, 1_000);
 
       ws.on("message", async (raw) => {
+        if (++messagesThisSecond > 60) {
+          ws.close(1008, "Rate limit exceeded");
+          return;
+        }
         try {
-          const msg = JSON.parse(raw.toString()) as ClientMessage;
+          const parsed = clientMessageSchema.safeParse(JSON.parse(raw.toString()));
+          if (!parsed.success) {
+            this.send(ws, { type: "error", message: "Invalid message" });
+            return;
+          }
+          const msg = parsed.data as ClientMessage;
           if (msg.type === "join" && typeof msg.displayName === "string") {
             displayName = msg.displayName.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 32) || "Operativo";
           }
           await this.handleMessage(userId, displayName, ws, msg);
-        } catch (err: any) {
-          this.send(ws, { type: "error", message: err.message || "Invalid message" });
+        } catch {
+          this.send(ws, { type: "error", message: "Invalid message" });
         }
       });
 
       ws.on("close", () => {
+        clearInterval(rateReset);
         this.onDisconnect(userId);
       });
 
       ws.on("error", () => {
+        clearInterval(rateReset);
         this.onDisconnect(userId);
       });
     });
@@ -268,6 +303,10 @@ class RoomManager {
     const roomId = this.userToRoom.get(userId);
     const room = roomId ? this.rooms.get(roomId) : undefined;
     return room?.status === "COUNTDOWN" || room?.status === "IN_PROGRESS";
+  }
+
+  private secureId(prefix: string): string {
+    return `${prefix}_${Date.now()}_${randomBytes(8).toString("hex")}`;
   }
 
   // ─── Message Handler ─────────────────────────────────────────────────────
@@ -352,7 +391,7 @@ class RoomManager {
       }
     }
     // Create new
-    const id = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = this.secureId("room");
     const room: BattleRoom = {
       id,
       status: "LOBBY",
@@ -379,6 +418,8 @@ class RoomManager {
       minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
+    void distributedState.setRoomOwner(id);
+    void distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
     return id;
   }
 
@@ -1347,9 +1388,9 @@ class RoomManager {
     if (this.userToRoom.has(userId)) this.leaveRoom(userId);
     this.matchmaking.dequeue(userId);
 
-    const id = `lobby_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = this.secureId("lobby");
     const code = isPrivate
-      ? Math.random().toString(36).slice(2, 8).toUpperCase()
+      ? randomBytes(6).toString("base64url").slice(0, 8).toUpperCase()
       : null;
 
     const room: BattleRoom = {
@@ -1378,6 +1419,12 @@ class RoomManager {
       minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
+    if (!(await distributedState.setRoomOwner(id))) {
+      this.send(ws, { type: "error", message: "Lobby indisponível; tente novamente" });
+      this.rooms.delete(id);
+      return;
+    }
+    await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
     await this.joinRoom(userId, displayName, ws, id);
   }
 
@@ -1432,7 +1479,7 @@ class RoomManager {
   async createLobbyFromMatchmaking(
     players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[],
   ): Promise<string> {
-    const id = `mm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = this.secureId("mm");
     const room: BattleRoom = {
       id,
       status: "LOBBY",
@@ -1459,6 +1506,10 @@ class RoomManager {
       minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
+    if (!(await distributedState.setRoomOwner(id))) {
+      throw new Error("Sala distribuída indisponível");
+    }
+    await distributedState.publishControl({ type: "match_created", roomId: id, players: players.map((p) => p.userId) });
 
     for (const p of players) {
       // Seat without going through public join (already authenticated)

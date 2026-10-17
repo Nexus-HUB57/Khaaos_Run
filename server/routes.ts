@@ -13,6 +13,7 @@ import { generateMatchContent, generateLootField } from "./game/ProceduralGenera
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
+import { distributedState } from "./game/DistributedState";
 import {
   emptyMutationInput,
   zoneStartInput,
@@ -26,6 +27,7 @@ import {
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+  await distributedState.connect();
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);
@@ -40,6 +42,24 @@ export function registerApiRoutes(app: Express): void {
     if (!req.user?.claims?.sub) throw new Error("Unauthorized");
     return req.user.claims.sub as string;
   };
+
+  const csrfGuard = (req: any, res: any, next: any) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    if (req.get("sec-fetch-site") === "cross-site") return res.status(403).json({ message: "Cross-site request blocked" });
+    const origin = req.get("origin");
+    if (!origin) return next();
+    try {
+      const expected = process.env.PUBLIC_ORIGIN
+        ? new URL(process.env.PUBLIC_ORIGIN).origin
+        : `${req.protocol}://${req.get("host")}`;
+      if (new URL(origin).origin !== expected) return res.status(403).json({ message: "Origin not allowed" });
+    } catch {
+      return res.status(403).json({ message: "Origin not allowed" });
+    }
+    return next();
+  };
+
+  app.use("/api", csrfGuard);
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
@@ -74,6 +94,20 @@ export function registerApiRoutes(app: Express): void {
     return parsed.data;
   };
 
+  const sendFinancialError = (res: any, error: any) => {
+    if (error?.code === "INSUFFICIENT_FUNDS") {
+      return res.status(402).json({ message: "Saldo insuficiente", required: error.required, available: error.available });
+    }
+    if (error?.code === "LOAN_LIMIT") return res.status(403).json({ message: error.message });
+    if (error?.code === "SALARY_ALREADY_CLAIMED") return res.status(400).json({ message: error.message });
+    if (error?.message === "Empréstimo não encontrado" || error?.message === "Item não encontrado") {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error?.message === "Empréstimo já pago") return res.status(409).json({ message: error.message });
+    console.error("Financial operation failed", { code: error?.code, message: error?.message });
+    return res.status(500).json({ message: "Internal server error" });
+  };
+
   // ── BANK ─────────────────────────────────────────────────────────────────
 
   app.get(api.bank.get.path, requireAuth, async (req, res) => {
@@ -84,17 +118,12 @@ export function registerApiRoutes(app: Express): void {
     try {
       const userId = getUserId(req);
       const { amountUsd } = api.bank.deposit.input.parse(req.body);
-      const bank = await storage.getBankAccount(userId);
       const amountKrc = amountUsd * schema.KRC_TO_USD;
-      await storage.updateBankAccount(userId, {
-        weaponsBalance: (Number(bank.weaponsBalance) + amountKrc).toString(),
-        bonusBalance: (Number(bank.bonusBalance) + amountKrc).toString(),
-      });
-      const tx = await storage.createTransaction({ userId, type: "DEPOSITO", amountKrc: amountKrc.toString(), amountUsd: amountUsd.toString(), description: `Deposit $${amountUsd}` });
-      res.json({ newBalance: (Number(bank.weaponsBalance) + amountKrc).toString(), transactionId: tx.id });
+      const result = await storage.depositFunds(userId, amountKrc.toString(), amountUsd.toString());
+      res.json({ newBalance: result.bank.weaponsBalance, transactionId: result.transaction.id });
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -102,17 +131,11 @@ export function registerApiRoutes(app: Express): void {
     try {
       const userId = getUserId(req);
       const input = api.bank.transfer.input.parse(req.body);
-      const bank = await storage.getBankAccount(userId);
-      if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
-      const updates: any = { weaponsBalance: (Number(bank.weaponsBalance) - input.amountKrc).toString() };
-      if (input.destination === "fbm") updates.fbmBalance = (Number(bank.fbmBalance) + input.amountKrc).toString();
-      else updates.bonusBalance = (Number(bank.bonusBalance) + input.amountKrc).toString();
-      await storage.updateBankAccount(userId, updates);
-      await storage.createTransaction({ userId, type: "TRANSFERENCIA", amountKrc: input.amountKrc.toString(), description: `Transfer to ${input.destination}` });
-      res.json({ message: "Transferência realizada", newBalance: updates.weaponsBalance });
+      const result = await storage.transferFunds(userId, input.amountKrc.toString(), input.destination);
+      res.json({ message: "Transferência realizada", newBalance: result.bank.weaponsBalance });
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -130,17 +153,11 @@ export function registerApiRoutes(app: Express): void {
     try {
       const userId = getUserId(req);
       const input = api.loans.request.input.parse(req.body);
-      const active = (await storage.getLoans(userId)).filter(l => !l.isPaid);
-      if (active.length >= 3) return res.status(403).json({ message: "Limite de 3 empréstimos ativos atingido" });
-      const interest = input.amountKrc * 0.05 * input.days;
-      const loan = await storage.createLoan({ userId, principal: input.amountKrc.toString(), interest: interest.toString(), totalDue: (input.amountKrc + interest).toString(), daysRemaining: input.days });
-      const bank = await storage.getBankAccount(userId);
-      await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) + input.amountKrc).toString() });
-      await storage.createTransaction({ userId, type: "EMPRESTIMO", amountKrc: input.amountKrc.toString(), description: `Loan for ${input.days} days` });
+      const loan = await storage.requestLoanAtomic(userId, input.amountKrc.toString(), input.days);
       res.status(201).json(loan);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -150,19 +167,22 @@ export function registerApiRoutes(app: Express): void {
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
-      const loan = await storage.getLoanForUser(id, userId);
-      if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
-      if (loan.isPaid) return res.status(409).json({ message: "Empréstimo já pago" });
-      const bank = await storage.getBankAccount(userId);
-      const due = Number(loan.totalDue);
-      if (Number(bank.weaponsBalance) < due) return res.status(402).json({ message: "Saldo insuficiente", required: due, available: Number(bank.weaponsBalance) });
-      await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - due).toString() });
-      const updatedLoan = await storage.updateLoanForUser(loan.id, userId, { isPaid: true });
-      if (!updatedLoan) return res.status(404).json({ message: "Empréstimo não encontrado" });
-      await storage.createTransaction({ userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: due.toString(), description: `Repaid loan #${loan.id}` });
+      const existingLoan = await storage.getLoanForUser(id, userId);
+      if (!existingLoan) return res.status(404).json({ message: "Empréstimo não encontrado" });
+      if (typeof (storage as any).payLoanAtomic === "function") {
+        await storage.payLoanAtomic(userId, id);
+      } else {
+        if (existingLoan.isPaid) return res.status(409).json({ message: "Empréstimo já pago" });
+        const bank = await storage.getBankAccount(userId);
+        const due = Number(existingLoan.totalDue);
+        if (Number(bank.weaponsBalance) < due) return res.status(402).json({ message: "Saldo insuficiente", required: due, available: Number(bank.weaponsBalance) });
+        await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - due).toString() });
+        await storage.updateLoanForUser(id, userId, { isPaid: true });
+        await storage.createTransaction({ userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: due.toString(), description: `Repaid loan #${id}` });
+      }
       res.json({ message: "Empréstimo pago" });
     } catch (err) {
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -191,17 +211,11 @@ export function registerApiRoutes(app: Express): void {
     try {
       const userId = getUserId(req);
       const input = api.items.purchase.input.parse(req.body);
-      const prices: Record<string, number> = { ARMA: 500, DEFESA: 300, CURATIVO: 150, UTILIDADE: 200 };
-      const price = prices[input.type] || 500;
-      const bank = await storage.getBankAccount(userId);
-      if (Number(bank.weaponsBalance) < price) return res.status(402).json({ message: "Saldo insuficiente", required: price, available: Number(bank.weaponsBalance) });
-      await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - price).toString() });
-      const item = await storage.createItem({ userId, name: input.name, type: input.type });
-      await storage.createTransaction({ userId, type: "COMPRA", amountKrc: price.toString(), description: `Purchased ${input.name}` });
-      res.status(201).json(item);
+      const result = await storage.purchaseItemAtomic(userId, input.name, input.type);
+      res.status(201).json(result.item);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -239,19 +253,24 @@ export function registerApiRoutes(app: Express): void {
       const input = api.items.repair.input.parse(req.body);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
-      const item = await storage.getItemForUser(id, userId);
-      if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      const bank = await storage.getBankAccount(userId);
-      if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
-      const newDur = Math.min(Number(item.maxDurability), Number(item.durability) + input.amountKrc * 0.5);
-      await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - input.amountKrc).toString() });
-      const updatedItem = await storage.updateItemForUser(item.id, userId, { durability: newDur.toString() });
-      if (!updatedItem) return res.status(404).json({ message: "Item não encontrado" });
-      await storage.createTransaction({ userId, type: "REPARO", amountKrc: input.amountKrc.toString(), description: `Repaired ${item.name}` });
-      res.json({ message: `Reparado ${item.name}`, newDurability: updatedItem.durability });
+      const existingItem = await storage.getItemForUser(id, userId);
+      if (!existingItem) return res.status(404).json({ message: "Item não encontrado" });
+      if (typeof (storage as any).repairItemAtomic === "function") {
+        const result = await storage.repairItemAtomic(userId, id, input.amountKrc.toString());
+        res.json({ message: `Reparado ${result.item.name}`, newDurability: result.item.durability });
+      } else {
+        const bank = await storage.getBankAccount(userId);
+        if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
+        const newDurability = Math.min(Number(existingItem.maxDurability), Number(existingItem.durability) + input.amountKrc * 0.5);
+        await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - input.amountKrc).toString() });
+        const updatedItem = await storage.updateItemForUser(id, userId, { durability: newDurability.toString() });
+        if (!updatedItem) return res.status(404).json({ message: "Item não encontrado" });
+        await storage.createTransaction({ userId, type: "REPARO", amountKrc: input.amountKrc.toString(), description: `Repaired ${existingItem.name}` });
+        res.json({ message: `Reparado ${existingItem.name}`, newDurability: updatedItem.durability });
+      }
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -259,23 +278,31 @@ export function registerApiRoutes(app: Express): void {
 
   app.get(api.player.me.path, requireAuth, async (req, res) => {
     const stats = await storage.getPlayerStats(getUserId(req));
-    res.json({ stats, user: req.user });
+    const claims = (req.user as any)?.claims ?? {};
+    res.json({
+      stats,
+      user: {
+        id: claims.sub,
+        email: claims.email,
+        firstName: claims.first_name,
+        lastName: claims.last_name,
+        profileImageUrl: claims.profile_image_url,
+      },
+    });
   });
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {
     if (!parseMutationBody(req, res, emptyMutationInput)) return;
-    const userId = getUserId(req);
-    const stats = await storage.getPlayerStats(userId);
-    const now = new Date();
-    const last = stats.lastSalaryDate ? new Date(stats.lastSalaryDate) : null;
-    if (last && (now.getTime() - last.getTime()) < 24 * 60 * 60 * 1000) return res.status(400).json({ message: "Salário já recebido hoje" });
-    const salaries: Record<string, number> = { ZHEERS: 100, ONITH: 200, SKEETW: 500, HURAN: 800, VENEX: 1200, KHAEL: 2000, MALAKOR: 3500, OVERLORD: 5000 };
-    const salary = salaries[stats.rank || "ZHEERS"] || 100;
-    await storage.updatePlayerStats(userId, { lastSalaryDate: now });
-    const bank = await storage.getBankAccount(userId);
-    await storage.updateBankAccount(userId, { bonusBalance: (Number(bank.bonusBalance) + salary).toString() });
-    await storage.createTransaction({ userId, type: "SALARY", amountKrc: salary.toString(), description: "Daily Salary" });
-    res.json({ message: "Salário recebido", amount: salary });
+    try {
+      const userId = getUserId(req);
+      const stats = await storage.getPlayerStats(userId);
+      const salaries: Record<string, number> = { ZHEERS: 100, ONITH: 200, SKEETW: 500, HURAN: 800, VENEX: 1200, KHAEL: 2000, MALAKOR: 3500, OVERLORD: 5000 };
+      const salary = salaries[stats.rank || "ZHEERS"] || 100;
+      await storage.claimDailySalaryAtomic(userId, salary);
+      res.json({ message: "Salário recebido", amount: salary });
+    } catch (err) {
+      return sendFinancialError(res, err);
+    }
   });
 
   // ── SAFE ZONE ────────────────────────────────────────────────────────────
