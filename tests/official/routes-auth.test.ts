@@ -6,6 +6,8 @@ import express from "express";
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 const previousZoneOperatorIds = process.env.ZONE_OPERATOR_IDS;
 process.env.ZONE_OPERATOR_IDS = "operator-allowed";
+const previousMarshalOperatorIds = process.env.MARSHAL_CONSOLE_OPERATOR_IDS;
+process.env.MARSHAL_CONSOLE_OPERATOR_IDS = "operator-allowed";
 
 const [{ registerApiRoutes }, { registerAuthRoutes }] = await Promise.all([
   import("../../server/routes.ts"),
@@ -30,6 +32,8 @@ registerAuthRoutes(app);
 registerApiRoutes(app);
 if (previousZoneOperatorIds === undefined) delete process.env.ZONE_OPERATOR_IDS;
 else process.env.ZONE_OPERATOR_IDS = previousZoneOperatorIds;
+if (previousMarshalOperatorIds === undefined) delete process.env.MARSHAL_CONSOLE_OPERATOR_IDS;
+else process.env.MARSHAL_CONSOLE_OPERATOR_IDS = previousMarshalOperatorIds;
 
 const server = createServer(app);
 await new Promise<void>((resolve, reject) => {
@@ -53,6 +57,10 @@ const protectedRoutes = [
   ["GET", "/api/auth/user"],
   ["GET", "/api/auth/ws-token"],
   ["GET", "/api/zone/permissions"],
+  ["GET", "/api/console/v1/marshal/overview?worldId=W1"],
+  ["POST", "/api/console/v1/marshal/councils"],
+  ["GET", "/api/console/v1/marshal/councils/00000000-0000-4000-8000-000000000000"],
+  ["GET", "/api/console/v1/marshal/proposals/prop_00000000-0000-4000-8000-000000000000"],
   ["GET", "/api/bank"],
   ["POST", "/api/bank/deposit"],
   ["POST", "/api/bank/transfer"],
@@ -67,6 +75,7 @@ const protectedRoutes = [
   ["POST", "/api/items/1/repair"],
   ["GET", "/api/player/me"],
   ["POST", "/api/player/daily-salary"],
+  ["POST", "/api/player/specialization"],
   ["GET", "/api/zone/status"],
   ["POST", "/api/zone/start"],
   ["POST", "/api/zone/stop"],
@@ -145,4 +154,12 @@ test("controles globais da zona rejeitam jogador comum mesmo com role forjado no
       });
     });
   }
+});
+
+test("console do Marechal rejeita usuário sem allowlist mesmo com papel forjado", async () => {
+  const response = await fetch(`${baseUrl}/api/console/v1/marshal/overview?worldId=W1`, {
+    headers: { "x-test-user-id": "player-1" },
+  });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json() as any).error.code, "INSUFFICIENT_SCOPE");
 });

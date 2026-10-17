@@ -5,7 +5,12 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { api } from "@shared/routes";
 import { z } from "zod";
 import * as schema from "@shared/schema";
-import { ZONE_PHASES, PlayerStatus } from "@shared/schema";
+import {
+  ZONE_PHASES,
+  PlayerStatus,
+  EP555_SPECIALIZATIONS,
+  canUnlockSpecialization,
+} from "@shared/schema";
 import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/RoomManager";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
@@ -63,6 +68,7 @@ export function registerApiRoutes(app: Express): void {
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
+  registerMarshalConsoleRoutes(app);
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {
@@ -116,6 +122,10 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.bank.deposit.path, requireAuth, async (req, res) => {
     try {
+      const input = parseMutationBody(req, res, api.bank.deposit.input);
+      if (!input) return;
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
       const userId = getUserId(req);
       const { amountUsd } = api.bank.deposit.input.parse(req.body);
       const amountKrc = amountUsd * schema.KRC_TO_USD;
@@ -129,6 +139,10 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.bank.transfer.path, requireAuth, async (req, res) => {
     try {
+      const input = parseMutationBody(req, res, api.bank.transfer.input);
+      if (!input) return;
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
       const userId = getUserId(req);
       const input = api.bank.transfer.input.parse(req.body);
       const result = await storage.transferFunds(userId, input.amountKrc.toString(), input.destination);
@@ -151,6 +165,10 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.loans.request.path, requireAuth, async (req, res) => {
     try {
+      const input = parseMutationBody(req, res, api.loans.request.input);
+      if (!input) return;
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
       const userId = getUserId(req);
       const input = api.loans.request.input.parse(req.body);
       const loan = await storage.requestLoanAtomic(userId, input.amountKrc.toString(), input.days);
@@ -164,7 +182,6 @@ export function registerApiRoutes(app: Express): void {
   app.post(api.loans.pay.path, requireAuth, async (req, res) => {
     try {
       if (!parseMutationBody(req, res, emptyMutationInput)) return;
-      const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
       const existingLoan = await storage.getLoanForUser(id, userId);
@@ -198,6 +215,9 @@ export function registerApiRoutes(app: Express): void {
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const { isEquipped } = api.items.equip.input.parse(req.body);
+      if (roomManager.isInLiveMatch(userId)) {
+        return res.status(409).json({ message: "Loadout congelado: altere a PackBack antes de iniciar o countdown." });
+      }
       const item = await storage.setItemEquipped(id, userId, isEquipped);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       res.json(item);
@@ -209,6 +229,10 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.items.purchase.path, requireAuth, async (req, res) => {
     try {
+      const input = parseMutationBody(req, res, api.items.purchase.input);
+      if (!input) return;
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
       const userId = getUserId(req);
       const input = api.items.purchase.input.parse(req.body);
       const result = await storage.purchaseItemAtomic(userId, input.name, input.type);
@@ -230,7 +254,7 @@ export function registerApiRoutes(app: Express): void {
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      if (item.type !== "CURATIVO" || !Number.isFinite(item.stats?.heal) || Number(item.stats?.heal) <= 0) {
+      if (!canUseItemOutsideMatch(item.type, item.stats)) {
         return res.status(409).json({ message: "Este item não possui uso legado fora do combate." });
       }
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
@@ -249,8 +273,9 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.items.repair.path, requireAuth, async (req, res) => {
     try {
+      const input = parseMutationBody(req, res, api.items.repair.input);
+      if (!input) return;
       const userId = getUserId(req);
-      const input = api.items.repair.input.parse(req.body);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const existingItem = await storage.getItemForUser(id, userId);
@@ -289,6 +314,30 @@ export function registerApiRoutes(app: Express): void {
         profileImageUrl: claims.profile_image_url,
       },
     });
+  });
+
+  app.post(api.player.specialization.path, requireAuth, async (req, res) => {
+    const parsed = api.player.specialization.input.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Especialização inválida" });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const stats = await storage.getPlayerStats(userId);
+      const specialization = EP555_SPECIALIZATIONS.find(({ id }) => id === parsed.data.specializationId);
+      if (!specialization) return res.status(400).json({ message: "Especialização inválida" });
+      if (!canUnlockSpecialization(specialization, stats.xp ?? 0, stats.kills ?? 0)) {
+        return res.status(403).json({ message: "Requisitos de patente e Morth ainda não atingidos" });
+      }
+
+      const updated = await storage.updatePlayerStats(userId, {
+        specializationId: specialization.id,
+      });
+      res.json({ specializationId: updated.specializationId ?? specialization.id });
+    } catch {
+      res.status(500).json({ message: "Não foi possível registrar a especialização" });
+    }
   });
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {

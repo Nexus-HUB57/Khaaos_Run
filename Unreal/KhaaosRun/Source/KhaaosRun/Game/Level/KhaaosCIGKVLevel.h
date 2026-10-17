@@ -24,6 +24,7 @@
 #include "KhaaosCIGKVLevel.generated.h"
 
 class AKhaaosGameMode;
+class AKhaaosPlayerController;
 class UKhaaosAbilitySystemComponent;
 
 // ─── Zone Phase Configuration ────────────────────────────────────────────────
@@ -133,6 +134,13 @@ struct FCIGKVZuEntry
     float CinematicDuration = 8.0f;
 };
 
+struct FCIGKVActiveZuEntryState
+{
+    ECIGKVZuVariant Variant = ECIGKVZuVariant::Zu1_Cinto;
+    float WrongDecisionDamage = 0.0f;
+    FTimerHandle DecisionTimeoutHandle;
+};
+
 // ─── Level Script Actor ──────────────────────────────────────────────────────
 
 /**
@@ -204,9 +212,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Khaaos|CIGKV|Zu")
     void StartZuEntry(APlayerController* PlayerController);
 
-    /** Player makes Zu decision (correct = 0 damage, wrong = up to -30%) */
-    UFUNCTION(BlueprintCallable, Category = "Khaaos|CIGKV|Zu")
-    void ResolveZuDecision(APlayerController* PlayerController, bool bCorrectDecision);
+    /** Cancel a pending Zu entry when its player disconnects. Server only. */
+    void CancelZuEntry(APlayerController* PlayerController);
+
+    /** Resolve a submitted option index against the server-held active variant. Server only. */
+    bool ResolveZuDecision(APlayerController* PlayerController, uint8 ChoiceIndex);
 
     // ─── Player Flow ─────────────────────────────────────────────────────────
 
@@ -249,6 +259,10 @@ public:
     /** Damage per second for inactive players */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Config")
     float InactivityDamagePerSecond = 2.0f;
+
+    /** Seconds to choose after the Zu cinematic; timeout resolves as the unsafe choice. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Config")
+    float ZuDecisionTimeout = 6.0f;
 
     /** Arsenal: no patente limits in CIGKV */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Config")
@@ -303,6 +317,11 @@ protected:
     UKhaaosCIGKVMapData* MapData = nullptr;
 
 private:
+
+    TMap<TWeakObjectPtr<APlayerController>, FCIGKVActiveZuEntryState> ActiveZuEntries;
+    TSet<TWeakObjectPtr<APlayerController>> ResolvedZuEntries;
+
+    void ResolveZuDecisionTimeout(APlayerController* PlayerController);
 
     /** Timer handle for zone phase advancement */
     FTimerHandle ZonePhaseTimer;

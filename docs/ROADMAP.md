@@ -1,146 +1,191 @@
-# Roadmap de engenharia — Khaaos Run
+# Roadmap mestre de engenharia — Khaaos Run
 
-Este roadmap é uma sequência técnica orientada a risco e critérios de aceite. Não presume datas ou capacidade de equipe. O estado parte da branch `main` após autenticação realtime, allowlist da zona, divisão de bundle por rota e integração dos testes de matchmaking.
+**Nível de planejamento:** engenharia de sistemas avançada (Dev/Ph.D.). Este documento define ordem de risco, invariantes, critérios verificáveis e dependências. Não presume datas, tamanho de equipe ou disponibilidade de infraestrutura.
 
-## Estado atual
+## Estado atual e escopo
 
-**Vertical slice funcional:** frontend React, autenticação Replit OIDC, API Express/PostgreSQL, filas/salas multiplayer, lobby, zona, combate, loot, ranking e resultados de partida. A aplicação principal e o runtime isolado têm testes independentes e são verificados no CI.
+Khaaos Run já tem um vertical slice executável em React/TypeScript, Express, PostgreSQL e WebSocket: autenticação, inventário, matchmaking, salas, zona, combate, loot, ranking e resultado de partida. O `game-runtime` mantém testes próprios. A trilha Unreal Engine 5.8 está iniciada, mas ainda não foi compilada com UnrealBuildTool.
 
-**Proteções entregues recentemente:** token WS assinado de curta duração, identidade WS extraída do token no handshake, escopo por usuário em leituras de itens/empréstimos, dano limitado, controles globais da zona com allowlist e testes correspondentes.
+Nesta rodada, a branch de trabalho adiciona testes de integração contra PostgreSQL real, reforça a sincronização do War’I, garante que a coleta de loot só seja confirmada depois da gravação e inclui reconexão autenticada em partida. A zona do canvas passou a usar a geometria elíptica compatível com coordenadas do servidor e recebeu navegação por teclado e estados acessíveis. A validação executada localmente passou: `npm run check`, `npm run test:postgres` (2 casos), `npm run test:official` (44 casos), além de todos os gates de `npm run verify:all` (build, testes do runtime, stress e regras portáveis da zona/loot UE5).
 
-**Operação parcialmente configurada:** CI roda `npm run verify:all` em push para `main` e pull request. Existe Blueprint Render e job GitHub Actions pós-verificação, com deploy hook do commit exato e espera pelo health check do SHA. A ativação real depende de criar/configurar o Web Service, cadastrar o secret/variables do GitHub e validar o gate OIDC no domínio externo. O Replit Autoscale continua sendo configuração separada.
+O roadmap não considera a presença de arquivos ou stubs como implementação concluída. Uma tarefa só muda para concluída quando seu comportamento é demonstrável por teste, migração, build ou evidência operacional correspondente. Itens com dependências de serviço externo continuam abertos até que a configuração real seja validada.
 
-**Trilha Unreal iniciada:** a branch principal agora contém um `.uproject` para UE 5.8 e headers C++ de fundação, ainda sem validação de UnrealBuildTool ou Automation Tests. A implementação web/TypeScript segue como caminho executável comprovado.
+### Decisões e invariantes de arquitetura
 
-## Prioridade 0 — fechar fronteiras de segurança e consistência
+1. **Autoridade de partida:** o servidor valida movimento, combate, zona, posse, carga, durabilidade e transições de sala. O cliente solicita ações e renderiza snapshots; não define o resultado.
+2. **Persistência:** gravações relevantes ao inventário precedem a confirmação/broadcast. Uma falha de persistência deve restaurar o estado de jogo reservado ou deixar a operação explicitamente sem confirmação.
+3. **Identidade:** a identidade do WebSocket vem do token assinado do handshake, nunca de `userId` fornecido em mensagem do cliente. A retomada exige token válido, membership ainda presente e correspondência do `roomId`.
+4. **Banco de teste:** a suíte de integração exige URL explícita, host local e database com sufixo `_test`; fixtures usam IDs exclusivos e removem apenas suas próprias linhas.
+5. **Economia:** KRC permanece unidade de jogo sem resgate, carteira de custódia ou conexão a fundos reais. Qualquer mudança de escopo exige revisão jurídica, de fraude, custódia, compliance e segurança antes de implementação.
+6. **Unreal:** a SPA/servidor TypeScript continuam sendo a referência executável até que a trilha UE5 compile, passe Automation Tests e prove paridade de protocolo e jogo.
 
-### 0.1 Autorizações das APIs restantes
+## Fase 0 — Fronteiras de segurança e invariantes de domínio
 
-- [ ] Inventariar cada rota mutável e declarar recurso, proprietário e capability exigida.
-- [ ] Garantir ownership no SQL da mutação quando possível, evitando padrão check-then-update suscetível a TOCTOU.
-- [ ] Aplicar Zod nas entradas de dinheiro/itens/dano, com limites e resposta 400 sem mutação.
-- [ ] Cobrir testes negativos: ausência de sessão, usuário de outro dono, IDs inexistentes e valores fora de faixa.
-- [ ] Separar operações de jogador, moderador e operador/admin; nunca inferir role do corpo ou query do cliente.
+**Objetivo:** impedir operações não autorizadas e transições parcialmente aplicadas antes de ampliar o volume de usuários ou valor econômico.
 
+- [ ] Inventariar todas as rotas mutáveis com recurso, proprietário, papel/capability e efeitos laterais documentados.
+- [ ] Aplicar ownership dentro do `WHERE` da mutação SQL sempre que possível, evitando padrão check-then-update e TOCTOU.
+- [ ] Validar entrada de dinheiro de jogo, itens, dano, matchmaking e controles com schemas estritos; input inválido retorna erro sem write parcial.
+- [ ] Fechar cobertura HTTP negativa para sessão ausente, owner diferente, ID inexistente, faixa inválida, operador e moderador.
+- [ ] Separar capabilities de jogador, host, moderador e operador; role nunca é aceita do body ou query string.
+- [ ] Adicionar limites e rate limits coerentes para login, token WS, economia, lobby, movimento e ações de combate.
+- [ ] Definir política de Origin/CSRF para mutações HTTP e allowlist de Origin para handshake WebSocket.
+- [ ] Rever logs para remover tokens, cookies, PII desnecessária e payloads sensíveis.
+- [ ] Definir invariantes explícitos para `LOBBY → COUNTDOWN → IN_PROGRESS → FINISHED`, eliminação, abandono e vitória.
 **Entrega parcial desta rodada:** a zona e o spawn global de loot exigem a allowlist de operador; reparo/uso de item e pagamento de empréstimo fazem a mutação SQL com filtro de proprietário; entradas das mutações cobertas são estritas e limitadas por Zod. As suítes HTTP verificam que as 41 rotas privadas rejeitam sessões ausentes e expiradas, os quatro controles globais da zona rejeitam jogadores comuns mesmo com role forjado no corpo, leituras de conta/inventário/empréstimos/histórico usam o proprietário da sessão e mutações de itens/empréstimos ocultam recursos alheios ou inexistentes. Entradas inválidas em mutações financeiras, de itens, zona e jogador retornam 400 sem chamar o storage. O aceite 0.1 ainda exige inventário contínuo das rotas e ampliação da cobertura de ownership/IDs para os demais recursos, além de garantir atomicidade quando uma persistência falhar entre etapas.
 
-**Aceite:** toda rota privada tem teste de negação; nenhuma rota altera recurso de outro usuário; nenhuma ação com input inválido causa write parcial.
+**Entregue parcialmente:** há controles de zona/spawn por allowlist, escopo por usuário em operações de item e empréstimo, limites Zod em mutações cobertas e identidade WS autenticada. A suíte negativa abrangente e auditoria de todas as rotas ainda não fecham esta fase.
 
-### 0.2 Atomicidade da economia de jogo
+**Gate de aceite:** cada endpoint privado tem teste positivo e negativo; uma identidade não altera recursos de outra; entrada inválida, timeout e retry não deixam estado parcial; logs e mensagens não revelam segredos.
 
-- [ ] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
-- [ ] Usar decimal exato ou unidades inteiras mínimas; eliminar aritmética monetária baseada em `Number`.
-- [ ] Adicionar idempotency key nas mutações que o cliente pode repetir após timeout.
-- [ ] Definir constraints/checks de saldo, status e ownership no banco, não somente na camada Express.
-- [ ] Escrever testes concorrentes para compra, transferência, pagamento e salário.
+## Fase 1 — PostgreSQL, migrações reproduzíveis e CI
+- [x] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
+- [x] Usar decimal exato ou unidades inteiras mínimas nas mutações econômicas; saldos usam `numeric` no SQL e entradas usam centavos inteiros.
+- [x] Adicionar idempotency key nas mutações econômicas com persistência e replay de resposta.
+- [x] Definir checks no banco para saldos não negativos, lançamentos, durabilidade e estado dos empréstimos (migration 0003, `NOT VALID` até auditoria).
+- [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
+- [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
 
-**Aceite:** sob chamadas concorrentes, o saldo e o ledger reconciliam; retries não duplicam crédito/débito; falha intermediária reverte tudo.
+**Entrega inicial desta rodada:** depósito, transferência, empréstimo, pagamento, compra, reparo e salário usam o serviço transacional/idempotente. O schema e as migrations foram aplicados e os testes concorrentes passaram em PostgreSQL local descartável; não foi alterado nenhum banco da aplicação, pois não há `DATABASE_URL` disponível. Os checks `NOT VALID` protegem novos/alterados registros; a validação dos dados legados e FKs de ownership continuam pendentes. O rollout está descrito em [`docs/ECONOMY_TRANSACTIONS.md`](./ECONOMY_TRANSACTIONS.md).
+
+**Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
+
+- [x] Usar migrações Drizzle versionadas e revisáveis em vez de alteração operacional implícita de schema.
+- [x] Adicionar suíte `tests/integration/` usando `DatabaseStorage` e pool PostgreSQL reais, sem mock de storage.
+- [x] Restringir testes a URL explícita, host local, ambiente não produtivo e database `_test`; cada fixture apaga apenas os próprios registros.
+- [x] Testar criação/leitura de stats e bank account, defaults e atualização persistida de stats.
+- [x] Testar item JSONB, ownership no SQL, equipagem e cinco atualizações concorrentes da durabilidade sem lost update.
+- [x] Provisionar PostgreSQL 16 efêmero no CI, esperar readiness, aplicar migrações e rodar `test:postgres` como gate bloqueante.
+- [x] Documentar Compose descartável, URL, migrações, execução e limites conhecidos em `docs/TESTING_POSTGRES.md`.
+- [ ] Definir estratégia expand/contract para mudanças incompatíveis e verificar compatibilidade entre versões de aplicação e schema.
+- [ ] Escrever testes concorrentes de compra, transferência, pagamento, ledger e rollback multi-tabela.
+- [ ] Definir backup, restore testado, retenção, RPO/RTO e procedimento de rollback de migração.
+- [ ] Adicionar constraints e índices somente após conferir query plans e padrões reais de consulta.
+### 0.3 Auditoria e reconciliação da economia
+
+Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito ainda aberto: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões de ownership/FK da 0.2.
+
+- [x] Definir contrato de ledger append-only com `operation_id`/chave de idempotência correlacionáveis e lançamentos explícitos por conta de origem/destino; migration 0004 preserva histórico antigo e cria saldos de abertura por carteira.
+- [x] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
+- [x] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; disponibilizar limpeza controlável e segura em dry-run por padrão.
+- [ ] Definir fluxo de ajustes administrativos por lançamentos compensatórios append-only, com capability, motivo, ator, horário e trilha de auditoria; proibir correção por update/delete de histórico.
+- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0003 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
+- [ ] Executar migrações e testes PostgreSQL num banco efêmero obrigatório no CI; medir reconciliação antes/depois de carga concorrente e de falhas injetadas.
+
+**Aceite:** todo saldo é explicável por lançamentos correlacionados; reconciliação detecta drift sem mutação automática; ajustes são auditáveis e compensatórios; retries continuam seguros dentro da retenção estabelecida; migrações e checks passam do zero em CI.
+
+**Implementação desta rodada:** além do ledger correlacionável e append-only, `npm run economy:reconcile` gera relatório read-only para drift de carteira, operações desbalanceadas, transações sem ledger e claims incompletos, respeitando o marco de adoção do ledger para dados históricos. A janela de retry do cliente é 90 dias; claims completos ficam 365 dias e `economy:idempotency:prune` só apaga mediante `--execute`, em lotes com `SKIP LOCKED`, excluindo respostas incompletas e qualquer sucesso sem posting. Testes PostgreSQL confirmam detecção sem autocorreção, pruning dry-run/execução e rejeição de replay antigo sem novo débito/crédito. Tudo foi testado em banco descartável; nenhum banco de produto foi acessado. Ajustes compensatórios, auditoria de registros legados em produção, CI com banco efêmero obrigatório e separação da role runtime/owner permanecem pendentes.
 
 ## Prioridade 1 — entrega reproduzível e dados seguros
 
-### 1.1 Migrações e contratos de banco
+**Gate de aceite:** database limpo é migrado do zero no CI; testes demonstram leitura de volta e concorrência; falha de migração impede deploy; backup pode ser restaurado em ambiente isolado. O gate atual cobre persistência básica de jogador/conta/item, mas não substitui testes de ledger, backup ou rollback.
 
-- [x] Substituir `db:push` operacional por migrações Drizzle revisadas e versionadas em `migrations/`.
-- [ ] Definir migração expand/contract, backup, rollback e verificação de compatibilidade entre versões.
-- [ ] Aplicar constraints e índices para campos consultados em sala, usuário, rating e histórico.
-- [ ] Usar banco isolado nos testes de integração de API e persistência.
+## Fase 2 — War’I: ciclo completo de interface, combate e sincronização
 
-**Aceite:** CI consegue criar banco efêmero, aplicar migrações do zero e executar testes; deploy não modifica schema de forma não revisada.
+**Objetivo:** entregar uma experiência de inventário e partida coerente, com servidor como autoridade e feedback claro diante de erro ou desconexão.
 
-### 1.2 CI, implantação e rollback
+- [x] Implementar filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes de item, seleção persistida da PackBack e atualizações limitadas ao proprietário.
+- [x] Carregar, no início do match, somente a PackBack persistida do jogador; arma e defesa duráveis aplicam efeitos com limites definidos.
+- [x] Conectar cura, granada e reconhecimento temporário às ações autoritativas do servidor, consumindo durabilidade de modo atômico e apresentando feedback no HUD.
+- [x] Aplicar capacidade e pesos de loot no servidor e validar a carga antes de permitir coleta.
+- [x] Tornar a coleta assíncrona transacional do ponto de vista do jogo: reservar o item, aguardar `createItem`, e só então aplicar efeitos/broadcast; se o banco falhar, reabrir o item, restaurar carga e avisar o jogador.
+- [x] Adicionar retomada autenticada da sala ativa por `sessionStorage` + mensagem `resume`, restaurando snapshot e PackBack sem reinserir o jogador nem perder estado.
+- [x] Ignorar evento `close` tardio do socket anterior depois de o jogador ter sido vinculado ao novo socket.
+- [x] Calcular zona na retomada com raio interpolado e tempos restantes coerentes com o tick do servidor; renderizar a geometria como elipse no canvas responsivo.
+- [x] Expor estado de conexão, impedir ações enquanto offline e oferecer controle de movimento pelo teclado (setas; Shift para passo maior), com foco e instruções acessíveis.
+- [x] Expandir E2E WebSocket autenticado para cobrir match, PackBack, granada/dano/durabilidade, coleta só após persistência, rollback de coleta e retomada sem desconexão falsa.
+- [ ] Adicionar testes de UI em navegador para teclado, leitor de tela, estados de erro, loading e breakpoints móveis.
+- [ ] Validar fluxo completo de lobby/inventário/partida/pós-partida com dois clientes reais em ambiente de staging, incluindo perda de rede e expiração de sessão.
+- [ ] Definir por produto como lidar com desconexão prolongada, reconexão após reinício do processo e retorno a uma partida já finalizada.
 
-- [x] Rodar `npm run verify:all` em push para `main` e pull request.
-- [x] Tornar `test:official` fail-fast entre suítes TS e JS.
-- [x] Selecionar Render e documentar a integração baseada em Deploy Hook e Blueprint.
-- [ ] Criar serviço Render, guardar `RENDER_DEPLOY_HOOK_URL` no GitHub e definir `RENDER_SERVICE_URL`.
-- [x] Limitar deploy ao push em `main` após `verify` verde, serializar publicação e incluir opt-in `RENDER_DEPLOY_ENABLED`.
-- [x] Adicionar `/healthz` e comparar o commit efetivamente servido com o SHA verificado no CI.
-- [ ] Validar rollback no serviço criado e documentar o procedimento aprovado.
-- [ ] Separar ambientes de preview/staging e produção; usar banco e OIDC isolados.
-- [ ] Validar Replit OIDC em Render ou planejar migração de identidade antes de habilitar o tráfego de usuários.
+**Gate de aceite:** nenhum item aparece como coletado nem produz efeito antes da gravação persistida; falha deixa inventário, carga e grid consistentes; reconnect do mesmo usuário recupera exatamente uma participação e um snapshot; inputs offline não são silenciosamente exibidos como enviados. A jornada automatizada atual cobre servidor/WebSocket e falhas simuladas de persistência; teste de navegador/leitor de tela e prova com múltiplos clientes em staging ainda estão pendentes.
 
-**Aceite:** push aprovado para `main` publica uma versão identificável; falha de teste não publica; segredo pode ser revogado; health check determina sucesso ou falha do job.
+## Fase 3 — Multiplayer distribuído, consistência e integridade competitiva
 
-### 1.3 Sessões, chaves e proteção operacional
+**Objetivo:** preservar invariantes de partida sob concorrência, falhas de processo e escala horizontal.
 
-- [ ] Validar configuração obrigatória no startup e falhar rápido com mensagem segura.
-- [ ] Definir rotação de `SESSION_SECRET`/`WS_TOKEN_SECRET` e período de convivência de chaves.
-- [ ] Implementar revogação/expiração de sessões e política para desconectar sockets após logout/ban.
-- [ ] Adicionar rate limits coerentes a login, token WS, economia e endpoints de jogo.
-- [ ] Validar Origin/CSRF nas mutações HTTP e política de origins do handshake WS.
-- [ ] Revisar serialização de logs: evitar expor payloads/PII e remover tokens, cookies ou dados sensíveis.
+- [ ] Formalizar máquina de estados de sala e transitions válidas com testes baseados em propriedades/invariantes.
+- [ ] Definir sequência monotônica de eventos/snapshots, deduplicação, replay limitado e reconciliação após reconnect.
+- [ ] Definir ownership/particionamento de salas entre réplicas; não permitir que duas réplicas comandem a mesma partida.
+- [ ] Implementar presença e pub/sub com Redis/KeyDB ou equivalente, incluindo TTL, fencing/lease e operações atômicas.
+- [ ] Colocar limites de frequência e tamanho de mensagens, backpressure, cancelamento de subscriptions e proteção de fan-out.
+- [ ] Revisar movimento, validação de posição, alcance, lag compensation e relógios forjados com testes de abuso/replay.
+- [ ] Definir abandono, reconexão longa, draw, sala sem vencedor e takeover de host sem edge cases silenciosos.
+- [ ] Canonicalizar matchmaking: comparar implementação de produção com referência determinística e registrar versão/configuração dos parâmetros.
+- [ ] Testar carga com múltiplas salas e instâncias; medir latências p50/p95/p99, erro, uso de memória e tempo de recuperação.
 
-**Aceite:** checklist de threat model atualizado; chaves rotacionáveis sem expor segredo; nenhuma credencial aparece em artefatos/logs.
+**Gate de aceite:** nenhuma corrida cria duas salas/jogadores para a mesma identidade; resultado pode ser reconstruído a partir de seed e sequência de inputs; limites de latência e erro são publicados para carga declarada; falha de instância não duplica comandos nem distribui snapshots conflitantes.
 
-## Prioridade 2 — multiplayer distribuído e qualidade de experiência
+## Fase 4 — Unreal Engine 5.8 e paridade de cliente
 
-### 2.1 Salas escaláveis horizontalmente
+**Objetivo:** transformar a fundação C++/GAS em uma trilha jogável e validada sem declarar compatibilidade por presença de arquivos.
 
-- [ ] Definir ownership/particionamento de salas e reconexões entre réplicas.
-- [ ] Implementar presença e pub/sub com Redis/KeyDB ou serviço equivalente, com operações atômicas e TTL.
-- [ ] Reconciliar snapshot, sequence number e replay após reconexão.
-- [ ] Colocar backpressure, limites de frequência/tamanho das mensagens e proteção de fan-out.
-- [ ] Executar teste de carga com múltiplas instâncias e regiões, medindo p50/p95/p99 e desconexão.
+- [x] Adicionar `.uproject`, estrutura inicial de módulos/classes, zona, atributos, loot, combate, economia, IA e SaveGame.
+- [ ] Abrir e compilar o projeto com UnrealBuildTool em instalação limpa de UE 5.8; corrigir includes, macros UHT, APIs e módulos reais.
+- [ ] Substituir stubs por implementações executáveis e registrar dependências externas/licenças dos assets.
+- [ ] Executar Automation Tests para zona, dano/GAS, EffectCauser, GameplayCue, loot e ciclo de match em mundo real.
+- [ ] Definir protocolo versionado cliente-servidor (auth, ownership, mensagens, reconnect, rate limits e compatibilidade).
+- [ ] Integrar compilação/testes UE em runner licenciado apropriado, sem inserir credenciais ou assets não redistribuíveis no repositório.
+- [ ] Construir mapa mínimo jogável e testar replicação, latência, autoridade e reconexão em servidor dedicado.
+- [ ] Decidir por ADR se Unreal substitui a SPA ou permanece como cliente adicional, somente após paridade mensurável.
 
-**Aceite:** nenhuma duplicidade de jogador/sala sob corrida de join/reconnect; limite de latência e taxa de erro documentado sob carga definida.
+**Gate de aceite:** build limpa em UE 5.8 e Automation Tests passam; existe mapa jogável reproduzível; contrato com backend está versionado; assets possuem licença rastreável. Os checks C++/UE atuais em CI validam regras portáveis e integridade de arquivos, não compilação Unreal real.
 
-### 2.2 Gameplay e ranking
+## Fase 5 — Economia de jogo, ledger e limites de compliance
 
-- [ ] Definir invariantes de estado para lobby → countdown → partida → finish; testar transições e desconexões.
-- [ ] Tornar IDs/snapshot/replay suficientes para reconstruir uma partida com a mesma seed.
-- [ ] Validar cálculo de posição/ataque/lag compensation e tolerância a relógio de cliente manipulado.
-- [ ] Comparar algoritmo de matchmaking JavaScript/Python de referência com `MatchmakingService` de produção; escolher uma implementação canônica.
-- [ ] Definir regras de abandono, empate, desconexão prolongada e partida sem vencedor.
-- [ ] Executar teste de abuso de loot, dano, queue mode e host controls.
+**Objetivo:** proteger integridade do valor de jogo e impedir que uma economia simulada seja confundida com custódia ou ativo resgatável.
 
-**Aceite:** mesma seed e sequência de inputs produz resultado reproduzível; testes de equilíbrio e matchmaking publicam métricas e limites.
+- [ ] Manter KRC sem resgate, custódia ou ligação a fundos reais enquanto não houver decisão formal separada.
+- [ ] Projetar ledger append-only com unidades inteiras/decimais exatos, idempotency keys, hashes encadeados e reconciliação auditável.
+- [ ] Executar débito/crédito, criação de item/empréstimo e ledger em transações PostgreSQL; definir constraints de saldo e estado.
+- [ ] Adicionar testes concorrentes, retries, duplicação de eventos, falha intermediária e reconciliação contábil.
+- [ ] Restringir console administrativo, registrar ator/razão de ajuste e revisar trilha de auditoria.
+- [ ] Antes de qualquer moeda resgatável, carteira ou pagamento: revisão jurídica/regulatória por jurisdição, KYC/AML, fraude, custódia, privacidade, auditoria e threat model.
 
-### 2.3 Frontend, acessibilidade e desempenho
+**Gate de aceite:** saldos e ledger reconciliam sob concorrência e retry; correções são auditáveis; não há ponte para valor real antes de revisão e aprovação explícitas. Esta fase não autoriza nem implementa transações reais de Bitcoin.
 
-- [x] Fazer code splitting das páginas com lazy imports.
-- [x] Atualizar `caniuse-lite`/Browserslist.
-- [x] Reduzir o chunk inicial de aproximadamente 613 kB minificados para aproximadamente 386 kB minificados no build medido.
-- [x] Implementar no War’I os filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes do item e seleção persistida da PackBack com atualização limitada ao proprietário.
-- [x] Carregar no fim do countdown apenas a PackBack persistida do próprio usuário; arma durável define dano/alcance, defesa durável acrescenta vida máxima (limite 200) e falha de leitura pausa a partida.
-- [x] Conectar cura (`CURATIVO`), granada em área e reconhecimento temporário (`UTILIDADE`) a ações autoritativas no combate; validar snapshot/ownership, limitar frequência e consumir durabilidade atomicamente, com feedback no HUD, testes unitários/de integração e jornada E2E via WebSocket autenticado (match → ação → dano/ack; persistência isolada por fixture).
-- [x] Definir regras de gameplay server-authoritative para capacidade (50 pts base, bônus de itens utilitários equipados até 150; pesos por categoria e rejeição de pickup acima do limite) e Adrenalina (+20% por 10s por padrão, limitada a +50%, com movimento avançado no tick do servidor).
-- [ ] Manter testes de Lighthouse em runner estável para mobile e desktop, com percentis/variação documentados.
-- [ ] Definir limites de regressão de LCP, INP, CLS e JavaScript inicial após recolher baseline repetível.
-- [ ] Adicionar testes de interação e acessibilidade para lobby, zona, inventário, banco e pós-partida.
-- [ ] Considerar lazy loading de dependências pesadas compartilhadas somente com evidência de waterfall/coverage.
+## Fase 6 — SRE, observabilidade e prontidão de produção
 
-**Aceite:** Lighthouse/CI executa em ambiente reprodutível; budget de performance é baseado em várias execuções e não em um único score local.
+**Objetivo:** detectar falhas, limitar impacto e recuperar serviço/dados com procedimentos testados.
 
-### 2.4 Observabilidade e SRE
+- [ ] Separar ambientes de preview, staging e produção com identidades, bancos, segredos e permissões independentes.
+- [ ] Validar OIDC no domínio de produção antes de tráfego real; documentar rotação de `SESSION_SECRET` e `WS_TOKEN_SECRET`.
+- [ ] Implementar health/readiness checks reais de dependências, mantendo liveness independente de chamadas lentas ao banco.
+- [ ] Instrumentar request IDs, traces, métricas HTTP/DB, filas, matchmaking, partidas e sessões WebSocket.
+- [ ] Definir SLOs/SLIs, alertas com owner e playbooks de incidente; medir latência a partir do servidor.
+- [ ] Criar dashboards para erro, latência, saturação, pool PostgreSQL, reconexões e duração/falha de partida.
+- [ ] Validar restore de backup, rollback de deploy e migração em staging; definir RPO/RTO com responsáveis.
+- [ ] Executar load, soak e fault-injection tests para falhas de DB, Redis, worker, réplica e rede.
+- [ ] Manter deploy restrito a commit verificado, serializado e health-checked; ativação real de Render permanece condicionada à configuração do serviço e segredo externos.
 
-- [ ] Adicionar `/health/live` e `/health/ready` com checagem de banco e dependências.
-- [ ] Instrumentar traces/request IDs, métricas de matchmaking, fila, partidas e sessões WS.
-- [ ] Definir SLOs, alertas de erro/latência e playbooks de incidentes.
-- [ ] Publicar métricas de rede por região e ping medido pelo servidor, em vez de confiar em latência declarada pelo cliente.
-- [ ] Fazer load test, soak test e teste de recuperação após falha de réplica/banco.
+**Gate de aceite:** incidente pode ser detectado e diagnosticado por métricas/traces sem expor dados sensíveis; rollback e restore são demonstrados em staging; deploy não ocorre após gate vermelho; SLOs e limites são compatíveis com o teste de carga publicado.
 
-**Aceite:** dashboard responde a “o que falhou, quem foi afetado e quando”; alertas têm owner e playbook.
+## Fase 7 — Validação científica, qualidade contínua e sustentabilidade open source
 
-### 2.5 Portabilidade Unreal Engine 5.8
+**Objetivo:** transformar decisões de gameplay e operação em hipóteses testáveis e manter o projeto evolutivo, auditável e contribuível.
 
-- [x] Adicionar estrutura inicial do projeto UE 5.8 e headers para GameMode/GameState, PlayerState, atributos, zona, loot, grade espacial, combate, economia, AI e SaveGame.
-- [ ] Executar UnrealBuildTool em ambiente com UE 5.8 instalado e corrigir erros reais de compilação; headers atuais não foram validados pelo CI Node.
-- [ ] Preencher módulos/classes declarados mas não implementados, validar includes/API UE5 e eliminar stubs/dependências que não estão no repositório.
-- [ ] Definir interface versionada entre cliente UE e backend autoritativo, incluindo autenticação, reconnect, serialização, rate limits e ownership das partidas.
-- [ ] Implementar primeiro mapa/protótipo jogável com assets/licenças rastreáveis e testes Unreal Automation para zona, dano, loot e ciclo de partida.
-- [ ] Integrar UnrealBuildTool/Automation Tests em runner com licença e instalação UE apropriadas, sem armazenar credenciais de distribuição no repo.
-- [ ] Fazer playtest multiplayer dedicado, validar replicação/lag compensation e só então decidir se o cliente UE substitui ou complementa a SPA.
+- [ ] Registrar ADRs para arquitetura, regras de gameplay, schema, protocolo, migrações e trade-offs de segurança.
+- [ ] Definir benchmarks reproduzíveis com seeds, versões, parâmetros e datasets sintéticos sem dados pessoais.
+- [ ] Separar métricas de balanceamento de métricas de operação; evitar usar dados de produção para inferência sem política de privacidade.
+- [ ] Medir distribuição de loot, duração da partida, taxa de abandono, equilíbrio de armas e sucesso de reconexão; avaliar intervalos/variância em vez de um run isolado.
+- [ ] Definir budget de performance frontend após baseline repetido de LCP, INP, CLS e JS inicial em runner estável para desktop/mobile.
+- [ ] Criar testes de regressão para economia simulada e matchmaking; publicar metodologia e limitações junto aos resultados.
+- [ ] Documentar contribuição, setup local, licença de código/assets, política de segurança e processo de disclosure de vulnerabilidade.
+- [ ] Manter release notes, matriz de compatibilidade cliente/protocolo/schema e política de depreciação.
+- [ ] Revisar periodicamente dependências, cobertura de threat model, acessibilidade e suporte a versões ativas.
 
-**Aceite:** projeto abre e compila em UE 5.8 limpo; Automation Tests passam; existe build reproduzível e um fluxo de jogo testável; integração com backend possui contrato/versionamento e revisão de segurança. A mera presença do `.uproject` e dos headers não satisfaz este aceite.
+**Gate de aceite:** experimento pode ser reproduzido a partir da documentação e seed; decisões alteradas deixam trilha ADR; release tem changelog, compatibilidade, licença e segurança revisados; nenhum ganho de balanceamento ou performance é afirmado com base em amostra não reprodutível.
 
-## Prioridade 3 — economia persistente e compliance
+## Ordem de execução e gates entre fases
 
-- [ ] Manter KRC como unidade de jogo sem conversão em valor externo até decisão formal.
-- [ ] Se houver carteira, moeda resgatável ou pagamento real: parar antes de implementar e realizar análise jurídica/regulatória, KYC/AML, fraude, custody, auditoria e threat modeling.
-- [ ] Definir ledger append-only, reconciliação, retenção, acesso administrativo auditado e política de reversão.
+A sequência recomendada é **0 → 1 → 2 → 3 → 6**, mantendo **4** em trilha paralela até atingir paridade, e **5** bloqueada para valor real até revisão externa formal. A Fase 7 fornece o mecanismo de evidência para todas as demais.
 
-**Aceite:** nenhum valor real é conectado antes de revisão e aprovação explícitas das regras, controles e jurisdição aplicáveis.
+- Não escalar partidas distribuídas (Fase 3) antes de fechar identidade, ownership e consistência de dados (Fases 0–1).
+- Não habilitar reconnect entre réplicas antes de definir ownership de sala, sequência de eventos e fencing (Fase 3).
+- Não usar o primeiro build UE como critério de troca de cliente; exigir testes e compatibilidade de backend (Fase 4).
+- Não declarar produção pronta apenas porque `/healthz` responde; exigir staging, rollback, observabilidade e recuperação demonstrados (Fase 6).
+- Não conectar dinheiro/custódia real a KRC; a Fase 5 exige decisão e avaliação especializada fora do escopo de implementação rotineira.
 
-## Como contribuir ao roadmap
+## Como manter este roadmap
 
-Cada item implementado deve chegar por mudança pequena e revisável, ter testes associados e atualizar a documentação do contrato. Preferir uma sequência de entregas em que migrações de banco, autorização e compatibilidade sejam concluídas antes de escalar recursos de gameplay. Atualize os checkboxes apenas quando o critério de aceite correspondente puder ser demonstrado.
+Cada PR deve ser pequeno o suficiente para revisão, ter teste e atualizar o contrato afetado. Marque um item como concluído apenas com evidência reproduzível. Registre bloqueios de infraestrutura sem transformar hipótese em entrega. Replaneje a ordem quando novos riscos forem descobertos, preservando os invariantes de segurança, persistência e autoridade do servidor.

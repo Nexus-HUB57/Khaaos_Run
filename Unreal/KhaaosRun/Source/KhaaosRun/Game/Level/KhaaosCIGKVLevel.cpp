@@ -8,6 +8,9 @@
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Game/Loot/KhaaosLootPickup.h"
 #include "Game/World/CIGKV/KhaaosCIGKVMapData.h"
+#include "Game/World/CIGKV/CIGKVZuRules.h"
+#include "Player/KhaaosPlayerController.h"
+#include "Player/KhaaosPlayerState.h"
 #include "Game/World/CIGKV/CIGKVLootRules.h"
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -317,52 +320,157 @@ bool AKhaaosCIGKVLevel::PlayerExtractAtZEX(APlayerState* PlayerState, const FGui
 
 // ─── Zu Entry Protocol ───────────────────────────────────────────────────────
 
-void AKhaaosCIGKVLevel::StartZuEntry(APlayerController* PlayerController)
+namespace
 {
-    if (!PlayerController || ZuVariants.Num() == 0) return;
-
-    // Select random Zu variant
-    int32 VariantIndex = FMath::RandRange(0, ZuVariants.Num() - 1);
-    const FCIGKVZuEntry& Zu = ZuVariants[VariantIndex];
-
-    UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zu entry: Variant=%d, Spawn=(%s), Duration=%.1fs"),
-        static_cast<int32>(Zu.Variant), *Zu.SpawnPoint.ToString(), Zu.CinematicDuration);
-
-    // Move player to spawn point (cinematic entry)
-    if (APawn* Pawn = PlayerController->GetPawn())
+bool BuildZuPrompt(ECIGKVZuVariant Variant, FText& Prompt, FText& OptionA, FText& OptionB)
+{
+    switch (Variant)
     {
-        Pawn->SetActorLocation(Zu.SpawnPoint);
-        Pawn->SetActorRotation(Zu.SpawnRotation);
+    case ECIGKVZuVariant::Zu1_Cinto:
+        Prompt = NSLOCTEXT("KhaaosRun", "Zu1Prompt", "Risco de colisão: decida agora.");
+        OptionA = NSLOCTEXT("KhaaosRun", "Zu1SafeOption", "Apertar o cinto");
+        OptionB = NSLOCTEXT("KhaaosRun", "Zu1UnsafeOption", "Continuar sem cinto");
+        return true;
+    case ECIGKVZuVariant::Zu2_Saltar:
+        Prompt = NSLOCTEXT("KhaaosRun", "Zu2Prompt", "Desmoronamento iminente: saia do caminhão.");
+        OptionA = NSLOCTEXT("KhaaosRun", "Zu2SafeOption", "Saltar");
+        OptionB = NSLOCTEXT("KhaaosRun", "Zu2UnsafeOption", "Permanecer");
+        return true;
+    case ECIGKVZuVariant::Zu3_Mascara:
+        Prompt = NSLOCTEXT("KhaaosRun", "Zu3Prompt", "Queda na ponte: proteja sua respiração.");
+        OptionA = NSLOCTEXT("KhaaosRun", "Zu3SafeOption", "Usar máscara de oxigênio");
+        OptionB = NSLOCTEXT("KhaaosRun", "Zu3UnsafeOption", "Continuar sem máscara");
+        return true;
+    default:
+        return false;
     }
-
-    // Cinematic sequence: handled by Blueprint/HUD
-    // Player gets a decision pop-up after cinematic
+}
 }
 
-void AKhaaosCIGKVLevel::ResolveZuDecision(APlayerController* PlayerController, bool bCorrectDecision)
+void AKhaaosCIGKVLevel::StartZuEntry(APlayerController* PlayerController)
 {
-    if (!PlayerController) return;
+    if (!HasAuthority() || !IsValid(PlayerController) || ZuVariants.Num() == 0) return;
 
-    if (bCorrectDecision)
+    const TWeakObjectPtr<APlayerController> PlayerKey(PlayerController);
+    if (ActiveZuEntries.Contains(PlayerKey) || ResolvedZuEntries.Contains(PlayerKey)) return;
+
+    AKhaaosPlayerState* PlayerState = Cast<AKhaaosPlayerState>(PlayerController->PlayerState);
+    AKhaaosPlayerController* KhaaosController = Cast<AKhaaosPlayerController>(PlayerController);
+    APawn* Pawn = PlayerController->GetPawn();
+    if (!PlayerState || PlayerState->PlayerStatus != EPlayerStatus::Vivo || !KhaaosController || !Pawn)
     {
-        // Correct decision: 0 damage, possible stun/blurred vision (5-7s)
-        UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zu: Correct decision — 0 damage, brief stun"));
-        // Apply stun effect via GAS
+        UE_LOG(LogTemp, Warning, TEXT("[CIGKV] Zu entry skipped: player, pawn, or Khaaos controller is unavailable"));
+        return;
+    }
+
+    const int32 VariantIndex = FMath::RandRange(0, ZuVariants.Num() - 1);
+    const FCIGKVZuEntry Zu = ZuVariants[VariantIndex];
+    const int32 VariantId = static_cast<int32>(Zu.Variant);
+    FText Prompt;
+    FText OptionA;
+    FText OptionB;
+    if (!KhaaosCIGKVRules::IsValidVariant(VariantId) ||
+        !BuildZuPrompt(Zu.Variant, Prompt, OptionA, OptionB))
+    {
+        UE_LOG(LogTemp, Error, TEXT("[CIGKV] Zu entry has an unsupported variant (%d)"), VariantId);
+        return;
+    }
+
+    Pawn->SetActorLocation(Zu.SpawnPoint, false, nullptr, ETeleportType::TeleportPhysics);
+    Pawn->SetActorRotation(Zu.SpawnRotation);
+
+    FActiveZuEntryState EntryState;
+    EntryState.Variant = Zu.Variant;
+    EntryState.WrongDecisionDamage = KhaaosCIGKVRules::ClampWrongDecisionDamageFraction(Zu.WrongDecisionDamage);
+    ActiveZuEntries.Add(PlayerKey, EntryState);
+
+    const float CinematicDuration = FMath::Max(0.0f, Zu.CinematicDuration);
+    const float ResponseTimeout = FMath::Max(1.0f, ZuDecisionTimeout);
+    FTimerDelegate TimeoutDelegate;
+    TimeoutDelegate.BindUObject(this, &AKhaaosCIGKVLevel::ResolveZuDecisionTimeout, PlayerController);
+    GetWorldTimerManager().SetTimer(
+        ActiveZuEntries.FindChecked(PlayerKey).DecisionTimeoutHandle,
+        TimeoutDelegate,
+        CinematicDuration + ResponseTimeout,
+        false);
+
+    KhaaosController->ClientBeginZuEntry(
+        static_cast<uint8>(VariantId), Prompt, OptionA, OptionB, CinematicDuration, ResponseTimeout);
+
+    UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zu entry started: Variant=%d, Duration=%.1fs, ResponseTimeout=%.1fs"),
+        VariantId, CinematicDuration, ResponseTimeout);
+}
+
+void AKhaaosCIGKVLevel::CancelZuEntry(APlayerController* PlayerController)
+{
+    if (!HasAuthority() || !IsValid(PlayerController)) return;
+
+    const TWeakObjectPtr<APlayerController> PlayerKey(PlayerController);
+    if (FActiveZuEntryState* Entry = ActiveZuEntries.Find(PlayerKey))
+    {
+        GetWorldTimerManager().ClearTimer(Entry->DecisionTimeoutHandle);
+        ActiveZuEntries.Remove(PlayerKey);
+    }
+    ResolvedZuEntries.Remove(PlayerKey);
+
+    if (AKhaaosPlayerController* KhaaosController = Cast<AKhaaosPlayerController>(PlayerController))
+    {
+        KhaaosController->ClientEndZuEntry();
+    }
+}
+
+bool AKhaaosCIGKVLevel::ResolveZuDecision(APlayerController* PlayerController, uint8 ChoiceIndex)
+{
+    if (!HasAuthority() || !IsValid(PlayerController) || !KhaaosCIGKVRules::IsValidChoice(ChoiceIndex))
+    {
+        return false;
+    }
+
+    const TWeakObjectPtr<APlayerController> PlayerKey(PlayerController);
+    FActiveZuEntryState* PendingEntry = ActiveZuEntries.Find(PlayerKey);
+    if (!PendingEntry)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[CIGKV] Ignored duplicate or stale Zu choice"));
+        return false;
+    }
+
+    const FActiveZuEntryState Entry = *PendingEntry;
+    GetWorldTimerManager().ClearTimer(Entry.DecisionTimeoutHandle);
+    ActiveZuEntries.Remove(PlayerKey);
+    ResolvedZuEntries.Add(PlayerKey);
+
+    if (AKhaaosPlayerController* KhaaosController = Cast<AKhaaosPlayerController>(PlayerController))
+    {
+        KhaaosController->ClientEndZuEntry();
+    }
+
+    const int32 VariantId = static_cast<int32>(Entry.Variant);
+    if (KhaaosCIGKVRules::IsCorrectChoice(VariantId, ChoiceIndex))
+    {
+        UE_LOG(LogTemp, Log, TEXT("[CIGKV] Zu: safe choice accepted — no entry damage"));
+        return true;
+    }
+
+    if (AKhaaosPlayerState* PlayerState = Cast<AKhaaosPlayerState>(PlayerController->PlayerState))
+    {
+        const float MaxHealth = FMath::Max(0.0f, PlayerState->MaxHealth);
+        const float Damage = MaxHealth * Entry.WrongDecisionDamage;
+        const float ActualDamage = PlayerState->ApplyDamage(Damage, nullptr);
+        UE_LOG(LogTemp, Warning, TEXT("[CIGKV] Zu: unsafe choice; damage %.1f/%.1f (%.0f%% configured)"),
+            ActualDamage, Damage, Entry.WrongDecisionDamage * 100.0f);
     }
     else
     {
-        // Wrong decision: up to -30% health
-        UE_LOG(LogTemp, Warning, TEXT("[CIGKV] Zu: Wrong decision — -30%% health penalty"));
-        // Apply damage via GAS (30% of max health)
-        if (APawn* Pawn = PlayerController->GetPawn())
-        {
-            if (UAbilitySystemComponent* ASC = Pawn->FindComponentByClass<UAbilitySystemComponent>())
-            {
-                // Apply damage GameplayEffect (30% of max health)
-                // KhaaosEffectApplier handles this
-            }
-        }
+        UE_LOG(LogTemp, Error, TEXT("[CIGKV] Zu penalty could not be applied: AKhaaosPlayerState is missing"));
     }
+
+    return true;
+}
+
+void AKhaaosCIGKVLevel::ResolveZuDecisionTimeout(APlayerController* PlayerController)
+{
+    UE_LOG(LogTemp, Warning, TEXT("[CIGKV] Zu response timed out; applying unsafe-choice outcome"));
+    ResolveZuDecision(PlayerController, 1);
 }
 
 // ─── Player Flow ─────────────────────────────────────────────────────────────
