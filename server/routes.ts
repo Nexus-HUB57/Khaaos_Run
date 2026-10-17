@@ -19,6 +19,9 @@ import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
 import { canUseItemOutsideMatch } from "@shared/war-i";
+import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
+import { economyService } from "./game/economyService";
+import { isValidIdempotencyKey } from "./game/economyMoney";
 import {
   emptyMutationInput,
   zoneStartInput,
