@@ -108,6 +108,31 @@ jobs:
     name: Game Runtime Tests
     runs-on: ubuntu-latest
     needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: khaaos_runtime
+          POSTGRES_USER: runtime
+          POSTGRES_PASSWORD: runtime_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      KR_DATABASE_URL: postgresql://runtime:runtime_ci@localhost:5432/khaaos_runtime
+      KR_DATABASE_TEST_URL: postgresql://runtime:runtime_ci@localhost:5432/khaaos_runtime
+      KR_REDIS_TEST_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
 
@@ -120,6 +145,14 @@ jobs:
       - name: Install game-runtime deps
         working-directory: game-runtime
         run: npm ci
+
+      - name: Apply runtime PostgreSQL migrations
+        working-directory: game-runtime
+        run: npm run db:migrate
+
+      - name: Real PostgreSQL and Redis adapter tests
+        working-directory: game-runtime
+        run: npm run test:real
 
       - name: Game infra tests
         working-directory: game-runtime

@@ -24,8 +24,9 @@
 
 ## Integrações de produção pendentes
 
-- [ ] Substituir `DurableJsonStore` por banco transacional com migrações, fencing e testes de recuperação.
-- [ ] Conectar adapter Redis/KeyDB real com `INCR` + expiração atômica cross-process.
+- [x] Implementar `PostgresSessionStore` transacional com migração versionada, expiração no banco, readiness e testes reais opt-in.
+- [x] Conectar `RedisRateStore` real com `INCR` + `PEXPIRE` atômicos via Lua, readiness e testes reais opt-in.
+- [ ] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência.
 - [ ] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional.
 - [ ] Implementar RBAC com auditoria e permissões por recurso.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.

@@ -7,7 +7,7 @@ Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)
 O servidor usa tokens assinados HMAC-SHA256 com expiração, hash de senha `scrypt` e papéis `player`, `moderator` e `admin`. Configure produção com `AUTH_SECRET` forte e `KR_USERS_JSON` contendo usuários pré-provisionados com `passwordHash` gerado por `hashPassword`.
 
 ```bash
-AUTH_SECRET='segredo-longo' ADMIN_TOKEN='chave-legada-temporaria' KR_STORE=/var/lib/khaaos/state.json npm run server
+AUTH_SECRET='segredo-longo' ADMIN_TOKEN='chave-legada-temporaria' KR_SESSION_STORE=postgres KR_DATABASE_URL='postgresql://runtime:senha@db:5432/khaaos_runtime' KR_RATE_STORE=redis REDIS_URL='redis://redis:6379' npm run server
 ```
 
 O login é feito em `POST /auth/login` com `{ "username": "...", "password": "..." }`. WebSocket exige `?token=...`. O painel administrativo exige token JWT com role `admin`; o `ADMIN_TOKEN` existe apenas como compatibilidade operacional temporária.
@@ -25,7 +25,18 @@ O matchmaking usa `region` do token (`sa-east`, `us-east` ou `eu-west`) e latên
 
 ## Persistência e rate limiting
 
-Sessões de reconexão são gravadas por `DurableJsonStore` com escrita atômica e sobrevivem à recriação do processo. O rate limiter usa um adapter com operação `incr` atômica; `SharedMemoryRateStore` é adequado para testes e uma única instância. Em produção, conecte o mesmo contrato a Redis/KeyDB com `INCR` + expiração para compartilhar contadores entre réplicas.
+Em produção, o runtime usa `PostgresSessionStore` quando `KR_SESSION_STORE=postgres`, com `KR_DATABASE_URL`/`DATABASE_URL`, migração versionada em `migrations/001_runtime_sessions.sql` e expiração no banco. O rate limiter usa `RedisRateStore` quando `KR_RATE_STORE=redis`, com `REDIS_URL`/`KR_REDIS_URL`; cada incremento executa `INCR` e `PEXPIRE` na mesma operação Lua, compartilhando contadores entre réplicas. O `DurableJsonStore` e `SharedMemoryRateStore` permanecem apenas para desenvolvimento/testes explícitos.
+
+Para levantar dependências reais localmente:
+
+```bash
+docker compose -f docker-compose.real.yml up -d
+export KR_DATABASE_URL='postgresql://runtime:runtime_dev_only@127.0.0.1:55433/khaaos_runtime'
+export REDIS_URL='redis://127.0.0.1:56379'
+npm run db:migrate
+npm run test:real
+KR_SESSION_STORE=postgres KR_RATE_STORE=redis npm run server
+```
 
 ## Painel anti-cheat
 
