@@ -324,7 +324,10 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
       FOR EACH ROW EXECUTE FUNCTION fail_test_purchase_ledger();
     `);
     const rollbackKey = randomUUID();
-    await assert.rejects(service.purchaseItem(rollbackUser, rollbackKey, { type: "ARMA", name: "Falha injetada" }), /injected ledger failure/);
+    await assert.rejects(
+      service.purchaseItem(rollbackUser, rollbackKey, { type: "ARMA", name: "Falha injetada" }),
+      (error: any) => /injected ledger failure/.test(`${error?.message ?? ""} ${error?.cause?.message ?? ""}`),
+    );
     const rollbackState = await pool.query(`
       SELECT b.weapons_balance::text AS balance,
         (SELECT count(*)::int FROM items WHERE user_id = $1) AS items,

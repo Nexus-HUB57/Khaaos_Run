@@ -139,7 +139,7 @@ export type ClientMessage =
   | { type: "join_code"; code: string };
 
 const clientMessageSchema = z.object({
-  type: z.enum(["join", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code"]),
+  type: z.enum(["join", "resume", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code"]),
   roomId: z.string().trim().max(128).optional(),
   displayName: z.string().max(64).optional(),
   x: z.number().finite().min(0).max(100).optional(),
@@ -285,12 +285,12 @@ class RoomManager {
 
       ws.on("close", () => {
         clearInterval(rateReset);
-        this.onDisconnect(userId);
+        this.onDisconnect(userId, ws);
       });
 
       ws.on("error", () => {
         clearInterval(rateReset);
-        this.onDisconnect(userId);
+        this.onDisconnect(userId, ws);
       });
     });
 
