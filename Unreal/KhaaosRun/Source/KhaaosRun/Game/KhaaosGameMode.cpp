@@ -9,6 +9,15 @@
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 
+// ─── E2E Phases 5-8 Includes ───────────────────────────────────────────────────
+#include "Game/Economy/KhaaosEconomySync.h"
+#include "Game/Economy/KhaaosShopSystem.h"
+#include "Game/Economy/KhaaosTransactionValidator.h"
+#include "Game/EOS/KhaaosEOSCrossplay.h"
+#include "Game/EOS/KhaaosEOSMatchmakingV2.h"
+#include "Game/EOS/KhaaosEOSSessionRecovery.h"
+#include "Game/Audio/KhaaosZoneWarningSystem.h"
+
 #include "Engine/World.h"
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Pawn.h"
@@ -37,6 +46,15 @@ AKhaaosGameMode::AKhaaosGameMode()
         SpatialGrid         = nullptr;
         SafeZone            = nullptr;
         KhaaosGameState     = nullptr;
+
+        // E2E Phases 5-8 subsystems (initialized in InitializeE2ESubsystems)
+        EconomySync         = nullptr;
+        ShopSystem          = nullptr;
+        TransactionValidator = nullptr;
+        CrossplayManager    = nullptr;
+        MatchmakingV2       = nullptr;
+        SessionRecovery     = nullptr;
+        ZoneWarning         = nullptr;
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -73,6 +91,9 @@ void AKhaaosGameMode::StartPlay()
         {
                 SafeZone = Cast<AKhaaosSafeZone>(SafeZones[0]);
         }
+
+        // Initialize E2E Phases 5-8 subsystems
+        InitializeE2ESubsystems();
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::StartPlay - Match phase: Lobby"));
 }
@@ -456,15 +477,15 @@ void AKhaaosGameMode::ApplyZoneDamage()
                         if (APlayerState* PS = PC->PlayerState)
                         {
                                 AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PS);
-							if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
-							{
-								// Check if player is outside safe zone
-								const APawn* PlayerPawn = PC->GetPawn();
-								const bool bInsideSafeZone = SafeZone->UsesWorldSpaceZone()
-									? (!PlayerPawn || SafeZone->IsInsideWorldZone(PlayerPawn->GetActorLocation()))
-									: SafeZone->IsInsideZone(KPS->MapPosition);
-								if (!bInsideSafeZone)
-								{
+                                                        if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
+                                                        {
+                                                                // Check if player is outside safe zone
+                                                                const APawn* PlayerPawn = PC->GetPawn();
+                                                                const bool bInsideSafeZone = SafeZone->UsesWorldSpaceZone()
+                                                                        ? (!PlayerPawn || SafeZone->IsInsideWorldZone(PlayerPawn->GetActorLocation()))
+                                                                        : SafeZone->IsInsideZone(KPS->MapPosition);
+                                                                if (!bInsideSafeZone)
+                                                                {
                                                 float ZoneDamage = SafeZone->DamagePerTick;
                                                 KPS->ApplyDamage(ZoneDamage, nullptr);
 
@@ -512,4 +533,49 @@ void AKhaaosGameMode::ComputeRankings()
         //   - Time survived
         //   - Average ELO of opponents
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::ComputeRankings - Computing ELO rankings"));
+}
+
+// ─── E2E Phases 5-8 Subsystems Initialization ──────────────────────────────────
+
+void AKhaaosGameMode::InitializeE2ESubsystems()
+{
+	if (!GetWorld()) return;
+
+	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Starting"));
+
+	// Phase 5: Economy Bridge
+	EconomySync = NewObject<UKhaaosEconomySync>(this, UKhaaosEconomySync::StaticClass());
+	if (EconomySync)
+	{
+		EconomySync->RegisterComponent();
+		UE_LOG(LogKhaaosRun, Log, TEXT("  EconomySync initialized"));
+	}
+
+	ShopSystem = NewObject<UKhaaosShopSystem>(this, UKhaaosShopSystem::StaticClass());
+	if (ShopSystem)
+	{
+		ShopSystem->RegisterComponent();
+		UE_LOG(LogKhaaosRun, Log, TEXT("  ShopSystem initialized"));
+	}
+
+	// Phase 6: EOS Enhancement
+	SessionRecovery = NewObject<UKhaaosEOSSessionRecovery>(this, UKhaaosEOSSessionRecovery::StaticClass());
+	if (SessionRecovery)
+	{
+		SessionRecovery->RegisterComponent();
+		UE_LOG(LogKhaaosRun, Log, TEXT("  SessionRecovery initialized"));
+	}
+
+	// Phase 8: Audio
+	ZoneWarning = NewObject<UKhaaosZoneWarningSystem>(this, UKhaaosZoneWarningSystem::StaticClass());
+	if (ZoneWarning)
+	{
+		ZoneWarning->RegisterComponent();
+		UE_LOG(LogKhaaosRun, Log, TEXT("  ZoneWarning initialized"));
+	}
+
+	// Note: TransactionValidator is UEngineSubsystem (auto-initialized)
+	// Note: CrossplayManager and MatchmakingV2 are UGameInstanceSubsystem (auto-initialized)
+
+	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Complete (4 actor components + 3 engine/game-instance subsystems)"));
 }
