@@ -279,7 +279,7 @@ jobs:
             -d '{
               "embeds": [{
                 "title": "🚀 Deploy Successful",
-                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "description": "Environment: ${{ inputs.environment }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "color": 3066993
               }]
             }' || true
@@ -292,7 +292,7 @@ jobs:
             -d '{
               "embeds": [{
                 "title": "❌ Deploy Failed",
-                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "description": "Environment: ${{ inputs.environment }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "color": 15158332
               }]
             }' || true
