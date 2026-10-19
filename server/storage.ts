@@ -23,9 +23,6 @@ export interface IStorage {
   getLoans(userId: string): Promise<Loan[]>;
   getLoan(id: number): Promise<Loan | undefined>;
   getLoanForUser(id: number, userId: string): Promise<Loan | undefined>;
-  updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined>;
-  createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
-  updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   requestLoanAtomic(userId: string, amountKrc: string, days: number): Promise<Loan>;
   payLoanAtomic(userId: string, loanId: number): Promise<{ bank: BankAccount; loan: Loan; transaction: Transaction }>;
   // Items
@@ -415,38 +412,44 @@ export class DatabaseStorage implements IStorage {
 
   // Server_PickupItem RPC equivalent — runs on server, validates, grants item, destroys loot actor
   async pickupLoot(lootId: number, userId: string, userName?: string): Promise<{ loot: LootItem; item: Item }> {
-    const loot = await this.getLootItem(lootId);
-    if (!loot) throw new Error("Item de loot não encontrado");
-    if (loot.isPickedUp) throw new Error("Item já foi coletado por outro operativo");
+    return db.transaction(async (tx) => {
+      const [loot] = await tx.select().from(lootItems).where(eq(lootItems.id, lootId)).for("update");
+      if (!loot) throw new Error("Item de loot não encontrado");
+      if (loot.isPickedUp) throw new Error("Item já foi coletado por outro operativo");
 
-    const stats = await this.getPlayerStats(userId);
-    if (stats.status !== PlayerStatus.VIVO) throw new Error("Operativo eliminado não pode coletar itens");
+      await tx.insert(playerStats).values({ userId }).onConflictDoNothing();
+      const [stats] = await tx.select().from(playerStats).where(eq(playerStats.userId, userId)).for("update");
+      if (!stats) throw new Error("Player stats could not be initialized");
+      if (stats.status !== PlayerStatus.VIVO) throw new Error("Operativo eliminado não pode coletar itens");
 
-    // Mark as picked up (Destroy Actor equivalent — removes from map)
-    const [updatedLoot] = await db.update(lootItems)
-      .set({ isPickedUp: true, pickedUpBy: userId, pickedUpAt: new Date() })
-      .where(and(eq(lootItems.id, lootId), eq(lootItems.isPickedUp, false)))
-      .returning();
+      const [updatedLoot] = await tx.update(lootItems)
+        .set({ isPickedUp: true, pickedUpBy: userId, pickedUpAt: new Date() })
+        .where(and(eq(lootItems.id, lootId), eq(lootItems.isPickedUp, false)))
+        .returning();
+      if (!updatedLoot) throw new Error("Conflito: item já coletado");
 
-    if (!updatedLoot) throw new Error("Conflito: item já coletado");
+      const [item] = await tx.insert(items).values({
+        userId,
+        name: loot.name,
+        type: loot.type,
+        rarity: loot.rarity,
+        stats: loot.stats ?? {},
+        durability: "100",
+        maxDurability: "100",
+      }).returning();
+      if (!item) throw new Error("Não foi possível adicionar o loot ao inventário");
 
-    // Add to Inventory (Add to Inventory node equivalent)
-    const item = await this.createItem({
-      userId,
-      name: loot.name,
-      type: loot.type,
-      rarity: loot.rarity,
-      stats: loot.stats ?? {},
-      durability: "100",
-      maxDurability: "100",
+      const heal = loot.stats?.heal;
+      if (loot.type === "CURATIVO" && typeof heal === "number" && Number.isFinite(heal) && heal > 0) {
+        const [healedStats] = await tx.update(playerStats)
+          .set({ health: Math.min(stats.maxHealth, stats.health + heal) })
+          .where(eq(playerStats.userId, userId))
+          .returning();
+        if (!healedStats) throw new Error("Não foi possível aplicar a cura do loot");
+      }
+
+      return { loot: updatedLoot, item };
     });
-
-    // Heal if curativo
-    if (loot.type === "CURATIVO" && loot.stats?.heal) {
-      await this.healPlayer(userId, loot.stats.heal);
-    }
-
-    return { loot: updatedLoot, item };
   }
 
   // === ELIMINATION (BP_Character Event Any Damage death logic) ===
