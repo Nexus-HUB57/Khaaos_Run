@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Item, buildUrl, errorSchemas } from "@shared/routes";
+import { api, type ForgeCatalogItem, type Item, buildUrl, errorSchemas } from "@shared/routes";
 import { idempotentFetch } from "@/lib/queryClient";
-import { z } from "zod";
 
 async function apiErrorMessage(response: Response, fallback: string) {
   const body = await response.json().catch(() => null) as { message?: unknown } | null;
@@ -19,10 +18,21 @@ export function useItems() {
   });
 }
 
+export function useForgeCatalog() {
+  return useQuery<ForgeCatalogItem[]>({
+    queryKey: [api.forge.catalog.path],
+    queryFn: async () => {
+      const res = await fetch(api.forge.catalog.path, { credentials: "include" });
+      if (!res.ok) throw new Error(await apiErrorMessage(res, "Não foi possível carregar o catálogo da Forja."));
+      return api.forge.catalog.responses[200].parse(await res.json());
+    },
+  });
+}
+
 export function usePurchaseItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { type: string, name: string }) => {
+    mutationFn: async (data: { catalogId: string }) => {
       const validated = api.items.purchase.input.parse(data);
       const res = await idempotentFetch(api.items.purchase.path, {
         method: "POST",

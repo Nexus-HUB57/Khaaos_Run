@@ -283,6 +283,7 @@ export const items = pgTable("items", {
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
+  catalogId: text("catalog_id"),
   rarity: text("rarity").notNull().default(Rarity.COMUM),
   durability: numeric("durability").notNull().default("100"),
   maxDurability: numeric("max_durability").notNull().default("100"),

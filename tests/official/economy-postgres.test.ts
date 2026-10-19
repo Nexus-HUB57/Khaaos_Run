@@ -131,6 +131,10 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     const openingSnapshotAfterReplay = await pool.query("SELECT count(*)::int AS count FROM economy_ledger_entries WHERE user_id = $1", [legacyUser]);
     assert.equal(openingSnapshotAfterReplay.rows[0].count, 6);
 
+    const forgeCatalogMigration = await readFile(new URL("../../migrations/0005_forge_catalog_id.sql", import.meta.url), "utf8");
+    await pool.query(forgeCatalogMigration);
+    await pool.query(forgeCatalogMigration);
+
     const schema = await import("../../shared/schema");
     const { EconomyService } = await import("../../server/game/economyService");
     const database = drizzle(pool, { schema }) as unknown as typeof import("../../server/db").db;
@@ -183,8 +187,8 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(depositedBalance.rows[0].bonus_balance, "123.00");
 
     const purchases = await Promise.all([
-      service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra A" }),
-      service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra B" }),
+      service.purchaseItem(purchaseUser, randomUUID(), { catalogId: "nano_blade" }),
+      service.purchaseItem(purchaseUser, randomUUID(), { catalogId: "nano_blade" }),
     ]);
     assert.deepEqual(purchases.map((result) => result.status).sort(), [201, 402]);
     const purchaseState = await pool.query(`
@@ -196,6 +200,46 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(purchaseState.rows[0].balance, "0.00");
     assert.equal(purchaseState.rows[0].items, 1);
     assert.equal(purchaseState.rows[0].ledger, 1);
+    const firstPurchase = purchases.find((result) => result.status === 201)!;
+    const purchasedItem = await pool.query("SELECT catalog_id, name, type, rarity FROM items WHERE user_id = $1", [purchaseUser]);
+    assert.deepEqual(purchasedItem.rows[0], {
+      catalog_id: "nano_blade",
+      name: "Lâmina Nano",
+      type: "ARMA",
+      rarity: "COMUM",
+    });
+    const purchasePostings = await pool.query(
+      "SELECT amount_krc::text, side FROM economy_ledger_entries WHERE operation_id = $1 ORDER BY line_number",
+      [firstPurchase.body.operationId],
+    );
+    assert.deepEqual(purchasePostings.rows, [
+      { amount_krc: "500.00", side: "CREDIT" },
+      { amount_krc: "500.00", side: "DEBIT" },
+    ]);
+
+    await pool.query("UPDATE bank_accounts SET weapons_balance = 1200 WHERE user_id = $1", [purchaseUser]);
+    const replayKey = randomUUID();
+    const replayedPurchases = await Promise.all([
+      service.purchaseItem(purchaseUser, replayKey, { catalogId: "plasma_rifle" }),
+      service.purchaseItem(purchaseUser, replayKey, { catalogId: "plasma_rifle" }),
+    ]);
+    assert.deepEqual(replayedPurchases.map((result) => result.status), [201, 201]);
+    assert.equal(replayedPurchases[0].body.operationId, replayedPurchases[1].body.operationId);
+    const replayPurchaseState = await pool.query(`
+      SELECT b.weapons_balance::text AS balance,
+        (SELECT count(*)::int FROM items WHERE user_id = $1 AND catalog_id = 'plasma_rifle') AS items,
+        (SELECT count(*)::int FROM economy_ledger_entries WHERE user_id = $1 AND idempotency_key = $2) AS postings
+      FROM bank_accounts b WHERE b.user_id = $1
+    `, [purchaseUser, replayKey]);
+    assert.equal(replayPurchaseState.rows[0].balance, "0.00");
+    assert.equal(replayPurchaseState.rows[0].items, 1);
+    assert.equal(replayPurchaseState.rows[0].postings, 2);
+    await assert.rejects(
+      service.purchaseItem(purchaseUser, randomUUID(), { catalogId: "invented_item" }),
+      /Item não encontrado no catálogo/,
+    );
+    const balanceAfterUnknownSku = await pool.query("SELECT weapons_balance::text FROM bank_accounts WHERE user_id = $1", [purchaseUser]);
+    assert.equal(balanceAfterUnknownSku.rows[0].weapons_balance, "0.00");
 
     const [repairableItem] = (await pool.query(
       "INSERT INTO items (user_id, name, type, durability, max_durability) VALUES ($1, 'Item para reparar', 'ARMA', 50, 100) RETURNING id",
@@ -325,7 +369,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     `);
     const rollbackKey = randomUUID();
     await assert.rejects(
-      service.purchaseItem(rollbackUser, rollbackKey, { type: "ARMA", name: "Falha injetada" }),
+      service.purchaseItem(rollbackUser, rollbackKey, { catalogId: "nano_blade" }),
       (error: any) => /injected ledger failure/.test(`${error?.message ?? ""} ${error?.cause?.message ?? ""}`),
     );
     const rollbackState = await pool.query(`

@@ -21,7 +21,10 @@ test("bank/loan/item inputs reject non-finite, out-of-range, fractional and extr
   rejects(api.bank.transfer.input, { amountKrc: -1, destination: "fbm" });
   rejects(api.bank.transfer.input, { amountKrc: 5, destination: "fbm", userId: "victim" });
   rejects(api.loans.request.input, { amountKrc: 100.5, days: 1 });
-  rejects(api.items.purchase.input, { type: "ARMA", name: "   " });
+  rejects(api.items.purchase.input, { type: "ARMA", name: "Lâmina Nano" });
+  rejects(api.items.purchase.input, { catalogId: "nano_blade", priceKrc: 1 });
+  rejects(api.items.purchase.input, { catalogId: "   " });
+  assert.deepEqual(api.items.purchase.input.parse({ catalogId: "nano_blade" }), { catalogId: "nano_blade" });
   rejects(api.items.equip.input, { isEquipped: true, userId: "victim" });
   rejects(api.items.repair.input, { amountKrc: 100001 });
   rejects(api.player.specialization.input, { specializationId: "ADMIN" });

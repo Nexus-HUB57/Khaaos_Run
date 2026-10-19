@@ -20,6 +20,7 @@ import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorizatio
 import { distributedState } from "./game/DistributedState";
 import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
 import { economyService } from "./game/economyService";
+import { getForgeCatalog } from "./game/forgeCatalog";
 import { isValidIdempotencyKey } from "./game/economyMoney";
 import { canUseItemOutsideMatch } from "@shared/war-i";
 import {
@@ -226,6 +227,11 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get(api.forge.catalog.path, requireAuth, (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(getForgeCatalog());
+  });
+
   app.post(api.items.purchase.path, requireAuth, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, api.items.purchase.input);
@@ -233,7 +239,7 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const result = await economyService.purchaseItem(userId, key, { name: input.name, type: input.type });
+      const result = await economyService.purchaseItem(userId, key, { catalogId: input.catalogId });
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });

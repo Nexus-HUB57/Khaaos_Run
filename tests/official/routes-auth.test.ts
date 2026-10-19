@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { after, test } from "node:test";
 import express from "express";
+import { api } from "../../shared/routes";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 const previousZoneOperatorIds = process.env.ZONE_OPERATOR_IDS;
@@ -69,6 +70,7 @@ const protectedRoutes = [
   ["POST", "/api/loans"],
   ["POST", "/api/loans/1/pay"],
   ["GET", "/api/items"],
+  ["GET", "/api/forge/catalog"],
   ["POST", "/api/items/1/equip"],
   ["POST", "/api/items/purchase"],
   ["POST", "/api/items/1/use"],
@@ -162,4 +164,26 @@ test("console do Marechal rejeita usuário sem allowlist mesmo com papel forjado
   });
   assert.equal(response.status, 403);
   assert.equal((await response.json() as any).error.code, "INSUFFICIENT_SCOPE");
+});
+
+test("Forja: catálogo canônico autenticado e compra rejeita o payload antigo controlado pelo cliente", async () => {
+  const catalogResponse = await fetch(`${baseUrl}${api.forge.catalog.path}`, {
+    headers: { "x-test-user-id": "player-1" },
+  });
+  assert.equal(catalogResponse.status, 200);
+  assert.equal(catalogResponse.headers.get("cache-control"), "no-store");
+  const catalog = api.forge.catalog.responses[200].parse(await catalogResponse.json());
+  assert.equal(catalog.length, 8);
+  assert.equal(catalog.find((item) => item.catalogId === "plasma_rifle")?.priceKrc, 1200);
+
+  const legacyPurchase = await fetch(`${baseUrl}${api.items.purchase.path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": "forge-legacy-payload-test-0001",
+      "x-test-user-id": "player-1",
+    },
+    body: JSON.stringify({ name: "Item Inventado", type: "ARMA", priceKrc: 1 }),
+  });
+  assert.equal(legacyPurchase.status, 400);
 });

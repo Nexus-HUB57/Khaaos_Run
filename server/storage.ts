@@ -35,7 +35,6 @@ export interface IStorage {
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined>;
   setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined>;
-  purchaseItemAtomic(userId: string, name: string, type: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
   repairItemAtomic(userId: string, itemId: number, amountKrc: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
   // Zone
   getActiveZoneSession(): Promise<ZoneSession | undefined>;
@@ -194,29 +193,6 @@ export class DatabaseStorage implements IStorage {
         userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: loan.totalDue, description: `Repaid loan #${loanId}`,
       }).returning();
       return { bank: updatedBank, loan: updatedLoan, transaction };
-    });
-  }
-
-  async purchaseItemAtomic(userId: string, name: string, type: string) {
-    return db.transaction(async (tx) => {
-      const bank = await this.lockBankAccount(tx, userId);
-      const prices: Record<string, number> = { ARMA: 500, DEFESA: 300, CURATIVO: 150, UTILIDADE: 200 };
-      const price = prices[type] ?? 500;
-      if (Number(bank.weaponsBalance) < price) {
-        const error = new Error("Saldo insuficiente");
-        (error as any).code = "INSUFFICIENT_FUNDS";
-        (error as any).required = price;
-        (error as any).available = Number(bank.weaponsBalance);
-        throw error;
-      }
-      const [updatedBank] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${price}::numeric`,
-      }).where(eq(bankAccounts.userId, userId)).returning();
-      const [item] = await tx.insert(items).values({ userId, name, type }).returning();
-      const [transaction] = await tx.insert(transactions).values({
-        userId, type: "COMPRA", amountKrc: price.toString(), description: `Purchased ${name}`,
-      }).returning();
-      return { bank: updatedBank, item, transaction };
     });
   }
 

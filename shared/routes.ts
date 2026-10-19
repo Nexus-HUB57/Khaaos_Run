@@ -48,6 +48,16 @@ export const errorSchemas = {
   }),
 };
 
+export const forgeCatalogItemSchema = z.object({
+  catalogId: z.string().min(1).max(64),
+  name: z.string().min(1).max(64),
+  type: z.enum(['ARMA', 'DEFESA', 'CURATIVO', 'UTILIDADE']),
+  rarity: z.enum(['COMUM', 'RARO', 'EPICO', 'LENDARIO', 'MITICO']),
+  description: z.string().max(500),
+  priceKrc: z.number().finite().int().positive(),
+});
+export type ForgeCatalogItem = z.infer<typeof forgeCatalogItemSchema>;
+
 export const api = {
   // === BANKING ===
   bank: {
@@ -145,10 +155,7 @@ export const api = {
     purchase: {
       method: 'POST' as const,
       path: '/api/items/purchase',
-      input: z.object({
-        type: z.enum(['ARMA', 'DEFESA', 'CURATIVO', 'UTILIDADE']),
-        name: z.string().trim().min(1).max(64),
-      }).strict(),
+      input: z.object({ catalogId: z.string().trim().min(1).max(64) }).strict(),
       responses: {
         201: z.object({ operationId: z.string().uuid() }).passthrough().and(z.custom<typeof items.$inferSelect>()),
         402: errorSchemas.insufficientFunds,
@@ -191,6 +198,17 @@ export const api = {
         }),
         404: errorSchemas.notFound,
         402: errorSchemas.insufficientFunds,
+      },
+    },
+  },
+
+  // === FORGE ===
+  forge: {
+    catalog: {
+      method: 'GET' as const,
+      path: '/api/forge/catalog',
+      responses: {
+        200: z.array(forgeCatalogItemSchema),
       },
     },
   },

@@ -90,7 +90,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "transferência negativa", path: "/api/bank/transfer", body: { amountKrc: -1, destination: "fbm" } },
     { name: "transferência com usuário forjado", path: "/api/bank/transfer", body: { amountKrc: 5, destination: "fbm", userId: "victim" } },
     { name: "empréstimo fracionário", path: "/api/loans", body: { amountKrc: 100.5, days: 1 } },
-    { name: "compra com tipo desconhecido", path: "/api/items/purchase", body: { type: "ADMIN", name: "Item" } },
+    { name: "compra com SKU desconhecido", path: "/api/items/purchase", body: { catalogId: "invented_item" } },
+    { name: "compra com preço controlado pelo cliente", path: "/api/items/purchase", body: { catalogId: "nano_blade", priceKrc: 1 } },
     { name: "equipamento com proprietário forjado", path: "/api/items/1/equip", body: { isEquipped: true, userId: "victim" } },
     { name: "uso de item com campo extra", path: "/api/items/1/use", body: { userId: "victim" } },
     { name: "reparo abaixo do mínimo", path: "/api/items/1/repair", body: { amountKrc: 0 } },
@@ -166,7 +167,7 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
     { method: "transfer", path: "/api/bank/transfer", body: { amountKrc: "10.00", destination: "fbm" }, key: "route-transfer-key-0001", args: ["player-1", "route-transfer-key-0001", "10.00", "fbm"] },
     { method: "requestLoan", path: "/api/loans", body: { amountKrc: 100, days: 2 }, key: "route-loan-key-000001", args: ["player-1", "route-loan-key-000001", 100, 2] },
     { method: "payLoan", path: "/api/loans/1/pay", body: {}, key: "route-payloan-key-0001", args: ["player-1", "route-payloan-key-0001", 1] },
-    { method: "purchaseItem", path: "/api/items/purchase", body: { type: "ARMA", name: "Fuzil" }, key: "route-purchase-key-0001", args: ["player-1", "route-purchase-key-0001", { name: "Fuzil", type: "ARMA" }] },
+    { method: "purchaseItem", path: "/api/items/purchase", body: { catalogId: "plasma_rifle" }, key: "route-purchase-key-0001", args: ["player-1", "route-purchase-key-0001", { catalogId: "plasma_rifle" }] },
     { method: "repairItem", path: "/api/items/1/repair", body: { amountKrc: "1.00" }, key: "route-repair-key-00001", args: ["player-1", "route-repair-key-00001", 1, "1.00"] },
     { method: "claimDailySalary", path: "/api/player/daily-salary", body: {}, key: "route-salary-key-0001", args: ["player-1", "route-salary-key-0001"] },
   ];
