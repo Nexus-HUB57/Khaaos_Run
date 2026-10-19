@@ -671,33 +671,41 @@ Protocolo WS: JSON com discriminador `type`. Contrato vivo em `RoomManager.ts` +
 
 ## Desenvolvimento Local
 
+### Pré-requisitos comuns
+O CI principal usa Node.js 20; `package.json` ainda não declara `engines`. A aplicação web requer PostgreSQL acessível. Configure valores locais em `.env` (não versionar segredos) e revise `.env.example`: ele contém placeholders e defaults de produção, não deve ser copiado sem revisão.
+
 ### Web/API (Node.js)
 
 ```bash
 npm ci
-npm ci --prefix game-runtime
 npm run check
-npm run dev          # porta PORT ou 5000
+npm run db:migrate   # DATABASE_URL deve apontar para o PostgreSQL local
+npm run dev          # PORT ou 5000
 ```
 
-Variáveis obrigatórias: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`.
-Recomendadas: `WS_TOKEN_SECRET` (≥ 32 bytes), `ZONE_OPERATOR_IDS`.
+Configure `DATABASE_URL`. Para autenticação Replit, configure também `SESSION_SECRET` e `REPL_ID`; `WS_TOKEN_SECRET` é opcional quando `SESSION_SECRET` está definido (o código usa fallback). A autenticação depende da configuração OIDC/Replit correspondente.
+
+### Game runtime (projeto independente)
+O diretório `game-runtime/` tem manifest e lockfile próprios. Para desenvolver ou testar esse componente:
+
+```bash
+npm ci --prefix game-runtime
+npm --prefix game-runtime run dev
+npm --prefix game-runtime test
+```
+
+Modos com PostgreSQL/Redis e testes contra adapters reais exigem configuração adicional; veja [game-runtime/README.md](game-runtime/README.md). O runtime não é iniciado por `npm run dev` da aplicação raiz.
 
 ### UE5 Dedicated Server
 
 ```bash
-# Build do servidor dedicado Linux
-cd Unreal/KhaaosRun/Build
-bash build-server.sh --release
-
-# Build com Docker
-bash build-server.sh --docker
-
-# Debug build
-bash build-server.sh --debug
+# Ajuste o caminho para a instalação local de Unreal Engine 5.8.
+bash scripts/build-server.sh --ue5=/caminho/para/UnrealEngine --debug
 ```
 
-Requer: UE5.8 Editor instalado, Linux target, 50 GB+ SDK.
+O script real fica em `scripts/build-server.sh`; `--release` seleciona Shipping e `--docker` solicita a criação de imagem. Consulte [Unreal/README.md](Unreal/README.md) para requisitos, limites e estado da validação. A build UE5 completa ainda não foi confirmada neste projeto.
+
+**Integração:** `game-runtime` e UE5 são trilhas distintas. Não há afirmação de paridade nem de integração ponta a ponta validada entre elas; consulte a [arquitetura](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md) e o [roadmap](docs/ROADMAP.md).
 
 ### Verificação
 
@@ -745,9 +753,9 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 
 ### UE5 Dedicated Server
 
-- **Docker**: `docker-compose up` — UE5 server + Economy API + Redis + Prometheus + Grafana
-- **GHCR**: Imagens publicadas automaticamente via `ue5-server-build.yml` on merge to main
-- **Trivy**: Vulnerability scanning no container antes do deploy
+- O script de build está em `scripts/build-server.sh`; consulte [Unreal/README.md](Unreal/README.md) antes de iniciar build ou empacotamento.
+- Existe Compose em `Unreal/KhaaosRun/Build/docker-compose.yml`, mas não há Compose UE5 na raiz. Valide contextos e dependências antes de usá-lo; sua presença não comprova uma build UE5 validada.
+- A presença de workflow, Dockerfile ou configuração não é prova de publicação ou implantação bem-sucedida. A build UE5 completa permanece pendente de validação com UE5.8.
 
 Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
@@ -875,7 +883,7 @@ Semana  1   4   8   11  15  23  28
 - [Roadmap de engenharia](docs/ROADMAP.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
-- [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Source/KhaaosRun/Game/Data/ASSET_NAMING_CONVENTIONS.md)
+- [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
 
 ---
 
