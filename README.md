@@ -12,6 +12,7 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -58,6 +59,59 @@
 | **EAC SDK Binary** | ⏳ Pendente | Easy Anti-Cheat requer SDK binary + build compilado |
 
 ---
+
+
+## Desenvolvimento recente — CIGKV + Barburhen (PR #45)
+
+Branch: `feat/cigkv-barburhen-e2e`
+
+### CIGKV (treino)
+| Sistema | Path | Função |
+|---------|------|--------|
+| Zu 1 / 2 / 3 | `Game/CIGKV/` | Ingresso cinematográfico, pop-up, debuffs |
+| Vitalidade | `Game/Player/KhaaosVitalityComponent` | % dano, fome/sede/medo, Sync GAS Health |
+| Bankhaoos | `Game/Economy/KhaaosBankhaoosComponent` | Conta + **1000 KRC** no Zu 1 |
+| Transfer 20 % | `Game/Economy/KhaaosTransferSystem` | ZEX → W1 + Token Veterano (top 50) |
+| ZEX | `Game/CIGKV/KhaaosZEXTerminal` | Luz azul, crédito KRC + registro transfer |
+| Forja | `Game/Economy/KhaaosArmorerForge` | Loja KRC (DataTable catálogo) |
+
+### Barburhen W1/C1
+| Sistema | Função |
+|---------|--------|
+| `ABarburhenRingController` | Água da Morte: 250 m → 40 m / 10 min; **fora do anel ≈ −5 %/s** vitalidade |
+| `ABarburhenAcidRainVolume` | Chuva ácida: **−1 % / 10 s** (sem tag `HasAcidProtection`) |
+| `ABarburhenMapBuilder` | Lê DT e spawna Ring + Rain + ZEX |
+| Content | CSV pontos, OBJ/glTF, HTML 3D, SVG |
+
+### Fórmula chuva ácida (sincronizada)
+
+```
+DamagePercentPerTick = AcidRainDamagePerSecond × AcidRainTickInterval
+                     = 0.001 × 10
+                     = 0.01   →  −1 % MaxVitality por tick
+
+ApplyRainTick (a cada 10 s):
+  ∀ Character player no volume
+    se NÃO HasAcidProtection
+      Vitality.ApplyPercentageDamage(0.01)
+      Fear += 2
+      → SyncToGASHealth (UKhaaosAttributeSet)
+```
+
+Ring e chuva **acumulam**. Colete/máscara (tag `HasAcidProtection`) só bloqueia chuva, não o ring.
+
+### Assets mapa
+`Unreal/KhaaosRun/Content/Barburhen/` — importar `Barburhen_Map.obj` (metros) no Level + MapBuilder.
+
+Docs: `Docs/CIGKV_Barburhen/`
+
+---
+
+
+### Combate ↔ Vitalidade (integração)
+- Projéteis (`AKhaaosProjectile`) aplicam dano na ordem: **Vitality → AttributeSet → Engine fallback**
+- Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
+- Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
 
 ## Ontologia dos Mundos
 
@@ -583,7 +637,7 @@ Fonte canônica: `shared/schema.ts`.
 - `eliminations` — eventos de eliminação
 - `match_results` — placement, kills, dano, rating, XP
 
-Schema aplicado via `npm run db:push` (Drizzle Kit). Migrações versionadas ainda são roadmap.
+Mudanças no schema devem gerar uma migration revisável com `npm run db:generate`; aplique somente migrations commitadas com `npm run db:migrate` e `DATABASE_URL` definido. O CI valida as migrations contra um PostgreSQL efêmero criado do zero. O deploy normal não altera o schema; `RUN_DB_MIGRATIONS=true` é um opt-in temporário para procedimento controlado e deve voltar a `false` após a aplicação.
 
 ---
 
@@ -811,7 +865,8 @@ Semana  1   4   8   11  15  23  28
 ---
 
 ## Referências
-
+- [Arquitetura dos mundos e agentes especiais](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md)
+- [API proposta do painel do Marechal](docs/API_MARECHAL_CONTROL_PANEL.md)
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
 - [Autenticação realtime](docs/REALTIME_AUTH.md)
 - [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)

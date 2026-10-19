@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Barburhen W1/C1 — Mapa 3D</title>
+  <style>
+    * { margin: 0; box-sizing: border-box; }
+    body { background: #0a0e0c; color: #e0d8c8; font-family: system-ui, sans-serif; overflow: hidden; }
+    #canvas-wrap { width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 12px; left: 12px; z-index: 10;
+      background: rgba(10,14,12,0.88); border: 1px solid #3a5a48; border-radius: 8px;
+      padding: 12px 16px; max-width: 320px; backdrop-filter: blur(8px);
+    }
+    #hud h1 { font-size: 16px; color: #f0e6d0; margin-bottom: 4px; }
+    #hud p { font-size: 11px; color: #a09070; line-height: 1.4; }
+    #legend {
+      position: fixed; bottom: 12px; left: 12px; z-index: 10;
+      background: rgba(10,14,12,0.88); border: 1px solid #3a5a48; border-radius: 8px;
+      padding: 10px 14px; font-size: 11px; line-height: 1.6;
+    }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    #controls {
+      position: fixed; top: 12px; right: 12px; z-index: 10;
+      background: rgba(10,14,12,0.88); border: 1px solid #3a5a48; border-radius: 8px;
+      padding: 10px 14px; font-size: 11px;
+    }
+    button {
+      background: #1a3028; color: #c8e0d0; border: 1px solid #4a7a60;
+      padding: 6px 10px; margin: 2px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    }
+    button:hover { background: #2a4840; }
+    #info {
+      position: fixed; bottom: 12px; right: 12px; z-index: 10;
+      background: rgba(10,14,12,0.9); border: 1px solid #3a5a48; border-radius: 8px;
+      padding: 10px 14px; font-size: 12px; min-width: 180px; display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <h1>BARBURHEN — W1/C1</h1>
+    <p>Mundo da Destruição · Mapa 3D interativo<br/>
+    Arraste = orbitar · Scroll = zoom · Clique em POI = info<br/>
+    Escala: 1 unidade = 1 metro</p>
+  </div>
+  <div id="legend">
+    <div><span class="dot" style="background:#30c040"></span>Spawns (8)</div>
+    <div><span class="dot" style="background:#2080ff"></span>ZEX (15)</div>
+    <div><span class="dot" style="background:#e09020"></span>Snipers (10)</div>
+    <div><span class="dot" style="background:#608050"></span>Tanques (5)</div>
+    <div><span class="dot" style="background:#606080"></span>Bunkers (2)</div>
+    <div><span class="dot" style="background:#a04040"></span>Hospitais (2)</div>
+    <div><span class="dot" style="background:#4060a0"></span>Delegacias (3)</div>
+    <div><span class="dot" style="background:#c04040;border-radius:0"></span>Anel final</div>
+  </div>
+  <div id="controls">
+    <button type="button" id="btn-ring">Toggle Anel</button>
+    <button type="button" id="btn-rain">Toggle Chuva</button>
+    <button type="button" id="btn-top">Vista Topo</button>
+    <button type="button" id="btn-iso">Vista Iso</button>
+  </div>
+  <div id="info"></div>
+  <div id="canvas-wrap"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- Scale: game cm → meters (divide by 100). Origin = Park center ---
+    const cm = (v) => v / 100;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0e0c);
+    scene.fog = new THREE.FogExp2(0x0a1210, 0.0022);
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 800);
+    camera.position.set(180, 140, 220);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    document.getElementById('canvas-wrap').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0, 0);
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.minDistance = 20;
+    controls.maxDistance = 500;
+    controls.update();
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0x3a4a40, 0.55));
+    const sun = new THREE.DirectionalLight(0xc0d0b0, 0.85);
+    sun.position.set(80, 120, 40);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0x405060, 0.25);
+    fill.position.set(-60, 40, -80);
+    scene.add(fill);
+
+    // Ground plane
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2218, roughness: 0.95, metalness: 0.05 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Grid
+    const grid = new THREE.GridHelper(500, 50, 0x2a3a30, 0x1a2820);
+    grid.position.y = 0.05;
+    scene.add(grid);
+
+    function box(w, h, d, color, x, y, z, rotY = 0) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.1 })
+      );
+      m.position.set(x, y + h / 2, z);
+      m.rotation.y = rotY;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      scene.add(m);
+      return m;
+    }
+
+    function marker(color, x, z, y = 1.5, r = 1.2, name = '', data = {}) {
+      const g = new THREE.Mesh(
+        new THREE.SphereGeometry(r, 12, 12),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35 })
+      );
+      g.position.set(x, y, z);
+      g.userData = { name, ...data };
+      scene.add(g);
+      // stem
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, y, 6),
+        new THREE.MeshStandardMaterial({ color: 0x333333 })
+      );
+      stem.position.set(x, y / 2, z);
+      scene.add(stem);
+      clickables.push(g);
+      return g;
+    }
+
+    const clickables = [];
+
+    // ========== SECTOR FLOORS (slight color tint) ==========
+    function sectorFloor(w, d, color, x, z) {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, d),
+        new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0, transparent: true, opacity: 0.35 })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, 0.08, z);
+      scene.add(m);
+    }
+    // Industrial (south) Z positive in three = -Y game? 
+    // Game: +Y north, +X east. Three: +Z south-ish for our mapping: gameY → -threeZ, gameX → threeX
+    const gx = (xCm) => cm(xCm);
+    const gz = (yCm) => -cm(yCm); // game +Y (north) → three -Z
+
+    sectorFloor(280, 160, 0x3a3020, 0, gz(-14000));      // Industrial
+    sectorFloor(160, 160, 0x204028, 0, 0);                 // Park
+    sectorFloor(200, 180, 0x3a2818, gx(9000), gz(7000));  // Urban
+    sectorFloor(180, 80, 0x1a3040, 0, gz(20000));          // Station
+
+    // ========== INDUSTRIAL BUILDINGS ==========
+    box(40, 12, 22, 0x3a3830, gx(-6000), 0, gz(-12000)); // Galpão A
+    box(40, 12, 22, 0x3a3830, gx(2000), 0, gz(-12000));
+    box(44, 14, 24, 0x3a3830, gx(6000), 0, gz(-11500));
+    box(36, 10, 20, 0x353028, gx(10000), 0, gz(-13000));
+    // Silos
+    const siloGeo = new THREE.CylinderGeometry(8, 8, 28, 16);
+    const siloMat = new THREE.MeshStandardMaterial({ color: 0x4a4840, metalness: 0.4, roughness: 0.5 });
+    const silo1 = new THREE.Mesh(siloGeo, siloMat);
+    silo1.position.set(gx(-6000), 14, gz(-9000));
+    silo1.castShadow = true;
+    scene.add(silo1);
+    const silo2 = new THREE.Mesh(siloGeo, siloMat);
+    silo2.position.set(gx(-4500), 12, gz(-9500));
+    silo2.scale.y = 0.85;
+    scene.add(silo2);
+    // Crane
+    box(2, 35, 2, 0x6a6050, gx(5000), 0, gz(-13000));
+    box(30, 1.5, 2, 0x6a6050, gx(5000), 34, gz(-13000));
+    // Water tower
+    box(3, 25, 3, 0x4a4a40, gx(-10000), 0, gz(-8000));
+    const tankTop = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 8, 12), siloMat);
+    tankTop.position.set(gx(-10000), 28, gz(-8000));
+    scene.add(tankTop);
+    // Containers
+    box(6, 3, 12, 0x3a5020, gx(8000), 0, gz(-15000));
+    box(6, 3, 12, 0x503020, gx(8700), 0, gz(-15000));
+    box(6, 3, 12, 0x303050, gx(8000), 3.2, gz(-15000));
+    // Bunker Ind
+    box(18, 5, 14, 0x404050, gx(-2000), 0, gz(-12000));
+    // Police Ind
+    box(12, 6, 10, 0x2a3550, gx(1000), 0, gz(-14000));
+
+    // ========== PARK ==========
+    // Coreto
+    const coreto = new THREE.Mesh(
+      new THREE.CylinderGeometry(8, 10, 2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3a3028 })
+    );
+    coreto.position.set(0, 1, 0);
+    scene.add(coreto);
+    const pillars = [0, 1, 2, 3, 4, 5, 6, 7].map(i => {
+      const a = (i / 8) * Math.PI * 2;
+      return box(0.8, 6, 0.8, 0x4a4038, Math.cos(a) * 7, 0, Math.sin(a) * 7);
+    });
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(11, 4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2820 })
+    );
+    roof.position.set(0, 8, 0);
+    scene.add(roof);
+    // Dead trees (simple)
+    for (const [tx, tz] of [[-40, -30], [45, -25], [-35, 40], [50, 35], [-20, 55], [30, -50]]) {
+      box(1.2, 12 + Math.random() * 6, 1.2, 0x2a3020, tx, 0, tz);
+    }
+    // Dry lake
+    const lake = new THREE.Mesh(
+      new THREE.CircleGeometry(18, 24),
+      new THREE.MeshStandardMaterial({ color: 0x1a1810, roughness: 1 })
+    );
+    lake.rotation.x = -Math.PI / 2;
+    lake.position.set(25, 0.1, 20);
+    scene.add(lake);
+    // Hospital park
+    box(16, 8, 12, 0x4a2828, gx(-4000), 0, gz(-2500));
+
+    // ========== URBAN ==========
+    box(28, 18, 20, 0x3a3530, gx(12000), 0, gz(8000)); // tower
+    box(22, 14, 18, 0x3a3028, gx(9000), 0, gz(11000));
+    box(35, 10, 25, 0x2a2820, gx(10000), 0, gz(5000)); // hospital area
+    box(20, 9, 14, 0x3a2820, gx(10000), 0, gz(5000)); // hospital
+    box(14, 7, 12, 0x2a3550, gx(11000), 0, gz(3000)); // police 1
+    box(14, 7, 12, 0x2a3550, gx(5000), 0, gz(10000)); // police 2
+    box(22, 6, 16, 0x404050, gx(7000), 0, gz(9000)); // bunker urban
+    box(40, 8, 30, 0x2a2520, gx(13000), 0, gz(4000)); // unfinished
+    box(18, 5, 12, 0x2a2820, gx(7500), 0, gz(4000));
+    // Building frames (unfinished)
+    for (let i = 0; i < 4; i++) {
+      box(1, 20, 1, 0x5a5040, gx(14000 + i * 3), 0, gz(5000));
+      box(1, 20, 1, 0x5a5040, gx(14000 + i * 3), 0, gz(5500));
+    }
+
+    // ========== STATION ==========
+    box(80, 1, 4, 0x3a4048, 0, 0, gz(20000)); // rails
+    box(80, 1, 4, 0x3a4048, 0, 0, gz(19800));
+    box(16, 8, 12, 0x2a3540, gx(-4000), 0, gz(20500)); // ticket
+    box(20, 16, 14, 0x2a3540, 0, 0, gz(21000)); // control tower
+    box(18, 7, 12, 0x2a3038, gx(5000), 0, gz(20500)); // depot
+
+    // ========== RING ==========
+    let ringGroup = new THREE.Group();
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x50a060, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+    const ringStart = new THREE.Mesh(new THREE.RingGeometry(248, 252, 64), ringMat);
+    ringStart.rotation.x = -Math.PI / 2;
+    ringStart.position.y = 0.5;
+    ringGroup.add(ringStart);
+    const ringEndMat = new THREE.MeshBasicMaterial({ color: 0xc04040, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+    const ringEnd = new THREE.Mesh(new THREE.RingGeometry(38, 42, 48), ringEndMat);
+    ringEnd.rotation.x = -Math.PI / 2;
+    ringEnd.position.y = 0.6;
+    ringGroup.add(ringEnd);
+    // Vertical wall hint for end ring
+    const wall = new THREE.Mesh(
+      new THREE.CylinderGeometry(40, 40, 8, 48, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xc04040, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
+    );
+    wall.position.y = 4;
+    ringGroup.add(wall);
+    scene.add(ringGroup);
+
+    // ========== ACID RAIN particles ==========
+    let rainActive = true;
+    const rainCount = 4000;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPos = new Float32Array(rainCount * 3);
+    for (let i = 0; i < rainCount; i++) {
+      rainPos[i * 3] = (Math.random() - 0.5) * 400;
+      rainPos[i * 3 + 1] = Math.random() * 80;
+      rainPos[i * 3 + 2] = (Math.random() - 0.5) * 400;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+    const rainMat = new THREE.PointsMaterial({ color: 0x60a070, size: 0.35, transparent: true, opacity: 0.5 });
+    const rain = new THREE.Points(rainGeo, rainMat);
+    scene.add(rain);
+
+    // ========== MARKERS from official coords ==========
+    // Spawns
+    const spawns = [
+      [0, -18000], [4000, -17000], [-4000, -17000], [8000, -15000],
+      [-8000, -15000], [12000, -14000], [-12000, -14000], [2000, -20000]
+    ];
+    spawns.forEach((p, i) => marker(0x30c040, gx(p[0]), gz(p[1]), 2, 1.5, `Spawn_${String(i + 1).padStart(2, '0')}`, { type: 'Spawn' }));
+
+    // ZEX
+    const zex = [
+      [0, -16000, 'ZEX-01 Desembarque'], [6000, -12000, 'ZEX-02'], [-6000, -12000, 'ZEX-03'], [2000, -8000, 'ZEX-04'],
+      [8000, 7000, 'ZEX-05 Praça'], [13000, 5000, 'ZEX-06'], [4000, 9000, 'ZEX-07'], [10000, 10000, 'ZEX-08'],
+      [1500, 1500, 'ZEX-09 Parque'], [-1500, 1200, 'ZEX-10'], [0, -2000, 'ZEX-11 Coreto'], [2500, -1000, 'ZEX-12'],
+      [0, 20000, 'ZEX-13 EXTRAÇÃO'], [-2000, 19000, 'ZEX-14'], [2000, 19000, 'ZEX-15']
+    ];
+    zex.forEach(p => marker(0x2080ff, gx(p[0]), gz(p[1]), 3, 1.4, p[2], { type: 'ZEX' }));
+
+    // Snipers (elevated)
+    const snipers = [
+      [12000, 8000, 12, 'S1 Telhado NE'], [9000, 11000, 9, 'S2'], [14000, 4000, 11, 'S3 Torre'],
+      [6000, 12000, 8, 'S4'], [-6000, -9000, 15, 'S5 Silo'], [5000, -13000, 10, 'S6 Guindaste'],
+      [-10000, -8000, 9, 'S7'], [0, 3500, 6, 'S8 Mirante'], [-1500, 21000, 8, 'S9 Torre Estação'],
+      [3000, 20500, 7, 'S10']
+    ];
+    snipers.forEach(p => marker(0xe09020, gx(p[0]), gz(p[1]), p[2], 1.1, p[3], { type: 'Sniper' }));
+
+    // Tanks
+    [[3000, -10000], [-5000, -11000], [9000, 6000], [-3000, 2000], [2500, 18500]].forEach((p, i) => {
+      const t = box(8, 3.5, 12, 0x507040, gx(p[0]), 0, gz(p[1]));
+      t.userData = { name: `Tank_${i + 1}`, type: 'Tanque' };
+      clickables.push(t);
+    });
+
+    // Labels sector
+    function makeLabel(text, x, z, color = '#c8d0b0') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, 512, 64);
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.fillText(text, 256, 42);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const spr = new THREE.Sprite(mat);
+      spr.position.set(x, 25, z);
+      spr.scale.set(40, 5, 1);
+      scene.add(spr);
+    }
+    makeLabel('INDUSTRIAL — SPAWNS', 0, gz(-14000), '#d0a050');
+    makeLabel('PARQUE — FIM DO ANEL', 0, 0, '#60c080');
+    makeLabel('URBANO', gx(9000), gz(7000), '#d08050');
+    makeLabel('ESTAÇÃO — EXTRAÇÃO', 0, gz(20000), '#50b0d0');
+
+    // Click raycast
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const infoEl = document.getElementById('info');
+    renderer.domElement.addEventListener('click', (e) => {
+      mouse.x = (e.clientX / innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(clickables, false);
+      if (hits.length) {
+        const u = hits[0].object.userData;
+        infoEl.style.display = 'block';
+        infoEl.innerHTML = `<strong>${u.name || 'POI'}</strong><br/>Tipo: ${u.type || '—'}`;
+      } else {
+        infoEl.style.display = 'none';
+      }
+    });
+
+    // UI buttons
+    document.getElementById('btn-ring').onclick = () => { ringGroup.visible = !ringGroup.visible; };
+    document.getElementById('btn-rain').onclick = () => { rainActive = !rainActive; rain.visible = rainActive; };
+    document.getElementById('btn-top').onclick = () => {
+      camera.position.set(0, 320, 0.1);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    };
+    document.getElementById('btn-iso').onclick = () => {
+      camera.position.set(180, 140, 220);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    };
+
+    // Animate
+    function animate() {
+      requestAnimationFrame(animate);
+      if (rainActive) {
+        const pos = rain.geometry.attributes.position.array;
+        for (let i = 0; i < rainCount; i++) {
+          pos[i * 3 + 1] -= 0.45;
+          if (pos[i * 3 + 1] < 0) pos[i * 3 + 1] = 80;
+        }
+        rain.geometry.attributes.position.needsUpdate = true;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

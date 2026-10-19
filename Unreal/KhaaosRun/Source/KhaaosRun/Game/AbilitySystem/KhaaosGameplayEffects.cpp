@@ -2,6 +2,7 @@
 
 #include "Game/AbilitySystem/KhaaosGameplayEffects.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
 #include "GameplayEffect.h"
 #include "GameplayEffectTypes.h"
 
@@ -218,6 +219,7 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateDamageEffect(float Damage, FGamep
 
 	// Modifier: subtract damage from Health
 	FGameplayModifierInfo ModifierInfo;
+	ModifierInfo.Attribute = UKhaaosAttributeSet::GetHealthAttribute();
 	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
 	ModifierInfo.ModifierMagnitude = FScalableFloat(-Damage);
 	Effect->Modifiers.Add(ModifierInfo);
@@ -227,7 +229,7 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateDamageEffect(float Damage, FGamep
 
 // ─── CreateZoneDamageEffect ──────────────────────────────────────────────────
 
-UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerSecond)
+UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerHit)
 {
 	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_ZoneDamage"));
 	if (!Effect)
@@ -235,8 +237,8 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerS
 		return nullptr;
 	}
 
-	// Infinite duration — persists until explicitly removed
-	Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+	// GameMode owns the tick; each application represents one instant hit.
+	Effect->DurationPolicy = EGameplayEffectDurationType::Instant;
 
 	// Grant zone damage tag
 	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
@@ -244,15 +246,16 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerS
 	GrantedTags.AddTag(Tags.Effect_Damage_Zone);
 	Effect->GrantedTags = GrantedTags;
 
-	// Periodic modifier: damage per second
-	FGameplayModifierInfo ModifierInfo;
-	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
-	ModifierInfo.ModifierMagnitude = FScalableFloat(-DamagePerSecond);
-	Effect->Modifiers.Add(ModifierInfo);
+	FGameplayEffectCue ZoneDamageCue;
+	ZoneDamageCue.GameplayCueTag = Tags.GameplayCue_Damage_Zone;
+	Effect->GameplayCues.Add(ZoneDamageCue);
 
-	// Period: apply every 1 second
-	Effect->Period = FScalableFloat(1.0f);
-	Effect->bExecutePeriodicEffectOnApplication = false;
+	// Single modifier: subtract this tick's damage from Health.
+	FGameplayModifierInfo ModifierInfo;
+	ModifierInfo.Attribute = UKhaaosAttributeSet::GetHealthAttribute();
+	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
+	ModifierInfo.ModifierMagnitude = FScalableFloat(-DamagePerHit);
+	Effect->Modifiers.Add(ModifierInfo);
 
 	return Effect;
 }

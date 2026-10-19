@@ -3,21 +3,27 @@
 // ============================================================================
 
 #include "Game/World/CIGKV/KhaaosCIGKVMapData.h"
+#include "Game/World/CIGKV/CIGKVLootRules.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/UnrealMathUtility.h"
 
 // ─── Utility Functions ────────────────────────────────────────────────────────
 
-TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex) const
+TArray<FCIGKVLootSpawnPoint> UKhaaosCIGKVMapData::GetRandomLootSpawnEntries(
+    int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex) const
 {
-    TArray<FVector> Result;
+    TArray<FCIGKVLootSpawnPoint> Result;
+    if (Count <= 0)
+    {
+        return Result;
+    }
 
-    // Filter loot points that are within the zone
+    // Keep each eligible entry intact so the level can apply its weights/rotation.
     TArray<const FCIGKVLootSpawnPoint*> ValidPoints;
     for (const FCIGKVLootSpawnPoint& Point : LootSpawnPoints)
     {
         const float DistanceSquared = FVector::DistSquared2D(Point.Location, ZoneCenter);
-        if (Point.MinPhase <= PhaseIndex && DistanceSquared <= FMath::Square(ZoneRadius))
+        if (KhaaosCIGKVRules::IsLootPointEligible(Point.MinPhase, PhaseIndex, DistanceSquared, ZoneRadius))
         {
             ValidPoints.Add(&Point);
         }
@@ -37,9 +43,22 @@ TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(int32 Count, FVect
 
     for (int32 i = 0; i < NumToPick; i++)
     {
-        Result.Add(ValidPoints[Indices[i]]->Location);
+        Result.Add(*ValidPoints[Indices[i]]);
     }
 
+    return Result;
+}
+
+TArray<FVector> UKhaaosCIGKVMapData::GetRandomLootSpawnPoints(
+    int32 Count, FVector ZoneCenter, float ZoneRadius, int32 PhaseIndex) const
+{
+    TArray<FVector> Result;
+    const TArray<FCIGKVLootSpawnPoint> Entries = GetRandomLootSpawnEntries(Count, ZoneCenter, ZoneRadius, PhaseIndex);
+    Result.Reserve(Entries.Num());
+    for (const FCIGKVLootSpawnPoint& Entry : Entries)
+    {
+        Result.Add(Entry.Location);
+    }
     return Result;
 }
 

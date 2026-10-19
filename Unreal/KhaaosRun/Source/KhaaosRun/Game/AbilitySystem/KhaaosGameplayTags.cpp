@@ -10,10 +10,13 @@ void FKhaaosGameplayTags::InitializeTags()
 {
 	if (bTagsInitialized) return;
 
-	UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
-
-	auto RequestTag = [&Manager](const FGameplayTag& Tag, const ANSICHAR* TagName) -> FGameplayTag
+auto RequestTag = [](const FGameplayTag& Tag, const ANSICHAR* TagName) -> FGameplayTag
 	{
+if (Tag.IsValid())
+{
+return Tag;
+}
+
 		FGameplayTag RequestedTag = FGameplayTag::RequestGameplayTag(FName(TagName));
 		if (!RequestedTag.IsValid())
 		{
@@ -79,6 +82,11 @@ void FKhaaosGameplayTags::InitializeTags()
 	GameplayTags.Effect_Damage_Fall = RequestTag(GameplayTags.Effect_Damage_Fall, "Effect.Damage.Fall");
 	GameplayTags.Effect_Buff_Shielded = RequestTag(GameplayTags.Effect_Buff_Shielded, "Effect.Buff.Shielded");
 	GameplayTags.Effect_Buff_SpeedBoost = RequestTag(GameplayTags.Effect_Buff_SpeedBoost, "Effect.Buff.SpeedBoost");
+	// ─── State.Match ─────────────────────────────────────────────────────
+
+GameplayTags.GameplayCue_Damage_Zone = RequestTag(
+GameplayTags.GameplayCue_Damage_Zone, "GameplayCue.Damage.Zone");
+
 	GameplayTags.Effect_Buff_HealOverTime = RequestTag(GameplayTags.Effect_Buff_HealOverTime, "Effect.Buff.HealOverTime");
 	GameplayTags.Effect_Buff_Overclock = RequestTag(GameplayTags.Effect_Buff_Overclock, "Effect.Buff.Overclock");
 	GameplayTags.Effect_Buff_Adaptabilidade = RequestTag(GameplayTags.Effect_Buff_Adaptabilidade, "Effect.Buff.Adaptabilidade");
@@ -146,5 +154,5 @@ void FKhaaosGameplayTags::InitializeTags()
 	GameplayTags.AI_Difficulty_Elite = RequestTag(GameplayTags.AI_Difficulty_Elite, "AI.Difficulty.Elite");
 
 	bTagsInitialized = true;
-	UE_LOG(LogTemp, Log, TEXT("KhaaosGameplayTags: All %d gameplay tags initialized")), 122);
+UE_LOG(LogTemp, Log, TEXT("KhaaosGameplayTags: All %d gameplay tags initialized"), 122);
 }

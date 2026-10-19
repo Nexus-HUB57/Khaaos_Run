@@ -1,0 +1,34 @@
+name: Configure Render Staging Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_staging:
+        description: Confirm that only khaaos-run-staging will be updated
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-render-staging-database
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set private database URL and enable migrations
+        env:
+          RENDER_API_KEY: ${{ secrets.API_KEY_RENDER }}
+          RENDER_SERVICE_ID: srv-db6183o473hc73co8n10
+          RENDER_POSTGRES_ID: dpg-db61f10473hc73cp2i9g-a
+        run: node scripts/configure-render-staging-db.mjs

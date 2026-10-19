@@ -4,7 +4,10 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
+import { api } from "@shared/routes";
+import type { WarIActionItem } from "@shared/war-i";
 
 export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 
@@ -13,6 +16,10 @@ export interface BattlePlayer {
   displayName: string;
   posX: number;
   posY: number;
+  carryCapacity?: number;
+  carriedWeight?: number;
+  speedBoostUntil?: number;
+  speedMultiplier?: number;
   health: number;
   maxHealth: number;
   status: string;
@@ -75,15 +82,30 @@ type ServerMessage =
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
+  | { type: "packback_ready"; items: WarIActionItem[] }
+  | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
+  | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: BattlePlayer[]; loot: RoomLoot[] }
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement?: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: string }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: string }
   | { type: "queue_left" }
   | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
   | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
+export interface PackBackScan {
+  expiresAt: number;
+  players: { userId: string; displayName: string; posX: number; posY: number }[];
+  loot: { id: number; name: string; type: string; posX: number; posY: number }[];
+}
+
+export interface PackBackUseResult {
+  itemId: number;
+  name: string;
+  durability: string;
+  message: string;
+}
 
 export interface MatchRankingRow {
   userId: string;
@@ -101,13 +123,41 @@ export interface LastMatchResult {
   finishedAt: number;
 }
 
+export type BattleConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
+
+function roomSessionKey(userId: string | null) {
+  return userId ? `khaaos:room:${userId}` : null;
+}
+
+function readSavedRoomId(userId: string | null) {
+  const key = roomSessionKey(userId);
+  if (!key || typeof window === "undefined") return null;
+  try { return window.sessionStorage.getItem(key); } catch { return null; }
+}
+
+function saveRoomId(userId: string | null, roomId: string | null) {
+  const key = roomSessionKey(userId);
+  if (!key || typeof window === "undefined") return;
+  try {
+    if (roomId) window.sessionStorage.setItem(key, roomId);
+    else window.sessionStorage.removeItem(key);
+  } catch { /* storage can be unavailable in private browsing */ }
+}
+
 export function useBattleRoom() {
   const { user } = useAuth();
+  const userId = typeof (user as any)?.id === "string"
+    ? (user as any).id as string
+    : typeof (user as any)?.claims?.sub === "string"
+      ? (user as any).claims.sub as string
+      : null;
+  const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const activeRef = useRef(false);
   const connectingRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<BattleConnectionState>("connecting");
   const [room, setRoom] = useState<RoomState | null>(null);
   const [zone, setZone] = useState<ZoneStatus | null>(null);
   const [players, setPlayers] = useState<BattlePlayer[]>([]);
@@ -116,6 +166,10 @@ export function useBattleRoom() {
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [eliminations, setEliminations] = useState<{ userId: string; cause: string }[]>([]);
   const [lastMatchResult, setLastMatchResult] = useState<LastMatchResult | null>(null);
+  const [packbackItems, setPackbackItems] = useState<WarIActionItem[]>([]);
+  const [lastPackbackUse, setLastPackbackUse] = useState<PackBackUseResult | null>(null);
+  const [packbackScan, setPackbackScan] = useState<PackBackScan | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [inQueue, setInQueue] = useState(false);
   const [queueInfo, setQueueInfo] = useState<{
     position: number;
@@ -129,13 +183,17 @@ export function useBattleRoom() {
   const send = useCallback((msg: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
+      return true;
     }
+    setLastError("Sem conexão com a partida. Reconectando; a ação ainda não foi enviada.");
+    return false;
   }, []);
 
   const connect = useCallback(async () => {
     if (!user || !activeRef.current || connectingRef.current) return;
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) return;
     connectingRef.current = true;
+    setConnectionState("connecting");
 
     let ws: WebSocket;
     try {
@@ -150,6 +208,7 @@ export function useBattleRoom() {
       wsRef.current = ws;
     } catch (error) {
       setLastError(error instanceof Error ? error.message : "Falha de autenticação WebSocket");
+      setConnectionState(activeRef.current ? "reconnecting" : "offline");
       if (activeRef.current) {
         reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
       }
@@ -158,15 +217,16 @@ export function useBattleRoom() {
       connectingRef.current = false;
     }
 
+    const displayName = (user as any).firstName || (user as any).claims?.first_name || "Operativo";
     ws.onopen = () => {
       setConnected(true);
+      setConnectionState("connected");
       setLastError(null);
-      const name = (user as any).firstName || (user as any).claims?.first_name || "Operativo";
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "join",
-          displayName: name,
-        }));
+        const savedRoomId = readSavedRoomId(userId);
+        ws.send(JSON.stringify(savedRoomId
+          ? { type: "resume", roomId: savedRoomId }
+          : { type: "join", displayName }));
       }
     };
 
@@ -175,12 +235,21 @@ export function useBattleRoom() {
         const msg = JSON.parse(ev.data) as ServerMessage;
         switch (msg.type) {
           case "welcome":
-            // roomId known
+            saveRoomId(userId, msg.roomId);
             break;
           case "room_state":
+            setLastError(null);
+            saveRoomId(userId, msg.room.status === "FINISHED" ? null : msg.room.id);
             setRoom(msg.room);
             setPlayers(msg.room.players);
             setZone(msg.room.zone);
+            if (msg.room.status === "LOBBY" || msg.room.status === "FINISHED") {
+              setPackbackItems([]);
+              setPackbackScan(null);
+              setLastPackbackUse(null);
+              if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+              scanTimerRef.current = null;
+            }
             if (msg.room.countdownSeconds != null) setCountdown(msg.room.countdownSeconds);
             if (msg.room.winnerId) setWinnerId(msg.room.winnerId);
             break;
@@ -217,9 +286,39 @@ export function useBattleRoom() {
             setPlayers(msg.players);
             setRoom((prev) => (prev ? { ...prev, loot: msg.loot } : prev));
             break;
+          case "packback_ready":
+            setPackbackItems(msg.items);
+            setLastPackbackUse(null);
+            setPackbackScan(null);
+            break;
+          case "packback_item_used":
+            setPackbackItems((current) => current.map((item) =>
+              item.id === msg.itemId ? { ...item, durability: msg.durability } : item,
+            ));
+            setLastPackbackUse(msg);
+            void queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
+            break;
+          case "packback_scan": {
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+            setPackbackScan({
+              expiresAt: Date.now() + Math.max(0, msg.durationMs),
+              players: msg.players,
+              loot: msg.loot,
+            });
+            scanTimerRef.current = setTimeout(() => {
+              setPackbackScan(null);
+              scanTimerRef.current = null;
+            }, Math.max(0, msg.durationMs));
+            break;
+          }
           case "match_finished":
+            saveRoomId(userId, null);
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
+            setPackbackItems([]);
+            setPackbackScan(null);
+            if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+            scanTimerRef.current = null;
             setLastMatchResult({
               winnerId: msg.winnerId,
               rankings: msg.rankings || [],
@@ -256,6 +355,12 @@ export function useBattleRoom() {
             break;
           case "error":
             setLastError(msg.message);
+            if (msg.code === "ROOM_RESUME_UNAVAILABLE") {
+              saveRoomId(userId, null);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "join", displayName }));
+              }
+            }
             break;
         }
       } catch {
@@ -268,6 +373,7 @@ export function useBattleRoom() {
         wsRef.current = null;
         setConnected(false);
       }
+      setConnectionState(activeRef.current ? "reconnecting" : "offline");
       if (activeRef.current) {
         reconnectTimerRef.current = setTimeout(() => { void connect(); }, 2000);
       }
@@ -276,15 +382,18 @@ export function useBattleRoom() {
     ws.onerror = () => {
       setLastError("WebSocket error");
     };
-  }, [user]);
+  }, [user, userId, queryClient]);
 
   useEffect(() => {
     activeRef.current = !!user;
     if (user) void connect();
+    else setConnectionState("offline");
     return () => {
       activeRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
       wsRef.current?.close();
       wsRef.current = null;
     };
@@ -302,11 +411,19 @@ export function useBattleRoom() {
 
   const startMatch = useCallback(() => send({ type: "start" }), [send]);
 
-  const leave = useCallback(() => send({ type: "leave" }), [send]);
+  const leave = useCallback(() => {
+    const sent = send({ type: "leave" });
+    if (sent) saveRoomId(userId, null);
+  }, [send, userId]);
 
   const attack = useCallback(
     (targetId: string) =>
       send({ type: "attack", targetId, clientTimestamp: Date.now() }),
+    [send],
+  );
+
+  const usePackBackItem = useCallback(
+    (itemId: number) => send({ type: "use_packback_item", itemId }),
     [send],
   );
 
@@ -345,6 +462,7 @@ export function useBattleRoom() {
 
   return {
     connected,
+    connectionState,
     room,
     zone,
     players,
@@ -359,6 +477,10 @@ export function useBattleRoom() {
     startMatch,
     leave,
     attack,
+    usePackBackItem,
+    packbackItems,
+    lastPackbackUse,
+    packbackScan,
     joinQueue,
     leaveQueue,
     setReady,

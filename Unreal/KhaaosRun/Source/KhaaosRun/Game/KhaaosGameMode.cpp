@@ -1,6 +1,8 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/KhaaosGameMode.h"
+#include "Game/Level/KhaaosCIGKVLevel.h"
+#include "Player/KhaaosPlayerController.h"
 #include "Game/KhaaosGameState.h"
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Game/Loot/KhaaosLootPickup.h"
@@ -39,6 +41,7 @@
 
 AKhaaosGameMode::AKhaaosGameMode()
 {
+    PlayerControllerClass = AKhaaosPlayerController::StaticClass();
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.bStartWithTickEnabled = true;
 
@@ -987,9 +990,44 @@ void AKhaaosGameMode::OnPostLogin(AController* NewPlayer)
     }
 }
 
+void AKhaaosGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+        Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+        if (!HasAuthority() || !NewPlayer || !GetWorld())
+        {
+                return;
+        }
+
+        TArray<AActor*> CIGKVLevels;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AKhaaosCIGKVLevel::StaticClass(), CIGKVLevels);
+        for (AActor* Actor : CIGKVLevels)
+        {
+                if (AKhaaosCIGKVLevel* CIGKVLevel = Cast<AKhaaosCIGKVLevel>(Actor))
+                {
+                        CIGKVLevel->StartZuEntry(NewPlayer);
+                        break;
+                }
+        }
+}
+
 void AKhaaosGameMode::Logout(AController* Exiting)
 {
     if (!Exiting) { Super::Logout(Exiting); return; }
+
+    if (APlayerController* PlayerController = Cast<APlayerController>(Exiting))
+    {
+        TArray<AActor*> CIGKVLevels;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AKhaaosCIGKVLevel::StaticClass(), CIGKVLevels);
+        for (AActor* Actor : CIGKVLevels)
+        {
+            if (AKhaaosCIGKVLevel* CIGKVLevel = Cast<AKhaaosCIGKVLevel>(Actor))
+            {
+                CIGKVLevel->CancelZuEntry(PlayerController);
+                break;
+            }
+        }
+    }
 
     if (SpatialGrid && Exiting->PlayerState)
     {
@@ -1001,37 +1039,44 @@ void AKhaaosGameMode::Logout(AController* Exiting)
 
 void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Eliminator, const FString& Cause)
 {
-    if (!Victim) return;
+    if (!HasAuthority() || !Victim)
+    {
+        return;
+    }
 
     AKhaaosPlayerState* VictimPS = Cast<AKhaaosPlayerState>(Victim);
-    if (!VictimPS || VictimPS->PlayerStatus != EPlayerStatus::Vivo) return;
-
-    VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
-
-    if (Eliminator && Eliminator != Victim)
+    if (!VictimPS || VictimPS->PlayerStatus != EPlayerStatus::Vivo)
     {
-        AKhaaosPlayerState* ElimPS = Cast<AKhaaosPlayerState>(Eliminator);
-        if (ElimPS)
-        {
-            ElimPS->Kills++;
-            VictimPS->EliminatorId = ElimPS->GetUniqueId().ToString();
-        }
+        return;
     }
 
-    // Decrement alive count in GameState
-    if (KhaaosGameState && KhaaosGameState->PlayersAlive > 0)
+    if (Cause == TEXT("ZONA"))
     {
-        KhaaosGameState->PlayersAlive--;
+        VictimPS->EliminationCause = EEliminationCause::Zona;
+    }
+    else if (Cause == TEXT("PVP"))
+    {
+        VictimPS->EliminationCause = EEliminationCause::PvP;
+    }
+    else
+    {
+        VictimPS->EliminationCause = EEliminationCause::Queda;
     }
 
-    // Grant kill credits to eliminator (KRC economy)
+    VictimPS->EliminatorId.Empty();
+    VictimPS->Deaths++;
+
     if (Eliminator && Eliminator != Victim)
     {
         if (AKhaaosPlayerState* ElimPS = Cast<AKhaaosPlayerState>(Eliminator))
         {
-            ElimPS->GrantCredits(50); // Kill reward
+            ElimPS->Kills++;
+            VictimPS->EliminatorId = ElimPS->GetUniqueId().ToString();
+            ElimPS->GrantCredits(50);
         }
     }
+
+    VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
 
     if (KhaaosGameState)
     {
@@ -1056,6 +1101,9 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
         ElimEvent.Data.Add(TEXT("Cause"), Cause);
         MatchTimeline->RecordEvent(ElimEvent);
     }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::EliminatePlayer - %s eliminated by %s (%s)"),
+        *Victim->GetPlayerName(), *Cause, *VictimPS->EliminatorId);
 }
 
 bool AKhaaosGameMode::CheckWinCondition() const
@@ -1085,43 +1133,27 @@ bool AKhaaosGameMode::CheckWinCondition() const
 
 void AKhaaosGameMode::ApplyZoneDamage()
 {
-    // ─── FULLY IMPLEMENTED: Escalating zone damage (Fortnite-style) ───
-    if (MatchPhase != EMatchPhase::InProgress && MatchPhase != EMatchPhase::PulsoKhaaos) return;
+    if ((MatchPhase != EMatchPhase::InProgress && MatchPhase != EMatchPhase::PulsoKhaaos) || !SafeZone)
+    {
+        return;
+    }
 
-    UWorld* World = GetWorld();
-    if (!World || !KhaaosGameState) return;
-
-    float DamagePerTick = KhaaosGameState->ZoneDamagePerTick;
-    if (DamagePerTick <= 0.0f) return; // No zone damage in early phases
-
-    FVector2D ZoneCenter = KhaaosGameState->ZoneCenter;
-    float ZoneRadius = KhaaosGameState->ZoneRadius;
-
-    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
         if (APlayerController* PC = It->Get())
         {
-            if (APawn* Pawn = PC->GetPawn())
+            if (APlayerState* PS = PC->PlayerState)
             {
-                AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
-                if (!KPS || KPS->PlayerStatus != EPlayerStatus::Vivo) continue;
-
-                FVector PlayerLoc = Pawn->GetActorLocation();
-                FVector2D PlayerLoc2D(PlayerLoc.X, PlayerLoc.Y);
-                float DistFromCenter = FVector2D::Distance(PlayerLoc2D, ZoneCenter);
-
-                if (DistFromCenter > ZoneRadius)
+                AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PS);
+                if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
                 {
-                    // Escalating damage: further outside = more damage (like Fortnite)
-                    float OverageRatio = (DistFromCenter - ZoneRadius) / FMath::Max(ZoneRadius, 1.0f);
-                    float ZoneDamage = DamagePerTick * (1.0f + OverageRatio * 2.0f);
-
-                    KPS->ApplyDamage(ZoneDamage, nullptr);
-                    KPS->EliminationCause = EEliminationCause::Zona;
-
-                    if (KPS->Health <= 0.0f)
+                    const APawn* PlayerPawn = PC->GetPawn();
+                    const bool bInsideSafeZone = SafeZone->UsesWorldSpaceZone()
+                        ? (!PlayerPawn || SafeZone->IsInsideWorldZone(PlayerPawn->GetActorLocation()))
+                        : SafeZone->IsInsideZone(KPS->MapPosition);
+                    if (!bInsideSafeZone)
                     {
-                        EliminatePlayer(KPS, nullptr, TEXT("ZONA"));
+                        KPS->ApplyZoneDamage(SafeZone->DamagePerTick, SafeZone);
                     }
                 }
             }

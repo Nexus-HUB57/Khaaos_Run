@@ -123,6 +123,18 @@ void AKhaaosLootPickup::InitFromPreset(int32 InItemId, const FString& InName, EI
                 InItemId, *InName, InPosX, InPosY);
 }
 
+bool AKhaaosLootPickup::SetRarity(ELootRarity InRarity)
+{
+        if (!HasAuthority())
+        {
+                return false;
+        }
+
+        Rarity = InRarity;
+        ForceNetUpdate();
+        return true;
+}
+
 // ─── Client RPC ─────────────────────────────────────────────────────────────────
 
 void AKhaaosLootPickup::ClientOnPickedUp_Implementation(const FString& PickerId)

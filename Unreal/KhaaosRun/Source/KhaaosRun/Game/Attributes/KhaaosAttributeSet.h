@@ -2,18 +2,31 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/NoExportTypes.h"
+#include "AbilitySystemComponent.h"
+#include "AttributeSet.h"
 #include "KhaaosAttributeSet.generated.h"
+
+class AActor;
+class UAbilitySystemComponent;
+class UKhaaosAttributeSet;
+
+#define KHAOOS_ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
+	GAMEPLAYATTRIBUTE_PROPERTY_GETTER(ClassName, PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)
 
 // ─── Delegates ────────────────────────────────────────────────────────────────
 
 /** Broadcast when any attribute changes. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnAttributeChanged, UKhaaosAttributeSet*, AttributeSet, const FString&, AttributeName, float, NewValue);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnKhaaosOutOfHealth, AActor*, AActor*, AActor*);
 
 /**
  * UKhaaosAttributeSet
  *
- * Game attribute container following ActionRoguelike RogueAttributeSet pattern.
+ * Gameplay AttributeSet for Health/MaxHealth, with project-side attributes
+ * retained for compatibility with existing gameplay systems.
  * Also maps to schema.ts playerStats columns.
  *
  * Attributes:
@@ -29,8 +42,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnAttributeChanged, UKhaaosAttri
  *
  * All mutations fire OnAttributeChanged for UI binding.
  */
-UCLASS(Abstract, BlueprintType, DefaultToInstanced)
-class UKhaaosAttributeSet : public UObject
+UCLASS(BlueprintType)
+class UKhaaosAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
 
@@ -40,12 +53,14 @@ public:
 	// ─── Attributes ─────────────────────────────────────────────────────────
 
 	/** Current health. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
-	float Health;
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Khaaos|Attributes")
+	FGameplayAttributeData Health;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, Health)
 
 	/** Maximum health (default 100, from schema.ts). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "1"))
-	float MaxHealth;
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxHealth, Category = "Khaaos|Attributes")
+	FGameplayAttributeData MaxHealth;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxHealth)
 
 	/** Current energy (for abilities). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
@@ -135,12 +150,21 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Attributes")
 	FOnAttributeChanged OnAttributeChanged;
 
+	/** Broadcast once on the server when authoritative Health reaches zero. */
+	FOnKhaaosOutOfHealth OnOutOfHealth;
+
+	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_Health(const FGameplayAttributeData& OldHealth);
+
+	UFUNCTION()
+	void OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth);
+
 protected:
 
-	/** Internal setter that fires delegate. */
-	void SetHealth(float NewHealth);
-
-	/** Internal setter that fires delegate. */
+	/** Internal setter for the legacy Energy value. */
 	void SetEnergy(float NewEnergy);
 
 	/** Default values (from schema.ts playerStats). */
@@ -148,4 +172,8 @@ protected:
 	static constexpr float DefaultMaxEnergy = 100.0f;
 	static constexpr float DefaultSpeed = 1.0f;
 	static constexpr int32 DefaultCredits = 0;
+
+	bool bOutOfHealthAlreadyBroadcast = false;
 };
+
+#undef KHAOOS_ATTRIBUTE_ACCESSORS

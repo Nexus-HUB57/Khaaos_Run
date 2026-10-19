@@ -12,6 +12,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: RUN_DB_MIGRATIONS
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: SESSION_SECRET
@@ -20,5 +22,15 @@ services:
         sync: false
       - key: REPL_ID
         sync: false
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_REQUIRED
+        value: "true"
+      - key: REDIS_NAMESPACE
+        value: khaaos
       - key: ZONE_OPERATOR_IDS
+        sync: false
+      - key: MARSHAL_CONSOLE_OPERATOR_IDS
         sync: false

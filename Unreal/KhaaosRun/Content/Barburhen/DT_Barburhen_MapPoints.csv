@@ -1,0 +1,59 @@
+---,PointId,Type,Sector,Location_X,Location_Y,Location_Z,Rotation_Pitch,Rotation_Yaw,Rotation_Roll,Radius,DisplayName
+# === SPAWNS – Setor Industrial (Sul) ===
+Spawn_01,Spawn_01,PlayerSpawn,Industrial,0,-18000,100,0,0,0,300,Spawn Industrial 01
+Spawn_02,Spawn_02,PlayerSpawn,Industrial,4000,-17000,100,0,0,0,300,Spawn Industrial 02
+Spawn_03,Spawn_03,PlayerSpawn,Industrial,-4000,-17000,100,0,0,0,300,Spawn Industrial 03
+Spawn_04,Spawn_04,PlayerSpawn,Industrial,8000,-15000,100,0,0,0,300,Spawn Industrial 04
+Spawn_05,Spawn_05,PlayerSpawn,Industrial,-8000,-15000,100,0,0,0,300,Spawn Industrial 05
+Spawn_06,Spawn_06,PlayerSpawn,Industrial,12000,-14000,100,0,0,0,300,Spawn Industrial 06
+Spawn_07,Spawn_07,PlayerSpawn,Industrial,-12000,-14000,100,0,0,0,300,Spawn Industrial 07
+Spawn_08,Spawn_08,PlayerSpawn,Industrial,2000,-20000,100,0,0,0,300,Spawn Industrial 08
+# === RING CENTER ===
+Park_Center,Park_Center,RingCenter,AbandonedPark,0,0,0,0,0,0,4000,Centro do Parque
+# === BUNKERS (2) ===
+Bunker_Urban,Bunker_Urban,Bunker,UrbanCommercial,7000,9000,50,0,45,0,500,Bunker Urbano
+Bunker_Ind,Bunker_Ind,Bunker,Industrial,-2000,-12000,50,0,-30,0,500,Bunker Industrial
+# === TANQUES (5) ===
+Tank_01,Tank_01,TankSpawn,Industrial,3000,-10000,50,0,90,0,400,Tanque Industrial 01
+Tank_02,Tank_02,TankSpawn,Industrial,-5000,-11000,50,0,0,0,400,Tanque Industrial 02
+Tank_03,Tank_03,TankSpawn,UrbanCommercial,9000,6000,50,0,180,0,400,Tanque Urbano 01
+Tank_04,Tank_04,TankSpawn,AbandonedPark,-3000,2000,50,0,90,0,400,Tanque Parque
+Tank_05,Tank_05,TankSpawn,ExtractionStation,2500,18500,50,0,0,0,400,Tanque Estação
+# === SNIPER POINTS (10) ===
+Sniper_01,Sniper_01,SniperPoint,UrbanCommercial,12000,8000,1200,0,225,0,200,Telhado NE
+Sniper_02,Sniper_02,SniperPoint,UrbanCommercial,9000,11000,900,0,200,0,200,Telhado N
+Sniper_03,Sniper_03,SniperPoint,UrbanCommercial,14000,4000,1100,0,270,0,200,Torre Comercial
+Sniper_04,Sniper_04,SniperPoint,UrbanCommercial,6000,12000,800,0,180,0,200,Prédio Inacabado
+Sniper_05,Sniper_05,SniperPoint,Industrial,-6000,-9000,1500,0,45,0,200,Silo Industrial
+Sniper_06,Sniper_06,SniperPoint,Industrial,5000,-13000,1000,0,0,0,200,Guindaste
+Sniper_07,Sniper_07,SniperPoint,Industrial,-10000,-8000,900,0,90,0,200,Caixa d'Água
+Sniper_08,Sniper_08,SniperPoint,AbandonedPark,0,3500,600,0,180,0,200,Mirante do Parque
+Sniper_09,Sniper_09,SniperPoint,ExtractionStation,-1500,21000,800,0,180,0,200,Torre da Estação
+Sniper_10,Sniper_10,SniperPoint,ExtractionStation,3000,20500,700,0,200,0,200,Sinalização Ferroviária
+# === HOSPITAIS (2) ===
+Hospital_01,Hospital_01,Hospital,UrbanCommercial,10000,5000,100,0,0,0,600,Hospital Urbano
+Hospital_02,Hospital_02,Hospital,AbandonedPark,-4000,-2500,100,0,90,0,600,Hospital do Parque
+# === DELEGACIAS (3) ===
+Police_01,Police_01,PoliceStation,UrbanCommercial,11000,3000,100,0,0,0,400,Delegacia Centro
+Police_02,Police_02,PoliceStation,UrbanCommercial,5000,10000,100,0,270,0,400,Delegacia Norte
+Police_03,Police_03,PoliceStation,Industrial,1000,-14000,100,0,0,0,400,Delegacia Industrial
+# === ZEX TERMINALS (15) ===
+ZEX_01,ZEX_01,ZEXTerminal,Industrial,0,-16000,50,0,0,0,150,ZEX Desembarque
+ZEX_02,ZEX_02,ZEXTerminal,Industrial,6000,-12000,50,0,0,0,150,ZEX Galpão Leste
+ZEX_03,ZEX_03,ZEXTerminal,Industrial,-6000,-12000,50,0,0,0,150,ZEX Galpão Oeste
+ZEX_04,ZEX_04,ZEXTerminal,Industrial,2000,-8000,50,0,0,0,150,ZEX Pátio
+ZEX_05,ZEX_05,ZEXTerminal,UrbanCommercial,8000,7000,50,0,0,0,150,ZEX Praça
+ZEX_06,ZEX_06,ZEXTerminal,UrbanCommercial,13000,5000,50,0,0,0,150,ZEX Shopping
+ZEX_07,ZEX_07,ZEXTerminal,UrbanCommercial,4000,9000,50,0,0,0,150,ZEX Rua Comercial
+ZEX_08,ZEX_08,ZEXTerminal,UrbanCommercial,10000,10000,50,0,0,0,150,ZEX Telhado Acesso
+ZEX_09,ZEX_09,ZEXTerminal,AbandonedPark,1500,1500,50,0,0,0,150,ZEX Parque Leste
+ZEX_10,ZEX_10,ZEXTerminal,AbandonedPark,-1500,1200,50,0,0,0,150,ZEX Parque Oeste
+ZEX_11,ZEX_11,ZEXTerminal,AbandonedPark,0,-2000,50,0,0,0,150,ZEX Coreto
+ZEX_12,ZEX_12,ZEXTerminal,AbandonedPark,2500,-1000,50,0,0,0,150,ZEX Lago Seco
+ZEX_13,ZEX_13,ZEXTerminal,ExtractionStation,0,20000,100,0,0,0,200,ZEX Extração Final
+ZEX_14,ZEX_14,ZEXTerminal,ExtractionStation,-2000,19000,50,0,0,0,150,ZEX Plataforma Oeste
+ZEX_15,ZEX_15,ZEXTerminal,ExtractionStation,2000,19000,50,0,0,0,150,ZEX Plataforma Leste
+# === LOOT CACHES extras ===
+Loot_Urban_01,Loot_Urban_01,LootCache,UrbanCommercial,7500,4000,50,0,0,0,100,Cache Urbano
+Loot_Ind_01,Loot_Ind_01,LootCache,Industrial,-3000,-15000,50,0,0,0,100,Cache Industrial
+Loot_Park_01,Loot_Park_01,LootCache,AbandonedPark,500,-500,50,0,0,0,100,Cache Parque

@@ -4,7 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
-#include "Player/KhaaosPlayerController.generated.h"
+#include "KhaaosPlayerController.generated.h"
 
 // ─── Forward Declarations ─────────────────────────────────────────────────────
 
@@ -37,8 +37,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSpectateTargetChanged, const FStr
  *   - Anti-cheat: server-side movement validation
  *   - Console commands for debugging
  */
-UCLASS(Abstract, config=Game)
-class AKhaaosPlayerController : public APlayerController
+UCLASS(Blueprintable, config=Game)
+class KHAAOSRUN_API AKhaaosPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
@@ -307,4 +307,20 @@ protected:
 	/** Console command: dump player state to log. */
 	UFUNCTION(Exec)
 	void DumpPlayerState();
+
+/** Button index: 0 is the protective option; 1 is the unsafe option. */
+UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Khaaos|CIGKV|Zu")
+void ServerSubmitZuChoice(uint8 ChoiceIndex);
+
+/** Blueprint hook to sequence the selected entry's camera, audio, and world effects. */
+UFUNCTION(BlueprintImplementableEvent, Category = "Khaaos|CIGKV|Zu")
+void PlayZuEntryCinematic(uint8 VariantIndex, float Duration);
+
+/** Deliver the server-selected entry and display copy to the owning client. */
+UFUNCTION(Client, Reliable)
+void ClientBeginZuEntry(uint8 VariantIndex, FText Prompt, FText OptionA, FText OptionB, float CinematicDuration, float ResponseTimeout);
+
+/** Hide the local prompt after resolution. */
+UFUNCTION(Client, Reliable)
+void ClientEndZuEntry();
 };

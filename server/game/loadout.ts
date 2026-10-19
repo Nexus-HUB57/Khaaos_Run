@@ -5,6 +5,25 @@ export interface CombatLoadout {
   equippedDamage: number;
   equippedRange: number;
   maxHealth: number;
+  carryCapacity: number;
+}
+
+export const BASE_CARRY_CAPACITY = 50;
+export const MAX_CARRY_CAPACITY = 150;
+
+export function getLootWeight(type: string, stats?: Record<string, number> | null): number {
+  const declaredWeight = stats?.weight;
+  if (typeof declaredWeight === "number" && Number.isFinite(declaredWeight) && declaredWeight > 0) {
+    return Math.max(1, Math.min(100, Math.floor(declaredWeight)));
+  }
+  const defaultWeight: Record<string, number> = {
+    ARMA: 25,
+    DEFESA: 20,
+    CURATIVO: 5,
+    UTILIDADE: 10,
+    RECURSO: 5,
+  };
+  return defaultWeight[type] ?? 10;
 }
 
 function positiveStat(item: Item, key: string): number {
@@ -12,15 +31,18 @@ function positiveStat(item: Item, key: string): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function isReadyForBattle(item: Item): boolean {
+export function hasValidDurability(item: Pick<Item, "durability" | "maxDurability">): boolean {
   const durability = Number(item.durability);
   const maxDurability = Number(item.maxDurability);
-  return item.isEquipped === true
-    && Number.isFinite(durability)
+  return Number.isFinite(durability)
     && Number.isFinite(maxDurability)
     && durability > 0
     && maxDurability > 0
     && durability <= maxDurability;
+}
+
+function isReadyForBattle(item: Item): boolean {
+  return item.isEquipped === true && hasValidDurability(item);
 }
 
 /**
@@ -46,11 +68,15 @@ export function deriveCombatLoadout(items: Item[], baseMaxHealth: number): Comba
   const defenseBonus = readyItems
     .filter((item) => item.type === "DEFESA")
     .reduce((total, item) => total + Math.floor(positiveStat(item, "defense") / 4), 0);
+  const capacityBonus = readyItems
+    .filter((item) => item.type === "UTILIDADE")
+    .reduce((total, item) => total + Math.min(100, Math.floor(positiveStat(item, "capacity"))), 0);
 
   return {
     itemIds: readyItems.map((item) => item.id),
     equippedDamage,
     equippedRange,
     maxHealth: Math.min(200, safeBaseHealth + defenseBonus),
+    carryCapacity: Math.min(MAX_CARRY_CAPACITY, BASE_CARRY_CAPACITY + capacityBonus),
   };
 }

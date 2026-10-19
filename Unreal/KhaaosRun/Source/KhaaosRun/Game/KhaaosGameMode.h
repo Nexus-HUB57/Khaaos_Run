@@ -31,6 +31,7 @@ class UKhaaosPerformanceBudgetComponent;
 class UKhaaosLODStrategyComponent;
 class UKhaaosReplicationBudgetComponent;
 class UKhaaosMatchTimelineComponent;
+class APlayerController;
 
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ public:
 
     virtual void OnPostLogin(AController* NewPlayer) override;
     virtual void Logout(AController* Exiting) override;
+    virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
     void EliminatePlayer(APlayerState* Victim, APlayerState* Eliminator, const FString& Cause);

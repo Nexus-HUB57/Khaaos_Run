@@ -19,8 +19,8 @@ class UGameplayEffect;
  * removing, and querying GameplayEffects via UKhaaosGameplayEffects factory.
  *
  * Centralizes the pattern:
- *   1. Create GE CDO via UKhaaosGameplayEffects::CreateXxx()
- *   2. Make outgoing spec from ASC
+ *   1. Create a transient GE instance via UKhaaosGameplayEffects::CreateXxx()
+ *   2. Build a spec from that instance and attach its source context
  *   3. Apply spec to ASC
  *
  * Usage:
@@ -63,6 +63,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Effect")
 	FActiveGameplayEffectHandle ApplyDebuff(UAbilitySystemComponent* ASC, FGameplayTag DebuffTag, float Duration, float Magnitude);
 
+	/** Apply one instant SafeZone hit with the zone actor recorded as the effect causer. */
+	UFUNCTION(BlueprintCallable, Category = "Khaaos|Effect")
+	FActiveGameplayEffectHandle ApplyZoneDamage(UAbilitySystemComponent* ASC, float Damage, AActor* EffectCauser);
+
+	/** Apply an instant damage effect with optional source and effect-causer context. */
+	FActiveGameplayEffectHandle ApplyDamage(
+		UAbilitySystemComponent* ASC,
+		float Damage,
+		FGameplayTag DamageType,
+		AActor* Instigator,
+		AActor* EffectCauser);
+
 	// ─── Remove Effect ────────────────────────────────────────────────────────
 
 	/** Remove all active effects that grant the specified tag. */
@@ -83,6 +95,10 @@ public:
 
 private:
 
-	/** Internal helper: apply a GameplayEffect CDO and return the handle. */
-	FActiveGameplayEffectHandle ApplyEffectCDO(UAbilitySystemComponent* ASC, UGameplayEffect* EffectCDO);
+	/** Apply a generated GameplayEffect instance with an explicit source context. */
+	FActiveGameplayEffectHandle ApplyEffectInstance(
+		UAbilitySystemComponent* ASC,
+		UGameplayEffect* Effect,
+		AActor* Instigator = nullptr,
+		AActor* EffectCauser = nullptr);
 };
