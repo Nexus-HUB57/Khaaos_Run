@@ -2,6 +2,22 @@
 
 Vertical slice jogável do **Campo de Instrução de Guerra Khaaos Ville (CIGKV)** com simulação modular, seeds reproduzíveis, catálogo de armas, loot ponderado e backend authoritative multiplayer.
 
+## Escopo e instalação
+Este pacote é um runtime JavaScript independente, com `package.json` e `package-lock.json` próprios. Ele não é iniciado pelo servidor web da raiz e não inicializa nem integra automaticamente o servidor Unreal Engine.
+
+Execute a partir da raiz do repositório:
+```bash
+npm ci --prefix game-runtime
+npm --prefix game-runtime run dev
+npm --prefix game-runtime test
+```
+Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e `npm test`. Use `npm ci` para respeitar o lockfile; `npm install` fica reservado a alterações intencionais de dependências.
+
+O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
+
+## Relação com a aplicação web e UE5
+A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
+
 ## Autenticação e RBAC
 
 O servidor usa tokens assinados HMAC-SHA256 com expiração, hash de senha `scrypt` e papéis `player`, `moderator` e `admin`. Configure produção com `AUTH_SECRET` forte e `KR_USERS_JSON` contendo usuários pré-provisionados com `passwordHash` gerado por `hashPassword`.
@@ -15,7 +31,7 @@ O login é feito em `POST /auth/login` com `{ "username": "...", "password": "..
 ## Cliente online, reconexão e regiões
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
