@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Escudo_Khael",
+  "name": "Escudo Khael",
+  "type": "Defesa",
+  "rarity": "LENDARIO",
+  "heal": 0,
+  "defense": 60,
+  "use_time": 0.0,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 880,
+  "rarity_weight": 4,
+  "rarity_multiplier": 22,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Legendary",
+  "vfx_use": "VFX_Escudo_Equip",
+  "sfx_use": "SFX_Escudo_Equip",
+  "description": "Escudo Khael lendario. +60 defesa, absorbs 1 lethal hit.",
+  "world_specific": []
+}

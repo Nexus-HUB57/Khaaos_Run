@@ -1,0 +1,288 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Khaaos Run \u2014 Match Detail Dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Active Matches",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "khaaos_matches_active_total",
+          "legendFormat": "Active"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Avg Players/Match",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "avg(khaaos_match_players_count)",
+          "legendFormat": "Avg"
+        }
+      ]
+    },
+    {
+      "title": "Match Duration p50/p95",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(khaaos_match_duration_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(khaaos_match_duration_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "title": "Eliminations/s",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_match_eliminations_total[5m])",
+          "legendFormat": "Elims/s"
+        }
+      ]
+    },
+    {
+      "title": "Players per Match Over Time",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "avg(khaaos_match_players_count)",
+          "legendFormat": "Avg Players"
+        },
+        {
+          "expr": "max(khaaos_match_players_count)",
+          "legendFormat": "Max Players"
+        },
+        {
+          "expr": "min(khaaos_match_players_count)",
+          "legendFormat": "Min Players"
+        }
+      ]
+    },
+    {
+      "title": "Match Phase Distribution",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(khaaos_match_phase{phase=\"lobby\"})",
+          "legendFormat": "Lobby"
+        },
+        {
+          "expr": "sum(khaaos_match_phase{phase=\"countdown\"})",
+          "legendFormat": "Countdown"
+        },
+        {
+          "expr": "sum(khaaos_match_phase{phase=\"in_progress\"})",
+          "legendFormat": "In Progress"
+        },
+        {
+          "expr": "sum(khaaos_match_phase{phase=\"finished\"})",
+          "legendFormat": "Finished"
+        }
+      ]
+    },
+    {
+      "title": "Eliminations by Cause",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_match_eliminations_total{cause=\"pvp\"}[5m])",
+          "legendFormat": "PvP"
+        },
+        {
+          "expr": "rate(khaaos_match_eliminations_total{cause=\"zone\"}[5m])",
+          "legendFormat": "Zone"
+        },
+        {
+          "expr": "rate(khaaos_match_eliminations_total{cause=\"pulso\"}[5m])",
+          "legendFormat": "Pulso"
+        },
+        {
+          "expr": "rate(khaaos_match_eliminations_total{cause=\"fall\"}[5m])",
+          "legendFormat": "Fall"
+        }
+      ]
+    },
+    {
+      "title": "World Transition Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_world_transitions_total{from=\"CIGKV\"}[5m])",
+          "legendFormat": "CIGKV\u2192W1"
+        },
+        {
+          "expr": "rate(khaaos_world_transitions_total{from=\"Barburhen\"}[5m])",
+          "legendFormat": "W1\u2192W2"
+        },
+        {
+          "expr": "rate(khaaos_world_transitions_total{from=\"Priadus\"}[5m])",
+          "legendFormat": "W2\u2192W3"
+        },
+        {
+          "expr": "rate(khaaos_world_transitions_total{from=\"Ckesalth\"}[5m])",
+          "legendFormat": "W3\u2192W4"
+        }
+      ]
+    },
+    {
+      "title": "Pulso Khaaos Events",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_pulso_events_total[5m])",
+          "legendFormat": "Events/s"
+        },
+        {
+          "expr": "rate(khaaos_pulso_loot_dropped_total[5m])",
+          "legendFormat": "Loot Dropped/s"
+        },
+        {
+          "expr": "rate(khaaos_pulso_damage_total[5m])",
+          "legendFormat": "Damage/s"
+        }
+      ]
+    },
+    {
+      "title": "TrueSkill2 Rating Distribution",
+      "type": "histogram",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "khaaos_trueskill_rating_bucket",
+          "legendFormat": "Rating"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": [
+    "khaaos",
+    "match",
+    "production"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "region",
+        "type": "query",
+        "query": "sa1,na1,eu1",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "world",
+        "type": "query",
+        "query": "CIGKV,Barburhen,Priadus,Ckesalth,Arukheea",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Khaaos Run \u2014 Match Detail",
+  "uid": "khaaos-match",
+  "version": 1
+}

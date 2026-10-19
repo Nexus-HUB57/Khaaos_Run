@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Capacete_Simples",
+  "name": "Capacete Simples",
+  "type": "Defesa",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 15,
+  "use_time": 0.0,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 168,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Rare",
+  "vfx_use": "VFX_Capacete_Equip",
+  "sfx_use": "SFX_Capacete_Equip",
+  "description": "Capacete simples. +15 defesa headshot protection.",
+  "world_specific": []
+}

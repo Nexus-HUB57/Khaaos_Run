@@ -1,0 +1,31 @@
+{
+  "material_id": "M_LOOT_Bandage",
+  "material_instance_id": "MI_LOOT_Bandage_Default",
+  "shader": "PBR",
+  "properties": {
+    "base_color": {
+      "r": 0.95,
+      "g": 0.95,
+      "b": 0.9,
+      "a": 1.0
+    },
+    "roughness": 0.5,
+    "metallic": 0.0,
+    "emissive": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 0.0,
+      "a": 0.0
+    },
+    "opacity": 1.0,
+    "two_sided": false
+  },
+  "textures": {
+    "diffuse": "T_LOOT_Bandage_D",
+    "normal": "T_LOOT_Bandage_N",
+    "orm": "T_LOOT_Bandage_ORM",
+    "emissive": "T_LOOT_Bandage_E"
+  },
+  "blend_mode": "Opaque",
+  "shading_model": "Default"
+}

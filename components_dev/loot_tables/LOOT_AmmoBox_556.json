@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_AmmoBox_556",
+  "name": "AmmoBox 5.56",
+  "type": "Utilidade",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "use_time": 0.5,
+  "auto_revive": false,
+  "stack_max": 3,
+  "price": 15,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_Ammo_Pickup",
+  "sfx_use": "SFX_Ammo_Pickup",
+  "description": "Caixa de municoes 5.56mm. 30 rounds.",
+  "world_specific": []
+}

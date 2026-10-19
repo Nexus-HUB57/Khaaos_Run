@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Mochila_Tatica",
+  "name": "Mochila Tatica",
+  "type": "Utilidade",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 0,
+  "use_time": 0.0,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 40,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_None",
+  "sfx_use": "SFX_Mochila_Equip",
+  "description": "Mochila tatica. +2 slots de inventario.",
+  "world_specific": []
+}

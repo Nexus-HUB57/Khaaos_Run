@@ -1,0 +1,19 @@
+{
+  "id": "VFX_BulletImpact_Concrete",
+  "type": "niagara",
+  "category": "vfx",
+  "description": "Bullet impact on concrete. Sparks + dust + decal.",
+  "priority": "P0",
+  "subsystem": "Niagara",
+  "textures_required": [
+    "T_VFX_BulletImpact_Concrete_D",
+    "T_VFX_BulletImpact_Concrete_N"
+  ],
+  "parameters": {
+    "lifetime": 1.0,
+    "spawn_rate": 30,
+    "particle_count": 20
+  },
+  "material": "M_VFX_BulletImpact_Concrete",
+  "dependencies": []
+}

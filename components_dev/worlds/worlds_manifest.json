@@ -1,0 +1,47 @@
+{
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-15T00:55:55.789010+00:00",
+  "world_count": 5,
+  "worlds": [
+    {
+      "id": "CIGKV",
+      "name": "CIGKV — Centro de Integracao",
+      "max_players": 50,
+      "rank": "RECRUTA",
+      "is_final": false,
+      "biome": "urban_station"
+    },
+    {
+      "id": "Barburhen",
+      "name": "Barburhen — Mundo Aquatico",
+      "max_players": 100,
+      "rank": "HURAN",
+      "is_final": false,
+      "biome": "ocean_archipelago"
+    },
+    {
+      "id": "Priadus",
+      "name": "Priadus — Cumes de Vento",
+      "max_players": 75,
+      "rank": "SKEETW",
+      "is_final": false,
+      "biome": "mountain_peaks"
+    },
+    {
+      "id": "Ckesalth",
+      "name": "Ckesalth — Pantanos Vulcanicos",
+      "max_players": 60,
+      "rank": "ONITH",
+      "is_final": false,
+      "biome": "volcanic_swamp"
+    },
+    {
+      "id": "Arukheea",
+      "name": "Arukheea — Forja Khaael",
+      "max_players": 80,
+      "rank": "VENEX",
+      "is_final": true,
+      "biome": "forging_hellscape"
+    }
+  ]
+}

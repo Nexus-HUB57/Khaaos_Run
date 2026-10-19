@@ -1,0 +1,24 @@
+{
+  "name": "13 — Monitoring Check",
+  "on": {
+    "schedule": [
+      {
+        "cron": "*/15 * * * *"
+      }
+    ]
+  },
+  "jobs": {
+    "monitor": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "name": "Health Check",
+          "run": "curl -sf https://api.khaaos.run/health || echo 'API unreachable'"
+        }
+      ]
+    }
+  }
+}

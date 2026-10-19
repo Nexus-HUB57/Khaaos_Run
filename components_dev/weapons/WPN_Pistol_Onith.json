@@ -1,0 +1,119 @@
+{
+  "id": "WPN_Pistol_Onith",
+  "name": "Pistol Onith MK-IV",
+  "codename": "ONITH_PISTOL_MK4",
+  "slot": "SECONDARY",
+  "category": "PISTOL",
+  "category_tag": "Weapon.Category.PISTOL",
+  "rarity": "COMUM",
+  "rarity_tag": "Loot.Rarity.COMUM",
+  "fire_mode": "Semi",
+  "damage": 28,
+  "fire_rate": 400,
+  "accuracy": 85,
+  "range": 40,
+  "mag": 15,
+  "reload": 1.5,
+  "headshot_multiplier": 2.0,
+  "speed_modifier": 1.0,
+  "ammo_type": "9mm",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 370,
+    "drag_coefficient": 0.012,
+    "gravity_scale": 1.0,
+    "penetration_depth_cm": 15
+  },
+  "recoil": {
+    "pitch_per_shot": 0.5,
+    "yaw_range": 0.2,
+    "recovery_speed": 5.0,
+    "pattern": [
+      0.5,
+      0.5316,
+      0.529,
+      0.4846,
+      0.4163,
+      0.3546,
+      0.3232,
+      0.3259,
+      0.3459,
+      0.3581,
+      0.3445,
+      0.3046,
+      0.2532,
+      0.2102,
+      0.1877
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 15,
+    "far_range_m": 40,
+    "falloff_curve": "linear",
+    "min_damage_percent": 65
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_Pistol",
+    "tracer": "VFX_Tracer_9mm",
+    "shell_eject": "VFX_Shell_9mm",
+    "impact_default": "VFX_Impact_Concrete",
+    "impact_flesh": "VFX_Impact_Flesh_Small"
+  },
+  "sfx": {
+    "fire": "SFX_Pistol_Onith_Fire",
+    "fire_suppressed": "SFX_Pistol_Onith_Supp",
+    "reload_magout": "SFX_Pistol_MagOut",
+    "reload_magin": "SFX_Pistol_MagIn",
+    "reload_charge": "SFX_Pistol_Charge",
+    "dryfire": "SFX_Dryfire_Small",
+    "equip": "SFX_Pistol_Equip"
+  },
+  "attachments": {
+    "optic": [
+      {
+        "id": "ATT_RDS_Micro",
+        "name": "Micro RDS",
+        "modifiers": {
+          "accuracy": 5
+        }
+      }
+    ],
+    "barrel": [
+      {
+        "id": "ATT_Supp_9mm",
+        "name": "Suppressor 9mm",
+        "modifiers": {
+          "range": -5,
+          "damage": -2
+        }
+      }
+    ],
+    "foregrip": [],
+    "stock": [],
+    "magazine": [
+      {
+        "id": "ATT_Mag_9mm_Ext",
+        "name": "Extended Mag 9mm",
+        "modifiers": {
+          "mag": 5,
+          "reload": 0.3
+        }
+      }
+    ]
+  },
+  "economy": {
+    "price": 196,
+    "krc_cost": 150,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 3
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
+}

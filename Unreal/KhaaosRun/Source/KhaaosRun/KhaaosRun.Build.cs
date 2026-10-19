@@ -30,6 +30,8 @@ public class KhaaosRun : ModuleRules
                         "NetCore",
                         "OnlineSubsystem",
                         "OnlineSubsystemUtils",
+			"EOSOverlayUI",
+			"EOSSDK",
                         "ModularGameplay",
                         "ModularGameplayActors",
                         "CommonUI",
@@ -48,6 +50,7 @@ public class KhaaosRun : ModuleRules
                         "Http",
                         "Json",
                         "JsonUtilities",
+			"DataValidation",
                         // ─── Added for CIGKV Level + Map Data ──────────────────
                         "DeveloperSettings",
                 });

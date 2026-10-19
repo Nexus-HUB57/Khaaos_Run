@@ -1,0 +1,26 @@
+{
+  "name": "12 — Deploy Production",
+  "on": {
+    "workflow_dispatch": {},
+    "push": {
+      "tags": [
+        "v*"
+      ]
+    }
+  },
+  "jobs": {
+    "production": {
+      "runs-on": "ubuntu-latest",
+      "environment": "production",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "name": "Deploy to Production VM",
+          "run": "echo 'Deploy production — triggered by tag or manual'"
+        }
+      ]
+    }
+  }
+}

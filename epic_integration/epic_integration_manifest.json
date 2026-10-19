@@ -1,0 +1,7 @@
+{
+  "manifest_version": "1.0.0",
+  "eos_sdk_bridge": "eos_sdk_bridge.json",
+  "lyra_mapping": "lyra_mapping.json",
+  "integration_count": 8,
+  "sdk_version": "1.16.0"
+}

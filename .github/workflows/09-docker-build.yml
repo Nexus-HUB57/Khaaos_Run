@@ -1,0 +1,24 @@
+{
+  "name": "09 — Docker Build",
+  "on": {
+    "push": {
+      "branches": [
+        "main"
+      ]
+    }
+  },
+  "jobs": {
+    "docker": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "name": "Build Economy API Docker",
+          "run": "docker build -t khaaos-economy:latest infra/economy/"
+        }
+      ]
+    }
+  }
+}

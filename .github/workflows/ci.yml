@@ -231,6 +231,11 @@ jobs:
 
           for h in $(find Unreal/KhaaosRun/Source -name "*.h" -not -path "*/ThirdParty/*"); do
             HEADER_COUNT=$((HEADER_COUNT + 1))
+            # Shared enums and inline helpers are intentionally header-only.
+            if [[ "$h" == */Game/Data/KhaaosEnums.h ]]; then
+              echo "ℹ️  HEADER-ONLY: $h"
+              continue
+            fi
             cpp="${h%.h}.cpp"
             if [ -f "$cpp" ]; then
               CPP_COUNT=$((CPP_COUNT + 1))

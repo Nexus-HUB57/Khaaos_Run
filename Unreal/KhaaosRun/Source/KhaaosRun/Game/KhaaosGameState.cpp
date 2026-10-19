@@ -29,17 +29,25 @@ AKhaaosGameState::AKhaaosGameState()
 
 void AKhaaosGameState::OnRep_RemainingTime()
 {
-        // Client-side UI sync when remaining time updates
+        // Client-side: sync countdown/timer UI
+        // Blueprint widgets bind to GameState::RemainingTime directly
+        UE_LOG(LogKhaaosRun, Verbose, TEXT("GameState::OnRep_RemainingTime - %.1f"), RemainingTime);
 }
 
 void AKhaaosGameState::OnRep_PlayersAlive()
 {
-        // Client-side UI sync for alive count
+        // Client-side: sync alive count for HUD + minimap markers
+        UE_LOG(LogKhaaosRun, Verbose, TEXT("GameState::OnRep_PlayersAlive - %d"), PlayersAlive);
 }
 
 void AKhaaosGameState::OnRep_WinnerId()
 {
-        // Client-side winner announcement
+        // Client-side: trigger victory/defeat screen
+        if (!WinnerId.IsEmpty())
+        {
+                UE_LOG(LogKhaaosRun, Log, TEXT("GameState::OnRep_WinnerId - Winner: %s"), *WinnerId);
+                OnMatchPhaseChanged.Broadcast(EMatchPhase::InProgress, EMatchPhase::Finished);
+        }
 }
 
 void AKhaaosGameState::OnRep_ZoneCenter()

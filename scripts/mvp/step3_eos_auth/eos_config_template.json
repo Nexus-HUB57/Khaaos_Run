@@ -1,0 +1,368 @@
+{
+  "_meta": {
+    "description": "Khaaos Run EOS Configuration Template — Step 3 (Auth + Matchmaking)",
+    "version": "1.0.0",
+    "cppClasses": {
+      "KhaaosEOSManager": "Auth + Platform initialization",
+      "KhaaosEOSLobby": "Lobby creation, join, search, attributes",
+      "KhaaosEOSMatchmaking": "Matchmaking pools, TrueSkill2 MMR, ticket management",
+      "KhaaosEOSSession": "Dedicated server sessions, heartbeat, registration",
+      "KhaaosCloudSave": "Cloud storage, LZ4 compression, SHA256 integrity"
+    },
+    "instructions": [
+      "1. Replace all placeholder values (marked with __PLACEHOLDER__) with real values from the Epic Developer Portal",
+      "2. Product/Sandbox/Deployment IDs are obtained after registering your product at https://dev.epicgames.com/portal/",
+      "3. Client ID and Secret are created in the Dev Portal under Product Settings > Auth Clients",
+      "4. Never commit real ClientSecret to version control — use environment variables or secret managers",
+      "5. For local development, use mock_eos_server.js instead of real EOS endpoints"
+    ]
+  },
+
+  "platform": {
+    "productId": "__PLACEHOLDER__: Get from Epic Dev Portal (e.g., '3f5a2b...')",
+    "sandboxId": "__PLACEHOLDER__: Sandbox ID for your deployment",
+    "deploymentId": "__PLACEHOLDER__: Deployment ID (Sandbox > Deployments)",
+    "clientId": "__PLACEHOLDER__: Auth Client ID from Dev Portal",
+    "clientSecret": "__PLACEHOLDER__: Auth Client Secret — STORE AS GITHUB SECRET!",
+    "encryptionKey": "__PLACEHOLDER__: EOS encryption key for secure communications",
+    "overrideCountryCode": "BR",
+    "overrideLocaleCode": "pt-BR"
+  },
+
+  "auth": {
+    "_class": "KhaaosEOSManager",
+    "loginBehavior": "PersistentAuth",
+    "credentialType": "DeviceToken",
+    "externalProviders": {
+      "epic": { "enabled": true, "type": "EpicExternalAccount" },
+      "steam": { "enabled": false, "type": "SteamExternalAccount", "appId": "" },
+      "gog": { "enabled": false, "type": "GOGExternalAccount" },
+      "discord": { "enabled": false, "type": "DiscordExternalAccount" }
+    },
+    "tokenSettings": {
+      "accessTokenExpirySeconds": 3600,
+      "refreshTokenExpirySeconds": 86400,
+      "tokenClockSkewSeconds": 300
+    },
+    "eas": {
+      "enabled": true,
+      "scopeFlags": ["BasicProfile", "Presence", "FriendsList"],
+      "requireEASForMultiplayer": true
+    },
+    "sessionManagement": {
+      "maxConcurrentSessions": 3,
+      "sessionTimeoutMinutes": 60,
+      "autoReconnect": true,
+      "reconnectMaxRetries": 5,
+      "reconnectBaseDelayMs": 1000
+    },
+    "cacheConfig": {
+      "authCacheSize": 128,
+      "authCacheTTLSeconds": 3600
+    },
+    "timeoutConfig": {
+      "authTimeoutMs": 10000,
+      "platformConnectionTimeoutMs": 30000,
+      "retryTotalTimeoutMs": 60000
+    }
+  },
+
+  "lobby": {
+    "_class": "KhaaosEOSLobby",
+    "maxMembers": 100,
+    "defaultMaxMembers": 100,
+    "presenceEnabled": true,
+    "rttEnabled": true,
+    "rttPingIntervalMs": 5000,
+    "searchAttributes": {
+      "world": { "type": "string", "values": ["CIGKV", "Barburhen", "Ckesalth", "Priadus", "Arukheea"] },
+      "rank_tier": { "type": "string", "values": ["unranked", "bronze", "silver", "gold", "platinum", "diamond", "master"] },
+      "region": { "type": "string", "values": ["sa1", "na1", "eu1"] },
+      "game_mode": { "type": "string", "values": ["Training", "Solo", "Duo", "Squad", "BattleRoyale"] }
+    },
+    "lobbyMemberAttributes": {
+      "skillRating": { "type": "int64", "visibility": "Private" },
+      "rankTier": { "type": "string", "visibility": "Public" },
+      "readyState": { "type": "boolean", "visibility": "Public" }
+    },
+    "bucketId": "khaaos-lobby-{region}",
+    "memberPromotionEnabled": true,
+    "cacheConfig": {
+      "lobbyCacheSize": 64,
+      "lobbyCacheTTLSeconds": 60
+    },
+    "timeoutConfig": {
+      "lobbyTimeoutMs": 10000
+    },
+    "rateLimit": {
+      "lobbyRateLimitPerSecond": 5,
+      "rateLimitBurstAllowance": 3,
+      "rateLimitCooldownMs": 1000
+    }
+  },
+
+  "matchmaking": {
+    "_class": "KhaaosEOSMatchmaking",
+    "algorithm": "SkillBasedMMR_TrueSkill2",
+    "trueSkill2": {
+      "initialMu": 25.0,
+      "initialSigma": 8.333,
+      "conservativeFactor": 3.0,
+      "drawProbability": 0.1,
+      "beta": 4.166,
+      "tau": 0.0833
+    },
+    "mmrSettings": {
+      "initialMMR": 1000,
+      "mmrSpread": 200,
+      "mmrExpandTimeSeconds": 30,
+      "mmrMaxSpread": 500,
+      "maxTeamSkillDelta": 100
+    },
+    "matchSettings": {
+      "minPlayersToStart": 10,
+      "preferredMatchSize": 50,
+      "maxWaitTimeSeconds": 120,
+      "allowJoinInProgress": true,
+      "autoStartWhenFull": false,
+      "autoStartMinPlayers": 10
+    },
+    "pools": {
+      "CIGKV_Training": {
+        "poolName": "CIGKV_Training",
+        "region": "sa1",
+        "world": "CIGKV",
+        "gameMode": "Training",
+        "minPlayers": 2,
+        "maxPlayers": 50,
+        "skillRange": 200,
+        "templateName": "Khaaos_CIGKV_Training"
+      },
+      "W1_Barburhen_Solo": {
+        "poolName": "W1_Barburhen_Solo",
+        "region": "sa1",
+        "world": "Barburhen",
+        "gameMode": "Solo",
+        "minPlayers": 2,
+        "maxPlayers": 100,
+        "skillRange": 300,
+        "templateName": "Khaaos_Barburhen_Solo"
+      },
+      "W2_Ckesalth_Duo": {
+        "poolName": "W2_Ckesalth_Duo",
+        "region": "na1",
+        "world": "Ckesalth",
+        "gameMode": "Duo",
+        "minPlayers": 4,
+        "maxPlayers": 100,
+        "skillRange": 250,
+        "templateName": "Khaaos_Ckesalth_Duo"
+      },
+      "W3_Priadus_Squad": {
+        "poolName": "W3_Priadus_Squad",
+        "region": "eu1",
+        "world": "Priadus",
+        "gameMode": "Squad",
+        "minPlayers": 8,
+        "maxPlayers": 100,
+        "skillRange": 200,
+        "templateName": "Khaaos_Priadus_Squad"
+      },
+      "W4_Arukheea_BR": {
+        "poolName": "W4_Arukheea_BR",
+        "region": "sa1",
+        "world": "Arukheea",
+        "gameMode": "BattleRoyale",
+        "minPlayers": 10,
+        "maxPlayers": 100,
+        "skillRange": 150,
+        "templateName": "Khaaos_Arukheea_BR"
+      }
+    },
+    "timeoutConfig": {
+      "matchmakingTimeoutMs": 15000
+    },
+    "cacheConfig": {
+      "sessionCacheSize": 64,
+      "sessionCacheTTLSeconds": 60
+    },
+    "rateLimit": {
+      "matchmakingRateLimitPerSecond": 2,
+      "rateLimitBurstAllowance": 3,
+      "rateLimitCooldownMs": 1000
+    }
+  },
+
+  "sessions": {
+    "_class": "KhaaosEOSSession",
+    "heartbeat": {
+      "intervalSeconds": 30,
+      "timeoutSeconds": 90,
+      "maxMissedHeartbeats": 3
+    },
+    "presence": {
+      "enabled": true,
+      "updateIntervalSeconds": 5
+    },
+    "invite": {
+      "enabled": true,
+      "maxPendingInvites": 5,
+      "inviteTTLSeconds": 300
+    },
+    "dedicatedServer": {
+      "registerOnStartup": true,
+      "gracefulShutdownSeconds": 30,
+      "maxPlayersDefault": 50,
+      "kickInactiveAfterSeconds": 300,
+      "allowJoinInProgress": true,
+      "allowSpectators": false
+    },
+    "sessionTemplates": {
+      "Khaaos_CIGKV_50p": {
+        "templateName": "Khaaos_CIGKV_50p",
+        "mapId": "CIGKV_KhaaosVille",
+        "gameMode": "KhaaosGameMode",
+        "maxPlayers": 50,
+        "minPlayers": 10,
+        "sessionTimeoutMinutes": 180,
+        "autoStartMinPlayers": 10
+      }
+    },
+    "timeoutConfig": {
+      "sessionTimeoutMs": 10000
+    },
+    "rateLimit": {
+      "sessionRateLimitPerSecond": 5
+    }
+  },
+
+  "cloudSave": {
+    "_class": "KhaaosCloudSave",
+    "buckets": {
+      "PlayerData": {
+        "description": "Player profile, inventory, and progression",
+        "maxSaveSizeBytes": 1048576,
+        "maxSlotsPerUser": 10
+      },
+      "MatchHistory": {
+        "description": "Recent match results and statistics",
+        "maxSaveSizeBytes": 524288,
+        "maxSlotsPerUser": 5,
+        "maxMatchHistoryEntries": 50
+      },
+      "Settings": {
+        "description": "User preferences and settings",
+        "maxSaveSizeBytes": 65536,
+        "maxSlotsPerUser": 1
+      }
+    },
+    "compression": {
+      "enabled": true,
+      "algorithm": "LZ4",
+      "minSizeToCompressBytes": 256,
+      "expectedRatio": 0.45
+    },
+    "integrity": {
+      "checksumAlgorithm": "SHA256",
+      "validateOnLoad": true,
+      "rejectCorruptedSaves": true
+    },
+    "autoSave": {
+      "enabled": true,
+      "intervalSeconds": 120,
+      "maxRetryCount": 5,
+      "retryBaseDelaySeconds": 1.0,
+      "retryMaxDelaySeconds": 30.0
+    },
+    "conflictResolution": {
+      "preferCloudOnConflict": true,
+      "mergeProgress": true,
+      "mergeStrategy": "MergeBoth",
+      "currentSaveVersion": 3
+    },
+    "timeoutConfig": {
+      "cloudStorageTimeoutMs": 15000
+    },
+    "rateLimit": {
+      "cloudStorageRateLimitPerSecond": 1
+    }
+  },
+
+  "regions": {
+    "_class": "KhaaosEOSRegionManager",
+    "selectionStrategy": "LowestPing",
+    "crossRegionPlay": {
+      "enabled": false,
+      "pingThresholdMs": 200
+    },
+    "endpoints": {
+      "sa1": {
+        "regionId": "sa1",
+        "regionName": "South America - Sao Paulo",
+        "endpoint": "eos-sa1.epicgames.com",
+        "latitude": -23.5505,
+        "longitude": -46.6333,
+        "maxLobbySize": 100,
+        "maxPlayersPerServer": 50,
+        "matchmakingPool": "KR_SA1",
+        "enabled": true,
+        "pingThreshold": 150,
+        "preferredDataCenter": "sa1"
+      },
+      "na1": {
+        "regionId": "na1",
+        "regionName": "North America - Virginia",
+        "endpoint": "eos-na1.epicgames.com",
+        "latitude": 37.4316,
+        "longitude": -78.6569,
+        "maxLobbySize": 100,
+        "maxPlayersPerServer": 50,
+        "matchmakingPool": "KR_NA1",
+        "enabled": true,
+        "pingThreshold": 100,
+        "preferredDataCenter": "na1"
+      },
+      "eu1": {
+        "regionId": "eu1",
+        "regionName": "Europe - Frankfurt",
+        "endpoint": "eos-eu1.epicgames.com",
+        "latitude": 50.1109,
+        "longitude": 8.6821,
+        "maxLobbySize": 100,
+        "maxPlayersPerServer": 50,
+        "matchmakingPool": "KR_EU1",
+        "enabled": true,
+        "pingThreshold": 100,
+        "preferredDataCenter": "eu1"
+      }
+    }
+  },
+
+  "monitoring": {
+    "metricsEnabled": true,
+    "metricsPort": 9090,
+    "metricsPath": "/metrics",
+    "alerts": {
+      "authFailure": true,
+      "matchmakingTimeout": true,
+      "eacViolation": true,
+      "cloudSaveFailure": true,
+      "highPing": true,
+      "highPingThresholdMs": 200
+    },
+    "dashboardRefreshIntervalMs": 5000,
+    "eosPlatformTickRateHz": 60
+  },
+
+  "mock": {
+    "description": "Settings for mock_eos_server.js (development only)",
+    "port": 8989,
+    "httpEndpoint": "http://localhost:8989",
+    "wsEndpoint": "ws://localhost:8989/ws",
+    "healthEndpoint": "http://localhost:8989/health",
+    "tokenExpirySeconds": 3600,
+    "heartbeatIntervalMs": 30000,
+    "matchmakingCheckIntervalMs": 2000,
+    "minPlayersForMatch": 2
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Mina_Khaaos",
+  "name": "Mina Khaaos",
+  "type": "Utilidade",
+  "rarity": "EPICO",
+  "heal": 0,
+  "defense": 0,
+  "use_time": 2.0,
+  "auto_revive": false,
+  "stack_max": 2,
+  "price": 375,
+  "rarity_weight": 12,
+  "rarity_multiplier": 7.5,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Epic",
+  "vfx_use": "VFX_Mina_Arm",
+  "sfx_use": "SFX_Mina_Arm",
+  "description": "Mina proxima Khaaos. 40 dano>o, raio 3m, detonacao automatica.",
+  "world_specific": []
+}

@@ -127,9 +127,9 @@ jobs:
               echo "::warning::$hdr missing #pragma once"
             fi
 
-            # Check for UCLASS/USTRUCT/UENUM without generated_body
-            if grep -q "UCLASS\|USTRUCT\|UENUM" "$hdr" && ! grep -q "GENERATED_BODY\|GENERATED_UCLASS_BODY\|GENERATED_USTRUCT_BODY" "$hdr"; then
-              echo "::error::$hdr has UE5 macro without GENERATED_BODY"
+            # UCLASS and USTRUCT require a generated body; UENUM does not.
+            if grep -q "UCLASS\|USTRUCT" "$hdr" && ! grep -q "GENERATED_BODY\|GENERATED_UCLASS_BODY\|GENERATED_USTRUCT_BODY" "$hdr"; then
+              echo "::error::$hdr has UCLASS/USTRUCT without a generated body"
               ERRORS=$((ERRORS + 1))
             fi
 
