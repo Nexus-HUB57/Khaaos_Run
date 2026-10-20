@@ -433,8 +433,49 @@ jobs:
               echo "Render is healthy on commit $EXPECTED_COMMIT (attempt $attempt)"
               exit 0
             fi
-            echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
+          echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
             sleep 15
           done
           echo "::error::Render did not become healthy on the expected commit within 10 minutes"
           exit 1
+
+  notify-failure:
+    name: Notify on CI failure
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    needs:
+      [lint, test-unit, test-game, build-server, docker-build, ue5-validate, economy-check, security, deploy-render]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Notify Discord (when configured)
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+            echo "DISCORD_WEBHOOK_URL is not configured; skipping Discord notification"
+            exit 0
+          fi
+          payload=$(jq -n --arg content "CI failed: ${REPOSITORY} (${REF_NAME}, ${COMMIT_SHA:0:7}) — ${RUN_URL}" '{content: $content}')
+          curl --fail --silent --show-error --max-time 15 \
+            -H "Content-Type: application/json" --data "$payload" "$DISCORD_WEBHOOK_URL"
+      - name: Notify Slack (when configured)
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification"
+            exit 0
+          fi
+          payload=$(jq -n --arg text "CI failed: ${REPOSITORY} (${REF_NAME}, ${COMMIT_SHA:0:7}) — ${RUN_URL}" '{text: $text}')
+          curl --fail --silent --show-error --max-time 15 \
+            -H "Content-Type: application/json" --data "$payload" "$SLACK_WEBHOOK_URL"

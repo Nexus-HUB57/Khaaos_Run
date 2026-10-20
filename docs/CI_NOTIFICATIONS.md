@@ -1,23 +1,20 @@
 # Notificações de falha do CI
 
-O workflow `.github/workflows/ci.yml` tenta notificar Discord e/ou Slack quando o job `verify` falha. É possível configurar um canal ou ambos; o job envia apenas para os webhooks cujos secrets estiverem configurados.
+O workflow `.github/workflows/ci.yml` contém um job `notify-failure` que tenta notificar Discord e Slack quando qualquer job principal de validação ou deploy falha. Cada destino é opcional: somente os webhooks cujos secrets estiverem disponíveis recebem mensagem.
 
-## Configurar destinos
+## Secrets de Actions necessários
 
-No GitHub, abra `Nexus-HUB57/Khaaos_Run` → **Settings → Secrets and variables → Actions → New repository secret** e configure um ou os dois:
+No GitHub, abra `Nexus-HUB57/Khaaos_Run` → **Settings → Secrets and variables → Actions → New repository secret** e cadastre um ou ambos:
 
-| Nome do secret | Valor esperado |
+| Nome | Valor esperado |
 |---|---|
-| `DISCORD_WEBHOOK_URL` | URL do webhook de um canal Discord autorizado |
+| `DISCORD_WEBHOOK_URL` | URL de webhook de um canal Discord autorizado |
 | `SLACK_WEBHOOK_URL` | URL de Incoming Webhook do workspace/canal Slack autorizado |
 
-Não coloque as URLs dos webhooks em arquivos do repositório, commits, issues ou logs. O workflow não imprime os valores dos secrets. Se nenhum estiver cadastrado, a pipeline continua reportando sua própria falha no GitHub, mas não há destino externo para a notificação.
+As URLs não devem ser colocadas no repositório, em issues ou em mensagens de chat. O workflow passa os valores ao processo por variáveis de ambiente e não os imprime. Se não houver secret para um destino, a etapa correspondente registra que foi ignorada. A pipeline continua exibindo a falha no GitHub.
 
-## Comportamento
+## Limite de verificação
 
-- O envio ocorre em job separado somente após falha do job `verify`.
-- Mensagem inclui repositório, branch, SHA abreviado e link da execução.
-- Se os dois secrets forem configurados, ambos os canais recebem alerta.
-- Falhas no endpoint do webhook deixam o job de notificação vermelho também; a falha original permanece registrada no job de verificação.
+Durante a manutenção desta integração, a API GitHub usada pela sessão retornou `403 Resource not accessible by integration` ao consultar nomes de Actions secrets. Portanto, não foi possível confirmar se os dois secrets existem. Nenhum valor foi lido ou cadastrado nesta execução. Um administrador do repositório precisa conferir a tela de Actions secrets.
 
-A execução do CI usa permissões mínimas de leitura no conteúdo do repositório.
+O job de alerta usa `curl` e payload JSON (`content` para Discord e `text` para Slack). Se o endpoint configurado rejeitar a mensagem, o job de notificação também falha; a falha que acionou o alerta continua visível nos jobs originais.
