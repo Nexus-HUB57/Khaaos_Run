@@ -43,14 +43,21 @@ async function close(server?: Server) {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 
-async function browserRequest(path: string, cookie?: string) {
+async function browserRequest(
+  path: string,
+  cookie?: string,
+  method = "GET",
+  extraHeaders: Record<string, string> = {},
+) {
   const response = await fetch(`http://127.0.0.1:${(application.address() as any).port}${path}`, {
+    method,
     redirect: "manual",
     headers: {
       host,
       "x-forwarded-host": host,
       "x-forwarded-proto": "https",
       ...(cookie ? { cookie } : {}),
+      ...extraHeaders,
     },
   });
   return response;
@@ -166,7 +173,19 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   assert.equal(persistedClaims?.sub, "simulated-replit-user");
   assert.equal(persistedClaims?.email, "local-user@example.test");
 
-  const logout = await browserRequest("/api/logout", cookie);
+  const legacyLogout = await browserRequest("/api/logout", cookie);
+  assert.equal(legacyLogout.status, 404, "logout must not mutate the session through GET");
+
+  const crossSiteLogout = await browserRequest("/api/logout", cookie, "POST", {
+    origin: "https://attacker.example",
+    "sec-fetch-site": "cross-site",
+  });
+  assert.equal(crossSiteLogout.status, 403, "cross-site logout must be rejected");
+
+  const logout = await browserRequest("/api/logout", cookie, "POST", {
+    origin: `https://${host}`,
+    "sec-fetch-site": "same-origin",
+  });
   assert.equal(logout.status, 302);
   const logoutRedirect = new URL(logout.headers.get("location")!);
   assert.equal(logoutRedirect.origin, providerOrigin.replace(/\/oidc$/, ""));

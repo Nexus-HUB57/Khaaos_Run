@@ -155,12 +155,26 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     })(req, res, next);
   });
 
-  app.get("/api/logout", (req, res) => {
+  app.post("/api/logout", (req, res) => {
     let origin: string;
     try {
       origin = getPublicOrigin(req);
     } catch {
       return res.status(400).json({ message: "Untrusted request host" });
+    }
+    if (req.get("sec-fetch-site") === "cross-site") {
+      return res.status(403).json({ message: "Cross-site request blocked" });
+    }
+    const requestOrigin = req.get("origin");
+    if (!requestOrigin) {
+      return res.status(403).json({ message: "Origin not allowed" });
+    }
+    try {
+      if (new URL(requestOrigin).origin !== origin) {
+        return res.status(403).json({ message: "Origin not allowed" });
+      }
+    } catch {
+      return res.status(403).json({ message: "Origin not allowed" });
     }
     req.logout(() => {
       res.redirect(

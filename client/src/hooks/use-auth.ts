@@ -18,7 +18,12 @@ async function fetchUser(): Promise<User | null> {
 }
 
 async function logout(): Promise<void> {
-  window.location.href = "/api/logout";
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/logout";
+  form.hidden = true;
+  document.body.appendChild(form);
+  form.submit();
 }
 
 export function useAuth() {
