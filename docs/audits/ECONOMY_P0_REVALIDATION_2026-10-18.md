@@ -108,3 +108,10 @@ A suite oficial também falhou inicialmente em `economy-postgres.test.ts` porque
 O comando `TEST_DATABASE_URL=<banco local descartável> npm run verify:all` terminou com **exit code 0**. Passaram todas as sete verificações do script: TypeScript, build e testes do app oficial; regras de loot UE5 portáveis; build, testes e stress do runtime. A falha inicial da suite oficial foi corrigida na asserção que agora verifica a causa PostgreSQL original.
 
 Validações PostgreSQL adicionais: `npm run test:postgres` **3/3**; `tests/official/economy-postgres.test.ts` **1/1**; teste WebSocket de reconexão **1/1**. O teste de lógica UE5 é host-portável e compila as regras reais compartilhadas, mas não substitui uma build completa no Unreal Editor/UnrealBuildTool, indisponível neste ambiente.
+
+
+## Atualização H1 — contenção do crédito não verificado (2026-10-20)
+
+Após a decisão de produto de que KRC será exclusivamente interno, a rota antiga de depósito foi desligada em código. `POST /api/bank/deposit` responde `503 PAYMENTS_NOT_CONFIGURED` antes de chamar qualquer serviço ou storage; não há método `EconomyService.deposit` nem `DatabaseStorage.depositFunds`, e o helper USD→KRC foi removido. A UI deixou de apresentar formulário USD, paridade, cashback por depósito e endereço simulado. Testes de rota e do contrato de serviço exigem fail-closed e ausência de mutação. Isso mitiga a concessão por esse caminho no código versionado; não prova configuração de produção nem substitui a futura verificação de pagamento.
+
+Checkout fiduciário continua pendente de escolha de provedor, entidade vendedora, catálogo, mercados iniciais e revisão jurídica/compliance. KRC não terá smart contract, Mainnet, saque ou resgate externo. A especificação está em [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](../INTERNAL_CURRENCY_AND_PAYMENTS.md).

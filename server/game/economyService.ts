@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { bankAccounts, economyIdempotency, economyLedgerEntries, items, loans, playerStats, transactions } from "@shared/schema";
-import { calculateLoanInterestMinorUnits, fromMinorUnits, hashEconomicRequest, isValidIdempotencyKey, toMinorUnits, usdToKrcMinorUnits } from "./economyMoney";
+import { calculateLoanInterestMinorUnits, fromMinorUnits, hashEconomicRequest, isValidIdempotencyKey, toMinorUnits } from "./economyMoney";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ResponseBody = Record<string, unknown>;
@@ -122,35 +122,6 @@ export class EconomyService {
     const [account] = await tx.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)).for("update");
     if (!account) throw new Error("Bank account could not be initialized");
     return account;
-  }
-
-  async deposit(userId: string, key: string, amountUsd: string | number): Promise<EconomyResponse> {
-    return this.execute(userId, key, "bank.deposit", { amountUsd }, async (tx, context) => {
-      const account = await this.lockBank(tx, userId);
-      const amountUsdMinor = boundedMinorUnits(amountUsd, 100n, 1_000_000n);
-      const amountKrcMinor = usdToKrcMinorUnits(amountUsd);
-      const amountUsdValue = fromMinorUnits(amountUsdMinor);
-      const amountKrcValue = fromMinorUnits(amountKrcMinor);
-      const [updated] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`round(${bankAccounts.weaponsBalance} + ${amountKrcValue}::numeric, 2)`,
-        bonusBalance: sql`round(${bankAccounts.bonusBalance} + ${amountKrcValue}::numeric, 2)`,
-      }).where(eq(bankAccounts.userId, userId)).returning();
-      if (!updated) throw new Error("Bank account disappeared during deposit");
-      await appendLedger(tx, context, [
-        { accountCode: "wallet.weapons", side: "CREDIT", amountKrc: amountKrcValue, description: "Deposit to Weapons wallet" },
-        { accountCode: "wallet.bonus", side: "CREDIT", amountKrc: amountKrcValue, description: "Deposit to Bonus wallet" },
-        { accountCode: "external.deposit", side: "DEBIT", amountKrc: fromMinorUnits(amountKrcMinor * 2n), description: "External deposit clearing" },
-      ]);
-      const [ledger] = await tx.insert(transactions).values({
-        userId,
-        type: "DEPOSITO",
-        amountKrc: amountKrcValue,
-        amountUsd: amountUsdValue,
-        operationId: context.operationId,
-        description: `Deposit $${amountUsdValue}`,
-      }).returning();
-      return { status: 200, body: { newBalance: updated.weaponsBalance, transactionId: ledger.id } };
-    });
   }
 
   async transfer(userId: string, key: string, amountKrc: string | number, destination: "bonus" | "fbm"): Promise<EconomyResponse> {

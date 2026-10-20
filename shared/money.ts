@@ -31,10 +31,6 @@ export function fromMinorUnits(value: bigint): string {
   return `${sign}${whole}.${fraction}`;
 }
 
-export function usdToKrcMinorUnits(usd: number | string, krcPerUsd = 100): bigint {
-  return toMinorUnits(usd) * BigInt(krcPerUsd);
-}
-
 /** 5% daily interest, rounded half-up to the nearest KRC cent. */
 export function calculateLoanInterestMinorUnits(principalKrc: number | string, days: number): bigint {
   if (!Number.isSafeInteger(days) || days < 1) throw new Error("Prazo inválido");

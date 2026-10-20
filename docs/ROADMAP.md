@@ -42,11 +42,12 @@ O roadmap não considera a presença de arquivos ou stubs como implementação c
 - [x] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
 - [x] Usar decimal exato ou unidades inteiras mínimas nas mutações econômicas; saldos usam `numeric` no SQL e entradas usam centavos inteiros.
 - [x] Adicionar idempotency key nas mutações econômicas com persistência e replay de resposta.
+- [x] Desativar concessão de KRC a partir de montante USD informado pelo cliente; não creditar antes de ordem e pagamento verificados.
 - [x] Definir checks no banco para saldos não negativos, lançamentos, durabilidade e estado dos empréstimos (migration 0003, `NOT VALID` até auditoria).
 - [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
 - [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
 
-**Entrega inicial desta rodada:** depósito, transferência, empréstimo, pagamento, compra, reparo e salário usam o serviço transacional/idempotente. O schema e as migrations foram aplicados e os testes concorrentes passaram em PostgreSQL local descartável; não foi alterado nenhum banco da aplicação, pois não há `DATABASE_URL` disponível. Os checks `NOT VALID` protegem novos/alterados registros; a validação dos dados legados e FKs de ownership continuam pendentes. O rollout está descrito em [`docs/ECONOMY_TRANSACTIONS.md`](./ECONOMY_TRANSACTIONS.md).
+**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. Nesta implementação posterior, o depósito sem prova de liquidação foi deliberadamente desabilitado com HTTP 503; as demais operações internas continuam no ledger. O schema e as migrations econômicas foram exercitados em PostgreSQL descartável; nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Checkout fiduciário e resgate não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md).
 
 **Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
 

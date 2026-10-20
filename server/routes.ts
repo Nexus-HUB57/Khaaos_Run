@@ -133,19 +133,11 @@ export function registerApiRoutes(app: Express): void {
     res.json(await storage.getBankAccount(getUserId(req)));
   });
 
-  app.post(api.bank.deposit.path, requireAuth, async (req, res) => {
-    try {
-      const input = parseMutationBody(req, res, api.bank.deposit.input);
-      if (!input) return;
-      const key = readIdempotencyKey(req, res);
-      if (!key) return;
-      const userId = getUserId(req);
-      const result = await economyService.deposit(userId, key, input.amountUsd);
-      res.status(result.status).json(result.body);
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
-    }
+  app.post(api.bank.deposit.path, requireAuth, (_req, res) => {
+    res.status(503).json({
+      code: "PAYMENTS_NOT_CONFIGURED",
+      message: "Depósitos estão temporariamente indisponíveis. Nenhum KRC foi creditado.",
+    });
   });
 
   app.post(api.bank.transfer.path, requireAuth, async (req, res) => {
