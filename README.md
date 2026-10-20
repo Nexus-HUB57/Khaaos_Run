@@ -58,6 +58,8 @@
 | **3D Assets / Mapas** | ✅ Pacotes 3D + Commandlet | Geometria `.obj`/`.gltf`, `.umap.json`, DataTables `.csv` e TopDown `.svg` gerados para **CIGKV + W1–W4** + **11 Niagara VFX (`NS_*`)** + `UKhaaosWorldAssetBuilderCommandlet` |
 | **EAC SDK Binary** | ✅ Integrado (C-ABI + Binários) | `eos_anticheat_bridge.h` + `libeasyanticheat_server.so` (Linux) + `EasyAntiCheat_x64.dll` (Win64) + `SHA256SUMS` + `UKhaaosEACIntegration` 3-Strikes ativo |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
+| **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial (Américas, África, Ásia, Europa, MENA, Oceania), 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Git repo inicializado e povoado com branches (`main`, `pr-48`, `feat/pr61`, `feat/pr62`, `feat/pr63`), proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 
 ---
 
