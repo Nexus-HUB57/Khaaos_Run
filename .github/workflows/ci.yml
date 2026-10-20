@@ -40,7 +40,7 @@ jobs:
       - run: npm ci
 
       - name: TypeScript type check
-        run: npx tsc --noEmit 2>&1 | tee typecheck.log
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee typecheck.log
 
       - name: ESLint
         run: npx eslint . --ext .ts,.tsx --max-warnings 0 2>&1 | tee eslint.log || true
@@ -89,10 +89,10 @@ jobs:
         run: npm run db:migrate
 
       - name: Run unit tests
-        run: npm run test:official 2>&1 | tee test-unit.log
+        run: set -o pipefail; npm run test:official 2>&1 | tee test-unit.log
 
       - name: Run PostgreSQL persistence integration tests
-        run: npm run test:postgres 2>&1 | tee test-postgres.log
+        run: set -o pipefail; npm run test:postgres 2>&1 | tee test-postgres.log
 
       - name: Upload test results
         if: always()
@@ -174,7 +174,7 @@ jobs:
       - run: npm ci
 
       - name: Build
-        run: npm run build 2>&1 | tee build.log
+        run: set -o pipefail; npm run build 2>&1 | tee build.log
 
       - name: Upload dist
         uses: actions/upload-artifact@v4

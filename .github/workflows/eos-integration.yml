@@ -12,6 +12,17 @@ on:
       - 'Unreal/KhaaosRun/Config/DefaultEOS.ini'
       - 'Unreal/KhaaosRun/Config/Regions/**'
       - 'scripts/fase2/**'
+      - '.github/workflows/eos-integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/EOS/**'
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/Save/**'
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/**'
+      - 'Unreal/KhaaosRun/Config/DefaultEOS.ini'
+      - 'Unreal/KhaaosRun/Config/Regions/**'
+      - 'scripts/fase2/**'
+      - '.github/workflows/eos-integration.yml'
   workflow_dispatch:
     inputs:
       eos_environment:
@@ -36,8 +47,8 @@ jobs:
           echo "=== Validating $INI ==="
 
           # Required sections
-          for section in "EOSIntegrationKit" "OnlineSubsystemEOS" "EOSSettings"; do
-            if grep -q "\\[$section\\]" "$INI"; then
+          for section in "/Script/EOSIntegrationKit.EOSIntegrationKitSettings" "EOS"; do
+            if grep -Fqx "[$section]" "$INI"; then
               echo "  ✅ [$section] found"
             else
               echo "  ❌ [$section] MISSING"
@@ -47,15 +58,11 @@ jobs:
 
           # Required keys
           for key in "ProductId" "SandboxId" "DeploymentId" "ClientId" "ClientSecret"; do
-            if grep -q "$key" "$INI"; then
-              VALUE=$(grep "$key" "$INI" | head -1 | cut -d= -f2 | tr -d ' ')
-              if [[ "$VALUE" == KHAOS_* ]]; then
-                echo "  ⚠️  $key = placeholder ($VALUE) — needs Fase 2 setup"
-              else
-                echo "  ✅ $key = configured"
-              fi
+            if grep -Eq "^[[:space:]]*${key}[[:space:]]*=" "$INI"; then
+              echo "  ✅ $key key present (value is not logged)"
             else
               echo "  ❌ $key MISSING"
+              exit 1
             fi
           done
 
@@ -69,12 +76,14 @@ jobs:
             exit 1
           fi
 
+          missing=0
           # Verify all 3 regions configured
           for region in sa1 na1 eu1; do
             if grep -q "$region" "$INI"; then
               echo "  ✅ Region $region configured"
             else
               echo "  ❌ Region $region MISSING"
+              missing=1
             fi
           done
 
@@ -84,8 +93,12 @@ jobs:
               echo "  ✅ Matchmaking pool $pool configured"
             else
               echo "  ❌ Matchmaking pool $pool MISSING"
+              missing=1
             fi
           done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Check EAC Integration
         run: |
@@ -192,30 +205,7 @@ jobs:
             exit 1
           fi
 
-  # ─── Job 4: Verify GitHub Secrets ─────────────────────────────
-  verify-secrets:
-    name: Verify EOS GitHub Secrets
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check EOS secrets
-        run: |
-          echo "=== GitHub Secrets Status ==="
-          SECRETS=("EOS_PRODUCT_ID" "EOS_SANDBOX_ID" "EOS_DEPLOYMENT_ID" "EOS_CLIENT_ID" "EOS_CLIENT_SECRET")
-          CONFIGURED=0
-
-          for secret in "${SECRETS[@]}"; do
-            # Can't read secret values, but can check if workflow can access
-            echo "  📋 $secret: configured in repo settings?"
-            CONFIGURED=$((CONFIGURED + 1))
-          done
-
-          echo ""
-          echo "  💡 Run scripts/fase2/setup_eos_production.sh to configure all secrets"
-          echo "  💡 Or use: gh secret set $secret --body <value>"
-
-  # ─── Job 5: Region Connectivity Check ─────────────────────────
+  # ─── Job 4: Region Connectivity Check ─────────────────────────
   region-check:
     name: Region Connectivity
     runs-on: ubuntu-latest

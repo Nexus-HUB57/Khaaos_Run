@@ -3,6 +3,8 @@ name: 07 — Economy Validation
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   economy:
@@ -34,5 +36,6 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run test:economy
       - name: Validate transactional economy against PostgreSQL
         run: node --import tsx --test tests/official/economy-postgres.test.ts
