@@ -3,7 +3,8 @@
  * Tests: 11 abilities, cooldowns, energy, damage falloff, headshot
  * Copyright Nexus-HUB57
  */
-import { describe, it, expect, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // ─── Ability Definitions ──────────────────────────────────────────────────
 const ABILITIES = [
@@ -28,21 +29,21 @@ function calculateDamageAtDistance(baseDamage: number, distance: number, maxRang
 
 describe('GAS Combat System', () => {
   it('should have exactly 11 abilities', () => {
-    expect(ABILITIES).toHaveLength(11);
+    assert.equal(ABILITIES.length, 11);
   });
 
   it('all abilities should have valid cooldowns (>= 0)', () => {
-    ABILITIES.forEach(a => expect(a.cooldownMs).toBeGreaterThanOrEqual(0));
+    ABILITIES.forEach(a => assert.ok(a.cooldownMs >= 0, `${a.id} cooldown must be non-negative`));
   });
 
   it('all abilities should have valid energy costs (>= 0)', () => {
-    ABILITIES.forEach(a => expect(a.energyCost).toBeGreaterThanOrEqual(0));
+    ABILITIES.forEach(a => assert.ok(a.energyCost >= 0, `${a.id} energy cost must be non-negative`));
   });
 
   it('damage abilities should have positive damage', () => {
     const damageAbilities = ABILITIES.filter(a => a.damage > 0);
-    expect(damageAbilities.length).toBeGreaterThan(0);
-    damageAbilities.forEach(a => expect(a.damage).toBeGreaterThan(0));
+    assert.ok(damageAbilities.length > 0);
+    damageAbilities.forEach(a => assert.ok(a.damage > 0, `${a.id} damage must be positive`));
   });
 
   it('should apply damage falloff at range', () => {
@@ -50,15 +51,15 @@ describe('GAS Combat System', () => {
     const dmgPointBlank = calculateDamageAtDistance(rifle.damage, 0, rifle.range);
     const dmgHalfRange = calculateDamageAtDistance(rifle.damage, rifle.range / 2, rifle.range);
     const dmgMaxRange = calculateDamageAtDistance(rifle.damage, rifle.range, rifle.range);
-    expect(dmgPointBlank).toBe(rifle.damage);
-    expect(dmgHalfRange).toBeLessThan(dmgPointBlank);
-    expect(dmgMaxRange).toBeCloseTo(rifle.damage * 0.3, 1);
+    assert.equal(dmgPointBlank, rifle.damage);
+    assert.ok(dmgHalfRange < dmgPointBlank);
+    assert.ok(Math.abs(dmgMaxRange - rifle.damage * 0.3) < 0.05);
   });
 
   it('should apply headshot multiplier correctly', () => {
     const rifle = ABILITIES.find(a => a.id === 'Shoot_Rifle')!;
     const headshotMult = 2.0;
-    expect(rifle.damage * headshotMult).toBe(70);
+    assert.equal(rifle.damage * headshotMult, 70);
   });
 
   it('sniper headshot should be highest single-hit damage', () => {
@@ -66,12 +67,12 @@ describe('GAS Combat System', () => {
     const sniperHeadshot = sniper.damage * 3.0;
     const rifle = ABILITIES.find(a => a.id === 'Shoot_Rifle')!;
     const rifleHeadshot = rifle.damage * 2.0;
-    expect(sniperHeadshot).toBeGreaterThan(rifleHeadshot);
+    assert.ok(sniperHeadshot > rifleHeadshot);
   });
 
   it('melee should have range <= 3', () => {
     const melee = ABILITIES.filter(a => a.range <= 3);
-    expect(melee.length).toBeGreaterThanOrEqual(1);
+    assert.ok(melee.length >= 1);
   });
 
   it('energy should not go negative', () => {
@@ -81,12 +82,12 @@ describe('GAS Combat System', () => {
         energy -= a.energyCost;
       }
     }
-    expect(energy).toBeGreaterThanOrEqual(0);
+    assert.ok(energy >= 0);
   });
 
   it('cooldowns should prevent ability spam', () => {
     const shield = ABILITIES.find(a => a.id === 'Shield')!;
-    expect(shield.cooldownMs).toBeGreaterThan(0);
-    expect(shield.cooldownMs).toBe(12000);
+    assert.ok(shield.cooldownMs > 0);
+    assert.equal(shield.cooldownMs, 12000);
   });
 });

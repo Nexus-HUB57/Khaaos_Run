@@ -5,6 +5,11 @@
       "branches": [
         "main"
       ]
+    },
+    "pull_request": {
+      "branches": [
+        "main"
+      ]
     }
   },
   "jobs": {
@@ -24,8 +29,8 @@
           "run": "npm ci"
         },
         {
-          "name": "EOS Auth Flow Test",
-          "run": "npx vitest run tests/integration/eos-economy.integration.test.ts"
+          "name": "EOS-to-economy mocked flow",
+          "run": "npm run test:eos-flow"
         }
       ]
     }
