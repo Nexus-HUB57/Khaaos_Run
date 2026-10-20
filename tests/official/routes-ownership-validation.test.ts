@@ -85,8 +85,6 @@ after(async () => {
 
 test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) => {
   const invalidInputs = [
-    { name: "depósito abaixo do mínimo", path: "/api/bank/deposit", body: { amountUsd: 0 } },
-    { name: "depósito acima do limite", path: "/api/bank/deposit", body: { amountUsd: 10001 } },
     { name: "transferência negativa", path: "/api/bank/transfer", body: { amountKrc: -1, destination: "fbm" } },
     { name: "transferência com usuário forjado", path: "/api/bank/transfer", body: { amountKrc: 5, destination: "fbm", userId: "victim" } },
     { name: "empréstimo fracionário", path: "/api/loans", body: { amountKrc: 100.5, days: 1 } },
@@ -143,9 +141,8 @@ test("IDs inválidos são rejeitados antes de acessar o storage", async (t) => {
 });
 
 test("mutações financeiras usam o serviço idempotente e preservam status e DTOs", async () => {
-  const methodNames = ["deposit", "transfer", "requestLoan", "payLoan", "purchaseItem", "repairItem", "claimDailySalary"];
+  const methodNames = ["transfer", "requestLoan", "payLoan", "purchaseItem", "repairItem", "claimDailySalary"];
   const replies: Record<string, { status: number; body: Record<string, unknown> }> = {
-    deposit: { status: 200, body: { newBalance: "123.00", transactionId: 11, operationId: "00000000-0000-4000-8000-000000000011" } },
     transfer: { status: 200, body: { message: "Transferência realizada", newBalance: "113.00", operationId: "00000000-0000-4000-8000-000000000012" } },
     requestLoan: { status: 201, body: { id: 12, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000013" } },
     payLoan: { status: 200, body: { message: "Empréstimo pago", operationId: "00000000-0000-4000-8000-000000000014" } },
@@ -162,7 +159,6 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
   }
 
   const cases = [
-    { method: "deposit", path: "/api/bank/deposit", body: { amountUsd: "1.23" }, key: "route-deposit-key-0001", args: ["player-1", "route-deposit-key-0001", "1.23"] },
     { method: "transfer", path: "/api/bank/transfer", body: { amountKrc: "10.00", destination: "fbm" }, key: "route-transfer-key-0001", args: ["player-1", "route-transfer-key-0001", "10.00", "fbm"] },
     { method: "requestLoan", path: "/api/loans", body: { amountKrc: 100, days: 2 }, key: "route-loan-key-000001", args: ["player-1", "route-loan-key-000001", 100, 2] },
     { method: "payLoan", path: "/api/loans/1/pay", body: {}, key: "route-payloan-key-0001", args: ["player-1", "route-payloan-key-0001", 1] },
@@ -172,7 +168,7 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
   ];
 
   try {
-    const missingKey = await request("POST", "/api/bank/deposit", "player-1", { amountUsd: "1.23" });
+    const missingKey = await request("POST", "/api/bank/transfer", "player-1", { amountKrc: "10.00", destination: "fbm" });
     assert.equal(missingKey.status, 400);
     assert.equal(calls.length, 0, "a rota não deve chamar o serviço sem uma chave válida");
 
@@ -187,6 +183,23 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
   } finally {
     for (const method of methodNames) delete (economyService as any)[method];
   }
+});
+
+test("depósito é bloqueado antes de serviço/storage e ignora valor escolhido pelo cliente", async () => {
+  const callsBefore = blockedStorageCalls.length;
+  const response = await request("POST", "/api/bank/deposit", "player-1", {
+    amountUsd: "10000.00",
+    amountKrc: "999999999.00",
+    userId: "victim",
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    code: "PAYMENTS_NOT_CONFIGURED",
+    message: "Depósitos estão temporariamente indisponíveis. Nenhum KRC foi creditado.",
+  });
+  assert.equal(blockedStorageCalls.length, callsBefore);
+  assert.equal(typeof (economyService as any).deposit, "undefined");
 });
 
 test("leituras privadas usam a identidade da sessão, não userId enviado na query", async (t) => {

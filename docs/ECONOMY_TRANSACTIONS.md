@@ -2,7 +2,7 @@
 
 ## Implementação inicial
 
-As rotas de depósito, transferência, solicitação/pagamento de empréstimo, compra/reparo de item e salário diário agora passam por `server/game/economyService.ts`. Cada operação grava débito/crédito, recurso (quando aplicável) e linha do ledger no mesmo `db.transaction` do PostgreSQL.
+Transferência, solicitação/pagamento de empréstimo, compra/reparo de item e salário diário passam por `server/game/economyService.ts`. Cada operação habilitada grava débito/crédito, recurso (quando aplicável) e linha do ledger no mesmo `db.transaction` do PostgreSQL. O depósito legado foi **desativado**: `POST /api/bank/deposit` retorna HTTP 503 sem chamar serviço econômico ou storage; o método antigo `DatabaseStorage.depositFunds` foi removido. A resposta não significa pagamento aceito nem KRC creditado.
 
 - Todas as operações monetárias exigem `Idempotency-Key` (16–128 caracteres permitidos), escopada pelo usuário autenticado.
 - A tabela `economy_idempotency` persiste o hash canônico do método/operação e payload, além do status/corpo da resposta. Um retry idêntico reproduz a resposta; a mesma chave com payload diferente retorna `409`.
@@ -29,7 +29,6 @@ As entradas usam KRC `numeric` positivo, `DEBIT`/`CREDIT`, número de linha e c�
 
 | Evento | Lançamentos principais |
 |---|---|
-| Depósito | Crédito em Weapons e Bonus; débito em clearing externo pelo total dos dois créditos (o comportamento atual deposita em ambas as carteiras). |
 | Transferência | Débito na carteira Weapons; crédito em Bonus ou FBM. |
 | Empréstimo | Crédito em Weapons; débito em recebíveis de principal. |
 | Pagamento de empréstimo | Débito em Weapons; crédito em recebíveis de principal e, separadamente, em receita de juros. |
@@ -52,3 +51,11 @@ Exemplos: `npm run economy:reconcile`; `npm run economy:idempotency:prune`; apó
 
 1. Auditar saldos negativos, ledger, empréstimos e durabilidade antes de `VALIDATE CONSTRAINT`; avaliar FKs de ownership com a tabela de usuários real. Enquanto isso, ownership das mutações permanece filtrado dentro do SQL da operação.
 2. Tornar o PostgreSQL de integração obrigatório no CI/deploy de teste: `economy-postgres.test.ts` já valida as constraints, concorrência de transferência, compra, pagamento, empréstimo e salário, replay, chave com payload diferente e rollback por falha injetada. Execução local: `TEST_DATABASE_URL=<URL de banco descartável *_test> node --import tsx --test tests/official/economy-postgres.test.ts`.
+
+## Moeda interna e pagamentos externos — estado atual
+
+KRC é uma moeda virtual fechada do jogo, não um token, stablecoin, criptoativo ou saldo resgatável. Não existe conversão USD→KRC nem endereço de depósito. Uma compra com moeda fiduciária não pode alterar `bank_accounts` diretamente a partir do browser.
+
+Até a seleção e implementação de um provedor de checkout apropriado, a rota `/api/bank/deposit` responde `503 PAYMENTS_NOT_CONFIGURED`. O caminho antigo de crédito pelo serviço e o método de storage foram removidos; testes de rota e PostgreSQL verificam que nenhum saldo, evento `DEPOSITO` ou posting é criado. Nenhum provedor, credencial, webhook ou liquidação de Mainnet está ativo.
+
+Quando a monetização for aprovada, o servidor criará uma ordem a partir de um catálogo fechado versionado, sem aceitar preço ou quantidade de KRC como autoridade do cliente. Um webhook com assinatura verificada deverá confirmar o valor, moeda, estado final e identificador do pedido; evento duplicado/retry será deduplicado por restrição única. A aplicação do entitlement e do lançamento interno ocorrerá uma vez, em transação PostgreSQL, com eventos de estorno e chargeback registrados por lançamentos compensatórios. Ver `docs/INTERNAL_CURRENCY_AND_PAYMENTS.md` para as decisões e gates.

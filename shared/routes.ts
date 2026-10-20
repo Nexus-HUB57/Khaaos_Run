@@ -25,7 +25,6 @@ export type {
   Loan,
   Item,
   PlayerStats,
-  DepositRequest,
   TransferRequest,
   LoanRequest,
 } from './schema';
@@ -62,16 +61,11 @@ export const api = {
     deposit: {
       method: 'POST' as const,
       path: '/api/bank/deposit',
-      input: z.object({
-        amountUsd: moneyAmountInput(100n, 1_000_000n),
-      }).strict(),
       responses: {
-        200: z.object({
-          newBalance: z.string(),
-          transactionId: z.number(),
-          operationId: z.string().uuid(),
+        503: z.object({
+          code: z.literal("PAYMENTS_NOT_CONFIGURED"),
+          message: z.string(),
         }),
-        400: errorSchemas.validation,
       },
     },
     transfer: {

@@ -17,6 +17,12 @@ void UKhaaosBankhaoosComponent::BeginPlay()
 
 bool UKhaaosBankhaoosComponent::CreateAccount()
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bankhaoos] Criação de conta negada fora da autoridade do servidor"));
+		return false;
+	}
+
 	if (bAccountCreated)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[Bankhaoos] Conta já existe: %s"), *AccountId);
@@ -24,25 +30,25 @@ bool UKhaaosBankhaoosComponent::CreateAccount()
 	}
 
 	AccountId = GenerateAccountId();
-	DepositAddress = GenerateDepositAddress();
 	KRCBalance = InitialKRC;
 	bAccountCreated = true;
 
-	UE_LOG(LogTemp, Log, TEXT("[Bankhaoos] Conta criada | ID=%s | Depósito=%s | KRC=%d"),
-		*AccountId, *DepositAddress, KRCBalance);
+	UE_LOG(LogTemp, Log, TEXT("[Bankhaoos] Conta local de teste criada | ID=%s | KRC=%d"),
+		*AccountId, KRCBalance);
 
 	OnAccountCreated.Broadcast(AccountId, InitialKRC);
 	OnKRCChanged.Broadcast(KRCBalance, InitialKRC);
-
-	// Em produção: HTTP POST para a API Node.js (EconomyBridge)
-	// Ex: POST /api/bankhaoos/create { playerId, initialKRC }
 
 	return true;
 }
 
 void UKhaaosBankhaoosComponent::CreditKRC(int32 Amount, const FString& Reason)
 {
-	if (Amount <= 0) return;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || Amount <= 0 || KRCBalance > MAX_int32 - Amount)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bankhaoos] Crédito local negado: requer autoridade do servidor e valor válido"));
+		return;
+	}
 
 	KRCBalance += Amount;
 	OnKRCChanged.Broadcast(KRCBalance, Amount);
@@ -52,7 +58,7 @@ void UKhaaosBankhaoosComponent::CreditKRC(int32 Amount, const FString& Reason)
 
 bool UKhaaosBankhaoosComponent::DebitKRC(int32 Amount, const FString& Reason)
 {
-	if (Amount <= 0 || Amount > KRCBalance) return false;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || Amount <= 0 || Amount > KRCBalance) return false;
 
 	KRCBalance -= Amount;
 	OnKRCChanged.Broadcast(KRCBalance, -Amount);
@@ -66,15 +72,4 @@ FString UKhaaosBankhaoosComponent::GenerateAccountId() const
 	// Formato simples: KR-XXXXXXXX
 	const int32 Rand = FMath::RandRange(10000000, 99999999);
 	return FString::Printf(TEXT("KR-%08d"), Rand);
-}
-
-FString UKhaaosBankhaoosComponent::GenerateDepositAddress() const
-{
-	// Simulação de endereço (em produção vem da API / wallet)
-	FString Addr = TEXT("krc1");
-	for (int32 i = 0; i < 32; ++i)
-	{
-		Addr.AppendChar(TEXT("0123456789abcdef")[FMath::RandRange(0, 15)]);
-	}
-	return Addr;
 }

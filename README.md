@@ -275,14 +275,14 @@ Em todos os casos:
 
 ## Modelo Econômico e Persistência
 
-- **KRC** (Khaaos Run Coin) — criptomoeda de jogo. Adquirida por sobrevivência, eliminações, captura de Data Cores e ranking de convites.
-- **Bankhaoos** — conta bancária automática ao alistamento + endereço de depósito.
-- **Fundo de Investimentos KR** — acumula o prêmio de US$ 1.000.000 destinado ao(à) grande vencedor(a).
-- **Forja do Armeiro** — marketplace de equipamentos e upgrades pagos em KRC.
+- **KRC** (Khaaos Run Coin) — moeda virtual fechada, sem blockchain, sem cotação externa, sem transferência para fora do jogo e sem resgate em dinheiro. Pode ser obtida por progressão de gameplay conforme as regras do servidor.
+- **Bankhaoos** — carteira virtual interna ao jogo; não é uma conta bancária nem gera endereço de depósito.
+- **Fundo Bélico (FBM)** — saldo e mecânica internos do jogo; não é investimento financeiro nem fundo com ativos reais.
+- **Forja do Armeiro** — marketplace de equipamentos e upgrades do jogo pagos em KRC, conforme regras autoritativas do servidor.
 - **Persistência seletiva**: conquistas do CIGKV não migram integralmente; apenas Tokens de Veterano, packs e os 1000 melhores pontuados recebem transferência parcial para W1/C1.
 - **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
-> **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+> **Estado de pagamentos:** compras com dinheiro real, depósitos, saques, resgates, prêmios em dinheiro e integração Mainnet não estão habilitados. A antiga rota de depósito não credita KRC. Qualquer monetização futura exige catálogo/preço controlados pelo servidor, confirmação de pagamento verificável, ledger/idempotência, tratamento de reembolsos e chargebacks, controles antifraude e revisão jurídica/compliance para os mercados atendidos. KRC continuará sendo apenas moeda interna, sem promessa de valor externo.
 
 ---
 

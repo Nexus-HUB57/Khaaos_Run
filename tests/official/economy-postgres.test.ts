@@ -172,16 +172,6 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await assert.rejects(pool.query("TRUNCATE economy_ledger_entries"), /append-only/);
     const conflictingReplay = await service.transfer(transferUser, transferKey, "11.00", "fbm");
     assert.equal(conflictingReplay.status, 409);
-    const depositKey = randomUUID();
-    const deposits = await Promise.all([
-      service.deposit(transferUser, depositKey, "1.23"),
-      service.deposit(transferUser, depositKey, "1.23"),
-    ]);
-    assert.deepEqual(deposits.map((result) => result.status), [200, 200]);
-    const depositedBalance = await pool.query("SELECT weapons_balance::text, bonus_balance::text FROM bank_accounts WHERE user_id = $1", [transferUser]);
-    assert.equal(depositedBalance.rows[0].weapons_balance, "213.00");
-    assert.equal(depositedBalance.rows[0].bonus_balance, "123.00");
-
     const purchases = await Promise.all([
       service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra A" }),
       service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra B" }),

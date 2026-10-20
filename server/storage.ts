@@ -3,7 +3,7 @@ import {
   playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
-  PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
+  PatenteKR, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
 import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -16,7 +16,6 @@ export interface IStorage {
   getBankAccount(userId: string): Promise<BankAccount>;
   updateBankAccount(userId: string, updates: Partial<BankAccount>): Promise<BankAccount>;
   createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction>;
-  depositFunds(userId: string, amountKrc: string, amountUsd: string): Promise<{ bank: BankAccount; transaction: Transaction }>;
   transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons"): Promise<{ bank: BankAccount; transaction: Transaction }>;
   getTransactions(userId: string): Promise<Transaction[]>;
   // Loans
@@ -108,20 +107,6 @@ export class DatabaseStorage implements IStorage {
     const [bank] = await tx.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)).for("update");
     if (!bank) throw new Error("Conta bancária não encontrada");
     return bank;
-  }
-
-  async depositFunds(userId: string, amountKrc: string, amountUsd: string) {
-    return db.transaction(async (tx) => {
-      const bank = await this.lockBankAccount(tx, userId);
-      const [updatedBank] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`${bankAccounts.weaponsBalance} + ${amountKrc}::numeric`,
-        bonusBalance: sql`${bankAccounts.bonusBalance} + ${amountKrc}::numeric`,
-      }).where(eq(bankAccounts.userId, userId)).returning();
-      const [transaction] = await tx.insert(transactions).values({
-        userId, type: "DEPOSITO", amountKrc, amountUsd, description: `Deposit $${amountUsd}`,
-      }).returning();
-      return { bank: updatedBank, transaction };
-    });
   }
 
   async transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons") {
