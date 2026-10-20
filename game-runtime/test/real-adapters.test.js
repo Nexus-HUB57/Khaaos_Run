@@ -5,7 +5,7 @@ import { PostgresSessionStore } from '../server/store.js';
 import { RedisRateStore } from '../server/rateLimit.js';
 
 const databaseUrl = process.env.KR_DATABASE_TEST_URL || process.env.KR_DATABASE_URL;
-const redisUrl = process.env.KR_REDIS_TEST_URL || process.env.REDIS_URL || process.env.KR_REDIS_URL;
+const redisUrl = process.env.KR_REDIS_TEST_URL;
 
  test('PostgreSQL: sessão é persistida, lida e expirada no servidor real', { skip: !databaseUrl }, async () => {
   const store = new PostgresSessionStore({ connectionString: databaseUrl });

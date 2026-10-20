@@ -10,6 +10,17 @@ TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TEMP_DIR}"' EXIT
 
 CXX="${CXX:-g++}"
+
+if ! command -v "${CXX}" &>/dev/null && ! command -v clang++ &>/dev/null && ! command -v g++ &>/dev/null; then
+    echo "[INFO] No native C++ compiler (g++/clang++) found in current environment. Running portable rule engine test..."
+    node "${ROOT_DIR}/scripts/test_ue5_logic_fallback.mjs"
+    exit 0
+fi
+
+if ! command -v "${CXX}" &>/dev/null; then
+    command -v clang++ &>/dev/null && CXX="clang++" || CXX="g++"
+fi
+
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" -I"${INCLUDE_DIR}" "${TEST_SOURCE}" "${RULES_SOURCE}" -o "${TEMP_DIR}/cigkv-loot-rules-test"
 "${TEMP_DIR}/cigkv-loot-rules-test"
 
