@@ -7,6 +7,8 @@ import { users } from "./models/auth";
 export * from "./models/auth";
 
 // === CONSTANTS ===
+export const KRC_TO_USD = 100;
+
 export const PatenteKR = {
   ZHEERS: "ZHEERS", ONITH: "ONITH", SKEETW: "SKEETW", HURAN: "HURAN",
   VENEX: "VENEX", KHAEL: "KHAEL", MALAKOR: "MALAKOR", OVERLORD: "OVERLORD",
@@ -382,6 +384,7 @@ export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
 export type MatchResult = typeof matchResults.$inferSelect;
+export interface DepositRequest { amountUsd: number | string; }
 export interface TransferRequest { amountKrc: number | string; destination: "fbm" | "bonus"; }
 export interface LoanRequest { amountKrc: number; days: number; }
 export interface CreateItemRequest { name: string; type: keyof typeof ItemType; rarity?: keyof typeof Rarity; }

@@ -1,0 +1,338 @@
+[
+  {
+    "id": "OP_MALE_VANGUARD",
+    "codename": "KHAEL VANCE",
+    "fullName": "Khael Vance · Operador Vanguarda M-01",
+    "gender": "MASCULINO",
+    "ethnicity": "Afro-Latino / Pardo Brasileiro",
+    "rank": "ONITH",
+    "specialization": "FUZILEIROS",
+    "defaultWorld": "CIGKV",
+    "svgPathContent": "Content/Avatars/male/op_male_vanguard.svg",
+    "svgPathPublic": "/avatars/male/op_male_vanguard.svg",
+    "colors": {
+      "primary": "#F97316",
+      "secondary": "#7C3AED",
+      "trim": "#EAB308",
+      "skinTone": "#8d5524",
+      "eyes": "#f59e0b",
+      "hair": "#171717"
+    },
+    "lore": "Nascido nas favelas verticais em torno do CIGKV. Especialista em CQB e incursão."
+  },
+  {
+    "id": "OP_MALE_BREACHER",
+    "codename": "DRAXEN KORR",
+    "fullName": "Draxen Korr · Operador Couraça M-02",
+    "gender": "MASCULINO",
+    "ethnicity": "Eslavo Nórdico / Leste Europeu",
+    "rank": "HURAN",
+    "specialization": "ENGENHARIA_TATICA",
+    "defaultWorld": "Barburhen",
+    "svgPathContent": "Content/Avatars/male/op_male_breacher.svg",
+    "svgPathPublic": "/avatars/male/op_male_breacher.svg",
+    "colors": {
+      "primary": "#EA580C",
+      "secondary": "#6D28D9",
+      "trim": "#D97706",
+      "skinTone": "#ffdbac",
+      "eyes": "#38bdf8",
+      "hair": "#e2e8f0"
+    },
+    "lore": "Sobrevivente dos complexos mineiros de Barburhen. Treinado em forja vulcânica."
+  },
+  {
+    "id": "OP_MALE_RECON_ASIAN",
+    "codename": "REN TANAKA",
+    "fullName": "Ren Tanaka (Kage) · Sombra Silenciosa M-03",
+    "gender": "MASCULINO",
+    "ethnicity": "Leste-Asiático (Japonês)",
+    "rank": "SKEETW",
+    "specialization": "RASTREADORES",
+    "defaultWorld": "Priadus",
+    "svgPathContent": "Content/Avatars/male/op_male_recon_asian.svg",
+    "svgPathPublic": "/avatars/male/op_male_recon_asian.svg",
+    "colors": {
+      "primary": "#06B6D4",
+      "secondary": "#6366F1",
+      "trim": "#38BDF8",
+      "skinTone": "#f1c27d",
+      "eyes": "#06b6d4",
+      "hair": "#09090b"
+    },
+    "lore": "Esquadrões de reconhecimento avançado de Tóquio Subterrânea. Furtividade em Priadus."
+  },
+  {
+    "id": "OP_MALE_MEDIC_AFRICAN",
+    "codename": "TARIQ BAKARI",
+    "fullName": "Tariq Bakari · Médico Balístico M-04",
+    "gender": "MASCULINO",
+    "ethnicity": "Africano Subsaariano (Quênia / Nigéria)",
+    "rank": "KHAEL",
+    "specialization": "MEDICO_COMBATE",
+    "defaultWorld": "Ckesalth",
+    "svgPathContent": "Content/Avatars/male/op_male_medic_african.svg",
+    "svgPathPublic": "/avatars/male/op_male_medic_african.svg",
+    "colors": {
+      "primary": "#10B981",
+      "secondary": "#047857",
+      "trim": "#FACC15",
+      "skinTone": "#3c2009",
+      "eyes": "#10b981",
+      "hair": "#0a0a0a"
+    },
+    "lore": "Cirurgião de trauma em Ckesalth. Desenvolveu injetores de coagulação rápida sob fogo."
+  },
+  {
+    "id": "OP_MALE_HUNTER_INDIGENOUS",
+    "codename": "ARANI YVY",
+    "fullName": "Arani Yvy · Rastreador Primordial M-05",
+    "gender": "MASCULINO",
+    "ethnicity": "Indígena Sul-Americano (Tupi-Guarani / Amazônico)",
+    "rank": "VENEX",
+    "specialization": "COMANDOS_SELVA",
+    "defaultWorld": "Priadus",
+    "svgPathContent": "Content/Avatars/male/op_male_hunter_indigenous.svg",
+    "svgPathPublic": "/avatars/male/op_male_hunter_indigenous.svg",
+    "colors": {
+      "primary": "#EF4444",
+      "secondary": "#15803D",
+      "trim": "#F59E0B",
+      "skinTone": "#a25828",
+      "eyes": "#d97706",
+      "hair": "#050505"
+    },
+    "lore": "Mestre de selva e emboscada. Pressente correntes de ar e fechamento de anéis em Priadus."
+  },
+  {
+    "id": "OP_MALE_MARKSMAN_MENA",
+    "codename": "ZAYN AL-MANSOOR",
+    "fullName": "Zayn Al-Mansoor · Olho do Vento M-06",
+    "gender": "MASCULINO",
+    "ethnicity": "Oriente Médio / Norte da África (Árabe-Beduíno)",
+    "rank": "SKEETW",
+    "specialization": "SNIPER",
+    "defaultWorld": "Ckesalth",
+    "svgPathContent": "Content/Avatars/male/op_male_marksman_mena.svg",
+    "svgPathPublic": "/avatars/male/op_male_marksman_mena.svg",
+    "colors": {
+      "primary": "#D97706",
+      "secondary": "#92400E",
+      "trim": "#FDE047",
+      "skinTone": "#c68642",
+      "eyes": "#f59e0b",
+      "hair": "#1c1917"
+    },
+    "lore": "Franco-atirador de longo alcance. Balística calculada sobre refração de calor em Ckesalth."
+  },
+  {
+    "id": "OP_MALE_BERSERKER_PACIFIC",
+    "codename": "MANOA TUILAGI",
+    "fullName": "Manoa Tuilagi · Quebrador de Marés M-07",
+    "gender": "MASCULINO",
+    "ethnicity": "Polinésio / Ilhas do Pacífico (Samoano / Maori)",
+    "rank": "HURAN",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Arukheea",
+    "svgPathContent": "Content/Avatars/male/op_male_berserker_pacific.svg",
+    "svgPathPublic": "/avatars/male/op_male_berserker_pacific.svg",
+    "colors": {
+      "primary": "#0284C7",
+      "secondary": "#0369A1",
+      "trim": "#F97316",
+      "skinTone": "#a0522d",
+      "eyes": "#38bdf8",
+      "hair": "#0c0a09"
+    },
+    "lore": "Estrutura maciça forjada enfrentando ondas oceânicas em Arukheea. Infantaria de choque."
+  },
+  {
+    "id": "OP_MALE_TECH_INDIAN",
+    "codename": "DEVAN SHARMA",
+    "fullName": "Devan Sharma · Espectro Eletrônico M-08",
+    "gender": "MASCULINO",
+    "ethnicity": "Sul-Asiático (Indiano)",
+    "rank": "OVERLORD",
+    "specialization": "COMUNICACOES_HACKER",
+    "defaultWorld": "CIGKV",
+    "svgPathContent": "Content/Avatars/male/op_male_tech_indian.svg",
+    "svgPathPublic": "/avatars/male/op_male_tech_indian.svg",
+    "colors": {
+      "primary": "#38BDF8",
+      "secondary": "#8B5CF6",
+      "trim": "#FACC15",
+      "skinTone": "#8b5a2b",
+      "eyes": "#38bdf8",
+      "hair": "#111827"
+    },
+    "lore": "Guerra eletrônica e antecipação de anéis de confinamento no CIGKV por telemetria quântica."
+  },
+  {
+    "id": "OP_FEMALE_VALKYRIE",
+    "codename": "NYRA VEX",
+    "fullName": "Nyra Vex · Operadora Valkyrie F-01",
+    "gender": "FEMININO",
+    "ethnicity": "Afro-Brasileira / Afro-Caribenha",
+    "rank": "SKEETW",
+    "specialization": "RASTREADORES",
+    "defaultWorld": "CIGKV",
+    "svgPathContent": "Content/Avatars/female/op_female_valkyrie.svg",
+    "svgPathPublic": "/avatars/female/op_female_valkyrie.svg",
+    "colors": {
+      "primary": "#F97316",
+      "secondary": "#A855F7",
+      "trim": "#FACC15",
+      "skinTone": "#8c532b",
+      "eyes": "#a855f7",
+      "hair": "#09090b"
+    },
+    "lore": "Líder de parkour e infiltração rápida no CIGKV. Reflexos acrobáticos e flanqueamento."
+  },
+  {
+    "id": "OP_FEMALE_SNIPER",
+    "codename": "LYRA SOLIS",
+    "fullName": "Lyra Solis · Operadora Mira F-02",
+    "gender": "FEMININO",
+    "ethnicity": "Latina Mestiza (Andina / Mexicana)",
+    "rank": "VENEX",
+    "specialization": "SNIPER",
+    "defaultWorld": "Priadus",
+    "svgPathContent": "Content/Avatars/female/op_female_sniper.svg",
+    "svgPathPublic": "/avatars/female/op_female_sniper.svg",
+    "colors": {
+      "primary": "#FB923C",
+      "secondary": "#8B5CF6",
+      "trim": "#FDE047",
+      "skinTone": "#c68642",
+      "eyes": "#f59e0b",
+      "hair": "#292524"
+    },
+    "lore": "Atiradora de precisão em Priadus. Abates limpos a 800m através de névoa e fumaça densa."
+  },
+  {
+    "id": "OP_FEMALE_STEALTH_ASIAN",
+    "codename": "MEI-LING ZHOU",
+    "fullName": "Mei-Ling Zhou · Lâmina Crepuscular F-03",
+    "gender": "FEMININO",
+    "ethnicity": "Leste-Asiático (Chinesa)",
+    "rank": "SKEETW",
+    "specialization": "PARAQUEDISTAS",
+    "defaultWorld": "Barburhen",
+    "svgPathContent": "Content/Avatars/female/op_female_stealth_asian.svg",
+    "svgPathPublic": "/avatars/female/op_female_stealth_asian.svg",
+    "colors": {
+      "primary": "#A855F7",
+      "secondary": "#6366F1",
+      "trim": "#38BDF8",
+      "skinTone": "#ffe0bd",
+      "eyes": "#a855f7",
+      "hair": "#030712"
+    },
+    "lore": "Descidas noturnas com planador sobre zonas industriais em Barburhen. Combate ágil e adagas."
+  },
+  {
+    "id": "OP_FEMALE_HEAVY_AFRICAN",
+    "codename": "AMARA DIALLO",
+    "fullName": "Amara Diallo · Muralha de Cinzas F-04",
+    "gender": "FEMININO",
+    "ethnicity": "Oeste-Africana (Senegalesa / Wolof)",
+    "rank": "KHAEL",
+    "specialization": "MOTORISTA_PESADOS",
+    "defaultWorld": "Barburhen",
+    "svgPathContent": "Content/Avatars/female/op_female_heavy_african.svg",
+    "svgPathPublic": "/avatars/female/op_female_heavy_african.svg",
+    "colors": {
+      "primary": "#F97316",
+      "secondary": "#78350F",
+      "trim": "#FACC15",
+      "skinTone": "#4a2c11",
+      "eyes": "#eab308",
+      "hair": "#0a0a0a"
+    },
+    "lore": "Piloto de comboios pesados sob chuva ácida em Barburhen. Armadura térmica e liderança."
+  },
+  {
+    "id": "OP_FEMALE_SURVIVOR_INDIGENOUS",
+    "codename": "KAYAEN APINAJÉ",
+    "fullName": "Kayaen Apinajé · Flor Venenosa F-05",
+    "gender": "FEMININO",
+    "ethnicity": "Indígena Brasileira (Cerrado / Tocantins - Apinajé)",
+    "rank": "ONITH",
+    "specialization": "COMANDOS_SELVA",
+    "defaultWorld": "Priadus",
+    "svgPathContent": "Content/Avatars/female/op_female_survivor_indigenous.svg",
+    "svgPathPublic": "/avatars/female/op_female_survivor_indigenous.svg",
+    "colors": {
+      "primary": "#10B981",
+      "secondary": "#EF4444",
+      "trim": "#F59E0B",
+      "skinTone": "#a25828",
+      "eyes": "#10b981",
+      "hair": "#050505"
+    },
+    "lore": "Manipulação de toxinas botânicas e filtros naturais de esporos na selva de Priadus."
+  },
+  {
+    "id": "OP_FEMALE_PILOT_EURO",
+    "codename": "FREJA LINDSTROM",
+    "fullName": "Freja Lindstrom · Asa de Gelo F-06",
+    "gender": "FEMININO",
+    "ethnicity": "Escandinava / Europeia Nórdica (Sueca)",
+    "rank": "VENEX",
+    "specialization": "PILOTO_AERONAVES",
+    "defaultWorld": "Arukheea",
+    "svgPathContent": "Content/Avatars/female/op_female_pilot_euro.svg",
+    "svgPathPublic": "/avatars/female/op_female_pilot_euro.svg",
+    "colors": {
+      "primary": "#0284C7",
+      "secondary": "#38BDF8",
+      "trim": "#FACC15",
+      "skinTone": "#ffe0bd",
+      "eyes": "#0284c7",
+      "hair": "#f8fafc"
+    },
+    "lore": "Piloto de helicóptero e resgate em tempestades na parede de água de Arukheea."
+  },
+  {
+    "id": "OP_FEMALE_DISRUPTOR_MENA",
+    "codename": "SORAYA HADDAD",
+    "fullName": "Soraya Haddad · Tempestade de Areia F-07",
+    "gender": "FEMININO",
+    "ethnicity": "Levantina / Oriente Médio (Libanesa)",
+    "rank": "HURAN",
+    "specialization": "ANTI_BOMBAS",
+    "defaultWorld": "Ckesalth",
+    "svgPathContent": "Content/Avatars/female/op_female_disruptor_mena.svg",
+    "svgPathPublic": "/avatars/female/op_female_disruptor_mena.svg",
+    "colors": {
+      "primary": "#EF4444",
+      "secondary": "#78350F",
+      "trim": "#F59E0B",
+      "skinTone": "#c68642",
+      "eyes": "#ef4444",
+      "hair": "#1c1917"
+    },
+    "lore": "Desativação de explosivos e granadas sônicas. Engenheira de demolição em Ckesalth."
+  },
+  {
+    "id": "OP_FEMALE_TACTICIAN_SOUTHASIAN",
+    "codename": "PRIYA NAIR",
+    "fullName": "Priya Nair · Égide Kalari F-08",
+    "gender": "FEMININO",
+    "ethnicity": "Sul-Asiática (Dravidiana / Sul da Índia - Kerala)",
+    "rank": "SKEETW",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Arukheea",
+    "svgPathContent": "Content/Avatars/female/op_female_tactician_southasian.svg",
+    "svgPathPublic": "/avatars/female/op_female_tactician_southasian.svg",
+    "colors": {
+      "primary": "#F59E0B",
+      "secondary": "#6D28D9",
+      "trim": "#FDE047",
+      "skinTone": "#8d5524",
+      "eyes": "#f59e0b",
+      "hair": "#09090b"
+    },
+    "lore": "Kalaripayattu tático e projeção de barreira Égide contra as marés de choque em Arukheea."
+  }
+]
