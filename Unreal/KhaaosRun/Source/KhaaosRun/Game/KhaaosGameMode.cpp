@@ -18,6 +18,15 @@
 #include "Game/EOS/KhaaosEOSSessionRecovery.h"
 #include "Game/Audio/KhaaosZoneWarningSystem.h"
 
+// ─── E2E Phases 9-12 Includes ──────────────────────────────────────────────────
+#include "Game/AI/KhaaosBotSpawner.h"
+#include "Game/LiveOps/KhaaosTelemetryPipeline.h"
+#include "Game/LiveOps/KhaaosHotFixSystem.h"
+#include "Game/Social/KhaaosSocialSystem.h"
+#include "Game/Progression/KhaaosProgressionSystem.h"
+#include "Game/Polish/KhaaosServerHealthMonitor.h"
+#include "Game/Polish/KhaaosCrashHandler.h"
+
 #include "Engine/World.h"
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Pawn.h"
@@ -55,6 +64,9 @@ AKhaaosGameMode::AKhaaosGameMode()
         MatchmakingV2       = nullptr;
         SessionRecovery     = nullptr;
         ZoneWarning         = nullptr;
+
+        // E2E Phases 9-12 subsystems
+        BotSpawner          = nullptr;
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -94,6 +106,9 @@ void AKhaaosGameMode::StartPlay()
 
         // Initialize E2E Phases 5-8 subsystems
         InitializeE2ESubsystems();
+
+        // Initialize E2E Phases 9-12 subsystems
+        InitializePhases9to12Subsystems();
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::StartPlay - Match phase: Lobby"));
 }
@@ -539,43 +554,65 @@ void AKhaaosGameMode::ComputeRankings()
 
 void AKhaaosGameMode::InitializeE2ESubsystems()
 {
-	if (!GetWorld()) return;
+        if (!GetWorld()) return;
 
-	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Starting"));
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Starting"));
 
-	// Phase 5: Economy Bridge
-	EconomySync = NewObject<UKhaaosEconomySync>(this, UKhaaosEconomySync::StaticClass());
-	if (EconomySync)
-	{
-		EconomySync->RegisterComponent();
-		UE_LOG(LogKhaaosRun, Log, TEXT("  EconomySync initialized"));
-	}
+        // Phase 5: Economy Bridge
+        EconomySync = NewObject<UKhaaosEconomySync>(this, UKhaaosEconomySync::StaticClass());
+        if (EconomySync)
+        {
+                EconomySync->RegisterComponent();
+                UE_LOG(LogKhaaosRun, Log, TEXT("  EconomySync initialized"));
+        }
 
-	ShopSystem = NewObject<UKhaaosShopSystem>(this, UKhaaosShopSystem::StaticClass());
-	if (ShopSystem)
-	{
-		ShopSystem->RegisterComponent();
-		UE_LOG(LogKhaaosRun, Log, TEXT("  ShopSystem initialized"));
-	}
+        ShopSystem = NewObject<UKhaaosShopSystem>(this, UKhaaosShopSystem::StaticClass());
+        if (ShopSystem)
+        {
+                ShopSystem->RegisterComponent();
+                UE_LOG(LogKhaaosRun, Log, TEXT("  ShopSystem initialized"));
+        }
 
-	// Phase 6: EOS Enhancement
-	SessionRecovery = NewObject<UKhaaosEOSSessionRecovery>(this, UKhaaosEOSSessionRecovery::StaticClass());
-	if (SessionRecovery)
-	{
-		SessionRecovery->RegisterComponent();
-		UE_LOG(LogKhaaosRun, Log, TEXT("  SessionRecovery initialized"));
-	}
+        // Phase 6: EOS Enhancement
+        SessionRecovery = NewObject<UKhaaosEOSSessionRecovery>(this, UKhaaosEOSSessionRecovery::StaticClass());
+        if (SessionRecovery)
+        {
+                SessionRecovery->RegisterComponent();
+                UE_LOG(LogKhaaosRun, Log, TEXT("  SessionRecovery initialized"));
+        }
 
-	// Phase 8: Audio
-	ZoneWarning = NewObject<UKhaaosZoneWarningSystem>(this, UKhaaosZoneWarningSystem::StaticClass());
-	if (ZoneWarning)
-	{
-		ZoneWarning->RegisterComponent();
-		UE_LOG(LogKhaaosRun, Log, TEXT("  ZoneWarning initialized"));
-	}
+        // Phase 8: Audio
+        ZoneWarning = NewObject<UKhaaosZoneWarningSystem>(this, UKhaaosZoneWarningSystem::StaticClass());
+        if (ZoneWarning)
+        {
+                ZoneWarning->RegisterComponent();
+                UE_LOG(LogKhaaosRun, Log, TEXT("  ZoneWarning initialized"));
+        }
 
-	// Note: TransactionValidator is UEngineSubsystem (auto-initialized)
-	// Note: CrossplayManager and MatchmakingV2 are UGameInstanceSubsystem (auto-initialized)
+        // Note: TransactionValidator is UEngineSubsystem (auto-initialized)
+        // Note: CrossplayManager and MatchmakingV2 are UGameInstanceSubsystem (auto-initialized)
 
-	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Complete (4 actor components + 3 engine/game-instance subsystems)"));
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeE2ESubsystems - Complete (4 actor components + 3 engine/game-instance subsystems)"));
+}
+
+// ─── E2E Phases 9-12 Subsystems Initialization ──────────────────────────────────
+
+void AKhaaosGameMode::InitializePhases9to12Subsystems()
+{
+        if (!GetWorld()) return;
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases9to12Subsystems - Starting"));
+
+        // Phase 9: Bot Spawner (WorldSubsystem - auto-initialized, cache pointer)
+        BotSpawner = GetWorld()->GetSubsystem<UKhaaosBotSpawner>();
+        if (BotSpawner)
+        {
+                UE_LOG(LogKhaaosRun, Log, TEXT("  BotSpawner cached"));
+        }
+
+        // Phase 10: TelemetryPipeline + HotFixSystem are EngineSubsystems (auto-initialized)
+        // Phase 11: SocialSystem + ProgressionSystem are GameInstanceSubsystems (auto-initialized)
+        // Phase 12: ServerHealthMonitor + CrashHandler are EngineSubsystems (auto-initialized)
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases9to12Subsystems - Complete (1 world subsystem + 6 auto-initialized subsystems)"));
 }

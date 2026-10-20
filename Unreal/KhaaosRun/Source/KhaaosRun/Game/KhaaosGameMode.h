@@ -25,6 +25,16 @@ class UKhaaosFootstepSystem;
 class UKhaaosWeaponAudioComponent;
 class UKhaaosZoneWarningSystem;
 
+// ─── E2E Phases 9-12 Forward Declarations ───────────────────────────────────────
+
+class UKhaaosBotSpawner;
+class UKhaaosTelemetryPipeline;
+class UKhaaosHotFixSystem;
+class UKhaaosSocialSystem;
+class UKhaaosProgressionSystem;
+class UKhaaosServerHealthMonitor;
+class UKhaaosCrashHandler;
+
 // ─── Match Phase Enum (mirrors TS RoomStatus) ─────────────────────────────────
 
 UENUM(BlueprintType)
@@ -160,6 +170,12 @@ public:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Audio")
         TObjectPtr<UKhaaosZoneWarningSystem> ZoneWarning;
 
+        // ─── E2E Phase 9: AI/Bot Subsystem ──────────────────────────────────────────
+
+        /** Bot spawner for match population. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|AI")
+        TObjectPtr<UKhaaosBotSpawner> BotSpawner;
+
 protected:
 
         /** Internal countdown timer (seconds remaining). */
@@ -194,4 +210,7 @@ protected:
 
         /** Initialize E2E Phases 5-8 subsystems (non-breaking). */
         void InitializeE2ESubsystems();
+
+        /** Initialize E2E Phases 9-12 subsystems (non-breaking). */
+        void InitializePhases9to12Subsystems();
 };
