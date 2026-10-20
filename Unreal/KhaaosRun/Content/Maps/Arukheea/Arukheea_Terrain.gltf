@@ -1,0 +1,121 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WorldAssetBuilder v2.0",
+    "copyright": "Nexus-HUB57 Devs Ph.D"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Arukheea_Scene",
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Arukheea_Landscape_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "ue5UMapPath": "/Game/Maps/Arukheea/L_Arukheea_W4",
+        "sizeMeters": 2500,
+        "maxPlayers": 80,
+        "primaryNiagaraHazard": "/Game/VFX/NS_TsunamiWall_Arukheea"
+      }
+    },
+    {
+      "name": "SM_Sector_Arukheea_ForestOfTheLost",
+      "translation": [
+        -440,
+        -320,
+        14
+      ],
+      "scale": [
+        520,
+        480,
+        48
+      ],
+      "extras": {
+        "fraction": "4/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Arukheea_NightSunPrison",
+      "translation": [
+        40,
+        110,
+        45
+      ],
+      "scale": [
+        440,
+        440,
+        95
+      ],
+      "extras": {
+        "fraction": "3/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Arukheea_WhaleGraveyardFactory",
+      "translation": [
+        540,
+        -420,
+        6
+      ],
+      "scale": [
+        310,
+        280,
+        36
+      ],
+      "extras": {
+        "fraction": "1/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Arukheea_TowerHelipadFinalZEX",
+      "translation": [
+        40,
+        110,
+        110
+      ],
+      "scale": [
+        120,
+        120,
+        120
+      ],
+      "extras": {
+        "fraction": "Heli-ZEX",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Arukheea_Terrain_StaticMesh",
+      "primitives": [
+        {
+          "mode": 4,
+          "extras": {
+            "materialSlot": "MI_Arukheea_MasterTerrain"
+          }
+        }
+      ]
+    }
+  ]
+}

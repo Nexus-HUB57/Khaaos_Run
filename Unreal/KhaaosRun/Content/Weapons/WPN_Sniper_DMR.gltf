@@ -1,0 +1,41 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WeaponAssetBuilder"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "WPN_Sniper_DMR",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SK_WPN_Sniper_DMR_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "id": "WPN_Sniper_DMR",
+        "category": "SniperDMR",
+        "caliber": "7.62x51mm",
+        "muzzleSocket": "Muzzle_Socket",
+        "rateOfFireRpm": 180
+      }
+    },
+    {
+      "name": "Muzzle_Socket",
+      "translation": [
+        0.68,
+        0,
+        0.08
+      ]
+    }
+  ]
+}

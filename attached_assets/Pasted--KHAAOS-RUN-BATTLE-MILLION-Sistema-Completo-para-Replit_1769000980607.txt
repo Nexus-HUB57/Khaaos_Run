@@ -1,0 +1,2585 @@
+"""
+🎮 KHAAOS RUN - BATTLE MILLION
+⚡ Sistema Completo para Replit / Beta Test
+🌍 4 Ciclos, 1 Vencedor, U$1.000.000
+"""
+
+import random
+import hashlib
+import time
+import json
+import sys
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import List, Dict, Optional, Tuple
+
+# ==================== CONSTANTES GLOBAIS ====================
+KRC_TO_USD = 100
+PREMIUM_BATTLE = 1000000  # U$1.000.000
+CASHBACK_RATE = 1.0  # 100%
+GAME_VERSION = "2.0.0 Beta"
+DEVELOPER_MODE = False
+
+# ==================== ENUMS E ESTRUTURAS ====================
+class PatenteKR(Enum):
+    ZHEERS = 1    # Unidade de Infantaria de Base
+    ONITH = 2     # Operador Tático de Incursão
+    SKEETW = 3    # SubOficial de Operações
+    HURAN = 4     # Líder de Esquadrão
+    VENEX = 5     # Comandante de Regimento
+    KHAEL = 6     # Estrategista de Divisão
+    MALAKOR = 7   # Alto Comissário de Guerra
+    OVERLORD = 8  # General Supremo do Khaaos
+
+class CicloKR(Enum):
+    CAOS_URBANO = 1  # Mundo 1: Caos Urbano
+    SELVA = 2        # Mundo 2: Selva
+    DESERTO = 3      # Mundo 3: Deserto
+    ILHA = 4         # Mundo 4: Ilha
+
+class TipoItem(Enum):
+    ARMA = "ARMA"
+    DEFESA = "DEFESA"
+    CURATIVO = "CURATIVO"
+    UTILIDADE = "UTILIDADE"
+    RECURSO = "RECURSO"
+
+# ==================== SISTEMA DE XP ====================
+XP_POR_PATENTE = {
+    PatenteKR.ZHEERS: 0,
+    PatenteKR.ONITH: 15000,
+    PatenteKR.SKEETW: 45000,
+    PatenteKR.HURAN: 100000,
+    PatenteKR.VENEX: 250000,
+    PatenteKR.KHAEL: 500000,
+    PatenteKR.MALAKOR: 1000000,
+    PatenteKR.OVERLORD: 5000000
+}
+
+# ==================== SISTEMA BANKHAAOS ====================
+class BanKhaaos:
+    """Sistema financeiro completo do Khaaos Run"""
+    
+    def __init__(self):
+        self.weapons_account = 0.0  # Depósitos diretos
+        self.bonus_account = 0.0    # Salários e CashBack
+        self.fbm_account = 0.0      # Fundo Battle Million
+        self.transacoes = []
+        self.emprestimos_ativos = []
+        self.taxa_juros = 0.05  # 5% ao dia
+    
+    def deposito(self, valor_usd: float) -> float:
+        """Realiza depósito com cashback de 100%"""
+        krc_valor = valor_usd * KRC_TO_USD
+        self.weapons_account += krc_valor
+        self.bonus_account += (krc_valor * CASHBACK_RATE)
+        
+        transacao = {
+            "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+            "data": datetime.now().isoformat(),
+            "tipo": "DEPOSITO",
+            "usd": valor_usd,
+            "krc_weapons": krc_valor,
+            "krc_bonus": krc_valor * CASHBACK_RATE,
+            "saldo_total": self.saldo_total()
+        }
+        self.transacoes.append(transacao)
+        
+        return krc_valor
+    
+    def creditar_salario(self, salario_krc: float):
+        """Credita salário diário"""
+        self.bonus_account += salario_krc
+        
+        transacao = {
+            "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+            "data": datetime.now().isoformat(),
+            "tipo": "SALARIO",
+            "krc_bonus": salario_krc,
+            "saldo_total": self.saldo_total()
+        }
+        self.transacoes.append(transacao)
+    
+    def transferir_para_fbm(self, valor_krc: float) -> bool:
+        """Transfere para Fundo Battle Million"""
+        if self.weapons_account >= valor_krc:
+            self.weapons_account -= valor_krc
+            self.fbm_account += valor_krc
+            
+            transacao = {
+                "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+                "data": datetime.now().isoformat(),
+                "tipo": "FBM_TRANSFER",
+                "krc_fbm": valor_krc,
+                "saldo_total": self.saldo_total()
+            }
+            self.transacoes.append(transacao)
+            return True
+        return False
+    
+    def saque_fbm(self, valor_krc: float) -> bool:
+        """Saque do Fundo Battle Million (com taxa de 10%)"""
+        if self.fbm_account >= valor_krc:
+            taxa = valor_krc * 0.1
+            valor_saque = valor_krc - taxa
+            self.fbm_account -= valor_krc
+            self.weapons_account += valor_saque
+            
+            transacao = {
+                "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+                "data": datetime.now().isoformat(),
+                "tipo": "FBM_SAQUE",
+                "krc_fbm": -valor_krc,
+                "krc_weapons": valor_saque,
+                "taxa": taxa,
+                "saldo_total": self.saldo_total()
+            }
+            self.transacoes.append(transacao)
+            return True
+        return False
+    
+    def pedir_emprestimo(self, valor_krc: float, dias: int = 7) -> bool:
+        """Solicita empréstimo com juros"""
+        if len(self.emprestimos_ativos) >= 3:
+            return False
+        
+        juros_total = valor_krc * self.taxa_juros * dias
+        valor_total = valor_krc + juros_total
+        
+        emprestimo = {
+            "id": f"EMP-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+            "data": datetime.now().isoformat(),
+            "valor_original": valor_krc,
+            "valor_total": valor_total,
+            "juros": juros_total,
+            "dias_restantes": dias,
+            "pago": False
+        }
+        
+        self.emprestimos_ativos.append(emprestimo)
+        self.weapons_account += valor_krc
+        
+        transacao = {
+            "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+            "data": datetime.now().isoformat(),
+            "tipo": "EMPRESTIMO",
+            "krc_weapons": valor_krc,
+            "juros": juros_total,
+            "saldo_total": self.saldo_total()
+        }
+        self.transacoes.append(transacao)
+        
+        return True
+    
+    def pagar_emprestimo(self, emprestimo_id: str) -> bool:
+        """Paga empréstimo pendente"""
+        for emp in self.emprestimos_ativos:
+            if emp["id"] == emprestimo_id and not emp["pago"]:
+                if self.weapons_account >= emp["valor_total"]:
+                    self.weapons_account -= emp["valor_total"]
+                    emp["pago"] = True
+                    
+                    transacao = {
+                        "id": f"TX-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}",
+                        "data": datetime.now().isoformat(),
+                        "tipo": "PAGAMENTO_EMPRESTIMO",
+                        "krc_weapons": -emp["valor_total"],
+                        "saldo_total": self.saldo_total()
+                    }
+                    self.transacoes.append(transacao)
+                    return True
+        return False
+    
+    def saldo_total(self) -> float:
+        """Retorna saldo total em KRC"""
+        return self.weapons_account + self.bonus_account + self.fbm_account
+    
+    def resumo(self) -> Dict:
+        """Retorna resumo das contas"""
+        total_emprestimos = sum(emp["valor_total"] for emp in self.emprestimos_ativos if not emp["pago"])
+        
+        return {
+            "weapons_krc": round(self.weapons_account, 2),
+            "bonus_krc": round(self.bonus_account, 2),
+            "fbm_krc": round(self.fbm_account, 2),
+            "total_krc": round(self.saldo_total(), 2),
+            "total_usd": round(self.saldo_total() / KRC_TO_USD, 2),
+            "emprestimos_ativos": len([e for e in self.emprestimos_ativos if not e["pago"]]),
+            "valor_emprestimos": round(total_emprestimos, 2),
+            "transacoes": len(self.transacoes)
+        }
+    
+    def extrato(self, limite: int = 10) -> List[Dict]:
+        """Retorna extrato recente"""
+        return self.transacoes[-limite:] if self.transacoes else []
+
+# ==================== SISTEMA DE ITENS ====================
+class ItemKR:
+    """Sistema completo de itens"""
+    
+    RARIDADES = ["COMUM", "RARO", "EPICO", "LENDARIO", "MITICO"]
+    
+    def __init__(self, nome: str, tipo: TipoItem, raridade: str = "COMUM", valor_krc: int = 0):
+        self.nome = nome
+        self.tipo = tipo
+        self.raridade = raridade if raridade in self.RARIDADES else "COMUM"
+        self.durabilidade = 100
+        self.durabilidade_max = 100
+        self.valor_krc = valor_krc
+        self.efeito = self._gerar_efeito()
+        self.id_item = f"IT-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}"
+        self.data_criacao = datetime.now()
+        self.equipado = False
+    
+    def _gerar_efeito(self) -> Dict:
+        """Gera efeito baseado no tipo e raridade"""
+        multiplicadores = {
+            "COMUM": 1.0,
+            "RARO": 1.3,
+            "EPICO": 1.7,
+            "LENDARIO": 2.2,
+            "MITICO": 3.0
+        }
+        
+        multiplicador = multiplicadores.get(self.raridade, 1.0)
+        
+        if self.tipo == TipoItem.ARMA:
+            return {
+                "dano": 10 * multiplicador,
+                "precisao": 70 + (5 * multiplicador),
+                "alcance": 10 * multiplicador
+            }
+        elif self.tipo == TipoItem.DEFESA:
+            return {
+                "defesa": 15 * multiplicador,
+                "vida_extra": 20 * multiplicador,
+                "resistencia": 10 * multiplicador
+            }
+        elif self.tipo == TipoItem.CURATIVO:
+            return {
+                "cura": 30 * multiplicador,
+                "duracao": 3 * multiplicador,
+                "regeneracao": 5 * multiplicador
+            }
+        else:
+            return {"utilidade": 1.0}
+    
+    def usar(self) -> Tuple[bool, float]:
+        """Usa o item, reduz durabilidade"""
+        if self.durabilidade <= 0:
+            return False, 0.0
+        
+        desgaste = random.uniform(2, 8)
+        self.durabilidade = max(0, self.durabilidade - desgaste)
+        
+        # Calcular eficiência baseada na durabilidade
+        eficiencia = self.durabilidade / self.durabilidade_max
+        
+        if self.durabilidade <= 0:
+            self.durabilidade = 0
+            return False, eficiencia
+        
+        return True, eficiencia
+    
+    def reparar(self, custo_krc: float) -> bool:
+        """Repara o item com KRC"""
+        if custo_krc <= 0:
+            return False
+        
+        reparo = (custo_krc / 10) * 2  # 10 KRC = 2% de reparo
+        self.durabilidade = min(self.durabilidade_max, self.durabilidade + reparo)
+        return True
+    
+    def melhorar(self, custo_krc: float) -> bool:
+        """Melhora a raridade do item"""
+        if self.raridade == "MITICO":
+            return False
+        
+        custos_melhoria = {
+            "COMUM": 500,
+            "RARO": 2000,
+            "EPICO": 10000,
+            "LENDARIO": 50000
+        }
+        
+        if self.raridade in custos_melhoria and custo_krc >= custos_melhoria[self.raridade]:
+            raridades = self.RARIDADES
+            idx_atual = raridades.index(self.raridade)
+            if idx_atual + 1 < len(raridades):
+                self.raridade = raridades[idx_atual + 1]
+                self.efeito = self._gerar_efeito()
+                self.durabilidade_max += 20
+                self.durabilidade = self.durabilidade_max
+                return True
+        return False
+    
+    def __str__(self) -> str:
+        cor = {
+            "COMUM": "⚪",
+            "RARO": "🔵",
+            "EPICO": "🟣",
+            "LENDARIO": "🟡",
+            "MITICO": "🔴"
+        }.get(self.raridade, "⚪")
+        
+        return f"{cor} {self.nome} [{self.tipo.value}] - {self.durabilidade:.0f}%"
+
+# ==================== SISTEMA DE HIERARQUIA ====================
+class HierarquiaKR:
+    """Sistema completo de hierarquia militar"""
+    
+    def __init__(self, patente: PatenteKR = PatenteKR.ZHEERS):
+        self.patente = patente
+        self.xp_necessario = XP_POR_PATENTE[patente]
+        self.nome_oficial = self._get_nome_oficial()
+        self.designacao_tatica = self._get_designacao_tatica()
+        self.emoji = self._get_emoji()
+        self.bonus = self._get_bonus()
+        self.salario_diario = self._get_salario()
+        self.unlock_habilidades = self._get_habilidades()
+    
+    def _get_nome_oficial(self) -> str:
+        nomes = {
+            PatenteKR.ZHEERS: "Zheers",
+            PatenteKR.ONITH: "Onith",
+            PatenteKR.SKEETW: "Skeetw",
+            PatenteKR.HURAN: "Huran",
+            PatenteKR.VENEX: "Ven'Ex",
+            PatenteKR.KHAEL: "Khael",
+            PatenteKR.MALAKOR: "Malakor",
+            PatenteKR.OVERLORD: "OverLord"
+        }
+        return nomes.get(self.patente, "Zheers")
+    
+    def _get_designacao_tatica(self) -> str:
+        designacoes = {
+            PatenteKR.ZHEERS: "Unidade de Infantaria de Base",
+            PatenteKR.ONITH: "Operador Tático de Incursão",
+            PatenteKR.SKEETW: "SubOficial de Operações",
+            PatenteKR.HURAN: "Líder de Esquadrão",
+            PatenteKR.VENEX: "Comandante de Regimento",
+            PatenteKR.KHAEL: "Estrategista de Divisão",
+            PatenteKR.MALAKOR: "Alto Comissário de Guerra",
+            PatenteKR.OVERLORD: "General Supremo do Khaaos"
+        }
+        return designacoes.get(self.patente, "Unidade de Infantaria de Base")
+    
+    def _get_emoji(self) -> str:
+        emojis = {
+            PatenteKR.ZHEERS: "⚔️",
+            PatenteKR.ONITH: "🎖️",
+            PatenteKR.SKEETW: "⭐",
+            PatenteKR.HURAN: "⚜️",
+            PatenteKR.VENEX: "👑",
+            PatenteKR.KHAEL: "🐉",
+            PatenteKR.MALAKOR: "👁️",
+            PatenteKR.OVERLORD: "👑🔥"
+        }
+        return emojis.get(self.patente, "⚔️")
+    
+    def _get_bonus(self) -> Dict:
+        bonus = {
+            PatenteKR.ZHEERS: {"vida": 0, "dano": 0, "velocidade": 0, "xp_ganho": 1.0, "defesa": 0},
+            PatenteKR.ONITH: {"vida": 10, "dano": 5, "velocidade": 5, "xp_ganho": 1.1, "defesa": 5},
+            PatenteKR.SKEETW: {"vida": 15, "dano": 10, "velocidade": 10, "xp_ganho": 1.2, "defesa": 10},
+            PatenteKR.HURAN: {"vida": 20, "dano": 15, "velocidade": 15, "xp_ganho": 1.3, "defesa": 15},
+            PatenteKR.VENEX: {"vida": 25, "dano": 20, "velocidade": 20, "xp_ganho": 1.4, "defesa": 20},
+            PatenteKR.KHAEL: {"vida": 30, "dano": 25, "velocidade": 25, "xp_ganho": 1.5, "defesa": 25},
+            PatenteKR.MALAKOR: {"vida": 40, "dano": 30, "velocidade": 30, "xp_ganho": 1.6, "defesa": 30},
+            PatenteKR.OVERLORD: {"vida": 50, "dano": 40, "velocidade": 40, "xp_ganho": 2.0, "defesa": 50}
+        }
+        return bonus.get(self.patente, bonus[PatenteKR.ZHEERS])
+    
+    def _get_salario(self) -> int:
+        salarios = {
+            PatenteKR.ZHEERS: 100,
+            PatenteKR.ONITH: 250,
+            PatenteKR.SKEETW: 500,
+            PatenteKR.HURAN: 1000,
+            PatenteKR.VENEX: 2500,
+            PatenteKR.KHAEL: 5000,
+            PatenteKR.MALAKOR: 10000,
+            PatenteKR.OVERLORD: 25000
+        }
+        return salarios.get(self.patente, 100)
+    
+    def _get_habilidades(self) -> List[str]:
+        habilidades = {
+            PatenteKR.ZHEERS: ["Tiro Básico"],
+            PatenteKR.ONITH: ["Tiro Básico", "Movimento Tático"],
+            PatenteKR.SKEETW: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros"],
+            PatenteKR.HURAN: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros", "Liderança"],
+            PatenteKR.VENEX: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros", "Liderança", "Estratégia"],
+            PatenteKR.KHAEL: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros", "Liderança", "Estratégia", "Logística"],
+            PatenteKR.MALAKOR: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros", "Liderança", "Estratégia", "Logística", "Diplomacia"],
+            PatenteKR.OVERLORD: ["Tiro Básico", "Movimento Tático", "Primeiros Socorros", "Liderança", "Estratégia", "Logística", "Diplomacia", "Domínio Total"]
+        }
+        return habilidades.get(self.patente, ["Tiro Básico"])
+    
+    def pode_promover(self, xp_atual: float) -> bool:
+        """Verifica se pode promover baseado no XP atual"""
+        patentes = list(PatenteKR)
+        current_idx = patentes.index(self.patente)
+        
+        if current_idx < len(patentes) - 1:
+            proxima_patente = patentes[current_idx + 1]
+            xp_necessario = XP_POR_PATENTE[proxima_patente]
+            return xp_atual >= xp_necessario
+        return False
+    
+    def get_proxima_patente(self) -> Optional[PatenteKR]:
+        """Retorna a próxima patente"""
+        patentes = list(PatenteKR)
+        current_idx = patentes.index(self.patente)
+        
+        if current_idx < len(patentes) - 1:
+            return patentes[current_idx + 1]
+        return None
+
+# ==================== MUNDO 1 - CAOS URBANO ====================
+class Mundo1CaosUrbano:
+    """Mundo 1: Caos Urbano - Mapa completo com clima e eventos"""
+    
+    def __init__(self):
+        self.setores = self._criar_setores()
+        self.climas = ["LIMPO", "CHUVA_ACIDA", "TEMPESTADE_POEIRA", "NEVOA_RADIOATIVA", "VENTO_STRONG"]
+        self.clima_atual = "LIMPO"
+        self.rodada = 1
+        self.max_rodadas = 7
+        self.eventos_ativos = []
+        self.recursos_disponiveis = {}
+        self._inicializar_recursos()
+    
+    def _criar_setores(self) -> Dict:
+        """Cria os setores do mundo urbano"""
+        return {
+            "PARQUE_PUBLICO": {
+                "nome": "Parque Público",
+                "emoji": "🌳",
+                "tipo": "VERDE",
+                "perigos": ["CHUVA_ACIDA", "ANIMAIS_SELVAGENS"],
+                "recursos": ["MADEIRA", "AGUA", "PLANTAS_MEDICINAIS"],
+                "cobertura": 70,
+                "visibilidade": 80,
+                "descricao": "Área verde tomada pela vegetação selvagem e animais perigosos"
+            },
+            "ZONA_URBANA": {
+                "nome": "Zona Urbana",
+                "emoji": "🏢",
+                "tipo": "URBANO",
+                "perigos": ["TIROTEIOS", "ARMADILHAS", "DESABAMENTOS"],
+                "recursos": ["METAL", "MUNICAO", "MEDICAMENTOS"],
+                "cobertura": 40,
+                "visibilidade": 60,
+                "descricao": "Prédios abandonados, ruas desertas e perigos urbanos"
+            },
+            "COMPLEXO_CRITICO": {
+                "nome": "Complexo Crítico",
+                "emoji": "⚠️",
+                "tipo": "INDUSTRIAL",
+                "perigos": ["RADIACAO", "EXPLOSOES", "GASES_TOXICOS"],
+                "recursos": ["PLASTICO_CRUZ", "COMPONENTES_ELETRONICOS", "COMBUSTIVEL"],
+                "cobertura": 50,
+                "visibilidade": 40,
+                "descricao": "Usina nuclear abandonada com altos níveis de radiação"
+            },
+            "TERRENOS_ARIDOS": {
+                "nome": "Terrenos Áridos",
+                "emoji": "🏜️",
+                "tipo": "DESERTICO",
+                "perigos": ["TEMPESTADE_POEIRA", "INSOLACAO", "AREIA_MOVEDICA"],
+                "recursos": ["MINERAIS", "COMBUSTIVEL", "AGUA_LIMPA"],
+                "cobertura": 20,
+                "visibilidade": 90,
+                "descricao": "Área industrial desertificada com tempestades constantes"
+            }
+        }
+    
+    def _inicializar_recursos(self):
+        """Inicializa recursos disponíveis em cada setor"""
+        for setor in self.setores:
+            self.recursos_disponiveis[setor] = {}
+            for recurso in self.setores[setor]["recursos"]:
+                self.recursos_disponiveis[setor][recurso] = random.randint(20, 100)
+    
+    def atualizar_clima(self) -> str:
+        """Atualiza o clima aleatoriamente"""
+        self.clima_atual = random.choice(self.climas)
+        
+        # Gerar evento baseado no clima
+        evento = self._gerar_evento_clima()
+        if evento:
+            self.eventos_ativos.append(evento)
+            print(f"\n🌪️ EVENTO CLIMÁTICO: {evento['nome']}")
+            print(f"   📝 {evento['descricao']}")
+        
+        return self.clima_atual
+    
+    def _gerar_evento_clima(self) -> Optional[Dict]:
+        """Gera evento especial baseado no clima"""
+        eventos = {
+            "CHUVA_ACIDA": {
+                "nome": "Chuva Ácida Corrosiva",
+                "descricao": "Chuva altamente corrosiva danifica equipamentos e reduz defesa",
+                "duracao": random.randint(2, 4),
+                "efeito": {"defesa": -30, "durabilidade": -10}
+            },
+            "TEMPESTADE_POEIRA": {
+                "nome": "Tempestade de Poeira",
+                "descricao": "Visibilidade reduzida a quase zero, movimento difícil",
+                "duracao": random.randint(1, 3),
+                "efeito": {"visibilidade": -80, "velocidade": -50}
+            },
+            "NEVOA_RADIOATIVA": {
+                "nome": "Névoa Radioativa",
+                "descricao": "Névoa tóxica causa dano contínuo por radiação",
+                "duracao": random.randint(3, 5),
+                "efeito": {"vida": -5, "velocidade": -20}
+            },
+            "VENTO_STRONG": {
+                "nome": "Ventos Fortes",
+                "descricao": "Ventos aceleram movimento mas dificultam precisão",
+                "duracao": random.randint(2, 4),
+                "efeito": {"velocidade": +40, "precisao": -30}
+            }
+        }
+        
+        if self.clima_atual in eventos and random.random() > 0.5:
+            return eventos[self.clima_atual]
+        return None
+    
+    def coletar_recurso(self, setor: str, recurso: str, quantidade: int = 1) -> Tuple[bool, int]:
+        """Coleta recursos de um setor"""
+        if setor not in self.recursos_disponiveis:
+            return False, 0
+        
+        if recurso not in self.recursos_disponiveis[setor]:
+            return False, 0
+        
+        disponivel = self.recursos_disponiveis[setor][recurso]
+        coletado = min(quantidade, disponivel)
+        
+        if coletado > 0:
+            self.recursos_disponiveis[setor][recurso] -= coletado
+            return True, coletado
+        
+        return False, 0
+    
+    def atualizar_eventos(self):
+        """Atualiza duração dos eventos ativos"""
+        eventos_remover = []
+        
+        for i, evento in enumerate(self.eventos_ativos):
+            evento["duracao"] -= 1
+            if evento["duracao"] <= 0:
+                eventos_remover.append(i)
+        
+        # Remover eventos finalizados
+        for idx in sorted(eventos_remover, reverse=True):
+            evento = self.eventos_ativos.pop(idx)
+            print(f"\n✅ EVENTO FINALIZADO: {evento['nome']}")
+    
+    def status_setor(self, setor: str) -> str:
+        """Retorna status de um setor"""
+        if setor not in self.setores:
+            return "Setor não encontrado"
+        
+        info = self.setores[setor]
+        recursos = ", ".join([f"{r}:{self.recursos_disponiveis[setor].get(r,0)}" 
+                            for r in info["recursos"][:3]])
+        
+        return f"""
+{info['emoji']} {info['nome']} ({setor})
+📊 Tipo: {info['tipo']}
+🛡️ Cobertura: {info['cobertura']}% | 👁️ Visibilidade: {info['visibilidade']}%
+⚠️ Perigos: {', '.join(info['perigos'][:2])}
+📦 Recursos: {recursos}
+📝 {info['descricao']}
+"""
+
+# ==================== SISTEMA DE AVATAR ====================
+class AvatarKR:
+    """Sistema completo de avatar/jogador"""
+    
+    def __init__(self, nome: str, pack_escolhido: str = "ESTRATEGISTA", is_human: bool = False):
+        self.nome = nome
+        self.is_human = is_human
+        self.id_jogador = f"KR-{hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]}"
+        self.hierarquia = HierarquiaKR(PatenteKR.ZHEERS)
+        self.xp = 0
+        self.nivel = 1
+        self.vitalidade_vl = 100.0
+        self.defesa_vd = 0
+        self.hp_max = 100
+        self.krs = 0
+        self.krc = 0
+        self.perks = []
+        
+        # Sistema BankHaaos
+        self.bank = BanKhaaos()
+        
+        # Sistema de posição
+        self.posicao_atual = "PARQUE_PUBLICO"
+        self.se_moveu = False
+        self.tempo_parado = 0
+        self.visivel_mapa = False
+        self.ultima_acao = datetime.now()
+        
+        # Sistema de ciclos
+        self.ciclos_completados = {c: False for c in CicloKR}
+        self.ciclo_atual = None
+        
+        # Resistências
+        self.resistencias = {"urbano": 0.0, "selva": 0.0, "deserto": 0.0, "ilha": 0.0}
+        
+        # Sistema de itens
+        self.packbag = []      # Itens levados para batalha
+        self.cofre_qg = []     # Itens seguros
+        self.arma_equipada = None
+        self.colete_equipado = None
+        self.itens_consumiveis = []
+        
+        # Estatísticas
+        self.kills = 0
+        self.mortes = 0
+        self.vitorias = 0
+        self.derrotas = 0
+        self.dano_total = 0
+        self.dano_recebido = 0
+        self.distancia_percorrida = 0
+        self.recursos_coletados = 0
+        
+        # Sistema HERCE
+        self.inscrito_herce = False
+        self.convocado = False
+        self.data_inscricao = datetime.now()
+        self.dias_sobrevivencia = 0
+        
+        # IA para NPCs
+        self.ia_agressividade = random.uniform(0.3, 0.8)
+        self.ia_cautela = random.uniform(0.2, 0.7)
+        self.ia_coleta = random.uniform(0.4, 0.9)
+        
+        self._aplicar_pack_inicial(pack_escolhido)
+        self._calcular_bonus_patente()
+        
+        # Depósito inicial
+        dep_inicial = random.randint(30, 100) if not is_human else 50
+        krc_depositado = self.bank.deposito(dep_inicial)
+        self.krc += krc_depositado
+        
+        print(f"✅ Avatar criado: {self.nome} ({pack_escolhido})")
+    
+    def _aplicar_pack_inicial(self, pack: str):
+        """Aplica pacote inicial"""
+        packs = {
+            "BRUTO": {
+                "itens": [
+                    ItemKR("Faca Pesada KR-9", TipoItem.ARMA, "COMUM", 200),
+                    ItemKR("Colete Básico KR", TipoItem.DEFESA, "COMUM", 150),
+                    ItemKR("Kit Médico Básico", TipoItem.CURATIVO, "COMUM", 100)
+                ],
+                "krs": 300,
+                "krc": 150,
+                "perks": ["Esmagador", "Resistência Física"],
+                "resistencias": {"urbano": 0.2, "selva": 0.0, "deserto": 0.0, "ilha": 0.0}
+            },
+            "SOMBRA": {
+                "itens": [
+                    ItemKR("Adaga Silenciosa", TipoItem.ARMA, "RARO", 350),
+                    ItemKR("Traje Camuflado", TipoItem.DEFESA, "RARO", 300),
+                    ItemKR("Kit Furtividade", TipoItem.UTILIDADE, "COMUM", 150)
+                ],
+                "krs": 700,
+                "krc": 350,
+                "perks": ["Passo Silencioso", "Furtividade", "Visão Noturna"],
+                "resistencias": {"urbano": 0.0, "selva": 0.25, "deserto": 0.0, "ilha": 0.15}
+            },
+            "EXPLORADOR": {
+                "itens": [
+                    ItemKR("Faca Multiuso", TipoItem.ARMA, "COMUM", 180),
+                    ItemKR("Kit de Navegação", TipoItem.UTILIDADE, "RARO", 250),
+                    ItemKR("Mochila Expedição", TipoItem.UTILIDADE, "COMUM", 120)
+                ],
+                "krs": 400,
+                "krc": 200,
+                "perks": ["Rastreamento", "Orientação", "Sobrevivência"],
+                "resistencias": {"urbano": 0.0, "selva": 0.15, "deserto": 0.1, "ilha": 0.25}
+            },
+            "ESTRATEGISTA": {
+                "itens": [
+                    ItemKR("Fuzil KR-Tático", TipoItem.ARMA, "RARO", 400),
+                    ItemKR("Kit Médico Avançado", TipoItem.CURATIVO, "RARO", 300),
+                    ItemKR("Binóculos Táticos", TipoItem.UTILIDADE, "COMUM", 150)
+                ],
+                "krs": 500,
+                "krc": 250,
+                "perks": ["Visão Estratégica", "Logística", "Economia de Recursos"],
+                "resistencias": {"urbano": 0.1, "selva": 0.1, "deserto": 0.1, "ilha": 0.1}
+            }
+        }
+        
+        config = packs.get(pack, packs["ESTRATEGISTA"])
+        
+        self.krs = config["krs"]
+        self.krc = config["krc"]
+        self.perks = config["perks"]
+        
+        # Adicionar itens
+        for item in config["itens"]:
+            if item.tipo == TipoItem.ARMA:
+                self.arma_equipada = item
+                item.equipado = True
+            elif item.tipo == TipoItem.DEFESA:
+                self.colete_equipado = item
+                item.equipado = True
+            self.packbag.append(item)
+        
+        # Aplicar resistências
+        for key, value in config["resistencias"].items():
+            self.resistencias[key] = value
+    
+    def _calcular_bonus_patente(self):
+        """Aplica bônus da patente"""
+        bonus = self.hierarquia.bonus
+        self.hp_max = 100 + bonus["vida"]
+        self.vitalidade_vl = min(self.vitalidade_vl, self.hp_max)
+        self.defesa_vd = bonus["defesa"]
+    
+    # =========== SISTEMA DE MOVIMENTO ===========
+    def mover_para_setor(self, setor_destino: str, mundo) -> Tuple[bool, str]:
+        """Move o jogador para outro setor"""
+        if setor_destino not in mundo.setores:
+            return False, "Setor não existe"
+        
+        if self.posicao_atual == setor_destino:
+            return False, "Já está neste setor"
+        
+        # Verificar se pode se mover (não está incapacitado)
+        if self.vitalidade_vl <= 20:
+            return False, "Vitalidade muito baixa para se mover"
+        
+        # Atualizar posição
+        setor_anterior = self.posicao_atual
+        self.posicao_atual = setor_destino
+        self.se_moveu = True
+        self.tempo_parado = 0
+        self.visivel_mapa = False
+        self.ultima_acao = datetime.now()
+        self.distancia_percorrida += 1
+        
+        # Custo de movimento (1-5% de vitalidade)
+        custo_movimento = random.uniform(1, 5)
+        self.vitalidade_vl = max(1, self.vitalidade_vl - custo_movimento)
+        
+        mensagem = (f"🗺️ {self.nome} moveu-se de {setor_anterior} para {setor_destino} "
+                   f"(VL -{custo_movimento:.1f}%)")
+        
+        return True, mensagem
+    
+    # =========== SISTEMA DE RATOS ===========
+    def processar_efeitos_ambiente(self, clima: str, setor: str) -> List[str]:
+        """Processa efeitos do ambiente e ratos"""
+        efeitos = []
+        
+        # Sistema de Ratos (Inatividade)
+        if not self.se_moveu:
+            self.tempo_parado += 1
+            if self.tempo_parado >= 3:  # 3 ticks parado
+                self.visivel_mapa = True
+                dano_ratos = random.uniform(1, 3)
+                self.vitalidade_vl -= dano_ratos
+                efeitos.append(f"🐀 Ratos atacam! VL -{dano_ratos:.1f}% (Visível no mapa)")
+        else:
+            self.tempo_parado = 0
+            self.visivel_mapa = False
+        
+        # Resetar movimento para próximo tick
+        self.se_moveu = False
+        
+        # Aplicar resistência ao clima
+        resistencia = self.resistencias.get("urbano", 0.0)
+        
+        # Efeitos específicos do clima
+        if clima == "CHUVA_ACIDA" and setor == "PARQUE_PUBLICO":
+            dano_reduzido = 5 * (1 - resistencia)
+            self.defesa_vd = max(0, self.defesa_vd - dano_reduzido)
+            if self.defesa_vd <= 0:
+                dano_vida = 3 * (1 - resistencia)
+                self.vitalidade_vl -= dano_vida
+                efeitos.append(f"⚠️ Chuva Ácida! VD -{dano_reduzido:.1f}, VL -{dano_vida:.1f}%")
+        
+        return efeitos
+    
+    # =========== SISTEMA DE COMBATE ===========
+    def atacar(self, alvo, mundo) -> Tuple[bool, str, float]:
+        """Ataca outro jogador"""
+        if self.vitalidade_vl <= 0:
+            return False, "Não pode atacar com vitalidade zero", 0
+        
+        if alvo.vitalidade_vl <= 0:
+            return False, "Alvo já está incapacitado", 0
+        
+        # Verificar se o alvo está visível
+        if not alvo.visivel_mapa and random.random() > 0.3:
+            return False, "Alvo não está visível", 0
+        
+        # Calcular dano base
+        dano_base = 10 + (self.hierarquia.patente.value * 2)
+        
+        # Bônus da arma equipada
+        if self.arma_equipada:
+            sucesso, eficiencia = self.arma_equipada.usar()
+            if sucesso:
+                dano_base *= (1 + (self.arma_equipada.efeito["dano"] / 100 * eficiencia))
+        
+        # Bônus de perks
+        if "Esmagador" in self.perks:
+            dano_base *= 1.2
+        
+        # Redução pela defesa do alvo
+        defesa_alvo = alvo.defesa_vd
+        if alvo.colete_equipado:
+            sucesso, eficiencia = alvo.colete_equipado.usar()
+            if sucesso:
+                defesa_alvo *= (1 + (alvo.colete_equipado.efeito["defesa"] / 100 * eficiencia))
+        
+        dano_final = max(1, dano_base - (defesa_alvo * 0.5))
+        
+        # Aplicar dano
+        alvo.vitalidade_vl -= dano_final
+        self.dano_total += dano_final
+        alvo.dano_recebido += dano_final
+        
+        # Verificar se eliminou o alvo
+        eliminado = False
+        if alvo.vitalidade_vl <= 0:
+            alvo.vitalidade_vl = 0
+            self.kills += 1
+            alvo.mortes += 1
+            eliminado = True
+            
+            # XP e KRC por kill
+            xp_kill = 100 * alvo.hierarquia.patente.value
+            krc_kill = 50 * alvo.hierarquia.patente.value
+            
+            self.ganhar_xp(xp_kill)
+            self.krc += krc_kill
+            
+            # Pilhagem
+            if alvo.packbag:
+                item_pilhado = random.choice(alvo.packbag)
+                self.packbag.append(item_pilhado)
+                alvo.packbag.remove(item_pilhado)
+                
+                mensagem = (f"⚔️ {self.nome} ELIMINOU {alvo.nome}! "
+                          f"Dano: {dano_final:.1f} | "
+                          f"XP: +{xp_kill} | KRC: +{krc_kill} | "
+                          f"Pilhado: {item_pilhado.nome}")
+            else:
+                mensagem = (f"⚔️ {self.nome} ELIMINOU {alvo.nome}! "
+                          f"Dano: {dano_final:.1f} | "
+                          f"XP: +{xp_kill} | KRC: +{krc_kill}")
+        else:
+            mensagem = f"⚔️ {self.nome} atacou {alvo.nome}: {dano_final:.1f} de dano"
+        
+        return True, mensagem, dano_final
+    
+    # =========== SISTEMA DE COLETA ===========
+    def coletar(self, mundo, recurso: str = None, quantidade: int = 1) -> Tuple[bool, str]:
+        """Coleta recursos do setor atual"""
+        if self.vitalidade_vl <= 10:
+            return False, "Vitalidade muito baixa para coletar"
+        
+        setor_info = mundo.setores.get(self.posicao_atual)
+        if not setor_info:
+            return False, "Setor inválido"
+        
+        # Se recurso não especificado, escolhe aleatório
+        if not recurso:
+            recursos_disponiveis = list(mundo.recursos_disponiveis.get(self.posicao_atual, {}).keys())
+            if not recursos_disponiveis:
+                return False, "Nenhum recurso disponível neste setor"
+            recurso = random.choice(recursos_disponiveis)
+        
+        sucesso, quantidade_coletada = mundo.coletar_recurso(self.posicao_atual, recurso, quantidade)
+        
+        if sucesso and quantidade_coletada > 0:
+            # Custo de coleta
+            custo_coleta = random.uniform(0.5, 2)
+            self.vitalidade_vl = max(1, self.vitalidade_vl - custo_coleta)
+            
+            # Ganho de KRC baseado no recurso
+            valor_recurso = {"MADEIRA": 5, "METAL": 10, "AGUA": 3, "MUNICAO": 15,
+                           "PLASTICO_CRUZ": 20, "COMBUSTIVEL": 25}.get(recurso, 5)
+            
+            krc_ganho = valor_recurso * quantidade_coletada
+            self.krc += krc_ganho
+            self.recursos_coletados += quantidade_coletada
+            
+            mensagem = (f"🛠️ {self.nome} coletou {quantidade_coletada}x {recurso} | "
+                       f"VL -{custo_coleta:.1f}% | KRC +{krc_ganho}")
+            return True, mensagem
+        
+        return False, f"Não foi possível coletar {recurso}"
+    
+    # =========== SISTEMA DE CURA ===========
+    def usar_item_cura(self) -> Tuple[bool, str]:
+        """Usa item de cura do packbag"""
+        itens_cura = [item for item in self.packbag if item.tipo == TipoItem.CURATIVO]
+        
+        if not itens_cura:
+            return False, "Nenhum item de cura disponível"
+        
+        item = itens_cura[0]  # Usa o primeiro item de cura
+        sucesso, eficiencia = item.usar()
+        
+        if sucesso:
+            cura = item.efeito["cura"] * eficiencia
+            self.vitalidade_vl = min(self.hp_max, self.vitalidade_vl + cura)
+            
+            # Remover item se durabilidade zero
+            if item.durabilidade <= 0:
+                self.packbag.remove(item)
+                mensagem = f"💊 {self.nome} usou {item.nome} (+{cura:.1f}% VL) - Item consumido"
+            else:
+                mensagem = f"💊 {self.nome} usou {item.nome} (+{cura:.1f}% VL)"
+            
+            return True, mensagem
+        
+        return False, "Item de cura não funcionou"
+    
+    # =========== SISTEMA DE XP ===========
+    def ganhar_xp(self, quantidade: float) -> float:
+        """Adiciona XP e verifica promoção"""
+        multiplicador = self.hierarquia.bonus["xp_ganho"]
+        xp_ganho = quantidade * multiplicador
+        self.xp += xp_ganho
+        
+        # Verificar promoção
+        if self.hierarquia.pode_promover(self.xp):
+            self.promover_patente()
+        
+        return xp_ganho
+    
+    def promover_patente(self) -> bool:
+        """Promove para próxima patente"""
+        proxima_patente = self.hierarquia.get_proxima_patente()
+        
+        if proxima_patente and self.xp >= XP_POR_PATENTE[proxima_patente]:
+            self.hierarquia = HierarquiaKR(proxima_patente)
+            self._calcular_bonus_patente()
+            
+            # Creditar salário
+            salario = self.hierarquia.salario_diario
+            self.bank.creditar_salario(salario)
+            self.krc += salario
+            
+            # Recompensa de promoção
+            recompensa = salario * 10
+            self.krc += recompensa
+            
+            print(f"\n{'⭐'*50}")
+            print(f"🎖️ PROMOÇÃO: {self.nome} agora é {self.hierarquia.nome_oficial}")
+            print(f"💰 Salário diário: {salario} KRC")
+            print(f"🎁 Recompensa: +{recompensa} KRC")
+            print(f"{'⭐'*50}")
+            
+            return True
+        return False
+    
+    # =========== SISTEMA DE DECISÃO DA IA ===========
+    def tomar_decisao_ia(self, mundo, jogadores_vivos) -> str:
+        """IA toma decisão baseada em agressividade e cautela"""
+        acoes_possiveis = []
+        
+        # Coletar recursos se vitalidade ok
+        if self.vitalidade_vl > 30 and random.random() < self.ia_coleta:
+            acoes_possiveis.append("COLETAR")
+        
+        # Mover-se para outro setor
+        if self.vitalidade_vl > 20:
+            acoes_possiveis.append("MOVER")
+        
+        # Atacar jogadores próximos
+        jogadores_no_mesmo_setor = [j for j in jogadores_vivos 
+                                   if j != self and j.posicao_atual == self.posicao_atual]
+        
+        if jogadores_no_mesmo_setor and random.random() < self.ia_agressividade:
+            if any(j.visivel_mapa for j in jogadores_no_mesmo_setor) or random.random() > 0.5:
+                acoes_possiveis.append("ATACAR")
+        
+        # Curar-se se vitalidade baixa
+        if self.vitalidade_vl < 40 and any(item.tipo == TipoItem.CURATIVO for item in self.packbag):
+            acoes_possiveis.append("CURAR")
+        
+        # Se não há ações possíveis, descansar
+        if not acoes_possiveis:
+            return "DESCANSAR"
+        
+        # Escolher ação baseada na personalidade da IA
+        pesos = {
+            "ATACAR": self.ia_agressividade,
+            "COLETAR": self.ia_coleta,
+            "MOVER": 0.7 - self.ia_cautela,  # Mais cautela = menos movimento
+            "CURAR": (1 - self.ia_agressividade) * 0.8,
+            "DESCANSAR": self.ia_cautela
+        }
+        
+        acoes_com_pesos = [(acao, pesos.get(acao, 0.5)) for acao in acoes_possiveis]
+        acoes_com_pesos.sort(key=lambda x: x[1], reverse=True)
+        
+        return acoes_com_pesos[0][0]
+    
+    # =========== STATUS E DISPLAY ===========
+    def status_completo(self) -> str:
+        """Retorna status completo formatado"""
+        ciclos_completos = sum(1 for v in self.ciclos_completados.values() if v)
+        bank_status = self.bank.resumo()
+        
+        # Itens equipados
+        arma = self.arma_equipada.nome if self.arma_equipada else "Nenhuma"
+        colete = self.colete_equipado.nome if self.colete_equipado else "Nenhum"
+        
+        # Próxima patente
+        proxima_patente = self.hierarquia.get_proxima_patente()
+        xp_proximo = XP_POR_PATENTE.get(proxima_patente, 0) if proxima_patente else 0
+        
+        status = f"""
+{'='*70}
+{self.hierarquia.emoji} {self.nome} [{self.id_jogador}] {'👤' if self.is_human else '🤖'}
+{'='*70}
+📊 PATENTE: {self.hierarquia.nome_oficial} ({self.hierarquia.designacao_tatica})
+⭐ XP: {self.xp:,}/{xp_proximo:,} (Próxima patente: {proxima_patente.name if proxima_patente else 'MAX'})
+❤️ VITALIDADE: {self.vitalidade_vl:.1f}/{self.hp_max}%
+🛡️ DEFESA: {self.defesa_vd:.1f}%
+
+📍 POSIÇÃO: {self.posicao_atual} | Visível: {'SIM' if self.visivel_mapa else 'NÃO'}
+📈 DIAS SOBREVIVIDOS: {self.dias_sobrevivencia}
+
+💰 SISTEMA BANKHAAOS:
+  • Weapons: {bank_status['weapons_krc']:,.0f} KRC
+  • Bonus: {bank_status['bonus_krc']:,.0f} KRC
+  • FBM: {bank_status['fbm_krc']:,.0f} KRC
+  • Total: {bank_status['total_krc']:,.0f} KRC (${bank_status['total_usd']:.2f} USD)
+
+🎯 ESTATÍSTICAS:
+  • K/D: {self.kills}/{self.mortes} | Vitórias: {self.vitorias}
+  • Dano Total: {self.dano_total:.0f} | Recebido: {self.dano_recebido:.0f}
+  • Recursos Coletados: {self.recursos_coletados}
+
+🌍 CICLOS COMPLETOS: {ciclos_completos}/4
+✨ PERKS: {', '.join(self.perks) if self.perks else 'Nenhum'}
+
+⚔️ EQUIPAMENTOS:
+  • Arma: {arma}
+  • Colete: {colete}
+  • Itens Packbag: {len(self.packbag)}/{12}
+  • Itens Cofre: {len(self.cofre_qg)}/{20}
+
+📋 HABILIDADES: {', '.join(self.hierarquia.unlock_habilidades[:3])}
+{'='*70}
+"""
+        return status
+    
+    def status_resumido(self) -> str:
+        """Status resumido para listagens"""
+        return (f"{self.hierarquia.emoji} {self.nome:15} | "
+                f"VL:{self.vitalidade_vl:5.1f}% | "
+                f"K:{self.kills:2} D:{self.mortes:2} | "
+                f"KRC:{self.krc:7,.0f} | "
+                f"{self.posicao_atual:15}")
+
+# ==================== SISTEMA DE CICLO ====================
+class CicloKhaaos:
+    """Gerencia um ciclo completo da guerra"""
+    
+    def __init__(self, numero: int, tipo_ciclo: CicloKR):
+        self.numero = numero
+        self.tipo = tipo_ciclo
+        self.nome = self._get_nome_ciclo()
+        self.emoji = self._get_emoji_ciclo()
+        
+        # Mundo específico do ciclo
+        if tipo_ciclo == CicloKR.CAOS_URBANO:
+            self.mapa = Mundo1CaosUrbano()
+        else:
+            self.mapa = Mundo1CaosUrbano()  # Placeholder para outros mundos
+        
+        self.duracao_dias = 7
+        self.dia_atual = 1
+        self.jogadores_ativos = []
+        self.jogadores_eliminados = []
+        self.vencedor = None
+        self.completado = False
+        self.rodada_atual = 1
+        
+        # Estatísticas do ciclo
+        self.combates_total = 0
+        self.mortes_total = 0
+        self.recursos_coletados_total = 0
+    
+    def _get_nome_ciclo(self) -> str:
+        nomes = {
+            CicloKR.CAOS_URBANO: "Caos Urbano",
+            CicloKR.SELVA: "Selva Profunda",
+            CicloKR.DESERTO: "Deserto Ardente",
+            CicloKR.ILHA: "Ilha Proibida"
+        }
+        return nomes.get(self.tipo, "Ciclo Desconhecido")
+    
+    def _get_emoji_ciclo(self) -> str:
+        emojis = {
+            CicloKR.CAOS_URBANO: "🏙️💥",
+            CicloKR.SELVA: "🌳🐍",
+            CicloKR.DESERTO: "🏜️🔥",
+            CicloKR.ILHA: "🏝️🌊"
+        }
+        return emojis.get(self.tipo, "❓")
+    
+    def adicionar_jogador(self, jogador: AvatarKR):
+        """Adiciona jogador ao ciclo"""
+        if jogador not in self.jogadores_ativos:
+            self.jogadores_ativos.append(jogador)
+            jogador.ciclo_atual = self
+            jogador.posicao_atual = random.choice(list(self.mapa.setores.keys()))
+            jogador.vitalidade_vl = jogador.hp_max
+            jogador.dias_sobrevivencia = 0
+    
+    def remover_jogador(self, jogador: AvatarKR):
+        """Remove jogador do ciclo (eliminado)"""
+        if jogador in self.jogadores_ativos:
+            self.jogadores_ativos.remove(jogador)
+            self.jogadores_eliminados.append(jogador)
+    
+    def executar_rodada(self, jogador_humano: Optional[AvatarKR] = None) -> List[str]:
+        """Executa uma rodada do ciclo"""
+        logs = []
+        self.mapa.rodada += 1
+        self.dia_atual = min(self.duracao_dias, (self.rodada_atual // 3) + 1)
+        
+        # Atualizar clima
+        clima = self.mapa.atualizar_clima()
+        logs.append(f"\n🌤️ DIA {self.dia_atual}/{self.duracao_dias} - Clima: {clima}")
+        
+        # Atualizar eventos
+        self.mapa.atualizar_eventos()
+        
+        # Aplicar efeitos climáticos a todos os jogadores
+        for jogador in self.jogadores_ativos[:]:
+            efeitos = jogador.processar_efeitos_ambiente(clima, jogador.posicao_atual)
+            if efeitos:
+                logs.extend([f"   👤 {jogador.nome}: {efeito}" for efeito in efeitos])
+            
+            # Verificar morte por ambiente
+            if jogador.vitalidade_vl <= 0:
+                jogador.vitalidade_vl = 0
+                self.remover_jogador(jogador)
+                logs.append(f"   💀 {jogador.nome} morreu devido às condições ambientais")
+                self.mortes_total += 1
+        
+        # Executar ações dos jogadores
+        jogadores_ordenados = sorted(self.jogadores_ativos, 
+                                   key=lambda j: (j.is_human, -j.vitalidade_vl))
+        
+        for jogador in jogadores_ordenados:
+            if jogador not in self.jogadores_ativos:
+                continue
+            
+            # Incrementar dias de sobrevivência
+            jogador.dias_sobrevivencia += 1
+            
+            # Jogador humano espera input, NPC decide automaticamente
+            if jogador.is_human and jogador_humano and jogador == jogador_humano:
+                # Ação do humano será tratada externamente
+                continue
+            
+            # IA toma decisão
+            acao = jogador.tomar_decisao_ia(self.mapa, self.jogadores_ativos)
+            
+            if acao == "MOVER":
+                # Escolher setor aleatório
+                setores = list(self.mapa.setores.keys())
+                setor_destino = random.choice([s for s in setores if s != jogador.posicao_atual])
+                sucesso, mensagem = jogador.mover_para_setor(setor_destino, self.mapa)
+                if sucesso:
+                    logs.append(f"   🗺️ {mensagem}")
+            
+            elif acao == "COLETAR":
+                sucesso, mensagem = jogador.coletar(self.mapa)
+                if sucesso:
+                    logs.append(f"   {mensagem}")
+                    self.recursos_coletados_total += 1
+            
+            elif acao == "ATACAR":
+                # Encontrar alvo no mesmo setor
+                alvos = [j for j in self.jogadores_ativos 
+                        if j != jogador and j.posicao_atual == jogador.posicao_atual]
+                
+                if alvos:
+                    alvo = random.choice(alvos)
+                    sucesso, mensagem, dano = jogador.atacar(alvo, self.mapa)
+                    if sucesso:
+                        logs.append(f"   {mensagem}")
+                        self.combates_total += 1
+                        
+                        # Verificar se eliminou o alvo
+                        if alvo.vitalidade_vl <= 0:
+                            self.remover_jogador(alvo)
+                            self.mortes_total += 1
+            
+            elif acao == "CURAR":
+                sucesso, mensagem = jogador.usar_item_cura()
+                if sucesso:
+                    logs.append(f"   {mensagem}")
+            
+            elif acao == "DESCANSAR":
+                # Recupera um pouco de vitalidade
+                recuperacao = random.uniform(1, 3)
+                jogador.vitalidade_vl = min(jogador.hp_max, jogador.vitalidade_vl + recuperacao)
+                logs.append(f"   😴 {jogador.nome} descansou (+{recuperacao:.1f}% VL)")
+        
+        self.rodada_atual += 1
+        return logs
+    
+    def verificar_fim_ciclo(self) -> bool:
+        """Verifica se o ciclo terminou"""
+        if len(self.jogadores_ativos) <= 1:
+            self.completado = True
+            if self.jogadores_ativos:
+                self.vencedor = self.jogadores_ativos[0]
+                self.vencedor.vitorias += 1
+                self.vencedor.ciclos_completados[self.tipo] = True
+                
+                # Recompensas
+                recompensas = {
+                    CicloKR.CAOS_URBANO: {"xp": 5000, "krc": 1000},
+                    CicloKR.SELVA: {"xp": 7500, "krc": 1500},
+                    CicloKR.DESERTO: {"xp": 10000, "krc": 2000},
+                    CicloKR.ILHA: {"xp": 15000, "krc": 3000}
+                }
+                
+                recompensa = recompensas.get(self.tipo, {"xp": 5000, "krc": 1000})
+                self.vencedor.ganhar_xp(recompensa["xp"])
+                self.vencedor.krc += recompensa["krc"]
+                self.vencedor.bank.deposito(recompensa["krc"] / KRC_TO_USD)
+            
+            return True
+        
+        if self.rodada_atual >= 21:  # 7 dias * 3 rodadas por dia
+            self.completado = True
+            # Vencedor é quem tem mais vitalidade
+            if self.jogadores_ativos:
+                self.jogadores_ativos.sort(key=lambda j: j.vitalidade_vl, reverse=True)
+                self.vencedor = self.jogadores_ativos[0]
+                self.vencedor.vitorias += 1
+                self.vencedor.ciclos_completados[self.tipo] = True
+            
+            return True
+        
+        return False
+    
+    def status_ciclo(self) -> str:
+        """Retorna status do ciclo"""
+        return f"""
+{self.emoji} CICLO {self.numero}: {self.nome}
+{'='*50}
+📅 Dia: {self.dia_atual}/{self.duracao_dias} | Rodada: {self.rodada_atual}
+🌤️ Clima Atual: {self.mapa.clima_atual}
+👥 Sobreviventes: {len(self.jogadores_ativos)}/{len(self.jogadores_ativos)+len(self.jogadores_eliminados)}
+⚔️ Combates: {self.combates_total} | 💀 Mortes: {self.mortes_total}
+📦 Recursos Coletados: {self.recursos_coletados_total}
+🏆 Vencedor: {self.vencedor.nome if self.vencedor else 'Ainda em disputa'}
+{'='*50}
+"""
+
+# ==================== SISTEMA DE GUERRA ====================
+class GuerraKhaaos:
+    """Gerencia a guerra completa dos 4 ciclos"""
+    
+    def __init__(self, max_jogadores: int = 20):
+        self.max_jogadores = max_jogadores
+        self.jogadores_inscritos = []
+        self.ciclos = [
+            CicloKhaaos(1, CicloKR.CAOS_URBANO),
+            CicloKhaaos(2, CicloKR.SELVA),
+            CicloKhaaos(3, CicloKR.DESERTO),
+            CicloKhaaos(4, CicloKR.ILHA)
+        ]
+        self.ciclo_atual_idx = 0
+        self.vencedor_geral = None
+        self.estado = "PREPARACAO"  # PREPARACAO, EM_ANDAMENTO, FINALIZADA
+        self.vencedores_ciclos = []
+        
+        # Estatísticas da guerra
+        self.inicio_data = datetime.now()
+        self.total_combates = 0
+        self.total_mortes = 0
+        self.total_recursos = 0
+    
+    @property
+    def ciclo_atual(self) -> Optional[CicloKhaaos]:
+        """Retorna o ciclo atual"""
+        if 0 <= self.ciclo_atual_idx < len(self.ciclos):
+            return self.ciclos[self.ciclo_atual_idx]
+        return None
+    
+    def inscrever_jogador(self, jogador: AvatarKR) -> Tuple[bool, str]:
+        """Inscreve jogador na guerra"""
+        if len(self.jogadores_inscritos) >= self.max_jogadores:
+            return False, "Limite de jogadores atingido"
+        
+        if jogador in self.jogadores_inscritos:
+            return False, "Jogador já inscrito"
+        
+        # Taxa de inscrição: 100 KRC
+        if jogador.krc < 100:
+            return False, "KRC insuficiente para inscrição (necessário 100 KRC)"
+        
+        jogador.krc -= 100
+        jogador.bank.transferir_para_fbm(100)
+        jogador.inscrito_herce = True
+        self.jogadores_inscritos.append(jogador)
+        
+        return True, f"✅ {jogador.nome} inscrito na Guerra Khaaos!"
+    
+    def iniciar_ciclo(self, ciclo_idx: int) -> bool:
+        """Inicia um ciclo específico"""
+        if ciclo_idx < 0 or ciclo_idx >= len(self.ciclos):
+            return False
+        
+        self.ciclo_atual_idx = ciclo_idx
+        ciclo = self.ciclo_atual
+        
+        # Selecionar jogadores para este ciclo (máximo 8 por ciclo)
+        participantes = self.jogadores_inscritos.copy()
+        random.shuffle(participantes)
+        participantes = participantes[:8]
+        
+        # Adicionar ao ciclo
+        for jogador in participantes:
+            ciclo.adicionar_jogador(jogador)
+        
+        self.estado = "EM_ANDAMENTO"
+        
+        print(f"\n{'='*80}")
+        print(f"🌍 INICIANDO {ciclo.emoji} CICLO {ciclo_idx+1}: {ciclo.nome}")
+        print(f"{'='*80}")
+        
+        if ciclo.mapa:
+            print(f"🗺️ Mapa: {len(ciclo.mapa.setores)} setores disponíveis")
+            print(f"🌤️ Sistema climático ativo")
+        
+        print(f"👥 Participantes: {len(ciclo.jogadores_ativos)} jogadores")
+        print(f"📅 Duração: {ciclo.duracao_dias} dias (máximo)")
+        print(f"{'='*80}")
+        
+        return True
+    
+    def proximo_ciclo(self) -> bool:
+        """Avança para o próximo ciclo"""
+        if self.ciclo_atual and not self.ciclo_atual.completado:
+            return False
+        
+        self.ciclo_atual_idx += 1
+        
+        if self.ciclo_atual_idx >= len(self.ciclos):
+            self.finalizar_guerra()
+            return False
+        
+        return self.iniciar_ciclo(self.ciclo_atual_idx)
+    
+    def finalizar_guerra(self):
+        """Finaliza a guerra e determina vencedor geral"""
+        self.estado = "FINALIZADA"
+        
+        # Coletar estatísticas
+        for ciclo in self.ciclos:
+            if ciclo.completado and ciclo.vencedor:
+                self.vencedores_ciclos.append(ciclo.vencedor)
+                self.total_combates += ciclo.combates_total
+                self.total_mortes += ciclo.mortes_total
+                self.total_recursos += ciclo.recursos_coletados_total
+        
+        # Determinar vencedor geral
+        # 1. Quem venceu mais ciclos
+        # 2. Quem tem mais KRC
+        # 3. Quem tem mais XP
+        
+        vencedores_por_ciclo = {}
+        for vencedor in self.vencedores_ciclos:
+            vencedores_por_ciclo[vencedor] = vencedores_por_ciclo.get(vencedor, 0) + 1
+        
+        if vencedores_por_ciclo:
+            # Ordenar por ciclos vencidos, depois KRC, depois XP
+            jogadores_ordenados = sorted(vencedores_por_ciclo.keys(),
+                                       key=lambda j: (
+                                           vencedores_por_ciclo[j],
+                                           j.krc,
+                                           j.xp
+                                       ), reverse=True)
+            
+            self.vencedor_geral = jogadores_ordenados[0]
+            ciclos_vencidos = vencedores_por_ciclo[self.vencedor_geral]
+            
+            # Verificar se ganhou o Battle Million
+            ganhou_million = ciclos_vencidos == 4
+            
+            print(f"\n{'⭐'*80}")
+            print(f"🏆🏆🏆 GUERRA KHAOAS FINALIZADA 🏆🏆🏆")
+            print(f"{'⭐'*80}")
+            print(f"👑 VENCEDOR GERAL: {self.vencedor_geral.nome}")
+            print(f"🎖️ Patente: {self.vencedor_geral.hierarquia.nome_oficial}")
+            print(f"💰 KRC Total: {self.vencedor_geral.krc:,.0f} KRC")
+            print(f"🌍 Ciclos Vencidos: {ciclos_vencidos}/4")
+            print(f"⚔️ Kills Totais: {self.vencedor_geral.kills}")
+            print(f"📈 XP Total: {self.vencedor_geral.xp:,.0f}")
+            
+            if ganhou_million:
+                print(f"\n{'💰'*40}")
+                print(f"🎰 BATTLE MILLION CONQUISTADO! 🎰")
+                print(f"💎 PRÊMIO: U${PREMIUM_BATTLE:,} (US$1.000.000)")
+                print(f"{'💰'*40}")
+                
+                # Converter para KRC
+                premio_krc = PREMIUM_BATTLE * KRC_TO_USD
+                self.vencedor_geral.krc += premio_krc
+                self.vencedor_geral.bank.deposito(PREMIUM_BATTLE)
+                
+                print(f"💰 KRC Adicionado: +{premio_krc:,} KRC")
+                print(f"💰 Total BankHaaos: {self.vencedor_geral.bank.resumo()['total_krc']:,.0f} KRC")
+                print(f"💰 Equivalente: ${self.vencedor_geral.bank.resumo()['total_usd']:,.2f} USD")
+            else:
+                print(f"\n⚠️ Para ganhar o BATTLE MILLION é necessário vencer TODOS os 4 ciclos!")
+                print(f"   {self.vencedor_geral.nome} venceu {ciclos_vencidos}/4 ciclos.")
+            
+            print(f"\n📊 ESTATÍSTICAS DA GUERRA:")
+            print(f"   ⚔️ Combates Totais: {self.total_combates}")
+            print(f"   💀 Mortes Totais: {self.total_mortes}")
+            print(f"   📦 Recursos Coletados: {self.total_recursos}")
+            print(f"   ⏱️ Duração: {(datetime.now() - self.inicio_data).seconds // 60} minutos")
+            print(f"{'⭐'*80}")
+    
+    def status_guerra(self) -> str:
+        """Retorna status da guerra"""
+        ciclos_completos = sum(1 for c in self.ciclos if c.completado)
+        
+        status = f"""
+{'='*80}
+🎮 GUERRA KHAOAS - BATTLE MILLION
+{'='*80}
+📊 Status: {self.estado}
+🌍 Ciclos: {ciclos_completos}/4 completados
+👥 Jogadores Inscritos: {len(self.jogadores_inscritos)}/{self.max_jogadores}
+💰 Prêmio: U${PREMIUM_BATTLE:,}
+⏱️ Iniciada: {self.inicio_data.strftime('%d/%m/%Y %H:%M')}
+
+"""
+        
+        if self.ciclo_atual:
+            status += f"🎯 CICLO ATUAL: {self.ciclo_atual.nome}\n"
+            status += f"📅 Dia: {self.ciclo_atual.dia_atual}/{self.ciclo_atual.duracao_dias}\n"
+            status += f"👥 Sobreviventes: {len(self.ciclo_atual.jogadores_ativos)}\n"
+        
+        if self.vencedor_geral:
+            status += f"\n🏆 VENCEDOR GERAL: {self.vencedor_geral.nome}\n"
+        
+        status += f"{'='*80}"
+        
+        return status
+
+# ==================== INTERFACE DE USUÁRIO ====================
+class InterfaceJogo:
+    """Interface interativa para o jogador humano"""
+    
+    def __init__(self):
+        self.jogador_humano = None
+        self.guerra = None
+        self.running = True
+    
+    def mostrar_titulo(self):
+        """Mostra título do jogo"""
+        titulo = f"""
+{'█'*80}
+█{' '*78}█
+█{' '*78}█
+█{' '*20}🎮 KHAAOS RUN - BATTLE MILLION{' '*21}█
+█{' '*20}⚡ v{GAME_VERSION} - Beta Test{' '*30}█
+█{' '*20}🌍 4 Ciclos • 1 Vencedor • U$1.000.000{' '*17}█
+█{' '*78}█
+█{' '*78}█
+{'█'*80}
+
+📢 Ministério da Defesa KR - Convocação HERCE 2026
+"""
+        print(titulo)
+    
+    def criar_personagem(self) -> AvatarKR:
+        """Cria personagem do jogador humano"""
+        print("\n" + "="*60)
+        print("👤 CRIAÇÃO DE PERSONAGEM")
+        print("="*60)
+        
+        nome = input("Digite o nome do seu personagem: ").strip()
+        if not nome:
+            nome = f"Jogador_{random.randint(1000, 9999)}"
+        
+        print("\n🎒 SELECIONE SEU PACOTE INICIAL:")
+        print("1. 🏋️ BRUTO - Combate direto (+20% resistência urbana)")
+        print("2. 🏃 SOMBRA - Furtividade (+25% selva, +15% ilha)")
+        print("3. 🧭 EXPLORADOR - Navegação (+15% selva, +10% deserto, +25% ilha)")
+        print("4. 🧠 ESTRATEGISTA - Balanceado (+10% em todos)")
+        
+        while True:
+            escolha = input("\nEscolha (1-4): ").strip()
+            if escolha in ["1", "2", "3", "4"]:
+                packs = ["BRUTO", "SOMBRA", "EXPLORADOR", "ESTRATEGISTA"]
+                pack = packs[int(escolha)-1]
+                break
+            print("Escolha inválida. Tente novamente.")
+        
+        jogador = AvatarKR(nome, pack, is_human=True)
+        self.jogador_humano = jogador
+        
+        print(f"\n✅ Personagem criado com sucesso!")
+        print(f"   👤 Nome: {jogador.nome}")
+        print(f"   🎒 Pacote: {pack}")
+        print(f"   🛡️ Resistência Urbana: {jogador.resistencias['urbano']*100:.0f}%")
+        print(f"   💰 KRC Inicial: {jogador.krc}")
+        
+        return jogador
+    
+    def menu_principal(self):
+        """Menu principal do jogo"""
+        while self.running:
+            print("\n" + "="*60)
+            print("🎮 MENU PRINCIPAL")
+            print("="*60)
+            
+            if not self.jogador_humano:
+                print("1. 👤 Criar Personagem")
+                print("2. 🚪 Sair")
+            elif not self.guerra:
+                print(f"👤 Jogador: {self.jogador_humano.nome}")
+                print("1. 🌍 Iniciar Nova Guerra")
+                print("2. 📊 Ver Status do Personagem")
+                print("3. 💰 Banco BankHaaos")
+                print("4. 🎒 Gerenciar Itens")
+                print("5. 🚪 Sair")
+            elif self.guerra and self.guerra.estado == "PREPARACAO":
+                print(f"⚔️ Guerra: {len(self.guerra.jogadores_inscritos)}/{self.guerra.max_jogadores} jogadores")
+                print("1. 🎯 Iniciar Primeiro Ciclo")
+                print("2. 👥 Adicionar NPCs")
+                print("3. 📊 Ver Status da Guerra")
+                print("4. 📊 Ver Status do Personagem")
+                print("5. ↩️ Voltar ao Menu Principal")
+            elif self.guerra and self.guerra.estado == "EM_ANDAMENTO":
+                print(f"🌍 Ciclo Atual: {self.guerra.ciclo_atual.nome}")
+                print("1. 🎮 Jogar Rodada")
+                print("2. 📊 Ver Status do Ciclo")
+                print("3. 👥 Ver Jogadores")
+                print("4. 🗺️ Ver Mapa")
+                print("5. 📊 Ver Status do Personagem")
+                print("6. ⏭️ Pular para Próximo Ciclo (DEV)")
+                print("7. ↩️ Voltar ao Menu Principal")
+            elif self.guerra and self.guerra.estado == "FINALIZADA":
+                print("🏆 Guerra Finalizada!")
+                print("1. 📊 Ver Resultados Finais")
+                print("2. 🌍 Iniciar Nova Guerra")
+                print("3. ↩️ Voltar ao Menu Principal")
+            
+            print("="*60)
+            
+            escolha = input("\nEscolha uma opção: ").strip()
+            self.processar_escolha(escolha)
+    
+    def processar_escolha(self, escolha: str):
+        """Processa escolha do menu"""
+        if not self.jogador_humano:
+            if escolha == "1":
+                self.criar_personagem()
+            elif escolha == "2":
+                self.running = False
+                print("\n🚪 Saindo do jogo... Até a próxima convocação!")
+            else:
+                print("❌ Opção inválida!")
+        
+        elif not self.guerra:
+            if escolha == "1":
+                self.iniciar_nova_guerra()
+            elif escolha == "2":
+                print(self.jogador_humano.status_completo())
+                input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "3":
+                self.menu_banco()
+            elif escolha == "4":
+                self.menu_itens()
+            elif escolha == "5":
+                self.running = False
+                print("\n🚪 Saindo do jogo... Até a próxima convocação!")
+            else:
+                print("❌ Opção inválida!")
+        
+        elif self.guerra and self.guerra.estado == "PREPARACAO":
+            if escolha == "1":
+                self.iniciar_ciclo()
+            elif escolha == "2":
+                self.adicionar_npcs()
+            elif escolha == "3":
+                print(self.guerra.status_guerra())
+                input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "4":
+                print(self.jogador_humano.status_completo())
+                input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "5":
+                self.guerra = None
+                print("\n↩️ Retornando ao menu principal...")
+            else:
+                print("❌ Opção inválida!")
+        
+        elif self.guerra and self.guerra.estado == "EM_ANDAMENTO":
+            if escolha == "1":
+                self.jogar_rodada()
+            elif escolha == "2":
+                if self.guerra.ciclo_atual:
+                    print(self.guerra.ciclo_atual.status_ciclo())
+                    input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "3":
+                self.ver_jogadores()
+            elif escolha == "4":
+                self.ver_mapa()
+            elif escolha == "5":
+                print(self.jogador_humano.status_completo())
+                input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "6" and DEVELOPER_MODE:
+                self.guerra.proximo_ciclo()
+                print("\n⚡ Modo DEV: Pulando para próximo ciclo...")
+            elif escolha == "7":
+                self.guerra = None
+                print("\n↩️ Retornando ao menu principal...")
+            else:
+                print("❌ Opção inválida!")
+        
+        elif self.guerra and self.guerra.estado == "FINALIZADA":
+            if escolha == "1":
+                print("\n📊 RESULTADOS FINAIS DA GUERRA")
+                print("="*60)
+                self.mostrar_resultados()
+                input("\n⏎ Pressione ENTER para continuar...")
+            elif escolha == "2":
+                self.iniciar_nova_guerra()
+            elif escolha == "3":
+                self.guerra = None
+                print("\n↩️ Retornando ao menu principal...")
+            else:
+                print("❌ Opção inválida!")
+    
+    def iniciar_nova_guerra(self):
+        """Inicia uma nova guerra"""
+        print("\n" + "="*60)
+        print("🌍 NOVA GUERRA KHAOAS")
+        print("="*60)
+        
+        while True:
+            try:
+                max_jogadores = int(input("Número máximo de jogadores (8-20): ").strip())
+                if 8 <= max_jogadores <= 20:
+                    break
+                print("Número deve estar entre 8 e 20.")
+            except ValueError:
+                print("Digite um número válido.")
+        
+        self.guerra = GuerraKhaaos(max_jogadores)
+        
+        # Inscrever jogador humano
+        sucesso, mensagem = self.guerra.inscrever_jogador(self.jogador_humano)
+        print(f"\n{mensagem}")
+        
+        # Adicionar alguns NPCs automaticamente
+        self.adicionar_npcs(quantidade=4)
+        
+        print(f"\n✅ Guerra criada com sucesso!")
+        print(f"   👥 {len(self.guerra.jogadores_inscritos)}/{self.guerra.max_jogadores} jogadores inscritos")
+        print(f"   💰 Taxa de inscrição: 100 KRC debitada")
+        
+        input("\n⏎ Pressione ENTER para continuar...")
+    
+    def adicionar_npcs(self, quantidade: int = None):
+        """Adiciona NPCs à guerra"""
+        if not self.guerra:
+            print("❌ Nenhuma guerra em andamento!")
+            return
+        
+        if not quantidade:
+            while True:
+                try:
+                    quantidade = int(input(f"Quantos NPCs adicionar? (0-{self.guerra.max_jogadores - len(self.guerra.jogadores_inscritos)}): ").strip())
+                    if 0 <= quantidade <= (self.guerra.max_jogadores - len(self.guerra.jogadores_inscritos)):
+                        break
+                    print(f"Digite um número entre 0 e {self.guerra.max_jogadores - len(self.guerra.jogadores_inscritos)}")
+                except ValueError:
+                    print("Digite um número válido.")
+        
+        nomes_npc = [
+            "Viper", "Raven", "Ghost", "Wolf", "Bear", "Hawk", "Fox", "Snake",
+            "Spectre", "Reaper", "Wraith", "Phantom", "Shadow", "Stalker",
+            "Hunter", "Tracker", "Scout", "Ranger", "Marauder", "Raider"
+        ]
+        
+        packs = ["BRUTO", "SOMBRA", "EXPLORADOR", "ESTRATEGISTA"]
+        
+        for i in range(quantidade):
+            nome = f"{random.choice(nomes_npc)}_{random.randint(1, 99)}"
+            pack = random.choice(packs)
+            
+            npc = AvatarKR(nome, pack, is_human=False)
+            sucesso, mensagem = self.guerra.inscrever_jogador(npc)
+            
+            if sucesso:
+                print(f"   🤖 {mensagem}")
+            else:
+                print(f"   ❌ Falha ao adicionar {nome}: {mensagem}")
+        
+        print(f"\n✅ {quantidade} NPCs adicionados com sucesso!")
+        print(f"   👥 Total: {len(self.guerra.jogadores_inscritos)}/{self.guerra.max_jogadores} jogadores")
+    
+    def iniciar_ciclo(self):
+        """Inicia o primeiro ciclo"""
+        if not self.guerra:
+            print("❌ Nenhuma guerra em andamento!")
+            return
+        
+        self.guerra.iniciar_ciclo(0)
+        print(f"\n✅ Ciclo 1 iniciado!")
+        print(f"   🎯 Objetivo: Ser o último sobrevivente em {self.guerra.ciclo_atual.duracao_dias} dias")
+        
+        input("\n⏎ Pressione ENTER para continuar...")
+    
+    def jogar_rodada(self):
+        """Executa uma rodada do ciclo atual"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            print("❌ Nenhum ciclo em andamento!")
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        # Verificar se jogador humano ainda está vivo
+        if self.jogador_humano not in ciclo.jogadores_ativos:
+            print("💀 Você foi eliminado deste ciclo!")
+            input("\n⏎ Pressione ENTER para continuar...")
+            return
+        
+        print(f"\n{'='*60}")
+        print(f"🎮 RODADA {ciclo.rodada_atual} - {self.jogador_humano.posicao_atual}")
+        print(f"🌤️ Clima: {ciclo.mapa.clima_atual}")
+        print(f"❤️ Sua Vitalidade: {self.jogador_humano.vitalidade_vl:.1f}%")
+        print(f"{'='*60}")
+        
+        # Menu de ações para o jogador humano
+        print("\n🎯 ESCOLHA SUA AÇÃO:")
+        print("1. 🗺️ Mover para outro setor")
+        print("2. 🛠️ Coletar recursos")
+        print("3. ⚔️ Atacar inimigo visível")
+        print("4. 💊 Usar item de cura")
+        print("5. 😴 Descansar (recuperar vida)")
+        print("6. 📊 Ver status detalhado")
+        print("7. 🎲 Deixar IA decidir")
+        print("8. ⏭️ Passar rodada")
+        
+        while True:
+            escolha = input("\nEscolha (1-8): ").strip()
+            
+            if escolha == "1":
+                self.mover_jogador()
+                break
+            elif escolha == "2":
+                self.coletar_recursos()
+                break
+            elif escolha == "3":
+                self.atacar_inimigo()
+                break
+            elif escolha == "4":
+                self.usar_cura()
+                break
+            elif escolha == "5":
+                self.descansar()
+                break
+            elif escolha == "6":
+                print(self.jogador_humano.status_completo())
+                continue
+            elif escolha == "7":
+                self.ia_decidir()
+                break
+            elif escolha == "8":
+                print("⏭️ Rodada passada.")
+                break
+            else:
+                print("❌ Escolha inválida!")
+        
+        # Executar rodada (ações dos NPCs)
+        print("\n" + "="*60)
+        print("⚔️ EXECUTANDO RODADA...")
+        print("="*60)
+        
+        logs = ciclo.executar_rodada(self.jogador_humano)
+        
+        # Mostrar logs
+        for log in logs:
+            print(log)
+            time.sleep(0.1)
+        
+        # Verificar fim do ciclo
+        if ciclo.verificar_fim_ciclo():
+            print(f"\n{'🏆'*30}")
+            print(f"CICLO {self.guerra.ciclo_atual_idx+1} FINALIZADO!")
+            
+            if ciclo.vencedor:
+                print(f"🏆 VENCEDOR: {ciclo.vencedor.nome}")
+                print(f"🎁 Recompensa: +{1000 * (self.guerra.ciclo_atual_idx+1)} KRC")
+            
+            # Verificar se há próximo ciclo
+            if self.guerra.ciclo_atual_idx + 1 < len(self.guerra.ciclos):
+                print(f"\nPróximo ciclo em 3 segundos...")
+                time.sleep(3)
+                self.guerra.proximo_ciclo()
+            else:
+                print(f"\n🏆 TODOS OS CICLOS CONCLUÍDOS!")
+                self.guerra.finalizar_guerra()
+        
+        input("\n⏎ Pressione ENTER para continuar...")
+    
+    def mover_jogador(self):
+        """Move jogador humano para outro setor"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        print(f"\n🗺️ SETORES DISPONÍVEIS:")
+        for i, (setor_id, setor_info) in enumerate(ciclo.mapa.setores.items(), 1):
+            print(f"{i}. {setor_info['emoji']} {setor_info['nome']} ({setor_id})")
+            print(f"   📝 {setor_info['descricao'][:60]}...")
+        
+        while True:
+            try:
+                escolha = int(input(f"\nEscolha setor (1-{len(ciclo.mapa.setores)}): ").strip())
+                if 1 <= escolha <= len(ciclo.mapa.setores):
+                    setor_escolhido = list(ciclo.mapa.setores.keys())[escolha-1]
+                    
+                    if setor_escolhido == self.jogador_humano.posicao_atual:
+                        print("❌ Você já está neste setor!")
+                        continue
+                    
+                    sucesso, mensagem = self.jogador_humano.mover_para_setor(setor_escolhido, ciclo.mapa)
+                    print(f"\n{mensagem}")
+                    break
+                else:
+                    print(f"Escolha inválida. Digite entre 1 e {len(ciclo.mapa.setores)}")
+            except ValueError:
+                print("Digite um número válido.")
+    
+    def coletar_recursos(self):
+        """Coleta recursos no setor atual"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        # Mostrar recursos disponíveis
+        recursos = ciclo.mapa.recursos_disponiveis.get(self.jogador_humano.posicao_atual, {})
+        
+        if not recursos:
+            print("❌ Nenhum recurso disponível neste setor.")
+            return
+        
+        print(f"\n📦 RECURSOS DISPONÍVEIS em {self.jogador_humano.posicao_atual}:")
+        recursos_lista = list(recursos.keys())
+        
+        for i, recurso in enumerate(recursos_lista, 1):
+            quantidade = recursos[recurso]
+            print(f"{i}. {recurso}: {quantidade} unidades")
+        
+        print(f"{len(recursos_lista)+1}. Coletar aleatório")
+        
+        while True:
+            try:
+                escolha = int(input(f"\nEscolha recurso (1-{len(recursos_lista)+1}): ").strip())
+                
+                if 1 <= escolha <= len(recursos_lista):
+                    recurso_escolhido = recursos_lista[escolha-1]
+                elif escolha == len(recursos_lista) + 1:
+                    recurso_escolhido = None
+                else:
+                    print("Escolha inválida.")
+                    continue
+                
+                quantidade = int(input("Quantidade (1-10): ").strip())
+                if 1 <= quantidade <= 10:
+                    sucesso, mensagem = self.jogador_humano.coletar(ciclo.mapa, recurso_escolhido, quantidade)
+                    print(f"\n{mensagem}")
+                    break
+                else:
+                    print("Quantidade deve estar entre 1 e 10.")
+            except ValueError:
+                print("Digite um número válido.")
+    
+    def atacar_inimigo(self):
+        """Ataca inimigo no mesmo setor"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        # Encontrar inimigos no mesmo setor
+        inimigos = [j for j in ciclo.jogadores_ativos 
+                   if j != self.jogador_humano and 
+                   j.posicao_atual == self.jogador_humano.posicao_atual]
+        
+        if not inimigos:
+            print("❌ Nenhum inimigo neste setor.")
+            return
+        
+        print(f"\n⚔️ INIMIGOS EM {self.jogador_humano.posicao_atual}:")
+        for i, inimigo in enumerate(inimigos, 1):
+            visibilidade = "👁️ VISÍVEL" if inimigo.visivel_mapa else "👻 OCULTO"
+            print(f"{i}. {inimigo.nome} | VL: {inimigo.vitalidade_vl:.1f}% | {visibilidade}")
+        
+        while True:
+            try:
+                escolha = int(input(f"\nEscolha inimigo (1-{len(inimigos)}): ").strip())
+                if 1 <= escolha <= len(inimigos):
+                    alvo = inimigos[escolha-1]
+                    
+                    sucesso, mensagem, dano = self.jogador_humano.atacar(alvo, ciclo.mapa)
+                    print(f"\n{mensagem}")
+                    
+                    # Verificar se eliminou
+                    if alvo.vitalidade_vl <= 0:
+                        ciclo.remover_jogador(alvo)
+                        print(f"💀 {alvo.nome} ELIMINADO!")
+                    
+                    break
+                else:
+                    print(f"Escolha inválida. Digite entre 1 e {len(inimigos)}")
+            except ValueError:
+                print("Digite um número válido.")
+    
+    def usar_cura(self):
+        """Usa item de cura"""
+        sucesso, mensagem = self.jogador_humano.usar_item_cura()
+        print(f"\n{mensagem}")
+    
+    def descansar(self):
+        """Descansa para recuperar vida"""
+        recuperacao = random.uniform(2, 5)
+        self.jogador_humano.vitalidade_vl = min(
+            self.jogador_humano.hp_max,
+            self.jogador_humano.vitalidade_vl + recuperacao
+        )
+        print(f"\n😴 Você descansou e recuperou {recuperacao:.1f}% de vitalidade.")
+        print(f"❤️ Vitalidade atual: {self.jogador_humano.vitalidade_vl:.1f}%")
+    
+    def ia_decidir(self):
+        """Deixa a IA decidir a ação"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        acao = self.jogador_humano.tomar_decisao_ia(ciclo.mapa, ciclo.jogadores_ativos)
+        
+        print(f"\n🤖 IA decidiu: {acao}")
+        
+        if acao == "MOVER":
+            setores = list(ciclo.mapa.setores.keys())
+            setor_destino = random.choice([s for s in setores if s != self.jogador_humano.posicao_atual])
+            sucesso, mensagem = self.jogador_humano.mover_para_setor(setor_destino, ciclo.mapa)
+            print(f"   {mensagem}")
+        
+        elif acao == "COLETAR":
+            sucesso, mensagem = self.jogador_humano.coletar(ciclo.mapa)
+            if sucesso:
+                print(f"   {mensagem}")
+        
+        elif acao == "ATACAR":
+            inimigos = [j for j in ciclo.jogadores_ativos 
+                       if j != self.jogador_humano and 
+                       j.posicao_atual == self.jogador_humano.posicao_atual]
+            
+            if inimigos:
+                alvo = random.choice(inimigos)
+                sucesso, mensagem, dano = self.jogador_humano.atacar(alvo, ciclo.mapa)
+                print(f"   {mensagem}")
+                
+                if alvo.vitalidade_vl <= 0:
+                    ciclo.remover_jogador(alvo)
+                    print(f"   💀 {alvo.nome} ELIMINADO!")
+            else:
+                print("   ⚔️ Nenhum inimigo para atacar.")
+        
+        elif acao == "CURAR":
+            self.usar_cura()
+        
+        elif acao == "DESCANSAR":
+            self.descansar()
+    
+    def ver_jogadores(self):
+        """Mostra status dos jogadores"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            print("❌ Nenhum ciclo em andamento!")
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        print(f"\n{'='*60}")
+        print(f"👥 JOGADORES - CICLO {self.guerra.ciclo_atual_idx+1}")
+        print(f"{'='*60}")
+        
+        print("\n🎯 SOBREVIVENTES:")
+        for jogador in sorted(ciclo.jogadores_ativos, key=lambda j: -j.vitalidade_vl):
+            humano = " 👤" if jogador.is_human else ""
+            print(f"   {jogador.status_resumido()}{humano}")
+        
+        if ciclo.jogadores_eliminados:
+            print(f"\n💀 ELIMINADOS ({len(ciclo.jogadores_eliminados)}):")
+            for jogador in ciclo.jogadores_eliminados[-5:]:  # Mostra últimos 5
+                print(f"   {jogador.nome:15} | Eliminado no dia {jogador.dias_sobrevivencia}")
+        
+        print(f"\n📊 Total: {len(ciclo.jogadores_ativos)} vivos, {len(ciclo.jogadores_eliminados)} eliminados")
+        print(f"{'='*60}")
+        
+        input("\n⏎ Pressione ENTER para continuar...")
+    
+    def ver_mapa(self):
+        """Mostra mapa do ciclo atual"""
+        if not self.guerra or not self.guerra.ciclo_atual:
+            print("❌ Nenhum ciclo em andamento!")
+            return
+        
+        ciclo = self.guerra.ciclo_atual
+        
+        print(f"\n{'='*60}")
+        print(f"🗺️ MAPA - {ciclo.nome}")
+        print(f"{'='*60}")
+        
+        for setor_id, setor_info in ciclo.mapa.setores.items():
+            # Contar jogadores neste setor
+            jogadores_no_setor = [j for j in ciclo.jogadores_ativos 
+                                 if j.posicao_atual == setor_id]
+            
+            humanos_no_setor = [j for j in jogadores_no_setor if j.is_human]
+            npcs_no_setor = [j for j in jogadores_no_setor if not j.is_human]
+            
+            print(f"\n{setor_info['emoji']} {setor_info['nome']} ({setor_id})")
+            print(f"   📝 {setor_info['descricao']}")
+            print(f"   👥 Jogadores: {len(humanos_no_setor)} humano(s), {len(npcs_no_setor)} NPC(s)")
+            
+            if jogadores_no_setor:
+                print(f"   🎯 Presentes: {', '.join([j.nome for j in jogadores_no_setor[:3]])}")
+                if len(jogadores_no_setor) > 3:
+                    print(f"   ... e mais {len(jogadores_no_setor) - 3}")
+            
+            # Recursos disponíveis
+            recursos = ciclo.mapa.recursos_disponiveis.get(setor_id, {})
+            if recursos:
+                recursos_str = ", ".join([f"{k}:{v}" for k, v in list(recursos.items())[:3]])
+                print(f"   📦 Recursos: {recursos_str}")
+        
+        print(f"\n🌤️ Clima Atual: {ciclo.mapa.clima_atual}")
+        
+        if ciclo.mapa.eventos_ativos:
+            print(f"\n🌪️ EVENTOS ATIVOS:")
+            for evento in ciclo.mapa.eventos_ativos:
+                print(f"   ⚠️ {evento['nome']} ({evento['duracao']} rodadas restantes)")
+        
+        print(f"{'='*60}")
+        
+        input("\n⏎ Pressione ENTER para continuar...")
+    
+    def menu_banco(self):
+        """Menu do BankHaaos"""
+        if not self.jogador_humano:
+            return
+        
+        bank = self.jogador_humano.bank
+        
+        while True:
+            print("\n" + "="*60)
+            print("💰 BANKHAAOS - SISTEMA FINANCEIRO KR")
+            print("="*60)
+            
+            resumo = bank.resumo()
+            
+            print(f"👤 Titular: {self.jogador_humano.nome}")
+            print(f"🎖️ Patente: {self.jogador_humano.hierarquia.nome_oficial}")
+            print(f"💰 Salário Diário: {self.jogador_humano.hierarquia.salario_diario} KRC")
+            print()
+            print(f"💳 Weapons Account: {resumo['weapons_krc']:,.0f} KRC")
+            print(f"🎁 Bonus Account: {resumo['bonus_krc']:,.0f} KRC")
+            print(f"🏆 FBM Account: {resumo['fbm_krc']:,.0f} KRC")
+            print(f"📊 Total: {resumo['total_krc']:,.0f} KRC (${resumo['total_usd']:.2f} USD)")
+            
+            if resumo['emprestimos_ativos'] > 0:
+                print(f"⚠️ Empréstimos Ativos: {resumo['emprestimos_ativos']}")
+                print(f"💰 Valor Total em Empréstimos: {resumo['valor_emprestimos']:,.0f} KRC")
+            
+            print("\n1. 💰 Depositar USD")
+            print("2. 🏧 Sacar do FBM (10% taxa)")
+            print("3. 📄 Ver Extrato")
+            print("4. 💸 Solicitar Empréstimo")
+            print("5. 📝 Pagar Empréstimo")
+            print("6. 💰 Receber Salário Diário")
+            print("7. ↩️ Voltar")
+            
+            print("="*60)
+            
+            escolha = input("\nEscolha: ").strip()
+            
+            if escolha == "1":
+                try:
+                    valor_usd = float(input("Valor em USD para depositar: "))
+                    if valor_usd > 0:
+                        krc_depositado = bank.deposito(valor_usd)
+                        print(f"✅ Depositado: U${valor_usd:.2f} → {krc_depositado:.0f} KRC")
+                        print(f"   🎁 Bônus de {krc_depositado:.0f} KRC creditado na Bonus Account")
+                        self.jogador_humano.krc += krc_depositado
+                    else:
+                        print("❌ Valor deve ser positivo.")
+                except ValueError:
+                    print("❌ Valor inválido.")
+            
+            elif escolha == "2":
+                try:
+                    valor_krc = float(input("Valor em KRC para sacar do FBM: "))
+                    if valor_krc > 0:
+                        if bank.saque_fbm(valor_krc):
+                            print(f"✅ Saque realizado: {valor_krc:.0f} KRC do FBM")
+                            print(f"   💰 {(valor_krc * 0.9):.0f} KRC creditado na Weapons Account")
+                            self.jogador_humano.krc += (valor_krc * 0.9)
+                        else:
+                            print("❌ Saldo insuficiente no FBM.")
+                    else:
+                        print("❌ Valor deve ser positivo.")
+                except ValueError:
+                    print("❌ Valor inválido.")
+            
+            elif escolha == "3":
+                extrato = bank.extrato(10)
+                print(f"\n📄 ÚLTIMAS 10 TRANSAÇÕES:")
+                for tx in extrato:
+                    print(f"   {tx['data'][11:19]} | {tx['tipo']:20} | Saldo: {tx.get('saldo_total', 0):.0f} KRC")
+            
+            elif escolha == "4":
+                try:
+                    valor_krc = float(input("Valor do empréstimo (KRC): "))
+                    dias = int(input("Dias para pagar (7-30): "))
+                    
+                    if 7 <= dias <= 30 and valor_krc > 0:
+                        juros = valor_krc * bank.taxa_juros * dias
+                        print(f"💸 Empréstimo: {valor_krc:.0f} KRC")
+                        print(f"📅 Dias: {dias} | Taxa: {bank.taxa_juros*100:.0f}% ao dia")
+                        print(f"💰 Juros Total: {juros:.0f} KRC")
+                        print(f"📊 Total a Pagar: {valor_krc + juros:.0f} KRC")
+                        
+                        confirmar = input("\nConfirmar empréstimo? (s/n): ").lower()
+                        if confirmar == 's':
+                            if bank.pedir_emprestimo(valor_krc, dias):
+                                print(f"✅ Empréstimo concedido! {valor_krc:.0f} KRC creditado.")
+                                self.jogador_humano.krc += valor_krc
+                            else:
+                                print("❌ Limite de empréstimos atingido (máximo 3).")
+                    else:
+                        print("❌ Valores inválidos.")
+                except ValueError:
+                    print("❌ Valor inválido.")
+            
+            elif escolha == "5":
+                emprestimos_ativos = [e for e in bank.emprestimos_ativos if not e["pago"]]
+                
+                if not emprestimos_ativos:
+                    print("✅ Nenhum empréstimo pendente.")
+                else:
+                    print(f"\n📝 EMPRÉSTIMOS PENDENTES:")
+                    for i, emp in enumerate(emprestimos_ativos, 1):
+                        print(f"{i}. ID: {emp['id']}")
+                        print(f"   💰 Valor: {emp['valor_original']:.0f} KRC")
+                        print(f"   📅 Dias Restantes: {emp['dias_restantes']}")
+                        print(f"   💸 Total a Pagar: {emp['valor_total']:.0f} KRC")
+                    
+                    try:
+                        escolha_emp = int(input("\nEscolha empréstimo para pagar: "))
+                        if 1 <= escolha_emp <= len(emprestimos_ativos):
+                            emp_id = emprestimos_ativos[escolha_emp-1]["id"]
+                            
+                            if bank.pagar_emprestimo(emp_id):
+                                print(f"✅ Empréstimo {emp_id} pago com sucesso!")
+                            else:
+                                print("❌ Saldo insuficiente para pagar o empréstimo.")
+                        else:
+                            print("❌ Escolha inválida.")
+                    except ValueError:
+                        print("❌ Valor inválido.")
+            
+            elif escolha == "6":
+                salario = self.jogador_humano.hierarquia.salario_diario
+                bank.creditar_salario(salario)
+                self.jogador_humano.krc += salario
+                print(f"✅ Salário de {salario} KRC creditado na Bonus Account!")
+            
+            elif escolha == "7":
+                break
+            
+            else:
+                print("❌ Opção inválida!")
+            
+            input("\n⏎ Pressione ENTER para continuar...")
+    
+    def menu_itens(self):
+        """Menu de gerenciamento de itens"""
+        if not self.jogador_humano:
+            return
+        
+        while True:
+            print("\n" + "="*60)
+            print("🎒 GERENCIAMENTO DE ITENS")
+            print("="*60)
+            
+            print(f"👤 Jogador: {self.jogador_humano.nome}")
+            print(f"🎒 Packbag: {len(self.jogador_humano.packbag)}/12 itens")
+            print(f"🏦 Cofre QG: {len(self.jogador_humano.cofre_qg)}/20 itens")
+            
+            print(f"\n⚔️ Arma Equipada: {self.jogador_humano.arma_equipada.nome if self.jogador_humano.arma_equipada else 'Nenhuma'}")
+            print(f"🛡️ Colete Equipado: {self.jogador_humano.colete_equipado.nome if self.jogador_humano.colete_equipado else 'Nenhum'}")
+            
+            print("\n1. 📦 Ver Packbag (itens de batalha)")
+            print("2. 🏦 Ver Cofre QG (itens seguros)")
+            print("3. 🔄 Transferir entre Packbag e Cofre")
+            print("4. ⚒️ Reparar item")
+            print("5. ⭐ Melhorar item")
+            print("6. ↩️ Voltar")
+            
+            print("="*60)
+            
+            escolha = input("\nEscolha: ").strip()
+            
+            if escolha == "1":
+                self.ver_itens("packbag")
+            elif escolha == "2":
+                self.ver_itens("cofre")
+            elif escolha == "3":
+                self.transferir_itens()
+            elif escolha == "4":
+                self.reparar_item()
+            elif escolha == "5":
+                self.melhorar_item()
+            elif escolha == "6":
+                break
+            else:
+                print("❌ Opção inválida!")
+            
+            input("\n⏎ Pressione ENTER para continuar...")
+    
+    def ver_itens(self, tipo: str):
+        """Mostra itens do packbag ou cofre"""
+        if tipo == "packbag":
+            itens = self.jogador_humano.packbag
+            titulo = "PACKBAG - Itens de Batalha"
+        else:
+            itens = self.jogador_humano.cofre_qg
+            titulo = "COFRE QG - Itens Seguros"
+        
+        print(f"\n{'='*60}")
+        print(f"📦 {titulo} ({len(itens)} itens)")
+        print(f"{'='*60}")
+        
+        if not itens:
+            print("📭 Vazio")
+            return
+        
+        for i, item in enumerate(itens, 1):
+            equipado = " ⚔️" if item.equipado else ""
+            print(f"{i}. {item}")
+            print(f"   📊 Efeito: {item.efeito}")
+            print(f"   💰 Valor: {item.valor_krc} KRC{equipado}")
+            print()
+    
+    def transferir_itens(self):
+        """Transfere itens entre packbag e cofre"""
+        print("\n🔄 TRANSFERÊNCIA DE ITENS")
+        print("1. Packbag → Cofre QG")
+        print("2. Cofre QG → Packbag")
+        
+        escolha = input("\nEscolha direção: ").strip()
+        
+        if escolha == "1":
+            origem = self.jogador_humano.packbag
+            destino = self.jogador_humano.cofre_qg
+            origem_nome = "Packbag"
+            destino_nome = "Cofre QG"
+        elif escolha == "2":
+            origem = self.jogador_humano.cofre_qg
+            destino = self.jogador_humano.packbag
+            origem_nome = "Cofre QG"
+            destino_nome = "Packbag"
+        else:
+            print("❌ Opção inválida!")
+            return
+        
+        if not origem:
+            print(f"❌ {origem_nome} está vazio!")
+            return
+        
+        if len(destino) >= (12 if destino_nome == "Packbag" else 20):
+            print(f"❌ {destino_nome} está cheio!")
+            return
+        
+        print(f"\n📦 ITENS EM {origem_nome}:")
+        for i, item in enumerate(origem, 1):
+            print(f"{i}. {item.nome}")
+        
+        try:
+            escolha_item = int(input(f"\nEscolha item para transferir (1-{len(origem)}): "))
+            if 1 <= escolha_item <= len(origem):
+                item = origem[escolha_item-1]
+                
+                # Não pode transferir item equipado
+                if item.equipado:
+                    print("❌ Não pode transferir item equipado!")
+                    return
+                
+                destino.append(item)
+                origem.remove(item)
+                
+                print(f"✅ {item.nome} transferido para {destino_nome}!")
+            else:
+                print("❌ Escolha inválida!")
+        except ValueError:
+            print("❌ Valor inválido!")
+    
+    def reparar_item(self):
+        """Repara um item com KRC"""
+        print("\n⚒️ REPARAR ITEM")
+        print("1. Reparar item do Packbag")
+        print("2. Reparar item do Cofre")
+        
+        escolha = input("\nEscolha: ").strip()
+        
+        if escolha == "1":
+            itens = self.jogador_humano.packbag
+            origem = "Packbag"
+        elif escolha == "2":
+            itens = self.jogador_humano.cofre_qg
+            origem = "Cofre QG"
+        else:
+            print("❌ Opção inválida!")
+            return
+        
+        if not itens:
+            print(f"❌ {origem} está vazio!")
+            return
+        
+        print(f"\n📦 ITENS EM {origem}:")
+        for i, item in enumerate(itens, 1):
+            print(f"{i}. {item.nome} - {item.durabilidade:.0f}%")
+        
+        try:
+            escolha_item = int(input(f"\nEscolha item para reparar (1-{len(itens)}): "))
+            if 1 <= escolha_item <= len(itens):
+                item = itens[escolha_item-1]
+                
+                if item.durabilidade >= 100:
+                    print("✅ Item já está com durabilidade máxima!")
+                    return
+                
+                custo = (100 - item.durabilidade) * 5  # 5 KRC por 1% de reparo
+                print(f"💰 Custo para reparar 100%: {custo:.0f} KRC")
+                
+                valor_gasto = float(input("Quantos KRC gastar para reparar? "))
+                
+                if valor_gasto > self.jogador_humano.krc:
+                    print("❌ KRC insuficiente!")
+                    return
+                
+                if valor_gasto <= 0:
+                    print("❌ Valor inválido!")
+                    return
+                
+                if item.reparar(valor_gasto):
+                    self.jogador_humano.krc -= valor_gasto
+                    print(f"✅ Item reparado! Durabilidade: {item.durabilidade:.0f}%")
+                    print(f"💰 KRC gasto: {valor_gasto:.0f}")
+                else:
+                    print("❌ Falha ao reparar item.")
+            else:
+                print("❌ Escolha inválida!")
+        except ValueError:
+            print("❌ Valor inválido!")
+    
+    def melhorar_item(self):
+        """Melhora a raridade de um item"""
+        print("\n⭐ MELHORAR ITEM")
+        print("1. Melhorar item do Packbag")
+        print("2. Melhorar item do Cofre")
+        
+        escolha = input("\nEscolha: ").strip()
+        
+        if escolha == "1":
+            itens = self.jogador_humano.packbag
+            origem = "Packbag"
+        elif escolha == "2":
+            itens = self.jogador_humano.cofre_qg
+            origem = "Cofre QG"
+        else:
+            print("❌ Opção inválida!")
+            return
+        
+        if not itens:
+            print(f"❌ {origem} está vazio!")
+            return
+        
+        # Filtrar itens que não são MITICO
+        itens_melhoraveis = [item for item in itens if item.raridade != "MITICO"]
+        
+        if not itens_melhoraveis:
+            print(f"❌ Nenhum item melhorável em {origem}!")
+            return
+        
+        print(f"\n📦 ITENS MELHORÁVEIS EM {origem}:")
+        for i, item in enumerate(itens_melhoraveis, 1):
+            print(f"{i}. {item.nome} - Raridade: {item.raridade}")
+        
+        try:
+            escolha_item = int(input(f"\nEscolha item para melhorar (1-{len(itens_melhoraveis)}): "))
+            if 1 <= escolha_item <= len(itens_melhoraveis):
+                item = itens_melhoraveis[escolha_item-1]
+                
+                custos_melhoria = {
+                    "COMUM": 500,
+                    "RARO": 2000,
+                    "EPICO": 10000,
+                    "LENDARIO": 50000
+                }
+                
+                custo = custos_melhoria.get(item.raridade, 0)
+                proxima_raridade = {
+                    "COMUM": "RARO",
+                    "RARO": "EPICO",
+                    "EPICO": "LENDARIO",
+                    "LENDARIO": "MITICO"
+                }.get(item.raridade, "MAX")
+                
+                print(f"💰 Custo para melhorar para {proxima_raridade}: {custo} KRC")
+                print(f"⚡ Novo efeito será: {item._gerar_efeito()}")
+                
+                confirmar = input(f"\nConfirmar melhoria? (s/n): ").lower()
+                if confirmar == 's':
+                    if item.melhorar(custo):
+                        self.jogador_humano.krc -= custo
+                        print(f"✅ Item melhorado para {item.raridade}!")
+                        print(f"💰 KRC gasto: {custo}")
+                    else:
+                        print("❌ KRC insuficiente para melhoria!")
+                else:
+                    print("❌ Melhoria cancelada.")
+            else:
+                print("❌ Escolha inválida!")
+        except ValueError:
+            print("❌ Valor inválido!")
+    
+    def mostrar_resultados(self):
+        """Mostra resultados finais da guerra"""
+        if not self.guerra or not self.guerra.vencedor_geral:
+            print("❌ Nenhuma guerra finalizada!")
+            return
+        
+        print(f"\n🏆 RESULTADOS FINAIS DA GUERRA")
+        print(f"{'='*60}")
+        
+        # Vencedor
+        print(f"👑 VENCEDOR GERAL: {self.guerra.vencedor_geral.nome}")
+        print(f"🎖️ Patente: {self.guerra.vencedor_geral.hierarquia.nome_oficial}")
+        print(f"💰 KRC Total: {self.guerra.vencedor_geral.krc:,.0f}")
+        print(f"🌍 Ciclos Vencidos: {sum(1 for v in self.guerra.vencedor_geral.ciclos_completados.values() if v)}/4")
+        
+        # Verificar se ganhou o Battle Million
+        ciclos_vencidos = sum(1 for v in self.guerra.vencedor_geral.ciclos_completados.values() if v)
+        if ciclos_vencidos == 4:
+            print(f"\n{'💰'*30}")
+            print(f"🎰 BATTLE MILLION CONQUISTADO!")
+            print(f"💎 PRÊMIO: U${PREMIUM_BATTLE:,}")
+            print(f"{'💰'*30}")
+        else:
+            print(f"\n⚠️ Não ganhou o Battle Million (precisa vencer 4/4 ciclos)")
+        
+        # Ranking final
+        print(f"\n📊 RANKING FINAL:")
+        jogadores_ordenados = sorted(self.guerra.jogadores_inscritos,
+                                   key=lambda j: (j.krc, j.xp, j.kills), 
+                                   reverse=True)
+        
+        for i, jogador in enumerate(jogadores_ordenados[:10], 1):
+            humano = " 👤" if jogador.is_human else ""
+            ciclos = sum(1 for v in jogador.ciclos_completados.values() if v)
+            print(f"{i:2}. {jogador.nome:15} | KRC:{jogador.krc:8,.0f} | "
+                  f"Ciclos:{ciclos}/4 | K/D:{jogador.kills}/{jogador.mortes}{humano}")
+        
+        # Estatísticas da guerra
+        print(f"\n📈 ESTATÍSTICAS DA GUERRA:")
+        print(f"   ⚔️ Combates Totais: {self.guerra.total_combates}")
+        print(f"   💀 Mortes Totais: {self.guerra.total_mortes}")
+        print(f"   📦 Recursos Coletados: {self.guerra.total_recursos}")
+        print(f"   ⏱️ Duração Total: {(datetime.now() - self.guerra.inicio_data).seconds // 60} minutos")
+        
+        # Status do jogador humano
+        if self.jogador_humano in self.guerra.jogadores_inscritos:
+            print(f"\n🎯 SEU DESEMPENHO:")
+            print(f"   🏆 Posição no Ranking: {jogadores_ordenados.index(self.jogador_humano)+1}º")
+            print(f"   💰 KRC Ganho: {self.jogador_humano.krc:,.0f}")
+            print(f"   🌍 Ciclos Completados: {sum(1 for v in self.jogador_humano.ciclos_completados.values() if v)}/4")
+            print(f"   ⚔️ Kills: {self.jogador_humano.kills}")
+            print(f"   📈 XP Total: {self.jogador_humano.xp:,.0f}")
+        
+        print(f"{'='*60}")
+
+# ==================== FUNÇÃO PRINCIPAL ====================
+def main():
+    """Função principal do jogo"""
+    
+    # Configurar encoding para suportar emojis
+    import sys
+    if sys.platform == "win32":
+        import os
+        os.system("chcp 65001 > nul")
+    
+    # Inicializar jogo
+    interface = InterfaceJogo()
+    interface.mostrar_titulo()
+    
+    # Verificar se é primeira execução
+    print(f"\n⚡ Bem-vindo ao KHAAOS RUN - BATTLE MILLION!")
+    print(f"📅 Convocação HERCE: Janeiro 2026")
+    print(f"💰 Prêmio: U${PREMIUM_BATTLE:,}")
+    print(f"🌍 4 Ciclos: Urbano, Selva, Deserto, Ilha")
+    
+    input("\n⏎ Pressione ENTER para começar...")
+    
+    # Iniciar menu principal
+    interface.menu_principal()
+    
+    # Mensagem de despedida
+    print(f"\n{'='*80}")
+    print("🎖️ Ministério da Defesa KR agradece sua participação!")
+    print("🎯 'O Caos é o Caminho. O Milhão, a Recompensa.'")
+    print(f"{'='*80}")
+
+# ==================== EXECUÇÃO ====================
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n🚪 Jogo interrompido pelo usuário.")
+    except Exception as e:
+        print(f"\n❌ Erro inesperado: {e}")
+        if DEVELOPER_MODE:
+            import traceback
+            traceback.print_exc()
+        input("\n⏎ Pressione ENTER para sair...")

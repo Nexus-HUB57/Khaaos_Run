@@ -1,0 +1,25 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_MuzzleFlash_Sniper",
+  "name": "NS_MuzzleFlash_Sniper",
+  "world": "All",
+  "emitterType": "CPUSim_HighVelocityBrakeJet",
+  "spawnRate": 0,
+  "burstCount": 65,
+  "maxParticles": 160,
+  "colorLinear": [
+    1,
+    0.82,
+    0.35,
+    1
+  ],
+  "velocityRange": [
+    1200,
+    3400
+  ],
+  "lifetimeSeconds": 0.12,
+  "significanceRank": 2,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

@@ -1,0 +1,33 @@
+# Khaaos Run UE5.8 3D Terrain & Sector Blockout Mesh — Priadus
+# Unit: meters | Coordinate System: Right-Handed OBJ -> Imported to UE5.8 StaticMesh
+o Priadus_Terrain
+v -1400 0 -1400
+v 1400 0 -1400
+v 1400 0 1400
+v -1400 0 1400
+vn 0 1 0
+f 1//1 2//1 3//1 4//1
+g Sector_SwampBasin
+v -690 0 -550
+v -270 0 -550
+v -270 22 -170
+v -690 22 -170
+f 5//1 6//1 7//1 8//1
+g Sector_DarkCanopyLanding
+v 220 0 -540
+v 700 0 -540
+v 700 55 -100
+v 220 55 -100
+f 9//1 10//1 11//1 12//1
+g Sector_AncientTempleHunt
+v -225 0 -145
+v 225 0 -145
+v 225 70 305
+v -225 70 305
+f 13//1 14//1 15//1 16//1
+g Sector_SlaughterhouseZEX
+v -130 0 625
+v 130 0 625
+v 130 40 815
+v -130 40 815
+f 17//1 18//1 19//1 20//1

@@ -1,0 +1,196 @@
+# =============================================================================
+# Khaaos Run — UE5 / server image delivery
+# Validates the repository and builds the full Node application image.
+# =============================================================================
+name: UE5 CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Unreal/**"
+      - "server/**"
+      - "client/**"
+      - "shared/**"
+      - "script/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tailwind.config.ts"
+      - "postcss.config.js"
+      - "tsconfig.json"
+      - "index.html"
+      - ".dockerignore"
+      - "server/Dockerfile"
+      - ".github/workflows/ue5-cd.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Unreal/**"
+      - "server/**"
+      - "client/**"
+      - "shared/**"
+      - "script/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tailwind.config.ts"
+      - "postcss.config.js"
+      - "tsconfig.json"
+      - "index.html"
+      - ".dockerignore"
+      - "server/Dockerfile"
+      - ".github/workflows/ue5-cd.yml"
+
+permissions:
+  contents: read
+
+# Canonical lowercase GHCR path; the Docker context remains the repository root.
+env:
+  IMAGE_NAME: ghcr.io/nexus-hub57/khaaos-run-server
+
+jobs:
+  verify:
+    name: Verify app before image delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            game-runtime/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install game runtime dependencies
+        run: npm ci --prefix game-runtime --no-audit --no-fund
+
+      - name: Verify all application and runtime suites
+        run: npm run verify:all
+
+  validate-server-config:
+    name: Validate Unreal server config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate DefaultGame.ini
+        run: |
+          set -euo pipefail
+          ini="Unreal/KhaaosRun/Config/DefaultGame.ini"
+          if [[ -f "$ini" ]]; then
+            echo "DefaultGame.ini found"
+            if grep -qi "localhost" "$ini"; then
+              echo "::warning::DefaultGame.ini contains localhost; ensure a production override"
+            fi
+          else
+            echo "::warning::DefaultGame.ini is not committed yet"
+          fi
+
+      - name: Validate .uproject and server plugins
+        run: |
+          set -euo pipefail
+          project="Unreal/KhaaosRun/KhaaosRun.uproject"
+          if [[ ! -f "$project" ]]; then
+            echo "::error::Missing $project"
+            exit 1
+          fi
+          python3 - "$project" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as file:
+              project = json.load(file)
+          plugins = {plugin["Name"] for plugin in project.get("Plugins", [])}
+          required = {"GameplayAbilities", "Iris", "SignificanceManager"}
+          missing = sorted(required - plugins)
+          if missing:
+              for name in missing:
+                  print(f"::warning::Missing server plugin: {name}")
+          else:
+              print("Required server plugins are present")
+          PY
+
+  build-server-image:
+    name: Build server image (publish only on main)
+    needs: [verify, validate-server-config]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+
+      - name: Build and optionally publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./server/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  notify-deploy:
+    name: Notify image publication
+    needs: [verify, validate-server-config, build-server-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send publication notification when configured
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          IMAGE_TAGS: ${{ needs.build-server-image.outputs.image-tags }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$DISCORD_WEBHOOK_URL" ]]; then
+            message="Imagem do servidor de ${REPOSITORY} publicada (commit ${COMMIT:0:7}). Tags: ${IMAGE_TAGS}"
+            payload=$(jq -n --arg content "$message" '{content: $content}')
+            if curl --fail --silent --show-error --max-time 15 \
+              -H 'Content-Type: application/json' \
+              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null; then
+              echo "Notification sent"
+            else
+              echo "::warning::Discord notification failed; the GHCR image was already published."
+            fi
+          else
+            echo "No Discord webhook configured; skipping notification"
+          fi

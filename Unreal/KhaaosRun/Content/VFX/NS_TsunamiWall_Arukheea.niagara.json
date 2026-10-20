@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_TsunamiWall_Arukheea",
+  "name": "NS_TsunamiWall_Arukheea",
+  "world": "Arukheea",
+  "emitterType": "GPUComputeSim_HydraulicWaveCrest",
+  "spawnRate": 6000,
+  "maxParticles": 45000,
+  "colorLinear": [
+    0.23,
+    0.51,
+    0.96,
+    0.92
+  ],
+  "velocityRange": [
+    400,
+    1100
+  ],
+  "lifetimeSeconds": 3.8,
+  "significanceRank": 0,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

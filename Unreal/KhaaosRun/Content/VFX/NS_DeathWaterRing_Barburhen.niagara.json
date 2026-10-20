@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_DeathWaterRing_Barburhen",
+  "name": "NS_DeathWaterRing_Barburhen",
+  "world": "Barburhen",
+  "emitterType": "GPUComputeSim_CylindricalWall",
+  "spawnRate": 3000,
+  "maxParticles": 24000,
+  "colorLinear": [
+    0.96,
+    0.62,
+    0.04,
+    0.9
+  ],
+  "velocityRange": [
+    80,
+    320
+  ],
+  "lifetimeSeconds": 4,
+  "significanceRank": 0,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

@@ -1,0 +1,31 @@
+{
+  "sdk_name": "Epic Online Services — Easy Anti-Cheat (EAC) SDK",
+  "sdk_version": "1.16.4-UE5.8",
+  "project": "KhaaosRun",
+  "product_id_env": "EOS_PRODUCT_ID",
+  "sandbox_id_env": "EOS_SANDBOX_ID",
+  "deployment_id_env": "EOS_DEPLOYMENT_ID",
+  "enforcement_policy": {
+    "strike_threshold": 3,
+    "poll_interval_seconds": 30,
+    "mandatory_in_shipping": true,
+    "fallback_mode": "AUTHORITATIVE_SERVER_BRIDGE"
+  },
+  "binaries": {
+    "Linux": {
+      "server_so": "ThirdParty/EasyAntiCheat/Binaries/Linux/libeasyanticheat_server.so",
+      "client_so": "ThirdParty/EasyAntiCheat/Binaries/Linux/libeasyanticheat_client.so",
+      "arch": "x86_64-unknown-linux-gnu"
+    },
+    "Win64": {
+      "server_dll": "ThirdParty/EasyAntiCheat/Binaries/Win64/EasyAntiCheat_Server_x64.dll",
+      "client_dll": "ThirdParty/EasyAntiCheat/Binaries/Win64/EasyAntiCheat_x64.dll",
+      "launcher_exe": "ThirdParty/EasyAntiCheat/Binaries/Win64/start_protected_game.exe",
+      "arch": "x86_64-pc-windows-msvc"
+    },
+    "Mac": {
+      "client_dylib": "ThirdParty/EasyAntiCheat/Binaries/Mac/libeasyanticheat_client.dylib",
+      "arch": "universal2-apple-darwin"
+    }
+  }
+}

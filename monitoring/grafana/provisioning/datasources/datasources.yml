@@ -1,0 +1,47 @@
+# Khaaos Run — Grafana Datasource Provisioning
+# Auto-configure Prometheus datasource on first launch
+apiVersion: 1
+
+datasources:
+  # ── Primary Prometheus ────────────────────────────────────────
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    uid: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: '15s'
+      queryTimeout: '60s'
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: '10m'
+
+  # ── AlertManager ──────────────────────────────────────────────
+  - name: AlertManager
+    type: alertmanager
+    access: proxy
+    uid: alertmanager
+    url: http://alertmanager:9093
+    editable: true
+    jsonData:
+      implementation: prometheus
+
+  # ── PostgreSQL (for ad-hoc economy queries) ───────────────────
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    uid: postgres
+    url: postgres:5432
+    user: khaaos_reader
+    secureJsonData:
+      password: ${GRAFANA_DB_PASSWORD}
+    editable: true
+    jsonData:
+      sslmode: require
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1600
+      timescaledb: false

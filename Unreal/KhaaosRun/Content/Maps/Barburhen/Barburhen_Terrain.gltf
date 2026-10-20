@@ -1,0 +1,121 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WorldAssetBuilder v2.0",
+    "copyright": "Nexus-HUB57 Devs Ph.D"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Barburhen_Scene",
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Barburhen_Landscape_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "ue5UMapPath": "/Game/Maps/Barburhen/L_Barburhen_W1",
+        "sizeMeters": 3000,
+        "maxPlayers": 100,
+        "primaryNiagaraHazard": "/Game/VFX/NS_AcidRain_Barburhen"
+      }
+    },
+    {
+      "name": "SM_Sector_Barburhen_UrbanCommercial",
+      "translation": [
+        -550,
+        -420,
+        22
+      ],
+      "scale": [
+        420,
+        380,
+        75
+      ],
+      "extras": {
+        "fraction": "2/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Barburhen_IndustrialLanding",
+      "translation": [
+        520,
+        -380,
+        18
+      ],
+      "scale": [
+        500,
+        440,
+        60
+      ],
+      "extras": {
+        "fraction": "3/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Barburhen_AbandonedParkCenter",
+      "translation": [
+        0,
+        120,
+        8
+      ],
+      "scale": [
+        460,
+        460,
+        30
+      ],
+      "extras": {
+        "fraction": "3/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Barburhen_RailStationExtraction",
+      "translation": [
+        0,
+        780,
+        15
+      ],
+      "scale": [
+        280,
+        200,
+        45
+      ],
+      "extras": {
+        "fraction": "ZEX-Hub",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Barburhen_Terrain_StaticMesh",
+      "primitives": [
+        {
+          "mode": 4,
+          "extras": {
+            "materialSlot": "MI_Barburhen_MasterTerrain"
+          }
+        }
+      ]
+    }
+  ]
+}

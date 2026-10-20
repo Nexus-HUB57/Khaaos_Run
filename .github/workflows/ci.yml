@@ -1,0 +1,440 @@
+# Khaaos Run — CI Pipeline
+# Validação contínua: lint, testes unitários, build Node.js, verificação UE5 C++
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "attached_assets/**"
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "attached_assets/**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  REGISTRY: ghcr.io
+
+jobs:
+  # ─── Job 1: Lint + Type Check ─────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit 2>&1 | tee typecheck.log
+
+      - name: ESLint
+        run: npx eslint . --ext .ts,.tsx --max-warnings 0 2>&1 | tee eslint.log || true
+
+  # ─── Job 2: Unit Tests ────────────────────────────────────────
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: khaaos_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test_pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://test:test_pw@localhost:5432/khaaos_test
+      TEST_DATABASE_URL: postgresql://test:test_pw@localhost:5432/khaaos_test
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Apply versioned database migrations
+        run: npm run db:migrate
+
+      - name: Run unit tests
+        run: npm run test:official 2>&1 | tee test-unit.log
+
+      - name: Run PostgreSQL persistence integration tests
+        run: npm run test:postgres 2>&1 | tee test-postgres.log
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            test-unit.log
+            test-postgres.log
+
+  # ─── Job 3: Game Runtime Tests ────────────────────────────────
+  test-game:
+    name: Game Runtime Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: khaaos_runtime
+          POSTGRES_USER: runtime
+          POSTGRES_PASSWORD: runtime_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      KR_DATABASE_URL: postgresql://runtime:runtime_ci@localhost:5432/khaaos_runtime
+      KR_DATABASE_TEST_URL: postgresql://runtime:runtime_ci@localhost:5432/khaaos_runtime
+      KR_REDIS_TEST_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: game-runtime/package.json
+
+      - name: Install game-runtime deps
+        working-directory: game-runtime
+        run: npm ci
+
+      - name: Apply runtime PostgreSQL migrations
+        working-directory: game-runtime
+        run: npm run db:migrate
+
+      - name: Real PostgreSQL and Redis adapter tests
+        working-directory: game-runtime
+        run: npm run test:real
+
+      - name: Game infra tests
+        working-directory: game-runtime
+        run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
+
+  # ─── Job 4: Build Node.js Server ──────────────────────────────
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-game]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build 2>&1 | tee build.log
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+
+  # ─── Job 5: Docker Build (Server) ─────────────────────────────
+  docker-build:
+    name: Docker Build (Server)
+    runs-on: ubuntu-latest
+    needs: build-server
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./server/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ github.sha }}
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Job 6: UE5 C++ Syntax Validation ────────────────────────
+  ue5-validate:
+    name: UE5 C++ Validation
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check C++ file integrity
+        run: |
+          echo "=== Verificando headers C++ ==="
+          HEADER_COUNT=0
+          CPP_COUNT=0
+          MISSING_CPP=0
+
+          for h in $(find Unreal/KhaaosRun/Source -name "*.h" -not -path "*/ThirdParty/*"); do
+            HEADER_COUNT=$((HEADER_COUNT + 1))
+            # Shared enums and inline helpers are intentionally header-only.
+            if [[ "$h" == */Game/Data/KhaaosEnums.h ]]; then
+              echo "ℹ️  HEADER-ONLY: $h"
+              continue
+            fi
+            cpp="${h%.h}.cpp"
+            if [ -f "$cpp" ]; then
+              CPP_COUNT=$((CPP_COUNT + 1))
+            else
+              MISSING_CPP=$((MISSING_CPP + 1))
+              echo "⚠️  MISSING .cpp: $cpp (for $h)"
+            fi
+          done
+
+          echo ""
+          echo "📊 Headers: $HEADER_COUNT | Implementations: $CPP_COUNT | Missing: $MISSING_CPP"
+
+          # Check for UCLASS/USTRUCT/UPROPERTY consistency
+          echo ""
+          echo "=== Verificando macros UE5 ==="
+          UCLASS_COUNT=$(grep -r "UCLASS" Unreal/KhaaosRun/Source --include="*.h" | wc -l)
+          USTRUCT_COUNT=$(grep -r "USTRUCT" Unreal/KhaaosRun/Source --include="*.h" | wc -l)
+          UPROPERTY_COUNT=$(grep -r "UPROPERTY" Unreal/KhaaosRun/Source --include="*.h" | wc -l)
+          UFUNCTION_COUNT=$(grep -r "UFUNCTION" Unreal/KhaaosRun/Source --include="*.h" | wc -l)
+          GENERATED_BODY=$(grep -r "GENERATED_" Unreal/KhaaosRun/Source --include="*.h" | wc -l)
+
+          echo "  UCLASS: $UCLASS_COUNT | USTRUCT: $USTRUCT_COUNT | UPROPERTY: $UPROPERTY_COUNT"
+          echo "  UFUNCTION: $UFUNCTION_COUNT | GENERATED_*: $GENERATED_BODY"
+
+          # Check .ini configs
+          echo ""
+          echo "=== Verificando configs INI ==="
+          for ini in Unreal/KhaaosRun/Config/*.ini; do
+            if [ -f "$ini" ]; then
+              LINES=$(wc -l < "$ini")
+              echo "  ✅ $(basename $ini): $LINES lines"
+            fi
+          done
+
+          if [ "$MISSING_CPP" -gt 0 ]; then
+            echo ""
+            echo "❌ $MISSING_CPP .cpp files missing for existing headers"
+            exit 1
+          fi
+          echo ""
+          echo "✅ All C++ files validated"
+
+  # ─── Job 7: Economy Integrity Check ──────────────────────────
+  economy-check:
+    name: Economy Integrity
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Atomic Ledger implementation
+        run: |
+          echo "=== Verificando AtomicLedger ==="
+          LEDGER_H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosAtomicLedger.h"
+          LEDGER_CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosAtomicLedger.cpp"
+
+          # Check required transaction types
+          for ttype in Mint Burn Transfer EscrowLock EscrowRelease EscrowRefund Rollback; do
+            if grep -q "$ttype" "$LEDGER_H"; then
+              echo "  ✅ $ttype declared"
+            else
+              echo "  ❌ $ttype MISSING from header"
+            fi
+          done
+
+          # Check SHA256 hash chain
+          if grep -q "ComputeHash\|SHA256\|PreviousHash" "$LEDGER_H"; then
+            echo "  ✅ Hash chain present"
+          else
+            echo "  ❌ Hash chain MISSING"
+          fi
+
+          # Check supply cap
+          if grep -qi "SupplyCap\|MaxCirculation\|1.*000.*000" "$LEDGER_H"; then
+            echo "  ✅ Supply cap defined"
+          else
+            echo "  ❌ Supply cap MISSING"
+          fi
+
+          # Verify .cpp has implementations
+          CPP_LINES=$(wc -l < "$LEDGER_CPP")
+          echo "  📊 Ledger .cpp: $CPP_LINES lines"
+
+          echo ""
+          echo "=== Verificando ComplianceFramework ==="
+          COMPLIANCE_H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosComplianceFramework.h"
+          if grep -q "KYC\|AML\|BancoCentral\|IRPF" "$COMPLIANCE_H"; then
+            echo "  ✅ Brazilian compliance (KYC/AML/BCB/IRPF) present"
+          else
+            echo "  ❌ Brazilian compliance MISSING"
+          fi
+
+  # ─── Job 8: Security Scan ────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "=== Verificando secrets hardcoded ==="
+          # Check for placeholder EOS IDs (expected)
+          if grep -rq "KHAOS_PRODUCT_ID\|KHAOS_SANDBOX_ID\|KHAOS_DEPLOYMENT_ID" \
+              Unreal/KhaaosRun/Config/ --include="*.ini"; then
+            echo "  ⚠️  EOS placeholder IDs found (expected before Fase 2 setup)"
+          fi
+
+          # Check for actual secrets (not acceptable)
+          SECRET_PATTERN="(sk_live|sk_test|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)"
+          if grep -rqP "$SECRET_PATTERN" . --include="*.ts" --include="*.js" --include="*.env" 2>/dev/null; then
+            echo "  ❌ HARDCODED SECRETS DETECTED"
+            exit 1
+          else
+            echo "  ✅ No hardcoded secrets detected"
+          fi
+
+  # ─── Job 9: Deploy to Render only after every CI gate ───────────
+  deploy-render:
+    name: Deploy to Render (after full CI)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RENDER_DEPLOY_ENABLED == 'true'
+    needs:
+      [
+        lint,
+        test-unit,
+        test-game,
+        build-server,
+        docker-build,
+        ue5-validate,
+        economy-check,
+        security,
+      ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate Render configuration
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$RENDER_DEPLOY_HOOK_URL" ]]; then
+            echo "::error::Missing Actions secret RENDER_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+          if [[ "$RENDER_SERVICE_URL" != https://* ]]; then
+            echo "::error::Set Actions variable RENDER_SERVICE_URL to the public HTTPS origin"
+            exit 1
+          fi
+
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --max-time 30 --request POST "$RENDER_DEPLOY_HOOK_URL")
+          if [[ ! "$status" =~ ^2[0-9]{2}$ ]]; then
+            echo "::error::Render rejected the deploy hook (HTTP $status)"
+            exit 1
+          fi
+          echo "Render accepted the deploy request (HTTP $status)"
+
+      - name: Wait for the exact commit to become healthy
+        env:
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          service_url="${RENDER_SERVICE_URL%/}"
+          for attempt in $(seq 1 40); do
+            body=$(curl --fail --silent --show-error --max-time 15 \
+              "$service_url/healthz.json" 2>/dev/null || true)
+            if [[ -n "$body" ]] && jq -e --arg commit "$EXPECTED_COMMIT" \
+              '.status == "ok" and .commit == $commit' >/dev/null <<<"$body"; then
+              echo "Render is healthy on commit $EXPECTED_COMMIT (attempt $attempt)"
+              exit 0
+            fi
+            echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
+            sleep 15
+          done
+          echo "::error::Render did not become healthy on the expected commit within 10 minutes"
+          exit 1

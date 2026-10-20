@@ -1,0 +1,31 @@
+{
+  "packageVersion": "UE5.8-Package-Descriptor",
+  "umapPackagePath": "/Game/Maps/CIGKV/L_CIGKV_KhaaosVille",
+  "levelScriptActorClass": "/Script/KhaaosRun.AKhaaosCIGKVLevel",
+  "worldPartitionEnabled": true,
+  "naniteLandscapeEnabled": true,
+  "lumenGlobalIllumination": true,
+  "staticMeshes": [
+    "/Game/Maps/CIGKV/CIGKV_Terrain.CIGKV_Terrain",
+    "/Game/Maps/CIGKV/SM_Sector_ArmoryHub",
+    "/Game/Maps/CIGKV/SM_Sector_ProvingGrounds",
+    "/Game/Maps/CIGKV/SM_Sector_AbandonedPark"
+  ],
+  "dataTables": [
+    "/Game/Maps/CIGKV/DT_CIGKV_MapPoints",
+    "/Game/Maps/CIGKV/DT_CIGKV_WorldConfig"
+  ],
+  "niagaraSystemsPlaced": [
+    "/Game/VFX/NS_EMP_CalibrationPulse",
+    "/Game/VFX/NS_ZEXBeacon_BluePulse",
+    "/Game/VFX/NS_Loot_Pickup_Aura"
+  ],
+  "spawnedActorsSummary": {
+    "playerStartClusters": 8,
+    "totalPlayerCapacity": 50,
+    "zexTerminals": 15,
+    "sectorVolumes": 3,
+    "safeZoneController": 1,
+    "hazardVolume": 1
+  }
+}

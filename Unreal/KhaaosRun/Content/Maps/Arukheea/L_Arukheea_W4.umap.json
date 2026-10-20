@@ -1,0 +1,32 @@
+{
+  "packageVersion": "UE5.8-Package-Descriptor",
+  "umapPackagePath": "/Game/Maps/Arukheea/L_Arukheea_W4",
+  "levelScriptActorClass": "/Script/KhaaosRun.AKhaaosArukheeaLevel",
+  "worldPartitionEnabled": true,
+  "naniteLandscapeEnabled": true,
+  "lumenGlobalIllumination": true,
+  "staticMeshes": [
+    "/Game/Maps/Arukheea/Arukheea_Terrain.Arukheea_Terrain",
+    "/Game/Maps/Arukheea/SM_Sector_ForestOfTheLost",
+    "/Game/Maps/Arukheea/SM_Sector_NightSunPrison",
+    "/Game/Maps/Arukheea/SM_Sector_WhaleGraveyardFactory",
+    "/Game/Maps/Arukheea/SM_Sector_TowerHelipadFinalZEX"
+  ],
+  "dataTables": [
+    "/Game/Maps/Arukheea/DT_Arukheea_MapPoints",
+    "/Game/Maps/Arukheea/DT_Arukheea_WorldConfig"
+  ],
+  "niagaraSystemsPlaced": [
+    "/Game/VFX/NS_TsunamiWall_Arukheea",
+    "/Game/VFX/NS_ZEXBeacon_BluePulse",
+    "/Game/VFX/NS_Loot_Pickup_Aura"
+  ],
+  "spawnedActorsSummary": {
+    "playerStartClusters": 8,
+    "totalPlayerCapacity": 80,
+    "zexTerminals": 15,
+    "sectorVolumes": 4,
+    "safeZoneController": 1,
+    "hazardVolume": 1
+  }
+}

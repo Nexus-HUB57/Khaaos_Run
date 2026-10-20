@@ -1,0 +1,376 @@
+// Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/GameModeBase.h"
+#include "Game/Data/KhaaosSpeciesDataAsset.h"
+#include "Game/Data/KhaaosWeaponDataAsset.h"
+#include "Game/Data/KhaaosLootItemDataAsset.h"
+#include "Game/Data/KhaaosWorldConfigDataAsset.h"
+#include "KhaaosGameMode.generated.h"
+
+// ─── Forward Declarations ─────────────────────────────────────────────────────
+
+class AKhaaosSafeZone;
+class AKhaaosLootPickup;
+class USpatialGridSubsystem;
+class UKhaaosAttributeSet;
+class AKhaaosGameState;
+class UEconomyBridgeSubsystem;
+class UKhaaosSpeciesAbilityComponent;
+class UKhaaosWeaponComponent;
+class UKhaaosZoneManagerComponent;
+class UKhaaosDamageManagerComponent;
+class UKhaaosKillFeedComponent;
+class UKhaaosReviveSystemComponent;
+class UKhaaosMatchFlowStateMachineComponent;
+class UKhaaosAirdropSystemComponent;
+class UKhaaosDeploySystemComponent;
+class UKhaaosCirclePredictionComponent;
+class UKhaaosPerformanceBudgetComponent;
+class UKhaaosLODStrategyComponent;
+class UKhaaosReplicationBudgetComponent;
+class UKhaaosMatchTimelineComponent;
+class APlayerController;
+
+// ─── Match Phase Enum ─────────────────────────────────────────────────────────
+
+UENUM(BlueprintType)
+enum class EMatchPhase : uint8
+{
+    Lobby       UMETA(DisplayName = "LOBBY"),
+    Countdown   UMETA(DisplayName = "COUNTDOWN"),
+    InProgress  UMETA(DisplayName = "IN_PROGRESS"),
+    PulsoKhaaos UMETA(DisplayName = "PULSO_KHAAOS"),
+    WorldTransition UMETA(DisplayName = "WORLD_TRANSITION"),
+    Finished    UMETA(DisplayName = "FINISHED")
+};
+
+// ─── World Sequence Enum ──────────────────────────────────────────────────────
+
+UENUM(BlueprintType)
+enum class EWorldSequence : uint8
+{
+    CIGKV       UMETA(DisplayName = "CIGKV"),
+    Barburhen   UMETA(DisplayName = "Barburhen"),
+    Priadus     UMETA(DisplayName = "Priadus"),
+    Ckesalth    UMETA(DisplayName = "Ckesalth"),
+    Arukheea    UMETA(DisplayName = "Arukheea")
+};
+
+// ─── Pulso Khaaos Event Struct ────────────────────────────────────────────────
+
+USTRUCT(BlueprintType)
+struct FPulsoKhaaosEvent
+{
+    GENERATED_BODY()
+
+    /** World where Pulso is active. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    FName ActiveWorld;
+
+    /** Center of the Pulso event. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    FVector CenterLocation = FVector::ZeroVector;
+
+    /** Current radius (shrinks over time). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    float CurrentRadius = 500.0f;
+
+    /** Seconds remaining. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    float RemainingTime = 60.0f;
+
+    /** Rarity boost multiplier (e.g. 2x for Lendário). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    float RarityBoost = 2.0f;
+
+    /** Whether the event is active. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    uint8 bIsActive : 1;
+};
+
+/**
+ * AKhaaosGameMode — Enhanced with DataAsset-driven architecture.
+ *
+ * Data-Driven Flow:
+ *   JSON → CSV → UE5 DataTable → UPrimaryDataAsset → Gameplay
+ *
+ * Species Selection:   SpeciesDataAsset → PlayerState (stats, passive, skins)
+ * Weapon Loadout:      WeaponDataAsset → WeaponPickup (damage, falloff, fire mode)
+ * Loot Distribution:   LootItemDataAsset → LootPickup (type, rarity, spawn weight)
+ * World Transition:    WorldConfigDataAsset → Level streaming (CIGKV→W1→W2→W3→W4)
+ * Pulso Khaaos:        WorldConfig.PulsoConfig → Timed event (loot boost + zone damage)
+ */
+UCLASS(Abstract, config=Game, defaultconfig)
+class AKhaaosGameMode : public AGameModeBase
+{
+    GENERATED_BODY()
+
+public:
+    AKhaaosGameMode();
+
+    // ─── Lifecycle ──────────────────────────────────────────────────────────
+
+    virtual void InitGameState() override;
+    virtual void StartPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void Tick(float DeltaSeconds) override;
+
+    // ─── Match Lifecycle ─────────────────────────────────────────────────────
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    void StartCountdown();
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    void CancelCountdown();
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    void StartMatch();
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    void FinishMatch(const FString& WinnerId);
+
+    // ─── Player Management ──────────────────────────────────────────────────
+
+    virtual void OnPostLogin(AController* NewPlayer) override;
+    virtual void Logout(AController* Exiting) override;
+    virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    void EliminatePlayer(APlayerState* Victim, APlayerState* Eliminator, const FString& Cause);
+
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Match")
+    bool CheckWinCondition() const;
+
+    // ─── Species Selection (DataAsset-Driven) ────────────────────────────────
+
+    /** Assign a species to a player from SpeciesDataAsset.
+     *  Applies stats to PlayerState and activates passive ability
+     *  via KhaaosSpeciesAbilityComponent. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Species")
+    void AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDataAsset* SpeciesAsset);
+
+    /** Get all available species for the current world (filtered by WorldConfig). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Species")
+    TArray<UKhaaosSpeciesDataAsset*> GetAvailableSpecies() const;
+
+    /** Get the species ability component for a player (if assigned). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Species")
+    UKhaaosSpeciesAbilityComponent* GetSpeciesAbilityComponent(APlayerState* Player) const;
+
+    // ─── Weapon Loadout (DataAsset-Driven) ───────────────────────────────────
+
+    /** Assign weapon loadout from WeaponDataAsset pool.
+     *  Assigns Primary + Secondary + Melee based on rarity weighting
+     *  and equips via KhaaosWeaponComponent. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Weapon")
+    void AssignWeaponLoadout(APlayerState* Player);
+
+    /** Get the weapon component for a player (if assigned). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Weapon")
+    UKhaaosWeaponComponent* GetWeaponComponent(APlayerState* Player) const;
+
+    // ─── Loot Distribution (DataAsset-Driven) ────────────────────────────────
+
+    /** Spawn loot across the map using WorldConfigDataAsset loot points.
+     *  Uses weighted random selection based on RarityWeight and RarityMultiplier. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
+    void SpawnLootFromDataAssets();
+
+    /** Get loot items by type and rarity for current world. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Loot")
+    TArray<UKhaaosLootItemDataAsset*> GetLootPool(FName TypeTag, FName RarityTag) const;
+
+    /** Select a random loot item using weighted rarity distribution. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
+    UKhaaosLootItemDataAsset* SelectWeightedRandomLoot() const;
+
+    // ─── World Transition ────────────────────────────────────────────────────
+
+    /** Transition to the next world in the sequence. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|World")
+    void TransitionToNextWorld();
+
+    /** Check if players meet the rank requirement for the next world. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|World")
+    bool CanTransitionToNextWorld() const;
+
+    /** Get the current world config asset. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|World")
+    UKhaaosWorldConfigDataAsset* GetCurrentWorldConfig() const;
+
+    // ─── Pulso Khaaos Event ──────────────────────────────────────────────────
+
+    /** Trigger a Pulso Khaaos event in the current world. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Pulso")
+    void TriggerPulsoKhaaos();
+
+    /** Get the current Pulso event state. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Pulso")
+    FPulsoKhaaosEvent GetPulsoState() const { return ActivePulso; }
+
+    // ─── Configuration ──────────────────────────────────────────────────────
+
+    UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "Khaaos|Match")
+    int32 MaxPlayers;
+
+    UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "Khaaos|Match")
+    int32 MinPlayersToStart;
+
+    UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "Khaaos|Match")
+    float CountdownDuration;
+
+    UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "Khaaos|Match")
+    float MatchTimeLimit;
+
+    UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "Khaaos|Match")
+    float ZoneTickInterval;
+
+    // ─── DataAsset References (Data-Driven) ─────────────────────────────────
+
+    /** Species assets loaded from DataTable. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Data")
+    TArray<TSoftObjectPtr<UKhaaosSpeciesDataAsset>> SpeciesAssets;
+
+    /** Weapon assets loaded from DataTable. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Data")
+    TArray<TSoftObjectPtr<UKhaaosWeaponDataAsset>> WeaponAssets;
+
+    /** Loot item assets loaded from DataTable. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Data")
+    TArray<TSoftObjectPtr<UKhaaosLootItemDataAsset>> LootItemAssets;
+
+    /** World config assets (CIGKV, W1-W4). */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Data")
+    TArray<TSoftObjectPtr<UKhaaosWorldConfigDataAsset>> WorldConfigAssets;
+
+    // ─── Subsystem References ───────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    USpatialGridSubsystem* SpatialGrid;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    TObjectPtr<AKhaaosSafeZone> SafeZone;
+
+protected:
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Match")
+    float CountdownRemaining;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Match")
+    EMatchPhase MatchPhase;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|World")
+    EWorldSequence CurrentWorld;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|World")
+    int32 CurrentWorldIndex = 0;
+
+    UPROPERTY()
+    TObjectPtr<AKhaaosGameState> KhaaosGameState;
+
+    /** Active Pulso Khaaos event. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Pulso")
+    FPulsoKhaaosEvent ActivePulso;
+
+    /** Loaded (resolved) species assets. */
+    UPROPERTY()
+    TArray<UKhaaosSpeciesDataAsset*> LoadedSpeciesAssets;
+
+    /** Loaded weapon assets. */
+    UPROPERTY()
+    TArray<UKhaaosWeaponDataAsset*> LoadedWeaponAssets;
+
+    /** Loaded loot item assets. */
+    UPROPERTY()
+    TArray<UKhaaosLootItemDataAsset*> LoadedLootItemAssets;
+
+    /** Loaded world config assets. */
+    UPROPERTY()
+    TArray<UKhaaosWorldConfigDataAsset*> LoadedWorldConfigAssets;
+
+    FTimerHandle ZoneTickTimerHandle;
+    FTimerHandle CountdownTimerHandle;
+    FTimerHandle PulsoTimerHandle;
+
+    // ─── PhD-Level Subsystems (Non-Breaking Additions) ───────────────────
+
+    /** Multi-phase zone manager (Fortnite-style storm circle). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosZoneManagerComponent* ZoneManager;
+
+    /** Central damage processing with headshot, validation, kill tracking. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosDamageManagerComponent* DamageManager;
+
+    /** Replicated kill feed for HUD. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosKillFeedComponent* KillFeed;
+
+    /** Downed/revive/reboot system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosReviveSystemComponent* ReviveSystem;
+
+    // ─── E2E Phase 1-3 Subsystems (Non-Breaking Additions) ──────────────
+
+    /** Match flow state machine (Lobby→Deploy→Combat→Endgame→Results). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosMatchFlowStateMachineComponent* MatchFlow;
+
+    /** Free Fire-style airdrop/supply drop system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosAirdropSystemComponent* AirdropSystem;
+
+    /** Deploy/parachute system. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosDeploySystemComponent* DeploySystem;
+
+    /** Circle prediction for minimap UI (Fortnite white circle). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosCirclePredictionComponent* CirclePrediction;
+
+    /** Console performance budget manager. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosPerformanceBudgetComponent* PerformanceBudget;
+
+    /** LOD strategy for battle royale actors. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosLODStrategyComponent* LODStrategy;
+
+    /** Replication bandwidth budget manager. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosReplicationBudgetComponent* ReplicationBudget;
+
+    /** Match timeline recorder (event log, match summary, JSON serialize). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    UKhaaosMatchTimelineComponent* MatchTimeline;
+
+    // ─── Internal Methods ───────────────────────────────────────────────────
+
+    void ApplyZoneDamage();
+    void CountdownTick();
+    void SpawnLoot();
+    void ComputeRankings();
+
+    /** Load all soft references to DataAssets. */
+    void LoadDataAssets();
+
+    /** Initialize PhD-level subsystems. */
+    void InitializePhDSubsystems();
+
+    /** Tick the Pulso Khaaos event (shrink, damage, loot). */
+    void TickPulsoEvent(float DeltaSeconds);
+
+    /** Apply Pulso damage to players inside the event radius. */
+    void ApplyPulsoDamage();
+
+    /** Spawn boosted loot at Pulso center. */
+    void SpawnPulsoLoot();
+
+    /** Select a random weapon for loadout assignment by slot. */
+    UKhaaosWeaponDataAsset* SelectRandomWeaponForSlot(FName SlotTag) const;
+
+    /** Build cumulative weight array for weighted random loot selection. */
+    void BuildLootWeightTable();
+};

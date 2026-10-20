@@ -1,0 +1,142 @@
+# =============================================================================
+# Khaaos Run — Branch Protection, Console Shield & Dev Coordination
+# Prevents overwriting or deleting commits, files, or folders that other Devs
+# are actively developing in the Console or in parallel PR branches.
+# =============================================================================
+name: Dev Coordination
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Warn/block if PR touches Console files, deletes tracked files, or overlaps
+  # with other Devs' active PRs
+  # ---------------------------------------------------------------------------
+  conflict-awareness:
+    name: Check Other Devs' Activity & Console Protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR changed files
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          separator: '|'
+
+      - name: Check for overlapping branches, deletions & Console paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prFiles = '${{ steps.changed.outputs.all_changed_files }}'.split('|').filter(Boolean);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const currentPrNumber = context.issue.number;
+
+            const protectedConsolePaths = [
+              'server/game/marshalConsole.ts',
+              'server/game/orchestration.ts',
+              'client/src/pages/marshal-console.tsx',
+              'client/src/lib/marshal-console-api.ts',
+              'docs/API_MARECHAL_CONTROL_PANEL.md',
+              'docs/Comandos de Console e Parâmetros de Configuração',
+              'tests/official/marshal-console-client.test.ts',
+              'tests/official/marshal-console-routes.test.ts',
+              'tests/official/orchestration.test.ts',
+              'tests/official/orchestration.integration.test.ts',
+              '.github/workflows/Auto Merge PR 48'
+            ];
+
+            // Inspect current PR files for deletions or Console path touches
+            const currentPrFilesResp = await github.rest.pulls.listFiles({
+              owner, repo, pull_number: currentPrNumber, per_page: 100
+            });
+
+            const deletedFiles = currentPrFilesResp.data
+              .filter(f => f.status === 'removed')
+              .map(f => f.filename);
+
+            const consoleTouched = currentPrFilesResp.data
+              .filter(f => protectedConsolePaths.some(p => f.filename === p || f.filename.startsWith(`${p}/`)))
+              .map(f => `${f.filename} (${f.status})`);
+
+            // Get all open PRs
+            const prs = await github.rest.pulls.list({
+              owner, repo, state: 'open', per_page: 50
+            });
+
+            const overlaps = [];
+            for (const pr of prs.data) {
+              if (pr.number === currentPrNumber) continue;
+
+              const prFilesList = await github.rest.pulls.listFiles({
+                owner, repo, pull_number: pr.number, per_page: 100
+              });
+
+              const theirFiles = prFilesList.data.map(f => f.filename);
+              const overlap = prFiles.filter(f => theirFiles.includes(f));
+
+              if (overlap.length > 0) {
+                overlaps.push({
+                  pr: pr.number,
+                  branch: pr.head.ref,
+                  author: pr.user.login,
+                  files: overlap
+                });
+              }
+            }
+
+            if (overlaps.length > 0 || deletedFiles.length > 0 || consoleTouched.length > 0) {
+              let msg = '## 🛡️ Multi-Dev Coordination & Console Protection Alert\n\n';
+
+              if (consoleTouched.length > 0) {
+                msg += '### ⚠️ Protected Console Files Modified\n';
+                msg += 'Other Devs are actively working on the Console subsystem. Verify before merging that no Console commits are overwritten:\n';
+                for (const cf of consoleTouched) {
+                  msg += `- \`${cf}\`\n`;
+                }
+                msg += '\n';
+              }
+
+              if (deletedFiles.length > 0) {
+                msg += '### 🚨 Tracked File Deletion Detected\n';
+                msg += 'This PR removes tracked files/folders. Confirm these were not created by another Dev on `main` or a Console branch:\n';
+                for (const df of deletedFiles) {
+                  msg += `- \`${df}\`\n`;
+                }
+                msg += '\n';
+              }
+
+              if (overlaps.length > 0) {
+                msg += '### ⚠️ Overlapping Active PRs Detected\n';
+                msg += 'This PR modifies files that other Devs are also working on:\n\n';
+                for (const o of overlaps) {
+                  msg += `- **PR #${o.pr}** (\`${o.branch}\`) by @${o.author}:\n`;
+                  for (const f of o.files) {
+                    msg += `  - \`${f}\`\n`;
+                  }
+                }
+                msg += '\n';
+              }
+
+              msg += '**Coordinate with the Console Devs and run `./scripts/khaaos_workflow.sh --check-overlaps` before merging.**\n';
+
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: currentPrNumber,
+                body: msg
+              });
+            } else {
+              console.log('✅ No overlapping changes, deletions, or uncoordinated Console modifications detected');
+            }

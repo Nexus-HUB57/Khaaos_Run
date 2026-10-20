@@ -1,0 +1,2 @@
+---,WorldId,MaxPlayers,RingStartRadius,RingEndRadius,RingCloseDurationSeconds,HazardDamagePerSecond,HazardTickInterval,ParkCenterX,ParkCenterY,ParkCenterZ,NiagaraHazardSystem
+Default,Ckesalth,60,160000,4500,600,0.0025,6,0,0,100,/Game/VFX/NS_OilFireSmoke_Ckesalth

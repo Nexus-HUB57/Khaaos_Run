@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_ToxicSporeFog_Priadus",
+  "name": "NS_ToxicSporeFog_Priadus",
+  "world": "Priadus",
+  "emitterType": "GPUComputeSim_VolumetricSpores",
+  "spawnRate": 2800,
+  "maxParticles": 20000,
+  "colorLinear": [
+    0.06,
+    0.72,
+    0.5,
+    0.65
+  ],
+  "velocityRange": [
+    15,
+    75
+  ],
+  "lifetimeSeconds": 6.5,
+  "significanceRank": 0,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

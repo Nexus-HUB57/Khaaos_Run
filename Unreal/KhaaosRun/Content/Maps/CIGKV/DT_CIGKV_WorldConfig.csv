@@ -1,0 +1,2 @@
+---,WorldId,MaxPlayers,RingStartRadius,RingEndRadius,RingCloseDurationSeconds,HazardDamagePerSecond,HazardTickInterval,ParkCenterX,ParkCenterY,ParkCenterZ,NiagaraHazardSystem
+Default,CIGKV,50,100000,6000,900,0.0015,180,0,0,100,/Game/VFX/NS_EMP_CalibrationPulse

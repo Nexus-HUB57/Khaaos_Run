@@ -1,0 +1,33 @@
+# Khaaos Run UE5.8 3D Terrain & Sector Blockout Mesh — Barburhen
+# Unit: meters | Coordinate System: Right-Handed OBJ -> Imported to UE5.8 StaticMesh
+o Barburhen_Terrain
+v -1500 0 -1500
+v 1500 0 -1500
+v 1500 0 1500
+v -1500 0 1500
+vn 0 1 0
+f 1//1 2//1 3//1 4//1
+g Sector_UrbanCommercial
+v -760 0 -610
+v -340 0 -610
+v -340 75 -230
+v -760 75 -230
+f 5//1 6//1 7//1 8//1
+g Sector_IndustrialLanding
+v 270 0 -600
+v 770 0 -600
+v 770 60 -160
+v 270 60 -160
+f 9//1 10//1 11//1 12//1
+g Sector_AbandonedParkCenter
+v -230 0 -110
+v 230 0 -110
+v 230 30 350
+v -230 30 350
+f 13//1 14//1 15//1 16//1
+g Sector_RailStationExtraction
+v -140 0 680
+v 140 0 680
+v 140 45 880
+v -140 45 880
+f 17//1 18//1 19//1 20//1

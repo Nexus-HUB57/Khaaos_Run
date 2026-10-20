@@ -1,0 +1,32 @@
+{
+  "packageVersion": "UE5.8-Package-Descriptor",
+  "umapPackagePath": "/Game/Maps/Ckesalth/L_Ckesalth_W3",
+  "levelScriptActorClass": "/Script/KhaaosRun.AKhaaosCkesalthLevel",
+  "worldPartitionEnabled": true,
+  "naniteLandscapeEnabled": true,
+  "lumenGlobalIllumination": true,
+  "staticMeshes": [
+    "/Game/Maps/Ckesalth/Ckesalth_Terrain.Ckesalth_Terrain",
+    "/Game/Maps/Ckesalth/SM_Sector_AbandonedResort",
+    "/Game/Maps/Ckesalth/SM_Sector_BedouinVillage",
+    "/Game/Maps/Ckesalth/SM_Sector_CentralOilRefinery",
+    "/Game/Maps/Ckesalth/SM_Sector_ExpeditionOutpostZEX"
+  ],
+  "dataTables": [
+    "/Game/Maps/Ckesalth/DT_Ckesalth_MapPoints",
+    "/Game/Maps/Ckesalth/DT_Ckesalth_WorldConfig"
+  ],
+  "niagaraSystemsPlaced": [
+    "/Game/VFX/NS_OilFireSmoke_Ckesalth",
+    "/Game/VFX/NS_ZEXBeacon_BluePulse",
+    "/Game/VFX/NS_Loot_Pickup_Aura"
+  ],
+  "spawnedActorsSummary": {
+    "playerStartClusters": 8,
+    "totalPlayerCapacity": 60,
+    "zexTerminals": 15,
+    "sectorVolumes": 4,
+    "safeZoneController": 1,
+    "hazardVolume": 1
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "world": "Priadus",
+  "max_players": 75,
+  "rarity_weights": {
+    "COMUM": 55,
+    "RARO": 28,
+    "EPICO": 12,
+    "LENDARIO": 4,
+    "MITICO": 1
+  },
+  "rarity_multiplier": {
+    "COMUM": 1,
+    "RARO": 2.8,
+    "EPICO": 7.5,
+    "LENDARIO": 22,
+    "MITICO": 65
+  },
+  "loot_pool": [
+    "LOOT_MedKit_Medium",
+    "LOOT_Seringa_Venex",
+    "LOOT_Shield_Lv2",
+    "LOOT_Escudo_Khael",
+    "LOOT_Mina_Khaaos",
+    "LOOT_Granada_Zheers",
+    "LOOT_AmmoBox_762",
+    "LOOT_AmmoBox_12g",
+    "LOOT_Material_Cristal"
+  ],
+  "spawn_density": 7.5
+}

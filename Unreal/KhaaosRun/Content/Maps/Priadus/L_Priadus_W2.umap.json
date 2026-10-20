@@ -1,0 +1,32 @@
+{
+  "packageVersion": "UE5.8-Package-Descriptor",
+  "umapPackagePath": "/Game/Maps/Priadus/L_Priadus_W2",
+  "levelScriptActorClass": "/Script/KhaaosRun.AKhaaosPriadusLevel",
+  "worldPartitionEnabled": true,
+  "naniteLandscapeEnabled": true,
+  "lumenGlobalIllumination": true,
+  "staticMeshes": [
+    "/Game/Maps/Priadus/Priadus_Terrain.Priadus_Terrain",
+    "/Game/Maps/Priadus/SM_Sector_SwampBasin",
+    "/Game/Maps/Priadus/SM_Sector_DarkCanopyLanding",
+    "/Game/Maps/Priadus/SM_Sector_AncientTempleHunt",
+    "/Game/Maps/Priadus/SM_Sector_SlaughterhouseZEX"
+  ],
+  "dataTables": [
+    "/Game/Maps/Priadus/DT_Priadus_MapPoints",
+    "/Game/Maps/Priadus/DT_Priadus_WorldConfig"
+  ],
+  "niagaraSystemsPlaced": [
+    "/Game/VFX/NS_ToxicSporeFog_Priadus",
+    "/Game/VFX/NS_ZEXBeacon_BluePulse",
+    "/Game/VFX/NS_Loot_Pickup_Aura"
+  ],
+  "spawnedActorsSummary": {
+    "playerStartClusters": 8,
+    "totalPlayerCapacity": 75,
+    "zexTerminals": 15,
+    "sectorVolumes": 4,
+    "safeZoneController": 1,
+    "hazardVolume": 1
+  }
+}

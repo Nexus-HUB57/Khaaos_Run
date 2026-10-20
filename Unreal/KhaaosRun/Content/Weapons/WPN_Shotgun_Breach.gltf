@@ -1,0 +1,41 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WeaponAssetBuilder"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "WPN_Shotgun_Breach",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SK_WPN_Shotgun_Breach_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "id": "WPN_Shotgun_Breach",
+        "category": "Shotgun",
+        "caliber": "12Gauge",
+        "muzzleSocket": "Muzzle_Socket",
+        "rateOfFireRpm": 110
+      }
+    },
+    {
+      "name": "Muzzle_Socket",
+      "translation": [
+        0.68,
+        0,
+        0.08
+      ]
+    }
+  ]
+}

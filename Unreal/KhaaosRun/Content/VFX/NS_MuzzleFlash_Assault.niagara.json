@@ -1,0 +1,25 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_MuzzleFlash_Assault",
+  "name": "NS_MuzzleFlash_Assault",
+  "world": "All",
+  "emitterType": "CPUSim_BurstCone",
+  "spawnRate": 0,
+  "burstCount": 45,
+  "maxParticles": 120,
+  "colorLinear": [
+    1,
+    0.72,
+    0.2,
+    1
+  ],
+  "velocityRange": [
+    800,
+    2200
+  ],
+  "lifetimeSeconds": 0.08,
+  "significanceRank": 2,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

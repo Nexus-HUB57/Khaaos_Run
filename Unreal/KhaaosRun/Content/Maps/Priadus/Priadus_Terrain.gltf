@@ -1,0 +1,121 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WorldAssetBuilder v2.0",
+    "copyright": "Nexus-HUB57 Devs Ph.D"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Priadus_Scene",
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Priadus_Landscape_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "ue5UMapPath": "/Game/Maps/Priadus/L_Priadus_W2",
+        "sizeMeters": 2800,
+        "maxPlayers": 75,
+        "primaryNiagaraHazard": "/Game/VFX/NS_ToxicSporeFog_Priadus"
+      }
+    },
+    {
+      "name": "SM_Sector_Priadus_SwampBasin",
+      "translation": [
+        -480,
+        -360,
+        4
+      ],
+      "scale": [
+        420,
+        380,
+        22
+      ],
+      "extras": {
+        "fraction": "2/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Priadus_DarkCanopyLanding",
+      "translation": [
+        460,
+        -320,
+        16
+      ],
+      "scale": [
+        480,
+        440,
+        55
+      ],
+      "extras": {
+        "fraction": "3/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Priadus_AncientTempleHunt",
+      "translation": [
+        0,
+        80,
+        28
+      ],
+      "scale": [
+        450,
+        450,
+        70
+      ],
+      "extras": {
+        "fraction": "3/8",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    },
+    {
+      "name": "SM_Sector_Priadus_SlaughterhouseZEX",
+      "translation": [
+        0,
+        720,
+        12
+      ],
+      "scale": [
+        260,
+        190,
+        40
+      ],
+      "extras": {
+        "fraction": "ZEX-Hub",
+        "collisionProfile": "BlockAll",
+        "naniteEnabled": true
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Priadus_Terrain_StaticMesh",
+      "primitives": [
+        {
+          "mode": 4,
+          "extras": {
+            "materialSlot": "MI_Priadus_MasterTerrain"
+          }
+        }
+      ]
+    }
+  ]
+}

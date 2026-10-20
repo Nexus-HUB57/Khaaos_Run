@@ -1,0 +1,48 @@
+{
+  "asset_id": "LOOT_AmmoBox_762",
+  "name": "7.62mm Ammo Box",
+  "category": "loot",
+  "subcategory": "ammo",
+  "priority": "P0",
+  "description": "7.62x51mm ammunition box. Contains 20 rounds. Brown color.",
+  "version": "1.0.0",
+  "author": "Khaaos Run MVP Pipeline",
+  "generated_at": "2026-10-12T21:11:26Z",
+  "dimensions_cm": {
+    "width": 15,
+    "depth": 8,
+    "height": 10
+  },
+  "mesh_stats": {
+    "vertex_count": 8,
+    "face_count": 12,
+    "triangle_count": 12,
+    "uv_channels": 1
+  },
+  "lod_info": {
+    "lod_count": 1,
+    "lod_levels": [
+      {
+        "level": 0,
+        "target_triangles": 12,
+        "screen_size": 1.0
+      }
+    ]
+  },
+  "collision": {
+    "type": "box",
+    "complexity": "simple",
+    "cook_mode": "auto"
+  },
+  "import_settings": {
+    "scale": 1.0,
+    "forward_axis": "Y",
+    "up_axis": "Z",
+    "convert_units": true,
+    "auto_generate_collision": true,
+    "skeletal_mesh": false
+  },
+  "dependencies": [],
+  "target_polycount": 300,
+  "naming_convention": "UE5"
+}

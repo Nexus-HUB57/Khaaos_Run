@@ -1,0 +1,255 @@
+# =============================================================================
+# Khaaos Run — UE5 CI Pipeline
+# Validates C++ headers, project structure, naming conventions, and LFS tracking
+# =============================================================================
+name: UE5 CI
+
+on:
+  push:
+    branches: [main, 'feat/ue5-*']
+    paths:
+      - 'Unreal/**'
+      - 'tests/ue5/**'
+      - 'scripts/test_ue5_logic.sh'
+      - 'scripts/verify-all.mjs'
+      - 'package.json'
+      - '.github/workflows/ue5-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Unreal/**'
+      - 'tests/ue5/**'
+      - 'scripts/test_ue5_logic.sh'
+      - 'scripts/verify-all.mjs'
+      - 'package.json'
+      - '.github/workflows/ue5-ci.yml'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  UE5_PROJECT: Unreal/KhaaosRun/KhaaosRun.uproject
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Validate UE5 project structure and configuration
+  # ---------------------------------------------------------------------------
+  validate-project:
+    name: Validate UE5 Project Structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Validate .uproject file
+        run: |
+          set -euo pipefail
+          echo "::group::Validating .uproject"
+          if [[ ! -f "$UE5_PROJECT" ]]; then
+            echo "::error::Missing .uproject file at $UE5_PROJECT"
+            exit 1
+          fi
+          # Verify it is valid JSON
+          python3 -c "import json; json.load(open('$UE5_PROJECT'))"
+          echo "✅ .uproject is valid JSON"
+
+          # Check required fields
+          python3 -c "
+          import json, sys
+          proj = json.load(open('$UE5_PROJECT'))
+          assert 'EngineAssociation' in proj, 'Missing EngineAssociation'
+          assert 'Modules' in proj, 'Missing Modules'
+          assert len(proj['Modules']) >= 1, 'Need at least one module'
+          print(f'Engine: {proj[\"EngineAssociation\"]}')
+          print(f'Modules: {len(proj[\"Modules\"])}')
+          "
+          echo "::endgroup::"
+
+      - name: Validate module structure
+        run: |
+          set -euo pipefail
+          echo "::group::Validating Modules"
+          PROJECT_DIR="Unreal/KhaaosRun"
+          for dir in "$PROJECT_DIR"/Source/*/; do
+            MODULE=$(basename "$dir")
+            BUILD_CS="$dir${MODULE}.Build.cs"
+            if [[ ! -f "$BUILD_CS" ]]; then
+              echo "::warning::Module $MODULE missing ${MODULE}.Build.cs"
+            else
+              echo "✅ $MODULE: Build.cs found"
+            fi
+          done
+          echo "::endgroup::"
+
+      - name: Validate Git LFS tracking
+        run: |
+          set -euo pipefail
+          echo "::group::Validating Git LFS"
+          ATTRS="Unreal/.gitattributes"
+          if [[ ! -f "$ATTRS" ]]; then
+            echo "::warning::No .gitattributes found in Unreal/"
+          else
+            REQUIRED_PATTERNS=(".uasset" ".umap" ".fbx" ".png" ".jpg")
+            for pat in "${REQUIRED_PATTERNS[@]}"; do
+              if grep -q "$pat" "$ATTRS"; then
+                echo "✅ LFS tracks $pat"
+              else
+                echo "::warning::$pat not tracked by LFS"
+              fi
+            done
+          fi
+          echo "::endgroup::"
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Validate C++ headers naming conventions (ue5-style-guide)
+  # ---------------------------------------------------------------------------
+  validate-cpp-headers:
+    name: Validate C++ Headers & Naming
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check UE5 naming conventions
+        run: |
+          set -euo pipefail
+          echo "::group::Checking C++ Headers"
+          ERRORS=0
+          for hdr in $(find Unreal/KhaaosRun/Source -name "*.h" -type f 2>/dev/null); do
+            # Check for #pragma once
+            if ! grep -q "#pragma once" "$hdr"; then
+              echo "::warning::$hdr missing #pragma once"
+            fi
+
+            # UCLASS and USTRUCT require a generated body; UENUM does not.
+            if grep -q "UCLASS\|USTRUCT" "$hdr" && ! grep -q "GENERATED_BODY\|GENERATED_UCLASS_BODY\|GENERATED_USTRUCT_BODY" "$hdr"; then
+              echo "::error::$hdr has UCLASS/USTRUCT without a generated body"
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            # Check for raw new/delete (should use NewObject<T> or MakeShared)
+            if grep -qP "^\s*new\s+" "$hdr"; then
+              echo "::warning::$hdr uses raw 'new' — prefer NewObject<T> or MakeShared<T>"
+            fi
+          done
+
+          echo "::endgroup::"
+          if [[ $ERRORS -gt 0 ]]; then
+            echo "::error::$ERRORS header validation error(s) found"
+            exit 1
+          fi
+          echo "✅ All C++ headers passed validation"
+
+      - name: Check UE5 asset naming conventions
+        run: |
+          set -euo pipefail
+          echo "::group::Checking Asset Naming"
+          # Static Meshes: SM_
+          # Skeletal Meshes: SK_
+          # Materials: M_, Material Instances: MI_
+          # Textures: T_
+          # Animations: A_
+          # Blueprints: BP_
+          # Widgets: W_
+          # Data Tables: DT_
+
+          CONVENTIONS=(
+            "SM_:StaticMeshes"
+            "SK_:SkeletalMeshes"
+            "M_:Materials"
+            "MI_:MaterialInstances"
+            "T_:Textures"
+            "A_:Animations"
+            "BP_:Blueprints"
+            "W_:Widgets"
+            "DT_:DataTables"
+          )
+
+          for conv in "${CONVENTIONS[@]}"; do
+            PREFIX="${conv%%:*}"
+            LABEL="${conv##*:}"
+            # This would check .uasset files if they were text-readable
+            # For now, just document the convention
+            echo "  $PREFIX → $LABEL"
+          done
+          echo "::endgroup::"
+          echo "✅ Naming conventions documented"
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Check for merge conflicts with other Devs' branches
+  # ---------------------------------------------------------------------------
+  conflict-check:
+    name: Check Merge Conflicts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for conflict markers
+        run: |
+          set -euo pipefail
+          CONFLICTS=0
+          for f in $(find Unreal -name "*.h" -o -name "*.cpp" -o -name "*.cs" -o -name "*.ini" 2>/dev/null); do
+            if grep -q "<<<<<<< " "$f" 2>/dev/null; then
+              echo "::error::$f contains merge conflict markers"
+              CONFLICTS=$((CONFLICTS + 1))
+            fi
+          done
+          if [[ $CONFLICTS -gt 0 ]]; then
+            exit 1
+          fi
+          echo "✅ No merge conflict markers found"
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Execute portable CIGKV gameplay rules without a UE installation
+  # ---------------------------------------------------------------------------
+  test-cigkv-loot-rules:
+    name: Test CIGKV Loot Rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile and run MinPhase and rarity tests
+        run: bash scripts/test_ue5_logic.sh
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Security scan for hardcoded credentials
+  # ---------------------------------------------------------------------------
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan for hardcoded secrets
+        run: |
+          set -euo pipefail
+          echo "::group::Scanning for secrets"
+          SECRETS_FOUND=0
+          for f in $(find Unreal -name "*.h" -o -name "*.cpp" -o -name "*.ini" -o -name "*.cs" 2>/dev/null); do
+            # Check for hardcoded API keys, tokens, passwords
+            if grep -qiP "(api_key|apikey|secret|token|password|senha)\s*[:=]\s*['\"][^'\"]{8,}" "$f" 2>/dev/null; then
+              echo "::warning::$f may contain hardcoded credentials"
+              SECRETS_FOUND=$((SECRETS_FOUND + 1))
+            fi
+          done
+          if [[ $SECRETS_FOUND -gt 0 ]]; then
+            echo "::warning::$SECRETS_FOUND file(s) with potential hardcoded secrets"
+          else
+            echo "✅ No hardcoded secrets detected"
+          fi
+          echo "::endgroup::"

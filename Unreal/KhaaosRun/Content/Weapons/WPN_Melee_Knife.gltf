@@ -1,0 +1,41 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WeaponAssetBuilder"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "WPN_Melee_Knife",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SK_WPN_Melee_Knife_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "id": "WPN_Melee_Knife",
+        "category": "MeleeBlade",
+        "caliber": "N/A",
+        "muzzleSocket": "BladeTip_Socket",
+        "rateOfFireRpm": 140
+      }
+    },
+    {
+      "name": "BladeTip_Socket",
+      "translation": [
+        0.68,
+        0,
+        0.08
+      ]
+    }
+  ]
+}

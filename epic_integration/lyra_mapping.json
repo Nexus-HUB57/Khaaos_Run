@@ -1,0 +1,44 @@
+{
+  "integration_points": [
+    {
+      "name": "HeroComponent",
+      "bridge": "KhaaosLyraHeroComponent",
+      "module": "ModularGameplay"
+    },
+    {
+      "name": "AbilityBridge",
+      "bridge": "KhaaosLyraAbilityBridge",
+      "module": "GameplayAbilities"
+    },
+    {
+      "name": "WeaponBridge",
+      "bridge": "KhaaosLyraWeaponBridge",
+      "module": "GameplayAbilities"
+    },
+    {
+      "name": "InputBridge",
+      "bridge": "KhaaosLyraInputBridge",
+      "module": "EnhancedInput"
+    },
+    {
+      "name": "GameplayTagBridge",
+      "bridge": "KhaaosLyraGameplayTagBridge",
+      "module": "GameplayTags"
+    },
+    {
+      "name": "HUDOverride",
+      "bridge": "KhaaosLyraHUDOverride",
+      "module": "CommonUI"
+    },
+    {
+      "name": "ModeBaseOverride",
+      "bridge": "KhaaosLyraModeBaseOverride",
+      "module": "ModularGameplayActors"
+    },
+    {
+      "name": "EOSBridge",
+      "bridge": "KhaaosLyraEOSBridge",
+      "module": "OnlineSubsystem"
+    }
+  ]
+}

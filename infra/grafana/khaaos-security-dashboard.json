@@ -1,0 +1,63 @@
+{
+  "annotations": { "list": [] },
+  "description": "Khaaos Run — Anti-Cheat & Security Dashboard",
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "title": "EAC Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "khaaos_eac_status", "legendFormat": "EAC" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0 }] } } }
+    },
+    {
+      "title": "Violations/min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "rate(khaaos_anticheat_violations_total[1m])", "legendFormat": "Violations/min" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 2 }, { "color": "red", "value": 10 }] } } }
+    },
+    {
+      "title": "DDoS Blocks/min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "rate(khaaos_ddos_blocks_total[1m])", "legendFormat": "DDoS Blocks/min" }]
+    },
+    {
+      "title": "Rate Limit Rejections/min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "rate(khaaos_ratelimit_rejected_total[1m])", "legendFormat": "Rejected/min" }]
+    },
+    {
+      "title": "Violation Types",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "rate(khaaos_anticheat_violations_total{type=\"speed_hack\"}[5m])", "legendFormat": "Speed Hack" },
+        { "expr": "rate(khaaos_anticheat_violations_total{type=\"aimbot\"}[5m])", "legendFormat": "Aimbot" },
+        { "expr": "rate(khaaos_anticheat_violations_total{type=\"wall_hack\"}[5m])", "legendFormat": "Wall Hack" },
+        { "expr": "rate(khaaos_anticheat_violations_total{type=\"invalid_packet\"}[5m])", "legendFormat": "Invalid Packet" },
+        { "expr": "rate(khaaos_anticheat_violations_total{type=\"memory_tamper\"}[5m])", "legendFormat": "Memory Tamper" }
+      ]
+    },
+    {
+      "title": "DDoS Blocks Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "rate(khaaos_ddos_blocks_total[5m])", "legendFormat": "DDoS" },
+        { "expr": "rate(khaaos_ratelimit_rejected_total[5m])", "legendFormat": "Rate Limit" },
+        { "expr": "rate(khaaos_eos_auth_failures_total[5m])", "legendFormat": "EOS Auth Fail" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["khaaos", "security", "production"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Khaaos Run — Security",
+  "uid": "khaaos-security",
+  "version": 1
+}

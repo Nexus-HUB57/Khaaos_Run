@@ -1,0 +1,64 @@
+name: Auto Merge PR 48
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - 'pr-48/merge-main-into-feat-console-e2e-phases-1-4'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge main into correction branch (if possible)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const head = 'pr-48/merge-main-into-feat-console-e2e-phases-1-4';
+            const base = 'main';
+            try {
+              const mergeResult = await github.rest.repos.merge({ owner, repo, base: head, head: base });
+              core.info(`Merged ${base} into ${head}: ${mergeResult.data.sha}`);
+            } catch (err) {
+              core.info(`Could not merge ${base} into ${head}: ${err.message}`);
+            }
+
+      - name: Wait for GitHub to compute PR mergeability (short sleep)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+      - name: Attempt to merge PR #48 if mergeable
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = 48;
+
+            const pr = (await github.rest.pulls.get({ owner, repo, pull_number: prNumber })).data;
+            core.info(`PR ${prNumber} state: ${pr.state}, mergeable: ${pr.mergeable}, mergeable_state: ${pr.mergeable_state}`);
+
+            if (pr.state !== 'open') {
+              core.info('PR is not open, skipping.');
+              return;
+            }
+
+            if (pr.mergeable && (pr.mergeable_state === 'clean' || pr.mergeable_state === 'unstable' || pr.mergeable_state === 'has_hooks')) {
+              try {
+                const mergeResp = await github.rest.pulls.merge({ owner, repo, pull_number: prNumber, merge_method: 'merge' });
+                core.info(`Merged PR ${prNumber}: ${mergeResp.data.sha}`);
+              } catch (err) {
+                core.info(`Failed to merge PR ${prNumber}: ${err.message}`);
+                core.setFailed(err.message);
+              }
+            } else {
+              core.info(`PR ${prNumber} is not mergeable yet (state=${pr.mergeable_state}).`);
+            }

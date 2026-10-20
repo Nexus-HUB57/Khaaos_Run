@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090b0f" />
+    <title>Khaaos Run // CIGKV</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small>OPERAÇÃO CIGKV // BETA DE CAMPO</small></div></div>
+        <div class="match-state"><span class="live-dot"></span><span id="matchStatus">AGUARDANDO ZU</span><b id="matchClock">10:00</b></div>
+        <button id="resetBtn" class="ghost-btn">REINICIAR RING</button>
+      </header>
+      <main class="game-shell">
+        <aside class="left-rail panel">
+          <div class="section-label">QG-WAR'I / OPERADOR</div>
+          <div class="operator-card"><div class="avatar">ZH</div><div><h2>ZHEERS-07</h2><p>RECRUTA // CIGKV</p></div></div>
+          <div class="stat-grid">
+            <div><span>ACCUR / XP</span><strong id="xpValue">0000</strong></div>
+            <div><span>KRC / SALDO</span><strong id="krcValue">0250</strong></div>
+            <div><span>ABATES</span><strong id="killsValue">00</strong></div>
+            <div><span>RANKING</span><strong id="rankValue">#50</strong></div>
+          </div>
+          <div class="section-label spaced">VITALIDADE</div>
+          <div class="vitality-row"><span>VL</span><div class="bar"><i id="lifeBar"></i></div><b id="lifeValue">100%</b></div>
+          <div class="vitality-row defense"><span>VD</span><div class="bar"><i id="defenseBar"></i></div><b id="defenseValue">35%</b></div>
+          <div class="section-label spaced">PACKBAG TÁTICA</div>
+          <div id="inventory" class="inventory"></div>
+          <div class="controls"><span><kbd>WASD</kbd> mover</span><span><kbd>Mouse</kbd> mirar/atacar</span><span><kbd>E</kbd> interagir</span><span><kbd>F</kbd> oficina</span></div>
+        </aside>
+        <section class="arena-wrap">
+          <div class="arena-head"><div><span class="eyebrow">MUNDO 0 // KHAOOS VILLE</span><h1>O PÁTIO DE ARMAMENTO</h1></div><div class="threat"><span>AMEAÇA</span><b id="threatValue">PULSO 01</b></div></div>
+          <div class="canvas-frame"><canvas id="arena" width="1100" height="660"></canvas><div id="zuModal" class="modal"><div class="modal-card"><span class="eyebrow">PROTOCOLO DE ENTRADA // ZU-01</span><h2>RISCO DE COLISÃO</h2><p>O transporte perdeu o controle após o impacto. Escolha como entrar no ring de batalha.</p><div class="modal-actions"><button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+ defesa inicial</small></button><button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+ velocidade inicial</small></button></div></div></div><div id="endModal" class="modal hidden"><div class="modal-card"><span class="eyebrow">TRANSMISSÃO DO MARECHAL</span><h2 id="endTitle">VOCÊ FOI ELIMINADO</h2><p id="endText"></p><button id="endBtn" class="primary-btn">RETORNAR AO QG</button></div></div></div>
+          <div class="arena-footer"><div><span>RING</span><b id="ringValue">100%</b></div><div><span>SOBREVIVENTES</span><b id="survivorsValue">50 / 50</b></div><div><span>PULSO KHAOOS</span><b id="pulseValue">ESTÁVEL</b></div><div><span>EXTRAÇÕES XP</span><b id="extractValue">0 / 3</b></div></div>
+        </section>
+        <aside class="right-rail"><div class="panel mission"><div class="section-label">ORDEM ATIVA</div><h3>DOMINE O RING</h3><p>Sobreviva ao fechamento do anel, colete recursos e extraia XP antes que o caos consuma o setor.</p><div class="objective"><span class="check">◈</span><span>Sobreviver ao primeiro pulso</span></div><div class="objective"><span class="check" id="extractCheck">◇</span><span>Extrair dados em um terminal</span></div><div class="objective"><span class="check" id="craftCheck">◇</span><span>Fabricar um item de campo</span></div></div><div class="panel feed"><div class="section-label">RÁDIO // LOG AO VIVO</div><div id="feedList"></div></div><div class="panel workshop"><div class="section-label">OFICINA DE CAMPO</div><div class="recipe"><div><b>LANÇA DE SUCATA</b><small>15 madeira + 10 metal</small></div><button id="craftBtn">FABRICAR</button></div><div class="recipe"><div><b>BANDAGEM ESTÉRIL</b><small>10 madeira + 5 componentes</small></div><button id="healBtn">USAR</button></div></div></aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

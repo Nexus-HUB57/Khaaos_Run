@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_ZEXBeacon_BluePulse",
+  "name": "NS_ZEXBeacon_BluePulse",
+  "world": "All",
+  "emitterType": "CPUSim_PointLightColumn",
+  "spawnRate": 450,
+  "maxParticles": 2400,
+  "colorLinear": [
+    0.1,
+    0.4,
+    1,
+    1
+  ],
+  "velocityRange": [
+    90,
+    240
+  ],
+  "lifetimeSeconds": 2.8,
+  "significanceRank": 1,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

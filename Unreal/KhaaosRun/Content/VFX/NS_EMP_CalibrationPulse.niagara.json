@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_EMP_CalibrationPulse",
+  "name": "NS_EMP_CalibrationPulse",
+  "world": "CIGKV",
+  "emitterType": "GPUComputeSim_RadialWave",
+  "spawnRate": 1200,
+  "maxParticles": 8000,
+  "colorLinear": [
+    0,
+    0.94,
+    1,
+    0.85
+  ],
+  "velocityRange": [
+    250,
+    600
+  ],
+  "lifetimeSeconds": 3.5,
+  "significanceRank": 1,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

@@ -1,0 +1,2 @@
+---,WorldId,MaxPlayers,RingStartRadius,RingEndRadius,RingCloseDurationSeconds,HazardDamagePerSecond,HazardTickInterval,ParkCenterX,ParkCenterY,ParkCenterZ,NiagaraHazardSystem
+Default,Priadus,75,140000,5000,600,0.002,8,0,0,100,/Game/VFX/NS_ToxicSporeFog_Priadus

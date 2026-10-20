@@ -1,0 +1,32 @@
+{
+  "packageVersion": "UE5.8-Package-Descriptor",
+  "umapPackagePath": "/Game/Maps/Barburhen/L_Barburhen_W1",
+  "levelScriptActorClass": "/Script/KhaaosRun.AKhaaosBarburhenLevel",
+  "worldPartitionEnabled": true,
+  "naniteLandscapeEnabled": true,
+  "lumenGlobalIllumination": true,
+  "staticMeshes": [
+    "/Game/Maps/Barburhen/Barburhen_Terrain.Barburhen_Terrain",
+    "/Game/Maps/Barburhen/SM_Sector_UrbanCommercial",
+    "/Game/Maps/Barburhen/SM_Sector_IndustrialLanding",
+    "/Game/Maps/Barburhen/SM_Sector_AbandonedParkCenter",
+    "/Game/Maps/Barburhen/SM_Sector_RailStationExtraction"
+  ],
+  "dataTables": [
+    "/Game/Maps/Barburhen/DT_Barburhen_MapPoints",
+    "/Game/Maps/Barburhen/DT_Barburhen_WorldConfig"
+  ],
+  "niagaraSystemsPlaced": [
+    "/Game/VFX/NS_AcidRain_Barburhen",
+    "/Game/VFX/NS_ZEXBeacon_BluePulse",
+    "/Game/VFX/NS_Loot_Pickup_Aura"
+  ],
+  "spawnedActorsSummary": {
+    "playerStartClusters": 8,
+    "totalPlayerCapacity": 100,
+    "zexTerminals": 15,
+    "sectorVolumes": 4,
+    "safeZoneController": 1,
+    "hazardVolume": 1
+  }
+}

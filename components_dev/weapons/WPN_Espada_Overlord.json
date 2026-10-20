@@ -1,0 +1,85 @@
+{
+  "id": "WPN_Espada_Overlord",
+  "name": "Espada Overlord",
+  "codename": "OVERLORD_SWORD",
+  "slot": "MELEE",
+  "category": "MELEE",
+  "category_tag": "Weapon.Category.MELEE",
+  "rarity": "LENDARIO",
+  "rarity_tag": "Loot.Rarity.LENDARIO",
+  "fire_mode": "Melee",
+  "damage": 75,
+  "fire_rate": 80,
+  "accuracy": 100,
+  "range": 4,
+  "mag": 0,
+  "reload": 0,
+  "headshot_multiplier": 1.0,
+  "speed_modifier": 0.98,
+  "ammo_type": "NONE",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 0,
+    "drag_coefficient": 0,
+    "gravity_scale": 0,
+    "penetration_depth_cm": 0
+  },
+  "recoil": {
+    "pitch_per_shot": 0,
+    "yaw_range": 0,
+    "recovery_speed": 0,
+    "pattern": []
+  },
+  "damage_falloff": {
+    "near_range_m": 0,
+    "far_range_m": 4,
+    "falloff_curve": "none",
+    "min_damage_percent": 100
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_None",
+    "tracer": "VFX_None",
+    "shell_eject": "VFX_None",
+    "impact_default": "VFX_Melee_SwordSlash",
+    "impact_flesh": "VFX_Melee_SwordBlood"
+  },
+  "sfx": {
+    "fire": "SFX_Sword_Swing",
+    "fire_suppressed": "SFX_None",
+    "reload_magout": "SFX_None",
+    "reload_magin": "SFX_None",
+    "reload_charge": "SFX_None",
+    "dryfire": "SFX_None",
+    "equip": "SFX_Sword_Equip"
+  },
+  "attachments": {
+    "optic": [],
+    "barrel": [],
+    "foregrip": [],
+    "stock": [],
+    "magazine": []
+  },
+  "economy": {
+    "price": 1650,
+    "krc_cost": 1200,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 20
+      },
+      {
+        "id": "LOOT_Material_Cristal",
+        "count": 10
+      },
+      {
+        "id": "LOOT_Material_Nucleo",
+        "count": 3
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
+}

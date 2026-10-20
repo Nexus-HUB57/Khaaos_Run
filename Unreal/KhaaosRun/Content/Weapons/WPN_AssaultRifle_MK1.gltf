@@ -1,0 +1,41 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "KhaaosRun UE5.8 WeaponAssetBuilder"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "WPN_AssaultRifle_MK1",
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SK_WPN_AssaultRifle_MK1_Root",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "extras": {
+        "id": "WPN_AssaultRifle_MK1",
+        "category": "AssaultRifle",
+        "caliber": "5.56x45mm",
+        "muzzleSocket": "Muzzle_Socket",
+        "rateOfFireRpm": 720
+      }
+    },
+    {
+      "name": "Muzzle_Socket",
+      "translation": [
+        0.68,
+        0,
+        0.08
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+---,WorldId,MaxPlayers,RingStartRadius,RingEndRadius,RingCloseDurationSeconds,HazardDamagePerSecond,HazardTickInterval,ParkCenterX,ParkCenterY,ParkCenterZ,NiagaraHazardSystem
+Default,Arukheea,80,125000,3500,600,0.0035,5,0,0,100,/Game/VFX/NS_TsunamiWall_Arukheea

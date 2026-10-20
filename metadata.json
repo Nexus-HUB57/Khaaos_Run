@@ -1,0 +1,8 @@
+{
+  "name": "Khaaos Run",
+  "description": "Khaaos Run Battle Million - Cybernetic battle royale arena with War'I arsenal, Bankhaoos financial economy, safe zone survival, and live match room system.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

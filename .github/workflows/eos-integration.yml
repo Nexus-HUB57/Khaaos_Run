@@ -1,0 +1,243 @@
+# Khaaos Run — EOS Integration Pipeline
+# Fase 2: Validate EOS configuration, test auth/lobby/matchmaking/sessions flows
+name: EOS Integration
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/EOS/**'
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/Save/**'
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/**'
+      - 'Unreal/KhaaosRun/Config/DefaultEOS.ini'
+      - 'Unreal/KhaaosRun/Config/Regions/**'
+      - 'scripts/fase2/**'
+  workflow_dispatch:
+    inputs:
+      eos_environment:
+        description: 'EOS environment (sandbox/dev/live)'
+        required: false
+        default: 'sandbox'
+
+env:
+  EOS_REGIONS: 'sa1,na1,eu1'
+
+jobs:
+  # ─── Job 1: Validate EOS Configuration ────────────────────────
+  validate-config:
+    name: Validate EOS Config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check DefaultEOS.ini
+        run: |
+          INI="Unreal/KhaaosRun/Config/DefaultEOS.ini"
+          echo "=== Validating $INI ==="
+
+          # Required sections
+          for section in "EOSIntegrationKit" "OnlineSubsystemEOS" "EOSSettings"; do
+            if grep -q "\\[$section\\]" "$INI"; then
+              echo "  ✅ [$section] found"
+            else
+              echo "  ❌ [$section] MISSING"
+              exit 1
+            fi
+          done
+
+          # Required keys
+          for key in "ProductId" "SandboxId" "DeploymentId" "ClientId" "ClientSecret"; do
+            if grep -q "$key" "$INI"; then
+              VALUE=$(grep "$key" "$INI" | head -1 | cut -d= -f2 | tr -d ' ')
+              if [[ "$VALUE" == KHAOS_* ]]; then
+                echo "  ⚠️  $key = placeholder ($VALUE) — needs Fase 2 setup"
+              else
+                echo "  ✅ $key = configured"
+              fi
+            else
+              echo "  ❌ $key MISSING"
+            fi
+          done
+
+      - name: Check Production Config
+        run: |
+          INI="Unreal/KhaaosRun/Config/Regions/DefaultEOS_Production.ini"
+          echo "=== Validating $INI ==="
+
+          if [ ! -f "$INI" ]; then
+            echo "  ❌ Production config MISSING"
+            exit 1
+          fi
+
+          # Verify all 3 regions configured
+          for region in sa1 na1 eu1; do
+            if grep -q "$region" "$INI"; then
+              echo "  ✅ Region $region configured"
+            else
+              echo "  ❌ Region $region MISSING"
+            fi
+          done
+
+          # Verify matchmaking pools
+          for pool in KR_SA1 KR_NA1 KR_EU1; do
+            if grep -q "$pool" "$INI"; then
+              echo "  ✅ Matchmaking pool $pool configured"
+            else
+              echo "  ❌ Matchmaking pool $pool MISSING"
+            fi
+          done
+
+      - name: Check EAC Integration
+        run: |
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosEACIntegration.h"
+          CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/AntiCheat/KhaaosEACIntegration.cpp"
+
+          echo "=== EAC Integration ==="
+          H_LINES=$(wc -l < "$H")
+          CPP_LINES=$(wc -l < "$CPP")
+          echo "  Header: $H_LINES lines | Implementation: $CPP_LINES lines"
+
+          # Verify 3-strike system
+          if grep -q "Strike" "$H"; then
+            echo "  ✅ 3-strike system present"
+          else
+            echo "  ❌ 3-strike system MISSING"
+          fi
+
+  # ─── Job 2: Validate EOS C++ Implementation ──────────────────
+  validate-implementation:
+    name: Validate EOS C++ Implementation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all EOS subsystems
+        run: |
+          echo "=== EOS Subsystem Validation ==="
+          SUBSYSTEMS=("Manager" "Lobby" "Matchmaking" "Session" "RegionManager")
+
+          for sub in "${SUBSYSTEMS[@]}"; do
+            H="Unreal/KhaaosRun/Source/KhaaosRun/Game/EOS/KhaaosEOS${sub}.h"
+            CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/EOS/KhaaosEOS${sub}.cpp"
+
+            if [ -f "$H" ] && [ -f "$CPP" ]; then
+              H_LINES=$(wc -l < "$H")
+              CPP_LINES=$(wc -l < "$CPP")
+
+              # Verify UCLASS and GENERATED_BODY
+              HAS_UCLASS=$(grep -c "UCLASS" "$H")
+              HAS_GEN=$(grep -c "GENERATED_" "$H")
+
+              echo "  ✅ EOS${sub}: H=${H_LINES}L CPP=${CPP_LINES}L UCLASS=${HAS_UCLASS} GEN=${HAS_GEN}"
+            else
+              echo "  ❌ EOS${sub}: MISSING"
+              exit 1
+            fi
+          done
+
+      - name: Check Cloud Save Production
+        run: |
+          H="Unreal/KhaaosRun/Source/KhaaosRun/Game/Save/KhaaosCloudSaveProduction.h"
+          CPP="Unreal/KhaaosRun/Source/KhaaosRun/Game/Save/KhaaosCloudSaveProduction.cpp"
+
+          echo "=== Cloud Save Production ==="
+          H_LINES=$(wc -l < "$H")
+          CPP_LINES=$(wc -l < "$CPP")
+          echo "  Header: $H_LINES lines | Implementation: $CPP_LINES lines"
+
+          # Verify key features
+          for feature in "LZ4\|Compress" "SHA256\|Checksum" "MergeStrategy" "AutoSave" "SchemaMigration" "RetryConfig"; do
+            if grep -qP "$feature" "$H"; then
+              echo "  ✅ $feature present"
+            else
+              echo "  ❌ $feature MISSING"
+            fi
+          done
+
+  # ─── Job 3: EOS Auth Smoke Test ──────────────────────────────
+  smoke-test:
+    name: EOS Auth Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test EOS Auth Endpoint
+        env:
+          EOS_CLIENT_ID: ${{ secrets.EOS_CLIENT_ID }}
+          EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
+        run: |
+          if [ -z "$EOS_CLIENT_ID" ] || [ -z "$EOS_CLIENT_SECRET" ]; then
+            echo "⚠️  EOS credentials not configured (secrets.EOS_CLIENT_ID/SECRET)"
+            echo "    Run scripts/fase2/setup_eos_production.sh to configure"
+            echo "    Skipping auth smoke test"
+            exit 0
+          fi
+
+          echo "=== Testing EOS Auth ==="
+          # Exchange credentials for access token
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.epicgames.com/auth/v1/oauth/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -u "${EOS_CLIENT_ID}:${EOS_CLIENT_SECRET}" \
+            -d "grant_type=client_credentials&scope=account")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "  ✅ EOS auth successful (HTTP $HTTP_CODE)"
+          else
+            echo "  ❌ EOS auth failed (HTTP $HTTP_CODE)"
+            echo "  Response: $BODY"
+            exit 1
+          fi
+
+  # ─── Job 4: Verify GitHub Secrets ─────────────────────────────
+  verify-secrets:
+    name: Verify EOS GitHub Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check EOS secrets
+        run: |
+          echo "=== GitHub Secrets Status ==="
+          SECRETS=("EOS_PRODUCT_ID" "EOS_SANDBOX_ID" "EOS_DEPLOYMENT_ID" "EOS_CLIENT_ID" "EOS_CLIENT_SECRET")
+          CONFIGURED=0
+
+          for secret in "${SECRETS[@]}"; do
+            # Can't read secret values, but can check if workflow can access
+            echo "  📋 $secret: configured in repo settings?"
+            CONFIGURED=$((CONFIGURED + 1))
+          done
+
+          echo ""
+          echo "  💡 Run scripts/fase2/setup_eos_production.sh to configure all secrets"
+          echo "  💡 Or use: gh secret set $secret --body <value>"
+
+  # ─── Job 5: Region Connectivity Check ─────────────────────────
+  region-check:
+    name: Region Connectivity
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [sa1, na1, eu1]
+    steps:
+      - name: Ping EOS ${{ matrix.region }}
+        run: |
+          HOSTS=(
+            "sa1:São Paulo:epicmediastore-a.akamaihd.net"
+            "na1:Virginia:epicgames-download1.akamaized.net"
+            "eu1:Frankfurt:epicgames-download2.akamaized.net"
+          )
+
+          for entry in "${HOSTS[@]}"; do
+            IFS=':' read -r reg name host <<< "$entry"
+            if [ "$reg" = "${{ matrix.region }}" ]; then
+              echo "=== $name ($reg) ==="
+              # Measure latency
+              LATENCY=$(curl -s -o /dev/null -w "%{time_connect}" "https://$host" 2>/dev/null || echo "timeout")
+              echo "  Latency: ${LATENCY}s"
+              break
+            fi
+          done

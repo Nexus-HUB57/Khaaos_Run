@@ -1,0 +1,174 @@
+# Khaaos Run — PR Automation
+# Auto-label, validate, and gate pull requests
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Job 1: Label PR ──────────────────────────────────────────
+  label:
+    name: Auto-Label
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label by path
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+  # ─── Job 2: Size Check ────────────────────────────────────────
+  size:
+    name: PR Size
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate size
+        id: size
+        run: |
+          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | wc -l)
+          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions -q '.additions')
+          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions -q '.deletions')
+          TOTAL=$((ADDITIONS + DELETIONS))
+
+          if [ "$TOTAL" -lt 100 ]; then SIZE="XS";
+          elif [ "$TOTAL" -lt 300 ]; then SIZE="S";
+          elif [ "$TOTAL" -lt 1000 ]; then SIZE="M";
+          elif [ "$TOTAL" -lt 3000 ]; then SIZE="L";
+          else SIZE="XL"; fi
+
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          echo "📊 PR Size: $SIZE ($FILES files, +$ADDITIONS/-$DELETIONS)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add size label
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --add-label "size/${{ steps.size.outputs.size }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── Job 3: Check Conventional Commits ────────────────────────
+  conventional:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        run: |
+          echo "=== Checking Conventional Commits ==="
+          VALID_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+          PATTERN="^(${VALID_TYPES})(\(.+\))?!?: .+"
+
+          # Get PR commits
+          COMMITS=$(git log --format='%s' origin/main..HEAD)
+
+          INVALID=0
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -qP "$PATTERN"; then
+              echo "  ✅ $msg"
+            else
+              echo "  ❌ $msg"
+              INVALID=$((INVALID + 1))
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$INVALID" -gt 0 ]; then
+            echo ""
+            echo "❌ $INVALID commit(s) don't follow Conventional Commits"
+            echo "   Format: type(scope): description"
+            echo "   Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          fi
+
+  # ─── Job 4: Changed Files Summary ─────────────────────────────
+  summary:
+    name: Changed Files Summary
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate summary
+        run: |
+          echo "## 📋 Changed Files Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Categorize by subsystem
+          UE5_CPP=$(git diff --name-only origin/main..HEAD -- 'Unreal/**.cpp' 'Unreal/**.h' | wc -l)
+          UE5_INI=$(git diff --name-only origin/main..HEAD -- 'Unreal/**.ini' | wc -l)
+          SERVER_TS=$(git diff --name-only origin/main..HEAD -- 'server/**.ts' | wc -l)
+          CLIENT_TSX=$(git diff --name-only origin/main..HEAD -- 'client/**' 'shared/**' | wc -l)
+          CONSOLE_DEV=$(git diff --name-only origin/main..HEAD -- 'server/game/marshalConsole.ts' 'server/game/orchestration.ts' 'client/src/pages/marshal-console.tsx' 'client/src/lib/marshal-console-api.ts' 'docs/API_MARECHAL_CONTROL_PANEL.md' | wc -l)
+          GAME_JS=$(git diff --name-only origin/main..HEAD -- 'game-runtime/**' | wc -l)
+          SCRIPTS=$(git diff --name-only origin/main..HEAD -- 'scripts/**' | wc -l)
+          INFRA=$(git diff --name-only origin/main..HEAD -- 'infra/**' '.github/**' | wc -l)
+          DOCS=$(git diff --name-only origin/main..HEAD -- 'docs/**' '*.md' | wc -l)
+
+          echo "| Subsystem | Files Changed |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| UE5 C++ | $UE5_CPP |" >> $GITHUB_STEP_SUMMARY
+          echo "| UE5 Config | $UE5_INI |" >> $GITHUB_STEP_SUMMARY
+          echo "| Server (TS) | $SERVER_TS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Client & Shared (TS/TSX) | $CLIENT_TSX |" >> $GITHUB_STEP_SUMMARY
+          echo "| Console Subsystem (Protected) | $CONSOLE_DEV |" >> $GITHUB_STEP_SUMMARY
+          echo "| Game Runtime | $GAME_JS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scripts | $SCRIPTS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Infra/CI | $INFRA |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docs | $DOCS |" >> $GITHUB_STEP_SUMMARY
+
+  # ─── Job 5: Console & Non-Destructive Deletion Guard ──────────
+  console-and-deletion-guard:
+    name: Console & Non-Destructive Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify no accidental deletions of Console or shared Dev files
+        run: |
+          echo "=== Verifying Protected Console Files & Non-Destructive Diff ==="
+          DELETED=$(git diff --name-only --diff-filter=D origin/main...HEAD || true)
+          if [ -n "$DELETED" ]; then
+            echo "⚠️ Tracked files deleted in this PR:"
+            echo "$DELETED"
+          else
+            echo "✅ Zero tracked file deletions detected."
+          fi
+
+          # Ensure critical Console files still exist in working tree
+          for console_file in \
+            "server/game/marshalConsole.ts" \
+            "server/game/orchestration.ts" \
+            "client/src/pages/marshal-console.tsx" \
+            "client/src/lib/marshal-console-api.ts" \
+            "docs/API_MARECHAL_CONTROL_PANEL.md" \
+            "tests/official/marshal-console-client.test.ts" \
+            "tests/official/marshal-console-routes.test.ts"; do
+            if [ ! -f "$console_file" ]; then
+              echo "❌ CRITICAL: Protected Console file '$console_file' was removed!"
+              exit 1
+            fi
+          done
+          echo "✅ All Protected Console files are present and intact."
+

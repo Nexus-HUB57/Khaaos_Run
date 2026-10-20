@@ -1,0 +1,130 @@
+# ══════════════════════════════════════════════════════════════
+# Khaaos Run — Alertmanager Configuration
+# Routes alerts to Discord + Slack with severity-based routing
+# ══════════════════════════════════════════════════════════════
+
+global:
+  resolve_timeout: 5m
+  # Slack API URL (set via env ALERTMANAGER_SLACK_API_URL)
+  slack_api_url: '{{ env "ALERTMANAGER_SLACK_API_URL" }}'
+
+# ─── Templates ─────────────────────────────────────────────────
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# ─── Route Tree ────────────────────────────────────────────────
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'discord-default'
+
+  routes:
+    # ── Critical alerts: page Discord + Slack immediately ──────
+    - match:
+        severity: critical
+      receiver: 'discord-critical'
+      repeat_interval: 15m
+      routes:
+        - match:
+            team: oncall
+          receiver: 'discord-critical'
+          continue: true
+        - match:
+            team: security
+          receiver: 'discord-security'
+          continue: true
+        - match:
+            team: economy
+          receiver: 'discord-economy'
+
+    # ── Warning alerts: notify Discord, log to Slack ───────────
+    - match:
+        severity: warning
+      receiver: 'discord-warning'
+      repeat_interval: 2h
+
+    # ── Info alerts: Slack only ────────────────────────────────
+    - match:
+        severity: info
+      receiver: 'slack-info'
+
+# ─── Receivers ────────────────────────────────────────────────
+receivers:
+  # Default
+  - name: 'discord-default'
+    discord_configs:
+      - webhook_url: '{{ env "DISCORD_WEBHOOK_URL" }}'
+        send_resolved: true
+        title: '[Khaaos] {{ .GroupLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}
+          **{{ .Annotations.summary }}**
+          {{ .Annotations.description }}
+          {{ end }}
+
+  # Critical
+  - name: 'discord-critical'
+    discord_configs:
+      - webhook_url: '{{ env "DISCORD_WEBHOOK_URL" }}'
+        send_resolved: true
+        title: '[Khaaos CRITICAL] {{ .GroupLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}
+          **{{ .Annotations.summary }}**
+          {{ .Annotations.description }}
+          Labels: {{ .Labels }}
+          {{ end }}
+
+  # Security
+  - name: 'discord-security'
+    discord_configs:
+      - webhook_url: '{{ env "DISCORD_SECURITY_WEBHOOK_URL" }}'
+        send_resolved: true
+        title: '[Khaaos SECURITY] {{ .GroupLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}
+          **{{ .Annotations.summary }}**
+          {{ .Annotations.description }}
+          {{ end }}
+
+  # Economy
+  - name: 'discord-economy'
+    discord_configs:
+      - webhook_url: '{{ env "DISCORD_ECONOMY_WEBHOOK_URL" }}'
+        send_resolved: true
+        title: '[Khaaos ECONOMY] {{ .GroupLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}
+          **{{ .Annotations.summary }}**
+          {{ .Annotations.description }}
+          {{ end }}
+
+  # Warning
+  - name: 'discord-warning'
+    discord_configs:
+      - webhook_url: '{{ env "DISCORD_WEBHOOK_URL" }}'
+        send_resolved: true
+        title: '[Khaaos Warning] {{ .GroupLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}
+          {{ .Annotations.summary }}
+          {{ end }}
+
+  # Slack Info
+  - name: 'slack-info'
+    slack_configs:
+      - channel: '#khaaos-monitoring'
+        send_resolved: false
+        title: '[Khaaos] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+# ─── Inhibition Rules ─────────────────────────────────────────
+inhibit_rules:
+  # Critical inhibits warning for same alert
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']

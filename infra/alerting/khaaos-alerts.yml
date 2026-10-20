@@ -1,0 +1,133 @@
+# ============================================================================
+# Khaaos Run — Prometheus Alerting Rules (Fase 3)
+# ============================================================================
+# Alerts fire when metrics exceed thresholds.
+# Notifications go to Discord + Slack via AlertManager.
+# ============================================================================
+
+groups:
+  # ─── Critical Alerts (page immediately) ────────────────────────────────────
+  - name: khaaos_critical
+    rules:
+      - alert: KhaaosServerDown
+        expr: up{job="khaaos_server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: oncall
+        annotations:
+          summary: "Khaaos server is DOWN"
+          description: "Server {{ $labels.instance }} has been down for >1 minute."
+
+      - alert: KhaaosHighRTT
+        expr: histogram_quantile(0.95, rate(khaaos_net_rtt_bucket[5m])) > 150
+        for: 5m
+        labels:
+          severity: critical
+          team: gameplay
+        annotations:
+          summary: "High network RTT p95 (>150ms)"
+          description: "95th percentile RTT is {{ $value }}ms — exceeds 150ms threshold."
+
+      - alert: KhaaosCrashLoop
+        expr: rate(khaaos_server_crashes_total[10m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: oncall
+        annotations:
+          summary: "Server crash loop detected"
+          description: "{{ $value }} crashes/min in last 10m."
+
+      - alert: KhaaosAntiCheatSpike
+        expr: rate(khaaos_anticheat_violations_total[5m]) > 5
+        for: 3m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Anti-cheat violation spike"
+          description: "{{ $value }} violations/s — possible attack or cheat wave."
+
+      - alert: KhaaosDDoSAttack
+        expr: rate(khaaos_ddos_blocks_total[1m]) > 50
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "DDoS attack detected"
+          description: "{{ $value }} blocks/s — active DDoS mitigation."
+
+      - alert: KhaaosMatchmakingFailure
+        expr: rate(khaaos_matchmaking_failures_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: gameplay
+        annotations:
+          summary: "Matchmaking failure rate high"
+          description: "{{ $value }} failures/s — players can't find matches."
+
+  # ─── Warning Alerts (investigate soon) ──────────────────────────────────────
+  - name: khaaos_warning
+    rules:
+      - alert: KhaaosHighMemory
+        expr: khaaos_server_memory_used_bytes / khaaos_server_memory_total_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Server memory >85%"
+          description: "Memory usage at {{ $value | humanizePercentage }}."
+
+      - alert: KhaaosHighCPU
+        expr: rate(khaaos_server_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Server CPU >80%"
+          description: "CPU usage at {{ $value | humanizePercentage }}."
+
+      - alert: KhaaosLowPlayerCount
+        expr: khaaos_players_active_total < 5 AND khaaos_matches_active_total > 0
+        for: 30m
+        labels:
+          severity: warning
+          team: gameplay
+        annotations:
+          summary: "Low player count in active matches"
+          description: "Only {{ $value }} players across active matches."
+
+      - alert: KhaaosEconomyAnomaly
+        expr: abs(rate(khaaos_economy_krc_earned_total[5m]) - rate(khaaos_economy_krc_spent_total[5m])) > 1000
+        for: 15m
+        labels:
+          severity: warning
+          team: economy
+        annotations:
+          summary: "KRC economy imbalance"
+          description: "Earn vs spend delta: {{ $value }} KRC/s — possible exploit."
+
+      - alert: KhaaosRateLimitHigh
+        expr: rate(khaaos_ratelimit_rejected_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High rate limit rejections"
+          description: "{{ $value }} requests/s rejected — unusual traffic pattern."
+
+      - alert: KhaaosEOSAuthFailures
+        expr: rate(khaaos_eos_auth_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "EOS auth failure rate elevated"
+          description: "{{ $value }} auth failures/s — check EOS service status."

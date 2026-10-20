@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_OilFireSmoke_Ckesalth",
+  "name": "NS_OilFireSmoke_Ckesalth",
+  "world": "Ckesalth",
+  "emitterType": "GPUComputeSim_ThermalPlume",
+  "spawnRate": 3500,
+  "maxParticles": 28000,
+  "colorLinear": [
+    0.94,
+    0.26,
+    0.26,
+    0.85
+  ],
+  "velocityRange": [
+    120,
+    480
+  ],
+  "lifetimeSeconds": 5,
+  "significanceRank": 0,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

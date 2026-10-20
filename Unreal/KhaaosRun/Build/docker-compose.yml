@@ -1,0 +1,172 @@
+# =============================================================================
+# Khaaos Run — Local Server Orchestration | Devs Ph.D
+# =============================================================================
+# Usage:
+#   docker compose up -d              # Start all services
+#   docker compose up -d khaaos-server # Start game server only
+#   docker compose logs -f             # Follow all logs
+#   docker compose down               # Stop and remove containers
+# =============================================================================
+
+version: "3.9"
+
+x-common-env: &common-env
+  SERVER_NAME: ${SERVER_NAME:-KhaaosRun-Dev}
+  MAX_PLAYERS: ${MAX_PLAYERS:-100}
+  MAP_NAME: ${MAP_NAME:-Main}
+  GAME_MODE: ${GAME_MODE:-KhaaosGameMode}
+  TICK_RATE: ${TICK_RATE:-60}
+  REGION: ${REGION:-us-east-1}
+
+services:
+  # ── Khaaos Run Dedicated Server ──────────────────────────────────────────────
+  khaaos-server:
+    build:
+      context: ..
+      dockerfile: Build/Dockerfile
+    container_name: khaaos-server
+    restart: unless-stopped
+    ports:
+      - "7777:7777/udp"   # Game traffic
+      - "7778:7778/udp"   # Beacon
+      - "27015:27015/udp" # Query
+    environment:
+      <<: *common-env
+      REDIS_URL: redis://redis:6379
+      ECONOMY_API_URL: http://economy-api:3000
+    volumes:
+      - server-logs:/home/khaaos/server/KhaaosRun/Saved/Logs
+      - server-config:/home/khaaos/server/KhaaosRun/Saved/Config
+      - server-cloud:/home/khaaos/server/KhaaosRun/Saved/Cloud
+    networks:
+      - khaaos-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      economy-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f KhaaosRunServer > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+
+  # ── Economy Microservice ─────────────────────────────────────────────────────
+  economy-api:
+    build:
+      context: ../../../server
+      dockerfile: Dockerfile
+    container_name: khaaos-economy-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-}
+    networks:
+      - khaaos-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # ── Redis — Session Cache & Rate Limiting ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: khaaos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - khaaos-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ── Prometheus — Metrics Collection ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: khaaos-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - khaaos-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Grafana — Monitoring Dashboard ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: khaaos-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-khaaos-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - khaaos-net
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+# ── Volumes ──────────────────────────────────────────────────────────────────────
+volumes:
+  server-logs:
+    driver: local
+  server-config:
+    driver: local
+  server-cloud:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ── Network ──────────────────────────────────────────────────────────────────────
+networks:
+  khaaos-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

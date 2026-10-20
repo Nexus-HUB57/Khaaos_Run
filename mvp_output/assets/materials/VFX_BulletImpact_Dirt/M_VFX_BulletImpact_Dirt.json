@@ -1,0 +1,31 @@
+{
+  "material_id": "M_VFX_BulletImpact_Dirt",
+  "material_instance_id": "MI_VFX_BulletImpact_Dirt_Default",
+  "shader": "Unlit",
+  "properties": {
+    "base_color": {
+      "r": 1.0,
+      "g": 0.9,
+      "b": 0.5,
+      "a": 1.0
+    },
+    "roughness": 1.0,
+    "metallic": 0.0,
+    "emissive": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 0.0,
+      "a": 0.0
+    },
+    "opacity": 1.0,
+    "two_sided": false
+  },
+  "textures": {
+    "diffuse": "T_VFX_BulletImpact_Dirt_D",
+    "normal": "T_VFX_BulletImpact_Dirt_N",
+    "orm": "T_VFX_BulletImpact_Dirt_ORM",
+    "emissive": "T_VFX_BulletImpact_Dirt_E"
+  },
+  "blend_mode": "Opaque",
+  "shading_model": "Unlit"
+}

@@ -1,0 +1,24 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_Loot_Pickup_Aura",
+  "name": "NS_Loot_Pickup_Aura",
+  "world": "All",
+  "emitterType": "CPUSim_RarityHelix",
+  "spawnRate": 180,
+  "maxParticles": 600,
+  "colorLinear": [
+    0.95,
+    0.65,
+    0.1,
+    0.85
+  ],
+  "velocityRange": [
+    25,
+    80
+  ],
+  "lifetimeSeconds": 2.5,
+  "significanceRank": 3,
+  "poolingEnabled": true,
+  "autoActivate": true
+}

@@ -1,0 +1,101 @@
+# =============================================================================
+# Khaaos Run — PR Automation
+# Auto-label, auto-assign, and validation for pull requests
+# =============================================================================
+name: PR Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Auto-label PRs based on changed paths
+  # ---------------------------------------------------------------------------
+  auto-label:
+    name: Auto-label PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Label based on changed paths
+        uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yml
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Validate PR has required information
+  # ---------------------------------------------------------------------------
+  validate-pr:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check PR description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          # Check for conventional commit prefix in title
+          if ! echo "$PR_TITLE" | grep -qP "^(feat|fix|refactor|test|docs|chore|ci|perf|build|style)(\(.+\))?:\s"; then
+            echo "::warning::PR title should follow conventional commits: feat|fix|refactor|test|docs|chore|ci(scope): description"
+          else
+            echo "✅ PR title follows conventional commits"
+          fi
+
+          # Check description is not empty
+          if [[ -z "$PR_BODY" ]]; then
+            echo "::warning::PR description is empty — please add a summary of changes"
+          else
+            echo "✅ PR has description"
+          fi
+
+      - name: Check for breaking changes
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        if: false  # Enable when needed
+
+  # ---------------------------------------------------------------------------
+  # Post review checklist comment
+  # ---------------------------------------------------------------------------
+  review-checklist:
+    name: Post Review Checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: github.event.action == 'opened'
+    steps:
+      - name: Post checklist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const checklist = `## 📋 UE5 Code Review Checklist
+
+            - [ ] C++ headers follow ue5-style-guide naming (SM_, SK_, M_, MI_, T_, BP_)
+            - [ ] All UCLASS/USTRUCT/UENUM have GENERATED_BODY()
+            - [ ] Server-authoritative logic uses Server RPCs (not Client)
+            - [ ] Gameplay Abilities use tag-based activation (not hardcoded IDs)
+            - [ ] Replicated properties have proper DOREPLIFETIME macros
+            - [ ] No hardcoded credentials or API keys
+            - [ ] Git LFS tracks all binary assets (.uasset, .umap, .fbx)
+            - [ ] Iris replication markers on network-relevant actors
+            - [ ] SignificanceManager tags for distance-based relevance
+            - [ ] EconomyBridge calls are async with timeout handling
+            - [ ] No merge conflicts with other Devs' active branches`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: checklist
+            });

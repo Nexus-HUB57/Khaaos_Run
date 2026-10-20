@@ -1,0 +1,69 @@
+# Khaaos Run — Grafana Dashboard Provisioning
+# Auto-load all Khaaos dashboards on first launch
+apiVersion: 1
+
+providers:
+  # ── Khaaos Production Dashboards ──────────────────────────────
+  - name: 'Khaaos Production'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
+
+  # ── Khaaos Match Dashboards ───────────────────────────────────
+  - name: 'Khaaos Match'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/match
+      foldersFromFilesStructure: true
+
+  # ── Khaaos Economy Dashboards ─────────────────────────────────
+  - name: 'Khaaos Economy'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/economy
+      foldersFromFilesStructure: true
+
+  # ── Khaaos World Dashboards ───────────────────────────────────
+  - name: 'Khaaos World'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/world
+      foldersFromFilesStructure: true
+
+  # ── Khaaos Security Dashboards ────────────────────────────────
+  - name: 'Khaaos Security'
+    orgId: 1
+    folder: 'Khaaos Run'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/security
+      foldersFromFilesStructure: true
+
+  # ── Infrastructure Dashboards ─────────────────────────────────
+  - name: 'Infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards/infra

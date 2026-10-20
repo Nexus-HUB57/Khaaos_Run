@@ -1,0 +1,25 @@
+{
+  "assetType": "UNiagaraSystem",
+  "engineVersion": "5.8",
+  "packagePath": "/Game/VFX/NS_MuzzleFlash_Shotgun",
+  "name": "NS_MuzzleFlash_Shotgun",
+  "world": "All",
+  "emitterType": "CPUSim_BurstWideCone",
+  "spawnRate": 0,
+  "burstCount": 85,
+  "maxParticles": 200,
+  "colorLinear": [
+    1,
+    0.58,
+    0.12,
+    1
+  ],
+  "velocityRange": [
+    650,
+    1800
+  ],
+  "lifetimeSeconds": 0.11,
+  "significanceRank": 2,
+  "poolingEnabled": true,
+  "autoActivate": true
+}
