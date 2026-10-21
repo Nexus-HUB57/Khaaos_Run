@@ -19,6 +19,7 @@
 - [Mundos Oficiais (W1–W4)](#mundos-oficiais-w1w4)
 - [Protocolos de Ingresso (Zu)](#protocolos-de-ingresso-zu)
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
+- [Figuras de alistamento](#figuras-de-alistamento)
 - [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
 - [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
 - [CI/CD e Automação](#cicd-e-automação)
@@ -286,6 +287,23 @@ Em todos os casos:
 - **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
 > **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+
+---
+
+## Figuras de alistamento
+
+O corpo não altera XP, dano nem saque. Sexo e origem são identidade visual. O kit de Zheers é o mesmo para todos: jaqueta olive, kevlar, máscara no peito, faca à direita de quem olha.
+
+| Id | Nome | Sexo | Origem | Marca | Render |
+|----|------|------|--------|-------|--------|
+| kane | Idris Kane | Masculino | Afro-brasileiro | Queimadura no pescoço | Placa 3D em `client/public/figures/kane.jpg` |
+| puri | Yara Puri | Feminino | Indígena amazônica | Marca de nascença sob o olho | Ficha fechada, placa pendente |
+| voss | Leandro Voss | Masculino | Levantina | Nariz quebrado | Ficha fechada, placa pendente |
+| okada | Mei Okada | Feminino | Nikkei | Cicatriz na têmpora | Ficha fechada, placa pendente |
+| hald | Soren Hald | Masculino | Norte-europeia | Orelha comida por estilhaço | Ficha fechada, placa pendente |
+| okonkwo | Nia Okonkwo | Feminino | África Ocidental | Heterocromia e diastema | Ficha fechada, placa pendente |
+
+Catálogo: [`shared/figures.ts`](shared/figures.ts). A placa é render 3D realista de estúdio, não ilustração. A malha riggada (GLB) ainda não está no repositório.
 
 ---
 
