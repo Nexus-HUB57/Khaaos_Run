@@ -79,6 +79,47 @@ test("overview rejeita mundo inválido", async () => {
   assert.equal((await response.json() as any).error.code, "INVALID_REQUEST");
 });
 
+test("stream SSE exige sessão/allowlist e envia snapshot inicial sem cache", async () => {
+  const path = `${baseUrl}/api/console/v1/marshal/telemetry/stream?worldId=W2`;
+  const anonymous = await fetch(path);
+  assert.equal(anonymous.status, 401);
+  const unauthorized = await fetch(path, { headers: { "x-test-user-id": "ordinary-player" } });
+  assert.equal(unauthorized.status, 403);
+
+  const controller = new AbortController();
+  try {
+    const response = await fetch(path, { headers: { "x-test-user-id": "console-admin" }, signal: controller.signal });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /text\/event-stream/);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    const reader = response.body!.getReader();
+    let buffered = "";
+    for (let attempt = 0; attempt < 5 && !buffered.includes('"worldId":"W2"'); attempt += 1) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffered += new TextDecoder().decode(chunk.value);
+    }
+    assert.match(buffered, /event: telemetry/);
+    assert.match(buffered, /"worldId":"W2"/);
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  } finally {
+    controller.abort();
+  }
+});
+
+test("eventos narrativos refletem sinais atuais e não oferecem execução", async () => {
+  const response = await fetch(`${baseUrl}/api/console/v1/marshal/narrative-events?worldId=W2`, {
+    headers: { "x-test-user-id": "console-admin" },
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json() as any;
+  assert.equal(data.worldId, "W2");
+  assert.equal(data.source, "server-runtime-telemetry");
+  assert.deepEqual(data.events, []);
+  assert.deepEqual(data.policy, { proposalOnly: true, humanReviewRequired: true, executable: false });
+});
+
 test("requisições concorrentes com a mesma chave de idempotência compartilham um único conselho", async () => {
   const key = "00000000-0000-4000-8000-000000000004";
   const send = () => fetch(`${baseUrl}/api/console/v1/marshal/councils`, {

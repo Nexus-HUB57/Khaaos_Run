@@ -149,7 +149,13 @@ Política de conflito no `resolveGovernanceConflicts()`:
 4. A precedência não pode ser alterada por confiança, ordem de chegada ou cargo ficcional. Competência por agente é verificada: Marechal (segurança/integridade/operações), King (economia), Uryan (diplomacia).
 5. Todos os resultados carregam `executable: false`; não há escrita nem resolução automática de saldo, partida, aliança ou publicação. Falhas e casos parciais sempre falham fechados.
 
-Contrato HTTP ativo, exemplos, controles de segurança e limites de telemetria: [`API_MARECHAL_CONTROL_PANEL.md`](API_MARECHAL_CONTROL_PANEL.md).
+Contrato HTTP ativo, SSE, drafts narrativos, exemplos, controles de segurança e limites de telemetria: [`API_MARECHAL_CONTROL_PANEL.md`](API_MARECHAL_CONTROL_PANEL.md). Os princípios editoriais e gatilhos determinísticos estão em [`SPECIAL_CLASS_NARRATIVE_GUIDELINES.md`](SPECIAL_CLASS_NARRATIVE_GUIDELINES.md).
+
+### Visualização em tempo real e camada narrativa
+
+O painel consome `GET /telemetry/stream?worldId=...` via SSE autenticado; o servidor emite snapshot imediato e amostras a cada 2 segundos. O cliente atualiza o cache de overview sem recriar a conexão a cada amostra e mantém polling de fallback. O stream é limitado a 100 conexões por processo e 3 por operador; desconexão remove o subscriber.
+
+`buildSpecialClassNarrativeEvents()` cria zero ou mais drafts determinísticos de As Docas em Silêncio (fila ≥ 3), O Farol da Espera (p95 ≥ 60 s) e A Mesa do Anel (ocupação ≥ 80%). Todos usam apenas sinais do snapshot do servidor e dão uma contribuição a Henricks, Krapulla e Uryan. São rascunhos ficcionais com `needsHumanReview: true` e `executable: false`; nunca publicam mensagens, afirmam dados de mercado/diplomacia indisponíveis ou alteram gameplay.
 
 ### Defesa contra abuso e falhas
 

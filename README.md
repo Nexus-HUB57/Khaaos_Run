@@ -528,6 +528,7 @@ Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
 | **EOS Integration** | `eos-integration.yml` | Push EOS/Save/AntiCheat | Validate EOS config (3 regions), C++ implementation audit, auth smoke test, region connectivity |
 | **Economy Validation** | `economy-validation.yml` | Push Economy | Ledger integrity audit (15 tx types, SHA256, escrow), Compliance (KYC/AML/BCB/IRPF), bridge validation, world progression gates |
 | **Deploy** | `deploy.yml` | Push main + manual | Pre-deploy validation, build Docker images, deploy staging (Render) / production (3 regions), health checks, notifications |
+| **Marshal Console Load** | `marshal-console-load.yml` | Every PR + manual | 400 overview reads + 100 council simulations + 40 SSE streams; latency assertions and 30-day artifact |
 | **Stress Test** | `stress-test.yml` | Manual + weekly | 100/500/1000/2000 bot profiles, ramp-up strategies, region targeting, Prometheus push, JSON reporting |
 | **Release** | `release.yml` | Tag v* + manual | Version + changelog, build all artifacts, Docker images (server + UE5), GitHub Release, notifications |
 | **PR Checks** | `pr-checks.yml` | PR events | Auto-label by path, size classification, conventional commits validation, changed files summary |
@@ -876,6 +877,7 @@ Semana  1   4   8   11  15  23  28
 ## Referências
 - [Arquitetura dos mundos e agentes especiais](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md)
 - [API ativa do painel do Marechal, telemetria e persistência](docs/API_MARECHAL_CONTROL_PANEL.md)
+- [Diretrizes narrativas da Classe Especial](docs/SPECIAL_CLASS_NARRATIVE_GUIDELINES.md)
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
 - [Autenticação realtime](docs/REALTIME_AUTH.md)
 - [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)

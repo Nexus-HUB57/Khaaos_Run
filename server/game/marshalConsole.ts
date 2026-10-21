@@ -6,6 +6,8 @@ import { roomManager } from "./RoomManager";
 import { PostgresMarshalConsoleRepository, type MarshalConsoleRepository, type NewPersistedCouncil, type NewPersistedProposal, type PersistedCouncil, type PersistedProposal } from "./marshalConsoleRepository";
 import { runSpecialClassCouncil, type AgentId, type CouncilAgentAdapter, type CouncilRequest, type CouncilResult, type GovernanceFinding, type WorldId, SPECIAL_AGENTS } from "./orchestration";
 import { WORLD_CATALOG, WORLD_IDS, type WorldTelemetrySnapshot } from "./worldTelemetry";
+import { createMarshalTelemetryStream } from "./marshalTelemetryStream";
+import { buildSpecialClassNarrativeEvents } from "./specialClassNarrative";
 
 const worldIdSchema = z.enum(WORLD_IDS as [WorldId, ...WorldId[]]);
 const councilBodySchema = z.object({
@@ -246,6 +248,22 @@ export function registerMarshalConsoleRoutes(app: Express, options: MarshalConso
   const noStore: RequestHandler = (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); };
   const protect = [noStore, isAuthenticated, createMarshalConsoleGuard(options.operatorIds)];
   const prefix = "/api/console/v1/marshal";
+
+  const telemetryStream = createMarshalTelemetryStream((worldId) => roomManager.getWorldTelemetry(worldId));
+  app.get(`${prefix}/telemetry/stream`, ...protect, telemetryStream);
+  app.get(`${prefix}/narrative-events`, ...protect, (req, res) => {
+    const correlation = correlationId(req);
+    const parsedWorld = worldIdSchema.safeParse(req.query.worldId);
+    if (!parsedWorld.success) return error(res, 400, "INVALID_REQUEST", "worldId inválido ou ausente.", correlation);
+    const telemetry = roomManager.getWorldTelemetry(parsedWorld.data);
+    return res.json({
+      worldId: parsedWorld.data,
+      generatedAt: telemetry.observedAt,
+      source: "server-runtime-telemetry",
+      events: buildSpecialClassNarrativeEvents(telemetry),
+      policy: { proposalOnly: true, humanReviewRequired: true, executable: false },
+    });
+  });
 
   app.get(`${prefix}/overview`, ...protect, (req, res) => {
     const correlation = correlationId(req);
