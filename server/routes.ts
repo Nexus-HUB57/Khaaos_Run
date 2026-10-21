@@ -18,6 +18,10 @@ import { generateMatchContent, generateLootField } from "./game/ProceduralGenera
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
+import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
+import { economyService } from "./game/economyService";
+import { isValidIdempotencyKey } from "./game/economyMoney";
+import { canUseItemOutsideMatch } from "@shared/war-i";
 import { distributedState } from "./game/DistributedState";
 import {
   emptyMutationInput,
@@ -100,18 +104,13 @@ export function registerApiRoutes(app: Express): void {
     return parsed.data;
   };
 
-  const sendFinancialError = (res: any, error: any) => {
-    if (error?.code === "INSUFFICIENT_FUNDS") {
-      return res.status(402).json({ message: "Saldo insuficiente", required: error.required, available: error.available });
+  const readIdempotencyKey = (req: any, res: any): string | null => {
+    const key = req.get?.("Idempotency-Key") ?? req.headers?.["idempotency-key"];
+    if (!isValidIdempotencyKey(key)) {
+      res.status(400).json({ message: "Informe um Idempotency-Key válido (16 a 128 caracteres)." });
+      return null;
     }
-    if (error?.code === "LOAN_LIMIT") return res.status(403).json({ message: error.message });
-    if (error?.code === "SALARY_ALREADY_CLAIMED") return res.status(400).json({ message: error.message });
-    if (error?.message === "Empréstimo não encontrado" || error?.message === "Item não encontrado") {
-      return res.status(404).json({ message: error.message });
-    }
-    if (error?.message === "Empréstimo já pago") return res.status(409).json({ message: error.message });
-    console.error("Financial operation failed", { code: error?.code, message: error?.message });
-    return res.status(500).json({ message: "Internal server error" });
+    return key;
   };
 
   // ── BANK ─────────────────────────────────────────────────────────────────
@@ -127,13 +126,11 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const { amountUsd } = api.bank.deposit.input.parse(req.body);
-      const amountKrc = amountUsd * schema.KRC_TO_USD;
-      const result = await storage.depositFunds(userId, amountKrc.toString(), amountUsd.toString());
-      res.json({ newBalance: result.bank.weaponsBalance, transactionId: result.transaction.id });
+      const result = await economyService.deposit(userId, key, input.amountUsd);
+      res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -144,12 +141,11 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const input = api.bank.transfer.input.parse(req.body);
-      const result = await storage.transferFunds(userId, input.amountKrc.toString(), input.destination);
-      res.json({ message: "Transferência realizada", newBalance: result.bank.weaponsBalance });
+      const result = await economyService.transfer(userId, key, input.amountKrc, input.destination);
+      res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -170,12 +166,11 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const input = api.loans.request.input.parse(req.body);
-      const loan = await storage.requestLoanAtomic(userId, input.amountKrc.toString(), input.days);
-      res.status(201).json(loan);
+      const result = await economyService.requestLoan(userId, key, input.amountKrc, input.days);
+      res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -184,22 +179,15 @@ export function registerApiRoutes(app: Express): void {
       if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
-      const existingLoan = await storage.getLoanForUser(id, userId);
-      if (!existingLoan) return res.status(404).json({ message: "Empréstimo não encontrado" });
-      if (typeof (storage as any).payLoanAtomic === "function") {
-        await storage.payLoanAtomic(userId, id);
-      } else {
-        if (existingLoan.isPaid) return res.status(409).json({ message: "Empréstimo já pago" });
-        const bank = await storage.getBankAccount(userId);
-        const due = Number(existingLoan.totalDue);
-        if (Number(bank.weaponsBalance) < due) return res.status(402).json({ message: "Saldo insuficiente", required: due, available: Number(bank.weaponsBalance) });
-        await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - due).toString() });
-        await storage.updateLoanForUser(id, userId, { isPaid: true });
-        await storage.createTransaction({ userId, type: "PAGAMENTO_EMPRESTIMO", amountKrc: due.toString(), description: `Repaid loan #${id}` });
-      }
-      res.json({ message: "Empréstimo pago" });
+      const userId = getUserId(req);
+      const loan = await storage.getLoanForUser(id, userId);
+      if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
+      const result = await economyService.payLoan(userId, key, id);
+      res.status(result.status).json(result.body);
     } catch (err) {
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -234,12 +222,11 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const input = api.items.purchase.input.parse(req.body);
-      const result = await storage.purchaseItemAtomic(userId, input.name, input.type);
-      res.status(201).json(result.item);
+      const result = await economyService.purchaseItem(userId, key, input);
+      res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -254,7 +241,7 @@ export function registerApiRoutes(app: Express): void {
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      if (!canUseItemOutsideMatch(item.type, item.stats)) {
+      if (item.type !== "CURATIVO" || !Number.isFinite(item.stats?.heal) || Number(item.stats?.heal) <= 0) {
         return res.status(409).json({ message: "Este item não possui uso legado fora do combate." });
       }
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
@@ -278,24 +265,15 @@ export function registerApiRoutes(app: Express): void {
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
-      const existingItem = await storage.getItemForUser(id, userId);
-      if (!existingItem) return res.status(404).json({ message: "Item não encontrado" });
-      if (typeof (storage as any).repairItemAtomic === "function") {
-        const result = await storage.repairItemAtomic(userId, id, input.amountKrc.toString());
-        res.json({ message: `Reparado ${result.item.name}`, newDurability: result.item.durability });
-      } else {
-        const bank = await storage.getBankAccount(userId);
-        if (Number(bank.weaponsBalance) < input.amountKrc) return res.status(402).json({ message: "Saldo insuficiente", required: input.amountKrc, available: Number(bank.weaponsBalance) });
-        const newDurability = Math.min(Number(existingItem.maxDurability), Number(existingItem.durability) + input.amountKrc * 0.5);
-        await storage.updateBankAccount(userId, { weaponsBalance: (Number(bank.weaponsBalance) - input.amountKrc).toString() });
-        const updatedItem = await storage.updateItemForUser(id, userId, { durability: newDurability.toString() });
-        if (!updatedItem) return res.status(404).json({ message: "Item não encontrado" });
-        await storage.createTransaction({ userId, type: "REPARO", amountKrc: input.amountKrc.toString(), description: `Repaired ${existingItem.name}` });
-        res.json({ message: `Reparado ${existingItem.name}`, newDurability: updatedItem.durability });
-      }
+      const item = await storage.getItemForUser(id, userId);
+      if (!item) return res.status(404).json({ message: "Item não encontrado" });
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
+      const result = await economyService.repairItem(userId, key, id, input.amountKrc);
+      res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      return sendFinancialError(res, err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -342,15 +320,13 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {
     if (!parseMutationBody(req, res, emptyMutationInput)) return;
+    const key = readIdempotencyKey(req, res);
+    if (!key) return;
     try {
-      const userId = getUserId(req);
-      const stats = await storage.getPlayerStats(userId);
-      const salaries: Record<string, number> = { ZHEERS: 100, ONITH: 200, SKEETW: 500, HURAN: 800, VENEX: 1200, KHAEL: 2000, MALAKOR: 3500, OVERLORD: 5000 };
-      const salary = salaries[stats.rank || "ZHEERS"] || 100;
-      await storage.claimDailySalaryAtomic(userId, salary);
-      res.json({ message: "Salário recebido", amount: salary });
-    } catch (err) {
-      return sendFinancialError(res, err);
+      const result = await economyService.claimDailySalary(getUserId(req), key);
+      res.status(result.status).json(result.body);
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 

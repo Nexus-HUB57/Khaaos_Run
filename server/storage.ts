@@ -23,9 +23,6 @@ export interface IStorage {
   getLoans(userId: string): Promise<Loan[]>;
   getLoan(id: number): Promise<Loan | undefined>;
   getLoanForUser(id: number, userId: string): Promise<Loan | undefined>;
-  updateLoanForUser(id: number, userId: string, updates: Partial<Loan>): Promise<Loan | undefined>;
-  createLoan(loan: Partial<Loan> & { userId: string }): Promise<Loan>;
-  updateLoan(id: number, updates: Partial<Loan>): Promise<Loan>;
   requestLoanAtomic(userId: string, amountKrc: string, days: number): Promise<Loan>;
   payLoanAtomic(userId: string, loanId: number): Promise<{ bank: BankAccount; loan: Loan; transaction: Transaction }>;
   // Items
