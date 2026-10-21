@@ -57,7 +57,11 @@
 
 // ─── E2E Phases 13-16 Includes ──────────────────────────────────────────────────
 #include "Game/WorldGen/KhaaosWorldGenerator.h"
+#include "Game/WorldGen/KhaaosProceduralLoot.h"
+#include "Game/WorldGen/KhaaosWorldTransition.h"
+#include "Game/WorldGen/KhaaosEnvironmentalHazard.h"
 #include "Game/Accessibility/KhaaosAccessibilitySystem.h"
+#include "Game/Localization/KhaaosLocalizationManager.h"
 #include "Game/Replay/KhaaosReplaySystem.h"
 #include "Game/Polish/KhaaosLaunchReadiness.h"
 
@@ -1413,6 +1417,40 @@ void AKhaaosGameMode::InitializePhases13to16Subsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("  WorldGenerator cached"));
     }
 
+    // Phase 13: Procedural Loot Spawner (ActorComponent)
+    ProceduralLoot = NewObject<UKhaaosProceduralLoot>(this, UKhaaosProceduralLoot::StaticClass());
+    if (ProceduralLoot)
+    {
+        ProceduralLoot->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  ProceduralLoot initialized"));
+    }
+
+    // Phase 13: World Transition (ActorComponent)
+    WorldTransition = NewObject<UKhaaosWorldTransition>(this, UKhaaosWorldTransition::StaticClass());
+    if (WorldTransition)
+    {
+        WorldTransition->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  WorldTransition initialized"));
+    }
+
+    // Phase 13: Environmental Hazard (ActorComponent)
+    EnvironmentalHazard = NewObject<UKhaaosEnvironmentalHazard>(this, UKhaaosEnvironmentalHazard::StaticClass());
+    if (EnvironmentalHazard)
+    {
+        EnvironmentalHazard->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  EnvironmentalHazard initialized"));
+    }
+
+    // Phase 14: Localization Manager (GameInstanceSubsystem - auto-initialized, cache pointer)
+    if (GetGameInstance())
+    {
+        LocalizationManager = GetGameInstance()->GetSubsystem<UKhaaosLocalizationManager>();
+        if (LocalizationManager)
+        {
+            UE_LOG(LogKhaaosRun, Log, TEXT("  LocalizationManager cached"));
+        }
+    }
+
     // Phase 15: Replay System (ActorComponent)
     ReplaySystem = NewObject<UKhaaosReplaySystem>(this, UKhaaosReplaySystem::StaticClass());
     if (ReplaySystem)
@@ -1424,7 +1462,7 @@ void AKhaaosGameMode::InitializePhases13to16Subsystems()
     // Phase 14: AccessibilitySystem is GameInstanceSubsystem (auto-initialized)
     // Phase 16: LaunchReadiness is EngineSubsystem (auto-initialized)
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 1 actor + 2 auto-initialized subsystems)"));
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 4 actor + 1 gameinstance + 2 auto-initialized subsystems)"));
 }
 
 // ─── E2E Phases 17-20 Subsystems Initialization ────────────────────────────────

@@ -58,6 +58,10 @@ class UKhaaosCrashHandler;
 // ─── E2E Phases 13-16 Forward Declarations ────────────────────────────────────────────
 
 class UKhaaosWorldGenerator;
+class UKhaaosProceduralLoot;
+class UKhaaosWorldTransition;
+class UKhaaosEnvironmentalHazard;
+class UKhaaosLocalizationManager;
 class UKhaaosReplaySystem;
 
 // ─── E2E Phases 17-20 Forward Declarations ────────────────────────────────────────────
@@ -319,10 +323,24 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|AI")
     TObjectPtr<UKhaaosBotSpawner> BotSpawner;
 
-    // ─── E2E Phase 13: World Generation ────────────────────────────────────────
+    // ─── E2E Phase 13: World Generation & PCG ──────────────────────────────────
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
     TObjectPtr<UKhaaosWorldGenerator> WorldGenerator;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosProceduralLoot> ProceduralLoot;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosWorldTransition> WorldTransition;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosEnvironmentalHazard> EnvironmentalHazard;
+
+    // ─── E2E Phase 14: Localization & i18n ──────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Localization")
+    TObjectPtr<UKhaaosLocalizationManager> LocalizationManager;
 
     // ─── E2E Phase 15: Replay ───────────────────────────────────────────────────
 
