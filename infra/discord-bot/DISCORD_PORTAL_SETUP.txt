@@ -1,0 +1,167 @@
+# ══════════════════════════════════════════════════════════════
+# Khaaos Run — Discord Developer Portal Setup Guide | Devs Ph.D
+# ══════════════════════════════════════════════════════════════
+#
+# This document provides the exact step-by-step procedure for
+# configuring the Khaaos Run Discord integration in the
+# Discord Developer Portal.
+#
+# Discord Server: https://discord.gg/GQCXA7YFu
+# Developer Portal: https://discord.com/developers/applications
+# ══════════════════════════════════════════════════════════════
+
+# ─── STEP 1: Create Application ──────────────────────────────
+#
+# 1. Navigate to https://discord.com/developers/applications
+# 2. Click "New Application"
+# 3. Name: "Khaaos Run"
+# 4. Copy the APPLICATION ID → DISCORD_APPLICATION_ID in .env
+# 5. Upload an app icon (the Khaaos Run logo)
+
+# ─── STEP 2: Configure Bot ───────────────────────────────────
+#
+# 1. Navigate to Bot section in left sidebar
+# 2. Click "Reset Token" → Copy the token → DISCORD_BOT_TOKEN in .env
+#    ⚠️ NEVER commit this token to the repository
+# 3. Under "Privileged Server Intents", enable:
+#    ☑ SERVER MEMBERS INTENT    (required for guildMemberAdd + beta role)
+#    ☑ MESSAGE CONTENT INTENT   (required for future message commands)
+#    ☑ PRESENCE INTENT          (optional, for player presence tracking)
+# 4. Under "Authorization Flow":
+#    ☑ Public Bot: YES (allows adding to other servers)
+#    ☑ Requires OAuth2 Code Grant: NO
+
+# ─── STEP 3: Configure OAuth2 ────────────────────────────────
+#
+# 1. Navigate to OAuth2 section in left sidebar
+# 2. Copy CLIENT ID → DISCORD_OAUTH2_CLIENT_ID in .env
+# 3. Click "Reset Secret" → Copy → DISCORD_OAUTH2_CLIENT_SECRET in .env
+# 4. Under "Redirects", add:
+#    https://khaaos.run/api/discord/callback
+#    (and for local dev: http://localhost:3000/api/discord/callback)
+# 5. Copy the REDIRECT URI → DISCORD_OAUTH2_REDIRECT_URI in .env
+# 6. Under "OAuth2 URL Generator", select scopes:
+#    ☑ identify    (to know who the Discord user is)
+#    ☑ guilds      (to check beta role membership)
+#    Copy the generated URL for the auth flow
+
+# ─── STEP 4: Add Bot to Guild ────────────────────────────────
+#
+# 1. Generate OAuth2 URL with scope "bot" and permissions:
+#    - Manage Roles (for beta role assignment)
+#    - Send Messages (for webhook + channel messages)
+#    - Embed Links (for rich embeds)
+#    - Read Message History (for event polling)
+#    - Use Slash Commands
+# 2. Open the URL in browser → Select the Khaaos Run server → Authorize
+# 3. In the Discord server, get the Guild ID:
+#    - Enable Developer Mode: User Settings → App Settings → Advanced → Developer Mode
+#    - Right-click the server name → Copy Server ID → DISCORD_GUILD_ID in .env
+# 4. Get the Beta Role ID:
+#    - Create a role called "Beta Tester" (or use existing)
+#    - Right-click the role → Copy Role ID → DISCORD_BETA_ROLE_ID in .env
+
+# ─── STEP 5: Create Webhooks (per channel) ───────────────────
+#
+# For each EKhaaosWebhookChannel, create a webhook in the target channel:
+#
+# | Channel Name       | Webhook Env Var               | Color   | Purpose                          |
+# |--------------------|-------------------------------|---------|----------------------------------|
+# | #anti-cheat        | DISCORD_WEBHOOK_ANTI_CHEAT    | Red     | Cheat detections, bans           |
+# | #economy           | DISCORD_WEBHOOK_ECONOMY       | Green   | KRC transactions, economy alerts |
+# | #match-results     | DISCORD_WEBHOOK_MATCH_RESULTS | Cyan    | Match end summaries, kill feeds  |
+# | #ranked            | DISCORD_WEBHOOK_RANKED        | Purple  | Rank changes, leaderboard        |
+# | #deploy            | DISCORD_WEBHOOK_DEPLOY        | Yellow  | Server deployments, restarts     |
+# | #server-status     | DISCORD_WEBHOOK_SERVER_STATUS | Blue    | Health, uptime, region status    |
+#
+# For each channel:
+#   1. Channel Settings → Integrations → Webhooks → New Webhook
+#   2. Name: "Khaaos Bot - <channel-name>"
+#   3. Copy Webhook URL → corresponding env var in .env
+#   4. Upload a bot avatar for each webhook (optional)
+
+# ─── STEP 6: Upload Rich Presence Art Assets ────────────────
+#
+# Navigate to: Rich Presence → Art Assets
+# URL: https://discord.com/developers/applications/{APPLICATION_ID}/rich-presence/visualizer
+#
+# Upload 11 PNG images (512x512 min, 1024x1024 recommended, max 512KB each):
+#
+# ── World Images (5) ──────────────────────────────────────────
+# | Key Name          | File                  | Description                     |
+# |-------------------|-----------------------|---------------------------------|
+# | world_cigkv       | world_cigkv.png       | CIGKV - Lobby/Hub world (50p)  |
+# | world_barburhen   | world_barburhen.png   | W1 Barburhen (100 players)     |
+# | world_priadus     | world_priadus.png     | W2 Priadus (75 players)        |
+# | world_ckesalth    | world_ckesalth.png    | W3 Ckesalth (60 players)       |
+# | world_arukheea    | world_arukheea.png    | W4 Arukheea (80 players)       |
+#
+# ── Species Images (6) ───────────────────────────────────────
+# | Key Name          | File                  | Description                     |
+# |-------------------|-----------------------|---------------------------------|
+# | species_zheers    | species_zheers.png    | Zheers species portrait        |
+# | species_onith     | species_onith.png     | Onith species portrait         |
+# | species_skeetw    | species_skeetw.png    | Skeetw species portrait        |
+# | species_huran     | species_huran.png     | Huran species portrait         |
+# | species_venex     | species_venex.png     | Venex species portrait         |
+# | species_khael     | species_khael.png     | Khael species portrait         |
+#
+# ⚠️ Key names are CASE-SENSITIVE and must match exactly the
+#    keys in KhaaosDiscordRichPresence.cpp:
+#    - WorldMap: {CIGKV, Barburhen, Priadus, Ckesalth, Arukheea}
+#    - SpeciesMap: {Zheers, Onith, Skeetw, Huran, Venex, Khael}
+#
+# Validate local assets:  npm run rpc:validate
+# Print upload guide:     npm run rpc:upload
+
+# ─── STEP 7: Register Slash Commands ─────────────────────────
+#
+# Option A: Automatic (recommended for development)
+#   cd infra/discord-bot
+#   npm run register          # Guild commands (instant, for testing)
+#   npm run register:global   # Global commands (takes up to 1h to propagate)
+#   npm run register:list     # List currently registered commands
+#
+# Option B: Automatic on bot startup
+#   Commands are automatically registered when the bot starts (bot.js ready event).
+#   This uses the same REST.put() call as the register script.
+#
+# Option C: Manual via Developer Portal
+#   Not supported — Discord requires API registration for slash commands.
+#
+# Registered commands (1 root + 6 subcommands):
+#   /khaaos status               → Server status (players, matches, health)
+#   /khaaos ranked <player>      → Player ELO, rank, win rate
+#   /khaaos tournament list      → Active tournaments
+#   /khaaos tournament info <id> → Tournament bracket/standings
+#   /khaaos match <id>           → Match details (world, players, kills)
+#   /khaaos economy <player>     → KRC balance (admin only)
+#   /khaaos lookup <user>        → Discord↔EOS link info
+
+# ─── STEP 8: Validate Configuration ──────────────────────────
+#
+# Run the environment validation script:
+#   cd infra/discord-bot
+#   npm run validate-env           # Check all env vars
+#   npm run validate-env:docker    # Also check Docker compose references
+#   npm run validate-env:strict    # Exit 1 on any missing required var
+
+# ─── Quick Reference ─────────────────────────────────────────
+#
+# .env file (infra/discord-bot/.env):
+#   DISCORD_BOT_TOKEN=             # Bot token
+#   DISCORD_APPLICATION_ID=        # Application ID
+#   DISCORD_GUILD_ID=              # Server ID
+#   DISCORD_BETA_ROLE_ID=          # Beta role ID
+#   DISCORD_OAUTH2_CLIENT_ID=      # OAuth2 client ID
+#   DISCORD_OAUTH2_CLIENT_SECRET=  # OAuth2 client secret
+#   DISCORD_OAUTH2_REDIRECT_URI=   # OAuth2 redirect URI
+#   DISCORD_WEBHOOK_ANTI_CHEAT=    # Webhook URL
+#   DISCORD_WEBHOOK_ECONOMY=       # Webhook URL
+#   DISCORD_WEBHOOK_MATCH_RESULTS= # Webhook URL
+#   DISCORD_WEBHOOK_RANKED=        # Webhook URL
+#   DISCORD_WEBHOOK_DEPLOY=        # Webhook URL
+#   DISCORD_WEBHOOK_SERVER_STATUS= # Webhook URL
+#   KHAASOS_API_BASE=http://localhost:3001
+#   KHAASOS_API_KEY=               # API key
+#   LOG_LEVEL=info
