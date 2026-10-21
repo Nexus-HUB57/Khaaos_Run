@@ -27,6 +27,12 @@
 #include "Game/Polish/KhaaosServerHealthMonitor.h"
 #include "Game/Polish/KhaaosCrashHandler.h"
 
+// ─── E2E Phases 13-16 Includes ──────────────────────────────────────────────────
+#include "Game/WorldGen/KhaaosWorldGenerator.h"
+#include "Game/Accessibility/KhaaosAccessibilitySystem.h"
+#include "Game/Replay/KhaaosReplaySystem.h"
+#include "Game/Polish/KhaaosLaunchReadiness.h"
+
 #include "Engine/World.h"
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Pawn.h"
@@ -67,6 +73,10 @@ AKhaaosGameMode::AKhaaosGameMode()
 
         // E2E Phases 9-12 subsystems
         BotSpawner          = nullptr;
+
+        // E2E Phases 13-16 subsystems
+        WorldGenerator      = nullptr;
+        ReplaySystem        = nullptr;
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -109,6 +119,9 @@ void AKhaaosGameMode::StartPlay()
 
         // Initialize E2E Phases 9-12 subsystems
         InitializePhases9to12Subsystems();
+
+        // Initialize E2E Phases 13-16 subsystems
+        InitializePhases13to16Subsystems();
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::StartPlay - Match phase: Lobby"));
 }
@@ -615,4 +628,33 @@ void AKhaaosGameMode::InitializePhases9to12Subsystems()
         // Phase 12: ServerHealthMonitor + CrashHandler are EngineSubsystems (auto-initialized)
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases9to12Subsystems - Complete (1 world subsystem + 6 auto-initialized subsystems)"));
+}
+
+// ─── E2E Phases 13-16 Subsystems Initialization ────────────────────────────────
+
+void AKhaaosGameMode::InitializePhases13to16Subsystems()
+{
+        if (!GetWorld()) return;
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Starting"));
+
+        // Phase 13: World Generator (WorldSubsystem - auto-initialized, cache pointer)
+        WorldGenerator = GetWorld()->GetSubsystem<UKhaaosWorldGenerator>();
+        if (WorldGenerator)
+        {
+                UE_LOG(LogKhaaosRun, Log, TEXT("  WorldGenerator cached"));
+        }
+
+        // Phase 15: Replay System (ActorComponent)
+        ReplaySystem = NewObject<UKhaaosReplaySystem>(this, UKhaaosReplaySystem::StaticClass());
+        if (ReplaySystem)
+        {
+                ReplaySystem->RegisterComponent();
+                UE_LOG(LogKhaaosRun, Log, TEXT("  ReplaySystem initialized"));
+        }
+
+        // Phase 14: AccessibilitySystem is GameInstanceSubsystem (auto-initialized)
+        // Phase 16: LaunchReadiness is EngineSubsystem (auto-initialized)
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 1 actor + 2 auto-initialized subsystems)"));
 }

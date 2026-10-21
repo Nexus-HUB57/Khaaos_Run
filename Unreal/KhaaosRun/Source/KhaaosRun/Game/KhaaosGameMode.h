@@ -35,6 +35,11 @@ class UKhaaosProgressionSystem;
 class UKhaaosServerHealthMonitor;
 class UKhaaosCrashHandler;
 
+// ─── E2E Phases 13-16 Forward Declarations ──────────────────────────────────────
+
+class UKhaaosWorldGenerator;
+class UKhaaosReplaySystem;
+
 // ─── Match Phase Enum (mirrors TS RoomStatus) ─────────────────────────────────
 
 UENUM(BlueprintType)
@@ -176,6 +181,18 @@ public:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|AI")
         TObjectPtr<UKhaaosBotSpawner> BotSpawner;
 
+        // ─── E2E Phase 13: World Generation ────────────────────────────────────────
+
+        /** World generator (PCG). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+        TObjectPtr<UKhaaosWorldGenerator> WorldGenerator;
+
+        // ─── E2E Phase 15: Replay ───────────────────────────────────────────────────
+
+        /** Replay recording/playback. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Replay")
+        TObjectPtr<UKhaaosReplaySystem> ReplaySystem;
+
 protected:
 
         /** Internal countdown timer (seconds remaining). */
@@ -213,4 +230,7 @@ protected:
 
         /** Initialize E2E Phases 9-12 subsystems (non-breaking). */
         void InitializePhases9to12Subsystems();
+
+        /** Initialize E2E Phases 13-16 subsystems (non-breaking). */
+        void InitializePhases13to16Subsystems();
 };
