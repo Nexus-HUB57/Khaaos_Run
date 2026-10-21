@@ -259,6 +259,55 @@ export const economyLedgerEntries = pgTable("economy_ledger_entries", {
   validAccount: check("economy_ledger_account_valid", sql`${table.accountCode} IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'equity.opening_balance')`),
 }));
 
+export const paymentOrders = pgTable("payment_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  provider: text("provider").notNull().default("stripe"),
+  productId: text("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  priceBrlMinor: numeric("price_brl_minor", { precision: 12, scale: 0 }).notNull(),
+  krcMinorUnits: numeric("krc_minor_units", { precision: 20, scale: 0 }).notNull(),
+  currency: text("currency").notNull().default("brl"),
+  status: text("status").notNull().default("created"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  stripeSessionId: text("stripe_session_id"),
+  checkoutUrl: text("checkout_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  paidAt: timestamp("paid_at"),
+  fulfilledAt: timestamp("fulfilled_at"),
+}, (table) => ({
+  userIdempotencyUnique: uniqueIndex("payment_orders_user_idempotency_unique").on(table.userId, table.idempotencyKey),
+  stripeSessionUnique: uniqueIndex("payment_orders_stripe_session_unique").on(table.stripeSessionId),
+  userCreatedIndex: index("payment_orders_user_created_idx").on(table.userId, table.createdAt),
+  providerValid: check("payment_orders_provider_valid", sql`${table.provider} = 'stripe'`),
+  currencyBrl: check("payment_orders_currency_brl", sql`${table.currency} = 'brl'`),
+  statusValid: check("payment_orders_status_valid", sql`${table.status} IN ('created', 'pending', 'fulfilled', 'failed', 'expired', 'rejected')`),
+  pricePositive: check("payment_orders_price_positive", sql`${table.priceBrlMinor} >= 50`),
+  krcPositive: check("payment_orders_krc_positive", sql`${table.krcMinorUnits} > 0`),
+  requestHashSha256: check("payment_orders_request_hash_sha256", sql`length(${table.requestHash}) = 64`),
+}));
+
+export const paymentWebhookEvents = pgTable("payment_webhook_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  provider: text("provider").notNull().default("stripe"),
+  eventId: text("event_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  orderId: uuid("order_id"),
+  status: text("status").notNull().default("received"),
+  errorCode: text("error_code"),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+}, (table) => ({
+  providerEventUnique: uniqueIndex("payment_webhook_events_provider_event_unique").on(table.provider, table.eventId),
+  orderIndex: index("payment_webhook_events_order_idx").on(table.orderId, table.receivedAt),
+  providerValid: check("payment_webhook_events_provider_valid", sql`${table.provider} = 'stripe'`),
+  statusValid: check("payment_webhook_events_status_valid", sql`${table.status} IN ('received', 'processed', 'ignored', 'rejected')`),
+  payloadHashSha256: check("payment_webhook_events_payload_hash_sha256", sql`length(${table.payloadHash}) = 64`),
+}));
+
 export const loans = pgTable("loans", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),

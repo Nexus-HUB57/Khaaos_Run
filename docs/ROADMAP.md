@@ -6,7 +6,7 @@
 
 Khaaos Run já tem um vertical slice executável em React/TypeScript, Express, PostgreSQL e WebSocket: autenticação, inventário, matchmaking, salas, zona, combate, loot, ranking e resultado de partida. O `game-runtime` mantém testes próprios. A trilha Unreal Engine 5.8 está iniciada, mas ainda não foi compilada com UnrealBuildTool.
 
-Nesta rodada, a branch de trabalho adiciona testes de integração contra PostgreSQL real, reforça a sincronização do War’I, garante que a coleta de loot só seja confirmada depois da gravação e inclui reconexão autenticada em partida. A zona do canvas passou a usar a geometria elíptica compatível com coordenadas do servidor e recebeu navegação por teclado e estados acessíveis. A validação executada localmente passou: `npm run check`, `npm run test:postgres` (2 casos), `npm run test:official` (44 casos), além de todos os gates de `npm run verify:all` (build, testes do runtime, stress e regras portáveis da zona/loot UE5).
+**Evidência desta branch:** o checkout Stripe BRL test-only, migration 0005, validação de raw-body webhook e testes de state machine estão em revisão. Localmente passaram `npm run check`, `npm run build`, `npm run test:official`, `npm run verify:all`, `drizzle-kit check` e geração Drizzle sem diff. O teste PostgreSQL Stripe foi escrito, mas não foi executado neste sandbox por ausência de serviço local; a execução CI com PostgreSQL efêmero permanece gate obrigatório antes do merge.
 
 O roadmap não considera a presença de arquivos ou stubs como implementação concluída. Uma tarefa só muda para concluída quando seu comportamento é demonstrável por teste, migração, build ou evidência operacional correspondente. Itens com dependências de serviço externo continuam abertos até que a configuração real seja validada.
 
@@ -47,7 +47,7 @@ O roadmap não considera a presença de arquivos ou stubs como implementação c
 - [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
 - [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
 
-**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. Nesta implementação posterior, o depósito sem prova de liquidação foi deliberadamente desabilitado com HTTP 503; as demais operações internas continuam no ledger. O schema e as migrations econômicas foram exercitados em PostgreSQL descartável; nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Checkout fiduciário e resgate não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md).
+**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. O depósito sem prova de liquidação permanece desabilitado com HTTP 503; as demais operações internas continuam no ledger. A entrega Stripe desta branch é exclusivamente test-mode, desabilitada por padrão, e não cria checkout nem cobrança sem configuração. Nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Resgate, refund/chargeback e rollout live não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](./STRIPE_BRAZIL_CHECKOUT.md).
 
 **Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
 
@@ -62,6 +62,20 @@ O roadmap não considera a presença de arquivos ou stubs como implementação c
 - [ ] Escrever testes concorrentes de compra, transferência, pagamento, ledger e rollback multi-tabela.
 - [ ] Definir backup, restore testado, retenção, RPO/RTO e procedimento de rollback de migração.
 - [ ] Adicionar constraints e índices somente após conferir query plans e padrões reais de consulta.
+
+### Fase 1.1 — Checkout Stripe sandbox (Brasil)
+
+- [x] Adicionar migration 0005 para ordens server-priced e inbox de eventos Stripe, sem modificar saldos existentes.
+- [x] Adicionar Checkout Session avulsa em BRL com catálogo fixo server-side; cliente envia somente `productId` e `Idempotency-Key`.
+- [x] Validar assinatura Stripe em raw body, restringir integração a `sk_test_`, exigir webhook secret e preservar checkout desativado no Render.
+- [x] Gravar crédito Weapons, histórico e ledger balanceado append-only na mesma transação do webhook pago; deduplicar IDs de evento e conferir SKU, jogador, sessão, moeda e valor.
+- [x] Escrever testes unitários de catálogo/assinatura e teste PostgreSQL de checkout idempotente, fulfillment concorrente, colisão de evento, divergência e estados terminais.
+- [ ] Passar o teste PostgreSQL no CI com migration 0005 aplicada e validar a execução de staging com credenciais Stripe test-only.
+- [ ] Definir nomes, quantidades KRC e preços BRL dos pacotes; confirmar elegibilidade da conta para métodos (Pix está sujeito a disponibilidade/ativação Stripe).
+- [ ] Configurar segredos e webhook somente em staging; validar um pagamento de teste e estados pendentes/expirados/retries sem chave live.
+- [ ] Implementar refunds, chargebacks, suporte, impostos, termos e lançamentos compensatórios antes de qualquer venda live.
+- [ ] Fazer revisão jurídica/fiscal e aprovação explícita do titular antes de remover qualquer gate de produção; a intenção global não libera mercados além do Brasil.
+
 ### 0.3 Auditoria e reconciliação da economia
 
 Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito ainda aberto: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões de ownership/FK da 0.2.

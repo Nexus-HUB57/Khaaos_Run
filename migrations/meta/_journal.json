@@ -36,6 +36,13 @@
       "when": 1792090137595,
       "tag": "0004_correlated_append_only_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792482451436,
+      "tag": "0005_stripe_checkout",
+      "breakpoints": true
     }
   ]
 }
