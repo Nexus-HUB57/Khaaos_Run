@@ -14,7 +14,7 @@
  * 3. Provide tunable parameters for live economy balancing.
  */
 
-import { Rarity, ItemType, KRC_TO_USD } from "@shared/schema";
+import { Rarity, ItemType } from "@shared/schema";
 
 // ─── Tunable parameters (live balance knobs) ─────────────────────────────────
 

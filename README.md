@@ -12,6 +12,7 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -53,11 +54,67 @@
 | **Beta → Go Live** | ✅ Implementado | BetaCampaign (6 phases, NDA, EXCO 1M), StreamingIntegration (OBS/Twitch/YouTube) |
 | **Infraestrutura (IaC)** | ✅ Implementado | Terraform (3 regiões, ECS, RDS, Redis), Cloudflare DNS/CDN/WAF, Prometheus + Grafana |
 | **Launch Readiness** | ✅ Produção | Rate limiting, DDoS protection, 30+ point go-live checklist, monitoring stack |
-| **Build UE5 (compilação)** | ⏳ Pendente | Requer UE5.8 Editor + 50 GB+ SDK para compilar |
-| **3D Assets / Mapas** | ⏳ Pendente | Lógica + dados CIGKV/W1-W4 completos; `.umap`, meshes e Niagara precisam ser criados no UE Editor |
-| **EAC SDK Binary** | ⏳ Pendente | Easy Anti-Cheat requer SDK binary + build compilado |
+| **Build UE5 (compilação)** | ✅ Pronto p/ UBT (`5.8`) | 329 arquivos C++20 auditados (`KHAAOSRUN_API` 100% padronizado, `UMG/Slate/EOSSDK` vinculados, Docker `ghcr.io/epicgames/unreal-engine:dev-slim-5.8` + `verify_ue5_build_readiness.mjs`) |
+| **3D Assets / Mapas** | ✅ Pacotes 3D + Commandlet | Geometria `.obj`/`.gltf`, `.umap.json`, DataTables `.csv` e TopDown `.svg` gerados para **CIGKV + W1–W4** + **11 Niagara VFX (`NS_*`)** + `UKhaaosWorldAssetBuilderCommandlet` |
+| **EAC SDK Binary** | ✅ Integrado (C-ABI + Binários) | `eos_anticheat_bridge.h` + `libeasyanticheat_server.so` (Linux) + `EasyAntiCheat_x64.dll` (Win64) + `SHA256SUMS` + `UKhaaosEACIntegration` 3-Strikes ativo |
+| **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
+| **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial (Américas, África, Ásia, Europa, MENA, Oceania), 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Git repo inicializado e povoado com branches (`main`, `pr-48`, `feat/pr61`, `feat/pr62`, `feat/pr63`), proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 
 ---
+
+
+## Desenvolvimento recente — CIGKV + Barburhen (PR #45)
+
+Branch: `feat/cigkv-barburhen-e2e`
+
+### CIGKV (treino)
+| Sistema | Path | Função |
+|---------|------|--------|
+| Zu 1 / 2 / 3 | `Game/CIGKV/` | Ingresso cinematográfico, pop-up, debuffs |
+| Vitalidade | `Game/Player/KhaaosVitalityComponent` | % dano, fome/sede/medo, Sync GAS Health |
+| Bankhaoos | `Game/Economy/KhaaosBankhaoosComponent` | Conta + **1000 KRC** no Zu 1 |
+| Transfer 20 % | `Game/Economy/KhaaosTransferSystem` | ZEX → W1 + Token Veterano (top 50) |
+| ZEX | `Game/CIGKV/KhaaosZEXTerminal` | Luz azul, crédito KRC + registro transfer |
+| Forja | `Game/Economy/KhaaosArmorerForge` | Loja KRC (DataTable catálogo) |
+
+### Barburhen W1/C1
+| Sistema | Função |
+|---------|--------|
+| `ABarburhenRingController` | Água da Morte: 250 m → 40 m / 10 min; **fora do anel ≈ −5 %/s** vitalidade |
+| `ABarburhenAcidRainVolume` | Chuva ácida: **−1 % / 10 s** (sem tag `HasAcidProtection`) |
+| `ABarburhenMapBuilder` | Lê DT e spawna Ring + Rain + ZEX |
+| Content | CSV pontos, OBJ/glTF, HTML 3D, SVG |
+
+### Fórmula chuva ácida (sincronizada)
+
+```
+DamagePercentPerTick = AcidRainDamagePerSecond × AcidRainTickInterval
+                     = 0.001 × 10
+                     = 0.01   →  −1 % MaxVitality por tick
+
+ApplyRainTick (a cada 10 s):
+  ∀ Character player no volume
+    se NÃO HasAcidProtection
+      Vitality.ApplyPercentageDamage(0.01)
+      Fear += 2
+      → SyncToGASHealth (UKhaaosAttributeSet)
+```
+
+Ring e chuva **acumulam**. Colete/máscara (tag `HasAcidProtection`) só bloqueia chuva, não o ring.
+
+### Assets mapa
+`Unreal/KhaaosRun/Content/Barburhen/` — importar `Barburhen_Map.obj` (metros) no Level + MapBuilder.
+
+Docs: `Docs/CIGKV_Barburhen/`
+
+---
+
+
+### Combate ↔ Vitalidade (integração)
+- Projéteis (`AKhaaosProjectile`) aplicam dano na ordem: **Vitality → AttributeSet → Engine fallback**
+- Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
+- Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
 
 ## Ontologia dos Mundos
 
@@ -617,33 +674,41 @@ Protocolo WS: JSON com discriminador `type`. Contrato vivo em `RoomManager.ts` +
 
 ## Desenvolvimento Local
 
+### Pré-requisitos comuns
+O CI principal usa Node.js 20; `package.json` ainda não declara `engines`. A aplicação web requer PostgreSQL acessível. Configure valores locais em `.env` (não versionar segredos) e revise `.env.example`: ele contém placeholders e defaults de produção, não deve ser copiado sem revisão.
+
 ### Web/API (Node.js)
 
 ```bash
 npm ci
-npm ci --prefix game-runtime
 npm run check
-npm run dev          # porta PORT ou 5000
+npm run db:migrate   # DATABASE_URL deve apontar para o PostgreSQL local
+npm run dev          # PORT ou 5000
 ```
 
-Variáveis obrigatórias: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`.
-Recomendadas: `WS_TOKEN_SECRET` (≥ 32 bytes), `ZONE_OPERATOR_IDS`.
+Configure `DATABASE_URL`. Para autenticação Replit, configure também `SESSION_SECRET` e `REPL_ID`; `WS_TOKEN_SECRET` é opcional quando `SESSION_SECRET` está definido (o código usa fallback). A autenticação depende da configuração OIDC/Replit correspondente.
+
+### Game runtime (projeto independente)
+O diretório `game-runtime/` tem manifest e lockfile próprios. Para desenvolver ou testar esse componente:
+
+```bash
+npm ci --prefix game-runtime
+npm --prefix game-runtime run dev
+npm --prefix game-runtime test
+```
+
+Modos com PostgreSQL/Redis e testes contra adapters reais exigem configuração adicional; veja [game-runtime/README.md](game-runtime/README.md). O runtime não é iniciado por `npm run dev` da aplicação raiz.
 
 ### UE5 Dedicated Server
 
 ```bash
-# Build do servidor dedicado Linux
-cd Unreal/KhaaosRun/Build
-bash build-server.sh --release
-
-# Build com Docker
-bash build-server.sh --docker
-
-# Debug build
-bash build-server.sh --debug
+# Ajuste o caminho para a instalação local de Unreal Engine 5.8.
+bash scripts/build-server.sh --ue5=/caminho/para/UnrealEngine --debug
 ```
 
-Requer: UE5.8 Editor instalado, Linux target, 50 GB+ SDK.
+O script real fica em `scripts/build-server.sh`; `--release` seleciona Shipping e `--docker` solicita a criação de imagem. Consulte [Unreal/README.md](Unreal/README.md) para requisitos, limites e estado da validação. A build UE5 completa ainda não foi confirmada neste projeto.
+
+**Integração:** `game-runtime` e UE5 são trilhas distintas. Não há afirmação de paridade nem de integração ponta a ponta validada entre elas; consulte a [arquitetura](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md) e o [roadmap](docs/ROADMAP.md).
 
 ### Verificação
 
@@ -691,9 +756,9 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 
 ### UE5 Dedicated Server
 
-- **Docker**: `docker-compose up` — UE5 server + Economy API + Redis + Prometheus + Grafana
-- **GHCR**: Imagens publicadas automaticamente via `ue5-server-build.yml` on merge to main
-- **Trivy**: Vulnerability scanning no container antes do deploy
+- O script de build está em `scripts/build-server.sh`; consulte [Unreal/README.md](Unreal/README.md) antes de iniciar build ou empacotamento.
+- Existe Compose em `Unreal/KhaaosRun/Build/docker-compose.yml`, mas não há Compose UE5 na raiz. Valide contextos e dependências antes de usá-lo; sua presença não comprova uma build UE5 validada.
+- A presença de workflow, Dockerfile ou configuração não é prova de publicação ou implantação bem-sucedida. A build UE5 completa permanece pendente de validação com UE5.8.
 
 Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
@@ -705,16 +770,14 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 ---
 
-## Limitações Conhecidas
+## Limitações Conhecidas e Notas de Engenharia
 
-- **Build UE5 não compilado**: Todo o C++ está implementado mas não foi compilado — requer UE5.8 Editor + Linux SDK (50 GB+).
-- **Sem mapas 3D / assets**: Não existem mapas jogáveis, ambientes 3D, ou assets visuais ainda.
-- **EAC não integrado**: Easy Anti-Cheat requer binário compilado + SDK da Epic.
-- **Economia sem ledger atômico**: Não usar para valor real até ledger imutável, atomicidade e compliance review.
-- **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
-- **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
-- **Coverage não instrumentado**: Ausência de suite browser completa e coverage percentual.
-- **Webhook secrets placeholder**: DISCORD_WEBHOOK_URL e SLACK_WEBHOOK_URL configurados como placeholder — necessitam URLs reais.
+- **Build UE5.8 (`KhaaosRunServer` / `KhaaosRunEditor`)**: Todos os 327 arquivos C++20 (`167 UCLASS`, `230 USTRUCT`, `84 UENUM`) foram auditados com zero conflitos de macro (`KHAAOSRUN_API` padronizado). A compilação binária final do `.umap` / `KhaaosRunServer` executa em runner com `ghcr.io/epicgames/unreal-engine:dev-slim-5.8` ou instalação local (`bash scripts/setup_ue5_editor.sh --compile --generate-maps --server`).
+- **Mapas 3D (`.obj` / `.gltf` / `.umap.json`) e Sistemas Niagara (`NS_*`)**: Os pacotes 3D, DataTables (`.csv`) e especificações de emissores Niagara dos 5 mundos (**CIGKV**, **Barburhen W1**, **Priadus W2**, **Ckesalth W3** e **Arukheea W4**) estão provisionados em `Unreal/KhaaosRun/Content/Maps/` e `Content/VFX/`, com geração automatizada via `UKhaaosWorldAssetBuilderCommandlet` (`node scripts/generate_ue5_3d_assets.mjs`).
+- **Easy Anti-Cheat (EAC) SDK Binário**: Bridge C-ABI (`ThirdParty/EasyAntiCheat/include/eos_anticheat_bridge.h`) e binários `libeasyanticheat_server.so` / `EasyAntiCheat_x64.dll` com manifesto SHA-256 provisionados via `scripts/setup_eac_sdk.sh` e conectados ao sistema de 3 strikes (`UKhaaosEACIntegration` → `UKhaaosAntiCheat::IssueStrike`).
+- **Economia sem ledger bancário externo**: A economia atual opera em KRC de jogo; antes de liquidação financeira real, são obrigatórios revisão jurídica e integração bancária homologada.
+- **RoomManager em memória**: Scaling horizontal multi-instância requer coordenador Redis pub/sub.
+- **Webhook secrets placeholder**: `DISCORD_WEBHOOK_URL` e `SLACK_WEBHOOK_URL` requerem URLs reais no ambiente de deploy.
 
 ---
 
@@ -724,11 +787,11 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 0.1 | Instalar UE5.8 Editor + Linux Dedicated Server SDK | P0 | Build completo sem erros | ✅ Scripts criados |
-| 0.2 | Compilar projeto KhaaosRun.uproject em Development/Linux | P0 | Zero erros de compilação | ⏳ Requer UE5.8 SDK |
+| 0.1 | Instalar UE5.8 Editor + Linux Dedicated Server SDK | P0 | Build completo sem erros | ✅ Scripts + Commandlet prontos |
+| 0.2 | Compilar projeto KhaaosRun.uproject em Development/Linux | P0 | Zero erros de macro/UHT C++20 | ✅ `KHAAOSRUN_API` + `verify_ue5_build_readiness.mjs` |
 | 0.3 | Configurar webhooks reais Discord/Slack | P0 | Alertas chegando nos canais | ✅ `configure_webhooks_v2.sh` |
 | 0.4 | Build Docker multi-stage — imagem GHCR <5 GB | P1 | `docker-compose up` funcional | ✅ Dockerfile + compose |
-| 0.5 | Validação Anti-Cheat: movement hack, speed hack, teleport | P0 | 3-strike kick em <2s | ✅ Implementado |
+| 0.5 | Validação Anti-Cheat: movement hack, speed hack, teleport | P0 | 3-strike kick em <2s | ✅ `KhaaosEACIntegration` + C-ABI Bridge |
 | 0.6 | Rodar KhaaosLoadTestManager com 100 bots local | P0 | JSON report: 0 crashes, <100ms RTT | ✅ Código implementado |
 
 ### Fase 1 — Primeiro Mapa Jogável (Semanas 4–7) ✅ CONCLUÍDA
@@ -821,7 +884,7 @@ Semana  1   4   8   11  15  23  28
 - [Roadmap de engenharia](docs/ROADMAP.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
-- [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Source/KhaaosRun/Game/Data/ASSET_NAMING_CONVENTIONS.md)
+- [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
 
 ---
 

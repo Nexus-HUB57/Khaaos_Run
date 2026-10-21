@@ -40,3 +40,11 @@ export function getWarIUseKind(
   if (positiveStat(stats, "vision")) return "RECON";
   return null;
 }
+
+/** Legacy inventory use is intentionally limited to healing outside a match. */
+export function canUseItemOutsideMatch(
+  type: string,
+  stats: Record<string, number> | null | undefined,
+): boolean {
+  return type === "CURATIVO" && positiveStat(stats, "heal");
+}

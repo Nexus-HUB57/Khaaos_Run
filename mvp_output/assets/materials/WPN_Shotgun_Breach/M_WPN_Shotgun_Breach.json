@@ -1,0 +1,31 @@
+{
+  "material_id": "M_WPN_Shotgun_Breach",
+  "material_instance_id": "MI_WPN_Shotgun_Breach_Default",
+  "shader": "PBR",
+  "properties": {
+    "base_color": {
+      "r": 0.45,
+      "g": 0.3,
+      "b": 0.15,
+      "a": 1.0
+    },
+    "roughness": 0.5,
+    "metallic": 0.8,
+    "emissive": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 0.0,
+      "a": 0.0
+    },
+    "opacity": 1.0,
+    "two_sided": false
+  },
+  "textures": {
+    "diffuse": "T_WPN_Shotgun_Breach_D",
+    "normal": "T_WPN_Shotgun_Breach_N",
+    "orm": "T_WPN_Shotgun_Breach_ORM",
+    "emissive": "T_WPN_Shotgun_Breach_E"
+  },
+  "blend_mode": "Opaque",
+  "shading_model": "Default"
+}

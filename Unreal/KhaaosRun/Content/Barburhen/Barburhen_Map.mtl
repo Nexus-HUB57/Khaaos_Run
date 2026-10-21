@@ -1,0 +1,157 @@
+# Barburhen Map Materials
+newmtl Ground
+Kd 0.100 0.130 0.090
+Ka 0.030 0.039 0.027
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Sector_Industrial
+Kd 0.250 0.200 0.120
+Ka 0.075 0.060 0.036
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Sector_Park
+Kd 0.120 0.250 0.150
+Ka 0.036 0.075 0.045
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Sector_Urban
+Kd 0.250 0.160 0.100
+Ka 0.075 0.048 0.030
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Sector_Station
+Kd 0.100 0.180 0.250
+Ka 0.030 0.054 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Warehouse
+Kd 0.220 0.210 0.180
+Ka 0.066 0.063 0.054
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Silo
+Kd 0.280 0.270 0.240
+Ka 0.084 0.081 0.072
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Crane
+Kd 0.400 0.380 0.300
+Ka 0.120 0.114 0.090
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Tower
+Kd 0.280 0.280 0.250
+Ka 0.084 0.084 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Prop_Container
+Kd 0.220 0.300 0.120
+Ka 0.066 0.090 0.036
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl POI_Bunker
+Kd 0.250 0.250 0.300
+Ka 0.075 0.075 0.090
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl POI_Police
+Kd 0.150 0.200 0.300
+Ka 0.045 0.060 0.090
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Coreto
+Kd 0.220 0.180 0.150
+Ka 0.066 0.054 0.045
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Prop_DeadTree
+Kd 0.150 0.180 0.120
+Ka 0.045 0.054 0.036
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Prop_DryLake
+Kd 0.100 0.090 0.060
+Ka 0.030 0.027 0.018
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl POI_Hospital
+Kd 0.280 0.150 0.150
+Ka 0.084 0.045 0.045
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Urban
+Kd 0.220 0.200 0.180
+Ka 0.066 0.060 0.054
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Frame
+Kd 0.350 0.300 0.250
+Ka 0.105 0.090 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Rails
+Kd 0.220 0.250 0.280
+Ka 0.066 0.075 0.084
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Building_Station
+Kd 0.150 0.200 0.250
+Ka 0.045 0.060 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Marker_Spawn
+Kd 0.200 0.750 0.250
+Ka 0.060 0.225 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Marker_ZEX
+Kd 0.120 0.450 1.000
+Ka 0.036 0.135 0.300
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Marker_Sniper
+Kd 0.880 0.550 0.120
+Ka 0.264 0.165 0.036
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl POI_Tank
+Kd 0.300 0.450 0.250
+Ka 0.090 0.135 0.075
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Ring_Start
+Kd 0.250 0.550 0.350
+Ka 0.075 0.165 0.105
+Ks 0.1 0.1 0.1
+Ns 20
+
+newmtl Ring_End
+Kd 0.750 0.200 0.200
+Ka 0.225 0.060 0.060
+Ks 0.1 0.1 0.1
+Ns 20
+

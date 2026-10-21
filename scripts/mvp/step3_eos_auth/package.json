@@ -1,0 +1,17 @@
+{
+  "name": "step3_eos_auth",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mock_eos_server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0",
+    "ws": "^8.22.0"
+  }
+}

@@ -9,7 +9,6 @@
 
 class UKhaaosAbilitySlotWidget;
 class UKhaaosKillFeed;
-class USoundBase;
 
 /**
  * UKhaaosHUDWidget
@@ -46,22 +45,6 @@ public:
 	/** Update health bar display. */
 	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD")
 	void UpdateHealth(float Current, float Max);
-
-	/** Blueprint hook for a brief red vignette on each SafeZone damage cue. */
-	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD|SafeZone")
-	void PlayZoneDamageVignette(float Intensity);
-
-	/** Start/update local SafeZone warning cadence after a replicated damage cue. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|HUD|SafeZone")
-	void NotifySafeZoneDamageCue(float Current, float Max);
-
-	/** Stop the warning cadence after leaving the damage area or being eliminated. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|HUD|SafeZone")
-	void StopSafeZoneWarningAudio();
-
-	/** Pure cadence function, exposed for automation and tuning. Lower Health means a shorter interval. */
-	UFUNCTION(BlueprintPure, Category = "Khaaos|HUD|SafeZone")
-	static float GetZoneWarningBeepInterval(float Current, float Max);
 
 	/** Update shield bar display. */
 	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Khaaos|HUD")
@@ -163,23 +146,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|HUD")
 	FText ZoneWarningText;
 
-	/** Short beep imported from Content/Audio/SFX/SFX_ZoneWarningBeep.wav. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|HUD|SafeZone")
-	TSoftObjectPtr<USoundBase> ZoneWarningBeepSound;
-
 protected:
-	virtual void NativeDestruct() override;
-
-	void PlayZoneWarningBeep();
-
-	FTimerHandle ZoneWarningPulseTimerHandle;
-	FTimerHandle ZoneWarningTimeoutTimerHandle;
-	float ZoneWarningHealthFraction = 1.0f;
-	float ZoneWarningPulseInterval = 0.0f;
-
-	static constexpr float ZoneWarningMinimumInterval = 0.18f;
-	static constexpr float ZoneWarningMaximumInterval = 0.90f;
-	static constexpr float ZoneWarningCueTimeout = 1.65f;
 
 	/** Number of ability cooldown slots. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|HUD")

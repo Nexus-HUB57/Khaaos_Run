@@ -1,0 +1,16 @@
+name: 09 — Docker Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the production server image
+        run: docker build --file server/Dockerfile --tag khaaos-run-server:ci .

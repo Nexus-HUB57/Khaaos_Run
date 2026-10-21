@@ -19,8 +19,36 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1792025201235,
-      "tag": "0002_marshal-council-persistence",
+      "when": 1792090137593,
+      "tag": "0002_economy_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792090137594,
+      "tag": "0003_economy_invariants",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792090137595,
+      "tag": "0004_correlated_append_only_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792263320444,
+      "tag": "0005_optimal_steel_serpent",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792623974552,
+      "tag": "0006_marshal-council-persistence",
       "breakpoints": true
     }
   ]

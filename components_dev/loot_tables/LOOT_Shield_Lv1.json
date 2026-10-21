@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Shield_Lv1",
+  "name": "Shield Lv1",
+  "type": "Defesa",
+  "rarity": "COMUM",
+  "heal": 0,
+  "defense": 25,
+  "use_time": 0.0,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 140,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_Shield_Equip",
+  "sfx_use": "SFX_Shield_Equip",
+  "description": "Escudo basico. +25 defesa.",
+  "world_specific": []
+}

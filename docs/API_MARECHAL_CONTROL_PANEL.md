@@ -73,7 +73,7 @@ A resposta inicial usa `202 Accepted` enquanto `queued`/`running`, inclui `Locat
 
 ## Persistência e recuperação
 
-A migration aditiva `migrations/0002_marshal-council-persistence.sql` cria `marshal_councils` e `marshal_proposals`, com índice único `(actor_id, idempotency_key)`, índices de consulta e FK com cascade. O início normal do servidor tenta recuperar trabalhos `queued` e re-enfileira registros `running` sem atualização por 120 segundos; a reivindicação é um `UPDATE ... WHERE status='queued'`, para impedir que processos concorrentes iniciem o mesmo conselho. Resultado e propostas são gravados juntos em transação. A persistência não toca em usuários, perfis, contas ou partidas.
+A migration aditiva `migrations/0006_marshal-council-persistence.sql` cria `marshal_councils` e `marshal_proposals`, com índice único `(actor_id, idempotency_key)`, índices de consulta e FK com cascade. O início normal do servidor tenta recuperar trabalhos `queued` e re-enfileira registros `running` sem atualização por 120 segundos; a reivindicação é um `UPDATE ... WHERE status='queued'`, para impedir que processos concorrentes iniciem o mesmo conselho. Resultado e propostas são gravados juntos em transação. A persistência não toca em usuários, perfis, contas ou partidas.
 
 Aplicar migrations no deployment com o mecanismo existente (`RUN_DB_MIGRATIONS=true`) ou executar `npm run db:migrate` com `DATABASE_URL` configurada antes de ativar as rotas. Se o PostgreSQL estiver indisponível, `POST`/consultas retornam `503 COUNCIL_UNAVAILABLE`; em POST, repetir com a mesma chave.
 
@@ -94,7 +94,11 @@ Formato comum: `{ "error": { "code": "...", "message": "...", "details": [] }, "
 
 ## Limites explícitos
 
-- Salas, fila e telemetria continuam locais ao processo; a migração não adiciona agregação distribuída ou Redis. Em múltiplas réplicas, a persistência/idempotência é compartilhada, mas cada réplica enxerga sua própria carga em memória.
-- Eventos de incidentes, métricas de mercado e estado de tratados não têm fontes instrumentadas neste commit; permanecem indisponíveis em vez de inventados.
+- Salas e contadores de ocupação são locais ao processo; a fila pode ser coordenada via Redis conforme a configuração do runtime. Persistência/idempotência de conselhos é compartilhada via PostgreSQL. Em múltiplas réplicas, o snapshot de salas reflete o runtime local desta instância.
+- Eventos de incidentes, métricas de mercado e estado de tratados não têm fontes instrumentadas e permanecem indisponíveis em vez de inventados.
 - O rate limit é por processo, não um rate limiter global distribuído.
 - A avaliação dos três agentes é consultiva, determinística, auditável e fail-closed; não existe endpoint de aprovação/execução.
+
+## Interface web do operador
+
+A interface autenticada fica em `/marshal-console`; o backend continua sendo a autoridade. Ela apresenta snapshots autoritativos do runtime, permite selecionar mundo e submeter assunto/período para deliberação, acompanhar o processamento e consultar propostas. Métricas indisponíveis não podem ser preenchidas pelo cliente nem usadas como telemetria factual. A página não aprova nem executa propostas.

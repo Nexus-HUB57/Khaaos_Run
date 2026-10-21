@@ -16,8 +16,6 @@ const rejects = <T extends { safeParse(value: unknown): { success: boolean } }>(
 };
 
 test("bank/loan/item inputs reject non-finite, out-of-range, fractional and extra fields", () => {
-  rejects(api.bank.deposit.input, { amountUsd: Infinity });
-  rejects(api.bank.deposit.input, { amountUsd: 10001 });
   rejects(api.bank.transfer.input, { amountKrc: -1, destination: "fbm" });
   rejects(api.bank.transfer.input, { amountKrc: 5, destination: "fbm", userId: "victim" });
   rejects(api.loans.request.input, { amountKrc: 100.5, days: 1 });

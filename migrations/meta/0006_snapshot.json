@@ -1,6 +1,6 @@
 {
-  "id": "a6a6d5ba-d48a-46ae-af86-1ac4f13b219d",
-  "prevId": "3ad81e5b-ae4a-42c7-aa51-96c9a130ed2a",
+  "id": "28d875a9-3c48-4454-a985-2d1cf376683f",
+  "prevId": "a2623225-7f54-4bfd-b473-999344bdde4d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -55,7 +55,325 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "bank_weapons_nonnegative": {
+          "name": "bank_weapons_nonnegative",
+          "value": "\"bank_accounts\".\"weapons_balance\" >= 0"
+        },
+        "bank_bonus_nonnegative": {
+          "name": "bank_bonus_nonnegative",
+          "value": "\"bank_accounts\".\"bonus_balance\" >= 0"
+        },
+        "bank_fbm_nonnegative": {
+          "name": "bank_fbm_nonnegative",
+          "value": "\"bank_accounts\".\"fbm_balance\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.economy_idempotency": {
+      "name": "economy_idempotency",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response_status": {
+          "name": "response_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "economy_idempotency_user_key_unique": {
+          "name": "economy_idempotency_user_key_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "economy_idempotency_operation_id_unique": {
+          "name": "economy_idempotency_operation_id_unique",
+          "columns": [
+            {
+              "expression": "operation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "economy_idempotency_created_at_idx": {
+          "name": "economy_idempotency_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "economy_idem_key_format": {
+          "name": "economy_idem_key_format",
+          "value": "\"economy_idempotency\".\"idempotency_key\" ~ '^[A-Za-z0-9._~-]{16,128}$'"
+        },
+        "economy_idem_hash_sha256": {
+          "name": "economy_idem_hash_sha256",
+          "value": "length(\"economy_idempotency\".\"request_hash\") = 64"
+        },
+        "economy_idem_response_status_valid": {
+          "name": "economy_idem_response_status_valid",
+          "value": "\"economy_idempotency\".\"response_status\" IS NULL OR \"economy_idempotency\".\"response_status\" BETWEEN 100 AND 599"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.economy_ledger_entries": {
+      "name": "economy_ledger_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_number": {
+          "name": "line_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_code": {
+          "name": "account_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_krc": {
+          "name": "amount_krc",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "economy_ledger_operation_line_unique": {
+          "name": "economy_ledger_operation_line_unique",
+          "columns": [
+            {
+              "expression": "operation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "line_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "economy_ledger_user_key_line_unique": {
+          "name": "economy_ledger_user_key_line_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "line_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "economy_ledger_user_account_time_idx": {
+          "name": "economy_ledger_user_account_time_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "economy_ledger_key_format": {
+          "name": "economy_ledger_key_format",
+          "value": "\"economy_ledger_entries\".\"idempotency_key\" ~ '^[A-Za-z0-9._~-]{16,128}$'"
+        },
+        "economy_ledger_line_number_positive": {
+          "name": "economy_ledger_line_number_positive",
+          "value": "\"economy_ledger_entries\".\"line_number\" > 0"
+        },
+        "economy_ledger_side_valid": {
+          "name": "economy_ledger_side_valid",
+          "value": "\"economy_ledger_entries\".\"side\" IN ('DEBIT', 'CREDIT')"
+        },
+        "economy_ledger_amount_positive": {
+          "name": "economy_ledger_amount_positive",
+          "value": "\"economy_ledger_entries\".\"amount_krc\" > 0"
+        },
+        "economy_ledger_account_valid": {
+          "name": "economy_ledger_account_valid",
+          "value": "\"economy_ledger_entries\".\"account_code\" IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'equity.opening_balance')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.eliminations": {
@@ -202,7 +520,20 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "items_durability_nonnegative": {
+          "name": "items_durability_nonnegative",
+          "value": "\"items\".\"durability\" >= 0"
+        },
+        "items_max_durability_nonnegative": {
+          "name": "items_max_durability_nonnegative",
+          "value": "\"items\".\"max_durability\" >= 0"
+        },
+        "items_durability_within_maximum": {
+          "name": "items_durability_within_maximum",
+          "value": "\"items\".\"durability\" <= \"items\".\"max_durability\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.loans": {
@@ -265,7 +596,28 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "loans_principal_nonnegative": {
+          "name": "loans_principal_nonnegative",
+          "value": "\"loans\".\"principal\" >= 0"
+        },
+        "loans_interest_nonnegative": {
+          "name": "loans_interest_nonnegative",
+          "value": "\"loans\".\"interest\" >= 0"
+        },
+        "loans_total_due_nonnegative": {
+          "name": "loans_total_due_nonnegative",
+          "value": "\"loans\".\"total_due\" >= 0"
+        },
+        "loans_days_remaining_nonnegative": {
+          "name": "loans_days_remaining_nonnegative",
+          "value": "\"loans\".\"days_remaining\" >= 0"
+        },
+        "loans_is_paid_present": {
+          "name": "loans_is_paid_present",
+          "value": "\"loans\".\"is_paid\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.loot_items": {
@@ -888,6 +1240,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "timestamp": {
           "name": "timestamp",
           "type": "timestamp",
@@ -901,7 +1259,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "transactions_amount_krc_nonnegative": {
+          "name": "transactions_amount_krc_nonnegative",
+          "value": "\"transactions\".\"amount_krc\" >= 0"
+        },
+        "transactions_amount_usd_nonnegative": {
+          "name": "transactions_amount_usd_nonnegative",
+          "value": "\"transactions\".\"amount_usd\" IS NULL OR \"transactions\".\"amount_usd\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.zone_sessions": {

@@ -10,6 +10,10 @@
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
+#include "KhaaosAttributeSet.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -254,32 +258,57 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
                 return;
         }
 
-        // Area damage
-        if (DamageRadius > 0.0f)
+        auto ApplyToOne = [this](AActor* Victim, float Amount)
         {
-                // Apply radial damage
-                UGameplayStatics::ApplyRadialDamage(
-                        GetWorld(),
-                        Damage,
-                        Hit.Location,
-                        DamageRadius,
-                        UDamageType::StaticClass(),
-                        TArray<AActor*>(),
-                        InstigatorActor.Get(),
-                        true
-                );
-        }
-        else
-        {
-                // Single-target damage
+                if (!Victim || Amount <= 0.f) return;
+                if (UKhaaosVitalityComponent* Vitality = Victim->FindComponentByClass<UKhaaosVitalityComponent>())
+                {
+                        Vitality->ApplyDamage(Amount, InstigatorActor.Get());
+                        return;
+                }
+                if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Victim))
+                {
+                        if (const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>())
+                        {
+                                const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamage(Amount, InstigatorActor.Get());
+                                return;
+                        }
+                }
                 UGameplayStatics::ApplyDamage(
-                        Target,
-                        Damage,
+                        Victim,
+                        Amount,
                         InstigatorActor ? InstigatorActor->GetInstigatorController() : nullptr,
                         this,
                         UDamageType::StaticClass()
                 );
+        };
+
+        // Area damage: apply to all pawns in radius (Vitality-aware)
+        if (DamageRadius > 0.0f)
+        {
+                TArray<FOverlapResult> Overlaps;
+                FCollisionQueryParams Params(SCENE_QUERY_STAT(KhaaosProjectileRadial), false, this);
+                GetWorld()->OverlapMultiByChannel(
+                        Overlaps,
+                        Hit.Location,
+                        FQuat::Identity,
+                        ECC_Pawn,
+                        FCollisionShape::MakeSphere(DamageRadius),
+                        Params
+                );
+                for (const FOverlapResult& Ov : Overlaps)
+                {
+                        if (AActor* Victim = Ov.GetActor())
+                        {
+                                ApplyToOne(Victim, Damage);
+                        }
+                }
+                // Always include primary target
+                ApplyToOne(Target, Damage);
+                return;
         }
+
+        ApplyToOne(Target, Damage);
 }
 
 void AKhaaosProjectile::ClientSpawnImpactFX_Implementation(const FHitResult& Hit)

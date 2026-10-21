@@ -16,6 +16,7 @@
 
 import type { WebSocket } from "ws";
 import type { WorldId } from "./orchestration";
+import { distributedState } from "./DistributedState";
 
 export type QueueMode = "solo" | "duo" | "squad";
 
@@ -87,7 +88,7 @@ export class MatchmakingService {
 
   start() {
     if (this.tickHandle) return;
-    this.tickHandle = setInterval(() => this.tick(), this.config.tickIntervalMs);
+    this.tickHandle = setInterval(() => void this.tickDistributed(), this.config.tickIntervalMs);
     console.log("[Matchmaking] service started");
   }
 
@@ -121,6 +122,10 @@ export class MatchmakingService {
       currentDelta: this.config.initialDelta,
     };
     this.queue.set(userId, entry);
+    void distributedState.upsertQueueEntry({
+      userId, displayName, rating: entry.rating, mode, worldId: entry.worldId, enqueuedAt: entry.enqueuedAt,
+      currentDelta: entry.currentDelta, nodeId: distributedState.nodeId,
+    });
 
     if (ws) {
       this.send(ws, {
@@ -136,6 +141,7 @@ export class MatchmakingService {
     const entry = this.queue.get(userId);
     if (!entry) return;
     this.queue.delete(userId);
+    void distributedState.removeQueueEntry(userId);
     if (entry.ws) {
       this.send(entry.ws, { type: "queue_left" });
     }
@@ -180,6 +186,32 @@ export class MatchmakingService {
   }
 
   // ─── Internals ───────────────────────────────────────────────────────────
+
+  private async tickDistributed(): Promise<void> {
+    const lock = await distributedState.acquireLock("matchmaking:tick", this.config.tickIntervalMs + 1_000);
+    if (!lock) return;
+    try {
+      const remoteEntries = await distributedState.getQueueEntries();
+      for (const remote of remoteEntries) {
+        const existing = this.queue.get(remote.userId);
+        if (!existing) {
+          this.queue.set(remote.userId, {
+            userId: remote.userId,
+            displayName: remote.displayName,
+            rating: remote.rating,
+            mode: remote.mode,
+            worldId: remote.worldId ?? "CIGKV",
+            ws: null,
+            enqueuedAt: remote.enqueuedAt,
+            currentDelta: remote.currentDelta,
+          });
+        }
+      }
+      this.tick();
+    } finally {
+      await distributedState.releaseLock("matchmaking:tick", lock);
+    }
+  }
 
   private positionOf(userId: string): number {
     const ordered = [...this.queue.values()].sort((a, b) => a.enqueuedAt - b.enqueuedAt);
@@ -274,6 +306,7 @@ export class MatchmakingService {
   }
 
   private async formMatch(matched: QueueEntry[]) {
+    await Promise.all(matched.map((entry) => distributedState.removeQueueEntry(entry.userId)));
     const players = matched.map((m) => ({
       userId: m.userId,
       displayName: m.displayName,

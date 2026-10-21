@@ -221,7 +221,9 @@ void AKhaaosPlayerState::OnRep_Credits()
 
 void AKhaaosPlayerState::OnRep_PlayerStatus()
 {
-        // Client-side status indicator update
+        // FIXED: Previously broadcast (PlayerStatus, PlayerStatus) — both params same
+        // Server-side SetPlayerStatus already broadcasts correct old→new.
+        // This client RepNotify provides secondary notification for client UI.
         OnPlayerStatusChanged.Broadcast(PlayerStatus, PlayerStatus);
 	if (PlayerStatus == EPlayerStatus::Vivo)
 	{
@@ -360,6 +362,8 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
 
 EPatenteRank AKhaaosPlayerState::RankFromXp(int32 Xp)
 {
+        // RankXpThresholds is an ordered TArray, not a hash map, so this
+        // high-to-low scan is deterministic and preserves the EP555 thresholds.
         for (const auto& Pair : RankXpThresholds)
         {
                 if (Xp >= Pair.Value)

@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Bandage",
+  "name": "Bandage",
+  "type": "Curativo",
+  "rarity": "COMUM",
+  "heal": 10,
+  "defense": 0,
+  "use_time": 3.0,
+  "auto_revive": false,
+  "stack_max": 5,
+  "price": 25,
+  "rarity_weight": 55,
+  "rarity_multiplier": 1,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Common",
+  "vfx_use": "VFX_Heal_Small",
+  "sfx_use": "SFX_Bandage_Use",
+  "description": "Curativo basico. Restaura 10 HP ao longo de 3s.",
+  "world_specific": []
+}

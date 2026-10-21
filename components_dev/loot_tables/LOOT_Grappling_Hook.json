@@ -1,0 +1,24 @@
+{
+  "id": "LOOT_Grappling_Hook",
+  "name": "Grappling Hook",
+  "type": "Utilidade",
+  "rarity": "LENDARIO",
+  "heal": 0,
+  "defense": 0,
+  "use_time": 0.5,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 880,
+  "rarity_weight": 4,
+  "rarity_multiplier": 22,
+  "cooldown": 15.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Legendary",
+  "vfx_use": "VFX_Grapple_Fire",
+  "sfx_use": "SFX_Grapple_Fire",
+  "description": "Grappling Hook lendario. Distancia max 40m, cooldown 15s.",
+  "world_specific": [
+    "Priadus",
+    "Ckesalth"
+  ]
+}

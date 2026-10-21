@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_Shield_Lv2",
+  "name": "Shield Lv2",
+  "type": "Defesa",
+  "rarity": "RARO",
+  "heal": 0,
+  "defense": 50,
+  "use_time": 0.0,
+  "auto_revive": false,
+  "stack_max": 1,
+  "price": 375,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Rare",
+  "vfx_use": "VFX_Shield_Equip",
+  "sfx_use": "SFX_Shield_Equip",
+  "description": "Escudo reforcado. +50 defesa.",
+  "world_specific": []
+}

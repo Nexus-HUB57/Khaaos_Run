@@ -1,0 +1,19 @@
+{
+  "id": "VFX_BulletImpact_Dirt",
+  "type": "niagara",
+  "category": "vfx",
+  "description": "Bullet impact on dirt. Dust puff + small debris.",
+  "priority": "P0",
+  "subsystem": "Niagara",
+  "textures_required": [
+    "T_VFX_BulletImpact_Dirt_D",
+    "T_VFX_BulletImpact_Dirt_N"
+  ],
+  "parameters": {
+    "lifetime": 1.0,
+    "spawn_rate": 30,
+    "particle_count": 20
+  },
+  "material": "M_VFX_BulletImpact_Dirt",
+  "dependencies": []
+}

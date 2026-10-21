@@ -1,0 +1,2 @@
+ALTER TABLE "economy_idempotency" ADD CONSTRAINT "economy_idem_key_format" CHECK ("economy_idempotency"."idempotency_key" ~ '^[A-Za-z0-9._~-]{16,128}$');--> statement-breakpoint
+ALTER TABLE "economy_ledger_entries" ADD CONSTRAINT "economy_ledger_key_format" CHECK ("economy_ledger_entries"."idempotency_key" ~ '^[A-Za-z0-9._~-]{16,128}$');

@@ -1,0 +1,181 @@
+{
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-15T00:55:55.789010+00:00",
+  "loot_item_count": 26,
+  "curativo_count": 6,
+  "defesa_count": 7,
+  "utilidade_count": 7,
+  "recurso_count": 6,
+  "rarity_weights": {
+    "COMUM": 55,
+    "RARO": 28,
+    "EPICO": 12,
+    "LENDARIO": 4,
+    "MITICO": 1
+  },
+  "rarity_multiplier": {
+    "COMUM": 1,
+    "RARO": 2.8,
+    "EPICO": 7.5,
+    "LENDARIO": 22,
+    "MITICO": 65
+  },
+  "items": [
+    {
+      "id": "LOOT_Bandage",
+      "name": "Bandage",
+      "type": "Curativo",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_MedKit_Small",
+      "name": "MedKit Small",
+      "type": "Curativo",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_MedKit_Medium",
+      "name": "MedKit Medium",
+      "type": "Curativo",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Phoenix_Frasco",
+      "name": "Phoenix Frasco",
+      "type": "Curativo",
+      "rarity": "LENDARIO"
+    },
+    {
+      "id": "LOOT_Seringa_Venex",
+      "name": "Seringa Venex",
+      "type": "Curativo",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Adrenalina_Khael",
+      "name": "Adrenalina Khael",
+      "type": "Curativo",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Shield_Lv1",
+      "name": "Shield Lv1",
+      "type": "Defesa",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_Shield_Lv2",
+      "name": "Shield Lv2",
+      "type": "Defesa",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Colete_Khaaos",
+      "name": "Colete Khaaos",
+      "type": "Defesa",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Capacete_Simples",
+      "name": "Capacete Simples",
+      "type": "Defesa",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Armadura_Huran",
+      "name": "Armadura Huran",
+      "type": "Defesa",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Escudo_Khael",
+      "name": "Escudo Khael",
+      "type": "Defesa",
+      "rarity": "LENDARIO"
+    },
+    {
+      "id": "LOOT_Granada_Frag",
+      "name": "Granada Frag",
+      "type": "Defesa",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_Granada_Zheers",
+      "name": "Granada Zheers",
+      "type": "Utilidade",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Mina_Khaaos",
+      "name": "Mina Khaaos",
+      "type": "Utilidade",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Beacon_Pulso",
+      "name": "Beacon Pulso",
+      "type": "Utilidade",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Drone_Recon",
+      "name": "Drone Recon",
+      "type": "Utilidade",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Grappling_Hook",
+      "name": "Grappling Hook",
+      "type": "Utilidade",
+      "rarity": "LENDARIO"
+    },
+    {
+      "id": "LOOT_Mochila_Tatica",
+      "name": "Mochila Tatica",
+      "type": "Utilidade",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_AmmoBox_556",
+      "name": "AmmoBox 5.56",
+      "type": "Utilidade",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_AmmoBox_762",
+      "name": "AmmoBox 7.62",
+      "type": "Recurso",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_AmmoBox_9mm",
+      "name": "AmmoBox 9mm",
+      "type": "Recurso",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_AmmoBox_12g",
+      "name": "AmmoBox 12g",
+      "type": "Recurso",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_Material_Metal",
+      "name": "Material Metal",
+      "type": "Recurso",
+      "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_Material_Cristal",
+      "name": "Material Cristal",
+      "type": "Recurso",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Material_Nucleo",
+      "name": "Material Nucleo",
+      "type": "Recurso",
+      "rarity": "EPICO"
+    }
+  ]
+}
