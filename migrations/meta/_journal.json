@@ -15,6 +15,13 @@
       "when": 1792023223444,
       "tag": "0001_ep555-specialization",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792025201235,
+      "tag": "0002_marshal-council-persistence",
+      "breakpoints": true
     }
   ]
 }

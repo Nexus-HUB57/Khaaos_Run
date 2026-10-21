@@ -15,6 +15,7 @@
  */
 
 import type { WebSocket } from "ws";
+import type { WorldId } from "./orchestration";
 
 export type QueueMode = "solo" | "duo" | "squad";
 
@@ -23,6 +24,7 @@ export interface QueueEntry {
   displayName: string;
   rating: number;
   mode: QueueMode;
+  worldId: WorldId;
   ws: WebSocket | null;
   enqueuedAt: number;
   /** Expanding half-width of acceptable rating delta */
@@ -63,7 +65,8 @@ export type MatchmakingEvent =
   | { type: "error"; message: string };
 
 type SendFn = (ws: WebSocket, msg: MatchmakingEvent) => void;
-type CreateLobbyFn = (players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[]) => Promise<string>;
+type MatchPlayer = { userId: string; displayName: string; rating: number; ws: WebSocket | null };
+type CreateLobbyFn = (players: MatchPlayer[], worldId: WorldId) => Promise<string>;
 
 export class MatchmakingService {
   private queue = new Map<string, QueueEntry>();
@@ -102,6 +105,7 @@ export class MatchmakingService {
     rating: number,
     ws: WebSocket | null,
     mode: QueueMode = "solo",
+    worldId: WorldId = "CIGKV",
   ) {
     // Leave any previous queue slot
     this.queue.delete(userId);
@@ -111,6 +115,7 @@ export class MatchmakingService {
       displayName,
       rating: rating || 1000,
       mode,
+      worldId,
       ws,
       enqueuedAt: Date.now(),
       currentDelta: this.config.initialDelta,
@@ -148,6 +153,16 @@ export class MatchmakingService {
 
   getQueueSize(): number {
     return this.queue.size;
+  }
+
+  getTelemetry(worldId: WorldId, now = Date.now()): { count: number; p95WaitSeconds: number | null } {
+    const waits = [...this.queue.values()]
+      .filter((entry) => entry.worldId === worldId)
+      .map((entry) => Math.max(0, (now - entry.enqueuedAt) / 1000))
+      .sort((a, b) => a - b);
+    if (!waits.length) return { count: 0, p95WaitSeconds: null };
+    const p95 = waits[Math.max(0, Math.ceil(waits.length * 0.95) - 1)];
+    return { count: waits.length, p95WaitSeconds: Math.round(p95 * 10) / 10 };
   }
 
   getStatus(userId: string) {
@@ -221,6 +236,7 @@ export class MatchmakingService {
       const candidates = remaining.filter((e) => {
         if (used.has(e.userId)) return false;
         if (e.mode !== seed.mode) return false;
+        if (e.worldId !== seed.worldId) return false;
         // Mutual rating window (both must accept each other)
         const delta = Math.max(seed.currentDelta, e.currentDelta);
         return Math.abs(e.rating - seed.rating) <= delta;
@@ -265,7 +281,7 @@ export class MatchmakingService {
       ws: m.ws,
     }));
 
-    const roomId = await this.createLobby(players);
+    const roomId = await this.createLobby(players, matched[0].worldId);
 
     const payload: MatchmakingEvent = {
       type: "match_found",

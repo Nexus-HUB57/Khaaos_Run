@@ -812,7 +812,7 @@ Semana  1   4   8   11  15  23  28
 
 ## Referências
 - [Arquitetura dos mundos e agentes especiais](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md)
-- [API proposta do painel do Marechal](docs/API_MARECHAL_CONTROL_PANEL.md)
+- [API ativa do painel do Marechal, telemetria e persistência](docs/API_MARECHAL_CONTROL_PANEL.md)
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
 - [Autenticação realtime](docs/REALTIME_AUTH.md)
 - [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)
