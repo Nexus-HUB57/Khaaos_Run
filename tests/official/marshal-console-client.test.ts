@@ -9,9 +9,11 @@ process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 const {
   checkMarshalConsoleAccess,
   createMarshalCouncil,
+  fetchMarshalNarrativeEvents,
   fetchMarshalCouncil,
   fetchMarshalOverview,
   fetchMarshalProposal,
+  marshalTelemetryStreamUrl,
 } = await import("../../client/src/lib/marshal-console-api.ts");
 const [{ registerMarshalConsoleRoutes, MarshalConsoleStore }, { MemoryMarshalConsoleRepository }] = await Promise.all([
   import("../../server/game/marshalConsole.ts"),
@@ -77,6 +79,11 @@ test("cliente do console completa overview → conselho assíncrono → proposta
   assert.equal(overview.name, "Priadus");
   assert.equal(overview.stale, false);
   assert.equal(overview.occupancy.current, 0);
+  assert.equal(marshalTelemetryStreamUrl("W2"), "/api/console/v1/marshal/telemetry/stream?worldId=W2");
+  const narrative = await fetchMarshalNarrativeEvents("W2");
+  assert.equal(narrative.source, "server-runtime-telemetry");
+  assert.deepEqual(narrative.events, []);
+  assert.equal(narrative.policy.executable, false);
 
   const submitted = await createMarshalCouncil({
     subject: "revisar-janela-de-entrada",
@@ -129,6 +136,9 @@ test("página comunica telemetria ausente e não oferece aprovação ou execuç�
   assert.match(markup, /CONSOLE DO MARECHAL/);
   assert.match(markup, /SNAPSHOT DO RUNTIME/);
   assert.match(markup, /Sem telemetria/);
+  assert.match(markup, /marshal-telemetry-trends/);
+  assert.match(markup, /Tendência OCUPAÇÃO/);
+  assert.match(markup, /SINAIS NARRATIVOS/);
   assert.match(markup, /Propostas exigem revisão humana/);
   assert.doesNotMatch(markup, /VOLATILIDADE DE MERCADO|INCIDENTES ATIVOS|OCUPAÇÃO \(%\)/);
   assert.doesNotMatch(markup, /APROVAR PROPOSTA|EXECUTAR PROPOSTA/i);

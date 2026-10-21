@@ -14,6 +14,7 @@
     "economy:idempotency:prune": "tsx scripts/prune-economy-idempotency.ts",
     "test:game": "npm --prefix game-runtime test",
     "test:official": "node --import tsx --test tests/official/*.test.ts tests/official/dashboard-transactions.test.tsx && node --test tests/official/*.test.js",
+    "test:marshal-load": "node --import tsx --test tests/performance/marshal-console-load.test.ts",
     "test:postgres": "node --import tsx --test tests/integration/*.test.ts",
     "test:eos-flow": "node --import tsx --test tests/integration/eos-economy.integration.test.ts",
     "test:economy": "node --import tsx --test tests/official/economy-money.test.ts tests/official/economy-procgen-e2e.test.js tests/integration/eos-economy.integration.test.ts",

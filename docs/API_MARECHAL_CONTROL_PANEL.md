@@ -16,6 +16,8 @@
 | Método e caminho | Descrição |
 |---|---|
 | `GET /api/console/v1/marshal/overview?worldId=W2` | Snapshot atual de salas e fila para o mundo. |
+| `GET /api/console/v1/marshal/telemetry/stream?worldId=W2` | Stream SSE autenticado; publica snapshots a cada 2 s. |
+| `GET /api/console/v1/marshal/narrative-events?worldId=W2` | Drafts narrativos determinísticos dos três agentes, derivados do snapshot. |
 | `POST /api/console/v1/marshal/councils` | Persistir e iniciar um conselho assíncrono. |
 | `GET /api/console/v1/marshal/councils/{requestId}` | Consultar status, snapshot usado e deliberação. |
 | `GET /api/console/v1/marshal/proposals/{proposalId}` | Consultar uma proposta; sempre `executable: false`. |
@@ -102,3 +104,27 @@ Formato comum: `{ "error": { "code": "...", "message": "...", "details": [] }, "
 ## Interface web do operador
 
 A interface autenticada fica em `/marshal-console`; o backend continua sendo a autoridade. Ela apresenta snapshots autoritativos do runtime, permite selecionar mundo e submeter assunto/período para deliberação, acompanhar o processamento e consultar propostas. Métricas indisponíveis não podem ser preenchidas pelo cliente nem usadas como telemetria factual. A página não aprova nem executa propostas.
+
+
+## Telemetria em tempo real (SSE)
+
+```http
+GET /api/console/v1/marshal/telemetry/stream?worldId=W2
+Cookie: <sessao-autenticada>
+Accept: text/event-stream
+```
+
+A conexão usa a mesma sessão OIDC e allowlist de operadores da API. O servidor envia `event: telemetry` imediatamente e, enquanto aberta, um snapshot a cada 2 segundos. O campo `data` é o objeto de overview documentado acima, incluindo `observedAt`. O painel atualiza o cache React Query com os eventos recebidos; EventSource reconecta automaticamente e o overview mantém polling de fallback a cada 15 segundos. Respostas usam `Cache-Control: no-cache, no-store, no-transform` e `X-Accel-Buffering: no`. Cada processo limita streams ativos a 100 no total e 3 por operador; excesso responde `429 STREAM_LIMIT_REACHED` com `Retry-After: 5`. Fechar a aba remove o consumidor e interrompe o timer de fanout quando não há clientes.
+
+## Drafts narrativos da Classe Especial
+
+```http
+GET /api/console/v1/marshal/narrative-events?worldId=W2
+Cookie: <sessao-autenticada>
+```
+
+A resposta contém `source: "server-runtime-telemetry"`, eventos atuais e `policy: { proposalOnly: true, humanReviewRequired: true, executable: false }`. Gatilhos disponíveis: fila com ao menos 3 participantes (**As Docas em Silêncio**), p95 de espera de ao menos 60 segundos (**O Farol da Espera**) e ocupação observada de ao menos 80% (**A Mesa do Anel**). Cada draft inclui os sinais que o ativaram e uma contribuição de Henricks, King Krapulla e Uryan. Valores ausentes não acionam gatilhos; falas são ficcionais, não evidência de incidentes/mercado/tratados, e não afetam gameplay. A lista pode ficar vazia. Regras editoriais completas em [`SPECIAL_CLASS_NARRATIVE_GUIDELINES.md`](SPECIAL_CLASS_NARRATIVE_GUIDELINES.md).
+
+## Pipeline de carga por PR
+
+`.github/workflows/marshal-console-load.yml` executa para cada pull request destinado a `main` ou `develop` e também pode ser acionado manualmente. O harness local testa 400 leituras de overview, 100 conselhos assíncronos e 40 streams SSE simultâneos com 20 operadores e cinco mundos, aplica limites de latência, e publica o log como artefato por 30 dias. A simulação é isolada do serviço público e usa repositório de memória, não exige DB/Redis nem gera tráfego em regiões de produção.

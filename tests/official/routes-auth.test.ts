@@ -58,6 +58,8 @@ const protectedRoutes = [
   ["GET", "/api/auth/ws-token"],
   ["GET", "/api/zone/permissions"],
   ["GET", "/api/console/v1/marshal/overview?worldId=W1"],
+  ["GET", "/api/console/v1/marshal/telemetry/stream?worldId=W1"],
+  ["GET", "/api/console/v1/marshal/narrative-events?worldId=W1"],
   ["POST", "/api/console/v1/marshal/councils"],
   ["GET", "/api/console/v1/marshal/councils/00000000-0000-4000-8000-000000000000"],
   ["GET", "/api/console/v1/marshal/proposals/prop_00000000-0000-4000-8000-000000000000"],

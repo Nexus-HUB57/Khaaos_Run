@@ -1,6 +1,6 @@
 import React, { useEffect, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Clock3, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, AlertTriangle, Clock3, Radio, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,11 @@ import {
   MarshalWorldId,
   MARSHAL_WORLDS,
   createMarshalCouncil,
+  fetchMarshalNarrativeEvents,
   fetchMarshalCouncil,
   fetchMarshalOverview,
   fetchMarshalProposal,
+  marshalTelemetryStreamUrl,
 } from "@/lib/marshal-console-api";
 
 interface CouncilDraft {
@@ -26,6 +28,7 @@ interface CouncilDraft {
 const INITIAL_DRAFT: CouncilDraft = { subject: "", periodSeconds: "3600" };
 
 const TERMINAL_STATUSES = new Set<CouncilStatus>(["complete", "partial", "failed"]);
+type TelemetryPoint = { occupancyPct: number | null; queueP95Seconds: number | null; queueCount: number };
 
 function errorMessage(error: unknown): string {
   if (error instanceof MarshalConsoleApiError) {
@@ -76,6 +79,29 @@ function prettyCode(value: string): string {
   return value.replaceAll("-", " ").replaceAll("_", " ").toLocaleUpperCase("pt-BR");
 }
 
+function TelemetryTrend({ title, values, color, format }: { title: string; values: Array<number | null>; color: string; format: (value: number) => string }) {
+  const valid = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  const maximum = Math.max(1, ...valid);
+  const points = values.map((value, index) => value === null || !Number.isFinite(value)
+    ? null
+    : `${values.length < 2 ? 50 : (index / (values.length - 1)) * 100},${30 - (value / maximum) * 26}`)
+    .filter((point): point is string => point !== null);
+  const latest = valid.at(-1);
+  return (
+    <div className="border border-border/40 bg-black/25 p-3" aria-label={`${title} ao longo das últimas amostras`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-mono tracking-widest text-muted-foreground">{title}</p>
+        <span className="text-xs font-semibold" style={{ color }}>{latest === undefined ? "—" : format(latest)}</span>
+      </div>
+      <svg role="img" aria-label={`Tendência ${title}`} viewBox="0 0 100 32" preserveAspectRatio="none" className="mt-2 h-12 w-full">
+        <line x1="0" y1="31" x2="100" y2="31" stroke="currentColor" strokeOpacity="0.2" />
+        {points.length > 1 && <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      <p className="text-[9px] font-mono text-muted-foreground">{valid.length} AMOSTRAS · ATUALIZAÇÃO SSE</p>
+    </div>
+  );
+}
+
 function AccessDenied({ error }: { error: unknown }) {
   const expired = error instanceof MarshalConsoleApiError && error.status === 401;
   return (
@@ -116,6 +142,9 @@ export default function MarshalConsolePage() {
   const [pollError, setPollError] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalLoading, setProposalLoading] = useState(false);
+  const [streamState, setStreamState] = useState<"connecting" | "live" | "reconnecting">("connecting");
+  const [trendSamples, setTrendSamples] = useState<TelemetryPoint[]>([]);
+  const queryClient = useQueryClient();
 
   const overviewQuery = useQuery<MarshalOverview, Error>({
     queryKey: ["marshal-console-overview", worldId],
@@ -123,7 +152,51 @@ export default function MarshalConsolePage() {
     staleTime: 15_000,
     retry: false,
     refetchOnWindowFocus: false,
+    refetchInterval: 15_000,
   });
+
+  const narrativeQuery = useQuery({
+    queryKey: ["marshal-narrative-events", worldId],
+    queryFn: ({ signal }) => fetchMarshalNarrativeEvents(worldId, signal),
+    enabled: !!overviewQuery.data,
+    staleTime: 5_000,
+    refetchInterval: 20_000,
+    retry: false,
+  });
+  const hasOverview = !!overviewQuery.data;
+
+  useEffect(() => {
+    if (!hasOverview) return;
+    setStreamState("connecting");
+    const source = new EventSource(marshalTelemetryStreamUrl(worldId), { withCredentials: true });
+    source.onopen = () => setStreamState("live");
+    source.onerror = () => setStreamState("reconnecting");
+    source.addEventListener("telemetry", (rawEvent) => {
+      try {
+        const snapshot = JSON.parse((rawEvent as MessageEvent<string>).data) as MarshalOverview;
+        if (snapshot.worldId !== worldId) return;
+        const previous = queryClient.getQueryData<MarshalOverview>(["marshal-console-overview", worldId]);
+        queryClient.setQueryData(["marshal-console-overview", worldId], snapshot);
+        setTrendSamples((current) => [...current, {
+          occupancyPct: snapshot.occupancy.percent,
+          queueP95Seconds: snapshot.queueP95Seconds,
+          queueCount: snapshot.queueCount,
+        }].slice(-30));
+        setStreamState("live");
+        const materiallyChanged = !previous ||
+          previous.occupancy.current !== snapshot.occupancy.current ||
+          previous.occupancy.capacity !== snapshot.occupancy.capacity ||
+          previous.queueCount !== snapshot.queueCount ||
+          previous.queueP95Seconds !== snapshot.queueP95Seconds;
+        if (materiallyChanged) {
+          void queryClient.invalidateQueries({ queryKey: ["marshal-narrative-events", worldId] });
+        }
+      } catch {
+        setStreamState("reconnecting");
+      }
+    });
+    return () => source.close();
+  }, [hasOverview, queryClient, worldId]);
 
   useEffect(() => {
     if (!councilPath) return;
@@ -276,7 +349,7 @@ export default function MarshalConsolePage() {
                 <Activity className="h-5 w-5 text-cyan-300" aria-hidden="true" />
                 VISÃO DO MUNDO
               </CardTitle>
-              <CardDescription className="mt-2">Catálogo e última leitura disponível para o operador.</CardDescription>
+              <CardDescription className="mt-2">Telemetria autoritativa atualizada pelo stream do servidor.</CardDescription>
             </div>
             <Button
               type="button"
@@ -290,6 +363,10 @@ export default function MarshalConsolePage() {
               <RefreshCw className={`h-4 w-4 ${overviewQuery.isFetching ? "animate-spin" : ""}`} />
               ATUALIZAR
             </Button>
+            <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-muted-foreground">
+              <Radio className={`h-3.5 w-3.5 ${streamState === "live" ? "text-emerald-300" : "text-amber-300"}`} aria-hidden="true" />
+              {streamState === "live" ? "AO VIVO · SSE" : streamState === "connecting" ? "CONECTANDO" : "RECONEXÃO SSE"}
+            </span>
           </CardHeader>
           <CardContent className="space-y-4">
             <label htmlFor="marshal-world" className="block text-xs font-mono tracking-widest text-muted-foreground">
@@ -334,6 +411,11 @@ export default function MarshalConsolePage() {
                   <Metric label="FILA P95" value={overview.queueP95Seconds == null ? "Sem telemetria" : `${overview.queueP95Seconds}s`} />
                   <Metric label="INCIDENTES" value={overview.activeIncidents == null ? "Sem telemetria" : String(overview.activeIncidents)} />
                   <Metric label="REVISÃO" value={overview.configRevision || "—"} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3" data-testid="marshal-telemetry-trends">
+                  <TelemetryTrend title="OCUPAÇÃO" values={trendSamples.map((sample) => sample.occupancyPct)} color="#22d3ee" format={(value) => `${value}%`} />
+                  <TelemetryTrend title="FILA P95" values={trendSamples.map((sample) => sample.queueP95Seconds)} color="#fbbf24" format={(value) => `${value}s`} />
+                  <TelemetryTrend title="FILA ATUAL" values={trendSamples.map((sample) => sample.queueCount)} color="#a78bfa" format={(value) => String(value)} />
                 </div>
                 <p className="text-[11px] font-mono text-muted-foreground">
                   <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
@@ -408,6 +490,45 @@ export default function MarshalConsolePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-amber-500/20 bg-card/70" data-testid="marshal-narrative-events">
+        <CardHeader>
+          <CardTitle className="text-lg">SINAIS NARRATIVOS · CLASSE ESPECIAL</CardTitle>
+          <CardDescription>
+            Rascunhos ficcionais disparados somente por sinais observados; não são incidentes confirmados nem ações do jogo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {narrativeQuery.isLoading && <p role="status" className="text-xs font-mono text-muted-foreground">LENDO SINAIS DO MUNDO...</p>}
+          {narrativeQuery.error && <p role="alert" className="text-sm text-destructive">Não foi possível carregar os rascunhos narrativos.</p>}
+          {narrativeQuery.data?.events.length === 0 && (
+            <p className="border border-border/40 bg-black/25 p-4 text-sm text-muted-foreground">
+              Nenhum gatilho narrativo atingido neste snapshot. Os thresholds não criam eventos de gameplay.
+            </p>
+          )}
+          {narrativeQuery.data?.events.map((event) => (
+            <article key={event.eventId} className="space-y-3 border border-border/50 bg-black/25 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-foreground">{event.title}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">{event.theme}</p>
+                </div>
+                <span className="border border-amber-500/40 px-2 py-1 text-[10px] font-mono text-amber-200">RASCUNHO · REVISÃO HUMANA</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Gatilho observável: {event.trigger}</p>
+              <div className="grid gap-2 md:grid-cols-3">
+                {event.contributions.map((contribution) => (
+                  <p key={`${event.eventId}-${contribution.agentId}`} className="border border-border/30 p-3 text-xs leading-relaxed text-muted-foreground">
+                    <span className="mb-1 block font-mono text-[10px] tracking-widest text-primary">{prettyCode(contribution.agentId)} · {prettyCode(contribution.role)}</span>
+                    {contribution.line}
+                  </p>
+                ))}
+              </div>
+              <p className="text-[10px] font-mono text-muted-foreground">SINAIS: {event.observedSignals.map((signal) => `${signal.key}=${signal.value}`).join(" · ")} · NÃO EXECUTÁVEL</p>
+            </article>
+          ))}
+        </CardContent>
+      </Card>
 
       {council && (
         <Card className="border-purple-500/20 bg-card/70" data-testid="marshal-council-result">
