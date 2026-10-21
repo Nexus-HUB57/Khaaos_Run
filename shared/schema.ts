@@ -236,6 +236,7 @@ export const economyIdempotency = pgTable("economy_idempotency", {
   userKeyUnique: uniqueIndex("economy_idempotency_user_key_unique").on(table.userId, table.idempotencyKey),
   operationIdUnique: uniqueIndex("economy_idempotency_operation_id_unique").on(table.operationId),
   createdAtIndex: index("economy_idempotency_created_at_idx").on(table.createdAt),
+  idempotencyKeyFormat: check("economy_idem_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
   requestHashSha256: check("economy_idem_hash_sha256", sql`length(${table.requestHash}) = 64`),
   responseStatusValid: check("economy_idem_response_status_valid", sql`${table.responseStatus} IS NULL OR ${table.responseStatus} BETWEEN 100 AND 599`),
 }));
@@ -255,6 +256,7 @@ export const economyLedgerEntries = pgTable("economy_ledger_entries", {
   operationLineUnique: uniqueIndex("economy_ledger_operation_line_unique").on(table.operationId, table.lineNumber),
   userKeyLineUnique: uniqueIndex("economy_ledger_user_key_line_unique").on(table.userId, table.idempotencyKey, table.lineNumber),
   userAccountTime: index("economy_ledger_user_account_time_idx").on(table.userId, table.accountCode, table.createdAt, table.id),
+  idempotencyKeyFormat: check("economy_ledger_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
   positiveLineNumber: check("economy_ledger_line_number_positive", sql`${table.lineNumber} > 0`),
   validSide: check("economy_ledger_side_valid", sql`${table.side} IN ('DEBIT', 'CREDIT')`),
   positiveAmount: check("economy_ledger_amount_positive", sql`${table.amountKrc} > 0`),
