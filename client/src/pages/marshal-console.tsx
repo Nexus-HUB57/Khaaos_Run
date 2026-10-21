@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  CouncilContext,
   CouncilResponse,
   CouncilStatus,
   MarshalConsoleApiError,
@@ -22,26 +21,9 @@ import {
 interface CouncilDraft {
   subject: string;
   periodSeconds: string;
-  occupancyPct: string;
-  queueP95Seconds: string;
-  activeIncidents: string;
-  marketVolatilityPct: string;
-  marketDataStale: boolean;
-  activeTreatyConflict: boolean;
-  configRevision: string;
 }
 
-const INITIAL_DRAFT: CouncilDraft = {
-  subject: "",
-  periodSeconds: "3600",
-  occupancyPct: "",
-  queueP95Seconds: "",
-  activeIncidents: "",
-  marketVolatilityPct: "",
-  marketDataStale: false,
-  activeTreatyConflict: false,
-  configRevision: "",
-};
+const INITIAL_DRAFT: CouncilDraft = { subject: "", periodSeconds: "3600" };
 
 const TERMINAL_STATUSES = new Set<CouncilStatus>(["complete", "partial", "failed"]);
 
@@ -62,41 +44,16 @@ function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
-function optionalNumber(value: string, label: string, min: number, max: number, integer = false): number | undefined {
-  if (value.trim() === "") return undefined;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max || (integer && !Number.isInteger(parsed))) {
-    throw new Error(`${label}: informe um valor entre ${min} e ${max}${integer ? " (inteiro)" : ""}.`);
-  }
-  return parsed;
-}
-
 function buildCouncilInput(worldId: MarshalWorldId, draft: CouncilDraft) {
   const subject = draft.subject.trim();
   if (subject.length < 2 || subject.length > 120) {
     throw new Error("O assunto precisa ter entre 2 e 120 caracteres.");
   }
-
-  const periodSeconds = optionalNumber(draft.periodSeconds, "Período", 60, 2_592_000, true);
-  const context: CouncilContext = {};
-  const occupancyPct = optionalNumber(draft.occupancyPct, "Ocupação", 0, 100);
-  const queueP95Seconds = optionalNumber(draft.queueP95Seconds, "Fila P95", 0, 3600);
-  const activeIncidents = optionalNumber(draft.activeIncidents, "Incidentes ativos", 0, 100, true);
-  const marketVolatilityPct = optionalNumber(draft.marketVolatilityPct, "Volatilidade", 0, 1000);
-  if (occupancyPct !== undefined) context.occupancyPct = occupancyPct;
-  if (queueP95Seconds !== undefined) context.queueP95Seconds = queueP95Seconds;
-  if (activeIncidents !== undefined) context.activeIncidents = activeIncidents;
-  if (marketVolatilityPct !== undefined) context.marketVolatilityPct = marketVolatilityPct;
-  if (draft.marketDataStale) context.marketDataStale = true;
-  if (draft.activeTreatyConflict) context.activeTreatyConflict = true;
-  const configRevision = draft.configRevision.trim();
-  if (configRevision) context.configRevision = configRevision.slice(0, 80);
-
-  return {
-    subject,
-    scope: { worldId, ...(periodSeconds === undefined ? {} : { periodSeconds }) },
-    context,
-  };
+  const periodSeconds = Number(draft.periodSeconds);
+  if (!Number.isInteger(periodSeconds) || periodSeconds < 60 || periodSeconds > 2_592_000) {
+    throw new Error("O período precisa ser um inteiro entre 60 e 2.592.000 segundos.");
+  }
+  return { subject, scope: { worldId, periodSeconds } };
 }
 
 function statusLabel(status: CouncilStatus): string {
@@ -305,9 +262,8 @@ export default function MarshalConsolePage() {
         <div>
           <p className="font-display font-bold tracking-wider text-amber-200">DADOS E LIMITES DO CONSOLE</p>
           <p className="mt-1 text-muted-foreground">
-            A visão de mundo ainda não recebe telemetria ao vivo. Os sinais do conselho são informados pelo operador,
-            e os adapters atuais são determinísticos e locais — não consultam um LLM ou serviço externo.
-            Propostas são apenas para revisão humana; não há aprovação nem execução nesta tela.
+            Ocupação e fila vêm do runtime desta instância; incidentes, mercado e diplomacia ainda não têm fontes autoritativas.
+            Os adapters são determinísticos e locais — sem LLM ou serviço externo. Propostas exigem revisão humana; não há aprovação nem execução nesta tela.
           </p>
         </div>
       </div>
@@ -366,7 +322,7 @@ export default function MarshalConsolePage() {
             {overview && (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2 border border-amber-500/30 bg-amber-500/5 p-3">
-                  <span className="text-xs font-mono tracking-widest text-amber-200">CATÁLOGO ESTÁTICO · SEM TELEMETRIA</span>
+                  <span className="text-xs font-mono tracking-widest text-amber-200">SNAPSHOT DO RUNTIME · FONTES PARCIAIS</span>
                   <span className="border border-amber-500/30 px-2 py-0.5 text-[10px] font-mono text-amber-200">
                     {overview.stale ? "DESATUALIZADO" : "ATUAL"}
                   </span>
@@ -392,7 +348,7 @@ export default function MarshalConsolePage() {
           <CardHeader>
             <CardTitle className="text-lg">SOLICITAR PARECER</CardTitle>
             <CardDescription>
-              Informe um assunto e, se houver, métricas agregadas fornecidas pelo operador.
+              Informe o assunto e o período; o servidor anexa a telemetria atual do runtime.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -430,37 +386,9 @@ export default function MarshalConsolePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <NumberField label="OCUPAÇÃO (%)" value={draft.occupancyPct} min={0} max={100} onChange={(value) => updateDraft("occupancyPct", value)} />
-                  <NumberField label="FILA P95 (SEGUNDOS)" value={draft.queueP95Seconds} min={0} max={3600} onChange={(value) => updateDraft("queueP95Seconds", value)} />
-                  <NumberField label="INCIDENTES ATIVOS" value={draft.activeIncidents} min={0} max={100} step={1} onChange={(value) => updateDraft("activeIncidents", value)} />
-                  <NumberField label="VOLATILIDADE DE MERCADO (%)" value={draft.marketVolatilityPct} min={0} max={1000} onChange={(value) => updateDraft("marketVolatilityPct", value)} />
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <CheckField
-                    checked={draft.marketDataStale}
-                    onChange={(checked) => updateDraft("marketDataStale", checked)}
-                    label="Sinal de mercado desatualizado"
-                  />
-                  <CheckField
-                    checked={draft.activeTreatyConflict}
-                    onChange={(checked) => updateDraft("activeTreatyConflict", checked)}
-                    label="Conflito de tratado ativo"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="marshal-config-revision" className="text-xs font-mono tracking-widest text-muted-foreground">
-                    REVISÃO DE CONFIGURAÇÃO (OPCIONAL)
-                  </label>
-                  <Input
-                    id="marshal-config-revision"
-                    value={draft.configRevision}
-                    onChange={(event) => updateDraft("configRevision", event.target.value)}
-                    maxLength={80}
-                    placeholder="Até 80 caracteres"
-                  />
+                <div role="note" className="border border-border/40 bg-black/25 p-3 text-xs text-muted-foreground">
+                  A deliberação anexará o snapshot calculado pelo servidor. Métricas não são editáveis pelo operador;
+                  dados de incidentes, economia e diplomacia permanecem indisponíveis até existir integração autoritativa.
                 </div>
               </fieldset>
 
@@ -607,60 +535,5 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-mono tracking-widest text-muted-foreground">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold text-foreground">{value}</p>
     </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  min: number;
-  max: number;
-  step?: number;
-  onChange: (value: string) => void;
-}) {
-  const id = `marshal-${label.toLocaleLowerCase("en").replace(/[^a-z0-9]+/g, "-")}`;
-  return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="text-[10px] font-mono tracking-widest text-muted-foreground">{label}</label>
-      <Input
-        id={id}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Sem sinal"
-      />
-    </div>
-  );
-}
-
-function CheckField({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-}) {
-  return (
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 border border-border/40 bg-black/25 px-3 py-2 text-xs text-muted-foreground">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-primary"
-      />
-      {label}
-    </label>
   );
 }

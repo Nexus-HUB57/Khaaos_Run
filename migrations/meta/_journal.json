@@ -43,6 +43,13 @@
       "when": 1792263320444,
       "tag": "0005_optimal_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792623974552,
+      "tag": "0006_marshal-council-persistence",
+      "breakpoints": true
     }
   ]
 }

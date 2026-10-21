@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uniqueIndex, index, check, uuid, bigserial } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uuid, varchar, index, uniqueIndex, check, bigserial } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -352,6 +352,39 @@ export const matchResults = pgTable("match_results", {
   xpGained: integer("xp_gained").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Special Class governance audit; isolated from player profiles, banks and match state.
+export const marshalCouncils = pgTable("marshal_councils", {
+  id: uuid("id").primaryKey(),
+  actorId: text("actor_id").notNull(),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  worldId: varchar("world_id", { length: 8 }).notNull(),
+  periodSeconds: integer("period_seconds"),
+  telemetrySnapshot: jsonb("telemetry_snapshot").$type<Record<string, unknown>>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("queued"),
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  errorCode: varchar("error_code", { length: 64 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  actorIdempotency: uniqueIndex("marshal_councils_actor_idempotency_uq").on(table.actorId, table.idempotencyKey),
+  actorCreated: index("marshal_councils_actor_created_idx").on(table.actorId, table.createdAt),
+  statusUpdated: index("marshal_councils_status_updated_idx").on(table.status, table.updatedAt),
+}));
+
+export const marshalProposals = pgTable("marshal_proposals", {
+  id: uuid("id").primaryKey(),
+  councilId: uuid("council_id").notNull().references(() => marshalCouncils.id, { onDelete: "cascade" }),
+  actorId: text("actor_id").notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  governance: jsonb("governance").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  councilSubject: uniqueIndex("marshal_proposals_council_subject_uq").on(table.councilId, table.subject),
+  actorCreated: index("marshal_proposals_actor_created_idx").on(table.actorId, table.createdAt),
+}));
 
 // === RELATIONS ===
 export const playerStatsRelations = relations(playerStats, ({ one }) => ({

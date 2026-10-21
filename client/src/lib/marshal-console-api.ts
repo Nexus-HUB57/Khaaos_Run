@@ -15,28 +15,20 @@ export interface MarshalOverview {
   worldId: MarshalWorldId;
   name: string;
   operationalState: string;
-  occupancy: { current: number | null; capacity: number; percent: number | null };
+  occupancy: { current: number; capacity: number; percent: number | null };
+  activeRooms: number;
+  queueCount: number;
   queueP95Seconds: number | null;
   activeIncidents: number | null;
-  configRevision: string;
+  incidentTelemetryAvailable: boolean;
+  configRevision: string | null;
   observedAt: string;
   stale: boolean;
-}
-
-export interface CouncilContext {
-  occupancyPct?: number;
-  queueP95Seconds?: number;
-  activeIncidents?: number;
-  marketVolatilityPct?: number;
-  marketDataStale?: boolean;
-  activeTreatyConflict?: boolean;
-  configRevision?: string;
 }
 
 export interface CouncilInput {
   subject: string;
   scope: { worldId: MarshalWorldId; periodSeconds?: number };
-  context?: CouncilContext;
 }
 
 export interface CouncilAgent {
@@ -70,6 +62,7 @@ export interface CouncilResponse {
   correlationId?: string;
   dataRevision?: string | null;
   links?: { self?: string };
+  telemetry?: MarshalOverview;
 }
 
 export interface MarshalProposal {
