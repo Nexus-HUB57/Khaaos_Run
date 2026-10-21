@@ -11,10 +11,10 @@ No GitHub, abra `Nexus-HUB57/Khaaos_Run` → **Settings → Secrets and variable
 | `DISCORD_WEBHOOK_URL` | URL de webhook de um canal Discord autorizado |
 | `SLACK_WEBHOOK_URL` | URL de Incoming Webhook do workspace/canal Slack autorizado |
 
-As URLs não devem ser colocadas no repositório, em issues ou em mensagens de chat. O workflow passa os valores ao processo por variáveis de ambiente e não os imprime. Se não houver secret para um destino, a etapa correspondente registra que foi ignorada. A pipeline continua exibindo a falha no GitHub.
+As URLs não devem ser colocadas no repositório, em issues ou em mensagens de chat. O workflow passa os valores ao processo por variáveis de ambiente e não os imprime. Se não houver secret para um destino, a etapa correspondente registra que foi ignorada. As notificações são auxiliares: falha de entrega gera warning e não mascara os resultados dos jobs principais; a tentativa Slack continua mesmo se Discord falhar.
 
 ## Limite de verificação
 
-Durante a manutenção desta integração, a API GitHub usada pela sessão retornou `403 Resource not accessible by integration` ao consultar nomes de Actions secrets. Portanto, não foi possível confirmar se os dois secrets existem. Nenhum valor foi lido ou cadastrado nesta execução. Um administrador do repositório precisa conferir a tela de Actions secrets.
+O log do workflow mostrou que `DISCORD_WEBHOOK_URL` foi injetado como secret mascarado, sem revelar nem ler seu valor. Na execução `39449716200`, a chamada retornou HTTP 405. O workflow agora informa apenas o status HTTP e continua ao Slack, sem imprimir URL ou corpo da resposta. Um administrador deve conferir **Settings → Secrets and variables → Actions** e garantir que `DISCORD_WEBHOOK_URL` contém a URL canônica de um webhook de canal Discord (endpoint Discord que aceita POST), e não URL de outro serviço, a página de configuração ou endpoint de leitura. Se necessário, criar um webhook novo no Discord e substituir o secret diretamente no GitHub; nunca compartilhe o valor.
 
-O job de alerta usa `curl` e payload JSON (`content` para Discord e `text` para Slack). Se o endpoint configurado rejeitar a mensagem, o job de notificação também falha; a falha que acionou o alerta continua visível nos jobs originais.
+O job de alerta usa POST JSON (`content` para Discord e `text` para Slack). Somente status HTTP 2xx é registrado como entrega aceita; 405 indica endpoint incompatível com POST e aparece como warning, sem transformar o job de alerta em uma falha adicional. Isso mantém a CI independente da disponibilidade do serviço de chat, mas não significa que a mensagem Discord foi entregue: a URL secreta precisa ser corrigida para reativar a entrega.

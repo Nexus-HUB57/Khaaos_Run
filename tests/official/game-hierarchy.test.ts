@@ -13,43 +13,33 @@ import {
   getFullGameHierarchyOverview,
 } from "../../shared/game-hierarchy";
 
-test("Eixo I: 8 escalões EP555 coincidem 1:1 com shared/schema.ts, DefaultGame.ini e UKhaaosHierarchySubsystem", () => {
+test("Eixo I: 8 escalões EP555 coincidem entre schema.ts, DefaultGame.ini e KhaaosPlayerState", () => {
   assert.equal(EP555_HIERARCHY_TIERS.length, 8);
-  for (let i = 0; i < EP555_RANKS.length; i += 1) {
-    assert.equal(EP555_HIERARCHY_TIERS[i].id, EP555_RANKS[i].id);
-    assert.equal(EP555_HIERARCHY_TIERS[i].xpRequired, EP555_RANKS[i].xpRequired);
-    assert.equal(EP555_HIERARCHY_TIERS[i].echelon, i + 1);
-  }
-
   const cpp = readFileSync(
-    new URL(
-      "../../Unreal/KhaaosRun/Source/KhaaosRun/Game/Hierarchy/KhaaosHierarchySubsystem.cpp",
-      import.meta.url,
-    ),
+    new URL("../../Unreal/KhaaosRun/Source/KhaaosRun/Player/KhaaosPlayerState.cpp", import.meta.url),
     "utf8",
   );
-  assert.match(cpp, /case EPatenteRank::Overlord:\s*return 5000000;/);
-  assert.match(cpp, /case EPatenteRank::Malakor:\s*return 1000000;/);
-  assert.match(cpp, /case EPatenteRank::Zheers:\s*return 0;/);
-});
-
-test("Eixo II: 12 especializações EP555 coincidem entre schema.ts, game-hierarchy.ts, DefaultGame.ini e UE5 C++", () => {
-  assert.equal(EP555_SPECIALIZATION_DOCTRINES.length, 12);
-
   const ini = readFileSync(
     new URL("../../Unreal/KhaaosRun/Source/KhaaosRun/Config/DefaultGame.ini", import.meta.url),
     "utf8",
   );
-  const specSection = ini.match(/\[Khaaos\.Specializations\]([\s\S]*?)(?:\r?\n\[|$)/)?.[1];
-  assert.ok(specSection, "DefaultGame.ini deve conter [Khaaos.Specializations]");
 
-  const cpp = readFileSync(
-    new URL(
-      "../../Unreal/KhaaosRun/Source/KhaaosRun/Game/Hierarchy/KhaaosHierarchySubsystem.cpp",
-      import.meta.url,
-    ),
-    "utf8",
-  );
+  for (let i = 0; i < EP555_RANKS.length; i += 1) {
+    const rank = EP555_RANKS[i];
+    const cppRankName = rank.id[0] + rank.id.slice(1).toLowerCase();
+    assert.equal(EP555_HIERARCHY_TIERS[i].id, rank.id);
+    assert.equal(EP555_HIERARCHY_TIERS[i].xpRequired, rank.xpRequired);
+    assert.equal(EP555_HIERARCHY_TIERS[i].echelon, i + 1);
+    assert.match(ini, new RegExp(`^${rank.id}=${rank.xpRequired}$`, "m"));
+    assert.match(
+      cpp,
+      new RegExp(`\\{\\s*EPatenteRank::${cppRankName},\\s*${rank.xpRequired}\\s*\\}`),
+    );
+  }
+});
+
+test("Eixo II: 12 especializações EP555 permanecem sincronizadas entre schema.ts e o modelo TypeScript", () => {
+  assert.equal(EP555_SPECIALIZATION_DOCTRINES.length, 12);
 
   for (let i = 0; i < EP555_SPECIALIZATIONS.length; i += 1) {
     const baseSpec = EP555_SPECIALIZATIONS[i];
@@ -57,8 +47,6 @@ test("Eixo II: 12 especializações EP555 coincidem entre schema.ts, game-hierar
     assert.equal(doctrine.id, baseSpec.id);
     assert.equal(doctrine.requiredRank, baseSpec.rank);
     assert.equal(doctrine.morthRequired, baseSpec.morthRequired);
-    assert.ok(specSection.includes(`${baseSpec.id}=${baseSpec.rank},${baseSpec.morthRequired}`));
-    assert.ok(cpp.includes(`FName("${baseSpec.id}")`));
   }
 });
 

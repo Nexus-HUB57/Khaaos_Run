@@ -72,6 +72,10 @@ export const api = {
           operationId: z.string().uuid(),
         }),
         400: errorSchemas.validation,
+        503: z.object({
+          code: z.literal('PAYMENTS_NOT_CONFIGURED'),
+          message: z.string(),
+        }),
       },
     },
     transfer: {
