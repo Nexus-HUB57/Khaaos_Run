@@ -88,11 +88,8 @@ jobs:
       - name: Apply versioned database migrations
         run: npm run db:migrate
 
-      - name: Run unit tests
-        run: set -o pipefail; npm run test:official 2>&1 | tee test-unit.log
-
-      - name: Run PostgreSQL persistence integration tests
-        run: set -o pipefail; npm run test:postgres 2>&1 | tee test-postgres.log
+      - name: Run official tests with coverage
+        run: set -o pipefail; npm run coverage:official 2>&1 | tee test-unit.log
 
       - name: Upload test results
         if: always()
@@ -101,7 +98,7 @@ jobs:
           name: unit-test-results
           path: |
             test-unit.log
-            test-postgres.log
+            coverage/official/**
 
   # ─── Job 3: Game Runtime Tests ────────────────────────────────
   test-game:
@@ -157,6 +154,18 @@ jobs:
       - name: Game infra tests
         working-directory: game-runtime
         run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
+
+      - name: Runtime tests with coverage
+        working-directory: game-runtime
+        run: npm run coverage
+
+      - name: Upload runtime coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-game-runtime
+          path: game-runtime/coverage/**
+          if-no-files-found: warn
 
   # ─── Job 4: Build Node.js Server ──────────────────────────────
   build-server:
