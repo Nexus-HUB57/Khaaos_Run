@@ -60,6 +60,13 @@ class UKhaaosCrashHandler;
 class UKhaaosWorldGenerator;
 class UKhaaosReplaySystem;
 
+// ─── E2E Phases 17-20 Forward Declarations ────────────────────────────────────────────
+
+class UKhaaosRankedSystem;
+class UKhaaosMapVotingSystem;
+class UKhaaosCoachSystem;
+class UKhaaosCinematicSystem;
+
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
 UENUM(BlueprintType)
@@ -322,6 +329,21 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Replay")
     TObjectPtr<UKhaaosReplaySystem> ReplaySystem;
 
+    // ─── E2E Phase 17: Ranked & Tournament ───────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Ranked")
+    TObjectPtr<UKhaaosMapVotingSystem> MapVoting;
+
+    // ─── E2E Phase 19: Coach ────────────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Coach")
+    TObjectPtr<UKhaaosCoachSystem> CoachSystem;
+
+    // ─── E2E Phase 20: Cinematic ────────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Cinematic")
+    TObjectPtr<UKhaaosCinematicSystem> CinematicSystem;
+
 protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Match")
@@ -453,4 +475,7 @@ protected:
 
     /** Initialize E2E Phases 13-16 subsystems (non-breaking). */
     void InitializePhases13to16Subsystems();
+
+    /** Initialize E2E Phases 17-20 subsystems (non-breaking). */
+    void InitializePhases17to20Subsystems();
 };

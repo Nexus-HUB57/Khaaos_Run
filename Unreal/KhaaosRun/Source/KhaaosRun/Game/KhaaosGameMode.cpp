@@ -61,6 +61,12 @@
 #include "Game/Replay/KhaaosReplaySystem.h"
 #include "Game/Polish/KhaaosLaunchReadiness.h"
 
+// ─── E2E Phases 17-20 Includes ──────────────────────────────────────────────────
+#include "Game/Ranked/KhaaosRankedSystem.h"
+#include "Game/MapVoting/KhaaosMapVotingSystem.h"
+#include "Game/Coach/KhaaosCoachSystem.h"
+#include "Game/Cinematic/KhaaosCinematicSystem.h"
+
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
 AKhaaosGameMode::AKhaaosGameMode()
@@ -101,6 +107,11 @@ AKhaaosGameMode::AKhaaosGameMode()
     // E2E Phases 13-16 subsystems
     WorldGenerator      = nullptr;
     ReplaySystem        = nullptr;
+
+    // E2E Phases 17-20 subsystems
+    MapVoting           = nullptr;
+    CoachSystem         = nullptr;
+    CinematicSystem     = nullptr;
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -141,6 +152,7 @@ void AKhaaosGameMode::StartPlay()
     InitializeE2ESubsystems();
     InitializePhases9to12Subsystems();
     InitializePhases13to16Subsystems();
+    InitializePhases17to20Subsystems();
 }
 
 void AKhaaosGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -1413,4 +1425,40 @@ void AKhaaosGameMode::InitializePhases13to16Subsystems()
     // Phase 16: LaunchReadiness is EngineSubsystem (auto-initialized)
 
     UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 1 actor + 2 auto-initialized subsystems)"));
+}
+
+// ─── E2E Phases 17-20 Subsystems Initialization ────────────────────────────────
+
+void AKhaaosGameMode::InitializePhases17to20Subsystems()
+{
+    if (!GetWorld()) return;
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases17to20Subsystems - Starting"));
+
+    // Phase 18: Map Voting (WorldSubsystem - auto-initialized, cache pointer)
+    MapVoting = GetWorld()->GetSubsystem<UKhaaosMapVotingSystem>();
+    if (MapVoting)
+    {
+        UE_LOG(LogKhaaosRun, Log, TEXT("  MapVoting cached"));
+    }
+
+    // Phase 19: Coach System (ActorComponent)
+    CoachSystem = NewObject<UKhaaosCoachSystem>(this, UKhaaosCoachSystem::StaticClass());
+    if (CoachSystem)
+    {
+        CoachSystem->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  CoachSystem initialized"));
+    }
+
+    // Phase 20: Cinematic System (ActorComponent)
+    CinematicSystem = NewObject<UKhaaosCinematicSystem>(this, UKhaaosCinematicSystem::StaticClass());
+    if (CinematicSystem)
+    {
+        CinematicSystem->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  CinematicSystem initialized"));
+    }
+
+    // Phase 17: RankedSystem is GameInstanceSubsystem (auto-initialized)
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases17to20Subsystems - Complete (1 world + 2 actor + 1 auto-initialized subsystem)"));
 }
