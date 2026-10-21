@@ -71,6 +71,12 @@ class UKhaaosMapVotingSystem;
 class UKhaaosCoachSystem;
 class UKhaaosCinematicSystem;
 
+// ─── Discord Integration Forward Declarations ──────────────────────────────────────
+
+class UKhaaosDiscordRichPresence;
+class UKhaaosDiscordOAuth2;
+class UKhaaosDiscordWebhooks;
+
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
 UENUM(BlueprintType)
@@ -496,4 +502,6 @@ protected:
 
     /** Initialize E2E Phases 17-20 subsystems (non-breaking). */
     void InitializePhases17to20Subsystems();
+
+    void InitializeDiscordSubsystems();
 };
