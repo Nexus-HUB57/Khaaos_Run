@@ -1,0 +1,43 @@
+# ══════════════════════════════════════════════════════════════
+# Khaaos Run — Terraform Variable Values (Example)
+# Copy to terraform.tfvars and fill in real values
+# ══════════════════════════════════════════════════════════════
+
+# ─── Cloudflare ─────────────────────────────────────────────────
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-cloudflare-zone-id"
+
+# ─── Docker / ECS ──────────────────────────────────────────────
+ecs_image_tag      = "v1.0.0"
+economy_api_image  = "123456789.dkr.ecr.sa-east-1.amazonaws.com/khaaos-run/economy-api"
+
+# ─── Database ──────────────────────────────────────────────────
+db_password        = "CHANGE_ME_strong_postgres_password"
+db_instance_class  = "db.r6g.large"
+
+# ─── Redis ─────────────────────────────────────────────────────
+redis_node_type    = "cache.r6g.large"
+
+# ─── JWT ───────────────────────────────────────────────────────
+jwt_secret         = "CHANGE_ME_jwt_signing_secret_min_32_chars"
+
+# ─── EOS (Epic Online Services) ────────────────────────────────
+eos_product_id     = "your-eos-product-id"
+eos_sandbox_id     = "your-eos-sandbox-id"
+eos_deployment_id  = "your-eos-deployment-id"
+eos_client_id      = "xyza1234567890abcdef"
+eos_client_secret  = "your-eos-client-secret"
+
+# ─── Networking ────────────────────────────────────────────────
+vpc_cidr_sa1       = "10.0.0.0/16"
+vpc_cidr_na1       = "10.1.0.0/16"
+vpc_cidr_eu1       = "10.2.0.0/16"
+
+# ─── UE5 Dedicated Server ──────────────────────────────────────
+game_server_instance_type     = "c6i.2xlarge"
+max_game_servers_per_region   = 10
+
+# ─── Monitoring ────────────────────────────────────────────────
+grafana_admin_password = "CHANGE_ME_grafana_admin_password"
+slack_webhook_url      = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+discord_webhook_url    = "https://discord.com/api/webhooks/XXX/YYY"

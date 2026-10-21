@@ -1,0 +1,142 @@
+{
+  "id": "WPN_Carbine_Venex",
+  "name": "Carbine Venex CR-7",
+  "codename": "VENEX_CR7_CARBINE",
+  "slot": "PRIMARY",
+  "category": "CARBINE",
+  "category_tag": "Weapon.Category.CARBINE",
+  "rarity": "RARO",
+  "rarity_tag": "Loot.Rarity.RARO",
+  "fire_mode": "Auto",
+  "damage": 30,
+  "fire_rate": 700,
+  "accuracy": 75,
+  "range": 65,
+  "mag": 25,
+  "reload": 1.8,
+  "headshot_multiplier": 1.8,
+  "speed_modifier": 0.96,
+  "ammo_type": "5.56mm",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 880,
+    "drag_coefficient": 0.009,
+    "gravity_scale": 1.0,
+    "penetration_depth_cm": 22
+  },
+  "recoil": {
+    "pitch_per_shot": 0.45,
+    "yaw_range": 0.2,
+    "recovery_speed": 4.8,
+    "pattern": [
+      0.45,
+      0.4865,
+      0.4926,
+      0.4599,
+      0.4032,
+      0.351,
+      0.3276,
+      0.3389,
+      0.37,
+      0.3948,
+      0.3928,
+      0.3603,
+      0.312,
+      0.2712,
+      0.2549,
+      0.2648,
+      0.2868,
+      0.3007,
+      0.2926,
+      0.2627,
+      0.2239,
+      0.1935,
+      0.1822,
+      0.1885,
+      0.2006
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 25,
+    "far_range_m": 65,
+    "falloff_curve": "linear",
+    "min_damage_percent": 68
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_Carbine",
+    "tracer": "VFX_Tracer_556",
+    "shell_eject": "VFX_Shell_556",
+    "impact_default": "VFX_Impact_Concrete",
+    "impact_flesh": "VFX_Impact_Flesh_Med"
+  },
+  "sfx": {
+    "fire": "SFX_Carbine_Venex_Fire",
+    "fire_suppressed": "SFX_Carbine_Venex_Supp",
+    "reload_magout": "SFX_Carbine_MagOut",
+    "reload_magin": "SFX_Carbine_MagIn",
+    "reload_charge": "SFX_Carbine_Charge",
+    "dryfire": "SFX_Dryfire_556",
+    "equip": "SFX_Carbine_Equip"
+  },
+  "attachments": {
+    "optic": [
+      {
+        "id": "ATT_RDS_Mid",
+        "name": "Mid-Range RDS",
+        "modifiers": {
+          "accuracy": 5
+        }
+      }
+    ],
+    "barrel": [
+      {
+        "id": "ATT_Supp_556",
+        "name": "Suppressor 5.56",
+        "modifiers": {
+          "range": -6,
+          "damage": -2
+        }
+      }
+    ],
+    "foregrip": [
+      {
+        "id": "ATT_Grip_Angled",
+        "name": "Angled Grip",
+        "modifiers": {
+          "accuracy": 4,
+          "recoil": -0.06
+        }
+      }
+    ],
+    "stock": [],
+    "magazine": [
+      {
+        "id": "ATT_Mag_556_Ext",
+        "name": "Extended Mag 5.56",
+        "modifiers": {
+          "mag": 8,
+          "reload": 0.4
+        }
+      }
+    ]
+  },
+  "economy": {
+    "price": 308,
+    "krc_cost": 240,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 6
+      },
+      {
+        "id": "LOOT_Material_Cristal",
+        "count": 1
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
+}

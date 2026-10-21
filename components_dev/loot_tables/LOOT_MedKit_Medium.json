@@ -1,0 +1,21 @@
+{
+  "id": "LOOT_MedKit_Medium",
+  "name": "MedKit Medium",
+  "type": "Curativo",
+  "rarity": "RARO",
+  "heal": 50,
+  "defense": 0,
+  "use_time": 7.0,
+  "auto_revive": false,
+  "stack_max": 2,
+  "price": 112,
+  "rarity_weight": 28,
+  "rarity_multiplier": 2.8,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Rare",
+  "vfx_use": "VFX_Heal_Large",
+  "sfx_use": "SFX_MedKit_Medium_Use",
+  "description": "Kit medico avancado. Restaura 50 HP em 7s.",
+  "world_specific": []
+}

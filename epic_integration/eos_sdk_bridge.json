@@ -1,0 +1,23 @@
+{
+  "sdk_version": "1.16.0",
+  "subsystems": [
+    "Auth",
+    "Sessions",
+    "Lobbies",
+    "Voice",
+    "Stats"
+  ],
+  "regions": [
+    "us-east-1",
+    "eu-west-1",
+    "sa-east-1"
+  ],
+  "ranking_system": "TrueSkill2",
+  "auth_scopes": [
+    "basic_profile",
+    "friends_list",
+    "presence"
+  ],
+  "session_timeout_minutes": 30,
+  "lobby_max_members": 60
+}

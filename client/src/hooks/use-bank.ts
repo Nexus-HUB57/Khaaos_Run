@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type BankAccount, type Transaction, type DepositRequest, type TransferRequest, errorSchemas } from "@shared/routes";
+import { api, type BankAccount, type Transaction, type TransferRequest, errorSchemas } from "@shared/routes";
 import { idempotentFetch } from "@/lib/queryClient";
 
 export function useBank() {
@@ -20,33 +20,6 @@ export function useTransactions() {
       const res = await fetch(api.bank.transactions.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transactions");
       return api.bank.transactions.responses[200].parse(await res.json());
-    },
-  });
-}
-
-export function useDeposit() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: DepositRequest) => {
-      const validated = api.bank.deposit.input.parse(data);
-      const res = await idempotentFetch(api.bank.deposit.path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validated),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        if (res.status === 400) {
-          const error = errorSchemas.validation.parse(await res.json());
-          throw new Error(error.message);
-        }
-        throw new Error("Deposit failed");
-      }
-      return api.bank.deposit.responses[200].parse(await res.json());
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.bank.get.path] });
-      queryClient.invalidateQueries({ queryKey: [api.bank.transactions.path] });
     },
   });
 }

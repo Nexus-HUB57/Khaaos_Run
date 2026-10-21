@@ -1,0 +1,38 @@
+ItemID,Name,Type,Price,KRCCost,SupplyCap,DemandFactor
+WPN_Pistol_Onith,Pistol Onith MK-IV,Weapon,196,150,100,1.0
+WPN_SMG_Huran,SMG Huran PDW-9,Weapon,293,220,100,1.0
+WPN_AssaultRifle_MK1,Assault Rifle MK1-F,Weapon,336,260,100,1.0
+WPN_Carbine_Venex,Carbine Venex CR-7,Weapon,308,240,100,1.0
+WPN_Sniper_DMR,Sniper Khaaos SRS-1,Weapon,665,500,100,1.0
+WPN_DMR_Khael,DMR Khael MR-12,Weapon,550,420,100,1.0
+WPN_Shotgun_Breach,Shotgun Breach SG-12,Weapon,196,150,100,1.0
+WPN_LMG_Skeetw,LMG Skeetw MG-6,Weapon,700,550,100,1.0
+WPN_Knife_Combat,Faca de Combate K-7,Weapon,0,0,100,1.0
+WPN_Espada_Overlord,Espada Overlord,Weapon,1650,1200,100,1.0
+WPN_Canhao_KhaaosPrime,Canhao Khaaos Prime,Weapon,9750,7500,100,1.0
+LOOT_Bandage,Bandage,Curativo,25,19,200,0.8
+LOOT_MedKit_Small,MedKit Small,Curativo,50,38,200,0.8
+LOOT_MedKit_Medium,MedKit Medium,Curativo,112,84,100,1.2
+LOOT_Phoenix_Frasco,Phoenix Frasco,Curativo,880,660,20,3.0
+LOOT_Seringa_Venex,Seringa Venex,Curativo,375,281,50,1.8
+LOOT_Adrenalina_Khael,Adrenalina Khael,Curativo,375,281,50,1.8
+LOOT_Shield_Lv1,Shield Lv1,Defesa,140,105,200,0.8
+LOOT_Shield_Lv2,Shield Lv2,Defesa,375,281,100,1.2
+LOOT_Colete_Khaaos,Colete Khaaos,Defesa,375,281,50,1.8
+LOOT_Capacete_Simples,Capacete Simples,Defesa,168,126,100,1.2
+LOOT_Armadura_Huran,Armadura Huran,Defesa,880,660,50,1.8
+LOOT_Escudo_Khael,Escudo Khael,Defesa,880,660,20,3.0
+LOOT_Granada_Frag,Granada Frag,Defesa,35,26,200,0.8
+LOOT_Granada_Zheers,Granada Zheers,Utilidade,375,281,100,1.2
+LOOT_Mina_Khaaos,Mina Khaaos,Utilidade,375,281,50,1.8
+LOOT_Beacon_Pulso,Beacon Pulso,Utilidade,168,126,100,1.2
+LOOT_Drone_Recon,Drone Recon,Utilidade,375,281,50,1.8
+LOOT_Grappling_Hook,Grappling Hook,Utilidade,880,660,20,3.0
+LOOT_Mochila_Tatica,Mochila Tatica,Utilidade,40,30,200,0.8
+LOOT_AmmoBox_556,AmmoBox 5.56,Utilidade,15,11,200,0.8
+LOOT_AmmoBox_762,AmmoBox 7.62,Recurso,15,11,200,0.8
+LOOT_AmmoBox_9mm,AmmoBox 9mm,Recurso,10,8,200,0.8
+LOOT_AmmoBox_12g,AmmoBox 12g,Recurso,12,9,200,0.8
+LOOT_Material_Metal,Material Metal,Recurso,20,15,200,0.8
+LOOT_Material_Cristal,Material Cristal,Recurso,84,63,100,1.2
+LOOT_Material_Nucleo,Material Nucleo,Recurso,375,281,50,1.8

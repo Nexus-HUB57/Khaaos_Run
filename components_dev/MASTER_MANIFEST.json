@@ -1,0 +1,24 @@
+{
+  "version": "2.0-phd",
+  "design_tier": "PhD",
+  "species": {
+    "count": 6,
+    "status": "PHD_COMPLETE"
+  },
+  "weapons": {
+    "count": 11,
+    "status": "PHD_COMPLETE"
+  },
+  "loot_items": {
+    "count": 26,
+    "status": "PHD_COMPLETE"
+  },
+  "worlds": {
+    "count": 5,
+    "status": "PHD_COMPLETE"
+  },
+  "total_json_files": 48,
+  "csv_tables": 4,
+  "cpp_headers_enhanced": 4,
+  "balance_report": true
+}

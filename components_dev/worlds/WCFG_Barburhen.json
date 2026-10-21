@@ -1,0 +1,484 @@
+{
+  "world_id": "Barburhen",
+  "display_name": "Barburhen — Mundo Aquatico",
+  "codename": "W1_BARBURHEN_OCEAN",
+  "max_players": 100,
+  "required_rank": "HURAN",
+  "next_world_id": "Priadus",
+  "is_final_world": false,
+  "map_bounds": 3000,
+  "sector_count": 12,
+  "biome": {
+    "type": "ocean_archipelago",
+    "description": "Arquipelago oceanico com ilhas, recifes e estruturas subaquaticas",
+    "colors": {
+      "primary": "#0A3D62",
+      "secondary": "#1B6CA5",
+      "accent": "#00E5FF",
+      "fog": "#062A45"
+    },
+    "lighting": {
+      "ambient_intensity": 0.5,
+      "directional_intensity": 1.5,
+      "color_temp": 6500
+    },
+    "fog": {
+      "density": 0.01,
+      "start_m": 200,
+      "end_m": 2800,
+      "color": "#062A45"
+    },
+    "atmosphere": {
+      "particles": "sea_spray",
+      "wind_speed": 8.0,
+      "humidity": 0.85
+    }
+  },
+  "weather_system": {
+    "types": [
+      "clear",
+      "storm_tropical",
+      "fog_coastal",
+      "tsunami_warning"
+    ],
+    "frequency": {
+      "clear": 0.4,
+      "storm_tropical": 0.3,
+      "fog_coastal": 0.2,
+      "tsunami_warning": 0.1
+    },
+    "intensity": {
+      "storm_tropical": 0.8,
+      "fog_coastal": 0.5,
+      "tsunami_warning": 1.0
+    },
+    "effects": {
+      "storm_tropical": {
+        "visibility_m": -300,
+        "speed_modifier": -0.15
+      },
+      "fog_coastal": {
+        "visibility_m": -200,
+        "accuracy_modifier": -8
+      },
+      "tsunami_warning": {
+        "visibility_m": -500,
+        "damage_per_second": 10
+      }
+    }
+  },
+  "poi_markers": [
+    {
+      "name": "Ilha Central",
+      "type": "stronghold",
+      "location": [
+        0,
+        0,
+        5
+      ],
+      "loot_tier": "epic_pool",
+      "danger_level": 6
+    },
+    {
+      "name": "Recife Venex",
+      "type": "underwater",
+      "location": [
+        800,
+        -400,
+        -15
+      ],
+      "loot_tier": "legendary_pool",
+      "danger_level": 8
+    },
+    {
+      "name": "Porto Norte",
+      "type": "building",
+      "location": [
+        -500,
+        800,
+        2
+      ],
+      "loot_tier": "rare_pool",
+      "danger_level": 3
+    },
+    {
+      "name": "Plataforma Offshore",
+      "type": "platform",
+      "location": [
+        1000,
+        600,
+        0
+      ],
+      "loot_tier": "epic_pool",
+      "danger_level": 5
+    },
+    {
+      "name": "Caverna Subaquatica",
+      "type": "cave",
+      "location": [
+        -300,
+        -700,
+        -20
+      ],
+      "loot_tier": "rare_pool",
+      "danger_level": 7
+    }
+  ],
+  "spawn_points": [
+    {
+      "location": [
+        900.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        728.1,
+        529.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        36.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        278.1,
+        856.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        72.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -278.1,
+        856.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        108.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -728.1,
+        529.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        144.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -900.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -728.1,
+        -529.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        216.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -278.1,
+        -856.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        252.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        278.1,
+        -856.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        288.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        728.1,
+        -529.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        324.0
+      ],
+      "team": ""
+    }
+  ],
+  "loot_points": [
+    {
+      "location": [
+        600.0,
+        0.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        856.0,
+        278.1,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        970.8,
+        705.3,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        352.7,
+        485.4,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        278.1,
+        856.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        0.0,
+        1200.0,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        -185.4,
+        570.6,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        -529.0,
+        728.1,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        -970.8,
+        705.3,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        -570.6,
+        185.4,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        -900.0,
+        0.0,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        -1141.3,
+        -370.8,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        -485.4,
+        -352.7,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        -529.0,
+        -728.1,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        -370.8,
+        -1141.3,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        -0.0,
+        -600.0,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        278.1,
+        -856.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        705.3,
+        -970.8,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        485.4,
+        -352.7,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        856.0,
+        -278.1,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    }
+  ],
+  "pulso_config": {
+    "radius": 900,
+    "duration_seconds": 120,
+    "rarity_boost_multiplier": 2.5,
+    "max_loot_drops": 18,
+    "damage_per_second": 4.0,
+    "shrink_rate": 8.0
+  },
+  "ambient_audio_zones": [
+    {
+      "zone_id": "AZ_Ocean",
+      "sound": "AMB_Ocean_Waves",
+      "radius": 500
+    },
+    {
+      "zone_id": "AZ_Underwater",
+      "sound": "AMB_Underwater_Deep",
+      "radius": 300
+    },
+    {
+      "zone_id": "AZ_Storm",
+      "sound": "AMB_Storm_Rain",
+      "radius": 600
+    }
+  ],
+  "material_layers": [
+    "MAT_Sand_Wet",
+    "MAT_Water_Shallow",
+    "MAT_Coral",
+    "MAT_Metal_Rusted",
+    "MAT_Rock_Mossy"
+  ],
+  "loot_table_ids": [
+    "barburhen_loot_table"
+  ],
+  "available_species": [
+    "Zheers",
+    "Onith",
+    "Huran",
+    "Venex",
+    "Khael"
+  ],
+  "world_tag": "World.Barburhen"
+}

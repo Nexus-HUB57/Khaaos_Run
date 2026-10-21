@@ -1,0 +1,201 @@
+# =============================================================================
+# Khaaos Run — MVP Step 1: UE5 Build Docker Compose
+# Devs Ph.D | Copyright Nexus-HUB57. All Rights Reserved.
+# =============================================================================
+#
+# Build pipeline orchestration for UE5.8 dedicated server
+#
+# Usage:
+#   docker compose -f docker-compose.build.yml build          # Build all
+#   docker compose -f docker-compose.build.yml up -d           # Start server
+#   docker compose -f docker-compose.build.yml up -d --profile test  # + smoke test
+#   docker compose -f docker-compose.build.yml logs -f         # Follow logs
+#   docker compose -f docker-compose.build.yml down            # Stop & remove
+#
+# Ports:
+#   7777/udp  — Game traffic (Unreal net driver)
+#   7778/udp  — Beacon port (session discovery)
+#   27015/udp — Steam/EOS query port
+# =============================================================================
+
+version: "3.9"
+
+x-eos-env: &eos-env
+  # EOS Integration Kit — override via .env or environment
+  EOS_PRODUCT_ID: ${EOS_PRODUCT_ID:-KHAOS_PRODUCT_ID}
+  EOS_SANDBOX_ID: ${EOS_SANDBOX_ID:-KHAOS_SANDBOX_ID}
+  EOS_DEPLOYMENT_ID: ${EOS_DEPLOYMENT_ID:-KHAOS_DEPLOYMENT_ID}
+  EOS_CLIENT_ID: ${EOS_CLIENT_ID:-KHAOS_CLIENT_ID}
+  EOS_CLIENT_SECRET: ${EOS_CLIENT_SECRET:-KHAOS_CLIENT_SECRET}
+  EOS_DEFAULT_REGION: ${EOS_DEFAULT_REGION:-sa1}
+  EOS_ENABLE_EAS: ${EOS_ENABLE_EAS:-true}
+
+x-server-env: &server-env
+  SERVER_NAME: ${SERVER_NAME:-KhaaosRun-Server}
+  MAX_PLAYERS: ${MAX_PLAYERS:-100}
+  MAP_NAME: ${MAP_NAME:-Main}
+  GAME_MODE: ${GAME_MODE:-KhaaosGameMode}
+  TICK_RATE: ${TICK_RATE:-60}
+  REGION: ${REGION:-us-east-1}
+  MULTIHOME: ${MULTIHOME:-0.0.0.0}
+
+services:
+  # ── Khaaos Run Dedicated Server ──────────────────────────────────────────────
+  khaaos-server:
+    build:
+      context: ../../..
+      dockerfile: Unreal/KhaaosRun/Build/Dockerfile
+      args:
+        UE5_PATH: ${UE5_PATH:-/opt/UnrealEngine/5.8}
+      labels:
+        org.opencontainers.image.title: "Khaaos Run Dedicated Server"
+        org.opencontainers.image.vendor: "Nexus-HUB57"
+        org.opencontainers.image.version: "1.0.0"
+    image: khaaos-run-server:${TAG:-latest}
+    container_name: khaaos-server
+    restart: unless-stopped
+    ports:
+      - "${GAME_PORT:-7777}:7777/udp"     # Game traffic
+      - "${BEACON_PORT:-7778}:7778/udp"   # Beacon
+      - "${QUERY_PORT:-27015}:27015/udp"  # Steam/EOS query
+    environment:
+      <<: [*server-env, *eos-env]
+      # Internal service connections
+      REDIS_URL: redis://redis:6379
+      ECONOMY_API_URL: http://economy-api:3000
+      # Runtime flags
+      ADDITIONAL_ARGS: ${ADDITIONAL_ARGS:-}
+    volumes:
+      - server-logs:/home/khaaos/server/KhaaosRun/Saved/Logs
+      - server-config:/home/khaaos/server/KhaaosRun/Saved/Config
+      - server-saved:/home/khaaos/server/KhaaosRun/Saved/Cloud
+      # Mount custom EOS config if available
+      - ${EOS_CONFIG_PATH:-/dev/null}:/home/khaaos/server/KhaaosRun/Config/DefaultEOS.ini:ro
+    networks:
+      - khaaos-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f KhaaosRunServer > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Profile: only start server in 'production' profile
+    profiles:
+      - production
+
+  # ── Economy Microservice ─────────────────────────────────────────────────────
+  economy-api:
+    build:
+      context: ../../../server
+      dockerfile: Dockerfile
+    image: khaaos-economy-api:${TAG:-latest}
+    container_name: khaaos-economy-api
+    restart: unless-stopped
+    ports:
+      - "${ECONOMY_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-}
+    networks:
+      - khaaos-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Redis — Session Cache & Rate Limiting ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: khaaos-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - khaaos-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ── Smoke Test Runner ────────────────────────────────────────────────────────
+  smoke-test:
+    image: khaaos-run-server:${TAG:-latest}
+    container_name: khaaos-smoke-test
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== Khaaos Run Smoke Test ==="
+        echo "Checking server binary..."
+        if [ -x /home/khaaos/server/KhaaosRun/Binaries/Linux/KhaaosRunServer ]; then
+          echo "PASS: Server binary exists and is executable"
+        else
+          echo "FAIL: Server binary missing or not executable"
+          exit 1
+        fi
+        echo "Checking shared libraries..."
+        ldd /home/khaaos/server/KhaaosRun/Binaries/Linux/KhaaosRunServer 2>&1 | grep "not found" && exit 1 || true
+        echo "PASS: All shared libraries resolved"
+        echo "Checking config files..."
+        for cfg in DefaultEngine.ini DefaultGame.ini DefaultEOS.ini; do
+          if [ -f "/home/khaaos/server/KhaaosRun/Config/${cfg}" ]; then
+            echo "PASS: ${cfg} found"
+          else
+            echo "WARN: ${cfg} not found (may be in Saved/Config)"
+          fi
+        done
+        echo "=== Smoke Test Complete ==="
+    networks:
+      - khaaos-net
+    profiles:
+      - test
+
+# ── Volumes ──────────────────────────────────────────────────────────────────────
+volumes:
+  server-logs:
+    driver: local
+  server-config:
+    driver: local
+  server-saved:
+    driver: local
+  redis-data:
+    driver: local
+
+# ── Network ──────────────────────────────────────────────────────────────────────
+networks:
+  khaaos-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

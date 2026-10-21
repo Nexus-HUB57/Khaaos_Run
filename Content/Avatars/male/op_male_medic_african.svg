@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background glow gradient -->
+    <radialGradient id="bgGlow-OP_MALE_MEDIC_AFRICAN" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#050508" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+
+    <!-- Skin gradient with realistic ambient occlusion -->
+    <linearGradient id="skinGrad-OP_MALE_MEDIC_AFRICAN" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3c2009"/>
+      <stop offset="100%" stop-color="#3c2009cc"/>
+    </linearGradient>
+
+    <!-- Tactical armor chest gradient -->
+    <linearGradient id="armorGrad-OP_MALE_MEDIC_AFRICAN" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Clip path for circular reticle portrait -->
+    <clipPath id="circleClip-OP_MALE_MEDIC_AFRICAN">
+      <rect x="0" y="0" width="512" height="512" rx="24"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#circleClip-OP_MALE_MEDIC_AFRICAN)">
+    <!-- Dark Tactical Background -->
+    <rect width="512" height="512" fill="url(#bgGlow-OP_MALE_MEDIC_AFRICAN)" />
+
+    <!-- Cybernetic Hex & Radar Grid -->
+    <circle cx="256" cy="256" r="235" fill="none" stroke="#10B981" stroke-width="2" stroke-dasharray="15 15" opacity="0.3"/>
+    <circle cx="256" cy="256" r="180" fill="none" stroke="#047857" stroke-width="1.5" stroke-dasharray="8 8" opacity="0.25"/>
+    <line x1="0" y1="256" x2="512" y2="256" stroke="#10B981" stroke-width="1.5" opacity="0.2"/>
+    <line x1="256" y1="0" x2="256" y2="512" stroke="#10B981" stroke-width="1.5" opacity="0.2"/>
+
+    <!-- Neck Structure -->
+    <path d="M215 307 L215 384 Q256 399 297 384 L297 307 Z" fill="url(#skinGrad-OP_MALE_MEDIC_AFRICAN)" />
+
+    <!-- Shoulders & Heavy Tactical Armor Base -->
+    <path d="M92 430 Q256 471 420 430 L451 512 L61 512 Z" fill="url(#armorGrad-OP_MALE_MEDIC_AFRICAN)" stroke="#10B981" stroke-width="5"/>
+
+    <!-- Anatomical Head & Face Shape -->
+    <ellipse cx="256" cy="246" rx="102" ry="118" fill="url(#skinGrad-OP_MALE_MEDIC_AFRICAN)" />
+
+    <!-- Eyes (Sclera & Iris) -->
+    <ellipse cx="205" cy="235" rx="18" ry="10" fill="#ffffff" />
+    <circle cx="205" cy="235" r="8" fill="#10b981" />
+    <ellipse cx="307" cy="235" rx="18" ry="10" fill="#ffffff" />
+    <circle cx="307" cy="235" r="8" fill="#10b981" />
+
+    <!-- Nose Bridge -->
+    <path d="M251 235 L246 271 L266 271" stroke="#3c200988" stroke-width="6" stroke-linecap="round" fill="none" />
+
+    <!-- Stoic Mouth Line -->
+    <line x1="230" y1="297" x2="282" y2="297" stroke="#713f12" stroke-width="7" stroke-linecap="round" />
+
+    <!-- Operative Unique Cultural / Ethnic / Tactical Features -->
+    
+      <!-- Clean shaved scalp line -->
+      <path d="M154 164 C154 92 358 92 358 164" stroke="#FACC15" stroke-width="5" stroke-dasharray="10 10" fill="none" />
+      <!-- Green medical HUD monocle over left eye -->
+      <circle cx="312" cy="230" r="35" fill="none" stroke="#10b981" stroke-width="7" />
+      <line x1="312" y1="210" x2="312" y2="250" stroke="#10b981" stroke-width="7" />
+      <line x1="292" y1="230" x2="332" y2="230" stroke="#10b981" stroke-width="7" />
+      <!-- Biohazard medical collar -->
+      <path d="M143 399 Q256 430 369 399 L379 461 Q256 492 133 461 Z" fill="#064e3b" stroke="#10b981" stroke-width="5" />
+    
+
+    <!-- Tactical HUD Corner Brackets -->
+    <path d="M41 92 L41 41 L92 41" stroke="#10B981" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M471 92 L471 41 L420 41" stroke="#10B981" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M41 420 L41 471 L92 471" stroke="#10B981" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M471 420 L471 471 L420 471" stroke="#10B981" stroke-width="7" fill="none" stroke-linecap="round"/>
+
+    <!-- Operative Tactical Identification Overlay Tag -->
+    <rect x="24" y="24" width="180" height="32" rx="4" fill="#000000" fill-opacity="0.8" stroke="#10B981" stroke-width="2"/>
+    <text x="34" y="46" font-family="monospace" font-size="14" font-weight="bold" fill="#ffffff">
+      ♂ MALE · KHAEL
+    </text>
+
+    <!-- Codename & Ethnicity Watermark -->
+    <rect x="24" y="456" width="464" height="36" rx="4" fill="#000000" fill-opacity="0.85" stroke="#10B98166" stroke-width="1.5"/>
+    <text x="36" y="480" font-family="system-ui, sans-serif" font-size="15" font-weight="bold" fill="#ffffff">
+      TARIQ BAKARI <tspan fill="#FACC15" font-size="12">(Africano Subsaariano (Quênia / Nigéria))</tspan>
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+{
+  "material_id": "M_LOOT_Shield_Lv2",
+  "material_instance_id": "MI_LOOT_Shield_Lv2_Default",
+  "shader": "PBR",
+  "properties": {
+    "base_color": {
+      "r": 0.4,
+      "g": 0.3,
+      "b": 1.0,
+      "a": 1.0
+    },
+    "roughness": 0.5,
+    "metallic": 0.0,
+    "emissive": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 0.0,
+      "a": 0.0
+    },
+    "opacity": 1.0,
+    "two_sided": false
+  },
+  "textures": {
+    "diffuse": "T_LOOT_Shield_Lv2_D",
+    "normal": "T_LOOT_Shield_Lv2_N",
+    "orm": "T_LOOT_Shield_Lv2_ORM",
+    "emissive": "T_LOOT_Shield_Lv2_E"
+  },
+  "blend_mode": "Opaque",
+  "shading_model": "Default"
+}

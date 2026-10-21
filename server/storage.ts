@@ -3,7 +3,7 @@ import {
   playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
-  PatenteKR, KRC_TO_USD, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
+  PatenteKR, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
 import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -16,7 +16,6 @@ export interface IStorage {
   getBankAccount(userId: string): Promise<BankAccount>;
   updateBankAccount(userId: string, updates: Partial<BankAccount>): Promise<BankAccount>;
   createTransaction(tx: Partial<Transaction> & { userId: string; type: string; amountKrc: string }): Promise<Transaction>;
-  depositFunds(userId: string, amountKrc: string, amountUsd: string): Promise<{ bank: BankAccount; transaction: Transaction }>;
   transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons"): Promise<{ bank: BankAccount; transaction: Transaction }>;
   getTransactions(userId: string): Promise<Transaction[]>;
   // Loans
@@ -108,20 +107,6 @@ export class DatabaseStorage implements IStorage {
     const [bank] = await tx.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)).for("update");
     if (!bank) throw new Error("Conta bancária não encontrada");
     return bank;
-  }
-
-  async depositFunds(userId: string, amountKrc: string, amountUsd: string) {
-    return db.transaction(async (tx) => {
-      const bank = await this.lockBankAccount(tx, userId);
-      const [updatedBank] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`${bankAccounts.weaponsBalance} + ${amountKrc}::numeric`,
-        bonusBalance: sql`${bankAccounts.bonusBalance} + ${amountKrc}::numeric`,
-      }).where(eq(bankAccounts.userId, userId)).returning();
-      const [transaction] = await tx.insert(transactions).values({
-        userId, type: "DEPOSITO", amountKrc, amountUsd, description: `Deposit $${amountUsd}`,
-      }).returning();
-      return { bank: updatedBank, transaction };
-    });
   }
 
   async transferFunds(userId: string, amountKrc: string, destination: "fbm" | "weapons") {
@@ -412,38 +397,44 @@ export class DatabaseStorage implements IStorage {
 
   // Server_PickupItem RPC equivalent — runs on server, validates, grants item, destroys loot actor
   async pickupLoot(lootId: number, userId: string, userName?: string): Promise<{ loot: LootItem; item: Item }> {
-    const loot = await this.getLootItem(lootId);
-    if (!loot) throw new Error("Item de loot não encontrado");
-    if (loot.isPickedUp) throw new Error("Item já foi coletado por outro operativo");
+    return db.transaction(async (tx) => {
+      const [loot] = await tx.select().from(lootItems).where(eq(lootItems.id, lootId)).for("update");
+      if (!loot) throw new Error("Item de loot não encontrado");
+      if (loot.isPickedUp) throw new Error("Item já foi coletado por outro operativo");
 
-    const stats = await this.getPlayerStats(userId);
-    if (stats.status !== PlayerStatus.VIVO) throw new Error("Operativo eliminado não pode coletar itens");
+      await tx.insert(playerStats).values({ userId }).onConflictDoNothing();
+      const [stats] = await tx.select().from(playerStats).where(eq(playerStats.userId, userId)).for("update");
+      if (!stats) throw new Error("Player stats could not be initialized");
+      if (stats.status !== PlayerStatus.VIVO) throw new Error("Operativo eliminado não pode coletar itens");
 
-    // Mark as picked up (Destroy Actor equivalent — removes from map)
-    const [updatedLoot] = await db.update(lootItems)
-      .set({ isPickedUp: true, pickedUpBy: userId, pickedUpAt: new Date() })
-      .where(and(eq(lootItems.id, lootId), eq(lootItems.isPickedUp, false)))
-      .returning();
+      const [updatedLoot] = await tx.update(lootItems)
+        .set({ isPickedUp: true, pickedUpBy: userId, pickedUpAt: new Date() })
+        .where(and(eq(lootItems.id, lootId), eq(lootItems.isPickedUp, false)))
+        .returning();
+      if (!updatedLoot) throw new Error("Conflito: item já coletado");
 
-    if (!updatedLoot) throw new Error("Conflito: item já coletado");
+      const [item] = await tx.insert(items).values({
+        userId,
+        name: loot.name,
+        type: loot.type,
+        rarity: loot.rarity,
+        stats: loot.stats ?? {},
+        durability: "100",
+        maxDurability: "100",
+      }).returning();
+      if (!item) throw new Error("Não foi possível adicionar o loot ao inventário");
 
-    // Add to Inventory (Add to Inventory node equivalent)
-    const item = await this.createItem({
-      userId,
-      name: loot.name,
-      type: loot.type,
-      rarity: loot.rarity,
-      stats: loot.stats ?? {},
-      durability: "100",
-      maxDurability: "100",
+      const heal = loot.stats?.heal;
+      if (loot.type === "CURATIVO" && typeof heal === "number" && Number.isFinite(heal) && heal > 0) {
+        const [healedStats] = await tx.update(playerStats)
+          .set({ health: Math.min(stats.maxHealth, stats.health + heal) })
+          .where(eq(playerStats.userId, userId))
+          .returning();
+        if (!healedStats) throw new Error("Não foi possível aplicar a cura do loot");
+      }
+
+      return { loot: updatedLoot, item };
     });
-
-    // Heal if curativo
-    if (loot.type === "CURATIVO" && loot.stats?.heal) {
-      await this.healPlayer(userId, loot.stats.heal);
-    }
-
-    return { loot: updatedLoot, item };
   }
 
   // === ELIMINATION (BP_Character Event Any Damage death logic) ===

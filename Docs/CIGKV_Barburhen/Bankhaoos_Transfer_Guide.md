@@ -1,100 +1,33 @@
-# Bankhaoos + Transferência Parcial CIGKV → W1/C1
+# Bankhaoos e progressão entre mundos — estado do protótipo
 
-Implementação alinhada ao **README oficial**.
+> **Status de segurança:** KRC é moeda virtual interna do jogo. Esta documentação descreve protótipos Unreal locais, não um serviço financeiro de produção. Não há endereço de depósito, checkout, API de pagamento, saque, resgate ou Mainnet. Não envie dinheiro ou cripto para qualquer endereço relacionado ao projeto.
 
----
+## Bankhaoos no Unreal
 
-## 1. Bankhaoos (`UKhaaosBankhaoosComponent`)
+`UKhaaosBankhaoosComponent` contém estado local de demonstração. `InitialKRC`, `CreditKRC` e `DebitKRC` não consultam o PostgreSQL autoritativo nem a API econômica do servidor. Não conecte esses métodos diretamente a input remoto do jogador, Blueprints replicados ou recompensas ranqueadas. Para partidas online, o servidor de jogo deve validar elegibilidade e valor e persistir a alteração pelo serviço econômico; até essa integração ser implementada, o componente não deve conceder saldo em produção.
 
-### Regras oficiais
-- Conta criada automaticamente no **primeiro Zu 1** do CIGKV
-- **1000 KRC** creditados na criação
-- Gera `AccountId` (`KR-XXXXXXXX`) e `DepositAddress`
-- Eventos: `OnAccountCreated`, `OnKRCChanged`
+O componente não cria nem exibe `DepositAddress`. O antigo formato aleatório `krc1…` foi removido porque não correspondia a uma carteira ou rede real.
 
-### Como usar
-1. Adicione o componente no Character do jogador.
-2. O Zu 1 chama `CreateAccount()` automaticamente no `TriggerCrash`.
-3. Para a Forja do Armeiro / loot:
-   ```cpp
-   Bank->CreditKRC(50, TEXT("ZEX terminal"));
-   Bank->DebitKRC(200, TEXT("Forja – Pistola 9mm"));
-   ```
+## Compras e pagamentos
 
-### Bridge para API (produção)
-Substitua os logs por chamadas HTTP ao Economy microservice:
-```
-POST /api/bankhaoos/create  { playerId, initialKRC: 1000 }
-POST /api/bankhaoos/credit  { accountId, amount, reason }
-POST /api/bankhaoos/debit   { accountId, amount, reason }
-```
+A interface web mantém saldos para gameplay, transferências internas e itens conforme as rotas autoritativas cobertas pelo `EconomyService`. Depósitos de valor real estão desativados: `POST /api/bank/deposit` responde `503 PAYMENTS_NOT_CONFIGURED` e não credita KRC. Não existe endpoint de produção `/api/bankhaoos/create`, `/credit` ou `/debit`; qualquer referência anterior a essas rotas era uma proposta não implementada.
 
----
+Um checkout futuro exigirá ordem criada no servidor a partir de catálogo controlado, confirmação de webhook assinado, processamento idempotente e concessão transacional do entitlement. A escolha do provedor e dos mercados está pendente. KRC permanecerá uma moeda fechada, sem token ou conversibilidade.
 
-## 2. Transferência Parcial (`UKhaaosTransferSystem`)
+## Progressão parcial entre mundos
 
-### Regras oficiais (README)
-| Regra | Valor |
-|-------|-------|
-| % de KRC/itens dos ZEX transferidos | **20 %** |
-| Token de Veterano + Pack UE5 | **Top 50** |
-| Persistência parcial | **Top 1000** |
+O sistema `UKhaaosTransferSystem` é um protótipo de progressão interna, não uma transferência de ativo financeiro. Percentuais, requisitos de ranking e recompensas precisam coincidir com regras versionadas do servidor antes de serem considerados contrato de jogo.
 
-### Fluxo
-1. Durante o CIGKV, terminais **ZEX** chamam:
-   ```cpp
-   Transfer->RegisterZEXKRC(150);
-   Transfer->RegisterZEXItem(FName("Knife_Tactical"), 2);
-   ```
-2. Ranking service atualiza:
-   ```cpp
-   Transfer->SetCIGKVRank(37); // exemplo
-   ```
-3. Ao sair do ring / entrar em Barburhen:
-   ```cpp
-   FTransferPayload Payload = Transfer->ExecuteTransfer();
-   // Payload.TransferredKRC, .TransferredItems, .bHasVeteranToken, .bHasUE5Pack
-   ```
+Para mudar essas regras, registre uma decisão de produto e acrescente testes que comprovem ownership, limite de elegibilidade, idempotência e comportamento em retry. Não use valores enviados pelo cliente como prova de ranking, entitlement ou saldo.
 
-### Eventos
-- `OnTransferCompleted` → UI de “conquistas salvas”
-- `OnVeteranTokenGranted` → pop-up especial do Marechal
+## Preparação para integração online
 
----
+Antes de ligar o Unreal à API:
 
-## 3. Componentes no Character
+1. Autenticar o jogador por sessão/ticket verificável pelo servidor; nunca aceitar `playerId` fornecido no body como identidade.
+2. Fazer o servidor calcular saldo, recompensa e preço; o cliente envia apenas a intenção da ação.
+3. Aplicar cada mutação junto com o ledger e a chave de idempotência em uma transação PostgreSQL.
+4. Usar eventos de domínio e confirmação de resposta para atualizar a HUD, mantendo estados pendentes e mensagens recuperáveis após desconexão.
+5. Cobrir replay, chamadas concorrentes, troca de conta, desconexão e reconciliação em testes de integração.
 
-```
-Character (Player)
-├── KhaaosVitalityComponent
-├── KhaaosBankhaoosComponent
-└── KhaaosTransferSystem
-```
-
----
-
-## 4. Pop-up sugerido (transferência)
-
-Texto oficial de imersão:
-> “Marechal, as conquistas foram salvas. Bem-vindo ao Barburhen, Zheers.”
-
----
-
-## 5. Arquivos criados
-
-```
-Source/KhaaosRun/
-├── Public/Economy/
-│   ├── KhaaosBankhaoosComponent.h
-│   └── KhaaosTransferSystem.h
-└── Private/Economy/
-    ├── KhaaosBankhaoosComponent.cpp
-    └── KhaaosTransferSystem.cpp
-```
-
-Zu 1 já cria a conta Bankhaoos automaticamente.
-
----
-
-**Bankhaoos + Transferência parcial implementados.**
-Compile, adicione os componentes ao Character e teste o fluxo Zu 1 → ZEX → ExecuteTransfer.
+Até esses gates passarem, o componente Unreal é somente scaffolding local e não deve ser descrito como bridge ou implementação de produção.

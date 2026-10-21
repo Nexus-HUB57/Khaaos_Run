@@ -1,0 +1,350 @@
+{
+  "report_title": "Khaaos Run MVP \u2014 Step 4: 3D Asset Generation Report",
+  "generated_at": "2026-10-12T21:11:26Z",
+  "pipeline_step": "step4_3d_assets",
+  "output_root": "/home/z/my-project/Khaaos_Run/repo/mvp_output/assets",
+  "summary": {
+    "total_assets": 17,
+    "mesh_assets": 11,
+    "vfx_assets": 6,
+    "character_count": 1,
+    "weapon_count": 3,
+    "loot_count": 7,
+    "vfx_count": 6,
+    "p0_count": 17,
+    "total_vertices": 502,
+    "total_faces": 812,
+    "mvp_requirement_met": true
+  },
+  "assets": [
+    {
+      "asset_id": "CHR_Zheers_Base",
+      "name": "Zheers Warrior Base",
+      "category": "character",
+      "priority": "P0",
+      "format": "DAE+OBJ",
+      "vertices": 128,
+      "faces": 192,
+      "target_polycount": 80000,
+      "dimensions_cm": [
+        60,
+        40,
+        180
+      ],
+      "lod_levels": 4,
+      "collision_type": "capsule",
+      "file_size_bytes": 29894,
+      "status": "generated"
+    },
+    {
+      "asset_id": "WPN_AssaultRifle_MK1",
+      "name": "Assault Rifle MK1",
+      "category": "weapon",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 86,
+      "faces": 144,
+      "target_polycount": 12000,
+      "dimensions_cm": [
+        5,
+        85,
+        18
+      ],
+      "lod_levels": 3,
+      "collision_type": "box",
+      "file_size_bytes": 14633,
+      "status": "generated"
+    },
+    {
+      "asset_id": "WPN_Shotgun_Breach",
+      "name": "Breach Shotgun",
+      "category": "weapon",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 68,
+      "faces": 112,
+      "target_polycount": 8000,
+      "dimensions_cm": [
+        5,
+        95,
+        18
+      ],
+      "lod_levels": 3,
+      "collision_type": "box",
+      "file_size_bytes": 12207,
+      "status": "generated"
+    },
+    {
+      "asset_id": "WPN_Sniper_DMR",
+      "name": "DMR Sniper",
+      "category": "weapon",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 148,
+      "faces": 248,
+      "target_polycount": 10000,
+      "dimensions_cm": [
+        5,
+        110,
+        20
+      ],
+      "lod_levels": 3,
+      "collision_type": "box",
+      "file_size_bytes": 25202,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_MedKit_Small",
+      "name": "Small Med Kit",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 8,
+      "faces": 12,
+      "target_polycount": 500,
+      "dimensions_cm": [
+        12,
+        8,
+        6
+      ],
+      "lod_levels": 1,
+      "collision_type": "box",
+      "file_size_bytes": 1841,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_MedKit_Medium",
+      "name": "Medium Med Kit",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 8,
+      "faces": 12,
+      "target_polycount": 600,
+      "dimensions_cm": [
+        18,
+        12,
+        8
+      ],
+      "lod_levels": 1,
+      "collision_type": "box",
+      "file_size_bytes": 1843,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_Bandage",
+      "name": "Bandage",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 8,
+      "faces": 12,
+      "target_polycount": 200,
+      "dimensions_cm": [
+        8,
+        5,
+        3
+      ],
+      "lod_levels": 1,
+      "collision_type": "box",
+      "file_size_bytes": 1831,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_Shield_Lv1",
+      "name": "Shield Cell Lv1",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 16,
+      "faces": 28,
+      "target_polycount": 400,
+      "dimensions_cm": [
+        10,
+        10,
+        14
+      ],
+      "lod_levels": 1,
+      "collision_type": "convex",
+      "file_size_bytes": 2098,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_Shield_Lv2",
+      "name": "Shield Cell Lv2",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 16,
+      "faces": 28,
+      "target_polycount": 500,
+      "dimensions_cm": [
+        12,
+        12,
+        16
+      ],
+      "lod_levels": 1,
+      "collision_type": "convex",
+      "file_size_bytes": 2100,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_AmmoBox_556",
+      "name": "5.56mm Ammo Box",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 8,
+      "faces": 12,
+      "target_polycount": 300,
+      "dimensions_cm": [
+        15,
+        8,
+        10
+      ],
+      "lod_levels": 1,
+      "collision_type": "box",
+      "file_size_bytes": 1839,
+      "status": "generated"
+    },
+    {
+      "asset_id": "LOOT_AmmoBox_762",
+      "name": "7.62mm Ammo Box",
+      "category": "loot",
+      "priority": "P0",
+      "format": "OBJ+FBX",
+      "vertices": 8,
+      "faces": 12,
+      "target_polycount": 300,
+      "dimensions_cm": [
+        15,
+        8,
+        10
+      ],
+      "lod_levels": 1,
+      "collision_type": "box",
+      "file_size_bytes": 1839,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_MuzzleFlash_Assault",
+      "name": "VFX_MuzzleFlash_Assault",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_MuzzleFlash_Shotgun",
+      "name": "VFX_MuzzleFlash_Shotgun",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_MuzzleFlash_Sniper",
+      "name": "VFX_MuzzleFlash_Sniper",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_BulletImpact_Concrete",
+      "name": "VFX_BulletImpact_Concrete",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_BulletImpact_Metal",
+      "name": "VFX_BulletImpact_Metal",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    },
+    {
+      "asset_id": "VFX_BulletImpact_Dirt",
+      "name": "VFX_BulletImpact_Dirt",
+      "category": "vfx",
+      "priority": "P0",
+      "format": "TGA+JSON",
+      "vertices": 0,
+      "faces": 0,
+      "target_polycount": 0,
+      "dimensions_cm": [
+        0,
+        0,
+        0
+      ],
+      "lod_levels": 0,
+      "collision_type": "none",
+      "file_size_bytes": 24612,
+      "status": "generated"
+    }
+  ],
+  "validation": {
+    "minimum_assets_required": 10,
+    "minimum_assets_found": 11,
+    "requirement_satisfied": true,
+    "all_p0_generated": true
+  }
+}

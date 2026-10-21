@@ -1,6 +1,5 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
-// Bankhaoos – Conta do jogador + KRC iniciais
-// Criação automática no primeiro Zu do CIGKV
+// Bankhaoos – protótipo de carteira interna local; não é fonte server-authoritative
 
 #pragma once
 
@@ -13,10 +12,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnKRCChanged, int32, NewBalance, i
 
 /**
  * Componente de conta Bankhaoos.
- * - Criação automática no primeiro ingresso (Zu 1)
- * - 1000 KRC iniciais (README oficial)
- * - Saldo local + bridge para a API de economia (Node.js)
- * - Endereço de depósito gerado
+ * - Demonstração local de conta e saldo interno
+ * - Saldo local de protótipo; não é uma fonte autoritativa de KRC
  */
 UCLASS(ClassGroup = (Khaaos), meta = (BlueprintSpawnableComponent))
 class KHAOSRUN_API UKhaaosBankhaoosComponent : public UActorComponent
@@ -32,7 +29,7 @@ public:
 	// CONFIGURAÇÃO
 	// ============================================================
 
-	/** KRC creditados na criação da conta (padrão oficial = 1000) */
+	/** Saldo inicial apenas para protótipos locais; não use como grant online */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bankhaoos")
 	int32 InitialKRC = 1000;
 
@@ -43,10 +40,6 @@ public:
 	/** ID único da conta Bankhaoos */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bankhaoos")
 	FString AccountId;
-
-	/** Endereço de depósito (simulado – em produção vem da API) */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bankhaoos")
-	FString DepositAddress;
 
 	/** Saldo atual de KRC */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Bankhaoos")
@@ -86,7 +79,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Bankhaoos")
 	bool HasAccount() const { return bAccountCreated; }
 
-protected:
+	protected:
 	FString GenerateAccountId() const;
-	FString GenerateDepositAddress() const;
 };

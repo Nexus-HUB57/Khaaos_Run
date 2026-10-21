@@ -124,3 +124,88 @@ test("PostgreSQL: item, ownership, loadout e consumo concorrente de durabilidade
     await cleanUserRows(ownerId);
   }
 });
+
+test("PostgreSQL: pickup de curativo confirma loot, inventário e cura em uma transação", async () => {
+  const userId = uniqueUserId();
+  const rollbackUserId = `rollback-probe-user-${randomUUID()}`;
+  const successLootName = `Atomic pickup medkit ${randomUUID()}`;
+  const rollbackLootName = `Rollback pickup medkit ${randomUUID()}`;
+  let successLootId: number | undefined;
+  let rollbackLootId: number | undefined;
+
+  try {
+    await storage.getPlayerStats(userId);
+    await storage.updatePlayerStats(userId, { health: 40 });
+    const successLoot = await pool.query<{ id: number }>(
+      `INSERT INTO loot_items (name, type, rarity, pos_x, pos_y, stats)
+       VALUES ($1, 'CURATIVO', 'COMUM', 30, 40, $2::jsonb) RETURNING id`,
+      [successLootName, JSON.stringify({ heal: 25 })],
+    );
+    successLootId = successLoot.rows[0].id;
+
+    const picked = await storage.pickupLoot(successLootId, userId);
+    assert.equal(picked.loot.isPickedUp, true);
+    assert.equal(picked.loot.pickedUpBy, userId);
+    assert.equal(picked.item.userId, userId);
+    assert.equal(picked.item.name, successLootName);
+    const healed = await pool.query<{ health: number }>(
+      "SELECT health FROM player_stats WHERE user_id = $1",
+      [userId],
+    );
+    assert.equal(healed.rows[0].health, 65);
+
+    await storage.getPlayerStats(rollbackUserId);
+    await storage.updatePlayerStats(rollbackUserId, { health: 20 });
+    const rollbackLoot = await pool.query<{ id: number }>(
+      `INSERT INTO loot_items (name, type, rarity, pos_x, pos_y, stats)
+       VALUES ($1, 'CURATIVO', 'COMUM', 50, 50, $2::jsonb) RETURNING id`,
+      [rollbackLootName, JSON.stringify({ heal: 25 })],
+    );
+    rollbackLootId = rollbackLoot.rows[0].id;
+
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION reject_test_pickup_heal() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.user_id LIKE 'rollback-probe-user-%' AND NEW.health > OLD.health THEN
+          RAISE EXCEPTION 'injected pickup heal failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await pool.query("DROP TRIGGER IF EXISTS reject_test_pickup_heal ON player_stats");
+    await pool.query(`
+      CREATE TRIGGER reject_test_pickup_heal
+      BEFORE UPDATE OF health ON player_stats
+      FOR EACH ROW EXECUTE FUNCTION reject_test_pickup_heal()
+    `);
+
+    await assert.rejects(
+      storage.pickupLoot(rollbackLootId, rollbackUserId),
+      (error: any) => /injected pickup heal failure/.test(`${error?.message ?? ""} ${error?.cause?.message ?? ""}`),
+    );
+    const rolledBackLoot = await pool.query<{ is_picked_up: boolean; picked_up_by: string | null }>(
+      "SELECT is_picked_up, picked_up_by FROM loot_items WHERE id = $1",
+      [rollbackLootId],
+    );
+    assert.equal(rolledBackLoot.rows[0].is_picked_up, false, "o claim deve voltar atrás quando a cura falha");
+    assert.equal(rolledBackLoot.rows[0].picked_up_by, null);
+    const rolledBackItems = await pool.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM items WHERE user_id = $1 AND name = $2",
+      [rollbackUserId, rollbackLootName],
+    );
+    assert.equal(rolledBackItems.rows[0].count, 0, "o inventário não pode manter item de um pickup revertido");
+    const unchangedHealth = await pool.query<{ health: number }>(
+      "SELECT health FROM player_stats WHERE user_id = $1",
+      [rollbackUserId],
+    );
+    assert.equal(unchangedHealth.rows[0].health, 20, "a falha não pode deixar cura parcial");
+  } finally {
+    await pool.query("DROP TRIGGER IF EXISTS reject_test_pickup_heal ON player_stats");
+    await pool.query("DROP FUNCTION IF EXISTS reject_test_pickup_heal()");
+    if (successLootId !== undefined) await pool.query("DELETE FROM loot_items WHERE id = $1", [successLootId]);
+    if (rollbackLootId !== undefined) await pool.query("DELETE FROM loot_items WHERE id = $1", [rollbackLootId]);
+    await cleanUserRows(userId);
+    await cleanUserRows(rollbackUserId);
+  }
+});

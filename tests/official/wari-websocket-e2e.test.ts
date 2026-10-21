@@ -240,7 +240,7 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
       "broadcast de coleta persistida",
     );
     ownerSocket.send(JSON.stringify({ type: "pickup", lootId }));
-    await persistenceStarted;
+    await withTimeout(persistenceStarted, "persistência do pickup não iniciou", 8_000);
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(lootBroadcastSeen, false, "não transmitir loot antes do commit da gravação");
     allowPersistence();
@@ -318,9 +318,19 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
 
     const wss = (roomManager as any).wss;
     if (wss) {
-      await new Promise<void>((resolve) => wss.close(() => resolve()));
+      for (const client of wss.clients ?? []) client.terminate();
+      await withTimeout(
+        new Promise<void>((resolve) => wss.close(() => resolve())),
+        "WebSocketServer de teste não fechou",
+        1_500,
+      ).catch(() => {});
     }
-    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    httpServer.closeAllConnections();
+    await withTimeout(
+      new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve())),
+      "servidor HTTP de teste não fechou",
+      1_500,
+    ).catch(() => {});
 
     storage.getPlayerStats = originals.getPlayerStats;
     storage.getEquippedItems = originals.getEquippedItems;

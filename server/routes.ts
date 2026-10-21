@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import * as schema from "@shared/schema";
 import {
   ZONE_PHASES,
   PlayerStatus,
@@ -18,11 +17,11 @@ import { generateMatchContent, generateLootField } from "./game/ProceduralGenera
 import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
+import { distributedState } from "./game/DistributedState";
 import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
 import { economyService } from "./game/economyService";
 import { isValidIdempotencyKey } from "./game/economyMoney";
 import { canUseItemOutsideMatch } from "@shared/war-i";
-import { distributedState } from "./game/DistributedState";
 import {
   emptyMutationInput,
   zoneStartInput,
@@ -105,12 +104,27 @@ export function registerApiRoutes(app: Express): void {
   };
 
   const readIdempotencyKey = (req: any, res: any): string | null => {
-    const key = req.get?.("Idempotency-Key") ?? req.headers?.["idempotency-key"];
+    const key = req.get("Idempotency-Key");
     if (!isValidIdempotencyKey(key)) {
-      res.status(400).json({ message: "Informe um Idempotency-Key válido (16 a 128 caracteres)." });
+      res.status(400).json({ message: "Cabeçalho Idempotency-Key ausente ou inválido" });
       return null;
     }
     return key;
+  };
+
+  const sendFinancialError = (res: any, error: any) => {
+    if (error instanceof RangeError) return res.status(400).json({ message: error.message });
+    if (error?.code === "INSUFFICIENT_FUNDS") {
+      return res.status(402).json({ message: "Saldo insuficiente", required: error.required, available: error.available });
+    }
+    if (error?.code === "LOAN_LIMIT") return res.status(403).json({ message: error.message });
+    if (error?.code === "SALARY_ALREADY_CLAIMED") return res.status(400).json({ message: error.message });
+    if (error?.message === "Empréstimo não encontrado" || error?.message === "Item não encontrado") {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error?.message === "Empréstimo já pago") return res.status(409).json({ message: error.message });
+    console.error("Financial operation failed", { code: error?.code, message: error?.message });
+    return res.status(500).json({ message: "Internal server error" });
   };
 
   // ── BANK ─────────────────────────────────────────────────────────────────
@@ -119,19 +133,11 @@ export function registerApiRoutes(app: Express): void {
     res.json(await storage.getBankAccount(getUserId(req)));
   });
 
-  app.post(api.bank.deposit.path, requireAuth, async (req, res) => {
-    try {
-      const input = parseMutationBody(req, res, api.bank.deposit.input);
-      if (!input) return;
-      const key = readIdempotencyKey(req, res);
-      if (!key) return;
-      const userId = getUserId(req);
-      const result = await economyService.deposit(userId, key, input.amountUsd);
-      res.status(result.status).json(result.body);
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
-    }
+  app.post(api.bank.deposit.path, requireAuth, (_req, res) => {
+    res.status(503).json({
+      code: "PAYMENTS_NOT_CONFIGURED",
+      message: "Depósitos estão temporariamente indisponíveis. Nenhum KRC foi creditado.",
+    });
   });
 
   app.post(api.bank.transfer.path, requireAuth, async (req, res) => {
@@ -145,7 +151,7 @@ export function registerApiRoutes(app: Express): void {
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -170,7 +176,7 @@ export function registerApiRoutes(app: Express): void {
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -179,15 +185,12 @@ export function registerApiRoutes(app: Express): void {
       if (!parseMutationBody(req, res, emptyMutationInput)) return;
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de empréstimo inválido" });
-      const userId = getUserId(req);
-      const loan = await storage.getLoanForUser(id, userId);
-      if (!loan) return res.status(404).json({ message: "Empréstimo não encontrado" });
       const key = readIdempotencyKey(req, res);
       if (!key) return;
-      const result = await economyService.payLoan(userId, key, id);
+      const result = await economyService.payLoan(getUserId(req), key, id);
       res.status(result.status).json(result.body);
     } catch (err) {
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -222,11 +225,11 @@ export function registerApiRoutes(app: Express): void {
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const result = await economyService.purchaseItem(userId, key, input);
+      const result = await economyService.purchaseItem(userId, key, { name: input.name, type: input.type });
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -241,7 +244,7 @@ export function registerApiRoutes(app: Express): void {
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
       const item = await storage.getItemForUser(id, userId);
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
-      if (item.type !== "CURATIVO" || !Number.isFinite(item.stats?.heal) || Number(item.stats?.heal) <= 0) {
+      if (!canUseItemOutsideMatch(item.type, item.stats)) {
         return res.status(409).json({ message: "Este item não possui uso legado fora do combate." });
       }
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
@@ -265,15 +268,13 @@ export function registerApiRoutes(app: Express): void {
       const userId = getUserId(req);
       const id = parseRouteId(req.params.id);
       if (id === null) return res.status(400).json({ message: "ID de item inválido" });
-      const item = await storage.getItemForUser(id, userId);
-      if (!item) return res.status(404).json({ message: "Item não encontrado" });
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const result = await economyService.repairItem(userId, key, id, input.amountKrc);
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(500).json({ message: "Internal server error" });
+      return sendFinancialError(res, err);
     }
   });
 
@@ -320,13 +321,14 @@ export function registerApiRoutes(app: Express): void {
 
   app.post(api.player.daily.path, requireAuth, async (req, res) => {
     if (!parseMutationBody(req, res, emptyMutationInput)) return;
-    const key = readIdempotencyKey(req, res);
-    if (!key) return;
     try {
-      const result = await economyService.claimDailySalary(getUserId(req), key);
+      const key = readIdempotencyKey(req, res);
+      if (!key) return;
+      const userId = getUserId(req);
+      const result = await economyService.claimDailySalary(userId, key);
       res.status(result.status).json(result.body);
-    } catch {
-      res.status(500).json({ message: "Internal server error" });
+    } catch (err) {
+      return sendFinancialError(res, err);
     }
   });
 

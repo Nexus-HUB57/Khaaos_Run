@@ -1,0 +1,267 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Khaaos Run \u2014 KRC Economy Dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "title": "KRC in Circulation",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "khaaos_economy_krc_circulating",
+          "legendFormat": "KRC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500000000
+              },
+              {
+                "color": "red",
+                "value": 900000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "KRC Earned/s",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_economy_krc_earned_total[5m])",
+          "legendFormat": "Earned/s"
+        }
+      ]
+    },
+    {
+      "title": "KRC Spent/s",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_economy_krc_spent_total[5m])",
+          "legendFormat": "Spent/s"
+        }
+      ]
+    },
+    {
+      "title": "Tx/s",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_economy_transactions_total[5m])",
+          "legendFormat": "Tx/s"
+        }
+      ]
+    },
+    {
+      "title": "KRC Flow (Earn vs Spend)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(khaaos_economy_krc_earned_total[5m])",
+          "legendFormat": "Earned/s"
+        },
+        {
+          "expr": "rate(khaaos_economy_krc_spent_total[5m])",
+          "legendFormat": "Spent/s"
+        },
+        {
+          "expr": "rate(khaaos_economy_krc_earned_total[5m]) - rate(khaaos_economy_krc_spent_total[5m])",
+          "legendFormat": "Net Flow/s"
+        }
+      ]
+    },
+    {
+      "title": "Transaction Types",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "sum by (tx_type) (rate(khaaos_economy_transactions_total[5m]))",
+          "legendFormat": "{{tx_type}}"
+        }
+      ]
+    },
+    {
+      "title": "Ledger Hash Chain Integrity",
+      "type": "stat",
+      "gridPos-": "h4w6x0y12",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "khaaos_economy_ledger_integrity_check",
+          "legendFormat": "Integrity"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Loan Book",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "khaaos_economy_loans_active",
+          "legendFormat": "Active Loans"
+        },
+        {
+          "expr": "khaaos_economy_loans_defaulted_total",
+          "legendFormat": "Defaults"
+        },
+        {
+          "expr": "rate(khaaos_economy_loans_created_total[5m])",
+          "legendFormat": "Created/s"
+        }
+      ]
+    },
+    {
+      "title": "Economy Health Status",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "khaaos_economy_health_status",
+          "legendFormat": "Status"
+        }
+      ]
+    },
+    {
+      "title": "Supply Cap Utilization %",
+      "type": "gauge",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "(khaaos_economy_krc_circulating / 1000000000) * 100",
+          "legendFormat": "Utilization"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "khaaos",
+    "economy",
+    "production"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Khaaos Run \u2014 KRC Economy",
+  "uid": "khaaos-economy",
+  "version": 1
+}

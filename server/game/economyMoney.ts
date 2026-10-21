@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits, usdToKrcMinorUnits } from "@shared/money";
+import { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits } from "@shared/money";
 
-export { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits, usdToKrcMinorUnits };
+export { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits };
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);

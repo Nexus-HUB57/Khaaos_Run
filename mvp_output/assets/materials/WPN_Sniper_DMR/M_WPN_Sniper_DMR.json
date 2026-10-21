@@ -1,0 +1,31 @@
+{
+  "material_id": "M_WPN_Sniper_DMR",
+  "material_instance_id": "MI_WPN_Sniper_DMR_Default",
+  "shader": "PBR",
+  "properties": {
+    "base_color": {
+      "r": 0.15,
+      "g": 0.25,
+      "b": 0.12,
+      "a": 1.0
+    },
+    "roughness": 0.5,
+    "metallic": 0.8,
+    "emissive": {
+      "r": 0.0,
+      "g": 0.0,
+      "b": 0.0,
+      "a": 0.0
+    },
+    "opacity": 1.0,
+    "two_sided": false
+  },
+  "textures": {
+    "diffuse": "T_WPN_Sniper_DMR_D",
+    "normal": "T_WPN_Sniper_DMR_N",
+    "orm": "T_WPN_Sniper_DMR_ORM",
+    "emissive": "T_WPN_Sniper_DMR_E"
+  },
+  "blend_mode": "Opaque",
+  "shading_model": "Default"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "VFX_MuzzleFlash_Sniper",
+  "type": "niagara",
+  "category": "vfx",
+  "description": "Muzzle flash for sniper DMR. Sharp flash + suppressor trail.",
+  "priority": "P0",
+  "subsystem": "Niagara",
+  "textures_required": [
+    "T_VFX_MuzzleFlash_Sniper_D",
+    "T_VFX_MuzzleFlash_Sniper_N"
+  ],
+  "parameters": {
+    "lifetime": 0.5,
+    "spawn_rate": 100,
+    "particle_count": 50
+  },
+  "material": "M_VFX_MuzzleFlash_Sniper",
+  "dependencies": []
+}
