@@ -168,6 +168,24 @@ test("POST rejeita origem cross-site, ausência de origem e payload inválido an
   assert.equal((await invalid.json() as any).error.code, "INVALID_REQUEST");
 });
 
+test("carga HTTP: 240 consultas concorrentes de overview preservam isolamento de mundo e operador", async () => {
+  const worlds = ["CIGKV", "W1", "W2", "W3", "W4"];
+  const responses = await Promise.all(Array.from({ length: 240 }, async (_, index) => {
+    const actorId = loadActors[index % loadActors.length];
+    const worldId = worlds[index % worlds.length];
+    const response = await fetch(`${baseUrl}/api/console/v1/marshal/overview?worldId=${worldId}`, {
+      headers: { "x-test-user-id": actorId },
+    });
+    const data = await response.json() as any;
+    return { status: response.status, actorId, worldId, data };
+  }));
+
+  assert.ok(responses.every(({ status }) => status === 200));
+  assert.ok(responses.every(({ actorId }) => loadActors.includes(actorId)));
+  assert.ok(responses.every(({ worldId, data }) => data.worldId === worldId));
+  assert.ok(responses.every(({ data }) => data.activeIncidents === null && data.incidentTelemetryAvailable === false));
+});
+
 test("estresse HTTP: 80 conselhos simultâneos mantêm isolamento, idempotência e resultado persistido", async () => {
   const requests = Array.from({ length: 80 }, (_, index) => {
     const actorId = loadActors[index % loadActors.length];
