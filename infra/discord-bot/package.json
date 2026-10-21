@@ -1,0 +1,20 @@
+{
+  "name": "khaaos-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Khaaos Run - tournament management, ranked feed, live match status, and player lookup",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.0",
+    "axios": "^1.7.0",
+    "winston": "^3.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

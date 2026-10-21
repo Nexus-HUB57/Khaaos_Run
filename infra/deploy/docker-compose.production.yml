@@ -395,6 +395,41 @@ services:
     networks:
       - khaaos-monitoring
 
+  # ══ Discord Bot ═══════════════════════════════════════════════════════════════════
+  discord-bot:
+    build:
+      context: ../../infra/discord-bot
+      dockerfile: Dockerfile
+    container_name: khaaos-discord-bot
+    <<: *common-restart
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_BETA_ROLE_ID: ${DISCORD_BETA_ROLE_ID:-}
+      KHAASOS_API_BASE: ${KHAASOS_API_BASE:-http://economy-api:3000}
+      KHAASOS_API_KEY: ${KHAASOS_API_KEY:-}
+      LOG_LEVEL: ${DISCORD_BOT_LOG_LEVEL:-info}
+    logging: *common-logging
+    deploy:
+      <<: *common-deploy
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"process.exit(0)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - khaaos-backend
+    depends_on:
+      economy-api:
+        condition: service_healthy
+
 # ══ Volumes ═══════════════════════════════════════════════════════════════════════
 volumes:
   server-logs:
