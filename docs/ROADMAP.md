@@ -207,7 +207,7 @@ Esta seção atualiza a evidência histórica acima, que ainda aponta para a rev
 - Baseline V8: app — 34,20% linhas, 67,83% branches e 48,17% funções; runtime — 76,64% linhas, 70,34% branches e 71,42% funções. A UI está incluída no denominador e é a maior lacuna de cobertura; consultar `COVERAGE_REPORT_2026-10-21.md` e `TEST_COVERAGE_BASELINE.md`.
 - Contagens instrumentadas: app 275 aprovados, 1 ignorado, 0 falhas; runtime 14 aprovados, 2 ignorados, 0 falhas.
 - O workflow `Stress Test (local runtime)` agora executa honestamente o harness de 24 clientes em serviço local. Seu sucesso não comprova carga nas regiões públicas nem perfis de 100–2000 bots; um load test remoto depende de ambiente provisionado e autorização.
-- Os jobs CI principais e pipelines acionados no snapshot anterior ficaram verdes. A nova instrumentação precisa também passar no CI do commit que a inclui antes de virar gate estável.
+- CI principal (`39681007161`) e `04 — Unit Tests` (`39681007116`) passaram no commit `b3524d4`; os artifacts `unit-test-results` e `coverage-game-runtime` foram publicados. M0 segue em validação até existir uma segunda execução comparável e os smoke tests de UI planejados.
 - A notificação de falha Discord continua sem entrega confirmada: o POST devolveu HTTP 405. A workflow já envia POST JSON; a correção depende de trocar `DISCORD_WEBHOOK_URL` por endpoint oficial válido e confirmar a entrega. O alerta é opcional e não altera o estado dos gates.
 - UE5 ainda não tem evidência de build por UnrealBuildTool/Editor nem Automation Tests em runner licenciado; EOS continua mockado. Não declarar esses itens como prontidão de produção.
 
