@@ -31,6 +31,7 @@ import {
   economySimulationInput,
   economyBatchSimulationInput,
 } from "./game/mutationSchemas";
+import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -72,6 +73,9 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
   registerMarshalConsoleRoutes(app, { recoverPending: options.recoverPendingCouncils });
+
+  // ── Discord Bot API v1 (API-key auth, not session-based) ──────────────
+  registerDiscordApiV1Routes(app);
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {
