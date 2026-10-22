@@ -12,6 +12,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: KRC_CHECKOUT_ENABLED
+        value: "false"
       - key: RUN_DB_MIGRATIONS
         value: "false"
       - key: DATABASE_URL

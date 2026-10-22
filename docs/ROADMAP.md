@@ -8,7 +8,7 @@
 
 O repositório contém um vertical slice executável em React/TypeScript, Express, PostgreSQL e WebSocket: autenticação OIDC/sessões, inventário War’I, matchmaking, salas, zona, combate, loot, ranking e resultado. Também mantém um runtime Node separado, documentação e uma trilha Unreal Engine 5.8. A trilha UE5 **ainda não foi comprovada por build com UnrealBuildTool nem Automation Tests em instalação real**; checks C++/portáveis no CI não substituem isso.
 
-### Evidência de validação nesta revisão
+**Evidência desta branch:** o checkout Stripe BRL test-only, migration 0005, validação de raw-body webhook e testes de state machine estão em revisão. Localmente passaram `npm run check`, `npm run build`, `npm run test:official`, `npm run verify:all`, `drizzle-kit check` e geração Drizzle sem diff. O teste PostgreSQL Stripe foi escrito, mas não foi executado neste sandbox por ausência de serviço local; a execução CI com PostgreSQL efêmero permanece gate obrigatório antes do merge.
 
 Executado em `main` no SHA acima: `npm run verify:all`, com todas as etapas configuradas aprovadas.
 
@@ -44,70 +44,99 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 
 ## Fase 0 — Fronteiras de segurança e invariantes de domínio
 
-**Status: PARCIAL — não promover a escala até fechar os bloqueadores indicados.**
+**Objetivo:** impedir operações não autorizadas e transições parcialmente aplicadas antes de ampliar o volume de usuários ou valor econômico.
 
-### Concluído (código/testes)
+- [ ] Inventariar todas as rotas mutáveis com recurso, proprietário, papel/capability e efeitos laterais documentados.
+- [ ] Aplicar ownership dentro do `WHERE` da mutação SQL sempre que possível, evitando padrão check-then-update e TOCTOU.
+- [ ] Validar entrada de dinheiro de jogo, itens, dano, matchmaking e controles com schemas estritos; input inválido retorna erro sem write parcial.
+- [ ] Fechar cobertura HTTP negativa para sessão ausente, owner diferente, ID inexistente, faixa inválida, operador e moderador.
+- [ ] Separar capabilities de jogador, host, moderador e operador; role nunca é aceita do body ou query string.
+- [ ] Adicionar limites e rate limits coerentes para login, token WS, economia, lobby, movimento e ações de combate.
+- [ ] Definir política de Origin/CSRF para mutações HTTP e allowlist de Origin para handshake WebSocket.
+- [ ] Rever logs para remover tokens, cookies, PII desnecessária e payloads sensíveis.
+- [ ] Definir invariantes explícitos para `LOBBY → COUNTDOWN → IN_PROGRESS → FINISHED`, eliminação, abandono e vitória.
+**Entrega parcial desta rodada:** a zona e o spawn global de loot exigem a allowlist de operador; reparo/uso de item e pagamento de empréstimo fazem a mutação SQL com filtro de proprietário; entradas das mutações cobertas são estritas e limitadas por Zod. As suítes HTTP verificam que as 41 rotas privadas rejeitam sessões ausentes e expiradas, os quatro controles globais da zona rejeitam jogadores comuns mesmo com role forjado no corpo, leituras de conta/inventário/empréstimos/histórico usam o proprietário da sessão e mutações de itens/empréstimos ocultam recursos alheios ou inexistentes. Entradas inválidas em mutações financeiras, de itens, zona e jogador retornam 400 sem chamar o storage. O aceite 0.1 ainda exige inventário contínuo das rotas e ampliação da cobertura de ownership/IDs para os demais recursos, além de garantir atomicidade quando uma persistência falhar entre etapas.
 
-- Autenticação OIDC/sessão e proteção de rotas privadas; testes negativos verificam sessões ausentes/expiradas.
-- Endpoints protegidos derivam identidade do usuário autenticado; rotas e mutações cobertas validam payloads com schemas.
-- Operações de loans/items cobertas usam escopo de proprietário no storage/economia; controles globais de zona usam allowlist de operador.
-- WebSocket exige token HMAC de curta duração assinado pelo servidor, deriva do token a identidade e valida mensagens/payloads; testes rejeitam token ausente e `userId` falsificado.
-- Mutações HTTP possuem controles CSRF/Origin para métodos não seguros; secrets/tokens não são incluídos deliberadamente nos payloads do perfil.
+**Entregue parcialmente:** há controles de zona/spawn por allowlist, escopo por usuário em operações de item e empréstimo, limites Zod em mutações cobertas e identidade WS autenticada. A suíte negativa abrangente e auditoria de todas as rotas ainda não fecham esta fase.
 
-### Pendente / bloqueadores
+**Gate de aceite:** cada endpoint privado tem teste positivo e negativo; uma identidade não altera recursos de outra; entrada inválida, timeout e retry não deixam estado parcial; logs e mensagens não revelam segredos.
 
-- Inventário e cobertura negativa comprovável de **todas** as rotas mutáveis, papéis, recursos e efeitos laterais.
-- Ownership/TOCTOU, atomicidade e validação de identidade para todos os recursos/caminhos, não apenas os cobertos atualmente.
-- Ticket WebSocket é reutilizável enquanto válido; não há consumo/revogação por sessão nem limite agregado pré-autenticação. O handshake não valida `Origin`.
-- Logout ainda é mutação GET; revisar o caso de CSRF e usar método/guard apropriado.
-- Auditar logs e exceções para evitar exposição de detalhes internos; concluir política de limites/rate por IP/identidade para endpoints críticos.
-- Fechar fragilidades identificadas na auditoria atual, incluindo respawn sem validação do estado da partida e bypass de sala privada via `roomId`.
+## Fase 1 — PostgreSQL, migrações reproduzíveis e CI
+- [x] Agrupar débito/crédito, criação de empréstimo/item e ledger em transações PostgreSQL.
+- [x] Usar decimal exato ou unidades inteiras mínimas nas mutações econômicas; saldos usam `numeric` no SQL e entradas usam centavos inteiros.
+- [x] Adicionar idempotency key nas mutações econômicas com persistência e replay de resposta.
+- [x] Desativar concessão de KRC a partir de montante USD informado pelo cliente; não creditar antes de ordem e pagamento verificados.
+- [x] Definir checks no banco para saldos não negativos, lançamentos, durabilidade e estado dos empréstimos (migration 0003, `NOT VALID` até auditoria).
+- [ ] Avaliar e adicionar constraints de ownership/FK depois de conferir usuários e registros legados no banco de aplicação.
+- [x] Escrever e executar testes concorrentes para compra, transferência, pagamento de empréstimo e salário, além de retries e rollback.
 
-**Gate:** cada endpoint privado com teste positivo/negativo; identidade não altera recurso alheio; entradas inválidas, timeout/retry não deixam estado parcial; tokens e PII não aparecem em logs. Não aceito ainda.
+**Entrega inicial (histórica):** depósito, transferência, empréstimo, pagamento, compra, reparo e salário foram encaminhados ao serviço transacional/idempotente. O depósito sem prova de liquidação permanece desabilitado com HTTP 503; as demais operações internas continuam no ledger. A entrega Stripe desta branch é exclusivamente test-mode, desabilitada por padrão, e não cria checkout nem cobrança sem configuração. Nenhum banco de aplicação foi alterado. Os checks `NOT VALID` protegem novos/alterados registros; auditoria de legado e FKs de ownership continuam pendentes. Resgate, refund/chargeback e rollout live não estão habilitados; ver [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](./INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](./STRIPE_BRAZIL_CHECKOUT.md).
 
-## Fase 1 — PostgreSQL, migrações reproduzíveis e integridade da economia
+**Objetivo:** tornar evolução de schema e persistência repetíveis, isoladas e demonstráveis em cada execução.
 
-**Status: PARCIAL — persistência e ledger avançaram; legado, recuperação e gates operacionais ainda abertos.**
+- [x] Usar migrações Drizzle versionadas e revisáveis em vez de alteração operacional implícita de schema.
+- [x] Adicionar suíte `tests/integration/` usando `DatabaseStorage` e pool PostgreSQL reais, sem mock de storage.
+- [x] Restringir testes a URL explícita, host local, ambiente não produtivo e database `_test`; cada fixture apaga apenas os próprios registros.
+- [x] Testar criação/leitura de stats e bank account, defaults e atualização persistida de stats.
+- [x] Testar item JSONB, ownership no SQL, equipagem e cinco atualizações concorrentes da durabilidade sem lost update.
+- [x] Provisionar PostgreSQL 16 efêmero no CI, esperar readiness, aplicar migrações e rodar `test:postgres` como gate bloqueante.
+- [x] Documentar Compose descartável, URL, migrações, execução e limites conhecidos em `docs/TESTING_POSTGRES.md`.
+- [ ] Definir estratégia expand/contract para mudanças incompatíveis e verificar compatibilidade entre versões de aplicação e schema.
+- [ ] Escrever testes concorrentes de compra, transferência, pagamento, ledger e rollback multi-tabela.
+- [ ] Definir backup, restore testado, retenção, RPO/RTO e procedimento de rollback de migração.
+- [ ] Adicionar constraints e índices somente após conferir query plans e padrões reais de consulta.
 
-### Concluído (código/testes)
+### Fase 1.1 — Checkout Stripe sandbox (Brasil)
 
-- Migrações Drizzle versionadas e revisáveis; workflow CI cria PostgreSQL efêmero, aplica migrações e executa `test:postgres` como gate.
-- Testes de storage real cobrem stats/conta, ownership, JSONB de item e atualizações concorrentes de durabilidade.
-- Economia usa valores precisos/unidades mínimas, operações transacionais/idempotentes e ledger correlacionável append-only; migrations e reconciliação foram exercitadas em PostgreSQL descartável.
-- Reconciliação reporta drift sem autocorreção silenciosa; limpeza de chaves idempotentes tem dry-run por padrão e execução explícita.
-- Depósitos sem prova de liquidação estão desabilitados; não há integração com dinheiro real.
+- [x] Adicionar migration 0005 para ordens server-priced e inbox de eventos Stripe, sem modificar saldos existentes.
+- [x] Adicionar Checkout Session avulsa em BRL com catálogo fixo server-side; cliente envia somente `productId` e `Idempotency-Key`.
+- [x] Validar assinatura Stripe em raw body, restringir integração a `sk_test_`, exigir webhook secret e preservar checkout desativado no Render.
+- [x] Gravar crédito Weapons, histórico e ledger balanceado append-only na mesma transação do webhook pago; deduplicar IDs de evento e conferir SKU, jogador, sessão, moeda e valor.
+- [x] Escrever testes unitários de catálogo/assinatura e teste PostgreSQL de checkout idempotente, fulfillment concorrente, colisão de evento, divergência e estados terminais.
+- [ ] Passar o teste PostgreSQL no CI com migration 0005 aplicada e validar a execução de staging com credenciais Stripe test-only.
+- [ ] Definir nomes, quantidades KRC e preços BRL dos pacotes; confirmar elegibilidade da conta para métodos (Pix está sujeito a disponibilidade/ativação Stripe).
+- [ ] Configurar segredos e webhook somente em staging; validar um pagamento de teste e estados pendentes/expirados/retries sem chave live.
+- [ ] Implementar refunds, chargebacks, suporte, impostos, termos e lançamentos compensatórios antes de qualquer venda live.
+- [ ] Fazer revisão jurídica/fiscal e aprovação explícita do titular antes de remover qualquer gate de produção; a intenção global não libera mercados além do Brasil.
 
-### Pendente / bloqueadores
+### 0.3 Auditoria e reconciliação da economia
 
-- Auditar registros legados em banco de aplicação, validar checks `NOT VALID` e decidir FKs/ownership sem afetar semântica de exclusão.
-- Definir fluxo de ajuste compensatório append-only com ator, capability, motivo e trilha de auditoria.
-- Estratégia expand/contract e compatibilidade de versões aplicação/schema; rollback de migração comprovado.
-- Testes concorrentes/injeção de falha para operações econômicas completas, incluindo rollback multi-tabela e reconciliação antes/depois.
-- Backup/restore demonstrado, retenção e RPO/RTO definidos.
-- Corrigir divergência do preview de empréstimo: endpoint de preview e serviço autoritativo atualmente calculam taxas diferentes.
-- Separar permissões/roles de runtime e owner do banco, se a topologia operacional exigir.
+Esta etapa transforma a atomicidade já implementada em evidência operacional auditável. Pré-requisito ainda aberto: auditar o banco real antes de validar checks `NOT VALID` e concluir as decisões de ownership/FK da 0.2.
 
-**Gate:** database limpo migra do zero; operações e ledger reconciliam sob concorrência/retry; restore e rollback são demonstrados em ambiente isolado. Parcialmente atendido apenas.
+- [x] Definir contrato de ledger append-only com `operation_id`/chave de idempotência correlacionáveis e lançamentos explícitos por conta de origem/destino; migration 0004 preserva histórico antigo e cria saldos de abertura por carteira.
+- [x] Criar consulta/relatório de reconciliação que compare saldos das carteiras com os lançamentos; divergências devem gerar alerta e relatório, nunca autocorreção silenciosa.
+- [x] Definir prazo de retenção de idempotency keys maior que a janela de retry/replay suportada; disponibilizar limpeza controlável e segura em dry-run por padrão.
+- [ ] Definir fluxo de ajustes administrativos por lançamentos compensatórios append-only, com capability, motivo, ator, horário e trilha de auditoria; proibir correção por update/delete de histórico.
+- [ ] Auditar registros legados no banco de aplicação, corrigir anomalias com procedimento revisado, validar as constraints 0003 e avaliar FKs/ownership sem alterar semântica de exclusão de usuários.
+- [ ] Executar migrações e testes PostgreSQL num banco efêmero obrigatório no CI; medir reconciliação antes/depois de carga concorrente e de falhas injetadas.
 
-## Fase 2 — War’I: interface, combate e sincronização
+**Aceite:** todo saldo é explicável por lançamentos correlacionados; reconciliação detecta drift sem mutação automática; ajustes são auditáveis e compensatórios; retries continuam seguros dentro da retenção estabelecida; migrações e checks passam do zero em CI.
 
-**Status: PARCIAL — loop jogável e E2E servidor disponíveis; validação de experiência em navegador/staging pendente.**
+**Implementação desta rodada:** além do ledger correlacionável e append-only, `npm run economy:reconcile` gera relatório read-only para drift de carteira, operações desbalanceadas, transações sem ledger e claims incompletos, respeitando o marco de adoção do ledger para dados históricos. A janela de retry do cliente é 90 dias; claims completos ficam 365 dias e `economy:idempotency:prune` só apaga mediante `--execute`, em lotes com `SKIP LOCKED`, excluindo respostas incompletas e qualquer sucesso sem posting. Testes PostgreSQL confirmam detecção sem autocorreção, pruning dry-run/execução e rejeição de replay antigo sem novo débito/crédito. Tudo foi testado em banco descartável; nenhum banco de produto foi acessado. Ajustes compensatórios, auditoria de registros legados em produção, CI com banco efêmero obrigatório e separação da role runtime/owner permanecem pendentes.
 
-### Concluído (código/testes)
+## Prioridade 1 — entrega reproduzível e dados seguros
 
-- Inventário War’I com filtros, busca, detalhes, PackBack persistida e ownership.
-- Arma/defesa duráveis, habilidades, cura/granada/reconhecimento temporário, capacidade de carga e coleta autoritativa.
-- Coleta aguarda persistência antes de confirmar; falha pode reverter reserva/carga/efeitos.
-- Reconexão autenticada e teste E2E de WebSocket para partida, itens, persistência/rollback e retomada.
-- Canvas de zona responsivo, estados de conexão e navegação por teclado.
+**Gate de aceite:** database limpo é migrado do zero no CI; testes demonstram leitura de volta e concorrência; falha de migração impede deploy; backup pode ser restaurado em ambiente isolado. O gate atual cobre persistência básica de jogador/conta/item, mas não substitui testes de ledger, backup ou rollback.
 
-### Pendente / bloqueadores
+## Fase 2 — War’I: ciclo completo de interface, combate e sincronização
 
-- Testes de interface em navegador para leitor de tela, teclado, loading/erros e breakpoints móveis.
-- Jornada completa com dois clientes reais em staging, incluindo perda de rede, expiração de sessão e reconexão após restart.
-- Política de produto para desconexão prolongada, partida finalizada e perda/reinício do processo.
+**Objetivo:** entregar uma experiência de inventário e partida coerente, com servidor como autoridade e feedback claro diante de erro ou desconexão.
 
-**Gate:** persistência e estado de jogo consistentes; reconnect não duplica participação; fluxo validado com clientes reais e acessibilidade. Parcialmente atendido.
+- [x] Implementar filtros Arsenal/Armamento/Defesa/Bag, busca, detalhes de item, seleção persistida da PackBack e atualizações limitadas ao proprietário.
+- [x] Carregar, no início do match, somente a PackBack persistida do jogador; arma e defesa duráveis aplicam efeitos com limites definidos.
+- [x] Conectar cura, granada e reconhecimento temporário às ações autoritativas do servidor, consumindo durabilidade de modo atômico e apresentando feedback no HUD.
+- [x] Aplicar capacidade e pesos de loot no servidor e validar a carga antes de permitir coleta.
+- [x] Tornar a coleta assíncrona transacional do ponto de vista do jogo: reservar o item, aguardar `createItem`, e só então aplicar efeitos/broadcast; se o banco falhar, reabrir o item, restaurar carga e avisar o jogador.
+- [x] Adicionar retomada autenticada da sala ativa por `sessionStorage` + mensagem `resume`, restaurando snapshot e PackBack sem reinserir o jogador nem perder estado.
+- [x] Ignorar evento `close` tardio do socket anterior depois de o jogador ter sido vinculado ao novo socket.
+- [x] Calcular zona na retomada com raio interpolado e tempos restantes coerentes com o tick do servidor; renderizar a geometria como elipse no canvas responsivo.
+- [x] Expor estado de conexão, impedir ações enquanto offline e oferecer controle de movimento pelo teclado (setas; Shift para passo maior), com foco e instruções acessíveis.
+- [x] Expandir E2E WebSocket autenticado para cobrir match, PackBack, granada/dano/durabilidade, coleta só após persistência, rollback de coleta e retomada sem desconexão falsa.
+- [ ] Adicionar testes de UI em navegador para teclado, leitor de tela, estados de erro, loading e breakpoints móveis.
+- [ ] Validar fluxo completo de lobby/inventário/partida/pós-partida com dois clientes reais em ambiente de staging, incluindo perda de rede e expiração de sessão.
+- [ ] Definir por produto como lidar com desconexão prolongada, reconexão após reinício do processo e retorno a uma partida já finalizada.
+
+**Gate de aceite:** nenhum item aparece como coletado nem produz efeito antes da gravação persistida; falha deixa inventário, carga e grid consistentes; reconnect do mesmo usuário recupera exatamente uma participação e um snapshot; inputs offline não são silenciosamente exibidos como enviados. A jornada automatizada atual cobre servidor/WebSocket e falhas simuladas de persistência; teste de navegador/leitor de tela e prova com múltiplos clientes em staging ainda estão pendentes.
 
 ## Fase 3 — Multiplayer distribuído, consistência e integridade competitiva
 

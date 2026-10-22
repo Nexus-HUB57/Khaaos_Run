@@ -1,5 +1,5 @@
 {
-  "id": "a2623225-7f54-4bfd-b473-999344bdde4d",
+  "id": "d6d9204f-7ee4-434f-b796-c6d2b5902477",
   "prevId": "631004e6-4263-4f09-93a0-5e5f55967fa9",
   "version": "7",
   "dialect": "postgresql",
@@ -184,10 +184,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "economy_idem_key_format": {
-          "name": "economy_idem_key_format",
-          "value": "\"economy_idempotency\".\"idempotency_key\" ~ '^[A-Za-z0-9._~-]{16,128}$'"
-        },
         "economy_idem_hash_sha256": {
           "name": "economy_idem_hash_sha256",
           "value": "length(\"economy_idempotency\".\"request_hash\") = 64"
@@ -353,10 +349,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "economy_ledger_key_format": {
-          "name": "economy_ledger_key_format",
-          "value": "\"economy_ledger_entries\".\"idempotency_key\" ~ '^[A-Za-z0-9._~-]{16,128}$'"
-        },
         "economy_ledger_line_number_positive": {
           "name": "economy_ledger_line_number_positive",
           "value": "\"economy_ledger_entries\".\"line_number\" > 0"
@@ -790,6 +782,342 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payment_orders": {
+      "name": "payment_orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stripe'"
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_name": {
+          "name": "product_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price_brl_minor": {
+          "name": "price_brl_minor",
+          "type": "numeric(12, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "krc_minor_units": {
+          "name": "krc_minor_units",
+          "type": "numeric(20, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'brl'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'created'"
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stripe_session_id": {
+          "name": "stripe_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checkout_url": {
+          "name": "checkout_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "paid_at": {
+          "name": "paid_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fulfilled_at": {
+          "name": "fulfilled_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "payment_orders_user_idempotency_unique": {
+          "name": "payment_orders_user_idempotency_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_orders_stripe_session_unique": {
+          "name": "payment_orders_stripe_session_unique",
+          "columns": [
+            {
+              "expression": "stripe_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_orders_user_created_idx": {
+          "name": "payment_orders_user_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_orders_provider_valid": {
+          "name": "payment_orders_provider_valid",
+          "value": "\"payment_orders\".\"provider\" = 'stripe'"
+        },
+        "payment_orders_currency_brl": {
+          "name": "payment_orders_currency_brl",
+          "value": "\"payment_orders\".\"currency\" = 'brl'"
+        },
+        "payment_orders_status_valid": {
+          "name": "payment_orders_status_valid",
+          "value": "\"payment_orders\".\"status\" IN ('created', 'pending', 'fulfilled', 'failed', 'expired', 'rejected')"
+        },
+        "payment_orders_price_positive": {
+          "name": "payment_orders_price_positive",
+          "value": "\"payment_orders\".\"price_brl_minor\" >= 50"
+        },
+        "payment_orders_krc_positive": {
+          "name": "payment_orders_krc_positive",
+          "value": "\"payment_orders\".\"krc_minor_units\" > 0"
+        },
+        "payment_orders_request_hash_sha256": {
+          "name": "payment_orders_request_hash_sha256",
+          "value": "length(\"payment_orders\".\"request_hash\") = 64"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.payment_webhook_events": {
+      "name": "payment_webhook_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stripe'"
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload_hash": {
+          "name": "payload_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'received'"
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "payment_webhook_events_provider_event_unique": {
+          "name": "payment_webhook_events_provider_event_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_webhook_events_order_idx": {
+          "name": "payment_webhook_events_order_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_webhook_events_provider_valid": {
+          "name": "payment_webhook_events_provider_valid",
+          "value": "\"payment_webhook_events\".\"provider\" = 'stripe'"
+        },
+        "payment_webhook_events_status_valid": {
+          "name": "payment_webhook_events_status_valid",
+          "value": "\"payment_webhook_events\".\"status\" IN ('received', 'processed', 'ignored', 'rejected')"
+        },
+        "payment_webhook_events_payload_hash_sha256": {
+          "name": "payment_webhook_events_payload_hash_sha256",
+          "value": "length(\"payment_webhook_events\".\"payload_hash\") = 64"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.player_stats": {
