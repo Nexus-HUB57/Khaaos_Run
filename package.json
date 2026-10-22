@@ -14,10 +14,15 @@
     "economy:idempotency:prune": "tsx scripts/prune-economy-idempotency.ts",
     "test:game": "npm --prefix game-runtime test",
     "test:official": "node --import tsx --test tests/official/*.test.ts tests/official/dashboard-transactions.test.tsx && node --test tests/official/*.test.js",
+    "test:marshal-load": "node --import tsx --test tests/performance/marshal-console-load.test.ts",
     "test:postgres": "node --import tsx --test tests/integration/*.test.ts",
+    "test:eos-flow": "node --import tsx --test tests/integration/eos-economy.integration.test.ts",
+    "test:economy": "node --import tsx --test tests/official/economy-money.test.ts tests/official/economy-procgen-e2e.test.js tests/integration/eos-economy.integration.test.ts",
     "test:ue5:logic": "bash scripts/test_ue5_logic.sh",
     "test:game:infra": "npm --prefix game-runtime run test:infra",
     "test:game:stress": "npm --prefix game-runtime run test:stress",
+    "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
+    "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
     "verify:all": "node scripts/verify-all.mjs"
   },
   "dependencies": {
@@ -105,6 +110,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
+    "c8": "^12.0.0",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.0",
     "postcss": "^8.5.30",

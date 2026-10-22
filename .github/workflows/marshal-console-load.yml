@@ -1,0 +1,46 @@
+name: Marshal Console Load Test
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: marshal-console-load-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  marshal-load:
+    name: Marshal load (400 reads + 100 councils + 40 SSE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/khaaos_test
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run authenticated Marshal route load simulation
+        run: set -o pipefail; npm run test:marshal-load 2>&1 | tee marshal-console-load.log
+
+      - name: Upload load-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marshal-console-load-${{ github.run_id }}
+          path: marshal-console-load.log
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
 import express from "express";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
-const { registerMarshalConsoleRoutes } = await import("../../server/game/marshalConsole.ts");
+const [{ registerMarshalConsoleRoutes, MarshalConsoleStore }, { MemoryMarshalConsoleRepository }] = await Promise.all([
+  import("../../server/game/marshalConsole.ts"),
+  import("./helpers/marshalConsoleMemoryRepository.ts"),
+]);
 const app = express();
 app.use(express.json({ limit: "20kb" }));
 app.use((req, _res, next) => {
@@ -13,7 +17,11 @@ app.use((req, _res, next) => {
   if (actorId) (req as any).user = { claims: { sub: actorId }, expires_at: Math.floor(Date.now() / 1000) + 60 };
   next();
 });
-registerMarshalConsoleRoutes(app, { operatorIds: "console-admin,peer-admin" });
+const loadActors = Array.from({ length: 20 }, (_, index) => `load-operator-${index}`);
+registerMarshalConsoleRoutes(app, {
+  operatorIds: ["console-admin", "peer-admin", ...loadActors].join(","),
+  store: new MarshalConsoleStore(new MemoryMarshalConsoleRepository()),
+});
 const server = createServer(app);
 await new Promise<void>((resolve, reject) => {
   server.once("error", reject);
@@ -32,7 +40,6 @@ const postHeaders = (actorId = "console-admin", key = "00000000-0000-4000-8000-0
 const body = {
   subject: "W2-window-check",
   scope: { worldId: "W2", periodSeconds: 3600 },
-  context: { occupancyPct: 83, queueP95Seconds: 90, marketVolatilityPct: 48, configRevision: "world-config-12" },
 };
 after(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -48,7 +55,7 @@ test("painel do Marechal exige sessão e allowlist, independentemente do corpo",
   assert.equal((await player.json() as any).error.code, "INSUFFICIENT_SCOPE");
 });
 
-test("overview fornece estado seguro e indica dados operacionais não instrumentados como stale", async () => {
+test("overview informa telemetria ao vivo agregada e marca explicitamente as fontes ainda indisponíveis", async () => {
   const response = await fetch(`${baseUrl}/api/console/v1/marshal/overview?worldId=W2`, {
     headers: { "x-test-user-id": "console-admin" },
   });
@@ -56,10 +63,12 @@ test("overview fornece estado seguro e indica dados operacionais não instrument
   const data = await response.json() as any;
   assert.equal(data.worldId, "W2");
   assert.equal(data.name, "Priadus");
-  assert.equal(data.operationalState, "unknown");
-  assert.equal(data.occupancy.current, null);
-  assert.equal(data.occupancy.capacity, 75);
-  assert.equal(data.stale, true);
+  assert.equal(data.operationalState, "idle");
+  assert.equal(data.occupancy.current, 0);
+  assert.equal(data.occupancy.capacity, 0);
+  assert.equal(data.stale, false);
+  assert.equal(data.activeIncidents, null);
+  assert.equal(data.incidentTelemetryAvailable, false);
 });
 
 test("overview rejeita mundo inválido", async () => {
@@ -68,6 +77,47 @@ test("overview rejeita mundo inválido", async () => {
   });
   assert.equal(response.status, 400);
   assert.equal((await response.json() as any).error.code, "INVALID_REQUEST");
+});
+
+test("stream SSE exige sessão/allowlist e envia snapshot inicial sem cache", async () => {
+  const path = `${baseUrl}/api/console/v1/marshal/telemetry/stream?worldId=W2`;
+  const anonymous = await fetch(path);
+  assert.equal(anonymous.status, 401);
+  const unauthorized = await fetch(path, { headers: { "x-test-user-id": "ordinary-player" } });
+  assert.equal(unauthorized.status, 403);
+
+  const controller = new AbortController();
+  try {
+    const response = await fetch(path, { headers: { "x-test-user-id": "console-admin" }, signal: controller.signal });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /text\/event-stream/);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    const reader = response.body!.getReader();
+    let buffered = "";
+    for (let attempt = 0; attempt < 5 && !buffered.includes('"worldId":"W2"'); attempt += 1) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffered += new TextDecoder().decode(chunk.value);
+    }
+    assert.match(buffered, /event: telemetry/);
+    assert.match(buffered, /"worldId":"W2"/);
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  } finally {
+    controller.abort();
+  }
+});
+
+test("eventos narrativos refletem sinais atuais e não oferecem execução", async () => {
+  const response = await fetch(`${baseUrl}/api/console/v1/marshal/narrative-events?worldId=W2`, {
+    headers: { "x-test-user-id": "console-admin" },
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json() as any;
+  assert.equal(data.worldId, "W2");
+  assert.equal(data.source, "server-runtime-telemetry");
+  assert.deepEqual(data.events, []);
+  assert.deepEqual(data.policy, { proposalOnly: true, humanReviewRequired: true, executable: false });
 });
 
 test("requisições concorrentes com a mesma chave de idempotência compartilham um único conselho", async () => {
@@ -89,7 +139,8 @@ test("conselho assíncrono conclui, idempotência reproduz o mesmo recurso e pro
   assert.equal(createResponse.status, 202);
   const created = await createResponse.json() as any;
   assert.match(created.requestId, /^[0-9a-f-]{36}$/i);
-  assert.equal(created.status, "running");
+  assert.ok(["queued", "running"].includes(created.status));
+  assert.equal(created.telemetry.worldId, "W2");
   assert.equal(createResponse.headers.get("location"), `/api/console/v1/marshal/councils/${created.requestId}`);
 
   let result: any;
@@ -152,8 +203,57 @@ test("POST rejeita origem cross-site, ausência de origem e payload inválido an
 
   const invalid = await fetch(`${baseUrl}/api/console/v1/marshal/councils`, {
     method: "POST", headers: postHeaders("console-admin", "00000000-0000-4000-8000-000000000003"),
-    body: JSON.stringify({ ...body, context: { ...body.context, userEmail: "private@example.test" } }),
+    body: JSON.stringify({ ...body, telemetry: { userEmail: "private@example.test" } }),
   });
   assert.equal(invalid.status, 400);
   assert.equal((await invalid.json() as any).error.code, "INVALID_REQUEST");
+});
+
+test("carga HTTP: 240 consultas concorrentes de overview preservam isolamento de mundo e operador", async () => {
+  const worlds = ["CIGKV", "W1", "W2", "W3", "W4"];
+  const responses = await Promise.all(Array.from({ length: 240 }, async (_, index) => {
+    const actorId = loadActors[index % loadActors.length];
+    const worldId = worlds[index % worlds.length];
+    const response = await fetch(`${baseUrl}/api/console/v1/marshal/overview?worldId=${worldId}`, {
+      headers: { "x-test-user-id": actorId },
+    });
+    const data = await response.json() as any;
+    return { status: response.status, actorId, worldId, data };
+  }));
+
+  assert.ok(responses.every(({ status }) => status === 200));
+  assert.ok(responses.every(({ actorId }) => loadActors.includes(actorId)));
+  assert.ok(responses.every(({ worldId, data }) => data.worldId === worldId));
+  assert.ok(responses.every(({ data }) => data.activeIncidents === null && data.incidentTelemetryAvailable === false));
+});
+
+test("estresse HTTP: 80 conselhos simultâneos mantêm isolamento, idempotência e resultado persistido", async () => {
+  const requests = Array.from({ length: 80 }, (_, index) => {
+    const actorId = loadActors[index % loadActors.length];
+    const key = randomUUID();
+    return fetch(`${baseUrl}/api/console/v1/marshal/councils`, {
+      method: "POST",
+      headers: postHeaders(actorId, key),
+      body: JSON.stringify({ ...body, subject: `load-${index}`, scope: { worldId: index % 2 ? "W2" : "W1" } }),
+    }).then(async (response) => ({ status: response.status, actorId, key, data: await response.json() as any }));
+  });
+  const created = await Promise.all(requests);
+  assert.ok(created.every((response) => response.status === 202 || response.status === 200));
+  assert.equal(new Set(created.map((response) => response.data.requestId)).size, 80);
+
+  const results = await Promise.all(created.map(async (entry) => {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const response = await fetch(`${baseUrl}/api/console/v1/marshal/councils/${entry.data.requestId}`, {
+        headers: { "x-test-user-id": entry.actorId },
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json() as any;
+      if (["complete", "partial", "failed"].includes(result.status)) return result;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    throw new Error(`council ${entry.data.requestId} did not settle`);
+  }));
+  assert.ok(results.every((result) => result.status === "complete"));
+  assert.ok(results.every((result) => result.agents.length === 3));
+  assert.ok(results.every((result) => result.telemetry.worldId === result.scope.worldId));
 });

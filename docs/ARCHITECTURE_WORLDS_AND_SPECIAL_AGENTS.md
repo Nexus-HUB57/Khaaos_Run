@@ -149,7 +149,13 @@ Política de conflito no `resolveGovernanceConflicts()`:
 4. A precedência não pode ser alterada por confiança, ordem de chegada ou cargo ficcional. Competência por agente é verificada: Marechal (segurança/integridade/operações), King (economia), Uryan (diplomacia).
 5. Todos os resultados carregam `executable: false`; não há escrita nem resolução automática de saldo, partida, aliança ou publicação. Falhas e casos parciais sempre falham fechados.
 
-Contrato HTTP planejado e exemplos de payload do painel: [`API_MARECHAL_CONTROL_PANEL.md`](API_MARECHAL_CONTROL_PANEL.md). Rotas ainda não estão implementadas.
+Contrato HTTP ativo, SSE, drafts narrativos, exemplos, controles de segurança e limites de telemetria: [`API_MARECHAL_CONTROL_PANEL.md`](API_MARECHAL_CONTROL_PANEL.md). Os princípios editoriais e gatilhos determinísticos estão em [`SPECIAL_CLASS_NARRATIVE_GUIDELINES.md`](SPECIAL_CLASS_NARRATIVE_GUIDELINES.md).
+
+### Visualização em tempo real e camada narrativa
+
+O painel consome `GET /telemetry/stream?worldId=...` via SSE autenticado; o servidor emite snapshot imediato e amostras a cada 2 segundos. O cliente atualiza o cache de overview sem recriar a conexão a cada amostra e mantém polling de fallback. O stream é limitado a 100 conexões por processo e 3 por operador; desconexão remove o subscriber.
+
+`buildSpecialClassNarrativeEvents()` cria zero ou mais drafts determinísticos de As Docas em Silêncio (fila ≥ 3), O Farol da Espera (p95 ≥ 60 s) e A Mesa do Anel (ocupação ≥ 80%). Todos usam apenas sinais do snapshot do servidor e dão uma contribuição a Henricks, Krapulla e Uryan. São rascunhos ficcionais com `needsHumanReview: true` e `executable: false`; nunca publicam mensagens, afirmam dados de mercado/diplomacia indisponíveis ou alteram gameplay.
 
 ### Defesa contra abuso e falhas
 
@@ -195,7 +201,7 @@ Resposta padrão: `{ "status": "ok|rejected|proposal", "agentId": "king-krapulla
 - `docs/fase4/WORLDS_DESIGN.md`: cânone atual dos mundos.
 - `Unreal/KhaaosRun/Config/Default*.ini`: configuração da camada UE5; alinhar usando `configRevision` no futuro.
 
-Próxima etapa para serviço real: definir DTOs compartilhados em `shared/`, ligar rotas somente leitura autenticadas, coletar telemetria agregada e criar um adaptador de aprovação de propostas. Isso deve ser feito após validar a matriz de permissões, estados de mundo e revisão canônica dos parâmetros conflitantes.
+As rotas ativas são implementadas em `server/game/marshalConsole.ts`; `server/game/marshalConsoleRepository.ts` persiste conselhos/propostas em tabelas separadas, e `server/game/worldTelemetry.ts` agrega amostras atuais do `RoomManager`/matchmaking. Mensagens novas de fila e lobby aceitam `worldId`, com `CIGKV` como default compatível. Mercado, diplomacia e incidentes seguem explicitamente indisponíveis sem fonte autoritativa. Aprovação de proposta continua fora do escopo.
 
 ## 8. Critérios de aceite
 
@@ -207,3 +213,4 @@ Próxima etapa para serviço real: definir DTOs compartilhados em `shared/`, lig
 6. Conselho consulta os três agentes paralelamente, compartilha pareceres na revisão, aplica deadline e falha fechado.
 7. Vetos de segurança/integridade, limites de competência e escalação humana são determinísticos; nenhuma decisão é executável.
 8. TypeScript compila e testes unitários/de integração passam sem alterar configurações locais da Unreal.
+9. Testes HTTP de estresse e idempotência verificam concorrência do painel; testes de telemetria cobrem isolamento por mundo, agregação e fontes ausentes.

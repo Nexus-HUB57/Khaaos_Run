@@ -40,7 +40,7 @@ jobs:
       - run: npm ci
 
       - name: TypeScript type check
-        run: npx tsc --noEmit 2>&1 | tee typecheck.log
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee typecheck.log
 
       - name: ESLint
         run: npx eslint . --ext .ts,.tsx --max-warnings 0 2>&1 | tee eslint.log || true
@@ -88,11 +88,8 @@ jobs:
       - name: Apply versioned database migrations
         run: npm run db:migrate
 
-      - name: Run unit tests
-        run: npm run test:official 2>&1 | tee test-unit.log
-
-      - name: Run PostgreSQL persistence integration tests
-        run: npm run test:postgres 2>&1 | tee test-postgres.log
+      - name: Run official tests with coverage
+        run: set -o pipefail; npm run coverage:official 2>&1 | tee test-unit.log
 
       - name: Upload test results
         if: always()
@@ -101,7 +98,7 @@ jobs:
           name: unit-test-results
           path: |
             test-unit.log
-            test-postgres.log
+            coverage/official/**
 
   # ─── Job 3: Game Runtime Tests ────────────────────────────────
   test-game:
@@ -158,6 +155,18 @@ jobs:
         working-directory: game-runtime
         run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
 
+      - name: Runtime tests with coverage
+        working-directory: game-runtime
+        run: npm run coverage
+
+      - name: Upload runtime coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-game-runtime
+          path: game-runtime/coverage/**
+          if-no-files-found: warn
+
   # ─── Job 4: Build Node.js Server ──────────────────────────────
   build-server:
     name: Build Server
@@ -174,7 +183,7 @@ jobs:
       - run: npm ci
 
       - name: Build
-        run: npm run build 2>&1 | tee build.log
+        run: set -o pipefail; npm run build 2>&1 | tee build.log
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
@@ -433,8 +442,71 @@ jobs:
               echo "Render is healthy on commit $EXPECTED_COMMIT (attempt $attempt)"
               exit 0
             fi
-            echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
+          echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
             sleep 15
           done
           echo "::error::Render did not become healthy on the expected commit within 10 minutes"
           exit 1
+
+  notify-failure:
+    name: Notify on CI failure
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    needs:
+      [lint, test-unit, test-game, build-server, docker-build, ue5-validate, economy-check, security, deploy-render]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Notify Discord (when configured)
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+            echo "DISCORD_WEBHOOK_URL is not configured; skipping Discord notification"
+            exit 0
+          fi
+          payload=$(jq -n --arg content "CI failed: ${REPOSITORY} (${REF_NAME}, ${COMMIT_SHA:0:7}) — ${RUN_URL}" '{content: $content}')
+          if status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 15 --request POST -H "Content-Type: application/json" \
+            --data "$payload" "$DISCORD_WEBHOOK_URL"); then
+            if [[ "$status" =~ ^2[0-9]{2}$ ]]; then
+              echo "Discord accepted the CI failure notification (HTTP $status)"
+            else
+              echo "::warning::Discord webhook rejected the notification (HTTP $status); verify DISCORD_WEBHOOK_URL is a Discord webhook endpoint that accepts POST. The Slack step will still run."
+            fi
+          else
+            curl_status=$?
+            echo "::warning::Discord notification transport failed (curl exit $curl_status). The Slack step will still run."
+          fi
+      - name: Notify Slack (when configured)
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification"
+            exit 0
+          fi
+          payload=$(jq -n --arg text "CI failed: ${REPOSITORY} (${REF_NAME}, ${COMMIT_SHA:0:7}) — ${RUN_URL}" '{text: $text}')
+          if status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 15 --request POST -H "Content-Type: application/json" \
+            --data "$payload" "$SLACK_WEBHOOK_URL"); then
+            if [[ "$status" =~ ^2[0-9]{2}$ ]]; then
+              echo "Slack accepted the CI failure notification (HTTP $status)"
+            else
+              echo "::warning::Slack webhook rejected the notification (HTTP $status); verify SLACK_WEBHOOK_URL."
+            fi
+          else
+            curl_status=$?
+            echo "::warning::Slack notification transport failed (curl exit $curl_status)."
+          fi

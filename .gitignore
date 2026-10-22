@@ -9,3 +9,5 @@ vite.config.ts.*
 !.env.example
 !**/.env.example
 game-runtime/.data/
+coverage/
+game-runtime/coverage/

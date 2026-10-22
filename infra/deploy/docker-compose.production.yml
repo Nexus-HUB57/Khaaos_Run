@@ -395,6 +395,53 @@ services:
     networks:
       - khaaos-monitoring
 
+  # ══ Discord Bot ═══════════════════════════════════════════════════════════════════
+  discord-bot:
+    build:
+      context: ../../infra/discord-bot
+      dockerfile: Dockerfile
+    container_name: khaaos-discord-bot
+    <<: *common-restart
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_BETA_ROLE_ID: ${DISCORD_BETA_ROLE_ID:-}
+      DISCORD_OAUTH2_CLIENT_ID: ${DISCORD_OAUTH2_CLIENT_ID:-}
+      DISCORD_OAUTH2_CLIENT_SECRET: ${DISCORD_OAUTH2_CLIENT_SECRET:-}
+      DISCORD_OAUTH2_REDIRECT_URI: ${DISCORD_OAUTH2_REDIRECT_URI:-}
+      # Webhooks per EKhaaosWebhookChannel
+      DISCORD_WEBHOOK_ANTI_CHEAT: ${DISCORD_WEBHOOK_ANTI_CHEAT:-}
+      DISCORD_WEBHOOK_ECONOMY: ${DISCORD_WEBHOOK_ECONOMY:-}
+      DISCORD_WEBHOOK_MATCH_RESULTS: ${DISCORD_WEBHOOK_MATCH_RESULTS:-}
+      DISCORD_WEBHOOK_RANKED: ${DISCORD_WEBHOOK_RANKED:-}
+      DISCORD_WEBHOOK_DEPLOY: ${DISCORD_WEBHOOK_DEPLOY:-}
+      DISCORD_WEBHOOK_SERVER_STATUS: ${DISCORD_WEBHOOK_SERVER_STATUS:-}
+      KHAASOS_API_BASE: ${KHAASOS_API_BASE:-http://economy-api:3000}
+      KHAASOS_API_KEY: ${KHAASOS_API_KEY:-}
+      LOG_LEVEL: ${DISCORD_BOT_LOG_LEVEL:-info}
+    logging: *common-logging
+    deploy:
+      <<: *common-deploy
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - khaaos-backend
+    depends_on:
+      economy-api:
+        condition: service_healthy
+
 # ══ Volumes ═══════════════════════════════════════════════════════════════════════
 volumes:
   server-logs:

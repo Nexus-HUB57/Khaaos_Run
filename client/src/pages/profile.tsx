@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { User, Activity, Shield, Hash, Star, Swords, HeartPulse, Trophy, TrendingUp } from "lucide-react";
 import { useMyRanking, winRate, kdRatio } from "@/hooks/use-ranking";
 import { useToast } from "@/hooks/use-toast";
+import { FIGURES, figureSrc } from "@shared/figures";
 import { Link } from "wouter";
 import {
   canUnlockSpecialization,
@@ -111,6 +112,39 @@ export default function Profile() {
               <StatBox label="NRG" value={stats.maxEnergy} icon={Swords} color="text-amber-400" />
             </div>
           </div>
+        </div>
+      </CyberCard>
+
+      <CyberCard title="FIGURAS DE ALISTAMENTO" subtitle="RENDER 3D · A TABELA EP555 NÃO MUDA">
+        <p className="mb-4 text-xs font-mono leading-relaxed tracking-wide text-muted-foreground">
+          Seis corpos. Três masculinos, três femininos. Origem e marca são do rosto, não do dano.
+          Idris Kane é a primeira placa realista. As outras cinco estão fechadas na ficha; o render entra quando o estúdio liberar.
+          Malha riggada (GLB) ainda não exportada.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {FIGURES.map((figure) => (
+            <article key={figure.id} className="border border-border/40 bg-black/30">
+              {figure.render === "placa" ? (
+                <img
+                  src={figureSrc(figure.id)}
+                  alt={`${figure.name}, render 3D de alistamento`}
+                  className="aspect-[3/4] w-full object-cover object-top"
+                />
+              ) : (
+                <div className="flex aspect-[3/4] items-end border-b border-border/30 bg-black/50 p-3">
+                  <span className="font-mono text-[10px] tracking-widest text-muted-foreground">RENDER 3D PENDENTE</span>
+                </div>
+              )}
+              <div className="p-3">
+                <h3 className="font-display text-lg">{figure.name}</h3>
+                <p className="font-mono text-[10px] tracking-widest text-primary">
+                  {figure.sexLabel} · {figure.origin} · {figure.age}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{figure.build}</p>
+                <p className="mt-1 text-xs">{figure.mark}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </CyberCard>
 

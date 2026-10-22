@@ -34,6 +34,7 @@ import {
   economySimulationInput,
   economyBatchSimulationInput,
 } from "./game/mutationSchemas";
+import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -42,13 +43,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);
-  registerApiRoutes(app);
+  registerApiRoutes(app, { recoverPendingCouncils: true });
   return httpServer;
 }
 
 // Kept separate from OIDC setup so HTTP authorization boundaries can be tested
 // without discovery, session storage, or a live identity provider.
-export function registerApiRoutes(app: Express): void {
+export function registerApiRoutes(app: Express, options: { recoverPendingCouncils?: boolean } = {}): void {
   const getUserId = (req: any): string => {
     if (!req.user?.claims?.sub) throw new Error("Unauthorized");
     return req.user.claims.sub as string;
@@ -74,7 +75,10 @@ export function registerApiRoutes(app: Express): void {
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
-  registerMarshalConsoleRoutes(app);
+  registerMarshalConsoleRoutes(app, { recoverPending: options.recoverPendingCouncils });
+
+  // ── Discord Bot API v1 (API-key auth, not session-based) ──────────────
+  registerDiscordApiV1Routes(app);
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     try {

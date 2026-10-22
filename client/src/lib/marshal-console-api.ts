@@ -15,28 +15,40 @@ export interface MarshalOverview {
   worldId: MarshalWorldId;
   name: string;
   operationalState: string;
-  occupancy: { current: number | null; capacity: number; percent: number | null };
+  occupancy: { current: number; capacity: number; percent: number | null };
+  activeRooms: number;
+  queueCount: number;
   queueP95Seconds: number | null;
   activeIncidents: number | null;
-  configRevision: string;
+  incidentTelemetryAvailable: boolean;
+  configRevision: string | null;
   observedAt: string;
   stale: boolean;
 }
-
-export interface CouncilContext {
-  occupancyPct?: number;
-  queueP95Seconds?: number;
-  activeIncidents?: number;
-  marketVolatilityPct?: number;
-  marketDataStale?: boolean;
-  activeTreatyConflict?: boolean;
-  configRevision?: string;
+export type SpecialAgentId = "marshal-henricks" | "king-krapulla" | "ambassador-uryan";
+export interface SpecialClassNarrativeEvent {
+  eventId: string;
+  worldId: MarshalWorldId;
+  title: string;
+  theme: string;
+  trigger: string;
+  observedSignals: Array<{ key: "queueCount" | "queueP95Seconds" | "occupancy.percent"; value: number }>;
+  contributions: Array<{ agentId: SpecialAgentId; role: "lead" | "review" | "draft"; line: string }>;
+  status: "proposal";
+  needsHumanReview: true;
+  executable: false;
+}
+export interface NarrativeEventsResponse {
+  worldId: MarshalWorldId;
+  generatedAt: string;
+  source: "server-runtime-telemetry";
+  events: SpecialClassNarrativeEvent[];
+  policy: { proposalOnly: true; humanReviewRequired: true; executable: false };
 }
 
 export interface CouncilInput {
   subject: string;
   scope: { worldId: MarshalWorldId; periodSeconds?: number };
-  context?: CouncilContext;
 }
 
 export interface CouncilAgent {
@@ -70,6 +82,7 @@ export interface CouncilResponse {
   correlationId?: string;
   dataRevision?: string | null;
   links?: { self?: string };
+  telemetry?: MarshalOverview;
 }
 
 export interface MarshalProposal {
@@ -139,6 +152,18 @@ export async function fetchMarshalOverview(
 ): Promise<MarshalOverview> {
   const response = await request(`${MARSHAL_API_ROOT}/overview?worldId=${encodeURIComponent(worldId)}`, { signal });
   return parseResponse<MarshalOverview>(response);
+}
+
+export function marshalTelemetryStreamUrl(worldId: MarshalWorldId): string {
+  return `${MARSHAL_API_ROOT}/telemetry/stream?worldId=${encodeURIComponent(worldId)}`;
+}
+
+export async function fetchMarshalNarrativeEvents(
+  worldId: MarshalWorldId,
+  signal?: AbortSignal,
+): Promise<NarrativeEventsResponse> {
+  const response = await request(`${MARSHAL_API_ROOT}/narrative-events?worldId=${encodeURIComponent(worldId)}`, { signal });
+  return parseResponse<NarrativeEventsResponse>(response);
 }
 
 export async function checkMarshalConsoleAccess(): Promise<boolean> {

@@ -1,0 +1,30 @@
+{
+  "name": "khaaos-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Khaaos Run - tournament management, ranked feed, live match status, and player lookup",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js",
+    "register": "node scripts/register-commands.js",
+    "register:global": "node scripts/register-commands.js --global",
+    "register:list": "node scripts/register-commands.js --list",
+    "register:delete": "node scripts/register-commands.js --delete",
+    "rpc:validate": "node scripts/upload-rpc-assets.js",
+    "rpc:upload": "node scripts/upload-rpc-assets.js --generate-curls",
+    "rpc:portal": "node scripts/upload-rpc-assets.js --validate-portal",
+    "validate-env": "node scripts/validate-env.js",
+    "validate-env:strict": "node scripts/validate-env.js --strict",
+    "validate-env:docker": "node scripts/validate-env.js --docker"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.0",
+    "axios": "^1.7.0",
+    "winston": "^3.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

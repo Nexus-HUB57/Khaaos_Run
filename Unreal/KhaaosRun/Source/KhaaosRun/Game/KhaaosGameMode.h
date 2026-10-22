@@ -33,6 +33,50 @@ class UKhaaosReplicationBudgetComponent;
 class UKhaaosMatchTimelineComponent;
 class APlayerController;
 
+// ─── E2E Phases 5-8 Forward Declarations ───────────────────────────────────────────
+
+class UKhaaosEconomySync;
+class UKhaaosShopSystem;
+class UKhaaosTransactionValidator;
+class UKhaaosEOSCrossplay;
+class UKhaaosEOSMatchmakingV2;
+class UKhaaosEOSSessionRecovery;
+class UKhaaosFootstepSystem;
+class UKhaaosWeaponAudioComponent;
+class UKhaaosZoneWarningSystem;
+
+// ─── E2E Phases 9-12 Forward Declarations ───────────────────────────────────────────
+
+class UKhaaosBotSpawner;
+class UKhaaosTelemetryPipeline;
+class UKhaaosHotFixSystem;
+class UKhaaosSocialSystem;
+class UKhaaosProgressionSystem;
+class UKhaaosServerHealthMonitor;
+class UKhaaosCrashHandler;
+
+// ─── E2E Phases 13-16 Forward Declarations ────────────────────────────────────────────
+
+class UKhaaosWorldGenerator;
+class UKhaaosProceduralLoot;
+class UKhaaosWorldTransition;
+class UKhaaosEnvironmentalHazard;
+class UKhaaosLocalizationManager;
+class UKhaaosReplaySystem;
+
+// ─── E2E Phases 17-20 Forward Declarations ────────────────────────────────────────────
+
+class UKhaaosRankedSystem;
+class UKhaaosMapVotingSystem;
+class UKhaaosCoachSystem;
+class UKhaaosCinematicSystem;
+
+// ─── Discord Integration Forward Declarations ──────────────────────────────────────
+
+class UKhaaosDiscordRichPresence;
+class UKhaaosDiscordOAuth2;
+class UKhaaosDiscordWebhooks;
+
 // ─── Match Phase Enum ─────────────────────────────────────────────────────────
 
 UENUM(BlueprintType)
@@ -253,6 +297,77 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     TObjectPtr<AKhaaosSafeZone> SafeZone;
 
+    // ─── E2E Phase 5: Economy Bridge Subsystems ───────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Economy")
+    TObjectPtr<UKhaaosEconomySync> EconomySync;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Economy")
+    TObjectPtr<UKhaaosShopSystem> ShopSystem;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Economy")
+    TObjectPtr<UKhaaosTransactionValidator> TransactionValidator;
+
+    // ─── E2E Phase 6: EOS Enhancement Subsystems ──────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EOS")
+    TObjectPtr<UKhaaosEOSCrossplay> CrossplayManager;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EOS")
+    TObjectPtr<UKhaaosEOSMatchmakingV2> MatchmakingV2;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EOS")
+    TObjectPtr<UKhaaosEOSSessionRecovery> SessionRecovery;
+
+    // ─── E2E Phase 8: Audio Subsystems ─────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Audio")
+    TObjectPtr<UKhaaosZoneWarningSystem> ZoneWarning;
+
+    // ─── E2E Phase 9: AI/Bot Subsystem ──────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|AI")
+    TObjectPtr<UKhaaosBotSpawner> BotSpawner;
+
+    // ─── E2E Phase 13: World Generation & PCG ──────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosWorldGenerator> WorldGenerator;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosProceduralLoot> ProceduralLoot;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosWorldTransition> WorldTransition;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen")
+    TObjectPtr<UKhaaosEnvironmentalHazard> EnvironmentalHazard;
+
+    // ─── E2E Phase 14: Localization & i18n ──────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Localization")
+    TObjectPtr<UKhaaosLocalizationManager> LocalizationManager;
+
+    // ─── E2E Phase 15: Replay ───────────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Replay")
+    TObjectPtr<UKhaaosReplaySystem> ReplaySystem;
+
+    // ─── E2E Phase 17: Ranked & Tournament ───────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Ranked")
+    TObjectPtr<UKhaaosMapVotingSystem> MapVoting;
+
+    // ─── E2E Phase 19: Coach ────────────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Coach")
+    TObjectPtr<UKhaaosCoachSystem> CoachSystem;
+
+    // ─── E2E Phase 20: Cinematic ────────────────────────────────────────────────
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Cinematic")
+    TObjectPtr<UKhaaosCinematicSystem> CinematicSystem;
+
 protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Match")
@@ -373,4 +488,20 @@ protected:
 
     /** Build cumulative weight array for weighted random loot selection. */
     void BuildLootWeightTable();
+
+    // ─── E2E Subsystem Initialization Methods ──────────────────────────────────
+
+    /** Initialize E2E Phases 5-8 subsystems (non-breaking). */
+    void InitializeE2ESubsystems();
+
+    /** Initialize E2E Phases 9-12 subsystems (non-breaking). */
+    void InitializePhases9to12Subsystems();
+
+    /** Initialize E2E Phases 13-16 subsystems (non-breaking). */
+    void InitializePhases13to16Subsystems();
+
+    /** Initialize E2E Phases 17-20 subsystems (non-breaking). */
+    void InitializePhases17to20Subsystems();
+
+    void InitializeDiscordSubsystems();
 };

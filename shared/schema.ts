@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uniqueIndex, index, check, uuid, bigserial } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uuid, varchar, index, uniqueIndex, check, bigserial } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -7,6 +7,8 @@ import { users } from "./models/auth";
 export * from "./models/auth";
 
 // === CONSTANTS ===
+export const KRC_TO_USD = 100;
+
 export const PatenteKR = {
   ZHEERS: "ZHEERS", ONITH: "ONITH", SKEETW: "SKEETW", HURAN: "HURAN",
   VENEX: "VENEX", KHAEL: "KHAEL", MALAKOR: "MALAKOR", OVERLORD: "OVERLORD",
@@ -234,6 +236,7 @@ export const economyIdempotency = pgTable("economy_idempotency", {
   userKeyUnique: uniqueIndex("economy_idempotency_user_key_unique").on(table.userId, table.idempotencyKey),
   operationIdUnique: uniqueIndex("economy_idempotency_operation_id_unique").on(table.operationId),
   createdAtIndex: index("economy_idempotency_created_at_idx").on(table.createdAt),
+  idempotencyKeyFormat: check("economy_idem_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
   requestHashSha256: check("economy_idem_hash_sha256", sql`length(${table.requestHash}) = 64`),
   responseStatusValid: check("economy_idem_response_status_valid", sql`${table.responseStatus} IS NULL OR ${table.responseStatus} BETWEEN 100 AND 599`),
 }));
@@ -253,6 +256,7 @@ export const economyLedgerEntries = pgTable("economy_ledger_entries", {
   operationLineUnique: uniqueIndex("economy_ledger_operation_line_unique").on(table.operationId, table.lineNumber),
   userKeyLineUnique: uniqueIndex("economy_ledger_user_key_line_unique").on(table.userId, table.idempotencyKey, table.lineNumber),
   userAccountTime: index("economy_ledger_user_account_time_idx").on(table.userId, table.accountCode, table.createdAt, table.id),
+  idempotencyKeyFormat: check("economy_ledger_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
   positiveLineNumber: check("economy_ledger_line_number_positive", sql`${table.lineNumber} > 0`),
   validSide: check("economy_ledger_side_valid", sql`${table.side} IN ('DEBIT', 'CREDIT')`),
   positiveAmount: check("economy_ledger_amount_positive", sql`${table.amountKrc} > 0`),
@@ -398,6 +402,39 @@ export const matchResults = pgTable("match_results", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Special Class governance audit; isolated from player profiles, banks and match state.
+export const marshalCouncils = pgTable("marshal_councils", {
+  id: uuid("id").primaryKey(),
+  actorId: text("actor_id").notNull(),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  worldId: varchar("world_id", { length: 8 }).notNull(),
+  periodSeconds: integer("period_seconds"),
+  telemetrySnapshot: jsonb("telemetry_snapshot").$type<Record<string, unknown>>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("queued"),
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  errorCode: varchar("error_code", { length: 64 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  actorIdempotency: uniqueIndex("marshal_councils_actor_idempotency_uq").on(table.actorId, table.idempotencyKey),
+  actorCreated: index("marshal_councils_actor_created_idx").on(table.actorId, table.createdAt),
+  statusUpdated: index("marshal_councils_status_updated_idx").on(table.status, table.updatedAt),
+}));
+
+export const marshalProposals = pgTable("marshal_proposals", {
+  id: uuid("id").primaryKey(),
+  councilId: uuid("council_id").notNull().references(() => marshalCouncils.id, { onDelete: "cascade" }),
+  actorId: text("actor_id").notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  governance: jsonb("governance").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  councilSubject: uniqueIndex("marshal_proposals_council_subject_uq").on(table.councilId, table.subject),
+  actorCreated: index("marshal_proposals_actor_created_idx").on(table.actorId, table.createdAt),
+}));
+
 // === RELATIONS ===
 export const playerStatsRelations = relations(playerStats, ({ one }) => ({
   user: one(users, { fields: [playerStats.userId], references: [users.id] }),
@@ -431,6 +468,7 @@ export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
 export type MatchResult = typeof matchResults.$inferSelect;
+export interface DepositRequest { amountUsd: number | string; }
 export interface TransferRequest { amountKrc: number | string; destination: "fbm" | "bonus"; }
 export interface LoanRequest { amountKrc: number; days: number; }
 export interface CreateItemRequest { name: string; type: keyof typeof ItemType; rarity?: keyof typeof Rarity; }
