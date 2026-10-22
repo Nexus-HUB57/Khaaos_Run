@@ -225,17 +225,19 @@ async function validateP0_4() {
 
   const apiContent = fs.readFileSync(apiPath, 'utf-8');
 
-  // Validate all 7+1 required endpoints
+  // Validate all 11 endpoints
   const endpoints = [
     { method: 'GET', path: '/api/v1/server/status' },
     { method: 'GET', path: '/api/v1/ranked/:playerId' },
     { method: 'GET', path: '/api/v1/tournament' },
     { method: 'GET', path: '/api/v1/tournament/:id' },
     { method: 'GET', path: '/api/v1/match/:id' },
+    { method: 'GET', path: '/api/v1/economy/alerts' },
     { method: 'GET', path: '/api/v1/economy/:playerId' },
+    { method: 'GET', path: '/api/v1/discord-links/beta' },
     { method: 'GET', path: '/api/v1/discord-link/:discordId' },
     { method: 'POST', path: '/api/v1/discord-link' },
-    { method: 'GET', path: '/api/v1/economy/alerts' },
+    { method: 'GET', path: '/api/v1/webhooks' },
   ];
 
   for (const ep of endpoints) {
