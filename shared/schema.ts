@@ -490,3 +490,37 @@ export interface ZoneStatus {
   centerX: number;
   centerY: number;
 }
+
+// === DISCORD INTEGRATION TABLES ===
+
+/** Discord ↔ EOS account links (bidirectional) */
+export const discordLinks = pgTable("discord_links", {
+  id: serial("id").primaryKey(),
+  discordId: varchar("discord_id", { length: 32 }).notNull(),
+  discordUsername: varchar("discord_username", { length: 64 }).notNull().default("Unknown"),
+  eosId: varchar("eos_id", { length: 64 }).notNull(),
+  playerName: varchar("player_name", { length: 64 }).notNull().default("Unknown"),
+  hasBetaRole: boolean("has_beta_role").notNull().default(false),
+  linkedAt: timestamp("linked_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_discord_links_discord_id").on(table.discordId),
+  uniqueIndex("idx_discord_links_eos_id").on(table.eosId),
+]);
+
+/** Tournaments (persisted, replaces in-memory Map) */
+export const tournaments = pgTable("tournaments", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  state: varchar("state", { length: 32 }).notNull().default("registration"),
+  registeredCount: integer("registered_count").notNull().default(0),
+  maxParticipants: integer("max_participants").notNull().default(64),
+  currentRound: integer("current_round").notNull().default(0),
+  rounds: integer("rounds").notNull().default(6),
+  minElo: integer("min_elo").notNull().default(0),
+  prizePool: integer("prize_pool").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type DiscordLink = typeof discordLinks.$inferSelect;
+export type Tournament = typeof tournaments.$inferSelect;

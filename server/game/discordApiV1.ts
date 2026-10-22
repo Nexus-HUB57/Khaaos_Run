@@ -330,6 +330,27 @@ export function registerDiscordApiV1Routes(app: Express): void {
     }
   });
 
+  // ── GET /api/v1/discord-links/beta ────────────────────────────
+  // Returns all linked accounts with beta role (for BETA_EOS_IDS population)
+  app.get(`${v1Prefix}/discord-links/beta`, async (_req, res) => {
+    try {
+      // Try DB first, fall back to in-memory store
+      try {
+        const dbLinks = await storage.getAllDiscordLinks?.();
+        if (dbLinks) {
+          const betaLinks = dbLinks.filter((l: any) => l.hasBetaRole);
+          res.json(betaLinks.map((l: any) => ({ discordId: l.discordId, eosId: l.eosId, playerName: l.playerName, hasBetaRole: l.hasBetaRole })));
+          return;
+        }
+      } catch { /* DB not available, fall through to in-memory */ }
+
+      const betaLinks = Array.from(discordLinkStore.values()).filter((l) => l.hasBetaRole);
+      res.json(betaLinks.map((l) => ({ discordId: l.discordId, eosId: l.eosId, playerName: l.playerName, hasBetaRole: l.hasBetaRole })));
+    } catch (err: any) {
+      res.status(500).json({ error: "Internal server error", message: err.message });
+    }
+  });
+
   // ── GET /api/v1/discord-link/:discordId ──────────────────────────
   app.get(`${v1Prefix}/discord-link/:discordId`, async (req, res) => {
     try {

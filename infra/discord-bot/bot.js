@@ -157,6 +157,7 @@ client.once('ready', async () => {
 
   // Start webhook polling for tournament/economy events
   startEventPolling();
+  await refreshBetaEosIds();
 });
 
 // ---------------------------------------------------------------------------
@@ -208,7 +209,24 @@ client.on('interactionCreate', async (interaction) => {
 // ---------------------------------------------------------------------------
 // Guild member add - welcome and beta role
 // ---------------------------------------------------------------------------
-const BETA_EOS_IDS = new Set(); // populated from API on startup or polling
+const BETA_EOS_IDS = new Set();
+
+// ── Populate BETA_EOS_IDS from API ──
+async function refreshBetaEosIds() {
+  try {
+    const { data } = await api.get('/api/v1/discord-links/beta');
+    if (Array.isArray(data)) {
+      BETA_EOS_IDS.clear();
+      for (const link of data) {
+        if (link.eosId) BETA_EOS_IDS.add(link.eosId);
+      }
+      logger.info(`Refreshed BETA_EOS_IDS: ${BETA_EOS_IDS.size} beta testers`);
+    }
+  } catch {
+    // Endpoint may not exist yet — fall back to empty set
+    logger.info('Beta EOS IDs endpoint not available — BETA_EOS_IDS remains empty');
+  }
+}
 
 client.on('guildMemberAdd', async (member) => {
   try {
@@ -331,6 +349,7 @@ async function startEventPolling() {
     try {
       await pollTournamentEvents();
       await pollEconomyAlerts();
+      await refreshBetaEosIds();
     } catch (err) {
       logger.error(`Event polling error: ${err.message}`);
     }

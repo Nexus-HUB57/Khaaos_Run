@@ -16,7 +16,9 @@
     "rpc:portal": "node scripts/upload-rpc-assets.js --validate-portal",
     "validate-env": "node scripts/validate-env.js",
     "validate-env:strict": "node scripts/validate-env.js --strict",
-    "validate-env:docker": "node scripts/validate-env.js --docker"
+    "validate-env:docker": "node scripts/validate-env.js --docker",
+    "setup-credentials": "node scripts/setup-discord-credentials.js",
+    "setup-credentials:check": "node scripts/setup-discord-credentials.js --check"
   },
   "dependencies": {
     "discord.js": "^14.18.0",
