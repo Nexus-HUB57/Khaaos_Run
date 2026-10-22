@@ -17,28 +17,28 @@
         "format": "png"
       },
       {
-        "key": "world_w1_barburhen",
+        "key": "world_barburhen",
         "name": "W1 Barburhen",
         "description": "First battle world — 100 players max",
         "recommended_size": "512x512",
         "format": "png"
       },
       {
-        "key": "world_w2_priadus",
+        "key": "world_priadus",
         "name": "W2 Priadus",
         "description": "Second battle world — 75 players max",
         "recommended_size": "512x512",
         "format": "png"
       },
       {
-        "key": "world_w3_ckesalth",
+        "key": "world_ckesalth",
         "name": "W3 Ckesalth",
         "description": "Third battle world — 60 players max",
         "recommended_size": "512x512",
         "format": "png"
       },
       {
-        "key": "world_w4_arukheea",
+        "key": "world_arukheea",
         "name": "W4 Arukheea",
         "description": "Final battle world — 80 players max",
         "recommended_size": "512x512",
@@ -112,10 +112,10 @@
   "validation": {
     "cpp_world_mapping": {
       "CIGKV": "world_cigkv",
-      "Barburhen": "world_w1_barburhen",
-      "Priadus": "world_w2_priadus",
-      "Ckesalth": "world_w3_ckesalth",
-      "Arukheea": "world_w4_arukheea",
+      "Barburhen": "world_barburhen",
+      "Priadus": "world_priadus",
+      "Ckesalth": "world_ckesalth",
+      "Arukheea": "world_arukheea",
       "_default": "world_unknown"
     },
     "cpp_species_mapping": {
