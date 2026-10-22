@@ -21,6 +21,12 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { distributedState } from "./DistributedState";
 import { aggregateWorldTelemetry } from "./worldTelemetry";
+import {
+  EKhaaosWebhookChannel,
+  getWebhookInfo,
+  getWebhookStats,
+  getAllWebhooks,
+} from "./discordWebhookConfig";
 
 // ─── API Key Guard ──────────────────────────────────────────────────────────
 
@@ -284,6 +290,20 @@ export function registerDiscordApiV1Routes(app: Express): void {
     }
   });
 
+  // ── GET /api/v1/economy/alerts (MUST be before /:playerId) ────────
+  app.get(`${v1Prefix}/economy/alerts`, async (_req, res) => {
+    try {
+      // Return recent alerts (last 20)
+      res.json({
+        alerts: economyAlerts.slice(-20),
+        count: economyAlerts.length,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Internal server error", message: err.message });
+    }
+  });
+
   // ── GET /api/v1/economy/:playerId ────────────────────────────────
   app.get(`${v1Prefix}/economy/:playerId`, async (req, res) => {
     try {
@@ -363,17 +383,30 @@ export function registerDiscordApiV1Routes(app: Express): void {
     }
   });
 
-  // ── GET /api/v1/economy/alerts ────────────────────────────────────
-  app.get(`${v1Prefix}/economy/alerts`, async (_req, res) => {
+  // ── GET /api/v1/webhooks ────────────────────────────────────────
+  app.get(`${v1Prefix}/webhooks`, async (_req, res) => {
     try {
-      // Return recent alerts (last 20)
-      res.json({
-        alerts: economyAlerts.slice(-20),
-        count: economyAlerts.length,
-        timestamp: new Date().toISOString(),
-      });
+      const stats = getWebhookStats();
+      const webhooks = getAllWebhooks().map((w) => ({
+        channel: w.channel,
+        label: w.label,
+        color: `0x${w.color.toString(16).padStart(6, "0").toUpperCase()}`,
+        configured: w.configured,
+        // Never expose full URL — only indicate if set
+        urlMasked: w.configured ? `${w.url.slice(0, 35)}...` : null,
+      }));
+      res.json({ webhooks, stats, timestamp: new Date().toISOString() });
     } catch (err: any) {
       res.status(500).json({ error: "Internal server error", message: err.message });
     }
   });
 }
+
+// ─── Exports for testing ────────────────────────────────────────────────────
+export {
+  discordLinkStore,
+  economyAlerts,
+  tournamentStore,
+  rankNameFromELO,
+  apiKeyGuard,
+};
