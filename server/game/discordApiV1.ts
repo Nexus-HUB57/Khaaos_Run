@@ -4,15 +4,18 @@
  * Public-facing API routes for the Discord Bot and external integrations.
  * Authentication: X-API-Key header (not session-based).
  *
- * Endpoints:
- *   GET /api/v1/server/status         — Server health, online players, regions
- *   GET /api/v1/ranked/:playerId      — Player ELO, rank, win rate, stats
- *   GET /api/v1/tournament             — List active tournaments
- *   GET /api/v1/tournament/:id         — Tournament details + bracket
- *   GET /api/v1/match/:id             — Match details (world, players, kills, time)
- *   GET /api/v1/economy/:playerId     — Player KRC balance + lifetime stats
- *   GET /api/v1/discord-link/:discordId — Discord ↔ EOS account link info
- *   GET /api/v1/economy/alerts        — Recent economy anomaly alerts
+ * Endpoints (11):
+ *   GET  /api/v1/server/status         — Server health, online players, regions
+ *   GET  /api/v1/ranked/:playerId      — Player ELO, rank, win rate, stats
+ *   GET  /api/v1/tournament             — List active tournaments
+ *   GET  /api/v1/tournament/:id         — Tournament details + bracket
+ *   GET  /api/v1/match/:id             — Match details (world, players, kills, time)
+ *   GET  /api/v1/economy/alerts        — Recent economy anomaly alerts
+ *   GET  /api/v1/economy/:playerId     — Player KRC balance + lifetime stats
+ *   GET  /api/v1/discord-links/beta    — All linked accounts with beta role
+ *   GET  /api/v1/discord-link/:discordId — Discord ↔ EOS account link info
+ *   POST /api/v1/discord-link          — Create Discord ↔ EOS link
+ *   GET  /api/v1/webhooks              — Webhook config stats (masked URLs)
  *
  * Discord API v10 Reference: https://discord.com/developers/docs/reference
  */
