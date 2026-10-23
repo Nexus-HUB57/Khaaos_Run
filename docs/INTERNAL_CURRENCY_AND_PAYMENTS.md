@@ -1,6 +1,6 @@
 # KRC interno e pagamentos globais — decisão de arquitetura
 
-**Estado:** arquitetura aprovada para KRC interno; monetização externa bloqueada até escolha e validação de provedor.  
+**Estado:** KRC interno; Stripe escolhido para uma primeira fase no Brasil; checkout implementado apenas para sandbox/teste e desligado por padrão.
 **Escopo:** compras opcionais de conteúdo/entitlements de jogo com meios de pagamento fiduciários.  
 **Fora de escopo:** token transferível, carteira cripto, depósito/saque on-chain, resgate de KRC, promessa de rendimento ou prêmio em dinheiro.
 
@@ -8,7 +8,7 @@
 
 1. KRC é saldo virtual sem valor monetário externo. Ele não é ativo on-chain, não é conversível nem resgatável, e não tem paridade com USD ou outra moeda.
 2. KRC e progresso são autoritativos no servidor. A UI, o browser e o cliente Unreal podem solicitar ações de jogo, mas não podem determinar saldo, preço de pacote, resultado do pagamento nem concessão de entitlement.
-3. Nenhuma compra em dinheiro será ativada enquanto não houver provedor, catálogo e termos de produto definidos, revisão de política do provedor e revisão jurídica/compliance apropriada aos mercados de venda.
+3. Nenhuma cobrança live será ativada até que o catálogo de pacotes e os preços sejam aprovados, a conta Stripe e os métodos estejam elegíveis, e haja revisão jurídica/fiscal, política de reembolso e suporte para o mercado atendido.
 4. “Disponível mundialmente” descreve o público potencial, não disponibilidade universal de pagamentos. País de estabelecimento do vendedor, países atendidos, método de pagamento, impostos, moeda de apresentação, proteção ao consumidor, idade e regras de lojas/plataformas precisam ser determinados antes do rollout.
 5. O ledger PostgreSQL permanece o livro de eventos e saldos de jogo. Não se registram partidas, compras de itens ou KRC em blockchain: a liquidação de um pagamento não requer transformar a moeda de gameplay num token.
 
@@ -30,11 +30,11 @@ O servidor cria a sessão de checkout com chave de idempotência derivada/associ
 
 ### Webhook e liquidação
 
-O endpoint de webhook usa HTTPS e o corpo bruto exigido pelo SDK do provedor para validar assinatura. Persiste o evento numa inbox com índice único `(provider, provider_event_id)`; responde rapidamente após aceitação durável e processa de modo assíncrono/idempotente. O worker consulta ou valida o estado autoritativo do pagamento, compara conta/provedor, ordem, usuário, produto, valor em minor units, moeda e status final.
+No checkout sandbox atual, o endpoint HTTPS usa os bytes originais capturados pelo Express e valida a assinatura pelo SDK Stripe. Ele persiste o evento na inbox com unique `(provider, event_id)` e conclui a transação de fulfillment de forma **síncrona antes do HTTP 200**; não há worker/outbox assíncrono nesta entrega. Se a transação falhar, responde 500 para permitir retry; duplicatas idênticas não concedem novamente. O mesmo event ID com tipo/hash diferente grava `EVENT_ID_PAYLOAD_MISMATCH` para auditoria e não é processado.
 
-Em uma única transação PostgreSQL: bloqueia a ordem, confirma que ainda não foi liquidada, cria o entitlement ou o lançamento interno autorizado, escreve correlação no ledger, e marca a ordem como cumprida. Unique constraints nas referências do provedor e na ordem impedem replay paralelo. Qualquer divergência vai para quarentena e alerta, nunca para crédito automático.
+Em uma única transação PostgreSQL: bloqueia a ordem, valida sessão, SKU, valor, BRL, `livemode=false`, estado e país de cobrança BR, grava wallet + transação + duas linhas balanceadas do ledger e marca a ordem como cumprida. Só `pending` pode ser cumprido; falha/expiração terminal recebida antes de um sucesso não é reaberta automaticamente. Divergência marca a ordem `rejected` (quando pendente), não concede KRC e precisa de revisão operacional. Como o handler espera o banco antes de responder, latência/locks podem acionar retry Stripe; antes de live, avaliar outbox/worker, timeout e reconciliação sem sacrificar idempotência.
 
-O fulfillment pode ser uma concessão de item/entitlement ou de um pacote fixo de KRC de jogo, caso o desenho de produto seja aprovado. Em ambos os casos, compras são valor pago por conteúdo interno; KRC continua sem transferência externa ou resgate. O que será vendido ainda precisa ser definido. Para reduzir risco em mercados globais, não habilitar loot boxes, gacha ou recompensas aleatórias pagas até revisão jurídica, regras de odds/disclosure e políticas do provedor/plataforma terem aprovação explícita.
+O produto escolhido é um pacote fixo de KRC interno; SKUs, quantidades e preços BRL ainda não foram aprovados. O checkout de teste exige endereço de cobrança e só concede para país informado `BR`, mas isso não prova residência nem substitui controles jurídicos/comerciais. Para reduzir risco, não habilitar loot boxes, gacha ou recompensas aleatórias pagas até revisão jurídica, regras de odds/disclosure e políticas do provedor/plataforma terem aprovação explícita.
 
 ### Reembolsos, disputa e chargeback
 
@@ -48,26 +48,24 @@ Bloquear a rota e retirar caminhos de storage/cliente que emitem crédito com va
 
 ### 2. Fechar política de produto — decisão parcial
 
-A decisão recebida confirma KRC exclusivamente interno e elimina a necessidade de smart contract/Mainnet. Antes do checkout ainda faltam: provedor/merchant of record, entidade vendedora e país de estabelecimento, itens vendáveis, política de preço e moeda, regiões inicialmente atendidas, política de cancelamento/refund/chargeback, idade mínima e tratamento de contas de menores. Revisão jurídica deve avaliar cada mercado antes de disponibilizá-lo.
+A decisão recebida confirma KRC exclusivamente interno, elimina a necessidade de smart contract/Mainnet e escolhe Stripe para empresa brasileira, pacotes fixos e primeira venda no Brasil. Ainda faltam os SKUs/preços/relação KRC por pacote, confirmação de que a conta pode usar Pix (a oferta pode depender de elegibilidade/convite), política de cancelamento/refund/chargeback, idade mínima e termos do vendedor. “Global” permanece uma intenção de produto; nenhuma região além do Brasil deve ser liberada sem análise de cobertura do meio de pagamento, fiscal/jurídica, consumidor e plataforma.
 
-### 3. Implementar checkout em sandbox
+### 3. Implementar checkout em sandbox — código entregue; gates externos pendentes
 
-Adicionar `payment_orders`, `payment_webhook_events` (inbox) e `outbox`/fila durável, migrations aditivas, interface `PaymentProvider`, adaptador sandbox e testes com eventos assinados/forjados/duplicados/fora de ordem. O adapter real só entra após decisão de provedor; segredo de teste deve ficar em ambiente isolado. Testar timeout e retry, diferença de preço/moeda, evento para usuário diferente, sucesso pendente, pagamento assíncrono, refund e chargeback. Não usar valores ou credenciais live nos testes.
+O código acrescenta `payment_orders`, inbox `payment_webhook_events`, migration aditiva, Checkout Session de pagamento único BRL e fulfillment Stripe autenticado por assinatura. Só aceita chave `sk_test_`; `KRC_CHECKOUT_ENABLED` permanece `false` por padrão; catálogo vem de `STRIPE_KRC_PACKS_JSON`, sempre resolvido no servidor. Testes unitários não chamam o Stripe. A suíte PostgreSQL escrita cobre checkout concorrente com mesma `Idempotency-Key`, preço server-side, ownership, fulfillment concorrente, replay/hash conflitante, divergência de valor/país e estados falha/expiração fora de ordem; a execução do CI desta branch continua gate pendente. Para configurar sandbox real em staging: aplicar `npm run db:migrate` (incluindo 0005) antes da flag; validar `PUBLIC_ORIGIN` HTTPS, `STRIPE_SECRET_KEY=sk_test_…`, `STRIPE_WEBHOOK_SECRET=whsec_…`, catálogo aprovado, endpoint `/webhooks/stripe` e apenas métodos disponíveis na conta. Nunca usar credenciais live.
 
 ### 4. Validar mercados e UX
 
-Checkout deve mostrar preço local e moeda cobrada antes da confirmação, tax/fees conforme o merchant/provider, estado `pending` com polling limitado e ação de tentar novamente sem criar ordens duplicadas. O jogo deve mostrar o entitlement após confirmação servidor-side e ter mensagens localizadas, acessibilidade, suporte e fluxo de recuperação. Testar falhas de rede, retorno antes do webhook, webhook antes do retorno, pagamento assíncrono, expiração e chargeback. Bloquear territórios que o vendedor/provedor não possa atender.
+Checkout Brasil mostra preço BRL e pacote antes da saída ao provedor. O retorno `cancelled` não consulta a ordem; retorno `success` consulta status com polling limitado e só atualiza saldos após `fulfilled`. A interface comunica explicitamente sandbox/test mode e nunca diz que houve cobrança real. Ainda é necessário validar em staging retorno antes do webhook, webhook antes do retorno, Pix pendente/assíncrono e retry/expiração. País de cobrança fora de BR é rejeitado; esta checagem simples não substitui bloqueio comercial/regulatório por território. Pix brasileiro é somente avulso em BRL e a elegibilidade deve ser confirmada no Dashboard Stripe.
 
 ### 5. Rollout controlado — sem Mainnet para KRC
 
 Começar em sandbox; depois canary limitado por feature flag, país e pacote, com limites baixos, rate limiting, métricas de conversão/falha, alertas de reconciliação e botão de desativação. Só passar a live após revisão de segurança, fraude, suporte/refunds, tax/compliance e configuração de produção aprovada. Não criar contrato de token KRC nem endpoints de saque.
 
-## Esquema de dados sugerido para checkout
+## Esquema atual e complementos pendentes
 
-- `payment_orders`: `id` UUID, `user_id`, `product_id`, snapshot do preço/moeda/benefício, `provider`, `provider_order_id`, `status`, `created_at`, `paid_at`, `fulfilled_at`, `refunded_at`, `version`.
-- `payment_webhook_events`: `provider`, `provider_event_id` UNIQUE, tipo, hash/cópia mínima do payload redigida, verificação de assinatura, recebido/processado em, erro operacional sem dados sensíveis.
-- `payment_outbox`: ordem de fulfillment e tentativas, chave única por ordem/tipo, lease/estado para retry.
-- `payment_adjustments`: compensações append-only para refund/dispute, ligadas a order, provider event e operação do ledger.
+- Implementados em migration 0005: `payment_orders` (snapshot imutável de SKU/preço/moeda/benefício, idempotency key, sessão Stripe e estados) e `payment_webhook_events` (event ID único, tipo, SHA-256, estado, erro operacional, timestamps).
+- Pendentes antes de um desenho live resiliente: `payment_outbox` para processamento assíncrono/retries e `payment_adjustments` append-only para refunds/disputes correlacionados ao pedido/evento/operação do ledger.
 
 Valores são inteiros em minor units e moedas ISO 4217; nunca `float` para dinheiro. Persistir apenas os dados pessoais estritamente necessários. Não gravar PAN, CVV, segredo de webhook, client secret ou tokens de pagamento no ledger nem nos logs.
 
@@ -82,7 +80,8 @@ Valores são inteiros em minor units e moedas ISO 4217; nunca `float` para dinhe
 
 ## Referências técnicas
 
-- [Stripe Webhooks](https://docs.stripe.com/webhooks) — assinatura, corpo bruto e notificações assíncronas.
+- [Stripe Brasil — checkout e Pix sandbox](./STRIPE_BRAZIL_CHECKOUT.md) — decisão, gates e fontes oficiais.
+- [Stripe Webhooks](https://docs.stripe.com/webhooks) — assinatura, corpo bruto, duplicatas e notificações assíncronas.
 - [Stripe Payment Intent status](https://docs.stripe.com/payments/payment-intents/verifying-status) — fulfillment baseado na confirmação server-side por webhook.
 - [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests) — retries sem criar operações duplicadas no provedor.
 

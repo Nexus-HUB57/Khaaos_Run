@@ -90,6 +90,7 @@ export interface RoomLoot {
 
 export interface BattleRoom {
   id: string;
+  worldId: WorldId;
   status: RoomStatus;
   maxPlayers: number;
   players: Map<string, RoomPlayer>;
@@ -123,25 +124,26 @@ export interface BattleRoom {
 type SpatialEntityAdapter = { id: string | number };
 
 export type ClientMessage =
-  | { type: "join"; roomId?: string; displayName?: string }
+  | { type: "join"; roomId?: string; displayName?: string; worldId?: WorldId }
   | { type: "resume"; roomId: string }
   | { type: "leave" }
   | { type: "position"; x: number; y: number }
   | { type: "pickup"; lootId: number }
   | { type: "attack"; targetId: string; clientTimestamp?: number }
   | { type: "use_packback_item"; itemId: number }
-  | { type: "queue"; mode?: QueueMode }
+  | { type: "queue"; mode?: QueueMode; worldId?: WorldId }
   | { type: "dequeue" }
   | { type: "set_ready"; ready: boolean }
   | { type: "start" }           // host force-start or all-ready start
   | { type: "cancel_countdown" } // host only
   | { type: "kick"; targetId: string } // host only
-  | { type: "create_lobby"; private?: boolean; maxPlayers?: number }
+  | { type: "create_lobby"; private?: boolean; maxPlayers?: number; worldId?: WorldId }
   | { type: "join_code"; code: string };
 
 const clientMessageSchema = z.object({
   type: z.enum(["join", "resume", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code"]),
   roomId: z.string().trim().max(128).optional(),
+  worldId: z.enum(["CIGKV", "W1", "W2", "W3", "W4"]).optional(),
   displayName: z.string().max(64).optional(),
   x: z.number().finite().min(0).max(100).optional(),
   y: z.number().finite().min(0).max(100).optional(),
@@ -196,6 +198,7 @@ interface SerializedPlayer {
 
 interface SerializedRoom {
   id: string;
+  worldId: WorldId;
   status: RoomStatus;
   maxPlayers: number;
   playerCount: number;
@@ -225,7 +228,7 @@ class RoomManager {
   constructor() {
     this.matchmaking = new MatchmakingService(
       (ws, msg) => this.send(ws, msg as ServerMessage),
-      (players) => this.createLobbyFromMatchmaking(players),
+      (players, worldId) => this.createLobbyFromMatchmaking(players, worldId),
     );
     void distributedState.subscribeControl((event) => {
       if (event.type === "auth:revoke" && typeof event.userId === "string") this.closeUserSockets(event.userId);
@@ -343,8 +346,18 @@ class RoomManager {
   ) {
     switch (msg.type) {
       case "join": {
-        const roomId = msg.roomId || this.findOrCreateLobby();
-        await this.joinRoom(userId, displayName, ws, roomId);
+        if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
+          this.send(ws, { type: "error", message: "Mundo inválido" });
+          break;
+        }
+        const worldId = msg.worldId ?? "CIGKV";
+        const requestedRoom = msg.roomId ? this.rooms.get(msg.roomId) : undefined;
+        if (msg.worldId !== undefined && requestedRoom && requestedRoom.worldId !== worldId) {
+          this.send(ws, { type: "error", message: "A sala pertence a outro mundo" });
+          break;
+        }
+        const roomId = msg.roomId || this.findOrCreateLobby(worldId);
+        await this.joinRoom(userId, displayName, ws, roomId, worldId);
         break;
       }
       case "resume": {
@@ -376,7 +389,11 @@ class RoomManager {
         break;
       }
       case "queue": {
-        await this.enqueuePlayer(userId, displayName, ws, msg.mode ?? "solo");
+        if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
+          this.send(ws, { type: "error", message: "Mundo inválido" });
+          break;
+        }
+        await this.enqueuePlayer(userId, displayName, ws, msg.mode ?? "solo", msg.worldId ?? "CIGKV");
         break;
       }
       case "dequeue": {
@@ -401,7 +418,11 @@ class RoomManager {
         break;
       }
       case "create_lobby": {
-        await this.createPrivateLobby(userId, displayName, ws, !!msg.private, msg.maxPlayers);
+        if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
+          this.send(ws, { type: "error", message: "Mundo inválido" });
+          break;
+        }
+        await this.createPrivateLobby(userId, displayName, ws, !!msg.private, msg.maxPlayers, msg.worldId ?? "CIGKV");
         break;
       }
       case "join_code": {
@@ -415,10 +436,10 @@ class RoomManager {
 
   // ─── Room Lifecycle ──────────────────────────────────────────────────────
 
-  private findOrCreateLobby(): string {
+  private findOrCreateLobby(worldId: WorldId = "CIGKV"): string {
     // Prefer an existing lobby with space
     for (const room of this.rooms.values()) {
-      if (room.status === "LOBBY" && room.players.size < room.maxPlayers) {
+      if (room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
         return room.id;
       }
     }
@@ -426,6 +447,7 @@ class RoomManager {
     const id = this.secureId("room");
     const room: BattleRoom = {
       id,
+      worldId,
       status: "LOBBY",
       maxPlayers: 50, // scalable later
       players: new Map(),
@@ -455,7 +477,7 @@ class RoomManager {
     return id;
   }
 
-  async joinRoom(userId: string, displayName: string, ws: WebSocket, roomId: string) {
+  async joinRoom(userId: string, displayName: string, ws: WebSocket, roomId: string, worldId: WorldId = "CIGKV") {
     // Leave matchmaking queue if present
     this.matchmaking.dequeue(userId);
     this.matchmaking.rebindWs(userId, ws);
@@ -467,7 +489,7 @@ class RoomManager {
 
     let room = this.rooms.get(roomId);
     if (!room) {
-      roomId = this.findOrCreateLobby();
+      roomId = this.findOrCreateLobby(worldId);
       room = this.rooms.get(roomId)!;
     }
 
@@ -1368,6 +1390,7 @@ class RoomManager {
         type: "room_state",
         room: {
           id: room.id,
+          worldId: room.worldId,
           status: room.status,
           maxPlayers: room.maxPlayers,
           playerCount: room.players.size,
@@ -1463,6 +1486,7 @@ class RoomManager {
     ws: WebSocket,
     isPrivate: boolean,
     maxPlayers?: number,
+    worldId: WorldId = "CIGKV",
   ) {
     if (this.userToRoom.has(userId)) this.leaveRoom(userId);
     this.matchmaking.dequeue(userId);
@@ -1474,6 +1498,7 @@ class RoomManager {
 
     const room: BattleRoom = {
       id,
+      worldId,
       status: "LOBBY",
       maxPlayers: Math.min(50, Math.max(2, maxPlayers ?? 16)),
       players: new Map(),
@@ -1533,6 +1558,7 @@ class RoomManager {
     displayName: string,
     ws: WebSocket,
     mode: QueueMode,
+    worldId: WorldId = "CIGKV",
   ) {
     // Cannot queue while already in an active match
     const existingRoom = this.userToRoom.get(userId);
@@ -1548,7 +1574,7 @@ class RoomManager {
 
     const stats = await storage.getPlayerStats(userId);
     const rating = (stats as any).rating ?? 1000;
-    this.matchmaking.enqueue(userId, displayName, rating, ws, mode);
+    this.matchmaking.enqueue(userId, displayName, rating, ws, mode, worldId);
   }
 
   /**
@@ -1557,10 +1583,12 @@ class RoomManager {
    */
   async createLobbyFromMatchmaking(
     players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[],
+    worldId: WorldId = "CIGKV",
   ): Promise<string> {
     const id = this.secureId("mm");
     const room: BattleRoom = {
       id,
+      worldId,
       status: "LOBBY",
       maxPlayers: Math.max(50, players.length),
       players: new Map(),
@@ -1664,6 +1692,17 @@ class RoomManager {
 
   getMatchmakingQueueSize() {
     return this.matchmaking.getQueueSize();
+  }
+
+  getWorldTelemetry(worldId: WorldId): WorldTelemetrySnapshot {
+    const rooms: WorldRoomSample[] = [...this.rooms.values()]
+      .filter((room) => room.worldId === worldId)
+      .map((room) => ({
+        status: room.status,
+        connectedPlayers: [...room.players.values()].filter((player) => player.isConnected).length,
+        maxPlayers: room.maxPlayers,
+      }));
+    return aggregateWorldTelemetry(worldId, rooms, this.matchmaking.getTelemetry(worldId));
   }
 
   // ─── Public helpers for REST ─────────────────────────────────────────────

@@ -105,6 +105,71 @@ describe("Special Class asynchronous integration", () => {
     assert.ok(result.reasonCodes.includes("AGENT_REVIEW_INCOMPLETE"));
   });
 
+  it("fails closed on transient DNS resolution failure and skips peer review", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    const reviewCalls: AgentId[] = [];
+    for (const agentId of ["marshal-henricks", "king-krapulla", "ambassador-uryan"] as const) {
+      const original = adapters[agentId].review;
+      adapters[agentId].review = async (input) => {
+        reviewCalls.push(agentId);
+        return original(input);
+      };
+    }
+    adapters["king-krapulla"].analyze = async () => {
+      throw Object.assign(new Error("temporary DNS resolver failure"), { code: "EAI_AGAIN" });
+    };
+
+    const result = await runSpecialClassCouncil(request, adapters);
+
+    assert.equal(result.status, "partial");
+    assert.equal(result.roundsCompleted, 1);
+    assert.deepEqual(result.failedAgents, ["king-krapulla"]);
+    assert.deepEqual(reviewCalls, []);
+    assert.equal(result.findings.find((finding) => finding.agentId === "king-krapulla")?.position, "hold");
+    assert.ok(result.conflicts.every((conflict) => conflict.executable === false));
+  });
+
+  it("marks every agent whose review connection fails and keeps the council non-executable", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    adapters["king-krapulla"].review = async () => {
+      throw Object.assign(new Error("connection closed before response"), { code: "ERR_STREAM_PREMATURE_CLOSE" });
+    };
+    adapters["ambassador-uryan"].review = async () => {
+      throw Object.assign(new Error("gateway response timed out"), { code: "ETIMEDOUT" });
+    };
+
+    const result = await runSpecialClassCouncil(request, adapters);
+
+    assert.equal(result.status, "partial");
+    assert.equal(result.roundsCompleted, 1);
+    assert.deepEqual(result.failedAgents, ["king-krapulla", "ambassador-uryan"]);
+    assert.equal(result.findings.find((finding) => finding.agentId === "king-krapulla")?.position, "hold");
+    assert.equal(result.findings.find((finding) => finding.agentId === "ambassador-uryan")?.position, "hold");
+    assert.ok(result.reasonCodes.includes("AGENT_REVIEW_INCOMPLETE"));
+    assert.ok(result.reasonCodes.includes("HUMAN_REVIEW_REQUIRED"));
+    assert.ok(result.conflicts.every((conflict) => conflict.executable === false));
+  });
+
+  it("ignores a late analysis reply that arrives after the adapter deadline", async () => {
+    const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
+    let deliverLateReply!: (finding: GovernanceFinding) => void;
+    adapters["king-krapulla"].analyze = () => new Promise<GovernanceFinding>((resolve) => { deliverLateReply = resolve; });
+
+    const result = await runSpecialClassCouncil(request, adapters, { timeoutMs: 50 });
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.failedAgents, ["king-krapulla"]);
+    assert.equal(result.findings.find((finding) => finding.agentId === "king-krapulla")?.position, "hold");
+
+    deliverLateReply({
+      agentId: "king-krapulla", domain: "economy", subject: request.subject,
+      position: "support", confidence: 1, rationale: "late response must not overwrite fail-closed result",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.failedAgents, ["king-krapulla"]);
+    assert.equal(result.findings.find((finding) => finding.agentId === "king-krapulla")?.position, "hold");
+  });
+
   it("times out a stalled peer-review response and never treats it as approval", async () => {
     const adapters = createAdapters({ "marshal-henricks": "support", "king-krapulla": "support", "ambassador-uryan": "support" });
     adapters["ambassador-uryan"].review = () => new Promise<GovernanceFinding>(() => {});

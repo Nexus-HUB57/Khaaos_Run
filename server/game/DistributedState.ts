@@ -6,6 +6,7 @@ export type DistributedQueueEntry = {
   displayName: string;
   rating: number;
   mode: "solo" | "duo" | "squad";
+  worldId: "CIGKV" | "W1" | "W2" | "W3" | "W4";
   enqueuedAt: number;
   currentDelta: number;
   nodeId: string;

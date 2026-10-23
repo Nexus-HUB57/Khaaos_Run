@@ -19,6 +19,7 @@
 - [Mundos Oficiais (W1–W4)](#mundos-oficiais-w1w4)
 - [Protocolos de Ingresso (Zu)](#protocolos-de-ingresso-zu)
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
+- [Figuras de alistamento](#figuras-de-alistamento)
 - [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
 - [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
 - [CI/CD e Automação](#cicd-e-automação)
@@ -289,6 +290,23 @@ Em todos os casos:
 
 ---
 
+## Figuras de alistamento
+
+O corpo não altera XP, dano nem saque. Sexo e origem são identidade visual. O kit de Zheers é o mesmo para todos: jaqueta olive, kevlar, máscara no peito, faca à direita de quem olha.
+
+| Id | Nome | Sexo | Origem | Marca | Render |
+|----|------|------|--------|-------|--------|
+| kane | Idris Kane | Masculino | Afro-brasileiro | Queimadura no pescoço | Placa 3D em `client/public/figures/kane.jpg` |
+| puri | Yara Puri | Feminino | Indígena amazônica | Marca de nascença sob o olho | Ficha fechada, placa pendente |
+| voss | Leandro Voss | Masculino | Levantina | Nariz quebrado | Ficha fechada, placa pendente |
+| okada | Mei Okada | Feminino | Nikkei | Cicatriz na têmpora | Ficha fechada, placa pendente |
+| hald | Soren Hald | Masculino | Norte-europeia | Orelha comida por estilhaço | Ficha fechada, placa pendente |
+| okonkwo | Nia Okonkwo | Feminino | África Ocidental | Heterocromia e diastema | Ficha fechada, placa pendente |
+
+Catálogo: [`shared/figures.ts`](shared/figures.ts). A placa é render 3D realista de estúdio, não ilustração. A malha riggada (GLB) ainda não está no repositório.
+
+---
+
 ## Arquitetura Técnica — Devs Ph.D
 
 ### Visão Geral de Duas Camadas
@@ -528,6 +546,7 @@ Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
 | **EOS Integration** | `eos-integration.yml` | Push EOS/Save/AntiCheat | Validate EOS config (3 regions), C++ implementation audit, auth smoke test, region connectivity |
 | **Economy Validation** | `economy-validation.yml` | Push Economy | Ledger integrity audit (15 tx types, SHA256, escrow), Compliance (KYC/AML/BCB/IRPF), bridge validation, world progression gates |
 | **Deploy** | `deploy.yml` | Push main + manual | Pre-deploy validation, build Docker images, deploy staging (Render) / production (3 regions), health checks, notifications |
+| **Marshal Console Load** | `marshal-console-load.yml` | Every PR + manual | 400 overview reads + 100 council simulations + 40 SSE streams; latency assertions and 30-day artifact |
 | **Stress Test** | `stress-test.yml` | Manual + weekly | 100/500/1000/2000 bot profiles, ramp-up strategies, region targeting, Prometheus push, JSON reporting |
 | **Release** | `release.yml` | Tag v* + manual | Version + changelog, build all artifacts, Docker images (server + UE5), GitHub Release, notifications |
 | **PR Checks** | `pr-checks.yml` | PR events | Auto-label by path, size classification, conventional commits validation, changed files summary |
@@ -875,7 +894,8 @@ Semana  1   4   8   11  15  23  28
 
 ## Referências
 - [Arquitetura dos mundos e agentes especiais](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md)
-- [API proposta do painel do Marechal](docs/API_MARECHAL_CONTROL_PANEL.md)
+- [API ativa do painel do Marechal, telemetria e persistência](docs/API_MARECHAL_CONTROL_PANEL.md)
+- [Diretrizes narrativas da Classe Especial](docs/SPECIAL_CLASS_NARRATIVE_GUIDELINES.md)
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
 - [Autenticação realtime](docs/REALTIME_AUTH.md)
 - [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)

@@ -2,42 +2,123 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#090b0f" />
-    <title>Khaaos Run // CIGKV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0b0814" />
+    <title>Khaaos Run // Battle Royale 3D — CIGKV</title>
+    <link rel="icon" href="/favicon.png" />
   </head>
-  <body>
-    <div id="app">
-      <header class="topbar">
-        <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small>OPERAÇÃO CIGKV // BETA DE CAMPO</small></div></div>
-        <div class="match-state"><span class="live-dot"></span><span id="matchStatus">AGUARDANDO ZU</span><b id="matchClock">10:00</b></div>
-        <button id="resetBtn" class="ghost-btn">REINICIAR RING</button>
-      </header>
-      <main class="game-shell">
-        <aside class="left-rail panel">
-          <div class="section-label">QG-WAR'I / OPERADOR</div>
-          <div class="operator-card"><div class="avatar">ZH</div><div><h2>ZHEERS-07</h2><p>RECRUTA // CIGKV</p></div></div>
-          <div class="stat-grid">
-            <div><span>ACCUR / XP</span><strong id="xpValue">0000</strong></div>
-            <div><span>KRC / SALDO</span><strong id="krcValue">0250</strong></div>
-            <div><span>ABATES</span><strong id="killsValue">00</strong></div>
-            <div><span>RANKING</span><strong id="rankValue">#50</strong></div>
-          </div>
-          <div class="section-label spaced">VITALIDADE</div>
-          <div class="vitality-row"><span>VL</span><div class="bar"><i id="lifeBar"></i></div><b id="lifeValue">100%</b></div>
-          <div class="vitality-row defense"><span>VD</span><div class="bar"><i id="defenseBar"></i></div><b id="defenseValue">35%</b></div>
-          <div class="section-label spaced">PACKBAG TÁTICA</div>
-          <div id="inventory" class="inventory"></div>
-          <div class="controls"><span><kbd>WASD</kbd> mover</span><span><kbd>Mouse</kbd> mirar/atacar</span><span><kbd>E</kbd> interagir</span><span><kbd>F</kbd> oficina</span></div>
-        </aside>
-        <section class="arena-wrap">
-          <div class="arena-head"><div><span class="eyebrow">MUNDO 0 // KHAOOS VILLE</span><h1>O PÁTIO DE ARMAMENTO</h1></div><div class="threat"><span>AMEAÇA</span><b id="threatValue">PULSO 01</b></div></div>
-          <div class="canvas-frame"><canvas id="arena" width="1100" height="660"></canvas><div id="zuModal" class="modal"><div class="modal-card"><span class="eyebrow">PROTOCOLO DE ENTRADA // ZU-01</span><h2>RISCO DE COLISÃO</h2><p>O transporte perdeu o controle após o impacto. Escolha como entrar no ring de batalha.</p><div class="modal-actions"><button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+ defesa inicial</small></button><button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+ velocidade inicial</small></button></div></div></div><div id="endModal" class="modal hidden"><div class="modal-card"><span class="eyebrow">TRANSMISSÃO DO MARECHAL</span><h2 id="endTitle">VOCÊ FOI ELIMINADO</h2><p id="endText"></p><button id="endBtn" class="primary-btn">RETORNAR AO QG</button></div></div></div>
-          <div class="arena-footer"><div><span>RING</span><b id="ringValue">100%</b></div><div><span>SOBREVIVENTES</span><b id="survivorsValue">50 / 50</b></div><div><span>PULSO KHAOOS</span><b id="pulseValue">ESTÁVEL</b></div><div><span>EXTRAÇÕES XP</span><b id="extractValue">0 / 3</b></div></div>
-        </section>
-        <aside class="right-rail"><div class="panel mission"><div class="section-label">ORDEM ATIVA</div><h3>DOMINE O RING</h3><p>Sobreviva ao fechamento do anel, colete recursos e extraia XP antes que o caos consuma o setor.</p><div class="objective"><span class="check">◈</span><span>Sobreviver ao primeiro pulso</span></div><div class="objective"><span class="check" id="extractCheck">◇</span><span>Extrair dados em um terminal</span></div><div class="objective"><span class="check" id="craftCheck">◇</span><span>Fabricar um item de campo</span></div></div><div class="panel feed"><div class="section-label">RÁDIO // LOG AO VIVO</div><div id="feedList"></div></div><div class="panel workshop"><div class="section-label">OFICINA DE CAMPO</div><div class="recipe"><div><b>LANÇA DE SUCATA</b><small>15 madeira + 10 metal</small></div><button id="craftBtn">FABRICAR</button></div><div class="recipe"><div><b>BANDAGEM ESTÉRIL</b><small>10 madeira + 5 componentes</small></div><button id="healBtn">USAR</button></div></div></aside>
-      </main>
+  <body class="hud-visible">
+    <canvas id="arena3d"></canvas>
+
+    <!-- vignette de dano -->
+    <div id="damageVignette"></div>
+
+    <!-- barra superior -->
+    <header class="topbar3d">
+      <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small>OPERAÇÃO CIGKV // BETA DE CAMPO 3D</small></div></div>
+      <div class="match-state">
+        <span class="live-dot"></span><span id="matchStatus">AGUARDANDO ZU</span>
+        <b id="matchClock">10:00</b>
+        <span class="alive-chip"><i>◇</i><b id="aliveValue">13</b> VIVOS</span>
+        <span class="pulse-chip" id="pulseValue">PULSO 00</span>
+      </div>
+      <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
+    </header>
+
+    <!-- crosshair dinâmico -->
+    <div id="crosshair"><i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="ch dot"></i></div>
+    <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+
+    <!-- minimapa + killfeed -->
+    <div class="map-corner">
+      <div class="minimap-frame"><canvas id="minimap" width="196" height="196"></canvas><span class="compass">N</span></div>
+      <div id="killfeed"></div>
     </div>
-    <script type="module" src="/src/main.js"></script>
+
+    <!-- status do jogador (canto inferior esquerdo) -->
+    <div class="vitals">
+      <div class="stat-strip">
+        <span>ACCUR/XP <b id="xpValue">0000</b></span>
+        <span>KRC <b id="krcValue">0250</b></span>
+        <span>ABATES <b id="killsValue">00</b></span>
+        <span>ZEX <b id="extractValue">0 / 3</b></span>
+      </div>
+      <div class="vitality-row"><span>VL</span><div class="bar"><i id="lifeBar"></i></div><b id="lifeValue">100</b></div>
+      <div class="vitality-row defense"><span>VD</span><div class="bar"><i id="armorBar"></i></div><b id="armorValue">35</b></div>
+    </div>
+
+    <!-- arma e munição (canto inferior direito) -->
+    <div class="weapon-panel">
+      <div id="reloadHint">RECARREGANDO…</div>
+      <div class="ammo-row"><b id="ammoMag">15</b><span id="ammoReserve">/ 45</span></div>
+      <div class="weapon-name" id="weaponName">PISTOLA 9MM</div>
+      <div class="medkit-chip" title="Usar kit médico [Q]">✚ <span id="medkitCount">×1</span><small>Q</small></div>
+    </div>
+
+    <!-- prompt de interação -->
+    <div id="interactPrompt">[E] Coletar</div>
+
+    <!-- feed lateral -->
+    <div class="feed-panel"><div class="section-label">RÁDIO // LOG AO VIVO</div><div id="feedList"></div></div>
+
+    <!-- objetivos -->
+    <div class="mission-panel">
+      <div class="section-label">ORDEM ATIVA</div>
+      <h3>DOMINE O RING</h3>
+      <div class="objective" id="objPulse"><span class="check">◈</span><span>Sobreviver ao primeiro pulso</span></div>
+      <div class="objective" id="objExtract"><span class="check">◇</span><span>Extrair dados em um terminal</span></div>
+      <div class="objective" id="objKills"><span class="check">◇</span><span>3 abates confirmados</span></div>
+    </div>
+
+    <!-- controles (desktop) -->
+    <div class="controls-hint">
+      <span><kbd>WASD</kbd> mover</span><span><kbd>MOUSE</kbd> mirar/atirar</span><span><kbd>RMB</kbd> mira precisa</span>
+      <span><kbd>SHIFT</kbd> correr</span><span><kbd>ESPAÇO</kbd> saltar</span><span><kbd>R</kbd> recarregar</span>
+      <span><kbd>E</kbd> coletar</span><span><kbd>Q</kbd> medkit</span><span><kbd>ESC</kbd> liberar mouse</span>
+    </div>
+
+    <!-- controles touch -->
+    <div id="touchLayer">
+      <div id="joyBase"><div id="joyKnob"></div></div>
+      <div class="touch-actions">
+        <button class="tbtn small" data-key="jump">⤒</button>
+        <button class="tbtn small" data-key="reload">R</button>
+        <button class="tbtn small" data-key="interact">E</button>
+        <button class="tbtn small" data-key="medkit">✚</button>
+        <button class="tbtn" data-key="ads">◎</button>
+        <button class="tbtn fire" data-key="fire">🔥</button>
+      </div>
+    </div>
+
+    <!-- link clássico -->
+    <a class="classic-link" href="/classic.html" title="Versão tática 2D">2D CLASSIC</a>
+
+    <!-- modal ZU -->
+    <div id="zuModal" class="modal">
+      <div class="modal-card">
+        <span class="eyebrow">PROTOCOLO DE ENTRADA // ZU-01</span>
+        <h2>RISCO DE COLISÃO</h2>
+        <p>O transporte perdeu o controle após o impacto sobre Khaoos Ville. Escolha como entrar no ring de batalha — 12 operativos já caíram no setor.</p>
+        <div class="modal-actions">
+          <button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+60 de armadura · mobilidade padrão</small></button>
+          <button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+18 de armadura · velocidade ampliada</small></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- modal fim -->
+    <div id="endModal" class="modal hidden">
+      <div class="modal-card">
+        <span class="eyebrow">TRANSMISSÃO DO MARECHAL</span>
+        <h2 id="endTitle">VOCÊ FOI ELIMINADO</h2>
+        <p id="endText"></p>
+        <div class="modal-actions">
+          <button id="endBtn" class="primary-btn">NOVA INSERÇÃO</button>
+          <button id="replayBtn" class="ghost-btn">EXPORTAR REPLAY</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/game3d/main3d.js"></script>
   </body>
 </html>
