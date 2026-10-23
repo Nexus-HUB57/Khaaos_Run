@@ -255,14 +255,14 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV' } = {}) {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
-    this.world = getWorldLayout(this.seed);
+    this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));

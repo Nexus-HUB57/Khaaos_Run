@@ -137,7 +137,9 @@ function groundCanvas() {
   return c;
 }
 export function groundTexture(repeat = 28) { return tex(groundCanvas(), { repeat }); }
-export function groundMaterial(repeat = 28) { return pbr(groundCanvas(), { repeat, rough: .95, strength: 1.5 }); }
+export function groundMaterial(repeat = 28, tint = null) {
+  return pbr(groundCanvas(), { repeat, rough: .95, strength: 1.5, extra: tint ? { color: new THREE.Color(tint) } : {} });
+}
 
 // ---- asfalto (praças/estradas) ----
 function asphaltCanvas() {
