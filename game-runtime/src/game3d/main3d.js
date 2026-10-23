@@ -15,7 +15,7 @@ const SIM_DT = 1 / 30;
 const VEST_COLORS = VEST_COLORS_FALLBACK;
 
 class Game3D {
-  constructor(seed) {
+  constructor(seed, { net = null } = {}) {
     this.seed = seed;
     this.sim = new KhaaosSim3D({ seed, botCount: 12 });
     this.audio = new GameAudio();
@@ -27,19 +27,24 @@ class Game3D {
     this.animT = 0;
     this.zuOpen = true;
     this.ended = false;
+    // modo online (OnlineGame3D injeta o NetClient3D e substitui this.sim pela view)
+    this.net = net;
+    this.online = !!net;
+    this.pendingSlot = 0;
+    this.netAccumulator = 0;
 
-    this.#initRenderer();
-    this.#initWorld();
-    this.#initEntities();
-    this.#initCamera();
-    this.#initInput();
+    this.initRenderer();
+    this.initWorld();
+    this.initEntities();
+    this.initCamera();
+    this.initInput();
 
     this.hud = new HUD({
       sim: this.sim,
       seed,
-      onEntry: (entry) => this.#startMatch(entry),
+      onEntry: (entry) => this.startMatch(entry),
       onRestart: (nextSeed) => this.restart(nextSeed),
-      onReplayExport: () => this.#exportReplay(),
+      onReplayExport: () => this.exportReplay(),
     });
     this.hud.audio = this.audio;
     this.hud.setMatchStatus('AGUARDANDO ZU');
@@ -49,8 +54,8 @@ class Game3D {
     requestAnimationFrame(this.loop);
   }
 
-  // ---------- infra ----------
-  #initRenderer() {
+  // ---------- infra (protegidos: reusados pelo OnlineGame3D) ----------
+  initRenderer() {
     this.renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#arena3d'), antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
@@ -66,7 +71,7 @@ class Game3D {
     });
   }
 
-  #initWorld() {
+  initWorld() {
     const { scene, sun } = buildScene(this.seed);
     this.scene = scene;
     this.sun = sun;
@@ -78,29 +83,31 @@ class Game3D {
     scene.add(this.sun.target);
   }
 
-  #initEntities() {
+  initEntities() {
     const rngIdx = Math.floor(Math.random() * 100);
     // jogador
     this.playerOp = createOperative({ skin: SKIN_TONES[rngIdx % SKIN_TONES.length], vest: '#4d3a30' });
     this.scene.add(this.playerOp.group);
     this.playerWeapon = null;
-    // bots
+    // bots (no modo online os atores remotos chegam via snapshot)
     this.botOps = new Map();
-    this.sim.bots.forEach((b, i) => {
-      const op = createOperative({
-        skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
-        vest: VEST_COLORS[i % VEST_COLORS.length],
+    if (!this.online) {
+      this.sim.bots.forEach((b, i) => {
+        const op = createOperative({
+          skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
+          vest: VEST_COLORS[i % VEST_COLORS.length],
+        });
+        this.scene.add(op.group);
+        attachWeapon(op.parts, op.group, b.weapon);
+        this.botOps.set(b.id, { op, weapon: b.weapon, name: this.makeNameTag(b.name, i) });
       });
-      this.scene.add(op.group);
-      attachWeapon(op.parts, op.group, b.weapon);
-      this.botOps.set(b.id, { op, weapon: b.weapon, name: this.#makeNameTag(b.name, i) });
-    });
+    }
     // loot
     this.lootMeshes = new Map();
     this.syncLoot(true);
   }
 
-  #makeNameTag(name, i) {
+  makeNameTag(name, i) {
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 64;
     const ctx = canvas.getContext('2d');
@@ -119,13 +126,13 @@ class Game3D {
     return sprite;
   }
 
-  #initCamera() {
+  initCamera() {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
   }
 
-  #initInput() {
+  initInput() {
     const canvas = this.renderer.domElement;
     canvas.addEventListener('click', () => {
       if (!this.zuOpen && !this.ended && !this.pointerLocked && !this.isTouch()) canvas.requestPointerLock();
@@ -157,6 +164,7 @@ class Game3D {
       if (k === 'r') this.input.reload = true;
       if (k === 'e') this.input.interact = true;
       if (k === 'q') this.input.medkit = true;
+      // troca de slot: offline aplica na sim; online agenda no próximo input
       if (k === '1') this.sim.switchSlot(1);
       if (k === '2') this.sim.switchSlot(2);
       if (k === 'escape' && this.pointerLocked) document.exitPointerLock();
@@ -167,7 +175,7 @@ class Game3D {
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
 
   // ---------- fluxo ----------
-  #startMatch(entry) {
+  startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
     this.zuOpen = false;
@@ -185,7 +193,8 @@ class Game3D {
     location.reload();
   }
 
-  #exportReplay() {
+  exportReplay() {
+    if (!this.sim.exportReplay) { this.hud.feed('CONSOLE', 'Replay disponível apenas no modo offline.'); return; }
     const data = JSON.stringify(this.sim.exportReplay());
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
@@ -196,6 +205,7 @@ class Game3D {
   }
 
   #endMatch(win, stats) {
+    if (this.ended) return;
     this.ended = true;
     this.audio.stinger(win);
     this.hud.setMatchStatus(win ? 'SOBREVIVENTE' : 'ELIMINADO');
@@ -224,7 +234,7 @@ class Game3D {
     }
   }
 
-  #syncEntities(dt) {
+  syncEntities(dt) {
     const s = this.sim;
     // jogador
     const p = s.player;
@@ -253,7 +263,7 @@ class Game3D {
       if (!entry) {
         const op = createOperative({ skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length] });
         this.scene.add(op.group);
-        const name = this.#makeNameTag(b.name, 0);
+        const name = this.makeNameTag(b.name, 0);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon);
         entry = { op, weapon: b.weapon, name };
@@ -276,7 +286,7 @@ class Game3D {
     }
   }
 
-  #updateRing() {
+  updateRing() {
     const r = this.sim.ring;
     this.ringWall.position.set(r.x, 23, r.z);
     this.ringWall.scale.set(r.radius, 1, r.radius);
@@ -284,7 +294,7 @@ class Game3D {
     for (const u of this.ringWall.userData.uniforms) u.time.value = t;
   }
 
-  #updateCamera(dt) {
+  updateCamera(dt) {
     const p = this.sim.player;
     const rig = this.camRig;
     const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
@@ -324,7 +334,7 @@ class Game3D {
     this.sun.target.position.set(p.x, 0, p.z);
   }
 
-  #buildSimInput(dt) {
+  buildSimInput(dt) {
     const k = this.keys;
     let dx = (k.has('d') ? 1 : 0) - (k.has('a') ? 1 : 0);
     let dy = (k.has('s') ? 1 : 0) - (k.has('w') ? 1 : 0);
@@ -342,13 +352,15 @@ class Game3D {
       reload: this.input.reload || !!touch.reload,
       interact: this.input.interact || !!touch.interact,
       medkit: this.input.medkit || !!touch.medkit,
+      slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
     this.input.reload = false; this.input.interact = false; this.input.medkit = false;
+    this.pendingSlot = 0;
     return input;
   }
 
-  #handleEvents() {
+  handleEvents() {
     const p = this.sim.player;
     for (const e of this.sim.consumeEvents()) {
       switch (e.type) {
@@ -363,7 +375,8 @@ class Game3D {
             this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
             this.audio.hurt();
             this.hud.damageFlash = .4;
-          } else {
+          } else if (e.owner === undefined || e.owner === 'player') {
+            // hitmarker apenas para acertos próprios (offline não envia owner)
             this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
             this.audio.hit(e.head);
             this.hud.hitmarker(e.head);
@@ -374,11 +387,26 @@ class Game3D {
           this.effects.impact(new THREE.Vector3(e.x, e.y, e.z), e.kind);
           break;
         case 'kill':
-          this.hud.killfeed('ZHEERS-07 (VOCÊ)', e.target, e.head, true);
+          this.hud.killfeed('VOCÊ', e.target, e.head, true);
           this.hud.feed('ABATE', `${e.target} neutralizado. +${e.xp} XP / +${e.krc} KRC.`, 'good');
+          break;
+        case 'killfeed':
+          this.hud.killfeed(e.killer, e.victim, !!e.head, false);
           break;
         case 'botKill':
           this.hud.killfeed('RING', e.target, false, false);
+          break;
+        case 'matchStart':
+          this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
+          break;
+        case 'hurt':
+          if (e.kind === 'ring') {
+            if (!this._ringWarned || performance.now() - this._ringWarned > 4000) {
+              this._ringWarned = performance.now();
+              this.hud.feed('ANEL', 'Você está fora da zona segura.', 'bad');
+              this.audio.ringWarn();
+            }
+          }
           break;
         case 'pulse':
           this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.`, 'warn');
@@ -399,6 +427,8 @@ class Game3D {
           this.hud.feed('ZEX', `Extração confirmada. Terminal ${e.count}/3. +250 XP.`, 'good');
           break;
         case 'reload': this.audio.reload(); break;
+        case 'reloaded': break;
+        case 'weaponSwitch': break;
         case 'medkit': this.hud.feed('OFICINA', 'Kit médico aplicado. +30 VL.', 'good'); break;
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         case 'victory': this.#endMatch(true, e); break;
@@ -407,7 +437,7 @@ class Game3D {
     }
   }
 
-  #updateInteractionPrompt() {
+  updateInteractionPrompt() {
     const p = this.sim.player;
     if (!p.alive) { this.hud.prompt(null); return; }
     let text = null;
@@ -436,16 +466,16 @@ class Game3D {
       this.accumulator += dt;
       let guard = 0;
       while (this.accumulator >= SIM_DT && guard++ < 5) {
-        const input = this.#buildSimInput(SIM_DT);
+        const input = this.buildSimInput(SIM_DT);
         this.sim.step(input, SIM_DT);
         this.accumulator -= SIM_DT;
       }
-      this.#handleEvents();
+      this.handleEvents();
     }
     this.syncLoot();
-    this.#syncEntities(dt);
-    this.#updateRing();
-    this.#updateCamera(dt);
+    this.syncEntities(dt);
+    this.updateRing();
+    this.updateCamera(dt);
     this.effects.update(dt);
     // beacon pulse
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
@@ -455,7 +485,7 @@ class Game3D {
     // HUD
     if (!this.zuOpen) {
       this.hud.update(dt, this.input);
-      this.#updateInteractionPrompt();
+      this.updateInteractionPrompt();
     }
     this.renderer.render(this.scene, this.camera);
   }
@@ -463,5 +493,12 @@ class Game3D {
 
 // ---------- bootstrap ----------
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
-const game = new Game3D(seed);
-window.KhaaosReplay3D = { export: () => game.sim.exportReplay(), game };
+const online = new URLSearchParams(location.search).get('online') === '1';
+if (online) {
+  // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
+  const { bootstrapOnline } = await import('./online3d.js');
+  bootstrapOnline();
+} else {
+  const game = new Game3D(seed);
+  window.KhaaosReplay3D = { export: () => game.sim.exportReplay(), game };
+}
