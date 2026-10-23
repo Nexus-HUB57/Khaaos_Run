@@ -166,6 +166,24 @@ export KR_REDIS_TEST_URL='redis://127.0.0.1:56379'
 npm run db:migrate && npm run test:real && npm run test:resilience
 ```
 
+Fluxo: `GET /auth/oidc/start` → 302 para o IdP com `state` single-use (cookie `HttpOnly` `SameSite=Lax`) e `nonce`; `GET /auth/oidc/callback?code&state` valida state (cookie ∩ query, TTL de 10 min, single-use), troca o código, verifica o `id_token` e provisiona o usuário (`preferred_username`/`email`, role `player` por padrão) emitindo a sessão KR. Cobertura: `test/security.test.js` (8 testes — rotação, revogação, TLS real com certificado openssl e fluxo OIDC contra um IdP HTTP local real).
+
+## RBAC com auditoria e permissões por recurso
+
+Catálogo declarativo em `server/rbac.js` — única fonte de verdade de autorização:
+
+| Permissão | player | moderator | admin |
+|---|---|---|---|
+| `room:join` / `room:start` / `room:input` | ✔ (restrito à própria sala) | ✔ | ✔ |
+| `admin:metrics` | — | ✔ (payload sem dados por usuário) | ✔ (completo) |
+| `audit:read` | — | ✔ | ✔ |
+| `keys:rotate` | — | — | ✔ |
+
+- **Por recurso**: permissões `room:*` respeitam o escopo da identidade — `can(identity, 'room:start', roomId)` nega sala alheia; o WebSocket aplica a guarda no `start` e responde `{ type: 'forbidden', permission }`.
+- **HTTP**: negativas viram `403 { error: 'forbidden', permission }` (antes `401` — autenticado ≠ autorizado). Token legacy de operações continua válido como `admin`.
+- **Auditoria append-only** (`server/audit.js`): ring buffer em memória com ids monotônicos + persistência opcional `PostgresAuditStore` (`KR_AUDIT_STORE=postgres`, migração `002_audit_events.sql`). Eventos: `auth.login` (allow/deny), `auth.logout`, `auth.oidc`, `key.rotate`, `key.drop`, `room.start` (por sala), `rbac.deny` (HTTP e WS, toda negativa é registrada; allows só em operações sensíveis para não gerar ruído).
+- **Consulta**: `GET /admin/audit?actor=&action=&outcome=&sinceId=&limit=` (exige `audit:read`), paginação estável por id.
+
 ## Painel anti-cheat
 
 ```bash

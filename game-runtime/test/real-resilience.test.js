@@ -100,8 +100,16 @@ test('PG expiração: sessão vencida fica invisível e cleanupExpired() a remov
 // ---------- Redis ----------
 
 test('Redis falha de dependência: store em dependência inacessível rejeita readiness', { skip: !redisUrl }, async () => {
-  const store = new RedisRateStore({ url: REDIS_DEAD });
+  // reconnectStrategy: false evita retry infinito do cliente (que penduraria o event loop)
+  const store = new RedisRateStore({
+    client: createRedisClient({
+      url: REDIS_DEAD,
+      socket: { connectTimeout: 750, reconnectStrategy: false },
+    }),
+  });
+  const startedAt = Date.now();
   await assert.rejects(() => store.ready(), undefined, 'ready() deve rejeitar com o Redis fora');
+  assert.ok(Date.now() - startedAt < 10_000, 'falha deve ser rápida');
   await store.close().catch(() => {}); // close tolera falha de conexão
 });
 
