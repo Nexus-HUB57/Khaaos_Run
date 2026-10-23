@@ -35,6 +35,8 @@ import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
 import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integrations/auth/origin";
+import type { WorldId } from "./orchestration";
+import { aggregateWorldTelemetry, isWorldId, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -223,6 +225,7 @@ class RoomManager {
   private wss: WebSocketServer | null = null;
   private nextLootId = 1;
   private matchmaking: MatchmakingService;
+  private socketsByUser = new Map<string, Set<WebSocket>>();
 
   /** Attach to existing HTTP server */
   constructor() {
@@ -232,14 +235,30 @@ class RoomManager {
     );
     void distributedState.subscribeControl((event) => {
       if (event.type === "auth:revoke" && typeof event.userId === "string") this.closeUserSockets(event.userId);
+    }).catch((error) => {
+      console.error("[RoomManager] control subscriber unavailable", {
+        message: process.env.NODE_ENV === "production" ? "subscriber unavailable" : error instanceof Error ? error.message : String(error),
+      });
+      if (process.env.NODE_ENV === "production") process.exitCode = 1;
     });
   }
 
   private closeUserSockets(userId: string): void {
-    for (const room of this.rooms.values()) {
-      const player = room.players.get(userId);
-      if (player?.ws && player.ws.readyState === WebSocket.OPEN) player.ws.close(4001, "Session revoked");
+    for (const ws of this.socketsByUser.get(userId) ?? []) {
+      if (ws.readyState === WebSocket.OPEN) ws.close(4001, "Session revoked");
     }
+  }
+
+  private registerSocket(userId: string, ws: WebSocket): void {
+    const sockets = this.socketsByUser.get(userId) ?? new Set<WebSocket>();
+    sockets.add(ws);
+    this.socketsByUser.set(userId, sockets);
+  }
+
+  private unregisterSocket(userId: string, ws: WebSocket): void {
+    const sockets = this.socketsByUser.get(userId);
+    sockets?.delete(ws);
+    if (sockets && sockets.size === 0) this.socketsByUser.delete(userId);
   }
 
   attach(httpServer: Server) {
@@ -282,14 +301,24 @@ class RoomManager {
         ws.close(1008, "Unauthorized");
         return;
       }
+      this.registerSocket(userId, ws);
       let displayName = "Operativo";
       let messagesThisSecond = 0;
       const rateReset = setInterval(() => { messagesThisSecond = 0; }, 1_000);
 
       ws.on("message", async (raw) => {
-        const aggregateLimit = await distributedState.rateLimit(`ws:messages:${userId}`, 600, 10_000);
-        if (++messagesThisSecond > 60 || !aggregateLimit.allowed) {
-          ws.close(1008, "Rate limit exceeded");
+        try {
+          if (await distributedState.isUserRevoked(userId)) {
+            ws.close(4001, "Session revoked");
+            return;
+          }
+          const aggregateLimit = await distributedState.rateLimit(`ws:messages:${userId}`, 600, 10_000);
+          if (++messagesThisSecond > 60 || !aggregateLimit.allowed) {
+            ws.close(1008, "Rate limit exceeded");
+            return;
+          }
+        } catch {
+          ws.close(1011, "Realtime security unavailable");
           return;
         }
         try {
@@ -310,11 +339,13 @@ class RoomManager {
 
       ws.on("close", () => {
         clearInterval(rateReset);
+        this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
 
       ws.on("error", () => {
         clearInterval(rateReset);
+        this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
     });
