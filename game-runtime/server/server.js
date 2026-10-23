@@ -5,11 +5,12 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { MatchRoom } from './room.js';
-import { validateInput, ViolationTracker } from './antiCheat.js';
-import { AuthService, hasRole } from './auth.js';
+import { MatchRoom3D } from './room3d.js';
+import { validateInput, validateInput3D, ViolationTracker } from './antiCheat.js';
+import { AuthService, hasRole, hashPassword } from './auth.js';
 import { createSessionStore } from './store.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
-import { chooseRegion, chooseRoom, normalizeRegion } from './matchmaking.js';
+import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_WS_PAYLOAD = 16 * 1024;
@@ -36,10 +37,20 @@ export function createAuthoritativeServer({
   rateStore,
 } = {}) {
   const users = process.env.KR_USERS_JSON ? JSON.parse(process.env.KR_USERS_JSON) : [];
+  // KR_DEV_AUTH=1 provisiona usuários de desenvolvimento (NUNCA usar em produção).
+  if (process.env.KR_DEV_AUTH === '1' && users.length === 0) {
+    users.push(
+      { id: 'dev-player', username: 'kr_player', passwordHash: hashPassword('kr123'), role: 'player', region: 'sa-east' },
+      { id: 'dev-admin', username: 'kr_admin', passwordHash: hashPassword('kr123'), role: 'admin', region: 'sa-east' },
+    );
+  }
   const identity = auth || new AuthService({ secret: process.env.AUTH_SECRET || 'dev-only-change-me', users });
   const durable = store || createSessionStore();
   const selectedRateStore = rateStore || (process.env.KR_RATE_STORE === 'redis' ? new RedisRateStore() : new SharedMemoryRateStore());
+  // orçamento de mensagens/s por identidade, separado por modo:
+  // 2D (legado, 20Hz de inputs) mantém 30/s; 3D (30Hz de inputs + ping) usa 90/s.
   const limiter = new DistributedRateLimiter({ store: selectedRateStore, limit: 30, windowMs: 1000, prefix: 'ws-input' });
+  const limiter3d = new DistributedRateLimiter({ store: selectedRateStore, limit: Number(process.env.KR_INPUT_LIMIT || 90), windowMs: 1000, prefix: 'ws-input-3d' });
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -69,12 +80,14 @@ export function createAuthoritativeServer({
   };
 
   function assign(client) {
-    let room = chooseRoom(rooms, client.region, roomCapacity);
+    let room = chooseRoom(rooms, client.region, roomCapacity, client.mode);
     if (!room) {
-      room = new MatchRoom({ id: `ring-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
+      room = client.mode === '3d'
+        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1 })
+        : new MatchRoom({ id: `ring-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
       rooms.set(room.id, room);
     }
-    room.addPlayer(client.id);
+    room.addPlayer(client.id, client.identity.username);
     client.roomId = room.id;
     const position = queue.indexOf(client);
     if (position >= 0) queue.splice(position, 1);
@@ -89,8 +102,9 @@ export function createAuthoritativeServer({
     const url = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'GET' && url.pathname === '/healthz') {
+        const roomList = [...rooms.values()];
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, connections: clients.size, queue: queue.length }));
+        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length }));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/readyz') {
@@ -151,14 +165,16 @@ export function createAuthoritativeServer({
     const token = url.searchParams.get('token');
     const user = identity.verify(token);
     if (!user) { metrics.authFailures++; send(ws, { type: 'auth_required' }); ws.close(4001, 'auth-required'); return; }
+    const mode = normalizeMode(url.searchParams.get('mode'));
     const resume = url.searchParams.get('resume');
     const saved = resume ? await durable.getSession(resume) : null;
+    const blankInput3D = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
     let client;
     if (saved && saved.userId === user.sub && saved.expiresAt > Date.now() && rooms.get(saved.roomId)?.players.has(saved.id)) {
-      client = { id: saved.id, ws, roomId: saved.roomId, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, violations: new ViolationTracker(), identity: user, region: normalizeRegion(user.region), resumeToken: resume, connectedAt: Date.now() };
+      client = { id: saved.id, ws, roomId: saved.roomId, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: normalizeRegion(user.region), resumeToken: resume, connectedAt: Date.now() };
       metrics.reconnects++;
     } else {
-      client = { id: `client-${nextClient++}`, ws, roomId: null, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, violations: new ViolationTracker(), identity: user, region: chooseRegion(user.region, {}), resumeToken: crypto.randomBytes(24).toString('base64url'), connectedAt: Date.now() };
+      client = { id: `client-${nextClient++}`, ws, roomId: null, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: chooseRegion(user.region, {}), resumeToken: crypto.randomBytes(24).toString('base64url'), connectedAt: Date.now() };
     }
     clients.set(client.id, client);
     metrics.connections++;
@@ -169,13 +185,30 @@ export function createAuthoritativeServer({
       void (async () => {
         metrics.messages++;
         if (raw.length > MAX_WS_PAYLOAD) { metrics.oversized++; ws.close(4009, 'payload-too-large'); return; }
-        const limited = await limiter.allowAsync(client.identity.sub);
+        const limited = await (client.mode === '3d' ? limiter3d : limiter).allowAsync(client.identity.sub);
         if (!limited.allowed) { metrics.rateLimited++; send(ws, { type: 'rate_limited', retryAt: limited.resetAt }); return; }
         try {
           const message = JSON.parse(raw.toString());
+          if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t }); return; }
           if (message.type === 'start') { getRoom(client)?.start(client.id, message.entry || 'belt'); return; }
           if (message.type !== 'input') return;
           const room = getRoom(client);
+          if (room?.is3d) {
+            const candidate = { ...message.input, seq: message.input?.seq ?? -1 };
+            const result = validateInput3D(client.input3d, candidate, 1 / 20);
+            if (!result.ok) {
+              client.violations.add(result.violations);
+              metrics.rejections++;
+              metrics.violations += result.violations.length;
+              send(ws, { type: 'rejected', violations: result.violations, strikes: client.violations.count });
+              if (client.violations.banned) { metrics.bans++; send(ws, { type: 'banned', reason: 'anti-cheat threshold' }); ws.close(4003, 'anti-cheat'); }
+              return;
+            }
+            client.input3d = candidate;
+            client.seq = candidate.seq;
+            room.input(client.id, candidate);
+            return;
+          }
           const candidate = { ...message.input, seq: message.input?.seq ?? -1 };
           const player = room?.players.get(client.id);
           const previous = { ...client.input, x: player?.x ?? 550, y: player?.y ?? 330 };

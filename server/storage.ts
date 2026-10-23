@@ -1,8 +1,10 @@
 import { db } from "./db";
 import {
   playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
+  discordLinks, tournaments,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
+  type DiscordLink, type Tournament,
   PatenteKR, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
 import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
@@ -65,6 +67,19 @@ export interface IStorage {
   claimDailySalaryAtomic(userId: string, salary: number): Promise<{ bank: BankAccount; stats: PlayerStats; transaction: Transaction }>;
   // Init
   initializeUser(userId: string): Promise<void>;
+
+  // Discord Links
+  getDiscordLinkByDiscordId(discordId: string): Promise<DiscordLink | undefined>;
+  getDiscordLinkByEosId(eosId: string): Promise<DiscordLink | undefined>;
+  createDiscordLink(data: { discordId: string; discordUsername?: string; eosId: string; playerName?: string; hasBetaRole?: boolean }): Promise<DiscordLink>;
+  deleteDiscordLink(discordId: string): Promise<void>;
+  getAllDiscordLinks(): Promise<DiscordLink[]>;
+
+  // Tournaments
+  getTournament(id: string): Promise<Tournament | undefined>;
+  getAllTournaments(): Promise<Tournament[]>;
+  createTournament(data: { id: string; name: string; state?: string; maxParticipants?: number; rounds?: number; minElo?: number; prizePool?: number }): Promise<Tournament>;
+  updateTournament(id: string, updates: Partial<Tournament>): Promise<Tournament>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -531,6 +546,83 @@ export class DatabaseStorage implements IStorage {
   async addKill(userId: string): Promise<void> {
     const stats = await this.getPlayerStats(userId);
     await this.updatePlayerStats(userId, { kills: stats.kills + 1 });
+  }
+
+  // ─── Discord Links (DB-backed) ──────────────────────────────────────────
+
+  async getDiscordLinkByDiscordId(discordId: string): Promise<DiscordLink | undefined> {
+    const [link] = await db.select().from(discordLinks).where(eq(discordLinks.discordId, discordId));
+    return link;
+  }
+
+  async getDiscordLinkByEosId(eosId: string): Promise<DiscordLink | undefined> {
+    const [link] = await db.select().from(discordLinks).where(eq(discordLinks.eosId, eosId));
+    return link;
+  }
+
+  async createDiscordLink(data: { discordId: string; discordUsername?: string; eosId: string; playerName?: string; hasBetaRole?: boolean }): Promise<DiscordLink> {
+    // Upsert: if link exists for this discordId, update it
+    const existing = await this.getDiscordLinkByDiscordId(data.discordId);
+    if (existing) {
+      const [updated] = await db.update(discordLinks)
+        .set({
+          eosId: data.eosId,
+          discordUsername: data.discordUsername ?? "Unknown",
+          playerName: data.playerName ?? "Unknown",
+          hasBetaRole: data.hasBetaRole ?? false,
+        })
+        .where(eq(discordLinks.discordId, data.discordId))
+        .returning();
+      return updated;
+    }
+    const [link] = await db.insert(discordLinks).values({
+      discordId: data.discordId,
+      discordUsername: data.discordUsername ?? "Unknown",
+      eosId: data.eosId,
+      playerName: data.playerName ?? "Unknown",
+      hasBetaRole: data.hasBetaRole ?? false,
+    }).returning();
+    return link;
+  }
+
+  async deleteDiscordLink(discordId: string): Promise<void> {
+    await db.delete(discordLinks).where(eq(discordLinks.discordId, discordId));
+  }
+
+  async getAllDiscordLinks(): Promise<DiscordLink[]> {
+    return await db.select().from(discordLinks);
+  }
+
+  // ─── Tournaments (DB-backed) ────────────────────────────────────────────
+
+  async getTournament(id: string): Promise<Tournament | undefined> {
+    const [tourn] = await db.select().from(tournaments).where(eq(tournaments.id, id));
+    return tourn;
+  }
+
+  async getAllTournaments(): Promise<Tournament[]> {
+    return await db.select().from(tournaments).orderBy(desc(tournaments.createdAt));
+  }
+
+  async createTournament(data: { id: string; name: string; state?: string; maxParticipants?: number; rounds?: number; minElo?: number; prizePool?: number }): Promise<Tournament> {
+    const [tourn] = await db.insert(tournaments).values({
+      id: data.id,
+      name: data.name,
+      state: data.state ?? "registration",
+      maxParticipants: data.maxParticipants ?? 64,
+      rounds: data.rounds ?? 6,
+      minElo: data.minElo ?? 0,
+      prizePool: data.prizePool ?? 0,
+    }).returning();
+    return tourn;
+  }
+
+  async updateTournament(id: string, updates: Partial<Tournament>): Promise<Tournament> {
+    const [tourn] = await db.update(tournaments)
+      .set(updates)
+      .where(eq(tournaments.id, id))
+      .returning();
+    return tourn;
   }
 }
 

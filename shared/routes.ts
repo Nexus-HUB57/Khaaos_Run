@@ -104,6 +104,61 @@ export const api = {
     },
   },
 
+  // === PAYMENTS (fixed internal KRC packs; provider is authoritative) ===
+  payments: {
+    stripeCatalog: {
+      method: 'GET' as const,
+      path: '/api/payments/stripe/catalog',
+      responses: {
+        200: z.object({
+          enabled: z.boolean(),
+          testMode: z.literal(true),
+          currency: z.literal('BRL'),
+          paymentMethodTypes: z.array(z.enum(['card', 'pix'])),
+          packs: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            priceBrlMinor: z.number().int().safe(),
+            krcMinorUnits: z.number().int().safe(),
+          }).strict()),
+        }).strict(),
+        503: errorSchemas.internal,
+      },
+    },
+    stripeCheckout: {
+      method: 'POST' as const,
+      path: '/api/payments/stripe/checkout',
+      input: z.object({ productId: z.string().min(1).max(64) }).strict(),
+      responses: {
+        200: z.object({ orderId: z.string().uuid(), checkoutUrl: z.string().url() }).strict(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+        409: errorSchemas.internal,
+        503: errorSchemas.internal,
+        502: errorSchemas.internal,
+      },
+    },
+    stripeOrder: {
+      method: 'GET' as const,
+      path: '/api/payments/stripe/orders/:id',
+      responses: {
+        200: z.object({
+          id: z.string().uuid(),
+          productId: z.string(),
+          productName: z.string(),
+          priceBrlMinor: z.string(),
+          krcMinorUnits: z.string(),
+          currency: z.literal('BRL'),
+          status: z.enum(['created', 'pending', 'fulfilled', 'failed', 'expired', 'rejected']),
+          createdAt: z.string().datetime(),
+          paidAt: z.string().datetime().nullable(),
+          fulfilledAt: z.string().datetime().nullable(),
+        }).strict(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+
   // === LOANS ===
   loans: {
     list: {

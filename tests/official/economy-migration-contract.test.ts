@@ -18,12 +18,13 @@ for (const [name, requiredSnippets] of [
 
 test("migrations econômicas permanecem ordenadas e o boot não as executa implicitamente", async () => {
   const journal = JSON.parse(await readFile(new URL("../../migrations/meta/_journal.json", import.meta.url), "utf8"));
-  assert.deepEqual(journal.entries.slice(-4).map((entry: { tag: string }) => entry.tag), [
+  assert.deepEqual(journal.entries.slice(2, 6).map((entry: { tag: string }) => entry.tag), [
     "0002_economy_idempotency",
     "0003_economy_invariants",
     "0004_correlated_append_only_ledger",
     "0005_optimal_steel_serpent",
   ]);
+  assert.equal(journal.entries[6]?.tag, "0006_marshal-council-persistence");
   const indexSource = await readFile(new URL("../../server/index.ts", import.meta.url), "utf8");
   assert.doesNotMatch(indexSource, /drizzle-kit migrate|db\.migrate/);
 });

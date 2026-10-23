@@ -9,11 +9,16 @@ process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
 const {
   checkMarshalConsoleAccess,
   createMarshalCouncil,
+  fetchMarshalNarrativeEvents,
   fetchMarshalCouncil,
   fetchMarshalOverview,
   fetchMarshalProposal,
+  marshalTelemetryStreamUrl,
 } = await import("../../client/src/lib/marshal-console-api.ts");
-const { registerMarshalConsoleRoutes } = await import("../../server/game/marshalConsole.ts");
+const [{ registerMarshalConsoleRoutes, MarshalConsoleStore }, { MemoryMarshalConsoleRepository }] = await Promise.all([
+  import("../../server/game/marshalConsole.ts"),
+  import("./helpers/marshalConsoleMemoryRepository.ts"),
+]);
 const { default: MarshalConsolePage } = await import("../../client/src/pages/marshal-console.tsx");
 
 const app = (await import("express")).default();
@@ -30,7 +35,10 @@ app.use((req, _res, next) => {
   }
   next();
 });
-registerMarshalConsoleRoutes(app, { operatorIds: "console-admin" });
+registerMarshalConsoleRoutes(app, {
+  operatorIds: "console-admin",
+  store: new MarshalConsoleStore(new MemoryMarshalConsoleRepository()),
+});
 
 const { createServer } = await import("node:http");
 const server = createServer(app);
@@ -69,13 +77,17 @@ test("cliente do console completa overview → conselho assíncrono → proposta
   const overview = await fetchMarshalOverview("W2");
   assert.equal(overview.worldId, "W2");
   assert.equal(overview.name, "Priadus");
-  assert.equal(overview.stale, true);
-  assert.equal(overview.occupancy.current, null);
+  assert.equal(overview.stale, false);
+  assert.equal(overview.occupancy.current, 0);
+  assert.equal(marshalTelemetryStreamUrl("W2"), "/api/console/v1/marshal/telemetry/stream?worldId=W2");
+  const narrative = await fetchMarshalNarrativeEvents("W2");
+  assert.equal(narrative.source, "server-runtime-telemetry");
+  assert.deepEqual(narrative.events, []);
+  assert.equal(narrative.policy.executable, false);
 
   const submitted = await createMarshalCouncil({
     subject: "revisar-janela-de-entrada",
     scope: { worldId: "W2", periodSeconds: 3600 },
-    context: { occupancyPct: 83, queueP95Seconds: 90, marketVolatilityPct: 48 },
   }, "00000000-0000-4000-8000-000000000021");
   assert.match(submitted.resourcePath, /^\/api\/console\/v1\/marshal\/councils\/[0-9a-f-]{36}$/i);
 
@@ -105,13 +117,16 @@ test("página comunica telemetria ausente e não oferece aprovação ou execuç�
   client.setQueryData(["marshal-console-overview", "CIGKV"], {
     worldId: "CIGKV",
     name: "Khaaos Ville",
-    operationalState: "unknown",
-    occupancy: { current: null, capacity: 50, percent: null },
+    operationalState: "idle",
+    occupancy: { current: 0, capacity: 0, percent: null },
+    activeRooms: 0,
+    queueCount: 0,
     queueP95Seconds: null,
     activeIncidents: null,
-    configRevision: "world-catalog-v1",
+    incidentTelemetryAvailable: false,
+    configRevision: null,
     observedAt: "2026-10-15T00:00:00.000Z",
-    stale: true,
+    stale: false,
   });
   const markup = renderToStaticMarkup(createElement(
     QueryClientProvider,
@@ -119,9 +134,13 @@ test("página comunica telemetria ausente e não oferece aprovação ou execuç�
     createElement(MarshalConsolePage),
   ));
   assert.match(markup, /CONSOLE DO MARECHAL/);
-  assert.match(markup, /CATÁLOGO ESTÁTICO/);
+  assert.match(markup, /SNAPSHOT DO RUNTIME/);
   assert.match(markup, /Sem telemetria/);
-  assert.match(markup, /Propostas são apenas para revisão humana/);
+  assert.match(markup, /marshal-telemetry-trends/);
+  assert.match(markup, /Tendência OCUPAÇÃO/);
+  assert.match(markup, /SINAIS NARRATIVOS/);
+  assert.match(markup, /Propostas exigem revisão humana/);
+  assert.doesNotMatch(markup, /VOLATILIDADE DE MERCADO|INCIDENTES ATIVOS|OCUPAÇÃO \(%\)/);
   assert.doesNotMatch(markup, /APROVAR PROPOSTA|EXECUTAR PROPOSTA/i);
   client.clear();
 });

@@ -15,6 +15,59 @@ Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e
 
 O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
 
+## Modo 3D — Battle Royale TPS (FreeFire-style)
+
+`index.html` (raiz do runtime) inicia o **modo 3D**: terceira pessoa (TPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
+
+| Sistema | Módulo | Responsabilidade |
+|---------|--------|------------------|
+| Simulação headless | `src/game3d/sim3d.js` | Movimento, balística com convergência de mira, IA dos bots (patrulha→engajar→caçar), zona em pulsos, loot, terminais ZEX, replay/snapshot. Determinística por seed (mesma sequência de RNG da trilha 2D). |
+| Layout procedural | `src/game3d/layout3d.js` | Distritos (Pátio de Armamento, Proving Grounds, Parque Abandonado, Setor Industrial, Terminal ZEX), colliders AABB, pontos de loot/spawn. Mesma seed ⇒ mesmo mundo. |
+| Mundo | `src/game3d/world3d.js` | Céu de crepúsculo (paleta Mystic Chaos), sol com sombras PCFSoft, fog, terreno, estruturas, grama instanciada, parede do anel (shader). |
+| Entidades | `src/game3d/entities3d.js` | Operativos humanoides articulados (8 tons de pele canônicos), arsenal low-poly por arma, loot com feixe de raridade, terminais ZEX. |
+| Efeitos/Áudio | `src/game3d/effects3d.js`, `audio3d.js` | Tracers, muzzle flash, impactos, sangue + SFX WebAudio 100% procedurais (tiro por arma, hitmarker, pulso, heartbeat). |
+| HUD | `src/game3d/hud3d.js` | Barras VL/VD, munição, minimapa com anel atual/alvo, killfeed, crosshair dinâmico, objetivos, modais ZU/Marechal, controles touch. |
+
+**Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `1`/`2` slots · `ESC` liberar mouse.
+**Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit) à direita.
+
+## Modo Online 3D — Battle Royale autoritativo
+
+`index.html?online=1` inicia o **modo multiplayer**: o servidor (`server/room3d.js`) roda a
+`MatchRoom3D` — autoridade total de movimento, balística, zona, loot e eliminação para
+todos os operativos (humanos + bots preenchendo o ring até a capacidade). O cliente envia
+somente inputs e interpreta snapshots interpolados, com o mesmo contrato
+"simulação headless → renderizador burro" do modo offline.
+
+| Sistema | Módulo | Responsabilidade |
+|---------|--------|------------------|
+| Sala autoritativa | `server/room3d.js` | `MatchRoom3D`: humanos + bots (IA engajar/caçar/patrulhar), zona em pulsos, balística projetil-a-projetil com headshot ×1.75, loot/terminais compartilhados, eventos por jogador, snapshot filtrado por espectador. Reutiliza os helpers de física de `sim3d.js` (mesmas constantes e colisões do offline). |
+| Anti-cheat 3D | `server/antiCheat.js` | `validateInput3D`: seq monotônica, vetor de movimento ≤ 1.01, pitch ±1.4, taxa de yaw ≤ 14 rad/s (com wrap), tipos estritos dos one-shots, `clientDt`. Violações alimentam o `ViolationTracker` existente (ban no limiar). |
+| Matchmaking por modo | `server/matchmaking.js` | `chooseRoom(rooms, region, capacity, mode)`: salas 2D e 3D nunca se misturam; `mode` vem do query `?mode=3d` do handshake WS. |
+| Transporte | `server/server.js` | Tick 20 Hz compartilhado, broadcast de snapshot por cliente (eventos embutidos), `ping`/`pong` para RTT, rate limit por modo (2D 30 msg/s, 3D 90 msg/s — `KR_INPUT_LIMIT`), `resume` reconstrói sessão por 15 s. |
+| Cliente de rede | `src/game3d/net3d.js` | `NetClient3D`: login HTTP + WS `?token&mode=3d`, inputs a 30 Hz, buffer de 3 snapshots com interpolação (delay 110 ms), reconexão com backoff e `kr_resume_3d`. |
+| Jogo online | `src/game3d/online3d.js` | `OnlineGame3D` (estende `Game3D`): `Sim3DView` traduz snapshots para o contrato da sim local — renderizador, HUD e áudio do offline funcionam sem fork; yaw/pitch da câmera permanecem locais (responsivos), posição vem do servidor. |
+
+**Fluxo de desenvolvimento (2 terminais):**
+```bash
+KR_DEV_AUTH=1 npm run server          # terminal 1 — API + WS na :8787 (usuários kr_player/kr123 e kr_admin/kr123)
+npm run dev                            # terminal 2 — Vite na :5173 com proxy /ws, /auth, /admin
+```
+Abra `http://localhost:5173/?online=1`, faça login (`kr_player`/`kr123` no console:
+`await window.KhaaosOnline3D.net.constructor.login('', 'kr_player', 'kr123')`) — ou grave o JWT
+em `localStorage.kr_token` antes de abrir. Em produção (`/auth/login` + `localStorage.kr_token`),
+o fluxo é idêntico ao do cliente online 2D.
+
+**Notas de segurança:** `KR_DEV_AUTH=1` é apenas para desenvolvimento local (nunca em produção);
+produção continua usando `KR_USERS_JSON`/Postgres como documentado acima. O input 3D passa pelo
+mesmo pipeline de validação/strikes/ban do 2D, e snapshots nunca expõem `ai`/inventário de terceiros.
+
+**Testes:** `node --test test/sim3d.test.js` cobre a sim offline (determinística de mundo/loot,
+movimento+colisão, balística corpo/headshot ×1.75, pulsos e dano de zona, coleta, recarga, fim de
+partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a sala autoritativa
+e o anti-cheat 3D; `node --test test/server3d.test.js` valida o end-to-end real (login HTTP →
+matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
+
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
 

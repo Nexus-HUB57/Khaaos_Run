@@ -27,6 +27,9 @@
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
+#include "Game/Discord/KhaaosDiscordRichPresence.h"
+#include "Game/Discord/KhaaosDiscordOAuth2.h"
+#include "Game/Discord/KhaaosDiscordWebhooks.h"
 
 #include "Engine/World.h"
 #include "Engine/EngineTypes.h"
@@ -57,7 +60,11 @@
 
 // ─── E2E Phases 13-16 Includes ──────────────────────────────────────────────────
 #include "Game/WorldGen/KhaaosWorldGenerator.h"
+#include "Game/WorldGen/KhaaosProceduralLoot.h"
+#include "Game/WorldGen/KhaaosWorldTransition.h"
+#include "Game/WorldGen/KhaaosEnvironmentalHazard.h"
 #include "Game/Accessibility/KhaaosAccessibilitySystem.h"
+#include "Game/Localization/KhaaosLocalizationManager.h"
 #include "Game/Replay/KhaaosReplaySystem.h"
 #include "Game/Polish/KhaaosLaunchReadiness.h"
 
@@ -153,6 +160,9 @@ void AKhaaosGameMode::StartPlay()
     InitializePhases9to12Subsystems();
     InitializePhases13to16Subsystems();
     InitializePhases17to20Subsystems();
+
+    // Initialize Discord Integration subsystems
+    InitializeDiscordSubsystems();
 }
 
 void AKhaaosGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -1413,6 +1423,40 @@ void AKhaaosGameMode::InitializePhases13to16Subsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("  WorldGenerator cached"));
     }
 
+    // Phase 13: Procedural Loot Spawner (ActorComponent)
+    ProceduralLoot = NewObject<UKhaaosProceduralLoot>(this, UKhaaosProceduralLoot::StaticClass());
+    if (ProceduralLoot)
+    {
+        ProceduralLoot->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  ProceduralLoot initialized"));
+    }
+
+    // Phase 13: World Transition (ActorComponent)
+    WorldTransition = NewObject<UKhaaosWorldTransition>(this, UKhaaosWorldTransition::StaticClass());
+    if (WorldTransition)
+    {
+        WorldTransition->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  WorldTransition initialized"));
+    }
+
+    // Phase 13: Environmental Hazard (ActorComponent)
+    EnvironmentalHazard = NewObject<UKhaaosEnvironmentalHazard>(this, UKhaaosEnvironmentalHazard::StaticClass());
+    if (EnvironmentalHazard)
+    {
+        EnvironmentalHazard->RegisterComponent();
+        UE_LOG(LogKhaaosRun, Log, TEXT("  EnvironmentalHazard initialized"));
+    }
+
+    // Phase 14: Localization Manager (GameInstanceSubsystem - auto-initialized, cache pointer)
+    if (GetGameInstance())
+    {
+        LocalizationManager = GetGameInstance()->GetSubsystem<UKhaaosLocalizationManager>();
+        if (LocalizationManager)
+        {
+            UE_LOG(LogKhaaosRun, Log, TEXT("  LocalizationManager cached"));
+        }
+    }
+
     // Phase 15: Replay System (ActorComponent)
     ReplaySystem = NewObject<UKhaaosReplaySystem>(this, UKhaaosReplaySystem::StaticClass());
     if (ReplaySystem)
@@ -1424,7 +1468,7 @@ void AKhaaosGameMode::InitializePhases13to16Subsystems()
     // Phase 14: AccessibilitySystem is GameInstanceSubsystem (auto-initialized)
     // Phase 16: LaunchReadiness is EngineSubsystem (auto-initialized)
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 1 actor + 2 auto-initialized subsystems)"));
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases13to16Subsystems - Complete (1 world + 4 actor + 1 gameinstance + 2 auto-initialized subsystems)"));
 }
 
 // ─── E2E Phases 17-20 Subsystems Initialization ────────────────────────────────
@@ -1461,4 +1505,80 @@ void AKhaaosGameMode::InitializePhases17to20Subsystems()
     // Phase 17: RankedSystem is GameInstanceSubsystem (auto-initialized)
 
     UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializePhases17to20Subsystems - Complete (1 world + 2 actor + 1 auto-initialized subsystem)"));
+}
+
+// ─── Discord Integration ────────────────────────────────────────────────────
+
+void AKhaaosGameMode::InitializeDiscordSubsystems()
+{
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeDiscordSubsystems - Starting"));
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogKhaaosRun, Warning, TEXT("KhaaosGameMode::InitializeDiscordSubsystems - No world, skipping"));
+        return;
+    }
+
+    UGameInstance* GameInstance = World->GetGameInstance();
+    if (!GameInstance)
+    {
+        UE_LOG(LogKhaaosRun, Warning, TEXT("KhaaosGameMode::InitializeDiscordSubsystems - No game instance, skipping"));
+        return;
+    }
+
+    // ── Discord Rich Presence ──────────────────────────────────────────────
+    UKhaaosDiscordRichPresence* RichPresence = GameInstance->GetSubsystem<UKhaaosDiscordRichPresence>();
+    if (RichPresence)
+    {
+        FKhaaosDiscordRichPresenceConfig RPConfig;
+        // ApplicationId and SteamAppId are set via config/blueprint in production
+        RPConfig.UpdateIntervalSeconds = 15.0f;
+        RPConfig.bEnableAskToJoin = true;
+        RPConfig.bEnableSpectate = true;
+        RPConfig.bAutoUpdateOnWorldTransition = true;
+
+        const bool bRPInit = RichPresence->InitializeSDK(RPConfig);
+        UE_LOG(LogKhaaosRun, Log, TEXT("  DiscordRichPresence initialized: %s"), bRPInit ? TEXT("true") : TEXT("false"));
+    }
+    else
+    {
+        UE_LOG(LogKhaaosRun, Warning, TEXT("  DiscordRichPresence subsystem not available"));
+    }
+
+    // ── Discord OAuth2 ─────────────────────────────────────────────────────
+    UKhaaosDiscordOAuth2* OAuth2 = GameInstance->GetSubsystem<UKhaaosDiscordOAuth2>();
+    if (OAuth2)
+    {
+        FKhaaosDiscordOAuth2Config OAuthConfig;
+        // ClientId, ClientSecret, GuildId, BetaRoleId set via config in production
+        OAuthConfig.bRequireBetaRole = true;
+
+        const bool bOAuthInit = OAuth2->InitializeOAuth2(OAuthConfig);
+        UE_LOG(LogKhaaosRun, Log, TEXT("  DiscordOAuth2 initialized: %s"), bOAuthInit ? TEXT("true") : TEXT("false"));
+    }
+    else
+    {
+        UE_LOG(LogKhaaosRun, Warning, TEXT("  DiscordOAuth2 subsystem not available"));
+    }
+
+    // ── Discord Webhooks ───────────────────────────────────────────────────
+    UKhaaosDiscordWebhooks* Webhooks = GameInstance->GetSubsystem<UKhaaosDiscordWebhooks>();
+    if (Webhooks)
+    {
+        FKhaaosDiscordWebhookConfig WHConfig;
+        // WebhookUrls set via config/environment in production
+        WHConfig.bEnabled = true;
+        WHConfig.RateLimitPerChannel = 5;
+        WHConfig.UsernameOverride = TEXT("Khaaos Run");
+
+        const bool bWHInit = Webhooks->InitializeWebhooks(WHConfig);
+        UE_LOG(LogKhaaosRun, Log, TEXT("  DiscordWebhooks initialized: %s"), bWHInit ? TEXT("true") : TEXT("false"));
+    }
+    else
+    {
+        UE_LOG(LogKhaaosRun, Warning, TEXT("  DiscordWebhooks subsystem not available"));
+    }
+
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::InitializeDiscordSubsystems - Complete (3 subsystems)"));
 }

@@ -6,12 +6,20 @@ export type DistributedQueueEntry = {
   displayName: string;
   rating: number;
   mode: "solo" | "duo" | "squad";
+  worldId: "CIGKV" | "W1" | "W2" | "W3" | "W4";
   enqueuedAt: number;
   currentDelta: number;
   nodeId: string;
 };
 
 type RedisLike = RedisClientType;
+
+const RATE_LIMIT_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+local ttl = redis.call('PTTL', KEYS[1])
+return { count, ttl }
+`;
 
 /**
  * Shared coordination primitive for horizontally scaled realtime nodes.
@@ -24,6 +32,7 @@ export class DistributedState {
   private readonly required = process.env.NODE_ENV === "production" && process.env.REDIS_REQUIRED !== "false";
   private client: RedisLike | null = null;
   private connected = false;
+  private connecting: Promise<void> | null = null;
   private readonly prefix = process.env.REDIS_NAMESPACE || "khaaos";
   private readonly localExpirations = new Map<string, number>();
   private readonly localCounters = new Map<string, { count: number; expiresAt: number }>();
@@ -32,6 +41,16 @@ export class DistributedState {
 
   async connect(): Promise<void> {
     if (this.connected) return;
+    if (this.connecting) return this.connecting;
+    this.connecting = this.connectInternal();
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
+    }
+  }
+
+  private async connectInternal(): Promise<void> {
     if (!this.enabled) {
       if (this.required) throw new Error("REDIS_URL must be configured for production realtime state");
       return;
@@ -185,9 +204,12 @@ export class DistributedState {
     await this.connect();
     const key = this.key(`rate:${name}`);
     if (this.client) {
-      const count = await this.client.incr(key);
-      if (count === 1) await this.client.pExpire(key, windowMs);
-      const ttl = Math.max(0, await this.client.pTTL(key));
+      const result = await this.client.eval(RATE_LIMIT_SCRIPT, {
+        keys: [key],
+        arguments: [String(windowMs)],
+      }) as number[];
+      const count = Number(result[0]);
+      const ttl = Math.max(0, Number(result[1]));
       return { allowed: count <= limit, retryAfterMs: ttl };
     }
     const now = Date.now();

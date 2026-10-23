@@ -24,6 +24,13 @@ export function getSession() {
   const currentSecret = process.env.SESSION_SECRET_CURRENT ?? process.env.SESSION_SECRET;
   const previousSecret = process.env.SESSION_SECRET_PREVIOUS;
   if (!currentSecret || Buffer.byteLength(currentSecret, "utf8") < 32) throw new Error("SESSION_SECRET_CURRENT must contain at least 32 bytes");
+  const previousValidUntil = process.env.SESSION_SECRET_PREVIOUS_VALID_UNTIL
+    ? Number(process.env.SESSION_SECRET_PREVIOUS_VALID_UNTIL)
+    : undefined;
+  if (previousSecret && (!previousValidUntil || !Number.isFinite(previousValidUntil))) {
+    if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET_PREVIOUS_VALID_UNTIL is required in production");
+  }
+  const previousIsValid = Boolean(previousSecret && previousValidUntil && previousValidUntil > Math.floor(Date.now() / 1000));
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -32,7 +39,7 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: previousSecret ? [currentSecret, previousSecret] : currentSecret,
+    secret: previousIsValid ? [currentSecret, previousSecret!] : currentSecret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,

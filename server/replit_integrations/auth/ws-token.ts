@@ -42,7 +42,7 @@ export function verifyWsAccessTokenDetails(token: string, nowSeconds = Math.floo
   try {
     const [encodedPayload, signature] = parts;
     const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as Partial<WsTokenPayload>;
-    const key = keys().find((candidate) => candidate.kid === payload.kid) ?? keys()[0];
+    const key = keys().find((candidate) => candidate.kid === payload.kid);
     if (!key || !verifySignature(encodedPayload, signature, key)) return null;
     if (
       typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 256 ||

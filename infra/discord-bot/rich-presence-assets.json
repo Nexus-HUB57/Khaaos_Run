@@ -1,0 +1,131 @@
+{
+  "_comment": "Khaaos Run — Discord Rich Presence Art Asset Manifest",
+  "_docs": "https://discord.com/developers/docs/rich-presence/visuals",
+  "_instructions": "Upload each image to the Discord Developer Portal under your Application > Rich Presence > Art Assets. Image keys must match exactly.",
+
+  "application_id": "${DISCORD_APPLICATION_ID}",
+  "total_assets": 13,
+
+  "large_images": {
+    "_description": "World splash art shown as the large image in Rich Presence. Recommended: 512x512 PNG, max 1024x1024.",
+    "assets": [
+      {
+        "key": "world_cigkv",
+        "name": "CIGKV Lobby",
+        "description": "Starting zone / lobby world — 50 players max",
+        "recommended_size": "512x512",
+        "format": "png"
+      },
+      {
+        "key": "world_barburhen",
+        "name": "W1 Barburhen",
+        "description": "First battle world — 100 players max",
+        "recommended_size": "512x512",
+        "format": "png"
+      },
+      {
+        "key": "world_priadus",
+        "name": "W2 Priadus",
+        "description": "Second battle world — 75 players max",
+        "recommended_size": "512x512",
+        "format": "png"
+      },
+      {
+        "key": "world_ckesalth",
+        "name": "W3 Ckesalth",
+        "description": "Third battle world — 60 players max",
+        "recommended_size": "512x512",
+        "format": "png"
+      },
+      {
+        "key": "world_arukheea",
+        "name": "W4 Arukheea",
+        "description": "Final battle world — 80 players max",
+        "recommended_size": "512x512",
+        "format": "png"
+      },
+      {
+        "key": "world_unknown",
+        "name": "Unknown World",
+        "description": "Fallback for unrecognized world names",
+        "recommended_size": "512x512",
+        "format": "png"
+      }
+    ]
+  },
+
+  "small_images": {
+    "_description": "Species icon shown as the small image (bottom-right corner). Recommended: 128x128 PNG, max 512x512.",
+    "assets": [
+      {
+        "key": "species_zheers",
+        "name": "Zheers",
+        "description": "Zheers species — reptilian/amphibian warriors",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_onith",
+        "name": "Onith",
+        "description": "Onith species — avian scouts",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_skeetw",
+        "name": "Skeetw",
+        "description": "Skeetw species — insectoid swarm fighters",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_huran",
+        "name": "Huran",
+        "description": "Huran species — human baseline",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_venex",
+        "name": "Venex",
+        "description": "Venex species — venomous assassins",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_khael",
+        "name": "Khael",
+        "description": "Khael species — ethereal psionics",
+        "recommended_size": "128x128",
+        "format": "png"
+      },
+      {
+        "key": "species_unknown",
+        "name": "Unknown Species",
+        "description": "Fallback for unrecognized species names",
+        "recommended_size": "128x128",
+        "format": "png"
+      }
+    ]
+  },
+
+  "validation": {
+    "cpp_world_mapping": {
+      "CIGKV": "world_cigkv",
+      "Barburhen": "world_barburhen",
+      "Priadus": "world_priadus",
+      "Ckesalth": "world_ckesalth",
+      "Arukheea": "world_arukheea",
+      "_default": "world_unknown"
+    },
+    "cpp_species_mapping": {
+      "Zheers": "species_zheers",
+      "Onith": "species_onith",
+      "Skeetw": "species_skeetw",
+      "Huran": "species_huran",
+      "Venex": "species_venex",
+      "Khael": "species_khael",
+      "_default": "species_unknown"
+    }
+  }
+}

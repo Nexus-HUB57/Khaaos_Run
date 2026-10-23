@@ -65,3 +65,42 @@ DROP TRIGGER IF EXISTS trg_accounts_updated ON player_accounts;
 CREATE TRIGGER trg_accounts_updated
     BEFORE UPDATE ON player_accounts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════
+-- Discord Integration Tables
+-- ═══════════════════════════════════════════════════════════════
+
+-- Discord ↔ EOS account links (bidirectional lookup)
+CREATE TABLE IF NOT EXISTS discord_links (
+    id                SERIAL PRIMARY KEY,
+    discord_id        VARCHAR(32) NOT NULL,
+    discord_username  VARCHAR(64) NOT NULL DEFAULT 'Unknown',
+    eos_id            VARCHAR(64) NOT NULL,
+    player_name       VARCHAR(64) NOT NULL DEFAULT 'Unknown',
+    has_beta_role     BOOLEAN NOT NULL DEFAULT FALSE,
+    linked_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_discord_links_discord_id ON discord_links(discord_id);
+CREATE UNIQUE INDEX idx_discord_links_eos_id ON discord_links(eos_id);
+
+-- Tournaments (persisted, replaces in-memory Map)
+CREATE TABLE IF NOT EXISTS tournaments (
+    id                VARCHAR(64) PRIMARY KEY,
+    name              VARCHAR(128) NOT NULL,
+    state             VARCHAR(32) NOT NULL DEFAULT 'registration',
+    registered_count  INT NOT NULL DEFAULT 0,
+    max_participants  INT NOT NULL DEFAULT 64,
+    current_round     INT NOT NULL DEFAULT 0,
+    rounds            INT NOT NULL DEFAULT 6,
+    min_elo           INT NOT NULL DEFAULT 0,
+    prize_pool        INT NOT NULL DEFAULT 0,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_tournaments_state ON tournaments(state);
+
+-- Audit trigger for tournaments updated_at
+DROP TRIGGER IF EXISTS trg_tournaments_updated ON tournaments;
+CREATE TRIGGER trg_tournaments_updated
+    BEFORE UPDATE ON tournaments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
