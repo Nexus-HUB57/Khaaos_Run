@@ -62,10 +62,30 @@ o fluxo é idêntico ao do cliente online 2D.
 produção continua usando `KR_USERS_JSON`/Postgres como documentado acima. O input 3D passa pelo
 mesmo pipeline de validação/strikes/ban do 2D, e snapshots nunca expõem `ai`/inventário de terceiros.
 
+### Netfeel — predição, reconciliação e lag compensation (Fase 3)
+
+| Sistema | Módulo | Comportamento |
+|---------|--------|---------------|
+| Movimento compartilhado | `src/game3d/sim3d.js` | `stepActorMovement(a, input, dt, world)` é a ÚNICA implementação de cinemática — usada pela `MatchRoom3D`, pela sim offline e pela predição do cliente (cliente e servidor jamais divergem na física). |
+| Fila de inputs + ack | `server/room3d.js` | `input()` enfileira por `seq` (rejeita replay/duplicado, cap 60); cada tick processa até `MAX_INPUTS_PER_TICK=3` inputs com `dt=1/30` — drena rajadas sem permitir speedhack. O snapshot expõe `player.ackSeq` (último seq processado). |
+| Predição client-side | `src/game3d/predict3d.js` | `LocalPredictor` prevê o movimento local no exato instante do input; a cada snapshot rewinda para o estado autoritativo no `ackSeq`, replays os inputs pendentes e converte o erro em um offset visual com decaimento exponencial (correção suave, sem rubber band). Drift > 8 m (teleport/spawn) faz snap seco. Morte segue o servidor. |
+| Lag compensation | `server/room3d.js` | Histórico de posições por tick (buffer ~1,3 s). Tiro humano é testado contra as posições rebobinadas de `rtt + 110 ms (interp) + 25 ms (meia tick)` — "atira onde vê, acerta onde vê". Bots atiram no estado vivo atual; vítima morta no presente não recebe dano retroativo. `rayCharacter` agora respeita a base `y` do ator (acerto real em alvos no ar). |
+| RTT no input | `net3d.js` / `antiCheat.js` | Cliente embute `rtt` (medido via ping/pong) no input; anticheat valida o tipo, servidor faz clamp [0, 600] ms e usa na lag compensation. |
+
+**Realismo "Live Action" (render):** `src/game3d/postfx3d.js` encadeia
+`RenderPass → UnrealBloomPass → grade cinematográfico → OutputPass` — bloom sutil,
+vinheta, grão de filme animado, contraste/saturação leves e tinta de cinema
+(sombras frias, altas luzes quentes) sobre o tone mapping ACES existente.
+`?fx=0` desliga o pipeline (fallback render direto); touch usa qualidade reduzida.
+O disparo próprio adiciona recuo visual à câmera (`camKick`, não afeta a mira).
+
 **Testes:** `node --test test/sim3d.test.js` cobre a sim offline (determinística de mundo/loot,
 movimento+colisão, balística corpo/headshot ×1.75, pulsos e dano de zona, coleta, recarga, fim de
-partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a sala autoritativa
-e o anti-cheat 3D; `node --test test/server3d.test.js` valida o end-to-end real (login HTTP →
+partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a sala autoritativa,
+o anti-cheat 3D, a fila de inputs (`ackSeq`, cap anti-speedhack), e a lag compensation (rewind
+acerta a posição passada; alvo fora do rewind não é atingido). `node --test test/predict3d.test.js`
+cobre a predição (réplica exata do servidor, replay de pendentes, offset visual com decaimento,
+snap de teleport, morte). `node --test test/server3d.test.js` valida o end-to-end real (login HTTP →
 matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
 
 ## Relação com a aplicação web e UE5

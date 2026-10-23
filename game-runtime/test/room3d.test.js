@@ -168,7 +168,8 @@ test('room3d: recarga conserva munição de reserva', () => {
   room.input('p1', blankInput({ seq: 1, reload: true }));
   room.tick(DT);
   assert.ok(p.reloadT > 0);
-  for (let i = 0; i < Math.ceil(WEAPONS3D.g19.reload / DT) + 2; i++) {
+  // fila processa 1 input/tick com dt=1/30: cada tick avança 1/30s da recarga
+  for (let i = 0; i < Math.ceil(WEAPONS3D.g19.reload * 30) + 2; i++) {
     room.input('p1', blankInput({ seq: i + 2 }));
     room.tick(DT);
   }
@@ -288,4 +289,101 @@ test('matchmaking: chooseRoom só agrupa clientes do mesmo modo', () => {
   assert.equal(chooseRoom(rooms, 'sa-east', 16, '2d').id, 'ring-1');
   assert.equal(chooseRoom(rooms, 'sa-east', 16, '3d').id, 'ring3d-1');
   assert.equal(chooseRoom(rooms, 'eu-west', 16, '3d'), null);           // região incompatível
+});
+
+// ---------- Fase 3: fila de inputs, ackSeq e lag compensation ----------
+test('room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (predição)', () => {
+  const room = makeRoom({ humans: 1, botFill: 1 });
+  room.start('p1', 'belt');
+  const p = room.humans.get('p1');
+  const z0 = p.z;
+  // 5 inputs enfileirados; 1º tick processa até 3
+  for (let i = 1; i <= 5; i++) room.input('p1', blankInput({ seq: i, dy: -1 }));
+  room.tick(DT);
+  assert.equal(p.lastProcessedSeq, 3, 'MAX_INPUTS_PER_TICK=3 por tick');
+  room.tick(DT);
+  assert.equal(p.lastProcessedSeq, 5, 'fila drenada no 2º tick');
+  const snap = room.snapshot('p1');
+  assert.equal(snap.player.ackSeq, 5, 'ackSeq no snapshot para reconciliação');
+  // movimento idêntico ao previsto pelo cliente (mesma física compartilhada)
+  const expected = z0 - 5 * 5.2 * (1 / 30);
+  assert.ok(Math.abs(p.z - expected) < 1e-9, `z = ${p.z}, esperado ${expected}`);
+});
+
+test('room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorados', () => {
+  const room = makeRoom({ humans: 1, botFill: 1 });
+  room.start('p1', 'belt');
+  const p = room.humans.get('p1');
+  const z0 = p.z;
+  // rajada: 50 inputs de uma vez (spam de rede)
+  for (let i = 1; i <= 50; i++) room.input('p1', blankInput({ seq: i, dy: -1 }));
+  room.tick(DT);
+  assert.equal(p.lastProcessedSeq, 3, 'no máximo 3 inputs processados no tick');
+  // deslocamento do tick equivale a no máximo 3 passos de 1/30s
+  assert.ok(p.z - z0 >= -(5.2 * 3 * (1 / 30) + 1e-9), 'sem deslocamento além do cap');
+  // seq repetida/antiga não re-enfileira
+  const q = p.inputQueue.length;
+  room.input('p1', blankInput({ seq: 40, dy: -1 }));
+  room.input('p1', blankInput({ seq: 10, dy: -1 }));
+  assert.equal(p.inputQueue.length, q, 'duplicado/replay fora da fila');
+});
+
+test('room3d: rtt reportado no input é armazenado com clamp', () => {
+  const room = makeRoom({ humans: 1, botFill: 1 });
+  room.start('p1', 'belt');
+  room.input('p1', blankInput({ seq: 1, rtt: 180 }));
+  room.tick(DT);
+  assert.equal(room.humans.get('p1').rtt, 180);
+  room.input('p1', blankInput({ seq: 2, rtt: 99999 }));
+  room.tick(DT);
+  assert.equal(room.humans.get('p1').rtt, 600, 'clamp em 600ms');
+});
+
+test('room3d: lag compensation acerta alvo na posição rebobinada que o atirador via', () => {
+  const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-1' });
+  room.start('p1', 'belt');
+  const p1 = room.humans.get('p1'); // atirador (rtt alto)
+  const p2 = room.humans.get('p2'); // vítima em movimento
+  p1.cooldown = 0; p1.rtt = 400;             // 400ms de RTT → rewind ≈ 11 ticks
+  p2.armor = 0;
+  // vítima vista 4m a leste do spawn (linha livre, como no teste de kill)
+  p1.yaw = -Math.PI / 2; // frente = +X
+  p2.x = p1.x + 4; p2.z = p1.z;
+  for (let i = 0; i < 6; i++) { room.input('p1', blankInput({ seq: i + 1, rtt: 400 })); room.input('p2', blankInput({ seq: i + 1 })); room.tick(DT); }
+  // desloca a vítima: ainda dentro do anel, 40m ao norte da linha de tiro
+  p2.x = p1.x + 30; p2.z = p1.z + 40;
+  for (let i = 0; i < 8; i++) { room.input('p1', blankInput({ seq: 10 + i, rtt: 400 })); room.input('p2', blankInput({ seq: 10 + i })); room.tick(DT); }
+  const life0 = p2.life;
+  // fogo no tick 15: rewind 11 ticks → tick 4, quando p2 estava 4m a leste
+  room.input('p1', blankInput({ seq: 100, yaw: -Math.PI / 2, fire: true, rtt: 400 }));
+  room.input('p2', blankInput({ seq: 100 }));
+  room.tick(DT); // processa o input de fogo (bala nasce — e pode acertar — neste tick)
+  assert.ok(room.bullets.length > 0 || p2.life < life0, 'disparo processado (bala em voo ou impacto imediato)');
+  for (let i = 0; i < 20 && room.bullets.length > 0; i++) {
+    room.tick(DT);
+    room.input('p1', blankInput({ seq: 101 + i, rtt: 400 }));
+    room.input('p2', blankInput({ seq: 101 + i }));
+  }
+  assert.ok(p2.life < life0, `rewind acerta a posição passada: vida ${life0} → ${p2.life}`);
+  const events = room.drainEvents('p1');
+  assert.ok(events.some((e) => e.type === 'hit' && e.victim === 'p2'), 'evento hit entregue ao atirador');
+});
+
+test('room3d: lag compensation NÃO acerta posição presente quando alvo já saiu do rewind', () => {
+  // vítima nunca esteve na linha de tiro: rewind = presente, nenhum hit
+  const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-2' });
+  room.start('p1', 'belt');
+  const p1 = room.humans.get('p1');
+  const p2 = room.humans.get('p2');
+  p1.yaw = -Math.PI / 2; // mira leste
+  p2.armor = 0;
+  p2.x = p1.x + 4; p2.z = p1.z;
+  for (let i = 0; i < 6; i++) { room.input('p1', blankInput({ seq: i + 1 })); room.tick(DT); }
+  p2.x = p1.x + 4; p2.z = p1.z + 90; // vítima ao NORTE da linha leste
+  for (let i = 0; i < 8; i++) { room.input('p1', blankInput({ seq: 10 + i })); room.tick(DT); }
+  const life0 = p2.life;
+  room.input('p1', blankInput({ seq: 50, yaw: -Math.PI / 2, fire: true }));
+  room.tick(DT);
+  for (let i = 0; i < 20 && room.bullets.length > 0; i++) room.tick(DT);
+  assert.equal(p2.life, life0, 'tiro para leste não acerta vítima ao norte');
 });

@@ -11,7 +11,7 @@ import { rollLoot } from '../src/shared/weapons.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
-  getWorldLayout, circlePushAabb, rayAabb, rayCharacter,
+  getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
 } from '../src/game3d/sim3d.js';
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -21,6 +21,14 @@ export const HEADSHOT_MULT = 1.75;
 export const KILL_XP = 120, KILL_XP_HEAD = 180, KILL_KRC = 15;
 export const EXTRACT_XP = 250;
 export const BOT_SIGHT = 70;
+
+// Fase 3 — netfeel: fila de inputs (predição/reconciliação) e lag compensation.
+export const INPUT_DT = 1 / 30;        // cada input cobre 1/30s (cadência do cliente)
+export const MAX_INPUTS_PER_TICK = 3;  // 20Hz tick × 3 ≈ 90 inputs/s: drena rajadas sem permitir speedhack
+export const INPUT_QUEUE_CAP = 60;     // teto da fila por jogador (~2s de rede degradada)
+export const HISTORY_TICKS = 26;       // buffer de posições p/ rewind (~1,3s @ 20Hz)
+export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
+export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
   constructor({ id, seed, region = 'sa-east', capacity = 16, botFill } = {}) {
@@ -49,6 +57,7 @@ export class MatchRoom3D {
     this.started = false;
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
+    this.history = [];         // [{tick, at: [{id,x,y,z}]}] — rewind p/ lag compensation
   }
 
   // ---------- eventos ----------
@@ -76,7 +85,8 @@ export class MatchRoom3D {
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      lastInput: null, lastSeq: 0,
+      lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
+      inputQueue: [], rtt: null,
     };
   }
   addPlayer(id, name = 'OPERATIVO') {
@@ -158,8 +168,18 @@ export class MatchRoom3D {
   input(id, input) {
     const actor = this.humans.get(id);
     if (!actor || !actor.alive || this.state !== ROOM_STATES.IN_PROGRESS) return;
+    // rtt (reportado pelo cliente no input) alimenta a lag compensation
+    if (Number.isFinite(input?.rtt)) actor.rtt = clamp(input.rtt, 0, 600);
     actor.lastInput = input;
-    if (Number.isFinite(input?.seq)) actor.lastSeq = input.seq;
+    if (Number.isFinite(input?.seq)) {
+      actor.lastSeq = input.seq;
+      // fila em ordem de seq: ignora replays/duplicados, limita rajadas
+      if (input.seq > (actor.lastQueuedSeq ?? 0)) {
+        actor.lastQueuedSeq = input.seq;
+        actor.inputQueue.push(input);
+        if (actor.inputQueue.length > INPUT_QUEUE_CAP) actor.inputQueue.shift();
+      }
+    }
   }
 
   // ---------- tick ----------
@@ -183,12 +203,30 @@ export class MatchRoom3D {
       }
     }
 
-    // --- atores: humanos (último input) + bots (IA) ---
+    // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
       if (!actor.alive) continue;
-      this.#stepActor(actor, actor.lastInput ?? this.defaultInputFor(actor), dt);
+      const queue = actor.inputQueue;
+      if (queue.length > 0) {
+        const n = Math.min(MAX_INPUTS_PER_TICK, queue.length);
+        for (let i = 0; i < n; i++) {
+          const input = queue.shift();
+          this.#stepActor(actor, input, INPUT_DT);
+          if (Number.isFinite(input.seq)) actor.lastProcessedSeq = input.seq;
+        }
+      } else {
+        // sem inputs novos (jogador inativo/conexão instável): passo padrão
+        this.#stepActor(actor, actor.lastInput ?? this.defaultInputFor(actor), dt);
+      }
     }
     for (const bot of this.bots) if (bot.alive) this.#stepBot(bot, dt);
+
+    // --- histórico de posições p/ lag compensation (após o movimento do tick) ---
+    const positions = this.#actors()
+      .filter((a) => a.alive)
+      .map((a) => ({ id: a.id, x: a.x, y: a.y, z: a.z }));
+    this.history.push({ tick: this.tickCount, at: positions });
+    if (this.history.length > HISTORY_TICKS) this.history.shift();
 
     // --- projéteis ---
     this.#stepBullets(dt);
@@ -216,28 +254,8 @@ export class MatchRoom3D {
     a.cooldown = Math.max(0, a.cooldown - dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
-    a.sprinting = !!(input.sprint && !input.ads);
-    a.ads = !!input.ads;
+    stepActorMovement(a, input, dt, this.world);
     const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-    let sp = a.speed * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
-    if (w.category === 'sniper' && !a.ads) sp *= 0.9;
-    const len = Math.hypot(input.dx, input.dy) || 1;
-    const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
-    const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
-    a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
-    let nx = a.x + (mx * cos + mz * sin), nz = a.z + (-mx * sin + mz * cos);
-    for (const box of this.world.colliders) {
-      if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue;
-      const hit = circlePushAabb(nx, nz, PLAYER_R, box);
-      if (hit) { nx = hit.x; nz = hit.z; }
-    }
-    const lim = WORLD.size / 2 - 2;
-    a.x = clamp(nx, -lim, lim); a.z = clamp(nz, -lim, lim);
-    if (!a.onGround || input.jump) {
-      if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
-      a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
-      if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
-    }
     if (input.reload) this.#tryReload(a);
     if (input.medkit) this.#useMedkit(a);
     if (input.interact) this.#interact(a);
@@ -357,7 +375,10 @@ export class MatchRoom3D {
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const spread = a.isBot ? 0
       : w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1);
-    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, 1);
+    // lag compensation: tiro humano é testado contra as posições que o ATIRADOR via
+    // (rewind de rtt + buffer de interpolação); bots atiram no estado vivo atual.
+    const lagTargets = a.isBot ? null : this.#lagTargetsFor(a);
+    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, 1, lagTargets);
     // áudio/flash do tiro: para o atirador e para humanos próximos (raio 90m)
     for (const h of this.humans.values()) {
       if (!h.alive) continue;
@@ -367,7 +388,7 @@ export class MatchRoom3D {
     }
     return true;
   }
-  #spawnBullet(a, dir, spread, w, dmgScale = 1) {
+  #spawnBullet(a, dir, spread, w, dmgScale = 1, lagTargets = null) {
     let { dx, dy, dz, ox, oy, oz } = dir;
     if (dir.tx !== undefined) {
       let tx = dir.tx - ox, ty = dir.ty - oy, tz = dir.tz - oz;
@@ -384,7 +405,21 @@ export class MatchRoom3D {
       id: this.nextBulletId++, x: ox, y: oy, z: oz,
       vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
       owner: a.id, damage: w.damage * dmgScale, life: w.range / w.bulletSpeed, weapon: w.id,
+      lagTargets,
     });
+  }
+  // rewind: posições dos outros atores no tick que o atirador estava vendo
+  #lagTargetsFor(shooter) {
+    if (this.history.length === 0) return null;
+    const rtt = Number.isFinite(shooter.rtt) ? shooter.rtt : 90;
+    const backMs = clamp(rtt + INTERP_DELAY_MS + HALF_TICK_MS, LAG_COMP_MIN_MS, LAG_COMP_MAX_MS);
+    const wantTick = this.tickCount - Math.round(backMs / (1000 / 20));
+    let entry = this.history[0];
+    for (const h of this.history) {
+      if (Math.abs(h.tick - wantTick) < Math.abs(entry.tick - wantTick)) entry = h;
+    }
+    if (entry.tick >= this.tickCount) return null; // sem rewind disponível ainda
+    return entry.at.filter((p) => p.id !== shooter.id).map((p) => ({ ...p }));
   }
   #meleeSwing(a, w) {
     if (a.cooldown > 0) return false;
@@ -403,6 +438,7 @@ export class MatchRoom3D {
   }
   #stepBullets(dt) {
     const actors = this.#actors();
+    const actorById = new Map(actors.map((a) => [a.id, a]));
     for (const b of this.bullets) {
       b.life -= dt;
       const ox = b.x, oy = b.y, oz = b.z;
@@ -418,10 +454,21 @@ export class MatchRoom3D {
         if (t !== null && t < hitT) hitT = t;
       }
       let charHit = null, charT = Infinity;
-      for (const actor of actors) {
-        if (!actor.alive || actor.id === b.owner) continue;
-        const h = rayCharacter(ox, oy, oz, dx, dy, dz, actor, len);
-        if (h && h.t < charT) { charT = h.t; charHit = { ref: actor, head: h.head }; }
+      if (b.lagTargets) {
+        // lag compensation: colide com as posições rebobinadas do tiro;
+        // só aplica dano se a vítima ainda estiver viva no presente
+        for (const t of b.lagTargets) {
+          const real = actorById.get(t.id);
+          if (!real || !real.alive || t.id === b.owner) continue;
+          const h = rayCharacter(ox, oy, oz, dx, dy, dz, t, len);
+          if (h && h.t < charT) { charT = h.t; charHit = { ref: real, head: h.head }; }
+        }
+      } else {
+        for (const actor of actors) {
+          if (!actor.alive || actor.id === b.owner) continue;
+          const h = rayCharacter(ox, oy, oz, dx, dy, dz, actor, len);
+          if (h && h.t < charT) { charT = h.t; charHit = { ref: actor, head: h.head }; }
+        }
       }
       if (charHit && charT < hitT) {
         b.life = 0;
@@ -557,12 +604,13 @@ export class MatchRoom3D {
   }
   #selfView(a) {
     return {
-      id: a.id, name: a.name, x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch,
+      id: a.id, name: a.name, x: a.x, y: a.y, z: a.z, vy: a.vy, yaw: a.yaw, pitch: a.pitch,
       life: a.life, armor: a.armor, xp: a.xp, krc: a.krc, kills: a.kills, extracted: a.extracted,
-      weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
+      speed: a.speed, weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
       inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads,
+      ackSeq: a.lastProcessedSeq,
     };
   }
   #otherView(a) {

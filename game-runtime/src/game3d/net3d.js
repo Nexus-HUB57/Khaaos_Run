@@ -1,7 +1,8 @@
 // Khaaos Run — Cliente de rede 3D (netcode do Battle Royale online).
-// Conecta no /ws com ?token&mode=3d, envia inputs a 30Hz, recebe snapshots
-// autoritativos a 20Hz e fornece interpolação (buffer de 3 snapshots) para o
-// renderizador. Reconexão com backoff + resume token próprio do modo 3D.
+// Conecta no /ws com ?token&mode=3d, envia inputs a 30Hz (buffer de pendentes para
+// a reconciliação da predição), recebe snapshots autoritativos a 20Hz e fornece
+// interpolação (buffer de 3 snapshots) para o renderizador. Reconexão com backoff
+// + resume token próprio do modo 3D.
 import { NetworkClient } from '../network/client.js';
 
 const RESUME_KEY = 'kr_resume_3d';
@@ -18,6 +19,8 @@ export class NetClient3D {
     this.onRejected = onRejected;
     this.socket = null;
     this.buffer = [];          // [{ snapshot, receivedAt }]
+    this.pending = [];         // inputs não confirmados (predição client-side)
+    this.ackSeq = 0;           // último seq processado pelo servidor
     this.retry = 0;
     this.closed = false;
     this.rtt = null;
@@ -71,6 +74,12 @@ export class NetClient3D {
   push(snapshot) {
     this.buffer.push({ snapshot, receivedAt: performance.now() });
     if (this.buffer.length > BUFFER_SIZE) this.buffer.shift();
+    // reconciliação: ack do servidor descarta inputs já processados
+    const ack = snapshot.player?.ackSeq;
+    if (Number.isFinite(ack)) {
+      this.ackSeq = Math.max(this.ackSeq, ack);
+      this.pending = this.pending.filter((p) => p.input.seq > ack);
+    }
     this.onSnapshot?.(snapshot);
     for (const evt of snapshot.events ?? []) this.onEvent?.(evt);
   }
@@ -117,7 +126,9 @@ export class NetClient3D {
 
   sendInput(input) {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({ type: 'input', input: { ...input, clientDt: 1 / 30 } }));
+    this.pending.push({ input, sentAt: performance.now() });
+    if (this.pending.length > 90) this.pending.shift();
+    this.socket.send(JSON.stringify({ type: 'input', input: { ...input, clientDt: 1 / 30, rtt: this.rtt ?? undefined } }));
   }
   start(entry) {
     if (this.socket?.readyState !== WebSocket.OPEN) return;

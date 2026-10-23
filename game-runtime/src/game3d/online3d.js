@@ -2,10 +2,13 @@
 // Sim3DView traduz snapshots autoritativos do servidor para o mesmo contrato da
 // simulação local (player/bots/ring/loot/terminals/consumeEvents), permitindo que
 // o renderizador e o HUD do modo offline funcionem sem alterações de comportamento.
+// Fase 3: LocalPredictor prevê o movimento do jogador local (mesma física do
+// servidor) e reconcilia a cada snapshot — input responsivo com correção suave.
 // bootstrapOnline conecta o NetClient3D e injeta o modo online no Game3D.
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
-import { MATCH_TIME, WORLD } from './sim3d.js';
+import { MATCH_TIME, WORLD, getWorldLayout } from './sim3d.js';
+import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -84,6 +87,9 @@ export class OnlineGame3D extends Game3D {
     this.view.onSwitchSlot = (slot) => { this.pendingSlot = slot; };
     this.sim = this.view;
     this.hud.sim = this.view;
+    // predição client-side (Fase 3): mundo local idêntico ao da sala (seed sincronizada)
+    this.inputSeq = 0;
+    this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
     this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
     const seedInput = document.querySelector('#seedInput');
@@ -110,7 +116,9 @@ export class OnlineGame3D extends Game3D {
     this.scene.traverse((o) => { o.geometry?.dispose?.(); });
     this.initWorld();
     this.initEntities();
-    this.initCamera();
+    this.initCamera(); // initCamera → initPost (composer acompanha nova cena/câmera)
+    // preditor acompanha o novo layout (mesma seed autoritativa)
+    this.predictor = new LocalPredictor({ world: getWorldLayout(seed) });
     this.hud.feed('CIGKV', `Sincronizado com a seed da sala: ${seed}.`, 'good');
   }
 
@@ -142,18 +150,38 @@ export class OnlineGame3D extends Game3D {
     const view = this.net?.interpolate();
     if (view) {
       this.view.applySnapshot(view);
-      // câmera/jogador local usam yaw/pitch locais (responsivos); posição vem do servidor
+      const serverPlayer = this.view.player;
+      if (serverPlayer) {
+        // Fase 3 — predição + reconciliação: posição local prevista com a mesma
+        // física do servidor; vida/armas/etc permanecem autoritativos.
+        this.predictor?.reconcile(serverPlayer, serverPlayer.ackSeq ?? this.net.ackSeq);
+        const pos = this.predictor?.pos;
+        this.view.player = {
+          ...serverPlayer,
+          x: pos?.x ?? serverPlayer.x,
+          y: pos?.y ?? serverPlayer.y,
+          z: pos?.z ?? serverPlayer.z,
+          moving: this.predictor?.actor.moving ?? serverPlayer.moving,
+          sprinting: this.predictor?.actor.sprinting ?? serverPlayer.sprinting,
+          onGround: this.predictor?.actor.onGround ?? serverPlayer.onGround,
+        };
+      }
+      // câmera/jogador local usam yaw/pitch locais (responsivos)
       if (this.view.player) {
         this.view.player.yaw = this.input.yaw;
         this.view.player.pitch = this.input.pitch;
       }
     }
+    this.predictor?.update(dt);
 
-    // envio de input a 30Hz (enquanto a partida estiver ativa)
+    // envio de input a 30Hz (enquanto a partida estiver ativa) + predição local
     if (!this.zuOpen && !this.ended) {
       this.netAccumulator = (this.netAccumulator ?? 0) + dt;
       while (this.netAccumulator >= 1 / 30) {
-        this.net?.sendInput(this.buildSimInput(1 / 30));
+        const input = this.buildSimInput(1 / 30);
+        input.seq = ++this.inputSeq; // seq local monotônica (independe do tick do servidor)
+        this.net?.sendInput(input);
+        this.predictor?.onInput(input);
         this.netAccumulator -= 1 / 30;
       }
       this.handleEvents();
@@ -171,7 +199,8 @@ export class OnlineGame3D extends Game3D {
       this.hud.update(dt, this.input);
       this.updateInteractionPrompt();
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) this.post.render(dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 }
 

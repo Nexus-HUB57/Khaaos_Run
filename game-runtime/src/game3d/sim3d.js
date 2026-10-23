@@ -58,7 +58,9 @@ export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   return tmin;
 }
 export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
-  // cápsula aproximada: cilindro vertical r=PLAYER_R, y∈[0, PLAYER_H]
+  // cápsula aproximada: cilindro vertical r=PLAYER_R, y∈[ch.y, ch.y+PLAYER_H]
+  // (ch.y é a base do ator; 0 no chão — suporte a salto/lag compensation)
+  const base = ch.y ?? 0;
   const mx = ox - ch.x, mz = oz - ch.z;
   const a = dx * dx + dz * dz;
   if (a < 1e-9) return null;
@@ -68,8 +70,42 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
   const t = (-b - Math.sqrt(disc)) / (2 * a);
   if (t < 0 || t > maxT) return null;
   const hy = oy + dy * t;
-  if (hy < 0 || hy > PLAYER_H) return null;
-  return { t, head: hy > HEAD_Y };
+  if (hy < base || hy > base + PLAYER_H) return null;
+  return { t, head: hy > base + HEAD_Y };
+}
+
+// ---------- movimento compartilhado (servidor autoritativo + predição do cliente) ----------
+// Extraído do #stepActor para que a predição client-side replique EXATAMENTE a
+// física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
+// Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
+export function stepActorMovement(a, input, dt, world) {
+  a.sprinting = !!(input.sprint && !input.ads);
+  a.ads = !!input.ads;
+  const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
+  let sp = a.speed * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
+  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
+  const len = Math.hypot(input.dx, input.dy) || 1;
+  const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
+  const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
+  a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
+  // frente do ator: -Z quando yaw=0 (convenção Three.js)
+  // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
+  let nx = a.x + (mx * cos + mz * sin), nz = a.z + (-mx * sin + mz * cos);
+  // colisão XZ com o mundo
+  for (const box of world.colliders) {
+    if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
+    const hit = circlePushAabb(nx, nz, PLAYER_R, box);
+    if (hit) { nx = hit.x; nz = hit.z; }
+  }
+  const lim = WORLD.size / 2 - 2;
+  a.x = clamp(nx, -lim, lim); a.z = clamp(nz, -lim, lim);
+  // vertical
+  if (!a.onGround || input.jump) {
+    if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
+    a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
+    if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
+  }
+  return a;
 }
 
 // ---------- mundo ----------
@@ -170,33 +206,9 @@ export class KhaaosSim3D {
     a.cooldown = Math.max(0, a.cooldown - dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
-    a.sprinting = !!(isPlayer && input.sprint && !input.ads);
-    a.ads = !!(isPlayer && input.ads);
-    const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-    let sp = a.speed * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
-    if (w.category === 'sniper' && !a.ads) sp *= 0.9;
-    const len = Math.hypot(input.dx, input.dy) || 1;
-    const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
-    const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
-    a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
-    // frente do ator: -Z quando yaw=0 (convenção Three.js)
-    // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
-    let nx = a.x + (mx * cos + mz * sin), nz = a.z + (-mx * sin + mz * cos);
-    // colisão XZ com o mundo
-    for (const box of this.world.colliders) {
-      if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
-      const hit = circlePushAabb(nx, nz, PLAYER_R, box);
-      if (hit) { nx = hit.x; nz = hit.z; }
-    }
-    const lim = WORLD.size / 2 - 2;
-    a.x = clamp(nx, -lim, lim); a.z = clamp(nz, -lim, lim);
-    // vertical
-    if (!a.onGround || input.jump) {
-      if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
-      a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
-      if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
-    }
+    stepActorMovement(a, input, dt, this.world);
     if (isPlayer) {
+      const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
       if (input.reload) this.#tryReload(a);
       if (input.medkit) this.#useMedkit(a);
       if (input.interact) this.#interact(a);
