@@ -29,7 +29,7 @@
 - [x] Implementar `PostgresSessionStore` transacional com migração versionada, expiração no banco, readiness e testes reais opt-in.
 - [x] Conectar `RedisRateStore` real com `INCR` + `PEXPIRE` atômicos via Lua, readiness e testes reais opt-in.
 - [ ] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência.
-- [ ] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional.
+- [x] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional. Cobertura: `test/security.test.js` (8 testes) — HTTPS (`tls: {cert,key}` / `KR_TLS_CERT`/`KR_TLS_KEY`), tokens HS256 com `kid` + grace (`retired`) via `POST /admin/keys/rotate|drop`, revogação por `jti` via `POST /auth/logout` (HTTP e WebSocket) e OIDC Authorization Code completo (`server/oidc.js`: discovery, JWKS RS256, nonce/state single-use, provisionamento de usuário).
 - [ ] Implementar RBAC com auditoria e permissões por recurso.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.
 - [ ] Testar múltiplas instâncias, falha de processo, reconnect após reinício, soak e fault injection.
