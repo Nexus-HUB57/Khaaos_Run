@@ -94,8 +94,10 @@ export function buildWorldLayout(seed) {
   }
 
   // ---- terminais ZEX (3) ----
+  // O terminal central fica AO LADO do monolito (10×10 no centro): dentro do colisor
+  // o jogador seria empurrado além do alcance de interação (bug de extração).
   const terminals = [
-    { x: 0, z: 0, label: 'ZEX // CENTRO', nearMonolith: true },
+    { x: 8, z: 0, label: 'ZEX // CENTRO', nearMonolith: true },
     { x: -130, z: -30, label: 'ZEX // OESTE' },
     { x: 120, z: 40, label: 'ZEX // LESTE' },
   ];

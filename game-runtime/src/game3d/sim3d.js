@@ -24,7 +24,7 @@ for (const [id, w] of Object.entries(WEAPONS)) {
     reload: { sidearm: 1.4, smg: 1.9, rifle: 2.1, sniper: 2.8, energy: 2.2, melee: 0 }[w.category] ?? 2,
   };
 }
-const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
+export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
@@ -32,7 +32,8 @@ export const DEFAULT_INPUT = Object.freeze({
 });
 
 // ---------- utilitários de colisão ----------
-function circlePushAabb(px, pz, r, b) {
+// Exportados para reuso pela MatchRoom3D autoritativa (server/room3d.js).
+export function circlePushAabb(px, pz, r, b) {
   const cx = clamp(px, b.minX, b.maxX), cz = clamp(pz, b.minZ, b.maxZ);
   const dx = px - cx, dz = pz - cz, d2 = dx * dx + dz * dz;
   if (d2 >= r * r) return null;
@@ -44,7 +45,7 @@ function circlePushAabb(px, pz, r, b) {
   if (m === t) return { x: px, z: b.minZ - r };
   return { x: px, z: b.maxZ + r };
 }
-function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
+export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   let tmin = 0, tmax = maxT;
   const axes = [[ox, dx, box.minX, box.maxX], [oy, dy, box.yMin, box.yMax], [oz, dz, box.minZ, box.maxZ]];
   for (const [o, d, lo, hi] of axes) {
@@ -56,7 +57,7 @@ function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   }
   return tmin;
 }
-function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
+export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
   // cápsula aproximada: cilindro vertical r=PLAYER_R, y∈[0, PLAYER_H]
   const mx = ox - ch.x, mz = oz - ch.z;
   const a = dx * dx + dz * dz;
@@ -237,7 +238,8 @@ export class KhaaosSim3D {
     const ax = tx - b.x, az = tz - b.z;
     const inAngle = Math.atan2(-ax, -az); // yaw apontando para o destino
     b.yaw += Math.atan2(Math.sin(inAngle - b.yaw), Math.cos(inAngle - b.yaw)) * Math.min(1, dt * 6);
-    const input = { ...DEFAULT_INPUT, dx: 0, dy: run, yaw: b.yaw, pitch: 0 };
+    // frente do ator é -Z: para CAMINHAR na direção do yaw o input é dy negativo
+    const input = { ...DEFAULT_INPUT, dx: 0, dy: -run, yaw: b.yaw, pitch: 0 };
     this.#stepActor(b, input, dt, false);
     // disparo — erro humano: espalha o ponto alvo em vez do cone de saída
     const w = WEAPONS3D[b.weapon];

@@ -13,4 +13,15 @@ export default defineConfig({
       },
     },
   },
+  server: {
+    proxy: {
+      // dev: mesmo princípio do modo online 2D — cliente fala com o servidor
+      // autoritativo na mesma origem (/ws com upgrade WebSocket, /auth login).
+      '/ws': { target: 'ws://localhost:8787', ws: true },
+      '/auth': { target: 'http://localhost:8787' },
+      '/healthz': { target: 'http://localhost:8787' },
+      '/readyz': { target: 'http://localhost:8787' },
+      '/admin': { target: 'http://localhost:8787' },
+    },
+  },
 });

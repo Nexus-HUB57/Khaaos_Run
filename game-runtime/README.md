@@ -31,7 +31,42 @@ O desenvolvimento local e os testes unitários não exigem a configuração dos 
 **Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `1`/`2` slots · `ESC` liberar mouse.
 **Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit) à direita.
 
-**Testes:** `node --test test/sim3d.test.js` cobre determinística de mundo/loot, movimento+colisão, balística (corpo e headshot ×1.75), pulsos e dano de zona, coleta, recarga, fim de partida, replay determinístico e snapshot roundtrip.
+## Modo Online 3D — Battle Royale autoritativo
+
+`index.html?online=1` inicia o **modo multiplayer**: o servidor (`server/room3d.js`) roda a
+`MatchRoom3D` — autoridade total de movimento, balística, zona, loot e eliminação para
+todos os operativos (humanos + bots preenchendo o ring até a capacidade). O cliente envia
+somente inputs e interpreta snapshots interpolados, com o mesmo contrato
+"simulação headless → renderizador burro" do modo offline.
+
+| Sistema | Módulo | Responsabilidade |
+|---------|--------|------------------|
+| Sala autoritativa | `server/room3d.js` | `MatchRoom3D`: humanos + bots (IA engajar/caçar/patrulhar), zona em pulsos, balística projetil-a-projetil com headshot ×1.75, loot/terminais compartilhados, eventos por jogador, snapshot filtrado por espectador. Reutiliza os helpers de física de `sim3d.js` (mesmas constantes e colisões do offline). |
+| Anti-cheat 3D | `server/antiCheat.js` | `validateInput3D`: seq monotônica, vetor de movimento ≤ 1.01, pitch ±1.4, taxa de yaw ≤ 14 rad/s (com wrap), tipos estritos dos one-shots, `clientDt`. Violações alimentam o `ViolationTracker` existente (ban no limiar). |
+| Matchmaking por modo | `server/matchmaking.js` | `chooseRoom(rooms, region, capacity, mode)`: salas 2D e 3D nunca se misturam; `mode` vem do query `?mode=3d` do handshake WS. |
+| Transporte | `server/server.js` | Tick 20 Hz compartilhado, broadcast de snapshot por cliente (eventos embutidos), `ping`/`pong` para RTT, rate limit por modo (2D 30 msg/s, 3D 90 msg/s — `KR_INPUT_LIMIT`), `resume` reconstrói sessão por 15 s. |
+| Cliente de rede | `src/game3d/net3d.js` | `NetClient3D`: login HTTP + WS `?token&mode=3d`, inputs a 30 Hz, buffer de 3 snapshots com interpolação (delay 110 ms), reconexão com backoff e `kr_resume_3d`. |
+| Jogo online | `src/game3d/online3d.js` | `OnlineGame3D` (estende `Game3D`): `Sim3DView` traduz snapshots para o contrato da sim local — renderizador, HUD e áudio do offline funcionam sem fork; yaw/pitch da câmera permanecem locais (responsivos), posição vem do servidor. |
+
+**Fluxo de desenvolvimento (2 terminais):**
+```bash
+KR_DEV_AUTH=1 npm run server          # terminal 1 — API + WS na :8787 (usuários kr_player/kr123 e kr_admin/kr123)
+npm run dev                            # terminal 2 — Vite na :5173 com proxy /ws, /auth, /admin
+```
+Abra `http://localhost:5173/?online=1`, faça login (`kr_player`/`kr123` no console:
+`await window.KhaaosOnline3D.net.constructor.login('', 'kr_player', 'kr123')`) — ou grave o JWT
+em `localStorage.kr_token` antes de abrir. Em produção (`/auth/login` + `localStorage.kr_token`),
+o fluxo é idêntico ao do cliente online 2D.
+
+**Notas de segurança:** `KR_DEV_AUTH=1` é apenas para desenvolvimento local (nunca em produção);
+produção continua usando `KR_USERS_JSON`/Postgres como documentado acima. O input 3D passa pelo
+mesmo pipeline de validação/strikes/ban do 2D, e snapshots nunca expõem `ai`/inventário de terceiros.
+
+**Testes:** `node --test test/sim3d.test.js` cobre a sim offline (determinística de mundo/loot,
+movimento+colisão, balística corpo/headshot ×1.75, pulsos e dano de zona, coleta, recarga, fim de
+partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a sala autoritativa
+e o anti-cheat 3D; `node --test test/server3d.test.js` valida o end-to-end real (login HTTP →
+matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
 
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
