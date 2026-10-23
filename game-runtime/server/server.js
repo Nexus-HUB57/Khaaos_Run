@@ -10,7 +10,9 @@ import { MatchRoom3D } from './room3d.js';
 import { validateInput, validateInput3D, ViolationTracker } from './antiCheat.js';
 import { AuthService, hasRole, hashPassword } from './auth.js';
 import { OidcClient } from './oidc.js';
-import { createSessionStore } from './store.js';
+import { createSessionStore, PostgresAuditStore } from './store.js';
+import { AuditLog } from './audit.js';
+import { can } from './rbac.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
 
@@ -46,6 +48,7 @@ export function createAuthoritativeServer({
   rateStore,
   tls,
   oidc,
+  auditStore,
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -77,6 +80,11 @@ export function createAuthoritativeServer({
   // 2D (legado, 20Hz de inputs) mantém 30/s; 3D (30Hz de inputs + ping) usa 90/s.
   const limiter = new DistributedRateLimiter({ store: selectedRateStore, limit: 30, windowMs: 1000, prefix: 'ws-input' });
   const limiter3d = new DistributedRateLimiter({ store: selectedRateStore, limit: Number(process.env.KR_INPUT_LIMIT || 90), windowMs: 1000, prefix: 'ws-input-3d' });
+  // Trilha de auditoria: ring buffer em memória + store persistente opcional
+  // (KR_AUDIT_STORE=postgres usa PostgresAuditStore, migração 002_audit_events.sql).
+  const selectedAuditStore = auditStore
+    || (process.env.KR_AUDIT_STORE === 'postgres' ? new PostgresAuditStore() : null);
+  const audit = new AuditLog({ store: selectedAuditStore });
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -85,7 +93,7 @@ export function createAuthoritativeServer({
   const metrics = {
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
-    backpressure: 0, oversized: 0, logouts: 0, keyRotations: 0, oidcLogins: 0,
+    backpressure: 0, oversized: 0, logouts: 0, keyRotations: 0, oidcLogins: 0, rbacDenies: 0,
   };
 
   const send = (ws, message) => {
@@ -99,10 +107,25 @@ export function createAuthoritativeServer({
     return true;
   };
   const getRoom = (client) => client.roomId ? rooms.get(client.roomId) : null;
-  const authorizedAdmin = (req) => {
+  // Identidade da requisição HTTP: token KR (qualquer papel) ou token legacy de operações (admin).
+  const identityFor = (req) => {
     const token = bearer(req) || req.headers['x-admin-token'] || new URL(req.url, 'http://localhost').searchParams.get('token');
     const user = identity.verify(token);
-    return (user && hasRole(user, 'admin')) || token === adminToken;
+    if (user) return user;
+    if (token === adminToken) return { sub: 'legacy', username: 'legacy-token', role: 'admin' };
+    return null;
+  };
+  // Guarda RBAC de endpoint: 403 + evento de auditoria quando a permissão não cobre.
+  // Decisões allow SÓ são auditadas em operações sensíveis (rotate/drop/login/logout/oidc/start);
+  // leituras repetitivas (painel) não geram ruído.
+  const guardHttp = (req, res, permission, resource = null) => {
+    const actor = identityFor(req);
+    if (can(actor, permission, resource)) return actor;
+    metrics.rbacDenies++;
+    audit.record({ actor: actor?.username || 'anonymous', action: 'rbac.deny', resource, outcome: 'deny', detail: { permission, via: 'http' } });
+    res.writeHead(403, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'forbidden', permission }));
+    return null;
   };
 
   function assign(client) {
@@ -155,7 +178,12 @@ export function createAuthoritativeServer({
         if (!allowed.allowed) { res.writeHead(429); res.end(JSON.stringify({ error: 'rate_limited' })); return; }
         const body = await jsonBody(req);
         const logged = identity.login(body.username, body.password);
-        if (!logged) { metrics.authFailures++; res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'invalid_credentials' })); return; }
+        if (!logged) {
+          metrics.authFailures++;
+          audit.record({ actor: body.username || 'unknown', action: 'auth.login', outcome: 'deny', detail: { via: 'password' } });
+          res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'invalid_credentials' })); return;
+        }
+        audit.record({ actor: logged.user.username, action: 'auth.login', outcome: 'allow', detail: { via: 'password', role: logged.user.role } });
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify(logged));
         return;
@@ -163,8 +191,10 @@ export function createAuthoritativeServer({
       if (req.method === 'POST' && url.pathname === '/auth/logout') {
         const token = bearer(req);
         if (!token) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const actor = identity.verify(token);
         const revoked = identity.revoke(token);
         if (revoked) metrics.logouts++;
+        audit.record({ actor: actor?.username || 'unknown', action: 'auth.logout', outcome: revoked ? 'allow' : 'deny' });
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end(JSON.stringify({ revoked, logout: true }));
         return;
@@ -212,6 +242,7 @@ export function createAuthoritativeServer({
           const user = identity.upsertExternalUser({ id: `oidc-${claims.sub}`, username, role, region: claims.region });
           const session = identity.issueForUser(user);
           metrics.oidcLogins++;
+          audit.record({ actor: user.username, action: 'auth.oidc', outcome: 'allow', detail: { subject: claims.sub, provider: 'oidc', role: user.role } });
           const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' };
           if (process.env.KR_OIDC_SET_COOKIE === '1') {
             headers['set-cookie'] = `kr_token=${encodeURIComponent(session.token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`;
@@ -231,25 +262,29 @@ export function createAuthoritativeServer({
         return;
       }
       if (url.pathname === '/admin/keys' && req.method === 'GET') {
-        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        if (!guardHttp(req, res, 'keys:rotate')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end(JSON.stringify({ keys: identity.keyInfo() }));
         return;
       }
       if (url.pathname === '/admin/keys/rotate' && req.method === 'POST') {
-        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const admin = guardHttp(req, res, 'keys:rotate');
+        if (!admin) return;
         const body = await jsonBody(req);
         const result = identity.rotateSecret(body.secret || undefined);
         metrics.keyRotations++;
+        audit.record({ actor: admin.username, action: 'key.rotate', outcome: 'allow', detail: { kid: result.kid, providedSecret: Boolean(body.secret) } });
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end(JSON.stringify(result));
         return;
       }
       if (url.pathname === '/admin/keys/drop' && req.method === 'POST') {
-        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const admin = guardHttp(req, res, 'keys:rotate');
+        if (!admin) return;
         const body = await jsonBody(req);
         try {
           const dropped = identity.dropKey(body.kid);
+          audit.record({ actor: admin.username, action: 'key.drop', outcome: dropped ? 'allow' : 'deny', detail: { kid: body.kid } });
           res.writeHead(dropped ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           res.end(JSON.stringify({ dropped, keys: identity.keyInfo() }));
         } catch (error) {
@@ -258,14 +293,29 @@ export function createAuthoritativeServer({
         }
         return;
       }
+      if (url.pathname === '/admin/audit' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'audit:read')) return;
+        const events = audit.query({
+          sinceId: Number(url.searchParams.get('sinceId') || 0),
+          limit: Number(url.searchParams.get('limit') || 100),
+          actor: url.searchParams.get('actor'),
+          action: url.searchParams.get('action'),
+          outcome: url.searchParams.get('outcome'),
+        });
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ events, nextSinceId: events.length ? events[0].id : Number(url.searchParams.get('sinceId') || 0) }));
+        return;
+      }
       if (url.pathname.startsWith('/admin/')) {
-        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
-        const admin = identity.verify(bearer(req));
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        const elevated = hasRole(admin, 'admin');
         const payload = {
           metrics,
           queue: queue.length,
           rooms: [...rooms.values()].map((room) => room.metrics()),
-          clients: [...clients.values()].map((client) => ({ id: client.id, username: client.identity.username, role: client.identity.role, region: client.region, roomId: client.roomId, strikes: client.violations.count, suspicious: client.violations.suspicious })),
+          // dados por usuário (usernames, strikes) só para papéis elevados
+          clients: elevated ? [...clients.values()].map((client) => ({ id: client.id, username: client.identity.username, role: client.identity.role, region: client.region, roomId: client.roomId, strikes: client.violations.count, suspicious: client.violations.suspicious })) : undefined,
           sessions: (await durable.listSessions()).length,
           admin: admin?.username || 'legacy-token',
           now: Date.now(),
@@ -317,7 +367,18 @@ export function createAuthoritativeServer({
         try {
           const message = JSON.parse(raw.toString());
           if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t }); return; }
-          if (message.type === 'start') { getRoom(client)?.start(client.id, message.entry || 'belt'); return; }
+          if (message.type === 'start') {
+            const room = getRoom(client);
+            if (!can(client.identity, 'room:start', room?.id)) {
+              metrics.rbacDenies++;
+              audit.record({ actor: client.identity.username, action: 'rbac.deny', resource: room?.id || null, outcome: 'deny', detail: { permission: 'room:start', via: 'ws' } });
+              send(ws, { type: 'forbidden', permission: 'room:start' });
+              return;
+            }
+            if (room) audit.record({ actor: client.identity.username, action: 'room.start', resource: room.id, outcome: 'allow' });
+            room?.start(client.id, message.entry || 'belt');
+            return;
+          }
           if (message.type !== 'input') return;
           const room = getRoom(client);
           if (room?.is3d) {
@@ -382,7 +443,7 @@ export function createAuthoritativeServer({
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
-    tls: tlsConfig, oidc: oidcClient,
+    tls: tlsConfig, oidc: oidcClient, audit,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);

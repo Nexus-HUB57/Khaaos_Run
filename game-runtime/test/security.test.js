@@ -126,9 +126,9 @@ test('admin de chaves: player não autorizado; legacy token rotaciona; lista nun
   try {
     const playerToken = app.auth.login('player', 'player-pw').token;
     const deniedList = await fetch(`http://127.0.0.1:${port}/admin/keys`, { headers: { authorization: `Bearer ${playerToken}` } });
-    assert.equal(deniedList.status, 401);
+    assert.equal(deniedList.status, 403); // RBAC: autenticado, porém sem permissão
     const deniedRotate = await fetch(`http://127.0.0.1:${port}/admin/keys/rotate`, { method: 'POST', headers: { authorization: `Bearer ${playerToken}` }, body: '{}' });
-    assert.equal(deniedRotate.status, 401);
+    assert.equal(deniedRotate.status, 403); // RBAC: autenticado, porém sem permissão
 
     const rotate = await fetch(`http://127.0.0.1:${port}/admin/keys/rotate?token=legacy`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ secret: 'novo-secret-ops' }) });
     assert.equal(rotate.status, 200);
