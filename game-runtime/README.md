@@ -15,6 +15,24 @@ Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e
 
 O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
 
+## Modo 3D — Battle Royale TPS (FreeFire-style)
+
+`index.html` (raiz do runtime) inicia o **modo 3D**: terceira pessoa (TPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
+
+| Sistema | Módulo | Responsabilidade |
+|---------|--------|------------------|
+| Simulação headless | `src/game3d/sim3d.js` | Movimento, balística com convergência de mira, IA dos bots (patrulha→engajar→caçar), zona em pulsos, loot, terminais ZEX, replay/snapshot. Determinística por seed (mesma sequência de RNG da trilha 2D). |
+| Layout procedural | `src/game3d/layout3d.js` | Distritos (Pátio de Armamento, Proving Grounds, Parque Abandonado, Setor Industrial, Terminal ZEX), colliders AABB, pontos de loot/spawn. Mesma seed ⇒ mesmo mundo. |
+| Mundo | `src/game3d/world3d.js` | Céu de crepúsculo (paleta Mystic Chaos), sol com sombras PCFSoft, fog, terreno, estruturas, grama instanciada, parede do anel (shader). |
+| Entidades | `src/game3d/entities3d.js` | Operativos humanoides articulados (8 tons de pele canônicos), arsenal low-poly por arma, loot com feixe de raridade, terminais ZEX. |
+| Efeitos/Áudio | `src/game3d/effects3d.js`, `audio3d.js` | Tracers, muzzle flash, impactos, sangue + SFX WebAudio 100% procedurais (tiro por arma, hitmarker, pulso, heartbeat). |
+| HUD | `src/game3d/hud3d.js` | Barras VL/VD, munição, minimapa com anel atual/alvo, killfeed, crosshair dinâmico, objetivos, modais ZU/Marechal, controles touch. |
+
+**Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `1`/`2` slots · `ESC` liberar mouse.
+**Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit) à direita.
+
+**Testes:** `node --test test/sim3d.test.js` cobre determinística de mundo/loot, movimento+colisão, balística (corpo e headshot ×1.75), pulsos e dano de zona, coleta, recarga, fim de partida, replay determinístico e snapshot roundtrip.
+
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
 
