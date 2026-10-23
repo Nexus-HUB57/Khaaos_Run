@@ -9,6 +9,7 @@ import { createOperative, animateOperative, attachWeapon, createLootMesh, SKIN_T
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
+import { createPostFX } from './postfx3d.js';
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -68,6 +69,15 @@ export class Game3D {
       this.camera.aspect = innerWidth / innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);
+      this.post?.setSize(innerWidth, innerHeight);
+    });
+  }
+
+  // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback render direto)
+  initPost() {
+    const fxOff = new URLSearchParams(location.search).get('fx') === '0';
+    this.post = fxOff ? null : createPostFX(this.renderer, this.scene, this.camera, {
+      quality: this.isTouch() ? 'low' : 'high',
     });
   }
 
@@ -130,6 +140,8 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
+    this.camKick = 0; // recuo visual do disparo (só câmera, não afeta a mira)
+    this.initPost();
   }
 
   initInput() {
@@ -313,8 +325,9 @@ export class Game3D {
     const dir = camPos.clone().sub(eye);
     const len = dir.length(); dir.normalize();
     const ray = new THREE.Raycaster(eye, dir, 0, len);
+    ray.camera = this.camera; // exigido p/ sprites (evita spam de erro no console)
     const hits = ray.intersectObjects(this.scene.children, true)
-      .filter(h => h.object.visible && !h.object.userData.noCamBlock && h.distance > .2);
+      .filter(h => h.object.isMesh && h.object.visible && !h.object.userData.noCamBlock && h.distance > .2);
     let finalPos = camPos;
     if (hits.length) {
       const blocked = hits.find(h => h.object.geometry?.type === 'BoxGeometry' || h.object.geometry?.type === 'CylinderGeometry');
@@ -324,6 +337,9 @@ export class Game3D {
     }
     this.camera.position.lerp(finalPos, Math.min(1, dt * 14));
     const lookTarget = shoulder.clone().addScaledVector(new THREE.Vector3(fx, fy, fz), 30);
+    // recuo visual do disparo (decai exponencialmente; não altera a mira real)
+    this.camKick *= Math.exp(-dt * 9);
+    lookTarget.y += this.camKick * 26;
     this.camera.lookAt(lookTarget);
     // FOV dinâmico
     const targetFov = p.ads ? 42 : (p.sprinting ? 68 : 62);
@@ -368,6 +384,7 @@ export class Game3D {
           const dist = e.owner === 'player' ? 0 : Math.hypot(e.x - p.x, e.z - p.z);
           this.effects.muzzleFlash(new THREE.Vector3(e.x, e.y, e.z));
           this.audio.shot(e.weapon, dist);
+          if (e.owner === 'player') this.camKick = Math.min(0.03, this.camKick + 0.011);
           break;
         }
         case 'hit': {
@@ -487,7 +504,8 @@ export class Game3D {
       this.hud.update(dt, this.input);
       this.updateInteractionPrompt();
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) this.post.render(dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 }
 

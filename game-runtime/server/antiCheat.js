@@ -29,6 +29,8 @@ export function validateInput3D(previous, next, dt = 1/20) {
     if(next[flag]!==undefined && typeof next[flag]!=='boolean') violations.push('field_type');
   }
   if(next.slot!==undefined && next.slot!==0 && next.slot!==1 && next.slot!==2) violations.push('field_type');
+  // rtt (Fase 3): se presente, deve ser numérico finito — o servidor faz o clamp
+  if(next.rtt!==undefined && !Number.isFinite(next.rtt)) violations.push('field_type');
   if(Number.isFinite(next.clientDt)&&Math.abs(next.clientDt-dt)>MAX_INPUT_GAP) violations.push('client_timing');
   return { ok:violations.length===0, violations };
 }
