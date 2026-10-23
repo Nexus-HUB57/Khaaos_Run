@@ -14,7 +14,7 @@ import './styles3d.css';
 const SIM_DT = 1 / 30;
 const VEST_COLORS = VEST_COLORS_FALLBACK;
 
-class Game3D {
+export class Game3D {
   constructor(seed, { net = null } = {}) {
     this.seed = seed;
     this.sim = new KhaaosSim3D({ seed, botCount: 12 });
@@ -496,8 +496,7 @@ const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
 const online = new URLSearchParams(location.search).get('online') === '1';
 if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
-  const { bootstrapOnline } = await import('./online3d.js');
-  bootstrapOnline();
+  import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
 } else {
   const game = new Game3D(seed);
   window.KhaaosReplay3D = { export: () => game.sim.exportReplay(), game };
