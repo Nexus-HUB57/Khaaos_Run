@@ -169,10 +169,10 @@ function validateP0_3() {
   // Validate world image keys
   const worlds = [
     { name: 'CIGKV', key: 'world_cigkv' },
-    { name: 'Barburhen', key: 'world_w1_barburhen' },
-    { name: 'Priadus', key: 'world_w2_priadus' },
-    { name: 'Ckesalth', key: 'world_w3_ckesalth' },
-    { name: 'Arukheea', key: 'world_w4_arukheea' },
+    { name: 'Barburhen', key: 'world_barburhen' },
+    { name: 'Priadus', key: 'world_priadus' },
+    { name: 'Ckesalth', key: 'world_ckesalth' },
+    { name: 'Arukheea', key: 'world_arukheea' },
   ];
 
   for (const w of worlds) {

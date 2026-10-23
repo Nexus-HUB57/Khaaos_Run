@@ -355,19 +355,19 @@ FString UKhaaosDiscordRichPresence::GetWorldImageKey(const FString& WorldName) c
         }
         else if (WorldName == TEXT("Barburhen"))
         {
-                return TEXT("world_w1_barburhen");
+                return TEXT("world_barburhen");
         }
         else if (WorldName == TEXT("Priadus"))
         {
-                return TEXT("world_w2_priadus");
+                return TEXT("world_priadus");
         }
         else if (WorldName == TEXT("Ckesalth"))
         {
-                return TEXT("world_w3_ckesalth");
+                return TEXT("world_ckesalth");
         }
         else if (WorldName == TEXT("Arukheea"))
         {
-                return TEXT("world_w4_arukheea");
+                return TEXT("world_arukheea");
         }
 
         UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosDiscordRichPresence::GetWorldImageKey - Unknown world: %s"), *WorldName);
