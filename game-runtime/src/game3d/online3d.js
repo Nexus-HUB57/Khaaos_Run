@@ -92,6 +92,15 @@ export class OnlineGame3D extends Game3D {
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
     this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
+    const scenarioSelect = document.querySelector('#scenarioSelect');
+    if (scenarioSelect) {
+      scenarioSelect.disabled = true;
+      scenarioSelect.title = 'O cenário online é escolhido pela sala autoritativa.';
+    }
+    const operativeSelect = document.querySelector('#operativeSelect');
+    if (operativeSelect) operativeSelect.disabled = true;
+    const selectionStatus = document.querySelector('#contentSelectionStatus');
+    if (selectionStatus) selectionStatus.textContent = 'ONLINE: o servidor define o mundo; o operativo/paleta ainda não sincroniza entre jogadores.';
     const seedInput = document.querySelector('#seedInput');
     if (seedInput) { seedInput.disabled = true; seedInput.value = 'SERVIDOR'; }
 

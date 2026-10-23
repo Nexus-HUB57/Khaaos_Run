@@ -22,8 +22,8 @@
 
 import type { Express } from "express";
 import { storage } from "../storage";
-import { distributedState } from "./DistributedState";
-import { aggregateWorldTelemetry } from "./worldTelemetry";
+import { roomManager } from "./RoomManager";
+import { WORLD_IDS } from "./worldTelemetry";
 import {
   EKhaaosWebhookChannel,
   getWebhookInfo,
@@ -143,16 +143,9 @@ export function registerDiscordApiV1Routes(app: Express): void {
   // ── GET /api/v1/server/status ─────────────────────────────────────
   app.get(`${v1Prefix}/server/status`, async (_req, res) => {
     try {
-      // Aggregate from distributed state
-      const state = distributedState.getState();
-      const worldTelemetry = aggregateWorldTelemetry();
-
-      const onlinePlayers = state.rooms.reduce(
-        (sum: number, r: any) => sum + (r.players?.length ?? 0), 0
-      );
-      const activeMatches = state.rooms.filter(
-        (r: any) => r.phase === "IN_PROGRESS"
-      ).length;
+      const worldTelemetry = WORLD_IDS.map((worldId) => roomManager.getWorldTelemetry(worldId));
+      const onlinePlayers = worldTelemetry.reduce((sum, world) => sum + world.occupancy.current, 0);
+      const activeMatches = worldTelemetry.reduce((sum, world) => sum + world.activeRooms, 0);
 
       const regions = [
         { id: "sa1", name: "South America", healthy: true, players: Math.floor(onlinePlayers * 0.4) },
@@ -166,7 +159,7 @@ export function registerDiscordApiV1Routes(app: Express): void {
         region: process.env.KHAOS_REGION || "sa1",
         onlinePlayers,
         activeMatches,
-        totalRooms: state.rooms.length,
+        totalRooms: activeMatches,
         regions,
         uptime: process.uptime(),
         worlds: worldTelemetry,
@@ -190,16 +183,16 @@ export function registerDiscordApiV1Routes(app: Express): void {
         return;
       }
 
-      const elo = stats.elo ?? stats.rating ?? 1000;
+      const elo = stats.rating ?? 1000;
       const rank = rankNameFromELO(elo);
       const wins = stats.wins ?? 0;
-      const losses = stats.losses ?? 0;
-      const totalMatches = wins + losses;
+      const losses = Math.max(0, stats.matchesPlayed - wins);
+      const totalMatches = stats.matchesPlayed;
       const winRate = totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : "0.0";
 
       res.json({
         playerId,
-        playerName: stats.playerName ?? stats.username ?? playerId,
+        playerName: playerId,
         elo,
         rank,
         wins,
@@ -207,9 +200,8 @@ export function registerDiscordApiV1Routes(app: Express): void {
         winRate: `${winRate}%`,
         matchesPlayed: totalMatches,
         kills: stats.kills ?? 0,
-        bestKillStreak: stats.bestKillStreak ?? stats.killStreak ?? 0,
-        damageDealt: stats.damageDealt ?? 0,
-        matchesSurvived: stats.matchesSurvived ?? wins,
+        top5: stats.top5,
+        seasonKills: stats.seasonKills,
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
@@ -257,35 +249,23 @@ export function registerDiscordApiV1Routes(app: Express): void {
     try {
       const { id } = req.params;
 
-      // Try to get match from distributed state
-      const state = distributedState.getState();
-      const room = state.rooms.find((r: any) => r.id === id || r.roomId === id);
+      const room = roomManager.getRoomSummary(id);
 
       if (!room) {
         res.status(404).json({ error: "Match not found", code: 10003 });
         return;
       }
 
-      const players = (room.players ?? []).map((p: any) => ({
-        id: p.id ?? p.eosId,
-        name: p.name ?? p.username ?? "Unknown",
-        species: p.species ?? "Unknown",
-        kills: p.kills ?? 0,
-        alive: p.status !== "eliminated",
-      }));
-
-      // Sort by kills descending for kill feed
-      const killFeed = [...players].sort((a, b) => b.kills - a.kills).slice(0, 5);
-
       res.json({
         matchId: id,
-        world: room.world ?? room.mapName ?? "Unknown",
-        phase: room.phase ?? "Unknown",
-        totalPlayers: players.length,
-        aliveCount: players.filter(p => p.alive).length,
-        killFeed,
-        timeElapsed: room.timeElapsed ?? room.matchTime ?? 0,
-        circlePhase: room.circlePhase ?? 1,
+        world: room.worldId,
+        phase: room.status,
+        totalPlayers: room.playerCount,
+        maxPlayers: room.maxPlayers,
+        aliveCount: null,
+        killFeed: [],
+        timeElapsed: null,
+        circlePhase: null,
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
@@ -312,20 +292,13 @@ export function registerDiscordApiV1Routes(app: Express): void {
     try {
       const { playerId } = req.params;
 
-      // Try to get from economy service
-      const balance = await storage.getPlayerBalance?.(playerId).catch(() => null);
-
-      if (balance === null || balance === undefined) {
-        res.status(404).json({ error: "Player economy data not found", code: 10013 });
-        return;
-      }
+      const account = await storage.getBankAccount(playerId);
 
       res.json({
         playerId,
-        balance: balance.krc ?? balance.balance ?? 0,
-        lifetimeEarned: balance.lifetimeEarned ?? 0,
-        lifetimeSpent: balance.lifetimeSpent ?? 0,
-        transactionCount: balance.transactionCount ?? 0,
+        balance: Number(account.weaponsBalance),
+        bonusBalance: Number(account.bonusBalance),
+        fbmBalance: Number(account.fbmBalance),
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {

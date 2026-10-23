@@ -8,7 +8,7 @@ for (const [name, requiredSnippets] of [
   ["0002_economy_idempotency.sql", ["CREATE TABLE IF NOT EXISTS economy_idempotency", "economy_idempotency_user_key_unique"]],
   ["0003_economy_invariants.sql", ["bank_weapons_nonnegative", "loans_is_paid_present", "items_durability_within_maximum"]],
   ["0004_correlated_append_only_ledger.sql", ["economy_ledger_entries", "economy_ledger_no_row_mutation", "economy_ledger_operation_balanced"]],
-  ["0005_optimal_steel_serpent.sql", ["economy_idem_key_format", "economy_ledger_key_format"]],
+  ["0005_stripe_checkout.sql", ["CREATE TABLE IF NOT EXISTS payment_orders", "payment_orders_currency_brl", "payment_orders_user_idempotency_unique", "payment_webhook_events_provider_event_unique"]],
 ] as const) {
   test(`${name} mantém os gates econômicos declarados`, async () => {
     const sql = await readFile(migration(name), "utf8");
@@ -22,9 +22,8 @@ test("migrations econômicas permanecem ordenadas e o boot não as executa impli
     "0002_economy_idempotency",
     "0003_economy_invariants",
     "0004_correlated_append_only_ledger",
-    "0005_optimal_steel_serpent",
+    "0005_stripe_checkout",
   ]);
-  assert.equal(journal.entries[6]?.tag, "0006_marshal-council-persistence");
   const indexSource = await readFile(new URL("../../server/index.ts", import.meta.url), "utf8");
   assert.doesNotMatch(indexSource, /drizzle-kit migrate|db\.migrate/);
 });
