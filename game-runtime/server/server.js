@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -8,6 +9,7 @@ import { MatchRoom } from './room.js';
 import { MatchRoom3D } from './room3d.js';
 import { validateInput, validateInput3D, ViolationTracker } from './antiCheat.js';
 import { AuthService, hasRole, hashPassword } from './auth.js';
+import { OidcClient } from './oidc.js';
 import { createSessionStore } from './store.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
@@ -27,6 +29,13 @@ const jsonBody = (req) => new Promise((resolve, reject) => {
   });
 });
 const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+const cookieValue = (req, name) => {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(rest.join('='));
+  }
+  return null;
+};
 
 export function createAuthoritativeServer({
   port = Number(process.env.PORT || 8787),
@@ -35,7 +44,24 @@ export function createAuthoritativeServer({
   auth,
   store,
   rateStore,
+  tls,
+  oidc,
 } = {}) {
+  // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
+  const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
+    ? { cert: fs.readFileSync(process.env.KR_TLS_CERT), key: fs.readFileSync(process.env.KR_TLS_KEY) }
+    : null);
+  // SSO/OIDC operacional: config direta ou env KR_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URI.
+  const oidcConfig = oidc || (process.env.KR_OIDC_ISSUER && process.env.KR_OIDC_CLIENT_ID && process.env.KR_OIDC_CLIENT_SECRET
+    ? {
+        issuer: process.env.KR_OIDC_ISSUER,
+        clientId: process.env.KR_OIDC_CLIENT_ID,
+        clientSecret: process.env.KR_OIDC_CLIENT_SECRET,
+        redirectUri: process.env.KR_OIDC_REDIRECT_URI,
+      }
+    : null);
+  const oidcClient = oidcConfig ? new OidcClient(oidcConfig) : null;
+  const oidcSubjectsAdmin = new Set(String(process.env.KR_OIDC_ADMIN_SUBJECTS || '').split(',').filter(Boolean));
   const users = process.env.KR_USERS_JSON ? JSON.parse(process.env.KR_USERS_JSON) : [];
   // KR_DEV_AUTH=1 provisiona usuários de desenvolvimento (NUNCA usar em produção).
   if (process.env.KR_DEV_AUTH === '1' && users.length === 0) {
@@ -59,7 +85,7 @@ export function createAuthoritativeServer({
   const metrics = {
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
-    backpressure: 0, oversized: 0,
+    backpressure: 0, oversized: 0, logouts: 0, keyRotations: 0, oidcLogins: 0,
   };
 
   const send = (ws, message) => {
@@ -98,13 +124,17 @@ export function createAuthoritativeServer({
     });
   }
 
-  const server = http.createServer(async (req, res) => {
+  // Estados de autorização OIDC (state single-use → { nonce, expiresAt }).
+  const oidcStates = new Map();
+  const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
+
+  async function httpHandler(req, res) {
     const url = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'GET' && url.pathname === '/healthz') {
         const roomList = [...rooms.values()];
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length }));
+        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, tls: Boolean(tlsConfig), oidc: Boolean(oidcClient) }));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/readyz') {
@@ -130,9 +160,102 @@ export function createAuthoritativeServer({
         res.end(JSON.stringify(logged));
         return;
       }
+      if (req.method === 'POST' && url.pathname === '/auth/logout') {
+        const token = bearer(req);
+        if (!token) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const revoked = identity.revoke(token);
+        if (revoked) metrics.logouts++;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ revoked, logout: true }));
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/auth/oidc/start') {
+        if (!oidcClient) { res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'oidc_not_configured' })); return; }
+        try {
+          await oidcClient.ready();
+        } catch {
+          res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'oidc_unavailable' })); return;
+        }
+        const now = Date.now();
+        for (const [st, entry] of oidcStates) if (entry.expiresAt <= now) oidcStates.delete(st);
+        const state = crypto.randomBytes(24).toString('base64url');
+        const nonce = crypto.randomBytes(16).toString('base64url');
+        oidcStates.set(state, { nonce, expiresAt: now + OIDC_STATE_TTL_MS });
+        res.writeHead(302, {
+          location: oidcClient.authorizationUrl({ state, nonce }),
+          'set-cookie': `kr_oidc_state=${encodeURIComponent(state)}; HttpOnly; SameSite=Lax; Path=/auth/oidc; Max-Age=600`,
+          'cache-control': 'no-store',
+        });
+        res.end();
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/auth/oidc/callback') {
+        if (!oidcClient) { res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'oidc_not_configured' })); return; }
+        const queryState = url.searchParams.get('state');
+        const cookieState = cookieValue(req, 'kr_oidc_state');
+        const entry = queryState ? oidcStates.get(queryState) : null;
+        if (!queryState || !cookieState || queryState !== cookieState || !entry || entry.expiresAt <= Date.now()) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid_state' }));
+          return;
+        }
+        oidcStates.delete(queryState); // single-use
+        const code = url.searchParams.get('code');
+        if (!code) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'missing_code' })); return; }
+        try {
+          const tokens = await oidcClient.exchangeCode(code);
+          const result = await oidcClient.verifyIdToken(tokens.id_token, { nonce: entry.nonce });
+          if (!result.ok) { metrics.authFailures++; res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'invalid_id_token', reason: result.reason })); return; }
+          const claims = result.claims;
+          const username = claims.preferred_username || claims.email || `oidc:${claims.sub}`;
+          const role = oidcSubjectsAdmin.has(claims.sub) ? 'admin' : 'player';
+          const user = identity.upsertExternalUser({ id: `oidc-${claims.sub}`, username, role, region: claims.region });
+          const session = identity.issueForUser(user);
+          metrics.oidcLogins++;
+          const headers = { 'content-type': 'application/json', 'cache-control': 'no-store' };
+          if (process.env.KR_OIDC_SET_COOKIE === '1') {
+            headers['set-cookie'] = `kr_token=${encodeURIComponent(session.token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`;
+          }
+          res.writeHead(200, headers);
+          res.end(JSON.stringify({ ...session, provider: 'oidc' }));
+        } catch (error) {
+          metrics.authFailures++;
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'oidc_exchange_failed', detail: error?.message }));
+        }
+        return;
+      }
       if (url.pathname === '/admin.html') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end(fs.readFileSync(path.join(ROOT, 'admin.html')));
+        return;
+      }
+      if (url.pathname === '/admin/keys' && req.method === 'GET') {
+        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ keys: identity.keyInfo() }));
+        return;
+      }
+      if (url.pathname === '/admin/keys/rotate' && req.method === 'POST') {
+        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const body = await jsonBody(req);
+        const result = identity.rotateSecret(body.secret || undefined);
+        metrics.keyRotations++;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(result));
+        return;
+      }
+      if (url.pathname === '/admin/keys/drop' && req.method === 'POST') {
+        if (!authorizedAdmin(req)) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const body = await jsonBody(req);
+        try {
+          const dropped = identity.dropKey(body.kid);
+          res.writeHead(dropped ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ dropped, keys: identity.keyInfo() }));
+        } catch (error) {
+          res.writeHead(409, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: error.message }));
+        }
         return;
       }
       if (url.pathname.startsWith('/admin/')) {
@@ -157,7 +280,11 @@ export function createAuthoritativeServer({
       res.writeHead(400, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'bad_request' }));
     }
-  });
+  }
+
+  const server = tlsConfig
+    ? https.createServer({ cert: tlsConfig.cert, key: tlsConfig.key }, (req, res) => { void httpHandler(req, res); })
+    : http.createServer((req, res) => { void httpHandler(req, res); });
 
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
   const handleConnection = async (ws, req) => {
@@ -255,6 +382,7 @@ export function createAuthoritativeServer({
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
+    tls: tlsConfig, oidc: oidcClient,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
@@ -268,6 +396,10 @@ export function createAuthoritativeServer({
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const app = createAuthoritativeServer();
-  app.ready.then(() => app.server.listen(Number(process.env.PORT || 8787), () => console.log(`[CIGKV authoritative] http://localhost:${process.env.PORT || 8787} | /ws | /auth/login | /admin.html`)))
+  app.ready.then(() => app.server.listen(Number(process.env.PORT || 8787), () => {
+    const scheme = app.tls ? 'https' : 'http';
+    const extras = [app.tls ? 'TLS on' : 'TLS off', app.oidc ? 'SSO/OIDC on' : 'SSO/OIDC off'].join(' | ');
+    console.log(`[CIGKV authoritative] ${scheme}://localhost:${process.env.PORT || 8787} | /ws | /auth/login | /auth/logout | /auth/oidc/start | /admin.html | ${extras}`);
+  }))
     .catch((error) => { console.error(`[CIGKV authoritative] dependency readiness failed: ${error.message}`); process.exitCode = 1; });
 }
