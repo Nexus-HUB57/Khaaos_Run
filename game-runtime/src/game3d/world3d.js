@@ -169,8 +169,10 @@ function buildNature(scene, layout, rng) {
 }
 
 // ---------- mundo completo ----------
-export function buildScene(seed, renderer = null) {
-  const layout = getWorldLayout(seed);
+// Fase 4 + cenários: buildScene(seed, scenarioId, renderer) — renderer habilita o envmap PBR
+export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
+  const scenario = resolveScenario(scenarioId);
+  const layout = getWorldLayout(seed, scenario.id);
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0048 : 0.0038);
   scene.userData.scenarioId = scenario.id;
@@ -202,7 +204,7 @@ export function buildScene(seed, renderer = null) {
   // ---- terreno ----
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(440, 440),
-    groundMaterial(30) // PBR: cor + normal procedural (Fase 4)
+    groundMaterial(30, scenario.groundTint) // PBR: cor + normal procedural + tint do cenário (Fase 4 + cenários)
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;

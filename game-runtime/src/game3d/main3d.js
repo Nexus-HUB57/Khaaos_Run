@@ -92,7 +92,7 @@ export class Game3D {
   }
 
   initWorld() {
-    const { scene, sun } = buildScene(this.seed, this.renderer); // renderer habilita o envmap PBR
+    const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer); // cenário + envmap PBR (renderer)
     this.scene = scene;
     this.sun = sun;
     this.ringWall = createRingWall();
