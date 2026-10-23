@@ -102,6 +102,9 @@ public:
 	 */
 	static UGameplayEffect* CreateDamageEffect(float Damage, FGameplayTag DamageType);
 
+	/** Create the persistent Onith passive effect; Reduction is a fraction in [0, 1]. */
+	static UGameplayEffect* CreateOnithPassiveEffect(float Reduction);
+
 	// ─── Instant SafeZone Damage ───────────────────────────────────────────────
 
 	/**

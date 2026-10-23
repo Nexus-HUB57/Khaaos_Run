@@ -2,6 +2,8 @@
 
 #include "Game/Combat/KhaaosProjectile.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
+#include "Player/KhaaosCharacter.h"
 #include "KhaaosRun.h"
 
 #include "Components/SphereComponent.h"
@@ -258,9 +260,19 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
                 return;
         }
 
-        auto ApplyToOne = [this](AActor* Victim, float Amount)
+        const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+        const FGameplayTag EffectiveDamageType = DamageTypeTag.IsValid()
+                ? DamageTypeTag
+                : (DamageRadius > 0.0f ? Tags.Effect_Damage_Explosion : Tags.Effect_Damage_Bullet);
+
+        auto ApplyToOne = [this, EffectiveDamageType](AActor* Victim, float Amount)
         {
                 if (!Victim || Amount <= 0.f) return;
+                if (AKhaaosCharacter* CharacterVictim = Cast<AKhaaosCharacter>(Victim))
+                {
+                        CharacterVictim->ApplyDamage(Amount, InstigatorActor.Get(), EffectiveDamageType);
+                        return;
+                }
                 if (UKhaaosVitalityComponent* Vitality = Victim->FindComponentByClass<UKhaaosVitalityComponent>())
                 {
                         Vitality->ApplyDamage(Amount, InstigatorActor.Get());
@@ -270,7 +282,8 @@ void AKhaaosProjectile::ApplyDamageToActor(AActor* Target, const FHitResult& Hit
                 {
                         if (const UKhaaosAttributeSet* ConstAttr = ASC->GetSet<UKhaaosAttributeSet>())
                         {
-                                const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamage(Amount, InstigatorActor.Get());
+                                const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamageOfType(
+                                        Amount, InstigatorActor.Get(), EffectiveDamageType);
                                 return;
                         }
                 }

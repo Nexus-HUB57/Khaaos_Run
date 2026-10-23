@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
+#include "Game/AbilitySystem/KhaaosGameplayEffects.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "KhaaosRun.h"
 
@@ -52,10 +53,42 @@ void UKhaaosAbility_OnithPassive::ActivateAbility(const FGameplayAbilitySpecHand
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// Apply Pele Escamosa: -15% projectile/explosion damage
-	// Implementation: Apply GameplayEffect that modifies damage received
-	// with tag Effect.Damage.Bullet and Effect.Damage.Explosion
-	UE_LOG(LogKhaaosRun, Log, TEXT("Onith Passive: Pele Escamosa activated (-15%% dmg reduction)"));
+	if (!ActorInfo || !ActorInfo->AbilitySystemComponent.IsValid())
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Onith Passive: activation has no valid AbilitySystemComponent"));
+		return;
+	}
+
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	const AActor* OwnerActor = ASC->GetOwnerActor();
+	const FGameplayAbilitySpec* AbilitySpec = ASC->FindAbilitySpecFromHandle(Handle);
+	if (!OwnerActor || !OwnerActor->HasAuthority() || !AbilitySpec || !AbilitySpec->IsActive())
+	{
+		return;
+	}
+
+	UGameplayEffect* PassiveEffect = UKhaaosGameplayEffects::CreateOnithPassiveEffect(DamageReductionPercent);
+	if (!PassiveEffect)
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Onith Passive: failed to create Pele Escamosa GameplayEffect"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+	EffectContext.AddSourceObject(this);
+	const FGameplayEffectSpec PassiveSpec(PassiveEffect, EffectContext, GetAbilityLevel());
+	const FActiveGameplayEffectHandle ActiveHandle = ASC->ApplyGameplayEffectSpecToSelf(PassiveSpec);
+	if (!ActiveHandle.IsValid())
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("Onith Passive: ASC rejected Pele Escamosa GameplayEffect"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	ActiveEffectHandles.Add(ActiveHandle);
+	UE_LOG(LogKhaaosRun, Log, TEXT("Onith Passive: Pele Escamosa applied (%.0f%% projectile/explosion reduction)"),
+		DamageReductionPercent * 100.0f);
 
 	// Do NOT end ability — passives are persistent
 }

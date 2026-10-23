@@ -227,6 +227,40 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateDamageEffect(float Damage, FGamep
 	return Effect;
 }
 
+UGameplayEffect* UKhaaosGameplayEffects::CreateOnithPassiveEffect(float Reduction)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_Species_Onith_PeleEscamosa"));
+	if (!Effect)
+	{
+		return nullptr;
+	}
+
+	const float SafeReduction = FMath::Clamp(Reduction, 0.0f, 1.0f);
+	Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	FGameplayTagContainer GrantedTags;
+	if (Tags.Species_Onith.IsValid())
+	{
+		GrantedTags.AddTag(Tags.Species_Onith);
+	}
+	Effect->GrantedTags = GrantedTags;
+
+	FGameplayModifierInfo ProjectileReduction;
+	ProjectileReduction.Attribute = UKhaaosAttributeSet::GetOnithProjectileDamageReductionAttribute();
+	ProjectileReduction.ModifierOp = EGameplayModOp::Additive;
+	ProjectileReduction.ModifierMagnitude = FScalableFloat(SafeReduction);
+	Effect->Modifiers.Add(ProjectileReduction);
+
+	FGameplayModifierInfo ExplosionReduction;
+	ExplosionReduction.Attribute = UKhaaosAttributeSet::GetOnithExplosionDamageReductionAttribute();
+	ExplosionReduction.ModifierOp = EGameplayModOp::Additive;
+	ExplosionReduction.ModifierMagnitude = FScalableFloat(SafeReduction);
+	Effect->Modifiers.Add(ExplosionReduction);
+
+	return Effect;
+}
+
 // ─── CreateZoneDamageEffect ──────────────────────────────────────────────────
 
 UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerHit)

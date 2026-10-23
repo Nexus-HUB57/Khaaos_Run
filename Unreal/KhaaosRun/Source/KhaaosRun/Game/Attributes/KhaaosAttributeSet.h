@@ -86,6 +86,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
 	float DefenseRating;
 
+	/** Onith passive reduction against projectile damage, applied by an infinite GameplayEffect. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithProjectileDamageReduction, Category = "Khaaos|Attributes|Species")
+	FGameplayAttributeData OnithProjectileDamageReduction;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, OnithProjectileDamageReduction)
+
+	/** Onith passive reduction against explosion damage, applied by an infinite GameplayEffect. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithExplosionDamageReduction, Category = "Khaaos|Attributes|Species")
+	FGameplayAttributeData OnithExplosionDamageReduction;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, OnithExplosionDamageReduction)
+
 	/** Attack range in map percentage. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
 	float AttackRange;
@@ -93,12 +103,22 @@ public:
 	// ─── Mutation Methods ───────────────────────────────────────────────────
 
 	/**
-	 * Apply damage to Health, reduced by DefenseRating.
+	 * Apply untyped damage to Health; typed callers use ApplyDamageOfType.
 	 * Clamps Health to [0, MaxHealth]. Returns actual damage dealt.
 	 * Server-authoritative: clients never call this directly.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	float ApplyDamage(float DamageAmount, AActor* Instigator = nullptr);
+
+	/** Apply typed damage so damage-specific species passives can be evaluated. */
+	float ApplyDamageOfType(float DamageAmount, AActor* Instigator, const FGameplayTag& DamageType);
+
+	/** Apply species mitigation to raw damage before armor/defense. */
+	static float CalculateSpeciesMitigatedDamage(
+		float DamageAmount,
+		const FGameplayTag& DamageType,
+		float ProjectileReduction,
+		float ExplosionReduction);
 
 	/**
 	 * Heal Health by amount. Clamps to MaxHealth.
@@ -161,6 +181,12 @@ public:
 
 	UFUNCTION()
 	void OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth);
+
+	UFUNCTION()
+	void OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction);
+
+	UFUNCTION()
+	void OnRep_OnithExplosionDamageReduction(const FGameplayAttributeData& OldReduction);
 
 protected:
 
