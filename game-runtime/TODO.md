@@ -13,6 +13,8 @@
 - [x] Implementar rate limit com adapter compartilhável em memória.
 - [x] Adicionar testes de autenticação, persistência, reconexão, regiões e concorrência.
 - [x] Expor liveness público em `GET /healthz`, com teste de contrato e sem dados sensíveis.
+- [x] Fase 3 — netfeel: predição client-side com reconciliação, fila de inputs com `ackSeq`, lag compensation por rewind e pós-processamento Live Action.
+- [x] Fase 4 — infiltração aérea (paraquedas sky/chute autoritativo replicado na predição), granada FRAG (balística + dano radial com atenuação por parede), Gloo Wall (cobertura destrutível 220 HP/60 s em colliders dinâmicos), realismo PBR (normal maps procedurais, envmap, vegetação/nuvens) e HUD de queda/arremessáveis. Cobertura: `test/phase4.test.js` (12 testes).
 
 ## Próxima entrega de código
 

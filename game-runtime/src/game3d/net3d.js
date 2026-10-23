@@ -121,6 +121,15 @@ export class NetClient3D {
         return { ...o, x: lerp(prev.x, o.x), y: lerp(prev.y, o.y), z: lerp(prev.z, o.z) };
       });
     }
+    // Fase 4 — granadas: lerp posicional pelo mesmo par de snapshots
+    if (B.grenades) {
+      const byIdG = new Map((A.grenades ?? []).map((g) => [g.id, g]));
+      view.grenades = B.grenades.map((g) => {
+        const prev = byIdG.get(g.id);
+        if (!prev) return g;
+        return { ...g, x: lerp(prev.x, g.x), y: lerp(prev.y, g.y), z: lerp(prev.z, g.z) };
+      });
+    }
     return view;
   }
 

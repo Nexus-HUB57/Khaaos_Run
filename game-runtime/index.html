@@ -52,7 +52,17 @@
       <div id="reloadHint">RECARREGANDO…</div>
       <div class="ammo-row"><b id="ammoMag">15</b><span id="ammoReserve">/ 45</span></div>
       <div class="weapon-name" id="weaponName">PISTOLA 9MM</div>
-      <div class="medkit-chip" title="Usar kit médico [Q]">✚ <span id="medkitCount">×1</span><small>Q</small></div>
+      <div class="throwables-row">
+        <div class="throw-chip frag" title="Granada FRAG [G]">💣 <span id="fragCount">×1</span><small>G</small></div>
+        <div class="throw-chip gloo" title="Gloo Wall [F]">🧊 <span id="glooCount">×1</span><small>F</small></div>
+        <div class="medkit-chip" title="Usar kit médico [Q]">✚ <span id="medkitCount">×1</span><small>Q</small></div>
+      </div>
+    </div>
+
+    <!-- altímetro da infiltração aérea (Fase 4) -->
+    <div id="altimeter">
+      <div class="alt-head"><span id="altPhase">QUEDA LIVRE</span><b><span id="altValue">140</span>m</b></div>
+      <div class="alt-track"><i id="altFill"></i><em class="alt-open">45m</em></div>
     </div>
 
     <!-- prompt de interação -->
@@ -74,7 +84,8 @@
     <div class="controls-hint">
       <span><kbd>WASD</kbd> mover</span><span><kbd>MOUSE</kbd> mirar/atirar</span><span><kbd>RMB</kbd> mira precisa</span>
       <span><kbd>SHIFT</kbd> correr</span><span><kbd>ESPAÇO</kbd> saltar</span><span><kbd>R</kbd> recarregar</span>
-      <span><kbd>E</kbd> coletar</span><span><kbd>Q</kbd> medkit</span><span><kbd>ESC</kbd> liberar mouse</span>
+      <span><kbd>E</kbd> coletar</span><span><kbd>Q</kbd> medkit</span><span><kbd>G</kbd> granada</span><span><kbd>F</kbd> gloo</span>
+      <span><kbd>ESC</kbd> liberar mouse</span>
     </div>
 
     <!-- controles touch -->
@@ -85,6 +96,8 @@
         <button class="tbtn small" data-key="reload">R</button>
         <button class="tbtn small" data-key="interact">E</button>
         <button class="tbtn small" data-key="medkit">✚</button>
+        <button class="tbtn small" data-key="throw">💣</button>
+        <button class="tbtn small" data-key="gloo">🧊</button>
         <button class="tbtn" data-key="ads">◎</button>
         <button class="tbtn fire" data-key="fire">🔥</button>
       </div>

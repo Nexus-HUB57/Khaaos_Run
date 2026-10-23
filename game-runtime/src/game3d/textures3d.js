@@ -25,8 +25,53 @@ function tex(c, { repeat = 1, srgb = true } = {}) {
   return t;
 }
 
+// Fase 4 — normal map procedural: deriva de altura por Sobel sobre o canvas de cor.
+// Converte a luminância em relevo (paredes/costelas/ferrugem ganham profundidade real
+// sob a luz do sol). Custo único por material (256²) — barato e sem assets externos.
+function normalMapFromCanvas(srcCanvas, { strength = 1.6 } = {}) {
+  const size = srcCanvas.width;
+  const sctx = srcCanvas.getContext('2d');
+  const src = sctx.getImageData(0, 0, size, size).data;
+  const lum = (i) => (src[i] * 0.299 + src[i + 1] * 0.587 + src[i + 2] * 0.114) / 255;
+  const out = document.createElement('canvas');
+  out.width = out.height = size;
+  const octx = out.getContext('2d');
+  const img = octx.createImageData(size, size);
+  const at = (x, y) => lum((((y + size) % size) * size + ((x + size) % size)) * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1))
+        - (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1));
+      const dy = (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1))
+        - (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1));
+      let nx = dx * strength, ny = dy * strength, nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      nx /= len; ny /= len; nz /= len;
+      const o = (y * size + x) * 4;
+      img.data[o] = (nx * .5 + .5) * 255;
+      img.data[o + 1] = (ny * .5 + .5) * 255;
+      img.data[o + 2] = (nz * .5 + .5) * 255;
+      img.data[o + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(out);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+// Material PBR de uma passada: cor + normal derivada da própria textura.
+// `repeat` aplica-se igualmente a map e normalMap para o relevo bater com a cor.
+function pbr(c, { repeat = 1, rough = .9, metal = 0, strength = 1.6, extra = {} } = {}) {
+  const map = tex(c, { repeat });
+  const normal = normalMapFromCanvas(c, { strength });
+  normal.repeat.set(repeat, repeat);
+  return new THREE.MeshStandardMaterial({ map, normalMap: normal, roughness: rough, metalness: metal, ...extra });
+}
+
 // ---- concreto ----
-export function concreteTexture(repeat = 2) {
+function concreteCanvas() {
   const [c, x] = canvas(256);
   x.fillStyle = '#8d8a84'; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 900; i++) {
@@ -46,11 +91,13 @@ export function concreteTexture(repeat = 2) {
   x.strokeStyle = 'rgba(35,33,32,.5)'; x.lineWidth = 3;
   x.strokeRect(0, 0, 256, 256);
   noise(x, 256, 0.1);
-  return tex(c, { repeat });
+  return c;
 }
+export function concreteTexture(repeat = 2) { return tex(concreteCanvas(), { repeat }); }
+export function concreteMaterial(repeat = 2) { return pbr(concreteCanvas(), { repeat, rough: .9, strength: 2.0 }); }
 
 // ---- metal pintado / contêiner ----
-export function metalTexture(base = '#7a4a2b', repeat = 1) {
+function metalCanvas(base = '#7a4a2b') {
   const [c, x] = canvas(256);
   x.fillStyle = base; x.fillRect(0, 0, 256, 256);
   // costelas verticais de contêiner
@@ -65,11 +112,13 @@ export function metalTexture(base = '#7a4a2b', repeat = 1) {
     x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 3 + Math.random() * 16, 0, 7); x.fill();
   }
   noise(x, 256, 0.08);
-  return tex(c, { repeat });
+  return c;
 }
+export function metalTexture(base = '#7a4a2b', repeat = 1) { return tex(metalCanvas(base), { repeat }); }
+export function metalMaterial(base = '#7a4a2b', repeat = 1) { return pbr(metalCanvas(base), { repeat, rough: .6, metal: .35, strength: 1.9 }); }
 
 // ---- terreno (terra/areia com grama seca) ----
-export function groundTexture(repeat = 28) {
+function groundCanvas() {
   const [c, x] = canvas(512);
   x.fillStyle = '#6d5f45'; x.fillRect(0, 0, 512, 512);
   for (let i = 0; i < 2600; i++) {
@@ -85,11 +134,13 @@ export function groundTexture(repeat = 28) {
     x.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 3, 1 + Math.random() * 3);
   }
   noise(x, 512, 0.09);
-  return tex(c, { repeat });
+  return c;
 }
+export function groundTexture(repeat = 28) { return tex(groundCanvas(), { repeat }); }
+export function groundMaterial(repeat = 28) { return pbr(groundCanvas(), { repeat, rough: .95, strength: 1.5 }); }
 
 // ---- asfalto (praças/estradas) ----
-export function asphaltTexture(repeat = 6) {
+function asphaltCanvas() {
   const [c, x] = canvas(256);
   x.fillStyle = '#3c3d40'; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 1400; i++) {
@@ -97,7 +148,28 @@ export function asphaltTexture(repeat = 6) {
     x.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 4, 1 + Math.random() * 4);
   }
   noise(x, 256, 0.07);
-  return tex(c, { repeat });
+  return c;
+}
+export function asphaltTexture(repeat = 6) { return tex(asphaltCanvas(), { repeat }); }
+export function asphaltMaterial(repeat = 6) { return pbr(asphaltCanvas(), { repeat, rough: .9, strength: 1.7 }); }
+
+// ---- nuvem (sprite com alpha procedural) ----
+export function cloudTexture() {
+  const [c, x] = canvas(256);
+  x.clearRect(0, 0, 256, 256);
+  for (let i = 0; i < 26; i++) {
+    const cx = 40 + Math.random() * 176, cy = 90 + Math.random() * 76;
+    const r = 18 + Math.random() * 42;
+    const g = x.createRadialGradient(cx, cy, 2, cx, cy, r);
+    const a = .05 + Math.random() * .09;
+    g.addColorStop(0, `rgba(236,222,214,${a})`);
+    g.addColorStop(1, 'rgba(236,222,214,0)');
+    x.fillStyle = g;
+    x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // ---- janelas de prédio (emissivas fracas) ----

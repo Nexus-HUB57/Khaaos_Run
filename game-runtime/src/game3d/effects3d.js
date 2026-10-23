@@ -1,16 +1,20 @@
-// Khaaos Run — Efeitos: tracers, muzzle flash, impactos e partículas (pooled).
+// Khaaos Run — Efeitos: tracers, muzzle flash, impactos, explosões e partículas (pooled).
 import * as THREE from 'three';
 import { radialSprite } from './textures3d.js';
 
 export class Effects {
+  #restoreMuzzleColor = 0;
   constructor(scene) {
     this.scene = scene;
     this.tracers = [];
     this.flashes = [];
     this.particles = [];
+    this.explosions = [];
     this.spriteTex = radialSprite();
     this.sparkTex = radialSprite('rgba(255,240,200,1)', 'rgba(255,160,60,0)');
     this.bloodTex = radialSprite('rgba(200,30,30,1)', 'rgba(120,10,10,0)');
+    this.smokeTex = radialSprite('rgba(120,112,104,1)', 'rgba(70,66,62,0)');
+    this.fireTex = radialSprite('rgba(255,214,120,1)', 'rgba(255,90,20,0)');
 
     // pool de tracers: quads aditivos esticados
     const tracerMat = new THREE.MeshBasicMaterial({
@@ -75,6 +79,60 @@ export class Effects {
 
   hitFlesh(pos) { this.impact(pos, 'blood'); }
 
+  // Fase 4 — explosão de granada: flash de luz, bola de fogo, fumaça, debris e anel
+  explosion(pos) {
+    // luz da explosão (mais forte e duradoura que o muzzle)
+    this.muzzleLight.position.copy(pos);
+    this.muzzleLight.intensity = 220;
+    this.muzzleLightT = .22;
+    this.muzzleLight.color.set('#ffd27a');
+    this.#restoreMuzzleColor = .3; // volta à cor de muzzle após o flash
+    // bola de fogo (núcleo aditivo que expande e some)
+    const fire = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this.fireTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    fire.position.copy(pos);
+    fire.scale.set(.5, .5, 1);
+    this.scene.add(fire);
+    this.explosions.push({ mesh: fire, life: .38, max: 4.6 });
+    // fumaça (normal blending, sobe lentamente)
+    for (let i = 0; i < 10; i++) {
+      const p = this.#getParticle(this.smokeTex);
+      p.mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - .5) * 1.4, Math.random() * .5, (Math.random() - .5) * 1.4));
+      p.vel.set((Math.random() - .5) * 2.4, 1.6 + Math.random() * 2.2, (Math.random() - .5) * 2.4);
+      p.life = .9 + Math.random() * .7;
+      p.size = .8 + Math.random() * .9;
+      p.gravity = -1.4;
+      p.mesh.material.opacity = .5;
+      p.mesh.visible = true;
+    }
+    // faíscas/debris
+    for (let i = 0; i < 16; i++) {
+      const p = this.#getParticle(this.sparkTex);
+      p.mesh.position.copy(pos);
+      p.vel.set((Math.random() - .5) * 16, Math.random() * 9 + 2, (Math.random() - .5) * 16);
+      p.life = .3 + Math.random() * .35;
+      p.size = .08 + Math.random() * .07;
+      p.gravity = 16;
+      p.mesh.material.opacity = 1;
+      p.mesh.visible = true;
+    }
+  }
+
+  // Fase 4 — impacto/deploy de Gloo Wall (cristalização)
+  glooPuff(pos) {
+    for (let i = 0; i < 8; i++) {
+      const p = this.#getParticle(this.smokeTex);
+      p.mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - .5) * 2.4, Math.random() * 2.2, (Math.random() - .5) * .8));
+      p.vel.set((Math.random() - .5) * 1.2, .6 + Math.random(), (Math.random() - .5) * 1.2);
+      p.life = .5 + Math.random() * .4;
+      p.size = .4 + Math.random() * .4;
+      p.gravity = -0.6;
+      p.mesh.material.opacity = .4;
+      p.mesh.visible = true;
+    }
+  }
+
   #getParticle(tex) {
     let p = this.particles.find(p => p.life <= 0);
     if (!p) {
@@ -100,7 +158,22 @@ export class Effects {
     }
     if (this.muzzleLightT > 0) {
       this.muzzleLightT -= dt;
-      this.muzzleLight.intensity = Math.max(0, this.muzzleLightT / .05) * 26;
+      const frac = Math.max(0, this.muzzleLightT);
+      this.muzzleLight.intensity = frac > .1 ? frac * 1000 : Math.max(0, frac / .05) * 26;
+    }
+    if (this.#restoreMuzzleColor > 0) {
+      this.#restoreMuzzleColor -= dt;
+      if (this.#restoreMuzzleColor <= 0 && this.muzzleLightT <= 0) this.muzzleLight.color.set('#ffb45e');
+    }
+    for (const e of this.explosions) {
+      if (e.life > 0) {
+        e.life -= dt;
+        const k = 1 - e.life / .38;
+        const s = .5 + e.max * Math.sqrt(k);
+        e.mesh.scale.set(s, s, 1);
+        e.mesh.material.opacity = Math.max(0, e.life / .38);
+        if (e.life <= 0) { e.mesh.visible = false; this.scene.remove(e.mesh); }
+      }
     }
     for (const p of this.particles) {
       if (p.life > 0) {

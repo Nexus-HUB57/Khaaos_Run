@@ -7,7 +7,7 @@
 // bootstrapOnline conecta o NetClient3D e injeta o modo online no Game3D.
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
-import { MATCH_TIME, WORLD, getWorldLayout } from './sim3d.js';
+import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 
@@ -28,6 +28,8 @@ export class Sim3DView {
     this.bots = [];
     this.loot = [];
     this.terminals = [];
+    this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
+    this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -38,9 +40,10 @@ export class Sim3DView {
       id: 'player', name: 'OPERATIVO', x: 0, y: 0, z: 150, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, extracted: 0,
       weapon: 'g19', ammoMag: 15, reloadT: 0, activeSlot: 1,
-      inventory: { ammo: { '9MM': 45 }, medkit: 1 },
+      inventory: { ammo: { '9MM': 45 }, medkit: 1, frag: 1, gloo: 1 },
       slots: { 1: 'g19' },
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      dropPhase: null,
     };
   }
 
@@ -57,6 +60,12 @@ export class Sim3DView {
     if (s.others) this.bots = s.others;
     if (s.loot) this.loot = s.loot;
     if (s.terminals) this.terminals = s.terminals;
+    if (s.grenades) this.grenades = s.grenades;
+    if (s.walls) {
+      this.walls = s.walls.map((w) => ({ ...w, active: true }));
+      // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
+      this.onWallsChanged?.(this.walls);
+    }
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
@@ -90,6 +99,16 @@ export class OnlineGame3D extends Game3D {
     // predição client-side (Fase 3): mundo local idêntico ao da sala (seed sincronizada)
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
+    // Fase 4 — preditor enxerga Gloo Walls (colliders dinâmicos) sem mutar o layout cacheado
+    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders };
+    this.predictor.world = this.predictorWorld;
+    this.view.onWallsChanged = (walls) => {
+      const staticColliders = getWorldLayout(this.seed).colliders;
+      const active = walls.filter((w) => w.active !== false);
+      this.predictorWorld.colliders = active.length
+        ? staticColliders.concat(active.map(glooCollider))
+        : staticColliders;
+    };
     this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
     const seedInput = document.querySelector('#seedInput');
@@ -117,8 +136,17 @@ export class OnlineGame3D extends Game3D {
     this.initWorld();
     this.initEntities();
     this.initCamera(); // initCamera → initPost (composer acompanha nova cena/câmera)
-    // preditor acompanha o novo layout (mesma seed autoritativa)
+    // preditor acompanha o novo layout (mesma seed autoritativa) + mundo físico próprio
     this.predictor = new LocalPredictor({ world: getWorldLayout(seed) });
+    this.predictorWorld = { colliders: getWorldLayout(seed).colliders };
+    this.predictor.world = this.predictorWorld;
+    this.view.onWallsChanged = (walls) => {
+      const staticColliders = getWorldLayout(this.seed).colliders;
+      const active = walls.filter((w) => w.active !== false);
+      this.predictorWorld.colliders = active.length
+        ? staticColliders.concat(active.map(glooCollider))
+        : staticColliders;
+    };
     this.hud.feed('CIGKV', `Sincronizado com a seed da sala: ${seed}.`, 'good');
   }
 
@@ -192,6 +220,7 @@ export class OnlineGame3D extends Game3D {
     this.updateRing();
     this.updateCamera(dt);
     this.effects.update(dt);
+    this.updateDropFX(dt);
     const bl = 0.5 + Math.sin(performance.now() / 300) * 0.5;
     for (const b of this.scene.userData.beacons ?? []) b.material.color.setRGB(0.9 + bl * 0.1, 0.1, 0.18);
     for (const mesh of this.lootMeshes.values()) mesh.rotation.y += dt * 1.6;

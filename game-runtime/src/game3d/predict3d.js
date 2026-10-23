@@ -37,6 +37,9 @@ export class LocalPredictor {
     if (!this.synced || !this.actor.alive) return;
     this.pending.push(input);
     if (this.pending.length > MAX_PENDING) this.pending.splice(0, this.pending.length - MAX_PENDING);
+    // yaw/pitch do input alimentam a cinemática (mesma ordem do #stepActor do servidor)
+    this.actor.yaw = input.yaw;
+    this.actor.pitch = input.pitch ?? 0;
     stepActorMovement(this.actor, input, INPUT_DT, this.world);
     this.history.set(input.seq, { x: this.actor.x, y: this.actor.y, z: this.actor.z });
     if (this.history.size > HISTORY_SIZE) {
@@ -74,6 +77,8 @@ export class LocalPredictor {
     }
     this.actor.speed = Number.isFinite(player.speed) ? player.speed : this.actor.speed;
     this.actor.weapon = player.weapon ?? this.actor.weapon;
+    // Fase 4 — fase de queda autoritativa (sky/chute) replica no preditor
+    this.actor.dropPhase = player.dropPhase ?? null;
 
     if (Number.isFinite(ackSeq) && ackSeq > this.lastAck) {
       this.lastAck = ackSeq;
@@ -102,6 +107,8 @@ export class LocalPredictor {
     this.actor.vy = Number.isFinite(player.vy) ? player.vy : this.actor.vy;
     this.actor.onGround = player.onGround ?? this.actor.onGround;
     for (const input of this.pending) {
+      this.actor.yaw = input.yaw;
+      this.actor.pitch = input.pitch ?? 0;
       stepActorMovement(this.actor, input, INPUT_DT, this.world);
       this.history.set(input.seq, { x: this.actor.x, y: this.actor.y, z: this.actor.z });
     }
@@ -128,5 +135,6 @@ export class LocalPredictor {
     this.actor.alive = !!player.alive;
     this.actor.speed = Number.isFinite(player.speed) ? player.speed : this.actor.speed;
     this.actor.weapon = player.weapon ?? this.actor.weapon;
+    this.actor.dropPhase = player.dropPhase ?? null;
   }
 }

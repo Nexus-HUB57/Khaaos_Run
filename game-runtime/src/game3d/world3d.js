@@ -1,11 +1,15 @@
 // Khaaos Run — Construção do mundo 3D (Khaoos Ville // CIGKV)
 // Céu de crepúsculo vulcânico (paleta Mystic Chaos), luz direcional com sombras,
 // terreno, estruturas do layout procedural, parede do anel, grama instanciada.
+// Fase 4 — realismo PBR: normal maps procedurais, environment map (metais reais),
+// vegetação instanciada (árvores/pedras) e nuvens de crepúsculo.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import {
-  concreteTexture, metalTexture, groundTexture, asphaltTexture,
-  windowsTexture, crateTexture, grassBladeTexture,
+  concreteMaterial, metalMaterial, groundMaterial, asphaltMaterial,
+  windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 
@@ -83,8 +87,88 @@ export function createRingWall() {
   return group;
 }
 
+// ---------- Fase 4 — natureza: árvores, pedras e nuvens ----------
+// Decorativas (sem colisão — a sim permanece idêntica), espalhadas FORA dos
+// distritos para não sujar leitura de combate. Instanced = custo mínimo.
+function buildNature(scene, layout, rng) {
+  const free = (x, z, m = 4) => layout.colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
+  const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
+
+  // ---- árvores (tronco cônico + copa em dupla esfera achatada) ----
+  const TREES = 46;
+  const trunkGeo = new THREE.CylinderGeometry(.16, .3, 3.4, 6);
+  const canopyGeo = new THREE.IcosahedronGeometry(1.7, 1);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: .95 });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: '#4d5a33', roughness: .9, flatShading: true });
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREES);
+  const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, TREES * 2);
+  trunks.castShadow = canopies.castShadow = true;
+  trunks.receiveShadow = true;
+  const dummy = new THREE.Object3D();
+  let ti = 0, ci = 0, guard = 0;
+  while (ti < TREES && guard++ < 600) {
+    const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
+    if (!free(x, z) || !districtClear(x, z)) continue;
+    const s = .8 + rng.next() * .7;
+    dummy.position.set(x, 1.7 * s, z);
+    dummy.scale.setScalar(s);
+    dummy.rotation.set(0, rng.next() * Math.PI * 2, 0);
+    dummy.updateMatrix();
+    trunks.setMatrixAt(ti, dummy.matrix);
+    for (let k = 0; k < 2 && ci < TREES * 2; k++) {
+      dummy.position.set(x + (rng.next() - .5) * .8, (3.3 + k * 1.05) * s, z + (rng.next() - .5) * .8);
+      const cs = s * (1.05 - k * .25);
+      dummy.scale.setScalar(cs);
+      dummy.rotation.set(rng.next() * .3, rng.next() * Math.PI * 2, 0);
+      dummy.updateMatrix();
+      canopies.setMatrixAt(ci++, dummy.matrix);
+    }
+    ti++;
+  }
+  trunks.count = ti; canopies.count = ci;
+  scene.add(trunks, canopies);
+
+  // ---- pedras (dodecaedros achatados) ----
+  const ROCKS = 30;
+  const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
+  const rockMat = new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .92, flatShading: true });
+  const rocks = new THREE.InstancedMesh(rockGeo, rockMat, ROCKS);
+  rocks.castShadow = rocks.receiveShadow = true;
+  let ri = 0; guard = 0;
+  while (ri < ROCKS && guard++ < 400) {
+    const x = (rng.next() - .5) * 390, z = (rng.next() - .5) * 390;
+    if (!free(x, z, 3) || !districtClear(x, z, 2)) continue;
+    dummy.position.set(x, .25 + rng.next() * .2, z);
+    dummy.scale.set(.5 + rng.next() * .9, .35 + rng.next() * .5, .5 + rng.next() * .9);
+    dummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
+    dummy.updateMatrix();
+    rocks.setMatrixAt(ri++, dummy.matrix);
+  }
+  rocks.count = ri;
+  scene.add(rocks);
+
+  // ---- nuvens de crepúsculo: planos deitados no céu (horizonte limpo) ----
+  const cloudTex = cloudTexture();
+  const cloudMat = new THREE.MeshBasicMaterial({
+    map: cloudTex, transparent: true, depthWrite: false, opacity: .85,
+    color: '#d8b8a8', // tinta de crepúsculo
+  });
+  const cloudGroup = new THREE.Group();
+  for (let i = 0; i < 14; i++) {
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(90 + rng.next() * 110, 34 + rng.next() * 40), cloudMat);
+    const a = rng.next() * Math.PI * 2, r = 160 + rng.next() * 380;
+    c.position.set(Math.cos(a) * r, 120 + rng.next() * 90, Math.sin(a) * r);
+    c.rotation.x = -Math.PI / 2; // deitadas — lidas como camada no céu
+    c.rotation.z = rng.next() * Math.PI;
+    cloudGroup.add(c);
+  }
+  cloudGroup.userData.drift = true; // deriva lenta no loop do jogo
+  scene.userData.clouds = cloudGroup;
+  scene.add(cloudGroup);
+}
+
 // ---------- mundo completo ----------
-export function buildScene(seed) {
+export function buildScene(seed, renderer = null) {
   const layout = getWorldLayout(seed);
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(new THREE.Color('#57382f'), 0.0038);
@@ -113,10 +197,9 @@ export function buildScene(seed) {
   scene.add(back);
 
   // ---- terreno ----
-  const gTex = groundTexture(30);
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(440, 440),
-    new THREE.MeshStandardMaterial({ map: gTex, roughness: .95, metalness: 0 })
+    groundMaterial(30) // PBR: cor + normal procedural (Fase 4)
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -125,39 +208,53 @@ export function buildScene(seed) {
   // praça central de asfalto
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(34, 40),
-    new THREE.MeshStandardMaterial({ map: asphaltTexture(8), roughness: .9 })
+    asphaltMaterial(8)
   );
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
   plaza.receiveShadow = true;
   scene.add(plaza);
 
   // ---- estruturas ----
-  const concrete = concreteTexture(2.2);
-  const concrete2 = concreteTexture(1.4);
-  const metalRust = metalTexture('#7a4a2b');
-  const metalBlue = metalTexture('#31556b');
-  const metalGreen = metalTexture('#3d5a3a');
-  const metalGray = metalTexture('#4c4f55');
+  const concrete = concreteMaterial(2.2);
+  const concrete2 = concreteMaterial(1.4);
+  const metalRust = metalMaterial('#7a4a2b');
+  const metalBlue = metalMaterial('#31556b');
+  const metalGreen = metalMaterial('#3d5a3a');
+  const metalGray = metalMaterial('#4c4f55');
   const winTex = windowsTexture();
   const crateTex = crateTexture();
 
   const mats = {
-    barrack: new THREE.MeshStandardMaterial({ map: concrete, roughness: .9 }),
-    hangar: new THREE.MeshStandardMaterial({ map: concrete2, roughness: .85, metalness: .15 }),
-    warehouse: new THREE.MeshStandardMaterial({ map: metalGray, roughness: .6, metalness: .35 }),
-    tower: new THREE.MeshStandardMaterial({ map: concrete, roughness: .9 }),
-    ruin: new THREE.MeshStandardMaterial({ map: concrete2, roughness: .95, color: '#b0a89a' }),
-    depot: new THREE.MeshStandardMaterial({ map: metalRust, roughness: .6, metalness: .3 }),
-    wall: new THREE.MeshStandardMaterial({ map: concrete, roughness: .95 }),
-    barrier: new THREE.MeshStandardMaterial({ map: concrete2, roughness: .9 }),
+    barrack: concrete,
+    hangar: concrete2,
+    warehouse: metalGray,
+    tower: concrete,
+    ruin: (() => { const m = concrete2.clone(); m.color = new THREE.Color('#b0a89a'); m.roughness = .95; return m; })(),
+    depot: metalRust,
+    wall: concrete,
+    barrier: concrete2,
     crate: new THREE.MeshStandardMaterial({ map: crateTex, roughness: .85 }),
     container: null, // por-variante
-    silo: new THREE.MeshStandardMaterial({ map: metalGray, roughness: .5, metalness: .5 }),
-    pavilion: new THREE.MeshStandardMaterial({ map: metalGreen, roughness: .7, metalness: .3 }),
-    monolith: new THREE.MeshStandardMaterial({ map: metalBlue, roughness: .4, metalness: .6, emissive: '#1a2e3a', emissiveIntensity: .5 }),
+    silo: metalGray,
+    pavilion: metalGreen,
+    monolith: (() => { const m = metalBlue.clone(); m.roughness = .4; m.metalness = .6; m.emissive = new THREE.Color('#1a2e3a'); m.emissiveIntensity = .5; return m; })(),
     building: new THREE.MeshStandardMaterial({ map: winTex, roughness: .8, emissive: '#ffd28a', emissiveMap: winTex, emissiveIntensity: .55 }),
   };
-  const containerMats = [metalRust, metalBlue, metalGreen, metalGray].map(m => new THREE.MeshStandardMaterial({ map: m, roughness: .55, metalness: .4 }));
+  const containerMats = [metalRust, metalBlue, metalGreen, metalGray];
+
+  // Fase 4 — environment map: reflexos PBR reais nos metais (contêineres, silos,
+  // monolito, armas). PMREM + RoomEnvironment (procedural, sem assets externos).
+  if (renderer) {
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
+      scene.environmentIntensity = .35; // sutil — o sol continua dominando o look
+      pmrem.dispose();
+    } catch { /* fallback: materiais seguem sem envmap */ }
+  }
+
+  // Fase 4 — vegetação e rochas fora dos distritos (instanced) + nuvens no céu
+  buildNature(scene, layout, new SeededRng(`${seed}:nature`));
 
   for (const s of layout.structures) {
     const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);

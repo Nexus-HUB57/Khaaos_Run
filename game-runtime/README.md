@@ -28,8 +28,8 @@ O desenvolvimento local e os testes unitários não exigem a configuração dos 
 | Efeitos/Áudio | `src/game3d/effects3d.js`, `audio3d.js` | Tracers, muzzle flash, impactos, sangue + SFX WebAudio 100% procedurais (tiro por arma, hitmarker, pulso, heartbeat). |
 | HUD | `src/game3d/hud3d.js` | Barras VL/VD, munição, minimapa com anel atual/alvo, killfeed, crosshair dinâmico, objetivos, modais ZU/Marechal, controles touch. |
 
-**Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `1`/`2` slots · `ESC` liberar mouse.
-**Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit) à direita.
+**Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `G` granada FRAG · `F` Gloo Wall · `1`/`2` slots · `ESC` liberar mouse.
+**Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit, 💣 granada, 🧊 gloo) à direita.
 
 ## Modo Online 3D — Battle Royale autoritativo
 
@@ -85,8 +85,22 @@ partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a
 o anti-cheat 3D, a fila de inputs (`ackSeq`, cap anti-speedhack), e a lag compensation (rewind
 acerta a posição passada; alvo fora do rewind não é atingido). `node --test test/predict3d.test.js`
 cobre a predição (réplica exata do servidor, replay de pendentes, offset visual com decaimento,
-snap de teleport, morte). `node --test test/server3d.test.js` valida o end-to-end real (login HTTP →
-matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
+snap de teleport, morte). `node --test test/phase4.test.js` cobre a Fase 4 (infiltração aérea
+determinística, granada com dano radial/attenuação por parede via `rayAabb`, Gloo Wall bloqueando
+movimento/balas e expirando, throw/gloo autoritativos com replicação no snapshot, anti-cheat dos
+one-shots e predição durante a queda). `node --test test/server3d.test.js` valida o end-to-end real
+(login HTTP → matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
+
+### Infiltração Aérea + Arremessáveis Táticos + Realismo PBR (Fase 4)
+
+| Sistema | Módulo | Comportamento |
+|---------|--------|---------------|
+| Infiltração aérea | `src/game3d/sim3d.js` | `start()` lança todos os operativos de `DROP_START_Y=140m`: queda livre (`sky`, cap −52 m/s) até 45 m, abertura automática do paraquedas (`chute`, cap −9 m/s), aterrissagem em tempo finito. Física em `stepActorMovement` — sim offline, `MatchRoom3D` e preditor replicam exatamente. No ar não há tiro/coleta/arremesso; deriva horizontal ×2,6 direciona o destino. Opção `airdrop: false` preserva partidas de solo (usada pelos testes das fases 1–3). |
+| Granada FRAG | `sim3d.js` + `room3d.js` | Item looteável (`kind: 'frag'`, cap 3, 1 no spawn). Tecla `G` (one-shot `throw`): projétil balístico com gravidade, quique amortecido (0.38) em chão/AABBs, pavio de 2,2 s. Explosão: 110 de dano no epicentro, decaimento linear até 9 m, atenuação ×0.25 quando `rayAabb` encontra parede entre epicentro e alvo (auto-dano incluído). Granada também desgasta Gloo Walls no raio. |
+| Gloo Wall | `sim3d.js` + `room3d.js` | Item looteável (`kind: 'gloo'`, cap 2, 1 no spawn). Tecla `F` (one-shot `gloo`): parede 4×3×0.4 m a 2,2 m à frente (rotação 0/90°), HP 220, dura 60 s. Entra nos colliders dinâmicos (`physicsWorld`): bloqueia movimento, balas (desgastam o HP — impacto `kind: 'gloo'`), LOS e granadas. Deploy rejeitado sobre collider existente. Expiração/destruição emitem `glooDown` e removem o collider. |
+| Replicação online | `server/room3d.js` + `net3d.js` | Snapshot expõe `grenades` (interpolação posicional no cliente) e `walls` (id/x/z/rot/hp). Eventos `airdrop`, `land`, `frag`, `explosion`, `gloo`, `glooDown` entregues por raio. Anti-cheat `validateInput3D` valida `throw`/`gloo` como booleanos. Preditor local respeita as paredes autoritativas (colliders reconstruídos por snapshot, sem mutar o layout cacheado). |
+| Realismo PBR | `textures3d.js` + `world3d.js` | Normal maps procedurais (Sobel sobre o canvas de cor) para concreto/metal/terreno/asfalto — relevo real sob o sol. `scene.environment` via PMREM+RoomEnvironment (metais refletem de verdade, intensidade sutil 0.35). Vegetação instanciada (46 árvores em 2 draw calls + 30 pedras) fora dos distritos, decorativa (sem colisão — sim idêntica). 14 nuvens de crepúsculo com deriva lenta. |
+| Apresentação | `entities3d.js`, `effects3d.js`, `audio3d.js`, `hud3d.js` | Paraquedas procedural (dossel + suspensórios, só na fase `chute`), pose de queda com braços abertos; granada com LED do pavio piscando e tombo em voo; gloo com animação de deploy (ease-out) e brilho que decai com o HP. Explosão: bola de fogo + fumaça + debris + luz + tremor de câmera proporcional à distância. Áudio 100% procedural: vento de queda, abertura do paraquedas, aterrissagem, whoosh do arremesso, detonação (sub-bass + estilhaços), cristalização do gloo. HUD: altímetro com marca de abertura (45 m), contagens 💣/🧊 com teclas, botões touch novos. |
 
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.

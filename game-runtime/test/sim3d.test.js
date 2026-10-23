@@ -6,8 +6,8 @@ const STEP = 1 / 30;
 const idle = (yaw = 0, pitch = 0) => ({ ...DEFAULT_INPUT, yaw, pitch });
 
 test('mesma seed produz mundo, loot e spawns idênticos', () => {
-  const a = new KhaaosSim3D({ seed: 'W3D-1', botCount: 0 });
-  const b = new KhaaosSim3D({ seed: 'W3D-1', botCount: 0 });
+  const a = new KhaaosSim3D({ seed: 'W3D-1', botCount: 0, airdrop: false });
+  const b = new KhaaosSim3D({ seed: 'W3D-1', botCount: 0, airdrop: false });
   assert.deepEqual(a.loot, b.loot);
   assert.deepEqual(a.world.structures, b.world.structures);
   assert.equal(a.world.colliders.length > 20, true);
@@ -16,7 +16,7 @@ test('mesma seed produz mundo, loot e spawns idênticos', () => {
 });
 
 test('movimento respeita yaw e colisão com estruturas', () => {
-  const s = new KhaaosSim3D({ seed: 'MOVE-1', botCount: 0 });
+  const s = new KhaaosSim3D({ seed: 'MOVE-1', botCount: 0, airdrop: false });
   s.start('belt');
   // caminha para frente (yaw=PI => +Z inicial invertido: frente -Z com yaw 0)
   let last = { x: s.player.x, z: s.player.z };
@@ -24,7 +24,7 @@ test('movimento respeita yaw e colisão com estruturas', () => {
   const moved = Math.hypot(s.player.x - last.x, s.player.z - last.z);
   assert.ok(moved > 5, `deveria mover >5m, moveu ${moved.toFixed(2)}`);
   // encosta numa parede e tenta atravessar: não atravessa
-  const s2 = new KhaaosSim3D({ seed: 'WALL-1', botCount: 0 });
+  const s2 = new KhaaosSim3D({ seed: 'WALL-1', botCount: 0, airdrop: false });
   s2.start('belt');
   s2.player.x = 0; s2.player.z = 0;
   // monolith collider em (0,0) 10x10 — empurra para fora
@@ -32,7 +32,7 @@ test('movimento respeita yaw e colisão com estruturas', () => {
 });
 
 test('disparo consome munição, aplica cooldown e mata bot com dano suficiente', () => {
-  const s = new KhaaosSim3D({ seed: 'FIRE-1', botCount: 1 });
+  const s = new KhaaosSim3D({ seed: 'FIRE-1', botCount: 1, airdrop: false });
   s.start('belt');
   const p = s.player;
   const bot = s.bots[0];
@@ -56,7 +56,7 @@ test('disparo consome munição, aplica cooldown e mata bot com dano suficiente'
 });
 
 test('headshot multiplica dano e rende XP bônus', () => {
-  const s = new KhaaosSim3D({ seed: 'HS-1', botCount: 1 });
+  const s = new KhaaosSim3D({ seed: 'HS-1', botCount: 1, airdrop: false });
   s.start('belt');
   const p = s.player, bot = s.bots[0];
   // linha de tiro unitária: remove estruturas para validar balística de forma determinística
@@ -79,7 +79,7 @@ test('headshot multiplica dano e rende XP bônus', () => {
 });
 
 test('zona encolhe em pulsos e causa dano fora do anel', () => {
-  const s = new KhaaosSim3D({ seed: 'RING-1', botCount: 0 });
+  const s = new KhaaosSim3D({ seed: 'RING-1', botCount: 0, airdrop: false });
   s.start('belt');
   s.player.x = 0; s.player.z = 0; // fica dentro do anel para a partida continuar
   const r0 = s.ring.radius;
@@ -87,7 +87,7 @@ test('zona encolhe em pulsos e causa dano fora do anel', () => {
   assert.ok(s.ring.radius < r0, 'anel deveria encolher');
   assert.ok(s.ring.pulse >= 2, 'pulsos deveriam acontecer');
   // jogador fora do anel sofre dano
-  const s2 = new KhaaosSim3D({ seed: 'RING-2', botCount: 0 });
+  const s2 = new KhaaosSim3D({ seed: 'RING-2', botCount: 0, airdrop: false });
   s2.start('belt');
   s2.player.x = 190; s2.player.z = 190;
   const life0 = s2.player.life;
@@ -96,7 +96,7 @@ test('zona encolhe em pulsos e causa dano fora do anel', () => {
 });
 
 test('loot: coleta altera estado (arma, kit, armadura ou recurso)', () => {
-  const s = new KhaaosSim3D({ seed: 'LOOT-3D', botCount: 0 });
+  const s = new KhaaosSim3D({ seed: 'LOOT-3D', botCount: 0, airdrop: false });
   s.start('belt');
   const item = s.loot.find(i => i.kind !== 'resource') ?? s.loot[0];
   s.player.x = item.x; s.player.z = item.z; s.player.y = 0;
@@ -108,7 +108,7 @@ test('loot: coleta altera estado (arma, kit, armadura ou recurso)', () => {
 });
 
 test('recarga respeita reserva e capacidade do pente', () => {
-  const s = new KhaaosSim3D({ seed: 'RELOAD-1', botCount: 0 });
+  const s = new KhaaosSim3D({ seed: 'RELOAD-1', botCount: 0, airdrop: false });
   s.start('belt');
   const p = s.player;
   p.ammoMag = 1; p.inventory.ammo['9MM'] = 45;
@@ -120,7 +120,7 @@ test('recarga respeita reserva e capacidade do pente', () => {
 });
 
 test('match completa: vitória por tempo ou eliminação por dano', () => {
-  const s = new KhaaosSim3D({ seed: 'END-1', botCount: 0 });
+  const s = new KhaaosSim3D({ seed: 'END-1', botCount: 0, airdrop: false });
   s.start('belt');
   s.player.life = 5;
   const bot = { x: 0, z: 0 };
@@ -136,7 +136,7 @@ test('match completa: vitória por tempo ou eliminação por dano', () => {
 });
 
 test('replay 3D reproduz estado final idêntico', () => {
-  const mk = () => new KhaaosSim3D({ seed: 'REPLAY-3D-9', botCount: 3 });
+  const mk = () => new KhaaosSim3D({ seed: 'REPLAY-3D-9', botCount: 3, airdrop: false });
   const a = mk(); a.start('rush');
   let t = 0;
   for (let i = 0; i < 300; i++) {
@@ -155,12 +155,12 @@ test('replay 3D reproduz estado final idêntico', () => {
 });
 
 test('snapshot/applySnapshot roundtrip preserva estado', () => {
-  const s = new KhaaosSim3D({ seed: 'SNAP-1', botCount: 2 });
+  const s = new KhaaosSim3D({ seed: 'SNAP-1', botCount: 2, airdrop: false });
   s.start('belt');
   for (let i = 0; i < 30; i++) s.step({ ...idle(0.5), dy: 1, fire: i % 5 === 0 }, STEP);
   const snap = s.snapshot();
   const json = JSON.parse(JSON.stringify(snap));
-  const s2 = new KhaaosSim3D({ seed: 'OUTRO', botCount: 0 });
+  const s2 = new KhaaosSim3D({ seed: 'OUTRO', botCount: 0, airdrop: false });
   s2.applySnapshot(json);
   assert.equal(s2.player.x, s.player.x);
   assert.equal(s2.bots.length, s.bots.length);

@@ -9,6 +9,39 @@ import { buildWorldLayout } from './layout3d.js';
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
 export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
+
+// ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
+// A partida começa com os operativos caindo do céu: queda livre (SKY) até a
+// altitude de abertura automática do paraquedas, depois descida lenta (CHUTE).
+// A física vive em stepActorMovement — sim offline, MatchRoom3D e predição do
+// cliente replicam EXATAMENTE o mesmo comportamento.
+export const DROP_START_Y = 140;       // altitude de inserção (m)
+export const DROP_OPEN_Y = 45;         // abertura automática do paraquedas (m)
+export const DROP_SKY_GRAVITY = -34;   // gravidade da queda livre
+export const DROP_SKY_MAX_FALL = -52;  // terminal velocity da queda livre
+export const DROP_CHUTE_GRAVITY = -6.5;// gravidade com paraquedas aberto
+export const DROP_CHUTE_MAX_FALL = -9; // terminal velocity com paraquedas
+export const DROP_SPEED_MULT = 2.6;    // deriva horizontal no ar (× velocidade base)
+
+// ---- Fase 4 — Arremessáveis táticos (granada FRAG + Gloo Wall) ----
+export const FRAG = {
+  fuse: 2.2,            // s até detonar após o arremesso
+  speed: 21,            // m/s de saída da mão
+  loft: 0.42,           // fração da velocidade aplicada para cima
+  bounce: 0.38,         // energia conservada no quique (XZ e Y)
+  gravity: -19,
+  damage: 110,          // dano no epicentro
+  radius: 9,            // raio letal (m)
+  wallAttenuation: 0.25,// fração do dano se a parede está entre epicentro e alvo
+  cap: 3,               // máximo carregado
+};
+export const GLOO = {
+  w: 4, h: 3, d: 0.4,   // dimensões da parede (m) — rot 0 (ao longo de X) ou 90°
+  hp: 220,              // pontos de vida (balas/granada desgastam)
+  duration: 60,         // s até se dissolver
+  forward: 2.2,         // distância à frente do jogador
+  cap: 2,               // máximo carregado
+};
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 
@@ -28,7 +61,7 @@ export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  jump: false, interact: false, reload: false, medkit: false,
+  jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false,
 });
 
 // ---------- utilitários de colisão ----------
@@ -84,6 +117,8 @@ export function stepActorMovement(a, input, dt, world) {
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
   let sp = a.speed * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
   if (w.category === 'sniper' && !a.ads) sp *= 0.9;
+  // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
+  if (a.dropPhase) { a.sprinting = false; a.ads = false; sp = a.speed * DROP_SPEED_MULT; }
   const len = Math.hypot(input.dx, input.dy) || 1;
   const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
@@ -91,21 +126,122 @@ export function stepActorMovement(a, input, dt, world) {
   // frente do ator: -Z quando yaw=0 (convenção Three.js)
   // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
   let nx = a.x + (mx * cos + mz * sin), nz = a.z + (-mx * sin + mz * cos);
-  // colisão XZ com o mundo
-  for (const box of world.colliders) {
-    if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
-    const hit = circlePushAabb(nx, nz, PLAYER_R, box);
-    if (hit) { nx = hit.x; nz = hit.z; }
+  // colisão XZ com o mundo (no ar: só a borda do mundo — paredes altas não alcançam)
+  if (!a.dropPhase) {
+    for (const box of world.colliders) {
+      if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
+      const hit = circlePushAabb(nx, nz, PLAYER_R, box);
+      if (hit) { nx = hit.x; nz = hit.z; }
+    }
   }
   const lim = WORLD.size / 2 - 2;
   a.x = clamp(nx, -lim, lim); a.z = clamp(nz, -lim, lim);
-  // vertical
+  // vertical: fase de queda própria (Fase 4) OU salto normal
+  if (a.dropPhase) {
+    const phase = a.dropPhase;
+    const g = phase === 'sky' ? DROP_SKY_GRAVITY : DROP_CHUTE_GRAVITY;
+    const cap = phase === 'sky' ? DROP_SKY_MAX_FALL : DROP_CHUTE_MAX_FALL;
+    if (a.vy > cap) a.vy = Math.max(cap, a.vy + g * dt); else a.vy = cap;
+    a.y += a.vy * dt;
+    if (phase === 'sky' && a.y <= DROP_OPEN_Y) { a.dropPhase = 'chute'; a.vy = Math.max(a.vy, DROP_CHUTE_MAX_FALL); }
+    if (a.y <= 0) {
+      a.y = 0; a.vy = 0; a.onGround = true; a.dropPhase = null;
+      a.landed = true; // consumido pelo dono do step para emitir 'land'
+    }
+    return a;
+  }
   if (!a.onGround || input.jump) {
     if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
     a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
     if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
   }
   return a;
+}
+
+// ---------- arremessáveis táticos (Fase 4) ----------
+// Helpers puros compartilhados pela sim offline e pela MatchRoom3D autoritativa.
+// Direção de arremesso: mira do ator (yaw/pitch) com loft fixo; física com
+// gravidade, quique amortecido em AABBs/chão e pavio temporizado.
+export function throwFragProjectile(a, id) {
+  const cp = Math.cos(a.pitch ?? 0);
+  const fx = -Math.sin(a.yaw) * cp, fy = Math.sin(a.pitch ?? 0), fz = -Math.cos(a.yaw) * cp;
+  return {
+    id, owner: a.id,
+    x: a.x + fx * 0.6, y: a.y + 1.5, z: a.z + fz * 0.6,
+    vx: fx * FRAG.speed, vy: fy * FRAG.speed + FRAG.speed * FRAG.loft, vz: fz * FRAG.speed,
+    fuse: FRAG.fuse, born: -1,
+  };
+}
+
+// Um passo de física da granada; retorna evento de impacto p/ FX ou null.
+export function stepFragProjectile(g, dt, colliders) {
+  g.fuse -= dt;
+  const ox = g.x, oy = g.y, oz = g.z;
+  g.vy += FRAG.gravity * dt;
+  g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
+  // chão
+  if (g.y <= 0.12) {
+    g.y = 0.12;
+    if (Math.abs(g.vy) > 2.2) {
+      g.vy = -g.vy * FRAG.bounce; g.vx *= FRAG.bounce; g.vz *= FRAG.bounce;
+      return { kind: 'bounce', x: g.x, y: g.y, z: g.z };
+    }
+    g.vy = 0; g.vx *= 0.86; g.vz *= 0.86; // rola e atrita
+  }
+  // AABBs: resolve pela menor penetração (granada é pequena — aproximação de ponto)
+  for (const box of colliders) {
+    if (box.noBlock) continue;
+    if (g.x < box.minX || g.x > box.maxX || g.z < box.minZ || g.z > box.maxZ) continue;
+    if (g.y < box.yMin || g.y > box.yMax) continue;
+    // recua para a posição anterior e reflete no eixo dominante
+    const pen = [
+      { axis: 'x', v: Math.min(Math.abs(g.x - box.minX), Math.abs(g.x - box.maxX)) },
+      { axis: 'z', v: Math.min(Math.abs(g.z - box.minZ), Math.abs(g.z - box.maxZ)) },
+      { axis: 'y', v: Math.min(Math.abs(g.y - box.yMin), Math.abs(g.y - box.yMax)) },
+    ].sort((p, q) => p.v - q.v)[0].axis;
+    g.x = ox; g.y = oy; g.z = oz;
+    if (pen === 'x') { g.vx = -g.vx * FRAG.bounce; g.vz *= FRAG.bounce; }
+    else if (pen === 'z') { g.vz = -g.vz * FRAG.bounce; g.vx *= FRAG.bounce; }
+    else g.vy = Math.abs(g.vy) > 2.2 ? -g.vy * FRAG.bounce : 0;
+    return { kind: 'bounce', x: g.x, y: g.y, z: g.z };
+  }
+  return null;
+}
+
+// Dano radial da explosão: decai linear do epicentro até o raio; paredes entre o
+// epicentro e o alvo atenuam (linha epicentro→alvo testada por rayAabb — robusto
+// para paredes finas como a Gloo Wall).
+export function explosionDamage(ex, ey, ez, target, colliders) {
+  const d = Math.hypot(target.x - ex, target.y + 0.9 - ey, target.z - ez);
+  if (d > FRAG.radius) return 0;
+  let dmg = FRAG.damage * (1 - d / FRAG.radius);
+  let dx = target.x - ex, dy = (target.y + 0.9) - ey, dz = target.z - ez;
+  const len = Math.hypot(dx, dy, dz);
+  if (len > 1e-6) {
+    dx /= len; dy /= len; dz /= len;
+    for (const box of colliders) {
+      if (box.noBlock) continue;
+      if (rayAabb(ex, ey, ez, dx, dy, dz, box, len) !== null) { dmg *= FRAG.wallAttenuation; break; }
+    }
+  }
+  return Math.max(0, dmg);
+}
+
+// AABB da Gloo Wall: rot 0 → parede estendida em X; rot 90° → estendida em Z.
+export function glooCollider(wall) {
+  const alongX = (wall.rot ?? 0) === 0;
+  const w = alongX ? GLOO.w : GLOO.d, d = alongX ? GLOO.d : GLOO.w;
+  return { minX: wall.x - w / 2, maxX: wall.x + w / 2, minZ: wall.z - d / 2, maxZ: wall.z + d / 2, yMin: 0, yMax: GLOO.h, kind: 'gloo', wallId: wall.id };
+}
+
+// Posição/rotação de deploy: à frente do ator, alinhada à direção de visão (0/90°).
+export function glooDeployPlacement(a) {
+  const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
+  const alongX = Math.abs(fx) < Math.abs(fz); // parede perpendicular à visão
+  return {
+    x: a.x + fx * GLOO.forward, z: a.z + fz * GLOO.forward,
+    rot: alongX ? 0 : Math.PI / 2,
+  };
 }
 
 // ---------- mundo ----------
@@ -117,18 +253,28 @@ export function getWorldLayout(seed) {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30 } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true } = {}) {
     this.seed = String(seed);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0;
     this.events = []; this.replay = []; this.over = false; this.started = false;
+    this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.world = getWorldLayout(this.seed);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
     this.bullets = []; this.nextBulletId = 1;
+    this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
     this.loot = this.#spawnLoot();
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
+    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls).
+    // ALIAS da lista do layout quando não há paredes — mutações externas no layout
+    // (ex.: testes que removem colliders) continuam valendo para balas/LOS/movimento.
+    this.physicsWorld = { colliders: this.world.colliders };
+  }
+  #syncPhysicsWorld() {
+    const active = this.walls.filter(w => w.active).map(glooCollider);
+    this.physicsWorld.colliders = active.length ? this.world.colliders.concat(active) : this.world.colliders;
   }
 
   // ---------- spawn ----------
@@ -136,8 +282,9 @@ export class KhaaosSim3D {
     return { id: 'player', name: 'ZHEERS-07', x: 0, y: 0, z: 150, vy: 0, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19',
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
-      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, ammo: { '9MM': 45 } },
-      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false };
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
+      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      dropPhase: null, dropTarget: null };
   }
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
@@ -146,15 +293,24 @@ export class KhaaosSim3D {
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };
   }
   #spawnLoot() {
     const zones = ['armory', 'industrial', 'park', 'extraction'];
-    return Array.from({ length: 24 }, (_, i) => {
+    const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
       const drop = rollLoot(this.rng, zones[i % zones.length], 1)[0];
       return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, ...drop, active: true };
     });
+    // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
+    const bonus = ['frag', 'gloo', 'frag', 'frag', 'gloo', 'frag'];
+    for (let i = 0; i < bonus.length; i++) {
+      const spot = this.world.lootSpots[(i * 7 + 3) % this.world.lootSpots.length];
+      items.push({ id: `loot-t${i}`, x: spot.x + ((i % 2) - .5) * 1.6, z: spot.z + ((i % 3) - 1) * 1.4,
+        y: 0.55, kind: bonus[i], name: bonus[i] === 'frag' ? 'Granada FRAG' : 'Gloo Wall', active: true });
+    }
+    return items;
   }
 
   // ---------- protocolo ----------
@@ -163,7 +319,24 @@ export class KhaaosSim3D {
     const p = this.player;
     p.armor = entry === 'belt' ? 60 : 18;
     p.speed = entry === 'belt' ? 5.2 : 6.1;
+    // Fase 4 — infiltração aérea: todos os operativos entram caindo do céu
+    if (this.airdrop) {
+      this.#airdropActor(p, 0, this.world.lootSpots);
+      this.bots.forEach((b, i) => this.#airdropActor(b, i + 1, this.world.lootSpots));
+      this.emit('airdrop', { altitude: DROP_START_Y });
+    }
     this.emit('entry', { entry });
+  }
+  #airdropActor(a, idx, lootSpots) {
+    // espalha na borda do anel com jitter determinístico; bots escolhem loot spot como destino
+    const ang = (idx / 17) * Math.PI * 2 + 0.35;
+    const r = 120 + (idx % 3) * 14;
+    a.x = Math.cos(ang) * r; a.z = Math.sin(ang) * r;
+    a.y = DROP_START_Y + (idx % 4) * 6;
+    a.vy = 0; a.onGround = false; a.dropPhase = 'sky';
+    a.yaw = Math.atan2(-a.x, -a.z); // olhando para o centro
+    const spot = lootSpots[(idx * 5) % lootSpots.length];
+    a.dropTarget = { x: spot.x, z: spot.z };
   }
   emit(type, payload = {}) { this.events.push({ tick: this.tick, type, ...payload }); }
   consumeEvents() { const e = this.events; this.events = []; return e; }
@@ -193,8 +366,9 @@ export class KhaaosSim3D {
     if (p.alive) this.#stepActor(p, input, dt, true);
     // --- bots ---
     for (const b of this.bots) if (b.alive) this.#stepBot(b, dt);
-    // --- projéteis ---
+    // --- projéteis e arremessáveis ---
     this.#stepBullets(dt);
+    this.#stepThrowables(dt);
     // --- fim de partida ---
     if (p.alive && this.time <= 0) { this.over = true; this.emit('victory', { kills: p.kills, xp: p.xp, krc: p.krc }); }
     if (!p.alive && !this.over) { this.over = true; this.emit('eliminated', { kills: p.kills }); }
@@ -206,19 +380,102 @@ export class KhaaosSim3D {
     a.cooldown = Math.max(0, a.cooldown - dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
-    stepActorMovement(a, input, dt, this.world);
+    stepActorMovement(a, input, dt, this.physicsWorld);
+    if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
+    const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
     if (isPlayer) {
       const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-      if (input.reload) this.#tryReload(a);
-      if (input.medkit) this.#useMedkit(a);
-      if (input.interact) this.#interact(a);
-      if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
-      else if (input.fire) this.#fire(a, w);
+      if (!airborne) {
+        if (input.reload) this.#tryReload(a);
+        if (input.medkit) this.#useMedkit(a);
+        if (input.interact) this.#interact(a);
+        if (input.throw) this.#throwFrag(a);
+        if (input.gloo) this.#deployGloo(a);
+        if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
+        else if (input.fire) this.#fire(a, w);
+      }
     }
+  }
+
+  // ---------- arremessáveis táticos (Fase 4) ----------
+  #throwFrag(a) {
+    if ((a.inventory.frag ?? 0) <= 0 || a.reloadT > 0) return;
+    a.inventory.frag--;
+    const g = throwFragProjectile(a, this.nextThrowableId++);
+    this.grenades.push(g);
+    this.emit('frag', { owner: a.id, x: g.x, y: g.y, z: g.z });
+  }
+  #deployGloo(a) {
+    if ((a.inventory.gloo ?? 0) <= 0) return;
+    const place = glooDeployPlacement(a);
+    // não empilha dentro de collider existente (inclusive outras paredes)
+    const probe = { ...place, id: 'probe' };
+    const box = glooCollider(probe);
+    for (const c of this.physicsWorld.colliders) {
+      if (c.noBlock) continue;
+      const overlap = box.minX < c.maxX && box.maxX > c.minX && box.minZ < c.maxZ && box.maxZ > c.minZ && box.yMin < c.yMax && GLOO.h > c.yMin;
+      if (overlap) return;
+    }
+    a.inventory.gloo--;
+    const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
+    this.walls.push(wall);
+    this.#syncPhysicsWorld();
+    this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
+  }
+  #stepThrowables(dt) {
+    // granadas: física + detonação
+    for (const g of this.grenades) {
+      stepFragProjectile(g, dt, this.physicsWorld.colliders);
+      if (g.fuse <= 0) {
+        g.dead = true;
+        this.#detonate(g);
+      }
+    }
+    this.grenades = this.grenades.filter(g => !g.dead);
+    // gloo walls: dano persistido, expiração e queda de hp
+    let changed = false;
+    for (const w of this.walls) {
+      if (!w.active) continue;
+      w.age += dt;
+      if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
+    }
+    if (changed) this.#syncPhysicsWorld();
+  }
+  #detonate(g) {
+    const actors = [this.player, ...this.bots].filter(a => a.alive);
+    for (const a of actors) {
+      const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
+      if (dmg <= 0) continue;
+      if (a.id === 'player') this.#hurtPlayer(dmg, g.owner, 'explosion');
+      else this.#damageBot(a, dmg, g.owner, false);
+    }
+    // granada desgasta gloo walls no raio
+    let changed = false;
+    for (const w of this.walls) {
+      if (!w.active) continue;
+      const box = glooCollider(w);
+      const cx = clamp(g.x, box.minX, box.maxX), cz = clamp(g.z, box.minZ, box.maxZ);
+      const cy = clamp(g.y, box.yMin, box.yMax);
+      const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
+    }
+    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.#syncPhysicsWorld(); }
+    this.emit('explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
   }
 
   #stepBot(b, dt) {
     const p = this.player;
+    // Fase 4 — na queda: deriva para o destino de aterrissagem, sem combate
+    if (b.dropPhase) {
+      const tx = b.dropTarget?.x ?? 0, tz = b.dropTarget?.z ?? 0;
+      const inAngle = Math.atan2(-(tx - b.x), -(tz - b.z));
+      b.yaw += Math.atan2(Math.sin(inAngle - b.yaw), Math.cos(inAngle - b.yaw)) * Math.min(1, dt * 4);
+      const dist = dist2d(b.x, b.z, tx, tz);
+      const dy = dist > 6 ? -1 : 0; // anda para frente enquanto longe do alvo
+      this.#stepActor(b, { ...DEFAULT_INPUT, dx: 0, dy, yaw: b.yaw }, dt, false);
+      if (b.landed) { b.landed = false; b.ai.state = 'patrol'; b.ai.think = 0; }
+      return;
+    }
     b.ai.think -= dt;
     const d = dist2d(b.x, b.z, p.x, p.z);
     const sees = p.alive && d < 85 && this.#hasLos(b, p);
@@ -271,7 +528,7 @@ export class KhaaosSim3D {
     let dx = b.x - ox, dy = (b.y + 1.5) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
-    for (const box of this.world.colliders) {
+    for (const box of this.physicsWorld.colliders) {
       if (box.noBlock) continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
@@ -353,11 +610,11 @@ export class KhaaosSim3D {
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
-      let hitT = Infinity;
-      for (const box of this.world.colliders) {
+      let hitT = Infinity, hitBox = null;
+      for (const box of this.physicsWorld.colliders) {
         if (box.noBlock) continue;
         const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
-        if (t !== null && t < hitT) hitT = t;
+        if (t !== null && t < hitT) { hitT = t; hitBox = box; }
       }
       let charHit = null, charT = Infinity;
       if (b.owner !== 'player' && p.alive) {
@@ -379,7 +636,12 @@ export class KhaaosSim3D {
       }
       if (hitT < len) {
         b.life = 0;
-        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: 'wall' });
+        // Fase 4 — balas desgastam Gloo Walls (cobertura destrutível)
+        if (hitBox?.wallId) {
+          const w = this.walls.find(wl => wl.id === hitBox.wallId && wl.active);
+          if (w) w.hp -= b.damage;
+        }
+        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: hitBox?.wallId ? 'gloo' : 'wall' });
       }
     }
     this.bullets = this.bullets.filter(b => b.life > 0);
@@ -455,6 +717,12 @@ export class KhaaosSim3D {
     } else if (item.kind === 'resource') {
       a.inventory[item.id] = (a.inventory[item.id] || 0) + (item.amount || 1);
       this.emit('loot', { item: item.id, kind: 'resource' });
+    } else if (item.kind === 'frag') {
+      a.inventory.frag = Math.min(FRAG.cap, (a.inventory.frag || 0) + 1);
+      this.emit('loot', { item: 'Granada FRAG', kind: 'frag' });
+    } else if (item.kind === 'gloo') {
+      a.inventory.gloo = Math.min(GLOO.cap, (a.inventory.gloo || 0) + 1);
+      this.emit('loot', { item: 'Gloo Wall', kind: 'gloo' });
     }
   }
   switchSlot(slot) {
@@ -477,6 +745,7 @@ export class KhaaosSim3D {
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),
+      grenades: this.grenades.map(g => ({ ...g })), walls: this.walls.map(w => ({ ...w })),
       terminals: this.terminals.map(t => ({ ...t })), replayLength: this.replay.length };
   }
   applySnapshot(s) {
@@ -488,6 +757,9 @@ export class KhaaosSim3D {
     this.bots = (s.bots ?? []).map(b => ({ ...b, ai: b.ai ?? { state: 'patrol', think: 0, lostT: 0, strafe: 0, waypoint: null } }));
     this.bullets = (s.bullets ?? []).map(b => ({ ...b }));
     this.loot = (s.loot ?? this.loot).map(i => ({ ...i }));
+    this.grenades = (s.grenades ?? this.grenades).map(g => ({ ...g }));
+    this.walls = (s.walls ?? this.walls).map(w => ({ ...w }));
+    this.#syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
   exportReplay() { return { version: 3, mode: '3d', seed: this.seed, tickRate: this.tickRate, inputs: this.replay }; }

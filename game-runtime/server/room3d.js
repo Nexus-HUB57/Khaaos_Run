@@ -11,7 +11,9 @@ import { rollLoot } from '../src/shared/weapons.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
+  FRAG, GLOO, DROP_START_Y,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
+  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
 } from '../src/game3d/sim3d.js';
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -31,12 +33,13 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
+    this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.mode = '3d';
     this.is3d = true;
     this.rng = new SeededRng(`${this.seed}:room3d`);
@@ -46,7 +49,10 @@ export class MatchRoom3D {
     this.players = this.humans; // alias de compatibilidade com o matchmaking/reconexão 2D
     this.bots = [];
     this.bullets = [];
+    this.grenades = [];        // Fase 4: granadas FRAG em voo
+    this.walls = [];           // Fase 4: Gloo Walls ativas
     this.nextBulletId = 1;
+    this.nextThrowableId = 1;
     this.loot = [];
     this.terminals = [];
     this.events = new Map();   // humanId -> [{tick, type, ...}]
@@ -58,6 +64,12 @@ export class MatchRoom3D {
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.history = [];         // [{tick, at: [{id,x,y,z}]}] — rewind p/ lag compensation
+    // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls)
+    this.physicsWorld = { colliders: this.world.colliders };
+  }
+  #syncPhysicsWorld() {
+    const active = this.walls.filter((w) => w.active).map(glooCollider);
+    this.physicsWorld.colliders = active.length ? this.world.colliders.concat(active) : this.world.colliders;
   }
 
   // ---------- eventos ----------
@@ -82,12 +94,24 @@ export class MatchRoom3D {
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, extracted: 0,
       speed: 5.2, weapon: 'g19', cooldown: 0, reloadT: 0,
       ammoMag: WEAPONS3D.g19.magazine,
-      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, ammo: { '9MM': 45 } },
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      dropPhase: null, dropTarget: null, landed: false,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
+  }
+  // Fase 4 — infiltração aérea: ator entra caindo com destino de aterrissagem
+  #airdropActor(a, idx, lootSpots) {
+    const ang = (idx / 17) * Math.PI * 2 + 0.35;
+    const r = 120 + (idx % 3) * 14;
+    a.x = Math.cos(ang) * r; a.z = Math.sin(ang) * r;
+    a.y = DROP_START_Y + (idx % 4) * 6;
+    a.vy = 0; a.onGround = false; a.dropPhase = 'sky';
+    a.yaw = Math.atan2(-a.x, -a.z);
+    const spot = lootSpots[(idx * 5) % lootSpots.length];
+    a.dropTarget = { x: spot.x, z: spot.z };
   }
   addPlayer(id, name = 'OPERATIVO') {
     if (this.state !== ROOM_STATES.LOBBY || this.humans.size >= this.capacity) return null;
@@ -142,6 +166,12 @@ export class MatchRoom3D {
     // preenche com bots até a capacidade (botFill limita o máximo de bots)
     const botCount = Math.max(0, Math.min(this.botFill, this.capacity - this.humans.size));
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
+    // Fase 4 — infiltração aérea: humanos e bots entram caindo do céu
+    if (this.airdrop) {
+      let idx = 0;
+      for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
+      for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
+    }
     for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
@@ -151,7 +181,7 @@ export class MatchRoom3D {
     // mesmo gerador da sim offline (catálogo/raridades idênticos), remapeado para
     // o formato serializável da sala: id da instância ≠ id do catálogo.
     const zones = ['armory', 'industrial', 'park', 'extraction'];
-    return Array.from({ length: 24 }, (_, i) => {
+    const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
       const drop = rollLoot(this.rng, zones[i % zones.length], 1)[0];
       const { id: dropId, weapon, ...rest } = drop;
@@ -164,6 +194,14 @@ export class MatchRoom3D {
         active: true,
       };
     });
+    // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
+    const bonus = ['frag', 'gloo', 'frag', 'frag', 'gloo', 'frag'];
+    for (let i = 0; i < bonus.length; i++) {
+      const spot = this.world.lootSpots[(i * 7 + 3) % this.world.lootSpots.length];
+      items.push({ id: `loot-t${i}`, x: spot.x + ((i % 2) - 0.5) * 1.6, z: spot.z + ((i % 3) - 1) * 1.4,
+        y: 0.55, kind: bonus[i], name: bonus[i] === 'frag' ? 'Granada FRAG' : 'Gloo Wall', active: true });
+    }
+    return items;
   }
   input(id, input) {
     const actor = this.humans.get(id);
@@ -228,8 +266,9 @@ export class MatchRoom3D {
     this.history.push({ tick: this.tickCount, at: positions });
     if (this.history.length > HISTORY_TICKS) this.history.shift();
 
-    // --- projéteis ---
+    // --- projéteis e arremessáveis ---
     this.#stepBullets(dt);
+    this.#stepThrowables(dt);
 
     // --- fim de partida ---
     const aliveAll = this.#actors().filter((a) => a.alive);
@@ -246,7 +285,7 @@ export class MatchRoom3D {
   #actors() { return [...this.humans.values(), ...this.bots]; }
 
   defaultInputFor(actor) {
-    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
+    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };
   }
 
   // ---------- passo de ator (idêntico à sim offline) ----------
@@ -254,14 +293,111 @@ export class MatchRoom3D {
     a.cooldown = Math.max(0, a.cooldown - dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
-    stepActorMovement(a, input, dt, this.world);
-    const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-    if (input.reload) this.#tryReload(a);
-    if (input.medkit) this.#useMedkit(a);
-    if (input.interact) this.#interact(a);
-    if (input.slot && a.slots[input.slot] && input.slot !== a.activeSlot) this.#switchSlot(a, input.slot);
-    if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
-    else if (input.fire) this.#fire(a, w);
+    stepActorMovement(a, input, dt, this.physicsWorld);
+    if (a.landed) {
+      a.landed = false;
+      if (!a.isBot) this.#emitTo(a.id, 'land', { x: a.x, z: a.z });
+    }
+    const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    if (!airborne) {
+      const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
+      if (input.reload) this.#tryReload(a);
+      if (input.medkit) this.#useMedkit(a);
+      if (input.interact) this.#interact(a);
+      if (input.throw) this.#throwFrag(a);
+      if (input.gloo) this.#deployGloo(a);
+      if (input.slot && a.slots[input.slot] && input.slot !== a.activeSlot) this.#switchSlot(a, input.slot);
+      if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
+      else if (input.fire) this.#fire(a, w);
+    }
+  }
+
+  // ---------- arremessáveis táticos (Fase 4) ----------
+  #throwFrag(a) {
+    if ((a.inventory.frag ?? 0) <= 0 || a.reloadT > 0) return;
+    a.inventory.frag--;
+    const g = throwFragProjectile(a, this.nextThrowableId++);
+    this.grenades.push(g);
+    if (!a.isBot) this.#emitTo(a.id, 'frag', { owner: a.id, x: g.x, y: g.y, z: g.z });
+    for (const h of this.humans.values()) {
+      if (h.id === a.id || !h.alive) continue;
+      if (dist2d(h.x, h.z, a.x, a.z) < 90) this.#emitTo(h.id, 'frag', { owner: a.id, x: g.x, y: g.y, z: g.z, isBot: a.isBot });
+    }
+  }
+  #deployGloo(a) {
+    if ((a.inventory.gloo ?? 0) <= 0) return;
+    const place = glooDeployPlacement(a);
+    const probe = { ...place, id: 'probe' };
+    const box = glooCollider(probe);
+    for (const c of this.physicsWorld.colliders) {
+      if (c.noBlock) continue;
+      const overlap = box.minX < c.maxX && box.maxX > c.minX && box.minZ < c.maxZ && box.maxZ > c.minZ && box.yMin < c.yMax && GLOO.h > c.yMin;
+      if (overlap) return;
+    }
+    a.inventory.gloo--;
+    const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
+    this.walls.push(wall);
+    this.#syncPhysicsWorld();
+    // deploy é global (a parede é visível/replicada para todos)
+    for (const h of this.humans.values()) {
+      if (!h.alive) continue;
+      this.#emitTo(h.id, 'gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot, isBot: a.isBot });
+    }
+  }
+  #stepThrowables(dt) {
+    for (const g of this.grenades) {
+      stepFragProjectile(g, dt, this.physicsWorld.colliders);
+      if (g.fuse <= 0) { g.dead = true; this.#detonate(g); }
+    }
+    this.grenades = this.grenades.filter((g) => !g.dead);
+    let changed = false;
+    for (const w of this.walls) {
+      if (!w.active) continue;
+      w.age += dt;
+      if (w.hp <= 0 || w.age >= GLOO.duration) {
+        w.active = false; changed = true;
+        for (const h of this.humans.values()) {
+          if (!h.alive) continue;
+          if (dist2d(h.x, h.z, w.x, w.z) < 110) this.#emitTo(h.id, 'glooDown', { id: w.id, destroyed: w.hp <= 0 });
+        }
+      }
+    }
+    if (changed) this.#syncPhysicsWorld();
+  }
+  #detonate(g) {
+    const actors = this.#actors();
+    for (const a of actors) {
+      if (!a.alive) continue;
+      const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
+      if (dmg <= 0) continue;
+      this.#damage(a, dmg, g.owner === a.id ? null : g.owner, 'explosion');
+    }
+    let changed = false;
+    for (const w of this.walls) {
+      if (!w.active) continue;
+      const box = glooCollider(w);
+      const cx = clamp(g.x, box.minX, box.maxX), cz = clamp(g.z, box.minZ, box.maxZ);
+      const cy = clamp(g.y, box.yMin, box.yMax);
+      const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
+    }
+    if (changed) {
+      for (const w of this.walls) {
+        if (w.active && w.hp <= 0) {
+          w.active = false;
+          for (const h of this.humans.values()) {
+            if (!h.alive) continue;
+            if (dist2d(h.x, h.z, w.x, w.z) < 110) this.#emitTo(h.id, 'glooDown', { id: w.id, destroyed: true });
+          }
+        }
+      }
+      this.#syncPhysicsWorld();
+    }
+    // explosão é evento global próximo (flash/áudio/shake)
+    for (const h of this.humans.values()) {
+      if (!h.alive) continue;
+      if (dist2d(h.x, h.z, g.x, g.z) < 130) this.#emitTo(h.id, 'explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
+    }
   }
   #switchSlot(a, slot) {
     const old = WEAPONS3D[a.weapon];
@@ -276,6 +412,15 @@ export class MatchRoom3D {
 
   // ---------- IA dos bots (engajar → caçar → patrulhar) ----------
   #stepBot(b, dt) {
+    // Fase 4 — na queda: deriva para o destino de aterrissagem, sem combate
+    if (b.dropPhase) {
+      const tx = b.dropTarget?.x ?? 0, tz = b.dropTarget?.z ?? 0;
+      const inAngle = Math.atan2(-(tx - b.x), -(tz - b.z));
+      b.yaw += Math.atan2(Math.sin(inAngle - b.yaw), Math.cos(inAngle - b.yaw)) * Math.min(1, dt * 4);
+      const dist = dist2d(b.x, b.z, tx, tz);
+      this.#stepActor(b, { dx: 0, dy: dist > 6 ? -1 : 0, yaw: b.yaw, pitch: 0 }, dt);
+      return;
+    }
     // alvo: ator vivo mais próximo com linha de visão
     let target = null, bestD = BOT_SIGHT;
     for (const other of this.#actors()) {
@@ -343,7 +488,7 @@ export class MatchRoom3D {
     let dx = b.x - ox, dy = (b.y + 1.5) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
-    for (const box of this.world.colliders) {
+    for (const box of this.physicsWorld.colliders) {
       if (box.noBlock) continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
@@ -447,11 +592,11 @@ export class MatchRoom3D {
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
-      let hitT = Infinity;
-      for (const box of this.world.colliders) {
+      let hitT = Infinity, hitBox = null;
+      for (const box of this.physicsWorld.colliders) {
         if (box.noBlock) continue;
         const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
-        if (t !== null && t < hitT) hitT = t;
+        if (t !== null && t < hitT) { hitT = t; hitBox = box; }
       }
       let charHit = null, charT = Infinity;
       if (b.lagTargets) {
@@ -480,7 +625,12 @@ export class MatchRoom3D {
       }
       if (hitT < len) {
         b.life = 0;
-        this.#impactEvent(ox + dx * hitT, oy + dy * hitT, oz + dz * hitT, 'wall', actors);
+        // Fase 4 — balas desgastam Gloo Walls (cobertura destrutível)
+        if (hitBox?.wallId) {
+          const w = this.walls.find((wl) => wl.id === hitBox.wallId && wl.active);
+          if (w) w.hp -= b.damage;
+        }
+        this.#impactEvent(ox + dx * hitT, oy + dy * hitT, oz + dz * hitT, hitBox?.wallId ? 'gloo' : 'wall', actors);
       }
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);
@@ -579,6 +729,12 @@ export class MatchRoom3D {
     } else if (item.kind === 'resource') {
       a.inventory[item.resourceId] = (a.inventory[item.resourceId] || 0) + (item.amount || 1);
       if (!a.isBot) this.#emitTo(a.id, 'loot', { item: item.resourceId, kind: 'resource' });
+    } else if (item.kind === 'frag') {
+      a.inventory.frag = Math.min(FRAG.cap, (a.inventory.frag || 0) + 1);
+      if (!a.isBot) this.#emitTo(a.id, 'loot', { item: 'Granada FRAG', kind: 'frag' });
+    } else if (item.kind === 'gloo') {
+      a.inventory.gloo = Math.min(GLOO.cap, (a.inventory.gloo || 0) + 1);
+      if (!a.isBot) this.#emitTo(a.id, 'loot', { item: 'Gloo Wall', kind: 'gloo' });
     }
   }
 
@@ -596,6 +752,8 @@ export class MatchRoom3D {
       player: self ? this.#selfView(self) : null,
       others: actors.filter((a) => a.id !== forId).map((a) => this.#otherView(a)),
       bullets: this.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
+      grenades: this.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
+      walls: this.walls.filter((w) => w.active).map((w) => ({ id: w.id, x: w.x, z: w.z, rot: w.rot, hp: Math.round(w.hp), owner: w.owner })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
       terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),
       events: forId ? this.drainEvents(forId) : [],
@@ -607,9 +765,10 @@ export class MatchRoom3D {
       id: a.id, name: a.name, x: a.x, y: a.y, z: a.z, vy: a.vy, yaw: a.yaw, pitch: a.pitch,
       life: a.life, armor: a.armor, xp: a.xp, krc: a.krc, kills: a.kills, extracted: a.extracted,
       speed: a.speed, weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
-      inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit },
+      inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit, frag: a.inventory.frag ?? 0, gloo: a.inventory.gloo ?? 0 },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads,
+      dropPhase: a.dropPhase ?? null,
       ackSeq: a.lastProcessedSeq,
     };
   }
@@ -619,6 +778,7 @@ export class MatchRoom3D {
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, kills: a.kills,
+      dropPhase: a.dropPhase ?? null,
     };
   }
 

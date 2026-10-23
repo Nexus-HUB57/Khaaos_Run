@@ -164,6 +164,23 @@ export function createLootMesh(item) {
   const g = new THREE.Group();
   const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e' };
   const color = rarityColors[item.rarity] ?? (item.kind === 'consumable' ? '#ff6b2c' : item.kind === 'armor' ? '#42d9de' : '#b7c2c7');
+  // Fase 4 — arremessáveis com silhueta própria
+  if (item.kind === 'frag' || item.kind === 'gloo') {
+    const frag = item.kind === 'frag';
+    const mesh = frag
+      ? new THREE.Mesh(new THREE.SphereGeometry(.18, 10, 8), M('#3a4436', { rough: .5, metal: .6, extra: { emissive: '#ff6b2c', emissiveIntensity: .25 } }))
+      : box(.5, .36, .1, M('#9fb8c6', { rough: .4, metal: .2, extra: { emissive: '#42d9de', emissiveIntensity: .3 } }));
+    mesh.position.y = frag ? .2 : .3;
+    mesh.castShadow = true;
+    g.add(mesh);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.03, .05, 1.8, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: frag ? '#ff6b2c' : '#42d9de', transparent: true, opacity: .35, depthWrite: false })
+    );
+    beam.position.y = .9;
+    g.add(beam);
+    return g;
+  }
   const isWeapon = item.kind === 'weapon';
   const size = isWeapon ? .5 : .34;
   const box_ = box(size, size, size, M(color, { rough: .5, metal: .5, extra: { emissive: color, emissiveIntensity: .22 } }));
@@ -192,3 +209,75 @@ export function createTerminalMesh() {
   g.userData.screen = screen;
   return g;
 }
+
+// ---------- Fase 4 — paraquedas (infiltração aérea) ----------
+// Dossel semiesférico + suspensórios; anexado ao grupo do operativo (y ~2.4).
+export function createParachute(color = '#c8622e') {
+  const g = new THREE.Group();
+  const canopy = new THREE.Mesh(
+    new THREE.SphereGeometry(1.9, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color, roughness: .85, side: THREE.DoubleSide })
+  );
+  canopy.position.y = 2.55;
+  canopy.castShadow = true;
+  // faixa de identificação (verde ácido de comando)
+  const stripe = new THREE.Mesh(
+    new THREE.TorusGeometry(1.88, .08, 8, 32),
+    new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .5, roughness: .5 })
+  );
+  stripe.rotation.x = Math.PI / 2;
+  stripe.position.y = 2.55;
+  g.add(canopy, stripe);
+  const cordM = new THREE.LineBasicMaterial({ color: '#1c1e22', transparent: true, opacity: .8 });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(Math.cos(a) * 1.7, 2.6, Math.sin(a) * 1.7),
+      new THREE.Vector3(Math.cos(a) * .2, 1.85, Math.sin(a) * .2),
+    ]);
+    g.add(new THREE.Line(geo, cordM));
+  }
+  return g;
+}
+
+// ---------- Fase 4 — granada FRAG (corpo em voo) ----------
+export function createFragMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(.11, 10, 8),
+    M('#3a4436', { rough: .55, metal: .55 })
+  );
+  body.castShadow = true;
+  const lever = box(.03, .12, .03, M('#8a8f96', { metal: .8, rough: .35 }), 0, .09, .05);
+  const pinLight = new THREE.Mesh(
+    new THREE.SphereGeometry(.05, 6, 6),
+    new THREE.MeshBasicMaterial({ color: '#ff3d52' })
+  ); // LED do pavio — pisca no update
+  g.add(body, lever, pinLight);
+  g.userData.led = pinLight;
+  return g;
+}
+
+// ---------- Fase 4 — Gloo Wall (cobertura desdobrável) ----------
+// Parede de composto tático com painéis e brilho de contenção; hp barra no shader? —
+// mantém simples: emissive decai com o hp via userData.updateHp(fraction).
+export function createGlooMesh() {
+  const g = new THREE.Group();
+  const panel = new THREE.MeshStandardMaterial({ color: '#9fb8c6', roughness: .4, metalness: .15, emissive: '#2a4a58', emissiveIntensity: .35 });
+  const wall = box(GLOO_W, GLOO_H, GLOO_D, panel, 0, GLOO_H / 2, 0);
+  // juntas dos 4 painéis
+  const seam = M('#5f7684', { metal: .4, rough: .5 });
+  for (let i = 1; i <= 3; i++) {
+    g.add(box(.06, GLOO_H * .96, GLOO_D * 1.12, seam, -GLOO_W / 2 + (i * GLOO_W) / 4, GLOO_H / 2, 0));
+  }
+  // topo com borda luminosa
+  const edge = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .8, roughness: .4 });
+  g.add(box(GLOO_W * 1.01, .07, GLOO_D * 1.3, edge, 0, GLOO_H + .04, 0));
+  g.add(wall);
+  g.userData.updateHp = (frac) => {
+    panel.emissiveIntensity = .12 + frac * .3;
+    edge.emissiveIntensity = frac > .35 ? .8 : (frac > .15 ? .45 : .15);
+  };
+  return g;
+}
+const GLOO_W = 4, GLOO_H = 3, GLOO_D = .4; // espelha GLOO de sim3d (sem import p/ evitar ciclo)

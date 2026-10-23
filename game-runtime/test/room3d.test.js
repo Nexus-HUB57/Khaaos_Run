@@ -16,7 +16,8 @@ const blankInput = (over = {}) => ({
 });
 
 function makeRoom({ humans = 3, botFill = 0, seed = 'TESTE-3D' } = {}) {
-  const room = new MatchRoom3D({ id: 'ring3d-test', seed, region: 'sa-east', capacity: 16, botFill });
+  // airdrop desligado: os testes das fases 1-3 validam mecânicas de solo
+  const room = new MatchRoom3D({ id: 'ring3d-test', seed, region: 'sa-east', capacity: 16, botFill, airdrop: false });
   for (let i = 0; i < humans; i++) room.addPlayer(`p${i + 1}`, `JOGADOR-${i + 1}`);
   return room;
 }
