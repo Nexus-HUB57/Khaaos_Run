@@ -123,6 +123,18 @@ export class HUD {
     $('#killsValue').textContent = String(p.kills).padStart(2, '0');
     // medkits
     $('#medkitCount').textContent = `×${p.inventory.medkit}`;
+    // Fase 4 — arremessáveis táticos (G/F)
+    $('#fragCount').textContent = `×${p.inventory.frag ?? 0}`;
+    $('#glooCount').textContent = `×${p.inventory.gloo ?? 0}`;
+    // Fase 4 — altímetro da infiltração aérea
+    const dropping = !!p.dropPhase;
+    $('#altimeter').classList.toggle('visible', dropping);
+    if (dropping) {
+      const alt = Math.max(0, Math.round(p.y));
+      $('#altValue').textContent = String(alt).padStart(3, '0');
+      $('#altPhase').textContent = p.dropPhase === 'sky' ? 'QUEDA LIVRE' : 'PARAQUEDAS';
+      $('#altFill').style.width = `${Math.min(100, (alt / 140) * 100)}%`;
+    }
     // objetivos
     $('#objPulse').classList.toggle('done', s.ring.pulse >= 1);
     $('#objExtract').classList.toggle('done', p.extracted >= 1);

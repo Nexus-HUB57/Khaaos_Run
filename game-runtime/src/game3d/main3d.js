@@ -3,9 +3,9 @@
 // Controles: WASD + mouse (pointer lock), RMB mira, Shift corre, Espaço salta,
 // R recarrega, E coleta, Q medkit, 1..2 slots. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD } from './sim3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO } from './sim3d.js';
 import { buildScene, createRingWall } from './world3d.js';
-import { createOperative, animateOperative, attachWeapon, createLootMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
@@ -37,6 +37,11 @@ export class Game3D {
     this.online = !!net;
     this.pendingSlot = 0;
     this.netAccumulator = 0;
+    // Fase 4 — visual state dos arremessáveis/queda
+    this.grenadeMeshes = new Map();   // id → mesh
+    this.wallMeshes = new Map();      // id → mesh
+    this.parachutes = new Map();      // actorId → { chute, group }
+    this.shake = 0;                   // tremor de câmera (explosões)
 
     this.initRenderer();
     this.initWorld();
@@ -87,7 +92,7 @@ export class Game3D {
   }
 
   initWorld() {
-    const { scene, sun } = buildScene(this.seed, this.scenario.id);
+    const { scene, sun } = buildScene(this.seed, this.renderer); // renderer habilita o envmap PBR
     this.scene = scene;
     this.sun = sun;
     this.ringWall = createRingWall();
@@ -240,6 +245,8 @@ export class Game3D {
       if (k === 'r') this.input.reload = true;
       if (k === 'e') this.input.interact = true;
       if (k === 'q') this.input.medkit = true;
+      if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
+      if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
       // troca de slot: offline aplica na sim; online agenda no próximo input
       if (k === '1') this.sim.switchSlot(1);
       if (k === '2') this.sim.switchSlot(2);
@@ -310,6 +317,79 @@ export class Game3D {
     }
   }
 
+  // ---------- Fase 4 — sincronização visual de arremessáveis/queda ----------
+  // Funciona nos dois modos: a sim offline e a Sim3DView online expõem os mesmos
+  // arrays (grenades/walls) traduzidos dos snapshots autoritativos.
+  syncThrowables(dt) {
+    const grenades = this.sim.grenades ?? [];
+    const walls = this.sim.walls ?? [];
+    const activeG = new Set(), activeW = new Set();
+    for (const g of grenades) {
+      activeG.add(g.id);
+      let mesh = this.grenadeMeshes.get(g.id);
+      if (!mesh) { mesh = createFragMesh(); this.scene.add(mesh); this.grenadeMeshes.set(g.id, mesh); }
+      mesh.position.set(g.x, g.y, g.z);
+      mesh.rotation.x += dt * 9; mesh.rotation.z += dt * 7; // tombo em voo
+      const led = mesh.userData.led;
+      if (led) led.visible = Math.sin(performance.now() / 70) > 0; // pavio piscando
+    }
+    for (const [id, mesh] of this.grenadeMeshes) {
+      if (!activeG.has(id)) { this.scene.remove(mesh); this.grenadeMeshes.delete(id); }
+    }
+    for (const w of walls) {
+      if (!w.active) { continue; }
+      activeW.add(w.id);
+      let mesh = this.wallMeshes.get(w.id);
+      if (!mesh) {
+        mesh = createGlooMesh();
+        mesh.position.set(w.x, 0, w.z);
+        mesh.rotation.y = w.rot ?? 0;
+        // animação de deploy: cresce do chão
+        mesh.userData.spawnT = 0;
+        this.scene.add(mesh);
+        this.wallMeshes.set(w.id, mesh);
+        this.effects.glooPuff(new THREE.Vector3(w.x, 0, w.z));
+      }
+      if (mesh.userData.spawnT < 1) {
+        mesh.userData.spawnT = Math.min(1, (mesh.userData.spawnT ?? 0) + dt * 4.5);
+        const k = mesh.userData.spawnT;
+        mesh.scale.y = .12 + .88 * (1 - Math.pow(1 - k, 3)); // ease-out
+      }
+      mesh.userData.updateHp?.(Math.max(0, Math.min(1, (w.hp ?? 0) / 220)));
+    }
+    for (const [id, mesh] of this.wallMeshes) {
+      if (!activeW.has(id)) { this.scene.remove(mesh); this.wallMeshes.delete(id); }
+    }
+  }
+
+  syncParachutes() {
+    // jogador + bots/remotos: paraquedas visível na fase 'chute' (abertura auto a 45m)
+    const actors = [['player', this.sim.player, this.playerOp]];
+    for (const b of this.sim.bots ?? []) {
+      const entry = this.botOps.get(b.id);
+      if (entry) actors.push([b.id, b, entry.op]);
+    }
+    const seen = new Set();
+    for (const [id, actor, op] of actors) {
+      if (!actor || !op) continue;
+      seen.add(id);
+      let pc = this.parachutes.get(id);
+      const wantChute = actor.dropPhase === 'chute';
+      if (wantChute && !pc) {
+        const chute = createParachute(id === 'player' ? '#c8622e' : VEST_COLORS[(id.length * 7) % VEST_COLORS.length]);
+        op.group.add(chute);
+        pc = { chute };
+        this.parachutes.set(id, pc);
+      } else if (!wantChute && pc) {
+        op.group.remove(pc.chute);
+        this.parachutes.delete(id);
+      }
+    }
+    for (const [id, pc] of this.parachutes) {
+      if (!seen.has(id)) { pc.chute.parent?.remove(pc.chute); this.parachutes.delete(id); }
+    }
+  }
+
   syncEntities(dt) {
     const s = this.sim;
     // jogador
@@ -322,10 +402,19 @@ export class Game3D {
       pg.userData.deadPose = true;
     }
     if (p.alive) pg.userData.deadPose = false, pg.rotation.x = 0;
+    // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
+    const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
       t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads,
     });
+    if (airborne) {
+      const flap = Math.sin(this.animT * 5) * .5;
+      this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
+      this.playerOp.parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
+      this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
+      this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
+    }
     // troca de arma visual
     if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon) {
       this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon);
@@ -358,8 +447,19 @@ export class Game3D {
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
       animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false });
+      // Fase 4 — pose de queda para bots/remotos
+      if (b.dropPhase) {
+        const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
+        entry.op.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
+        entry.op.parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
+        entry.op.parts.legL.hip.rotation.x = .5 + flap * .25;
+        entry.op.parts.legR.hip.rotation.x = .35 - flap * .25;
+      }
       if (entry.weapon !== b.weapon) { attachWeapon(entry.op.parts, g, b.weapon); entry.weapon = b.weapon; }
     }
+    // Fase 4 — arremessáveis + paraquedas compartilham o mesmo contrato offline/online
+    this.syncThrowables(dt);
+    this.syncParachutes();
   }
 
   updateRing() {
@@ -405,6 +505,13 @@ export class Game3D {
     this.camKick *= Math.exp(-dt * 9);
     lookTarget.y += this.camKick * 26;
     this.camera.lookAt(lookTarget);
+    // Fase 4 — tremor de explosão (só câmera; mira intacta)
+    if (this.shake > 0.001) {
+      this.camera.position.x += (Math.random() - .5) * this.shake;
+      this.camera.position.y += (Math.random() - .5) * this.shake;
+      this.camera.position.z += (Math.random() - .5) * this.shake;
+      this.shake *= Math.exp(-dt * 6.5);
+    }
     // FOV dinâmico
     const targetFov = p.ads ? 42 : (p.sprinting ? 68 : 62);
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
@@ -432,10 +539,13 @@ export class Game3D {
       reload: this.input.reload || !!touch.reload,
       interact: this.input.interact || !!touch.interact,
       medkit: this.input.medkit || !!touch.medkit,
+      throw: this.input.throw || !!touch.throw,
+      gloo: this.input.gloo || !!touch.gloo,
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
     this.input.reload = false; this.input.interact = false; this.input.medkit = false;
+    this.input.throw = false; this.input.gloo = false;
     this.pendingSlot = 0;
     return input;
   }
@@ -512,6 +622,32 @@ export class Game3D {
         case 'weaponSwitch': break;
         case 'medkit': this.hud.feed('OFICINA', 'Kit médico aplicado. +30 VL.', 'good'); break;
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
+        // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
+        case 'airdrop':
+          this.hud.feed('ZU', `Infiltração aérea confirmada. Altitude ${Math.round(e.altitude)}m — paraquedas abre a 45m.`, 'warn');
+          break;
+        case 'land':
+          this.audio.land();
+          this.shake = Math.max(this.shake, .12);
+          this.hud.feed('ZU', 'Aterrissagem confirmada. Ring em operação.', 'good');
+          break;
+        case 'frag':
+          if (e.owner === 'player') this.audio.fragThrow();
+          else this.audio.fragThrow();
+          break;
+        case 'explosion': {
+          const dist = Math.hypot(e.x - p.x, e.z - p.z);
+          this.effects.explosion(new THREE.Vector3(e.x, e.y, e.z));
+          this.audio.explosion(dist);
+          this.shake = Math.max(this.shake, Math.max(0, .3 - dist * .004));
+          break;
+        }
+        case 'gloo':
+          if (e.owner !== 'player') this.audio.gloo();
+          break;
+        case 'glooDown':
+          this.hud.feed('ARSENAL', e.destroyed ? 'Gloo Wall destruída.' : 'Gloo Wall dissolvida.');
+          break;
         case 'victory': this.#endMatch(true, e); break;
         case 'eliminated': this.#endMatch(false, e); break;
       }
@@ -536,6 +672,22 @@ export class Game3D {
     this.hud.prompt(text);
   }
 
+  // Fase 4 — áudio de queda + deriva das nuvens (chamado pelos dois loops)
+  updateDropFX(dt) {
+    const p = this.sim.player;
+    const dropping = !!p?.dropPhase && p.alive && !this.ended;
+    if (dropping) {
+      this.audio.wind(true, p.dropPhase === 'sky' ? .34 : .2);
+      if (this._wasPhase === 'sky' && p.dropPhase === 'chute') this.audio.chuteOpen();
+    } else if (this._wasPhase) {
+      this.audio.wind(false);
+    }
+    this._wasPhase = dropping ? p.dropPhase : null;
+    // nuvens: deriva lenta constante
+    const clouds = this.scene.userData.clouds;
+    if (clouds) clouds.rotation.y += dt * 0.004;
+  }
+
   // ---------- loop ----------
   loop() {
     requestAnimationFrame(this.loop);
@@ -558,6 +710,7 @@ export class Game3D {
     this.updateRing();
     this.updateCamera(dt);
     this.effects.update(dt);
+    this.updateDropFX(dt);
     // beacon pulse
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
     for (const b of this.scene.userData.beacons ?? []) b.material.color.setRGB(.9 + bl * .1, .1, .18);

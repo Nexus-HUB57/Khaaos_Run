@@ -184,4 +184,119 @@ export class GameAudio {
     osc.connect(g); g.connect(this.master);
     osc.start(t); osc.stop(t + .06);
   }
+
+  // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
+
+  // vento de queda: camada temporária intensificada (quanto mais perto do chão, mais forte)
+  wind(on, intensity = .3) {
+    if (!this.ctx) return;
+    if (on && !this.windGain) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.#noiseBuffer(2); src.loop = true;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = .55;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.start();
+      this.windGain = g;
+    }
+    if (this.windGain) {
+      this.windGain.gain.setTargetAtTime(on ? intensity : 0, this.ctx.currentTime, .25);
+      if (!on) { const old = this.windGain; setTimeout(() => old.disconnect?.(), 800); this.windGain = null; }
+    }
+  }
+
+  // abertura do paraquedas (estalo + flap de tecido)
+  chuteOpen() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.25);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.setValueAtTime(900, t);
+    bp.frequency.exponentialRampToValueAtTime(300, t + .22);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .01, .22, .5);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t);
+  }
+
+  // aterrissagem (thud abafado)
+  land() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + .12);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .004, .14, .45);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + .2);
+  }
+
+  // arremesso da granada (whoosh curto)
+  fragThrow() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.14);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.setValueAtTime(1400, t);
+    bp.frequency.exponentialRampToValueAtTime(500, t + .12);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .01, .12, .3);
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t);
+  }
+
+  // detonação: sub-bass + corpo de ruído + metálico de estilhaços
+  explosion(distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.12, 1 - distance / 90);
+    // sub-bass
+    const sub = this.ctx.createOscillator();
+    sub.type = 'sine'; sub.frequency.setValueAtTime(80, t);
+    sub.frequency.exponentialRampToValueAtTime(28, t + .4);
+    const sg = this.ctx.createGain();
+    this.#env(sg, t, .005, .42, .8 * vol);
+    sub.connect(sg); sg.connect(this.master);
+    sub.start(t); sub.stop(t + .5);
+    // corpo
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.7);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(2600, t);
+    lp.frequency.exponentialRampToValueAtTime(120, t + .5);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .003, .55, .75 * vol);
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t);
+    // estilhaços (curtos pings metálicos decrescentes)
+    for (let i = 0; i < 5; i++) {
+      const off = .06 + i * .05;
+      const ping = this.ctx.createOscillator();
+      ping.type = 'triangle'; ping.frequency.value = 1800 + Math.random() * 2200;
+      const pg = this.ctx.createGain();
+      this.#env(pg, t + off, .001, .05, .1 * vol);
+      ping.connect(pg); pg.connect(this.master);
+      ping.start(t + off); ping.stop(t + off + .08);
+    }
+  }
+
+  // deploy da Gloo Wall (cristalização ascendente)
+  gloo() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    [0, .07, .14].forEach((off, i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(300 + i * 260, t + off);
+      osc.frequency.exponentialRampToValueAtTime(760 + i * 260, t + off + .1);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, .008, .12, .22);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + off); osc.stop(t + off + .18);
+    });
+  }
 }
