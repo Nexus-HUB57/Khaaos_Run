@@ -24,6 +24,7 @@
 #include "Game/Performance/KhaaosLODStrategy.h"
 #include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/MatchFlow/KhaaosMatchTimeline.h"
+#include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
@@ -346,7 +347,7 @@ void AKhaaosGameMode::InitializePhDSubsystems()
 
 void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDataAsset* SpeciesAsset)
 {
-    if (!Player || !SpeciesAsset) return;
+    if (!HasAuthority() || !Player || !SpeciesAsset) return;
 
     AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(Player);
     if (!KPS) return;
@@ -363,6 +364,13 @@ void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDa
     {
         SpeciesComp->SetSpecies(SpeciesAsset);
     }
+
+    const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+    const bool bIsOnith = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase) ||
+        (SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Onith.IsValid() &&
+            SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Onith);
+    KPS->SetSpeciesPassiveAbility(
+        bIsOnith ? UKhaaosAbility_OnithPassive::StaticClass() : nullptr);
 
     UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s (HP=%d, Energy=%d, Speed=%.1f)"),
         *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(),

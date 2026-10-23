@@ -5,9 +5,12 @@
 #include "GameFramework/PlayerState.h"
 #include "AbilitySystemInterface.h"
 #include "GameplayCueInterface.h"
+#include "GameplayAbilitySpec.h"
+#include "GameplayTagContainer.h"
 #include "KhaaosPlayerState.generated.h"
 
 class UAbilitySystemComponent;
+class UGameplayAbility;
 class UKhaaosAttributeSet;
 
 // ─── Enums ported from schema.ts ──────────────────────────────────────────────
@@ -207,9 +210,15 @@ public:
 
 	// ─── Server Authority Methods ───────────────────────────────────────────
 
-	/** Apply damage (server only). Returns actual damage applied. */
+	/** Apply untyped damage (server only). Returns actual damage applied. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	float ApplyDamage(float DamageAmount, APlayerState* Instigator);
+
+	/** Apply typed damage (server only) so species passives can filter it. */
+	float ApplyDamageOfType(float DamageAmount, const FGameplayTag& DamageType, APlayerState* Instigator);
+
+	/** Replace the current species passive ability; null removes any previous passive. */
+	void SetSpeciesPassiveAbility(TSubclassOf<UGameplayAbility> PassiveAbilityClass, UObject* SourceObject = nullptr);
 
 	/** Apply one instant SafeZone hit and preserve SafeZone as EffectCauser. */
 	float ApplyZoneDamage(float DamageAmount, AActor* EffectCauser);
@@ -243,6 +252,7 @@ private:
 	void HandleOutOfHealth(AActor* OwnerActor, AActor* AvatarActor, AActor* EffectCauser);
 
 	FDelegateHandle OutOfHealthDelegateHandle;
+	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 

@@ -141,27 +141,29 @@ npm run test:real
 KR_SESSION_STORE=postgres KR_RATE_STORE=redis npm run server
 ```
 
-## Segurança operacional: TLS, rotação de chaves, revogação e SSO/OIDC
+### Testes reais e resiliência de adapters
 
-**TLS** — o servidor atende HTTPS quando recebe `{ cert, key }` PEM direto (`createAuthoritativeServer({ tls })`) ou via `KR_TLS_CERT`/`KR_TLS_KEY` (caminhos de arquivo). O WebSocket passa a operar sobre `wss://` automaticamente (mesmo listener). `GET /healthz` reporta `tls: true|false`.
-
-**Rotação de chaves** — os tokens HS256 carregam `kid` no header. A rotação ativa uma nova chave imediatamente e mantém a anterior em estado `retired` (grace: valida tokens emitidos antes, não emite novos); `dropKey` remove uma chave retired e invalida definitivamente seus tokens. Ops via HTTP (admin):
+Os adapters reais (`PostgresSessionStore`, `RedisRateStore`) têm cobertura opt-in contra servidores de verdade — em CI, o job **Game Runtime Tests** provisiona `postgres:16-alpine` e `redis:7-alpine`, aplica as migrações e executa:
 
 ```bash
-POST /admin/keys/rotate   # { "secret": "opcional" } — sem body gera secret de 48 bytes
-GET  /admin/keys          # lista kids + estados (nunca expõe secrets)
-POST /admin/keys/drop     # { "kid": "..." } — recusado (409) para a chave ativa
+npm run test:real         # persistência de sessão e atomicidade INCR+PEXPIRE reais
+npm run test:resilience   # falha de dependência, timeout e recuperação
 ```
 
-**Revogação** — todo token tem `jti` único; `POST /auth/logout` (Bearer) revoga o token corrente (denylist até `exp` + folga de relógio, purga automática). Tokens revogados são rejeitados no HTTP e no handshake do WebSocket (`4001`).
+O `test:resilience` cobre exatamente os modos de falha esperados em produção:
 
-**SSO/OIDC** — Authorization Code Flow completo, sem dependências externas: discovery do issuer, troca de código no `token_endpoint`, verificação RS256 do `id_token` via JWKS (`kid`, `iss`, `aud`, `exp`, `nonce`) e renovação automática do JWKS quando o IdP rotaciona chaves. Configuração:
+- **Falha de dependência**: store apontando para dependência inacessível rejeita `ready()` (o `/readyz` vira `503`), em tempo limitado.
+- **Timeout**: host non-routable respeita `connectionTimeoutMillis`/`connectTimeout` e rejeita sem travar o processo.
+- **Recuperação**: perda forçada das conexões no servidor (`pg_terminate_backend` no Postgres, `CLIENT KILL` no Redis) é absorvida pelo pool/client — a operação seguinte reconecta sozinha e os dados persistem.
+- **Expiração**: sessões vencidas ficam invisíveis para `getSession` e são removidas do banco por `cleanupExpired()`.
+
+Para rodar localmente com dependências efêmeras:
 
 ```bash
-KR_OIDC_ISSUER=https://idp.exemplo      KR_OIDC_CLIENT_ID=kr-client
-KR_OIDC_CLIENT_SECRET=...               KR_OIDC_REDIRECT_URI=https://jogo.exemplo/auth/oidc/callback
-KR_OIDC_ADMIN_SUBJECTS=id-do-admin-1    # opcional: subjects que entram como admin
-KR_OIDC_SET_COOKIE=1                    # opcional: também emite cookie kr_token HttpOnly
+docker compose -f ../docker-compose.test.yml up -d
+export KR_DATABASE_TEST_URL='postgresql://test:test_pw@127.0.0.1:55432/khaaos_test'
+export KR_REDIS_TEST_URL='redis://127.0.0.1:56379'
+npm run db:migrate && npm run test:real && npm run test:resilience
 ```
 
 Fluxo: `GET /auth/oidc/start` → 302 para o IdP com `state` single-use (cookie `HttpOnly` `SameSite=Lax`) e `nonce`; `GET /auth/oidc/callback?code&state` valida state (cookie ∩ query, TTL de 10 min, single-use), troca o código, verifica o `id_token` e provisiona o usuário (`preferred_username`/`email`, role `player` por padrão) emitindo a sessão KR. Cobertura: `test/security.test.js` (8 testes — rotação, revogação, TLS real com certificado openssl e fluxo OIDC contra um IdP HTTP local real).

@@ -196,7 +196,7 @@ public:
 
 	/**
 	 * Server-authoritative damage application.
-	 * Reduces Shield first, then Health. Trims by defense rating.
+	 * Applies typed species mitigation, then reduces Shield before Health.
 	 * Returns actual damage dealt.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")

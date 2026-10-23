@@ -3,6 +3,7 @@
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 #include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
 #include "Game/AbilitySystem/KhaaosEffectApplier.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
@@ -256,6 +257,11 @@ void AKhaaosPlayerState::OnRep_PlayerStatus()
 
 float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigator)
 {
+	return ApplyDamageOfType(DamageAmount, FGameplayTag(), Instigator);
+}
+
+float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayTag& DamageType, APlayerState* Instigator)
+{
 	if (!HasAuthority() || !AbilitySystemComponent || !KhaaosAttributeSet)
 	{
 		return 0.0f;
@@ -266,6 +272,16 @@ float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigat
                 return 0.0f;
         }
 
+	const float MitigatedDamage = UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
+		DamageAmount,
+		DamageType,
+		KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
+		KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+	if (MitigatedDamage <= 0.0f)
+	{
+		return 0.0f;
+	}
+
 	const float OldHealth = KhaaosAttributeSet->GetHealth();
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
@@ -273,8 +289,8 @@ float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigat
 		{
 			EffectApplier->ApplyDamage(
 				AbilitySystemComponent,
-				DamageAmount,
-				FGameplayTag(),
+				MitigatedDamage,
+				DamageType,
 				Instigator,
 				Instigator);
 		}
@@ -283,6 +299,47 @@ float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigat
 	const float ActualDamage = FMath::Max(0.0f, OldHealth - KhaaosAttributeSet->GetHealth());
 	DamageDealt += ActualDamage;
 	return ActualDamage;
+}
+
+void AKhaaosPlayerState::SetSpeciesPassiveAbility(
+	TSubclassOf<UGameplayAbility> PassiveAbilityClass,
+	UObject* SourceObject)
+{
+	if (!HasAuthority() || !AbilitySystemComponent)
+	{
+		return;
+	}
+
+	if (SpeciesPassiveAbilityHandle.IsValid())
+	{
+		const FGameplayAbilitySpec* ExistingSpec = AbilitySystemComponent->FindAbilitySpecFromHandle(SpeciesPassiveAbilityHandle);
+		if (ExistingSpec && ExistingSpec->Ability &&
+			ExistingSpec->Ability->GetClass() == PassiveAbilityClass.Get() && ExistingSpec->IsActive())
+		{
+			return;
+		}
+
+		AbilitySystemComponent->CancelAbilityHandle(SpeciesPassiveAbilityHandle);
+		AbilitySystemComponent->ClearAbility(SpeciesPassiveAbilityHandle);
+		SpeciesPassiveAbilityHandle = FGameplayAbilitySpecHandle();
+	}
+
+	if (!PassiveAbilityClass)
+	{
+		return;
+	}
+
+	const FGameplayAbilitySpec NewSpec(PassiveAbilityClass, 1, INDEX_NONE, SourceObject ? SourceObject : this);
+	SpeciesPassiveAbilityHandle = AbilitySystemComponent->GiveAbility(NewSpec);
+	if (!SpeciesPassiveAbilityHandle.IsValid() || !AbilitySystemComponent->TryActivateAbility(SpeciesPassiveAbilityHandle))
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("PlayerState: failed to grant/activate species passive %s"), *GetNameSafe(PassiveAbilityClass.Get()));
+		if (SpeciesPassiveAbilityHandle.IsValid())
+		{
+			AbilitySystemComponent->ClearAbility(SpeciesPassiveAbilityHandle);
+			SpeciesPassiveAbilityHandle = FGameplayAbilitySpecHandle();
+		}
+	}
 }
 
 float AKhaaosPlayerState::ApplyZoneDamage(float DamageAmount, AActor* EffectCauser)

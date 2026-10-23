@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 #include "KhaaosProjectile.generated.h"
 
 // ─── Forward Declarations ─────────────────────────────────────────────────────
@@ -64,6 +65,10 @@ public:
 	/** Damage dealt on impact. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Projectile")
 	float Damage;
+
+	/** Damage category; when unset, radius projectiles default to explosion and others to bullet. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Projectile")
+	FGameplayTag DamageTypeTag;
 
 	/** Initial speed of the projectile. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Projectile")
