@@ -2,20 +2,23 @@
 // Gera distritos, estruturas, colliders AABB, pontos de loot/spawn e terminais ZEX.
 // Mesma seed => mesmo mundo (sim e renderizador compartilham esta função).
 import { SeededRng } from '../shared/rng.js';
+import { resolveScenario } from './scenarios.js';
 
 // Cada estrutura: { x, z, w, d, h, rot, kind, variant }
 // Collider AABB alinhado aos eixos (rotação 0°/90° apenas — garante colisão barata).
-export function buildWorldLayout(seed) {
-  const rng = new SeededRng(`${seed}:world`);
+export function buildWorldLayout(seed, scenarioId = 'CIGKV') {
+  const scenario = resolveScenario(scenarioId);
+  const rng = new SeededRng(scenario.id === 'CIGKV' ? `${seed}:world` : `${seed}:${scenario.id}:world`);
   const structures = [];
   const colliders = [];
-  const districts = [
-    { name: 'PÁTIO DE ARMAMENTO', cx: -95, cz: -95, kind: 'armory', r: 62 },
-    { name: 'PROVING GROUNDS', cx: 95, cz: -95, kind: 'proving', r: 62 },
-    { name: 'PARQUE ABANDONADO', cx: -100, cz: 95, kind: 'park', r: 66 },
-    { name: 'SETOR INDUSTRIAL', cx: 100, cz: 95, kind: 'industrial', r: 66 },
-    { name: 'TERMINAL ZEX', cx: 0, cz: 0, kind: 'terminal', r: 40 },
-  ];
+  const districtKinds = ['armory', 'proving', 'park', 'industrial', 'terminal'];
+  const districts = scenario.sectorNames.map((name, i) => ({
+    name: name.toUpperCase(),
+    cx: [-95, 95, -100, 100, 0][i],
+    cz: [-95, -95, 95, 95, 0][i],
+    kind: districtKinds[i],
+    r: [62, 62, 66, 66, 40][i],
+  }));
 
   const addBox = (x, z, w, d, h, kind, variant = 0, yMin = 0, noBlock = false) => {
     const s = { x, z, w, d, h, yMin, kind, variant, rot: rng.next() < 0.5 ? 0 : Math.PI / 2 };
@@ -83,6 +86,18 @@ export function buildWorldLayout(seed) {
     addBox(cx - 14, cz + 12, 5, 5, 1.6, 'crate', 1);
     addBox(cx + 15, cz - 12, 5, 5, 1.6, 'crate', 0);
   }
+  if (scenario.id === 'Barburhen') {
+    const urban = districts[0];
+    addBox(urban.cx + 20, urban.cz + 30, 14, 12, 13, 'building', 0);
+    addBox(urban.cx - 31, urban.cz + 30, 12, 11, 9, 'building', 1);
+    const station = districts[1];
+    addBox(station.cx - 32, station.cz + 38, 36, 3, 1.2, 'barrier', 0);
+    addBox(station.cx + 32, station.cz + 38, 36, 3, 1.2, 'barrier', 1);
+    addBox(station.cx, station.cz + 42, 18, 8, 3.2, 'depot', 2);
+    const industrial = districts[3];
+    addBox(industrial.cx - 38, industrial.cz - 34, 8, 8, 16, 'silo', 2);
+    addBox(industrial.cx + 34, industrial.cz + 35, 22, 5, 2, 'barrier', 3);
+  }
   // ---- espalha ruínas/props de ligação entre distritos ----
   for (let i = 0; i < 14; i++) {
     const a = rng.next() * Math.PI * 2, r = 30 + rng.next() * 130;
@@ -111,12 +126,20 @@ export function buildWorldLayout(seed) {
 
   // ---- pontos de loot: ao lado de estruturas, livres de colisão ----
   const lootSpots = [];
+  const lootZoneFor = (x, z) => {
+    const closest = districts.reduce((best, district) => {
+      const d = Math.hypot(x - district.cx, z - district.cz);
+      return d < best.distance ? { district, distance: d } : best;
+    }, { district: districts[0], distance: Infinity }).district;
+    const zoneByKind = { armory: 'armory', proving: 'extraction', park: 'park', industrial: 'industrial', terminal: 'extraction' };
+    return { sectorId: closest.kind, sectorName: closest.name, lootZone: zoneByKind[closest.kind] };
+  };
   const free = (x, z, m = 3) => colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
   for (const s of structures) {
     if (s.kind === 'monolith' || s.h < 1.5) continue;
     const spots = [[s.x + s.w / 2 + 3, s.z], [s.x - s.w / 2 - 3, s.z], [s.x, s.z + s.d / 2 + 3], [s.x, s.z - s.d / 2 - 3]];
     for (const [x, z] of spots) {
-      if (Math.abs(x) < 195 && Math.abs(z) < 195 && free(x, z)) lootSpots.push({ x, z });
+      if (Math.abs(x) < 195 && Math.abs(z) < 195 && free(x, z)) lootSpots.push({ x, z, ...lootZoneFor(x, z) });
       if (lootSpots.length >= 40) break;
     }
     if (lootSpots.length >= 40) break;
@@ -125,8 +148,8 @@ export function buildWorldLayout(seed) {
   let guard = 0;
   while (lootSpots.length < 30 && guard++ < 400) {
     const x = (rng.next() - 0.5) * 360, z = (rng.next() - 0.5) * 360;
-    if (free(x, z, 2)) lootSpots.push({ x, z });
+    if (free(x, z, 2)) lootSpots.push({ x, z, ...lootZoneFor(x, z) });
   }
 
-  return { seed, size: 400, structures, colliders, districts, terminals, botSpawns, lootSpots };
+  return { seed, scenarioId: scenario.id, size: 400, structures, colliders, districts, sectors: districts, terminals, botSpawns, lootSpots, playerSpawn: { ...scenario.playerSpawn } };
 }

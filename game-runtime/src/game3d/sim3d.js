@@ -5,6 +5,7 @@
 import { SeededRng } from '../shared/rng.js';
 import { WEAPONS, rollLoot } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
+import { resolveScenario } from './scenarios.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -246,20 +247,22 @@ export function glooDeployPlacement(a) {
 
 // ---------- mundo ----------
 const layoutCache = new Map();
-export function getWorldLayout(seed) {
-  const key = String(seed);
-  if (!layoutCache.has(key)) layoutCache.set(key, buildWorldLayout(key));
+export function getWorldLayout(seed, scenarioId = 'CIGKV') {
+  const scenario = resolveScenario(scenarioId);
+  const key = `${scenario.id}:${String(seed)}`;
+  if (!layoutCache.has(key)) layoutCache.set(key, buildWorldLayout(String(seed), scenario.id));
   return layoutCache.get(key);
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV' } = {}) {
     this.seed = String(seed);
+    this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
-    this.world = getWorldLayout(this.seed);
+    this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
@@ -279,8 +282,9 @@ export class KhaaosSim3D {
 
   // ---------- spawn ----------
   #spawnPlayer() {
-    return { id: 'player', name: 'ZHEERS-07', x: 0, y: 0, z: 150, vy: 0, yaw: 0, pitch: 0,
+    return { id: 'player', name: 'ZHEERS-07', x: this.world.playerSpawn.x, y: 0, z: this.world.playerSpawn.z, vy: 0, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19',
+      operativeId: 'OP_MALE_VANGUARD',
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
@@ -300,8 +304,8 @@ export class KhaaosSim3D {
     const zones = ['armory', 'industrial', 'park', 'extraction'];
     const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
-      const drop = rollLoot(this.rng, zones[i % zones.length], 1)[0];
-      return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, ...drop, active: true };
+      const drop = rollLoot(this.rng, spot.lootZone ?? zones[i % zones.length], 1)[0];
+      return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, sectorId: spot.sectorId, ...drop, active: true };
     });
     // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
     const bonus = ['frag', 'gloo', 'frag', 'frag', 'gloo', 'frag'];
@@ -359,7 +363,7 @@ export class KhaaosSim3D {
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
     if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
-      this.#hurtPlayer((4 + this.ring.pulse * 1.4) * dt, null, 'ring');
+      this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
 
     // --- jogador ---
@@ -653,8 +657,9 @@ export class KhaaosSim3D {
     if (bot.life <= 0) {
       bot.alive = false;
       if (ownerId === 'player') {
-        this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += 15;
-        this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc: 15 });
+        const krc = Math.round(15 * this.scenario.krcMultiplier);
+        this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
       } else this.emit('botKill', { target: bot.name });
     }
   }
@@ -741,7 +746,7 @@ export class KhaaosSim3D {
 
   // ---------- snapshot / replay ----------
   snapshot() {
-    return { seed: this.seed, tick: this.tick, time: this.time, over: this.over, started: this.started,
+    return { seed: this.seed, scenarioId: this.scenario.id, tick: this.tick, time: this.time, over: this.over, started: this.started,
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),
@@ -762,5 +767,5 @@ export class KhaaosSim3D {
     this.#syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
-  exportReplay() { return { version: 3, mode: '3d', seed: this.seed, tickRate: this.tickRate, inputs: this.replay }; }
+  exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, tickRate: this.tickRate, inputs: this.replay }; }
 }

@@ -226,19 +226,32 @@ Não avançar para Beta aberto/Go Live com base apenas em checks de código ou m
 Cada atualização deve registrar data, SHA de referência, comandos executados e resultados separados por suíte. Marcar itens como concluídos somente com evidência; separar status de código, testes e operação. Referenciar issue/PR relacionado, proprietário e bloqueio quando conhecido. Não usar checkboxes deste documento para inferir estado de issues; atualizar ambos os sistemas explicitamente.
 
 
-## Revisão atual e próximos marcos — 21 de outubro de 2026
+## Snapshot histórico — 21 de outubro de 2026
 
-Esta seção atualiza a evidência histórica acima, que ainda aponta para a revisão de 20/10/2026 e SHA `26758e0`. A base de código examinada para a medição de cobertura foi `main` em `ce630f2e7b31397e1b2af38965ef1adf3948b033` (`ce630f2`); os dois commits incluídos desde `1375a06` adicionam somente código Unreal, fora dos globos V8 medidos.
+Esta seção registra o estado naquela data, não o estado atual. A revisão atual e supersedente está documentada abaixo. A medição deste snapshot foi sobre `ce630f2e7b31397e1b2af38965ef1adf3948b033` (`ce630f2`).
 
 ### Estado de validação mais recente
 
 - `npm run verify:all` passou localmente após integrar `c8` no app oficial e no runtime.
-- Baseline V8: app — 34,20% linhas, 67,83% branches e 48,17% funções; runtime — 76,64% linhas, 70,34% branches e 71,42% funções. A UI está incluída no denominador e é a maior lacuna de cobertura; consultar `COVERAGE_REPORT_2026-10-21.md` e `TEST_COVERAGE_BASELINE.md`.
+- Baseline V8: app — 34,20% linhas, 67,83% branches e 48,17% funções; runtime — 76,64% linhas, 70,34% branches e 71,42% funções. A UI está incluída no denominador e é a maior lacuna de cobertura; consultar `COVERAGE_REPORT_2026-10-23.md` e `TEST_COVERAGE_BASELINE.md`.
 - Contagens instrumentadas: app 275 aprovados, 1 ignorado, 0 falhas; runtime 14 aprovados, 2 ignorados, 0 falhas.
 - O workflow `Stress Test (local runtime)` agora executa honestamente o harness de 24 clientes em serviço local. Seu sucesso não comprova carga nas regiões públicas nem perfis de 100–2000 bots; um load test remoto depende de ambiente provisionado e autorização.
 - CI principal (`39681007161`) e `04 — Unit Tests` (`39681007116`) passaram no commit `b3524d4`; os artifacts `unit-test-results` e `coverage-game-runtime` foram publicados. M0 segue em validação até existir uma segunda execução comparável e os smoke tests de UI planejados.
 - A notificação de falha Discord continua sem entrega confirmada: o POST devolveu HTTP 405. A workflow já envia POST JSON; a correção depende de trocar `DISCORD_WEBHOOK_URL` por endpoint oficial válido e confirmar a entrega. O alerta é opcional e não altera o estado dos gates.
 - UE5 ainda não tem evidência de build por UnrealBuildTool/Editor nem Automation Tests em runner licenciado; EOS continua mockado. Não declarar esses itens como prontidão de produção.
+
+## Revisão atual e próximos marcos — 23 de outubro de 2026
+
+**Base:** `main` em `37bce8d0cdb8a61c5061cd79602b45ccb8db8055` (`37bce8d`). A branch avançou 51 commits desde o snapshot anterior, incluindo novos sistemas e testes; os percentuais não são comparação direta porque o denominador mudou.
+
+### Estado de validação
+
+- Coverage local do app produziu summary, mas não passou: 270 casos, 267 aprovados, 2 falhas e 1 ignorado; a medição foi sem `TEST_DATABASE_URL`. Runtime: 62 casos, 60 aprovados e 2 ignorados, sem falhas.
+- Coverage na ponta atual: app 35,77% linhas / 68,71% branches / 50,71% funções; runtime 44,50% / 74,22% / 77,60%. São números locais parciais; CI desta revisão falhou antes de publicar artifact atualizado do app. Ver [`COVERAGE_REPORT_2026-10-23.md`](COVERAGE_REPORT_2026-10-23.md) e [`TEST_COVERAGE_BASELINE.md`](TEST_COVERAGE_BASELINE.md).
+- CI principal (`40002127380`), TypeScript (`40002127431`) e Unit Tests (`40002127508`) falharam. Typecheck reportou incompatibilidades em `server/game/discordApiV1.ts` (métodos/campos de estado, jogador e storage; assinatura de construtor e tipo implícito). O teste de contrato de migrations ainda espera `0005_optimal_steel_serpent`, enquanto a migration versionada atual é `0005_stripe_checkout`.
+- Próxima prioridade: (1) corrigir contratos de tipos da API Discord e atualizar seus testes; (2) alinhar o teste à migration real e revisar a ordenação; (3) rerodar `npm run verify:all` e CI com PostgreSQL/Redis efêmeros; (4) publicar artifacts atualizados antes de considerar o baseline estável.
+- No job `notify-failure` (`40002127380`), Discord respondeu 405 e Slack 302; nenhum destino confirmou entrega 2xx. A consulta/gestão de Actions secrets retornou HTTP 403. Um administrador precisa validar/substituir ambos os endpoints nas configurações GitHub e confirmar respostas 2xx; não transmitir URLs em chat ou repositório. Detalhes em [`CI_NOTIFICATIONS.md`](CI_NOTIFICATIONS.md).
+- As execuções `b3524d4` de 21/10 foram verdes, mas são somente baseline histórica. Falhas da nova ponta significam que não se pode afirmar que a `main` atual esteja 100% verde.
 
 ### Milestones técnicos seguintes
 
