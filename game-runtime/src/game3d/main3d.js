@@ -10,15 +10,19 @@ import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
+import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
+import { SCENARIOS, resolveScenario } from './scenarios.js';
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
 const VEST_COLORS = VEST_COLORS_FALLBACK;
 
 export class Game3D {
-  constructor(seed, { net = null } = {}) {
+  constructor(seed, { net = null, scenarioId = 'CIGKV' } = {}) {
     this.seed = seed;
-    this.sim = new KhaaosSim3D({ seed, botCount: 12 });
+    this.scenario = resolveScenario(scenarioId);
+    this.selectedOperative = operativeCatalog[0];
+    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id });
     this.audio = new GameAudio();
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
@@ -55,6 +59,7 @@ export class Game3D {
     this.hud.audio = this.audio;
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
+    this.initContentSelectors();
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
@@ -99,9 +104,8 @@ export class Game3D {
   }
 
   initEntities() {
-    const rngIdx = Math.floor(Math.random() * 100);
     // jogador
-    this.playerOp = createOperative({ skin: SKIN_TONES[rngIdx % SKIN_TONES.length], vest: '#4d3a30' });
+    this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.scene.add(this.playerOp.group);
     this.playerWeapon = null;
     // bots (no modo online os atores remotos chegam via snapshot)
@@ -120,6 +124,66 @@ export class Game3D {
     // loot
     this.lootMeshes = new Map();
     this.syncLoot(true);
+  }
+
+  initContentSelectors() {
+    const scenarioSelect = document.querySelector('#scenarioSelect');
+    if (scenarioSelect) {
+      scenarioSelect.replaceChildren(...Object.values(SCENARIOS).map((scenario) => {
+        const option = document.createElement('option');
+        option.value = scenario.id.toLowerCase();
+        option.textContent = scenario.label;
+        return option;
+      }));
+      scenarioSelect.value = this.scenario.id.toLowerCase();
+      scenarioSelect.addEventListener('change', () => {
+        const url = new URL(location.href);
+        url.searchParams.set('scenario', scenarioSelect.value);
+        location.assign(url);
+      });
+    }
+    const scenarioName = document.querySelector('#scenarioName');
+    if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
+    const selectionStatus = document.querySelector('#contentSelectionStatus');
+    if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. Habilidades por operativo ainda estão em desenvolvimento.';
+
+    const select = document.querySelector('#operativeSelect');
+    if (!select) return;
+    select.replaceChildren(...operativeCatalog.map((operative) => {
+      const option = document.createElement('option');
+      option.value = operative.id;
+      option.textContent = `${operative.codename} — ${operative.rank}`;
+      return option;
+    }));
+    select.value = this.selectedOperative.id;
+    this.renderOperativeCard(this.selectedOperative);
+    select.addEventListener('change', () => {
+      if (this.sim.started) return;
+      const operative = operativeCatalog.find((entry) => entry.id === select.value);
+      if (!operative) return;
+      this.selectedOperative = operative;
+      this.sim.player.operativeId = operative.id;
+      this.scene.remove(this.playerOp.group);
+      this.playerOp = createOperative({ skin: operative.colors.skinTone, vest: operative.colors.primary });
+      this.scene.add(this.playerOp.group);
+      this.playerWeapon = null;
+      this.renderOperativeCard(operative);
+    });
+  }
+
+  renderOperativeCard(operative) {
+    const initials = operative.codename.split(/\s+/).map((part) => part[0]).join('').slice(0, 2);
+    const sigil = document.querySelector('#operativeSigil');
+    if (sigil) {
+      sigil.textContent = initials;
+      sigil.style.background = `linear-gradient(135deg, ${operative.colors.primary}, ${operative.colors.secondary})`;
+    }
+    const setText = (id, text) => { const node = document.querySelector(id); if (node) node.textContent = text; };
+    setText('#operativeName', operative.codename);
+    setText('#operativeRole', operative.specialization.replaceAll('_', ' '));
+    setText('#operativeWorld', `MUNDO DE ORIGEM // ${operative.defaultWorld}`);
+    setText('#operativeLore', operative.lore);
+    setText('#operativeDisplay', `OPERATIVO // ${operative.codename}`);
   }
 
   makeNameTag(name, i) {
@@ -352,7 +416,7 @@ export class Game3D {
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
     // troca de arma visual
-    if (this.playerWeapon && this.playerWeapon.userData?.id !== p.weapon) {
+    if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon) {
       this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon);
       this.playerWeapon.userData = { id: p.weapon };
     }
@@ -664,11 +728,13 @@ export class Game3D {
 
 // ---------- bootstrap ----------
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
-const online = new URLSearchParams(location.search).get('online') === '1';
+const query = new URLSearchParams(location.search);
+const online = query.get('online') === '1';
+const scenarioId = query.get('scenario') || 'CIGKV';
 if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
   import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
 } else {
-  const game = new Game3D(seed);
+  const game = new Game3D(seed, { scenarioId });
   window.KhaaosReplay3D = { export: () => game.sim.exportReplay(), game };
 }

@@ -15,7 +15,7 @@
 
     <!-- barra superior -->
     <header class="topbar3d">
-      <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small>OPERAÇÃO CIGKV // BETA DE CAMPO 3D</small></div></div>
+      <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small id="scenarioName">CIGKV // KHAOOS VILLE</small></div></div>
       <div class="match-state">
         <span class="live-dot"></span><span id="matchStatus">AGUARDANDO ZU</span>
         <b id="matchClock">10:00</b>
@@ -23,6 +23,7 @@
         <span class="pulse-chip" id="pulseValue">PULSO 00</span>
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
+      <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
     <!-- crosshair dinâmico -->
@@ -110,8 +111,27 @@
     <div id="zuModal" class="modal">
       <div class="modal-card">
         <span class="eyebrow">PROTOCOLO DE ENTRADA // ZU-01</span>
-        <h2>RISCO DE COLISÃO</h2>
-        <p>O transporte perdeu o controle após o impacto sobre Khaoos Ville. Escolha como entrar no ring de batalha — 12 operativos já caíram no setor.</p>
+        <h2>PROTOCOLO DE INSERÇÃO</h2>
+        <p>Escolha o teatro de operações, selecione seu operativo e defina como entrar no ring. A arena CIGKV permanece como treino; Barburhen abre um protótipo local do Setor Industrial.</p>
+        <div class="content-selection">
+          <label for="scenarioSelect">TEATRO DE OPERAÇÕES</label>
+          <select id="scenarioSelect" aria-label="Selecionar cenário">
+            <option value="cigkv">CIGKV — Campo de Instrução</option>
+            <option value="barburhen">Barburhen — Protótipo Setor Industrial</option>
+          </select>
+          <label for="operativeSelect">OPERATIVO CANÔNICO · 16 DISPONÍVEIS</label>
+          <select id="operativeSelect" aria-label="Selecionar operativo"></select>
+          <div class="operative-card" aria-live="polite">
+            <div id="operativeSigil" class="operative-sigil">KV</div>
+            <div class="operative-copy">
+              <strong id="operativeName">KHAEL VANCE</strong>
+              <span id="operativeRole">FUZILEIROS</span>
+              <small id="operativeWorld">MUNDO DE ORIGEM // CIGKV</small>
+              <p id="operativeLore">Especialista em CQB e incursão.</p>
+            </div>
+          </div>
+          <small id="contentSelectionStatus" class="content-selection-status" aria-live="polite"></small>
+        </div>
         <div class="modal-actions">
           <button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+60 de armadura · mobilidade padrão</small></button>
           <button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+18 de armadura · velocidade ampliada</small></button>

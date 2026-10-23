@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
+import { resolveScenario } from './scenarios.js';
 import {
   concreteMaterial, metalMaterial, groundMaterial, asphaltMaterial,
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
@@ -14,15 +15,15 @@ import {
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 
 // ---------- céu ----------
-function createSky() {
+function createSky(scenario) {
   const geo = new THREE.SphereGeometry(900, 32, 20);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      top: { value: new THREE.Color('#160f2e') },       // roxo profundo (zenite)
-      mid: { value: new THREE.Color('#4a2a4e') },        // transição mística
-      horizon: { value: new THREE.Color('#c65a2e') },    // laranja vulcânico
+      top: { value: new THREE.Color(scenario.sky.top) },
+      mid: { value: new THREE.Color(scenario.sky.mid) },
+      horizon: { value: new THREE.Color(scenario.sky.horizon) },
       sunDir: { value: new THREE.Vector3(-.55, .18, -.82).normalize() },
     },
     vertexShader: `
@@ -171,12 +172,14 @@ function buildNature(scene, layout, rng) {
 export function buildScene(seed, renderer = null) {
   const layout = getWorldLayout(seed);
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(new THREE.Color('#57382f'), 0.0038);
+  scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0048 : 0.0038);
+  scene.userData.scenarioId = scenario.id;
+  scene.userData.mapLabel = scenario.mapLabel;
 
-  scene.add(createSky());
+  scene.add(createSky(scenario));
 
   // luzes: sol vulcânico + ambiente místico
-  const sun = new THREE.DirectionalLight('#ffb37a', 2.6);
+  const sun = new THREE.DirectionalLight(scenario.id === 'Barburhen' ? '#dce9f3' : '#ffb37a', 2.6);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -187,7 +190,7 @@ export function buildScene(seed, renderer = null) {
   sun.shadow.bias = -0.0004;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight('#8a6ab0', '#3a3028', 1.08);
+  const hemi = new THREE.HemisphereLight(scenario.id === 'Barburhen' ? '#b9d0df' : '#8a6ab0', scenario.id === 'Barburhen' ? '#59646a' : '#3a3028', 1.08);
   scene.add(hemi);
   const fill = new THREE.DirectionalLight('#6a5aa0', 0.55);
   fill.position.set(140, 80, 180);
@@ -327,5 +330,6 @@ export function buildScene(seed, renderer = null) {
   }
 
   scene.userData.layout = layout;
+  scene.userData.sectors = layout.sectors;
   return { scene, layout, sun, materials: mats };
 }

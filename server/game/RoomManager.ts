@@ -1743,6 +1743,7 @@ class RoomManager {
     if (!room) return null;
     return {
       id: room.id,
+      worldId: room.worldId,
       status: room.status,
       playerCount: room.players.size,
       maxPlayers: room.maxPlayers,

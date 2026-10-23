@@ -11,6 +11,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 
+// These route-contract tests do not query PostgreSQL, but the app module requires a URL at import time.
+process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/khaaos_test";
+
 // We need to use dynamic import for modules that may have side effects
 const { default: supertest } = await import("supertest");
 
