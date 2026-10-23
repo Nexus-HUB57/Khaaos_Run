@@ -8,11 +8,14 @@
 #include "Components/ChildActorComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
 
 #include "Player/KhaaosPlayerState.h"
 #include "Player/KhaaosPlayerController.h"
+#include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
 #include "Game/AbilitySystem/KhaaosAbilityComponent.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/Inventory/KhaaosInventoryComponent.h"
 #include "Game/Data/KhaaosWeaponComponent.h"
@@ -160,6 +163,10 @@ void AKhaaosCharacter::PossessedBy(AController* NewController)
 
 	CachedPC = Cast<AKhaaosPlayerController>(NewController);
 	CachedPS = Cast<AKhaaosPlayerState>(GetPlayerState());
+	if (CachedPS && CachedPS->GetAbilitySystemComponent())
+	{
+		CachedPS->GetAbilitySystemComponent()->InitAbilityActorInfo(CachedPS, this);
+	}
 
 	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: PossessedBy %s"), *GetNameSafe(NewController));
 }
@@ -169,6 +176,10 @@ void AKhaaosCharacter::OnRep_PlayerState()
 	Super::OnRep_PlayerState();
 
 	CachedPS = Cast<AKhaaosPlayerState>(GetPlayerState());
+	if (CachedPS && CachedPS->GetAbilitySystemComponent())
+	{
+		CachedPS->GetAbilitySystemComponent()->InitAbilityActorInfo(CachedPS, this);
+	}
 
 	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: OnRep_PlayerState for %s"), *GetName());
 }
@@ -482,12 +493,17 @@ void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
 	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: Species %s applied -- Health=%.0f, Speed=%.1f"),
 		*SpeciesAsset->SpeciesID.ToString(), MaxHealth, WalkSpeed);
 
-	// ── Activate species passive ability via GAS ──
-	if (AbilityComp && SpeciesAsset->PassiveAbilityTag.IsValid())
+	// Species passives are UGameplayAbility specs on PlayerState's GAS ASC,
+	// not UKhaaosAbilityAction entries in the Character's custom AbilityComp.
+	CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
+	if (CachedPS)
 	{
-		AbilityComp->StartAction(this, SpeciesAsset->PassiveAbilityTag);
-		UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: Species passive %s activated"),
-			*SpeciesAsset->PassiveAbilityTag.ToString());
+		const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+		const bool bIsOnith = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase) ||
+			(SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Onith.IsValid() &&
+				SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Onith);
+		CachedPS->SetSpeciesPassiveAbility(
+			bIsOnith ? UKhaaosAbility_OnithPassive::StaticClass() : nullptr);
 	}
 }
 
@@ -496,6 +512,20 @@ void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
 float AKhaaosCharacter::ApplyDamage(float DamageAmount, AActor* DamageInstigator, const FGameplayTag& DamageType)
 {
 	if (!HasAuthority() || bIsDead || DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
+	if (CachedPS && CachedPS->KhaaosAttributeSet)
+	{
+		DamageAmount = UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
+			DamageAmount,
+			DamageType,
+			CachedPS->KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
+			CachedPS->KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+	}
+	if (DamageAmount <= 0.0f)
 	{
 		return 0.0f;
 	}

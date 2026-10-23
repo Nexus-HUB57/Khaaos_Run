@@ -3,6 +3,7 @@
 #include "Game/AbilitySystem/KhaaosAbility_Combat.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "KhaaosRun.h"
+#include "Player/KhaaosCharacter.h"
 
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Character.h"
@@ -117,16 +118,22 @@ void UKhaaosAbility_Shoot::ServerShoot_Implementation(const FVector& TraceStart,
                 UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosAbility_Shoot::ServerShoot - HEADSHOT! Damage: %.1f"), FinalDamage);
         }
 
-        // Apply damage: Vitality → AttributeSet → log only fallback
-        if (UKhaaosVitalityComponent* Vitality = HitActor->FindComponentByClass<UKhaaosVitalityComponent>())
-        {
-                Vitality->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo());
+		const FGameplayTag BulletDamageTag = FKhaaosGameplayTags::Get().Effect_Damage_Bullet;
+		// KhaaosCharacter owns shield/health flow and reads Onith modifiers from PlayerState's ASC.
+		if (AKhaaosCharacter* TargetCharacter = Cast<AKhaaosCharacter>(HitActor))
+		{
+			TargetCharacter->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo(), BulletDamageTag);
+		}
+		else if (UKhaaosVitalityComponent* Vitality = HitActor->FindComponentByClass<UKhaaosVitalityComponent>())
+		{
+			Vitality->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo());
         }
         else if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitActor))
         {
                 if (const UKhaaosAttributeSet* ConstAttr = TargetASC->GetSet<UKhaaosAttributeSet>())
                 {
-                        const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo());
+					const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamageOfType(
+						FinalDamage, GetAvatarActorFromActorInfo(), BulletDamageTag);
                 }
         }
 

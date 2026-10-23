@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/Combat/KhaaosDamageManager.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 
@@ -80,7 +81,8 @@ float UKhaaosDamageManagerComponent::ProcessDamage(const FKhaaosHitResult& Hit)
                 {
                     if (KPS->GetUniqueId().ToString() == Hit.VictimId)
                     {
-                        ActualDamage = KPS->ApplyDamage(FinalDamage, nullptr);
+						const FGameplayTag DamageTag = GetGameplayTagForDamageType(Hit.DamageType);
+						ActualDamage = KPS->ApplyDamageOfType(FinalDamage, DamageTag, nullptr);
 
                         // Track damage dealt by instigator
                         if (!Hit.InstigatorId.IsEmpty() && ActualDamage > 0.0f)
@@ -131,6 +133,21 @@ float UKhaaosDamageManagerComponent::ProcessDamage(const FKhaaosHitResult& Hit)
 bool UKhaaosDamageManagerComponent::IsHeadshotBone(const FName& BoneName)
 {
     return HeadshotBones.Contains(BoneName);
+}
+
+FGameplayTag UKhaaosDamageManagerComponent::GetGameplayTagForDamageType(EKhaaosDamageType DamageType)
+{
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	switch (DamageType)
+	{
+	case EKhaaosDamageType::Bullet: return Tags.Effect_Damage_Bullet;
+	case EKhaaosDamageType::Explosion: return Tags.Effect_Damage_Explosion;
+	case EKhaaosDamageType::Zone: return Tags.Effect_Damage_Zone;
+	case EKhaaosDamageType::Melee: return Tags.Effect_Damage_Melee;
+	case EKhaaosDamageType::Fall: return Tags.Effect_Damage_Fall;
+	case EKhaaosDamageType::Pulso: return Tags.Effect_Damage_Pulso;
+	default: return FGameplayTag();
+	}
 }
 
 // ─── Validation ─────────────────────────────────────────────────────────────────

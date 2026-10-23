@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "KhaaosDamageManager.generated.h"
 
 // ─── Damage Type Enum ──────────────────────────────────────────────────────────
@@ -108,6 +109,9 @@ public:
     /** Check if a bone name represents a headshot. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Damage")
     static bool IsHeadshotBone(const FName& BoneName);
+
+    /** Map the combat enum to its canonical damage GameplayTag (invalid for untyped damage). */
+    static FGameplayTag GetGameplayTagForDamageType(EKhaaosDamageType DamageType);
 
     // ─── Configuration ──────────────────────────────────────────────────────
 
