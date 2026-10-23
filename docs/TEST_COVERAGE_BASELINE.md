@@ -1,77 +1,58 @@
 # Baseline de cobertura — Khaaos_Run
 
-**Data da medição:** 21/10/2026
-**Base de código:** `main` em `ce630f2e7b31397e1b2af38965ef1adf3948b033` (`ce630f2`); os commits desde `1375a06` acrescentam arquivos Unreal fora do escopo V8.
-**Instrumentador:** `c8` 12.0.0, baseado em V8; relatórios por arquivo e LCOV.
-**Escopos:** app (`client/src/`, `server/`, `shared/`) e runtime Node (`game-runtime/server/`, `game-runtime/src/`), medidos separadamente.
+**Atualizado em:** 23/10/2026
+**Revisão:** `main` em `37bce8d0cdb8a61c5061cd79602b45ccb8db8055` (`37bce8d`).
+**Instrumentador:** c8 12.0.0 / V8; LCOV e JSON-summary.
+**Status:** baseline local provisório; a CI desta revisão está falhando e ainda não produziu artifacts atuais do app.
 
-## Resultado instrumentado
+## Cobertura reproduzida na main atual
 
 | Escopo | Arquivos | Statements/linhas | Branches | Functions |
 |---|---:|---:|---:|---:|
-| App oficial | 129 | 8.871 / 25.936 (**34,20%**) | 831 / 1.225 (**67,83%**) | 198 / 411 (**48,17%**) |
-| Runtime Node | 12 | 604 / 788 (**76,64%**) | 185 / 263 (**70,34%**) | 70 / 98 (**71,42%**) |
+| App (`client/src`, `server`, `shared`) | 141 | 10.149 / 28.366 (**35,77%**) | 1.006 / 1.464 (**68,71%**) | 247 / 487 (**50,71%**) |
+| Runtime Node | 26 | 1.931 / 4.339 (**44,50%**) | 668 / 900 (**74,22%**) | 149 / 192 (**77,60%**) |
 
-Os resultados são dois scopes distintos; não some percentuais entre app e runtime. Os contadores cobrem as fontes que correspondem aos globos `--include` e não incluem testes, `node_modules`, diretórios de build nem migrations/scripts do runtime. O código React está incluído no denominador para não mascarar a ausência de testes de UI.
+A medição do app foi obtida por `npm run coverage:official`; o processo produziu summary, mas falhou em 2 de 270 testes (267 aprovados, 2 falhas, 1 ignorado). Portanto, coverage é uma medida parcial, não uma execução verde. O runtime executou 62 testes: 60 aprovados, zero falhas, 2 ignorados.
 
-### Breakdown do app oficial
+O app foi medido sem `TEST_DATABASE_URL`; integração PostgreSQL foi omitida localmente. A UI permanece incluída no denominador. Não compare percentuais diretamente com o snapshot CI de 21/10: desde então o código, o número de arquivos e o denominador mudaram.
+
+### Breakdown do app
 
 | Área | Arquivos | Linhas | Branches | Functions |
 |---|---:|---:|---:|---:|
-| `client/src/` | 87 | 902 / 14.315 (**6,30%**) | 63 / 186 (**33,87%**) | 33 / 134 (**24,63%**) |
-| `server/` | 31 | 3.843 / 6.632 (**57,95%**) | 644 / 875 (**73,60%**) | 143 / 251 (**56,97%**) |
-| `shared/` | 11 | 4.126 / 4.989 (**82,70%**) | 124 / 164 (**75,61%**) | 22 / 26 (**84,62%**) |
+| `client/src/` | 88 | 892 / 14.559 (**6,13%**) | 64 / 196 (**32,65%**) | 34 / 129 (**26,36%**) |
+| `server/` | 41 | 4.858 / 8.545 (**56,85%**) | 807 / 1.092 (**73,90%**) | 187 / 327 (**57,19%**) |
+| `shared/` | 12 | 4.399 / 5.262 (**83,60%**) | 135 / 176 (**76,70%**) | 26 / 31 (**83,87%**) |
 
-A coverage baixa em `client/src/` é principalmente por não haver uma suíte browser/React que monte esses componentes; vários componentes aparecem com 0%. Isso é lacuna real do escopo e não deve ser lido como falha funcional nem excluído do denominador sem decisão documentada.
+## Bloqueadores de qualidade atuais
 
-## Testes executados sob instrumentação
+A CI da revisão `37bce8d` está vermelha. `02 — CI TypeScript` (`40002127431`), `04 — Unit Tests` (`40002127508`) e CI (`40002127380`) falharam. O typecheck lista erros de contrato em `server/game/discordApiV1.ts`: propriedades de jogador (`elo`, `losses`, `playerName`, `username`, `bestKillStreak`, `killStreak`, `damageDealt`, `matchesSurvived`), método `DistributedState.getState`, chamada `DatabaseStorage.getPlayerBalance`, assinatura de construtor e tipo implícito.
 
-| Suite | Casos | Aprovados | Ignorados | Falhas |
-|---|---:|---:|---:|---:|
-| App oficial — TS/TSX | 230 | 229 | 1 | 0 |
-| App oficial — JavaScript | 39 | 39 | 0 | 0 |
-| Fluxo EOS mockado | 7 | 7 | 0 | 0 |
-| **App oficial total** | **276** | **275** | **1** | **0** |
-| Runtime `npm test` | 16 | 14 | 2 | 0 |
+Na execução local de coverage, falharam `tests/official/discordApiV1.test.ts` e `tests/official/economy-migration-contract.test.ts`. A segunda ainda espera `0005_optimal_steel_serpent`, mas a migration atual se chama `0005_stripe_checkout`. Corrigir essas falhas e rerodar CI com serviços PostgreSQL/Redis efêmeros antes de marcar baseline estável.
 
-`coverage:official` também instrumenta `test:postgres` quando `TEST_DATABASE_URL` está explicitamente configurada (como no job CI com PostgreSQL efêmero). Na medição local ela foi ignorada por ausência dessa variável. Os casos são contagens de execução, não percentuais de cobertura, e podem se sobrepor a outras etapas de CI. A integração PostgreSQL/Redis real é exercitada separadamente no CI. EOS aqui é mockado. O teste C++ host-side continua fora de LCOV/V8.
+## Hotspots
 
-## Hotspots prioritários
-
-Os menores resultados no app apontam para estas próximas suítes, em ordem de risco/impacto:
-
-| Módulo | Linhas | Branches | Functions | Prioridade/razão |
+| Módulo | Linhas | Branches | Functions | Próximo foco |
 |---|---:|---:|---:|---|
-| `server/game/worldProgression.ts` | 0,00% | 0,00% | 0,00% | Lógica de progressão sem testes exercitando a implementação |
-| `server/game/economyService.ts` | 12,25% | 100,00% | 23,07% | Operações críticas de economia; cobrir fluxos, side effects e persistência |
-| `server/game/economyRetention.ts` | 24,57% | 100,00% | 50,00% | Retention/cleanup precisa de cenários de prazo e falha |
-| `server/game/MonteCarloEconomy.ts` | 27,18% | 100,00% | 14,28% | Funções do modelo quase não exercitadas |
-| `server/storage.ts` | 31,47% | 100,00% | 4,25% | Grande quantidade de funções de persistência sem chamada medida |
-| `server/game/MatchmakingService.ts` | 45,03% | 64,70% | 56,25% | Cenários de fila, rating, timeout e cancelamento |
-| `server/game/LagCompensation.ts` | 47,77% | 87,50% | 62,50% | Limites temporais, hit validation e entradas inválidas |
-| `server/routes.ts` | 66,99% | 60,31% | 66,66% | Matriz de autorização/erros e efeitos colaterais |
-| `server/game/RoomManager.ts` | 67,10% | 67,31% | 69,76% | Reconnect, privacidade de sala, replay e limites |
+| `server/game/worldProgression.ts` | 0% | 0% | 0% | Adicionar suite de regras/estados |
+| `server/game/economyService.ts` | 12,25% | 100% | 23,07% | Cobrir fluxo monetário e persistência |
+| `server/game/economyRetention.ts` | 24,57% | 100% | 50% | Cenários de cleanup e falha |
+| `server/game/MonteCarloEconomy.ts` | 27,18% | 100% | 14,28% | Exercitar funções do modelo |
+| `server/storage.ts` | 32,75% | 100% | 3,57% | Testes de transação e ownership |
+| `server/game/discordApiV1.ts` | 38,53% | 100% | 40% | Corrigir contratos e cobrir handlers |
+| `server/game/MatchmakingService.ts` | 54,86% | 69,23% | 64,70% | Filas, rating e timeout |
+| `server/routes.ts` | 63,10% | 60,71% | 66,66% | Autorização/ownership |
+| `server/game/RoomManager.ts` | 66,66% | 65% | 70,21% | Reconnect e isolamento de sala |
 
-Além disso, 87 arquivos de `client/src/` somam 6,30% de linhas. O roadmap deve priorizar testes de browser para login, lobby→partida→resultado, inventário/economia, erro/loading, teclado, leitor de tela e breakpoints.
+## Scripts e artefatos
 
-## Scripts e artifacts
+- `npm run coverage:official` gera `coverage/official/lcov.info` e `coverage/official/coverage-summary.json`.
+- `npm --prefix game-runtime run coverage` gera LCOV e summary do runtime.
+- `npm run coverage:all` executa ambos; `npm run verify:all` inclui testes, builds e typecheck.
+- A CI publica `unit-test-results` e `coverage-game-runtime` quando as etapas de upload são atingidas. A revisão atual não possui artifact atualizado do app porque o job falhou no typecheck.
 
-- `npm run coverage:official` — testes oficiais do app e fluxo EOS mockado; inclui PostgreSQL quando `TEST_DATABASE_URL` existir; gera relatórios em `coverage/official/`.
-- `npm --prefix game-runtime run coverage` — testes do runtime e relatórios em `game-runtime/coverage/`.
-- `npm run coverage:all` — executa os dois scopes sequencialmente.
-- `npm run verify:all` — inclui typecheck/builds, regras C++ host-side e as duas suites instrumentadas.
-- Cada scope gera `lcov.info` (detalhe linha a linha) e `coverage-summary.json` (percentuais por arquivo e total), além da tabela `text` no log. O workflow CI publica os dois diretórios como artifacts. As saídas locais são ignoradas pelo Git.
+O primeiro snapshot CI verde de coverage foi `b3524d4` (21/10): app 36,16% linhas / 67,30% branches / 53,52% funções; runtime 82,61% / 70,21% / 81,63%, com PostgreSQL/Redis efêmeros. É histórico e não substitui a nova medição.
 
-**Baseline não é threshold.** Não há limites mínimos de coverage configurados ainda; definir thresholds antes de estabilizar a execução pode bloquear contribuição por artefatos/escopos não calibrados. Após duas execuções CI reproduzíveis, fixar metas graduais por `server/`, `shared/`, `client/src/` e runtime, privilegiando linhas/branches críticas em vez de um único percentual global.
+**Não há thresholds mínimos configurados.** Após duas execuções CI verdes e comparáveis, estabelecer gates graduais por `client/src`, `server`, `shared` e runtime. Não remover UI do denominador para elevar percentuais. Coverage C++/UE5 deve ser medido em ferramenta/runner próprio.
 
-## Lacunas que permanecem
-
-1. Autorização deny-by-default em todas as rotas mutáveis, ownership/TOCTOU e efeitos laterais.
-2. Token WebSocket: replay/revogação, Origin, limite agregado por IP/identidade e concorrência em reconnect.
-3. Salas privadas, snapshots/AOI, isolamento por sala/região e rejeição de mensagens inválidas.
-4. Operações econômicas concorrentes, rollback multi-tabela, idempotência, reconciliação e divergência preview/cobrança.
-5. UI React/browser, acessibilidade e comportamento em loading/erro.
-6. PostgreSQL/Redis gerenciados, OIDC real, staging, failover e restore/backups.
-7. UE5 sem build comprovado por UnrealBuildTool/Editor/Automation Tests; seus testes portáveis C++ não são contabilizados pelo c8.
-
-Consulte [`ROADMAP.md`](ROADMAP.md) para marcos e gates técnicos.
+O próximo plano e os critérios de aceite estão em [`ROADMAP.md`](ROADMAP.md); o relatório detalhado desta execução está em [`COVERAGE_REPORT_2026-10-23.md`](COVERAGE_REPORT_2026-10-23.md).
