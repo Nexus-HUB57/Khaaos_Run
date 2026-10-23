@@ -26,6 +26,10 @@ export class DistributedState {
   private client: RedisLike | null = null;
   private connected = false;
   private readonly prefix = process.env.REDIS_NAMESPACE || "khaaos";
+  private readonly localExpirations = new Map<string, number>();
+  private readonly localCounters = new Map<string, { count: number; expiresAt: number }>();
+  private controlSubscriber: RedisClientType | null = null;
+  private readonly controlHandlers = new Set<(event: Record<string, unknown>) => void>();
 
   async connect(): Promise<void> {
     if (this.connected) return;
@@ -47,6 +51,8 @@ export class DistributedState {
   }
 
   async close(): Promise<void> {
+    if (this.controlSubscriber) await this.controlSubscriber.quit().catch(() => undefined);
+    this.controlSubscriber = null;
     if (this.client) await this.client.close().catch(() => undefined);
     this.client = null;
     this.connected = false;
@@ -127,8 +133,70 @@ export class DistributedState {
 
   async publishControl(event: Record<string, unknown>): Promise<void> {
     await this.connect();
-    if (!this.client) return;
-    await this.client.publish(this.key("realtime:control"), JSON.stringify({ ...event, nodeId: this.nodeId, at: Date.now() }));
+    const envelope = { ...event, nodeId: this.nodeId, at: Date.now() };
+    for (const callback of this.controlHandlers) callback(envelope);
+    if (this.client) await this.client.publish(this.key("realtime:control"), JSON.stringify(envelope));
+  }
+
+  async subscribeControl(handler: (event: Record<string, unknown>) => void): Promise<void> {
+    this.controlHandlers.add(handler);
+    await this.connect();
+    if (!this.client || this.controlSubscriber) return;
+    const subscriber = this.client.duplicate() as RedisClientType;
+    await subscriber.connect();
+    await subscriber.subscribe(this.key("realtime:control"), (raw) => {
+      try {
+        const event = JSON.parse(raw) as Record<string, unknown>;
+        for (const callback of this.controlHandlers) callback(event);
+      } catch {
+        // Ignore malformed control events; they must not affect the game loop.
+      }
+    });
+    this.controlSubscriber = subscriber;
+  }
+
+  /** Consume a one-time credential atomically. Returns false on replay. */
+  async consumeOnce(name: string, ttlMs: number): Promise<boolean> {
+    await this.connect();
+    const key = this.key(`once:${name}`);
+    if (this.client) return Boolean(await this.client.set(key, this.nodeId, { NX: true, PX: ttlMs }));
+    const now = Date.now();
+    const expiresAt = this.localExpirations.get(key) ?? 0;
+    if (expiresAt > now) return false;
+    this.localExpirations.set(key, now + ttlMs);
+    return true;
+  }
+
+  async revokeUser(userId: string, ttlMs = 7 * 24 * 60 * 60 * 1000): Promise<void> {
+    await this.connect();
+    const key = this.key(`revoked:user:${userId}`);
+    if (this.client) await this.client.set(key, "1", { PX: ttlMs });
+    else this.localExpirations.set(key, Date.now() + ttlMs);
+    await this.publishControl({ type: "auth:revoke", userId });
+  }
+
+  async isUserRevoked(userId: string): Promise<boolean> {
+    await this.connect();
+    const key = this.key(`revoked:user:${userId}`);
+    if (this.client) return (await this.client.exists(key)) === 1;
+    return (this.localExpirations.get(key) ?? 0) > Date.now();
+  }
+
+  async rateLimit(name: string, limit: number, windowMs: number): Promise<{ allowed: boolean; retryAfterMs: number }> {
+    await this.connect();
+    const key = this.key(`rate:${name}`);
+    if (this.client) {
+      const count = await this.client.incr(key);
+      if (count === 1) await this.client.pExpire(key, windowMs);
+      const ttl = Math.max(0, await this.client.pTTL(key));
+      return { allowed: count <= limit, retryAfterMs: ttl };
+    }
+    const now = Date.now();
+    const current = this.localCounters.get(key);
+    const entry = current && current.expiresAt > now ? current : { count: 0, expiresAt: now + windowMs };
+    entry.count += 1;
+    this.localCounters.set(key, entry);
+    return { allowed: entry.count <= limit, retryAfterMs: Math.max(0, entry.expiresAt - now) };
   }
 }
 

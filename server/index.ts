@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { randomUUID } from "node:crypto";
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +22,18 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.use((req, res, next) => {
+  const candidate = req.get("x-request-id");
+  const requestId = candidate && /^[A-Za-z0-9._:-]{8,128}$/.test(candidate) ? candidate : randomUUID();
+  res.setHeader("X-Request-Id", requestId);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  (req as Request & { requestId?: string }).requestId = requestId;
+  next();
+});
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -52,7 +65,11 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    console.error("Internal Server Error:", { status, message: err?.message, stack: err?.stack });
+    console.error("Internal Server Error:", {
+      requestId: (res.req as Request & { requestId?: string }).requestId,
+      status,
+      message: process.env.NODE_ENV === "production" ? "Internal Server Error" : err?.message,
+    });
 
     if (res.headersSent) {
       return next(err);
