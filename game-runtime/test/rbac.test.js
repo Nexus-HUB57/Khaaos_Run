@@ -246,8 +246,8 @@ test('PostgreSQL: auditoria persiste no servidor real com filtros e paginação 
     assert.equal(page.length, 0);
 
     await pool.query('DELETE FROM audit_events WHERE actor = $1', [marker]);
-    await store.close();
+    // pool é compartilhado com o store — encerrado UMA única vez no finally
   } finally {
-    await pool.end();
+    await pool.end().catch(() => {});
   }
 });
