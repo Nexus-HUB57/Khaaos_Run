@@ -141,6 +141,31 @@ npm run test:real
 KR_SESSION_STORE=postgres KR_RATE_STORE=redis npm run server
 ```
 
+### Testes reais e resiliência de adapters
+
+Os adapters reais (`PostgresSessionStore`, `RedisRateStore`) têm cobertura opt-in contra servidores de verdade — em CI, o job **Game Runtime Tests** provisiona `postgres:16-alpine` e `redis:7-alpine`, aplica as migrações e executa:
+
+```bash
+npm run test:real         # persistência de sessão e atomicidade INCR+PEXPIRE reais
+npm run test:resilience   # falha de dependência, timeout e recuperação
+```
+
+O `test:resilience` cobre exatamente os modos de falha esperados em produção:
+
+- **Falha de dependência**: store apontando para dependência inacessível rejeita `ready()` (o `/readyz` vira `503`), em tempo limitado.
+- **Timeout**: host non-routable respeita `connectionTimeoutMillis`/`connectTimeout` e rejeita sem travar o processo.
+- **Recuperação**: perda forçada das conexões no servidor (`pg_terminate_backend` no Postgres, `CLIENT KILL` no Redis) é absorvida pelo pool/client — a operação seguinte reconecta sozinha e os dados persistem.
+- **Expiração**: sessões vencidas ficam invisíveis para `getSession` e são removidas do banco por `cleanupExpired()`.
+
+Para rodar localmente com dependências efêmeras:
+
+```bash
+docker compose -f ../docker-compose.test.yml up -d
+export KR_DATABASE_TEST_URL='postgresql://test:test_pw@127.0.0.1:55432/khaaos_test'
+export KR_REDIS_TEST_URL='redis://127.0.0.1:56379'
+npm run db:migrate && npm run test:real && npm run test:resilience
+```
+
 ## Painel anti-cheat
 
 ```bash

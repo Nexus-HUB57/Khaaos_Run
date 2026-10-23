@@ -28,7 +28,7 @@
 
 - [x] Implementar `PostgresSessionStore` transacional com migração versionada, expiração no banco, readiness e testes reais opt-in.
 - [x] Conectar `RedisRateStore` real com `INCR` + `PEXPIRE` atômicos via Lua, readiness e testes reais opt-in.
-- [ ] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência.
+- [x] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência. Cobertura: job `Game Runtime Tests` (`.github/workflows/ci.yml`) + `test/real-resilience.test.js` via `npm run test:resilience` (`pg_terminate_backend`/`CLIENT KILL`, host non-routable com timeout, ready() rejeita com dependência fora, expiração/cleanup).
 - [ ] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional.
 - [ ] Implementar RBAC com auditoria e permissões por recurso.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.
