@@ -33,7 +33,8 @@ import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
-import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
+import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
+import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integrations/auth/origin";
 import { distributedState } from "./DistributedState";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -226,6 +227,16 @@ class RoomManager {
       (ws, msg) => this.send(ws, msg as ServerMessage),
       (players) => this.createLobbyFromMatchmaking(players),
     );
+    void distributedState.subscribeControl((event) => {
+      if (event.type === "auth:revoke" && typeof event.userId === "string") this.closeUserSockets(event.userId);
+    });
+  }
+
+  private closeUserSockets(userId: string): void {
+    for (const room of this.rooms.values()) {
+      const player = room.players.get(userId);
+      if (player?.ws && player.ws.readyState === WebSocket.OPEN) player.ws.close(4001, "Session revoked");
+    }
   }
 
   attach(httpServer: Server) {
@@ -241,13 +252,23 @@ class RoomManager {
           .map((protocol) => protocol.trim());
         const tokenProtocol = offeredProtocols.find((protocol) => protocol.startsWith("khaaos-token."));
         const token = tokenProtocol?.slice("khaaos-token.".length);
-        const userId = token ? verifyWsAccessToken(token) : null;
-        if (!offeredProtocols.includes("khaaos-v1") || !userId) {
-          done(false, 401, "Unauthorized");
-          return;
-        }
-        (req as typeof req & { khaaosUserId?: string }).khaaosUserId = userId;
-        done(true);
+        const origin = requestOriginFromHeaders(req.headers);
+        const ip = req.socket.remoteAddress ?? "unknown";
+        void (async () => {
+          const edgeLimit = await distributedState.rateLimit(`ws:upgrade:${ip}`, 30, 60_000);
+          if (!edgeLimit.allowed) { done(false, 429, "Too Many Requests"); return; }
+          if (!token) { done(false, 401, "Unauthorized"); return; }
+          if (!offeredProtocols.includes("khaaos-v1") || !isAllowedOrigin(origin)) {
+            done(false, 403, "Origin or protocol not allowed");
+            return;
+          }
+          const verified = token ? await consumeWsAccessToken(token, origin) : null;
+          if (!verified) { done(false, 401, "Unauthorized"); return; }
+          const identityLimit = await distributedState.rateLimit(`ws:identity:${verified.sub}`, 120, 60_000);
+          if (!identityLimit.allowed) { done(false, 429, "Too Many Requests"); return; }
+          (req as typeof req & { khaaosUserId?: string }).khaaosUserId = verified.sub;
+          done(true);
+        })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
     });
     this.matchmaking.start();
@@ -263,7 +284,8 @@ class RoomManager {
       const rateReset = setInterval(() => { messagesThisSecond = 0; }, 1_000);
 
       ws.on("message", async (raw) => {
-        if (++messagesThisSecond > 60) {
+        const aggregateLimit = await distributedState.rateLimit(`ws:messages:${userId}`, 600, 10_000);
+        if (++messagesThisSecond > 60 || !aggregateLimit.allowed) {
           ws.close(1008, "Rate limit exceeded");
           return;
         }

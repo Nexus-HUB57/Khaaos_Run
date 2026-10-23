@@ -69,17 +69,34 @@ export function registerApiRoutes(app: Express): void {
 
   app.use("/api", csrfGuard);
 
+  app.use("/api", (req: any, res: any, next: any) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    const actor = req.user?.claims?.sub ?? `ip:${req.ip}`;
+    void Promise.all([
+      distributedState.rateLimit(`http:ip:${req.ip}`, 600, 60_000),
+      distributedState.rateLimit(`http:actor:${actor}`, 180, 60_000),
+    ]).then(([ipLimit, actorLimit]) => {
+      const limit = !ipLimit.allowed ? ipLimit : actorLimit;
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many requests" });
+      next();
+    }).catch(() => res.status(503).json({ message: "Rate limiting unavailable" }));
+  });
+
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
   registerMarshalConsoleRoutes(app);
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
-    try {
-      res.setHeader("Cache-Control", "no-store");
-      res.json(createWsAccessToken(getUserId(req)));
-    } catch {
-      res.status(503).json({ message: "Autenticação WebSocket indisponível" });
-    }
+    const userId = getUserId(req);
+    void distributedState.rateLimit(`auth:ws-token:${userId}:${req.ip}`, 20, 60_000).then((limit) => {
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many WebSocket token requests" });
+      try {
+        res.setHeader("Cache-Control", "no-store");
+        res.json(createWsAccessToken(userId, undefined, req.sessionID));
+      } catch {
+        res.status(503).json({ message: "Autenticação WebSocket indisponível" });
+      }
+    }).catch(() => res.status(503).json({ message: "Autenticação WebSocket indisponível" }));
   });
 
   app.get("/api/zone/permissions", requireAuth, (req, res) => {
