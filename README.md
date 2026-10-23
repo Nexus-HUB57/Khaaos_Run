@@ -296,14 +296,14 @@ O corpo não altera XP, dano nem saque. Sexo e origem são identidade visual. O 
 
 | Id | Nome | Sexo | Origem | Marca | Render |
 |----|------|------|--------|-------|--------|
-| kane | Idris Kane | Masculino | Afro-brasileiro | Queimadura no pescoço | Placa 3D em `client/public/figures/kane.jpg` |
-| puri | Yara Puri | Feminino | Indígena amazônica | Marca de nascença sob o olho | Ficha fechada, placa pendente |
-| voss | Leandro Voss | Masculino | Levantina | Nariz quebrado | Ficha fechada, placa pendente |
-| okada | Mei Okada | Feminino | Nikkei | Cicatriz na têmpora | Ficha fechada, placa pendente |
-| hald | Soren Hald | Masculino | Norte-europeia | Orelha comida por estilhaço | Ficha fechada, placa pendente |
-| okonkwo | Nia Okonkwo | Feminino | África Ocidental | Heterocromia e diastema | Ficha fechada, placa pendente |
+| kane | Idris Kane | Masculino | Afro-brasileiro | Queimadura no pescoço | `client/public/figures/kane.jpg` |
+| puri | Yara Puri | Feminino | Indígena amazônica | Marca de nascença sob o olho | `client/public/figures/puri.jpg` |
+| voss | Leandro Voss | Masculino | Levantina | Nariz quebrado | `client/public/figures/voss.jpg` |
+| okada | Mei Okada | Feminino | Nikkei | Cicatriz na têmpora | `client/public/figures/okada.jpg` |
+| hald | Soren Hald | Masculino | Norte-europeia | Sardas no nariz e nas maçãs | `client/public/figures/hald.jpg` |
+| okonkwo | Nia Okonkwo | Feminino | África Ocidental | Heterocromia e diastema | `client/public/figures/okonkwo.jpg` |
 
-Catálogo: [`shared/figures.ts`](shared/figures.ts). A placa é render 3D realista de estúdio, não ilustração. A malha riggada (GLB) ainda não está no repositório.
+Catálogo: [`shared/figures.ts`](shared/figures.ts). As seis placas são render 3D realista de estúdio, não ilustração. A malha riggada (GLB) ainda não está no repositório.
 
 ---
 

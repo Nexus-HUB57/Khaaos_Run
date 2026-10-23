@@ -118,8 +118,7 @@ export default function Profile() {
       <CyberCard title="FIGURAS DE ALISTAMENTO" subtitle="RENDER 3D · A TABELA EP555 NÃO MUDA">
         <p className="mb-4 text-xs font-mono leading-relaxed tracking-wide text-muted-foreground">
           Seis corpos. Três masculinos, três femininos. Origem e marca são do rosto, não do dano.
-          Idris Kane é a primeira placa realista. As outras cinco estão fechadas na ficha; o render entra quando o estúdio liberar.
-          Malha riggada (GLB) ainda não exportada.
+          As seis placas 3D estão no ar. A malha riggada (GLB) ainda não foi exportada.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {FIGURES.map((figure) => (

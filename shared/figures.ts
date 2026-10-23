@@ -33,9 +33,9 @@ export const FIGURES: FigureDef[] = [
     sexLabel: "Feminino",
     origin: "Indígena amazônica",
     age: 27,
-    mark: "Marca de nascença redonda sob o olho esquerdo de quem olha.",
+    mark: "Marca de nascença redonda sob o olho mais próximo de quem olha.",
     build: "Maçãs altas, cabelo preto liso em coque baixo. Sem pintura, sem adereço.",
-    render: "pendente",
+    render: "placa",
   },
   {
     id: "voss",
@@ -46,7 +46,7 @@ export const FIGURES: FigureDef[] = [
     age: 34,
     mark: "Nariz quebrado, com calo no dorso.",
     build: "Cabelo escuro crespo curto, barba cerrada, olhos fundos.",
-    render: "pendente",
+    render: "placa",
   },
   {
     id: "okada",
@@ -57,7 +57,7 @@ export const FIGURES: FigureDef[] = [
     age: 26,
     mark: "Cicatriz fina na têmpora esquerda de quem olha.",
     build: "Corte assimétrico, mais longo do lado direito de quem olha.",
-    render: "pendente",
+    render: "placa",
   },
   {
     id: "hald",
@@ -66,9 +66,9 @@ export const FIGURES: FigureDef[] = [
     sexLabel: "Masculino",
     origin: "Norte-europeia",
     age: 29,
-    mark: "Orelha direita de quem olha comida por estilhaço.",
+    mark: "Sardas densas no nariz e nas maçãs.",
     build: "Pele sardenta, cabelo loiro escuro, olhos claros.",
-    render: "pendente",
+    render: "placa",
   },
   {
     id: "okonkwo",
@@ -79,7 +79,7 @@ export const FIGURES: FigureDef[] = [
     age: 33,
     mark: "Heterocromia: olho âmbar à esquerda de quem olha. Diastema.",
     build: "Tranças curtas rente ao couro, pescoço longo.",
-    render: "pendente",
+    render: "placa",
   },
 ];
 
