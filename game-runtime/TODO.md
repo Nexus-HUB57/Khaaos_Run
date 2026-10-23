@@ -28,8 +28,8 @@
 
 - [x] Implementar `PostgresSessionStore` transacional com migração versionada, expiração no banco, readiness e testes reais opt-in.
 - [x] Conectar `RedisRateStore` real com `INCR` + `PEXPIRE` atômicos via Lua, readiness e testes reais opt-in.
-- [ ] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência.
-- [x] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional. Cobertura: `test/security.test.js` (8 testes) — HTTPS (`tls: {cert,key}` / `KR_TLS_CERT`/`KR_TLS_KEY`), tokens HS256 com `kid` + grace (`retired`) via `POST /admin/keys/rotate|drop`, revogação por `jti` via `POST /auth/logout` (HTTP e WebSocket) e OIDC Authorization Code completo (`server/oidc.js`: discovery, JWKS RS256, nonce/state single-use, provisionamento de usuário).
+- [x] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência. Cobertura: job `Game Runtime Tests` (`.github/workflows/ci.yml`) + `test/real-resilience.test.js` via `npm run test:resilience` (`pg_terminate_backend`/`CLIENT KILL`, host non-routable com timeout, ready() rejeita com dependência fora, expiração/cleanup).
+- [ ] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional.
 - [ ] Implementar RBAC com auditoria e permissões por recurso.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.
 - [ ] Testar múltiplas instâncias, falha de processo, reconnect após reinício, soak e fault injection.

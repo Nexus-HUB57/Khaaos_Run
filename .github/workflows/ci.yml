@@ -151,6 +151,10 @@ jobs:
         working-directory: game-runtime
         run: npm run test:real
 
+      - name: Real adapter resilience tests (dependency failure, timeout, recovery)
+        working-directory: game-runtime
+        run: npm run test:resilience
+
       - name: Game infra tests
         working-directory: game-runtime
         run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
