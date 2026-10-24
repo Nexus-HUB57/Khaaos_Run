@@ -1,0 +1,32 @@
+{
+  "all": true,
+  "clean": true,
+  "excludeAfterRemap": true,
+  "include": [
+    "client/src/**/*.ts",
+    "client/src/**/*.tsx",
+    "server/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.js",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.d.ts",
+    "**/vite.config.*"
+  ],
+  "extension": [
+    ".ts",
+    ".tsx"
+  ],
+  "report-dir": "coverage",
+  "reporter": [
+    "text",
+    "text-summary",
+    "lcov",
+    "html"
+  ],
+  "skip-full": true
+}
