@@ -21,6 +21,14 @@ import { distributedState } from "./game/DistributedState";
 import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
 import { economyService } from "./game/economyService";
 import { getForgeCatalog } from "./game/forgeCatalog";
+import {
+  IdentityLinkError,
+  confirmIdentityLinkChallenge,
+  createIdentityLinkChallenge,
+  getIdentityLinkChallengeStatus,
+  listGameIdentityLinks,
+  submitEosIdentityProof,
+} from "./game/identityLinkService";
 import { isValidIdempotencyKey } from "./game/economyMoney";
 import { canUseItemOutsideMatch } from "@shared/war-i";
 import {
@@ -126,6 +134,14 @@ export function registerApiRoutes(app: Express): void {
     if (error?.message === "Empréstimo já pago") return res.status(409).json({ message: error.message });
     console.error("Financial operation failed", { code: error?.code, message: error?.message });
     return res.status(500).json({ message: "Internal server error" });
+  };
+
+  const sendIdentityLinkError = (res: any, error: unknown) => {
+    if (error instanceof IdentityLinkError) {
+      return res.status(error.status).json({ message: error.message, code: error.code });
+    }
+    console.error("Identity link operation failed");
+    return res.status(500).json({ message: "Não foi possível processar o vínculo de identidade." });
   };
 
   // ── BANK ─────────────────────────────────────────────────────────────────
@@ -293,6 +309,61 @@ export function registerApiRoutes(app: Express): void {
   });
 
   // ── PLAYER ───────────────────────────────────────────────────────────────
+
+  app.get(api.player.identities.list.path, requireAuth, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      res.json(await listGameIdentityLinks(getUserId(req)));
+    } catch (error) {
+      return sendIdentityLinkError(res, error);
+    }
+  });
+
+  app.post(api.player.identities.createLinkChallenge.path, requireAuth, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (!parseMutationBody(req, res, api.player.identities.createLinkChallenge.input)) return;
+    try {
+      res.status(201).json(await createIdentityLinkChallenge(getUserId(req)));
+    } catch (error) {
+      return sendIdentityLinkError(res, error);
+    }
+  });
+
+  app.get(api.player.identities.getLinkChallenge.path, requireAuth, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const challengeId = z.string().uuid().safeParse(req.params.challengeId);
+    if (!challengeId.success) return res.status(400).json({ message: "ID do desafio inválido" });
+    try {
+      res.json(await getIdentityLinkChallengeStatus(getUserId(req), challengeId.data));
+    } catch (error) {
+      return sendIdentityLinkError(res, error);
+    }
+  });
+
+  app.post(api.player.identities.confirmLinkChallenge.path, requireAuth, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (!parseMutationBody(req, res, api.player.identities.confirmLinkChallenge.input)) return;
+    const challengeId = z.string().uuid().safeParse(req.params.challengeId);
+    if (!challengeId.success) return res.status(400).json({ message: "ID do desafio inválido" });
+    try {
+      res.json(await confirmIdentityLinkChallenge(getUserId(req), challengeId.data));
+    } catch (error) {
+      return sendIdentityLinkError(res, error);
+    }
+  });
+
+  // This route is intentionally not cookie-authenticated: possession of a fresh,
+  // verified EOS Connect ID token and a high-entropy web challenge proves both sides.
+  app.post(api.player.identities.submitEosProof.path, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const input = parseMutationBody(req, res, api.player.identities.submitEosProof.input);
+    if (!input) return;
+    try {
+      res.status(202).json(await submitEosIdentityProof(input.code, input.idToken));
+    } catch (error) {
+      return sendIdentityLinkError(res, error);
+    }
+  });
 
   app.get(api.player.me.path, requireAuth, async (req, res) => {
     const stats = await storage.getPlayerStats(getUserId(req));

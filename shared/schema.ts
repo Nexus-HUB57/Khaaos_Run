@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uniqueIndex, index, check, uuid, bigserial } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uniqueIndex, index, check, uuid, bigserial, varchar } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -276,6 +276,51 @@ export const loans = pgTable("loans", {
   totalDueNonnegative: check("loans_total_due_nonnegative", sql`${table.totalDue} >= 0`),
   daysRemainingNonnegative: check("loans_days_remaining_nonnegative", sql`${table.daysRemaining} >= 0`),
   isPaidPresent: check("loans_is_paid_present", sql`${table.isPaid} IS NOT NULL`),
+}));
+
+export const gameIdentityLinks = pgTable("game_identity_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("EOS_CONNECT"),
+  providerSubject: text("provider_subject").notNull(),
+  productId: text("product_id").notNull(),
+  sandboxId: text("sandbox_id").notNull(),
+  deploymentId: text("deployment_id").notNull(),
+  linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
+  lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  providerSubjectUnique: uniqueIndex("game_identity_provider_subject_unique").on(table.provider, table.productId, table.providerSubject),
+  userProviderUnique: uniqueIndex("game_identity_user_provider_unique").on(table.userId, table.provider),
+  validProvider: check("game_identity_provider_valid", sql`${table.provider} = 'EOS_CONNECT'`),
+  subjectNotEmpty: check("game_identity_subject_not_empty", sql`length(trim(${table.providerSubject})) > 0`),
+}));
+
+export const identityLinkChallenges = pgTable("identity_link_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("EOS_CONNECT"),
+  codeHash: varchar("code_hash", { length: 64 }).notNull(),
+  proofTokenHash: varchar("proof_token_hash", { length: 64 }),
+  status: text("status").notNull().default("PENDING"),
+  providerSubject: text("provider_subject"),
+  productId: text("product_id"),
+  sandboxId: text("sandbox_id"),
+  deploymentId: text("deployment_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  proofSubmittedAt: timestamp("proof_submitted_at", { withTimezone: true }),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+}, (table) => ({
+  codeHashUnique: uniqueIndex("identity_link_challenge_code_hash_unique").on(table.codeHash),
+  proofTokenHashUnique: uniqueIndex("identity_link_challenge_proof_token_hash_unique").on(table.proofTokenHash),
+  userCreatedAt: index("identity_link_challenge_user_created_idx").on(table.userId, table.createdAt),
+  activeExpiry: index("identity_link_challenge_status_expiry_idx").on(table.status, table.expiresAt),
+  validProvider: check("identity_link_challenge_provider_valid", sql`${table.provider} = 'EOS_CONNECT'`),
+  validStatus: check("identity_link_challenge_status_valid", sql`${table.status} IN ('PENDING', 'AWAITING_CONFIRMATION', 'CONFIRMED', 'CANCELLED', 'EXPIRED')`),
+  codeHashSha256: check("identity_link_challenge_code_hash_sha256", sql`length(${table.codeHash}) = 64`),
+  candidateRequired: check("identity_link_challenge_candidate_required", sql`${table.status} <> 'AWAITING_CONFIRMATION' OR (${table.providerSubject} IS NOT NULL AND ${table.productId} IS NOT NULL AND ${table.sandboxId} IS NOT NULL AND ${table.deploymentId} IS NOT NULL AND ${table.proofSubmittedAt} IS NOT NULL)`),
+  confirmationTimestamp: check("identity_link_challenge_confirmation_timestamp", sql`${table.status} <> 'CONFIRMED' OR ${table.confirmedAt} IS NOT NULL`),
+  expiryAfterCreation: check("identity_link_challenge_expiry_after_creation", sql`${table.expiresAt} > ${table.createdAt}`),
 }));
 
 export const items = pgTable("items", {

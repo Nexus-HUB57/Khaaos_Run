@@ -58,6 +58,20 @@ export const forgeCatalogItemSchema = z.object({
 });
 export type ForgeCatalogItem = z.infer<typeof forgeCatalogItemSchema>;
 
+const identityLinkStatusSchema = z.enum([
+  'PENDING',
+  'AWAITING_CONFIRMATION',
+  'CONFIRMED',
+  'CANCELLED',
+  'EXPIRED',
+]);
+const identityLinkChallengeIdSchema = z.string().uuid();
+const identityLinkChallengeCodeSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+const identityLinkProofInput = z.object({
+  code: identityLinkChallengeCodeSchema,
+  idToken: z.string().min(1).max(8192),
+}).strict();
+
 export const api = {
   // === BANKING ===
   bank: {
@@ -248,6 +262,71 @@ export const api = {
         200: z.object({ specializationId: z.string() }),
         400: errorSchemas.validation,
         403: errorSchemas.validation,
+      },
+    },
+    identities: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/player/identities',
+        responses: {
+          200: z.array(z.object({
+            id: z.string().uuid(),
+            provider: z.literal('EOS_CONNECT'),
+            maskedSubject: z.string(),
+            linkedAt: z.string().datetime(),
+            lastVerifiedAt: z.string().datetime(),
+          })),
+        },
+      },
+      createLinkChallenge: {
+        method: 'POST' as const,
+        path: '/api/player/identity-links/challenges',
+        input: z.object({}).strict(),
+        responses: {
+          201: z.object({
+            challengeId: identityLinkChallengeIdSchema,
+            code: identityLinkChallengeCodeSchema,
+            expiresAt: z.string().datetime(),
+          }),
+        },
+      },
+      getLinkChallenge: {
+        method: 'GET' as const,
+        path: '/api/player/identity-links/challenges/:challengeId',
+        responses: {
+          200: z.object({
+            challengeId: identityLinkChallengeIdSchema,
+            status: identityLinkStatusSchema,
+            expiresAt: z.string().datetime(),
+            maskedSubject: z.string().optional(),
+          }),
+          404: errorSchemas.notFound,
+        },
+      },
+      confirmLinkChallenge: {
+        method: 'POST' as const,
+        path: '/api/player/identity-links/challenges/:challengeId/confirm',
+        input: z.object({}).strict(),
+        responses: {
+          200: z.object({
+            id: z.string().uuid(),
+            provider: z.literal('EOS_CONNECT'),
+            maskedSubject: z.string(),
+            linkedAt: z.string().datetime(),
+          }),
+        },
+      },
+      submitEosProof: {
+        method: 'POST' as const,
+        path: '/api/game/identity-links/eos-proof',
+        input: identityLinkProofInput,
+        responses: {
+          202: z.object({
+            challengeId: identityLinkChallengeIdSchema,
+            status: z.literal('AWAITING_CONFIRMATION'),
+            maskedSubject: z.string(),
+          }),
+        },
       },
     },
   },

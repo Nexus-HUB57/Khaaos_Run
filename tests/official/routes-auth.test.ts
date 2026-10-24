@@ -76,6 +76,10 @@ const protectedRoutes = [
   ["POST", "/api/items/1/use"],
   ["POST", "/api/items/1/repair"],
   ["GET", "/api/player/me"],
+  ["GET", "/api/player/identities"],
+  ["POST", "/api/player/identity-links/challenges"],
+  ["GET", "/api/player/identity-links/challenges/00000000-0000-4000-8000-000000000000"],
+  ["POST", "/api/player/identity-links/challenges/00000000-0000-4000-8000-000000000000/confirm"],
   ["POST", "/api/player/daily-salary"],
   ["POST", "/api/player/specialization"],
   ["GET", "/api/zone/status"],
@@ -186,4 +190,13 @@ test("Forja: catálogo canônico autenticado e compra rejeita o payload antigo c
     body: JSON.stringify({ name: "Item Inventado", type: "ARMA", priceKrc: 1 }),
   });
   assert.equal(legacyPurchase.status, 400);
+});
+
+test("identidade do jogo: a rota de prova rejeita IDs enviados pelo cliente e códigos inválidos", async () => {
+  const response = await fetch(`${baseUrl}${api.player.identities.submitEosProof.path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "short", idToken: "not-a-token", userId: "victim", productUserId: "forged" }),
+  });
+  assert.equal(response.status, 400);
 });
