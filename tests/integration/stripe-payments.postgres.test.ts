@@ -201,7 +201,7 @@ test("Stripe PostgreSQL: checkout idempotente, fulfillment atômico e state mach
       assert.equal(call.params.line_items?.[0]?.price_data?.currency, "brl");
       assert.equal(call.params.line_items?.[0]?.price_data?.unit_amount, 2500, "price is taken from the server package");
       assert.equal(call.params.line_items?.[0]?.quantity, 1);
-      assert.match(call.params.line_items?.[0]?.price_data?.product_data?.description ?? "", /123,45 KRC internos/);
+      assert.match(call.params.line_items?.[0]?.price_data?.product_data?.description ?? "", /123\.45 KRC internos/);
       assert.equal(call.params.metadata?.userId, undefined, "internal user IDs are not sent to Stripe metadata");
     }
     orderIds.push(checkoutA.orderId);
