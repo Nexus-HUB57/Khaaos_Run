@@ -37,7 +37,7 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 
 1. **Autoridade de partida:** servidor valida movimento, combate, zona, posse, carga, durabilidade e transições; o cliente solicita ações e renderiza estado.
 2. **Persistência:** gravações relevantes ao inventário precedem confirmação/broadcast; falhas não podem deixar estado parcialmente aplicado.
-3. **Identidade:** o `userId` do WebSocket vem do token assinado, não da mensagem do cliente. Permanecem pendentes mitigação de replay/uso múltiplo do token e validação de Origin no handshake.
+3. **Identidade:** o `userId` do WebSocket vem do token assinado, não da mensagem do cliente. Nesta branch, o ticket usa `jti` de uso único consumido com `SET NX`/TTL no Redis e o handshake valida `Origin` contra `PUBLIC_ORIGIN`; Redis indisponível em produção falha fechado.
 4. **Banco de teste:** testes PostgreSQL exigem URL explícita, ambiente não produtivo e database `_test`; fixtures devem apagar apenas seus registros.
 5. **Economia:** KRC permanece moeda de jogo, sem resgate/custódia/fundos reais. Depósitos sem prova de liquidação estão desabilitados. Qualquer expansão de escopo exige revisão especializada antes de implementar.
 6. **Unreal:** SPA/servidor TypeScript são a referência executável até UE5 compilar, passar Automation Tests e demonstrar paridade.
@@ -58,8 +58,8 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 
 - Inventário e cobertura negativa comprovável de **todas** as rotas mutáveis, papéis, recursos e efeitos laterais.
 - Ownership/TOCTOU, atomicidade e validação de identidade para todos os recursos/caminhos, não apenas os cobertos atualmente.
-- Ticket WebSocket é reutilizável enquanto válido; não há consumo/revogação por sessão nem limite agregado pré-autenticação. O handshake não valida `Origin`.
-- Logout ainda é mutação GET; revisar o caso de CSRF e usar método/guard apropriado.
+- Permanecem pendentes a revogação de tickets por logout/ban, quota pré-autenticação por IP/identidade e limite agregado de conexões. O consumo Redis tem TTL de 90 s para cobrir a tolerância máxima de clock; fallback local exige `WS_LOCAL_TICKET_FALLBACK=true` fora de produção, não protege entre processos e não é um modo válido para staging/multi-réplica.
+- Nesta branch, `/api/logout` não aceita mais GET: o cliente faz POST, que exige `Origin` same-origin e rejeita `Sec-Fetch-Site: cross-site`; a cobertura OIDC valida o fluxo. A alteração ainda precisa ser integrada à `main`.
 - Auditar logs e exceções para evitar exposição de detalhes internos; concluir política de limites/rate por IP/identidade para endpoints críticos.
 - Fechar fragilidades identificadas na auditoria atual, incluindo respawn sem validação do estado da partida e bypass de sala privada via `roomId`.
 

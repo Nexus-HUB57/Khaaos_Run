@@ -4,7 +4,9 @@ import { test } from "node:test";
 import WebSocket from "ws";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
+process.env.NODE_ENV = "test";
 process.env.WS_TOKEN_SECRET = "official-wari-websocket-e2e-test-secret-32-bytes";
+process.env.WS_LOCAL_TICKET_FALLBACK = "true";
 
 const [{ roomManager }, { storage }, { createWsAccessToken }] = await Promise.all([
   import("../../server/game/RoomManager.ts"),
@@ -66,7 +68,12 @@ function waitForMessage(
 
 async function connectAuthenticated(url: string, userId: string): Promise<WebSocket> {
   const { token } = createWsAccessToken(userId);
-  const socket = new WebSocket(url, ["khaaos-v1", `khaaos-token.${token}`]);
+  const websocketUrl = new URL(url);
+  const originProtocol = websocketUrl.protocol === "wss:" ? "https:" : "http:";
+  const origin = `${originProtocol}//${websocketUrl.host}`;
+  const socket = new WebSocket(url, ["khaaos-v1", `khaaos-token.${token}`], {
+    headers: { Origin: origin },
+  });
   await withTimeout(new Promise<void>((resolve, reject) => {
     socket.once("open", resolve);
     socket.once("error", reject);
@@ -125,16 +132,21 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
   let rivalSocket: WebSocket | undefined;
   let roomId: string | undefined;
   let releaseLootPersistence: (() => void) | undefined;
+  let originalPublicOrigin: string | undefined;
+  let publicOriginOverridden = false;
 
   try {
     await new Promise<void>((resolve, reject) => {
       httpServer.once("error", reject);
       httpServer.listen(0, "127.0.0.1", resolve);
     });
-    roomManager.attach(httpServer);
     const address = httpServer.address();
     assert.ok(address && typeof address !== "string");
     const url = `ws://127.0.0.1:${address.port}/ws`;
+    originalPublicOrigin = process.env.PUBLIC_ORIGIN;
+    process.env.PUBLIC_ORIGIN = `http://127.0.0.1:${address.port}`;
+    publicOriginOverridden = true;
+    roomManager.attach(httpServer);
 
     ownerSocket = await connectAuthenticated(url, ownerId);
     const ownerWelcomePromise = waitForMessage(ownerSocket, (message) => message.type === "welcome", "welcome do proprietário");
@@ -295,6 +307,10 @@ test("War’I E2E: WebSocket autenticado inicia partida, usa granada e replica d
     assert.equal(room.players.get(ownerId)?.ws, reboundServerSocket);
     assert.equal(room.players.get(ownerId)?.isConnected, true);
   } finally {
+    if (publicOriginOverridden) {
+      if (originalPublicOrigin === undefined) delete process.env.PUBLIC_ORIGIN;
+      else process.env.PUBLIC_ORIGIN = originalPublicOrigin;
+    }
     releaseLootPersistence?.();
     const activeRoom = roomId ? (roomManager as any).rooms.get(roomId) : undefined;
     if (activeRoom) {

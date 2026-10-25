@@ -14,7 +14,7 @@
  */
 
 import { WebSocket, WebSocketServer } from "ws";
-import type { Server } from "http";
+import type { IncomingMessage, Server } from "http";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { storage } from "../storage";
@@ -33,8 +33,37 @@ import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
-import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
+import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
 import { distributedState } from "./DistributedState";
+
+function isAllowedWebSocketOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (typeof origin !== "string" || !origin) {
+    return process.env.NODE_ENV !== "production" && process.env.WS_ALLOW_MISSING_ORIGIN === "true";
+  }
+
+  try {
+    let expectedOrigin: string;
+    if (process.env.PUBLIC_ORIGIN) {
+      const configuredOrigin = new URL(process.env.PUBLIC_ORIGIN);
+      if (process.env.NODE_ENV === "production" && configuredOrigin.protocol !== "https:") return false;
+      expectedOrigin = configuredOrigin.origin;
+    } else {
+      if (process.env.NODE_ENV === "production" || !req.headers.host) return false;
+      const forwardedProto = req.headers["x-forwarded-proto"];
+      const protocol = typeof forwardedProto === "string"
+        ? forwardedProto.split(",")[0].trim()
+        : "http";
+      if (protocol !== "http" && protocol !== "https") return false;
+      expectedOrigin = new URL(`${protocol}://${req.headers.host}`).origin;
+    }
+
+    const parsedOrigin = new URL(origin);
+    return parsedOrigin.origin === origin && parsedOrigin.origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -236,18 +265,27 @@ class RoomManager {
       perMessageDeflate: false,
       handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
       verifyClient: ({ req }, done) => {
+        if (!isAllowedWebSocketOrigin(req)) {
+          done(false, 403, "Origin not allowed");
+          return;
+        }
         const offeredProtocols = (req.headers["sec-websocket-protocol"] ?? "")
           .split(",")
           .map((protocol) => protocol.trim());
         const tokenProtocol = offeredProtocols.find((protocol) => protocol.startsWith("khaaos-token."));
         const token = tokenProtocol?.slice("khaaos-token.".length);
-        const userId = token ? verifyWsAccessToken(token) : null;
-        if (!offeredProtocols.includes("khaaos-v1") || !userId) {
+        if (!offeredProtocols.includes("khaaos-v1") || !token) {
           done(false, 401, "Unauthorized");
           return;
         }
-        (req as typeof req & { khaaosUserId?: string }).khaaosUserId = userId;
-        done(true);
+        void consumeWsAccessToken(token).then((userId) => {
+          if (!userId) {
+            done(false, 401, "Unauthorized");
+            return;
+          }
+          (req as typeof req & { khaaosUserId?: string }).khaaosUserId = userId;
+          done(true);
+        }).catch(() => done(false, 401, "Unauthorized"));
       },
     });
     this.matchmaking.start();

@@ -7,6 +7,7 @@ const checks = [
   { name: "App oficial · TypeScript", cwd: root, args: ["run", "check"] },
   { name: "App oficial · build", cwd: root, args: ["run", "build"] },
   { name: "App oficial · testes", cwd: root, args: ["run", "test:official"] },
+  { name: "WebSocket Redis · integração (opt-in)", cwd: root, args: ["run", "test:ws-ticket-redis"] },
   { name: "UE5 · regras de loot", cwd: root, args: ["run", "test:ue5:logic"] },
   { name: "Runtime · build", cwd: path.join(root, "game-runtime"), args: ["run", "build"] },
   { name: "Runtime · testes", cwd: path.join(root, "game-runtime"), args: ["test"] },

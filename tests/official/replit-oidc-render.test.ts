@@ -141,6 +141,7 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
     sessionMiddleware,
     upsertUser: async (claims) => { persistedClaims = claims; },
   });
+  app.get("/test/session", (req, res) => res.json({ authenticated: req.isAuthenticated() }));
   application = createServer(app);
   const appPort = await listen(application);
   t.after(async () => {
@@ -155,7 +156,7 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   assert(setCookie?.includes("connect.sid="), "session cookie must be issued");
   assert(/; secure/i.test(setCookie), "session cookie must be Secure behind the Render TLS proxy");
   assert(/; httponly/i.test(setCookie), "session cookie must be HttpOnly");
-  const cookie = setCookie.split(";")[0];
+  let cookie = setCookie.split(";")[0];
 
   const issuerRedirect = new URL(login.headers.get("location")!);
   assert.equal(issuerRedirect.origin, providerOrigin.replace(/\/oidc$/, ""));
@@ -168,10 +169,14 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   const callbackResponse = await browserRequest(`${callback.pathname}${callback.search}`, cookie);
   assert.equal(callbackResponse.status, 302);
   assert.equal(callbackResponse.headers.get("location"), "/");
+  const callbackCookie = callbackResponse.headers.get("set-cookie")?.match(/connect\.sid=[^;]+/)?.[0];
+  if (callbackCookie) cookie = callbackCookie;
   assert.equal(callbackRedirectUri, `https://${host}/api/callback`);
   assert.equal(tokenGrantVerified, true);
   assert.equal(persistedClaims?.sub, "simulated-replit-user");
   assert.equal(persistedClaims?.email, "local-user@example.test");
+  const activeSession = await browserRequest("/test/session", cookie);
+  assert.deepEqual(await activeSession.json(), { authenticated: true });
 
   const legacyLogout = await browserRequest("/api/logout", cookie);
   assert.equal(legacyLogout.status, 404, "logout must not mutate the session through GET");
@@ -182,6 +187,25 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   });
   assert.equal(crossSiteLogout.status, 403, "cross-site logout must be rejected");
 
+  const missingOriginLogout = await browserRequest("/api/logout", cookie, "POST", {
+    "sec-fetch-site": "same-origin",
+  });
+  assert.equal(missingOriginLogout.status, 403, "logout without Origin must be rejected");
+
+  const mismatchedOriginLogout = await browserRequest("/api/logout", cookie, "POST", {
+    origin: "https://attacker.example",
+  });
+  assert.equal(mismatchedOriginLogout.status, 403, "foreign Origin must be rejected even without Fetch Metadata");
+
+  const contradictoryMetadataLogout = await browserRequest("/api/logout", cookie, "POST", {
+    origin: `https://${host}`,
+    "sec-fetch-site": "cross-site",
+  });
+  assert.equal(contradictoryMetadataLogout.status, 403, "cross-site Fetch Metadata must be rejected even with matching Origin");
+
+  const sessionAfterRejectedLogouts = await browserRequest("/test/session", cookie);
+  assert.deepEqual(await sessionAfterRejectedLogouts.json(), { authenticated: true });
+
   const logout = await browserRequest("/api/logout", cookie, "POST", {
     origin: `https://${host}`,
     "sec-fetch-site": "same-origin",
@@ -190,5 +214,7 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   const logoutRedirect = new URL(logout.headers.get("location")!);
   assert.equal(logoutRedirect.origin, providerOrigin.replace(/\/oidc$/, ""));
   assert.equal(logoutRedirect.searchParams.get("post_logout_redirect_uri"), `https://${host}`);
+  const sessionAfterLogout = await browserRequest("/test/session", cookie);
+  assert.deepEqual(await sessionAfterLogout.json(), { authenticated: false });
   assert.equal(appPort > 0, true);
 });
