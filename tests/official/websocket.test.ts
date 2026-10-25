@@ -81,6 +81,17 @@ test("WebSocket oficial: handshake exige token e ignora userId forjado pelo clie
     assert.equal(message.type, "welcome");
     assert.equal(message.userId, "user-validado-no-servidor");
     assert.ok(message.roomId);
+
+    const deadline = Date.now() + 7_000;
+    let telemetry = roomManager.getWorldTelemetry("CIGKV");
+    while (telemetry.networkLatencySampleCount < 1 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      telemetry = roomManager.getWorldTelemetry("CIGKV");
+    }
+    assert.ok(telemetry.networkLatencySampleCount >= 1, "servidor deve medir RTT via pong nativo");
+    assert.equal(telemetry.networkLatencyTelemetryAvailable, true);
+    assert.ok((telemetry.networkLatencyP95Ms ?? -1) >= 0);
+    assert.equal(JSON.stringify(telemetry).includes("user-validado-no-servidor"), false);
   } finally {
     storage.getPlayerStats = originalGetPlayerStats;
     if (authenticatedWs && authenticatedWs.readyState !== WebSocket.CLOSED) {

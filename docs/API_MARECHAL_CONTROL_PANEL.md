@@ -42,6 +42,10 @@ Exemplo de formato de resposta (contagens variam em tempo real):
   "activeRooms": 0,
   "queueCount": 0,
   "queueP95Seconds": null,
+  "networkLatencyP95Ms": null,
+  "networkLatencySampleCount": 0,
+  "networkLatencyTelemetryAvailable": false,
+  "networkLatencyObservedAt": null,
   "activeIncidents": null,
   "incidentTelemetryAvailable": false,
   "configRevision": null,
@@ -50,7 +54,7 @@ Exemplo de formato de resposta (contagens variam em tempo real):
 }
 ```
 
-Amostras reais são agregadas do `RoomManager` e da fila local: jogadores conectados e vagas configuradas em salas não finalizadas, mais quantidade e p95 da idade de espera dos jogadores atualmente enfileirados. O p95 é uma estimativa da espera atual, não uma série histórica de tempos de conclusão. `activeIncidents` é `null` e `incidentTelemetryAvailable` é `false` enquanto não existir fonte de incidentes; revisão de mercado e diplomacia também não têm conectores nesta versão. Esses campos ausentes fazem os agentes de economia/diplomacia se posicionarem em `hold`.
+Amostras reais são agregadas do `RoomManager` e da fila local: jogadores conectados e vagas configuradas em salas não finalizadas, mais quantidade e p95 da idade de espera dos jogadores atualmente enfileirados. O p95 de fila é espera estimada atual, não latência de rede. `networkLatencyP95Ms` vem de RTT de WebSocket ping/pong iniciado pelo servidor; `networkLatencySampleCount`, `networkLatencyObservedAt` e `networkLatencyTelemetryAvailable` declaram cobertura. A agregação usa janela móvel de cinco minutos e não serializa IDs de jogador. Sem amostras, o RTT fica `null`. `activeIncidents` é `null` e `incidentTelemetryAvailable` é `false` enquanto não existir fonte de incidentes; revisão de mercado e diplomacia também não têm conectores nesta versão.
 
 ## Criar conselho
 
@@ -123,7 +127,7 @@ GET /api/console/v1/marshal/narrative-events?worldId=W2
 Cookie: <sessao-autenticada>
 ```
 
-A resposta contém `source: "server-runtime-telemetry"`, eventos atuais e `policy: { proposalOnly: true, humanReviewRequired: true, executable: false }`. Gatilhos disponíveis: fila com ao menos 3 participantes (**As Docas em Silêncio**), p95 de espera de ao menos 60 segundos (**O Farol da Espera**) e ocupação observada de ao menos 80% (**A Mesa do Anel**). Cada draft inclui os sinais que o ativaram e uma contribuição de Henricks, King Krapulla e Uryan. Valores ausentes não acionam gatilhos; falas são ficcionais, não evidência de incidentes/mercado/tratados, e não afetam gameplay. A lista pode ficar vazia. Regras editoriais completas em [`SPECIAL_CLASS_NARRATIVE_GUIDELINES.md`](SPECIAL_CLASS_NARRATIVE_GUIDELINES.md).
+A resposta contém `source: "server-runtime-telemetry"`, eventos atuais e `policy: { proposalOnly: true, humanReviewRequired: true, executable: false }`. Gatilhos incluem fila ≥3 (**As Docas em Silêncio**), espera p95 ≥60 s (**O Farol da Espera**), ocupação ≥80% (**A Mesa do Anel**), RTT p95 entre 250–499,9 ms com ≥5 amostras (**O Corredor de Ecos**) e RTT p95 ≥500 ms com ≥5 amostras (**A Tempestade de Ecos**). Os eventos de RTT usam ping/pong medido pelo servidor e não são inferidos a partir da fila. Cada draft inclui sinais que o ativaram e contribuições dos três agentes. Não atribuem causa, não executam mitigação nem pausam partidas; requerem revisão humana. Valores ausentes não acionam gatilhos. Regras editoriais completas em [`SPECIAL_CLASS_NARRATIVE_GUIDELINES.md`](SPECIAL_CLASS_NARRATIVE_GUIDELINES.md).
 
 ## Pipeline de carga por PR
 

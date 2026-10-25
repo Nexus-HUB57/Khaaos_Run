@@ -13,7 +13,7 @@ export interface SpecialClassNarrativeEvent {
   title: string;
   theme: string;
   trigger: string;
-  observedSignals: Array<{ key: "queueCount" | "queueP95Seconds" | "occupancy.percent"; value: number }>;
+  observedSignals: Array<{ key: "queueCount" | "queueP95Seconds" | "occupancy.percent" | "networkLatencyP95Ms" | "networkLatencySampleCount"; value: number }>;
   contributions: NarrativeContribution[];
   status: "proposal";
   needsHumanReview: true;
@@ -27,6 +27,8 @@ export interface SpecialClassNarrativeEvent {
  */
 export function buildSpecialClassNarrativeEvents(snapshot: WorldTelemetrySnapshot): SpecialClassNarrativeEvent[] {
   const events: SpecialClassNarrativeEvent[] = [];
+  const hasReliableLatency = snapshot.networkLatencyTelemetryAvailable &&
+    snapshot.networkLatencySampleCount >= 5 && snapshot.networkLatencyP95Ms !== null;
   if (snapshot.queueCount >= 3) {
     events.push({
       eventId: `KR-QUEUE-${snapshot.worldId}-${snapshot.observedAt}`,
@@ -75,6 +77,48 @@ export function buildSpecialClassNarrativeEvents(snapshot: WorldTelemetrySnapsho
         { agentId: "marshal-henricks", role: "lead", line: "Henricks solicita revisão humana de capacidade; nenhum operador ou equipe é identificado." },
         { agentId: "king-krapulla", role: "review", line: "King não infere preços, escassez ou transações a partir da ocupação." },
         { agentId: "ambassador-uryan", role: "draft", line: "Uryan prepara uma proposta de diálogo entre facções, sem anunciar tratado ou recompensa." },
+      ],
+      status: "proposal",
+      needsHumanReview: true,
+      executable: false,
+    });
+  }
+  if (hasReliableLatency && snapshot.networkLatencyP95Ms! >= 250 && snapshot.networkLatencyP95Ms! < 500) {
+    events.push({
+      eventId: `KR-LATENCY-WARN-${snapshot.worldId}-${snapshot.observedAt}`,
+      worldId: snapshot.worldId,
+      title: "O Corredor de Ecos",
+      theme: "Os sinais chegam com atraso; os três agentes coordenam uma resposta narrativa cautelosa.",
+      trigger: "RTT p95 observado entre 250 ms e 499,9 ms com pelo menos cinco respostas pong recentes do servidor.",
+      observedSignals: [
+        { key: "networkLatencyP95Ms", value: snapshot.networkLatencyP95Ms! },
+        { key: "networkLatencySampleCount", value: snapshot.networkLatencySampleCount },
+      ],
+      contributions: [
+        { agentId: "marshal-henricks", role: "lead", line: "Henricks recomenda cautela narrativa e mantém ordens operacionais em hold enquanto a latência é observada." },
+        { agentId: "king-krapulla", role: "review", line: "King não atribui o atraso a mercado, sabotagem ou facção sem evidência independente." },
+        { agentId: "ambassador-uryan", role: "draft", line: "Uryan redige uma mensagem ficcional pedindo que as partes aguardem confirmação antes de responder." },
+      ],
+      status: "proposal",
+      needsHumanReview: true,
+      executable: false,
+    });
+  }
+  if (hasReliableLatency && snapshot.networkLatencyP95Ms! >= 500) {
+    events.push({
+      eventId: `KR-LATENCY-CRITICAL-${snapshot.worldId}-${snapshot.observedAt}`,
+      worldId: snapshot.worldId,
+      title: "A Tempestade de Ecos",
+      theme: "A comunicação está severamente atrasada; a Classe Especial propõe pausa narrativa e verificação humana.",
+      trigger: "RTT p95 observado igual ou superior a 500 ms com pelo menos cinco respostas pong recentes do servidor.",
+      observedSignals: [
+        { key: "networkLatencyP95Ms", value: snapshot.networkLatencyP95Ms! },
+        { key: "networkLatencySampleCount", value: snapshot.networkLatencySampleCount },
+      ],
+      contributions: [
+        { agentId: "marshal-henricks", role: "lead", line: "Henricks encaminha o sinal de latência elevada para revisão humana; o draft não pausa nem altera partidas." },
+        { agentId: "king-krapulla", role: "review", line: "King rejeita teorias de bloqueio comercial: RTT sozinho não revela causa nem responsável." },
+        { agentId: "ambassador-uryan", role: "draft", line: "Uryan prepara uma convocação ficcional para confirmar a recepção das mensagens antes de qualquer diálogo." },
       ],
       status: "proposal",
       needsHumanReview: true,

@@ -19,6 +19,10 @@ export interface MarshalOverview {
   activeRooms: number;
   queueCount: number;
   queueP95Seconds: number | null;
+  networkLatencyP95Ms: number | null;
+  networkLatencySampleCount: number;
+  networkLatencyTelemetryAvailable: boolean;
+  networkLatencyObservedAt: string | null;
   activeIncidents: number | null;
   incidentTelemetryAvailable: boolean;
   configRevision: string | null;
@@ -32,7 +36,7 @@ export interface SpecialClassNarrativeEvent {
   title: string;
   theme: string;
   trigger: string;
-  observedSignals: Array<{ key: "queueCount" | "queueP95Seconds" | "occupancy.percent"; value: number }>;
+  observedSignals: Array<{ key: "queueCount" | "queueP95Seconds" | "occupancy.percent" | "networkLatencyP95Ms"; value: number }>;
   contributions: Array<{ agentId: SpecialAgentId; role: "lead" | "review" | "draft"; line: string }>;
   status: "proposal";
   needsHumanReview: true;

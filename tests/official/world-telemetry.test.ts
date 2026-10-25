@@ -17,6 +17,9 @@ test("telemetria por mundo soma apenas salas ativas e informa cobertura ausente 
   assert.equal(snapshot.activeRooms, 2);
   assert.equal(snapshot.queueCount, 3);
   assert.equal(snapshot.queueP95Seconds, 12.4);
+  assert.equal(snapshot.networkLatencyP95Ms, null);
+  assert.equal(snapshot.networkLatencySampleCount, 0);
+  assert.equal(snapshot.networkLatencyTelemetryAvailable, false);
   assert.equal(snapshot.activeIncidents, null);
   assert.equal(snapshot.incidentTelemetryAvailable, false);
   assert.equal(snapshot.stale, false);
@@ -29,6 +32,23 @@ test("telemetria sem salas não infere capacidade nem disponibilidade de inciden
   assert.deepEqual(snapshot.occupancy, { current: 0, capacity: 0, percent: null });
   assert.equal(snapshot.activeIncidents, null);
   assert.equal(snapshot.incidentTelemetryAvailable, false);
+});
+
+test("RTT p95 agregado usa somente amostras recentes válidas e mantém timestamp sem IDs pessoais", () => {
+  const samples = [20, 40, 60, 80, 300].map((rttMs, index) => ({
+    rttMs,
+    observedAt: new Date(`2026-10-21T20:00:0${index}.000Z`).toISOString(),
+  }));
+  const snapshot = aggregateWorldTelemetry("W2", [], { count: 0, p95WaitSeconds: null }, new Date(), [
+    ...samples,
+    { rttMs: -1, observedAt: "2026-10-21T20:00:09.000Z" },
+    { rttMs: Number.NaN, observedAt: "2026-10-21T20:00:10.000Z" },
+  ]);
+  assert.equal(snapshot.networkLatencyP95Ms, 300);
+  assert.equal(snapshot.networkLatencySampleCount, 5);
+  assert.equal(snapshot.networkLatencyTelemetryAvailable, true);
+  assert.equal(snapshot.networkLatencyObservedAt, "2026-10-21T20:00:04.000Z");
+  assert.equal(JSON.stringify(snapshot).includes("userId"), false);
 });
 
 test("fila de matchmaking calcula contagem e p95 de espera isolados por mundo", () => {
