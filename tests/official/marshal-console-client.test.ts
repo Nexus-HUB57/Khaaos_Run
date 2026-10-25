@@ -122,6 +122,10 @@ test("página comunica telemetria ausente e não oferece aprovação ou execuç�
     activeRooms: 0,
     queueCount: 0,
     queueP95Seconds: null,
+    networkLatencyP95Ms: null,
+    networkLatencySampleCount: 0,
+    networkLatencyTelemetryAvailable: false,
+    networkLatencyObservedAt: null,
     activeIncidents: null,
     incidentTelemetryAvailable: false,
     configRevision: null,
@@ -136,8 +140,11 @@ test("página comunica telemetria ausente e não oferece aprovação ou execuç�
   assert.match(markup, /CONSOLE DO MARECHAL/);
   assert.match(markup, /SNAPSHOT DO RUNTIME/);
   assert.match(markup, /Sem telemetria/);
+  assert.match(markup, /RTT P95/);
+  assert.match(markup, /Aguardando amostras/);
   assert.match(markup, /marshal-telemetry-trends/);
   assert.match(markup, /Tendência OCUPAÇÃO/);
+  assert.match(markup, /Tendência RTT P95/);
   assert.match(markup, /SINAIS NARRATIVOS/);
   assert.match(markup, /Propostas exigem revisão humana/);
   assert.doesNotMatch(markup, /VOLATILIDADE DE MERCADO|INCIDENTES ATIVOS|OCUPAÇÃO \(%\)/);

@@ -28,7 +28,7 @@ interface CouncilDraft {
 const INITIAL_DRAFT: CouncilDraft = { subject: "", periodSeconds: "3600" };
 
 const TERMINAL_STATUSES = new Set<CouncilStatus>(["complete", "partial", "failed"]);
-type TelemetryPoint = { occupancyPct: number | null; queueP95Seconds: number | null; queueCount: number };
+type TelemetryPoint = { occupancyPct: number | null; queueP95Seconds: number | null; queueCount: number; networkLatencyP95Ms: number | null };
 
 function errorMessage(error: unknown): string {
   if (error instanceof MarshalConsoleApiError) {
@@ -166,6 +166,10 @@ export default function MarshalConsolePage() {
   const hasOverview = !!overviewQuery.data;
 
   useEffect(() => {
+    setTrendSamples([]);
+  }, [worldId]);
+
+  useEffect(() => {
     if (!hasOverview) return;
     setStreamState("connecting");
     const source = new EventSource(marshalTelemetryStreamUrl(worldId), { withCredentials: true });
@@ -181,13 +185,16 @@ export default function MarshalConsolePage() {
           occupancyPct: snapshot.occupancy.percent,
           queueP95Seconds: snapshot.queueP95Seconds,
           queueCount: snapshot.queueCount,
+          networkLatencyP95Ms: snapshot.networkLatencyP95Ms,
         }].slice(-30));
         setStreamState("live");
         const materiallyChanged = !previous ||
           previous.occupancy.current !== snapshot.occupancy.current ||
           previous.occupancy.capacity !== snapshot.occupancy.capacity ||
           previous.queueCount !== snapshot.queueCount ||
-          previous.queueP95Seconds !== snapshot.queueP95Seconds;
+          previous.queueP95Seconds !== snapshot.queueP95Seconds ||
+          previous.networkLatencyP95Ms !== snapshot.networkLatencyP95Ms ||
+          previous.networkLatencySampleCount !== snapshot.networkLatencySampleCount;
         if (materiallyChanged) {
           void queryClient.invalidateQueries({ queryKey: ["marshal-narrative-events", worldId] });
         }
@@ -409,13 +416,15 @@ export default function MarshalConsolePage() {
                   <Metric label="ESTADO OPERACIONAL" value={prettyCode(overview.operationalState)} />
                   <Metric label="OCUPAÇÃO / CAPACIDADE" value={`${occupancy}${overview.occupancy.percent == null ? "" : ` · ${overview.occupancy.percent}%`}`} />
                   <Metric label="FILA P95" value={overview.queueP95Seconds == null ? "Sem telemetria" : `${overview.queueP95Seconds}s`} />
+                  <Metric label="RTT P95" value={!overview.networkLatencyTelemetryAvailable || overview.networkLatencyP95Ms == null ? "Aguardando amostras" : `${overview.networkLatencyP95Ms} ms · n=${overview.networkLatencySampleCount}`} />
                   <Metric label="INCIDENTES" value={overview.activeIncidents == null ? "Sem telemetria" : String(overview.activeIncidents)} />
                   <Metric label="REVISÃO" value={overview.configRevision || "—"} />
                 </div>
-                <div className="grid gap-3 md:grid-cols-3" data-testid="marshal-telemetry-trends">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="marshal-telemetry-trends">
                   <TelemetryTrend title="OCUPAÇÃO" values={trendSamples.map((sample) => sample.occupancyPct)} color="#22d3ee" format={(value) => `${value}%`} />
                   <TelemetryTrend title="FILA P95" values={trendSamples.map((sample) => sample.queueP95Seconds)} color="#fbbf24" format={(value) => `${value}s`} />
                   <TelemetryTrend title="FILA ATUAL" values={trendSamples.map((sample) => sample.queueCount)} color="#a78bfa" format={(value) => String(value)} />
+                  <TelemetryTrend title="RTT P95" values={trendSamples.map((sample) => sample.networkLatencyP95Ms)} color="#fb7185" format={(value) => `${value} ms`} />
                 </div>
                 <p className="text-[11px] font-mono text-muted-foreground">
                   <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />

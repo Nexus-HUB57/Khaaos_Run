@@ -35,7 +35,7 @@ import { applyMatchRankings, type MatchParticipant } from "./RankingService";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { verifyWsAccessToken } from "../replit_integrations/auth/ws-token";
 import type { WorldId } from "./orchestration";
-import { aggregateWorldTelemetry, isWorldId, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
+import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -224,6 +224,8 @@ class RoomManager {
   private wss: WebSocketServer | null = null;
   private nextLootId = 1;
   private matchmaking: MatchmakingService;
+  private socketWorlds = new WeakMap<WebSocket, WorldId>();
+  private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
 
   /** Attach to existing HTTP server */
   constructor() {
@@ -265,7 +267,34 @@ class RoomManager {
       }
       let displayName = "Operativo";
       let messagesThisSecond = 0;
+      let pendingPingAt: number | null = null;
+      const initialRoomId = this.userToRoom.get(userId);
+      const initialRoomWorld = initialRoomId ? this.rooms.get(initialRoomId)?.worldId : undefined;
+      this.socketWorlds.set(ws, initialRoomWorld ?? "CIGKV");
       const rateReset = setInterval(() => { messagesThisSecond = 0; }, 1_000);
+      const pingInterval = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN || pendingPingAt !== null) return;
+        pendingPingAt = Date.now();
+        ws.ping(String(pendingPingAt), false, (error) => {
+          if (error) pendingPingAt = null;
+        });
+      }, 5_000);
+      pingInterval.unref?.();
+
+      ws.on("pong", (payload) => {
+        const sentAt = Number(payload.toString());
+        if (pendingPingAt === null || !Number.isFinite(sentAt) || sentAt !== pendingPingAt) return;
+        const receivedAt = Date.now();
+        const rttMs = receivedAt - sentAt;
+        pendingPingAt = null;
+        if (rttMs < 0 || rttMs > 120_000) return;
+        const worldId = this.socketWorlds.get(ws) ?? "CIGKV";
+        const samples = this.networkLatencySamples.get(worldId) ?? [];
+        samples.push({ rttMs, observedAt: new Date(receivedAt).toISOString() });
+        const cutoff = receivedAt - 5 * 60_000;
+        const freshSamples = samples.filter((sample) => Date.parse(sample.observedAt) >= cutoff).slice(-1000);
+        this.networkLatencySamples.set(worldId, freshSamples);
+      });
 
       ws.on("message", async (raw) => {
         if (++messagesThisSecond > 60) {
@@ -279,10 +308,18 @@ class RoomManager {
             return;
           }
           const msg = parsed.data as ClientMessage;
+          if ((msg.type === "join" || msg.type === "queue" || msg.type === "create_lobby") && msg.worldId && isWorldId(msg.worldId)) {
+            this.socketWorlds.set(ws, msg.worldId);
+          } else if (msg.type === "join" && !msg.roomId) {
+            this.socketWorlds.set(ws, "CIGKV");
+          }
           if (msg.type === "join" && typeof msg.displayName === "string") {
             displayName = msg.displayName.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 32) || "Operativo";
           }
           await this.handleMessage(userId, displayName, ws, msg);
+          const activeRoomId = this.userToRoom.get(userId);
+          const activeWorld = activeRoomId ? this.rooms.get(activeRoomId)?.worldId : undefined;
+          if (activeWorld) this.socketWorlds.set(ws, activeWorld);
         } catch {
           this.send(ws, { type: "error", message: "Invalid message" });
         }
@@ -290,11 +327,13 @@ class RoomManager {
 
       ws.on("close", () => {
         clearInterval(rateReset);
+        clearInterval(pingInterval);
         this.onDisconnect(userId, ws);
       });
 
       ws.on("error", () => {
         clearInterval(rateReset);
+        clearInterval(pingInterval);
         this.onDisconnect(userId, ws);
       });
     });
@@ -1682,7 +1721,11 @@ class RoomManager {
         connectedPlayers: [...room.players.values()].filter((player) => player.isConnected).length,
         maxPlayers: room.maxPlayers,
       }));
-    return aggregateWorldTelemetry(worldId, rooms, this.matchmaking.getTelemetry(worldId));
+    const cutoff = Date.now() - 5 * 60_000;
+    const samples = (this.networkLatencySamples.get(worldId) ?? [])
+      .filter((sample) => Date.parse(sample.observedAt) >= cutoff);
+    this.networkLatencySamples.set(worldId, samples);
+    return aggregateWorldTelemetry(worldId, rooms, this.matchmaking.getTelemetry(worldId), new Date(), samples);
   }
 
   // ─── Public helpers for REST ─────────────────────────────────────────────

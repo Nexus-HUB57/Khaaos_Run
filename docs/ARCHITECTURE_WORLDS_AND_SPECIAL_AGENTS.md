@@ -155,7 +155,9 @@ Contrato HTTP ativo, SSE, drafts narrativos, exemplos, controles de segurança e
 
 O painel consome `GET /telemetry/stream?worldId=...` via SSE autenticado; o servidor emite snapshot imediato e amostras a cada 2 segundos. O cliente atualiza o cache de overview sem recriar a conexão a cada amostra e mantém polling de fallback. O stream é limitado a 100 conexões por processo e 3 por operador; desconexão remove o subscriber.
 
-`buildSpecialClassNarrativeEvents()` cria zero ou mais drafts determinísticos de As Docas em Silêncio (fila ≥ 3), O Farol da Espera (p95 ≥ 60 s) e A Mesa do Anel (ocupação ≥ 80%). Todos usam apenas sinais do snapshot do servidor e dão uma contribuição a Henricks, Krapulla e Uryan. São rascunhos ficcionais com `needsHumanReview: true` e `executable: false`; nunca publicam mensagens, afirmam dados de mercado/diplomacia indisponíveis ou alteram gameplay.
+O `RoomManager` emite probes WebSocket `ping` autenticados e mede o RTT em respostas `pong` nativas. Agrega apenas uma janela móvel de cinco minutos, com no máximo 1.000 amostras por mundo; não armazena IDs. O painel exibe RTT p95, cobertura e tendência, sem confundi-lo com p95 de espera de fila.
+
+`buildSpecialClassNarrativeEvents()` cria zero ou mais drafts determinísticos de As Docas em Silêncio (fila ≥ 3), O Farol da Espera (p95 ≥ 60 s), A Mesa do Anel (ocupação ≥ 80%), O Corredor de Ecos (RTT p95 ≥250 e <500 ms) e A Tempestade de Ecos (RTT p95 ≥500 ms). Eventos de RTT requerem ≥5 amostras válidas recentes. Todos usam apenas sinais do snapshot do servidor e dão uma contribuição a Henricks, Krapulla e Uryan. São rascunhos ficcionais com `needsHumanReview: true` e `executable: false`; nunca atribuem causa à latência, pausam partidas, publicam mensagens ou alteram gameplay.
 
 ### Defesa contra abuso e falhas
 

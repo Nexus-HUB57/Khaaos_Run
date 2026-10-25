@@ -18,6 +18,10 @@ Este catálogo transforma sinais operacionais limitados em rascunhos ficcionais 
 | **As Docas em Silêncio** | `queueCount >= 3` | revisa o limite operacional | conduz investigação ficcional, sem alegar oferta ou preço | rascunha proposta de trégua |
 | **O Farol da Espera** | `queueP95Seconds >= 60` | conduz e mantém mudanças em `hold` | recusa inferências econômicas não medidas | rascunha janela diplomática de passagem |
 | **A Mesa do Anel** | `occupancy.percent >= 80` | conduz revisão humana de capacidade | não infere escassez/valor da ocupação | propõe conversa entre facções, sem declarar tratado |
+| **O Corredor de Ecos** | RTT p95 de **250–499,9 ms**, com ≥5 pongs recentes | recomenda cautela, sem ordem operacional | não atribui causa a mercado/facção | redige mensagem ficcional para aguardar confirmação |
+| **A Tempestade de Ecos** | RTT p95 **≥500 ms**, com ≥5 pongs recentes | encaminha para revisão humana; não pausa partidas | rejeita teorias de sabotagem/causa sem evidência | prepara convocação ficcional de confirmação de mensagens |
+
+RTT vem de probes WebSocket `ping` iniciados pelo servidor e respostas nativas `pong`; não é `queueP95Seconds`, timestamp fornecido pelo cliente ou cálculo de lag de combate. O snapshot agrega apenas RTTs em janela móvel de cinco minutos, limitado a 1.000 amostras por mundo e sem IDs de usuário. O p95 e o número de amostras ficam explícitos; sem cinco amostras válidas recentes, latência é indisponível e nenhum evento de latência é criado. Os thresholds são sinais narrativos, não SLA, diagnóstico de causa nem acionamento de mitigação.
 
 O servidor retorna apenas eventos cujo gatilho é verdadeiro para o snapshot atual. `eventId` identifica mundo e observação; atualizar amostra cria uma nova versão observacional do rascunho, não publica uma cena nem inicia um evento de gameplay.
 
@@ -32,4 +36,6 @@ O painel mostra gatilho, valores observados, três contribuições, estado de re
 - Cada evento contém os três agentes e uma atribuição de papel coerente.
 - Resposta e cada evento permanecem `executable: false` e exigem revisão humana.
 - Snapshot com métricas indisponíveis/nulas não cria evento que dependa delas.
+- Alta latência exige RTT observado no servidor e no mínimo cinco amostras; espera de fila nunca substitui RTT.
+- 250 ms ativa aviso, 500 ms ativa o evento crítico; drafts não pausam nem reconfiguram partidas.
 - Texto narrativo não recebe nem serializa identificadores pessoais, credenciais ou dados de jogador.
