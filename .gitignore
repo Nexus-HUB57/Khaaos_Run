@@ -11,6 +11,8 @@ vite.config.ts.*
 game-runtime/.data/
 coverage/
 game-runtime/coverage/
+playwright-report/
+test-results/
 
 # runtime session store (qualquer profundidade)
 .data/
