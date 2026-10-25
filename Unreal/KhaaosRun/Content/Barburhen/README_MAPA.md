@@ -53,9 +53,12 @@ Abra `Barburhen_Map_TopDown.svg` no Chrome/Firefox para ver o layout.
 O preview interativo usa Three.js e pode ser aberto localmente no Chrome/Firefox. Antes de abrir, sincronize os pontos de interesse e parâmetros do anel a partir dos DataTables CSV:
 
 ```bash
+npm run test:barburhen:ids
 npm run map:barburhen:preview
 npm run test:barburhen:preview
 ```
+
+`test:barburhen:ids` percorre todos os CSVs em `Content/Barburhen` e exige IDs não vazios e únicos dentro de cada tabela/coluna de identificador, sem diferenciar maiúsculas/minúsculas (semântica de `FName`). Também exige que a row key da DataTable de pontos seja igual a `PointId`, analisa membros e valores numéricos de todos os enums `EBarburhen*` e confere se `Type` e `Sector` existem em `EBarburhenPointType` e `EBarburhenSector`. Valores enum C++ não literais não suportados provocam falha explícita, evitando declarar uma validação incompleta como aprovada. O comando usa apenas Python 3 da biblioteca padrão e informa arquivo/linha para facilitar a correção.
 
 Depois abra `Content/Barburhen/Barburhen_Map_3D.html`. O preview exibe todos os POIs do CSV, conta-os automaticamente, usa os raios/centro do anel do world config e inclui uma primeira camada autoral de luz, vias, entulho e silhuetas por setor. Os volumes de edifícios e o dressing ainda são blockout ilustrativo; não são meshes de produção nem substituem o level jogável.
 
