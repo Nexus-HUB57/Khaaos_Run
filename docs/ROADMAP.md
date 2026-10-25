@@ -58,7 +58,7 @@ O roadmap não considera stubs, arquivos ou documentação isoladamente como imp
 
 - Inventário e cobertura negativa comprovável de **todas** as rotas mutáveis, papéis, recursos e efeitos laterais.
 - Ownership/TOCTOU, atomicidade e validação de identidade para todos os recursos/caminhos, não apenas os cobertos atualmente.
-- Permanecem pendentes a revogação de tickets por logout/ban, quota pré-autenticação por IP/identidade e limite agregado de conexões. O consumo Redis tem TTL de 90 s para cobrir a tolerância máxima de clock; fallback local exige `WS_LOCAL_TICKET_FALLBACK=true` fora de produção, não protege entre processos e não é um modo válido para staging/multi-réplica.
+- Permanecem pendentes a revogação de tickets por logout/ban, quota pré-autenticação por IP/identidade e limite agregado de conexões. O consumo Redis tem TTL de 90 s para cobrir a tolerância máxima de clock; fallback local só é aceito com `WS_LOCAL_TICKET_FALLBACK=true` e `NODE_ENV=development|test`, não protege entre processos e não é um modo válido para staging/multi-réplica.
 - Nesta branch, `/api/logout` não aceita mais GET: o cliente faz POST, que exige `Origin` same-origin e rejeita `Sec-Fetch-Site: cross-site`; a cobertura OIDC valida o fluxo. A alteração ainda precisa ser integrada à `main`.
 - Auditar logs e exceções para evitar exposição de detalhes internos; concluir política de limites/rate por IP/identidade para endpoints críticos.
 - Fechar fragilidades identificadas na auditoria atual, incluindo respawn sem validação do estado da partida e bypass de sala privada via `roomId`.
