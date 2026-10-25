@@ -7,6 +7,7 @@ const checks = [
   { name: "App oficial · TypeScript", cwd: root, args: ["run", "check"] },
   { name: "App oficial · build", cwd: root, args: ["run", "build"] },
   { name: "App oficial · testes + coverage", cwd: root, args: ["run", "coverage:official"] },
+  { name: "Barburhen · preview 3D e dados CSV", cwd: root, args: ["run", "test:barburhen:preview"] },
   { name: "UE5 · regras de loot", cwd: root, args: ["run", "test:ue5:logic"] },
   { name: "Runtime · build", cwd: path.join(root, "game-runtime"), args: ["run", "build"] },
   { name: "Runtime · testes + coverage", cwd: path.join(root, "game-runtime"), args: ["run", "coverage"] },

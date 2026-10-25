@@ -7,7 +7,7 @@
   <style>
     * { margin: 0; box-sizing: border-box; }
     body { background: #0a0e0c; color: #e0d8c8; font-family: system-ui, sans-serif; overflow: hidden; }
-    #canvas-wrap { width: 100vw; height: 100vh; }
+    #canvas-wrap { width: 100vw; height: 100vh; touch-action: none; }
     #hud {
       position: fixed; top: 12px; left: 12px; z-index: 10;
       background: rgba(10,14,12,0.88); border: 1px solid #3a5a48; border-radius: 8px;
@@ -31,35 +31,605 @@
       padding: 6px 10px; margin: 2px; border-radius: 4px; cursor: pointer; font-size: 11px;
     }
     button:hover { background: #2a4840; }
+    button:focus-visible { outline: 2px solid #d3bd7b; outline-offset: 2px; }
     #info {
       position: fixed; bottom: 12px; right: 12px; z-index: 10;
       background: rgba(10,14,12,0.9); border: 1px solid #3a5a48; border-radius: 8px;
       padding: 10px 14px; font-size: 12px; min-width: 180px; display: none;
     }
+    @media (max-width: 720px) {
+      #hud { max-width: min(58vw, 300px); padding: 9px 11px; }
+      #hud h1 { font-size: 13px; }
+      #hud p { font-size: 10px; }
+      #controls { max-width: 42vw; padding: 7px; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+      button { min-height: 38px; padding: 6px 7px; font-size: 10px; }
+      #legend { max-height: 34vh; overflow: auto; padding: 8px 10px; font-size: 10px; }
+      #info { max-width: 52vw; right: 10px; bottom: 10px; min-width: 0; }
+    }
   </style>
+  <!-- BARBURHEN MAP DATA START -->
+<script id="barburhen-map-data" type="application/json">
+{
+  "points": [
+    {
+      "id": "Spawn_01",
+      "name": "Spawn Industrial 01",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": 0.0,
+      "yCm": -18000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_02",
+      "name": "Spawn Industrial 02",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": 4000.0,
+      "yCm": -17000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_03",
+      "name": "Spawn Industrial 03",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": -4000.0,
+      "yCm": -17000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_04",
+      "name": "Spawn Industrial 04",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": 8000.0,
+      "yCm": -15000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_05",
+      "name": "Spawn Industrial 05",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": -8000.0,
+      "yCm": -15000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_06",
+      "name": "Spawn Industrial 06",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": 12000.0,
+      "yCm": -14000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_07",
+      "name": "Spawn Industrial 07",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": -12000.0,
+      "yCm": -14000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Spawn_08",
+      "name": "Spawn Industrial 08",
+      "radiusCm": 300.0,
+      "sector": "Industrial",
+      "type": "PlayerSpawn",
+      "xCm": 2000.0,
+      "yCm": -20000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Park_Center",
+      "name": "Centro do Parque",
+      "radiusCm": 4000.0,
+      "sector": "AbandonedPark",
+      "type": "RingCenter",
+      "xCm": 0.0,
+      "yCm": 0.0,
+      "yaw": 0.0,
+      "zCm": 0.0
+    },
+    {
+      "id": "Bunker_Urban",
+      "name": "Bunker Urbano",
+      "radiusCm": 500.0,
+      "sector": "UrbanCommercial",
+      "type": "Bunker",
+      "xCm": 7000.0,
+      "yCm": 9000.0,
+      "yaw": 45.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Bunker_Ind",
+      "name": "Bunker Industrial",
+      "radiusCm": 500.0,
+      "sector": "Industrial",
+      "type": "Bunker",
+      "xCm": -2000.0,
+      "yCm": -12000.0,
+      "yaw": -30.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Tank_01",
+      "name": "Tanque Industrial 01",
+      "radiusCm": 400.0,
+      "sector": "Industrial",
+      "type": "TankSpawn",
+      "xCm": 3000.0,
+      "yCm": -10000.0,
+      "yaw": 90.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Tank_02",
+      "name": "Tanque Industrial 02",
+      "radiusCm": 400.0,
+      "sector": "Industrial",
+      "type": "TankSpawn",
+      "xCm": -5000.0,
+      "yCm": -11000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Tank_03",
+      "name": "Tanque Urbano 01",
+      "radiusCm": 400.0,
+      "sector": "UrbanCommercial",
+      "type": "TankSpawn",
+      "xCm": 9000.0,
+      "yCm": 6000.0,
+      "yaw": 180.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Tank_04",
+      "name": "Tanque Parque",
+      "radiusCm": 400.0,
+      "sector": "AbandonedPark",
+      "type": "TankSpawn",
+      "xCm": -3000.0,
+      "yCm": 2000.0,
+      "yaw": 90.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Tank_05",
+      "name": "Tanque Estação",
+      "radiusCm": 400.0,
+      "sector": "ExtractionStation",
+      "type": "TankSpawn",
+      "xCm": 2500.0,
+      "yCm": 18500.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Sniper_01",
+      "name": "Telhado NE",
+      "radiusCm": 200.0,
+      "sector": "UrbanCommercial",
+      "type": "SniperPoint",
+      "xCm": 12000.0,
+      "yCm": 8000.0,
+      "yaw": 225.0,
+      "zCm": 1200.0
+    },
+    {
+      "id": "Sniper_02",
+      "name": "Telhado N",
+      "radiusCm": 200.0,
+      "sector": "UrbanCommercial",
+      "type": "SniperPoint",
+      "xCm": 9000.0,
+      "yCm": 11000.0,
+      "yaw": 200.0,
+      "zCm": 900.0
+    },
+    {
+      "id": "Sniper_03",
+      "name": "Torre Comercial",
+      "radiusCm": 200.0,
+      "sector": "UrbanCommercial",
+      "type": "SniperPoint",
+      "xCm": 14000.0,
+      "yCm": 4000.0,
+      "yaw": 270.0,
+      "zCm": 1100.0
+    },
+    {
+      "id": "Sniper_04",
+      "name": "Prédio Inacabado",
+      "radiusCm": 200.0,
+      "sector": "UrbanCommercial",
+      "type": "SniperPoint",
+      "xCm": 6000.0,
+      "yCm": 12000.0,
+      "yaw": 180.0,
+      "zCm": 800.0
+    },
+    {
+      "id": "Sniper_05",
+      "name": "Silo Industrial",
+      "radiusCm": 200.0,
+      "sector": "Industrial",
+      "type": "SniperPoint",
+      "xCm": -6000.0,
+      "yCm": -9000.0,
+      "yaw": 45.0,
+      "zCm": 1500.0
+    },
+    {
+      "id": "Sniper_06",
+      "name": "Guindaste",
+      "radiusCm": 200.0,
+      "sector": "Industrial",
+      "type": "SniperPoint",
+      "xCm": 5000.0,
+      "yCm": -13000.0,
+      "yaw": 0.0,
+      "zCm": 1000.0
+    },
+    {
+      "id": "Sniper_07",
+      "name": "Caixa d'Água",
+      "radiusCm": 200.0,
+      "sector": "Industrial",
+      "type": "SniperPoint",
+      "xCm": -10000.0,
+      "yCm": -8000.0,
+      "yaw": 90.0,
+      "zCm": 900.0
+    },
+    {
+      "id": "Sniper_08",
+      "name": "Mirante do Parque",
+      "radiusCm": 200.0,
+      "sector": "AbandonedPark",
+      "type": "SniperPoint",
+      "xCm": 0.0,
+      "yCm": 3500.0,
+      "yaw": 180.0,
+      "zCm": 600.0
+    },
+    {
+      "id": "Sniper_09",
+      "name": "Torre da Estação",
+      "radiusCm": 200.0,
+      "sector": "ExtractionStation",
+      "type": "SniperPoint",
+      "xCm": -1500.0,
+      "yCm": 21000.0,
+      "yaw": 180.0,
+      "zCm": 800.0
+    },
+    {
+      "id": "Sniper_10",
+      "name": "Sinalização Ferroviária",
+      "radiusCm": 200.0,
+      "sector": "ExtractionStation",
+      "type": "SniperPoint",
+      "xCm": 3000.0,
+      "yCm": 20500.0,
+      "yaw": 200.0,
+      "zCm": 700.0
+    },
+    {
+      "id": "Hospital_01",
+      "name": "Hospital Urbano",
+      "radiusCm": 600.0,
+      "sector": "UrbanCommercial",
+      "type": "Hospital",
+      "xCm": 10000.0,
+      "yCm": 5000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Hospital_02",
+      "name": "Hospital do Parque",
+      "radiusCm": 600.0,
+      "sector": "AbandonedPark",
+      "type": "Hospital",
+      "xCm": -4000.0,
+      "yCm": -2500.0,
+      "yaw": 90.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Police_01",
+      "name": "Delegacia Centro",
+      "radiusCm": 400.0,
+      "sector": "UrbanCommercial",
+      "type": "PoliceStation",
+      "xCm": 11000.0,
+      "yCm": 3000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Police_02",
+      "name": "Delegacia Norte",
+      "radiusCm": 400.0,
+      "sector": "UrbanCommercial",
+      "type": "PoliceStation",
+      "xCm": 5000.0,
+      "yCm": 10000.0,
+      "yaw": 270.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "Police_03",
+      "name": "Delegacia Industrial",
+      "radiusCm": 400.0,
+      "sector": "Industrial",
+      "type": "PoliceStation",
+      "xCm": 1000.0,
+      "yCm": -14000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "ZEX_01",
+      "name": "ZEX Desembarque",
+      "radiusCm": 150.0,
+      "sector": "Industrial",
+      "type": "ZEXTerminal",
+      "xCm": 0.0,
+      "yCm": -16000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_02",
+      "name": "ZEX Galpão Leste",
+      "radiusCm": 150.0,
+      "sector": "Industrial",
+      "type": "ZEXTerminal",
+      "xCm": 6000.0,
+      "yCm": -12000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_03",
+      "name": "ZEX Galpão Oeste",
+      "radiusCm": 150.0,
+      "sector": "Industrial",
+      "type": "ZEXTerminal",
+      "xCm": -6000.0,
+      "yCm": -12000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_04",
+      "name": "ZEX Pátio",
+      "radiusCm": 150.0,
+      "sector": "Industrial",
+      "type": "ZEXTerminal",
+      "xCm": 2000.0,
+      "yCm": -8000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_05",
+      "name": "ZEX Praça",
+      "radiusCm": 150.0,
+      "sector": "UrbanCommercial",
+      "type": "ZEXTerminal",
+      "xCm": 8000.0,
+      "yCm": 7000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_06",
+      "name": "ZEX Shopping",
+      "radiusCm": 150.0,
+      "sector": "UrbanCommercial",
+      "type": "ZEXTerminal",
+      "xCm": 13000.0,
+      "yCm": 5000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_07",
+      "name": "ZEX Rua Comercial",
+      "radiusCm": 150.0,
+      "sector": "UrbanCommercial",
+      "type": "ZEXTerminal",
+      "xCm": 4000.0,
+      "yCm": 9000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_08",
+      "name": "ZEX Telhado Acesso",
+      "radiusCm": 150.0,
+      "sector": "UrbanCommercial",
+      "type": "ZEXTerminal",
+      "xCm": 10000.0,
+      "yCm": 10000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_09",
+      "name": "ZEX Parque Leste",
+      "radiusCm": 150.0,
+      "sector": "AbandonedPark",
+      "type": "ZEXTerminal",
+      "xCm": 1500.0,
+      "yCm": 1500.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_10",
+      "name": "ZEX Parque Oeste",
+      "radiusCm": 150.0,
+      "sector": "AbandonedPark",
+      "type": "ZEXTerminal",
+      "xCm": -1500.0,
+      "yCm": 1200.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_11",
+      "name": "ZEX Coreto",
+      "radiusCm": 150.0,
+      "sector": "AbandonedPark",
+      "type": "ZEXTerminal",
+      "xCm": 0.0,
+      "yCm": -2000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_12",
+      "name": "ZEX Lago Seco",
+      "radiusCm": 150.0,
+      "sector": "AbandonedPark",
+      "type": "ZEXTerminal",
+      "xCm": 2500.0,
+      "yCm": -1000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_13",
+      "name": "ZEX Extração Final",
+      "radiusCm": 200.0,
+      "sector": "ExtractionStation",
+      "type": "ZEXTerminal",
+      "xCm": 0.0,
+      "yCm": 20000.0,
+      "yaw": 0.0,
+      "zCm": 100.0
+    },
+    {
+      "id": "ZEX_14",
+      "name": "ZEX Plataforma Oeste",
+      "radiusCm": 150.0,
+      "sector": "ExtractionStation",
+      "type": "ZEXTerminal",
+      "xCm": -2000.0,
+      "yCm": 19000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "ZEX_15",
+      "name": "ZEX Plataforma Leste",
+      "radiusCm": 150.0,
+      "sector": "ExtractionStation",
+      "type": "ZEXTerminal",
+      "xCm": 2000.0,
+      "yCm": 19000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Loot_Urban_01",
+      "name": "Cache Urbano",
+      "radiusCm": 100.0,
+      "sector": "UrbanCommercial",
+      "type": "LootCache",
+      "xCm": 7500.0,
+      "yCm": 4000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Loot_Ind_01",
+      "name": "Cache Industrial",
+      "radiusCm": 100.0,
+      "sector": "Industrial",
+      "type": "LootCache",
+      "xCm": -3000.0,
+      "yCm": -15000.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    },
+    {
+      "id": "Loot_Park_01",
+      "name": "Cache Parque",
+      "radiusCm": 100.0,
+      "sector": "AbandonedPark",
+      "type": "LootCache",
+      "xCm": 500.0,
+      "yCm": -500.0,
+      "yaw": 0.0,
+      "zCm": 50.0
+    }
+  ],
+  "source": "DT_Barburhen_MapPoints.csv + DT_Barburhen_WorldConfig.csv",
+  "units": "centimeters",
+  "world": {
+    "maxPlayers": 100,
+    "parkCenterXcm": 0.0,
+    "parkCenterYcm": 0.0,
+    "parkCenterZcm": 0.0,
+    "ringCloseDurationSeconds": 600.0,
+    "ringEndRadiusCm": 4000.0,
+    "ringStartRadiusCm": 25000.0
+  }
+}
+</script>
+<!-- BARBURHEN MAP DATA END -->
 </head>
 <body>
   <div id="hud">
     <h1>BARBURHEN — W1/C1</h1>
-    <p>Mundo da Destruição · Mapa 3D interativo<br/>
-    Arraste = orbitar · Scroll = zoom · Clique em POI = info<br/>
-    Escala: 1 unidade = 1 metro</p>
+    <p>Ambiente original de shooter BR · preview artístico interativo<br/>
+    Arraste = orbitar · pinça/scroll = zoom · toque/clique = POI<br/>
+    Fonte dos marcadores: CSV oficial · <span id="map-status">carregando…</span></p>
   </div>
   <div id="legend">
-    <div><span class="dot" style="background:#30c040"></span>Spawns (8)</div>
-    <div><span class="dot" style="background:#2080ff"></span>ZEX (15)</div>
-    <div><span class="dot" style="background:#e09020"></span>Snipers (10)</div>
-    <div><span class="dot" style="background:#608050"></span>Tanques (5)</div>
-    <div><span class="dot" style="background:#606080"></span>Bunkers (2)</div>
-    <div><span class="dot" style="background:#a04040"></span>Hospitais (2)</div>
-    <div><span class="dot" style="background:#4060a0"></span>Delegacias (3)</div>
-    <div><span class="dot" style="background:#c04040;border-radius:0"></span>Anel final</div>
+    <div><span class="dot" style="background:#30c040"></span>Spawns (<span data-count="PlayerSpawn">—</span>)</div>
+    <div><span class="dot" style="background:#2080ff"></span>ZEX (<span data-count="ZEXTerminal">—</span>)</div>
+    <div><span class="dot" style="background:#e09020"></span>Snipers (<span data-count="SniperPoint">—</span>)</div>
+    <div><span class="dot" style="background:#608050"></span>Tanques (<span data-count="TankSpawn">—</span>)</div>
+    <div><span class="dot" style="background:#606080"></span>Bunkers (<span data-count="Bunker">—</span>)</div>
+    <div><span class="dot" style="background:#a04040"></span>Hospitais (<span data-count="Hospital">—</span>)</div>
+    <div><span class="dot" style="background:#4060a0"></span>Delegacias (<span data-count="PoliceStation">—</span>)</div>
+    <div><span class="dot" style="background:#c0a060"></span>Loot (<span data-count="LootCache">—</span>)</div>
+    <div><span class="dot" style="background:#c04040;border-radius:0"></span>Anel final (<span data-count="RingCenter">—</span>)</div>
   </div>
   <div id="controls">
     <button type="button" id="btn-ring">Toggle Anel</button>
     <button type="button" id="btn-rain">Toggle Chuva</button>
     <button type="button" id="btn-top">Vista Topo</button>
     <button type="button" id="btn-iso">Vista Iso</button>
+    <button type="button" id="btn-grid">Grade Debug</button>
   </div>
   <div id="info"></div>
   <div id="canvas-wrap"></div>
@@ -76,20 +646,54 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+    const mapData = JSON.parse(document.getElementById('barburhen-map-data').textContent);
+    const mapPoints = mapData.points;
+    const worldConfig = mapData.world;
+    const typeCounts = mapPoints.reduce((counts, point) => {
+      counts[point.type] = (counts[point.type] || 0) + 1;
+      return counts;
+    }, {});
+    document.querySelectorAll('[data-count]').forEach(node => {
+      node.textContent = typeCounts[node.dataset.count] || 0;
+    });
+    document.getElementById('map-status').textContent = `${mapPoints.length} pontos · ${worldConfig.maxPlayers} jogadores`;
+
     // --- Scale: game cm → meters (divide by 100). Origin = Park center ---
     const cm = (v) => v / 100;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0e0c);
-    scene.fog = new THREE.FogExp2(0x0a1210, 0.0022);
+    scene.background = new THREE.Color(0x77786c);
+    scene.fog = new THREE.FogExp2(0x8a806e, 0.0011);
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 8;
+    skyCanvas.height = 256;
+    const skyContext = skyCanvas.getContext('2d');
+    const skyGradient = skyContext.createLinearGradient(0, 0, 0, skyCanvas.height);
+    skyGradient.addColorStop(0, '#4f615f');
+    skyGradient.addColorStop(0.46, '#8a8d7b');
+    skyGradient.addColorStop(0.74, '#d39b69');
+    skyGradient.addColorStop(1, '#655545');
+    skyContext.fillStyle = skyGradient;
+    skyContext.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
+    const skyTexture = new THREE.CanvasTexture(skyCanvas);
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(900, 32, 16),
+      new THREE.MeshBasicMaterial({ map: skyTexture, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false })
+    );
+    skyDome.renderOrder = -1;
+    scene.add(skyDome);
 
     const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 800);
     camera.position.set(180, 140, 220);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(innerWidth, innerHeight);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.22;
     document.getElementById('canvas-wrap').appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -100,18 +704,46 @@
     controls.update();
 
     // Lights
-    scene.add(new THREE.AmbientLight(0x3a4a40, 0.55));
-    const sun = new THREE.DirectionalLight(0xc0d0b0, 0.85);
-    sun.position.set(80, 120, 40);
+    scene.add(new THREE.HemisphereLight(0xa3bdb1, 0x4c3a28, 2.0));
+    const sun = new THREE.DirectionalLight(0xffd2a0, 3.2);
+    sun.position.set(-120, 180, -90);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = -280;
+    sun.shadow.camera.right = 280;
+    sun.shadow.camera.top = 280;
+    sun.shadow.camera.bottom = -280;
+    sun.shadow.bias = -0.0004;
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x405060, 0.25);
-    fill.position.set(-60, 40, -80);
+    const fill = new THREE.DirectionalLight(0x88b7bf, 0.8);
+    fill.position.set(120, 60, 100);
     scene.add(fill);
 
+    // Procedural, source-controlled ground grain; no downloaded texture dependency.
+    function makeGroundTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext('2d');
+      const image = context.createImageData(256, 256);
+      let seed = 0x42b17;
+      const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (let i = 0; i < image.data.length; i += 4) {
+        const grain = Math.floor(random() * 36);
+        image.data[i] = 102 + grain;
+        image.data[i + 1] = 94 + grain;
+        image.data[i + 2] = 72 + Math.floor(grain * 0.7);
+        image.data[i + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(22, 22);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 4);
+      return texture;
+    }
     // Ground plane
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2218, roughness: 0.95, metalness: 0.05 });
+    const groundMat = new THREE.MeshStandardMaterial({ map: makeGroundTexture(), color: 0xc1b9a0, roughness: 0.96, metalness: 0.02 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -120,6 +752,7 @@
     // Grid
     const grid = new THREE.GridHelper(500, 50, 0x2a3a30, 0x1a2820);
     grid.position.y = 0.05;
+    grid.visible = false;
     scene.add(grid);
 
     function box(w, h, d, color, x, y, z, rotY = 0) {
@@ -133,6 +766,65 @@
       m.receiveShadow = true;
       scene.add(m);
       return m;
+    }
+
+    // Sector dressing is deterministic and instanced so the preview stays responsive.
+    function addRubbleCluster(centerX, centerZ, radius, count, seed, color) {
+      const geometry = new THREE.DodecahedronGeometry(1, 0);
+      const material = new THREE.MeshStandardMaterial({ color, roughness: 0.96, flatShading: true });
+      const rubble = new THREE.InstancedMesh(geometry, material, count);
+      rubble.castShadow = true;
+      rubble.receiveShadow = true;
+      let state = seed >>> 0;
+      const random = () => ((state = (state * 1664525 + 1013904223) >>> 0) / 4294967296);
+      const object = new THREE.Object3D();
+      for (let i = 0; i < count; i++) {
+        const angle = random() * Math.PI * 2;
+        const distance = radius * Math.sqrt(random());
+        object.position.set(centerX + Math.cos(angle) * distance, 0.25 + random() * 0.5, centerZ + Math.sin(angle) * distance);
+        object.rotation.set(random() * 0.8, random() * Math.PI, random() * 0.8);
+        const scale = 0.25 + random() * 1.15;
+        object.scale.set(scale * (0.7 + random() * 0.8), scale * (0.35 + random() * 0.5), scale * (0.7 + random() * 0.9));
+        object.updateMatrix();
+        rubble.setMatrixAt(i, object.matrix);
+      }
+      rubble.instanceMatrix.needsUpdate = true;
+      scene.add(rubble);
+    }
+
+    function branchBetween(start, end, thickness, material) {
+      const delta = new THREE.Vector3().subVectors(end, start);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(thickness * 0.45, thickness, delta.length(), 5), material);
+      mesh.position.copy(start).add(end).multiplyScalar(0.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize());
+      mesh.castShadow = true;
+      scene.add(mesh);
+      return mesh;
+    }
+
+    function deadTree(x, z, height, seed) {
+      const bark = new THREE.MeshStandardMaterial({ color: 0x40392b, roughness: 1, flatShading: true });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.48, height, 7), bark);
+      trunk.position.set(x, height / 2, z);
+      trunk.rotation.z = ((seed % 5) - 2) * 0.025;
+      trunk.castShadow = true;
+      scene.add(trunk);
+      const top = new THREE.Vector3(x, height, z);
+      for (let i = 0; i < 3; i++) {
+        const side = (i % 2 ? 1 : -1) * (1.2 + ((seed + i * 7) % 14) / 10);
+        const start = new THREE.Vector3(x, height * (0.43 + i * 0.16), z);
+        const end = new THREE.Vector3(x + side, height * (0.58 + i * 0.13), z + (i - 1) * 0.65);
+        branchBetween(start, end, 0.2 - i * 0.035, bark);
+      }
+      branchBetween(top, new THREE.Vector3(x + (seed % 2 ? 1 : -1), height + 1.5, z - 0.5), 0.13, bark);
+    }
+
+    function addRoad(x, z, width, length, rotation = 0) {
+      const road = box(width, 0.09, length, 0x262a28, x, 0.06, z, rotation);
+      road.receiveShadow = true;
+      for (let offset = -length / 2 + 9; offset < length / 2 - 4; offset += 14) {
+        box(0.22, 0.035, 5.5, 0xb99a57, x + Math.sin(rotation) * offset, 0.16, z + Math.cos(rotation) * offset, rotation);
+      }
     }
 
     function marker(color, x, z, y = 1.5, r = 1.2, name = '', data = {}) {
@@ -175,6 +867,15 @@
     sectorFloor(160, 160, 0x204028, 0, 0);                 // Park
     sectorFloor(200, 180, 0x3a2818, gx(9000), gz(7000));  // Urban
     sectorFloor(180, 80, 0x1a3040, 0, gz(20000));          // Station
+
+    // Dusty service roads and rubble fields establish sector identity without external assets.
+    addRoad(0, gz(-14000), 16, 240, Math.PI / 2);
+    addRoad(gx(9000), gz(7000), 12, 145, Math.PI / 2);
+    addRoad(0, gz(20000), 12, 145, Math.PI / 2);
+    addRubbleCluster(-102, gz(-14000), 24, 90, 4101, 0x514737);
+    addRubbleCluster(74, gz(7000), 18, 58, 4102, 0x4b4038);
+    addRubbleCluster(-58, gz(0), 16, 48, 4103, 0x3d4435);
+    addRubbleCluster(20, gz(20000), 16, 54, 4104, 0x354149);
 
     // ========== INDUSTRIAL BUILDINGS ==========
     box(40, 12, 22, 0x3a3830, gx(-6000), 0, gz(-12000)); // Galpão A
@@ -227,10 +928,8 @@
     );
     roof.position.set(0, 8, 0);
     scene.add(roof);
-    // Dead trees (simple)
-    for (const [tx, tz] of [[-40, -30], [45, -25], [-35, 40], [50, 35], [-20, 55], [30, -50]]) {
-      box(1.2, 12 + Math.random() * 6, 1.2, 0x2a3020, tx, 0, tz);
-    }
+    // Dead trees use fixed seeds/positions so every review capture is reproducible.
+    [[-40, -30, 17, 3], [45, -25, 14, 8], [-35, 40, 19, 5], [50, 35, 13, 2], [-20, 55, 16, 9], [30, -50, 18, 4], [-61, 9, 12, 7], [59, -6, 15, 1]].forEach(t => deadTree(t[0], t[1], t[2], t[3]));
     // Dry lake
     const lake = new THREE.Mesh(
       new THREE.CircleGeometry(18, 24),
@@ -257,6 +956,20 @@
       box(1, 20, 1, 0x5a5040, gx(14000 + i * 3), 0, gz(5000));
       box(1, 20, 1, 0x5a5040, gx(14000 + i * 3), 0, gz(5500));
     }
+    // Window bands and roof machinery turn flat blockout volumes into readable combat silhouettes.
+    function facadeWindows(centerX, centerZ, width, depth, floors, columns, tint = 0x90a39a) {
+      for (let floor = 0; floor < floors; floor++) {
+        for (let column = 0; column < columns; column++) {
+          const x = centerX - width / 2 + (column + 0.5) * width / columns;
+          const y = 2.2 + floor * 3.5;
+          box(width / columns * 0.52, 1.25, 0.16, tint, x, y, centerZ + depth / 2 + 0.12);
+        }
+      }
+    }
+    facadeWindows(gx(12000), gz(8000), 24, 20, 4, 5, 0x86958d);
+    facadeWindows(gx(9000), gz(11000), 18, 18, 3, 4, 0x8b7661);
+    box(5, 1.2, 4, 0x62624e, gx(12000), 18.2, gz(8000)); // rooftop HVAC
+    box(3.5, 0.8, 3, 0xb17b3e, gx(9500), 14.1, gz(11000)); // broken roof beacon
 
     // ========== STATION ==========
     box(80, 1, 4, 0x3a4048, 0, 0, gz(20000)); // rails
@@ -265,74 +978,82 @@
     box(20, 16, 14, 0x2a3540, 0, 0, gz(21000)); // control tower
     box(18, 7, 12, 0x2a3038, gx(5000), 0, gz(20500)); // depot
 
-    // ========== RING ==========
-    let ringGroup = new THREE.Group();
+    // ========== RING — dimensions and center from the official world CSV ==========
+    const ringCenterX = gx(worldConfig.parkCenterXcm);
+    const ringCenterZ = gz(worldConfig.parkCenterYcm);
+    const ringStartRadius = cm(worldConfig.ringStartRadiusCm);
+    const ringEndRadius = cm(worldConfig.ringEndRadiusCm);
+    const ringGroup = new THREE.Group();
     const ringMat = new THREE.MeshBasicMaterial({ color: 0x50a060, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
-    const ringStart = new THREE.Mesh(new THREE.RingGeometry(248, 252, 64), ringMat);
+    const ringStart = new THREE.Mesh(new THREE.RingGeometry(ringStartRadius - 2, ringStartRadius + 2, 96), ringMat);
     ringStart.rotation.x = -Math.PI / 2;
-    ringStart.position.y = 0.5;
+    ringStart.position.set(ringCenterX, 0.5, ringCenterZ);
     ringGroup.add(ringStart);
     const ringEndMat = new THREE.MeshBasicMaterial({ color: 0xc04040, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
-    const ringEnd = new THREE.Mesh(new THREE.RingGeometry(38, 42, 48), ringEndMat);
+    const ringEnd = new THREE.Mesh(new THREE.RingGeometry(ringEndRadius - 2, ringEndRadius + 2, 64), ringEndMat);
     ringEnd.rotation.x = -Math.PI / 2;
-    ringEnd.position.y = 0.6;
+    ringEnd.position.set(ringCenterX, 0.6, ringCenterZ);
     ringGroup.add(ringEnd);
     // Vertical wall hint for end ring
     const wall = new THREE.Mesh(
-      new THREE.CylinderGeometry(40, 40, 8, 48, 1, true),
+      new THREE.CylinderGeometry(ringEndRadius, ringEndRadius, 8, 64, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xc04040, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
     );
-    wall.position.y = 4;
+    wall.position.set(ringCenterX, 4, ringCenterZ);
     ringGroup.add(wall);
     scene.add(ringGroup);
 
     // ========== ACID RAIN particles ==========
     let rainActive = true;
-    const rainCount = 4000;
+    const rainCount = 1800;
     const rainGeo = new THREE.BufferGeometry();
     const rainPos = new Float32Array(rainCount * 3);
+    let rainSeed = 0x5a17;
+    const rainRandom = () => ((rainSeed = (rainSeed * 1664525 + 1013904223) >>> 0) / 4294967296);
     for (let i = 0; i < rainCount; i++) {
-      rainPos[i * 3] = (Math.random() - 0.5) * 400;
-      rainPos[i * 3 + 1] = Math.random() * 80;
-      rainPos[i * 3 + 2] = (Math.random() - 0.5) * 400;
+      rainPos[i * 3] = (rainRandom() - 0.5) * 400;
+      rainPos[i * 3 + 1] = rainRandom() * 80;
+      rainPos[i * 3 + 2] = (rainRandom() - 0.5) * 400;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
     const rainMat = new THREE.PointsMaterial({ color: 0x60a070, size: 0.35, transparent: true, opacity: 0.5 });
     const rain = new THREE.Points(rainGeo, rainMat);
     scene.add(rain);
 
-    // ========== MARKERS from official coords ==========
-    // Spawns
-    const spawns = [
-      [0, -18000], [4000, -17000], [-4000, -17000], [8000, -15000],
-      [-8000, -15000], [12000, -14000], [-12000, -14000], [2000, -20000]
-    ];
-    spawns.forEach((p, i) => marker(0x30c040, gx(p[0]), gz(p[1]), 2, 1.5, `Spawn_${String(i + 1).padStart(2, '0')}`, { type: 'Spawn' }));
-
-    // ZEX
-    const zex = [
-      [0, -16000, 'ZEX-01 Desembarque'], [6000, -12000, 'ZEX-02'], [-6000, -12000, 'ZEX-03'], [2000, -8000, 'ZEX-04'],
-      [8000, 7000, 'ZEX-05 Praça'], [13000, 5000, 'ZEX-06'], [4000, 9000, 'ZEX-07'], [10000, 10000, 'ZEX-08'],
-      [1500, 1500, 'ZEX-09 Parque'], [-1500, 1200, 'ZEX-10'], [0, -2000, 'ZEX-11 Coreto'], [2500, -1000, 'ZEX-12'],
-      [0, 20000, 'ZEX-13 EXTRAÇÃO'], [-2000, 19000, 'ZEX-14'], [2000, 19000, 'ZEX-15']
-    ];
-    zex.forEach(p => marker(0x2080ff, gx(p[0]), gz(p[1]), 3, 1.4, p[2], { type: 'ZEX' }));
-
-    // Snipers (elevated)
-    const snipers = [
-      [12000, 8000, 12, 'S1 Telhado NE'], [9000, 11000, 9, 'S2'], [14000, 4000, 11, 'S3 Torre'],
-      [6000, 12000, 8, 'S4'], [-6000, -9000, 15, 'S5 Silo'], [5000, -13000, 10, 'S6 Guindaste'],
-      [-10000, -8000, 9, 'S7'], [0, 3500, 6, 'S8 Mirante'], [-1500, 21000, 8, 'S9 Torre Estação'],
-      [3000, 20500, 7, 'S10']
-    ];
-    snipers.forEach(p => marker(0xe09020, gx(p[0]), gz(p[1]), p[2], 1.1, p[3], { type: 'Sniper' }));
-
-    // Tanks
-    [[3000, -10000], [-5000, -11000], [9000, 6000], [-3000, 2000], [2500, 18500]].forEach((p, i) => {
-      const t = box(8, 3.5, 12, 0x507040, gx(p[0]), 0, gz(p[1]));
-      t.userData = { name: `Tank_${i + 1}`, type: 'Tanque' };
-      clickables.push(t);
-    });
+    // ========== MARKERS — all 49 records come from the official CSV ==========
+    const markerStyle = {
+      PlayerSpawn: { color: 0x30c040, radius: 1.5, label: 'Spawn' },
+      ZEXTerminal: { color: 0x2080ff, radius: 1.35, label: 'Terminal ZEX' },
+      SniperPoint: { color: 0xe09020, radius: 1.1, label: 'Ponto elevado' },
+      TankSpawn: { color: 0x608050, radius: 1.4, label: 'Tanque' },
+      Bunker: { color: 0x77778f, radius: 1.35, label: 'Bunker' },
+      Hospital: { color: 0xc05a50, radius: 1.35, label: 'Hospital' },
+      PoliceStation: { color: 0x5077b0, radius: 1.35, label: 'Delegacia' },
+      LootCache: { color: 0xd0b45e, radius: 1.15, label: 'Cache de loot' },
+      RingCenter: { color: 0xd34b46, radius: 1.5, label: 'Centro do anel' }
+    };
+    for (const point of mapPoints) {
+      const style = markerStyle[point.type];
+      if (!style) continue;
+      const x = gx(point.xCm);
+      const z = gz(point.yCm);
+      const y = Math.max(1.5, cm(point.zCm) + 1.5);
+      if (point.type === 'TankSpawn') {
+        const hull = box(7.2, 2.4, 10.5, 0x394536, x, 0, z, THREE.MathUtils.degToRad(point.yaw));
+        const turret = box(3.2, 1.0, 3.4, 0x596349, x, 2.35, z, THREE.MathUtils.degToRad(point.yaw));
+        hull.userData = { name: point.name, type: style.label, sector: point.sector, id: point.id };
+        turret.userData = hull.userData;
+        clickables.push(hull, turret);
+        continue;
+      }
+      marker(style.color, x, z, y, style.radius, point.name, {
+        id: point.id,
+        type: style.label,
+        dataType: point.type,
+        sector: point.sector,
+        radiusMeters: cm(point.radiusCm)
+      });
+    }
 
     // Labels sector
     function makeLabel(text, x, z, color = '#c8d0b0') {
@@ -368,8 +1089,13 @@
       const hits = raycaster.intersectObjects(clickables, false);
       if (hits.length) {
         const u = hits[0].object.userData;
+        infoEl.replaceChildren();
+        const title = document.createElement('strong');
+        title.textContent = u.name || 'POI';
+        const details = document.createElement('div');
+        details.textContent = [u.type, u.sector, u.radiusMeters ? `raio ${u.radiusMeters.toFixed(1)} m` : ''].filter(Boolean).join(' · ');
+        infoEl.append(title, details);
         infoEl.style.display = 'block';
-        infoEl.innerHTML = `<strong>${u.name || 'POI'}</strong><br/>Tipo: ${u.type || '—'}`;
       } else {
         infoEl.style.display = 'none';
       }
@@ -388,14 +1114,17 @@
       controls.target.set(0, 0, 0);
       controls.update();
     };
+    document.getElementById('btn-grid').onclick = () => { grid.visible = !grid.visible; };
 
-    // Animate
+    // Animate at a bounded delta time for consistent behavior on slow devices.
+    const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
+      const deltaSeconds = Math.min(clock.getDelta(), 0.05);
       if (rainActive) {
         const pos = rain.geometry.attributes.position.array;
         for (let i = 0; i < rainCount; i++) {
-          pos[i * 3 + 1] -= 0.45;
+          pos[i * 3 + 1] -= 24 * deltaSeconds;
           if (pos[i * 3 + 1] < 0) pos[i * 3 + 1] = 80;
         }
         rain.geometry.attributes.position.needsUpdate = true;

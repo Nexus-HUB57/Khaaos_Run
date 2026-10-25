@@ -1,10 +1,11 @@
-# Mapa Barburhen — Pacote Final
+# Mapa Barburhen — dados, blockout e preview 3D
 
 ## Arquivos do mapa
 
 ```
 Content/Barburhen/
 ├── Barburhen_Map_TopDown.svg      ← Mapa visual (abra no browser)
+├── Barburhen_Map_3D.html          ← Preview 3D estilizado (blockout de revisão)
 ├── DT_Barburhen_WorldConfig.csv   ← Config do anel / chuva / players
 ├── DT_Barburhen_MapPoints.csv     ← TODOS os pontos oficiais
 └── README_MAPA.md
@@ -46,3 +47,18 @@ O Editor gera o `.umap`. Este pacote é o conteúdo completo do mapa (lógica + 
 | Ring center | 1 |
 
 Abra `Barburhen_Map_TopDown.svg` no Chrome/Firefox para ver o layout.
+
+## Preview artístico 3D
+
+O preview interativo usa Three.js e pode ser aberto localmente no Chrome/Firefox. Antes de abrir, sincronize os pontos de interesse e parâmetros do anel a partir dos DataTables CSV:
+
+```bash
+npm run map:barburhen:preview
+npm run test:barburhen:preview
+```
+
+Depois abra `Content/Barburhen/Barburhen_Map_3D.html`. O preview exibe todos os POIs do CSV, conta-os automaticamente, usa os raios/centro do anel do world config e inclui uma primeira camada autoral de luz, vias, entulho e silhuetas por setor. Os volumes de edifícios e o dressing ainda são blockout ilustrativo; não são meshes de produção nem substituem o level jogável.
+
+## Limite de integração UE5
+
+Este checkout contém dados, C++ de gameplay e fontes de referência OBJ/GLTF, mas não contém um `.umap` salvo nem os assets finais `.uasset` de cenário. Para chegar a um ambiente de produção de shooter competitivo, ainda é necessário importar/criar meshes e materiais modulares no UE 5.8, montar o Landscape/level, validar colisão, cobertura, leitura de POIs e desempenho no PIE e em dispositivo-alvo. O preview web serve para revisar escala e direção visual antes dessa etapa; não deve ser apresentado como captura/render do Unreal.

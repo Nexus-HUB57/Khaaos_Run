@@ -19,6 +19,8 @@
     "test:eos-flow": "node --import tsx --test tests/integration/eos-economy.integration.test.ts",
     "test:economy": "node --import tsx --test tests/official/economy-money.test.ts tests/official/economy-procgen-e2e.test.js tests/integration/eos-economy.integration.test.ts",
     "test:ue5:logic": "bash scripts/test_ue5_logic.sh",
+    "map:barburhen:preview": "python3 scripts/generate_barburhen_preview_data.py",
+    "test:barburhen:preview": "python3 scripts/generate_barburhen_preview_data.py --check",
     "test:game:infra": "npm --prefix game-runtime run test:infra",
     "test:game:stress": "npm --prefix game-runtime run test:stress",
     "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
