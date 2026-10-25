@@ -319,6 +319,7 @@ export default function ZonaPage() {
     attack,
     usePackBackItem,
     packbackItems,
+    pendingPackbackItemId,
     lastPackbackUse,
     packbackScan,
     lastError: wsError,
@@ -753,11 +754,18 @@ export default function ZonaPage() {
                 <p className="text-[11px] font-mono text-muted-foreground">Nenhum consumível ou utilidade ativa carregada neste match.</p>
               ) : (
                 <div className="space-y-2">
+                  {pendingPackbackItemId !== null && (
+                    <p role="status" aria-live="polite" className="text-[11px] font-mono text-amber-200">
+                      CONFIRMANDO AÇÃO NO SERVIDOR… aguarde antes de usar outro item.
+                    </p>
+                  )}
                   {packbackActions.map(({ item, kind }) => {
                     const icon = kind === "HEAL" ? <Heart className="w-4 h-4 shrink-0" /> : kind === "GRENADE" ? <Zap className="w-4 h-4 shrink-0" /> : <Radio className="w-4 h-4 shrink-0" />;
                     const hasAdrenaline = kind === "HEAL" && Number(item.stats.speed) > 0;
                     const actionLabel = hasAdrenaline ? "USAR ADRENALINA" : kind === "HEAL" ? "USAR CURA" : kind === "GRENADE" ? "LANÇAR GRANADA" : "ATIVAR DRONE";
-                    const disabled = Number(item.durability) <= 0
+                    const pending = pendingPackbackItemId === item.id;
+                    const disabled = pendingPackbackItemId !== null
+                      || Number(item.durability) <= 0
                       || !wsConnected
                       || localBattlePlayer?.status !== "VIVO"
                       || (kind === "HEAL" && health >= maxHealth && !hasAdrenaline);
@@ -765,12 +773,13 @@ export default function ZonaPage() {
                       <Button
                         key={item.id}
                         data-testid={`button-use-packback-${item.id}`}
+                        aria-busy={pending}
                         onClick={() => usePackBackItem(item.id)}
                         disabled={disabled}
                         variant="outline"
                         className="w-full justify-between border-amber-500/30 text-amber-100 hover:bg-amber-500/10 font-mono text-xs"
                       >
-                        <span className="flex min-w-0 items-center gap-2">{icon}<span className="truncate">{actionLabel} · {item.name}</span></span>
+                        <span className="flex min-w-0 items-center gap-2">{icon}<span className="truncate">{pending ? "CONFIRMANDO" : actionLabel} · {item.name}</span></span>
                         <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">{Number(item.durability).toFixed(0)}/{Number(item.maxDurability).toFixed(0)}</span>
                       </Button>
                     );
