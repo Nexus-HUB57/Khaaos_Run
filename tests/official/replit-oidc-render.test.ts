@@ -43,14 +43,19 @@ async function close(server?: Server) {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 
-async function browserRequest(path: string, cookie?: string) {
+async function browserRequest(path: string, cookie?: string, init: RequestInit = {}) {
+  const extraHeaders = init.headers instanceof Headers
+    ? Object.fromEntries(init.headers.entries())
+    : (init.headers ?? {}) as Record<string, string>;
   const response = await fetch(`http://127.0.0.1:${(application.address() as any).port}${path}`, {
+    ...init,
     redirect: "manual",
     headers: {
       host,
       "x-forwarded-host": host,
       "x-forwarded-proto": "https",
       ...(cookie ? { cookie } : {}),
+      ...extraHeaders,
     },
   });
   return response;
@@ -166,7 +171,12 @@ test("simulação OIDC local: callback Render, PKCE, sessão Secure e logout", a
   assert.equal(persistedClaims?.sub, "simulated-replit-user");
   assert.equal(persistedClaims?.email, "local-user@example.test");
 
-  const logout = await browserRequest("/api/logout", cookie);
+  const legacyLogout = await browserRequest("/api/logout", cookie);
+  assert.equal(legacyLogout.status, 405);
+  const logout = await browserRequest("/api/logout", cookie, {
+    method: "POST",
+    headers: { origin: `https://${host}` },
+  });
   assert.equal(logout.status, 302);
   const logoutRedirect = new URL(logout.headers.get("location")!);
   assert.equal(logoutRedirect.origin, providerOrigin.replace(/\/oidc$/, ""));

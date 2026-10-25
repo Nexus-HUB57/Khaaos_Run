@@ -50,7 +50,7 @@ export class RedisRateStore {
   }
 
   async close() {
-    await this.connectPromise;
+    try { await this.connectPromise; } catch { /* dependência indisponível: nada a encerrar */ }
     if (this.client.isOpen) await this.client.quit();
   }
 }

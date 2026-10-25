@@ -113,3 +113,49 @@ export function createSessionStore({ mode = process.env.KR_SESSION_STORE || 'jso
   if (mode !== 'json') throw new Error(`KR_SESSION_STORE inválido: ${mode}`);
   return new DurableJsonStore(filePath || process.env.KR_STORE || path.join(process.cwd(), '.data', 'server.json'));
 }
+
+// Persistência de auditoria (migration 002_audit_events.sql). Id é BIGSERIAL —
+// sinceId pagina de forma estável mesmo com escrita concorrente.
+export class PostgresAuditStore {
+  constructor({ connectionString = process.env.KR_AUDIT_DATABASE_URL || process.env.KR_DATABASE_URL || process.env.DATABASE_URL, pool } = {}) {
+    if (!pool && !connectionString) throw new Error('KR_AUDIT_DATABASE_URL ou DATABASE_URL é obrigatório para o audit store PostgreSQL');
+    this.pool = pool || new Pool({ connectionString, max: Number(process.env.KR_PG_POOL_MAX || 10), idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000 });
+  }
+
+  async ready() {
+    await this.pool.query('SELECT 1');
+    return true;
+  }
+
+  async recordEvent(event) {
+    await this.pool.query(
+      `INSERT INTO audit_events (at, actor, action, resource, outcome, detail)
+       VALUES (to_timestamp($1 / 1000.0), $2, $3, $4, $5, $6::jsonb)`,
+      [event.at, event.actor, event.action, event.resource, event.outcome, JSON.stringify(event.detail ?? null)],
+    );
+    return event;
+  }
+
+  async queryEvents({ sinceId = 0, limit = 100, actor = null, action = null, outcome = null } = {}) {
+    const conditions = ['id > $1'];
+    const params = [sinceId];
+    if (actor) { params.push(actor); conditions.push(`actor = $${params.length}`); }
+    if (action) { params.push(action); conditions.push(`action = $${params.length}`); }
+    if (outcome) { params.push(outcome); conditions.push(`outcome = $${params.length}`); }
+    params.push(Math.max(1, Math.min(limit, 1000)));
+    const result = await this.pool.query(
+      `SELECT id, (EXTRACT(EPOCH FROM at) * 1000)::bigint AS at, actor, action, resource, outcome, detail
+       FROM audit_events WHERE ${conditions.join(' AND ')}
+       ORDER BY id DESC LIMIT $${params.length}`,
+      params,
+    );
+    return result.rows.map((row) => ({
+      id: Number(row.id), at: Number(row.at), actor: row.actor, action: row.action,
+      resource: row.resource, outcome: row.outcome, detail: row.detail,
+    }));
+  }
+
+  async close() {
+    await this.pool.end();
+  }
+}

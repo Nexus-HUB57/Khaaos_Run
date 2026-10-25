@@ -13,6 +13,8 @@
 - [x] Implementar rate limit com adapter compartilhável em memória.
 - [x] Adicionar testes de autenticação, persistência, reconexão, regiões e concorrência.
 - [x] Expor liveness público em `GET /healthz`, com teste de contrato e sem dados sensíveis.
+- [x] Fase 3 — netfeel: predição client-side com reconciliação, fila de inputs com `ackSeq`, lag compensation por rewind e pós-processamento Live Action.
+- [x] Fase 4 — infiltração aérea (paraquedas sky/chute autoritativo replicado na predição), granada FRAG (balística + dano radial com atenuação por parede), Gloo Wall (cobertura destrutível 220 HP/60 s em colliders dinâmicos), realismo PBR (normal maps procedurais, envmap, vegetação/nuvens) e HUD de queda/arremessáveis. Cobertura: `test/phase4.test.js` (12 testes).
 
 ## Próxima entrega de código
 
@@ -26,9 +28,9 @@
 
 - [x] Implementar `PostgresSessionStore` transacional com migração versionada, expiração no banco, readiness e testes reais opt-in.
 - [x] Conectar `RedisRateStore` real com `INCR` + `PEXPIRE` atômicos via Lua, readiness e testes reais opt-in.
-- [ ] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência.
-- [ ] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional.
-- [ ] Implementar RBAC com auditoria e permissões por recurso.
+- [x] Executar os testes reais em CI/staging com PostgreSQL e Redis provisionados, incluindo recuperação, timeout e falha de dependência. Cobertura: job `Game Runtime Tests` (`.github/workflows/ci.yml`) + `test/real-resilience.test.js` via `npm run test:resilience` (`pg_terminate_backend`/`CLIENT KILL`, host non-routable com timeout, ready() rejeita com dependência fora, expiração/cleanup).
+- [x] Adicionar TLS, rotação de chaves, revogação e SSO/OIDC operacional. Cobertura: `test/security.test.js` (8 testes) — HTTPS (`tls: {cert,key}` / `KR_TLS_CERT`/`KR_TLS_KEY`), tokens HS256 com `kid` + grace (`retired`) via `POST /admin/keys/rotate|drop`, revogação por `jti` via `POST /auth/logout` (HTTP e WebSocket) e OIDC Authorization Code completo (`server/oidc.js`: discovery, JWKS RS256, nonce/state single-use, provisionamento de usuário).
+- [x] Implementar RBAC com auditoria e permissões por recurso. Cobertura: `test/rbac.test.js` (7 testes) — catálogo declarativo (`server/rbac.js`: `room:join/start/input` restritos à própria sala, `admin:metrics`, `keys:rotate`, `audit:read`), trilha append-only (`server/audit.js` ring buffer + `PostgresAuditStore` migração `002_audit_events.sql`), guards HTTP 403 com evento `rbac.deny`, `/admin/audit` com filtros (`actor/action/outcome/sinceId`), payload de métricas sem dados por usuário para papéis não elevados e `room:start` auditado por sala no WebSocket.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.
 - [ ] Testar múltiplas instâncias, falha de processo, reconnect após reinício, soak e fault injection.
 - [ ] Definir economia e compliance antes de conectar qualquer valor real, carteira, resgate ou custódia.

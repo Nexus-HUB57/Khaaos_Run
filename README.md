@@ -19,6 +19,8 @@
 - [Mundos Oficiais (W1–W4)](#mundos-oficiais-w1w4)
 - [Protocolos de Ingresso (Zu)](#protocolos-de-ingresso-zu)
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
+- [Figuras de alistamento](#figuras-de-alistamento)
+- [Classe Especial](#classe-especial)
 - [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
 - [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
 - [CI/CD e Automação](#cicd-e-automação)
@@ -286,6 +288,33 @@ Em todos os casos:
 - **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
 > **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+
+---
+
+## Figuras de alistamento
+
+O corpo não altera XP, dano nem saque. Sexo e origem são identidade visual. O kit de Zheers é o mesmo para todos: jaqueta olive, kevlar, máscara no peito, faca à direita de quem olha.
+
+| Id | Nome | Sexo | Origem | Marca | Render |
+|----|------|------|--------|-------|--------|
+| kane | Idris Kane | Masculino | Afro-brasileiro | Queimadura no pescoço | `client/public/figures/kane.jpg` |
+| puri | Yara Puri | Feminino | Indígena amazônica | Marca de nascença sob o olho | `client/public/figures/puri.jpg` |
+| voss | Leandro Voss | Masculino | Levantina | Nariz quebrado | `client/public/figures/voss.jpg` |
+| okada | Mei Okada | Feminino | Nikkei | Cicatriz na têmpora | `client/public/figures/okada.jpg` |
+| hald | Soren Hald | Masculino | Norte-europeia | Sardas no nariz e nas maçãs | `client/public/figures/hald.jpg` |
+| okonkwo | Nia Okonkwo | Feminino | África Ocidental | Heterocromia e diastema | `client/public/figures/okonkwo.jpg` |
+
+Catálogo: [`shared/figures.ts`](shared/figures.ts). As seis placas são render 3D realista de estúdio, não ilustração. A malha riggada (GLB) ainda não está no repositório.
+
+## Classe Especial
+
+Os três agentes do console não entram na tabela de alistamento. O render segue o mesmo estúdio 3D. Catálogo: [`shared/special-class.ts`](shared/special-class.ts).
+
+| Id | Nome | Posto | Origem | Marca | Placa |
+|----|------|-------|--------|-------|-------|
+| henricks | Henricks Hunterheads III | Marechal | Luso-brasileira | Cicatriz na sobrancelha | `client/public/agents/henricks.jpg` |
+| krapulla | King Krapulla | Centralizador | Sul-asiática | Tinta abstrata no pescoço | `client/public/agents/krapulla.jpg` |
+| uryan | Uryan Horks | Embaixadora | Andina | Queimadura na garganta | `client/public/agents/uryan.jpg` |
 
 ---
 

@@ -151,6 +151,10 @@ jobs:
         working-directory: game-runtime
         run: npm run test:real
 
+      - name: Real adapter resilience tests (dependency failure, timeout, recovery)
+        working-directory: game-runtime
+        run: npm run test:resilience
+
       - name: Game infra tests
         working-directory: game-runtime
         run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
@@ -372,10 +376,12 @@ jobs:
             echo "  ⚠️  EOS placeholder IDs found (expected before Fase 2 setup)"
           fi
 
-          # Check for actual secrets (not acceptable)
-          SECRET_PATTERN="(sk_live|sk_test|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)"
-          if grep -rqP "$SECRET_PATTERN" . --include="*.ts" --include="*.js" --include="*.env" 2>/dev/null; then
+          # Match complete key-shaped values, not prefix checks or synthetic test fixtures.
+          SECRET_PATTERN='(sk_(live|test)_[A-Za-z0-9]{24,}|rk_(live|test)_[A-Za-z0-9]{24,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)'
+          MATCHED_FILES=$(grep -rlP "$SECRET_PATTERN" . --include="*.ts" --include="*.js" --include="*.env" 2>/dev/null || true)
+          if [[ -n "$MATCHED_FILES" ]]; then
             echo "  ❌ HARDCODED SECRETS DETECTED"
+            printf '  Matching files (values withheld):\n%s\n' "$MATCHED_FILES"
             exit 1
           else
             echo "  ✅ No hardcoded secrets detected"

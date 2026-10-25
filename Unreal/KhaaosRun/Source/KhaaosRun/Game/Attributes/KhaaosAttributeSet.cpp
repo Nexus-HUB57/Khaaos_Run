@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/Attributes/KhaaosAttributeSet.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "KhaaosRun.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffectExtension.h"
@@ -15,12 +16,55 @@ UKhaaosAttributeSet::UKhaaosAttributeSet()
 
 // ─── Mutation Methods ───────────────────────────────────────────────────────────
 
+float UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
+	float DamageAmount,
+	const FGameplayTag& DamageType,
+	float ProjectileReduction,
+	float ExplosionReduction)
+{
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	float Reduction = 0.0f;
+	if (DamageType.IsValid() && DamageType == Tags.Effect_Damage_Bullet)
+	{
+		Reduction = ProjectileReduction;
+	}
+	else if (DamageType.IsValid() && DamageType == Tags.Effect_Damage_Explosion)
+	{
+		Reduction = ExplosionReduction;
+	}
+
+	return DamageAmount * (1.0f - FMath::Clamp(Reduction, 0.0f, 1.0f));
+}
+
 float UKhaaosAttributeSet::ApplyDamage(float DamageAmount, AActor* Instigator)
+{
+	return ApplyDamageOfType(DamageAmount, Instigator, FGameplayTag());
+}
+
+float UKhaaosAttributeSet::ApplyDamageOfType(
+	float DamageAmount,
+	AActor* Instigator,
+	const FGameplayTag& DamageType)
 {
         if (DamageAmount <= 0.0f)
         {
                 return 0.0f;
         }
+
+	DamageAmount = CalculateSpeciesMitigatedDamage(
+		DamageAmount,
+		DamageType,
+		GetOnithProjectileDamageReduction(),
+		GetOnithExplosionDamageReduction());
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
 
         // Reduce damage by defense rating (diminishing returns)
         float EffectiveDamage = DamageAmount;
@@ -140,6 +184,8 @@ void UKhaaosAttributeSet::InitFromSchemaDefaults()
         Speed            = DefaultSpeed;
         DamageMultiplier = 1.0f;
         DefenseRating    = 0.0f;
+        InitOnithProjectileDamageReduction(0.0f);
+        InitOnithExplosionDamageReduction(0.0f);
         AttackRange      = 15.0f;  // 15% of map
 }
 
@@ -201,11 +247,25 @@ void UKhaaosAttributeSet::OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHe
         OnAttributeChanged.Broadcast(this, TEXT("MaxHealth"), GetMaxHealth());
 }
 
+void UKhaaosAttributeSet::OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, OldReduction);
+	OnAttributeChanged.Broadcast(this, TEXT("OnithProjectileDamageReduction"), GetOnithProjectileDamageReduction());
+}
+
+void UKhaaosAttributeSet::OnRep_OnithExplosionDamageReduction(const FGameplayAttributeData& OldReduction)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, OldReduction);
+	OnAttributeChanged.Broadcast(this, TEXT("OnithExplosionDamageReduction"), GetOnithExplosionDamageReduction());
+}
+
 void UKhaaosAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
         Super::GetLifetimeReplicatedProps(OutLifetimeProps);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, Health, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_None, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_None, REPNOTIFY_Always);
 }
 
 void UKhaaosAttributeSet::SetEnergy(float NewEnergy)

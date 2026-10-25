@@ -7,6 +7,7 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
+import { distributedState } from "../../game/DistributedState";
 
 const getOidcConfig = memoize(
   async () => {
@@ -20,6 +21,16 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const currentSecret = process.env.SESSION_SECRET_CURRENT ?? process.env.SESSION_SECRET;
+  const previousSecret = process.env.SESSION_SECRET_PREVIOUS;
+  if (!currentSecret || Buffer.byteLength(currentSecret, "utf8") < 32) throw new Error("SESSION_SECRET_CURRENT must contain at least 32 bytes");
+  const previousValidUntil = process.env.SESSION_SECRET_PREVIOUS_VALID_UNTIL
+    ? Number(process.env.SESSION_SECRET_PREVIOUS_VALID_UNTIL)
+    : undefined;
+  if (previousSecret && (!previousValidUntil || !Number.isFinite(previousValidUntil))) {
+    if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET_PREVIOUS_VALID_UNTIL is required in production");
+  }
+  const previousIsValid = Boolean(previousSecret && previousValidUntil && previousValidUntil > Math.floor(Date.now() / 1000));
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -28,7 +39,7 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: previousIsValid ? [currentSecret, previousSecret!] : currentSecret,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -132,6 +143,8 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
+    void distributedState.rateLimit(`auth:login:${req.ip}`, 30, 60_000).then((limit) => {
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many authentication attempts" });
     try {
       ensureStrategy(req);
     } catch {
@@ -141,9 +154,12 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
+    }).catch(() => res.status(503).json({ message: "Authentication unavailable" }));
   });
 
   app.get("/api/callback", (req, res, next) => {
+    void distributedState.rateLimit(`auth:callback:${req.ip}`, 30, 60_000).then((limit) => {
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many authentication attempts" });
     try {
       ensureStrategy(req);
     } catch {
@@ -153,30 +169,44 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
+    }).catch(() => res.status(503).json({ message: "Authentication unavailable" }));
   });
 
-  app.get("/api/logout", (req, res) => {
+  const logout = (req: any, res: any) => {
     let origin: string;
     try {
       origin = getPublicOrigin(req);
     } catch {
       return res.status(400).json({ message: "Untrusted request host" });
     }
-    req.logout(() => {
+    if (req.get("origin") !== origin || req.get("sec-fetch-site") === "cross-site") {
+      return res.status(403).json({ message: "Origin not allowed" });
+    }
+    const userId = req.user?.claims?.sub;
+    const revoke = userId ? distributedState.revokeUser(userId) : Promise.resolve();
+    revoke.then(() => req.logout(() => {
+      req.session?.destroy(() => undefined);
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.REPL_ID!,
           post_logout_redirect_uri: origin,
         }).href
       );
-    });
-  });
+    })).catch(() => res.status(503).json({ message: "Logout indisponível" }));
+  };
+
+  app.post("/api/logout", logout);
+  app.get("/api/logout", (_req, res) => res.status(405).json({ message: "Use POST /api/logout" }));
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user.expires_at) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (user.claims?.sub && await distributedState.isUserRevoked(user.claims.sub)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 

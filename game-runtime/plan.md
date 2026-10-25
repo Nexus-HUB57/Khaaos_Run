@@ -4,12 +4,15 @@
 
 Transformar a base de lore e regras do repositório em uma primeira experiência jogável de navegador, sem remover os documentos originais. O slice cobre o loop mínimo do Campo de Instrução de Guerra: escolha de entrada Zu, movimentação, combate, bots, pilhagem, fechamento do Ring, terminais ZEX, crafting e tela de resultado.
 
-## Arquitetura
+## Arquitetura atual
 
-- `index.html`: HUD QG-War’I, modal de entrada Zu, arena e painéis de missão.
-- `src/main.js`: simulação determinística por frame lógico de 50 ms, entidades, colisões, progressão e renderização Canvas 2D.
-- `src/styles.css`: sistema visual cyber-militar responsivo.
-- `public/manus-routes.json`: manifesto de rota do protótipo.
+- `index.html`: HUD do runtime 3D, seleção de cenário/operativo, modal Zu e painéis de missão.
+- `src/game3d/main3d.js`: cliente Three.js, entrada do usuário, renderização dos atores e integração com a HUD.
+- `src/game3d/sim3d.js`: simulação determinística de combate, Ring, loot, progressão curta, snapshot e replay.
+- `src/game3d/layout3d.js` e `src/game3d/scenarios.js`: layout procedural determinístico, setores, spawn e regras por cenário.
+- `src/game3d/world3d.js` e `src/game3d/styles3d.css`: apresentação do mundo e identidade visual da interface.
+- `Content/Avatars/avatar_catalog.json`: catálogo canônico compartilhado dos 16 operativos; o runtime usa paletas para renderizar a seleção e o modelo jogável.
+- `src/game3d/operativeAbilities.js`: catálogo declarativo, com uma habilidade ativa balanceável por operativo; `sim3d.js` resolve efeitos e timers por ticks determinísticos.
 - Documentos legados (`Mundos`, DOCX e INI/redistribuíveis): preservados como fonte de lore e contexto histórico.
 
 ## Design
@@ -32,6 +35,16 @@ Cyber-militar brutalista com tensão de arena de extração: concreto escuro, in
 ### Interação e animação
 Ações diretas e reversíveis: WASD, mouse, E para interação e F para oficina. O Ring fecha progressivamente, pulsos mudam a ameaça e o rádio registra cada consequência.
 
+## Conteúdo jogável entregue nesta fatia
+
+- CIGKV permanece o cenário padrão e preserva o spawn de treino original.
+- Barburhen tem uma primeira arena local de escala protótipo, com setores Urbano, Estação Fria, Parque Ferrífero e Usina Industrial, além do Terminal ZEX. A composição inclui landmarks de edifícios e estação, paleta fria, spawn próprio e loot associado ao setor.
+- O Ring causa 1,5× de dano e abates concedem 1,5× de KRC no protótipo de Barburhen. A seleção de cenário fica no modal inicial; o cenário escolhido também é gravado em snapshots e replays.
+- Os 16 operativos canônicos estão selecionáveis. A escolha aparece no HUD e aplica tons de pele e colete ao modelo 3D.
+- Os 16 operativos têm habilidades ativas distintas no modo local: dash limitado a 8 m; mitigação de dano direto; reconhecimento de bots no minimapa; cura limitada; leitura/previsão informativa do pulso; precisão; aumento de velocidade; camuflagem contra detecção de bots; blindagem temporária; resistência ao Ring; scan do terminal ZEX mais próximo; e interrupção de bots sem dano. Cooldowns, efeitos temporizados e inputs ficam registrados no replay determinístico.
+- A HUD mostra habilidade e cooldown; Q ativa a habilidade e H usa kit médico. No touch há botão dedicado para habilidade. O online mantém as habilidades indisponíveis, sem enviar o novo campo ao servidor nem simular autoridade que ainda não existe.
+- A escala de Barburhen continua sendo uma arena demonstrativa de 400 m, não o mundo final de 12 km/100 jogadores. Habilidades ainda precisam de protocolo autoritativo, sincronização/anti-cheat e balanceamento multiplayer; estações completas, efeitos de inverno/blizzard e replicação/matchmaking multi-world também seguem pendentes.
+
 ## Próxima evolução
 
-A base atual é single-player local. A próxima camada deve separar simulação/renderização, adicionar seed de partida, armas com atributos reais, persistência de loadout e uma camada multiplayer authoritative server antes de qualquer economia real.
+Expandir as interações próprias dos quatro setores de Barburhen; então definir contrato e resolução autoritativa das habilidades no servidor/UE5, estabelecer métricas de balanceamento e sincronizar estados, cooldowns e eventos com anti-cheat. A base local single-player não substitui persistência de loadout nem suporte multiplayer escalável.

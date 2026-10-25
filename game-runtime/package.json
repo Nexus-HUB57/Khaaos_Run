@@ -1,6 +1,6 @@
 {
   "name": "khaaos-run",
-  "version": "0.4.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,12 +12,14 @@
     "server": "node server/server.js",
     "db:migrate": "node scripts/migrate.js",
     "test:real": "node --test test/real-adapters.test.js",
+    "test:resilience": "node --test test/real-resilience.test.js",
     "coverage": "c8 --all --include='server/**/*.js' --include='src/**/*.js' --exclude='test/**' --exclude='scripts/**' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage npm test",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "pg": "^8.16.3",
     "redis": "^5.12.1",
+    "three": "^0.169.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

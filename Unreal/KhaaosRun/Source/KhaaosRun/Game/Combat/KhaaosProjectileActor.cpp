@@ -2,6 +2,7 @@
 
 #include "Game/Combat/KhaaosProjectileActor.h"
 #include "Game/Combat/KhaaosDamageManager.h"
+#include "Player/KhaaosCharacter.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 
@@ -233,7 +234,27 @@ void AKhaaosProjectileActor::ApplyDamageToActor(AActor* Target, const FHitResult
             }
         }
 
-        // Fallback: direct damage via GameplayStatics
+		// Fallback when no DamageManager is attached: keep typed Khaaos paths first.
+		const FGameplayTag DamageTag = UKhaaosDamageManagerComponent::GetGameplayTagForDamageType(DamageType);
+		if (AKhaaosCharacter* CharacterVictim = Cast<AKhaaosCharacter>(Target))
+		{
+			CharacterVictim->ApplyDamage(DamageAmount, CachedInstigator.Get(), DamageTag);
+			return;
+		}
+		if (APawn* TargetPawn = Cast<APawn>(Target))
+		{
+			if (AKhaaosPlayerState* TargetPlayerState = Cast<AKhaaosPlayerState>(TargetPawn->GetPlayerState()))
+			{
+				APlayerState* InstigatorPlayerState = nullptr;
+				if (const APawn* InstigatorPawn = Cast<APawn>(CachedInstigator.Get()))
+				{
+					InstigatorPlayerState = InstigatorPawn->GetPlayerState();
+				}
+				TargetPlayerState->ApplyDamageOfType(DamageAmount, DamageTag, InstigatorPlayerState);
+				return;
+			}
+		}
+
         UGameplayStatics::ApplyDamage(
             Target,
             DamageAmount,

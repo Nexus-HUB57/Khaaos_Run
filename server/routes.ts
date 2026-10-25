@@ -22,6 +22,9 @@ import { registerMarshalConsoleRoutes } from "./game/marshalConsole";
 import { economyService } from "./game/economyService";
 import { isValidIdempotencyKey } from "./game/economyMoney";
 import { canUseItemOutsideMatch } from "@shared/war-i";
+import Stripe from "stripe";
+import { getStripeTestConfig, parseKrcPackCatalog } from "./payments/stripeConfig";
+import { sha256Payload, stripePaymentService } from "./payments/stripePaymentService";
 import {
   emptyMutationInput,
   zoneStartInput,
@@ -31,6 +34,7 @@ import {
   economySimulationInput,
   economyBatchSimulationInput,
 } from "./game/mutationSchemas";
+import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
@@ -69,17 +73,37 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   app.use("/api", csrfGuard);
 
+  app.use("/api", (req: any, res: any, next: any) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    const actor = req.user?.claims?.sub ?? `ip:${req.ip}`;
+    void Promise.all([
+      distributedState.rateLimit(`http:ip:${req.ip}`, 600, 60_000),
+      distributedState.rateLimit(`http:actor:${actor}`, 180, 60_000),
+    ]).then(([ipLimit, actorLimit]) => {
+      const limit = !ipLimit.allowed ? ipLimit : actorLimit;
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many requests" });
+      next();
+    }).catch(() => res.status(503).json({ message: "Rate limiting unavailable" }));
+  });
+
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
   registerMarshalConsoleRoutes(app, { recoverPending: options.recoverPendingCouncils });
 
+  // ── Discord Bot API v1 (API-key auth, not session-based) ──────────────
+  registerDiscordApiV1Routes(app);
+
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
-    try {
-      res.setHeader("Cache-Control", "no-store");
-      res.json(createWsAccessToken(getUserId(req)));
-    } catch {
-      res.status(503).json({ message: "Autenticação WebSocket indisponível" });
-    }
+    const userId = getUserId(req);
+    void distributedState.rateLimit(`auth:ws-token:${userId}:${req.ip}`, 20, 60_000).then((limit) => {
+      if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many WebSocket token requests" });
+      try {
+        res.setHeader("Cache-Control", "no-store");
+        res.json(createWsAccessToken(userId, undefined, req.sessionID));
+      } catch {
+        res.status(503).json({ message: "Autenticação WebSocket indisponível" });
+      }
+    }).catch(() => res.status(503).json({ message: "Autenticação WebSocket indisponível" }));
   });
 
   app.get("/api/zone/permissions", requireAuth, (req, res) => {
@@ -112,6 +136,35 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     return key;
   };
 
+  // Stripe sends this endpoint server-to-server; it intentionally does not use
+  // the browser session or the /api CSRF middleware. Signature verification
+  // uses the untouched bytes captured by express.json({ verify }).
+  app.post("/webhooks/stripe", async (req, res) => {
+    const config = getStripeTestConfig();
+    if (!config) return res.status(503).json({ message: "Webhook de pagamentos não configurado" });
+    const rawBody = req.rawBody;
+    const signature = req.get("stripe-signature");
+    if (!Buffer.isBuffer(rawBody) || !signature) {
+      return res.status(400).json({ message: "Webhook inválido" });
+    }
+
+    const stripe = new Stripe(config.secretKey);
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, config.webhookSecret);
+    } catch {
+      return res.status(400).json({ message: "Assinatura de webhook inválida" });
+    }
+
+    try {
+      await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      return res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error("Stripe webhook processing failed", { name: error?.name, code: error?.code });
+      return res.status(500).json({ message: "Webhook temporariamente indisponível" });
+    }
+  });
+
   const sendFinancialError = (res: any, error: any) => {
     if (error instanceof RangeError) return res.status(400).json({ message: error.message });
     if (error?.code === "INSUFFICIENT_FUNDS") {
@@ -126,6 +179,75 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     console.error("Financial operation failed", { code: error?.code, message: error?.message });
     return res.status(500).json({ message: "Internal server error" });
   };
+
+  app.get("/api/payments/stripe/catalog", requireAuth, (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const config = getStripeTestConfig();
+    if (!config) return res.json({ enabled: false, testMode: true, currency: "BRL", paymentMethodTypes: [], packs: [] });
+    try {
+      const packs = parseKrcPackCatalog(process.env.STRIPE_KRC_PACKS_JSON);
+      if (packs.length === 0) return res.json({ enabled: false, testMode: true, currency: "BRL", paymentMethodTypes: [], packs: [] });
+      return res.json({ enabled: true, testMode: true, currency: "BRL", paymentMethodTypes: config.paymentMethodTypes, packs });
+    } catch {
+      console.error("Stripe package catalog configuration is invalid");
+      return res.status(503).json({ message: "Catálogo de pagamentos indisponível" });
+    }
+  });
+
+  app.post("/api/payments/stripe/checkout", requireAuth, async (req, res) => {
+    const config = getStripeTestConfig();
+    if (!config) return res.status(503).json({ message: "Checkout de teste não configurado" });
+    const parsed = z.object({
+      productId: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/),
+    }).strict().safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ message: "Pacote inválido" });
+    const key = readIdempotencyKey(req, res);
+    if (!key) return;
+
+    let packs;
+    try {
+      packs = parseKrcPackCatalog(process.env.STRIPE_KRC_PACKS_JSON);
+    } catch {
+      return res.status(503).json({ message: "Catálogo de pagamentos indisponível" });
+    }
+    const pack = packs.find((candidate) => candidate.id === parsed.data.productId);
+    if (!pack) return res.status(404).json({ message: "Pacote não encontrado" });
+
+    try {
+      const stripe = new Stripe(config.secretKey, { maxNetworkRetries: 2 });
+      const result = await stripePaymentService.createCheckout(getUserId(req), key, pack, stripe, config);
+      if (result.kind === "idempotency_conflict") {
+        return res.status(409).json({ message: "Esta chave já foi usada para outro pacote" });
+      }
+      if (result.kind === "order_closed") {
+        return res.status(409).json({ message: "Esta ordem não pode ser reutilizada; inicie uma nova compra" });
+      }
+      return res.status(200).json({ orderId: result.orderId, checkoutUrl: result.checkoutUrl });
+    } catch (error: any) {
+      console.error("Stripe Checkout session creation failed", { name: error?.name, code: error?.code, type: error?.type });
+      return res.status(502).json({ message: "Não foi possível iniciar o checkout de teste" });
+    }
+  });
+
+  app.get("/api/payments/stripe/orders/:id", requireAuth, async (req, res) => {
+    try {
+      const order = await stripePaymentService.getOrderForUser(getUserId(req), String(req.params.id));
+      if (!order) return res.status(404).json({ message: "Ordem não encontrada" });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        ...order,
+        currency: "BRL",
+        priceBrlMinor: String(order.priceBrlMinor),
+        krcMinorUnits: String(order.krcMinorUnits),
+        createdAt: order.createdAt.toISOString(),
+        paidAt: order.paidAt?.toISOString() ?? null,
+        fulfilledAt: order.fulfilledAt?.toISOString() ?? null,
+      });
+    } catch (error: any) {
+      console.error("Payment order status query failed", { name: error?.name, code: error?.code });
+      return res.status(500).json({ message: "Não foi possível consultar a ordem" });
+    }
+  });
 
   // ── BANK ─────────────────────────────────────────────────────────────────
 
