@@ -907,6 +907,7 @@ Semana  1   4   8   11  15  23  28
 - [Arquitetura dos mundos e agentes especiais](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md)
 - [API ativa do painel do Marechal, telemetria e persistência](docs/API_MARECHAL_CONTROL_PANEL.md)
 - [Diretrizes narrativas da Classe Especial](docs/SPECIAL_CLASS_NARRATIVE_GUIDELINES.md)
+- [Chaos determinístico de perda de pacotes dos agentes](docs/AGENT_PACKET_LOSS_CHAOS.md)
 - [Fluxo end-to-end de batalha](docs/E2E_BATTLE_FLOW.md)
 - [Autenticação realtime](docs/REALTIME_AUTH.md)
 - [Baseline de cobertura](docs/TEST_COVERAGE_BASELINE.md)
