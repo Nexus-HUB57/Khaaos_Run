@@ -2,6 +2,7 @@
 // crosshair dinâmico, prompts de interação, modais ZU/fim e controles touch.
 import { RARITIES } from '../shared/weapons.js';
 import { WEAPONS3D } from './sim3d.js';
+import { getOperativeAbility } from './operativeAbilities.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -66,6 +67,20 @@ export class HUD {
   }
   uiClick() { this.audio?.ui?.(); }
 
+  setAbility(operativeId, online = false) {
+    this.operativeId = operativeId;
+    this.abilityOnline = online;
+    const ability = getOperativeAbility(operativeId);
+    const name = $('#abilityName');
+    const status = $('#abilityStatus');
+    const chip = $('#operativeAbility');
+    if (name) name.textContent = ability.name.toLocaleUpperCase('pt-BR');
+    if (status) status.textContent = online ? 'ONLINE · INDISPONÍVEL' : 'Q · PRONTA';
+    if (chip) chip.title = online
+      ? 'Habilidades por operativo ainda não são suportadas pelo servidor online.'
+      : ability.description;
+  }
+
   feed(who, msg, cls = '') {
     const el = document.createElement('div');
     el.className = `feed-entry ${cls}`;
@@ -99,8 +114,10 @@ export class HUD {
     // barras
     $('#lifeBar').style.width = `${Math.max(0, p.life)}%`;
     $('#lifeValue').textContent = `${Math.max(0, Math.round(p.life))}`;
-    $('#armorBar').style.width = `${Math.max(0, p.armor)}%`;
-    $('#armorValue').textContent = `${Math.max(0, Math.round(p.armor))}`;
+    const armorTotal = Math.max(0, p.armor + (p.temporaryArmor || 0));
+    $('#armorBar').style.width = `${Math.min(100, armorTotal)}%`;
+    $('#armorValue').textContent = `${Math.round(armorTotal)}`;
+    $('#armorValue').title = p.temporaryArmor > 0 ? `${Math.round(p.armor)} VD permanente + ${Math.round(p.temporaryArmor)} temporária` : '';
     $('#lifeBar').classList.toggle('low', p.life < 30);
     // arma
     const w = WEAPONS3D[p.weapon];
@@ -134,6 +151,19 @@ export class HUD {
       $('#altValue').textContent = String(alt).padStart(3, '0');
       $('#altPhase').textContent = p.dropPhase === 'sky' ? 'QUEDA LIVRE' : 'PARAQUEDAS';
       $('#altFill').style.width = `${Math.min(100, (alt / 140) * 100)}%`;
+    }
+    const ability = getOperativeAbility(p.operativeId || this.operativeId);
+    const abilityStatus = $('#abilityStatus');
+    const abilityChip = $('#operativeAbility');
+    if (abilityStatus && abilityChip) {
+      if (this.abilityOnline || s.online) {
+        abilityStatus.textContent = 'ONLINE · INDISPONÍVEL';
+        abilityChip.classList.add('unavailable');
+      } else {
+        const remaining = Math.max(0, p.abilityState?.cooldownTicks || 0) / (s.tickRate || 30);
+        abilityStatus.textContent = remaining > 0 ? `Q · ${remaining.toFixed(1)} s` : 'Q · PRONTA';
+        abilityChip.classList.toggle('unavailable', remaining > 0);
+      }
     }
     // objetivos
     $('#objPulse').classList.toggle('done', s.ring.pulse >= 1);
@@ -193,8 +223,16 @@ export class HUD {
     ctx.beginPath(); ctx.arc(s.ring.x * scale, s.ring.z * scale, s.ring.radius * scale, 0, 7); ctx.stroke();
     // terminais
     for (const t of s.terminals) {
-      ctx.fillStyle = t.active ? '#39ff88' : 'rgba(90,90,90,.5)';
+      const abilityState = p.abilityState;
+      const scanned = abilityState?.effect === 'terminalScan' && abilityState.activeTicks > 0 && abilityState.targetTerminalId === t.id;
+      ctx.fillStyle = scanned ? '#ffb52e' : (t.active ? '#39ff88' : 'rgba(90,90,90,.5)');
+      if (scanned) { ctx.beginPath(); ctx.arc(t.x * scale, t.z * scale, 7, 0, Math.PI * 2); ctx.strokeStyle = '#ffb52e'; ctx.stroke(); }
       ctx.fillRect(t.x * scale - 2.5, t.z * scale - 2.5, 5, 5);
+    }
+    // contatos de reconhecimento somente enquanto a marca determinística está ativa
+    ctx.fillStyle = '#ffb52e';
+    for (const bot of s.bots) if (bot.alive && bot.revealedTicks > 0) {
+      ctx.beginPath(); ctx.arc(bot.x * scale, bot.z * scale, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     // loot
     ctx.fillStyle = 'rgba(66,217,222,.8)';

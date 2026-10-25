@@ -156,6 +156,18 @@ kbd {
 .ammo-row b { font-size: 42px; color: #fff; font-family: var(--font-mono); line-height: 1; }
 .ammo-row span { font-size: 18px; color: var(--muted); font-family: var(--font-mono); }
 .weapon-name { font-size: 15px; letter-spacing: 2px; font-weight: 600; }
+.ability-chip {
+  margin-top: 6px; display: inline-flex; align-items: center; gap: 8px;
+  min-width: 174px; text-align: left; background: var(--panel);
+  border: 1px solid rgba(200,255,61,.45); border-radius: 4px;
+  padding: 6px 9px; color: var(--acid); box-shadow: 0 0 14px rgba(200,255,61,.08);
+}
+.ability-chip.unavailable { border-color: var(--panel-border); color: var(--muted); box-shadow: none; }
+.ability-symbol { font-size: 20px; color: var(--gold); }
+.ability-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.ability-copy strong { max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10px var(--font-mono); letter-spacing: .5px; }
+.ability-copy small { font: 9px var(--font-mono); color: var(--muted); }
+.ability-chip kbd { color: var(--acid); }
 #reloadHint {
   font-family: var(--font-mono); font-size: 11px; color: var(--gold);
   opacity: 0; margin-bottom: 4px;

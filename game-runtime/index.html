@@ -56,7 +56,12 @@
       <div class="throwables-row">
         <div class="throw-chip frag" title="Granada FRAG [G]">💣 <span id="fragCount">×1</span><small>G</small></div>
         <div class="throw-chip gloo" title="Gloo Wall [F]">🧊 <span id="glooCount">×1</span><small>F</small></div>
-        <div class="medkit-chip" title="Usar kit médico [Q]">✚ <span id="medkitCount">×1</span><small>Q</small></div>
+        <div class="medkit-chip" title="Usar kit médico [H]">✚ <span id="medkitCount">×1</span><small>H</small></div>
+      </div>
+      <div id="operativeAbility" class="ability-chip" aria-live="polite">
+        <span class="ability-symbol">◇</span>
+        <span class="ability-copy"><strong id="abilityName">HABILIDADE OPERATIVA</strong><small id="abilityStatus">Q · PRONTA</small></span>
+        <kbd>Q</kbd>
       </div>
     </div>
 
@@ -85,7 +90,7 @@
     <div class="controls-hint">
       <span><kbd>WASD</kbd> mover</span><span><kbd>MOUSE</kbd> mirar/atirar</span><span><kbd>RMB</kbd> mira precisa</span>
       <span><kbd>SHIFT</kbd> correr</span><span><kbd>ESPAÇO</kbd> saltar</span><span><kbd>R</kbd> recarregar</span>
-      <span><kbd>E</kbd> coletar</span><span><kbd>Q</kbd> medkit</span><span><kbd>G</kbd> granada</span><span><kbd>F</kbd> gloo</span>
+      <span><kbd>E</kbd> coletar</span><span><kbd>Q</kbd> habilidade</span><span><kbd>H</kbd> medkit</span><span><kbd>G</kbd> granada</span><span><kbd>F</kbd> gloo</span>
       <span><kbd>ESC</kbd> liberar mouse</span>
     </div>
 
@@ -96,6 +101,7 @@
         <button class="tbtn small" data-key="jump">⤒</button>
         <button class="tbtn small" data-key="reload">R</button>
         <button class="tbtn small" data-key="interact">E</button>
+        <button class="tbtn small" data-key="ability">Q</button>
         <button class="tbtn small" data-key="medkit">✚</button>
         <button class="tbtn small" data-key="throw">💣</button>
         <button class="tbtn small" data-key="gloo">🧊</button>

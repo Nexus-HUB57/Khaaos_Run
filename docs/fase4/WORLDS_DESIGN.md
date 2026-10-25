@@ -8,13 +8,13 @@ e economia própria. A progressão é linear: CIGKV → W1 → W2 → W3 → W4.
 
 ---
 
-## Estado de implementação — 23/10/2026
+## Estado de implementação — 24/10/2026
 
 O `game-runtime` agora contém um **slice local de protótipo** de Barburhen, selecionável no modal Zu. Ele reutiliza a arena procedural curta de CIGKV, mas oferece zonas nomeadas de Setor Urbano, Estação Fria, Parque Ferrífero e Usina Industrial, landmarks próprios para os trechos urbano/ferroviário, spawn e distribuição de loot por setor, paleta fria e regra temporária de 1,5× para dano do Ring e KRC por abate. CIGKV continua como cenário padrão.
 
 Este slice não implementa o mundo final de 12 km, partidas de 100 jogadores, quatro variantes Zu, sistema sazonal/blizzard, todos os setores de produção ou matchmaking multi-world. Os valores e a taxonomia nas tabelas abaixo continuam sendo **alvos de design**, não funcionalidades verificadas. Antes de congelar o mapa final, reconciliar os setores conceituais Industrial/Residential/Military/Wasteland/Port com os quatro distritos do slice local.
 
-O cliente também permite selecionar os 16 operativos do catálogo canônico e aplica identidade/paleta visual ao ator. Habilidades próprias, balanceamento por arquétipo e integração equivalente no cliente UE5 permanecem pendentes.
+O cliente também permite selecionar os 16 operativos do catálogo canônico e aplica identidade/paleta visual ao ator. No modo local, cada operativo já possui uma habilidade ativa distinta com cooldown e duração determinísticos, registradas no replay e exibidas na HUD: mobilidade, mitigação, reconhecimento, cura, leitura do Ring, precisão, camuflagem contra bots, blindagem temporária, resistência à zona, scan de terminal ou interrupção sem dano. O online mantém a habilidade indisponível até existir resolução autoritativa/sincronizada; não há alegação de integração UE5 nem balanceamento competitivo validado.
 
 ---
 

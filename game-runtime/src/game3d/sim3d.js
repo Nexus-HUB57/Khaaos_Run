@@ -6,6 +6,7 @@ import { SeededRng } from '../shared/rng.js';
 import { WEAPONS, rollLoot } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
 import { resolveScenario } from './scenarios.js';
+import { getOperativeAbility } from './operativeAbilities.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -62,7 +63,7 @@ export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false,
+  jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
 });
 
 // ---------- utilitários de colisão ----------
@@ -116,16 +117,18 @@ export function stepActorMovement(a, input, dt, world) {
   a.sprinting = !!(input.sprint && !input.ads);
   a.ads = !!input.ads;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-  let sp = a.speed * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
+  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
   if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
   if (a.dropPhase) { a.sprinting = false; a.ads = false; sp = a.speed * DROP_SPEED_MULT; }
+  if (Number.isFinite(a.abilityDistanceBudget)) sp = Math.min(sp, a.abilityDistanceBudget / Math.max(dt, 1e-6));
   const len = Math.hypot(input.dx, input.dy) || 1;
   const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
   a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   // frente do ator: -Z quando yaw=0 (convenção Three.js)
   // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
+  const oldX = a.x, oldZ = a.z;
   let nx = a.x + (mx * cos + mz * sin), nz = a.z + (-mx * sin + mz * cos);
   // colisão XZ com o mundo (no ar: só a borda do mundo — paredes altas não alcançam)
   if (!a.dropPhase) {
@@ -137,6 +140,9 @@ export function stepActorMovement(a, input, dt, world) {
   }
   const lim = WORLD.size / 2 - 2;
   a.x = clamp(nx, -lim, lim); a.z = clamp(nz, -lim, lim);
+  if (Number.isFinite(a.abilityDistanceBudget)) {
+    a.abilityDistanceBudget = Math.max(0, a.abilityDistanceBudget - Math.hypot(a.x - oldX, a.z - oldZ));
+  }
   // vertical: fase de queda própria (Fase 4) OU salto normal
   if (a.dropPhase) {
     const phase = a.dropPhase;
@@ -151,6 +157,7 @@ export function stepActorMovement(a, input, dt, world) {
     }
     return a;
   }
+  // vertical
   if (!a.onGround || input.jump) {
     if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
     a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
@@ -285,6 +292,8 @@ export class KhaaosSim3D {
     return { id: 'player', name: 'ZHEERS-07', x: this.world.playerSpawn.x, y: 0, z: this.world.playerSpawn.z, vy: 0, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19',
       operativeId: 'OP_MALE_VANGUARD',
+      temporaryArmor: 0,
+      abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
@@ -295,7 +304,7 @@ export class KhaaosSim3D {
     const jx = (this.rng.next() - .5) * 10, jz = (this.rng.next() - .5) * 10;
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
-      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false, revealedTicks: 0,
       speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };
@@ -346,11 +355,91 @@ export class KhaaosSim3D {
   consumeEvents() { const e = this.events; this.events = []; return e; }
   record(input) { this.replay.push({ tick: this.tick, input: { ...DEFAULT_INPUT, ...input } }); }
 
+  #advanceAbility() {
+    const p = this.player, state = p.abilityState;
+    state.cooldownTicks = Math.max(0, state.cooldownTicks - 1);
+    if (state.activeTicks > 0) {
+      state.activeTicks--;
+      if (state.activeTicks === 0) {
+        if (state.effect === 'temporaryArmor') p.temporaryArmor = 0;
+        state.effect = null;
+        state.targetTerminalId = null;
+        state.targetIds = [];
+      }
+    }
+    for (const bot of this.bots) if (bot.revealedTicks > 0) bot.revealedTicks--;
+  }
+
+  #activateAbility() {
+    const p = this.player;
+    const ability = getOperativeAbility(p.operativeId);
+    const state = p.abilityState;
+    if (!this.started || !p.alive || state.cooldownTicks > 0) return false;
+    if (ability.effect === 'heal' && p.life >= 100) {
+      this.emit('abilityUnavailable', { reason: 'life_full', name: ability.name });
+      return false;
+    }
+
+    const params = ability.parameters;
+    state.effect = ability.effect;
+    state.cooldownTicks = Math.ceil(ability.cooldownSeconds * this.tickRate);
+    state.activeTicks = Math.ceil(ability.durationSeconds * this.tickRate);
+    state.distanceRemaining = params.maxDistance ?? 0;
+    state.originX = p.x; state.originZ = p.z;
+    state.targetIds = []; state.targetTerminalId = null;
+    let details = {};
+
+    if (ability.effect === 'heal') {
+      const healed = Math.min(params.heal, 100 - p.life);
+      p.life += healed;
+      details.healed = healed;
+    } else if (ability.effect === 'recon') {
+      const radius = params.radius;
+      const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= radius);
+      for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
+      state.targetIds = targets.map((bot) => bot.id);
+      details.targets = targets.length;
+    } else if (ability.effect === 'stun') {
+      const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
+      for (const bot of targets) bot.ai.stunTicks = Math.ceil(params.stunSeconds * this.tickRate);
+      details.targets = targets.length;
+    } else if (ability.effect === 'temporaryArmor') {
+      p.temporaryArmor = params.armor;
+    } else if (ability.effect === 'ringRead' || ability.effect === 'ringForecast') {
+      details.nextPulseSeconds = Math.max(0, PULSE_INTERVAL - this.pulseTimer);
+      details.targetRadius = this.ring.radius > 42
+        ? Math.max(42, 168 - (this.ring.pulse + 1) * 30)
+        : this.ring.radius;
+    } else if (ability.effect === 'terminalScan') {
+      const terminal = this.terminals.filter((item) => item.active)
+        .sort((a, b) => dist2d(p.x, p.z, a.x, a.z) - dist2d(p.x, p.z, b.x, b.z))[0];
+      if (terminal) {
+        state.targetTerminalId = terminal.id;
+        details.terminalLabel = terminal.label || terminal.id;
+        details.terminalDistance = Math.round(dist2d(p.x, p.z, terminal.x, terminal.z));
+      }
+    }
+
+    this.emit('ability', {
+      operativeId: p.operativeId,
+      name: ability.name,
+      effect: ability.effect,
+      durationSeconds: ability.durationSeconds,
+      cooldownSeconds: ability.cooldownSeconds,
+      description: ability.description,
+      ...details,
+    });
+    if (ability.durationSeconds === 0) state.effect = null;
+    return true;
+  }
+
   step(rawInput = DEFAULT_INPUT, dt = 1 / 30) {
     const input = { ...DEFAULT_INPUT, ...rawInput };
     this.record(input);
     if (this.over || !this.started) return this.snapshot();
     this.tick++; this.time = Math.max(0, this.time - dt);
+    this.#advanceAbility();
+    if (input.ability) this.#activateAbility();
 
     // --- zona segura ---
     this.pulseTimer += dt;
@@ -384,9 +473,22 @@ export class KhaaosSim3D {
     a.cooldown = Math.max(0, a.cooldown - dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
+    if (isPlayer) {
+      const ability = getOperativeAbility(a.operativeId);
+      const active = a.abilityState.activeTicks > 0;
+      a.abilitySpeedMultiplier = active && (ability.effect === 'speed' || ability.effect === 'dash')
+        ? ability.parameters.speedMultiplier : 1;
+      a.abilityDistanceBudget = active && ability.effect === 'dash' ? a.abilityState.distanceRemaining : undefined;
+      a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
+    }
     stepActorMovement(a, input, dt, this.physicsWorld);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
+      a.abilityState.distanceRemaining = a.abilityDistanceBudget;
+      if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeTicks = 0;
+      delete a.abilityDistanceBudget;
+    }
     if (isPlayer) {
       const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
       if (!airborne) {
@@ -480,11 +582,16 @@ export class KhaaosSim3D {
       if (b.landed) { b.landed = false; b.ai.state = 'patrol'; b.ai.think = 0; }
       return;
     }
+    if ((b.ai.stunTicks ?? 0) > 0) { b.ai.stunTicks--; b.moving = false; return; }
     b.ai.think -= dt;
     const d = dist2d(b.x, b.z, p.x, p.z);
-    const sees = p.alive && d < 85 && this.#hasLos(b, p);
+    const concealed = p.abilityState?.effect === 'concealment' && p.abilityState.activeTicks > 0;
+    const sees = p.alive && !concealed && d < 85 && this.#hasLos(b, p);
     if (sees) { b.ai.state = 'engage'; b.ai.lostT = 0; b.ai.lx = p.x; b.ai.lz = p.z; }
-    else if (b.ai.state === 'engage') { b.ai.lostT += dt; if (b.ai.lostT > 5) b.ai.state = 'hunt'; }
+    else if (b.ai.state === 'engage') {
+      if (concealed) { b.ai.state = 'hunt'; b.ai.lostT = 5; }
+      else { b.ai.lostT += dt; if (b.ai.lostT > 5) b.ai.state = 'hunt'; }
+    }
     if (b.ai.think <= 0) {
       b.ai.think = 0.4 + this.rng.next() * 0.5;
       if (b.ai.state !== 'engage' && (!b.ai.waypoint || dist2d(b.x, b.z, b.ai.waypoint.x, b.ai.waypoint.z) < 6)) {
@@ -561,8 +668,9 @@ export class KhaaosSim3D {
     const ax = a.x + vdx * conv, ay = a.y + 1.55 + vdy * conv, az = a.z + vdz * conv;
     let dx = ax - m.x, dy = ay - m.y, dz = az - m.z;
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    const accuracy = isPlayer ? (a.abilityAccuracyMultiplier ?? 1) : 1;
     const spread = isPlayer
-      ? w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1)
+      ? (w.spread / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1)
       : 0;
     this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55);
     this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z });
@@ -666,6 +774,16 @@ export class KhaaosSim3D {
   #hurtPlayer(dmg, ownerId, kind) {
     const p = this.player;
     if (!p.alive) return;
+    const ability = getOperativeAbility(p.operativeId);
+    if (kind === 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'ringResistance') {
+      dmg *= 1 - ability.parameters.ringDamageReduction;
+    } else if (kind !== 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'damageReduction') {
+      dmg *= 1 - ability.parameters.damageReduction;
+    }
+    if (kind !== 'ring' && p.temporaryArmor > 0) {
+      const soak = Math.min(p.temporaryArmor, dmg);
+      p.temporaryArmor -= soak; dmg -= soak;
+    }
     if (p.armor > 0 && kind !== 'ring') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
@@ -767,5 +885,5 @@ export class KhaaosSim3D {
     this.#syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
-  exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, tickRate: this.tickRate, inputs: this.replay }; }
+  exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, operativeId: this.player.operativeId, tickRate: this.tickRate, inputs: this.replay }; }
 }

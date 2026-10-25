@@ -1,7 +1,7 @@
 // Khaaos Run — Cliente 3D (TPS Battle Royale // FreeFire-style)
 // Renderizador Three.js sobre a simulação determinística KhaaosSim3D.
 // Controles: WASD + mouse (pointer lock), RMB mira, Shift corre, Espaço salta,
-// R recarrega, E coleta, Q medkit, 1..2 slots. Touch: joystick + botões.
+// R recarrega, E coleta, Q habilidade local, H medkit, 1..2 slots. Touch: joystick + botões.
 import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO } from './sim3d.js';
 import { buildScene, createRingWall } from './world3d.js';
@@ -12,6 +12,7 @@ import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
+import { getOperativeAbility } from './operativeAbilities.js';
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -26,6 +27,8 @@ export class Game3D {
     this.audio = new GameAudio();
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
+    this.abilityPending = false;
+    this.abilityTouchDown = false;
     this.pointerLocked = false;
     this.accumulator = 0;
     this.clock = new THREE.Clock();
@@ -57,6 +60,7 @@ export class Game3D {
       onReplayExport: () => this.exportReplay(),
     });
     this.hud.audio = this.audio;
+    this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
     this.initContentSelectors();
@@ -145,7 +149,7 @@ export class Game3D {
     const scenarioName = document.querySelector('#scenarioName');
     if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
     const selectionStatus = document.querySelector('#contentSelectionStatus');
-    if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. Habilidades por operativo ainda estão em desenvolvimento.';
+    if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. A habilidade individual é acionada com Q; o modo online ainda não a sincroniza.';
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
@@ -163,6 +167,7 @@ export class Game3D {
       if (!operative) return;
       this.selectedOperative = operative;
       this.sim.player.operativeId = operative.id;
+      this.hud.setAbility(operative.id, this.online);
       this.scene.remove(this.playerOp.group);
       this.playerOp = createOperative({ skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.scene.add(this.playerOp.group);
@@ -244,7 +249,8 @@ export class Game3D {
       this.keys.add(k);
       if (k === 'r') this.input.reload = true;
       if (k === 'e') this.input.interact = true;
-      if (k === 'q') this.input.medkit = true;
+      if (k === 'q' && !e.repeat && !this.online) this.abilityPending = true;
+      if (k === 'h') this.input.medkit = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
       // troca de slot: offline aplica na sim; online agenda no próximo input
@@ -528,6 +534,9 @@ export class Game3D {
     // touch joystick
     if (this.hud.joy?.active) { dx = this.hud.joy.dx; dy = this.hud.joy.dy; }
     const touch = this.hud.touchState ?? {};
+    const abilityTouch = !!touch.ability;
+    const abilityTouchPressed = abilityTouch && !this.abilityTouchDown;
+    this.abilityTouchDown = abilityTouch;
     const input = {
       ...this.input,
       seq: this.sim.tick + 1,
@@ -541,12 +550,15 @@ export class Game3D {
       medkit: this.input.medkit || !!touch.medkit,
       throw: this.input.throw || !!touch.throw,
       gloo: this.input.gloo || !!touch.gloo,
+      ability: !this.online && (this.abilityPending || abilityTouchPressed),
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
     this.input.reload = false; this.input.interact = false; this.input.medkit = false;
     this.input.throw = false; this.input.gloo = false;
+    this.abilityPending = false;
     this.pendingSlot = 0;
+    if (this.online) delete input.ability;
     return input;
   }
 
@@ -621,6 +633,22 @@ export class Game3D {
         case 'reloaded': break;
         case 'weaponSwitch': break;
         case 'medkit': this.hud.feed('OFICINA', 'Kit médico aplicado. +30 VL.', 'good'); break;
+        case 'ability': {
+          let message = `${e.name}: ${e.description}`;
+          if (e.effect === 'heal') message = `${e.name}: +${Math.round(e.healed)} VL.`;
+          else if (e.effect === 'recon') message = `${e.name}: ${e.targets} contato(s) marcado(s) no minimapa por 3 s.`;
+          else if (e.effect === 'stun') message = `${e.name}: ${e.targets} bot(s) interrompido(s) sem dano.`;
+          else if (e.effect === 'ringRead') message = `${e.name}: próximo pulso em ${e.nextPulseSeconds.toFixed(1)} s.`;
+          else if (e.effect === 'ringForecast') message = `${e.name}: próximo pulso em ${e.nextPulseSeconds.toFixed(1)} s; raio-alvo ${Math.round(e.targetRadius)} m.`;
+          else if (e.effect === 'terminalScan') message = e.terminalLabel
+            ? `${e.name}: ${e.terminalLabel} a ${e.terminalDistance} m; marcado no minimapa por 4 s.`
+            : `${e.name}: nenhum terminal ZEX ativo disponível.`;
+          this.hud.feed('HABILIDADE', message, 'good');
+          break;
+        }
+        case 'abilityUnavailable':
+          this.hud.feed('HABILIDADE', 'Vida cheia: Coágulo de Campo não consumiu recarga.', 'warn');
+          break;
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
         case 'airdrop':

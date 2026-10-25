@@ -12,6 +12,7 @@ Transformar a base de lore e regras do repositório em uma primeira experiência
 - `src/game3d/layout3d.js` e `src/game3d/scenarios.js`: layout procedural determinístico, setores, spawn e regras por cenário.
 - `src/game3d/world3d.js` e `src/game3d/styles3d.css`: apresentação do mundo e identidade visual da interface.
 - `Content/Avatars/avatar_catalog.json`: catálogo canônico compartilhado dos 16 operativos; o runtime usa paletas para renderizar a seleção e o modelo jogável.
+- `src/game3d/operativeAbilities.js`: catálogo declarativo, com uma habilidade ativa balanceável por operativo; `sim3d.js` resolve efeitos e timers por ticks determinísticos.
 - Documentos legados (`Mundos`, DOCX e INI/redistribuíveis): preservados como fonte de lore e contexto histórico.
 
 ## Design
@@ -40,8 +41,10 @@ Ações diretas e reversíveis: WASD, mouse, E para interação e F para oficina
 - Barburhen tem uma primeira arena local de escala protótipo, com setores Urbano, Estação Fria, Parque Ferrífero e Usina Industrial, além do Terminal ZEX. A composição inclui landmarks de edifícios e estação, paleta fria, spawn próprio e loot associado ao setor.
 - O Ring causa 1,5× de dano e abates concedem 1,5× de KRC no protótipo de Barburhen. A seleção de cenário fica no modal inicial; o cenário escolhido também é gravado em snapshots e replays.
 - Os 16 operativos canônicos estão selecionáveis. A escolha aparece no HUD e aplica tons de pele e colete ao modelo 3D.
-- A escala de Barburhen continua sendo uma arena demonstrativa de 400 m, não o mundo final de 12 km/100 jogadores. Habilidades ativas individuais, estações completas, efeitos de inverno/blizzard e replicação/matchmaking multi-world ainda não estão implementados.
+- Os 16 operativos têm habilidades ativas distintas no modo local: dash limitado a 8 m; mitigação de dano direto; reconhecimento de bots no minimapa; cura limitada; leitura/previsão informativa do pulso; precisão; aumento de velocidade; camuflagem contra detecção de bots; blindagem temporária; resistência ao Ring; scan do terminal ZEX mais próximo; e interrupção de bots sem dano. Cooldowns, efeitos temporizados e inputs ficam registrados no replay determinístico.
+- A HUD mostra habilidade e cooldown; Q ativa a habilidade e H usa kit médico. No touch há botão dedicado para habilidade. O online mantém as habilidades indisponíveis, sem enviar o novo campo ao servidor nem simular autoridade que ainda não existe.
+- A escala de Barburhen continua sendo uma arena demonstrativa de 400 m, não o mundo final de 12 km/100 jogadores. Habilidades ainda precisam de protocolo autoritativo, sincronização/anti-cheat e balanceamento multiplayer; estações completas, efeitos de inverno/blizzard e replicação/matchmaking multi-world também seguem pendentes.
 
 ## Próxima evolução
 
-Desenvolver interações próprias para os quatro setores de Barburhen e habilidades de gameplay para os 16 arquétipos, com balanceamento e testes. Depois, integrar esses dados ao cliente UE5 e ao servidor autoritativo; a base local single-player não substitui persistência de loadout nem suporte multiplayer escalável.
+Expandir as interações próprias dos quatro setores de Barburhen; então definir contrato e resolução autoritativa das habilidades no servidor/UE5, estabelecer métricas de balanceamento e sincronizar estados, cooldowns e eventos com anti-cheat. A base local single-player não substitui persistência de loadout nem suporte multiplayer escalável.
