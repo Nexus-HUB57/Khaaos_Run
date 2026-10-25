@@ -8,6 +8,7 @@
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Game/Loot/KhaaosLootPickup.h"
 #include "Game/World/Barburhen/KhaaosBarburhenMapData.h"
+#include "Game/World/Barburhen/KhaaosBarburhenRules.h"
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
@@ -153,7 +154,8 @@ void AKhaaosBarburhenLevel::AdvanceZonePhase()
     const FBarburhenZonePhase& Phase = ZonePhases[CurrentZonePhase];
 
     // Apply season damage modifier
-    float EffectiveDamage = Phase.ZoneDamagePerSecond * Phase.SeasonDamageModifier * GetSeasonDamageModifier();
+    float EffectiveDamage = KhaaosBarburhenRules::EffectiveZoneDamage(
+        Phase.ZoneDamagePerSecond, Phase.SeasonDamageModifier, GetSeasonDamageModifier());
 
     UE_LOG(LogTemp, Log, TEXT("[Barburhen] Zone phase %d — Center=(%s), Radius=%.0f, Damage=%.1f/s (season-modified)"),
         Phase.PhaseIndex, *Phase.ZoneCenter.ToString(), Phase.ZoneRadius, EffectiveDamage);
@@ -262,8 +264,8 @@ void AKhaaosBarburhenLevel::UpdateZEXActivation()
     for (FBarburhenZEX& ZEX : ZEXPoints)
     {
         // ZEX is active only if it's inside the current safe zone
-        float DistToCenter = FVector::Dist(ZEX.Location, Phase.ZoneCenter);
-        ZEX.bIsActive = (DistToCenter <= Phase.ZoneRadius);
+        ZEX.bIsActive = KhaaosBarburhenRules::IsInsideZone2D(
+            ZEX.Location, Phase.ZoneCenter, Phase.ZoneRadius);
     }
 }
 
@@ -441,10 +443,7 @@ void AKhaaosBarburhenLevel::TriggerGiantsChallenge()
 bool AKhaaosBarburhenLevel::CanPlayerEnter() const
 {
     // Block entry in last 3 minutes of the Ring
-    if ((RingDuration - ElapsedTime) <= EntryBlockTime)
-    {
-        return false;
-    }
+    if (!KhaaosBarburhenRules::IsEntryOpen(ElapsedTime, RingDuration, EntryBlockTime)) return false;
 
     // Check capacity
     if (GetAlivePlayerCount() >= MaxPlayers)
@@ -504,6 +503,7 @@ void AKhaaosBarburhenLevel::InitializeMapData()
     if (!MapData)
     {
         MapData = NewObject<UKhaaosBarburhenMapData>(this);
+        MapData->InitializeDefaults();
     }
 
     // If ZonePhases not configured, create default Barburhen phases (4 phases, 1.5h)

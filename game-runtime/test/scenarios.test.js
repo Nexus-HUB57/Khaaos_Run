@@ -50,3 +50,20 @@ test('CIGKV continua sendo o cenário padrão e mantém o ponto de inserção an
   assert.equal(sim.scenario.id, 'CIGKV');
   assert.deepEqual({ x: sim.player.x, z: sim.player.z }, { x: 0, z: 150 });
 });
+
+test('os quatro Mundos competitivos possuem previews locais selecionáveis e aliases operacionais', () => {
+  const worlds = [
+    ['Priadus', 'w2/c2'],
+    ['Ckesalth', 'W3'],
+    ['Arukheea', 'w4'],
+  ];
+  for (const [canonical, alias] of worlds) {
+    const scenario = resolveScenario(alias);
+    assert.equal(scenario.id, canonical);
+    assert.equal(scenario.sectorNames.length, 5);
+    assert.ok(scenario.krcMultiplier > 1);
+    const sim = new KhaaosSim3D({ seed: `PREVIEW-${canonical}`, botCount: 0, scenarioId: canonical });
+    assert.equal(sim.snapshot().scenarioId, canonical);
+    assert.ok(sim.scenario.playerSpawn);
+  }
+});

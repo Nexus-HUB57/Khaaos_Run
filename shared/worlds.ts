@@ -5,6 +5,29 @@
 
 export type WorldId = "CIGKV" | "Barburhen" | "Priadus" | "Ckesalth" | "Arukheea";
 
+/** IDs usados pelo matchmaking/telemetria legados. */
+export type OperationalWorldId = "CIGKV" | "W1" | "W2" | "W3" | "W4";
+export const WORLD_OPERATIONAL_IDS: Readonly<Record<WorldId, OperationalWorldId>> = {
+  CIGKV: "CIGKV",
+  Barburhen: "W1",
+  Priadus: "W2",
+  Ckesalth: "W3",
+  Arukheea: "W4",
+};
+export const WORLD_CANONICAL_IDS: Readonly<Record<OperationalWorldId, WorldId>> = {
+  CIGKV: "CIGKV",
+  W1: "Barburhen",
+  W2: "Priadus",
+  W3: "Ckesalth",
+  W4: "Arukheea",
+};
+export function toOperationalWorldId(worldId: WorldId): OperationalWorldId {
+  return WORLD_OPERATIONAL_IDS[worldId];
+}
+export function toCanonicalWorldId(worldId: OperationalWorldId): WorldId {
+  return WORLD_CANONICAL_IDS[worldId];
+}
+
 export interface WorldSafeZonePhase {
   phaseIndex: number;
   phaseName: string;

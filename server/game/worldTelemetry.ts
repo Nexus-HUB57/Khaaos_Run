@@ -1,11 +1,12 @@
+import { WORLD_CANONICAL_IDS } from "@shared/worlds";
 import type { WorldId } from "./orchestration";
 
 export const WORLD_CATALOG: Readonly<Record<WorldId, { name: string }>> = {
-  CIGKV: { name: "Khaaos Ville" },
-  W1: { name: "Barburhen" },
-  W2: { name: "Priadus" },
-  W3: { name: "Ckesalth" },
-  W4: { name: "Arukheea" },
+  CIGKV: { name: WORLD_CANONICAL_IDS.CIGKV },
+  W1: { name: WORLD_CANONICAL_IDS.W1 },
+  W2: { name: WORLD_CANONICAL_IDS.W2 },
+  W3: { name: WORLD_CANONICAL_IDS.W3 },
+  W4: { name: WORLD_CANONICAL_IDS.W4 },
 };
 export const WORLD_IDS = Object.keys(WORLD_CATALOG) as WorldId[];
 export function isWorldId(value: unknown): value is WorldId {
