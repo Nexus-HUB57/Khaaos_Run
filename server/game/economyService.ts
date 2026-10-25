@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { bankAccounts, economyIdempotency, economyLedgerEntries, items, loans, playerStats, transactions } from "@shared/schema";
+import { getArmorerProduct, type ArmorerCatalogId } from "@shared/armorer-catalog";
 import { calculateLoanInterestMinorUnits, fromMinorUnits, hashEconomicRequest, isValidIdempotencyKey, toMinorUnits } from "./economyMoney";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -12,7 +13,6 @@ export interface EconomyResponse {
   replayed: boolean;
 }
 type OperationResponse = Pick<EconomyResponse, "status" | "body">;
-const ITEM_PRICES: Readonly<Record<string, string>> = { ARMA: "500.00", DEFESA: "300.00", CURATIVO: "150.00", UTILIDADE: "200.00" };
 type LedgerLine = { accountCode: string; side: "DEBIT" | "CREDIT"; amountKrc: string; description: string };
 type OperationContext = { userId: string; idempotencyKey: string; operationId: string };
 
@@ -251,13 +251,13 @@ export class EconomyService {
     });
   }
 
-  async purchaseItem(userId: string, key: string, input: { name: string; type: string }): Promise<EconomyResponse> {
-    const normalizedInput = { name: input.name.trim(), type: input.type };
-    if (!normalizedInput.name || normalizedInput.name.length > 64) throw new RangeError("Nome do item inválido");
-    if (!Object.prototype.hasOwnProperty.call(ITEM_PRICES, normalizedInput.type)) throw new RangeError("Tipo de item inválido");
+  async purchaseItem(userId: string, key: string, input: { catalogId: ArmorerCatalogId }): Promise<EconomyResponse> {
+    const product = getArmorerProduct(input.catalogId);
+    if (!product) throw new RangeError("Produto não encontrado na Forja do Armeiro");
+    const normalizedInput = { catalogId: product.id };
     return this.execute(userId, key, "items.purchase", normalizedInput, async (tx, context) => {
       const account = await this.lockBank(tx, userId);
-      const price = ITEM_PRICES[normalizedInput.type];
+      const price = product.priceKrc.toFixed(2);
       const [updated] = await tx.update(bankAccounts).set({
         weaponsBalance: sql`round(${bankAccounts.weaponsBalance} - ${price}::numeric, 2)`,
       }).where(and(
@@ -265,17 +265,26 @@ export class EconomyService {
         sql`${bankAccounts.weaponsBalance} >= ${price}::numeric`,
       )).returning();
       if (!updated) return insufficientFunds(price, String(account.weaponsBalance));
-      const [item] = await tx.insert(items).values({ userId, name: normalizedInput.name, type: normalizedInput.type }).returning();
+      const [item] = await tx.insert(items).values({
+        userId,
+        name: product.name,
+        type: product.type,
+        rarity: product.rarity,
+        durability: String(product.maxDurability),
+        maxDurability: String(product.maxDurability),
+        isEquipped: false,
+        stats: { ...product.stats },
+      }).returning();
       await appendLedger(tx, context, [
-        { accountCode: "system.item_sales", side: "CREDIT", amountKrc: price, description: `Item sale: ${normalizedInput.name}` },
-        { accountCode: "wallet.weapons", side: "DEBIT", amountKrc: price, description: `Purchase from Weapons wallet: ${normalizedInput.name}` },
+        { accountCode: "system.item_sales", side: "CREDIT", amountKrc: price, description: `Item sale: ${product.name}` },
+        { accountCode: "wallet.weapons", side: "DEBIT", amountKrc: price, description: `Purchase from Weapons wallet: ${product.name}` },
       ]);
       await tx.insert(transactions).values({
         userId,
         type: "COMPRA",
         amountKrc: price,
         operationId: context.operationId,
-        description: `Purchased ${normalizedInput.name}`,
+        description: `Purchased ${product.name}`,
       });
       return { status: 201, body: item as unknown as ResponseBody };
     });

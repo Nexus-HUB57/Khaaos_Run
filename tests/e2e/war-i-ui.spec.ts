@@ -1,10 +1,24 @@
 import { expect, test, type Page } from "@playwright/test";
 
+type MockInventoryItem = {
+  id: number;
+  userId: string;
+  name: string;
+  type: string;
+  rarity: string;
+  durability: string;
+  maxDurability: string;
+  isEquipped: boolean;
+  stats: Record<string, number>;
+  imageUrl: null;
+  createdAt: string;
+};
+
 const playerId = "war-i-ui-player";
 const roomId = "war-i-ui-room";
 const fixedTimestamp = "2026-01-01T12:00:00.000Z";
 
-const items = [
+const items: MockInventoryItem[] = [
   { id: 101, userId: playerId, name: "Fuzil Khaaos-47", type: "ARMA", rarity: "RARO", durability: "100", maxDurability: "100", isEquipped: true, stats: { damage: 35, range: 8 }, imageUrl: null, createdAt: fixedTimestamp },
   { id: 102, userId: playerId, name: "Colete Khaaos", type: "DEFESA", rarity: "COMUM", durability: "100", maxDurability: "100", isEquipped: true, stats: { defense: 20 }, imageUrl: null, createdAt: fixedTimestamp },
   { id: 103, userId: playerId, name: "Mochila Tática", type: "UTILIDADE", rarity: "EPICO", durability: "100", maxDurability: "100", isEquipped: true, stats: { capacity: 20 }, imageUrl: null, createdAt: fixedTimestamp },
@@ -38,41 +52,87 @@ const zone = {
 };
 
 async function mockPlayerApis(page: Page) {
+  const inventory = items.map((item) => ({ ...item, stats: { ...item.stats } }));
+  const purchaseRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
+  const equipRequests: Array<{ itemId: number; isEquipped: boolean }> = [];
+
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     let status = 200;
     let body: unknown;
 
-    switch (pathname) {
-      case "/api/auth/user":
-        body = { id: playerId, email: "war-i-ui@example.test", firstName: "Zheers", lastName: "Teste", profileImageUrl: null, createdAt: fixedTimestamp, updatedAt: fixedTimestamp };
-        break;
-      case "/api/auth/ws-token":
-        body = { token: "playwright-war-i-ui-token", expiresAt: Date.now() + 60_000 };
-        break;
-      case "/api/items":
-        body = items;
-        break;
-      case "/api/player/me":
-        body = {
-          user: { id: playerId, firstName: "Zheers", lastName: "Teste" },
-          stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0 },
+    if (pathname === "/api/items/purchase" && request.method() === "POST") {
+      const input = request.postDataJSON() as { catalogId?: string };
+      purchaseRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
+      if (input.catalogId !== "granada-de-fragmentacao") {
+        status = 400;
+        body = { message: "Produto de fixture inesperado." };
+      } else {
+        const purchasedItem: MockInventoryItem = {
+          id: 201,
+          userId: playerId,
+          name: "Granada de Fragmentação",
+          type: "UTILIDADE",
+          rarity: "RARO",
+          durability: "100",
+          maxDurability: "100",
+          isEquipped: false,
+          stats: { damage: 30, radius: 5 },
+          imageUrl: null,
+          createdAt: fixedTimestamp,
         };
-        break;
-      case "/api/zone/status":
-        body = zone;
-        break;
-      case "/api/zone/permissions":
-        body = { canManageZone: false };
-        break;
-      default:
-        status = 404;
-        body = { message: "API isolada pelo teste Playwright." };
+        inventory.push(purchasedItem);
+        status = 201;
+        body = { ...purchasedItem, operationId: "00000000-0000-4000-8000-000000000021" };
+      }
+    } else if (pathname === "/api/items" && request.method() === "GET") {
+      body = inventory;
+    } else {
+      const equipMatch = pathname.match(/^\/api\/items\/(\d+)\/equip$/);
+      if (equipMatch && request.method() === "POST") {
+        const itemId = Number(equipMatch[1]);
+        const input = request.postDataJSON() as { isEquipped: boolean };
+        equipRequests.push({ itemId, isEquipped: input.isEquipped });
+        const item = inventory.find((candidate) => candidate.id === itemId);
+        if (!item) {
+          status = 404;
+          body = { message: "Item não encontrado." };
+        } else {
+          item.isEquipped = input.isEquipped;
+          body = item;
+        }
+      } else {
+        switch (pathname) {
+          case "/api/auth/user":
+            body = { id: playerId, email: "war-i-ui@example.test", firstName: "Zheers", lastName: "Teste", profileImageUrl: null, createdAt: fixedTimestamp, updatedAt: fixedTimestamp };
+            break;
+          case "/api/auth/ws-token":
+            body = { token: "playwright-war-i-ui-token", expiresAt: Date.now() + 60_000 };
+            break;
+          case "/api/player/me":
+            body = {
+              user: { id: playerId, firstName: "Zheers", lastName: "Teste" },
+              stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0 },
+            };
+            break;
+          case "/api/zone/status":
+            body = zone;
+            break;
+          case "/api/zone/permissions":
+            body = { canManageZone: false };
+            break;
+          default:
+            status = 404;
+            body = { message: "API isolada pelo teste Playwright." };
+        }
+      }
     }
 
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
+
+  return { purchaseRequests, equipRequests };
 }
 
 async function mockBattleSocket(page: Page, inMatch: boolean) {
@@ -152,6 +212,44 @@ test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", a
   await page.getByLabel("Buscar itens no War’I").fill("granada");
   await expect(page.getByTestId("card-item-104")).toBeVisible();
   await expect(page.getByTestId("card-item-101")).not.toBeVisible();
+});
+
+test("compra na Forja sincroniza preço, raridade, stats e PackBack no War’I", async ({ page }) => {
+  const { purchaseRequests, equipRequests } = await mockPlayerApis(page);
+  await mockBattleSocket(page, false);
+  await page.goto("/market");
+
+  const grenadeOffer = page.getByTestId("card-market-item-6");
+  await expect(grenadeOffer).toContainText("600 KRC");
+  await expect(grenadeOffer).toContainText("RARO");
+  await expect(grenadeOffer).toContainText("UTILIDADE");
+  await expect(grenadeOffer).toContainText("Dano 30 em raio 5");
+  await page.getByTestId("button-buy-6").click();
+  await expect(page.getByText("AQUISIÇÃO CONFIRMADA")).toBeVisible();
+  await expect.poll(() => purchaseRequests).toHaveLength(1);
+  expect(purchaseRequests[0].catalogId).toBe("granada-de-fragmentacao");
+  expect(purchaseRequests[0].idempotencyKey).toBeTruthy();
+
+  await page.goto("/inventory");
+  await expect(page.getByRole("heading", { name: "WAR’I" })).toBeVisible();
+  const purchasedCard = page.getByTestId("card-item-201");
+  await expect(purchasedCard).toBeVisible();
+  await purchasedCard.click();
+  const details = page.getByRole("dialog");
+  await expect(details).toContainText("Granada de Fragmentação");
+  await expect(details).toContainText("RARO | BAG / UTILIDADE | DUR: 100/100");
+  await expect(details.getByText("DAMAGE")).toBeVisible();
+  await expect(details.getByText("RADIUS")).toBeVisible();
+  await expect(details.getByText("30", { exact: true })).toBeVisible();
+  await expect(details.getByText("5", { exact: true })).toBeVisible();
+
+  const equipButton = page.getByTestId("button-packback-201");
+  await equipButton.click();
+  await expect(equipButton).toContainText("NA PACKBACK — REMOVER");
+  await expect.poll(() => equipRequests).toHaveLength(1);
+  expect(equipRequests[0]).toEqual({ itemId: 201, isEquipped: true });
+  await page.getByRole("button", { name: "FECHAR" }).click();
+  await expect(purchasedCard).toContainText("PACKBACK");
 });
 
 test("Zona exibe a PackBack no celular, evita toque duplicado e confirma durabilidade", async ({ page }) => {

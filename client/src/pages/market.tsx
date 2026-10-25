@@ -4,17 +4,16 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Sword, Shield, Box, ShoppingCart, Zap, Flame, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ARMORER_CATALOG, type ArmorerProduct } from "@shared/armorer-catalog";
 
-const MARKET_ITEMS = [
-  { name: "Lâmina Nano", type: "ARMA", price: 500, icon: Sword, rarity: "COMUM", desc: "Arma corpo a corpo padrão. Eficiente em combate próximo." },
-  { name: "Rifle de Plasma", type: "ARMA", price: 1200, icon: Sword, rarity: "RARO", desc: "Arma de alto impacto energético. Dano devastador à distância." },
-  { name: "Colete de Kevlar", type: "DEFESA", price: 800, icon: Shield, rarity: "COMUM", desc: "Proteção balística básica. Absorve impacto de projéteis." },
-  { name: "Escudo Tático", type: "DEFESA", price: 2000, icon: Shield, rarity: "EPICO", desc: "Barreira defensiva avançada. Alta resistência ao dano." },
-  { name: "Stim Pack", type: "CURATIVO", price: 100, icon: Box, rarity: "COMUM", desc: "Restaura 20 HP instantaneamente. Essencial na PackBack." },
-  { name: "Célula de Energia", type: "UTILIDADE", price: 150, icon: Zap, rarity: "COMUM", desc: "Recarrega as reservas de energia do operativo." },
-  { name: "Granada de Fragmentação", type: "ARMA", price: 600, icon: Flame, rarity: "RARO", desc: "Explosivo de área. Causa dano múltiplo em batalha." },
-  { name: "Kit Médico Avançado", type: "CURATIVO", price: 350, icon: Package, rarity: "EPICO", desc: "Restaura 80 HP e remove debuffs. Item premium." },
-];
+const MARKET_ICON = {
+  sword: Sword,
+  shield: Shield,
+  box: Box,
+  zap: Zap,
+  flame: Flame,
+  package: Package,
+} as const;
 
 const rarityStyle: Record<string, { badge: string; border: string; glow: string }> = {
   COMUM:    { badge: "bg-white/5 text-white/50",           border: "border-white/10",       glow: "" },
@@ -27,8 +26,8 @@ export default function Market() {
   const { mutate: purchase, isPending } = usePurchaseItem();
   const { toast } = useToast();
 
-  const handleBuy = (item: typeof MARKET_ITEMS[0]) => {
-    purchase({ type: item.type, name: item.name }, {
+  const handleBuy = (item: ArmorerProduct) => {
+    purchase({ catalogId: item.id }, {
       onSuccess: () => toast({
         title: "AQUISIÇÃO CONFIRMADA",
         description: `${item.name} adicionado ao seu War'I.`,
@@ -65,8 +64,9 @@ export default function Market() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        {MARKET_ITEMS.map((item, idx) => {
+        {ARMORER_CATALOG.map((item, idx) => {
           const rs = rarityStyle[item.rarity] || rarityStyle.COMUM;
+          const Icon = MARKET_ICON[item.icon];
           return (
             <div
               key={idx}
@@ -87,7 +87,7 @@ export default function Market() {
 
               <div className="flex items-start gap-3 mb-4 pr-12">
                 <div className="p-2.5 bg-black/40 border border-border/40 group-hover:border-primary/30 transition-colors shrink-0">
-                  <item.icon className="w-5 h-5 text-foreground/70 group-hover:text-primary transition-colors" />
+                  <Icon className="w-5 h-5 text-foreground/70 group-hover:text-primary transition-colors" />
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-sm text-foreground leading-tight">{item.name}</h3>
@@ -95,11 +95,11 @@ export default function Market() {
                 </div>
               </div>
 
-              <p className="text-xs text-muted-foreground font-body leading-relaxed mb-5 min-h-[2.5rem]">{item.desc}</p>
+              <p className="text-xs text-muted-foreground font-body leading-relaxed mb-5 min-h-[2.5rem]">{item.description}</p>
 
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-mono text-muted-foreground tracking-widest">PREÇO</span>
-                <span className="font-display font-bold text-xl text-primary text-glow-primary">{item.price} <span className="text-xs text-muted-foreground font-mono">KRC</span></span>
+                <span className="font-display font-bold text-xl text-primary text-glow-primary">{item.priceKrc} <span className="text-xs text-muted-foreground font-mono">KRC</span></span>
               </div>
 
               <Button
