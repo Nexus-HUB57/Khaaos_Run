@@ -4,7 +4,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Game/EOS/KhaaosEOSManager.h"
-#include "Game/Save/KhaaosSaveGame.h"
+#include "Save/KhaaosSaveGame.h"
 #include "KhaaosEOSCloudSave.generated.h"
 
 // ─── Cloud Save Slot Data ─────────────────────────────────────────────────────
