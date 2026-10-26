@@ -172,7 +172,7 @@ test('obs: middleware isola falha do handler — 500 estruturado sem derrubar o 
 });
 
 test('obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (opt-in)', { skip: !REDIS_URL ? 'KR_REDIS_TEST_URL ausente' : false }, async () => {
-  const { createClient } = await import('node:redis');
+  const { createClient } = await import('redis');
   const shared = createClient({ url: REDIS_URL });
   shared.on('error', () => {});
   await shared.connect();
