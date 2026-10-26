@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { initializeGameServices, shutdownGameServices } from "./game/GameServices";
 
 const app = express();
 const httpServer = createServer(app);
@@ -61,6 +62,26 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // ── Initialize Game Services (EconomyMatchBridge, Spectator, DiscordBot, MatchFlow) ──
+  try {
+    await initializeGameServices(httpServer, app);
+    log("Game services initialized (EconomyMatch + Spectator + Discord + MatchFlow)");
+  } catch (err) {
+    console.error("[GameServices] Initialization failed (non-fatal):", err);
+  }
+
+  // ── Graceful shutdown ──
+  process.on("SIGTERM", async () => {
+    log("SIGTERM received, shutting down game services...");
+    await shutdownGameServices();
+    process.exit(0);
+  });
+  process.on("SIGINT", async () => {
+    log("SIGINT received, shutting down game services...");
+    await shutdownGameServices();
+    process.exit(0);
+  });
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

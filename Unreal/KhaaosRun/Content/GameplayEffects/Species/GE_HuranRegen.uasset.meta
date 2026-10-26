@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_HuranRegen",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": 5.0,
+  "tag": "Effect.Buff.HuranRegen",
+  "description": "+5 HP/s regeneration for Huran species",
+  "generated_by": "wire_all_4_tasks.py"
+}

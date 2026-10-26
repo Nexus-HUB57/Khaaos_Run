@@ -7,11 +7,10 @@ export default defineConfig({
     environment: "node",
     include: [
       "tests/integration/**/*.test.ts",
-      "tests/integration/**/*.test.js",
+      "tests/integration/**/*.test.js"
     ],
     timeout: 30000,
     hookTimeout: 10000,
-    // Coverage
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -23,6 +22,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./"),
       "@server": path.resolve(__dirname, "./server"),
       "@shared": path.resolve(__dirname, "./shared"),
+      "@client": path.resolve(__dirname, "./client"),
+      "@game": path.resolve(__dirname, "./server/game"),
+      "@auth": path.resolve(__dirname, "./server/replit_integrations/auth"),
+      "@tests": path.resolve(__dirname, "./tests"),
     },
   },
 });

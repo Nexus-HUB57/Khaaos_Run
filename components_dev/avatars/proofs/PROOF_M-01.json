@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M001",
+  "operative_id": "M-01",
+  "codename": "ZHR-01",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Zheers",
+    "name": "Zheers",
+    "type": "humanoid",
+    "skeleton": "SK_Manny",
+    "passive": "Adaptabilidade - +10% resistencia ao ambiente local",
+    "base_stats": {
+      "health": 100,
+      "energy": 100,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 180,
+      "weight_kg": 75
+    },
+    "abbr": "ZHR"
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "VENEX",
+  "specialization": "Operacoes Especiais",
+  "ethnicity": {
+    "label": "Afro-Latino",
+    "heritage": "Yoruba/Angolano (paterno) + Colombiano/Venezuelano (materno)",
+    "region": "Diaspora Africana na America Latina",
+    "cultural_fusion": "Tradies Yoruba de resistencia mescladas com cultura urbana latino-americana. Nome reflete fusao Khaael (energy) + Vance (Latin Anglo)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom quente profundo (#8B5E3C) com subtom dourado",
+    "hair": "Afro tight coil, fade lateral, tintacao cobre nas pontas",
+    "eyes": "Castanho escuro, formato amendoado, leve dobra epicantica (heranca indigena latino)",
+    "facial_structure": "Nariz largo, labios cheios, mandibula angular pronunciada, macas do rosto altas",
+    "body_type": "Mesomorfo atletico - 182 cm, 78 kg. Ombros largos, cintura definida, pernas potentes",
+    "distinctive_silhouette": "Postura de combate capoeira - tronco inclinado, peso distribuido. Maior mobilidade lateral do roster."
+  },
+  "cultural_markers": {
+    "tattoos": "Simbolo Adinkra DWENNIMMEN (humildade + forca) no antebrao direito, estilo preto-grama",
+    "scars": "Cicatriz vertical sobre sobrolho esquerdo (combate CIGKV - 3 cm), marcas de shrapnel no ombro direito",
+    "ornaments": "Brinco de ouro pequeno na orelha esquerda (tradio Yoruba), cordao de contas de acaja no pescoco",
+    "clothing_style": "Tatica urbana com influencia bandoleira latino-americana - colete multi-municao, faixa cruzada, botas de cano alto"
+  },
+  "species_traits": {
+    "visible_modification": "Nenhuma - Zheers puro, aparencia humana sem alterades de especie",
+    "passive_manifestation": "Adaptabilidade visivel: tom de pele ajusta sutilmente sob diferentes ambientes (biofeedback Zheers)",
+    "combat_style_id": "Movimentos fluidos de capoeira adaptados ao combate moderno - signature kick-spin melee"
+  },
+  "distinguishing_summary": "Unico Afro-Latino; fusao Yoruba-Latino visivel em adinkra + bandoleira; estilo de luta capoeira unico no roster; tintacao cobre no afro; cicatriz no sobrolho esquerdo",
+  "generated_at": "2026-10-22T13:30:29.510735+00:00",
+  "ref_code": "ZHR-01",
+  "operative_ref": "OP_ZHR_M_01",
+  "avatar_ref": "AVT_ZHR_M_01",
+  "legacy_codename": "KHAEL VANCE",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298809+00:00"
+}

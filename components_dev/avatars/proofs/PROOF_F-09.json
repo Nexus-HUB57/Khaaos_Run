@@ -1,0 +1,60 @@
+{
+  "proof_id": "PROOF_F009",
+  "operative_id": "F-09",
+  "codename": "HUR-02",
+  "ref_code": "HUR-02",
+  "operative_ref": "OP_HUR_F_02",
+  "avatar_ref": "AVT_HUR_F_02",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Huran",
+    "name": "Huran",
+    "type": "amphibian",
+    "skeleton": "SK_Gwen",
+    "passive": "Regeneracao Anfibia - +5 HP/s na agua",
+    "abbr": "HUR",
+    "base_stats": {
+      "health": 110,
+      "energy": 90,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 168,
+      "weight_kg": 60
+    }
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "HURAN",
+  "specialization": "Sabotagem Naval e Infiltracao Costeira",
+  "ethnicity": {
+    "label": "Filipina/Visayan",
+    "heritage": "Cebuano/Visayan (paterno) + Ifugao/Cordillera (materno)",
+    "region": "Visayas, Filipinas / Arquipelago do Pacifico",
+    "cultural_fusion": "Tradio maritima Visayan (navegadores de balangay) combinada com Huran anfibio. Filipinas = 7.641 ilhas, cultura aquatica profunda. Ifugao = engenheiros de terraços de arroz com sistemas hidraulicos ancestrais."
+  },
+  "phenotype": {
+    "skin_tone": "Morena clara filipina (#C4956A) com subtom dourado tropical e iridescencia Huran azulada em ambiente umido",
+    "hair": "Preto grosso e liso, longo, amarrado em tactical bun baixo, mechas bioluminescentes Huran TEAL (#20B2AA) nas pontas - brilham na agua",
+    "eyes": "Castanho escuro, formato amendado largo (Southeast Asian), membrana nictitante Huran - anel teal (#20B2AA) ao redor da iris, epicanthic fold",
+    "facial_structure": "Rosto oval com features Southeast Asian - nariz medio-baixo, labios cheios, macas do rosto largas, queixo delicado",
+    "body_type": "Athletic e stream-lined - 168 cm, 60 kg. Build de nadadora - ombros definidos, core forte, pernas torneadas. Huran adaptations: slightly wider feet for swimming, webbed toe traces.",
+    "distinctive_silhouette": "Postura de swim-ready - ombros rolados, corpo lean, pronta para entrada na agua. Pontas do cabelo teal brilham subaquatico. Silhueta de mergulhadora-tatica."
+  },
+  "cultural_markers": {
+    "tattoos": "Batok (tatuagem tradicional Kalinga/Visayan) no antebrao direito - patterns geometricos em linhas curvas (tradio Whang-Od); sarimanok (ave mitologica Maranao) na omoplata",
+    "scars": "Cicatriz de coral no joelho esquerdo (infiltracao recife - 3 cm), marcas de barracuda no antebrao direito (mordida em operacao costeira)",
+    "ornaments": "Bracelete de perolas das Filipinas (South Sea pearls) no pulso esquerdo, ear cuff de concha capiz na orelha direita",
+    "clothing_style": "Wetsuit tatico com elementos filipinos - tecido abaca (manila hemp) woven nas laterais, pattern pirin-pirin (tecido tradicional) nos pads de joelho, visual de navy-saboteur tropical"
+  },
+  "species_traits": {
+    "visible_modification": "Membranas Huran entre dedos dos pes (mais pronunciadas que HUR-01 - adaptação de nadadora); mechas bioluminescentes TEAL no cabelo (brilham na agua como rastro); pele com iridescencia azulada em ambiente umido; brachquias vestigiais no pesco (3 fendas, mais visiveis que HUR-01)",
+    "passive_manifestation": "Regeneracao Anfibia: na agua, HP regen +5/s com pulse teal visivel. Maior velocidade de nado do roster (Huran + Visayan swim heritage). Bioluminescencia TEAL = marker IFF subaquatico diferente de HUR-01 (verde-agua).",
+    "combat_style_id": "Estilo coast-saboteur - infiltracao costeira, sabotagem naval, combate em zona de praia/recife,游泳-swim insertion. Maior swim speed do roster. Unica operative com sabotagem naval + combate underwater."
+  },
+  "distinguishing_summary": "Unica Filipina/Visayan; mechas BIOLUMINESCENTES TEAL no cabelo (difere de verde-agua de HUR-01); nictitante TEAL; batok Kalinga no antebrao; sarimanok na omoplata; perlas Filipinas; maior swim speed; visual navy-saboteur tropical; unica operative com sabotagem naval",
+  "generated_at": "2026-10-23T18:51:00.592017+00:00"
+}

@@ -11,6 +11,9 @@
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
 #include "TimerManager.h"
+#include "Game/VFX/KhaaosVFXManager.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UKhaaosAbility_Shoot
@@ -134,14 +137,46 @@ void UKhaaosAbility_Shoot::ServerShoot_Implementation(const FVector& TraceStart,
 
 void UKhaaosAbility_Shoot::ClientSpawnMuzzleFlash_Implementation(const FVector& MuzzleLocation, const FRotator& MuzzleRotation)
 {
-        // Client-side muzzle flash VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Shoot::ClientSpawnMuzzleFlash - VFX at %s"), *MuzzleLocation.ToString());
+        if (!MuzzleFlashVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = MuzzleFlashVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                                GetWorld(), NiagaraSys, MuzzleLocation, MuzzleRotation,
+                                FVector::OneVector, true, true, ENiagaraEffectPoolPolicy::Auto, true);
+                }
+        }
+        else
+        {
+                // Fallback: use VFXManager if available
+                if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+                {
+                        VFXMgr->SpawnVFXAtLocation(FName(TEXT("MuzzleFlash")), MuzzleLocation, MuzzleRotation);
+                }
+        }
 }
 
 void UKhaaosAbility_Shoot::ClientSpawnImpactVFX_Implementation(const FVector& ImpactLocation, const FVector& ImpactNormal)
 {
-        // Client-side impact VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Shoot::ClientSpawnImpactVFX - VFX at %s"), *ImpactLocation.ToString());
+        if (!ImpactVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = ImpactVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        FRotator ImpactRotation = ImpactNormal.Rotation();
+                        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                                GetWorld(), NiagaraSys, ImpactLocation, ImpactRotation,
+                                FVector::OneVector, true, true, ENiagaraEffectPoolPolicy::Auto, true);
+                }
+        }
+        else
+        {
+                if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+                {
+                        VFXMgr->SpawnVFXAtLocation(FName(TEXT("BulletImpact")), ImpactLocation, ImpactNormal.Rotation());
+                }
+        }
 }
 
 void UKhaaosAbility_Shoot::ClientApplyRecoil_Implementation(float PitchRecoil, float YawRecoil)
@@ -320,8 +355,23 @@ void UKhaaosAbility_Melee::ServerMeleeAttack_Implementation(const FVector& Trace
 
 void UKhaaosAbility_Melee::ClientSpawnMeleeVFX_Implementation(const FVector& Origin)
 {
-        // Client-side melee swing VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Melee::ClientSpawnMeleeVFX - Swing VFX at %s"), *Origin.ToString());
+        if (!MeleeSwingVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = MeleeSwingVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                                GetWorld(), NiagaraSys, Origin, FRotator::ZeroRotator,
+                                FVector::OneVector, true, true, ENiagaraEffectPoolPolicy::Auto, true);
+                }
+        }
+        else
+        {
+                if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+                {
+                        VFXMgr->SpawnVFXAtLocation(FName(TEXT("MeleeSwing")), Origin);
+                }
+        }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -502,7 +552,25 @@ void UKhaaosAbility_Ultimate::ServerApplyAreaDamage_Implementation(const FVector
 
 void UKhaaosAbility_Ultimate::ClientSpawnUltimateVFX_Implementation(const FVector& Center, float Radius)
 {
-        // Client-side ultimate VFX (explosion, shockwave, etc.)
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Ultimate::ClientSpawnUltimateVFX - VFX at %s (radius: %.0f)"),
-                *Center.ToString(), Radius);
+        if (!UltimateExplosionVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = UltimateExplosionVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                                GetWorld(), NiagaraSys, Center, FRotator::ZeroRotator,
+                                FVector(Radius / 100.0f), false, true, ENiagaraEffectPoolPolicy::Auto, true);
+                        if (NiagaraComp)
+                        {
+                                NiagaraComp->SetNiagaraVariableFloat(FString("Radius"), Radius);
+                        }
+                }
+        }
+        else
+        {
+                if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+                {
+                        VFXMgr->SpawnVFXAtLocation(FName(TEXT("UltimateExplosion")), Center);
+                }
+        }
 }

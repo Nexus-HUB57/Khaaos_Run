@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M006",
+  "operative_id": "M-06",
+  "codename": "ONI-02",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Onith",
+    "name": "Onith",
+    "type": "reptile",
+    "skeleton": "SK_Manny",
+    "passive": "Escamas Refletivas - +15% defesa contra projeteis",
+    "base_stats": {
+      "health": 120,
+      "energy": 80,
+      "speed": 0.9
+    },
+    "physical": {
+      "height_cm": 190,
+      "weight_kg": 95
+    },
+    "abbr": "ONI"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 75
+  },
+  "rank": "ONITH",
+  "specialization": "Tatica e Comando",
+  "ethnicity": {
+    "label": "Arabe-Beduino",
+    "heritage": "Yemeni/Qahtanite (paterno) + Saudi/Rashid (materno) - tribos beduinas da fronteira",
+    "region": "Empty Quarter / Rub al Khali, Peninsula Arabica",
+    "cultural_fusion": "Codigo beduino de honra e hospitalidade combinado com lideranca tatica militar. Nome Zayn (beleza/graciosidade) + Al-Mansoor (vitorioso em arabe)."
+  },
+  "phenotype": {
+    "skin_tone": "Oliva-marfim (#C2A878) com patches de escama Onith em textura areia - camuflagem desertica natural",
+    "hair": "Castanho escuro, grosso, curto sob headwrap tatico - visivel apenas na nuca e temporas",
+    "eyes": "Castanho escuro com esclera levemente ambar (trado Onith), pupilas em fenda HORIZONTAL (Onith desertico - diferente do vertical de DRAXEN)",
+    "facial_structure": "Nariz aquilino proeminente (perfil arabe classico), barba densa aparada curta, olhos profundamente inseridos, maxilar angular",
+    "body_type": "Lean e sinuoso - 188 cm, 82 kg. Frame longo e enxuto, Onith desert-adapted - metabolismo lento, constituicao para resistencia de calor",
+    "distinctive_silhouette": "Postura de sheikh-tactical - ereto, controlado, movimentos minimalistas. Headwrap da silhueta triangular superior distinta."
+  },
+  "cultural_markers": {
+    "tattoos": "Escarificacao caligrafica no biceps direito - codigo tribal beduino em arabe calligraphy (3 linhas, tradio Qahtanite)",
+    "scars": "Cicatriz de sabre diagonal no peito (combate corpo-a-corpo - 15 cm), marcas de queimadura solar nas costas (deserto extremo)",
+    "ornaments": "Shemagh (keffiyeh) vermelho-branco como headwrap tatico permanente, anel de prata com agate yemeni na mao direita (siget de comando)",
+    "clothing_style": "Tatico desertico com elementos beduinos - shemagh integrado, drapeado sob armadura, faixa de cintura com khanjar ornamental"
+  },
+  "species_traits": {
+    "visible_modification": "Escamas Onith texturizadas como areia ao longo da espinha dorsal e costelas - visivel quando sem armadura; dorsal ridge Onith ao longo da coluna",
+    "passive_manifestation": "Escamas Refletivas adaptadas ao deserto - escamas brilham sob sol direto (reflexao ofuscante, camuflagem em tempestade de areia)",
+    "combat_style_id": "Estilo commander - direcao de esquadrado, positioning tatico, callouts. Fenda HORIZONTAL da pupila (vs VERTICAL de DRAXEN) = visao panoramica desertica."
+  },
+  "distinguishing_summary": "Unico Arabe-Beduino; shemagh vermelho-branco permanente (mais iconico); pupilas em fenda HORIZONTAL (difere de DRAXEN fenda vertical); barba densa aparada; escarificacao caligrafica arabe; dorsal ridge Onith; khanjar ornamental",
+  "generated_at": "2026-10-22T13:30:29.511425+00:00",
+  "ref_code": "ONI-02",
+  "operative_ref": "OP_ONI_M_02",
+  "avatar_ref": "AVT_ONI_M_02",
+  "legacy_codename": "ZAYN AL-MANSOOR",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299469+00:00"
+}

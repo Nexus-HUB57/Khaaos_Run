@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M007",
+  "operative_id": "M-07",
+  "codename": "ZHR-04",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Zheers",
+    "name": "Zheers",
+    "type": "humanoid",
+    "skeleton": "SK_Manny",
+    "passive": "Adaptabilidade - +10% resistencia ao ambiente local",
+    "base_stats": {
+      "health": 100,
+      "energy": 100,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 180,
+      "weight_kg": 75
+    },
+    "abbr": "ZHR"
+  },
+  "world": {
+    "id": "W3",
+    "name": "Ckesalth",
+    "capacity": 60
+  },
+  "rank": "VENEX",
+  "specialization": "Assault e Breaching",
+  "ethnicity": {
+    "label": "Polinesio/Maori",
+    "heritage": "Samoan (paterno) + Maori/Ngapuhi (materno)",
+    "region": "Ilhas do Pacifico - Samoa + Aotearoa (Nova Zelandia)",
+    "cultural_fusion": "Tradies guerreiras Maori (haka, ta moko) combinadas com forca bruta Samoan. Nome Manoa (guerreiro/sonhador Samoano) + Tuilagi (familia chefe Maori)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom dourado quente (#C68642) com subtom pacifico avermelhado",
+    "hair": "Preto espesso, amarrado em topknot Maori tradicional (mutu) com raspar lateral",
+    "eyes": "Castanho escuro, largos, expressivos, sobrancelhas grossas e horizontais",
+    "facial_structure": "Rosto largo e forte, arcada superciliar massiva, nariz largo e chato, queixo proeminente e quadrado",
+    "body_type": "Mesomorfo MASSIVO - 190 cm, 105 kg. Maior operativo em peso e envergadura. Frame de tanque natural.",
+    "distinctive_silhouette": "Postura de haka - ombros larguissimos, peito expandido, silhueta intimidadora massiva. Maior presenca fisica do roster."
+  },
+  "cultural_markers": {
+    "tattoos": "TA MOKO facial COMPLETO no lado esquerdo do rosto - queixo ate testa (curvas espirais Maori, tradio Ngapuhi) - MAIS ICONICO DO ROSTER MASCULINO",
+    "scars": "Multiplas cicatrizes de combate (breaching) - maos, antebraos, costela esquerda (entrada por explosao)",
+    "ornaments": "Colar de dentes de tubarao (hei matau inspirado) no pescoco, bracelete de jade Maori (hei tiki) no pulso esquerdo",
+    "clothing_style": "Armadura de assault pesada com motivos entalhados Polinesios no peitoral - koru patterns, visual de warrior moderno"
+  },
+  "species_traits": {
+    "visible_modification": "Nenhuma - Zheers puro, aparencia humana sem alterades de especie",
+    "passive_manifestation": "Adaptabilidade Zheers + size: em ambientes extremos, biofeedback reduz fadiga visivel - MANOA mostra menos exhaustion que operatives menores",
+    "combat_style_id": "Estilo battering-ram - breaching explosivo, melee devastating, door-kicker. Maior melee damage do roster. Haka-war-cry antes de assault (audio signature)."
+  },
+  "distinguishing_summary": "Unico Polinesio/Maori; TA MOKO facial completo (mais marcante visual do roster); maior peso/altura (190cm/105kg); topknot Maori; colar de dentes de tubarao; maior melee damage; haka war cry signature",
+  "generated_at": "2026-10-22T13:30:29.511519+00:00",
+  "ref_code": "ZHR-04",
+  "operative_ref": "OP_ZHR_M_04",
+  "avatar_ref": "AVT_ZHR_M_04",
+  "legacy_codename": "MANOA TUILAGI",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299596+00:00"
+}

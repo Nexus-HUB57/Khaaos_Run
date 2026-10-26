@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F010",
+  "operative_id": "F-10",
+  "codename": "HUR-01",
+  "ref_code": "HUR-01",
+  "operative_ref": "OP_HUR_F_01",
+  "avatar_ref": "AVT_HUR_F_01",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Huran",
+    "name": "Huran",
+    "type": "amphibian",
+    "skeleton": "SK_Gwen",
+    "passive": "Regeneracao Anfibia - +5 HP/s na agua",
+    "abbr": "HUR",
+    "base_stats": {
+      "health": 110,
+      "energy": 90,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 168,
+      "weight_kg": 60
+    }
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "VENEX",
+  "specialization": "Operacoes Anfibias e Mergulho Tatico",
+  "ethnicity": {
+    "label": "Maya/Yucatec",
+    "heritage": "Maya Yucatec (paterno) + Lacandon/Tzeltal (materno)",
+    "region": "Peninsula de Yucatan, Mexico/Belize/Guatemala - Cenotes",
+    "cultural_fusion": "Tradio milenar de navegacao em cenotes (agua subterranea sagrada) combinada com combate anfibio Huran. Cenotes = portais entre mundos na cosmologia Maya, espelho do multi-world Khaaos."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom cobre mesoamericano (#9B6B3D) com subtom oliva quente e patches iridescentes Huran na pele (tom azul-esverdeado na agua). Tez feminina com brilho dourado.",
+    "hair": "Preto reto e grosso, longo, preso em tactical braid baixo com ornamento de jade Maya no fecho. Raspado geometrico Maya (step-pyramid pattern) apenas na nuca.",
+    "eyes": "Castanho escuro com membrana nictitante Huran parcial - brilho verde-agua (#00CED1) visivel em ambiente aquatico. Olhos amendados amerindios com pestanas longas.",
+    "facial_structure": "Rosto largo mesoamericano feminino, nariz com raiz baixa e asas moderadas (perfil Maya classico), labios cheios e definidos, mandibula suave com queixo forte.",
+    "body_type": "Athletic e stream-lined - 168 cm, 60 kg. Build de mergulhadora de combate - ombros definidos, core forte, pernas torneadas. Body fat baixo para flutuabilidade neutra.",
+    "distinctive_silhouette": "Postura de mergulhadora - corpo lean e atlético, pronta para entrada na agua. Membranas Huran entre dedos visivel. Patches bioluminescentes azul nas costelas (acionados na agua). Tactical braid com ornamento jade."
+  },
+  "cultural_markers": {
+    "tattoos": "Calendario Haab (Maya long count) no peito - pattern circular com glifos, tinta preta com infusao de jade; Ixchel (deusa lua/agua Maya) no antebrao esquerdo - pattern floral aquatico",
+    "scars": "Cicatriz de cenote no tornozelo direito (mergulho em caverna subaquatica - 4 cm, pale), marcas de succao de lampreia nas costelas (habitat Huran aquatico)",
+    "ornaments": "Colar de jade Maya (pectoral de Palenque) no pescoco, brincos de obsidiana verde nas duas orelhas, bracelete de jade no pulso esquerdo com glifo Ixchel",
+    "clothing_style": "Neoprene tatico de mergulho feminino com elementos Maya - padroes de tecido huipil nas mangas, colete de flutuabilidade com glifos, visual de combat-diver mesoamericana"
+  },
+  "species_traits": {
+    "visible_modification": "Membranas interdigitais Huran (maos e pes) - semitransparentes, verde-agua; patches bioluminescentes nas costelas (ativam em contato com agua, brilho #00CED1); pele com textura anfibia sutil nas costas e pescoco (smooth, slightly moist); brachquias vestigiais no pescoco (2 fendas, nao funcionais)",
+    "passive_manifestation": "Regeneracao Anfibia: na agua, HP regenera +5/s visivel como pulse verde-agua ao redor do corpo. Fora da agua, regen cai para +1/s. Bioluminescencia serve como farol subaquatico para squad.",
+    "combat_style_id": "Estilo cenote-ops feminino - combate subaquatico, emboscada em zona alagada, traversal de rios/cachoeiras, mergulho tatico. Maior tempo de apneia do roster (4 min com Huran lungs). Unica operative Maya com combate underwater completo."
+  },
+  "distinguishing_summary": "Unica Maya/Yucatec feminina; membranas interdigitais Huran; patches BIOLUMINESCENTES verde-agua nas costelas (na agua); brachquias vestigiais no pescoco; colar de jade Maya; Ixchel (deusa lua) no antebrao; tactical braid com jade; maior apneia (4 min); combate subaquatico completo; visual combat-diver mesoamericana",
+  "generated_at": "2026-10-23T18:51:00.592017+00:00",
+  "ref_code_assigned_at": "2026-10-23T18:51:00.592017+00:00",
+  "legacy_codename": null
+}

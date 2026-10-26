@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_KhaelCryoResist",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "CryoDamageTaken",
+  "magnitude": 0.3,
+  "tag": "Effect.Buff.CryoResist",
+  "description": "70% cryo damage reduction for Khael species",
+  "generated_by": "wire_all_4_tasks.py"
+}

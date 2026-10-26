@@ -7,6 +7,9 @@
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "Game/VFX/KhaaosVFXManager.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UKhaaosAbility_Shield
@@ -141,20 +144,50 @@ void UKhaaosAbility_Shield::OnRep_bShieldActive()
 
 void UKhaaosAbility_Shield::ClientSpawnShieldVFX_Implementation()
 {
-        // Client-side shield barrier VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Shield::ClientSpawnShieldVFX - Spawning shield VFX"));
+        if (!ShieldBarrierVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = ShieldBarrierVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        ACharacter* Character = Cast<ACharacter>(GetOwningActorFromActorInfo());
+                        if (Character && Character->GetMesh())
+                        {
+                                UNiagaraFunctionLibrary::SpawnSystemAttached(
+                                        NiagaraSys, Character->GetMesh(), FName(TEXT("SpineSocket")),
+                                        FVector::ZeroVector, FRotator::ZeroRotator,
+                                        EAttachLocation::KeepRelativeOffset, false, true,
+                                        ENiagaraEffectPoolPolicy::Auto, true);
+                        }
+                }
+        }
 }
 
 void UKhaaosAbility_Shield::ClientRemoveShieldVFX_Implementation()
 {
-        // Client-side remove shield VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Shield::ClientRemoveShieldVFX - Removing shield VFX"));
+        // Shield VFX will auto-destroy or be cleaned up via VFXManager
+        if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+        {
+                VFXMgr->StopAllVFX(FName(TEXT("ShieldBarrier")), true);
+        }
 }
 
 void UKhaaosAbility_Shield::ClientShieldBreakVFX_Implementation()
 {
-        // Client-side shield break VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Shield::ClientShieldBreakVFX - Shield break VFX"));
+        if (!ShieldBreakVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = ShieldBreakVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        AActor* Owner = GetOwningActorFromActorInfo();
+                        if (Owner)
+                        {
+                                UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+                                        GetWorld(), NiagaraSys, Owner->GetActorLocation(),
+                                        FRotator::ZeroRotator, FVector::OneVector,
+                                        true, true, ENiagaraEffectPoolPolicy::Auto, true);
+                        }
+                }
+        }
 }
 
 void UKhaaosAbility_Shield::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -272,14 +305,30 @@ void UKhaaosAbility_Heal::OnRep_HealRemaining()
 
 void UKhaaosAbility_Heal::ClientSpawnHealVFX_Implementation()
 {
-        // Client-side heal particle VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Heal::ClientSpawnHealVFX - Spawning heal particles"));
+        if (!HealParticleVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = HealParticleVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        ACharacter* Character = Cast<ACharacter>(GetOwningActorFromActorInfo());
+                        if (Character && Character->GetMesh())
+                        {
+                                UNiagaraFunctionLibrary::SpawnSystemAttached(
+                                        NiagaraSys, Character->GetMesh(), FName(TEXT("SpineSocket")),
+                                        FVector::ZeroVector, FRotator::ZeroRotator,
+                                        EAttachLocation::KeepRelativeOffset, false, true,
+                                        ENiagaraEffectPoolPolicy::Auto, true);
+                        }
+                }
+        }
 }
 
 void UKhaaosAbility_Heal::ClientRemoveHealVFX_Implementation()
 {
-        // Client-side remove heal particle VFX
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_Heal::ClientRemoveHealVFX - Removing heal particles"));
+        if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+        {
+                VFXMgr->StopAllVFX(FName(TEXT("HealParticle")), true);
+        }
 }
 
 void UKhaaosAbility_Heal::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

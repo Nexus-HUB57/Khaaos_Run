@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_UltimateDamage",
+  "type": "Damage",
+  "duration_policy": "Instant",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -200.0,
+  "tag": "Effect.Damage.Area",
+  "description": "Ultimate area damage (200)",
+  "generated_by": "wire_all_4_tasks.py"
+}

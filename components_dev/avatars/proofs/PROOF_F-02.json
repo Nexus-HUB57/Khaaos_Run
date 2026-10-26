@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F002",
+  "operative_id": "F-02",
+  "codename": "KHL-01",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Khael",
+    "name": "Khael",
+    "type": "mystic",
+    "skeleton": "SK_Gwen",
+    "passive": "Energia Khaael - custo de habilidade -20%",
+    "base_stats": {
+      "health": 70,
+      "energy": 150,
+      "speed": 0.95
+    },
+    "physical": {
+      "height_cm": 178,
+      "weight_kg": 65
+    },
+    "abbr": "KHL"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 75
+  },
+  "rank": "HURAN",
+  "specialization": "Suporte Mistico e Cura",
+  "ethnicity": {
+    "label": "Latina Mestiza",
+    "heritage": "Mexicana/Espanola (paterno) + Nahuatl/Mixteca (materno)",
+    "region": "Oaxaca, Mexico / Centroamerica",
+    "cultural_fusion": "Espiritualidade Nahuatl (flores, cantos) combinada com misticismo Khael. Nome Lyra (constelacao/instrumento) + Solis (sol/espirito solar Nahuatl)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom medio quente (#CD853F) com subtom dourado Mestiza",
+    "hair": "Castanho escuro, longo, ondulado, STREAKS de energia Khael - brilham rosa-violeta (#FF69B4 ate #8B5CF6) nas pontas",
+    "eyes": "Hazel/avela com flecks de energia Khael pulsando violeta (#8B5CF6) na iris - pulsacao ritmica",
+    "facial_structure": "Rosto oval, macas do rosto proeminentes (trado Nahuatl), nariz medio, labios medio cheios",
+    "body_type": "Esvelta e graciosa - 170 cm, 56 kg. Frame Khael leve, movimentos fluidos como danca",
+    "distinctive_silhouette": "Postura de channeler - maos abertas ao lado, energia visivel como sigils flutuantes. Silhueta eterea, hair floating com energia."
+  },
+  "cultural_markers": {
+    "tattoos": "Calavera (Day of the Dead) na omoplata esquerda - traditional Mexican ornamental skull com flores marigold",
+    "scars": "Nenhuma - combate evasivo, raramente hit. Pele lisa e intacta (difere de operatives de frontline)",
+    "ornaments": "Colar de flores marigold (cempasuchil) - sempre fresco (simbolo Khael de ciclo vida/morte), brincos de prata Oaxaquena",
+    "clothing_style": "Vestes misticas com bordado mexicano - robe energy-woven, xal com patterns de Oaxaca, visual de curandeira-mistica moderna"
+  },
+  "species_traits": {
+    "visible_modification": "SIGILS de energia Khael flutuam ao redor das maos em repouso - rotacao lenta, formas geometricas Nahuatl (xochipilli patterns)",
+    "passive_manifestation": "Energia Khaael: streaks rosa-violeta no cabelo brilham mais intensamente quando cura - hair rise effect; custo de habilidade -20%",
+    "combat_style_id": "Estilo mystic-support - healing a distancia, energy shields, buffs. Sigils expand quando casting. Visual de Xochipilli (principe das flores Nahuatl) em combate."
+  },
+  "distinguishing_summary": "Unica Latina Mestiza Mexicana; STREAKS rosa-violeta no cabelo Khael; sigils flutuantes Nahuatl nas maos; calavera Day of the Dead na omoplata; colar de marigolds vivo; visual curandeira-mistica; unica operative sem cicatrizes",
+  "generated_at": "2026-10-22T13:30:29.511813+00:00",
+  "ref_code": "KHL-01",
+  "operative_ref": "OP_KHL_F_01",
+  "avatar_ref": "AVT_KHL_F_01",
+  "legacy_codename": "LYRA SOLIS",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.297803+00:00"
+}

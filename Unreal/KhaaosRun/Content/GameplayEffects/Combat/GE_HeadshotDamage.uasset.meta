@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_HeadshotDamage",
+  "type": "Damage",
+  "duration_policy": "Instant",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -50.0,
+  "tag": "Effect.Damage.Ballistic",
+  "description": "Headshot damage (2x multiplier)",
+  "generated_by": "wire_all_4_tasks.py"
+}

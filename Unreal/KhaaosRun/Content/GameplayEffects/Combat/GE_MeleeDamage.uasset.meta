@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_MeleeDamage",
+  "type": "Damage",
+  "duration_policy": "Instant",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -50.0,
+  "tag": "Effect.Damage.Melee",
+  "description": "Melee ability damage (50)",
+  "generated_by": "wire_all_4_tasks.py"
+}

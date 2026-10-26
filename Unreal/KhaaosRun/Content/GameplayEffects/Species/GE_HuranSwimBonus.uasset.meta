@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_HuranSwimBonus",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "SwimSpeed",
+  "magnitude": 1.2,
+  "tag": "Effect.Buff.SwimBonus",
+  "description": "+20% swim speed for Huran species",
+  "generated_by": "wire_all_4_tasks.py"
+}

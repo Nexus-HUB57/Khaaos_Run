@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_SkeetwFogStealth",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Override",
+  "attribute": "Visibility",
+  "magnitude": 0.0,
+  "tag": "Effect.Buff.FogStealth",
+  "description": "Fog zone stealth activation for Skeetw species",
+  "generated_by": "wire_all_4_tasks.py"
+}

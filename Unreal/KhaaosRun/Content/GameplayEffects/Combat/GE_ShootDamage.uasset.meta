@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_ShootDamage",
+  "type": "Damage",
+  "duration_policy": "Instant",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -25.0,
+  "tag": "Effect.Damage.Ballistic",
+  "description": "Shoot ability base damage (25)",
+  "generated_by": "wire_all_4_tasks.py"
+}

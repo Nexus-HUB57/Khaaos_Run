@@ -1,0 +1,557 @@
+{
+  "config_version": "2.0.0",
+  "generated_at": "2026-10-23T18:51:00.592017+00:00",
+  "system_name": "Khaaos Ring System",
+  "style": "FreeFire Live Action",
+  "description": "Sistema de zones concentricas que encolhem forcando combate. Cada mundo tem seu proprio ring pattern. Quando ring fecha em um mundo, sobreviventes transferem para proximo mundo no pipeline.",
+  "ring_types": {
+    "SAFE": {
+      "color": "#00FF88",
+      "description": "Zona segura - sem dano, dentro do ring",
+      "ui_label": "ZONA SEGURA"
+    },
+    "SHRINKING": {
+      "color": "#FFD700",
+      "description": "Ring ativo encolhendo - borda visivel",
+      "ui_label": "RING FECHANDO"
+    },
+    "DANGER": {
+      "color": "#FF4444",
+      "description": "Zona de perigo - dano crescente, fora do ring",
+      "ui_label": "ZONA DE PERIGO"
+    },
+    "DEADLY": {
+      "color": "#FF0000",
+      "description": "Zona mortal - dano extremo, ring final",
+      "ui_label": "ZONA MORTAL"
+    },
+    "WATER": {
+      "color": "#00CED1",
+      "description": "Zona aquatica - dano reducido para Huran, traversal lento",
+      "ui_label": "ZONA AQUATICA"
+    },
+    "VOID": {
+      "color": "#4A0080",
+      "description": "Mundo fechado - sem retorno, transicao obrigatoria",
+      "ui_label": "MUNDO FECHADO"
+    }
+  },
+  "global_params": {
+    "tick_rate_ms": 500,
+    "damage_tick_ms": 1000,
+    "ring_warning_seconds": 30,
+    "ring_move_speed_base": 1.0,
+    "shrink_acceleration": 0.05,
+    "damage_base_per_tick": 1,
+    "damage_growth_rate": 0.5,
+    "water_damage_modifier": 0.5,
+    "huran_water_dmg_modifier": 0.0,
+    "transition_grace_seconds": 15
+  },
+  "world_pipeline": {
+    "order": [
+      "CIGKV",
+      "W1",
+      "W2",
+      "W3",
+      "W4"
+    ],
+    "transition_trigger": "ring_close",
+    "transition_type": "portal_khaaos",
+    "CIGKV": {
+      "name": "CIGKV Hub",
+      "capacity": 50,
+      "is_hub": true,
+      "ring_phases": 2,
+      "ring_config": {
+        "phase_1": {
+          "radius_start": 500,
+          "radius_end": 200,
+          "duration_s": 120,
+          "damage_per_tick": 1
+        },
+        "phase_2": {
+          "radius_start": 200,
+          "radius_end": 50,
+          "duration_s": 90,
+          "damage_per_tick": 3
+        }
+      }
+    },
+    "W1": {
+      "name": "Barburhen",
+      "capacity": 100,
+      "is_hub": false,
+      "ring_phases": 6,
+      "ring_config": {
+        "phase_1": {
+          "radius_start": 800,
+          "radius_end": 600,
+          "duration_s": 180,
+          "damage_per_tick": 1,
+          "shrink_speed": 0.8
+        },
+        "phase_2": {
+          "radius_start": 600,
+          "radius_end": 400,
+          "duration_s": 150,
+          "damage_per_tick": 2,
+          "shrink_speed": 1.0
+        },
+        "phase_3": {
+          "radius_start": 400,
+          "radius_end": 250,
+          "duration_s": 120,
+          "damage_per_tick": 3,
+          "shrink_speed": 1.2
+        },
+        "phase_4": {
+          "radius_start": 250,
+          "radius_end": 120,
+          "duration_s": 90,
+          "damage_per_tick": 5,
+          "shrink_speed": 1.5
+        },
+        "phase_5": {
+          "radius_start": 120,
+          "radius_end": 40,
+          "duration_s": 60,
+          "damage_per_tick": 8,
+          "shrink_speed": 2.0
+        },
+        "phase_6": {
+          "radius_start": 40,
+          "radius_end": 0,
+          "duration_s": 30,
+          "damage_per_tick": 15,
+          "shrink_speed": 3.0
+        }
+      },
+      "water_zones": [
+        {
+          "type": "river",
+          "center": [
+            200,
+            0,
+            400
+          ],
+          "radius": 80,
+          "depth": 3.0,
+          "damage_modifier": 0.5
+        },
+        {
+          "type": "lake",
+          "center": [
+            500,
+            0,
+            100
+          ],
+          "radius": 120,
+          "depth": 5.0,
+          "damage_modifier": 0.3
+        }
+      ]
+    },
+    "W2": {
+      "name": "Priadus",
+      "capacity": 75,
+      "is_hub": false,
+      "ring_phases": 5,
+      "ring_config": {
+        "phase_1": {
+          "radius_start": 700,
+          "radius_end": 500,
+          "duration_s": 160,
+          "damage_per_tick": 1,
+          "shrink_speed": 0.9
+        },
+        "phase_2": {
+          "radius_start": 500,
+          "radius_end": 300,
+          "duration_s": 130,
+          "damage_per_tick": 2,
+          "shrink_speed": 1.1
+        },
+        "phase_3": {
+          "radius_start": 300,
+          "radius_end": 150,
+          "duration_s": 100,
+          "damage_per_tick": 4,
+          "shrink_speed": 1.4
+        },
+        "phase_4": {
+          "radius_start": 150,
+          "radius_end": 50,
+          "duration_s": 70,
+          "damage_per_tick": 7,
+          "shrink_speed": 1.8
+        },
+        "phase_5": {
+          "radius_start": 50,
+          "radius_end": 0,
+          "duration_s": 40,
+          "damage_per_tick": 12,
+          "shrink_speed": 2.5
+        }
+      },
+      "water_zones": [
+        {
+          "type": "flooded",
+          "center": [
+            300,
+            0,
+            300
+          ],
+          "radius": 200,
+          "depth": 1.5,
+          "damage_modifier": 0.7
+        }
+      ]
+    },
+    "W3": {
+      "name": "Ckesalth",
+      "capacity": 60,
+      "is_hub": false,
+      "ring_phases": 4,
+      "ring_config": {
+        "phase_1": {
+          "radius_start": 600,
+          "radius_end": 400,
+          "duration_s": 140,
+          "damage_per_tick": 2,
+          "shrink_speed": 1.0
+        },
+        "phase_2": {
+          "radius_start": 400,
+          "radius_end": 200,
+          "duration_s": 110,
+          "damage_per_tick": 4,
+          "shrink_speed": 1.3
+        },
+        "phase_3": {
+          "radius_start": 200,
+          "radius_end": 80,
+          "duration_s": 80,
+          "damage_per_tick": 7,
+          "shrink_speed": 1.7
+        },
+        "phase_4": {
+          "radius_start": 80,
+          "radius_end": 0,
+          "duration_s": 45,
+          "damage_per_tick": 15,
+          "shrink_speed": 2.5
+        }
+      },
+      "water_zones": []
+    },
+    "W4": {
+      "name": "Arukheea",
+      "capacity": 80,
+      "is_hub": false,
+      "ring_phases": 5,
+      "ring_config": {
+        "phase_1": {
+          "radius_start": 750,
+          "radius_end": 550,
+          "duration_s": 170,
+          "damage_per_tick": 1,
+          "shrink_speed": 0.85
+        },
+        "phase_2": {
+          "radius_start": 550,
+          "radius_end": 350,
+          "duration_s": 140,
+          "damage_per_tick": 3,
+          "shrink_speed": 1.1
+        },
+        "phase_3": {
+          "radius_start": 350,
+          "radius_end": 180,
+          "duration_s": 110,
+          "damage_per_tick": 5,
+          "shrink_speed": 1.4
+        },
+        "phase_4": {
+          "radius_start": 180,
+          "radius_end": 60,
+          "duration_s": 75,
+          "damage_per_tick": 8,
+          "shrink_speed": 1.9
+        },
+        "phase_5": {
+          "radius_start": 60,
+          "radius_end": 0,
+          "duration_s": 35,
+          "damage_per_tick": 15,
+          "shrink_speed": 3.0
+        }
+      },
+      "water_zones": [
+        {
+          "type": "ocean_shelf",
+          "center": [
+            0,
+            0,
+            600
+          ],
+          "radius": 300,
+          "depth": 8.0,
+          "damage_modifier": 0.4
+        },
+        {
+          "type": "mangrove",
+          "center": [
+            400,
+            0,
+            200
+          ],
+          "radius": 100,
+          "depth": 2.0,
+          "damage_modifier": 0.6
+        }
+      ]
+    }
+  },
+  "ring_events": {
+    "ring_start": {
+      "audio": "Audio_Khaaos_Ring_Start",
+      "vfx": "VFX_Ring_Electric_Start",
+      "ui_notification": "O RING ESTA FECHANDOMova-se para a zona segura.",
+      "duration_s": 5
+    },
+    "ring_shrinking": {
+      "audio": "Audio_Khaaos_Ring_Shrink_Loop",
+      "vfx": "VFX_Ring_Electric_Shrink",
+      "ui_countdown": true
+    },
+    "ring_closed": {
+      "audio": "Audio_Khaaos_Ring_Closed",
+      "vfx": "VFX_Ring_Electric_Closed",
+      "ui_notification": "RING FECHOUCuidado com a zona de perigo."
+    },
+    "world_transition": {
+      "audio": "Audio_Khaaos_Portal_Open",
+      "vfx": "VFX_Khaaos_Portal_Ring",
+      "ui_notification": "PORTAL KHAaos ATIVOTransfira para o proximo mundo!",
+      "portal_duration_s": 30
+    },
+    "final_ring": {
+      "audio": "Audio_Khaaos_Final_Ring",
+      "vfx": "VFX_Ring_Final_Electrical_Storm",
+      "ui_notification": "RING FINALSobreviva!",
+      "damage_multiplier": 3.0
+    }
+  },
+  "huran_mechanics": {
+    "water_zone_passive": "Regeneracao Anfibia ativa (+5 HP/s na agua)",
+    "ring_damage_in_water": "Dano do ring reduzido 50% em zona aquatica para Huran operatives",
+    "swim_speed_bonus": "+20% swim speed em water zones do ring",
+    "bioluminescence_iff": "HUR-01 verde-agua (#00CED1), HUR-02 teal (#20B2AA) - IFF subaquatico",
+    "underwater_ring_vision": "Huran operatives veem ring boundary debaixo da agua (outros operatives nao veem)",
+    "water_ring_strategy": "Huran operatives devem posicionar estrategicamente em water zones quando ring encolhe - water zones mitigam dano do ring e ativam regen",
+    "water_zone_ring_damage_reduction": 0.5,
+    "bioluminescence_tactical_use": "HUR operatives brilham na agua - revelam posicao ao squad mas tambem ao inimigo. Trade-off tatico.",
+    "underwater_ring_traversal": "Huran pode atravessar ring boundary underwater com dano reduzido (25% do normal) por 5 segundos - ability unique",
+    "ring_phase_water_spawn": "Water zones dentro do ring recebem loot bonus e peixes Huran (healing items) nos phases 3+"
+  },
+  "live_action": {
+    "spectator_system": {
+      "enabled": true,
+      "max_spectators_per_match": 500,
+      "spectator_delay_s": 10,
+      "camera_modes": [
+        "FREECAM",
+        "FOLLOW_PLAYER",
+        "OVERHEAD",
+        "RING_CENTER"
+      ],
+      "ring_cam": {
+        "description": "Camera posicionada no centro do ring mostrando encolhimento",
+        "auto_activate_on_shrink": true,
+        "transition_time_s": 2
+      }
+    },
+    "broadcast_system": {
+      "enabled": true,
+      "platforms": [
+        "DISCORD",
+        "TWITCH",
+        "YOUTUBE"
+      ],
+      "events_broadcast": [
+        "RING_PHASE_CHANGE",
+        "WORLD_TRANSITION",
+        "ELIMINATION_IN_RING",
+        "HURAN_WATER_PLAY",
+        "FINAL_RING",
+        "AIRDROP_SPAWN"
+      ],
+      "discord_integration": {
+        "webhook_events": [
+          "RING_PHASE_CHANGE",
+          "WORLD_TRANSITION",
+          "FINAL_RING"
+        ],
+        "embed_color_by_zone": {
+          "SAFE": 65280,
+          "SHRINKING": 16776960,
+          "DANGER": 16711680,
+          "DEADLY": 16711680,
+          "WATER": 0,
+          "VOID": 4915330
+        }
+      }
+    },
+    "commentator_system": {
+      "enabled": true,
+      "commentary_events": {
+        "ring_shrinking": "O ring esta fechando! Sobreviventes, movam-se para a zona segura!",
+        "ring_final_30s": "30 segundos para o ring final! Posicao e tudo!",
+        "world_transition": "Portal Khaaos ativo! O mundo esta fechando - transfira agora!",
+        "huran_water_play": "Operativo Huran na zona aquatica - regeneracao anfibia ativa!",
+        "airdrop_incoming": "Airdrop caindo em 10 segundos! Loot raro no horizonte!",
+        "final_circle": "Circulo final! Quem sobrevive, vence!"
+      }
+    }
+  },
+  "airdrop_system": {
+    "enabled": true,
+    "spawn_trigger": "ring_phase_change",
+    "spawn_probability": {
+      "phase_1": 0.3,
+      "phase_2": 0.5,
+      "phase_3": 0.7,
+      "phase_4": 0.9,
+      "phase_5": 1.0,
+      "phase_6": 1.0
+    },
+    "loot_tier_by_phase": {
+      "phase_1": "RARO",
+      "phase_2": "RARO",
+      "phase_3": "EPICO",
+      "phase_4": "EPICO",
+      "phase_5": "LENDARIO",
+      "phase_6": "MITICO"
+    },
+    "airdrop_types": {
+      "STANDARD": {
+        "loot_count": 4,
+        "contains_shield": true,
+        "fall_time_s": 8,
+        "vfx": "VFX_Airdrop_Standard"
+      },
+      "FLARE_GUN": {
+        "loot_count": 6,
+        "contains_shield": true,
+        "contains_mythic_chance": 0.15,
+        "fall_time_s": 6,
+        "vfx": "VFX_Airdrop_Flare"
+      },
+      "WATER_DROP": {
+        "loot_count": 5,
+        "water_only": true,
+        "huran_bonus_loot": true,
+        "fall_time_s": 10,
+        "vfx": "VFX_Airdrop_Water"
+      }
+    },
+    "world_overrides": {
+      "W1": {
+        "extra_drops": 1,
+        "water_drop_enabled": true
+      },
+      "W2": {
+        "extra_drops": 0,
+        "water_drop_enabled": true
+      },
+      "W3": {
+        "extra_drops": 0,
+        "water_drop_enabled": false
+      },
+      "W4": {
+        "extra_drops": 2,
+        "water_drop_enabled": true
+      }
+    }
+  },
+  "zone_loot_bonus": {
+    "description": "Loot spawn aumenta conforme ring encolhe - mais loot no centro do ring",
+    "bonus_per_phase": {
+      "1": 1.0,
+      "2": 1.2,
+      "3": 1.5,
+      "4": 2.0,
+      "5": 2.5,
+      "6": 3.0
+    },
+    "center_bonus_radius": 50,
+    "center_bonus_multiplier": 1.5,
+    "huran_water_loot_bonus": {
+      "description": "Water zones dentro do ring tem loot bonus extra para Huran operatives",
+      "multiplier": 1.3,
+      "exclusive_items": [
+        "LOOT_Armadura_Huran",
+        "LOOT_Seringa_Venex"
+      ]
+    }
+  },
+  "zone_hazards": {
+    "primary": "ELECTRIC_ENERGY",
+    "hazards": {
+      "ELECTRIC_ENERGY": {
+        "description": "Ring padrao - borda eletrica que da dano crescente",
+        "vfx": "VFX_Ring_Electric",
+        "damage_type": "ENERGY",
+        "applies_to_all_worlds": true
+      },
+      "TOXIC_FOG": {
+        "description": "W2 Priadus - zona toxica adicional na area do ring",
+        "vfx": "VFX_Ring_ToxicFog",
+        "damage_type": "TOXIC",
+        "damage_modifier": 0.3,
+        "worlds": [
+          "W2"
+        ],
+        "huran_resistance": 0.5
+      },
+      "RADIATION_ZONE": {
+        "description": "W3 Ckesalth - radiacao residual no ring (mundo deserto nuclear)",
+        "vfx": "VFX_Ring_Radiation",
+        "damage_type": "RADIATION",
+        "damage_modifier": 0.2,
+        "worlds": [
+          "W3"
+        ],
+        "shield_reduces": true
+      },
+      "CRYO_STORM": {
+        "description": "W4 Arukheea - tempestade de gelo no ring final (mundo gelo/vulcao)",
+        "vfx": "VFX_Ring_CryoStorm",
+        "damage_type": "CRYO",
+        "damage_modifier": 0.4,
+        "worlds": [
+          "W4"
+        ],
+        "slows_movement": true,
+        "slow_percentage": 30
+      }
+    }
+  },
+  "ring_prediction": {
+    "description": "Mostra proximo ring no minimap antes de comecar a encolher (FreeFire style)",
+    "enabled": true,
+    "preview_seconds_before_shrink": 30,
+    "preview_on_minimap": true,
+    "preview_on_world": false,
+    "preview_color": "#FFFFFF44",
+    "prediction_accuracy": {
+      "phase_1": "EXACT",
+      "phase_2": "EXACT",
+      "phase_3": "APPROXIMATE_90PCT",
+      "phase_4": "APPROXIMATE_80PCT",
+      "phase_5": "APPROXIMATE_70PCT",
+      "phase_6": "RANDOM_SHIFT_50M"
+    }
+  }
+}

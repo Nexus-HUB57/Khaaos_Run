@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_SlowDebuff",
+  "type": "Debuff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Multiply",
+  "attribute": "MoveSpeed",
+  "magnitude": 0.5,
+  "tag": "Effect.Debuff.Slowed",
+  "description": "Slow debuff (50% speed, 3s)",
+  "generated_by": "wire_all_4_tasks.py"
+}

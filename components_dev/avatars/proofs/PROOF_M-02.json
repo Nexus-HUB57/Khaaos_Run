@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M002",
+  "operative_id": "M-02",
+  "codename": "ONI-01",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Onith",
+    "name": "Onith",
+    "type": "reptile",
+    "skeleton": "SK_Manny",
+    "passive": "Escamas Refletivas - +15% defesa contra projeteis",
+    "base_stats": {
+      "health": 120,
+      "energy": 80,
+      "speed": 0.9
+    },
+    "physical": {
+      "height_cm": 190,
+      "weight_kg": 95
+    },
+    "abbr": "ONI"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 75
+  },
+  "rank": "ONITH",
+  "specialization": "Demolicao e Artilharia",
+  "ethnicity": {
+    "label": "Eslavo Nordico",
+    "heritage": "Kareliano/Russo (paterno) + Sueco/Noruego (materno)",
+    "region": "Escandinavia Oriental / Circulo Artico",
+    "cultural_fusion": "Tradies nordicas de sobrevivencia extremo mescladas com disciplina militar eslava. Nome Draxen (draugr-energy) + Korr (Norse korr = escolhido)."
+  },
+  "phenotype": {
+    "skin_tone": "Palido quase translucido (#F0E4D4) com subtom azulado-verde (influencia Onith reptiliana)",
+    "hair": "Platinum buzz cut, entradas nas temporas, textura grossa",
+    "eyes": "Gelo azul (#87CEEB), pupilas em fenda VERTICAL (trado Onith), profundamente inseridos",
+    "facial_structure": "Arcada superciliar proeminente, labios finos, queixo com cleft profundo, maxilar largo",
+    "body_type": "Mesomorfo massivo - 193 cm, 98 kg. Maior massa muscular masculina, constituiao Onith reforada",
+    "distinctive_silhouette": "Postura de siege - ombros extremamente largos, tronco barril, silhueta intimidadora. Maior operativo Onith."
+  },
+  "cultural_markers": {
+    "tattoos": "Runa Elder Futhark TIWAZ (deus da guerra) na omoplata direita, estilo tinta preta nordica",
+    "scars": "Queimadura criogenica na bochecha esquerda (missao artica W2 - 5 cm, textura enrugada branca), marcas de concussao na tempora",
+    "ornaments": "Colar de presas de urso polar (heranca nordica), dog tags de ao inoxidavel com gravacao cirilica",
+    "clothing_style": "Armadura tatica artica pesada - gola com forro de pelego, placas balisticas espessas, visual de tanque humano"
+  },
+  "species_traits": {
+    "visible_modification": "Escamas Onith iridescentes verde-preto ao longo da mandibula e antebraos - patches parciais, nao cobertura total",
+    "passive_manifestation": "Escamas Refletivas brilham sob fogo direto - efeito visual de deflexao nos patches de escama",
+    "combat_style_id": "Estilo siege/defesa posicional - absorve dano frontal, advance-and-plant. Maior resistencia a projeteis do roster."
+  },
+  "distinguishing_summary": "Unico Eslavo Nordico; unico com pupilas em fenda VERTICAL Onith; maior massa do roster masculino; escamas iridescentes verde-preto na mandibula; queimadura criogenica na bochecha; colar de presas de urso polar",
+  "generated_at": "2026-10-22T13:30:29.510993+00:00",
+  "ref_code": "ONI-01",
+  "operative_ref": "OP_ONI_M_01",
+  "avatar_ref": "AVT_ONI_M_01",
+  "legacy_codename": "DRAXEN KORR",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298948+00:00"
+}
