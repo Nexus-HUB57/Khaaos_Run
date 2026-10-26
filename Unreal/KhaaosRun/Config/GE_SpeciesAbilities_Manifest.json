@@ -1,0 +1,1406 @@
+{
+  "version": "2.0",
+  "description": "Khaaos Run Species Active Abilities \u2014 GameplayEffect Manifest (48 abilities)",
+  "gameplay_effects": [
+    {
+      "name": "GE_TidalSurge_Cooldown",
+      "type": "Cooldown",
+      "duration": 2.0,
+      "tag": "Cooldown.Species.Huran.TidalSurge",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TidalSurge"
+    },
+    {
+      "name": "GE_TidalSurge_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TidalSurge"
+    },
+    {
+      "name": "GE_TidalSurge_Damage",
+      "type": "Damage",
+      "magnitude": 40.0,
+      "tag": "Effect.Damage.Water",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TidalSurge"
+    },
+    {
+      "name": "GE_AquaShield_Cooldown",
+      "type": "Cooldown",
+      "duration": 15.0,
+      "tag": "Cooldown.Species.Huran.AquaShield",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.AquaShield"
+    },
+    {
+      "name": "GE_AquaShield_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.AquaShield"
+    },
+    {
+      "name": "GE_AquaShield_Buff",
+      "type": "Buff",
+      "duration": 10.0,
+      "tag": "Effect.Buff.Shielded",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.AquaShield"
+    },
+    {
+      "name": "GE_DiveBomb_Cooldown",
+      "type": "Cooldown",
+      "duration": 8.0,
+      "tag": "Cooldown.Species.Huran.DiveBomb",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.DiveBomb"
+    },
+    {
+      "name": "GE_DiveBomb_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.DiveBomb"
+    },
+    {
+      "name": "GE_DiveBomb_Buff",
+      "type": "Debuff",
+      "duration": 0.5,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.DiveBomb"
+    },
+    {
+      "name": "GE_DiveBomb_Damage",
+      "type": "Damage",
+      "magnitude": 30.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.DiveBomb"
+    },
+    {
+      "name": "GE_FloodZone_Cooldown",
+      "type": "Cooldown",
+      "duration": 30.0,
+      "tag": "Cooldown.Species.Huran.FloodZone",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.FloodZone"
+    },
+    {
+      "name": "GE_FloodZone_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 40.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.FloodZone"
+    },
+    {
+      "name": "GE_FloodZone_Buff",
+      "type": "Debuff",
+      "duration": 15.0,
+      "tag": "Effect.Debuff.Slowed",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.FloodZone"
+    },
+    {
+      "name": "GE_PressureStrike_Cooldown",
+      "type": "Cooldown",
+      "duration": 4.0,
+      "tag": "Cooldown.Species.Huran.PressureStrike",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.PressureStrike"
+    },
+    {
+      "name": "GE_PressureStrike_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.PressureStrike"
+    },
+    {
+      "name": "GE_PressureStrike_Buff",
+      "type": "Debuff",
+      "duration": 2.0,
+      "tag": "Effect.Damage.Melee",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.PressureStrike"
+    },
+    {
+      "name": "GE_PressureStrike_Damage",
+      "type": "Damage",
+      "magnitude": 75.0,
+      "tag": "Effect.Damage.Melee",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.PressureStrike"
+    },
+    {
+      "name": "GE_GillsRegen_Cooldown",
+      "type": "Cooldown",
+      "duration": 5.0,
+      "tag": "Cooldown.Species.Huran.GillsRegen",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.GillsRegen"
+    },
+    {
+      "name": "GE_GillsRegen_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 10.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.GillsRegen"
+    },
+    {
+      "name": "GE_Whirlpool_Cooldown",
+      "type": "Cooldown",
+      "duration": 20.0,
+      "tag": "Cooldown.Species.Huran.Whirlpool",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.Whirlpool"
+    },
+    {
+      "name": "GE_Whirlpool_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 35.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.Whirlpool"
+    },
+    {
+      "name": "GE_Whirlpool_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Debuff.Rooted",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.Whirlpool"
+    },
+    {
+      "name": "GE_Whirlpool_Damage",
+      "type": "Damage",
+      "magnitude": 15.0,
+      "tag": "Effect.Debuff.Rooted",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.Whirlpool"
+    },
+    {
+      "name": "GE_TsunamiRage_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Huran.TsunamiRage",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TsunamiRage"
+    },
+    {
+      "name": "GE_TsunamiRage_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TsunamiRage"
+    },
+    {
+      "name": "GE_TsunamiRage_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Damage.Water",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TsunamiRage"
+    },
+    {
+      "name": "GE_TsunamiRage_Damage",
+      "type": "Damage",
+      "magnitude": 150.0,
+      "tag": "Effect.Damage.Water",
+      "species": "Huran",
+      "ability_tag": "Ability.Species.Huran.TsunamiRage"
+    },
+    {
+      "name": "GE_FrostBolt_Cooldown",
+      "type": "Cooldown",
+      "duration": 3.0,
+      "tag": "Cooldown.Species.Khael.FrostBolt",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrostBolt"
+    },
+    {
+      "name": "GE_FrostBolt_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrostBolt"
+    },
+    {
+      "name": "GE_FrostBolt_Buff",
+      "type": "Debuff",
+      "duration": 2.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrostBolt"
+    },
+    {
+      "name": "GE_FrostBolt_Damage",
+      "type": "Damage",
+      "magnitude": 40.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrostBolt"
+    },
+    {
+      "name": "GE_CryoWall_Cooldown",
+      "type": "Cooldown",
+      "duration": 12.0,
+      "tag": "Cooldown.Species.Khael.CryoWall",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.CryoWall"
+    },
+    {
+      "name": "GE_CryoWall_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.CryoWall"
+    },
+    {
+      "name": "GE_CryoWall_Buff",
+      "type": "Buff",
+      "duration": 6.0,
+      "tag": "Effect.Buff.Shielded",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.CryoWall"
+    },
+    {
+      "name": "GE_Blizzard_Cooldown",
+      "type": "Cooldown",
+      "duration": 15.0,
+      "tag": "Cooldown.Species.Khael.Blizzard",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Blizzard"
+    },
+    {
+      "name": "GE_Blizzard_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 35.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Blizzard"
+    },
+    {
+      "name": "GE_Blizzard_Buff",
+      "type": "Debuff",
+      "duration": 4.0,
+      "tag": "Effect.Debuff.Slowed",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Blizzard"
+    },
+    {
+      "name": "GE_Blizzard_Damage",
+      "type": "Damage",
+      "magnitude": 10.0,
+      "tag": "Effect.Debuff.Slowed",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Blizzard"
+    },
+    {
+      "name": "GE_FrozenArmor_Cooldown",
+      "type": "Cooldown",
+      "duration": 20.0,
+      "tag": "Cooldown.Species.Khael.FrozenArmor",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrozenArmor"
+    },
+    {
+      "name": "GE_FrozenArmor_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrozenArmor"
+    },
+    {
+      "name": "GE_FrozenArmor_Buff",
+      "type": "Buff",
+      "duration": 8.0,
+      "tag": "Effect.Buff.DamageReduction",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.FrozenArmor"
+    },
+    {
+      "name": "GE_Avalanche_Cooldown",
+      "type": "Cooldown",
+      "duration": 10.0,
+      "tag": "Cooldown.Species.Khael.Avalanche",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Avalanche"
+    },
+    {
+      "name": "GE_Avalanche_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Avalanche"
+    },
+    {
+      "name": "GE_Avalanche_Buff",
+      "type": "Debuff",
+      "duration": 1.0,
+      "tag": "Effect.Damage.Fire",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Avalanche"
+    },
+    {
+      "name": "GE_Avalanche_Damage",
+      "type": "Damage",
+      "magnitude": 60.0,
+      "tag": "Effect.Damage.Fire",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Avalanche"
+    },
+    {
+      "name": "GE_Frostbite_Cooldown",
+      "type": "Cooldown",
+      "duration": 3.0,
+      "tag": "Cooldown.Species.Khael.Frostbite",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Frostbite"
+    },
+    {
+      "name": "GE_Frostbite_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 10.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Frostbite"
+    },
+    {
+      "name": "GE_Frostbite_Buff",
+      "type": "Debuff",
+      "duration": 1.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Frostbite"
+    },
+    {
+      "name": "GE_Frostbite_Damage",
+      "type": "Damage",
+      "magnitude": 30.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.Frostbite"
+    },
+    {
+      "name": "GE_IceClone_Cooldown",
+      "type": "Cooldown",
+      "duration": 18.0,
+      "tag": "Cooldown.Species.Khael.IceClone",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.IceClone"
+    },
+    {
+      "name": "GE_IceClone_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.IceClone"
+    },
+    {
+      "name": "GE_IceClone_Buff",
+      "type": "Debuff",
+      "duration": 8.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.IceClone"
+    },
+    {
+      "name": "GE_IceClone_Damage",
+      "type": "Damage",
+      "magnitude": 40.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.IceClone"
+    },
+    {
+      "name": "GE_AbsoluteZero_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Khael.AbsoluteZero",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.AbsoluteZero"
+    },
+    {
+      "name": "GE_AbsoluteZero_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.AbsoluteZero"
+    },
+    {
+      "name": "GE_AbsoluteZero_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.AbsoluteZero"
+    },
+    {
+      "name": "GE_AbsoluteZero_Damage",
+      "type": "Damage",
+      "magnitude": 80.0,
+      "tag": "Effect.Debuff.Frozen",
+      "species": "Khael",
+      "ability_tag": "Ability.Species.Khael.AbsoluteZero"
+    },
+    {
+      "name": "GE_PulseBlast_Cooldown",
+      "type": "Cooldown",
+      "duration": 8.0,
+      "tag": "Cooldown.Species.Venex.PulseBlast",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.PulseBlast"
+    },
+    {
+      "name": "GE_PulseBlast_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.PulseBlast"
+    },
+    {
+      "name": "GE_PulseBlast_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Debuff.Disarmed",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.PulseBlast"
+    },
+    {
+      "name": "GE_PulseBlast_Damage",
+      "type": "Damage",
+      "magnitude": 15.0,
+      "tag": "Effect.Debuff.Disarmed",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.PulseBlast"
+    },
+    {
+      "name": "GE_Overclock_Cooldown",
+      "type": "Cooldown",
+      "duration": 20.0,
+      "tag": "Cooldown.Species.Venex.Overclock",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overclock"
+    },
+    {
+      "name": "GE_Overclock_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overclock"
+    },
+    {
+      "name": "GE_Overclock_Buff",
+      "type": "Buff",
+      "duration": 5.0,
+      "tag": "Effect.Buff.Overclock",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overclock"
+    },
+    {
+      "name": "GE_TargetLock_Cooldown",
+      "type": "Cooldown",
+      "duration": 15.0,
+      "tag": "Cooldown.Species.Venex.TargetLock",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.TargetLock"
+    },
+    {
+      "name": "GE_TargetLock_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.TargetLock"
+    },
+    {
+      "name": "GE_TargetLock_Buff",
+      "type": "Buff",
+      "duration": 2.0,
+      "tag": "Effect.Buff.Overclock",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.TargetLock"
+    },
+    {
+      "name": "GE_NaniteRepair_Cooldown",
+      "type": "Cooldown",
+      "duration": 25.0,
+      "tag": "Cooldown.Species.Venex.NaniteRepair",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.NaniteRepair"
+    },
+    {
+      "name": "GE_NaniteRepair_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.NaniteRepair"
+    },
+    {
+      "name": "GE_NaniteRepair_Buff",
+      "type": "Buff",
+      "duration": 8.0,
+      "tag": "Effect.Buff.HealOverTime",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.NaniteRepair"
+    },
+    {
+      "name": "GE_CyberDash_Cooldown",
+      "type": "Cooldown",
+      "duration": 6.0,
+      "tag": "Cooldown.Species.Venex.CyberDash",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.CyberDash"
+    },
+    {
+      "name": "GE_CyberDash_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.CyberDash"
+    },
+    {
+      "name": "GE_ScannerSweep_Cooldown",
+      "type": "Cooldown",
+      "duration": 10.0,
+      "tag": "Cooldown.Species.Venex.ScannerSweep",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.ScannerSweep"
+    },
+    {
+      "name": "GE_ScannerSweep_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.ScannerSweep"
+    },
+    {
+      "name": "GE_ScannerSweep_Buff",
+      "type": "Buff",
+      "duration": 4.0,
+      "tag": "Effect.Buff.Recon",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.ScannerSweep"
+    },
+    {
+      "name": "GE_StasisField_Cooldown",
+      "type": "Cooldown",
+      "duration": 30.0,
+      "tag": "Cooldown.Species.Venex.StasisField",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.StasisField"
+    },
+    {
+      "name": "GE_StasisField_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 40.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.StasisField"
+    },
+    {
+      "name": "GE_StasisField_Buff",
+      "type": "Buff",
+      "duration": 3.0,
+      "tag": "Effect.Buff.Invulnerable",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.StasisField"
+    },
+    {
+      "name": "GE_Overload_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Venex.Overload",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overload"
+    },
+    {
+      "name": "GE_Overload_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overload"
+    },
+    {
+      "name": "GE_Overload_Buff",
+      "type": "Debuff",
+      "duration": 5.0,
+      "tag": "Effect.Debuff.Disarmed",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overload"
+    },
+    {
+      "name": "GE_Overload_Damage",
+      "type": "Damage",
+      "magnitude": 100.0,
+      "tag": "Effect.Debuff.Disarmed",
+      "species": "Venex",
+      "ability_tag": "Ability.Species.Venex.Overload"
+    },
+    {
+      "name": "GE_VenomSpit_Cooldown",
+      "type": "Cooldown",
+      "duration": 3.0,
+      "tag": "Cooldown.Species.Onith.VenomSpit",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.VenomSpit"
+    },
+    {
+      "name": "GE_VenomSpit_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 10.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.VenomSpit"
+    },
+    {
+      "name": "GE_VenomSpit_Buff",
+      "type": "Debuff",
+      "duration": 4.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.VenomSpit"
+    },
+    {
+      "name": "GE_VenomSpit_Damage",
+      "type": "Damage",
+      "magnitude": 25.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.VenomSpit"
+    },
+    {
+      "name": "GE_NoxiousGas_Cooldown",
+      "type": "Cooldown",
+      "duration": 12.0,
+      "tag": "Cooldown.Species.Onith.NoxiousGas",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.NoxiousGas"
+    },
+    {
+      "name": "GE_NoxiousGas_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.NoxiousGas"
+    },
+    {
+      "name": "GE_NoxiousGas_Buff",
+      "type": "Debuff",
+      "duration": 6.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.NoxiousGas"
+    },
+    {
+      "name": "GE_NoxiousGas_Damage",
+      "type": "Damage",
+      "magnitude": 3.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.NoxiousGas"
+    },
+    {
+      "name": "GE_PlagueTouch_Cooldown",
+      "type": "Cooldown",
+      "duration": 4.0,
+      "tag": "Cooldown.Species.Onith.PlagueTouch",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.PlagueTouch"
+    },
+    {
+      "name": "GE_PlagueTouch_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.PlagueTouch"
+    },
+    {
+      "name": "GE_PlagueTouch_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.PlagueTouch"
+    },
+    {
+      "name": "GE_PlagueTouch_Damage",
+      "type": "Damage",
+      "magnitude": 40.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.PlagueTouch"
+    },
+    {
+      "name": "GE_ToxicHusk_Cooldown",
+      "type": "Cooldown",
+      "duration": 18.0,
+      "tag": "Cooldown.Species.Onith.ToxicHusk",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ToxicHusk"
+    },
+    {
+      "name": "GE_ToxicHusk_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ToxicHusk"
+    },
+    {
+      "name": "GE_ToxicHusk_Buff",
+      "type": "Buff",
+      "duration": 8.0,
+      "tag": "Effect.Buff.Thorns",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ToxicHusk"
+    },
+    {
+      "name": "GE_ToxicHusk_Damage",
+      "type": "Damage",
+      "magnitude": 10.0,
+      "tag": "Effect.Buff.Thorns",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ToxicHusk"
+    },
+    {
+      "name": "GE_Contaminate_Cooldown",
+      "type": "Cooldown",
+      "duration": 15.0,
+      "tag": "Cooldown.Species.Onith.Contaminate",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Contaminate"
+    },
+    {
+      "name": "GE_Contaminate_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Contaminate"
+    },
+    {
+      "name": "GE_Contaminate_Buff",
+      "type": "Debuff",
+      "duration": 5.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Contaminate"
+    },
+    {
+      "name": "GE_Contaminate_Damage",
+      "type": "Damage",
+      "magnitude": 8.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Contaminate"
+    },
+    {
+      "name": "GE_ParasiteDrain_Cooldown",
+      "type": "Cooldown",
+      "duration": 10.0,
+      "tag": "Cooldown.Species.Onith.ParasiteDrain",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ParasiteDrain"
+    },
+    {
+      "name": "GE_ParasiteDrain_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ParasiteDrain"
+    },
+    {
+      "name": "GE_ParasiteDrain_Buff",
+      "type": "Buff",
+      "duration": 1.5,
+      "tag": "Effect.Buff.Leech",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ParasiteDrain"
+    },
+    {
+      "name": "GE_ParasiteDrain_Damage",
+      "type": "Damage",
+      "magnitude": 30.0,
+      "tag": "Effect.Buff.Leech",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.ParasiteDrain"
+    },
+    {
+      "name": "GE_BioMimic_Cooldown",
+      "type": "Cooldown",
+      "duration": 20.0,
+      "tag": "Cooldown.Species.Onith.BioMimic",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.BioMimic"
+    },
+    {
+      "name": "GE_BioMimic_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.BioMimic"
+    },
+    {
+      "name": "GE_BioMimic_Buff",
+      "type": "Buff",
+      "duration": 3.0,
+      "tag": "Effect.Buff.Stealth",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.BioMimic"
+    },
+    {
+      "name": "GE_BioMimic_Damage",
+      "type": "Damage",
+      "magnitude": 25.0,
+      "tag": "Effect.Buff.Stealth",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.BioMimic"
+    },
+    {
+      "name": "GE_Pandemic_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Onith.Pandemic",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Pandemic"
+    },
+    {
+      "name": "GE_Pandemic_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Pandemic"
+    },
+    {
+      "name": "GE_Pandemic_Buff",
+      "type": "Debuff",
+      "duration": 5.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Pandemic"
+    },
+    {
+      "name": "GE_Pandemic_Damage",
+      "type": "Damage",
+      "magnitude": 15.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "species": "Onith",
+      "ability_tag": "Ability.Species.Onith.Pandemic"
+    },
+    {
+      "name": "GE_RadBurst_Cooldown",
+      "type": "Cooldown",
+      "duration": 8.0,
+      "tag": "Cooldown.Species.Zheers.RadBurst",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadBurst"
+    },
+    {
+      "name": "GE_RadBurst_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadBurst"
+    },
+    {
+      "name": "GE_RadBurst_Buff",
+      "type": "Debuff",
+      "duration": 1.0,
+      "tag": "Effect.Debuff.Blinded",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadBurst"
+    },
+    {
+      "name": "GE_RadBurst_Damage",
+      "type": "Damage",
+      "magnitude": 30.0,
+      "tag": "Effect.Debuff.Blinded",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadBurst"
+    },
+    {
+      "name": "GE_MutateForm_Cooldown",
+      "type": "Cooldown",
+      "duration": 25.0,
+      "tag": "Cooldown.Species.Zheers.MutateForm",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.MutateForm"
+    },
+    {
+      "name": "GE_MutateForm_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 30.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.MutateForm"
+    },
+    {
+      "name": "GE_MutateForm_Buff",
+      "type": "Buff",
+      "duration": 8.0,
+      "tag": "Effect.Buff.Mutation",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.MutateForm"
+    },
+    {
+      "name": "GE_FissionShot_Cooldown",
+      "type": "Cooldown",
+      "duration": 5.0,
+      "tag": "Cooldown.Species.Zheers.FissionShot",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.FissionShot"
+    },
+    {
+      "name": "GE_FissionShot_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.FissionShot"
+    },
+    {
+      "name": "GE_FissionShot_Damage",
+      "type": "Damage",
+      "magnitude": 20.0,
+      "tag": "Effect.Damage.Bullet",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.FissionShot"
+    },
+    {
+      "name": "GE_RadAura_Cooldown",
+      "type": "Cooldown",
+      "duration": 15.0,
+      "tag": "Cooldown.Species.Zheers.RadAura",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadAura"
+    },
+    {
+      "name": "GE_RadAura_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 10.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadAura"
+    },
+    {
+      "name": "GE_RadAura_Damage",
+      "type": "Damage",
+      "magnitude": 5.0,
+      "tag": "Effect.Damage.Zone",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.RadAura"
+    },
+    {
+      "name": "GE_ChernobylCharge_Cooldown",
+      "type": "Cooldown",
+      "duration": 10.0,
+      "tag": "Cooldown.Species.Zheers.ChernobylCharge",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.ChernobylCharge"
+    },
+    {
+      "name": "GE_ChernobylCharge_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.ChernobylCharge"
+    },
+    {
+      "name": "GE_ChernobylCharge_Buff",
+      "type": "Debuff",
+      "duration": 1.0,
+      "tag": "Effect.Damage.Zone",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.ChernobylCharge"
+    },
+    {
+      "name": "GE_ChernobylCharge_Damage",
+      "type": "Damage",
+      "magnitude": 40.0,
+      "tag": "Effect.Damage.Zone",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.ChernobylCharge"
+    },
+    {
+      "name": "GE_DegenField_Cooldown",
+      "type": "Cooldown",
+      "duration": 18.0,
+      "tag": "Cooldown.Species.Zheers.DegenField",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.DegenField"
+    },
+    {
+      "name": "GE_DegenField_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.DegenField"
+    },
+    {
+      "name": "GE_DegenField_Buff",
+      "type": "Debuff",
+      "duration": 6.0,
+      "tag": "Effect.Debuff.ArmorReduction",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.DegenField"
+    },
+    {
+      "name": "GE_HalfLife_Cooldown",
+      "type": "Cooldown",
+      "duration": 12.0,
+      "tag": "Cooldown.Species.Zheers.HalfLife",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.HalfLife"
+    },
+    {
+      "name": "GE_HalfLife_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.HalfLife"
+    },
+    {
+      "name": "GE_HalfLife_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.HalfLife"
+    },
+    {
+      "name": "GE_HalfLife_Damage",
+      "type": "Damage",
+      "magnitude": 60.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.HalfLife"
+    },
+    {
+      "name": "GE_Meltdown_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Zheers.Meltdown",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.Meltdown"
+    },
+    {
+      "name": "GE_Meltdown_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.Meltdown"
+    },
+    {
+      "name": "GE_Meltdown_Buff",
+      "type": "Debuff",
+      "duration": 2.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.Meltdown"
+    },
+    {
+      "name": "GE_Meltdown_Damage",
+      "type": "Damage",
+      "magnitude": 200.0,
+      "tag": "Effect.Damage.Explosion",
+      "species": "Zheers",
+      "ability_tag": "Ability.Species.Zheers.Meltdown"
+    },
+    {
+      "name": "GE_FogCloud_Cooldown",
+      "type": "Cooldown",
+      "duration": 10.0,
+      "tag": "Cooldown.Species.Skeetw.FogCloud",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FogCloud"
+    },
+    {
+      "name": "GE_FogCloud_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FogCloud"
+    },
+    {
+      "name": "GE_FogCloud_Buff",
+      "type": "Debuff",
+      "duration": 6.0,
+      "tag": "Effect.Debuff.Blinded",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FogCloud"
+    },
+    {
+      "name": "GE_SkyDive_Cooldown",
+      "type": "Cooldown",
+      "duration": 8.0,
+      "tag": "Cooldown.Species.Skeetw.SkyDive",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.SkyDive"
+    },
+    {
+      "name": "GE_SkyDive_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 25.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.SkyDive"
+    },
+    {
+      "name": "GE_SkyDive_Buff",
+      "type": "Debuff",
+      "duration": 1.0,
+      "tag": "Effect.Damage.Melee",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.SkyDive"
+    },
+    {
+      "name": "GE_SkyDive_Damage",
+      "type": "Damage",
+      "magnitude": 70.0,
+      "tag": "Effect.Damage.Melee",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.SkyDive"
+    },
+    {
+      "name": "GE_TalonStrike_Cooldown",
+      "type": "Cooldown",
+      "duration": 3.0,
+      "tag": "Cooldown.Species.Skeetw.TalonStrike",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.TalonStrike"
+    },
+    {
+      "name": "GE_TalonStrike_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 10.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.TalonStrike"
+    },
+    {
+      "name": "GE_TalonStrike_Buff",
+      "type": "Debuff",
+      "duration": 3.0,
+      "tag": "Effect.Debuff.Bleeding",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.TalonStrike"
+    },
+    {
+      "name": "GE_TalonStrike_Damage",
+      "type": "Damage",
+      "magnitude": 50.0,
+      "tag": "Effect.Debuff.Bleeding",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.TalonStrike"
+    },
+    {
+      "name": "GE_WindGust_Cooldown",
+      "type": "Cooldown",
+      "duration": 6.0,
+      "tag": "Cooldown.Species.Skeetw.WindGust",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.WindGust"
+    },
+    {
+      "name": "GE_WindGust_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.WindGust"
+    },
+    {
+      "name": "GE_WindGust_Damage",
+      "type": "Damage",
+      "magnitude": 10.0,
+      "tag": "Effect.Debuff.Knockback",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.WindGust"
+    },
+    {
+      "name": "GE_FeatherFlurry_Cooldown",
+      "type": "Cooldown",
+      "duration": 4.0,
+      "tag": "Cooldown.Species.Skeetw.FeatherFlurry",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FeatherFlurry"
+    },
+    {
+      "name": "GE_FeatherFlurry_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FeatherFlurry"
+    },
+    {
+      "name": "GE_FeatherFlurry_Damage",
+      "type": "Damage",
+      "magnitude": 15.0,
+      "tag": "Effect.Damage.Bullet",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.FeatherFlurry"
+    },
+    {
+      "name": "GE_Camouflage_Cooldown",
+      "type": "Cooldown",
+      "duration": 25.0,
+      "tag": "Cooldown.Species.Skeetw.Camouflage",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.Camouflage"
+    },
+    {
+      "name": "GE_Camouflage_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 20.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.Camouflage"
+    },
+    {
+      "name": "GE_Camouflage_Buff",
+      "type": "Buff",
+      "duration": 4.0,
+      "tag": "Effect.Buff.Stealth",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.Camouflage"
+    },
+    {
+      "name": "GE_ScoutEye_Cooldown",
+      "type": "Cooldown",
+      "duration": 12.0,
+      "tag": "Cooldown.Species.Skeetw.ScoutEye",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.ScoutEye"
+    },
+    {
+      "name": "GE_ScoutEye_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 15.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.ScoutEye"
+    },
+    {
+      "name": "GE_ScoutEye_Buff",
+      "type": "Buff",
+      "duration": 5.0,
+      "tag": "Effect.Buff.Recon",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.ScoutEye"
+    },
+    {
+      "name": "GE_StormCall_Cooldown",
+      "type": "Cooldown",
+      "duration": 120.0,
+      "tag": "Cooldown.Species.Skeetw.StormCall",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.StormCall"
+    },
+    {
+      "name": "GE_StormCall_Cost",
+      "type": "Cost",
+      "attribute": "Energy",
+      "magnitude": 80.0,
+      "tag": "Attribute.Energy",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.StormCall"
+    },
+    {
+      "name": "GE_StormCall_Buff",
+      "type": "Debuff",
+      "duration": 4.0,
+      "tag": "Effect.Damage.Zone",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.StormCall"
+    },
+    {
+      "name": "GE_StormCall_Damage",
+      "type": "Damage",
+      "magnitude": 25.0,
+      "tag": "Effect.Damage.Zone",
+      "species": "Skeetw",
+      "ability_tag": "Ability.Species.Skeetw.StormCall"
+    }
+  ]
+}
