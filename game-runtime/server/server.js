@@ -14,6 +14,7 @@ import { createSessionStore, PostgresAuditStore } from './store.js';
 import { AuditLog } from './audit.js';
 import { can } from './rbac.js';
 import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
+import { grantMatchRewards } from './rewards.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode, makeInviteCode, normalizeInviteCode, findRoomByCode } from './matchmaking.js';
 import { createDependencyHealth, summarize } from './health.js';
@@ -97,6 +98,21 @@ export function createAuthoritativeServer({
   // trilha de valor real (REAL_MONEY_ENABLED=false congelado). Injeção direta
   // ou KR_ECONOMY_STORE=postgres (migração 003_economy_ledger.sql).
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
+
+  // ---------- Recompensas KRC no fim da partida ----------
+  // room3d dispara uma única vez por partida; aqui resolvemos client-id →
+  // userId (sub do token) e concedemos via ledger idempotente. Falhas são
+  // contidas: recompensa nunca derruba o servidor nem o tick.
+  const handleMatchEnd = ({ matchId, results }) => {
+    const actorById = new Map();
+    for (const c of clients.values()) actorById.set(c.id, c.identity);
+    void grantMatchRewards({
+      economy: economyService, matchId, results, actorById,
+      audit, observability, metrics,
+    }).catch((error) => {
+      observability.recordLog({ level: 'warn', event: 'economy.match_rewards_failed', fields: { matchId, error: String(error?.message || error) } });
+    });
+  };
   // Saúde real das dependências: sondas com latência medida (SELECT 1 / PING)
   // e cache curto para o readiness não martelar o banco a cada requisição.
   const healthMonitor = health || createDependencyHealth({ sessionStore: durable, rateStore: selectedRateStore, auditStore: selectedAuditStore });
@@ -116,7 +132,7 @@ export function createAuthoritativeServer({
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
     backpressure: 0, oversized: 0, logouts: 0, keyRotations: 0, oidcLogins: 0, rbacDenies: 0,
-    storeReadFailures: 0, rateStoreFailures: 0,
+    storeReadFailures: 0, rateStoreFailures: 0, economyMatchRewards: 0,
   };
 
   const send = (ws, message) => {
@@ -174,7 +190,7 @@ export function createAuthoritativeServer({
     let room = chooseRoom(rooms, client.region, roomCapacity, client.mode);
     if (!room) {
       room = client.mode === '3d'
-        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1 })
+        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd })
         : new MatchRoom({ id: `ring-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
       rooms.set(room.id, room);
     }
@@ -538,7 +554,7 @@ export function createAuthoritativeServer({
               id: `priv3d-${nextRoom++}`,
               seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
               region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
-              squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto),
+              squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto), onMatchEnd: handleMatchEnd,
             });
             rooms.set(room.id, room);
             const position = queue.indexOf(client);
