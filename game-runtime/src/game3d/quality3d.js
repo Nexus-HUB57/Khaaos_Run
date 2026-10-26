@@ -14,6 +14,7 @@ export const QUALITY_TIERS = {
     rockFactor: 0.5,
     cloudCount: 7,
     propsFactor: 0.85,
+    trafficFactor: 0.45,  // Fase 8 — menos caros no mobile
     bloom: false,
     contactShadows: true,   // barato (1 InstancedMesh) e sustenta a leitura visual
     gltfProps: true,
@@ -27,6 +28,7 @@ export const QUALITY_TIERS = {
     rockFactor: 0.75,
     cloudCount: 11,
     propsFactor: 1,
+    trafficFactor: 0.8,
     bloom: true,
     contactShadows: true,
     gltfProps: true,
@@ -40,6 +42,7 @@ export const QUALITY_TIERS = {
     rockFactor: 1,
     cloudCount: 14,
     propsFactor: 1,
+    trafficFactor: 1,
     bloom: true,
     contactShadows: true,
     gltfProps: true,

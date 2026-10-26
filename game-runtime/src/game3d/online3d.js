@@ -10,6 +10,7 @@ import { NetClient3D } from './net3d.js';
 import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
+import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
 
@@ -120,13 +121,23 @@ export class OnlineGame3D extends Game3D {
       scenarioSelect.title = 'O cenário online é escolhido pela sala autoritativa.';
     }
     const operativeSelect = document.querySelector('#operativeSelect');
-    if (operativeSelect) operativeSelect.disabled = true;
+    if (operativeSelect) operativeSelect.disabled = false; // Fase 8 — identidade sincroniza online
     const selectionStatus = document.querySelector('#contentSelectionStatus');
-    if (selectionStatus) selectionStatus.textContent = 'ONLINE: o servidor define o mundo; o operativo/paleta ainda não sincroniza entre jogadores.';
+    if (selectionStatus) selectionStatus.textContent = 'ONLINE: o operativo sincroniza com a sala; a habilidade é autoritativa (Q).';
+    // Fase 8 — troca de operativo no LOBBY declara a identidade ao servidor
+    operativeSelect?.addEventListener('change', () => {
+      const operative = operativeCatalog.find((entry) => entry.id === operativeSelect.value);
+      if (operative) this.net?.setOperative(operative.id);
+    });
     const seedInput = document.querySelector('#seedInput');
     if (seedInput) { seedInput.disabled = true; seedInput.value = 'SERVIDOR'; }
 
-    net.onStatus = (status) => this.hud.setMatchStatus(status);
+    net.onStatus = (status) => {
+      this.hud.setMatchStatus(status);
+      // Fase 8 — login da plataforma embutido no modal ZU quando a sessão não existe
+      const loginBox = document.querySelector('#loginBox');
+      if (loginBox) loginBox.classList.toggle('hidden', status !== 'LOGIN NECESSÁRIO');
+    };
     net.onSnapshot = (snapshot) => {
       // primeira amostra define a seed do mundo (o servidor escolhe a sala)
       if (snapshot.seed && snapshot.seed !== this.seed) this.pendingWorldSeed = snapshot.seed;
@@ -134,6 +145,8 @@ export class OnlineGame3D extends Game3D {
     };
     net.onEvent = (evt) => this.view.queueEvent(evt, net.myId);
     net.onRejected = (msg) => this.hud.feed('ANTI-CHEAT', `Input rejeitado: ${msg.violations?.join(', ')}`, 'bad');
+    // Fase 8 — declara o operativo inicial assim que o NetClient3D estiver pronto
+    net.setOperative(this.selectedOperative.id);
     // ---------- Fase 7 — salas privadas com código de convite ----------
     const privateBox = document.querySelector('#privateRoomBox');
     if (privateBox) privateBox.classList.remove('hidden');
@@ -162,6 +175,25 @@ export class OnlineGame3D extends Game3D {
       this.audio?.ui?.();
     };
     net.onPrivateError = (message) => this.hud.feed('SQUAD', message, 'bad');
+    // ---------- Fase 8 — login da plataforma embutido no modal ZU ----------
+    const loginBox = document.querySelector('#loginBox');
+    if (loginBox && !localStorage.getItem('kr_token')) loginBox.classList.remove('hidden');
+    document.querySelector('#loginBtn')?.addEventListener('click', async () => {
+      const user = document.querySelector('#loginUser')?.value?.trim();
+      const pass = document.querySelector('#loginPass')?.value ?? '';
+      if (!user || !pass) { this.hud.feed('LOGIN', 'Informe operativo e senha do QG-War\u2019I.', 'bad'); return; }
+      try {
+        this.hud.feed('LOGIN', 'Autenticando no QG-War\u2019I...', 'warn');
+        await NetClient3D.login(user, pass);
+        net.token = localStorage.getItem('kr_token');
+        loginBox?.classList.add('hidden');
+        this.hud.feed('LOGIN', `Sessão confirmada, ${user}. Conectando ao matchmaking 3D...`, 'good');
+        net.dispose();
+        net.connect();
+      } catch {
+        this.hud.feed('LOGIN', 'Credenciais recusadas pelo QG. Verifique usuário/senha.', 'bad');
+      }
+    });
     this.pingTimer = setInterval(() => {
       if (!this.zuOpen) this.hud.setMatchStatus(`ONLINE // PING ${net.rtt ?? '—'}ms // ${this.view.aliveCount} VIVOS`);
     }, 3000);
@@ -192,6 +224,7 @@ export class OnlineGame3D extends Game3D {
 
   #startMatchOnline(entry) {
     this.audio.init(); this.audio.resume();
+    this.net.setOperative(this.selectedOperative.id); // Fase 8 — reforça a identidade antes de iniciar
     this.net.start(entry);
     this.zuOpen = false;
     this.hud.hideZu();
@@ -259,6 +292,7 @@ export class OnlineGame3D extends Game3D {
     this.syncLoot();
     this.syncEntities(dt);
     this.updateRing();
+    this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

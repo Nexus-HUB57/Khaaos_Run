@@ -75,9 +75,10 @@ export class HUD {
     const status = $('#abilityStatus');
     const chip = $('#operativeAbility');
     if (name) name.textContent = ability.name.toLocaleUpperCase('pt-BR');
-    if (status) status.textContent = online ? 'ONLINE · INDISPONÍVEL' : 'Q · PRONTA';
+    // Fase 8 — habilidade autoritativa também no online (cooldown vem do snapshot)
+    if (status) status.textContent = 'Q · PRONTA';
     if (chip) chip.title = online
-      ? 'Habilidades por operativo ainda não são suportadas pelo servidor online.'
+      ? `${ability.description} (autoritativa no servidor)`
       : ability.description;
   }
 
@@ -166,14 +167,11 @@ export class HUD {
     const abilityStatus = $('#abilityStatus');
     const abilityChip = $('#operativeAbility');
     if (abilityStatus && abilityChip) {
-      if (this.abilityOnline || s.online) {
-        abilityStatus.textContent = 'ONLINE · INDISPONÍVEL';
-        abilityChip.classList.add('unavailable');
-      } else {
-        const remaining = Math.max(0, p.abilityState?.cooldownTicks || 0) / (s.tickRate || 30);
-        abilityStatus.textContent = remaining > 0 ? `Q · ${remaining.toFixed(1)} s` : 'Q · PRONTA';
-        abilityChip.classList.toggle('unavailable', remaining > 0);
-      }
+      // Fase 8 — habilidade funcional nos dois modos: offline resolve na sim local;
+      // online o estado vem do snapshot autoritativo (abilityState do servidor)
+      const remaining = Math.max(0, p.abilityState?.cooldownTicks || 0) / (s.tickRate || 30);
+      abilityStatus.textContent = remaining > 0 ? `Q · ${remaining.toFixed(1)} s` : 'Q · PRONTA';
+      abilityChip.classList.toggle('unavailable', remaining > 0);
     }
     // objetivos
     $('#objPulse').classList.toggle('done', s.ring.pulse >= 1);
@@ -240,8 +238,9 @@ export class HUD {
       ctx.fillRect(t.x * scale - 2.5, t.z * scale - 2.5, 5, 5);
     }
     // contatos de reconhecimento somente enquanto a marca determinística está ativa
+    // (offline: revealedTicks; online: flag revealed do snapshot — Fase 8)
     ctx.fillStyle = '#ffb52e';
-    for (const bot of s.bots) if (bot.alive && bot.revealedTicks > 0) {
+    for (const bot of s.bots) if (bot.alive && (bot.revealedTicks > 0 || bot.revealed)) {
       ctx.beginPath(); ctx.arc(bot.x * scale, bot.z * scale, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     // loot

@@ -9,9 +9,10 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
-import { roadSegments, propPlacements, facadeDetails, canopyTint } from './detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements } from './detail3d.js';
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
+import { NIGHT, nightSceneState } from './skyPhase.js';
 import {
   concreteMaterial, metalMaterial, groundMaterial, asphaltMaterial,
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
@@ -31,6 +32,11 @@ function createSky(scenario) {
       mid: { value: new THREE.Color(scenario.sky.mid) },
       horizon: { value: new THREE.Color(scenario.sky.horizon) },
       sunDir: { value: new THREE.Vector3(-.55, .18, -.82).normalize() },
+      // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite
+      night: { value: 0 },
+      nTop: { value: new THREE.Color(NIGHT.skyTop) },
+      nMid: { value: new THREE.Color(NIGHT.skyMid) },
+      nHorizon: { value: new THREE.Color(NIGHT.skyHorizon) },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -40,18 +46,24 @@ function createSky(scenario) {
       }`,
     fragmentShader: `
       uniform vec3 top, mid, horizon, sunDir;
+      uniform float night;
+      uniform vec3 nTop, nMid, nHorizon;
       varying vec3 vDir;
       void main() {
         float h = clamp(vDir.y, -0.05, 1.0);
         vec3 col = mix(horizon, mid, smoothstep(0.0, 0.28, h));
         col = mix(col, top, smoothstep(0.25, 0.85, h));
+        // Fase 8 — mistura para a paleta noturna por banda (horizonte→meio→zênite)
+        vec3 ncol = mix(nHorizon, nMid, smoothstep(0.0, 0.28, h));
+        ncol = mix(ncol, nTop, smoothstep(0.25, 0.85, h));
+        col = mix(col, ncol, night);
         float sun = max(dot(normalize(vDir), sunDir), 0.0);
-        col += vec3(1.0, .62, .3) * pow(sun, 22.0) * 1.35;   // halo
-        col += vec3(1.0, .85, .6) * pow(sun, 380.0) * 3.2;   // disco
-        // estrelas fracas no zenite
+        col += vec3(1.0, .62, .3) * pow(sun, 22.0) * 1.35 * (1.0 - night * 0.88);   // halo cede à noite
+        col += vec3(1.0, .85, .6) * pow(sun, 380.0) * 3.2 * (1.0 - night * 0.86);   // disco vira "lua"
+        // estrelas — ganham peso com a noite
         vec3 sd = normalize(vDir) * 220.0;
         float star = step(0.9985, fract(sin(dot(floor(sd), vec3(12.9898, 78.233, 45.164))) * 43758.5453));
-        col += vec3(.9) * star * smoothstep(0.35, 0.9, h) * .5;
+        col += vec3(.9) * star * smoothstep(0.35, 0.9, h) * mix(.5, 1.7, night);
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -91,6 +103,73 @@ export function createRingWall() {
   group.add(inner, outer);
   group.userData.uniforms = [inner.material.uniforms, outer.material.uniforms];
   return group;
+}
+
+// ---------- Fase 8 — tráfego urbano estático (carros/vans abandonados) ----------
+const CAR_COLORS = ['#8a2f2b', '#2b4a6f', '#5d5f63', '#6f5a2b', '#3d5a3a', '#26282c'];
+const TRAFFIC_DIMS = {
+  car: { L: 4.3, W: 1.86, H: .6, cabL: 2.15, cabW: 1.62, cabH: .58, cabOff: -.25, wheelR: .34 },
+  van: { L: 5.3, W: 2.0, H: .82, cabL: 3.5, cabW: 1.76, cabH: .8, cabOff: .35, wheelR: .4 },
+};
+function buildTraffic(scene, layout, q) {
+  const traffic = trafficPlacements(layout, { density: q.trafficFactor ?? 1 });
+  if (!traffic.length) return;
+  scene.userData.trafficPlacements = traffic; // registro p/ inspeção e2e
+  const dummy = new THREE.Object3D();
+  const glassMat = new THREE.MeshStandardMaterial({ color: '#10141c', roughness: .25, metalness: .6 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: '#0c0d0f', roughness: .95 });
+  for (const type of ['car', 'van']) {
+    const list = traffic.filter((t) => t.type === type);
+    if (!list.length) continue;
+    const d = TRAFFIC_DIMS[type];
+    const baseY = d.wheelR * .9;
+    const bodies = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(d.W, d.H, d.L),
+      new THREE.MeshStandardMaterial({ roughness: .42, metalness: .55 }),
+      list.length,
+    );
+    const cabs = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(d.cabW, d.cabH, d.cabL),
+      glassMat,
+      list.length,
+    );
+    // rodas low-poly (caixas pretas alinhadas ao yaw do veículo)
+    const wheels = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(.24, d.wheelR * 2, d.wheelR * 1.7),
+      tireMat,
+      list.length * 4,
+    );
+    list.forEach((t, i) => {
+      const cos = Math.cos(t.rot), sin = Math.sin(t.rot);
+      const at = (lx, lz, y) => { dummy.position.set(t.x + cos * lx + sin * lz, y, t.z - sin * lx + cos * lz); };
+      // corpo
+      at(0, 0, baseY + d.H / 2);
+      dummy.rotation.set(0, t.rot, 0); dummy.scale.setScalar(1); dummy.updateMatrix();
+      bodies.setMatrixAt(i, dummy.matrix);
+      bodies.setColorAt(i, new THREE.Color(CAR_COLORS[t.color % CAR_COLORS.length]));
+      // cabine (deslocada no eixo local Z)
+      at(0, d.cabOff, baseY + d.H + d.cabH / 2 - .05);
+      dummy.updateMatrix();
+      cabs.setMatrixAt(i, dummy.matrix);
+      // rodas nos 4 cantos
+      let wi = i * 4;
+      for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        at(sx * (d.W / 2 + .05), sz * (d.L / 2.65), d.wheelR);
+        dummy.updateMatrix();
+        wheels.setMatrixAt(wi++, dummy.matrix);
+      }
+    });
+    for (const m of [bodies, cabs, wheels]) {
+      m.castShadow = true; m.receiveShadow = true;
+      m.instanceMatrix.needsUpdate = true;
+      scene.add(m);
+    }
+    bodies.instanceColor.needsUpdate = true;
+  }
+  // sombras de contato sob os veículos (blobs retangulares aproximados)
+  buildContactShadows(scene, traffic.map((t) => ({
+    x: t.x, z: t.z, rot: t.rot, size: t.type === 'van' ? 3.4 : 2.8,
+  })));
 }
 
 // ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
@@ -597,6 +676,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   buildNature(scene, layout, new SeededRng(`${seed}:nature`), q);
   buildMountains(scene, scenario);
   buildProps(scene, layout, q);
+  // Fase 8 — tráfego urbano estático nas estradas (carros/vans com sombra de contato)
+  buildTraffic(scene, layout, q);
 
   for (const s of layout.structures) {
     const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
@@ -678,5 +759,44 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.userData.layout = layout;
   scene.userData.sectors = layout.sectors;
   scene.userData.quality = quality;
+  // Fase 8 — base do ciclo dia/noite dirigido pelos pulsos do Ring
+  const skyMesh = scene.children.find((c) => c.isMesh && c.material?.uniforms?.night);
+  scene.userData.nightBase = {
+    sky: { ...scenario.sky },
+    fogColor: scenario.fogColor,
+    sunColor: scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f',
+    sunIntensity: 2.35, hemiIntensity: 1.18, fillIntensity: 0.72, backIntensity: 0.55,
+    buildingMat: mats.building ?? null,
+    buildingEmissive: 0.55,
+  };
+  scene.userData.nightUniforms = skyMesh?.material.uniforms ?? null;
+  scene.userData.nightLights = { sun, hemi, fill, back };
+  scene.userData.nightT = -1; // força 1ª aplicação
   return { scene, layout, sun, materials: mats, quality: q };
+}
+
+// Fase 8 — aplica o nightness t ∈ [0,1] na cena (céu, fog, luzes, janelas).
+// Idempotente e barato: re-aplica apenas quando t muda de fato (> 0,001).
+export function applyNightness(scene, t) {
+  const base = scene.userData?.nightBase;
+  if (!base) return;
+  const k = Math.max(0, Math.min(1, Number(t) || 0));
+  if (Math.abs((scene.userData.nightT ?? -1) - k) < 0.001) return;
+  scene.userData.nightT = k;
+  const st = nightSceneState(base, k);
+  const u = scene.userData.nightUniforms;
+  if (u) {
+    u.night.value = k;
+    u.top.value.set(st.skyTop);
+    u.mid.value.set(st.skyMid);
+    u.horizon.value.set(st.skyHorizon);
+  }
+  if (scene.fog) scene.fog.color.set(st.fog);
+  const { sun, hemi, fill, back } = scene.userData.nightLights ?? {};
+  sun?.color.set(st.sunColor); if (sun) sun.intensity = st.sunIntensity;
+  if (hemi) hemi.intensity = st.hemiIntensity;
+  if (fill) fill.intensity = st.fillIntensity;
+  if (back) back.intensity = st.backIntensity;
+  // janelas dos prédios brilham mais quando escurece
+  if (base.buildingMat) base.buildingMat.emissiveIntensity = base.buildingEmissive + k * 0.5;
 }

@@ -17,6 +17,11 @@ import {
   throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
 } from '../src/game3d/sim3d.js';
+// Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
+import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
+
+export const OPERATIVE_IDS = Object.keys(OPERATIVE_ABILITIES);
+export const ABILITY_TICK_RATE = 30; // convenção de ticks no snapshot (igual à sim offline)
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -112,6 +117,9 @@ export class MatchRoom3D {
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null, landed: false,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
+      // Fase 8 — identidade do operativo + estado de habilidade autoritativo
+      operativeId: 'OP_MALE_VANGUARD', temporaryArmor: 0, revealedTicks: 0,
+      abilityState: { cooldownT: 0, activeT: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
@@ -127,9 +135,11 @@ export class MatchRoom3D {
     const spot = lootSpots[(idx * 5) % lootSpots.length];
     a.dropTarget = { x: spot.x, z: spot.z };
   }
-  addPlayer(id, name = 'OPERATIVO') {
+  addPlayer(id, name = 'OPERATIVO', operativeId = null) {
     if (this.state !== ROOM_STATES.LOBBY || this.humans.size >= this.capacity) return null;
     const actor = this.#baseActor(id, String(name).slice(0, 24));
+    // Fase 8 — identidade: operativo validado contra o catálogo (fallback VANGUARD)
+    if (operativeId && OPERATIVE_IDS.includes(operativeId)) actor.operativeId = operativeId;
     // posições humanas distribuídas na borda do ring (determinístico por ordem de entrada)
     const angle = (this.humans.size / this.capacity) * Math.PI * 2;
     const radius = 118 + (this.humans.size % 3) * 12;
@@ -141,6 +151,14 @@ export class MatchRoom3D {
     this.humans.set(id, actor);
     this.lastActivity = Date.now();
     return actor;
+  }
+  // Fase 8 — o cliente declara o operativo escolhido (apenas em LOBBY; validado)
+  setOperative(id, operativeId) {
+    const actor = this.humans.get(id);
+    if (!actor || this.state !== ROOM_STATES.LOBBY) return false;
+    if (!OPERATIVE_IDS.includes(operativeId)) return false;
+    actor.operativeId = operativeId;
+    return true;
   }
   removePlayer(id) {
     const actor = this.humans.get(id);
@@ -164,6 +182,8 @@ export class MatchRoom3D {
     bot.ammoMag = WEAPONS3D[bot.weapon].magazine;
     bot.cooldown = this.rng.next() * 2;
     bot.krc = 0;
+    // Fase 8 — identidade dos bots: operativo determinístico (paleta/acessórios no cliente)
+    bot.operativeId = this.rng.pick(OPERATIVE_IDS);
     // Fase 7 — bots formam esquadrões inimigos próprios (sqE-); não resgatam online
     if (this.squad) bot.squad = `sqE-${Math.floor(i / 4) + 1}`;
     bot.ai = { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null };
@@ -320,13 +340,19 @@ export class MatchRoom3D {
   #actors() { return [...this.humans.values(), ...this.bots]; }
 
   defaultInputFor(actor) {
-    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };  }
+    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false, slot: 0 };  }
 
   // ---------- passo de ator (idêntico à sim offline) ----------
   #stepActor(a, input, dt) {
     a.cooldown = Math.max(0, a.cooldown - dt);
+    // Fase 8 — avanço da habilidade no TEMPO DO ATOR (dt do input), como reloadT/cooldown:
+    // 3 inputs/tick × 1/30s = 0,1s por tick — igual à sim offline (1 passo = 1/30s)
+    this.#advanceAbilityState(a, dt);
     if (a.reloadT > 0) { a.reloadT -= dt; if (a.reloadT <= 0) this.#finishReload(a); }
     a.yaw = input.yaw; a.pitch = input.pitch ?? 0;
+    // Fase 8 — derivadas da habilidade ativa (velocidade/dash/precisão),
+    // mesma matemática da sim offline; stepActorMovement consome o orçamento do dash.
+    this.#applyAbilityDerivatives(a);
     stepActorMovement(a, input, dt, this.physicsWorld);
     if (a.landed) {
       a.landed = false;
@@ -335,6 +361,8 @@ export class MatchRoom3D {
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
     // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
     if (a.knocked) return;
+    // Fase 8 — dash: devolve o orçamento remanescente ao estado e encerra ao esgotar
+    this.#syncDashBudget(a);
     // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
     if (this.squad && input.interact) this.#tryRevive(a, dt);
     if (!airborne) {
@@ -347,7 +375,106 @@ export class MatchRoom3D {
       if (input.slot && a.slots[input.slot] && input.slot !== a.activeSlot) this.#switchSlot(a, input.slot);
       if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
       else if (input.fire) this.#fire(a, w);
+      if (input.ability) this.#activateAbility(a); // Fase 8 — habilidade autoritativa
     }
+  }
+
+  // ---------- Fase 8 — habilidades por operativo (autoridade do servidor) ----------
+  #applyAbilityDerivatives(a) {
+    const ability = getOperativeAbility(a.operativeId);
+    const st = a.abilityState;
+    const active = st.activeT > 0;
+    a.abilitySpeedMultiplier = active && (ability.effect === 'speed' || ability.effect === 'dash')
+      ? ability.parameters.speedMultiplier : 1;
+    a.abilityDistanceBudget = active && ability.effect === 'dash' ? st.distanceRemaining : undefined;
+    a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
+  }
+  #syncDashBudget(a) {
+    const ability = getOperativeAbility(a.operativeId);
+    if (ability.effect !== 'dash' || a.abilityState.activeT <= 0) return;
+    a.abilityState.distanceRemaining = a.abilityDistanceBudget ?? 0;
+    if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeT = 0;
+    delete a.abilityDistanceBudget;
+  }
+  #advanceAbilityState(a, dt) {
+    const st = a.abilityState;
+    if (!st) return;
+    st.cooldownT = Math.max(0, st.cooldownT - dt);
+    if (st.activeT > 0) {
+      st.activeT -= dt;
+      if (st.activeT <= 0) {
+        st.activeT = 0;
+        if (st.effect === 'temporaryArmor') a.temporaryArmor = 0;
+        st.effect = null;
+        st.targetTerminalId = null;
+        st.targetIds = [];
+      }
+    }
+    // marca de recon expira (apenas alvos recebem revealedTicks)
+    if (a.revealedTicks > 0) a.revealedTicks = Math.max(0, a.revealedTicks - dt);
+  }
+  #activateAbility(a) {
+    const ability = getOperativeAbility(a.operativeId);
+    const state = a.abilityState;
+    if (!this.started || !a.alive || a.knocked || a.dropPhase || state.cooldownT > 0) return false;
+    if (ability.effect === 'heal' && a.life >= 100) {
+      this.#emitTo(a.id, 'abilityUnavailable', { reason: 'life_full', name: ability.name });
+      return false;
+    }
+
+    const params = ability.parameters;
+    state.effect = ability.effect;
+    state.cooldownT = ability.cooldownSeconds;
+    state.activeT = ability.durationSeconds;
+    state.distanceRemaining = params.maxDistance ?? 0;
+    state.originX = a.x; state.originZ = a.z;
+    state.targetIds = []; state.targetTerminalId = null;
+    let details = {};
+    const others = () => this.#actors().filter((o) => o !== a && o.alive && !(this.squad && o.squad && o.squad === a.squad));
+
+    if (ability.effect === 'heal') {
+      const healed = Math.min(params.heal, 100 - a.life);
+      a.life += healed;
+      details.healed = healed;
+    } else if (ability.effect === 'recon') {
+      const targets = others().filter((o) => o.isBot && dist2d(a.x, a.z, o.x, o.z) <= params.radius);
+      for (const bot of targets) bot.revealedTicks = params.revealSeconds;
+      state.targetIds = targets.map((bot) => bot.id);
+      details.targets = targets.length;
+    } else if (ability.effect === 'stun') {
+      const targets = others().filter((o) => o.isBot && dist2d(a.x, a.z, o.x, o.z) <= params.radius);
+      for (const bot of targets) bot.ai.stunT = Math.max(bot.ai.stunT ?? 0, params.stunSeconds);
+      details.targets = targets.length;
+    } else if (ability.effect === 'temporaryArmor') {
+      a.temporaryArmor = params.armor;
+    } else if (ability.effect === 'ringRead' || ability.effect === 'ringForecast') {
+      details.nextPulseSeconds = Math.max(0, PULSE_INTERVAL - this.pulseTimer);
+      details.targetRadius = this.ring.radius > 42
+        ? Math.max(42, 168 - (this.ring.pulse + 1) * 30)
+        : this.ring.radius;
+    } else if (ability.effect === 'terminalScan') {
+      const terminal = this.terminals.filter((item) => item.active)
+        .sort((x, y) => dist2d(a.x, a.z, x.x, x.z) - dist2d(a.x, a.z, y.x, y.z))[0];
+      if (terminal) {
+        state.targetTerminalId = terminal.id;
+        details.terminalLabel = terminal.label || terminal.id;
+        details.terminalDistance = Math.round(dist2d(a.x, a.z, terminal.x, terminal.z));
+      }
+    }
+
+    // evento para o autor (HUD/feed) e para humanos próximos (feedback de presença)
+    for (const h of this.humans.values()) {
+      if (!h.alive && h.id !== a.id) continue;
+      if (h.id !== a.id && dist2d(h.x, h.z, a.x, a.z) > 90) continue;
+      this.#emitTo(h.id, 'ability', {
+        operativeId: ability.operativeId, by: a.name, isSelf: h.id === a.id,
+        name: ability.name, effect: ability.effect,
+        durationSeconds: ability.durationSeconds, cooldownSeconds: ability.cooldownSeconds,
+        description: ability.description, ...details,
+      });
+    }
+    if (ability.durationSeconds === 0) state.effect = null;
+    return true;
   }
 
   // ---------- arremessáveis táticos (Fase 4) ----------
@@ -451,6 +578,8 @@ export class MatchRoom3D {
 
   // ---------- IA dos bots (engajar → caçar → patrulhar) ----------
   #stepBot(b, dt) {
+    // Fase 8 — atordoado (Pulso de Desarme): bot congelado, sem mover/atirar
+    if ((b.ai.stunT ?? 0) > 0) { b.ai.stunT -= dt; b.moving = false; return; }
     // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
     if (b.knocked) {
       const ang = Math.atan2(b.x, b.z); // yaw apontando para o centro (frente = -Z)
@@ -474,6 +603,8 @@ export class MatchRoom3D {
     for (const passKnocked of [false, true]) {
       for (const other of this.#actors()) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        // Fase 8 — Véu Crepuscular: alvo ocultado é invisível para a IA
+        if (other.abilityState?.effect === 'concealment' && other.abilityState.activeT > 0) continue;
         if (this.squad && other.squad === b.squad) continue;
         const d = dist2d(b.x, b.z, other.x, other.z);
         if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
@@ -596,7 +727,8 @@ export class MatchRoom3D {
     let dx = ax - m.x, dy = ay - m.y, dz = az - m.z;
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const spread = a.isBot ? 0
-      : w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1);
+      : w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
+        * (a.abilityAccuracyMultiplier ?? 1); // Fase 8 — precisão da habilidade
     // lag compensation: tiro humano é testado contra as posições que o ATIRADOR via
     // (rewind de rtt + buffer de interpolação); bots atiram no estado vivo atual.
     const lagTargets = a.isBot ? null : this.#lagTargetsFor(a);
@@ -789,6 +921,22 @@ export class MatchRoom3D {
   }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
+    // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
+    // redução de dano direto e blindagem temporária (soak antes da armadura fixa).
+    const st = actor.abilityState;
+    if (st?.activeT > 0) {
+      const ability = getOperativeAbility(actor.operativeId);
+      if (kind === 'ring' && st.effect === 'ringResistance') {
+        dmg *= 1 - (ability.parameters.ringDamageReduction ?? 0);
+      } else if (kind !== 'ring' && st.effect === 'damageReduction') {
+        dmg *= 1 - (ability.parameters.damageReduction ?? 0);
+      }
+    }
+    if (kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption' && (actor.temporaryArmor ?? 0) > 0) {
+      const soakT = Math.min(actor.temporaryArmor, dmg);
+      actor.temporaryArmor -= soakT;
+      dmg -= soakT;
+    }
     if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
@@ -927,6 +1075,7 @@ export class MatchRoom3D {
     };
   }
   #selfView(a) {
+    const st = a.abilityState ?? {};
     return {
       id: a.id, name: a.name, x: a.x, y: a.y, z: a.z, vy: a.vy, yaw: a.yaw, pitch: a.pitch,
       life: a.life, armor: a.armor, xp: a.xp, krc: a.krc, kills: a.kills, extracted: a.extracted,
@@ -937,6 +1086,13 @@ export class MatchRoom3D {
       crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
       knocked: !!a.knocked, knockT: a.knockT ?? 0, reviveProgress: a.reviveProgress ?? 0, downedCount: a.downedCount ?? 0,
       squad: a.squad ?? null,
+      // Fase 8 — identidade + habilidade (cooldown/duração em ticks @30Hz p/ HUD)
+      operativeId: a.operativeId ?? null, temporaryArmor: a.temporaryArmor ?? 0,
+      abilityState: {
+        cooldownTicks: Math.round((st.cooldownT ?? 0) * ABILITY_TICK_RATE),
+        activeTicks: Math.round((st.activeT ?? 0) * ABILITY_TICK_RATE),
+        effect: st.effect ?? null,
+      },
       ackSeq: a.lastProcessedSeq,
     };
   }
@@ -947,6 +1103,8 @@ export class MatchRoom3D {
       weapon: a.weapon, weaponSkin: a.weaponSkin ?? null, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
       knocked: !!a.knocked, squad: a.squad ?? null,
+      // Fase 8 — identidade do operativo + marca de recon p/ minimapa
+      op: a.operativeId ?? null, revealed: (a.revealedTicks ?? 0) > 0,
     };
   }
 
