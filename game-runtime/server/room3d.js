@@ -35,10 +35,18 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
+    // Recompensas KRC: callback único por partida com { matchId, reason,
+    // winnerId, winnerName, results } (results = SOMENTE humanos, com id de
+    // conexão — o servidor resolve userId). Falha no callback NUNCA propaga
+    // para o tick da sala.
+    this.onMatchEnd = typeof onMatchEnd === 'function' ? onMatchEnd : null;
+    this.matchIndex = 0;      // nº da partida nesta sala (salas são single-match hoje)
+    this.matchId = null;      // "<roomId>#<matchIndex>" — chave de idempotência das recompensas
+    this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
@@ -179,6 +187,9 @@ export class MatchRoom3D {
     actor.speed = entry === 'belt' ? 5.2 : 6.1;
     this.state = ROOM_STATES.IN_PROGRESS;
     this.started = true;
+    this.matchIndex += 1;
+    this.matchId = `${this.id}#${this.matchIndex}`;
+    this.matchRewarded = false;
     this.loot = this.#spawnLoot();
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
     // preenche com bots até a capacidade (botFill limita o máximo de bots)
@@ -314,6 +325,24 @@ export class MatchRoom3D {
         reason: this.time <= 0 ? 'time' : aliveAll.length <= 1 ? 'last_alive' : 'empty',
         winner: winner?.name ?? 'CIGKV',
       });
+      // Recompensas KRC: um único disparo por partida, com resultados dos
+      // humanos (id de conexão; o servidor resolve userId e concede via ledger
+      // idempotente). Erro do callback é contido — fim de partida já foi emitido.
+      if (!this.matchRewarded && this.onMatchEnd) {
+        this.matchRewarded = true;
+        try {
+          const results = [...this.humans.values()].map((a) => ({
+            id: a.id, name: a.name, kills: a.kills, krc: a.krc, xp: a.xp,
+            survived: a.alive, winner: winner?.id === a.id,
+          }));
+          this.onMatchEnd({
+            matchId: this.matchId ?? `${this.id}#0`,
+            reason: this.time <= 0 ? 'time' : aliveAll.length <= 1 ? 'last_alive' : 'empty',
+            winnerId: winner?.id ?? null, winnerName: winner?.name ?? 'CIGKV',
+            results,
+          });
+        } catch { /* recompensa nunca derruba o fim de partida */ }
+      }
     }
     this.lastActivity = Date.now();
   }
