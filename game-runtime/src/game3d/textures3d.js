@@ -315,6 +315,37 @@ export function camoMaterial(palette = 0, { repeat = 1.6 } = {}) {
   return memo(`camo${palette}`, () => pbr(camoCanvas(palette), { repeat, rough: .92, strength: 1.1 }));
 }
 
+// ---- Fase 9 — pele realista: poros no roughness + pseudo-SSS ----
+// roughnessMap com poros/manchas quebra o aspecto "plástico" do MeshStandardMaterial
+// liso; o emissive na própria cor da pele aquece as sombras (aproximação barata de
+// subsurface scattering). Memoizado por tom — 16 operativos não regeneram canvas.
+export function skinMaterial(skin = '#d9a06b') {
+  return memo(`skin:${skin}`, () => {
+    const [c, x] = canvas(128);
+    // base neutra (roughness médio); poros = pontos mais ásperos (claros)
+    x.fillStyle = '#9a9a9a'; x.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 900; i++) {
+      const a = .10 + Math.random() * .16;
+      x.fillStyle = Math.random() < .62 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * .8})`;
+      x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, .6 + Math.random() * 1.3, 0, 7); x.fill();
+    }
+    // manchas macias de oleosidade (testa/nariz ficam mais "brilhantes")
+    for (let i = 0; i < 26; i++) {
+      const g = x.createRadialGradient(64, 64, 2, 32 + Math.random() * 64, 32 + Math.random() * 64, 8 + Math.random() * 20);
+      g.addColorStop(0, 'rgba(255,255,255,0.10)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    }
+    const rough = new THREE.CanvasTexture(c);
+    rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
+    return new THREE.MeshStandardMaterial({
+      color: skin,
+      roughness: .58, roughnessMap: rough,
+      metalness: 0,
+      emissive: new THREE.Color(skin), emissiveIntensity: .038, // pseudo-SSS
+    });
+  });
+}
+
 // ---- rosto pintado (olhos, sobrancelhas, sombreado) ----
 export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717') {
   return memo(`face:${skin}:${eyes}:${hair}`, () => {
@@ -327,12 +358,28 @@ export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717'
     x.fillStyle = shade; x.fillRect(0, 0, 128, 128);
     // sombra da testa/olheiras
     x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(0, 34, 128, 6);
+    // Fase 9 — modelagem facial por luz: pómulos iluminados, sombra sob
+    // maçãs do rosto e no queixo; quebra a máscara plana do rosto
+    for (const cx of [34, 94]) {
+      const glow = x.createRadialGradient(cx, 74, 2, cx, 74, 16);
+      glow.addColorStop(0, 'rgba(255,236,214,0.14)'); glow.addColorStop(1, 'rgba(255,236,214,0)');
+      x.fillStyle = glow; x.fillRect(0, 0, 128, 128);
+      x.fillStyle = 'rgba(40,22,14,0.16)'; // sombra sub-malar
+      x.beginPath(); x.ellipse(cx, 86, 13, 6, 0, 0, 7); x.fill();
+    }
+    const jaw = x.createLinearGradient(0, 92, 0, 128);
+    jaw.addColorStop(0, 'rgba(0,0,0,0)'); jaw.addColorStop(1, 'rgba(30,16,10,0.30)');
+    x.fillStyle = jaw; x.fillRect(0, 92, 128, 36);
     // olhos
     const eyeY = 58;
     for (const ex of [40, 88]) {
       x.fillStyle = '#f5f0e8'; x.beginPath(); x.ellipse(ex, eyeY, 9, 5.5, 0, 0, 7); x.fill();
-      x.fillStyle = eyes; x.beginPath(); x.arc(ex, eyeY, 4.4, 0, 7); x.fill();
+      const iris = x.createRadialGradient(ex - 1.4, eyeY - 1.4, .8, ex, eyeY, 4.6);
+      iris.addColorStop(0, eyes); iris.addColorStop(1, '#10100e');
+      x.fillStyle = iris; x.beginPath(); x.arc(ex, eyeY, 4.4, 0, 7); x.fill();
       x.fillStyle = '#10100e'; x.beginPath(); x.arc(ex, eyeY, 2.1, 0, 7); x.fill();
+      x.fillStyle = 'rgba(255,255,255,0.85)'; // reflexo — olho "vivo"
+      x.beginPath(); x.arc(ex - 1.8, eyeY - 1.8, 1.1, 0, 7); x.fill();
       // sobrancelha
       x.strokeStyle = hair; x.lineWidth = 3.4; x.beginPath();
       x.moveTo(ex - 11, eyeY - 10); x.quadraticCurveTo(ex, eyeY - 14, ex + 11, eyeY - 9); x.stroke();
@@ -342,6 +389,8 @@ export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717'
     x.beginPath(); x.moveTo(64, 62); x.quadraticCurveTo(60, 80, 64, 84); x.stroke();
     x.strokeStyle = 'rgba(70,30,20,.65)'; x.lineWidth = 3;
     x.beginPath(); x.moveTo(50, 98); x.quadraticCurveTo(64, 104, 78, 98); x.stroke();
+    x.fillStyle = 'rgba(150,64,52,0.28)'; // lábio inferior — volume
+    x.beginPath(); x.ellipse(64, 102, 10, 3.2, 0, 0, 7); x.fill();
     // barba/crocante sutil (tom do cabelo, alpha baixo)
     x.globalAlpha = .35; x.fillStyle = hair;
     x.fillRect(30, 92, 68, 26);

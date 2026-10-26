@@ -546,11 +546,13 @@ export class Game3D {
     }
     if (p.alive) pg.userData.deadPose = false, pg.rotation.x = 0;
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
+    // Fase 9 — `air` esvanece a sombra de contato com a altitude
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
       t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
+      air: airborne ? Math.max(0, p.y) : 0,
     });
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -611,7 +613,8 @@ export class Game3D {
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
-      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked });
+      // Fase 9 — sombra some com altitude da queda
+      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0 });
       // Fase 4 — pose de queda para bots/remotos
       if (b.dropPhase && !b.knocked) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
