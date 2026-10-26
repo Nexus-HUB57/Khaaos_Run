@@ -48,6 +48,7 @@ export const SCENARIOS = Object.freeze({
     playerSpawn: { x: 150, z: -90 },
     ringDamageMultiplier: 2,
     krcMultiplier: 2.5,
+    survival: Object.freeze({ type: 'VOLCANIC_LAVA', intervalSeconds: 140, durationSeconds: 35, damagePerSecond: 9, lavaBelowY: 180 }),
     groundTint: '#d8b27a',
     fogColor: '#70452b',
     sky: { top: '#2b1720', mid: '#a44c2d', horizon: '#efbd69' },

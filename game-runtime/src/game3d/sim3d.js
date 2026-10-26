@@ -293,6 +293,7 @@ export class KhaaosSim3D {
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
+    this.volcanicTimer = 0; this.volcanicRemaining = 0; this.volcanicActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
@@ -483,6 +484,7 @@ export class KhaaosSim3D {
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
+    if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -855,6 +857,28 @@ export class KhaaosSim3D {
       this.tsunamiRemaining = 0;
       this.tsunamiActive = false;
       this.emit('tsunamiEnd', {});
+    }
+  }
+  #stepVolcanicEruption(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.volcanicActive) {
+      this.volcanicTimer += dt;
+      if (this.volcanicTimer >= hazard.intervalSeconds) {
+        this.volcanicTimer -= hazard.intervalSeconds;
+        this.volcanicRemaining = hazard.durationSeconds;
+        this.volcanicActive = true;
+        this.emit('eruptionStart', { durationSeconds: hazard.durationSeconds, lavaBelowY: hazard.lavaBelowY });
+      }
+    }
+    if (!this.volcanicActive) return;
+    if (this.player.alive && this.player.y < hazard.lavaBelowY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'eruption');
+    for (const bot of this.bots) if (bot.alive && bot.y < hazard.lavaBelowY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'eruption');
+    this.volcanicRemaining -= dt;
+    if (this.volcanicRemaining <= 0) {
+      this.volcanicRemaining = 0;
+      this.volcanicActive = false;
+      this.emit('eruptionEnd', {});
     }
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {

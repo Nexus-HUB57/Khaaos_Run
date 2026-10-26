@@ -65,6 +65,9 @@ export class MatchRoom3D {
     this.tsunamiTimer = 0;
     this.tsunamiRemaining = 0;
     this.tsunamiActive = false;
+    this.volcanicTimer = 0;
+    this.volcanicRemaining = 0;
+    this.volcanicActive = false;
     this.state = ROOM_STATES.LOBBY;
     this.started = false;
     this.createdAt = Date.now();
@@ -248,6 +251,7 @@ export class MatchRoom3D {
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
+    if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
 
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
@@ -704,9 +708,32 @@ export class MatchRoom3D {
       this.#emitAll('tsunamiEnd', {});
     }
   }
+  #stepVolcanicEruption(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.volcanicActive) {
+      this.volcanicTimer += dt;
+      if (this.volcanicTimer >= hazard.intervalSeconds) {
+        this.volcanicTimer -= hazard.intervalSeconds;
+        this.volcanicRemaining = hazard.durationSeconds;
+        this.volcanicActive = true;
+        this.#emitAll('eruptionStart', { durationSeconds: hazard.durationSeconds, lavaBelowY: hazard.lavaBelowY });
+      }
+    }
+    if (!this.volcanicActive) return;
+    for (const actor of this.#actors()) {
+      if (actor.alive && actor.y < hazard.lavaBelowY) this.#damage(actor, hazard.damagePerSecond * dt, null, 'eruption');
+    }
+    this.volcanicRemaining -= dt;
+    if (this.volcanicRemaining <= 0) {
+      this.volcanicRemaining = 0;
+      this.volcanicActive = false;
+      this.#emitAll('eruptionEnd', {});
+    }
+  }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
-    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
+    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
     if (!actor.isBot) {
