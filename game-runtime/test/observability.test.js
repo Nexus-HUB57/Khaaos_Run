@@ -177,8 +177,12 @@ test('obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (op
   shared.on('error', () => {});
   await shared.connect();
   const key = `kr:obs:test:${Date.now()}`;
-  const exporterA = new RedisObsExporter({ client: shared, prefix: `${key}:a` });
-  const exporterB = new RedisObsExporter({ client: shared, prefix: `${key}:b` });
+  // Deploy multi-instância real: TODAS as instâncias usam o MESMO prefixo de
+  // deployment (cada nó contribui com o próprio serviceName) — agregação via
+  // snapshotRemote lê uma fonte só.
+  const sharedPrefix = `${key}:deploy`;
+  const exporterA = new RedisObsExporter({ client: shared, prefix: sharedPrefix });
+  const exporterB = new RedisObsExporter({ client: shared, prefix: sharedPrefix });
   const obsA = new Observability({ serviceName: 'node-a', exporter: exporterA });
   const obsB = new Observability({ serviceName: 'node-b', exporter: exporterB });
   try {
@@ -188,9 +192,14 @@ test('obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (op
     const spanB = obsB.startSpan({ name: 'ws session client-1', traceId: 'b'.repeat(32) });
     spanB.finish('ok');
     obsB.recordLog({ level: 'info', event: 'ws.connect', message: null });
-    // Pequena espera para o XADD assíncrono concluir.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const snapshot = await exporterA.snapshotRemote({ count: 100 });
+    // XADDs são fire-and-forget: sondar o stream até os dois serviços aparecerem.
+    let snapshot = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      snapshot = await exporterA.snapshotRemote({ count: 100 });
+      const sources = new Set(snapshot.spans.map((span) => span.service));
+      if (sources.has('node-a') && sources.has('node-b')) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     const sources = new Set(snapshot.spans.map((span) => span.service));
     assert.ok(sources.has('node-a') && sources.has('node-b'), `agregação multi-instância: ${[...sources].join(', ')}`);
     assert.ok(snapshot.spans.every((span) => typeof span.durationMs === 'number'));
@@ -202,13 +211,12 @@ test('obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (op
       span.finish('ok');
     }
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const trimmed = await shared.xLen(`${key}:a:spans`);
+    const trimmed = await shared.xLen(`${sharedPrefix}:spans`);
     assert.ok(trimmed <= 10_000, `stream podado: ${trimmed} entradas`);
   } finally {
-    await shared.xTrim(`${key}:a:spans`, 'MAXLEN', 0).catch(() => {});
-    await shared.xTrim(`${key}:a:logs`, 'MAXLEN', 0).catch(() => {});
-    await shared.xTrim(`${key}:b:spans`, 'MAXLEN', 0).catch(() => {});
-    await shared.xTrim(`${key}:b:logs`, 'MAXLEN', 0).catch(() => {});
+    for (const stream of [`${sharedPrefix}:spans`, `${sharedPrefix}:logs`]) {
+      await shared.xTrim(stream, 'MAXLEN', 0).catch(() => {});
+    }
     await shared.quit();
   }
 });
