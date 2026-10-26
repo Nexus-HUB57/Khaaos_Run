@@ -423,7 +423,7 @@ class RoomManager {
         const worldId = msg.worldId ?? "CIGKV";
         const requestedRoom = msg.roomId ? this.rooms.get(msg.roomId) : undefined;
         if (msg.worldId !== undefined && requestedRoom && requestedRoom.worldId !== worldId) {
-          this.send(ws, { type: "error", message: "A sala pertence a outro mundo" });
+          this.send(ws, { type: "error", message: requestedRoom.isPrivate ? "Sala não encontrada" : "A sala pertence a outro mundo" });
           break;
         }
         const roomId = msg.roomId || this.findOrCreateLobby(worldId);
@@ -509,7 +509,7 @@ class RoomManager {
   private findOrCreateLobby(worldId: WorldId = "CIGKV"): string {
     // Prefer an existing lobby with space
     for (const room of this.rooms.values()) {
-      if (room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
+      if (!room.isPrivate && room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
         return room.id;
       }
     }
@@ -547,7 +547,24 @@ class RoomManager {
     return id;
   }
 
-  async joinRoom(userId: string, displayName: string, ws: WebSocket, roomId: string, worldId: WorldId = "CIGKV") {
+  async joinRoom(
+    userId: string,
+    displayName: string,
+    ws: WebSocket,
+    roomId: string,
+    worldId: WorldId = "CIGKV",
+    privateInviteAuthorized = false,
+  ) {
+    let room = this.rooms.get(roomId);
+    if (!room) {
+      roomId = this.findOrCreateLobby(worldId);
+      room = this.rooms.get(roomId)!;
+    }
+    if (room.isPrivate && !privateInviteAuthorized) {
+      this.send(ws, { type: "error", message: "Sala não encontrada" });
+      return;
+    }
+
     // Leave matchmaking queue if present
     this.matchmaking.dequeue(userId);
     this.matchmaking.rebindWs(userId, ws);
@@ -555,12 +572,6 @@ class RoomManager {
     // Leave previous room if any
     if (this.userToRoom.has(userId)) {
       this.leaveRoom(userId);
-    }
-
-    let room = this.rooms.get(roomId);
-    if (!room) {
-      roomId = this.findOrCreateLobby(worldId);
-      room = this.rooms.get(roomId)!;
     }
 
     if (room.status !== "LOBBY" && room.status !== "COUNTDOWN") {
@@ -1599,7 +1610,7 @@ class RoomManager {
       return;
     }
     await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
-    await this.joinRoom(userId, displayName, ws, id);
+    await this.joinRoom(userId, displayName, ws, id, worldId, isPrivate);
   }
 
   private async joinByInviteCode(
@@ -1618,7 +1629,7 @@ class RoomManager {
       this.send(ws, { type: "error", message: "Código de lobby inválido ou expirado" });
       return;
     }
-    await this.joinRoom(userId, displayName, ws, room.id);
+    await this.joinRoom(userId, displayName, ws, room.id, room.worldId, true);
   }
 
   // ─── Matchmaking integration ─────────────────────────────────────────────
@@ -1795,7 +1806,7 @@ class RoomManager {
 
   listLobbies() {
     return [...this.rooms.values()]
-      .filter((r) => r.status === "LOBBY" || r.status === "COUNTDOWN")
+      .filter((r) => !r.isPrivate && (r.status === "LOBBY" || r.status === "COUNTDOWN"))
       .map((r) => ({
         id: r.id,
         status: r.status,

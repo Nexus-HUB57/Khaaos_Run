@@ -7,7 +7,7 @@ import {
   type DiscordLink, type Tournament,
   PatenteKR, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
-import { eq, desc, and, isNull, gt, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, gte, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
@@ -32,6 +32,7 @@ export interface IStorage {
   getItem(id: number): Promise<Item | undefined>;
   getItemForUser(id: number, userId: string): Promise<Item | undefined>;
   consumeItemDurability(id: number, userId: string, amount: number): Promise<Item | undefined>;
+  useItemAndHealAtomic(id: number, userId: string, durabilityCost: number, healAmount: number): Promise<{ item: Item; stats: PlayerStats; healed: number } | undefined>;
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined>;
@@ -308,9 +309,41 @@ export class DatabaseStorage implements IStorage {
     if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(amount) || amount <= 0) return undefined;
     const [updated] = await db.update(items)
       .set({ durability: sql`GREATEST(0, ${items.durability} - ${amount})` })
-      .where(and(eq(items.id, id), eq(items.userId, userId), gt(items.durability, "0")))
+      .where(and(eq(items.id, id), eq(items.userId, userId), gte(items.durability, String(amount))))
       .returning();
     return updated;
+  }
+
+  async useItemAndHealAtomic(id: number, userId: string, durabilityCost: number, healAmount: number) {
+    if (!Number.isSafeInteger(id) || id <= 0
+      || !Number.isFinite(durabilityCost) || durabilityCost <= 0
+      || !Number.isFinite(healAmount) || healAmount <= 0) return undefined;
+
+    return db.transaction(async (tx) => {
+      const [item] = await tx.update(items)
+        .set({ durability: sql`${items.durability} - ${durabilityCost}` })
+        .where(and(
+          eq(items.id, id),
+          eq(items.userId, userId),
+          gte(items.durability, String(durabilityCost)),
+        ))
+        .returning();
+      if (!item) return undefined;
+
+      await tx.insert(playerStats).values({ userId }).onConflictDoNothing();
+      const [before] = await tx.select().from(playerStats)
+        .where(eq(playerStats.userId, userId))
+        .for("update");
+      if (!before) throw new Error("Player stats could not be initialized");
+
+      const [stats] = await tx.update(playerStats)
+        .set({ health: Math.min(before.maxHealth, before.health + healAmount) })
+        .where(eq(playerStats.userId, userId))
+        .returning();
+      if (!stats) throw new Error("Player stats could not be healed");
+
+      return { item, stats, healed: stats.health - before.health };
+    });
   }
 
   async createItem(item: Partial<Item> & { userId: string }): Promise<Item> {

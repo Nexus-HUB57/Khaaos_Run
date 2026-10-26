@@ -372,12 +372,10 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
         return res.status(409).json({ message: "Item sem durabilidade disponível." });
       }
-      const consumed = await storage.consumeItemDurability(id, userId, 10);
-      if (!consumed) return res.status(409).json({ message: "Item sem durabilidade disponível." });
       const healAmount = Math.min(100, Math.max(1, Math.floor(Number(item.stats?.heal))));
-      const before = await storage.getPlayerStats(userId);
-      const stats = await storage.healPlayer(userId, healAmount);
-      res.json({ message: `${item.name} usado`, newDurability: consumed.durability, effect: { healed: stats.health - before.health } });
+      const result = await storage.useItemAndHealAtomic(id, userId, 10, healAmount);
+      if (!result) return res.status(409).json({ message: "Item sem durabilidade disponível." });
+      res.json({ message: `${item.name} usado`, newDurability: result.item.durability, effect: { healed: result.healed } });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
     }
