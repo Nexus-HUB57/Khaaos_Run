@@ -94,6 +94,7 @@ export function createAuthoritativeServer({
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
     backpressure: 0, oversized: 0, logouts: 0, keyRotations: 0, oidcLogins: 0, rbacDenies: 0,
+    storeReadFailures: 0, rateStoreFailures: 0,
   };
 
   const send = (ws, message) => {
@@ -126,6 +127,18 @@ export function createAuthoritativeServer({
     res.writeHead(403, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: 'forbidden', permission }));
     return null;
+  };
+
+  // Fail-open nos limitadores: indisponibilidade do rate store (Redis fora) não
+  // pode derrubar a partida — o input flui sem limite e a degradação fica
+  // sinalizada em metrics.rateStoreFailures para alarme externo.
+  const allowOrOpen = async (limiter, key) => {
+    try {
+      return await limiter.allowAsync(key);
+    } catch {
+      metrics.rateStoreFailures++;
+      return { allowed: true, count: 0, remaining: 0, resetAt: Date.now() + 1000 };
+    }
   };
 
   function assign(client) {
@@ -174,7 +187,7 @@ export function createAuthoritativeServer({
       }
       if (req.method === 'POST' && url.pathname === '/auth/login') {
         const ip = req.socket.remoteAddress || 'unknown';
-        const allowed = await limiter.allowAsync(`login:${ip}`);
+        const allowed = await allowOrOpen(limiter, `login:${ip}`);
         if (!allowed.allowed) { res.writeHead(429); res.end(JSON.stringify({ error: 'rate_limited' })); return; }
         const body = await jsonBody(req);
         const logged = identity.login(body.username, body.password);
@@ -344,8 +357,18 @@ export function createAuthoritativeServer({
     if (!user) { metrics.authFailures++; send(ws, { type: 'auth_required' }); ws.close(4001, 'auth-required'); return; }
     const mode = normalizeMode(url.searchParams.get('mode'));
     const resume = url.searchParams.get('resume');
-    const saved = resume ? await durable.getSession(resume) : null;
-    const blankInput3D = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
+    // Falha de leitura no store não pode bloquear a entrada do jogador:
+    // trata como sessão nova (fail-fresh) e sinaliza a degradação.
+    let saved = null;
+    if (resume) {
+      try {
+        saved = await durable.getSession(resume);
+      } catch {
+        saved = null;
+        metrics.storeReadFailures++;
+      }
+    }
+    const blankInput3D = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
     let client;
     if (saved && saved.userId === user.sub && saved.expiresAt > Date.now() && rooms.get(saved.roomId)?.players.has(saved.id)) {
       client = { id: saved.id, ws, roomId: saved.roomId, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: normalizeRegion(user.region), resumeToken: resume, connectedAt: Date.now() };
@@ -362,7 +385,7 @@ export function createAuthoritativeServer({
       void (async () => {
         metrics.messages++;
         if (raw.length > MAX_WS_PAYLOAD) { metrics.oversized++; ws.close(4009, 'payload-too-large'); return; }
-        const limited = await (client.mode === '3d' ? limiter3d : limiter).allowAsync(client.identity.sub);
+        const limited = await allowOrOpen(client.mode === '3d' ? limiter3d : limiter, client.identity.sub);
         if (!limited.allowed) { metrics.rateLimited++; send(ws, { type: 'rate_limited', retryAt: limited.resetAt }); return; }
         try {
           const message = JSON.parse(raw.toString());
