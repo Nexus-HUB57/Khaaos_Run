@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3d.js';
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
-import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createCharacterLOD, buildOperativeProxy } from './lod3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
@@ -60,6 +61,8 @@ export class Game3D {
     this.spectating = false;
     this.spectateTarget = null;
     this.placement = null;
+    // Fase 10 — reação de impacto: atorId → { angle, power, age }
+    this.hitFX = new Map();
 
     this.initRenderer();
     this.initWorld();
@@ -134,18 +137,21 @@ export class Game3D {
     this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
     // bots (no modo online os atores remotos chegam via snapshot)
+    // Fase 10 — bots nascem com LOD: modelo detalhado perto, proxy low-poly longe
     this.botOps = new Map();
     if (!this.online) {
       this.sim.bots.forEach((b, i) => {
         const ally = this.sim.squad && b.squad && b.squad === this.sim.player.squad;
         // Fase 10 — oficiais recebem paleta dourada canônica (identidade visual própria)
-        const op = createOperative(b.officer
-          ? { skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length], vest: '#b98a1e', variant: 'OCE_OFFICER' }
-          : {
-              skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
-              vest: VEST_COLORS[i % VEST_COLORS.length],
-              variant: b.id,
-            });
+        // Fase 10 — bots nascem com LOD: modelo detalhado perto, proxy low-poly longe
+        const palette = b.officer
+          ? { skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length], vest: '#b98a1e' }
+          : { skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length], vest: VEST_COLORS[i % VEST_COLORS.length] };
+        const op = createCharacterLOD(
+          createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : b.id }),
+          buildOperativeProxy(palette),
+          { tier: this.quality }
+        );
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
@@ -209,7 +215,8 @@ export class Game3D {
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
       this.firstPersonRig?.traverse((node) => {
-        if (node.isMesh && node.material?.color) node.material.color.set(operative.colors.primary);
+        // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
+        if (node.isMesh && node.userData?.tintable && node.material?.color) node.material.color.set(operative.colors.primary);
       });
       this.playerWeapon = null;
       this.renderOperativeCard(operative);
@@ -545,6 +552,11 @@ export class Game3D {
 
   syncEntities(dt) {
     const s = this.sim;
+    // Fase 10 — envelhece as reações de impacto (~.55 s de flinch)
+    for (const [k, hf] of this.hitFX) {
+      hf.age += dt;
+      if (hf.age > .55) this.hitFX.delete(k);
+    }
     // jogador
     const p = s.player;
     const pg = this.playerOp.group;
@@ -563,6 +575,7 @@ export class Game3D {
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
+      hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
     });
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -596,11 +609,17 @@ export class Game3D {
         // aliados do esquadrão em verde; oficiais em OURO canônico (Fase 10); fallback = paleta hash do id (compat legado)
         const ally = !!(s.squad && b.squad && b.squad === mySquad);
         const catalog = operativeCatalog.find((o) => o.id === b.op);
-        const op = createOperative(b.officer
-          ? { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: '#b98a1e', variant: 'OCE_OFFICER' }
+        // Fase 10 — atores remotos também nascem com LOD; oficiais em OURO canônico
+        const palette = b.officer
+          ? { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: '#b98a1e' }
           : catalog
-            ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary, variant: b.op }
-            : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
+            ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary }
+            : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length] };
+        const op = createCharacterLOD(
+          createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : (catalog ? b.op : b.id) }),
+          buildOperativeProxy(palette),
+          { tier: this.quality }
+        );
         this.scene.add(op.group);
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer);
         op.group.add(name);
@@ -609,6 +628,9 @@ export class Game3D {
         this.botOps.set(b.id, entry);
       }
       const g = entry.op.group;
+      // Fase 10 — LOD por distância à câmera (corpos no chão também culam)
+      const cam = this.camera.position;
+      entry.op.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z));
       // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
       if (!b.alive && !b.knocked) {
         if (!g.userData.deadVisible) {
@@ -626,14 +648,16 @@ export class Game3D {
       g.rotation.y = b.yaw + Math.PI;
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
-      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0 });
+      // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
+      const parts = entry.op.activeParts();
+      animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
       // Fase 4 — pose de queda para bots/remotos
       if (b.dropPhase && !b.knocked) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
-        entry.op.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
-        entry.op.parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
-        entry.op.parts.legL.hip.rotation.x = .5 + flap * .25;
-        entry.op.parts.legR.hip.rotation.x = .35 - flap * .25;
+        parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
+        parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
+        parts.legL.hip.rotation.x = .5 + flap * .25;
+        parts.legR.hip.rotation.x = .35 - flap * .25;
       }
       // Fase 7 — troca de arma + skin por raridade
       const bSkin = b.weaponSkin ?? null;
@@ -681,6 +705,18 @@ export class Game3D {
       this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
       this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
       this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
+      // Fase 10 — mãos articuladas: grip + indicador no gatilho + micro-vida;
+      // flinch da própria câmera quando o jogador é atingido (roll + recuo)
+      poseFirstPersonHands(this.firstPersonRig, { curl: .8 + this.camKick * 2.2, trigger: this.input.fire ? 1 : 0, breathe: Math.sin(this.animT * 2.1) * .03 });
+      const hf = this.hitFX.get('player');
+      if (hf) {
+        const env = (hf.age < .06 ? hf.age / .06 : Math.exp(-(hf.age - .06) / .17)) * hf.power;
+        this.firstPersonRig.rotation.z = Math.sin(hf.angle) * env * .07;
+        this.firstPersonRig.position.z = Math.cos(hf.angle) * env * .05;
+      } else {
+        this.firstPersonRig.rotation.z = 0;
+        this.firstPersonRig.position.z = 0;
+      }
       this.camKick *= Math.exp(-dt * 9);
       this.camera.rotation.z += this.camKick * .18;
       const targetFov = p.ads ? 42 : (p.sliding ? 74 : (p.sprinting ? 72 : 68));
@@ -794,12 +830,15 @@ export class Game3D {
             this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
             this.audio.hurt();
             this.hud.damageFlash = .4;
+            this.#registerHit(e.victim, e); // Fase 10 — corpo também reage
           } else if (e.owner === undefined || e.owner === 'player') {
             // hitmarker apenas para acertos próprios (offline não envia owner)
             this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
             this.audio.hit(e.head);
             this.hud.hitmarker(e.head);
           }
+          // Fase 10 — TODO alvo de carne reage ao impacto (bots/remotos incluídos)
+          if (e.victim !== 'player') this.#registerHit(e.victim, e);
           break;
         }
         case 'impact': {
@@ -846,6 +885,8 @@ export class Game3D {
               this.hud.feed('ANEL', 'Você está fora da zona segura.', 'bad');
               this.audio.ringWarn();
             }
+            // Fase 10 — queimadura do Ring provoca flinch genérico sutil
+            if (p.alive && !p.knocked) this.hitFX.set('player', { angle: 0, power: .3, age: 0 });
           }
           break;
         case 'pulse':
@@ -935,6 +976,28 @@ export class Game3D {
         case 'eliminated': this.enterSpectate(e); break;
       }
     }
+  }
+
+  // ---------- Fase 10 — reação de impacto ----------
+  // Converte o ponto de impacto (mundo) em ângulo no espaço LOCAL do modelo
+  // desfeito o rotation.y real do grupo (yaw + π): 0 = frente do modelo,
+  // +π/2 = lado +x do modelo, π = costas. Registra flinch só para atores vivos.
+  #registerHit(victimId, e) {
+    const s = this.sim;
+    const actor = victimId === 'player' ? s.player : (s.bots ?? []).find((b) => b.id === victimId);
+    if (!actor || !actor.alive) return;
+    const dx = e.x - actor.x, dz = e.z - actor.z;
+    const th = actor.yaw + Math.PI;
+    const cos = Math.cos(th), sin = Math.sin(th);
+    const lx = dx * cos - dz * sin;  // mundo → local (inverso de rotation.y)
+    const lz = dx * sin + dz * cos;
+    this.hitFX.set(victimId, { angle: Math.atan2(lx, -lz), power: e.head ? 1 : .8, age: 0 });
+  }
+
+  // snapshot imutável do flinch p/ animateOperative (ou null)
+  #hitParam(actorId) {
+    const hf = this.hitFX.get(actorId);
+    return hf ? { angle: hf.angle, power: hf.power, age: hf.age } : null;
   }
 
   updateInteractionPrompt() {

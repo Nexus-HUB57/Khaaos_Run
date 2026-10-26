@@ -301,7 +301,10 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // roll de passada, contra-rotação de cabeça e fade da sombra de contato por
 // `air` (altitude na infiltração). Frequências dessintonizadas evitam loop
 // mecânico; tudo determinístico (sem Math.random).
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0 } = {}) {
+// Fase 10: `hit` = reação de impacto direcional { angle, power, age } — flinch
+// ADITIVO sobre a pose base (não a substitui): ângulo em espaço do personagem
+// (0 = frente, +π/2 = lado +x, π = costas), power 0..1 e age em segundos.
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null } = {}) {
   // sombra de contato: some com altitude (paraquedas) e no corpo morto
   if (parts.shadow) {
     const fade = dead ? 0 : Math.max(0, .8 - air * .1);
@@ -378,6 +381,29 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
   parts.head.rotation.z = -parts.torso.rotation.z * .5;
+  // ---- Fase 10 — reação de impacto: flinch direcional aditivo ----
+  // Envelope: ataque rápido (~2 frames) + decaimento exponencial τ .17 s —
+  // o corpo dobra PARA LONGE da bala, afunda e os braços abrem em sobressalto,
+  // sem abandonar o regime de arma (magnitudes pequenas nos ombros).
+  if (hit && hit.power > 0) {
+    const ATTACK = .06, TAU = .17;
+    const age = Math.max(0, hit.age ?? 0);
+    const env = (age < ATTACK ? age / ATTACK : Math.exp(-(age - ATTACK) / TAU)) * Math.min(1, hit.power);
+    if (env > .001) {
+      const side = Math.sin(hit.angle ?? 0);   // + = impacto no lado +x do modelo
+      const front = Math.cos(hit.angle ?? 0);  // + = impacto na frente (-z)
+      parts.torso.rotation.x += front * env * .38;   // dobra para longe da bala
+      parts.torso.rotation.y += side * env * .42;    // torção de esquiva
+      parts.torso.position.x -= side * env * .06;    // empurrão na direção do tiro
+      parts.torso.position.y -= env * .05;           // afundamento do impacto
+      parts.head.rotation.y += side * env * .55;     // solavanco da cabeça
+      parts.head.rotation.x += front * env * .3;
+      parts.armR.shoulder.rotation.z -= side * env * .12; // sobressalto dos braços
+      parts.armL.shoulder.rotation.z += side * env * .12;
+      parts.armR.elbow.rotation.x += front * env * .18;   // antebraços recuam
+      parts.armL.elbow.rotation.x += front * env * .18;
+    }
+  }
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
@@ -501,6 +527,89 @@ export function attachWeapon(opParts, operativeGroup, weaponId, skin = null) {
 // Rig enxuto de primeira pessoa (Fase 6): mãos ENLUVADAS agarrando a arma,
 // mangas camufladas, peitoral do colete à vista. Materiais por instância —
 // o recolor do seletor de operativo não vaza para os demais personagens.
+// Fase 10: DEDOS INDIVIDUAIS articulados — 4 dedos + polegar por mão, cada um
+// com 2 falanges em cadeia (nó proximal + nó distal) que enrolam em volta do
+// punho da arma; índice da mão direita fica semi-estendido no gatilho e
+// flexiona ao atirar (poseFirstPersonHands). Meshes de pele/luva NÃO são
+// tintáveis — o recolor do seletor pinta apenas manga/colete (userData.tintable).
+const _fgeo = new Map();
+function fgeo(r, l) {
+  const key = `f${r}:${l}`;
+  if (!_fgeo.has(key)) _fgeo.set(key, new THREE.CapsuleGeometry(r, l, 2, 6));
+  return _fgeo.get(key);
+}
+
+// constrói uma mão articulada; side = +1 (direita) | -1 (esquerda).
+// Retorna { group, fingers: [{ base, tip, jitter }], thumb: { base, tip } }.
+function buildArticulatedHand({ side, skinM, gloveM }) {
+  const hand = new THREE.Group();
+  hand.position.set(0, -.545, -.02); // onde ficava o bloco "dedos à mostra"
+  // dorso da mão (luva) — dedos à mostra em pele, coerente com a Fase 6
+  const palm = box(.11, .05, .13, gloveM, 0, -.005, .01);
+  const knuckles = ball(.045, gloveM, 0, 0, -.05, 8, 6, 1.1, .55, .8);
+  hand.add(palm, knuckles);
+  // 4 dedos: cadeia proximal→distal apontando -y, enrolando em direção a -z
+  // (palma virada para a arma, que está mais à frente no rig)
+  const fingers = [];
+  const spacing = [.0245, .008, -.0085, -.025]; // x-offsets (indicador→mínimo)
+  for (let i = 0; i < 4; i++) {
+    const base = new THREE.Group();
+    base.position.set(spacing[i] * (side > 0 ? 1 : -1) * -1, -.02, -.012);
+    base.rotation.z = spacing[i] * .9; // leque sutil
+    const proximal = new THREE.Mesh(fgeo(.0105, .028), skinM);
+    proximal.position.y = -.0245;
+    proximal.castShadow = true;
+    const tip = new THREE.Group();
+    tip.position.y = -.049;
+    const distal = new THREE.Mesh(fgeo(.0095, .022), skinM);
+    distal.position.y = -.0205;
+    distal.castShadow = true;
+    tip.add(distal);
+    base.add(proximal, tip);
+    hand.add(base);
+    fingers.push({ base, tip, jitter: Math.sin(i * 2.3 + side) * .035 }); // assimetria orgânica determinística
+  }
+  // polegar: oposto aos dedos, do lado interno (em direção ao centro da arma)
+  const thumbBase = new THREE.Group();
+  thumbBase.position.set(side * .055, -.012, .008);
+  thumbBase.rotation.z = side * -1.15;
+  thumbBase.rotation.x = -.5;
+  const tProx = new THREE.Mesh(fgeo(.012, .024), skinM);
+  tProx.position.y = -.022;
+  tProx.castShadow = true;
+  const thumbTip = new THREE.Group();
+  thumbTip.position.y = -.044;
+  const tDist = new THREE.Mesh(fgeo(.011, .018), skinM);
+  tDist.position.y = -.019;
+  tDist.castShadow = true;
+  thumbTip.add(tDist);
+  thumbBase.add(tProx, thumbTip);
+  hand.add(thumbBase);
+  return { group: hand, fingers, thumb: { base: thumbBase, tip: thumbTip } };
+}
+
+// pose de grip das mãos em primeira pessoa — chamada por frame no loop FPS.
+// curl 0..1.6 enrola os dedos no punho; trigger 0..1 flexiona o INDICADOR
+// direito (gatilho); breathe adiciona micro-vida no idle. Determinístico.
+export function poseFirstPersonHands(rig, { curl = .8, trigger = 0, breathe = 0 } = {}) {
+  const hands = rig?.userData?.hands;
+  if (!hands) return;
+  const pose = (hand, base, isTriggerHand) => {
+    for (let i = 0; i < hand.fingers.length; i++) {
+      const f = hand.fingers[i];
+      let c = base + f.jitter + breathe;
+      if (isTriggerHand && i === 0) c = base - .45 + trigger * .7 + f.jitter; // índice: repouso estendido → aperta no tiro
+      c = Math.max(.04, Math.min(1.6, c));
+      f.base.rotation.x = c * 1.05;
+      f.tip.rotation.x = c * 1.3;
+    }
+    hand.thumb.base.rotation.x = -.5 + base * .45 + breathe;
+    hand.thumb.tip.rotation.x = base * .5;
+  };
+  pose(hands.armL, Math.min(1.6, curl * .92 + breathe * .5), false); // suporte: grip firme
+  pose(hands.armR, curl, true);                                       // gatilho
+}
+
 export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null } = {}) {
   const rig = new THREE.Group();
   const skinM = M(skin, { rough: .62 });
@@ -512,20 +621,26 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
     const arm = new THREE.Group();
     arm.position.set(side * .2, -.26, -.4);
     arm.rotation.set(-.4, side * .14, side * .2);
-    arm.add(box(.16, .42, .16, camoM, 0, -.18, 0));          // manga
-    arm.add(box(.17, .07, .17, secM, 0, -.34, 0));           // punho
-    arm.add(box(.14, .16, .15, gloveM, 0, -.46, -.01));      // luva
-    arm.add(box(.12, .06, .12, skinM, 0, -.55, -.02));       // dedos à mostra
+    const sleeve = box(.16, .42, .16, camoM, 0, -.18, 0);    // manga
+    const cuff = box(.17, .07, .17, secM, 0, -.34, 0);       // punho
+    const glove = box(.14, .16, .15, gloveM, 0, -.46, -.01); // luva
+    sleeve.userData.tintable = true;
+    arm.add(sleeve, cuff, glove);
+    const hand = buildArticulatedHand({ side, skinM, gloveM });
+    arm.add(hand.group);
     rig.add(arm);
+    arm.userData.hand = hand;
     return arm;
   };
   const armL = makeArm(-1);
   const armR = makeArm(1);
   const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
   chest.rotation.x = -.24;
+  chest.userData.tintable = true;
   const chestPouch = box(.14, .1, .05, M('#26282d', { rough: .8 }), 0, -.5, -.31);
   rig.add(chest, chestPouch);
   rig.userData.arms = { armL, armR };
+  rig.userData.hands = { armL: armL.userData.hand, armR: armR.userData.hand };
   return rig;
 }
 
