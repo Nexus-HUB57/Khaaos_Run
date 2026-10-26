@@ -15,8 +15,13 @@ const activate = (sim, operativeId) => {
 
 test('existe uma habilidade definida e identificável para cada operativo canônico', () => {
   assert.equal(roster.length, 16);
-  assert.deepEqual(Object.keys(OPERATIVE_ABILITIES).sort(), roster.map((operative) => operative.id).sort());
-  for (const operative of roster) {
+  // Fase 11 — as 3 insígnias OCE (Oficiais jogáveis) estendem a tabela de
+  // habilidades além do catálogo canônico de 16 operativos.
+  const oceIds = ['OCE_01', 'OCE_02', 'OCE_03'];
+  const abilityIds = Object.keys(OPERATIVE_ABILITIES);
+  for (const id of oceIds) assert.ok(abilityIds.includes(id), `${id} presente na tabela de habilidades`);
+  assert.deepEqual(abilityIds.filter((id) => !oceIds.includes(id)).sort(), roster.map((operative) => operative.id).sort());
+  for (const operative of [...roster, ...oceIds.map((id) => ({ id }))]) {
     const ability = getOperativeAbility(operative.id);
     assert.equal(ability.operativeId, operative.id);
     assert.ok(ability.name && ability.description);

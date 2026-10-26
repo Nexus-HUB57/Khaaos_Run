@@ -70,6 +70,27 @@ export const MOTIVOS_CORTE_MARCIAL = Object.freeze({
   DESOBEDIENCIA_FINAL: 'desobediencia_final', // 10º — não atendeu ao chamado da hora final
 });
 
+// Vereditos jogáveis da Corte Marcial (console do Marechal). A vida única é
+// SAGRADA — nenhum veredito reingressa o caído no Ring; o julgamento define o
+// REGISTRO oficial e as consequências de carreira (11º artigo lê patente/xp).
+export const VEREDITOS_CORTE_MARCIAL = Object.freeze({
+  AFASTAMENTO: 'afastamento',        // desligamento desonroso — patente reduzida a Recruta no registro
+  REDUCAO_PATENTE: 'reducao_patente', // degradação de um degrau na hierarquia (registro)
+  HONRAS_DE_GUERRA: 'honras_de_guerra', // queda em serviço honrosa — +200 XP memorial no registro
+  ABSOLVICAO: 'absolvicao',          // absolvido das acusações — registro limpo, +100 XP de reparação
+});
+const EFEITO_VEREDITO = Object.freeze({
+  afastamento: { patentePara: 'Recruta', xp: 0, registro: 'desonrado' },
+  reducao_patente: { patentePara: null, xp: 0, registro: 'degradado' }, // patentePara resolvido em runtime (um degrau abaixo)
+  honras_de_guerra: { patentePara: null, xp: 200, registro: 'honrado' },
+  absolvicao: { patentePara: null, xp: 100, registro: 'absolvido' },
+});
+const ROTULO_MOTIVO = Object.freeze({
+  evasao: 'Evasão (8º artigo)',
+  covardia_mundial: 'Covardia mundial (preceito anti-covardia)',
+  desobediencia_final: 'Desobediência na hora final (10º artigo)',
+});
+
 export class PojError extends Error {
   constructor(code, message = code) {
     super(message);
@@ -113,6 +134,8 @@ export class ProtocoloDeOrdemDeJogo {
     this.players = new Map();      // id → { id, name, patente, xp, kills, alive, eliminatedBy, status, incursoesTotal, worldIncursions:Set-like, evasions, marshalTie }
     this.incursions = new Map();   // id → { id, world, day, summoned:[], attended:Set, closed, open }
     this.nextIncursionId = 1;
+    this.courtCases = new Map();   // Corte Marcial: id → caso { playerId, motivo, evidência, status, veredito }
+    this.nextCaseId = 1;
     this.events = [];              // ata do protocolo [{ at, type, ... }]
     this.champion = null;
     this.marechalDecision = null;  // { criterion, dice, tiedIds }
@@ -339,11 +362,26 @@ export class ProtocoloDeOrdemDeJogo {
   }
 
   // ---------- Corte Marcial ----------
+  // Toda desclassificação gera um CASO pendente com evidência — o Marechal
+  // julga no console (vereditos jogáveis). A queda é imediata; o REGISTRO é
+  // definido no julgamento (nenhum veredito reingressa o caído — vida única).
   #courtMartial(playerId, motivo) {
     const p = this.players.get(playerId);
     if (!p.alive) return;
     p.alive = false; p.status = 'corte_marcial'; p.eliminatedBy = motivo;
-    this.#log('corte_marcial', { playerId, motivo, sentenca: 'desclassificado_e_julgado' });
+    const caseId = `cm-${this.nextCaseId++}`;
+    this.courtCases.set(caseId, {
+      id: caseId,
+      playerId: p.id, name: p.name, patente: p.patente,
+      motivo, motivoRotulo: ROTULO_MOTIVO[motivo] ?? motivo,
+      clock: this.clock, world: this.#currentWorld(), day: this.#isDay7() ? this.day : null,
+      evidencia: {
+        evasoes: p.evasions, incursoes: p.incursoesTotal, kills: p.kills, xp: p.xp,
+        patente: p.patente, statusAnterior: 'ativo',
+      },
+      status: 'pendente', veredito: null, juiz: null, nota: null, julgadoEm: null,
+    });
+    this.#log('corte_marcial', { playerId, motivo, caso: caseId, sentenca: 'desclassificado_e_a_julgamento' });
     if (this.survivorsCount <= 1 && this.phase === FASES.GUERRA && this.#isLastWorld() && this.#isDay7()) {
       this.phase = FASES.JULGAMENTO;
       this.#log('guerra_encerrada', { sobreviventes: this.survivorsCount });
@@ -356,7 +394,48 @@ export class ProtocoloDeOrdemDeJogo {
     return { ok: true };
   }
 
+  // Processo do banco da Corte Marcial: pendentes (a julgar) e histórico.
+  courtDocket(status = null) {
+    const cases = [...this.courtCases.values()];
+    const filtered = status ? cases.filter((c) => c.status === status) : cases;
+    return { pendentes: cases.filter((c) => c.status === 'pendente').length, julgados: cases.filter((c) => c.status === 'julgado').length, cases: filtered };
+  }
+
+  // Veredito do Marechal (console): aplica o efeito no REGISTRO do militar e
+  // encerra o caso. Vida única preservada — o caído permanece fora do Ring.
+  courtVerdict(caseId, veredito, { judge = 'Marechal-Khaaos', note = null } = {}) {
+    const caso = this.courtCases.get(String(caseId));
+    if (!caso) throw new PojError('caso_invalido', `caso ${caseId} não existe`);
+    if (caso.status === 'julgado') throw new PojError('caso_julgado', `caso ${caseId} já julgado`);
+    if (!Object.values(VEREDITOS_CORTE_MARCIAL).includes(veredito)) throw new PojError('veredito_invalido', `veredito ${veredito} inválido`);
+    const p = this.players.get(caso.playerId);
+    const efeito = EFEITO_VEREDITO[veredito];
+    if (p) {
+      if (veredito === VEREDITOS_CORTE_MARCIAL.REDUCAO_PATENTE) {
+        const idx = pesoPatente(p.patente);
+        p.patente = PATENTE_HIERARQUIA[Math.max(0, idx - 1)];
+      } else if (efeito.patentePara) {
+        p.patente = efeito.patentePara;
+      }
+      p.xp += efeito.xp;
+      p.registro = efeito.registro; // desonrado | degradado | honrado | absolvido
+    }
+    caso.status = 'julgado'; caso.veredito = veredito; caso.juiz = String(judge);
+    caso.nota = note ? String(note).slice(0, 280) : null; caso.julgadoEm = this.clock;
+    caso.patenteFinal = p?.patente ?? null;
+    this.#log('veredito_corte_marcial', { caso: caso.id, playerId: caso.playerId, veredito, registro: efeito.registro, juiz: caso.juiz });
+    return { ok: true, caso };
+  }
+
   // ---------- 7º/9º artigos — Oficiais de Classe Especial ----------
+  // Limiar do 7º artigo: 10% do total de inscrição. No canônico (1.000.000) é
+  // exatamente os 100.000 do regramento; em staging/alistamento comprimido o
+  // limiar escala proporcionalmente — a REGRA é a mesma, a escala não.
+  get rule7MinSurvivors() {
+    return this.enlistmentTotal === POJ_RULES.ENLISTMENT_TOTAL
+      ? POJ_RULES.RULE7_MIN_SURVIVORS
+      : Math.max(1, Math.ceil(this.enlistmentTotal * (POJ_RULES.RULE7_MIN_SURVIVORS / POJ_RULES.ENLISTMENT_TOTAL)));
+  }
   // Plano de entrada dos 3 Oficiais para o Ring/Batalha em curso.
   officerEntryPlan(survivors = this.survivorsCount) {
     if (this.phase !== FASES.GUERRA || !this.#isDay7() || this.#currentWorld() !== 'Arukheea') {
@@ -373,14 +452,15 @@ export class ProtocoloDeOrdemDeJogo {
           : `últimas 6 h: ${survivors} sobreviventes → Oficiais não entram`,
       };
     }
-    // 7º — avaliação feita no início do 7º dia: > 100.000 sobreviventes (10%)
-    const allowed = survivors > POJ_RULES.RULE7_MIN_SURVIVORS;
+    // 7º — avaliação feita no início do 7º dia: > 10% do efetivo inscritos
+    const minSurvivors = this.rule7MinSurvivors;
+    const allowed = survivors > minSurvivors;
     return {
       allowed, minutesPerRing: allowed ? POJ_RULES.RULE7_MIN_MINUTES : 0, article: '7º',
       officers: POJ_RULES.OFFICERS, survivors,
       reason: allowed
-        ? `início do 7º dia: ${survivors} sobreviventes (> ${POJ_RULES.RULE7_MIN_SURVIVORS}) → mínimo ${POJ_RULES.RULE7_MIN_MINUTES} min por Ring`
-        : `início do 7º dia: ${survivors} sobreviventes (≤ ${POJ_RULES.RULE7_MIN_SURVIVORS}) → Oficiais não entram`,
+        ? `início do 7º dia: ${survivors} sobreviventes (> ${minSurvivors}) → mínimo ${POJ_RULES.RULE7_MIN_MINUTES} min por Ring`
+        : `início do 7º dia: ${survivors} sobreviventes (≤ ${minSurvivors}) → Oficiais não entram`,
     };
   }
 
@@ -497,10 +577,11 @@ export class ProtocoloDeOrdemDeJogo {
       },
       champion: this.champion,
       marechalDecision: this.marechalDecision,
+      court: this.courtDocket(),
       players: [...this.players.values()].map((p) => ({
         id: p.id, name: p.name, patente: p.patente, alive: p.alive, status: p.status,
         incursoes: p.incursoesTotal, evasions: p.evasions, kills: p.kills, xp: p.xp,
-        eliminatedBy: p.eliminatedBy,
+        eliminatedBy: p.eliminatedBy, registro: p.registro ?? null,
       })),
       incursionsOpen: [...this.incursions.values()].filter((i) => !i.closed).map((i) => i.id),
       recentEvents: this.events.slice(-32),

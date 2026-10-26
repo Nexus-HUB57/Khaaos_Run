@@ -33,11 +33,14 @@ export function createPojService(overrides = {}) {
     state() {
       return proto.snapshot();
     },
-    // POST /poj/register — alistamento com identidade do token (patente opcional)
+    // POST /poj/register — alistamento com identidade do token (patente opcional).
+    // Fase 11 — o Marechal (admin) pode alistar um playerId de terceiros via
+    // console (corpo de guerra do protocolo); jogador comum alista só a si.
     register(actor, body = {}) {
       const patente = PATENTE_HIERARQUIA.includes(body.patente) ? body.patente : 'Recruta';
-      return proto.register(actor.sub, {
-        name: actor.username || actor.sub,
+      const target = actor.role === 'admin' && body.playerId ? String(body.playerId) : actor.sub;
+      return proto.register(target, {
+        name: body.name || (target === actor.sub ? (actor.username || actor.sub) : String(body.playerId)),
         patente,
         xp: Number(body.xp) || 0,
         kills: Number(body.kills) || 0,
@@ -73,6 +76,19 @@ export function createPojService(overrides = {}) {
     // POST /poj/court-martial — julgamento explícito (Marechal)
     courtMartial(body = {}) {
       return proto.courtMartial(String(body.playerId), body.motivo);
+    },
+    // ---------- Fase 11 — Corte Marcial jogável (console do Marechal) ----------
+    // GET /poj/court-martial — banco da Corte: casos pendentes + histórico.
+    courtCases(status = null) {
+      return proto.courtDocket(status);
+    },
+    // POST /poj/court-martial/verdict — veredito do Marechal sobre um caso.
+    // Efeitos no registro (patente/XP); a vida única NUNCA é restaurada.
+    courtVerdict(actor, body = {}) {
+      return proto.courtVerdict(String(body.caseId), String(body.veredito || body.verdict || ''), {
+        judge: actor?.username || 'Marechal-Khaaos',
+        note: body.nota ?? body.note ?? null,
+      });
     },
     // Plano de entrada dos Oficiais (leve — sem snapshot completo)
     officerPlan() {

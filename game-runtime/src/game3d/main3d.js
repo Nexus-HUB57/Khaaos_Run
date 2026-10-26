@@ -14,14 +14,18 @@ import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
+import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
+import { TrainIntro } from './trainIntro.js';
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
 const VEST_COLORS = VEST_COLORS_FALLBACK;
 
 export class Game3D {
+  #selectableOperatives = null; // Fase 11 — catálogo + insígnias OCE (memo)
+
   constructor(seed, { net = null, scenarioId = 'CIGKV' } = {}) {
     this.seed = seed;
     this.scenario = resolveScenario(scenarioId);
@@ -189,23 +193,28 @@ export class Game3D {
         location.assign(url);
       });
     }
-    select.replaceChildren(...operativeCatalog.map((operative) => {
-      const option = document.createElement('option');
-      option.value = operative.id;
-      option.textContent = `${operative.codename} — ${operative.rank}`;
-      return option;
-    }));
+    select.replaceChildren(...this.#operativeOptions());
     select.value = this.selectedOperative.id;
     this.renderOperativeCard(this.selectedOperative);
     select.addEventListener('change', () => {
       if (this.sim.started) return;
-      const operative = operativeCatalog.find((entry) => entry.id === select.value);
+      const operative = this.#findSelectable(select.value);
       if (!operative) return;
       this.selectedOperative = operative;
+      const isOfficer = Boolean(operative.officerWeapon); // Fase 11 — insígnia OCE
       this.sim.player.operativeId = operative.id;
+      if (isOfficer) {
+        // offline: a insígnia aplica a carga canônica do OCE (arma/blindagem/velocidade)
+        this.sim.player.weapon = operative.officerWeapon;
+        this.sim.player.ammoMag = WEAPONS3D[operative.officerWeapon].magazine;
+        this.sim.player.armor = operative.officerArmor;
+        this.sim.player.speed = operative.officerSpeed;
+      }
       this.hud.setAbility(operative.id, this.online);
       this.scene.remove(this.playerOp.group);
-      this.playerOp = createOperative({ skin: operative.colors.skinTone, vest: operative.colors.primary });
+      this.playerOp = createOperative(isOfficer
+        ? { skin: operative.colors.skinTone, vest: operative.colors.primary, variant: 'OCE_OFFICER' }
+        : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
       this.firstPersonRig?.traverse((node) => {
@@ -214,6 +223,24 @@ export class Game3D {
       this.playerWeapon = null;
       this.renderOperativeCard(operative);
     });
+  }
+
+  // Fase 11 — catálogo selecionável: operativos canônicos + as 3 insígnias OCE
+  // (jogáveis — online o servidor valida contra o plano do POJ; a insígnia é
+  // única por partida). Marcadas com ★ dourada no rótulo.
+  #operativeOptions() {
+    const entries = [...operativeCatalog, ...officerCatalogEntries()];
+    this.#selectableOperatives = entries;
+    return entries.map((operative) => {
+      const option = document.createElement('option');
+      option.value = operative.id;
+      option.textContent = operative.officerWeapon ? `★ ${operative.codename} — ${operative.rank}` : `${operative.codename} — ${operative.rank}`;
+      if (operative.officerWeapon) option.dataset.officer = '1';
+      return option;
+    });
+  }
+  #findSelectable(id) {
+    return (this.#selectableOperatives ?? [...operativeCatalog, ...officerCatalogEntries()]).find((o) => o.id === id) ?? null;
   }
 
   renderOperativeCard(operative) {
@@ -231,26 +258,36 @@ export class Game3D {
     setText('#operativeDisplay', `OPERATIVO // ${operative.codename}`);
   }
 
-  makeNameTag(name, i, ally = false, officer = false) {
+  makeNameTag(name, i, ally = false, officer = false, patente = null) {
     const canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 64;
+    canvas.width = 320; canvas.height = 64;
     const ctx = canvas.getContext('2d');
     ctx.font = 'bold 26px Rajdhani, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(8,8,12,.55)';
-    ctx.fillRect(48, 6, 160, 44);
+    ctx.fillRect(48, 6, 224, 44);
     // Fase 10 — Oficial de Classe Especial: moldura dourada + texto dourado
     if (officer) {
       ctx.strokeStyle = '#ffd75e'; ctx.lineWidth = 3;
-      ctx.strokeRect(48, 6, 160, 44);
+      ctx.strokeRect(48, 6, 224, 44);
     }
     // Fase 7 — aliados de squad em VERDE; inimigos em tons vermelhos; oficial em OURO
     ctx.fillStyle = officer ? '#ffd75e' : ally ? '#7dff8a' : (i % 2 ? '#e86a7a' : '#d8a0aa');
-    ctx.fillText(name, 128, 36);
+    // Fase 11 — patente no nametag: linha fina acima do nome (1º critério do 11º artigo)
+    if (patente) {
+      ctx.font = 'bold 15px Rajdhani, sans-serif';
+      ctx.fillStyle = officer ? '#ffe9a8' : ally ? '#b9ffc2' : '#e9b7bf';
+      ctx.fillText(String(patente).toUpperCase(), 160, 21);
+      ctx.font = 'bold 26px Rajdhani, sans-serif';
+      ctx.fillStyle = officer ? '#ffd75e' : ally ? '#7dff8a' : (i % 2 ? '#e86a7a' : '#d8a0aa');
+      ctx.fillText(name, 160, 44);
+    } else {
+      ctx.fillText(name, 128, 36);
+    }
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    sprite.scale.set(officer ? 2.6 : 2.2, .55, 1);
+    sprite.scale.set(officer ? 3.1 : 2.7, .62, 1);
     sprite.position.y = 2.25;
     sprite.renderOrder = 5;
     return sprite;
@@ -331,6 +368,22 @@ export class Game3D {
     this.hud.feed('CIGKV', entry === 'belt' ? 'Cinto travado. Defesa de impacto ampliada.' : 'Entrada agressiva. Velocidade ampliada.');
     if (!this.isTouch()) this.renderer.domElement.requestPointerLock?.();
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, this.sim.player.weapon);
+    // Fase 11 — ZU: o trem cruza a zona e o desembarque aéreo começa (só câmera;
+    // a sim continua autoritativa — nenhum input é bloqueado).
+    this.startTrainIntro();
+  }
+
+  // Fase 11 — cinemática do trem do ZU (offline e online; skippable)
+  startTrainIntro() {
+    try {
+      const p = this.sim.player ?? { x: 0, z: 118 };
+      this.trainIntro = new TrainIntro({
+        scene: this.scene,
+        spawn: { x: p.x ?? 0, z: p.z ?? 118 },
+        onDone: () => { this.trainIntro = null; },
+      });
+      this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
+    } catch { /* cinematic é best-effort — nunca bloqueia a partida */ }
   }
 
   restart(nextSeed) {
@@ -602,11 +655,19 @@ export class Game3D {
             ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary, variant: b.op }
             : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
         this.scene.add(op.group);
-        const name = this.makeNameTag(b.name, 0, ally, !!b.officer);
+        const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer };
         this.botOps.set(b.id, entry);
+      } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
+        // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
+        entry.name.material.map.dispose();
+        entry.name.material.dispose();
+        const fresh = this.makeNameTag(b.name, 0, entry.ally, !!b.officer, b.patente ?? null);
+        entry.op.group.remove(entry.name);
+        entry.op.group.add(fresh);
+        entry.name = fresh; entry.patente = b.patente ?? null; entry.officer = !!b.officer;
       }
       const g = entry.op.group;
       // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
@@ -664,6 +725,12 @@ export class Game3D {
   }
 
   updateCamera(dt) {
+    // Fase 11 — cinemática do trem do ZU captura a câmera até o handover
+    if (this.trainIntro && !this.trainIntro.done) {
+      this.trainIntro.update(dt);
+      this.trainIntro.cameraPose(this.camera, this.sim.player);
+      return;
+    }
     // Fase 5 — espectador acompanha outro operativo
     if (this.spectating && this.spectateTarget) { this.updateSpectateCamera(dt); return; }
     const p = this.sim.player;
@@ -902,6 +969,16 @@ export class Game3D {
           break;
         case 'officers_departed':
           this.hud.feed('POJ', 'Oficiais de Classe Especial se retiraram do Ring — duração autorizada encerrada.', 'warn');
+          break;
+        case 'operative_error': // Fase 11 — insígnia OCE recusada pelo regramento
+          this.hud.feed('POJ', e.reason === 'oficiais_fora_da_janela'
+            ? `Insígnia OCE recusada: ${e.detail ?? 'oficiais fora da janela do 7º/9º artigo'}.`
+            : e.reason === 'insignia_ocupada'
+              ? 'Insígnia OCE já reivindicada por outro operativo nesta partida.'
+              : `Identidade recusada: ${e.reason ?? 'desconhecida'}.`, 'bad');
+          break;
+        case 'patente': // Fase 11 — patente do perfil confirmada pelo servidor
+          this.hud.feed('POJ', `Patente confirmada no nametag: ${e.patente}.`, 'good');
           break;
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------

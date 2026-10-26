@@ -22,9 +22,24 @@ import {
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
 // Fase 10 — Oficiais de Classe Especial no Ring (7º/9º artigos do POJ)
 import { officerDeployment, officerCombatParams, shouldWithdraw } from '../src/game3d/officers.js';
+import { SPECIAL_CLASS_OFFICERS } from '../src/game3d/officers.js';
+import { PATENTE_HIERARQUIA } from '../src/game3d/poj.js';
+// Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
+const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
 export const OPERATIVE_IDS = Object.keys(OPERATIVE_ABILITIES);
 export const ABILITY_TICK_RATE = 30; // convenção de ticks no snapshot (igual à sim offline)
+
+// Fase 11 — distribuição de patentes do efetivo bot (nametag/killfeed):
+// base larga nas patências baixas, poucos generais — coerente com a hierarquia.
+const BOT_PATENTES = Object.freeze([
+  'Recruta', 'Soldado', 'Soldado', 'Cabo', 'Cabo', 'Sargento', 'Sargento',
+  'Sargento-Mor', 'Tenente', 'Tenente', 'Capitão', 'Major', 'Coronel', 'General',
+]);
+
+// Fase 11 — rótulo de nome com patente (killfeed/feed): "Sargento ZHEERS-03".
+// Oficiais OCE já carregam o callsign canônico — não recebem prefixo.
+const patenteTag = (a) => (a?.patente && !a.officer ? `${a.patente} ${a.name}` : String(a?.name ?? '—'));
 
 // Parâmetros de combate EFETIVOS dos oficiais: a tabela de elite deriva da
 // canônica BOT_COMBAT (mesma curva de decaimento de dano, erro escalado) —
@@ -62,6 +77,7 @@ export class MatchRoom3D {
     // a sala não importa o POJ — permanece desacoplada e testável.
     this.officerPlanFn = typeof officerPlanFn === 'function' ? officerPlanFn : null;
     this.officerMeta = null; // { count, article, deploySeconds, elapsed }
+    this.officerClaims = new Map(); // Fase 11 — insígnia OCE → client-id humano (1 por insígnia)
     this.matchIndex = 0;      // nº da partida nesta sala (salas são single-match hoje)
     this.matchId = null;      // "<roomId>#<matchIndex>" — chave de idempotência das recompensas
     this.matchRewarded = false;
@@ -173,12 +189,58 @@ export class MatchRoom3D {
     this.lastActivity = Date.now();
     return actor;
   }
-  // Fase 8 — o cliente declara o operativo escolhido (apenas em LOBBY; validado)
+  // Fase 8 — o cliente declara o operativo escolhido (apenas em LOBBY; validado).
+  // Fase 11 — Oficiais de Classe Especial JOGÁVEIS: um humano pode reivindicar
+  // uma das 3 insígnias OCE quando o regramento autoriza (officerPlan do POJ).
+  // A insígnia é ÚNICA por partida (3 slots) e dá identidade dourada, arma,
+  // blindagem e velocidade da tabela canônica (officers.js).
   setOperative(id, operativeId) {
     const actor = this.humans.get(id);
     if (!actor || this.state !== ROOM_STATES.LOBBY) return false;
+    if (OFFICER_IDS.includes(operativeId)) return this.#claimOfficer(actor, operativeId);
     if (!OPERATIVE_IDS.includes(operativeId)) return false;
+    // trocar para operativo regular libera a insígnia OCE reivindicada
+    if (actor.officer) { this.officerClaims.delete(actor.officerId ?? actor.operativeId); actor.officer = false; actor.officerCallsign = null; actor.officerId = null; }
     actor.operativeId = operativeId;
+    return true;
+  }
+  // Reivindicação de insígnia OCE por humano — gated pelo plano do POJ (7º/9º).
+  // Online a fonte é sempre officerPlanFn (pojService.officerPlan()) — nunca
+  // autoridade local; sala sem plano não autoriza (fail-closed).
+  #claimOfficer(actor, officerId) {
+    const plan = this.officerPlanFn?.() ?? null;
+    if (!plan?.allowed) {
+      this.#emitTo(actor.id, 'operative_error', { reason: 'oficiais_fora_da_janela', detail: plan?.reason ?? 'sem_plano_de_oficiais' });
+      return false;
+    }
+    if (this.officerClaims.has(officerId) && this.officerClaims.get(officerId) !== actor.id) {
+      this.#emitTo(actor.id, 'operative_error', { reason: 'insignia_ocupada', detail: officerId });
+      return false;
+    }
+    const def = SPECIAL_CLASS_OFFICERS.find((o) => o.id === officerId);
+    if (!def) return false;
+    // liberar insígnia anterior, se trocando entre OCEs
+    if (actor.officer && actor.officerId && actor.officerId !== officerId) this.officerClaims.delete(actor.officerId);
+    this.officerClaims.set(officerId, actor.id);
+    actor.officer = true;
+    actor.officerId = officerId;
+    actor.officerCallsign = def.callsign;
+    actor.operativeId = officerId; // identidade canônica OCE (paleta dourada no cliente)
+    actor.weapon = def.weapon;
+    actor.ammoMag = WEAPONS3D[def.weapon].magazine;
+    actor.armor = def.armor;
+    actor.speed = def.speed;
+    return true;
+  }
+  // Fase 11 — patente do perfil no nametag/killfeed (1º critério do 11º artigo).
+  // Resolvida pelo servidor a partir do KRC do perfil; bots derivam por tier.
+  // Mudança de patente emite evento ao vivo (snapshot do lobby não streama).
+  setPatente(id, patente) {
+    const actor = this.humans.get(id);
+    if (!actor || !PATENTE_HIERARQUIA.includes(patente)) return false;
+    const changed = actor.patente !== patente;
+    actor.patente = patente;
+    if (changed) this.#emitTo(id, 'patente', { patente });
     return true;
   }
   removePlayer(id) {
@@ -186,7 +248,7 @@ export class MatchRoom3D {
     this.humans.delete(id);
     this.events.delete(id);
     if (actor && this.state === ROOM_STATES.IN_PROGRESS) {
-      this.#emitAll('killfeed', { killer: 'CONEXÃO', victim: actor.name, head: false });
+      this.#emitAll('killfeed', { killer: 'CONEXÃO', victim: patenteTag(actor), head: false });
     }
     this.lastActivity = Date.now();
   }
@@ -205,6 +267,9 @@ export class MatchRoom3D {
     bot.krc = 0;
     // Fase 8 — identidade dos bots: operativo determinístico (paleta/acessórios no cliente)
     bot.operativeId = this.rng.pick(OPERATIVE_IDS);
+    // Fase 11 — patente dos bots no nametag/killfeed: derivada do tier do bot
+    // (determinística por seed — os mesmos soldados, as mesmas patentes)
+    bot.patente = BOT_PATENTES[i % BOT_PATENTES.length];
     // Fase 7 — bots formam esquadrões inimigos próprios (sqE-); não resgatam online
     if (this.squad) bot.squad = `sqE-${Math.floor(i / 4) + 1}`;
     bot.ai = { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null };
@@ -1050,7 +1115,7 @@ export class MatchRoom3D {
       if (this.squad && !actor.knocked) {
         knockActor(actor, ownerId, kind === 'headshot' ? 'headshot' : kind);
         const knocker = ownerId ? this.#actors().find((a) => a.id === ownerId) : null;
-        this.#emitAll('killfeed', { killer: knocker?.name ?? (kind === 'ring' ? 'RING' : 'CIGKV'), victim: actor.name, head: kind === 'headshot', knock: true });
+        this.#emitAll('killfeed', { killer: knocker ? patenteTag(knocker) : (kind === 'ring' ? 'RING' : 'CIGKV'), victim: patenteTag(actor), head: kind === 'headshot', knock: true });
         if (!actor.isBot) {
           this.#emitTo(actor.id, 'knocked', { by: knocker?.name ?? null, kind, knockT: actor.knockT });
           // nocaute dá XP/KRC parcial ao caçador humano
@@ -1081,9 +1146,9 @@ export class MatchRoom3D {
         killer.krc += KILL_KRC;
         this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC, finish: kind === 'bleedout' });
       }
-      this.#emitAll('killfeed', { killer: killer.name, victim: actor.name, head: kind === 'headshot' });
+      this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: kind === 'headshot' });
     } else {
-      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: actor.name, head: false });
+      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: patenteTag(actor), head: false });
     }
     // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
     if (!actor.isBot) {
@@ -1188,6 +1253,8 @@ export class MatchRoom3D {
       crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
       knocked: !!a.knocked, knockT: a.knockT ?? 0, reviveProgress: a.reviveProgress ?? 0, downedCount: a.downedCount ?? 0,
       squad: a.squad ?? null,
+      // Fase 11 — patente do perfil (nametag/HUD) + identidade OCE reivindicada
+      patente: a.patente ?? null, officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
       // Fase 8 — identidade + habilidade (cooldown/duração em ticks @30Hz p/ HUD)
       operativeId: a.operativeId ?? null, temporaryArmor: a.temporaryArmor ?? 0,
       abilityState: {
@@ -1209,6 +1276,8 @@ export class MatchRoom3D {
       op: a.operativeId ?? null, revealed: (a.revealedTicks ?? 0) > 0,
       // Fase 10 — marca de Oficial de Classe Especial (render dourado + nametag)
       officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
+      // Fase 11 — patente no nametag dos remotos/bots
+      patente: a.patente ?? null,
     };
   }
 

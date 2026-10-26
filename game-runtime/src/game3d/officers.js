@@ -111,3 +111,23 @@ export function officerDeployFeed(deployment) {
   const article = deployment[0].article ?? '';
   return `${deployment.length} OFICIAIS DE CLASSE ESPECIAL entraram no Ring — ${article} — no mínimo ${minutes} min de operação`;
 }
+
+// ---------- Fase 11 — Oficiais JOGÁVEIS ----------
+// Entradas em formato de catálogo (mesmo contrato do avatar_catalog.json) para
+// o seletor de operativo do modal ZU — offline e online usam a MESMA lista.
+// A paleta é a canônica dourada da Classe Especial; online o servidor valida a
+// reivindicação contra o officerPlan do POJ (7º/9º artigos) e a unicidade.
+export function officerCatalogEntries() {
+  return SPECIAL_CLASS_OFFICERS.map((o) => ({
+    id: o.id,
+    codename: o.name,
+    rank: `Oficial — ${o.callsign}`,
+    specialization: 'OFICIAL_DE_CLASSE_ESPECIAL',
+    defaultWorld: 'Arukheea',
+    officerWeapon: o.weapon,
+    officerArmor: o.armor,
+    officerSpeed: o.speed,
+    lore: `Insígnia ${o.id} da Classe Especial. Arma canônica ${o.weapon.toUpperCase()}, blindagem ${o.armor} VD. Só entra no Ring quando o Protocolo de Ordem de Jogo autoriza — e a insígnia é única por partida.`,
+    colors: { skinTone: '#c8a27a', primary: '#b98a1e', secondary: '#5c430d' },
+  }));
+}
