@@ -5,7 +5,7 @@
 > Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
-> **Nível Devs Ph.D** — 20+ PRs merged · 162 arquivos C++ · 25.000+ linhas UE5 · 8 workflows CI/CD · IaC Terraform · Fase 0-5 End-to-End
+> **Nível Devs Ph.D** — 97 PRs mesclados no GitHub (snapshot 2026-10-26) · 108 arquivos `.cpp` + 107 headers · 46.843 linhas no escopo-fonte UE5 · 16 workflows versionados · IaC Terraform · Fases 0–5 em estados distintos de implementação e aceite
 
 ---
 
@@ -45,12 +45,12 @@
 | Dimensão | Estado | Detalhe |
 |----------|--------|---------|
 | **Web/API (TS/Node)** | 🟡 Implementado / typecheck ✅ | Express 5, React 18, WebSocket, Economy, Matchmaking; `npm run check` passa; staging/produção requerem evidência operacional |
-| **UE5 C++ Core** | 🟡 Código implementado | 27 subsistemas; contagem de 162 arquivos / 25.000+ linhas inclui escopo amplo; build binária pendente |
+| **UE5 C++ Core** | 🟡 Código implementado | 108 `.cpp` + 107 headers; 46.843 linhas no escopo `Unreal/**/*.cpp|*.h|*.hpp`; build pendente |
 | **Gameplay Ability System** | 🟡 Código implementado | 11 abilities, GameplayEffects, Tags, Enhanced Input; compilação UE5 pendente |
 | **Rede / Replicação** | 🟡 Código implementado | Iris, Relevancy, NetMetrics, Spatial Grid; validação em servidor pendente |
 | **EOS (Epic Online Services)** | 🟡 Integração implementada | Auth, Lobby, Matchmaking, Sessions, Cloud Save; credenciais e staging pendentes |
-| **CI/CD** | ✅ Operacional | 16 workflows versionados; CI principal verde na revisão atual (testes, staging smoke, preflight UE5.8) |
-| **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado; build/execução operacional pendentes |
+| **CI/CD** | 🟡 Versionado / aceite por workflow | 16 workflows em `.github/workflows/`; alguns gates usam runners, credenciais ou serviços externos e não equivalem a aceite operacional |
+| **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado com 5 serviços e 1 rede; build/execução operacional pendentes |
 | **Anti-Cheat** | 🟡 Validações implementadas | Movement validation e 3-strike; binário/SDK EAC e build UE5 pendentes |
 | **Economia (KRC)** | 🟡 Código de jogo | AtomicLedger e Compliance versionados; runtime com ledger idempotente e recompensas de partida; não habilitar valor real sem auditoria e aceite |
 | **Mundos W1-W4** | 🟡 Regras/dados implementados | Lógica e dados versionados; pipeline de mundos engine-less validado (`generate_worlds.py`); cook `.umap` requer UE Editor |
@@ -324,7 +324,7 @@ Os três agentes do console não entram na tabela de alistamento. O render segue
 
 ## Arquitetura Técnica — Devs Ph.D
 
-> **Métricas:** 16.165 linhas correspondem ao núcleo UE5 contabilizado na tabela abaixo; 25.000+ linhas/162 arquivos é a contagem ampla declarada no status e pode incluir testes, integrações e código auxiliar. Recalcular ambas em CI antes de promover uma métrica a oficial.
+> **Métricas auditadas em 2026-10-26:** o escopo reproduzível `Unreal/**/*.cpp|*.h|*.hpp` contém 108 arquivos `.cpp`, 107 headers e 46.843 linhas. Contagens históricas como 16.165 linhas ou 162 arquivos não são usadas como baseline atual sem declarar um escopo diferente.
 
 ### Visão Geral de Duas Camadas
 
@@ -364,7 +364,7 @@ O Khaaos Run opera em duas camadas complementares que se comunicam via HTTP REST
 | `server/` | API HTTP, sessões OIDC, salas, simulação authoritative | Node.js, Express 5, `ws`, Passport, PostgreSQL |
 | `shared/` | Schema Drizzle, tipos e contratos | Drizzle ORM, Zod |
 | `game-runtime/` | Runtime JS isolado (simulação, replay, testes) | Node.js, Vite, `node:test` |
-| `Unreal/KhaaosRun/` | **UE5.8 C++ — 19 subsistemas, 16.165 linhas no núcleo contabilizado** | Unreal Engine 5.8, C++20, GAS, Iris, EOS, Lyra; build pendente |
+| `Unreal/KhaaosRun/` | **UE5.8 C++ — 19 subsistemas; 108 `.cpp` + 107 headers no checkout auditado** | Unreal Engine 5.8, C++20, GAS, Iris, EOS, Lyra; build pendente |
 | `server/game/matchmaking-*.{js,py}` | Algoritmos de referência skill-based | JS / Python 3 |
 
 ### Diagrama de Fluxo
@@ -531,7 +531,7 @@ Todos os sistemas abaixo estão implementados em C++20 no diretório `Unreal/Kha
 | **KhaaosRateLimiter** | — | — | 60/min + 10/s + burst 5, per-IP + per-player |
 | **KhaaosDDoSProtection** | — | — | 50/s global, 5/IP, auto-block 30min |
 | **KhaaosMonitorDashboard** | — | — | Server/Game/Security metrics, 5s collection |
-| **KhaaosLaunchChecklist** | — | — | 14 pre-launch checks (8 Critical, 6 Warning) |
+| **KhaaosLaunchChecklist** | — | — | 14 checks de pre-launch no código UE5; execução/aceite dependem do build |
 
 ### Módulos UE5 no Build.cs
 
@@ -567,12 +567,22 @@ Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
 | **Stress Test** | `stress-test.yml` | Manual + weekly | 100/500/1000/2000 bot profiles, ramp-up strategies, region targeting, Prometheus push, JSON reporting |
 | **Release** | `release.yml` | Tag v* + manual | Version + changelog, build all artifacts, Docker images (server + UE5), GitHub Release, notifications |
 | **PR Checks** | `pr-checks.yml` | PR events | Auto-label by path, size classification, conventional commits validation, changed files summary |
+| **Configure Staging DB** | `configure-staging-database.yml` | Manual, main + confirmação | Configuração controlada do banco PostgreSQL de staging |
+| **Dev Coordination** | `dev-coordination.yml` | Eventos de PR/issues | Coordenação e sinais de colaboração entre branches |
+| **PR Automation** | `pr-automation.yml` | PR events | Checklist, labels e validações auxiliares de PR |
+| **UE5 CD** | `ue5-cd.yml` | Push/PR com paths de app/UE5 | Verificação e entrega da imagem da aplicação |
+| **UE5 CI** | `ue5-ci.yml` | Push/PR com paths UE5 | Estrutura `.uproject`, headers, naming, LFS e regras UE5 |
+| **UE5 Headless Compile** | `ue5-headless-compile.yml` | Push específico + manual | Compilação em runner self-hosted UE5.8; depende de runner e secret |
+| **UE5 Dedicated Server Build** | `ue5-server-build.yml` | Push main em `Unreal/**` + manual | Build Linux dedicado e publicação opcional no GHCR |
+| **Auto Merge PR 48** | `Auto Merge PR 48` | Workflow histórico | Automação específica mantida no checkout; não contar como gate de produto |
+
+**Inventário auditado em 2026-10-26:** 16 arquivos em `.github/workflows/`. A presença de um workflow significa automação versionada, não execução bem-sucedida nem aceite de staging/produção. O CI principal executa `test:official` e `test:postgres`, mas ainda não chama `npm run test:coverage` nem publica `coverage/`.
 
 ### Automação de Push/PR
 
 - **`scripts/khaaos_workflow.sh`** — automação completa: stage → commit → rebase main → push → create PR (draft/ready, com reviewers)
-- **`scripts/khaaos_auto_push.sh`** — push simplificado para branch dedicada *(referência histórica; arquivo não está presente no checkout atual)*
-- Opera **SEMPRE** em branch `feat/*`, **NUNCA** na `main`
+- **`scripts/khaaos_auto_push.sh`** — referência histórica; o arquivo não está presente no checkout atual
+- Opera em branch dedicada, **NUNCA** diretamente na `main`; a convenção atual também usa prefixes `fix/` e `docs/`
 - Rebase automático da `main` antes de cada push (sync com outros Devs)
 
 ### Labels Automáticas
@@ -598,6 +608,8 @@ Configuradas em `.github/labeler.yml`: `ue5`, `cpp`, `gameplay`, `economy`, `ai`
 | #13 | feat/ue5-ge-input-eos-pooling | MERGED | GameplayEffects, Enhanced Input, EOS Integration, Actor Pooling |
 | #14 | feat/ue5-debugger-saveui-audio | MERGED | Gameplay Debugger, EOS Cloud Save, CommonUI HUD, MetaSound Audio |
 | #15 | feat/ue5-server-load-anticheat-launch | MERGED | Dedicated Server, Load Test, Anti-Cheat, Launch Readiness |
+
+O quadro acima é um histórico parcial dos primeiros PRs e não é um inventário completo. No snapshot de 2026-10-26, o GitHub registra **97 PRs mesclados** e **4 PRs abertos**. Entre os abertos estão: #102 (WebSocket E2E/README), #111 (observabilidade distribuída), #112 (UE5.8 build/preflight) e #113 (staging com PostgreSQL/Redis). Esses PRs não devem ser descritos como parte da base `main` até serem mesclados.
 
 ---
 
@@ -795,13 +807,15 @@ Esse resultado comprova a integridade estática da camada TypeScript. Não equiv
 
 ## Qualidade e Validação
 
-CI (`.github/workflows/`) executa em todo push/PR para `main`:
+Os workflows em `.github/workflows/` são acionados por push/PR conforme filtros de branch e `paths`; alterações apenas em `docs/**`, `*.md` e `attached_assets/**` são ignoradas pelo CI principal. A auditoria separa três níveis: teste local reproduzível, gate automatizado e aceite operacional com infraestrutura/credenciais reais.
 
 ### Pipeline Web
 
 - Typecheck + build da aplicação principal
 - Testes oficiais HTTP/auth/storage/WebSocket/matchmaking
+- Testes de persistência PostgreSQL com `TEST_DATABASE_URL` no job de CI
 - Build + testes + stress do `game-runtime/`
+- Docker build do servidor Node e publicação condicionada ao push em `main`
 
 ### Pipeline UE5
 
@@ -816,7 +830,25 @@ CI (`.github/workflows/`) executa em todo push/PR para `main`:
 - Review checklist UE5
 - Detecção de sobreposição com PRs de outros Devs
 
+**Limitações do gate atual:** `npm run test:coverage` gera cobertura localmente, mas ainda não é executado nem publicado como artefato pelo CI. O passo ESLint do workflow principal usa `|| true`, portanto o typecheck é bloqueante, mas o lint não é. Os workflows de compilação UE5 exigem runner self-hosted/UE5.8 ou infraestrutura equivalente; sua existência não comprova build executado.
+
 Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
+
+---
+
+## Snapshot de Auditoria do Desenvolvimento — 2026-10-26
+
+Este snapshot é uma fotografia do checkout e do GitHub, não uma promessa de produção:
+
+| Evidência | Resultado | Interpretação |
+|-----------|-----------|---------------|
+| `npm run check` | ✅ PASS | TypeScript sem erros no checkout auditado |
+| `npm run test:official` | ✅ 220 pass · 1 skip · 0 fail | Suíte oficial passa; o skip depende de PostgreSQL externo |
+| `npm run verify:all` | ✅ 7/7 gates na execução registrada em 2026-10-24 | Inclui app, UE5 logic, runtime e stress; não substitui build UE5 real |
+| `npm run test:coverage` | ✅ local | 27,46% lines · 68,45% branches · 48,58% functions; não é gate de CI ainda |
+| GitHub | 🟡 97 PRs mesclados · 4 abertos | PRs #102, #111, #112 e #113 permanecem fora da base `main` até merge |
+
+Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102), observabilidade distribuída (#111), preflight/build UE5.8 (#112) e staging com PostgreSQL/Redis (#113). O README deliberadamente não promove essas entregas a “operacionais” antes da mesclagem e da evidência de execução.
 
 ---
 
@@ -830,7 +862,7 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 ### UE5 Dedicated Server
 
 - **Docker**: `docker compose -f Unreal/KhaaosRun/Build/docker-compose.yml up` — UE5 server + Economy API + Redis + Prometheus + Grafana
-- **GHCR**: Imagens publicadas automaticamente via `ue5-server-build.yml` on merge to main
+- **GHCR**: `ue5-server-build.yml` é disparado em push para `main` com mudanças em `Unreal/**` ou manualmente; publicação depende do runner e das permissões do workflow
 - **Trivy**: Vulnerability scanning no container antes do deploy
 
 Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
@@ -847,8 +879,8 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 - **Build UE5 não compilado**: Todo o C++ está implementado mas não foi compilado — requer UE5.8 Editor + Linux SDK (50 GB+).
 - **Sem mapas 3D / assets**: Não existem mapas jogáveis, ambientes 3D, ou assets visuais ainda.
-- **EAC não integrado**: Easy Anti-Cheat requer binário compilado + SDK da Epic.
-- **Economia sem ledger atômico**: Não usar para valor real até ledger imutável, atomicidade e compliance review.
+- **EAC sem aceite operacional**: Há integração e validações versionadas, mas o binário/SDK da Epic e a execução em servidor compilado ainda são necessários.
+- **Economia sem aceite para valor real**: Há ledger e regras versionados, mas não habilitar valor real até auditoria imutável, teste de atomicidade, compliance review e aceite operacional.
 - **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
 - **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
 - **Coverage instrumentado**: c8 configurado para `client/src`, `server` e `shared`, com relatório completo atual de 27,46% de linhas, 68,45% de branches e 48,58% de funções; a suíte browser ainda é incompleta.
@@ -859,6 +891,8 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 ## Roadmap Go Live
 
 ### Fase 0 — Compilação & Validação (Semanas 1–3) 🟡 ARTEFATOS IMPLEMENTADOS; ACEITE PENDENTE
+
+> Nesta tabela, `✅` significa que o artefato ou a lógica está versionado. Não significa que o critério operacional foi aceito. O aceite exige a evidência indicada na coluna “Critério de Aceite”.
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
@@ -873,10 +907,10 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions | ✅ Level + MapData |
+| 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions | 🟡 Código/MapData versionados; assets e execução UE5 pendentes |
 | 1.2 | Implementar Zone shrinking (4 phases: Clear→Rain→Fog→Storm) | P0 | Zone timer + phase advance funcionais | ✅ Implementado |
 | 1.3 | Integrar KhaaosSafeZone com mapa real | P0 | Zone timer + phase advance funcionais | ✅ Implementado |
-| 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 60+ loot points com rarity distribuída | ✅ Implementado |
+| 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 60+ loot points com rarity distribuída | 🟡 Regras/dados versionados; mapa jogável pendente |
 | 1.5 | Protocolo Zu cinematográfico (3 variantes: cinto/saltar/máscara) | P1 | Decisão → dano/posicionamento | ✅ Implementado |
 | 1.6 | Dedo-duro (inactivity punishment: rats/mosquitoes/locusts/seagulls) | P1 | Punishment system funcional | ✅ Implementado |
 
@@ -884,14 +918,14 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 2.1 | Configurar EOS Product/Sandbox/Deployment IDs reais | P0 | EOS Auth login/logout funcional | ✅ Código pronto (`scripts/fase2/setup_eos_production.sh`) |
-| 2.2 | EOS Lobby: create/join/leave/promote em produção | P0 | 100 players em lobby sem crash | ✅ `KhaaosEOSLobby` implementado |
-| 2.3 | EOS Matchmaking: pool/region/skill em produção | P0 | Matchmaking <30s para 95% | ✅ `KhaaosEOSMatchmaking` (MMR/pool) |
-| 2.4 | EOS Sessions: host dedicated, join, register server | P0 | Dedicated server registrada no EOS | ✅ `KhaaosEOSSession` implementado |
-| 2.5 | EOS Cloud Save: upload/download/merge em produção | P1 | Auto-save 120s, merge sem data loss | ✅ `KhaaosCloudSaveProduction` (LZ4/SHA256) |
-| 2.6 | Integrar EAC (Easy Anti-Cheat) SDK | P0 | EAC running, kicks detectados | ✅ `KhaaosEACIntegration` (3-strike) |
-| 2.7 | EOS Region Manager — 3 regiões (sa1/na1/eu1) | P1 | Ping-based routing funcional | ✅ `KhaaosEOSRegionManager` |
-| 2.8 | EOS Production Config — matchmaking pools, cache, rate limits | P0 | DefaultEOS_Production.ini completo | ✅ 252 linhas config |
+| 2.1 | Configurar EOS Product/Sandbox/Deployment IDs reais | P0 | EOS Auth login/logout funcional | 🟡 Script/configuração versionados; IDs e staging pendentes |
+| 2.2 | EOS Lobby: create/join/leave/promote em produção | P0 | 100 players em lobby sem crash | 🟡 Implementação versionada; teste de produção pendente |
+| 2.3 | EOS Matchmaking: pool/region/skill em produção | P0 | Matchmaking <30s para 95% | 🟡 Implementação versionada; medição de produção pendente |
+| 2.4 | EOS Sessions: host dedicated, join, register server | P0 | Dedicated server registrada no EOS | 🟡 Código versionado; dedicated server/EOS pendentes |
+| 2.5 | EOS Cloud Save: upload/download/merge em produção | P1 | Auto-save 120s, merge sem data loss | 🟡 Código versionado; teste live e perda-zero pendentes |
+| 2.6 | Integrar EAC (Easy Anti-Cheat) SDK | P0 | EAC running, kicks detectados | 🟡 Integração declarada no código; binário/SDK e execução pendentes |
+| 2.7 | EOS Region Manager — 3 regiões (sa1/na1/eu1) | P1 | Ping-based routing funcional | 🟡 Código/configuração versionados; routing medido pendente |
+| 2.8 | EOS Production Config — matchmaking pools, cache, rate limits | P0 | DefaultEOS_Production.ini completo | 🟡 Configuração versionada; credenciais e aceite pendentes |
 
 ### Fase 3 — Alpha Fechado (Semanas 11–14) 🟡 CÓDIGO/IAC IMPLEMENTADOS; EXECUÇÃO PENDENTE
 
@@ -900,7 +934,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | 3.1 | Deploy dedicated server em cloud (AWS ECS Fargate) | P0 | Server running 24/7, auto-restart | ✅ Terraform IaC criado |
 | 3.2 | Rate Limiter + DDoS Protection em produção | P0 | 60/min, 50/s global, auto-block | ✅ `KhaaosRateLimiter` + `KhaaosDDoSProtection` |
 | 3.3 | Monitor Dashboard (Grafana) + alerting (Discord/Slack) | P0 | Dashboards visíveis, alertas em <5 min | ✅ 8 panels + 12 alert rules |
-| 3.4 | 14-point Launch Checklist — todos Critical = PASS | P0 | Zero Critical failures | ✅ `KhaaosLaunchChecklist` (19 checks) |
+| 3.4 | 14-point Launch Checklist — todos Critical = PASS | P0 | Zero Critical failures | 🟡 `KhaaosLaunchChecklist` (14 checks); execução UE5 pendente |
 | 3.5 | Production Config (feature flags, lockdown mode) | P0 | `ApplyProductionOverrides()` funcional | ✅ `KhaaosProductionConfig` |
 | 3.6 | Feature Flags (rollout %, presets, console cmd) | P1 | Gradual rollout funcional | ✅ `KhaaosFeatureFlags` |
 | 3.7 | Prometheus + Grafana provisioning (auto-config) | P1 | Zero manual setup | ✅ datasources + dashboards |
@@ -929,7 +963,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | 5.3 | Multi-region deploy (SA/NA/EU) + failover + rollback | P0 | <80ms RTT por região | ✅ `scripts/fase5/deploy_multiregion.sh` (584 linhas) |
 | 5.4 | CDN (CloudFront+Cloudflare) + WAF + TLS 1.3 | P1 | Download client <2 min | ✅ `cdn-config.yml` (449 linhas) |
 | 5.5 | Streaming Integration (OWS/Twitch/YouTube/Kick) | P2 | Transmissão ao vivo funcional | ✅ `KhaaosStreamingIntegration` (574 linhas) |
-| 5.6 | Go-Live Checklist (30+ checks, GO/NO-GO) | P0 | All critical checks pass | ✅ `scripts/fase5/golive_checklist.sh` |
+| 5.6 | Go-Live Checklist (25 checks, GO/NO-GO) | P0 | All critical checks pass | 🟡 `scripts/fase5/golive_checklist.sh` versionado; execução operacional pendente |
 | 5.7 | EXCO milestone (1.000.000 alistamentos) | P0 | Trigger transição CIGKV → W1/C1 | ✅ Em BetaCampaign |
 | 5.8 | **GO LIVE** — W1/C1 Barburhen oficial | P0 | 7 dias, 12h/dia, prêmio ativo | ⏳ Requer UE5 build + 3D assets |
 

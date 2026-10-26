@@ -86,3 +86,18 @@ O build UE5 e o Compose não são declarados como validados neste ambiente: o pr
 ## Regra de manutenção
 
 Toda nova afirmação de “produção”, “go live” ou “concluído” no README deve apontar para uma evidência verificável: workflow/run, relatório de teste, configuração versionada, release ou documento de aceite. Código presente sozinho deve permanecer como **implementado**, não **operacional**.
+
+## Snapshot incremental — 2026-10-26
+
+A auditoria foi repetida contra o checkout da branch de documentação e contra o estado atual do GitHub, sem incorporar PRs ainda abertos:
+
+| Verificação | Resultado | Consequência documental |
+|---|---|---|
+| Workflows versionados | 16 arquivos em `.github/workflows/` | README deixou de declarar 8 workflows e passou a distinguir automação de aceite |
+| Escopo UE5 reproduzível | 108 `.cpp`, 107 headers e 46.843 linhas em `Unreal/**/*.cpp|*.h|*.hpp` | Métricas históricas sem escopo foram removidas do baseline principal |
+| PRs no GitHub | 97 mesclados e 4 abertos em 2026-10-26 | PRs #102, #111, #112 e #113 foram explicitamente marcados como fora da base `main` até merge |
+| Checklist UE5 | `KhaaosLaunchChecklist` registra 14 checks | README diferencia esse checklist do `scripts/fase5/golive_checklist.sh`, que possui 25 checks |
+| CI de cobertura | Nenhuma referência a `npm run test:coverage` nos workflows | README registra cobertura como validação local, não como gate CI |
+| Gates locais | `npm run check` e `npm run test:official` passaram | README registra 220 testes aprovados, 1 skip e 0 falhas |
+
+Também foi corrigida a semântica do roadmap: `✅` nas fases significa artefato/lógica versionado; aceite operacional continua condicionado ao critério verificável da própria linha. As alterações não commitadas em `game-runtime/*.ini` foram preservadas e ficaram fora da auditoria documental.
