@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   'audit:read': 'Ler a trilha de auditoria',
   'obs:read': 'Ler traces e logs agregados da observabilidade',
   'economy:grant': 'Conceder créditos virtuais KRC (sem valor real)',
+  'poj:command': 'Comandar o Protocolo de Ordem de Jogo (Marechal: convocar, encerrar, julgar)',
 };
 
 export const ROLE_PERMISSIONS = {

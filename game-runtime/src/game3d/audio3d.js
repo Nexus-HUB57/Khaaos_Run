@@ -299,4 +299,75 @@ export class GameAudio {
       osc.start(t + off); osc.stop(t + off + .18);
     });
   }
+
+  // ---------- Fase 9 — SFX de habilidade p/ remotos (assinatura por família) ----------
+  // Cada família de habilidade tem uma assinatura sonora curta e distinta, com
+  // atenuação por distância (o cast de um remoto soa mais baixo longe do jogador).
+  ability(effect = 'speed', distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.07, .9 - distance / 90);
+    const tone = (type, f0, f1, at, dur, peak, off = 0) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f0, t + off);
+      if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, at, dur, peak * vol);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + off); osc.stop(t + off + dur + .1);
+    };
+    const noise = (f0, f1, dur, peak, type = 'bandpass', off = 0) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.#noiseBuffer(dur * 2);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = type;
+      bp.frequency.setValueAtTime(f0, t + off);
+      bp.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, .01, dur, peak * vol);
+      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.start(t + off); src.stop(t + off + dur * 2 + .05);
+    };
+    switch (effect) {
+      case 'heal': // brilho ascendente (dupla nota suave)
+        tone('sine', 520, 660, .01, .16, .3); tone('sine', 660, 880, .01, .2, .3, .1);
+        break;
+      case 'speed': // whoosh crescente
+        noise(420, 2400, .3, .4);
+        break;
+      case 'dash': // whoosh curto e grave
+        noise(1800, 300, .22, .45);
+        break;
+      case 'precision': // ping agudo único
+        tone('triangle', 1760, 1760, .002, .12, .3);
+        break;
+      case 'damageReduction': // clank metálico grave
+      case 'temporaryArmor':
+        tone('square', 180, 140, .004, .14, .26);
+        tone('triangle', 320, 300, .004, .1, .2, .02);
+        break;
+      case 'recon': // sonar (ping + eco)
+        tone('sine', 880, 880, .004, .14, .32);
+        tone('sine', 880, 880, .004, .12, .14, .16);
+        break;
+      case 'stun': // zap descendente
+        tone('sawtooth', 1400, 120, .003, .18, .34);
+        break;
+      case 'concealment': // sopro abafado
+        noise(900, 220, .34, .3, 'lowpass');
+        break;
+      case 'ringRead': // pulso do anel (dois tons graves)
+      case 'ringForecast':
+        tone('sine', 392, 392, .006, .12, .3); tone('sine', 294, 294, .006, .14, .3, .13);
+        break;
+      case 'terminalScan': // chirp digital
+        tone('square', 980, 1960, .004, .1, .2);
+        break;
+      case 'ringResistance': // shimmer com corpo
+        tone('triangle', 440, 620, .01, .2, .26); noise(600, 1400, .2, .16);
+        break;
+      default: tone('sine', 660, 660, .005, .1, .22);
+    }
+  }
 }

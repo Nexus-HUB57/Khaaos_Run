@@ -175,6 +175,9 @@ export class OnlineGame3D extends Game3D {
       this.audio?.ui?.();
     };
     net.onPrivateError = (message) => this.hud.feed('SQUAD', message, 'bad');
+    // ---------- Fase 9 — painel POJ no modal ZU (Protocolo de Ordem de Jogo) ----------
+    this.refreshPojStrip();
+    this.pojTimer = setInterval(() => this.refreshPojStrip(), 15000);
     // ---------- Fase 8 — login da plataforma embutido no modal ZU ----------
     const loginBox = document.querySelector('#loginBox');
     if (loginBox && !localStorage.getItem('kr_token')) loginBox.classList.remove('hidden');
@@ -199,6 +202,33 @@ export class OnlineGame3D extends Game3D {
     }, 3000);
     net.connect();
     this.hud.feed('CIGKV', 'Modo online: sala autoritativa. Escolha a entrada ZU.', 'good');
+  }
+
+  // ---------- Fase 9 — painel POJ: estado do Protocolo de Ordem de Jogo ----------
+  async refreshPojStrip() {
+    const strip = document.querySelector('#pojStrip');
+    if (!strip) return;
+    try {
+      const res = await fetch('/poj/state', { cache: 'no-store' });
+      if (!res.ok) return;
+      const s = await res.json();
+      const set = (id, text, cls = '') => {
+        const node = document.querySelector('#' + id);
+        if (!node) return;
+        node.textContent = text;
+        node.className = cls;
+      };
+      const fases = {
+        alistamento: 'ALISTAMENTO', contagem_regressiva: 'CONTAGEM 24H', guerra: 'GUERRA',
+        julgamento: 'JULGAMENTO', encerrado: 'ENCERRADO',
+      };
+      set('pojFase', fases[s.phase] ?? String(s.phase ?? '—').toUpperCase(), s.phase === 'guerra' ? 'poj-live' : s.phase === 'contagem_regressiva' ? 'poj-warn' : '');
+      set('pojInscritos', (s.registrations ?? 0).toLocaleString('pt-BR'));
+      set('pojCigkv', s.cigkvOpen ? 'ABERTO' : (s.phase === 'alistamento' ? 'FECHADO' : 'ENCERRADO'), s.cigkvOpen ? 'poj-live' : '');
+      set('pojMundo', s.world ?? '—');
+      set('pojDia', s.day ? `${s.day}/7` : '—');
+      set('pojVivos', (s.phase === 'guerra' || s.phase === 'julgamento') ? String(s.survivorsCount ?? 0) : '—', s.phase === 'guerra' ? 'poj-live' : '');
+    } catch { /* servidor sem /poj — painel permanece neutro */ }
   }
 
   // world rebuild quando a seed do servidor difere da local (uma vez, pré-partida)
