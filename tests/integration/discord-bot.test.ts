@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { DiscordBot, DISCORD_EVENT_TYPES, type DiscordEventType } from "@game/DiscordBot";
+import { describe, it, beforeEach, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { DiscordBot, DISCORD_EVENT_TYPES, type DiscordEventType } from "../../server/game/DiscordBot.ts";
 
 describe("DiscordBot Unit Tests", () => {
   let bot: DiscordBot;
@@ -8,31 +9,31 @@ describe("DiscordBot Unit Tests", () => {
 
   it("should construct with webhook URL", () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
-    expect(b).toBeDefined();
+    assert.notStrictEqual(b, undefined);
     b.shutdown();
   });
 
   it("should construct with bot token", () => {
     const b = new DiscordBot({ botToken: "test-bot-token" });
-    expect(b).toBeDefined();
+    assert.notStrictEqual(b, undefined);
     b.shutdown();
   });
 
   it("should be operational when webhook URL is set", () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
-    expect(b.isOperational()).toBe(true);
+    assert.strictEqual(b.isOperational(), true);
     b.shutdown();
   });
 
   it("should be operational when bot token is set", () => {
     const b = new DiscordBot({ botToken: "test-token" });
-    expect(b.isOperational()).toBe(true);
+    assert.strictEqual(b.isOperational(), true);
     b.shutdown();
   });
 
   it("should not be operational without webhook or token", () => {
     const b = new DiscordBot({});
-    expect(b.isOperational()).toBe(false);
+    assert.strictEqual(b.isOperational(), false);
     b.shutdown();
   });
 
@@ -41,17 +42,17 @@ describe("DiscordBot Unit Tests", () => {
   it("should return initial stats with zero values", () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
     const stats = b.getStats();
-    expect(stats.messagesSent).toBe(0);
-    expect(stats.messagesDropped).toBe(0);
-    expect(stats.eventsProcessed).toBe(0);
-    expect(stats.queueSize).toBe(0);
+    assert.strictEqual(stats.messagesSent, 0);
+    assert.strictEqual(stats.messagesDropped, 0);
+    assert.strictEqual(stats.eventsProcessed, 0);
+    assert.strictEqual(stats.queueSize, 0);
     b.shutdown();
   });
 
   // ─── Event Types ──────────────────────────────────────────────────────────
 
   it("should have 11 event types", () => {
-    expect(DISCORD_EVENT_TYPES).toHaveLength(11);
+    assert.strictEqual(DISCORD_EVENT_TYPES.length, 11);
   });
 
   it("should include all required event types", () => {
@@ -61,7 +62,7 @@ describe("DiscordBot Unit Tests", () => {
       "SPECTATOR_JOIN", "LEADERBOARD_UPDATE", "ECONOMY_ALERT",
     ];
     for (const type of expected) {
-      expect(DISCORD_EVENT_TYPES).toContain(type);
+      assert.ok(DISCORD_EVENT_TYPES.includes(type), `missing event type ${type}`);
     }
   });
 
@@ -82,10 +83,10 @@ describe("DiscordBot Unit Tests", () => {
         worldId: "cigkv",
         playerCount: 50,
       });
-      expect(result).toBe(true);
+      assert.strictEqual(result, true);
       const stats = bot.getStats();
-      expect(stats.messagesSent).toBe(1);
-      expect(stats.eventsProcessed).toBe(1);
+      assert.strictEqual(stats.messagesSent, 1);
+      assert.strictEqual(stats.eventsProcessed, 1);
     });
 
     it("should send kill feed event", async () => {
@@ -96,10 +97,10 @@ describe("DiscordBot Unit Tests", () => {
         victimName: "Victim",
         weapon: "rifle",
       });
-      expect(result).toBe(true);
+      assert.strictEqual(result, true);
       const stats = bot.getStats();
-      expect(stats.messagesSent).toBe(1);
-      expect(stats.eventsProcessed).toBe(1);
+      assert.strictEqual(stats.messagesSent, 1);
+      assert.strictEqual(stats.eventsProcessed, 1);
     });
 
     it("should send ring phase event", async () => {
@@ -108,8 +109,8 @@ describe("DiscordBot Unit Tests", () => {
         damagePerTick: 5,
         shrinkRadius: 200,
       });
-      expect(result).toBe(true);
-      expect(bot.getStats().messagesSent).toBe(1);
+      assert.strictEqual(result, true);
+      assert.strictEqual(bot.getStats().messagesSent, 1);
     });
 
     it("should send world transition event", async () => {
@@ -118,8 +119,8 @@ describe("DiscordBot Unit Tests", () => {
         toWorld: "barburhen",
         matchId: "match-001",
       });
-      expect(result).toBe(true);
-      expect(bot.getStats().messagesSent).toBe(1);
+      assert.strictEqual(result, true);
+      assert.strictEqual(bot.getStats().messagesSent, 1);
     });
 
     it("should send match end event", async () => {
@@ -129,8 +130,8 @@ describe("DiscordBot Unit Tests", () => {
         playerCount: 50,
         duration: 1800000,
       });
-      expect(result).toBe(true);
-      expect(bot.getStats().messagesSent).toBe(1);
+      assert.strictEqual(result, true);
+      assert.strictEqual(bot.getStats().messagesSent, 1);
     });
   });
 
@@ -141,7 +142,7 @@ describe("DiscordBot Unit Tests", () => {
     await b.broadcastEvent("MATCH_START", {});
     await b.broadcastEvent("KILL_FEED", {});
     await b.broadcastEvent("RING_PHASE", {});
-    expect(b.getStats().eventsProcessed).toBe(3);
+    assert.strictEqual(b.getStats().eventsProcessed, 3);
     b.shutdown();
   });
 
@@ -151,15 +152,15 @@ describe("DiscordBot Unit Tests", () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
     b.shutdown();
     const result = await b.broadcastEvent("MATCH_START", {});
-    expect(result).toBe(false);
-    expect(b.getStats().messagesDropped).toBe(1);
+    assert.strictEqual(result, false);
+    assert.strictEqual(b.getStats().messagesDropped, 1);
   });
 
   it("should report isConnected=false after shutdown", () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
-    expect(b.getStats().isConnected).toBe(true);
+    assert.strictEqual(b.getStats().isConnected, true);
     b.shutdown();
-    expect(b.getStats().isConnected).toBe(false);
+    assert.strictEqual(b.getStats().isConnected, false);
   });
 
   // ─── Rate Limiting ────────────────────────────────────────────────────────
@@ -170,8 +171,8 @@ describe("DiscordBot Unit Tests", () => {
     await b.broadcastEvent("KILL_FEED", {});
     // Third message should be rate-limited
     const result = await b.broadcastEvent("RING_PHASE", {});
-    expect(result).toBe(false);
-    expect(b.getStats().messagesDropped).toBe(1);
+    assert.strictEqual(result, false);
+    assert.strictEqual(b.getStats().messagesDropped, 1);
     b.shutdown();
   });
 
@@ -180,10 +181,10 @@ describe("DiscordBot Unit Tests", () => {
   it("should drop messages when bot is not operational", async () => {
     const b = new DiscordBot({}); // no webhook, no token
     const result = await b.broadcastEvent("MATCH_START", {});
-    expect(result).toBe(false);
-    expect(b.getStats().messagesDropped).toBe(1);
+    assert.strictEqual(result, false);
+    assert.strictEqual(b.getStats().messagesDropped, 1);
     // But eventsProcessed should still increment
-    expect(b.getStats().eventsProcessed).toBe(1);
+    assert.strictEqual(b.getStats().eventsProcessed, 1);
     b.shutdown();
   });
 
@@ -192,9 +193,9 @@ describe("DiscordBot Unit Tests", () => {
   it("should handle broadcastEvent with any event type", async () => {
     const b = new DiscordBot({ webhookUrl: "https://discord.com/api/webhooks/test/token" });
     const result = await b.broadcastEvent("ECONOMY_ALERT", { message: "test" });
-    expect(result).toBe(true);
-    expect(b.getStats().messagesSent).toBe(1);
-    expect(b.getStats().eventsProcessed).toBe(1);
+    assert.strictEqual(result, true);
+    assert.strictEqual(b.getStats().messagesSent, 1);
+    assert.strictEqual(b.getStats().eventsProcessed, 1);
     b.shutdown();
   });
 });
