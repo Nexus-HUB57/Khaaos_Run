@@ -285,25 +285,31 @@ export class ProtocoloDeOrdemDeJogo {
   }
 
   // Encerramento: ausentes sem justificativa respondem pelos artigos 8º e 10º.
-  closeIncursion(incursionId) {
+  // `evaluateAbsentees: false` é a via da INTEGRAÇÃO com partidas 3D reais
+  // (server/poj.js reportMatchResult): a incursão espelha UMA partida, logo a
+  // presença é o resultado da sala — quem não entrou nela não é "evasor", só
+  // estava em outro Ring/na fila. O canônico (default true) permanece intacto.
+  closeIncursion(incursionId, { evaluateAbsentees = true } = {}) {
     const incursion = this.incursions.get(incursionId);
     if (!incursion || incursion.closed) throw new PojError('incursao_invalida');
     incursion.closed = true;
     const ausentes = incursion.summoned.filter((id) => !incursion.attended.includes(id));
-    for (const id of ausentes) {
-      const p = this.players.get(id);
-      if (!p || !p.alive || p.status !== 'ativo') continue;
-      if (this.#inRule10Window()) {
-        // 10º — na última hora o atendimento é obrigatório: desobediência = Corte Marcial
-        this.#courtMartial(id, MOTIVOS_CORTE_MARCIAL.DESOBEDIENCIA_FINAL);
-      } else if (this.#inRule8Window()) {
-        // 8º — evasão registrada nas primeiras 12 h do 7º dia
-        p.evasions++;
-        this.#log('evasao_registrada', { playerId: id, evasions: p.evasions });
-        if (p.evasions > POJ_RULES.RULE8_MAX_EVASIONS) this.#courtMartial(id, MOTIVOS_CORTE_MARCIAL.EVASAO);
+    if (evaluateAbsentees) {
+      for (const id of ausentes) {
+        const p = this.players.get(id);
+        if (!p || !p.alive || p.status !== 'ativo') continue;
+        if (this.#inRule10Window()) {
+          // 10º — na última hora o atendimento é obrigatório: desobediência = Corte Marcial
+          this.#courtMartial(id, MOTIVOS_CORTE_MARCIAL.DESOBEDIENCIA_FINAL);
+        } else if (this.#inRule8Window()) {
+          // 8º — evasão registrada nas primeiras 12 h do 7º dia
+          p.evasions++;
+          this.#log('evasao_registrada', { playerId: id, evasions: p.evasions });
+          if (p.evasions > POJ_RULES.RULE8_MAX_EVASIONS) this.#courtMartial(id, MOTIVOS_CORTE_MARCIAL.EVASAO);
+        }
       }
     }
-    this.#log('incursao_encerrada', { id: incursion.id, presentes: incursion.attended.length, ausentes: ausentes.length });
+    this.#log('incursao_encerrada', { id: incursion.id, presentes: incursion.attended.length, ausentes: ausentes.length, avaliouAusentes: evaluateAbsentees });
     if (this.survivorsCount <= 1 && this.phase === FASES.GUERRA && this.#isLastWorld() && this.#isDay7()) {
       // 11º — a guerra pode acabar imediatamente após a última incursão
       this.phase = FASES.JULGAMENTO;

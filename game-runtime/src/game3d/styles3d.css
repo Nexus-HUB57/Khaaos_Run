@@ -408,6 +408,9 @@ body.spectating #operativeAbility { opacity: .35; }
 .poj-chip strong { color: #c8ff3d; font-size: 12px; letter-spacing: .06em; }
 .poj-chip strong.poj-warn { color: #ffb45e; }
 .poj-chip strong.poj-live { color: #6ee7a0; }
+/* Fase 10 — chip PATENTE: ouro canônico dos Oficiais de Classe Especial */
+.poj-chip-rank { background: rgba(201,162,39,.08); border: 1px solid rgba(255,215,94,.25); }
+.poj-chip-rank strong { color: #ffd75e; }
 .squad-toggle {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; border: 1px solid rgba(200,255,61,.3); border-radius: 4px;
