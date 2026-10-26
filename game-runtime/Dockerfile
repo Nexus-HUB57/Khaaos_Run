@@ -18,6 +18,8 @@ ENV NODE_ENV=production
 COPY --from=deps /app/game-runtime/node_modules /app/game-runtime/node_modules
 COPY game-runtime/package.json /app/game-runtime/package.json
 COPY game-runtime/server /app/game-runtime/server
+# src/ é compartilhado client/server (simulação, rng, armas, cenários 3D)
+COPY game-runtime/src /app/game-runtime/src
 COPY game-runtime/scripts/migrate.js /app/game-runtime/scripts/migrate.js
 COPY game-runtime/migrations /app/game-runtime/migrations
 RUN chown -R khaaos:khaaos /app

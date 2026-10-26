@@ -10,5 +10,6 @@ game-runtime/*
 !game-runtime/package.json
 !game-runtime/package-lock.json
 !game-runtime/server
+!game-runtime/src
 !game-runtime/scripts
 !game-runtime/migrations
