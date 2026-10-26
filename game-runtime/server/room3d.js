@@ -12,9 +12,10 @@ import { resolveScenario } from '../src/game3d/scenarios.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
-  FRAG, GLOO, DROP_START_Y,
+  FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
   throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
+  knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
 } from '../src/game3d/sim3d.js';
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -34,13 +35,16 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV' } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
+    this.isPrivate = !!isPrivate;
+    this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
     this.scenario = resolveScenario(scenarioId);
     this.mode = '3d';
     this.is3d = true;
@@ -101,12 +105,13 @@ export class MatchRoom3D {
       id, name, isBot: false,
       x: 0, y: 0, z: 0, vy: 0, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, extracted: 0,
-      speed: 5.2, weapon: 'g19', cooldown: 0, reloadT: 0,
+      speed: 5.2, weapon: 'g19', weaponSkin: null, cooldown: 0, reloadT: 0,
       ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null, landed: false,
+      knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
@@ -131,6 +136,8 @@ export class MatchRoom3D {
     actor.x = Math.cos(angle) * radius;
     actor.z = Math.sin(angle) * radius;
     actor.yaw = Math.atan2(-actor.x, -actor.z); // olhando para o centro
+    // Fase 7 — esquadrão humano pela ordem de entrada (grupos de 4, estilo FreeFire)
+    if (this.squad) actor.squad = `sq-${Math.floor(this.humans.size / 4) + 1}`;
     this.humans.set(id, actor);
     this.lastActivity = Date.now();
     return actor;
@@ -157,7 +164,9 @@ export class MatchRoom3D {
     bot.ammoMag = WEAPONS3D[bot.weapon].magazine;
     bot.cooldown = this.rng.next() * 2;
     bot.krc = 0;
-    bot.ai = { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null };
+    // Fase 7 — bots formam esquadrões inimigos próprios (sqE-); não resgatam online
+    if (this.squad) bot.squad = `sqE-${Math.floor(i / 4) + 1}`;
+    bot.ai = { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null };
     return bot;
   }
 
@@ -271,6 +280,14 @@ export class MatchRoom3D {
     }
     for (const bot of this.bots) if (bot.alive) this.#stepBot(bot, dt);
 
+    // --- Fase 7 — DBNO: sangramento, cancelamento de revive e mortes finais ---
+    for (const actor of this.#actors()) {
+      if (!actor.alive || !actor.knocked) continue;
+      if ((actor.reviveProgress ?? 0) > 0 && actor.lastReviveTick !== this.tickCount) actor.reviveProgress = 0;
+      actor.knockT -= dt;
+      if (actor.knockT <= 0) this.#finalizeDeath(actor, null, 'bleedout');
+    }
+
     // --- histórico de posições p/ lag compensation (após o movimento do tick) ---
     const positions = this.#actors()
       .filter((a) => a.alive)
@@ -316,6 +333,10 @@ export class MatchRoom3D {
       if (!a.isBot) this.#emitTo(a.id, 'land', { x: a.x, z: a.z });
     }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
+    if (a.knocked) return;
+    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
+    if (this.squad && input.interact) this.#tryRevive(a, dt);
     if (!airborne) {
       const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
       if (input.reload) this.#tryReload(a);
@@ -420,6 +441,7 @@ export class MatchRoom3D {
     const old = WEAPONS3D[a.weapon];
     if (old && old.ammo !== 'none') a.inventory.ammo[old.ammo] = (a.inventory.ammo[old.ammo] || 0) + a.ammoMag;
     a.activeSlot = slot; a.weapon = a.slots[slot];
+    a.weaponSkin = null; // skin pertence à arma coletada, não ao slot
     const w = WEAPONS3D[a.weapon];
     a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
     if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
@@ -429,6 +451,13 @@ export class MatchRoom3D {
 
   // ---------- IA dos bots (engajar → caçar → patrulhar) ----------
   #stepBot(b, dt) {
+    // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
+    if (b.knocked) {
+      const ang = Math.atan2(b.x, b.z); // yaw apontando para o centro (frente = -Z)
+      b.yaw += Math.atan2(Math.sin(ang - b.yaw), Math.cos(ang - b.yaw)) * Math.min(1, dt * 4);
+      this.#stepActor(b, { dx: 0, dy: -0.5, yaw: b.yaw, pitch: 0 }, dt);
+      return;
+    }
     // Fase 4 — na queda: deriva para o destino de aterrissagem, sem combate
     if (b.dropPhase) {
       const tx = b.dropTarget?.x ?? 0, tz = b.dropTarget?.z ?? 0;
@@ -439,11 +468,17 @@ export class MatchRoom3D {
       return;
     }
     // alvo: ator vivo mais próximo com linha de visão
+    // Fase 7 — ignora o próprio esquadrão; prioriza alvos de pé (caídos só quando
+    // não há ninguém de pé à vista — finalização). Bots online não resgatam.
     let target = null, bestD = BOT_SIGHT;
-    for (const other of this.#actors()) {
-      if (other === b || !other.alive) continue;
-      const d = dist2d(b.x, b.z, other.x, other.z);
-      if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
+    for (const passKnocked of [false, true]) {
+      for (const other of this.#actors()) {
+        if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        if (this.squad && other.squad === b.squad) continue;
+        const d = dist2d(b.x, b.z, other.x, other.z);
+        if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
+      }
+      if (target) break;
     }
     b.ai.think -= dt;
     if (target) { b.ai.state = 'engage'; b.ai.lostT = 0; b.ai.lx = target.x; b.ai.lz = target.z; b.ai.targetId = target.id; }
@@ -478,8 +513,17 @@ export class MatchRoom3D {
     // frente do ator é -Z: para CAMINHAR na direção do yaw o input é dy negativo
     this.#stepActor(b, { dx: 0, dy: -run, yaw: b.yaw, pitch: 0 }, dt);
     const w = WEAPONS3D[b.weapon];
-    if (target && b.cooldown <= 0 && b.reloadT <= 0) {
-      const err = 0.45 + Math.min(1.2, bestD * 0.012);
+    // Fase 7 — tempo de reação ao adquirir um NOVO alvo antes do 1º tiro
+    if (target) {
+      if (b.ai.reactTargetId !== target.id) {
+        b.ai.reactTargetId = target.id;
+        b.ai.reactT = BOT_COMBAT.reactionMin + this.rng.next() * (BOT_COMBAT.reactionMax - BOT_COMBAT.reactionMin);
+      }
+      b.ai.reactT -= dt;
+    } else b.ai.reactTargetId = null;
+    if (target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
+      const err = botAimError(bestD);
+      const dmgScale = botDamageScale(bestD);
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
@@ -488,11 +532,11 @@ export class MatchRoom3D {
         tx: target.x + (this.rng.next() - 0.5) * err * 2,
         ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
-      }, 0.012, w, 0.55);
+      }, 0.012, w, dmgScale);
       b.burst = (b.burst ?? 0) + 1;
-      if (b.burst >= (w.category === 'sniper' ? 1 : 3 + Math.floor(this.rng.next() * 4))) {
-        b.burst = 0; b.cooldown = 1.1 + this.rng.next() * 1.4;
-        if (this.rng.next() < 0.25) b.reloadT = w.reload;
+      if (b.burst >= (w.category === 'sniper' ? 1 : BOT_COMBAT.burstMin + Math.floor(this.rng.next() * (BOT_COMBAT.burstMax - BOT_COMBAT.burstMin + 1)))) {
+        b.burst = 0; b.cooldown = BOT_COMBAT.burstCooldownMin + this.rng.next() * (BOT_COMBAT.burstCooldownMax - BOT_COMBAT.burstCooldownMin);
+        if (this.rng.next() < BOT_COMBAT.reloadChance) b.reloadT = w.reload;
       } else b.cooldown = 1 / w.fireRate;
       if (!target.isBot) {
         // som posicional do tiro dos bots para todos os humanos próximos (raio 90m)
@@ -500,6 +544,18 @@ export class MatchRoom3D {
           if (!h.alive) continue;
           if (dist2d(h.x, h.z, b.x, b.z) < 90) this.#emitTo(h.id, 'shot', { owner: b.id, weapon: b.weapon, x: b.x, y: b.y + 1.42, z: b.z, isBot: true });
         }
+      }
+    }
+  }
+
+  // Fase 7 — canalização de revive (aliado de pé, mesmo esquadrão, no alcance)
+  #tryRevive(a, dt) {
+    const mate = reviveTargetFor(a, this.#actors());
+    if (!mate) return;
+    mate.lastReviveTick = this.tickCount;
+    if (stepRevive(mate, dt)) {
+      for (const h of this.humans.values()) {
+        this.#emitTo(h.id, 'revived', { by: a.name, target: mate.id, targetName: mate.name, life: mate.life, isSelf: mate.id === h.id });
       }
     }
   }
@@ -740,27 +796,49 @@ export class MatchRoom3D {
       this.#emitTo(actor.id, 'hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, actor.life) });
     }
     if (actor.life <= 0) {
-      actor.life = 0; actor.alive = false;
-      const killer = ownerId ? this.#actors().find((a) => a.id === ownerId) : null;
-      if (killer && killer.id !== actor.id) {
-        killer.kills++;
-        if (!killer.isBot) {
-          const head = kind === 'headshot';
-          killer.xp += head ? KILL_XP_HEAD : KILL_XP;
-          killer.krc += KILL_KRC;
-          this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC });
-          this.#emitAll('killfeed', { killer: killer.name, victim: actor.name, head }, killer.id);
-        } else {
-          this.#emitAll('killfeed', { killer: killer.name, victim: actor.name, head: false });
+      // Fase 7 — squads: primeiro dano letal NOCAUTEIA; dano já caído é letal
+      if (this.squad && !actor.knocked) {
+        knockActor(actor, ownerId, kind === 'headshot' ? 'headshot' : kind);
+        const knocker = ownerId ? this.#actors().find((a) => a.id === ownerId) : null;
+        this.#emitAll('killfeed', { killer: knocker?.name ?? (kind === 'ring' ? 'RING' : 'CIGKV'), victim: actor.name, head: kind === 'headshot', knock: true });
+        if (!actor.isBot) {
+          this.#emitTo(actor.id, 'knocked', { by: knocker?.name ?? null, kind, knockT: actor.knockT });
+          // nocaute dá XP/KRC parcial ao caçador humano
+          if (knocker && !knocker.isBot && knocker.id !== actor.id) {
+            knocker.xp += kind === 'headshot' ? 60 : 40;
+            knocker.krc += 5;
+            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: kind === 'headshot' ? 60 : 40, krc: 5 });
+          }
         }
-      } else {
-        this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: actor.name, head: false });
+        return;
       }
-      // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
-      if (!actor.isBot) {
-        const placement = this.#actors().filter((a) => a.alive).length + 1;
-        this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : 'CIGKV') });
+      this.#finalizeDeath(actor, ownerId, kind);
+    }
+  }
+
+  // Fase 7 — morte FINAL (finalização, sangramento, ring/caído)
+  #finalizeDeath(actor, ownerId, kind) {
+    actor.life = 0;
+    actor.alive = false;
+    actor.knocked = false;
+    const killerId = ownerId ?? actor.lastHitBy ?? null;
+    const killer = killerId ? this.#actors().find((a) => a.id === killerId) : null;
+    if (killer && killer.id !== actor.id) {
+      killer.kills++;
+      if (!killer.isBot) {
+        const head = kind === 'headshot';
+        killer.xp += head ? KILL_XP_HEAD : KILL_XP;
+        killer.krc += KILL_KRC;
+        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC, finish: kind === 'bleedout' });
       }
+      this.#emitAll('killfeed', { killer: killer.name, victim: actor.name, head: kind === 'headshot' });
+    } else {
+      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: actor.name, head: false });
+    }
+    // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
+    if (!actor.isBot) {
+      const placement = this.#actors().filter((a) => a.alive).length + 1;
+      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : 'CIGKV') });
     }
   }
 
@@ -799,6 +877,7 @@ export class MatchRoom3D {
     if (item.kind === 'weapon') {
       const id = item.weaponId || item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
       a.slots[a.activeSlot] = id; a.weapon = id;
+      a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
       a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
       if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
       a.reloadT = 0;
@@ -851,11 +930,13 @@ export class MatchRoom3D {
     return {
       id: a.id, name: a.name, x: a.x, y: a.y, z: a.z, vy: a.vy, yaw: a.yaw, pitch: a.pitch,
       life: a.life, armor: a.armor, xp: a.xp, krc: a.krc, kills: a.kills, extracted: a.extracted,
-      speed: a.speed, weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
+      speed: a.speed, weapon: a.weapon, weaponSkin: a.weaponSkin ?? null, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
       inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit, frag: a.inventory.frag ?? 0, gloo: a.inventory.gloo ?? 0 },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, stamina: a.stamina,
       crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
+      knocked: !!a.knocked, knockT: a.knockT ?? 0, reviveProgress: a.reviveProgress ?? 0, downedCount: a.downedCount ?? 0,
+      squad: a.squad ?? null,
       ackSeq: a.lastProcessedSeq,
     };
   }
@@ -863,8 +944,9 @@ export class MatchRoom3D {
     return {
       id: a.id, name: a.name, isBot: a.isBot,
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
-      weapon: a.weapon, alive: a.alive, onGround: a.onGround,
+      weapon: a.weapon, weaponSkin: a.weaponSkin ?? null, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
+      knocked: !!a.knocked, squad: a.squad ?? null,
     };
   }
 
@@ -874,6 +956,7 @@ export class MatchRoom3D {
       players: this.humans.size, capacity: this.capacity,
       bots: this.bots.length, botsAlive: this.bots.filter((b) => b.alive).length,
       state: this.state, started: this.started,
+      private: this.isPrivate, squad: this.squad,
       ageMs: Date.now() - this.createdAt, lastActivityMs: Date.now() - this.lastActivity,
       alive: this.#actors().filter((a) => a.alive).length,
     };

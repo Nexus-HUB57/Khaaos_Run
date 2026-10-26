@@ -1,7 +1,7 @@
 // Khaaos Run — HUD tático (estilo FreeFire): barras, munição, minimapa, killfeed,
 // crosshair dinâmico, prompts de interação, modais ZU/fim e controles touch.
 import { RARITIES } from '../shared/weapons.js';
-import { WEAPONS3D } from './sim3d.js';
+import { WEAPONS3D, DBNO } from './sim3d.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -90,10 +90,10 @@ export class HUD {
     while (list.children.length > 6) list.lastChild.remove();
   }
 
-  killfeed(killer, victim, head, isPlayerKill) {
+  killfeed(killer, victim, head, isPlayerKill, knock = false) {
     const el = document.createElement('div');
     el.className = `kill-entry ${isPlayerKill ? 'mine' : ''}`;
-    el.innerHTML = `<span>${killer}</span><i>${head ? '☠ HEADSHOT' : '✕'}</i><span>${victim}</span>`;
+    el.innerHTML = `<span>${killer}</span><i>${knock ? '◌ NOCAUTE' : head ? '☠ HEADSHOT' : '✕'}</i><span>${victim}</span>`;
     const list = $('#killfeed');
     list.prepend(el);
     while (list.children.length > 4) list.lastChild.remove();
@@ -151,6 +151,16 @@ export class HUD {
       $('#altValue').textContent = String(alt).padStart(3, '0');
       $('#altPhase').textContent = p.dropPhase === 'sky' ? 'QUEDA LIVRE' : 'PARAQUEDAS';
       $('#altFill').style.width = `${Math.min(100, (alt / 140) * 100)}%`;
+    }
+    // Fase 7 — overlay de nocaute (DBNO): contador de sangramento + progresso do revive
+    const knocked = !!p.knocked;
+    $('#knockOverlay')?.classList.toggle('hidden', !knocked);
+    if (knocked) {
+      const max = DBNO.bleedOutSeconds * Math.pow(DBNO.bleedOutDecay, Math.max(0, (p.downedCount ?? 1) - 1));
+      $('#knockFill').style.width = `${Math.max(0, Math.min(100, ((p.knockT ?? 0) / max) * 100))}%`;
+      const prog = p.reviveProgress ?? 0;
+      $('#reviveWrap')?.classList.toggle('hidden', prog <= 0);
+      if (prog > 0) $('#reviveFill').style.width = `${Math.min(100, (prog / DBNO.reviveSeconds) * 100)}%`;
     }
     const ability = getOperativeAbility(p.operativeId || this.operativeId);
     const abilityStatus = $('#abilityStatus');

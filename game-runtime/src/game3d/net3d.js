@@ -9,7 +9,7 @@ const RESUME_KEY = 'kr_resume_3d';
 const BUFFER_SIZE = 3;
 
 export class NetClient3D {
-  constructor({ url = '', onStatus, onSnapshot, onEvent, onRejected } = {}) {
+  constructor({ url = '', onStatus, onSnapshot, onEvent, onRejected, onPrivateCreated, onPrivateJoined, onPrivateError } = {}) {
     this.url = url;
     this.token = localStorage.getItem('kr_token');
     this.resume = localStorage.getItem(RESUME_KEY);
@@ -17,6 +17,9 @@ export class NetClient3D {
     this.onSnapshot = onSnapshot;
     this.onEvent = onEvent;
     this.onRejected = onRejected;
+    this.onPrivateCreated = onPrivateCreated;
+    this.onPrivateJoined = onPrivateJoined;
+    this.onPrivateError = onPrivateError;
     this.socket = null;
     this.buffer = [];          // [{ snapshot, receivedAt }]
     this.pending = [];         // inputs não confirmados (predição client-side)
@@ -57,6 +60,25 @@ export class NetClient3D {
         if (msg.resumeToken) { this.resume = msg.resumeToken; localStorage.setItem(RESUME_KEY, this.resume); }
         this.onStatus?.(`${msg.type === 'resumed' ? 'SESSÃO RETOMADA' : 'MATCHMAKING'} // ${msg.region || ''} // RING 3D`);
         if (msg.snapshot) this.push(msg.snapshot);
+        return;
+      }
+      // Fase 7 — salas privadas com código de convite
+      if (msg.type === 'private_created') {
+        this.myId = msg.id ?? this.myId;
+        this.onStatus?.(`SALA PRIVADA CRIADA // CÓDIGO ${msg.code}`);
+        if (msg.snapshot) this.push(msg.snapshot);
+        this.onPrivateCreated?.(msg.code);
+        return;
+      }
+      if (msg.type === 'private_joined') {
+        this.myId = msg.id ?? this.myId;
+        this.onStatus?.(`SALA PRIVADA // CÓDIGO ${msg.code}`);
+        if (msg.snapshot) this.push(msg.snapshot);
+        this.onPrivateJoined?.(msg.code);
+        return;
+      }
+      if (msg.type === 'private_not_found' || msg.type === 'private_error') {
+        this.onPrivateError?.(msg.type === 'private_not_found' ? 'Código não encontrado ou sala cheia/iniciada.' : 'Salas privadas disponíveis apenas no modo 3D.');
         return;
       }
       if (msg.type === 'snapshot') { this.push(msg.snapshot); return; }
@@ -142,6 +164,16 @@ export class NetClient3D {
   start(entry) {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify({ type: 'start', entry }));
+  }
+
+  // Fase 7 — sala privada: cria sala squad e devolve código de convite
+  createPrivate() {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'create_private' }));
+  }
+  joinPrivate(code) {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'join_private', code }));
   }
 
   dispose() {

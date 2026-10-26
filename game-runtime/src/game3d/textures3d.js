@@ -239,6 +239,25 @@ export function radialSprite(inner = 'rgba(255,214,140,1)', outer = 'rgba(255,12
   return t;
 }
 
+// ---- Fase 7 — sombra de contato (blob) ----
+// Gradiente radial escuro aplicado em planos sob props/árvores/pedras: ancora os
+// objetos no chão mesmo onde o shadow map do sol não alcança com nitidez.
+let _contactShadowTex = null;
+export function contactShadowTexture() {
+  if (_contactShadowTex) return _contactShadowTex;
+  const [c, x] = canvas(128);
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+  g.addColorStop(0, 'rgba(8,9,12,0.62)');
+  g.addColorStop(0.55, 'rgba(8,9,12,0.34)');
+  g.addColorStop(1, 'rgba(8,9,12,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 128, 128);
+  _contactShadowTex = new THREE.CanvasTexture(c);
+  _contactShadowTex.colorSpace = THREE.SRGBColorSpace;
+  return _contactShadowTex;
+}
+
+
 // ===========================================================================
 // Fase 6 — biblioteca de realismo: camuflagem, rosto, viação e props.
 // Todos os materiais passam por cache (memo) — 16 operativos NÃO regeneram canvas.

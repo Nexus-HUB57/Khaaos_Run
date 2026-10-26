@@ -149,11 +149,36 @@
           </div>
           <small id="contentSelectionStatus" class="content-selection-status" aria-live="polite"></small>
         </div>
+        <div class="squad-row">
+          <label id="squadToggleBox" class="squad-toggle" for="squadToggle">
+            <input type="checkbox" id="squadToggle" />
+            <span>MODO SQUAD · DBNO <small>aliados revivem · ring de esquadrões</small></span>
+          </label>
+          <div id="privateRoomBox" class="private-room hidden">
+            <label for="inviteCode">SALA PRIVADA · SQUAD (DBNO)</label>
+            <div class="private-actions">
+              <input id="inviteCode" maxlength="6" placeholder="CÓDIGO" autocomplete="off" />
+              <button id="createPrivateBtn" class="ghost-btn" type="button">CRIAR SALA</button>
+              <button id="joinPrivateBtn" class="ghost-btn" type="button">ENTRAR</button>
+            </div>
+          </div>
+        </div>
         <div class="modal-actions">
           <button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+60 de armadura · mobilidade padrão</small></button>
           <button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+18 de armadura · velocidade ampliada</small></button>
         </div>
       </div>
+    </div>
+
+    <!-- overlay de nocaute (DBNO) -->
+    <div id="knockOverlay" class="hidden">
+      <div class="knock-title">NOCAUTEADO</div>
+      <div class="knock-bar"><div id="knockFill"></div></div>
+      <div id="reviveWrap" class="revive-wrap hidden">
+        <div class="revive-label">REVIVENDO…</div>
+        <div class="revive-bar"><div id="reviveFill"></div></div>
+      </div>
+      <div class="knock-hint">Aliados podem reviver — segure <kbd>E</kbd> perto de um companheiro caído para revivê-lo</div>
     </div>
 
     <!-- modal fim -->

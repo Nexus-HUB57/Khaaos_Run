@@ -1,11 +1,13 @@
 // Khaaos Run — Entidades 3D: operativos humanoides DETALHADOS + arsenal enriquecido.
 // Fase 6: modelos procedurais nível "próximo do FreeFire" — colete tático com
 // pouches, pads, luvas, capacete com óculos, rosto pintado, camuflagem por paleta.
-// Continuam zero assets externos; API de parts/anim PresERVADA (sim/rede intocadas).
+// Fase 7: acessórios determinísticos por operativo (variant), skins de arma por
+// raridade do loot e pose de rastejo do DBNO. API de parts/anim PRESERVADA.
 import * as THREE from 'three';
 import {
   camoMaterial, faceTexture, goggleMaterial,
 } from './textures3d.js';
+import { RARITIES } from '../shared/weapons.js';
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? .82, metalness: opts.metal ?? .12, ...opts.extra });
 
@@ -38,10 +40,81 @@ function darken(hex, f = .55) {
   return '#' + new THREE.Color(hex).multiplyScalar(f).getHexString();
 }
 
-// ---------- operativo (Fase 6) ----------
+// ---------- Fase 7 — acessórios determinísticos por operativo ----------
+// `variant` (id do operativo / nome do bot) deriva, por hash, quais acessórios o
+// modelo carrega — cada operativo tem identidade visual própria e estável.
+function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM }) {
+  const seed = variant || vest + skin;
+  const roll = (mod, salt = '') => hashIdx(`${seed}:${salt}`, mod);
+  const bandColors = ['#8a1f2b', '#1f5a8a', '#3f6a2a', '#6a4a1f', '#22242a'];
+
+  // ---- cabeça ----
+  const headGear = roll(5, 'h');
+  if (headGear === 0) {
+    // bandana no topo do crânio + nó
+    head.add(box(.27, .05, .27, M(bandColors[roll(5, 'b')], { rough: .8 }), 0, .16, 0));
+    head.add(box(.05, .05, .06, M(bandColors[roll(5, 'b')], { rough: .8 }), .1, .16, .14));
+  } else if (headGear === 1) {
+    // lanterna de capacete (corpo + lente emissiva)
+    head.add(box(.06, .06, .1, gearM2, -.08, .24, .13));
+    head.add(box(.04, .04, .02, new THREE.MeshStandardMaterial({ color: '#fff7d6', emissive: '#ffe9a8', emissiveIntensity: 1.4, roughness: .3 }), -.08, .24, .18));
+  } else if (headGear === 2) {
+    // antena de comunicação curva atrás do capacete
+    const ant = cyl(.007, .007, .22, metalM, .12, .28, .1, 4);
+    ant.rotation.x = -.5;
+    head.add(ant);
+    head.add(box(.04, .04, .04, trimM, .12, .38, .03)); // topo emissivo
+  } else if (headGear === 3) {
+    // meia-máscara de respiração sobre a boca
+    head.add(box(.18, .09, .06, M('#23262b', { rough: .6, metal: .3 }), 0, -.06, -.14));
+    head.add(box(.14, .03, .03, M('#3a3e45', { rough: .5, metal: .5 }), 0, -.02, -.15));
+  }
+  // óculos de sol empurrados (variação independente da bandana)
+  if (roll(3, 'g') === 0) {
+    head.add(box(.2, .05, .03, M('#101114', { rough: .25, metal: .6 }), 0, .09, .13));
+  }
+
+  // ---- tronco/colete ----
+  const chest = roll(4, 'c');
+  if (chest === 0) {
+    // faca de combate embainhada no peitoral
+    torso.add(box(.035, .2, .05, M('#15171a', { rough: .4, metal: .6 }), -.14, .12, -.21));
+    torso.add(box(.05, .05, .06, gearM, -.14, .05, -.21));
+  } else if (chest === 1) {
+    // patch de equipe emissivo
+    torso.add(box(.08, .06, .02, trimM, .16, .14, -.2));
+  } else if (chest === 2) {
+    // granada presa no colete
+    torso.add(cyl(.035, .035, .07, M('#3a4436', { rough: .55, metal: .5 }), .2, -.15, -.2, 6));
+  }
+  // bandoleira diagonal (tira cruzando o peito)
+  if (roll(2, 's') === 0) {
+    const strap = box(.05, .62, .02, secM, 0, .02, -.2);
+    strap.rotation.z = .62;
+    torso.add(strap);
+  }
+
+  // ---- cinto/quadril ----
+  if (roll(2, 'w') === 0) {
+    g.add(box(.09, .12, .09, M('#3a4436', { rough: .7 }), -.24, .8, .08)); // cantil
+  }
+
+  // ---- pernas (joelheira extra) ----
+  if (roll(2, 'k') === 0) {
+    torso.add(box(.07, .1, .07, gearM2, .21, -.32, -.02)); // pouch de coxa
+  }
+
+  // ---- braços (faixa de braço do esquadrão) ----
+  if (roll(3, 'a') === 0) {
+    torso.add(box(.15, .04, .18, M(bandColors[roll(5, 'b2')], { rough: .75 }), -.33, .12, 0));
+  }
+}
+
+// ---------- operativo (Fase 6/7) ----------
 // cores: skin, vest (primária), secondary (calça/boina), trim (faixas),
 // eyes, hair — todas opcionais com fallback coerente.
-export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true } = {}) {
+// variant (Fase 7): string do operativo/bot — deriva acessórios determinísticos.
+export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true, variant = '' } = {}) {
   const g = new THREE.Group();
   const camo = camoMaterial(hashIdx(vest, 4), { repeat: 1.4 }); // camuflagem coerente com a cor do colete (compartilhada/memoizada)
   const sec = secondary ?? darken(vest, .6);
@@ -151,17 +224,37 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const armR = mkArm(1), armL = mkArm(-1);
   torso.add(armR.shoulder, armL.shoulder);
 
+  // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
+  buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
+
   return { group: g, parts: { head, torso, legL, legR, armL, armR } };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
 // crouch (Fase 5) dobra pernas e abaixa o tronco; Fase 6: respiração idle,
-// sway de tronco e cabeça acompanhando o passo.
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false } = {}) {
+// sway de tronco e cabeça acompanhando o passo. Fase 7: pose de rastejo DBNO.
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false } = {}) {
   if (dead) {
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
+    return;
+  }
+  if (knocked) {
+    // rastejar: tronco deitado, cotoveladas alternadas arrastando o corpo
+    const crawl = Math.sin(t * 5.2) * .5;
+    parts.torso.rotation.x = 1.22;
+    parts.torso.rotation.y = Math.sin(t * 2.6) * .09;
+    parts.torso.position.y = .5;
+    parts.legL.hip.rotation.x = .85 + crawl * .18;
+    parts.legR.hip.rotation.x = .85 - crawl * .18;
+    parts.legL.knee.rotation.x = -.55;
+    parts.legR.knee.rotation.x = -.5;
+    parts.armR.shoulder.rotation.x = -1.15 - crawl * .3;
+    parts.armL.shoulder.rotation.x = -1.15 + crawl * .3;
+    parts.armR.elbow.rotation.x = -.35;
+    parts.armL.elbow.rotation.x = -.35;
+    parts.head.rotation.x = -.6;
     return;
   }
   const swing = Math.sin(t * 9) * .62 * speedNorm;
@@ -190,13 +283,24 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   parts.torso.position.y = torsoY;
 }
 
-// ---------- arsenal (Fase 6 — silhuetas ricas: miras, trilhos, carregadores) ----------
-export function createWeaponModel(id) {
+// ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
+// skin (Fase 7): raridade do loot ('COMUM'..'LENDARIO') pinta o furniture com a
+// cor da raridade, adiciona brilho emissivo e uma gema no receiver — cada nível
+// é reconhecível à distância, como no FreeFire.
+export function createWeaponModel(id, skin = null) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
   const gun2 = M('#15171a', { rough: .48, metal: .72 });
   const accent = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .9, roughness: .4 });
-  const furniture = camoMaterial(2, { repeat: 1 }); // pintura tática no furniture
+  const rar = skin ? RARITIES[skin] : null;
+  const skinColor = rar?.color ?? null;
+  // furniture: pintura tática — tinge com a cor da raridade quando skin presente
+  const furniture = skinColor
+    ? new THREE.MeshStandardMaterial({ color: skinColor, roughness: .5, metalness: .25, emissive: skinColor, emissiveIntensity: .16 })
+    : camoMaterial(2, { repeat: 1 });
+  const skinGlow = skinColor
+    ? new THREE.MeshStandardMaterial({ color: skinColor, emissive: skinColor, emissiveIntensity: .95, roughness: .35 })
+    : null;
   const add = (w, h, d, mat, x, y, z) => { const m = box(w, h, d, mat, x, y, z); g.add(m); return m; };
   const sights = (zFront, zRear, y = .09) => { // massa de mira padrão
     add(.012, .05, .02, gun2, 0, y, zFront);
@@ -277,15 +381,20 @@ export function createWeaponModel(id) {
   }
   muzzle.position.set(0, .02, muzzleZ);
   g.add(muzzle);
+  // Fase 7 — gema de raridade no receiver (identificação rápida do skin)
+  if (skinGlow) {
+    const gem = add(.03, .024, .06, skinGlow, .045, .055, -.08);
+    gem.name = 'rarityGem';
+  }
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
   return { group: g, muzzle };
 }
 
 // orienta braços/arma no corpo — retorna o anchor da arma (na mão direita)
-export function attachWeapon(opParts, operativeGroup, weaponId) {
+export function attachWeapon(opParts, operativeGroup, weaponId, skin = null) {
   const old = operativeGroup.userData.weaponRig;
   if (old) { operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); }); }
-  const model = createWeaponModel(weaponId);
+  const model = createWeaponModel(weaponId, skin);
   model.group.position.set(.3, 1.4, -.25);
   operativeGroup.add(model.group);
   operativeGroup.userData.weaponRig = model;
