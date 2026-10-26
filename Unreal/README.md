@@ -26,6 +26,16 @@ bash scripts/test_ue5_logic.sh
 ```
 Esse comando compila subconjuntos de regras com g++; não valida UHT, módulos/plugins UE, replicação nem o executável dedicado.
 
+## Empacotamento do slice FPS CIGKV
+
+O script `scripts/build/package_ue5_first_world.py` cria um ZIP do primeiro slice de combate/ballística, inclui um manifesto SHA-256 e valida o `.uproject`, plugins, configuração CIGKV, perfil visual e contratos C++ necessários:
+
+```bash
+python3 scripts/build/package_ue5_first_world.py --run-engine
+```
+
+Com `--run-engine`, o script usa `UE5_ROOT`, `RUNUAT` ou `UNREAL_EDITOR` quando disponíveis. Sem uma instalação real do UE5.8, ele ainda empacota e executa a validação estática, mas registra `skipped_no_engine`; isso não deve ser interpretado como cook, UHT, UBT ou PIE aprovados. O artefato é escrito em `artifacts/ue5/`.
+
 ## Estrutura do Projeto
 
 ```

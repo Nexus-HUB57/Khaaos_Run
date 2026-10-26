@@ -15,9 +15,9 @@ Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e
 
 O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
 
-## Modo 3D — Battle Royale TPS (FreeFire-style)
+## Modo 3D — Battle Royale FPS (ritmo Free Fire/Fortnite)
 
-`index.html` (raiz do runtime) inicia o **modo 3D**: terceira pessoa (TPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
+`index.html` (raiz do runtime) inicia o **modo 3D** em primeira pessoa (FPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `?view=tps` mantém a câmera anterior para comparação e regressão visual. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
 
 | Sistema | Módulo | Responsabilidade |
 |---------|--------|------------------|
@@ -101,6 +101,16 @@ one-shots e predição durante a queda). `node --test test/server3d.test.js` val
 | Replicação online | `server/room3d.js` + `net3d.js` | Snapshot expõe `grenades` (interpolação posicional no cliente) e `walls` (id/x/z/rot/hp). Eventos `airdrop`, `land`, `frag`, `explosion`, `gloo`, `glooDown` entregues por raio. Anti-cheat `validateInput3D` valida `throw`/`gloo` como booleanos. Preditor local respeita as paredes autoritativas (colliders reconstruídos por snapshot, sem mutar o layout cacheado). |
 | Realismo PBR | `textures3d.js` + `world3d.js` | Normal maps procedurais (Sobel sobre o canvas de cor) para concreto/metal/terreno/asfalto — relevo real sob o sol. `scene.environment` via PMREM+RoomEnvironment (metais refletem de verdade, intensidade sutil 0.35). Vegetação instanciada (46 árvores em 2 draw calls + 30 pedras) fora dos distritos, decorativa (sem colisão — sim idêntica). 14 nuvens de crepúsculo com deriva lenta. |
 | Apresentação | `entities3d.js`, `effects3d.js`, `audio3d.js`, `hud3d.js` | Paraquedas procedural (dossel + suspensórios, só na fase `chute`), pose de queda com braços abertos; granada com LED do pavio piscando e tombo em voo; gloo com animação de deploy (ease-out) e brilho que decai com o HP. Explosão: bola de fogo + fumaça + debris + luz + tremor de câmera proporcional à distância. Áudio 100% procedural: vento de queda, abertura do paraquedas, aterrissagem, whoosh do arremesso, detonação (sub-bass + estilhaços), cristalização do gloo. HUD: altímetro com marca de abertura (45 m), contagens 💣/🧊 com teclas, botões touch novos. |
+
+### Agachamento, Espectador e Impactos de Combate (Fase 5)
+
+| Sistema | Módulo | Comportamento |
+|---------|--------|---------------|
+| Agachar | `src/game3d/sim3d.js` + `server/antiCheat.js` | Tecla `C` (toggle; touch segura ⤓): velocidade ×0.5, dispersão ×0.72, sprint cancelado enquanto agachado (e `jump` prevalece no frame do salto). `stepActorMovement` marca `a.crouching` (só no chão, nunca em queda/airdrop) — sim offline, `MatchRoom3D` e preditor replicam a mesma física. Snapshot replica `crouching` em `player` e `others`; `validateInput3D` aceita apenas booleano. Pose procedural: coxas à frente, joelhos dobrados, tronco −0.34 m; câmera desce de 1.62 m para ~1.15 m com interpolação. |
+| Combate bot-vs-bot | `sim3d.js` | A IA agora seleciona o ator vivo mais próximo COM linha de visão — jogador OU outros bots (antes só o jogador). O ring fica vivo: combates distantes acontecem sem o jogador. Alvo sob camuflagem (`concealment`) é ignorado na seleção. |
+| Modo espectador | `sim3d.js` + `room3d.js` + `main3d.js` + `hud3d.js` | Após a eliminação, a partida CONTINUA: o cliente entra em transmissão (`enterSpectate`) seguindo outro operativo vivo (←/→ ou botões ‹ › alternam; ✕ encerra). `KhaaosSim3D({ spectate: true })` segue até o último vivo/tempo; `MatchRoom3D` só encerra por tempo, último vivo ou sala vazia (humanos mortos permanecem recebendo snapshots — evento `eliminated` agora traz `placement`, e `matchEnd` traz `winner`). Tela final mostra posição (#N) e vencedor do ring. Legado `spectate: false` preservado (testes das fases 1–4). |
+| Impactos de combate | `effects3d.js` + `main3d.js` | Orifícios de bala persistentes em paredes/Gloo (sprites escuros com rotação aleatória, fade em 7 s, pool de 30 com reciclagem). Sangue/projeção de impacto mantidos do pool de partículas. |
+| FIX crítico de balística | `sim3d.js` + `room3d.js` | **Os projéteis dos bots nasciam NaN desde a Fase 3**: o tiro bot passava `{tx,ty,tz}` sem a origem do cano — `dir.tx - undefined = NaN` — e nenhum bot jamais acertou um tiro (offline E online). O disparo agora passa `ox/oy/oz` do `#muzzle`. Com o fix, bots realmente acertam (dano ×0.55 e erro humano preservados — dificuldade justa). |
 
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
@@ -200,6 +210,19 @@ Catálogo declarativo em `server/rbac.js` — única fonte de verdade de autoriz
 - **HTTP**: negativas viram `403 { error: 'forbidden', permission }` (antes `401` — autenticado ≠ autorizado). Token legacy de operações continua válido como `admin`.
 - **Auditoria append-only** (`server/audit.js`): ring buffer em memória com ids monotônicos + persistência opcional `PostgresAuditStore` (`KR_AUDIT_STORE=postgres`, migração `002_audit_events.sql`). Eventos: `auth.login` (allow/deny), `auth.logout`, `auth.oidc`, `key.rotate`, `key.drop`, `room.start` (por sala), `rbac.deny` (HTTP e WS, toda negativa é registrada; allows só em operações sensíveis para não gerar ruído).
 - **Consulta**: `GET /admin/audit?actor=&action=&outcome=&sinceId=&limit=` (exige `audit:read`), paginação estável por id.
+
+## Multi-instância, falha de processo, soak e fault injection
+
+O runtime é horizontal por design: sessões vivem no store compartilhável e o rate limit é atômico entre réplicas. A camada de resiliência operacional cobre:
+
+- **Multi-instância**: duas réplicas simultâneas compartilham o store em arquivo (ou Postgres/Redis em produção). Jogador da réplica A reconectando na réplica B degrada de forma graciosa — salas são por processo, então a sessão vira alocação nova, **nunca erro**.
+- **Falha de processo e reconnect pós-restart**: o `resumeToken` persistido sobrevive ao encerramento; a instância que sobe em seguida aceita o jogador de volta (alocação nova, sem crash).
+- **Fail-fresh na leitura de sessão**: store indisponível na conexão não bloqueia a entrada — o jogador entra novo e `metrics.storeReadFailures` sinaliza a degradação.
+- **Fail-open no rate limit**: Redis fora não derruba a partida; inputs continuam fluindo e `metrics.rateStoreFailures` expõe o período sem limite para alarme.
+- **Auditoria nunca bloqueia**: audit store quebrado é engolido silenciosamente — login e RBAC seguem normais.
+- **Soak com duração limitada**: 12 jogadores com churn contínuo (sai 1 / entra 1 a cada 300 ms), invariâncias de fluxo de snapshots, fila vazia, contadores consistentes e zero rejeições não tratadas. `KR_SOAK_MS` estende a duração em ambientes de soak reais.
+
+Cobertura: `test/multiinstance.test.js` (2), `test/fault-injection.test.js` (3) e `test/soak.test.js` (1, aceita `KR_SOAK_MS`).
 
 ## Painel anti-cheat
 

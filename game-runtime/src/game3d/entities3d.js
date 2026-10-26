@@ -65,18 +65,27 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], h
   return { group: g, parts: { head, torso, legL, legR, armL, armR } };
 }
 
-// pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false } = {}) {
+// pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
+// crouch (Fase 5) dobra pernas e abaixa o tronco
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false } = {}) {
   if (dead) {
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     return;
   }
   const swing = Math.sin(t * 9) * .62 * speedNorm;
   const swing2 = Math.cos(t * 9) * .5 * speedNorm;
-  parts.legL.hip.rotation.x = swing;
-  parts.legR.hip.rotation.x = -swing;
-  parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
-  parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+  if (crouch) {
+    // agachado: coxas à frente, joelhos dobrados, tronco ~0.34m mais baixo
+    parts.legL.hip.rotation.x = 1.15 + swing * .15;
+    parts.legR.hip.rotation.x = 1.15 - swing * .15;
+    parts.legL.knee.rotation.x = -1.45;
+    parts.legR.knee.rotation.x = -1.45;
+  } else {
+    parts.legL.hip.rotation.x = swing;
+    parts.legR.hip.rotation.x = -swing;
+    parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
+    parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+  }
   // braços seguram arma à frente; sobem/descem com pitch
   const aim = -Math.PI / 2 + pitch;
   parts.armR.shoulder.rotation.x = aim + .18 - swing * .18;
@@ -84,8 +93,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   parts.armR.elbow.rotation.x = ads ? -.28 : -.5;
   parts.armL.elbow.rotation.x = ads ? -.62 : -.85;
   parts.head.rotation.x = pitch * .4;
-  // bob de corrida
-  parts.torso.position.y = 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  // bob de corrida (agachado: tronco baixo, sem bob)
+  const torsoY = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  parts.torso.position.y = torsoY;
 }
 
 // ---------- arsenal ----------
@@ -157,6 +167,31 @@ export function attachWeapon(opParts, operativeGroup, weaponId) {
   operativeGroup.add(model.group);
   operativeGroup.userData.weaponRig = model;
   return model;
+}
+
+// Rig enxuto de primeira pessoa: mãos/antebraços ficam presos à câmera,
+// enquanto a simulação continua usando o operativo completo para colisão e rede.
+export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[0] } = {}) {
+  const rig = new THREE.Group();
+  const skinM = M(skin, { rough: .65 });
+  const clothM = M('#25292d', { rough: .9 });
+  const vestM = M(vest, { rough: .75, metal: .25 });
+  const makeArm = (side) => {
+    const arm = new THREE.Group();
+    arm.position.set(side * .24, -.26, -.42);
+    arm.rotation.set(-.36, side * .08, side * .16);
+    arm.add(box(.16, .46, .16, clothM, 0, -.2, 0));
+    arm.add(box(.14, .18, .14, skinM, 0, -.5, -.02));
+    rig.add(arm);
+    return arm;
+  };
+  const armL = makeArm(-1);
+  const armR = makeArm(1);
+  const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
+  chest.rotation.x = -.24;
+  rig.add(chest);
+  rig.userData.arms = { armL, armR };
+  return rig;
 }
 
 // ---------- loot no chão ----------
