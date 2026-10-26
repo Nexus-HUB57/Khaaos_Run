@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_SlideSpeed",
+  "type": "Buff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Multiply",
+  "attribute": "MoveSpeed",
+  "magnitude": 2.0,
+  "tag": "Effect.Buff.SpeedBoost",
+  "description": "Slide speed multiplier (2.0x)",
+  "generated_by": "wire_all_4_tasks.py"
+}

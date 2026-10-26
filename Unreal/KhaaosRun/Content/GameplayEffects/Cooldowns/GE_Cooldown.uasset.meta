@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_Cooldown",
+  "type": "Cooldown",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Override",
+  "attribute": "None",
+  "magnitude": 1.0,
+  "tag": "Cooldown.Global",
+  "description": "Cooldown template (override duration)",
+  "generated_by": "wire_all_4_tasks.py"
+}

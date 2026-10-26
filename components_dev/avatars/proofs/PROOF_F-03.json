@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F003",
+  "operative_id": "F-03",
+  "codename": "SKW-02",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Skeetw",
+    "name": "Skeetw",
+    "type": "avian",
+    "skeleton": "SK_Gwen",
+    "passive": "Voo Planado - velocidade +15% apos queda",
+    "base_stats": {
+      "health": 80,
+      "energy": 120,
+      "speed": 1.3
+    },
+    "physical": {
+      "height_cm": 170,
+      "weight_kg": 55
+    },
+    "abbr": "SKW"
+  },
+  "world": {
+    "id": "W3",
+    "name": "Ckesalth",
+    "capacity": 60
+  },
+  "rank": "ONITH",
+  "specialization": "Sniper e Precisao Aerea",
+  "ethnicity": {
+    "label": "Chinesa",
+    "heritage": "Han/Sichuan (paterno) + Han/Shanghai (materno)",
+    "region": "Sichuan, China / Leste Asiatico",
+    "cultural_fusion": "Disciplina marcial chinesa combinada com precision Skeetw. Nome Mei-Ling (beleza espirito/adaptavel) + Zhou (dinastia/perfeicao)."
+  },
+  "phenotype": {
+    "skin_tone": "Firme e claro com subtom quente (#F5DEB3 wheat), patches de penas iridescentes",
+    "hair": "Jet black, bob corte sharp e geometrico, tufos de pena Skeetw nas orelhas (ear tufts - owl-like)",
+    "eyes": "Castanho escuro, dobra epicantica forte, membrana nictitante Skeetw - anel prateado (#C0C0C0) ao redor da iris",
+    "facial_structure": "Rosto delicado e refinado, nariz pequeno, labios finos, qualidade porcelana, maxilar V-line",
+    "body_type": "Petite e agil - 162 cm, 50 kg. MENOR OPERATIVE DO ROSTER. Frame Skeetw ultra-light, precision build.",
+    "distinctive_silhouette": "Postura de sniper-perch - corpo compacto, sempre em posicao elevated. Ear tufts dao silhueta felina distinta."
+  },
+  "cultural_markers": {
+    "tattoos": "Red Thread of Fate (yuanfen hongsheng) no dedo anelar esquerdo - ring finger, tradio chinesa de destino",
+    "scars": "Cicatriz de ricochete na tempora direita (sniper counter - 1 cm, minimal)",
+    "ornaments": "Pingente de jade (bi disk) no pescoco, hair sticks decorativas no bob (removiveis em combate)",
+    "clothing_style": "Tatica slim-fit com gola mandarim - preto/cinza com acentos jade green, Skeetw wing-fold silhouette integrada no suit"
+  },
+  "species_traits": {
+    "visible_modification": "Penas de voo primarias Skeetw nas costas - estilo grca (crane-like), white-tipped, elegantly folded; ear tufts owl-inspired",
+    "passive_manifestation": "Voo Planado: longest glide ratio do roster - penas de grca abrem em V-perfect, silent descent. Nictitante prateada = zoom optico natural para sniping.",
+    "combat_style_id": "Estilo aerial-sniper - perch, snipe, glide to next position. Maior precision do roster. Crane-inspired grace = longest hang-time no ar."
+  },
+  "distinguishing_summary": "Unica Chinesa Han; MENOR operative (162cm/50kg); bob geometrico + ear tufts owl; penas de grca white-tipped nas costas; nictitante PRATEADA (difere de NYRA dourada e PRIYA teal); gola mandarim; pingente jade; sniper mais preciso do roster",
+  "generated_at": "2026-10-22T13:30:29.511936+00:00",
+  "ref_code": "SKW-02",
+  "operative_ref": "OP_SKW_F_02",
+  "avatar_ref": "AVT_SKW_F_02",
+  "legacy_codename": "MEI-LING ZHOU",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.297971+00:00"
+}

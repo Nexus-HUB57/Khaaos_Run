@@ -1,179 +1,391 @@
 /**
  * KHAAOS RUN — Spectator Data Pipeline
- * =====================================
- * Delayed batched spectator data with rate limiting and bandwidth control.
+ * ======================================
+ * Delayed, batched spectator data transmission over WebSocket.
+ *
+ * Design constraints:
+ *   - 10-second delay to prevent cheat-assisted ghosting
+ *   - Maximum 500 concurrent spectators per match
+ *   - 200ms batch rate (5 updates/second) to limit bandwidth
+ *   - WebSocket endpoint: /ws/spectator
+ *   - Camera modes: FREECAM, FOLLOW_PLAYER, OVERHEAD, RING_CENTER
+ *
+ * Pipeline: Game State → Delay Buffer (10s) → Batch Aggregator (200ms) → WS Fan-out
  */
 
-// ─── Spectator Configuration ─────────────────────────────────────────────────
+import { WebSocket, WebSocketServer } from "ws";
+import type { Server } from "http";
 
-export interface SpectatorConfig {
-  delayMs: number;
-  batchIntervalMs: number;
-  maxSpectatorsPerRoom: number;
-  globalMaxSpectators: number;
-  maxEventsPerBatch: number;
-  maxBandwidthKBps: number;
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export type SpectatorCameraMode = "FREECAM" | "FOLLOW_PLAYER" | "OVERHEAD" | "RING_CENTER";
+
+export interface SpectatorClient {
+  id: string;
+  ws: WebSocket;
+  cameraMode: SpectatorCameraMode;
+  followPlayerId: string | null;
+  connectedAt: number;
+  roomId: string;
+  bytesSent: number;
+  packetsSent: number;
 }
 
-export const DEFAULT_SPECTATOR_CONFIG: SpectatorConfig = {
-  delayMs: 10000,
-  batchIntervalMs: 200,
+export interface SpectatorGameData {
+  type: string;
+  roomId: string;
+  timestamp: number;
+  players: SpectatorPlayerSnapshot[];
+  ringState: SpectatorRingSnapshot;
+  events: SpectatorEvent[];
+}
+
+export interface SpectatorPlayerSnapshot {
+  id: string;
+  species: string;
+  posX: number;
+  posY: number;
+  health: number;
+  shield: number;
+  isDowned: boolean;
+  isEliminated: boolean;
+  kills: number;
+}
+
+export interface SpectatorRingSnapshot {
+  currentPhase: number;
+  currentRadius: number;
+  ringCenter: [number, number, number];
+  isShrinking: boolean;
+  nextPhaseIn: number;
+}
+
+export interface SpectatorEvent {
+  type: "ELIMINATION" | "WORLD_TRANSITION" | "RING_PHASE" | "AIRDROP" | "REVIVE";
+  data: Record<string, any>;
+  timestamp: number;
+}
+
+// ─── Spectator Data Pipeline Config ─────────────────────────────────────────
+
+export const SpectatorConfig = {
+  /** Delay in ms before spectator receives game data */
+  delayMs: 10_000,
+
+  /** Maximum concurrent spectators per room */
   maxSpectatorsPerRoom: 500,
-  globalMaxSpectators: 5000,
+
+  /** Batch interval in ms */
+  batchIntervalMs: 200,
+
+  /** Global max spectators across all rooms */
+  globalMaxSpectators: 5_000,
+
+  /** Max events per batch to limit payload size */
   maxEventsPerBatch: 20,
-  maxBandwidthKBps: 64,
+
+  /** Max bytes per second per spectator (throttle) */
+  maxBytesPerSecond: 65_536, // 64 KB/s
 };
 
-// ─── Spectator Entry ─────────────────────────────────────────────────────────
+// ─── Delay Buffer ───────────────────────────────────────────────────────────
 
-interface SpectatorEntry {
-  spectatorId: string;
-  roomId: string;
-  joinedAt: number;
-  cameraMode: string;
+interface DelayedEntry {
+  data: SpectatorGameData;
+  emitAt: number; // timestamp when this entry should be emitted
 }
 
-// ─── Delayed Game Data ───────────────────────────────────────────────────────
+class DelayBuffer {
+  private buffer: DelayedEntry[] = [];
+  private delayMs: number;
 
-interface DelayedGameData {
-  data: unknown;
-  timestamp: number;
-  deliverAt: number;
+  constructor(delayMs: number) {
+    this.delayMs = delayMs;
+  }
+
+  /** Push a game data snapshot into the delay buffer. */
+  push(data: SpectatorGameData): void {
+    this.buffer.push({
+      data,
+      emitAt: Date.now() + this.delayMs,
+    });
+  }
+
+  /** Flush all entries that have passed their emit time. */
+  flush(): SpectatorGameData[] {
+    const now = Date.now();
+    const ready: SpectatorGameData[] = [];
+    const remaining: DelayedEntry[] = [];
+
+    for (const entry of this.buffer) {
+      if (entry.emitAt <= now) {
+        ready.push(entry.data);
+      } else {
+        remaining.push(entry);
+      }
+    }
+
+    this.buffer = remaining;
+    return ready;
+  }
+
+  /** Current buffer size. */
+  get size(): number {
+    return this.buffer.length;
+  }
 }
 
-// ─── Spectator Room State ────────────────────────────────────────────────────
+// ─── Batch Aggregator ───────────────────────────────────────────────────────
 
-interface RoomState {
-  roomId: string;
-  spectators: Map<string, SpectatorEntry>;
-  delayBuffer: DelayedGameData[];
-  batchBuffer: DelayedGameData[];
+class BatchAggregator {
+  private pendingData: SpectatorGameData[] = [];
+  private lastFlushAt: number = 0;
+  private batchIntervalMs: number;
+
+  constructor(batchIntervalMs: number) {
+    this.batchIntervalMs = batchIntervalMs;
+  }
+
+  /** Add data to pending batch. */
+  add(data: SpectatorGameData[]): void {
+    this.pendingData.push(...data);
+  }
+
+  /** Check if enough time has elapsed for a batch flush. */
+  shouldFlush(): boolean {
+    return Date.now() - this.lastFlushAt >= this.batchIntervalMs;
+  }
+
+  /** Flush pending data as a single batch. */
+  flush(): SpectatorGameData[] {
+    if (this.pendingData.length === 0) return [];
+    const batch = this.pendingData;
+    this.pendingData = [];
+    this.lastFlushAt = Date.now();
+    return batch;
+  }
 }
 
-// ─── SpectatorDataPipeline Class ─────────────────────────────────────────────
+// ─── SpectatorDataPipeline Class ────────────────────────────────────────────
 
 export class SpectatorDataPipeline {
-  private config: SpectatorConfig;
-  private rooms: Map<string, RoomState> = new Map();
-  private destroyed = false;
+  private wss: WebSocketServer | null = null;
+  private spectators: Map<string, SpectatorClient> = new Map();
+  private roomSpectators: Map<string, Set<string>> = new Map(); // roomId → spectator IDs
+  private delayBuffers: Map<string, DelayBuffer> = new Map(); // roomId → delay buffer
+  private batchAggregators: Map<string, BatchAggregator> = new Map(); // roomId → batch aggregator
+  private batchTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private totalSpectators: number = 0;
 
-  constructor(config?: Partial<SpectatorConfig>) {
-    this.config = { ...DEFAULT_SPECTATOR_CONFIG, ...config };
-  }
+  /**
+   * Attach WebSocket server for spectator connections.
+   */
+  attach(httpServer: Server): void {
+    this.wss = new WebSocketServer({ server: httpServer, path: "/ws/spectator" });
 
-  /** Get or create a room state */
-  private getOrCreateRoom(roomId: string): RoomState {
-    let room = this.rooms.get(roomId);
-    if (!room) {
-      room = {
+    this.wss.on("connection", (ws: WebSocket, req) => {
+      const url = new URL(req.url || "/", `http://${req.headers.host}`);
+      const roomId = url.searchParams.get("roomId") || "default";
+      const cameraMode = (url.searchParams.get("camera") as SpectatorCameraMode) || "RING_CENTER";
+
+      // Check capacity
+      const roomCount = this.roomSpectators.get(roomId)?.size ?? 0;
+      if (roomCount >= SpectatorConfig.maxSpectatorsPerRoom || this.totalSpectators >= SpectatorConfig.globalMaxSpectators) {
+        ws.close(1013, "Spectator capacity reached");
+        return;
+      }
+
+      const spectatorId = `spec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const client: SpectatorClient = {
+        id: spectatorId,
+        ws,
+        cameraMode,
+        followPlayerId: null,
+        connectedAt: Date.now(),
         roomId,
-        spectators: new Map(),
-        delayBuffer: [],
-        batchBuffer: [],
+        bytesSent: 0,
+        packetsSent: 0,
       };
-      this.rooms.set(roomId, room);
-    }
-    return room;
-  }
 
-  /** Push game data into the delay buffer for a room */
-  pushGameData(roomId: string, data: unknown): void {
-    if (this.destroyed) return;
+      this.spectators.set(spectatorId, client);
 
-    const room = this.getOrCreateRoom(roomId);
-    const now = Date.now();
+      // Add to room
+      let roomSet = this.roomSpectators.get(roomId);
+      if (!roomSet) {
+        roomSet = new Set();
+        this.roomSpectators.set(roomId, roomSet);
+        // Initialize delay buffer and batch aggregator for room
+        this.delayBuffers.set(roomId, new DelayBuffer(SpectatorConfig.delayMs));
+        this.batchAggregators.set(roomId, new BatchAggregator(SpectatorConfig.batchIntervalMs));
+        this.startBatchTimer(roomId);
+      }
+      roomSet.add(spectatorId);
+      this.totalSpectators++;
 
-    room.delayBuffer.push({
-      data,
-      timestamp: now,
-      deliverAt: now + this.config.delayMs,
+      // Send welcome
+      ws.send(JSON.stringify({ type: "SPECTATOR_WELCOME", spectatorId, roomId, cameraMode, delayMs: SpectatorConfig.delayMs }));
+
+      // Handle camera mode changes
+      ws.on("message", (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === "SET_CAMERA") {
+            client.cameraMode = msg.cameraMode || "RING_CENTER";
+            client.followPlayerId = msg.followPlayerId || null;
+          }
+        } catch { /* ignore malformed messages */ }
+      });
+
+      ws.on("close", () => this.removeSpectator(spectatorId));
+
+      console.log(`[SpectatorPipeline] ${spectatorId} connected to room ${roomId} (${cameraMode})`);
     });
 
-    // Also add to batch buffer (for immediate batch access)
-    room.batchBuffer.push({
-      data,
-      timestamp: now,
-      deliverAt: now + this.config.delayMs,
-    });
+    console.log("[SpectatorPipeline] WebSocket server attached at /ws/spectator");
+  }
 
-    // Trim batch buffer to max events per batch
-    if (room.batchBuffer.length > this.config.maxEventsPerBatch) {
-      room.batchBuffer = room.batchBuffer.slice(-this.config.maxEventsPerBatch);
+  /**
+   * Remove a spectator from the pipeline.
+   */
+  private removeSpectator(spectatorId: string): void {
+    const client = this.spectators.get(spectatorId);
+    if (!client) return;
+
+    this.spectators.delete(spectatorId);
+    const roomSet = this.roomSpectators.get(client.roomId);
+    if (roomSet) {
+      roomSet.delete(spectatorId);
+      if (roomSet.size === 0) {
+        this.roomSpectators.delete(client.roomId);
+        this.stopBatchTimer(client.roomId);
+        this.delayBuffers.delete(client.roomId);
+        this.batchAggregators.delete(client.roomId);
+      }
+    }
+    this.totalSpectators--;
+    console.log(`[SpectatorPipeline] ${spectatorId} disconnected`);
+  }
+
+  /**
+   * Push game data into the delay buffer for a room.
+   * Called by the game loop on every tick.
+   */
+  pushGameData(roomId: string, data: SpectatorGameData): void {
+    const buffer = this.delayBuffers.get(roomId);
+    if (!buffer) return; // no spectators for this room
+    buffer.push(data);
+  }
+
+  /**
+   * Start the batch timer for a room. Periodically flushes delay buffer
+   * and aggregates data before sending to spectators.
+   */
+  private startBatchTimer(roomId: string): void {
+    const timer = setInterval(() => {
+      this.processBatch(roomId);
+    }, SpectatorConfig.batchIntervalMs);
+    this.batchTimers.set(roomId, timer);
+  }
+
+  private stopBatchTimer(roomId: string): void {
+    const timer = this.batchTimers.get(roomId);
+    if (timer) {
+      clearInterval(timer);
+      this.batchTimers.delete(roomId);
     }
   }
 
-  /** Add a spectator to a room */
-  addSpectator(roomId: string, spectatorId: string, cameraMode = "follow"): boolean {
-    if (this.destroyed) return false;
+  /**
+   * Process a batch: flush delay buffer → aggregate → fan-out.
+   */
+  private processBatch(roomId: string): void {
+    const buffer = this.delayBuffers.get(roomId);
+    const aggregator = this.batchAggregators.get(roomId);
+    if (!buffer || !aggregator) return;
 
-    const room = this.getOrCreateRoom(roomId);
+    // Flush delay buffer (releases data that's aged past the delay)
+    const delayed = buffer.flush();
+    if (delayed.length === 0) return;
 
-    // Check room capacity
-    if (room.spectators.size >= this.config.maxSpectatorsPerRoom) {
-      return false;
+    // Add to batch aggregator
+    aggregator.add(delayed);
+
+    // Check if batch interval elapsed
+    if (!aggregator.shouldFlush()) return;
+
+    // Flush batch
+    const batch = aggregator.flush();
+    if (batch.length === 0) return;
+
+    // Compose batch message (take latest snapshot, merge events)
+    const latestData = batch[batch.length - 1];
+    const allEvents: SpectatorEvent[] = [];
+    for (const d of batch) {
+      allEvents.push(...d.events);
     }
+    // Trim events to max
+    const trimmedEvents = allEvents.slice(-SpectatorConfig.maxEventsPerBatch);
 
-    // Check global capacity
-    const globalCount = this.getGlobalSpectatorCount();
-    if (globalCount >= this.config.globalMaxSpectators) {
-      return false;
-    }
-
-    room.spectators.set(spectatorId, {
-      spectatorId,
+    const payload = JSON.stringify({
+      type: "SPECTATOR_BATCH",
       roomId,
-      joinedAt: Date.now(),
-      cameraMode,
+      data: latestData,
+      events: trimmedEvents,
+      batchSize: batch.length,
+      timestamp: Date.now(),
     });
 
-    return true;
+    // Fan-out to all spectators in this room
+    const roomSet = this.roomSpectators.get(roomId);
+    if (!roomSet) return;
+
+    const payloadBytes = Buffer.byteLength(payload);
+    for (const specId of roomSet) {
+      const client = this.spectators.get(specId);
+      if (!client || client.ws.readyState !== 1) continue;
+
+      // Throttle check
+      const bps = client.bytesSent / ((Date.now() - client.connectedAt) / 1000 || 1);
+      if (bps > SpectatorConfig.maxBytesPerSecond) continue;
+
+      try {
+        client.ws.send(payload);
+        client.bytesSent += payloadBytes;
+        client.packetsSent++;
+      } catch { /* send failed */ }
+    }
   }
 
-  /** Remove a spectator from a room */
-  removeSpectator(roomId: string, spectatorId: string): boolean {
-    const room = this.rooms.get(roomId);
-    if (!room) return false;
-    return room.spectators.delete(spectatorId);
-  }
+  // ─── Query Methods ────────────────────────────────────────────────────────
 
-  /** Get spectator count for a specific room (or global if no roomId) */
   getSpectatorCount(roomId?: string): number {
-    if (roomId) {
-      const room = this.rooms.get(roomId);
-      return room ? room.spectators.size : 0;
-    }
-    return this.getGlobalSpectatorCount();
+    if (roomId) return this.roomSpectators.get(roomId)?.size ?? 0;
+    return this.totalSpectators;
   }
 
-  /** Get spectators for a room */
-  getSpectators(roomId: string): SpectatorEntry[] {
-    const room = this.rooms.get(roomId);
-    return room ? Array.from(room.spectators.values()) : [];
+  getSpectators(roomId: string): SpectatorClient[] {
+    const roomSet = this.roomSpectators.get(roomId);
+    if (!roomSet) return [];
+    return Array.from(roomSet)
+      .map(id => this.spectators.get(id))
+      .filter((s): s is SpectatorClient => !!s);
   }
 
-  /** Get delay buffer size for a room */
   getDelayBufferSize(roomId: string): number {
-    const room = this.rooms.get(roomId);
-    return room ? room.delayBuffer.length : 0;
+    return this.delayBuffers.get(roomId)?.size ?? 0;
   }
 
-  /** Get global spectator count */
-  private getGlobalSpectatorCount(): number {
-    let total = 0;
-    for (const room of this.rooms.values()) {
-      total += room.spectators.size;
-    }
-    return total;
-  }
-
-  /** Get config */
-  getConfig(): SpectatorConfig {
-    return { ...this.config };
-  }
-
-  /** Destroy the pipeline and cleanup all resources */
+  /**
+   * Cleanup all resources.
+   */
   destroy(): void {
-    this.destroyed = true;
-    this.rooms.clear();
+    for (const timer of this.batchTimers.values()) clearInterval(timer);
+    this.batchTimers.clear();
+    this.spectators.clear();
+    this.roomSpectators.clear();
+    this.delayBuffers.clear();
+    this.batchAggregators.clear();
+    this.wss?.close();
+    console.log("[SpectatorPipeline] Destroyed");
   }
 }

@@ -8,6 +8,9 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
+#include "Game/VFX/KhaaosVFXManager.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UKhaaosAbility_Sprint
@@ -448,12 +451,32 @@ void UKhaaosAbility_GrapplingHook::OnGrappleTick(float DeltaTime)
 
 void UKhaaosAbility_GrapplingHook::ClientSpawnGrappleVFX_Implementation(const FVector& StartPoint, const FVector& AnchorPoint)
 {
-        // Client-side VFX: spawn rope/cable visual
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_GrapplingHook::ClientSpawnGrappleVFX - Spawning rope VFX"));
+        if (!GrappleRopeVFX.IsNull())
+        {
+                UNiagaraSystem* NiagaraSys = GrappleRopeVFX.LoadSynchronous();
+                if (NiagaraSys)
+                {
+                        ACharacter* Character = Cast<ACharacter>(GetOwningActorFromActorInfo());
+                        if (Character && Character->GetMesh())
+                        {
+                                UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
+                                        NiagaraSys, Character->GetMesh(), NAME_None,
+                                        FVector::ZeroVector, FRotator::ZeroRotator,
+                                        EAttachLocation::KeepRelativeOffset, false, true,
+                                        ENiagaraEffectPoolPolicy::Auto, true);
+                                if (NiagaraComp)
+                                {
+                                        NiagaraComp->SetNiagaraVariableVec3(FString("AnchorPoint"), AnchorPoint);
+                                }
+                        }
+                }
+        }
 }
 
 void UKhaaosAbility_GrapplingHook::ClientRemoveGrappleVFX_Implementation()
 {
-        // Client-side VFX: remove rope/cable visual
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAbility_GrapplingHook::ClientRemoveGrappleVFX - Removing rope VFX"));
+        if (auto* VFXMgr = GetWorld()->GetSubsystem<UKhaaosVFXManager>())
+        {
+                VFXMgr->StopAllVFX(FName(TEXT("GrappleRope")), true);
+        }
 }

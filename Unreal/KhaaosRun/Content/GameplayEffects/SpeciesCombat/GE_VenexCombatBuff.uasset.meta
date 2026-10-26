@@ -1,0 +1,23 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_VenexCombatBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "FireRate",
+      "modifierOp": "Multiply",
+      "magnitude": 1.12
+    },
+    {
+      "attribute": "CombatMoveSpeed",
+      "modifierOp": "Multiply",
+      "magnitude": 1.08
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Venex.SpeedCombat"],
+    "requiredTags": ["Species.Venex"]
+  },
+  "description": "Venex speed combat bonus: +12% fire rate, +8% movement in combat"
+}

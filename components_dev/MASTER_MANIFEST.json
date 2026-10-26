@@ -1,24 +1,37 @@
 {
-  "version": "2.0-phd",
-  "design_tier": "PhD",
-  "species": {
-    "count": 6,
-    "status": "PHD_COMPLETE"
+  "manifest_version": "2.0.0",
+  "project": "Khaaos Run",
+  "copyright": "Nexus-HUB57",
+  "generated_at": "2026-10-23T18:51:00.592017+00:00",
+  "e2e_completion": "COMPLETE",
+  "components": {
+    "species": 6,
+    "weapons": 11,
+    "loot_items": 26,
+    "world_loot_tables": 5,
+    "data_assets": 5,
+    "lyra_bridges": 8,
+    "ci_workflows": 14,
+    "integration_tests": 3,
+    "editor_scripts": 2
   },
-  "weapons": {
-    "count": 11,
-    "status": "PHD_COMPLETE"
+  "vm_requirements": {
+    "cores": 8,
+    "ram_gb": 16,
+    "ssd_gb": 80,
+    "os": "Ubuntu 22.04 LTS"
   },
-  "loot_items": {
-    "count": 26,
-    "status": "PHD_COMPLETE"
-  },
-  "worlds": {
-    "count": 5,
-    "status": "PHD_COMPLETE"
-  },
-  "total_json_files": 48,
-  "csv_tables": 4,
-  "cpp_headers_enhanced": 4,
-  "balance_report": true
+  "deployment_order": [
+    "01-provision-vm",
+    "02-install-ue58-toolchain",
+    "03-build-dedicated-server",
+    "04-deploy-economy-api",
+    "05-configure-eos-sdk",
+    "06-import-data-assets",
+    "07-seed-loot-tables",
+    "08-launch-dedicated-server",
+    "09-health-check-verify"
+  ],
+  "files_generated": 112,
+  "completed_at": "2026-10-13T01:07:39.828626+00:00"
 }

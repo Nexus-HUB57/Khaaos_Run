@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_HuranWaterResist",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "RingDamageTaken",
+  "magnitude": 0.5,
+  "tag": "Effect.Buff.WaterResist",
+  "description": "50% ring damage reduction in water for Huran",
+  "generated_by": "wire_all_4_tasks.py"
+}

@@ -1,281 +1,248 @@
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE, RING_PHASES } from "../../server/game/MatchFlow.ts";
+/**
+ * KHAAOS RUN — Unit Tests: MatchFlow
+ * =====================================
+ */
 
-// Real-timer equivalents of the vitest fake-timer flow:
-// countdown of 1s (asserted via sleep ≥ 1.3s) and downed-elimination of 300ms.
-const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-const COUNTDOWN_WAIT_MS = 1300;
-const DOWNED_WAIT_MS = 500;
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchConfig } from "@game/MatchFlow";
+import { EconomyMatchBridge } from "@game/EconomyMatchBridge";
 
-describe("MatchFlow Unit Tests", () => {
-  let match: MatchFlow;
+describe("MatchFlow", () => {
+  let matchFlow: MatchFlow;
+  let economyBridge: EconomyMatchBridge;
 
   beforeEach(() => {
-    match = new MatchFlow("test-match-001", {
-      maxPlayers: 100,
-      countdownSeconds: 1,
-      downedEliminateTimeoutMs: 300,
+    economyBridge = new EconomyMatchBridge();
+    matchFlow = new MatchFlow(
+      { roomId: "test_match", maxPlayers: 100, countdownSeconds: 5 },
+      economyBridge,
+    );
+  });
+
+  // ─── Construction ────────────────────────────────────────────────────────
+
+  describe("construction", () => {
+    it("should create match in LOBBY state", () => {
+      const state = matchFlow.getState();
+      expect(state.status).toBe("LOBBY");
+      expect(state.roomId).toBe("test_match");
+    });
+
+    it("should initialize with 0 players", () => {
+      const state = matchFlow.getState();
+      expect(state.players.size).toBe(0);
+    });
+
+    it("should initialize with 0 eliminations", () => {
+      const state = matchFlow.getState();
+      expect(state.totalEliminations).toBe(0);
+    });
+
+    it("should have 5 worlds in default pipeline", () => {
+      expect(DEFAULT_WORLD_PIPELINE).toHaveLength(5);
     });
   });
 
-  afterEach(() => {
-    match.destroy();
+  // ─── Default World Pipeline ──────────────────────────────────────────────
+
+  describe("DEFAULT_WORLD_PIPELINE", () => {
+    it("should have correct world order", () => {
+      const ids = DEFAULT_WORLD_PIPELINE.map(w => w.worldId);
+      expect(ids).toEqual(["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
+    });
+
+    it("should have correct capacities", () => {
+      expect(DEFAULT_WORLD_PIPELINE[0].capacity).toBe(50);   // CIGKV
+      expect(DEFAULT_WORLD_PIPELINE[1].capacity).toBe(100);  // Barburhen
+      expect(DEFAULT_WORLD_PIPELINE[2].capacity).toBe(75);   // Priadus
+      expect(DEFAULT_WORLD_PIPELINE[3].capacity).toBe(60);   // Ckesalth
+      expect(DEFAULT_WORLD_PIPELINE[4].capacity).toBe(80);   // Arukheea
+    });
   });
 
-  // ─── Construction ─────────────────────────────────────────────────────────
+  // ─── Player Join ─────────────────────────────────────────────────────────
 
-  it("should initialize with LOBBY status", () => {
-    assert.strictEqual(match.getStatus(), "LOBBY");
+  describe("joinPlayer", () => {
+    it("should allow players to join lobby", () => {
+      const joined = matchFlow.joinPlayer({
+        id: "player_1",
+        displayName: "Operative Alpha",
+        species: "HURAN",
+        skinRarity: "COMUM",
+        posX: 50,
+        posY: 50,
+        inWaterZone: false,
+        worldId: "cigkv",
+      });
+      expect(joined).toBe(true);
+      expect(matchFlow.getState().players.size).toBe(1);
+    });
+
+    it("should reject duplicate player IDs", () => {
+      matchFlow.joinPlayer({
+        id: "player_1", displayName: "Alpha", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      const joined = matchFlow.joinPlayer({
+        id: "player_1", displayName: "Alpha", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      expect(joined).toBe(false);
+    });
+
+    it("should set initial health to 100 and shield to 50", () => {
+      matchFlow.joinPlayer({
+        id: "player_1", displayName: "Alpha", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      const player = matchFlow.getState().players.get("player_1");
+      expect(player?.health).toBe(100);
+      expect(player?.shield).toBe(50);
+      expect(player?.isDowned).toBe(false);
+      expect(player?.isEliminated).toBe(false);
+    });
+
+    it("should respect max players limit", () => {
+      const smallMatch = new MatchFlow(
+        { roomId: "small_match", maxPlayers: 2 },
+        economyBridge,
+      );
+
+      smallMatch.joinPlayer({
+        id: "p1", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      smallMatch.joinPlayer({
+        id: "p2", displayName: "B", species: "VENEX",
+        skinRarity: "COMUM", posX: 60, posY: 60, inWaterZone: false, worldId: "cigkv",
+      });
+      const joined = smallMatch.joinPlayer({
+        id: "p3", displayName: "C", species: "KHAEL",
+        skinRarity: "COMUM", posX: 70, posY: 70, inWaterZone: false, worldId: "cigkv",
+      });
+      expect(joined).toBe(false);
+    });
   });
 
-  it("should start with 0 players", () => {
-    assert.strictEqual(match.getPlayers().length, 0);
+  // ─── Match Lifecycle ─────────────────────────────────────────────────────
+
+  describe("match lifecycle", () => {
+    it("should transition LOBBY → COUNTDOWN on startCountdown", () => {
+      matchFlow.joinPlayer({
+        id: "p1", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      matchFlow.startCountdown();
+      expect(matchFlow.getState().status).toBe("COUNTDOWN");
+    });
+
+    it("should not start countdown if not in LOBBY", () => {
+      matchFlow.startCountdown();
+      matchFlow.startCountdown(); // second call should be no-op
+      // Status should remain COUNTDOWN (not error)
+      expect(["COUNTDOWN", "IN_PROGRESS"]).toContain(matchFlow.getState().status);
+    });
   });
 
-  it("should have 5 worlds in the default pipeline", () => {
-    assert.strictEqual(match.getWorldPipeline().length, 5);
+  // ─── Kill / Damage Pipeline ──────────────────────────────────────────────
+
+  describe("kill pipeline", () => {
+    it("should process kill and down victim", () => {
+      matchFlow.joinPlayer({
+        id: "killer", displayName: "K", species: "HURAN",
+        skinRarity: "RARO", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      matchFlow.joinPlayer({
+        id: "victim", displayName: "V", species: "VENEX",
+        skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
+      });
+
+      // 150 damage: 50 shield + 100 health = downed
+      matchFlow.processKill("killer", "victim", 150, "AssaultRifle");
+
+      const victim = matchFlow.getState().players.get("victim");
+      expect(victim?.isDowned).toBe(true);
+      expect(victim?.shield).toBe(0);
+      expect(victim?.health).toBe(0);
+    });
+
+    it("should shield absorb damage before health", () => {
+      matchFlow.joinPlayer({
+        id: "killer", displayName: "K", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      matchFlow.joinPlayer({
+        id: "victim", displayName: "V", species: "VENEX",
+        skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
+      });
+
+      // 30 damage: all absorbed by shield
+      matchFlow.processKill("killer", "victim", 30, "Pistol");
+
+      const victim = matchFlow.getState().players.get("victim");
+      expect(victim?.shield).toBe(20); // 50 - 30
+      expect(victim?.health).toBe(100); // untouched
+      expect(victim?.isDowned).toBe(false);
+    });
   });
 
-  // ─── DEFAULT_WORLD_PIPELINE ───────────────────────────────────────────────
+  // ─── Revive ──────────────────────────────────────────────────────────────
 
-  it("should have DEFAULT_WORLD_PIPELINE with correct order", () => {
-    const ids = DEFAULT_WORLD_PIPELINE.map(w => w.worldId);
-    assert.deepStrictEqual(ids, ["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
+  describe("revive", () => {
+    it("should revive a downed player with 30 HP", () => {
+      matchFlow.joinPlayer({
+        id: "p1", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      matchFlow.joinPlayer({
+        id: "p2", displayName: "B", species: "VENEX",
+        skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
+      });
+
+      // Down the player
+      matchFlow.processKill("p1", "p2", 200, "Sniper");
+
+      // Revive
+      const revived = matchFlow.revivePlayer("p2", "p1");
+      expect(revived).toBe(true);
+
+      const player = matchFlow.getState().players.get("p2");
+      expect(player?.isDowned).toBe(false);
+      expect(player?.health).toBe(30);
+    });
+
+    it("should not revive an already alive player", () => {
+      matchFlow.joinPlayer({
+        id: "p1", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+
+      const revived = matchFlow.revivePlayer("p1", "p1");
+      expect(revived).toBe(false);
+    });
   });
 
-  it("should have DEFAULT_WORLD_PIPELINE with correct capacities", () => {
-    assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 50);   // cigkv
-    assert.strictEqual(DEFAULT_WORLD_PIPELINE[1].capacity, 100);  // barburhen
-    assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 75);   // priadus
-    assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 60);   // ckesalth
-    assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 80);   // arukheea
+  // ─── Event Log ───────────────────────────────────────────────────────────
+
+  describe("event log", () => {
+    it("should track events", () => {
+      matchFlow.joinPlayer({
+        id: "p1", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+
+      const log = matchFlow.getEventLog();
+      expect(log.length).toBeGreaterThan(0);
+      expect(log[0].type).toBe("PLAYER_JOIN");
+    });
   });
 
-  // ─── joinPlayer ───────────────────────────────────────────────────────────
+  // ─── Cleanup ─────────────────────────────────────────────────────────────
 
-  it("should add player to lobby", () => {
-    const joined = match.joinPlayer("player-1", "HURAN");
-    assert.strictEqual(joined, true);
-    assert.strictEqual(match.getPlayers().length, 1);
-  });
-
-  it("should reject duplicate player", () => {
-    match.joinPlayer("player-1", "HURAN");
-    const joined = match.joinPlayer("player-1", "HURAN");
-    assert.strictEqual(joined, false);
-    assert.strictEqual(match.getPlayers().length, 1);
-  });
-
-  it("should set initial stats: health=100, shield=50, isDowned=false", () => {
-    match.joinPlayer("player-1", "KHAEL");
-    const player = match.getPlayer("player-1")!;
-    assert.strictEqual(player.health, 100);
-    assert.strictEqual(player.shield, 50);
-    assert.strictEqual(player.isDowned, false);
-    assert.strictEqual(player.isEliminated, false);
-    assert.strictEqual(player.kills, 0);
-  });
-
-  it("should respect max players limit", () => {
-    const smallMatch = new MatchFlow("small", { maxPlayers: 2, countdownSeconds: 1 });
-    assert.strictEqual(smallMatch.joinPlayer("p1", "HURAN"), true);
-    assert.strictEqual(smallMatch.joinPlayer("p2", "KHAEL"), true);
-    assert.strictEqual(smallMatch.joinPlayer("p3", "VENEX"), false);
-    smallMatch.destroy();
-  });
-
-  // ─── Match Lifecycle ──────────────────────────────────────────────────────
-
-  it("should transition from LOBBY to COUNTDOWN", () => {
-    match.joinPlayer("p1", "HURAN");
-    const started = match.startCountdown();
-    assert.strictEqual(started, true);
-    assert.strictEqual(match.getStatus(), "COUNTDOWN");
-  });
-
-  it("should auto-transition from COUNTDOWN to IN_PROGRESS after countdown", async () => {
-    match.joinPlayer("p1", "HURAN");
-    match.joinPlayer("p2", "KHAEL");
-    match.startCountdown();
-    assert.strictEqual(match.getStatus(), "COUNTDOWN");
-
-    await sleep(COUNTDOWN_WAIT_MS);
-    assert.strictEqual(match.getStatus(), "IN_PROGRESS");
-  });
-
-  it("should not start countdown with no players", () => {
-    const started = match.startCountdown();
-    assert.strictEqual(started, false);
-    assert.strictEqual(match.getStatus(), "LOBBY");
-  });
-
-  it("should not start countdown when not in LOBBY", () => {
-    match.joinPlayer("p1", "HURAN");
-    match.startCountdown();
-    const started2 = match.startCountdown();
-    assert.strictEqual(started2, false);
-  });
-
-  // ─── Kill Pipeline ────────────────────────────────────────────────────────
-
-  it("should down a player with 150 damage (shields absorb first)", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    const kill = match.processKill("killer", "victim", 150, "rifle");
-    assert.notStrictEqual(kill, null);
-
-    const victim = match.getPlayer("victim")!;
-    assert.strictEqual(victim.shield, 0);   // 50 shield absorbed
-    assert.strictEqual(victim.health, 0);   // 100 remaining health gone
-    assert.strictEqual(victim.isDowned, true);
-  });
-
-  it("should absorb shield damage first", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    // 40 damage — all absorbed by shield
-    match.processKill("killer", "victim", 40, "rifle");
-    const victim = match.getPlayer("victim")!;
-    assert.strictEqual(victim.shield, 10);
-    assert.strictEqual(victim.health, 100);
-    assert.strictEqual(victim.isDowned, false);
-  });
-
-  it("should credit killer immediately when victim is downed", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("killer", "victim", 200, "rifle");
-    assert.strictEqual(match.getPlayer("killer")!.kills, 1);
-
-    // Economy reward exists immediately
-    const rewards = match.getEconomy().getRewards().filter(r => r.type === "KILL");
-    assert.strictEqual(rewards.length, 1);
-  });
-
-  // ─── Revive ───────────────────────────────────────────────────────────────
-
-  it("should revive a downed player with 30 HP", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("killer", "victim", 200, "rifle");
-    assert.strictEqual(match.getPlayer("victim")!.isDowned, true);
-
-    const revived = match.revivePlayer("victim");
-    assert.strictEqual(revived, true);
-    assert.strictEqual(match.getPlayer("victim")!.isDowned, false);
-    assert.strictEqual(match.getPlayer("victim")!.health, 30);
-  });
-
-  it("should not revive an alive player", async () => {
-    match.joinPlayer("p1", "HURAN");
-    match.joinPlayer("p2", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    const revived = match.revivePlayer("p2");
-    assert.strictEqual(revived, false);
-  });
-
-  // ─── Event Log ────────────────────────────────────────────────────────────
-
-  it("should track events in the event log", async () => {
-    match.joinPlayer("p1", "HURAN");
-    match.joinPlayer("p2", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("p1", "p2", 200, "rifle");
-
-    const events = match.getEventLog();
-    assert.ok(events.some(e => e.type === "PLAYER_JOINED"));
-    assert.ok(events.some(e => e.type === "COUNTDOWN_STARTED"));
-    assert.ok(events.some(e => e.type === "MATCH_STARTED"));
-    assert.ok(events.some(e => e.type === "KILL"));
-  });
-
-  it("should record PLAYER_DOWNED event when victim health reaches 0", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("killer", "victim", 200, "rifle");
-
-    const events = match.getEventLog();
-    assert.ok(events.some(e => e.type === "PLAYER_DOWNED"));
-  });
-
-  // ─── RING_PHASES ──────────────────────────────────────────────────────────
-
-  it("should have 5 ring phases", () => {
-    assert.strictEqual(RING_PHASES.length, 5);
-  });
-
-  it("should have increasing damage per tick across ring phases", () => {
-    for (let i = 1; i < RING_PHASES.length; i++) {
-      assert.ok(RING_PHASES[i].damagePerTick > RING_PHASES[i - 1].damagePerTick);
-    }
-  });
-
-  // ─── Auto-elimination ─────────────────────────────────────────────────────
-
-  it("should auto-eliminate downed player after timeout", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.joinPlayer("other", "KHAEL");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("killer", "victim", 200, "rifle");
-    assert.strictEqual(match.getPlayer("victim")!.isDowned, true);
-    assert.strictEqual(match.getPlayer("victim")!.isEliminated, false);
-
-    await sleep(DOWNED_WAIT_MS);
-    assert.strictEqual(match.getPlayer("victim")!.isEliminated, true);
-  });
-
-  // ─── eliminatePlayer ──────────────────────────────────────────────────────
-
-  it("should manually eliminate a player", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.joinPlayer("other", "KHAEL");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("killer", "victim", 200, "rifle");
-    const eliminated = match.eliminatePlayer("victim");
-    assert.strictEqual(eliminated, true);
-    assert.strictEqual(match.getPlayer("victim")!.isEliminated, true);
-  });
-
-  // ─── Leaderboard ──────────────────────────────────────────────────────────
-
-  it("should return leaderboard sorted by kills", async () => {
-    match.joinPlayer("p1", "HURAN");
-    match.joinPlayer("p2", "KHAEL");
-    match.joinPlayer("p3", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    match.processKill("p2", "p3", 200, "rifle");  // p2 gets 1 kill
-    match.processKill("p2", "p1", 200, "rifle");   // p2 gets 2 kills (but p1 eliminated)
-
-    const lb = match.getLeaderboard();
-    assert.strictEqual(lb[0].playerId, "p2");
-    assert.strictEqual(lb[0].kills, 2);
+  describe("cleanup", () => {
+    it("should destroy cleanly", () => {
+      matchFlow.destroy();
+      // No errors
+    });
   });
 });

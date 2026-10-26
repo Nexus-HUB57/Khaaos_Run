@@ -1,150 +1,287 @@
-/**
- * KHAAOS RUN — Ring API
- * =====================
- * Ring state REST API endpoints and Discord broadcast integration.
- */
+// Khaaos Run — Ring & Spectator API Module
+// Provides ring state, spectator, airdrop, and Discord webhook endpoints
 
-import { DiscordBot, type DiscordEventType } from "./DiscordBot";
+import { Express, Request, Response } from "express";
+import { WebSocket } from "ws";
 
-// ─── World Ring Config ───────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface WorldRingConfig {
-  worldId: string;
-  initialRadius: number;
-  phases: number;
-  hasWaterZones: boolean;
-  damagePerPhase: number[];
+interface RingPhase {
+  phaseIndex: number;
+  radiusStart: number;
+  radiusEnd: number;
+  durationSeconds: number;
+  damagePerTick: number;
+  shrinkSpeed: number;
 }
 
-// ─── Ring State ──────────────────────────────────────────────────────────────
+interface WaterZone {
+  type: string;
+  center: [number, number, number];
+  radius: number;
+  depth: number;
+  damageModifier: number;
+}
 
-export interface RingState {
+interface RingWorldConfig {
+  worldId: string;
+  worldName: string;
+  capacity: number;
+  ringPhases: number;
+  phases: RingPhase[];
+  waterZones: WaterZone[];
+}
+
+interface RingState {
   worldId: string;
   currentPhase: number;
   currentRadius: number;
   targetRadius: number;
   damagePerTick: number;
-  shrinkRate: number;
-  center: { x: number; y: number };
-  isFinalPhase: boolean;
+  ringCenter: [number, number, number];
+  isShrinking: boolean;
+  playersInSafe: number;
+  playersInDanger: number;
+  nextPhaseIn: number; // seconds
 }
 
-// ─── Spectator Info ──────────────────────────────────────────────────────────
-
-interface SpectatorInfo {
-  spectatorId: string;
-  worldId: string;
-  cameraMode: string;
-  joinedAt: number;
+interface SpectatorSession {
+  id: string;
+  cameraMode: "FREECAM" | "FOLLOW_PLAYER" | "OVERHEAD" | "RING_CENTER";
+  followPlayerId?: string;
+  connectedAt: number;
 }
 
-// ─── Default World Configs ───────────────────────────────────────────────────
+// ─── Ring State Manager ──────────────────────────────────────────────────────
 
-const DEFAULT_WORLD_CONFIGS: WorldRingConfig[] = [
-  { worldId: "cigkv",    initialRadius: 500, phases: 5, hasWaterZones: true,  damagePerPhase: [1, 3, 5, 10, 25] },
-  { worldId: "barburhen", initialRadius: 600, phases: 5, hasWaterZones: false, damagePerPhase: [1, 3, 5, 10, 25] },
-  { worldId: "priadus",  initialRadius: 450, phases: 5, hasWaterZones: true,  damagePerPhase: [1, 3, 5, 10, 25] },
-  { worldId: "ckesalth", initialRadius: 400, phases: 5, hasWaterZones: false, damagePerPhase: [1, 3, 5, 10, 25] },
-  { worldId: "arukheea", initialRadius: 550, phases: 5, hasWaterZones: false, damagePerPhase: [1, 3, 5, 10, 25] },
-];
+class RingStateManager {
+  private states: Map<string, RingState> = new Map();
+  private config: Map<string, RingWorldConfig> = new Map();
+  private spectators: Map<string, SpectatorSession> = new Map();
+  private discordWebhookUrl: string = "";
+  private broadcastEnabled: boolean = true;
 
-// ─── RingAPI Class ───────────────────────────────────────────────────────────
-
-export class RingAPI {
-  private worldConfigs: Map<string, WorldRingConfig> = new Map();
-  private ringStates: Map<string, RingState> = new Map();
-  private spectators: Map<string, SpectatorInfo> = new Map();
-  private discord: DiscordBot;
-
-  constructor(worldConfigs?: WorldRingConfig[]) {
-    const configs = worldConfigs ?? DEFAULT_WORLD_CONFIGS;
-    for (const config of configs) {
-      this.worldConfigs.set(config.worldId, config);
-      // Initialize ring state for each world
-      this.ringStates.set(config.worldId, {
-        worldId: config.worldId,
-        currentPhase: 1,
-        currentRadius: config.initialRadius,
-        targetRadius: config.initialRadius * 0.9,
-        damagePerTick: config.damagePerPhase[0] ?? 1,
-        shrinkRate: 0.1,
-        center: { x: 0, y: 0 },
-        isFinalPhase: false,
-      });
+  constructor(ringConfig: any) {
+    // Load config from ring_config.json
+    if (ringConfig?.world_pipeline) {
+      for (const [key, value] of Object.entries(ringConfig.world_pipeline)) {
+        if (key === "order" || key === "transition_trigger" || key === "transition_type") continue;
+        const worldData = value as any;
+        const worldConfig: RingWorldConfig = {
+          worldId: key,
+          worldName: worldData.name || key,
+          capacity: worldData.capacity || 100,
+          ringPhases: worldData.ring_phases || 0,
+          phases: [],
+          waterZones: worldData.water_zones || []
+        };
+        
+        // Parse phases
+        if (worldData.ring_config) {
+          for (const [pKey, pValue] of Object.entries(worldData.ring_config)) {
+            const phase = pValue as any;
+            worldConfig.phases.push({
+              phaseIndex: parseInt(pKey.replace("phase_", "")) - 1,
+              radiusStart: phase.radius_start,
+              radiusEnd: phase.radius_end,
+              durationSeconds: phase.duration_s,
+              damagePerTick: phase.damage_per_tick,
+              shrinkSpeed: phase.shrink_speed || 1.0
+            });
+          }
+        }
+        
+        this.config.set(key, worldConfig);
+      }
     }
 
-    this.discord = new DiscordBot({ webhookUrl: process.env.DISCORD_WEBHOOK_URL });
+    // Load Discord config
+    this.discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL || "";
+    this.broadcastEnabled = !!this.discordWebhookUrl;
+
+    console.log(`[RingAPI] Initialized with ${this.config.size} worlds, discord=${this.broadcastEnabled}`);
   }
 
-  /** Get ring state for a world */
-  getRingState(worldId: string): RingState | undefined {
-    return this.ringStates.get(worldId);
+  getRingState(worldId: string): RingState | null {
+    return this.states.get(worldId) || null;
   }
 
-  /** Update ring state for a world */
-  updateRingState(worldId: string, state: Partial<RingState>): RingState | undefined {
-    const current = this.ringStates.get(worldId);
-    if (!current) return undefined;
+  getRingConfig(worldId: string): RingWorldConfig | null {
+    return this.config.get(worldId) || null;
+  }
 
-    const updated = { ...current, ...state, worldId }; // preserve worldId
-    this.ringStates.set(worldId, updated);
+  updateRingState(worldId: string, update: Partial<RingState>): RingState {
+    const current = this.states.get(worldId) || {
+      worldId,
+      currentPhase: 0,
+      currentRadius: 800,
+      targetRadius: 600,
+      damagePerTick: 1,
+      ringCenter: [0, 0, 0],
+      isShrinking: false,
+      playersInSafe: 0,
+      playersInDanger: 0,
+      nextPhaseIn: 180
+    };
+    
+    const updated = { ...current, ...update };
+    this.states.set(worldId, updated);
     return updated;
   }
 
-  /** Get spectators for a world */
-  getSpectators(worldId: string): SpectatorInfo[] {
-    return Array.from(this.spectators.values())
-      .filter(s => s.worldId === worldId);
+  // ─── Spectator Management ────────────────────────────────────────────────
+
+  addSpectator(session: SpectatorSession): void {
+    this.spectators.set(session.id, session);
+    console.log(`[RingAPI] Spectator ${session.id} connected (${session.cameraMode})`);
   }
 
-  /** Add a spectator to a world */
-  addSpectator(worldId: string, spectatorId: string, cameraMode = "free"): boolean {
-    if (!this.worldConfigs.has(worldId)) return false;
+  removeSpectator(sessionId: string): void {
+    this.spectators.delete(sessionId);
+  }
 
-    this.spectators.set(spectatorId, {
-      spectatorId,
-      worldId,
-      cameraMode,
-      joinedAt: Date.now(),
+  getSpectators(): SpectatorSession[] {
+    return Array.from(this.spectators.values());
+  }
+
+  setSpectatorCamera(sessionId: string, mode: SpectatorSession["cameraMode"]): void {
+    const session = this.spectators.get(sessionId);
+    if (session) session.cameraMode = mode;
+  }
+
+  // ─── Discord Broadcast ───────────────────────────────────────────────────
+
+  async broadcastToDiscord(eventType: string, data: string): Promise<void> {
+    if (!this.broadcastEnabled || !this.discordWebhookUrl) return;
+
+    const colorMap: Record<string, number> = {
+      RING_START: 65280,
+      RING_SHRINKING: 16776960,
+      RING_CLOSED: 16711680,
+      WORLD_TRANSITION: 4915330,
+      FINAL_RING: 16711680,
+    };
+
+    const nameMap: Record<string, string> = {
+      RING_START: "Ring Iniciando",
+      RING_SHRINKING: "Ring Fechando",
+      RING_CLOSED: "Ring Fechou",
+      WORLD_TRANSITION: "Portal Khaaos Ativo",
+      FINAL_RING: "RING FINAL",
+    };
+
+    const payload = {
+      embeds: [{
+        title: "Khaaos Run",
+        description: nameMap[eventType] || eventType,
+        color: colorMap[eventType] || 65280,
+        fields: [{ name: "Evento", value: data, inline: true }],
+        timestamp: new Date().toISOString()
+      }]
+    };
+
+    try {
+      await fetch(this.discordWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      console.log(`[Discord] Broadcast: ${eventType}`);
+    } catch (err) {
+      console.error(`[Discord] Broadcast failed:`, err);
+    }
+  }
+
+  // ─── Airdrop Probability ─────────────────────────────────────────────────
+
+  getAirdropProbability(phase: number): number {
+    const probs = [0.3, 0.5, 0.7, 0.9, 1.0, 1.0];
+    return probs[Math.min(phase - 1, probs.length - 1)] || 0.3;
+  }
+}
+
+// ─── Export Ring API Routes ───────────────────────────────────────────────────
+
+export function createRingAPI(ringConfig: any): { 
+  ringManager: RingStateManager;
+  router: (app: Express) => void;
+} {
+  const ringManager = new RingStateManager(ringConfig);
+
+  const router = (app: Express) => {
+    // ─── Ring State ──────────────────────────────────────────────────────────
+
+    app.get("/api/ring/state/:worldId", (req: Request, res: Response) => {
+      const state = ringManager.getRingState(req.params.worldId);
+      if (!state) {
+        return res.status(404).json({ error: "World not found or ring not initialized" });
+      }
+      res.json(state);
     });
 
-    return true;
-  }
+    app.get("/api/ring/config/:worldId", (req: Request, res: Response) => {
+      const config = ringManager.getRingConfig(req.params.worldId);
+      if (!config) {
+        return res.status(404).json({ error: "World config not found" });
+      }
+      res.json(config);
+    });
 
-  /** Remove a spectator */
-  removeSpectator(worldId: string, spectatorId: string): boolean {
-    const spectator = this.spectators.get(spectatorId);
-    if (!spectator || spectator.worldId !== worldId) return false;
-    return this.spectators.delete(spectatorId);
-  }
+    app.post("/api/ring/state/:worldId", (req: Request, res: Response) => {
+      const updated = ringManager.updateRingState(req.params.worldId, req.body);
+      
+      // Auto-broadcast phase changes to Discord
+      if (req.body.currentPhase !== undefined) {
+        ringManager.broadcastToDiscord("RING_SHRINKING", 
+          `World ${req.params.worldId} Phase ${req.body.currentPhase}`);
+      }
+      
+      res.json(updated);
+    });
 
-  /** Get airdrop probability based on ring phase */
-  getAirdropProbability(phase: number): number {
-    if (phase >= 5) return 1.0;
-    if (phase === 4) return 0.9;
-    if (phase === 3) return 0.7;
-    if (phase === 2) return 0.5;
-    return 0.3; // phase 1
-  }
+    // ─── Spectator ──────────────────────────────────────────────────────────
 
-  /** Broadcast a Discord event for a world */
-  async broadcastDiscord(worldId: string, eventType: DiscordEventType, data: unknown): Promise<boolean> {
-    const extra = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
-    return this.discord.broadcastEvent(eventType, { worldId, ...extra });
-  }
+    app.get("/api/ring/spectators", (_req: Request, res: Response) => {
+      res.json({ spectators: ringManager.getSpectators(), count: ringManager.getSpectators().length });
+    });
 
-  /** Get world config */
-  getWorldConfig(worldId: string): WorldRingConfig | undefined {
-    return this.worldConfigs.get(worldId);
-  }
+    app.post("/api/ring/spectator/join", (req: Request, res: Response) => {
+      const session: SpectatorSession = {
+        id: `spec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        cameraMode: req.body.cameraMode || "RING_CENTER",
+        connectedAt: Date.now()
+      };
+      ringManager.addSpectator(session);
+      res.json(session);
+    });
 
-  /** Get all world configs */
-  getAllWorldConfigs(): WorldRingConfig[] {
-    return Array.from(this.worldConfigs.values());
-  }
+    app.post("/api/ring/spectator/:id/camera", (req: Request, res: Response) => {
+      ringManager.setSpectatorCamera(req.params.id, req.body.cameraMode);
+      res.json({ ok: true });
+    });
 
-  /** Get the Discord bot instance */
-  getDiscordBot(): DiscordBot {
-    return this.discord;
-  }
+    // ─── Airdrop ────────────────────────────────────────────────────────────
+
+    app.get("/api/ring/airdrop/probability/:phase", (req: Request, res: Response) => {
+      const phase = parseInt(req.params.phase);
+      res.json({ phase, probability: ringManager.getAirdropProbability(phase) });
+    });
+
+    // ─── Discord ───────────────────────────────────────────────────────────
+
+    app.post("/api/ring/broadcast", async (req: Request, res: Response) => {
+      const { eventType, data } = req.body;
+      await ringManager.broadcastToDiscord(eventType, data);
+      res.json({ ok: true, broadcast: ringManager.broadcastEnabled });
+    });
+
+    app.get("/api/ring/discord/status", (_req: Request, res: Response) => {
+      res.json({ 
+        enabled: ringManager.broadcastEnabled, 
+        webhookConfigured: !!process.env.DISCORD_WEBHOOK_URL 
+      });
+    });
+  };
+
+  return { ringManager, router };
 }

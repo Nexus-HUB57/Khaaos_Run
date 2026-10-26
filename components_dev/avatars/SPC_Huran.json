@@ -1,424 +1,156 @@
 {
   "id": "SPC_Huran",
   "name": "Huran",
-  "codename": "HURAN_PHD",
   "type": "amphibian",
-  "species_tag": "Species.Huran",
-  "lore": {
-    "origin": "Os Huran emergiram dos Oceanos de Barburhen - o unico mundo com 80% de superficie aquatica. Anfibios de sangue frio com sistema circulacao triplo, podem sobreviver em agua, terra e ambientes toxicos. Com 5.600 ciclos, sao a especie mais antiga.",
-    "culture": "Civilizacao pelagica com cidades-submarinas de coral bioluminescente. Governo pelo Conselho das Mares - 7 anciaoos que comunicam através de canto subaquatico. A superficie e o seco - lugar de necessidade, nao de escolha.",
-    "motivation": "Proteger os oceanos de Barburhen. No Battle Royale, buscam zonas aquaticas para maximizar regeneracao.",
-    "relationship_with_khaaos": "O Pulso Khaaos tem propriedades aquaticas em Barburhen - o oceano reage com ondas anomales. Os Huran acreditam que o Pulso e o cantico das profundezas."
-  },
-  "base_stats": {
-    "health": 90,
-    "energy": 90,
-    "speed": 0.95,
-    "stamina": 110,
-    "armor_base": 5,
-    "shield_capacity": 0,
-    "regen_health_per_sec": 1.2,
-    "regen_energy_per_sec": 0.8,
-    "regen_stamina_per_sec": 2.0,
-    "crit_chance": 0.05,
-    "crit_multiplier": 1.4
-  },
-  "stat_curves": {
-    "health_per_level": [
-      90,
-      100,
-      112,
-      126,
-      142,
-      160,
-      181,
-      205,
-      232,
-      263
-    ],
-    "energy_per_level": [
-      90,
-      98,
-      107,
-      117,
-      128,
-      140,
-      154,
-      169,
-      186,
-      205
-    ],
-    "speed_per_level": [
-      0.95,
-      0.97,
-      0.99,
-      1.02,
-      1.05,
-      1.09,
-      1.13,
-      1.18,
-      1.24,
-      1.3
-    ]
-  },
-  "physical": {
-    "height_cm": 175,
-    "weight_kg": 70,
-    "skeleton": "SK_Gwen",
-    "morph_targets": [
-      "MT_Huran_Aquatic",
-      "MT_Huran_Terrestrial",
-      "MT_Huran_Toxic"
-    ],
-    "ik_settings": {
-      "foot_ik_enabled": true,
-      "foot_ik_trace_distance": 45.0,
-      "hand_ik_enabled": true,
-      "hand_ik_reach_radius": 42.0,
-      "full_body_ik_blend": 0.85
-    },
-    "clothing_physics": {
-      "cloth_sim_enabled": true,
-      "cloth_wind_scale": 1.2,
-      "cloth_damping": 0.25,
-      "cloth_stiffness": 0.5,
-      "loose_parts": [
-        "membrane_fins",
-        "wet_cloak",
-        "ankle_wraps"
-      ]
-    }
-  },
-  "passive": {
-    "name": "Regeneracao Anfibia",
-    "description": "+100% health regen na agua. Toxina immunity 50%. Apos 5s sem dano, +50% regen. Swim speed +40%.",
-    "tag": "Ability.Passive.Species.Huran.RegeneracaoAnfibial",
-    "class": "KhaaosAbility_HuranPassive",
-    "mechanics": [
-      {
-        "trigger": "in_water",
-        "effect": "regen_multiplier",
-        "value": 2.0
-      },
-      {
-        "trigger": "on_toxin_damage",
-        "effect": "damage_reduction",
-        "value": 0.5
-      },
-      {
-        "trigger": "5s_no_damage",
-        "effect": "regen_boost",
-        "value": 0.5
-      },
-      {
-        "trigger": "swimming",
-        "effect": "speed_bonus",
-        "value": 0.4
-      }
-    ]
-  },
-  "active_abilities": [
-    {
-      "name": "Onda Toxica",
-      "tag": "Ability.Active.Huran.OndaToxica",
-      "cooldown": 12.0,
-      "energy_cost": 25,
-      "duration": 5.0,
-      "description": "Nuvem toxica 8m - 8 dano/s + -15% speed inimigos 5s.",
-      "vfx": "VFX_Huran_ToxicWave",
-      "sfx": "SFX_Huran_ToxicWave"
-    },
-    {
-      "name": "Mergulho Curativo",
-      "tag": "Ability.Active.Huran.MergulhoCurativo",
-      "cooldown": 22.0,
-      "energy_cost": 35,
-      "duration": 4.0,
-      "description": "Mergulha - regenera 15HP/s 4s. Invisivel underwater. CC immune.",
-      "vfx": "VFX_Huran_HealingDive",
-      "sfx": "SFX_Huran_HealingDive"
-    },
-    {
-      "name": "Tsunami Khaael",
-      "tag": "Ability.Active.Huran.TsunamiKhaael",
-      "cooldown": 55.0,
-      "energy_cost": 55,
-      "duration": 10.0,
-      "description": "Ultimate: Onda 20m - knockback 15m, 25 dano/s, alaga zona 10s.",
-      "vfx": "VFX_Huran_TsunamiKhaael",
-      "sfx": "SFX_Huran_TsunamiKhaael"
-    }
-  ],
+  "base_health": 110,
+  "base_energy": 90,
+  "base_speed": 1.0,
+  "height_cm": 168,
+  "weight_kg": 60,
+  "skeleton": "SK_Gwen",
+  "passive": "Regeneração Anfíbia — +5 HP/s na água",
   "skins": [
     {
       "id": "SKN_Huran_Recruta",
-      "name": "Recruta Anfibio",
+      "name": "Recruta",
       "rarity": "COMUM",
-      "color_primary": "#3B82F6",
-      "color_secondary": "#1E3A5F",
-      "color_accent": "#93C5FD",
-      "color_emissive": "#000000",
-      "material_override": null,
-      "unlock_rank": "RECRUTA",
-      "description": "Pele azul-anfibia natural. Membranas interdigitais."
+      "color_primary": "#84CC16",
+      "color_accent": "#D9F99D",
+      "unlock_rank": "RECRUTA"
     },
     {
       "id": "SKN_Huran_Veterano",
-      "name": "Veterano Pelagico",
+      "name": "Veterano",
       "rarity": "RARO",
-      "color_primary": "#1D4ED8",
-      "color_secondary": "#1E3A8A",
-      "color_accent": "#BFDBFE",
-      "color_emissive": "#2563EB",
-      "material_override": "MAT_Huran_Veterano_CoralArmor",
-      "unlock_rank": "HURAN",
-      "description": "Armadura de coral vivo - bioluminescencia azul."
+      "color_primary": "#65A30D",
+      "color_accent": "#BEF264",
+      "unlock_rank": "HURAN"
     },
     {
       "id": "SKN_Huran_CIGKV_Elite",
-      "name": "CIGKV Elite Oceanico",
+      "name": "CIGKV Elite",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
-      "color_secondary": "#4C1D95",
       "color_accent": "#C4B5FD",
-      "color_emissive": "#8B5CF6",
-      "material_override": "MAT_Huran_Elite_DeepSea",
-      "unlock_rank": "VENEX",
-      "description": "Armadura das profundezas - pressao adaptativa."
+      "unlock_rank": "VENEX"
     },
     {
       "id": "SKN_Huran_Guarda_Overlord",
-      "name": "Guarda Overlord Marinho",
+      "name": "Guarda Overlord",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
-      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "color_emissive": "#FBBF24",
-      "material_override": "MAT_Huran_Overlord_AbyssalGold",
-      "unlock_rank": "ONITH",
-      "description": "Ouro abissal - armadura forjada nas fossas."
+      "unlock_rank": "ONITH"
     },
     {
       "id": "SKN_Huran_Khaaos_Prime",
-      "name": "Abismo Khaael",
+      "name": "Khaaos Prime",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
-      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "color_emissive": "#DC2626",
-      "material_override": "MAT_Huran_KhaaosPrime_VoidTide",
-      "unlock_rank": "MALAKOR",
-      "description": "Maré do vazio - agua interdimensional. Distorcao temporal."
+      "unlock_rank": "MALAKOR"
     }
   ],
-  "animations": {
-    "base_skeleton": "SK_Gwen",
-    "blend_spaces": [
-      {
-        "id": "BS_Huran_Move",
-        "type": "2D",
-        "axes": [
-          "Speed",
-          "Direction"
-        ],
-        "samples": 9
-      },
-      {
-        "id": "BS_Huran_Swim",
-        "type": "2D",
-        "axes": [
-          "SwimSpeed",
-          "Depth"
-        ],
-        "samples": 8
-      }
-    ],
-    "anim_sequences": [
-      {
-        "id": "ANM_Huran_idle",
-        "name": "idle",
-        "duration": 1.5,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_walk",
-        "name": "walk",
-        "duration": 0.8,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_run",
-        "name": "run",
-        "duration": 0.6,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_sprint",
-        "name": "sprint",
-        "duration": 0.45,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_slide",
-        "name": "slide",
-        "duration": 0.7,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_crouch_idle",
-        "name": "crouch_idle",
-        "duration": 1.2,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_crouch_walk",
-        "name": "crouch_walk",
-        "duration": 1.0,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_jump_start",
-        "name": "jump_start",
-        "duration": 0.3,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_jump_loop",
-        "name": "jump_loop",
-        "duration": 0.25,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_jump_land",
-        "name": "jump_land",
-        "duration": 0.25,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_mantle",
-        "name": "mantle",
-        "duration": 0.6,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_vault",
-        "name": "vault",
-        "duration": 0.4,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_shoot_rifle",
-        "name": "shoot_rifle",
-        "duration": 0.15,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_reload",
-        "name": "reload",
-        "duration": 2.0,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_melee_swing",
-        "name": "melee_swing",
-        "duration": 0.4,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_downed",
-        "name": "downed",
-        "duration": 1.0,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_eliminated",
-        "name": "eliminated",
-        "duration": 1.5,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_revive",
-        "name": "revive",
-        "duration": 3.0,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_loot_pickup",
-        "name": "loot_pickup",
-        "duration": 0.6,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_throw_grenade",
-        "name": "throw_grenade",
-        "duration": 0.5,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_swim_surface",
-        "name": "swim_surface",
-        "duration": 0.7,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_swim_underwater",
-        "name": "swim_underwater",
-        "duration": 0.8,
-        "loop": true
-      },
-      {
-        "id": "ANM_Huran_toxic_wave",
-        "name": "toxic_wave",
-        "duration": 0.7,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_healing_dive",
-        "name": "healing_dive",
-        "duration": 1.0,
-        "loop": false
-      },
-      {
-        "id": "ANM_Huran_tsunami_khaael",
-        "name": "tsunami_khaael",
-        "duration": 2.0,
-        "loop": false
-      }
-    ]
-  },
-  "audio": {
-    "footstep_surfaces": {
-      "metal": "SFX_FStep_Metal_Wet",
-      "dirt": "SFX_FStep_Mud",
-      "concrete": "SFX_FStep_Concrete_Wet",
-      "water": "SFX_FStep_Water_Swim"
+  "animations": [
+    {
+      "id": "ANM_SPC_Huran_01",
+      "name": "idle",
+      "skeleton": "SK_Gwen"
     },
-    "voice_lines": {
-      "eliminate": "VO_Huran_Elim",
-      "eliminated": "VO_Huran_Down",
-      "revive": "VO_Huran_Revive",
-      "ultimate": "VO_Huran_Ult"
+    {
+      "id": "ANM_SPC_Huran_02",
+      "name": "walk",
+      "skeleton": "SK_Gwen"
     },
-    "ambient_emitter": "SFX_Huran_Ambient_WaterDrip"
-  },
-  "vfx": {
-    "passive_indicator": "VFX_Huran_RegenGlow",
-    "ability_1": "VFX_Huran_ToxicWave",
-    "ability_2": "VFX_Huran_HealingDive",
-    "ultimate": "VFX_Huran_TsunamiKhaael",
-    "death": "VFX_Huran_DeathSplash",
-    "spawn": "VFX_Huran_SpawnBarburhen"
-  },
-  "available_worlds": [
-    "CIGKV",
-    "Barburhen",
-    "Priadus",
-    "Ckesalth",
-    "Arukheea"
-  ],
-  "meta": {
-    "design_tier": "PhD",
-    "balance_version": "2.0",
-    "designer": "Nexus-HUB57"
-  }
+    {
+      "id": "ANM_SPC_Huran_03",
+      "name": "run",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_04",
+      "name": "sprint",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_05",
+      "name": "slide",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_06",
+      "name": "jump_start",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_07",
+      "name": "jump_loop",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_08",
+      "name": "jump_land",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_09",
+      "name": "shoot_rifle",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_10",
+      "name": "shoot_sniper",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_11",
+      "name": "shoot_shotgun",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_12",
+      "name": "reload",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_13",
+      "name": "melee",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_14",
+      "name": "downed",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_15",
+      "name": "eliminated",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_16",
+      "name": "revive",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_17",
+      "name": "grappling_hook",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_18",
+      "name": "shield_activate",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_19",
+      "name": "heal_use",
+      "skeleton": "SK_Gwen"
+    },
+    {
+      "id": "ANM_SPC_Huran_20",
+      "name": "loot_pickup",
+      "skeleton": "SK_Gwen"
+    }
+  ]
 }

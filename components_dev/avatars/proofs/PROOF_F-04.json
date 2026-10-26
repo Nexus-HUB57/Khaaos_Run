@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F004",
+  "operative_id": "F-04",
+  "codename": "KHL-02",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Khael",
+    "name": "Khael",
+    "type": "mystic",
+    "skeleton": "SK_Gwen",
+    "passive": "Energia Khaael - custo de habilidade -20%",
+    "base_stats": {
+      "health": 70,
+      "energy": 150,
+      "speed": 0.95
+    },
+    "physical": {
+      "height_cm": 178,
+      "weight_kg": 65
+    },
+    "abbr": "KHL"
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "VENEX",
+  "specialization": "Defesa e Barreira Energetica",
+  "ethnicity": {
+    "label": "Senegalesa/Wolof",
+    "heritage": "Wolof/Dakar (paterno) + Serer/Sine (materno)",
+    "region": "Dakar, Senegal / Africa Ocidental",
+    "cultural_fusion": "Tradies espirituais Wolof (Teranga) combinadas com poder Khael de barreira. Nome Amara (graciosa/imortal) + Diallo (linhagem Wolof nobre)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom muito escuro (#3E2723) com subtom azul frio - distinctive cool undertone unico em pele muito escura",
+    "hair": "Trancas curtas com contas de cowrie shell, fios de energia Khael entrelacados (brilham violeta) nas trancas",
+    "eyes": "Castanho muito escuro com PULSO violeta Khael na iris - pulsacao lenta, ritmica, hypnotic",
+    "facial_structure": "Rosto angular e regal, testa alta, mandibula definida, nariz estreito e angular, sobrancelhas definidas",
+    "body_type": "Alta e commanding - 173 cm, 60 kg. Maior presenca feminina, frame Khael esguio mas imponente",
+    "distinctive_silhouette": "Postura de guardian - ereta, maos em posicao de shield-ready, energia Khael forma halo fraco ao redor da cabeca quando em defensive stance."
+  },
+  "cultural_markers": {
+    "tattoos": "Scarificado tribal Wolof nas temporas - 4 linhas verticais cada lado (tradio Serer/Wolof - rito de nobreza)",
+    "scars": "Marca/scarificado ritualistica intencional (nao cicatriz de combate) - marca de casta Diallo no antebrao esquerdo",
+    "ornaments": "Contas de cowrie em trancas e no pescoco (Teranga + espiritualidade Wolof), anel de ouro com ambar senegales no indicador direito",
+    "clothing_style": "Vestes misticas fluidas com patterns textiles da Africa Ocidental - woven Kente-inspired, cowrie accents, draped silhouette, visual de guardian-real"
+  },
+  "species_traits": {
+    "visible_modification": "HALO de energia Khael visivel durante ability use - anel de luz violeta ao redor da cabeca, intensidade proporcional a barrier strength",
+    "passive_manifestation": "Energia Khaael mais controlada - barrier duration longest do roster; custo -20% permite barrier uptime extendido; energia visivel como filamentos violeta nas trancas",
+    "combat_style_id": "Estilo guardian-barrier - shield de area, barreira direcional, zone denial. Halo = IFF marker para allies. Maior barrier uptime do roster."
+  },
+  "distinguishing_summary": "Unica Senegalesa Wolof; scarificacao 4 linhas nas temporas; subtom AZUL FRIO na pele (unico); HALO violeta Khael; trancas com cowrie; pulso violeta ritmico na iris; maior presenca feminina commanding; visual guardian-real Kente",
+  "generated_at": "2026-10-22T13:30:29.512032+00:00",
+  "ref_code": "KHL-02",
+  "operative_ref": "OP_KHL_F_02",
+  "avatar_ref": "AVT_KHL_F_02",
+  "legacy_codename": "AMARA DIALLO",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298106+00:00"
+}

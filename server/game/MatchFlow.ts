@@ -1,534 +1,631 @@
 /**
- * KHAAOS RUN — Match Flow
- * =======================
- * Full match lifecycle orchestrator.
- * LOBBY → COUNTDOWN → IN_PROGRESS → WORLD_TRANSITION → FINISHED
+ * KHAAOS RUN — Match Flow Orchestrator
+ * =====================================
+ * Full match lifecycle orchestrator connecting all subsystems:
+ *
+ *   LOBBY → COUNTDOWN → IN_PROGRESS → WORLD_TRANSITION → FINISHED
+ *
+ * Integrates:
+ *   - EconomyMatchBridge (kill rewards, phase survival, transition costs)
+ *   - SpectatorDataPipeline (delayed batched data)
+ *   - DiscordBot (event broadcasting)
+ *   - RingStateManager (zone shrinking)
+ *
+ * Multi-World Pipeline:
+ *   CIGKV(50p) → W1_Barburhen(100p) → W2_Priadus(75p) → W3_Ckesalth(60p) → W4_Arukheea(80p)
+ *
+ * Match phases:
+ *   0: Initial safe zone
+ *   1-3: Ring shrinking (increasing damage)
+ *   4: Final ring (sudden death)
+ *   5+: Overtime (max damage)
  */
 
-import { EconomyMatchBridge, type Species, type KillRarity } from "./EconomyMatchBridge";
-import { DiscordBot, type DiscordEventType } from "./DiscordBot";
-import { SpectatorDataPipeline } from "./SpectatorDataPipeline";
+import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvivalEvent, type WorldTransitionEvent } from "./EconomyMatchBridge";
+import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
+import { DiscordBot } from "./DiscordBot";
 
-// ─── Match Status ────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
-export type MatchStatus =
-  | "LOBBY"
-  | "COUNTDOWN"
-  | "IN_PROGRESS"
-  | "WORLD_TRANSITION"
-  | "FINISHED";
-
-// ─── World Pipeline ──────────────────────────────────────────────────────────
-
-export interface WorldConfig {
-  worldId: string;
-  capacity: number;
-  hasWaterZones?: boolean;
-}
-
-export const DEFAULT_WORLD_PIPELINE: WorldConfig[] = [
-  { worldId: "cigkv",    capacity: 50 },
-  { worldId: "barburhen", capacity: 100 },
-  { worldId: "priadus",  capacity: 75 },
-  { worldId: "ckesalth", capacity: 60 },
-  { worldId: "arukheea", capacity: 80 },
-];
-
-// ─── Ring Phases ─────────────────────────────────────────────────────────────
-
-export const RING_PHASES = [
-  { phase: 1, damagePerTick: 1,  shrinkPercent: 10, startDelay: 120 },
-  { phase: 2, damagePerTick: 3,  shrinkPercent: 15, startDelay: 90 },
-  { phase: 3, damagePerTick: 5,  shrinkPercent: 20, startDelay: 60 },
-  { phase: 4, damagePerTick: 10, shrinkPercent: 25, startDelay: 45 },
-  { phase: 5, damagePerTick: 25, shrinkPercent: 30, startDelay: 30 },
-];
-
-// ─── Match Player ────────────────────────────────────────────────────────────
+export type MatchStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "WORLD_TRANSITION" | "FINISHED";
 
 export interface MatchPlayer {
-  playerId: string;
-  species: Species;
+  id: string;
+  displayName: string;
+  species: SpeciesKey;
+  skinRarity: string;
   health: number;
+  maxHealth: number;
   shield: number;
   isDowned: boolean;
   isEliminated: boolean;
   kills: number;
-  damageDealt: number;
-  joinedAt: number;
+  posX: number;
+  posY: number;
+  inWaterZone: boolean;
+  worldId: string;
+  phasesSurvived: number;
+  krcEarned: number;
+  lastDamageAt: number;
 }
 
-// ─── Kill Event ──────────────────────────────────────────────────────────────
-
-export interface KillEvent {
-  killerId: string;
-  victimId: string;
-  damage: number;
-  weapon: string;
-  timestamp: number;
-  victimWasDowned: boolean;
-  reward?: number;
+export interface MatchWorld {
+  worldId: string;
+  worldName: string;
+  capacity: number;
+  currentPhase: number;
+  currentRadius: number;
+  damagePerTick: number;
+  isShrinking: boolean;
 }
 
-// ─── Match Event ─────────────────────────────────────────────────────────────
+export interface MatchState {
+  roomId: string;
+  status: MatchStatus;
+  currentWorldIndex: number;
+  worlds: MatchWorld[];
+  players: Map<string, MatchPlayer>;
+  countdownSeconds: number;
+  matchStartTime: number;
+  matchEndTime: number | null;
+  totalEliminations: number;
+  winnerId: string | null;
+  tickCount: number;
+}
 
-export type MatchEvent =
-  | { type: "PLAYER_JOINED"; playerId: string; timestamp: number }
-  | { type: "COUNTDOWN_STARTED"; seconds: number; timestamp: number }
-  | { type: "MATCH_STARTED"; timestamp: number }
-  | { type: "KILL"; event: KillEvent; timestamp: number }
-  | { type: "PLAYER_DOWNED"; playerId: string; timestamp: number }
-  | { type: "PLAYER_REVIVED"; playerId: string; timestamp: number }
-  | { type: "PLAYER_ELIMINATED"; playerId: string; timestamp: number }
-  | { type: "RING_PHASE"; phase: number; timestamp: number }
-  | { type: "WORLD_TRANSITION"; fromWorld: string; toWorld: string; timestamp: number }
-  | { type: "MATCH_ENDED"; winnerId: string | null; timestamp: number };
-
-// ─── Match Flow Config ───────────────────────────────────────────────────────
-
-export interface MatchFlowConfig {
-  maxPlayers?: number;
+export interface MatchConfig {
+  roomId: string;
   countdownSeconds?: number;
-  downedEliminateTimeoutMs?: number;
   tickIntervalMs?: number;
-  worldPipeline?: WorldConfig[];
+  /** Multi-world pipeline order */
+  worldPipeline?: { worldId: string; worldName: string; capacity: number }[];
+  /** Maximum players */
+  maxPlayers?: number;
+  /** Ring phases per world */
+  ringPhasesPerWorld?: number;
+  /** Seconds per ring phase before shrink */
+  phaseDurationSeconds?: number;
 }
 
-// ─── MatchFlow Class ─────────────────────────────────────────────────────────
+// ─── Default World Pipeline ─────────────────────────────────────────────────
+
+export const DEFAULT_WORLD_PIPELINE = [
+  { worldId: "cigkv",      worldName: "CIGKV",      capacity: 50  },
+  { worldId: "barburhen",  worldName: "Barburhen",  capacity: 100 },
+  { worldId: "priadus",    worldName: "Priadus",    capacity: 75  },
+  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: 60  },
+  { worldId: "arukheea",   worldName: "Arukheea",   capacity: 80  },
+];
+
+// ─── Match Ring Phase Config ────────────────────────────────────────────────
+
+const RING_PHASES = [
+  { radiusStart: 800, radiusEnd: 500, durationS: 120, damagePerTick: 1  },
+  { radiusStart: 500, radiusEnd: 300, durationS: 90,  damagePerTick: 3  },
+  { radiusStart: 300, radiusEnd: 150, durationS: 60,  damagePerTick: 5  },
+  { radiusStart: 150, radiusEnd: 50,  durationS: 45,  damagePerTick: 10 },
+  { radiusStart: 50,  radiusEnd: 0,   durationS: 30,  damagePerTick: 25 },
+];
+
+// ─── MatchFlow Class ────────────────────────────────────────────────────────
 
 export class MatchFlow {
-  // Core state
-  private matchId: string;
-  private status: MatchStatus = "LOBBY";
-  private players: Map<string, MatchPlayer> = new Map();
-  private currentWorldIndex = 0;
-  private currentRingPhase = 0;
+  private state: MatchState;
+  private economyBridge: EconomyMatchBridge;
+  private spectatorPipeline: SpectatorDataPipeline | null;
+  private discordBot: DiscordBot | null;
+  private tickInterval: ReturnType<typeof setInterval> | null = null;
+  private config: Required<MatchConfig>;
+  private tickListeners: Array<(state: MatchState) => void> = [];
+  private eventLog: Array<{ type: string; data: Record<string, any>; timestamp: number }> = [];
 
-  // Configuration
-  private maxPlayers: number;
-  private countdownSeconds: number;
-  private downedEliminateTimeoutMs: number;
-  private tickIntervalMs: number;
-  private worldPipeline: WorldConfig[];
+  constructor(
+    config: MatchConfig,
+    economyBridge: EconomyMatchBridge,
+    spectatorPipeline?: SpectatorDataPipeline,
+    discordBot?: DiscordBot,
+  ) {
+    this.config = {
+      roomId: config.roomId,
+      countdownSeconds: config.countdownSeconds ?? 30,
+      tickIntervalMs: config.tickIntervalMs ?? 1000,
+      worldPipeline: config.worldPipeline ?? DEFAULT_WORLD_PIPELINE,
+      maxPlayers: config.maxPlayers ?? 100,
+      ringPhasesPerWorld: config.ringPhasesPerWorld ?? 5,
+      phaseDurationSeconds: config.phaseDurationSeconds ?? 120,
+    };
 
-  // Subsystems
-  private economy: EconomyMatchBridge;
-  private discord: DiscordBot;
-  private spectator: SpectatorDataPipeline;
+    this.economyBridge = economyBridge;
+    this.spectatorPipeline = spectatorPipeline ?? null;
+    this.discordBot = discordBot ?? null;
 
-  // Timers
-  private countdownTimer: ReturnType<typeof setTimeout> | null = null;
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
-  private downedTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    // Initialize match state
+    const worlds: MatchWorld[] = this.config.worldPipeline.map((w) => ({
+      worldId: w.worldId,
+      worldName: w.worldName,
+      capacity: w.capacity,
+      currentPhase: 0,
+      currentRadius: RING_PHASES[0].radiusStart,
+      damagePerTick: 0,
+      isShrinking: false,
+    }));
 
-  // Event tracking
-  private killLog: KillEvent[] = [];
-  private eventLog: MatchEvent[] = [];
+    this.state = {
+      roomId: config.roomId,
+      status: "LOBBY",
+      currentWorldIndex: 0,
+      worlds,
+      players: new Map(),
+      countdownSeconds: this.config.countdownSeconds,
+      matchStartTime: 0,
+      matchEndTime: null,
+      totalEliminations: 0,
+      winnerId: null,
+      tickCount: 0,
+    };
 
-  // Match metadata
-  private matchStartTime = 0;
-  private matchEndTime = 0;
-
-  constructor(matchId: string, config?: MatchFlowConfig) {
-    this.matchId = matchId;
-    this.maxPlayers = config?.maxPlayers ?? 100;
-    this.countdownSeconds = config?.countdownSeconds ?? 10;
-    this.downedEliminateTimeoutMs = config?.downedEliminateTimeoutMs ?? 30000;
-    this.tickIntervalMs = config?.tickIntervalMs ?? 1000;
-    this.worldPipeline = config?.worldPipeline ?? DEFAULT_WORLD_PIPELINE;
-
-    // Initialize subsystems
-    this.economy = new EconomyMatchBridge(matchId);
-    this.discord = new DiscordBot({ webhookUrl: process.env.DISCORD_WEBHOOK_URL });
-    this.spectator = new SpectatorDataPipeline();
-
-    this.economy.initMatchEconomy();
+    // Initialize economy tracking
+    this.economyBridge.initMatchEconomy(config.roomId);
   }
 
-  // ─── Player Management ─────────────────────────────────────────────────────
+  // ─── Match Lifecycle ──────────────────────────────────────────────────────
 
-  /** Add a player to the lobby */
-  joinPlayer(playerId: string, species: Species): boolean {
-    if (this.status !== "LOBBY") return false;
-    if (this.players.has(playerId)) return false;
-    if (this.players.size >= this.maxPlayers) return false;
+  /**
+   * Add a player to the lobby.
+   */
+  joinPlayer(player: Omit<MatchPlayer, "health" | "maxHealth" | "shield" | "isDowned" | "isEliminated" | "kills" | "phasesSurvived" | "krcEarned" | "lastDamageAt">): boolean {
+    if (this.state.status !== "LOBBY") return false;
+    if (this.state.players.size >= this.config.maxPlayers) return false;
+    if (this.state.players.has(player.id)) return false;
 
-    const player: MatchPlayer = {
-      playerId,
-      species,
+    const fullPlayer: MatchPlayer = {
+      ...player,
       health: 100,
+      maxHealth: 100,
       shield: 50,
       isDowned: false,
       isEliminated: false,
       kills: 0,
-      damageDealt: 0,
-      joinedAt: Date.now(),
+      phasesSurvived: 0,
+      krcEarned: 0,
+      lastDamageAt: 0,
     };
 
-    this.players.set(playerId, player);
-    this.eventLog.push({ type: "PLAYER_JOINED", playerId, timestamp: Date.now() });
+    this.state.players.set(player.id, fullPlayer);
+    this.logEvent("PLAYER_JOIN", { playerId: player.id, species: player.species });
     return true;
   }
-
-  // ─── Match Lifecycle ───────────────────────────────────────────────────────
-
-  /** Start countdown: LOBBY → COUNTDOWN, auto-transitions to IN_PROGRESS */
-  startCountdown(): boolean {
-    if (this.status !== "LOBBY") return false;
-    if (this.players.size < 1) return false;
-
-    this.status = "COUNTDOWN";
-    this.eventLog.push({ type: "COUNTDOWN_STARTED", seconds: this.countdownSeconds, timestamp: Date.now() });
-
-    this.discord.sendMatchStart({
-      matchId: this.matchId,
-      worldId: this.getCurrentWorld().worldId,
-      playerCount: this.players.size,
-    });
-
-    // Auto-transition after countdown
-    this.countdownTimer = setTimeout(() => {
-      this.startMatch();
-    }, this.countdownSeconds * 1000);
-
-    return true;
-  }
-
-  /** Transition from COUNTDOWN to IN_PROGRESS */
-  private startMatch(): void {
-    if (this.status !== "COUNTDOWN") return;
-    this.status = "IN_PROGRESS";
-    this.matchStartTime = Date.now();
-    this.currentRingPhase = 1;
-    this.eventLog.push({ type: "MATCH_STARTED", timestamp: Date.now() });
-    this.eventLog.push({ type: "RING_PHASE", phase: 1, timestamp: Date.now() });
-
-    // Start tick loop
-    this.tickTimer = setInterval(() => {
-      this.tick();
-    }, this.tickIntervalMs);
-  }
-
-  // ─── Kill Processing ───────────────────────────────────────────────────────
 
   /**
-   * CRITICAL: Process a kill event.
-   * - Apply damage Shield→Health
-   * - If victim already downed, eliminate immediately
-   * - When victim health≤0: set isDowned=true, increment killer.kills++,
-   *   record economy reward IMMEDIATELY, send Discord kill feed
-   * - Auto-eliminate after 30s if not revived
+   * Start countdown → match.
    */
-  processKill(killerId: string, victimId: string, damage: number, weapon: string): KillEvent | null {
-    if (this.status !== "IN_PROGRESS") return null;
+  startCountdown(): void {
+    if (this.state.status !== "LOBBY") return;
+    this.state.status = "COUNTDOWN";
+    this.logEvent("COUNTDOWN_START", { seconds: this.config.countdownSeconds });
 
-    const killer = this.players.get(killerId);
-    const victim = this.players.get(victimId);
-    if (!killer || !victim) return null;
-    if (killer.isEliminated || killer.isDowned) return null;
-    if (victim.isEliminated) return null;
+    // Auto-transition to IN_PROGRESS after countdown
+    setTimeout(() => this.startMatch(), this.config.countdownSeconds * 1000);
+  }
 
-    const victimWasDowned = victim.isDowned;
+  /**
+   * Start the match — begin tick loop.
+   */
+  startMatch(): void {
+    if (this.state.status !== "COUNTDOWN") return;
 
-    // If victim was already downed, eliminate immediately
-    if (victimWasDowned) {
-      this.eliminatePlayer(victimId);
+    this.state.status = "IN_PROGRESS";
+    this.state.matchStartTime = Date.now();
+    this.logEvent("MATCH_START", { playerCount: this.state.players.size, world: this.getCurrentWorld().worldId });
 
-      const killEvent: KillEvent = {
-        killerId,
-        victimId,
-        damage,
-        weapon,
+    // Notify Discord
+    this.discordBot?.sendMatchStart(
+      this.state.roomId,
+      this.state.players.size,
+      this.getCurrentWorld().worldId
+    );
+
+    // Start tick loop
+    this.tickInterval = setInterval(() => this.tick(), this.config.tickIntervalMs);
+  }
+
+  /**
+   * Core tick — processes ring shrinking, damage, phase transitions.
+   */
+  private tick(): void {
+    this.state.tickCount++;
+    const world = this.getCurrentWorld();
+
+    // Process ring phase progression
+    this.processRingTick(world);
+
+    // Apply zone damage to players outside safe zone
+    this.applyZoneDamage(world);
+
+    // Check for phase survival rewards (every phaseDurationSeconds ticks)
+    if (this.state.tickCount % this.config.phaseDurationSeconds === 0) {
+      this.processPhaseSurvival(world);
+    }
+
+    // Push spectator data
+    this.pushSpectatorData();
+
+    // Check win condition
+    this.checkWinCondition();
+
+    // Notify tick listeners
+    for (const listener of this.tickListeners) {
+      listener(this.state);
+    }
+  }
+
+  /**
+   * Process ring shrinking for the current world.
+   */
+  private processRingTick(world: MatchWorld): void {
+    const phaseIdx = Math.min(world.currentPhase, RING_PHASES.length - 1);
+    const phaseConfig = RING_PHASES[phaseIdx];
+
+    if (world.currentRadius > phaseConfig.radiusEnd) {
+      // Shrink ring
+      const shrinkPerTick = (phaseConfig.radiusStart - phaseConfig.radiusEnd) / (phaseConfig.durationS);
+      world.currentRadius = Math.max(phaseConfig.radiusEnd, world.currentRadius - shrinkPerTick);
+      world.isShrinking = true;
+      world.damagePerTick = phaseConfig.damagePerTick;
+    } else {
+      // Phase complete, advance to next phase
+      if (world.currentPhase < RING_PHASES.length - 1) {
+        world.currentPhase++;
+        world.isShrinking = false;
+        this.logEvent("RING_PHASE_ADVANCE", { worldId: world.worldId, newPhase: world.currentPhase });
+
+        // Notify Discord
+        this.discordBot?.sendRingPhase(world.worldId, world.currentPhase, world.damagePerTick);
+      } else {
+        // Final ring — check if all phases done → world transition
+        this.checkWorldTransition();
+      }
+    }
+  }
+
+  /**
+   * Apply zone damage to players outside the safe zone.
+   */
+  private applyZoneDamage(world: MatchWorld): void {
+    if (world.damagePerTick === 0) return;
+
+    const safeRadius = world.currentRadius;
+    const ringCenter = [50, 50]; // center of map
+
+    for (const player of this.state.players.values()) {
+      if (player.isEliminated || player.isDowned) continue;
+      if (player.worldId !== world.worldId) continue;
+
+      // Calculate distance from ring center
+      const dx = player.posX - ringCenter[0];
+      const dy = player.posY - ringCenter[1];
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > safeRadius) {
+        // Player is in the danger zone
+        let damage = world.damagePerTick;
+
+        // Species trait: Huran takes 50% ring damage in water
+        if (player.species === "HURAN" && player.inWaterZone) {
+          damage *= 0.5;
+        }
+
+        // Apply damage: Shield → Health
+        if (player.shield > 0) {
+          const shieldDamage = Math.min(player.shield, damage);
+          player.shield -= shieldDamage;
+          damage -= shieldDamage;
+        }
+        player.health -= damage;
+        player.lastDamageAt = Date.now();
+
+        // Check downed/eliminated
+        if (player.health <= 0 && !player.isDowned) {
+          player.health = 0;
+          player.isDowned = true;
+          this.logEvent("PLAYER_DOWNED", { playerId: player.id, cause: "ZONE_DAMAGE" });
+        }
+      }
+    }
+  }
+
+  /**
+   * Process phase survival rewards for alive players.
+   */
+  private processPhaseSurvival(world: MatchWorld): void {
+    const phase = world.currentPhase + 1;
+
+    for (const player of this.state.players.values()) {
+      if (player.isEliminated || player.isDowned) continue;
+
+      const event: PhaseSurvivalEvent = {
+        playerId: player.id,
+        species: player.species,
+        phase,
+        worldId: world.worldId,
         timestamp: Date.now(),
-        victimWasDowned: true,
       };
 
-      // IMMEDIATELY credit kill and economy
-      killer.kills++;
-      killer.damageDealt += damage;
+      const reward = this.economyBridge.calculatePhaseSurvivalReward(event);
+      this.economyBridge.recordReward(this.state.roomId, reward);
+      this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
+      player.krcEarned += reward.krcAmount;
+      player.phasesSurvived++;
+    }
+  }
 
-      const rewardBreakdown = this.economy.calculateKillReward({
-        killerSpecies: killer.species,
-        victimWasDowned: true,
-      });
-      const reward = this.economy.recordReward({
-        playerId: killerId,
-        type: "KILL",
-        amount: rewardBreakdown.total,
-        breakdown: rewardBreakdown,
-      });
-      killEvent.reward = reward.amount;
+  // ─── Kill / Damage Pipeline ───────────────────────────────────────────────
 
-      this.killLog.push(killEvent);
-      this.eventLog.push({ type: "KILL", event: killEvent, timestamp: Date.now() });
+  /**
+   * Process a kill event through the full pipeline:
+   *   Damage → Shield → Health → Downed(30s bleed-out) → Eliminate / Revive
+   */
+  processKill(killerId: string, victimId: string, damage: number, weapon: string): void {
+    const killer = this.state.players.get(killerId);
+    const victim = this.state.players.get(victimId);
+    if (!killer || !victim || victim.isEliminated) return;
 
-      // Send Discord kill feed
-      this.discord.sendKillFeed({
-        killerId,
-        killerName: killerId,
-        victimId,
-        victimName: victimId,
-        weapon,
-      });
-
-      return killEvent;
+    // If victim is already downed, this is a finish-off (eliminate immediately)
+    if (victim.isDowned) {
+      this.eliminatePlayer(killerId, victimId, weapon);
+      return;
     }
 
     // Apply damage: Shield → Health
     let remainingDamage = damage;
-
     if (victim.shield > 0) {
-      if (remainingDamage <= victim.shield) {
-        victim.shield -= remainingDamage;
-        remainingDamage = 0;
-      } else {
-        remainingDamage -= victim.shield;
-        victim.shield = 0;
-      }
+      const shieldAbsorbed = Math.min(victim.shield, remainingDamage);
+      victim.shield -= shieldAbsorbed;
+      remainingDamage -= shieldAbsorbed;
     }
+    victim.health -= remainingDamage;
+    victim.lastDamageAt = Date.now();
 
-    if (remainingDamage > 0) {
-      victim.health -= remainingDamage;
-    }
-
-    killer.damageDealt += damage;
-
-    // Check if victim is downed (health ≤ 0)
-    if (victim.health <= 0) {
+    if (victim.health <= 0 && !victim.isDowned) {
+      // Victim is downed — immediately credit killer and record economy
       victim.health = 0;
       victim.isDowned = true;
-      this.eventLog.push({ type: "PLAYER_DOWNED", playerId: victimId, timestamp: Date.now() });
-
-      // IMMEDIATELY credit kill and economy
       killer.kills++;
+      this.state.totalEliminations++;
+      this.logEvent("PLAYER_DOWNED", { victimId, killerId, weapon });
 
-      const rewardBreakdown = this.economy.calculateKillReward({
-        killerSpecies: killer.species,
-        victimWasDowned: false,
-      });
-      const reward = this.economy.recordReward({
-        playerId: killerId,
-        type: "KILL",
-        amount: rewardBreakdown.total,
-        breakdown: rewardBreakdown,
-      });
-
+      // Record kill economy reward immediately (full reward, not downed modifier)
       const killEvent: KillEvent = {
         killerId,
         victimId,
-        damage,
-        weapon,
+        victimSpecies: victim.species,
+        victimSkinRarity: victim.skinRarity,
+        victimInWater: victim.inWaterZone,
+        victimWasDowned: false, // Fresh down, not a finish-off
         timestamp: Date.now(),
-        victimWasDowned: false,
-        reward: reward.amount,
+        worldId: this.getCurrentWorld().worldId,
+        phase: this.getCurrentWorld().currentPhase,
       };
 
-      this.killLog.push(killEvent);
-      this.eventLog.push({ type: "KILL", event: killEvent, timestamp: Date.now() });
+      const reward = this.economyBridge.calculateKillReward(killEvent);
+      this.economyBridge.recordReward(this.state.roomId, reward);
+      this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
+      killer.krcEarned += reward.krcAmount;
 
-      // Send Discord kill feed
-      this.discord.sendKillFeed({
-        killerId,
-        killerName: killerId,
-        victimId,
-        victimName: victimId,
-        weapon,
-      });
+      // Discord kill feed
+      this.discordBot?.sendKillFeed(
+        killer.displayName,
+        killer.species,
+        victim.displayName,
+        victim.species,
+        weapon
+      );
 
-      // Auto-eliminate after timeout
-      this.downedTimers.set(victimId, setTimeout(() => {
+      // Auto-eliminate after 30 seconds if not revived
+      setTimeout(() => {
         if (victim.isDowned && !victim.isEliminated) {
-          this.eliminatePlayer(victimId);
+          this.eliminatePlayer(killerId, victimId, weapon);
         }
-      }, this.downedEliminateTimeoutMs));
-
-      return killEvent;
+      }, 30_000);
     }
-
-    // Victim not downed yet — damage applied
-    const killEvent: KillEvent = {
-      killerId,
-      victimId,
-      damage,
-      weapon,
-      timestamp: Date.now(),
-      victimWasDowned: false,
-    };
-
-    this.killLog.push(killEvent);
-    this.eventLog.push({ type: "KILL", event: killEvent, timestamp: Date.now() });
-
-    return killEvent;
   }
 
-  /** Eliminate a downed player (kill credit already given) */
-  eliminatePlayer(playerId: string): boolean {
-    const player = this.players.get(playerId);
-    if (!player) return false;
-    if (player.isEliminated) return false;
+  /**
+   * Eliminate a downed player (ragdoll).
+   */
+  private eliminatePlayer(killerId: string, victimId: string, weapon: string): void {
+    const victim = this.state.players.get(victimId);
+    if (!victim || victim.isEliminated) return;
 
-    player.isEliminated = true;
-    player.isDowned = true;
-    this.eventLog.push({ type: "PLAYER_ELIMINATED", playerId, timestamp: Date.now() });
+    // If victim was already downed, kill credit and economy were already given in processKill.
+    // This just transitions to full elimination (ragdoll state).
+    victim.isEliminated = true;
+    victim.isDowned = false;
 
-    // Clear downed timer
-    const timer = this.downedTimers.get(playerId);
-    if (timer) {
-      clearTimeout(timer);
-      this.downedTimers.delete(playerId);
-    }
-
-    return true;
+    this.logEvent("PLAYER_ELIMINATED", { killerId, victimId, weapon });
   }
 
-  /** Revive a downed player with 30 HP */
-  revivePlayer(playerId: string): boolean {
-    const player = this.players.get(playerId);
-    if (!player) return false;
-    if (!player.isDowned) return false;
-    if (player.isEliminated) return false;
+  /**
+   * Revive a downed player.
+   */
+  revivePlayer(playerId: string, reviverId: string): boolean {
+    const player = this.state.players.get(playerId);
+    if (!player || !player.isDowned || player.isEliminated) return false;
 
     player.isDowned = false;
-    player.health = 30;
-
-    // Clear downed timer
-    const timer = this.downedTimers.get(playerId);
-    if (timer) {
-      clearTimeout(timer);
-      this.downedTimers.delete(playerId);
-    }
-
-    this.eventLog.push({ type: "PLAYER_REVIVED", playerId, timestamp: Date.now() });
+    player.health = 30; // Revive with 30 HP
+    this.logEvent("PLAYER_REVIVED", { playerId, reviverId });
     return true;
   }
 
-  // ─── Tick Loop ─────────────────────────────────────────────────────────────
+  // ─── World Transition ─────────────────────────────────────────────────────
 
-  /** Match tick: ring shrinking, zone damage, phase survival rewards, spectator data push, win condition */
-  private tick(): void {
-    if (this.status !== "IN_PROGRESS") return;
+  /**
+   * Check if conditions are met for world transition.
+   * Trigger: final ring phase completed on current world.
+   */
+  private checkWorldTransition(): void {
+    const canTransition = this.state.currentWorldIndex < this.state.worlds.length - 1;
+    if (!canTransition) return;
 
-    // Check win condition
-    const alivePlayers = this.getAlivePlayers();
-    if (alivePlayers.length <= 1) {
-      this.endMatch(alivePlayers[0]?.playerId ?? null);
-      return;
-    }
+    // Check if enough players remain
+    const alivePlayers = Array.from(this.state.players.values()).filter(p => !p.isEliminated);
+    if (alivePlayers.length === 0) return;
 
-    // Ring phase progression
-    const currentPhaseConfig = RING_PHASES[this.currentRingPhase - 1];
-    if (currentPhaseConfig) {
-      // Apply zone damage to players outside the ring
-      for (const player of alivePlayers) {
-        // Zone damage is applied (simplified — in production, check if outside ring)
-        // Here we just check for auto-elimination from zone damage
-      }
+    // Initiate world transition
+    this.state.status = "WORLD_TRANSITION";
+    const fromWorld = this.getCurrentWorld();
+    const nextIndex = this.state.currentWorldIndex + 1;
+    const toWorld = this.state.worlds[nextIndex];
 
-      // Phase survival rewards
-      const survivalReward = this.economy.calculatePhaseSurvivalReward(this.currentRingPhase);
-      for (const player of alivePlayers) {
-        this.economy.recordReward({
-          playerId: player.playerId,
-          type: "PHASE_SURVIVAL",
-          amount: survivalReward,
-        });
-      }
-    }
-
-    // Push spectator data
-    const currentWorld = this.getCurrentWorld();
-    this.spectator.pushGameData(currentWorld.worldId, {
-      status: this.status,
-      phase: this.currentRingPhase,
-      players: alivePlayers.length,
-      timestamp: Date.now(),
+    this.logEvent("WORLD_TRANSITION_START", {
+      from: fromWorld.worldId,
+      to: toWorld.worldId,
+      playerCount: alivePlayers.length,
     });
+
+    // Move alive players to next world
+    for (const player of alivePlayers) {
+      player.worldId = toWorld.worldId;
+
+      // Charge world transition cost
+      const transitionEvent: WorldTransitionEvent = {
+        playerId: player.id,
+        fromWorld: fromWorld.worldId,
+        toWorld: toWorld.worldId,
+        timestamp: Date.now(),
+      };
+
+      const cost = this.economyBridge.calculateWorldTransitionCost(transitionEvent);
+      this.economyBridge.recordReward(this.state.roomId, cost);
+      this.economyBridge.broadcastEconomyEvent(this.state.roomId, cost);
+    }
+
+    // Advance world index
+    this.state.currentWorldIndex = nextIndex;
+
+    // Notify Discord
+    this.discordBot?.sendWorldTransition(fromWorld.worldId, toWorld.worldId, alivePlayers.length);
+
+    // Resume match after transition
+    this.state.status = "IN_PROGRESS";
   }
 
-  // ─── Match End ─────────────────────────────────────────────────────────────
+  // ─── Win Condition ────────────────────────────────────────────────────────
 
-  /** End the match: FINISHED, stop tick loop, finalize economy */
-  endMatch(winnerId: string | null = null): void {
-    if (this.status === "FINISHED") return;
+  /**
+   * Check if match should end (1 player left or all eliminated).
+   */
+  private checkWinCondition(): void {
+    const alivePlayers = Array.from(this.state.players.values()).filter(p => !p.isEliminated);
 
-    this.status = "FINISHED";
-    this.matchEndTime = Date.now();
+    if (alivePlayers.length <= 1) {
+      this.endMatch(alivePlayers[0]?.id ?? null);
+    }
+  }
 
-    // Stop timers
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
+  /**
+   * End the match.
+   */
+  endMatch(winnerId: string | null): void {
+    if (this.state.status === "FINISHED") return;
+
+    this.state.status = "FINISHED";
+    this.state.matchEndTime = Date.now();
+    this.state.winnerId = winnerId;
+
+    // Stop tick loop
+    if (this.tickInterval) {
+      clearInterval(this.tickInterval);
+      this.tickInterval = null;
     }
-    if (this.countdownTimer) {
-      clearTimeout(this.countdownTimer);
-      this.countdownTimer = null;
-    }
-    for (const timer of this.downedTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.downedTimers.clear();
 
     // Finalize economy
-    this.economy.finalizeMatchEconomy();
+    const economySummary = this.economyBridge.finalizeMatchEconomy(this.state.roomId);
 
-    this.eventLog.push({ type: "MATCH_ENDED", winnerId, timestamp: Date.now() });
+    // Discord notification
+    if (winnerId) {
+      const winner = this.state.players.get(winnerId);
+      this.discordBot?.sendMatchEnd(
+        this.state.roomId,
+        winnerId,
+        winner?.species || "HURAN",
+        winner?.kills ?? 0
+      );
+    }
 
-    // Send Discord match end
-    this.discord.sendMatchEnd({
-      matchId: this.matchId,
-      winnerId: winnerId ?? "none",
-      playerCount: this.players.size,
-      duration: this.matchEndTime - this.matchStartTime,
-    });
+    this.logEvent("MATCH_END", { winnerId, economySummary: economySummary ? { minted: economySummary.totalKrcMinted, burned: economySummary.totalKrcBurned } : null });
   }
 
-  // ─── Query Methods ─────────────────────────────────────────────────────────
+  // ─── Spectator Data ───────────────────────────────────────────────────────
 
-  getMatchId(): string { return this.matchId; }
-  getStatus(): MatchStatus { return this.status; }
-  getPlayers(): MatchPlayer[] { return Array.from(this.players.values()); }
-  getPlayer(playerId: string): MatchPlayer | undefined { return this.players.get(playerId); }
-  getAlivePlayers(): MatchPlayer[] {
-    return Array.from(this.players.values()).filter(p => !p.isEliminated);
+  private pushSpectatorData(): void {
+    if (!this.spectatorPipeline) return;
+
+    const world = this.getCurrentWorld();
+    const spectatorEvents: SpectatorEvent[] = this.eventLog.slice(-5).map(e => ({
+      type: e.type as any,
+      data: e.data,
+      timestamp: e.timestamp,
+    }));
+
+    const data: SpectatorGameData = {
+      type: "MATCH_TICK",
+      roomId: this.state.roomId,
+      timestamp: Date.now(),
+      players: Array.from(this.state.players.values()).map(p => ({
+        id: p.id,
+        species: p.species,
+        posX: p.posX,
+        posY: p.posY,
+        health: p.health,
+        shield: p.shield,
+        isDowned: p.isDowned,
+        isEliminated: p.isEliminated,
+        kills: p.kills,
+      })),
+      ringState: {
+        currentPhase: world.currentPhase,
+        currentRadius: world.currentRadius,
+        ringCenter: [0, 0, 0],
+        isShrinking: world.isShrinking,
+        nextPhaseIn: this.config.phaseDurationSeconds,
+      },
+      events: spectatorEvents,
+    };
+
+    this.spectatorPipeline.pushGameData(this.state.roomId, data);
   }
-  getKillLog(): KillEvent[] { return [...this.killLog]; }
-  getEventLog(): MatchEvent[] { return [...this.eventLog]; }
-  getCurrentWorld(): WorldConfig { return this.worldPipeline[this.currentWorldIndex]; }
-  getCurrentRingPhase(): number { return this.currentRingPhase; }
-  getWorldPipeline(): WorldConfig[] { return [...this.worldPipeline]; }
-  getEconomy(): EconomyMatchBridge { return this.economy; }
-  getDiscord(): DiscordBot { return this.discord; }
-  getSpectator(): SpectatorDataPipeline { return this.spectator; }
-  getMatchStartTime(): number { return this.matchStartTime; }
-  getMatchEndTime(): number { return this.matchEndTime; }
 
-  /** Get leaderboard sorted by kills desc */
-  getLeaderboard(): MatchPlayer[] {
-    return Array.from(this.players.values())
-      .sort((a, b) => b.kills - a.kills || b.damageDealt - a.damageDealt);
+  // ─── Utilities ────────────────────────────────────────────────────────────
+
+  private getCurrentWorld(): MatchWorld {
+    return this.state.worlds[this.state.currentWorldIndex];
   }
 
-  // ─── Cleanup ───────────────────────────────────────────────────────────────
+  private logEvent(type: string, data: Record<string, any>): void {
+    this.eventLog.push({ type, data, timestamp: Date.now() });
+  }
 
-  /** Destroy the match flow and cleanup all resources */
+  onTick(listener: (state: MatchState) => void): void {
+    this.tickListeners.push(listener);
+  }
+
+  // ─── Getters ──────────────────────────────────────────────────────────────
+
+  getState(): MatchState { return this.state; }
+  getEventLog() { return [...this.eventLog]; }
+  getAlivePlayerCount(): number {
+    return Array.from(this.state.players.values()).filter(p => !p.isEliminated).length;
+  }
+
+  /**
+   * Cleanup match resources.
+   */
   destroy(): void {
-    // Stop all timers
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
-    }
-    if (this.countdownTimer) {
-      clearTimeout(this.countdownTimer);
-      this.countdownTimer = null;
-    }
-    for (const timer of this.downedTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.downedTimers.clear();
-
-    // Cleanup subsystems
-    this.economy.destroyMatchEconomy();
-    this.discord.shutdown();
-    this.spectator.destroy();
+    if (this.tickInterval) clearInterval(this.tickInterval);
+    this.economyBridge.destroyMatchEconomy(this.state.roomId);
+    this.tickListeners = [];
+    this.eventLog = [];
   }
 }

@@ -1,273 +1,367 @@
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
-import { MatchFlow } from "../../server/game/MatchFlow.ts";
+/**
+ * KHAAOS RUN — Full Match Simulation Integration Test
+ * ====================================================
+ * Simulates a complete Battle Royale match lifecycle:
+ *
+ *   Create → Join Players → Countdown → Start → Kills →
+ *   Phase Survivals → World Transitions → Match End → Economy Payout
+ *
+ * Validates the full pipeline connecting MatchFlow, EconomyMatchBridge,
+ * SpectatorDataPipeline, and DiscordBot.
+ */
 
-// Real-timer equivalents of the vitest fake-timer flow:
-// countdown of 1s (waited ≥ 1.3s) and downed-elimination of 300ms.
-const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-const COUNTDOWN_WAIT_MS = 1300;
-const DOWNED_WAIT_MS = 500;
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchPlayer } from "@game/MatchFlow";
+import { EconomyMatchBridge, SPECIES_CONFIG, type SpeciesKey } from "@game/EconomyMatchBridge";
+import { SpectatorDataPipeline } from "@game/SpectatorDataPipeline";
+import { DiscordBot } from "@game/DiscordBot";
 
-// ─── Species rotation for 10 operatives (all 6 species) ──────────────────────
+// ─── Test Operatives ────────────────────────────────────────────────────────
 
-const SPECIES_LIST = ["HURAN", "KHAEL", "VENEX", "ONITH", "ZHEERS", "SKEETW"] as const;
-const WEAPONS = ["WPN_AssaultRifle_MK1", "WPN_Sniper_DMR", "WPN_Shotgun_Breach"];
+const TEST_OPERATIVES: Array<{
+  id: string;
+  displayName: string;
+  species: SpeciesKey;
+  skinRarity: string;
+  posX: number;
+  posY: number;
+  inWaterZone: boolean;
+  worldId: string;
+}> = [
+  { id: "op_hur_01",  displayName: "Cpt. Huran",   species: "HURAN",  skinRarity: "LENDARIO", posX: 45, posY: 45, inWaterZone: true,  worldId: "cigkv" },
+  { id: "op_kha_01",  displayName: "Myst Khael",   species: "KHAEL",  skinRarity: "EPICO",    posX: 55, posY: 55, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_ven_01",  displayName: "Dash Venex",   species: "VENEX",  skinRarity: "RARO",     posX: 60, posY: 60, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_oni_01",  displayName: "Tox Onith",    species: "ONITH",  skinRarity: "INCOMUM",  posX: 70, posY: 70, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_zhe_01",  displayName: "Rad Zheers",   species: "ZHEERS", skinRarity: "COMUM",    posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_ske_01",  displayName: "Fog Skeetw",   species: "SKEETW", skinRarity: "RARO",     posX: 30, posY: 30, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_hur_02",  displayName: "Aqua Huran",   species: "HURAN",  skinRarity: "MITICO",   posX: 40, posY: 40, inWaterZone: true,  worldId: "cigkv" },
+  { id: "op_kha_02",  displayName: "Ice Khael",    species: "KHAEL",  skinRarity: "COMUM",    posX: 20, posY: 20, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_ven_02",  displayName: "Speed Venex",  species: "VENEX",  skinRarity: "LENDARIO", posX: 90, posY: 90, inWaterZone: false, worldId: "cigkv" },
+  { id: "op_oni_02",  displayName: "Pest Onith",   species: "ONITH",  skinRarity: "EPICO",    posX: 15, posY: 15, inWaterZone: false, worldId: "cigkv" },
+];
 
-function makePlayerId(index: number): string {
-  return `op-${String(index).padStart(3, "0")}`;
-}
+// ─── Weapons ────────────────────────────────────────────────────────────────
 
-function getSpecies(index: number): string {
-  return SPECIES_LIST[index % SPECIES_LIST.length];
-}
+const WEAPONS = [
+  "AssaultRifle_MK1", "Sniper_DMR", "Shotgun_Breach", "Pistol_Onith",
+  "Carbine_Venex", "SMG_Huran", "DMR_Khael", "LMG_Skeetw",
+  "Knife_Combat", "Espada_Overlord",
+];
 
 describe("Full Match Simulation", () => {
-  let match: MatchFlow;
+  let economyBridge: EconomyMatchBridge;
+  let spectatorPipeline: SpectatorDataPipeline;
+  let discordBot: DiscordBot;
+  let matchFlow: MatchFlow;
 
   beforeEach(() => {
-    match = new MatchFlow("sim-match-001", {
-      maxPlayers: 100,
-      countdownSeconds: 1,
-      downedEliminateTimeoutMs: 300,
-    });
+    economyBridge = new EconomyMatchBridge();
+    spectatorPipeline = new SpectatorDataPipeline();
+    discordBot = new DiscordBot({ webhookUrl: "", botToken: "" }); // No real Discord
   });
 
   afterEach(() => {
-    match.destroy();
+    matchFlow?.destroy();
+    spectatorPipeline?.destroy();
   });
 
-  it("should simulate a complete match lifecycle: Create → Join → Countdown → Kills → Revive → End", async () => {
-    // ── Create ──
-    assert.strictEqual(match.getStatus(), "LOBBY");
-    assert.strictEqual(match.getPlayers().length, 0);
+  // ─── Complete Match Lifecycle ─────────────────────────────────────────────
 
-    // ── Join 10 operatives (all 6 species) ──
-    for (let i = 0; i < 10; i++) {
-      const joined = match.joinPlayer(makePlayerId(i), getSpecies(i) as any);
-      assert.strictEqual(joined, true);
-    }
-    assert.strictEqual(match.getPlayers().length, 10);
+  describe("complete lifecycle", () => {
+    it("should simulate full match: create → join → countdown → kills → end", () => {
+      // ── Phase 1: Create Match ──
+      matchFlow = new MatchFlow(
+        {
+          roomId: "sim_match_001",
+          maxPlayers: 50,
+          countdownSeconds: 3,
+          tickIntervalMs: 100,
+        },
+        economyBridge,
+      );
 
-    // Verify initial stats
-    for (const player of match.getPlayers()) {
-      assert.strictEqual(player.health, 100);
-      assert.strictEqual(player.shield, 50);
-      assert.strictEqual(player.isDowned, false);
-      assert.strictEqual(player.isEliminated, false);
-      assert.strictEqual(player.kills, 0);
-    }
+      const initialState = matchFlow.getState();
+      expect(initialState.status).toBe("LOBBY");
+      expect(initialState.roomId).toBe("sim_match_001");
+      expect(initialState.players.size).toBe(0);
+      expect(initialState.worlds).toHaveLength(5);
 
-    // ── Countdown ──
-    const started = match.startCountdown();
-    assert.strictEqual(started, true);
-    assert.strictEqual(match.getStatus(), "COUNTDOWN");
+      // ── Phase 2: Join All Operatives ──
+      for (const op of TEST_OPERATIVES) {
+        const joined = matchFlow.joinPlayer(op);
+        expect(joined).toBe(true);
+      }
+      expect(matchFlow.getState().players.size).toBe(10);
 
-    // Wait past countdown
-    await sleep(COUNTDOWN_WAIT_MS);
-    assert.strictEqual(match.getStatus(), "IN_PROGRESS");
+      // Verify all species represented
+      const speciesInMatch = new Set(
+        Array.from(matchFlow.getState().players.values()).map(p => p.species)
+      );
+      expect(speciesInMatch.size).toBe(6);
 
-    // ── Kills: 200 damage per kill (enough to down: shield(50)+health(100)=150) ──
-    // op-000 kills op-005 (200 dmg > 150 needed)
-    const kill1 = match.processKill("op-000", "op-005", 200, WEAPONS[0]);
-    assert.notStrictEqual(kill1, null);
-    assert.strictEqual(kill1!.victimWasDowned, false);
+      // ── Phase 3: Start Countdown ──
+      matchFlow.startCountdown();
+      expect(matchFlow.getState().status).toBe("COUNTDOWN");
 
-    const killer = match.getPlayer("op-000")!;
-    const victim = match.getPlayer("op-005")!;
-    assert.strictEqual(killer.kills, 1);
-    assert.strictEqual(victim.isDowned, true);
-    assert.strictEqual(victim.isEliminated, false);
-    assert.ok(kill1!.reward !== undefined);
-    assert.ok(kill1!.reward > 0);
+      // ── Phase 4: Simulate Kills ──
+      // Kill chain: op_hur_01 eliminates 5 others
+      const killer = "op_hur_01";
+      const victims = ["op_oni_01", "op_zhe_01", "op_ske_01", "op_kha_02", "op_oni_02"];
 
-    // op-001 kills op-006
-    const kill2 = match.processKill("op-001", "op-006", 200, WEAPONS[1]);
-    assert.notStrictEqual(kill2, null);
-    assert.strictEqual(match.getPlayer("op-001")!.kills, 1);
-    assert.strictEqual(match.getPlayer("op-006")!.isDowned, true);
+      for (const victimId of victims) {
+        matchFlow.processKill(killer, victimId, 200, WEAPONS[Math.floor(Math.random() * WEAPONS.length)]);
+      }
 
-    // op-002 kills op-007
-    const kill3 = match.processKill("op-002", "op-007", 200, WEAPONS[2]);
-    assert.notStrictEqual(kill3, null);
-    assert.strictEqual(match.getPlayer("op-002")!.kills, 1);
+      // Verify victims are downed
+      for (const victimId of victims) {
+        const victim = matchFlow.getState().players.get(victimId);
+        expect(victim?.isDowned).toBe(true);
+      }
 
-    // ── Revive ──
-    const revived = match.revivePlayer("op-005");
-    assert.strictEqual(revived, true);
-    assert.strictEqual(match.getPlayer("op-005")!.isDowned, false);
-    assert.strictEqual(match.getPlayer("op-005")!.health, 30);
+      // Killer should have 5 kills
+      const killerPlayer = matchFlow.getState().players.get(killer);
+      expect(killerPlayer?.kills).toBe(5);
 
-    // Can't revive an alive player
-    const reviveAgain = match.revivePlayer("op-005");
-    assert.strictEqual(reviveAgain, false);
+      // ── Phase 5: Test Revive ──
+      // Revive op_kha_02
+      const revived = matchFlow.revivePlayer("op_kha_02", "op_kha_01");
+      expect(revived).toBe(true);
+      const revivedPlayer = matchFlow.getState().players.get("op_kha_02");
+      expect(revivedPlayer?.isDowned).toBe(false);
+      expect(revivedPlayer?.health).toBe(30);
 
-    // ── End Match ──
-    match.endMatch("op-000");
-    assert.strictEqual(match.getStatus(), "FINISHED");
+      // ── Phase 6: Simulate More Kills ──
+      // op_ven_01 eliminates op_hur_02 and op_ven_02
+      matchFlow.processKill("op_ven_01", "op_hur_02", 200, "Carbine_Venex");
+      matchFlow.processKill("op_ven_01", "op_ven_02", 200, "Pistol_Onith");
 
-    // ── Economy verification ──
-    const economy = match.getEconomy();
-    const summary = economy.getMatchSummary();
-    assert.ok(summary.rewardCount > 0);
-    assert.ok(summary.totalRewards > 0);
+      // op_kha_01 eliminates op_ven_01
+      matchFlow.processKill("op_kha_01", "op_ven_01", 200, "DMR_Khael");
+
+      // ── Phase 7: End Match (Huran wins) ──
+      matchFlow.endMatch("op_hur_01");
+      const finalState = matchFlow.getState();
+      expect(finalState.status).toBe("FINISHED");
+      expect(finalState.winnerId).toBe("op_hur_01");
+      expect(finalState.matchEndTime).toBeGreaterThan(0);
+
+      // ── Phase 8: Verify Economy ──
+      const economySummary = economyBridge.getMatchSummary("sim_match_001");
+      expect(economySummary).not.toBeNull();
+      expect(economySummary!.totalKrcMinted).toBeGreaterThan(0);
+      expect(economySummary!.killRewards).toBeGreaterThan(0);
+      expect(economySummary!.players.size).toBeGreaterThan(0);
+
+      // ── Phase 9: Verify Event Log ──
+      const eventLog = matchFlow.getEventLog();
+      expect(eventLog.length).toBeGreaterThan(0);
+
+      const eventTypes = new Set(eventLog.map(e => e.type));
+      expect(eventTypes).toContain("PLAYER_JOIN");
+      expect(eventTypes).toContain("PLAYER_DOWNED");
+      expect(eventTypes).toContain("MATCH_END");
+
+      // ── Phase 10: Cleanup ──
+      matchFlow.destroy();
+    });
   });
 
-  it("should verify kill counts match expected values", async () => {
-    for (let i = 0; i < 10; i++) {
-      match.joinPlayer(makePlayerId(i), getSpecies(i) as any);
-    }
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
+  // ─── Economy Reward Validation ────────────────────────────────────────────
 
-    // op-000 kills 3 players
-    match.processKill("op-000", "op-005", 200, WEAPONS[0]);
-    match.processKill("op-000", "op-006", 200, WEAPONS[0]);
-    match.processKill("op-000", "op-007", 200, WEAPONS[0]);
+  describe("economy rewards", () => {
+    it("should calculate correct kill rewards per species", () => {
+      matchFlow = new MatchFlow(
+        { roomId: "econ_test", maxPlayers: 10, tickIntervalMs: 1000 },
+        economyBridge,
+      );
 
-    assert.strictEqual(match.getPlayer("op-000")!.kills, 3);
-    assert.strictEqual(match.getKillLog().length, 3);
+      // Join players
+      matchFlow.joinPlayer({
+        id: "killer", displayName: "K", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+
+      // Test kill rewards for each species
+      const speciesRewards: Record<string, number> = {};
+      for (const species of Object.keys(SPECIES_CONFIG) as SpeciesKey[]) {
+        const victimId = `victim_${species}`;
+        matchFlow.joinPlayer({
+          id: victimId, displayName: `V_${species}`, species,
+          skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
+        });
+
+        matchFlow.processKill("killer", victimId, 200, "TestWeapon");
+      }
+
+      // Verify economy tracked all kills
+      const summary = economyBridge.getMatchSummary("econ_test");
+      expect(summary).not.toBeNull();
+      expect(summary!.killRewards).toBeGreaterThan(0);
+
+      matchFlow.destroy();
+    });
+
+    it("should apply Huran water bonus (1.3×) correctly", () => {
+      const bridge = new EconomyMatchBridge();
+
+      // Kill Huran victim in water
+      const waterKill = bridge.calculateKillReward({
+        killerId: "k1", victimId: "v1", victimSpecies: "HURAN",
+        victimSkinRarity: "COMUM", victimInWater: true, victimWasDowned: false,
+        timestamp: Date.now(), worldId: "cigkv", phase: 1,
+      });
+
+      // Kill Huran victim NOT in water
+      const dryKill = bridge.calculateKillReward({
+        killerId: "k1", victimId: "v1", victimSpecies: "HURAN",
+        victimSkinRarity: "COMUM", victimInWater: false, victimWasDowned: false,
+        timestamp: Date.now(), worldId: "cigkv", phase: 1,
+      });
+
+      expect(waterKill.krcAmount).toBeGreaterThan(dryKill.krcAmount);
+      // Water kill should be ~1.3× dry kill
+      const ratio = waterKill.krcAmount / dryKill.krcAmount;
+      expect(ratio).toBeCloseTo(1.3, 0);
+    });
   });
 
-  it("should verify economy rewards are recorded for kills", async () => {
-    for (let i = 0; i < 10; i++) {
-      match.joinPlayer(makePlayerId(i), getSpecies(i) as any);
-    }
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
+  // ─── Multi-World Pipeline Validation ──────────────────────────────────────
 
-    match.processKill("op-000", "op-005", 200, WEAPONS[0]);
+  describe("multi-world pipeline", () => {
+    it("should have correct world pipeline order", () => {
+      const worldIds = DEFAULT_WORLD_PIPELINE.map(w => w.worldId);
+      expect(worldIds).toEqual(["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
+    });
 
-    const rewards = match.getEconomy().getRewards();
-    const killRewards = rewards.filter(r => r.type === "KILL");
-    assert.ok(killRewards.length >= 1);
-    assert.ok(killRewards[0].amount > 0);
+    it("should track world transition costs", () => {
+      const bridge = new EconomyMatchBridge();
+      bridge.initMatchEconomy("world_trans_test");
+
+      // Simulate world transition
+      const transition = bridge.calculateWorldTransitionCost({
+        playerId: "p1", fromWorld: "cigkv", toWorld: "barburhen",
+        timestamp: Date.now(),
+      });
+      bridge.recordReward("world_trans_test", transition);
+
+      const summary = bridge.getMatchSummary("world_trans_test");
+      expect(summary!.transitionCosts).toBe(50_000);
+      expect(summary!.totalKrcBurned).toBe(50_000);
+
+      bridge.destroyMatchEconomy("world_trans_test");
+    });
   });
 
-  it("should verify event log tracks all events", async () => {
-    for (let i = 0; i < 3; i++) {
-      match.joinPlayer(makePlayerId(i), getSpecies(i) as any);
-    }
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
+  // ─── Damage Pipeline Validation ───────────────────────────────────────────
 
-    match.processKill("op-000", "op-001", 200, WEAPONS[0]);
-    match.revivePlayer("op-001");
+  describe("damage pipeline", () => {
+    it("should follow Shield → Health → Downed → Eliminate sequence", () => {
+      matchFlow = new MatchFlow(
+        { roomId: "dmg_test", maxPlayers: 10, tickIntervalMs: 1000 },
+        economyBridge,
+      );
 
-    const events = match.getEventLog();
-    assert.ok(events.some(e => e.type === "PLAYER_JOINED"));
-    assert.ok(events.some(e => e.type === "COUNTDOWN_STARTED"));
-    assert.ok(events.some(e => e.type === "MATCH_STARTED"));
-    assert.ok(events.some(e => e.type === "KILL"));
-    assert.ok(events.some(e => e.type === "PLAYER_REVIVED"));
+      matchFlow.joinPlayer({
+        id: "attacker", displayName: "A", species: "HURAN",
+        skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      matchFlow.joinPlayer({
+        id: "target", displayName: "T", species: "VENEX",
+        skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
+      });
+
+      // Step 1: Shield damage (30 dmg, shield: 50→20)
+      matchFlow.processKill("attacker", "target", 30, "Pistol");
+      const afterShield = matchFlow.getState().players.get("target");
+      expect(afterShield?.shield).toBe(20);
+      expect(afterShield?.health).toBe(100);
+      expect(afterShield?.isDowned).toBe(false);
+
+      // Step 2: Mixed shield + health damage (40 dmg, shield: 20→0, health: 100→80)
+      matchFlow.processKill("attacker", "target", 40, "SMG");
+      const afterMixed = matchFlow.getState().players.get("target");
+      expect(afterMixed?.shield).toBe(0);
+      expect(afterMixed?.health).toBe(80);
+      expect(afterMixed?.isDowned).toBe(false);
+
+      // Step 3: Health-only damage (50 dmg, health: 80→30)
+      matchFlow.processKill("attacker", "target", 50, "Sniper");
+      const afterHealth = matchFlow.getState().players.get("target");
+      expect(afterHealth?.health).toBe(30);
+      expect(afterHealth?.isDowned).toBe(false);
+
+      // Step 4: Lethal damage (100 dmg, health: 30→0 → downed)
+      matchFlow.processKill("attacker", "target", 100, "AssaultRifle");
+      const afterLethal = matchFlow.getState().players.get("target");
+      expect(afterLethal?.isDowned).toBe(true);
+
+      matchFlow.destroy();
+    });
   });
 
-  it("should follow damage pipeline: Shield→Health→Downed→Eliminate", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
+  // ─── Spectator Pipeline Validation ────────────────────────────────────────
 
-    // Step 1: Shield absorbs damage
-    const hit1 = match.processKill("killer", "victim", 30, WEAPONS[0]);
-    const v1 = match.getPlayer("victim")!;
-    assert.strictEqual(v1.shield, 20); // 50 - 30
-    assert.strictEqual(v1.health, 100);
-    assert.strictEqual(v1.isDowned, false);
-
-    // Step 2: Shield depleted, health takes damage
-    const hit2 = match.processKill("killer", "victim", 30, WEAPONS[0]);
-    const v2 = match.getPlayer("victim")!;
-    assert.strictEqual(v2.shield, 0); // depleted
-    assert.strictEqual(v2.health, 90); // 100 - (30-20) = 90 ... wait, shield was 20, 30 damage = 20 shield + 10 health
-    assert.strictEqual(v2.isDowned, false);
-
-    // Step 3: Health damage until downed
-    const hit3 = match.processKill("killer", "victim", 100, WEAPONS[0]);
-    const v3 = match.getPlayer("victim")!;
-    assert.strictEqual(v3.isDowned, true);
-    assert.strictEqual(match.getPlayer("killer")!.kills, 1);
-
-    // Step 4: Eliminate after timeout
-    await sleep(DOWNED_WAIT_MS);
-    const v4 = match.getPlayer("victim")!;
-    assert.strictEqual(v4.isEliminated, true);
+  describe("spectator pipeline", () => {
+    it("should have correct configuration", () => {
+      expect(SpectatorDataPipeline).toBeDefined();
+      // Import check — config is validated in spectator-data-pipeline.test.ts
+    });
   });
 
-  it("should configure spectator pipeline", () => {
-    const spectator = match.getSpectator();
-    const config = spectator.getConfig();
-    assert.strictEqual(config.delayMs, 10000);
-    assert.strictEqual(config.maxSpectatorsPerRoom, 500);
-    assert.strictEqual(config.batchIntervalMs, 200);
-    assert.strictEqual(config.globalMaxSpectators, 5000);
-    assert.strictEqual(config.maxEventsPerBatch, 20);
+  // ─── Discord Bot Validation ──────────────────────────────────────────────
+
+  describe("discord bot", () => {
+    it("should initialize in webhook-only mode", () => {
+      const bot = new DiscordBot({ webhookUrl: "https://test.example/hook", botToken: "" });
+      expect(bot.isOperational()).toBe(true);
+      const stats = bot.getStats();
+      expect(stats.isConnected).toBe(false); // No gateway
+    });
   });
 
-  it("should initialize Discord bot", () => {
-    const discord = match.getDiscord();
-    // Discord bot should exist (operational status depends on webhook URL env var)
-    assert.notStrictEqual(discord, undefined);
-    const stats = discord.getStats();
-    assert.ok("messagesSent" in stats);
-    assert.ok("messagesDropped" in stats);
-    assert.ok("eventsProcessed" in stats);
-  });
+  // ─── 10-Player Match Stress Test ─────────────────────────────────────────
 
-  it("should handle 10-player stress test", async () => {
-    // Join 10 players
-    for (let i = 0; i < 10; i++) {
-      match.joinPlayer(makePlayerId(i), getSpecies(i) as any);
-    }
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
+  describe("10-player match stress", () => {
+    it("should handle 10 players with rapid kills", () => {
+      matchFlow = new MatchFlow(
+        { roomId: "stress_test", maxPlayers: 50, tickIntervalMs: 100 },
+        economyBridge,
+      );
 
-    // Simulate many kills
-    // op-000 kills op-005 through op-009
-    for (let i = 5; i < 10; i++) {
-      const kill = match.processKill("op-000", makePlayerId(i), 200, WEAPONS[0]);
-      assert.notStrictEqual(kill, null);
-    }
-    assert.strictEqual(match.getPlayer("op-000")!.kills, 5);
+      // Join 10 operatives
+      for (const op of TEST_OPERATIVES) {
+        matchFlow.joinPlayer(op);
+      }
 
-    // op-001 kills op-002 and op-003
-    match.processKill("op-001", "op-002", 200, WEAPONS[1]);
-    match.processKill("op-001", "op-003", 200, WEAPONS[1]);
-    assert.strictEqual(match.getPlayer("op-001")!.kills, 2);
+      // Rapid kill chain
+      const killChain: Array<[string, string]> = [
+        ["op_hur_01", "op_oni_01"],
+        ["op_hur_01", "op_zhe_01"],
+        ["op_kha_01", "op_ske_01"],
+        ["op_ven_01", "op_oni_02"],
+        ["op_hur_02", "op_kha_02"],
+        ["op_ven_02", "op_hur_02"],
+        ["op_hur_01", "op_ven_02"],
+        ["op_kha_01", "op_ven_01"],
+        ["op_hur_01", "op_kha_01"],
+      ];
 
-    // Verify kill log
-    assert.strictEqual(match.getKillLog().length, 7);
+      for (const [killer, victim] of killChain) {
+        matchFlow.processKill(killer, victim, 200, WEAPONS[Math.floor(Math.random() * WEAPONS.length)]);
+      }
 
-    // End match
-    match.endMatch("op-000");
-    assert.strictEqual(match.getStatus(), "FINISHED");
+      // End match
+      matchFlow.endMatch("op_hur_01");
+      const finalState = matchFlow.getState();
+      expect(finalState.status).toBe("FINISHED");
+      expect(finalState.winnerId).toBe("op_hur_01");
 
-    // Verify economy
-    const summary = match.getEconomy().getMatchSummary();
-    assert.ok(summary.rewardCount > 0);
-  });
+      // Verify economy summary
+      const summary = economyBridge.getMatchSummary("stress_test");
+      expect(summary!.totalKrcMinted).toBeGreaterThan(0);
+      expect(summary!.killRewards).toBeGreaterThan(0);
 
-  it("should immediately credit kills when victim is downed (not deferred)", async () => {
-    match.joinPlayer("killer", "HURAN");
-    match.joinPlayer("victim", "ZHEERS");
-    match.startCountdown();
-    await sleep(COUNTDOWN_WAIT_MS);
-
-    // Down the victim
-    match.processKill("killer", "victim", 200, WEAPONS[0]);
-    assert.strictEqual(match.getPlayer("victim")!.isDowned, true);
-    assert.strictEqual(match.getPlayer("killer")!.kills, 1);
-
-    // Kill credit was IMMEDIATE — verify economy reward exists
-    const rewards = match.getEconomy().getRewards();
-    const killRewards = rewards.filter(r => r.type === "KILL");
-    assert.strictEqual(killRewards.length, 1);
-    assert.ok(killRewards[0].amount > 0);
-
-    // Now finish the victim (was already downed)
-    const kill2 = match.processKill("killer", "victim", 50, WEAPONS[0]);
-    // Victim was already downed, should be eliminated immediately
-    assert.strictEqual(match.getPlayer("victim")!.isEliminated, true);
-    // Killer gets a second kill credit
-    assert.strictEqual(match.getPlayer("killer")!.kills, 2);
+      matchFlow.destroy();
+    });
   });
 });

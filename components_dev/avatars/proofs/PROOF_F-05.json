@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F005",
+  "operative_id": "F-05",
+  "codename": "KHL-03",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Khael",
+    "name": "Khael",
+    "type": "mystic",
+    "skeleton": "SK_Gwen",
+    "passive": "Energia Khaael - custo de habilidade -20%",
+    "base_stats": {
+      "health": 70,
+      "energy": 150,
+      "speed": 0.95
+    },
+    "physical": {
+      "height_cm": 178,
+      "weight_kg": 65
+    },
+    "abbr": "KHL"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "RECRUTA",
+  "specialization": "Exploracao e Conexao Espiritual",
+  "ethnicity": {
+    "label": "Apinaje",
+    "heritage": "Apinaje (grupo Je) - sangue integral indigena brasileiro",
+    "region": "Tocantins, Cerrado, Brasil",
+    "cultural_fusion": "Espiritualidade Apinaje (conexao com Cerrado) combinada com Khael primal. Nome Kayaen (kaya = floresta/ser em Je) + Apinaje (nome do povo)."
+  },
+  "phenotype": {
+    "skin_tone": "Cobre quente (#B87333) com subtom solar avermelhado Cerrado",
+    "hair": "Preto reto, duas trancas longas, streaks de energia Khael - brilham ambar (#FF8C00) nas pontas das trancas",
+    "eyes": "Castanho escuro, leve dobra epicantica amerindia, spark de energia Khael ambar nos cantos",
+    "facial_structure": "Rosto redondo, macas do rosto largas amerindias, boca pequena, queixo delicado",
+    "body_type": "Compacta e agil - 165 cm, 54 kg. Frame Khael petite, conexao com natureza = movimentos naturais",
+    "distinctive_silhouette": "Postura de spirit-channeler - grounded, pes descalsos em ritual, energia rasteja como raizes do chao. Visual de xama da floresta."
+  },
+  "cultural_markers": {
+    "tattoos": "Nenhum - tradio de pintura corporal em vez de tatuagem permanente",
+    "scars": "Nenhuma - combate evasivo e exploratorio, raramente em frontline",
+    "ornaments": "Labio (boto/labret) - piercing tradicional Apinaje no labio inferior (disco de madeira pequeno), braceletes de sementes, cocar minimo (penas de ema)",
+    "clothing_style": "Atire mistica minimalista - bracadeiras transadas, chest piece de micangas e sementes, elementos de saia de palha energy-woven, visual de xama do Cerrado"
+  },
+  "species_traits": {
+    "visible_modification": "TRILHAS de energia Khael das pontas dos dedos - visiveis como linhas ambar rastejando no ar, manifestam como formas de natureza (vinhas, raizes, galhos)",
+    "passive_manifestation": "Energia Khaael mais primal - energy custo -20% + manifestado natural (raizes, flores, vinhas de luz ambar). Pintura urucu (annatto) patterns geometricos no rosto - renovado ritual semi-permanente.",
+    "combat_style_id": "Estilo spirit-explorer - scouting com energy sensing, nature-trap creation, spirit-vision. Unica operative com energy que se manifesta como formas organicas. Labio = identificador cultural mais distinta do roster feminino."
+  },
+  "distinguishing_summary": "Unica Apinaje integral; LABIO (labret tradicional - mais distinta cultural marker feminina); energia Khael ambar como manifestacao NATURAL (vinhas/raizes); urucu pintura geometrica; duas trancas longas ambar; pes descalsos em ritual; unica RECRUTA feminina",
+  "generated_at": "2026-10-22T13:30:29.512121+00:00",
+  "ref_code": "KHL-03",
+  "operative_ref": "OP_KHL_F_03",
+  "avatar_ref": "AVT_KHL_F_03",
+  "legacy_codename": "KAYAEN APINAJE",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298259+00:00"
+}

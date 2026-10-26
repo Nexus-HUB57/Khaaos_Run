@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_PoisonDebuff",
+  "type": "Debuff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -3.0,
+  "tag": "Effect.Debuff.Poisoned",
+  "description": "Poison debuff (3 dmg/s, 5s)",
+  "generated_by": "wire_all_4_tasks.py"
+}

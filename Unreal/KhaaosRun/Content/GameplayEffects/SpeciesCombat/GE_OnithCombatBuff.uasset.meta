@@ -1,0 +1,26 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_OnithCombatBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "Health",
+      "modifierOp": "Add",
+      "magnitude": -3.0,
+      "period": 1.0,
+      "condition": "OnMeleeHit",
+      "durationSeconds": 5.0
+    },
+    {
+      "attribute": "ToxinDamage",
+      "modifierOp": "Multiply",
+      "magnitude": 1.15
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Onith.PoisonDoT", "Combat.Species.Onith.ToxinBonus"],
+    "requiredTags": ["Species.Onith"]
+  },
+  "description": "Onith toxic combat bonus: poison DoT on melee, +15% toxin damage"
+}

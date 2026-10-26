@@ -1,228 +1,307 @@
 /**
- * KHAAOS RUN — Economy Match Bridge
- * ==================================
- * Species-aware kill rewards with full breakdown.
- * Bridges the match lifecycle to the economy system.
+ * KHAAOS RUN — Economy-Match Bridge
+ * ====================================
+ * Connects in-match events to the economy system with species-aware
+ * reward calculations, phase survival bonuses, and world transition costs.
+ *
+ * Reward formula:
+ *   killReward = baseKrc × speciesMultiplier(victim) × rarityMultiplier(skinRarity)
+ *   phaseSurvival = basePhaseKrc × phaseIndex
+ *   worldTransition = 50,000 KRC (flat)
+ *   huranWaterBonus = 1.3× on kills while victim is in water zone
+ *
+ * Species multipliers (victim's species determines reward):
+ *   HURAN: 1.3  |  KHAEL: 1.5  |  VENEX: 1.2  |  ONITH: 1.1  |  ZHEERS: 1.0  |  SKEETW: 1.15
  */
 
-// ─── Species Configuration ───────────────────────────────────────────────────
+import { EconomyConfig } from "./EconomyEngine";
 
-export type Species = "HURAN" | "KHAEL" | "VENEX" | "ONITH" | "ZHEERS" | "SKEETW";
+// ─── Species Configuration ──────────────────────────────────────────────────
 
-export const SPECIES_CONFIG: Record<Species, { killMultiplier: number }> = {
-  HURAN:  { killMultiplier: 1.3 },
-  KHAEL:  { killMultiplier: 1.5 },
-  VENEX:  { killMultiplier: 1.1 },
-  ONITH:  { killMultiplier: 1.2 },
-  ZHEERS: { killMultiplier: 1.0 },
-  SKEETW: { killMultiplier: 1.4 },
-};
+export const SPECIES_CONFIG = {
+  HURAN:   { killMultiplier: 1.3,  label: "Huran",  traits: ["+5HP/s", "50% ring dmg in water", "+20% swim"] },
+  KHAEL:   { killMultiplier: 1.5,  label: "Khael",  traits: ["70% cryo resist"] },
+  VENEX:   { killMultiplier: 1.2,  label: "Venex",  traits: ["+20% speed"] },
+  ONITH:   { killMultiplier: 1.1,  label: "Onith",  traits: ["+15% toxic resist"] },
+  ZHEERS:  { killMultiplier: 1.0,  label: "Zheers", traits: ["+10% rad resist"] },
+  SKEETW:  { killMultiplier: 1.15, label: "Skeetw", traits: ["fog stealth"] },
+} as const;
 
-// ─── Kill Rarity Modifier ────────────────────────────────────────────────────
+export type SpeciesKey = keyof typeof SPECIES_CONFIG;
 
-export type KillRarity = "COMUM" | "INCOMUM" | "RARO" | "EPICO" | "LENDARIO" | "MITICO";
+// ─── Skin Rarity Kill Modifier ──────────────────────────────────────────────
 
-export const KILL_RARITY_MODIFIER: Record<KillRarity, number> = {
+export const KILL_RARITY_MODIFIER: Record<string, number> = {
   COMUM:    1.0,
-  INCOMUM:  1.5,
-  RARO:     2.0,
-  EPICO:    2.5,
+  INCOMUM:  1.25,
+  RARO:     1.6,
+  EPICO:    2.2,
   LENDARIO: 3.5,
   MITICO:   5.0,
 };
 
-// ─── Economy Match Config ────────────────────────────────────────────────────
+// ─── Economy-Match Bridge Config ────────────────────────────────────────────
 
-export interface EconomyMatchConfig {
-  baseKillReward: number;
-  maxKillReward: number;
-  waterBonus: number;
-  downedModifier: number;
-  worldTransitionCost: number;
-  phaseSurvivalBase: number;
-}
-
-export const DEFAULT_ECONOMY_MATCH_CONFIG: EconomyMatchConfig = {
+export const EconomyMatchConfig = {
+  /** Base KRC reward per kill (before multipliers) */
   baseKillReward: 150,
-  maxKillReward: 10000,
-  waterBonus: 1.3,
-  downedModifier: 0.3,
-  worldTransitionCost: 50000,
-  phaseSurvivalBase: 200,
+
+  /** Base KRC per phase survived */
+  basePhaseSurvival: 200,
+
+  /** KRC cost to transition between worlds */
+  worldTransitionCost: 50_000,
+
+  /** Huran water-zone kill bonus (1.3×) */
+  huranWaterBonus: 1.3,
+
+  /** Maximum kill reward cap (prevents exploits) */
+  maxKillReward: 25_000,
+
+  /** Downed-but-revived partial reward for the would-be killer */
+  downedRevivePartial: 0.3,
 };
 
-// ─── Reward Breakdown ────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
-export interface KillRewardBreakdown {
-  base: number;
-  speciesMultiplier: number;
-  rarityModifier: number;
-  waterBonus: number;
-  downedModifier: number;
-  total: number;
-  capped: boolean;
+export interface KillEvent {
+  killerId: string;
+  victimId: string;
+  victimSpecies: SpeciesKey;
+  victimSkinRarity: string;
+  victimInWater: boolean;
+  victimWasDowned: boolean;   // true if victim was already downed (less reward)
+  timestamp: number;
+  worldId: string;
+  phase: number;
 }
 
-// ─── Economy Reward Record ───────────────────────────────────────────────────
-
-export interface EconomyReward {
-  id: string;
+export interface PhaseSurvivalEvent {
   playerId: string;
-  type: "KILL" | "PHASE_SURVIVAL" | "WORLD_TRANSITION" | "WIN_BONUS";
-  amount: number;
-  currency: "KRC" | "FBM";
-  breakdown?: KillRewardBreakdown;
-  matchId: string;
+  species: SpeciesKey;
+  phase: number;
+  worldId: string;
   timestamp: number;
 }
 
-// ─── Match Economy Summary ───────────────────────────────────────────────────
-
-export interface MatchEconomySummary {
-  matchId: string;
-  totalRewards: number;
-  totalDeductions: number;
-  netFlow: number;
-  rewardCount: number;
-  rewardsByType: Record<string, number>;
+export interface WorldTransitionEvent {
+  playerId: string;
+  fromWorld: string;
+  toWorld: string;
+  timestamp: number;
 }
 
-// ─── EconomyMatchBridge Class ────────────────────────────────────────────────
+export interface EconomyRewardResult {
+  eventType: "KILL" | "PHASE_SURVIVAL" | "WORLD_TRANSITION";
+  playerId: string;
+  krcAmount: number;
+  breakdown: Record<string, number>;
+  timestamp: number;
+}
+
+export interface MatchEconomySummary {
+  roomId: string;
+  totalKrcMinted: number;
+  totalKrcBurned: number;
+  killRewards: number;
+  phaseRewards: number;
+  transitionCosts: number;
+  players: Map<string, PlayerEconomyState>;
+}
+
+export interface PlayerEconomyState {
+  totalKrcEarned: number;
+  totalKrcSpent: number;
+  kills: number;
+  phasesSurvived: number;
+  worldTransitions: number;
+}
+
+// ─── EconomyMatchBridge Class ───────────────────────────────────────────────
 
 export class EconomyMatchBridge {
-  private config: EconomyMatchConfig;
-  private matchId: string;
-  private rewards: EconomyReward[] = [];
-  private rewardCounter = 0;
+  private matchEconomies: Map<string, MatchEconomySummary> = new Map();
 
-  constructor(matchId: string, config?: Partial<EconomyMatchConfig>) {
-    this.matchId = matchId;
-    this.config = { ...DEFAULT_ECONOMY_MATCH_CONFIG, ...config };
-  }
+  /**
+   * Calculate kill reward with species × rarity × water modifiers.
+   */
+  calculateKillReward(event: KillEvent): EconomyRewardResult {
+    const speciesMult = SPECIES_CONFIG[event.victimSpecies]?.killMultiplier ?? 1.0;
+    const rarityMult = KILL_RARITY_MODIFIER[event.victimSkinRarity] ?? 1.0;
+    const waterMult = event.victimInWater ? EconomyMatchConfig.huranWaterBonus : 1.0;
+    const downedMult = event.victimWasDowned ? EconomyMatchConfig.downedRevivePartial : 1.0;
 
-  /** Initialize match economy (idempotent) */
-  initMatchEconomy(): void {
-    this.rewards = [];
-    this.rewardCounter = 0;
+    const rawReward = EconomyMatchConfig.baseKillReward * speciesMult * rarityMult * waterMult * downedMult;
+    const krcAmount = Math.min(Math.round(rawReward), EconomyMatchConfig.maxKillReward);
+
+    return {
+      eventType: "KILL",
+      playerId: event.killerId,
+      krcAmount,
+      breakdown: {
+        base: EconomyMatchConfig.baseKillReward,
+        speciesMultiplier: speciesMult,
+        rarityMultiplier: rarityMult,
+        waterBonus: waterMult,
+        downedModifier: downedMult,
+      },
+      timestamp: event.timestamp,
+    };
   }
 
   /**
-   * Calculate kill reward with full breakdown.
-   * Formula: base × species × rarity × waterBonus(if applicable) × downedModifier(if applicable)
+   * Calculate phase survival reward. Higher phases yield more KRC.
    */
-  calculateKillReward(params: {
-    killerSpecies: Species;
-    victimWasDowned: boolean;
-    rarity?: KillRarity;
-    killerInWater?: boolean;
-  }): KillRewardBreakdown {
-    const speciesMult = SPECIES_CONFIG[params.killerSpecies]?.killMultiplier ?? 1.0;
-    const rarityMod = KILL_RARITY_MODIFIER[params.rarity ?? "COMUM"] ?? 1.0;
-    const waterBonus = params.killerInWater && params.killerSpecies === "HURAN"
-      ? this.config.waterBonus
-      : 1.0;
-    const downedMod = params.victimWasDowned
-      ? this.config.downedModifier
-      : 1.0;
-
-    const total = Math.round(
-      this.config.baseKillReward * speciesMult * rarityMod * waterBonus * downedMod
-    );
-    const capped = total > this.config.maxKillReward;
-    const finalTotal = capped ? this.config.maxKillReward : total;
+  calculatePhaseSurvivalReward(event: PhaseSurvivalEvent): EconomyRewardResult {
+    const krcAmount = Math.round(EconomyMatchConfig.basePhaseSurvival * event.phase);
 
     return {
-      base: this.config.baseKillReward,
-      speciesMultiplier: speciesMult,
-      rarityModifier: rarityMod,
-      waterBonus,
-      downedModifier: downedMod,
-      total: finalTotal,
-      capped,
+      eventType: "PHASE_SURVIVAL",
+      playerId: event.playerId,
+      krcAmount,
+      breakdown: {
+        base: EconomyMatchConfig.basePhaseSurvival,
+        phase: event.phase,
+      },
+      timestamp: event.timestamp,
     };
   }
 
-  /** Calculate phase survival reward: phaseSurvivalBase × phase */
-  calculatePhaseSurvivalReward(phase: number): number {
-    return this.config.phaseSurvivalBase * phase;
-  }
-
-  /** Calculate world transition cost: -50,000 KRC */
-  calculateWorldTransitionCost(): number {
-    return -this.config.worldTransitionCost;
-  }
-
-  /** Record a reward in the match economy */
-  recordReward(params: {
-    playerId: string;
-    type: EconomyReward["type"];
-    amount: number;
-    currency?: "KRC" | "FBM";
-    breakdown?: KillRewardBreakdown;
-  }): EconomyReward {
-    const reward: EconomyReward = {
-      id: `${this.matchId}-reward-${++this.rewardCounter}`,
-      playerId: params.playerId,
-      type: params.type,
-      amount: params.amount,
-      currency: params.currency ?? "KRC",
-      breakdown: params.breakdown,
-      matchId: this.matchId,
-      timestamp: Date.now(),
+  /**
+   * Calculate world transition cost (KRC burned from player).
+   * Returns negative krcAmount to indicate a cost.
+   */
+  calculateWorldTransitionCost(event: WorldTransitionEvent): EconomyRewardResult {
+    return {
+      eventType: "WORLD_TRANSITION",
+      playerId: event.playerId,
+      krcAmount: -EconomyMatchConfig.worldTransitionCost,
+      breakdown: {
+        flatCost: EconomyMatchConfig.worldTransitionCost,
+        fromWorld: 0, // placeholder for breakdown
+        toWorld: 0,
+      },
+      timestamp: event.timestamp,
     };
-    this.rewards.push(reward);
-    this.broadcastEconomyEvent("REWARD_RECORDED", reward);
-    return reward;
   }
 
-  /** Get match economy summary */
-  getMatchSummary(): MatchEconomySummary {
-    const rewardsByType: Record<string, number> = {};
-    let totalRewards = 0;
-    let totalDeductions = 0;
+  /**
+   * Initialize economy tracking for a match room.
+   */
+  initMatchEconomy(roomId: string): void {
+    this.matchEconomies.set(roomId, {
+      roomId,
+      totalKrcMinted: 0,
+      totalKrcBurned: 0,
+      killRewards: 0,
+      phaseRewards: 0,
+      transitionCosts: 0,
+      players: new Map(),
+    });
+  }
 
-    for (const reward of this.rewards) {
-      rewardsByType[reward.type] = (rewardsByType[reward.type] ?? 0) + reward.amount;
-      if (reward.amount >= 0) {
-        totalRewards += reward.amount;
-      } else {
-        totalDeductions += Math.abs(reward.amount);
-      }
+  /**
+   * Record a reward result into the match economy summary.
+   */
+  recordReward(roomId: string, result: EconomyRewardResult): void {
+    const summary = this.matchEconomies.get(roomId);
+    if (!summary) return;
+
+    let playerState = summary.players.get(result.playerId);
+    if (!playerState) {
+      playerState = { totalKrcEarned: 0, totalKrcSpent: 0, kills: 0, phasesSurvived: 0, worldTransitions: 0 };
+      summary.players.set(result.playerId, playerState);
     }
 
-    return {
-      matchId: this.matchId,
-      totalRewards,
-      totalDeductions,
-      netFlow: totalRewards - totalDeductions,
-      rewardCount: this.rewards.length,
-      rewardsByType,
-    };
+    if (result.krcAmount > 0) {
+      summary.totalKrcMinted += result.krcAmount;
+      playerState.totalKrcEarned += result.krcAmount;
+    } else {
+      summary.totalKrcBurned += Math.abs(result.krcAmount);
+      playerState.totalKrcSpent += Math.abs(result.krcAmount);
+    }
+
+    switch (result.eventType) {
+      case "KILL":
+        summary.killRewards += result.krcAmount;
+        playerState.kills++;
+        break;
+      case "PHASE_SURVIVAL":
+        summary.phaseRewards += result.krcAmount;
+        playerState.phasesSurvived++;
+        break;
+      case "WORLD_TRANSITION":
+        summary.transitionCosts += Math.abs(result.krcAmount);
+        playerState.worldTransitions++;
+        break;
+    }
   }
 
-  /** Finalize match economy — no more rewards can be recorded */
-  finalizeMatchEconomy(): MatchEconomySummary {
-    return this.getMatchSummary();
+  /**
+   * Get the economy summary for a match.
+   */
+  getMatchSummary(roomId: string): MatchEconomySummary | null {
+    return this.matchEconomies.get(roomId) ?? null;
   }
 
-  /** Destroy match economy — cleanup */
-  destroyMatchEconomy(): void {
-    this.rewards = [];
-    this.rewardCounter = 0;
+  /**
+   * Finalize match economy — compute final payout per player.
+   */
+  finalizeMatchEconomy(roomId: string): MatchEconomySummary | null {
+    const summary = this.matchEconomies.get(roomId);
+    if (!summary) return null;
+
+    // Log final state
+    console.log(
+      `[EconomyMatchBridge] Match ${roomId} finalized: ` +
+      `minted=${summary.totalKrcMinted} burned=${summary.totalKrcBurned} ` +
+      `kills=${summary.killRewards} phases=${summary.phaseRewards} ` +
+      `transitions=${summary.transitionCosts} players=${summary.players.size}`
+    );
+
+    return summary;
   }
 
-  /** Get all rewards */
-  getRewards(): EconomyReward[] {
-    return [...this.rewards];
+  /**
+   * Cleanup after match.
+   */
+  destroyMatchEconomy(roomId: string): void {
+    this.matchEconomies.delete(roomId);
   }
 
-  /** Get config */
-  getConfig(): EconomyMatchConfig {
-    return { ...this.config };
+  // ─── WebSocket Integration ────────────────────────────────────────────────
+
+  private economyWsClients: Map<string, Set<any>> = new Map();
+
+  /**
+   * Register a WebSocket client for economy updates.
+   */
+  subscribeEconomyUpdates(roomId: string, ws: any): void {
+    let clients = this.economyWsClients.get(roomId);
+    if (!clients) {
+      clients = new Set();
+      this.economyWsClients.set(roomId, clients);
+    }
+    clients.add(ws);
   }
 
-  /** Placeholder for WebSocket broadcast */
-  private broadcastEconomyEvent(_eventType: string, _data: unknown): void {
-    // Placeholder — would emit via WebSocket in production
+  /**
+   * Broadcast economy event to subscribed WebSocket clients.
+   */
+  broadcastEconomyEvent(roomId: string, result: EconomyRewardResult): void {
+    const clients = this.economyWsClients.get(roomId);
+    if (!clients) return;
+
+    const message = JSON.stringify({
+      type: "ECONOMY_UPDATE",
+      data: result,
+      timestamp: Date.now(),
+    });
+
+    for (const ws of clients) {
+      try {
+        if (ws.readyState === 1) ws.send(message);
+      } catch { /* client disconnected */ }
+    }
   }
 }

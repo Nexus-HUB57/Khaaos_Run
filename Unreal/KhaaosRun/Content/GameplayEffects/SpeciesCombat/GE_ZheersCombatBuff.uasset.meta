@@ -1,0 +1,24 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_ZheersCombatBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "RadDamageAoE",
+      "modifierOp": "Add",
+      "magnitude": 25.0,
+      "condition": "OnKill"
+    },
+    {
+      "attribute": "RadDamage",
+      "modifierOp": "Multiply",
+      "magnitude": 1.10
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Zheers.RadAoE", "Combat.Species.Zheers.RadBonus"],
+    "requiredTags": ["Species.Zheers"]
+  },
+  "description": "Zheers radiation combat bonus: rad AoE on kill, +10% rad damage"
+}

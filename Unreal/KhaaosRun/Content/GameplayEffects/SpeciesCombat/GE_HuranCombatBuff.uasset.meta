@@ -1,0 +1,25 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_HuranCombatBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "Damage",
+      "modifierOp": "Multiply",
+      "magnitude": 1.15,
+      "condition": "InWaterZone"
+    },
+    {
+      "attribute": "ReloadSpeed",
+      "modifierOp": "Multiply",
+      "magnitude": 1.10,
+      "condition": "InWaterZone"
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Huran.AmphibiousBonus"],
+    "requiredTags": ["Species.Huran"]
+  },
+  "description": "Huran amphibious combat bonus: +15% damage in water zones, +10% reload speed"
+}

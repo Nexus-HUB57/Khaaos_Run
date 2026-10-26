@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F006",
+  "operative_id": "F-06",
+  "codename": "SKW-03",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Skeetw",
+    "name": "Skeetw",
+    "type": "avian",
+    "skeleton": "SK_Gwen",
+    "passive": "Voo Planado - velocidade +15% apos queda",
+    "base_stats": {
+      "health": 80,
+      "energy": 120,
+      "speed": 1.3
+    },
+    "physical": {
+      "height_cm": 170,
+      "weight_kg": 55
+    },
+    "abbr": "SKW"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 75
+  },
+  "rank": "HURAN",
+  "specialization": "Operacoes Articas e Noturnas",
+  "ethnicity": {
+    "label": "Sueca",
+    "heritage": "Swedish/Uppland (paterno) + Finnish/Sami (materno)",
+    "region": "Uppsala, Suecia / Lapnia",
+    "cultural_fusion": "Tradies nordicas de sobrevivencia artico combinadas com aviacao Skeetw silenciosa. Nome Freja (deusa nordica do amor/guerra) + Lindstrom (linha de tilia sueca)."
+  },
+  "phenotype": {
+    "skin_tone": "Muito clara, sardas esparsas (#FBE8D3), patches de pena Skeetw white-gold nos ombros",
+    "hair": "Ash blonde, crop curto, crista de pena Skeetw na coroa - snowy owl-like (branco com bordas pretas)",
+    "eyes": "Azul claro (#87CEEB) com membrana nictitante Skeetw - anel ouro palido (#DAA520), formato Nordic wide-set",
+    "facial_structure": "Rosto angular nordico, macas do rosto altas, nariz estreito, mandibula forte, labios finos",
+    "body_type": "Alta e lean - 172 cm, 56 kg. Frame Skeetw alongado, Nordic height, owl-inspired build",
+    "distinctive_silhouette": "Postura de owl-perch - ombros com penas white-gold, head slight tilt (owl behavior), crista de coroa ereta em alerta. Maior night vision do roster."
+  },
+  "cultural_markers": {
+    "tattoos": "Runa Elder Futhark ALGIZ (protecao/defesa) na nuca - tinta branca visivel contra pele clara",
+    "scars": "Frostbite scarring nas pontas dos dedos (missao artica - padrao white-blackened, 8 dedos), cicatriz de gelo na orelha esquerda",
+    "ornaments": "Nenhum ornamento cultural (minimalismo nordico) - apenas runa e dog tag sueco",
+    "clothing_style": "Armadura tatica arctic-white com etchings runicos - camuflagem de neve, Skeetw flight harness branco, visual de snowy-owl-warrior"
+  },
+  "species_traits": {
+    "visible_modification": "Penas Skeetw nos ombros - snowy owl-inspired (white com bordas pretas), crista de pena na coroa (erectable), flight feathers white-gold",
+    "passive_manifestation": "Voo Planado + night vision: flight SILENT (owl adaptation Skeetw), maior stealth aereo noturno. Nictitante ouro palido = visao IR passiva natural.",
+    "combat_style_id": "Estilo night-owl - operades noturnas, silent flight, arctic survival. Maior night vision (Skeetw owl + Nordic adaptation). Visual all-white = camuflagem artica perfeita."
+  },
+  "distinguishing_summary": "Unica Sueca/Nordica; cor de pena SNOWY OWL white-gold (difere de azul-preto de NYRA, grca de MEI-LING, pavao de PRIYA); crista de coroa owl; frostbite nos dedos; visual all-white artico; maior night vision; silent flight; runa ALGIZ na nuca",
+  "generated_at": "2026-10-22T13:30:29.512213+00:00",
+  "ref_code": "SKW-03",
+  "operative_ref": "OP_SKW_F_03",
+  "avatar_ref": "AVT_SKW_F_03",
+  "legacy_codename": "FREJA LINDSTROM",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298398+00:00"
+}

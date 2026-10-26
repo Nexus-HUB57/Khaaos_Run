@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M008",
+  "operative_id": "M-08",
+  "codename": "VNX-02",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Venex",
+    "name": "Venex",
+    "type": "cyborg",
+    "skeleton": "SK_Manny",
+    "passive": "Interface Neural - +10% eficiencia de escudo",
+    "base_stats": {
+      "health": 90,
+      "energy": 110,
+      "speed": 1.1
+    },
+    "physical": {
+      "height_cm": 185,
+      "weight_kg": 80
+    },
+    "abbr": "VNX"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "HURAN",
+  "specialization": "Hacker e SIGINT",
+  "ethnicity": {
+    "label": "Indiano",
+    "heritage": "Punjabi/Khatri (paterno) + Rajput (materno)",
+    "region": "Punjab / Rajastao, Norte da India",
+    "cultural_fusion": "Disciplina marcial Rajput combinada com expertise tecnologica Punjabi. Nome Devan (deus/divino) + Sharma (alegria/protecao brahmanica)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom medio (#8B6914) com subtom dourado quente Rajasthani",
+    "hair": "Preto, curto, penteado neat, levemente ondulado na coroa",
+    "eyes": "Castanho escuro; OLHO DIREITO: overlay de targeting reticle Venex - brilho verde (#00FF41) sobre iris natural",
+    "facial_structure": "Rosto sharp e angular, testa alta, nariz estreito e definido, bigode fino aparado (Rajput tradicional)",
+    "body_type": "Athletic build - 178 cm, 72 kg. Constituicao atletica com BRACO ESQUERDO TOTALMENTE CIBERNETICO - adiciona volume ao lado esquerdo",
+    "distinctive_silhouette": "Postura de hacker-tactical - braco cibernetico esquerdo repousa em posicao de interface, ombro esquerdo levantado. Visual assimetrico braco-bio vs braco-cyber."
+  },
+  "cultural_markers": {
+    "tattoos": "Mandala Rajasthani no ombro direito (pattern de mehndi tradicional, tinta preta), chakra simbolo na nuca",
+    "scars": "Cicatriz de amputado no ombro esquerdo (interface Venex - clean surgical line), sem outras marcas",
+    "ornaments": "Bracelete de kara (aco Sikh) no pulso direito (vinculo cultural Punjabi), fio vermelho (kalawa) no pulso direito",
+    "clothing_style": "Tech suit form-fitting com patterns de textile indiano tecidos no tecido - Bandhani dot pattern nas mangas, visual de tech-silk"
+  },
+  "species_traits": {
+    "visible_modification": "25% augments Venex - BRACO ESQUERDO TOTALMENTE CIBERNETICO (chrome com etchings de mehndi fundidos no metal), neural interface na coroa da cabeca (3 portas visiveis sob cabelo), olho direito com targeting reticle verde",
+    "passive_manifestation": "Interface Neural: braco cibernetico pulsa verde ao hackear - efeito visual de data-stream flowing through arm",
+    "combat_style_id": "Estilo cyber-warfare - hacking em tempo real, drone override, SIGINT scanning. Braco cyber permite interface fisica com qualquer terminal. Unico com real-time SIGINT overlay."
+  },
+  "distinguishing_summary": "Unico Indiano Punjabi/Rajput; BRACO CIBERNETICO TOTAL esquerdo com mehndi etchings; bigode Rajput; targeting reticle verde no olho direito; mandala no ombro; kara Sikh no pulso; tech-suit Bandhani; posicao assimetrica braco cyber",
+  "generated_at": "2026-10-22T13:30:29.511606+00:00",
+  "ref_code": "VNX-02",
+  "operative_ref": "OP_VNX_M_02",
+  "avatar_ref": "AVT_VNX_M_02",
+  "legacy_codename": "DEVAN SHARMA",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299732+00:00"
+}

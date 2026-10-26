@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_ShieldBuff",
+  "type": "Buff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Add",
+  "attribute": "Shield",
+  "magnitude": 100.0,
+  "tag": "Effect.Buff.Shielded",
+  "description": "Shield barrier (100 HP, 5s)",
+  "generated_by": "wire_all_4_tasks.py"
+}

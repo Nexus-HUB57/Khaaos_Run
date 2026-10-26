@@ -1,270 +1,218 @@
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
+/**
+ * KHAAOS RUN — Unit Tests: EconomyMatchBridge
+ * =============================================
+ */
+
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   EconomyMatchBridge,
   SPECIES_CONFIG,
   KILL_RARITY_MODIFIER,
-  DEFAULT_ECONOMY_MATCH_CONFIG,
-  type Species,
-  type KillRarity,
-} from "../../server/game/EconomyMatchBridge.ts";
+  EconomyMatchConfig,
+  type SpeciesKey,
+  type KillEvent,
+  type PhaseSurvivalEvent,
+  type WorldTransitionEvent,
+} from "@game/EconomyMatchBridge";
 
-describe("EconomyMatchBridge Unit Tests", () => {
+describe("EconomyMatchBridge", () => {
   let bridge: EconomyMatchBridge;
 
   beforeEach(() => {
-    bridge = new EconomyMatchBridge("test-match-001");
-    bridge.initMatchEconomy();
+    bridge = new EconomyMatchBridge();
   });
 
-  afterEach(() => {
-    bridge.destroyMatchEconomy();
+  // ─── Species Config ──────────────────────────────────────────────────────
+
+  describe("SPECIES_CONFIG", () => {
+    it("should define all 6 species", () => {
+      const species = Object.keys(SPECIES_CONFIG) as SpeciesKey[];
+      expect(species).toHaveLength(6);
+      expect(species).toContain("HURAN");
+      expect(species).toContain("KHAEL");
+      expect(species).toContain("VENEX");
+      expect(species).toContain("ONITH");
+      expect(species).toContain("ZHEERS");
+      expect(species).toContain("SKEETW");
+    });
+
+    it("should have kill multipliers > 0 for all species", () => {
+      for (const [key, config] of Object.entries(SPECIES_CONFIG)) {
+        expect(config.killMultiplier).toBeGreaterThan(0);
+      }
+    });
+
+    it("KHAEL should have highest kill multiplier", () => {
+      const maxMult = Math.max(...Object.values(SPECIES_CONFIG).map(s => s.killMultiplier));
+      expect(SPECIES_CONFIG.KHAEL.killMultiplier).toBe(maxMult);
+    });
   });
 
-  // ─── SPECIES_CONFIG ───────────────────────────────────────────────────────
+  // ─── Kill Rarity Modifier ────────────────────────────────────────────────
 
-  it("should have 6 species in SPECIES_CONFIG", () => {
-    const species = Object.keys(SPECIES_CONFIG) as Species[];
-    assert.strictEqual(species.length, 6);
+  describe("KILL_RARITY_MODIFIER", () => {
+    it("should define 6 rarity tiers", () => {
+      expect(Object.keys(KILL_RARITY_MODIFIER)).toHaveLength(6);
+    });
+
+    it("should have ascending multipliers by rarity", () => {
+      const tiers = ["COMUM", "INCOMUM", "RARO", "EPICO", "LENDARIO", "MITICO"] as const;
+      for (let i = 1; i < tiers.length; i++) {
+        expect(KILL_RARITY_MODIFIER[tiers[i]]).toBeGreaterThan(KILL_RARITY_MODIFIER[tiers[i - 1]]);
+      }
+    });
   });
 
-  it("should have positive kill multipliers for all species", () => {
-    for (const config of Object.values(SPECIES_CONFIG)) {
-      assert.ok(config.killMultiplier > 0);
-    }
-  });
+  // ─── Kill Reward Calculation ─────────────────────────────────────────────
 
-  it("should have KHAEL as the highest kill multiplier", () => {
-    const multipliers = Object.values(SPECIES_CONFIG).map(c => c.killMultiplier);
-    const max = Math.max(...multipliers);
-    assert.strictEqual(SPECIES_CONFIG.KHAEL.killMultiplier, max);
-  });
-
-  // ─── KILL_RARITY_MODIFIER ─────────────────────────────────────────────────
-
-  it("should have 6 tiers in KILL_RARITY_MODIFIER", () => {
-    const tiers = Object.keys(KILL_RARITY_MODIFIER);
-    assert.strictEqual(tiers.length, 6);
-  });
-
-  it("should have ascending rarity modifiers", () => {
-    const values = Object.values(KILL_RARITY_MODIFIER);
-    for (let i = 1; i < values.length; i++) {
-      assert.ok(values[i] > values[i - 1]);
-    }
-  });
-
-  // ─── calculateKillReward ──────────────────────────────────────────────────
-
-  it("should calculate base reward = 195 (150 × 1.3 × 1.0) for HURAN + COMUM", () => {
-    const result = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
+  describe("calculateKillReward", () => {
+    const baseKill: KillEvent = {
+      killerId: "killer_1",
+      victimId: "victim_1",
+      victimSpecies: "HURAN",
+      victimSkinRarity: "COMUM",
+      victimInWater: false,
       victimWasDowned: false,
-      rarity: "COMUM",
+      timestamp: Date.now(),
+      worldId: "cigkv",
+      phase: 1,
+    };
+
+    it("should calculate base kill reward for HURAN + COMUM", () => {
+      const result = bridge.calculateKillReward(baseKill);
+      expect(result.eventType).toBe("KILL");
+      expect(result.playerId).toBe("killer_1");
+      expect(result.krcAmount).toBeGreaterThan(0);
+      // base (150) × species (1.3) × rarity (1.0) × water (1.0) × downed (1.0) = 195
+      expect(result.krcAmount).toBe(195);
     });
-    assert.strictEqual(result.base, 150);
-    assert.strictEqual(result.speciesMultiplier, 1.3);
-    assert.strictEqual(result.rarityModifier, 1.0);
-    assert.strictEqual(result.total, 195); // 150 * 1.3 * 1.0
+
+    it("should apply species multiplier correctly", () => {
+      const khaelKill: KillEvent = { ...baseKill, victimSpecies: "KHAEL" };
+      const result = bridge.calculateKillReward(khaelKill);
+      // 150 × 1.5 = 225
+      expect(result.krcAmount).toBe(225);
+    });
+
+    it("should apply rarity multiplier correctly", () => {
+      const legendaryKill: KillEvent = { ...baseKill, victimSkinRarity: "LENDARIO" };
+      const result = bridge.calculateKillReward(legendaryKill);
+      // 150 × 1.3 × 3.5 = 682.5 → 683
+      expect(result.krcAmount).toBe(683);
+    });
+
+    it("should apply water bonus for Huran in water", () => {
+      const waterKill: KillEvent = { ...baseKill, victimInWater: true };
+      const result = bridge.calculateKillReward(waterKill);
+      // 150 × 1.3 × 1.0 × 1.3 = 253.5 → 254
+      expect(result.krcAmount).toBe(254);
+      expect(result.breakdown.waterBonus).toBe(1.3);
+    });
+
+    it("should reduce reward for downed victim", () => {
+      const downedKill: KillEvent = { ...baseKill, victimWasDowned: true };
+      const result = bridge.calculateKillReward(downedKill);
+      // 150 × 1.3 × 1.0 × 1.0 × 0.3 = 58.5 → 59
+      expect(result.krcAmount).toBe(59);
+      expect(result.breakdown.downedModifier).toBe(0.3);
+    });
+
+    it("should cap at maxKillReward", () => {
+      const extremeKill: KillEvent = {
+        ...baseKill,
+        victimSpecies: "KHAEL",
+        victimSkinRarity: "MITICO",
+        victimInWater: true,
+      };
+      const result = bridge.calculateKillReward(extremeKill);
+      expect(result.krcAmount).toBeLessThanOrEqual(EconomyMatchConfig.maxKillReward);
+    });
+
+    it("should include full breakdown", () => {
+      const result = bridge.calculateKillReward(baseKill);
+      expect(result.breakdown).toHaveProperty("base");
+      expect(result.breakdown).toHaveProperty("speciesMultiplier");
+      expect(result.breakdown).toHaveProperty("rarityMultiplier");
+      expect(result.breakdown).toHaveProperty("waterBonus");
+      expect(result.breakdown).toHaveProperty("downedModifier");
+    });
   });
 
-  it("should apply species multiplier", () => {
-    const huran = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
+  // ─── Phase Survival Reward ───────────────────────────────────────────────
+
+  describe("calculatePhaseSurvivalReward", () => {
+    it("should scale reward with phase index", () => {
+      const phase1: PhaseSurvivalEvent = {
+        playerId: "p1", species: "HURAN", phase: 1,
+        worldId: "cigkv", timestamp: Date.now(),
+      };
+      const phase3: PhaseSurvivalEvent = { ...phase1, phase: 3 };
+
+      const r1 = bridge.calculatePhaseSurvivalReward(phase1);
+      const r3 = bridge.calculatePhaseSurvivalReward(phase3);
+
+      expect(r1.krcAmount).toBe(200);  // 200 × 1
+      expect(r3.krcAmount).toBe(600);  // 200 × 3
+      expect(r3.krcAmount).toBeGreaterThan(r1.krcAmount);
     });
-    const khael = bridge.calculateKillReward({
-      killerSpecies: "KHAEL",
-      victimWasDowned: false,
-      rarity: "COMUM",
-    });
-    assert.ok(khael.total > huran.total);
   });
 
-  it("should apply rarity modifier", () => {
-    const comum = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
+  // ─── World Transition Cost ───────────────────────────────────────────────
+
+  describe("calculateWorldTransitionCost", () => {
+    it("should return negative KRC (cost)", () => {
+      const event: WorldTransitionEvent = {
+        playerId: "p1", fromWorld: "cigkv", toWorld: "barburhen",
+        timestamp: Date.now(),
+      };
+      const result = bridge.calculateWorldTransitionCost(event);
+      expect(result.krcAmount).toBe(-50_000);
+      expect(result.eventType).toBe("WORLD_TRANSITION");
     });
-    const raro = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "RARO",
-    });
-    assert.ok(raro.total > comum.total);
   });
 
-  it("should apply water bonus for HURAN in water", () => {
-    const noWater = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
-      killerInWater: false,
+  // ─── Match Economy Tracking ──────────────────────────────────────────────
+
+  describe("match economy tracking", () => {
+    it("should track match economy from init to finalize", () => {
+      bridge.initMatchEconomy("room_test");
+
+      // Record a kill
+      const killResult = bridge.calculateKillReward({
+        killerId: "k1", victimId: "v1", victimSpecies: "VENEX",
+        victimSkinRarity: "RARO", victimInWater: false, victimWasDowned: false,
+        timestamp: Date.now(), worldId: "cigkv", phase: 1,
+      });
+      bridge.recordReward("room_test", killResult);
+
+      // Record a phase survival
+      const phaseResult = bridge.calculatePhaseSurvivalReward({
+        playerId: "k1", species: "VENEX", phase: 2,
+        worldId: "cigkv", timestamp: Date.now(),
+      });
+      bridge.recordReward("room_test", phaseResult);
+
+      // Record a world transition
+      const transResult = bridge.calculateWorldTransitionCost({
+        playerId: "k1", fromWorld: "cigkv", toWorld: "barburhen",
+        timestamp: Date.now(),
+      });
+      bridge.recordReward("room_test", transResult);
+
+      const summary = bridge.getMatchSummary("room_test");
+      expect(summary).not.toBeNull();
+      expect(summary!.totalKrcMinted).toBeGreaterThan(0);
+      expect(summary!.totalKrcBurned).toBe(50_000);
+      expect(summary!.killRewards).toBeGreaterThan(0);
+      expect(summary!.phaseRewards).toBeGreaterThan(0);
+      expect(summary!.transitionCosts).toBe(50_000);
+
+      const finalized = bridge.finalizeMatchEconomy("room_test");
+      expect(finalized).not.toBeNull();
+      expect(finalized!.players.size).toBe(1);
+
+      bridge.destroyMatchEconomy("room_test");
+      expect(bridge.getMatchSummary("room_test")).toBeNull();
     });
-    const inWater = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
-      killerInWater: true,
-    });
-    assert.strictEqual(inWater.waterBonus, 1.3);
-    assert.ok(inWater.total > noWater.total);
-  });
-
-  it("should not apply water bonus for non-HURAN species", () => {
-    const result = bridge.calculateKillReward({
-      killerSpecies: "KHAEL",
-      victimWasDowned: false,
-      rarity: "COMUM",
-      killerInWater: true,
-    });
-    assert.strictEqual(result.waterBonus, 1.0);
-  });
-
-  it("should apply downed modifier when victim was downed", () => {
-    const normal = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
-    });
-    const downed = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: true,
-      rarity: "COMUM",
-    });
-    assert.strictEqual(downed.downedModifier, 0.3);
-    assert.ok(downed.total < normal.total);
-  });
-
-  it("should cap at maxKillReward", () => {
-    const result = bridge.calculateKillReward({
-      killerSpecies: "KHAEL",
-      victimWasDowned: false,
-      rarity: "MITICO",
-      killerInWater: true,
-    });
-    // KHAEL(1.5) × MITICO(5.0) × water(1.3 for HURAN only) = KHAEL no water bonus
-    // 150 × 1.5 × 5.0 = 1125, which is under 10000 cap
-    // But let's test with a high-rarity scenario
-    assert.ok(result.total <= DEFAULT_ECONOMY_MATCH_CONFIG.maxKillReward);
-  });
-
-  it("should provide full breakdown", () => {
-    const result = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "COMUM",
-      killerInWater: true,
-    });
-    assert.ok("base" in result);
-    assert.ok("speciesMultiplier" in result);
-    assert.ok("rarityModifier" in result);
-    assert.ok("waterBonus" in result);
-    assert.ok("downedModifier" in result);
-    assert.ok("total" in result);
-    assert.ok("capped" in result);
-  });
-
-  // ─── calculatePhaseSurvivalReward ─────────────────────────────────────────
-
-  it("should scale phase survival reward with phase", () => {
-    const phase1 = bridge.calculatePhaseSurvivalReward(1);
-    const phase2 = bridge.calculatePhaseSurvivalReward(2);
-    const phase3 = bridge.calculatePhaseSurvivalReward(3);
-    assert.strictEqual(phase1, 200);   // 200 * 1
-    assert.strictEqual(phase2, 400);   // 200 * 2
-    assert.strictEqual(phase3, 600);   // 200 * 3
-  });
-
-  // ─── calculateWorldTransitionCost ─────────────────────────────────────────
-
-  it("should return -50,000 KRC for world transition cost", () => {
-    const cost = bridge.calculateWorldTransitionCost();
-    assert.strictEqual(cost, -50000);
-  });
-
-  // ─── Match Economy Tracking ───────────────────────────────────────────────
-
-  it("should track economy through init→record→finalize→destroy", () => {
-    // Init already done in beforeEach
-
-    // Record rewards
-    bridge.recordReward({
-      playerId: "player-1",
-      type: "KILL",
-      amount: 195,
-    });
-
-    bridge.recordReward({
-      playerId: "player-2",
-      type: "KILL",
-      amount: 300,
-    });
-
-    bridge.recordReward({
-      playerId: "player-1",
-      type: "PHASE_SURVIVAL",
-      amount: 200,
-    });
-
-    // Verify tracking
-    const rewards = bridge.getRewards();
-    assert.strictEqual(rewards.length, 3);
-
-    // Finalize
-    const summary = bridge.finalizeMatchEconomy();
-    assert.strictEqual(summary.rewardCount, 3);
-    assert.strictEqual(summary.totalRewards, 695);
-
-    // Destroy
-    bridge.destroyMatchEconomy();
-    assert.strictEqual(bridge.getRewards().length, 0);
-  });
-
-  it("should track rewards by type in summary", () => {
-    bridge.recordReward({ playerId: "p1", type: "KILL", amount: 195 });
-    bridge.recordReward({ playerId: "p1", type: "KILL", amount: 300 });
-    bridge.recordReward({ playerId: "p1", type: "PHASE_SURVIVAL", amount: 200 });
-
-    const summary = bridge.getMatchSummary();
-    assert.strictEqual(summary.rewardsByType["KILL"], 495);
-    assert.strictEqual(summary.rewardsByType["PHASE_SURVIVAL"], 200);
-  });
-
-  // ─── INCOMUM rarity ───────────────────────────────────────────────────────
-
-  it("should handle INCOMUM rarity correctly", () => {
-    const result = bridge.calculateKillReward({
-      killerSpecies: "HURAN",
-      victimWasDowned: false,
-      rarity: "INCOMUM",
-    });
-    assert.strictEqual(result.rarityModifier, 1.5);
-    // 150 * 1.3 * 1.5 = 292.5 → rounded to 293
-    assert.strictEqual(result.total, 293);
-  });
-
-  // ─── World transition cost tracking ───────────────────────────────────────
-
-  it("should track world transition costs as deductions", () => {
-    bridge.recordReward({ playerId: "p1", type: "WORLD_TRANSITION", amount: -50000 });
-    const summary = bridge.getMatchSummary();
-    assert.strictEqual(summary.totalDeductions, 50000);
-    assert.strictEqual(summary.netFlow, -50000);
-  });
-
-  // ─── Net flow calculation ─────────────────────────────────────────────────
-
-  it("should calculate net flow correctly with mixed rewards and deductions", () => {
-    bridge.recordReward({ playerId: "p1", type: "KILL", amount: 195 });
-    bridge.recordReward({ playerId: "p1", type: "KILL", amount: 300 });
-    bridge.recordReward({ playerId: "p1", type: "WORLD_TRANSITION", amount: -50000 });
-
-    const summary = bridge.getMatchSummary();
-    assert.strictEqual(summary.totalRewards, 495);
-    assert.strictEqual(summary.totalDeductions, 50000);
-    assert.strictEqual(summary.netFlow, 495 - 50000);
   });
 });

@@ -1,179 +1,126 @@
 /**
- * KHAAOS RUN — EOS Matchmaking
- * ============================
- * Region + skill bracket matchmaking for EOS.
- * Pools players by region and skill bracket, then forms matches.
+ * KHAAOS RUN — EOS Matchmaking (Server-Side)
+ * ============================================
+ * Coordinates matchmaking via Epic Online Services.
+ * Pools players by region + skill bracket, creates matches via MatchFlow.
  */
 
-import type { Species } from "./EconomyMatchBridge";
-
-// ─── Skill Brackets ──────────────────────────────────────────────────────────
-
-export type SkillBracket =
-  | "RECRUTA"
-  | "HURAN"
-  | "VENEX"
-  | "ONITH"
-  | "SKEETW"
-  | "OVERLORD"
-  | "MALAKOR";
-
-export const SKILL_BRACKETS: SkillBracket[] = [
-  "RECRUTA",
-  "HURAN",
-  "VENEX",
-  "ONITH",
-  "SKEETW",
-  "OVERLORD",
-  "MALAKOR",
-];
-
-// ─── Region ──────────────────────────────────────────────────────────────────
-
-export type Region = "SA" | "NA" | "EU" | "AS" | "OCE";
-
-// ─── Pool Entry ──────────────────────────────────────────────────────────────
-
-interface PoolEntry {
-  playerId: string;
-  region: Region;
-  species: Species;
-  rank: SkillBracket;
-  joinedAt: number;
-}
-
-// ─── Matchmaking Pool ────────────────────────────────────────────────────────
-
-interface MatchPool {
-  region: Region;
-  bracket: SkillBracket;
-  players: PoolEntry[];
+export interface MatchmakingPool {
+  poolId: string;
+  region: string;
+  skillBracket: string;
+  players: Array<{
+    playerId: string;
+    species: string;
+    rank: string;
+    joinedAt: number;
+  }>;
+  maxSize: number;
   createdAt: number;
 }
 
-// ─── EOSMatchmaking Config ───────────────────────────────────────────────────
-
 export interface MatchmakingConfig {
-  poolSizeTarget: number;
   poolTimeoutMs: number;
-  minPlayersToForm: number;
+  maxPoolSize: number;
+  skillBrackets: string[];
+  regions: string[];
 }
 
-const DEFAULT_CONFIG: MatchmakingConfig = {
-  poolSizeTarget: 50,
-  poolTimeoutMs: 60000,
-  minPlayersToForm: 2,
+export const DEFAULT_MATCHMAKING_CONFIG: MatchmakingConfig = {
+  poolTimeoutMs: 60_000,
+  maxPoolSize: 50,
+  skillBrackets: ["RECRUTA", "HURAN", "VENEX", "ONITH", "SKEETW", "OVERLORD", "MALAKOR"],
+  regions: ["sa1", "us-east", "eu-west", "asia-se"],
 };
 
-// ─── EOSMatchmaking Class ────────────────────────────────────────────────────
-
 export class EOSMatchmaking {
+  private pools: Map<string, MatchmakingPool> = new Map();
   private config: MatchmakingConfig;
-  private pools: Map<string, MatchPool> = new Map();
-  private playerPoolMap: Map<string, string> = new Map();
 
   constructor(config?: Partial<MatchmakingConfig>) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_MATCHMAKING_CONFIG, ...config };
   }
 
-  /** Get pool key from region + bracket */
-  private getPoolKey(region: Region, bracket: SkillBracket): string {
-    return `${region}:${bracket}`;
-  }
+  /** Add player to matchmaking pool */
+  joinPool(playerId: string, region: string, species: string, rank: string): string | null {
+    const skillBracket = this.getSkillBracket(rank);
+    const poolId = `${region}_${skillBracket}`;
 
-  /** Add a player to the matchmaking pool */
-  joinPool(playerId: string, region: Region, species: Species, rank: SkillBracket): boolean {
-    // Remove from any existing pool
-    this.leavePool(playerId);
-
-    const poolKey = this.getPoolKey(region, rank);
-    let pool = this.pools.get(poolKey);
-
+    let pool = this.pools.get(poolId);
     if (!pool) {
       pool = {
+        poolId,
         region,
-        bracket: rank,
+        skillBracket,
         players: [],
+        maxSize: this.config.maxPoolSize,
         createdAt: Date.now(),
       };
-      this.pools.set(poolKey, pool);
+      this.pools.set(poolId, pool);
     }
+
+    if (pool.players.length >= pool.maxSize) return null;
+    if (pool.players.some(p => p.playerId === playerId)) return null;
 
     pool.players.push({
       playerId,
-      region,
       species,
       rank,
       joinedAt: Date.now(),
     });
 
-    this.playerPoolMap.set(playerId, poolKey);
-    return true;
+    return poolId;
   }
 
-  /** Remove a player from the matchmaking pool */
+  /** Remove player from pool */
   leavePool(playerId: string): boolean {
-    const poolKey = this.playerPoolMap.get(playerId);
-    if (!poolKey) return false;
-
-    const pool = this.pools.get(poolKey);
-    if (!pool) return false;
-
-    pool.players = pool.players.filter(p => p.playerId !== playerId);
-    this.playerPoolMap.delete(playerId);
-
-    // Remove empty pools
-    if (pool.players.length === 0) {
-      this.pools.delete(poolKey);
-    }
-
-    return true;
-  }
-
-  /** Get ready pools: pools that are full OR timed out with ≥2 players */
-  getReadyPools(): MatchPool[] {
-    const now = Date.now();
-    const ready: MatchPool[] = [];
-
     for (const pool of this.pools.values()) {
-      const isFull = pool.players.length >= this.config.poolSizeTarget;
-      const isTimedOut = (now - pool.createdAt) >= this.config.poolTimeoutMs;
-      const hasMinPlayers = pool.players.length >= this.config.minPlayersToForm;
-
-      if ((isFull || isTimedOut) && hasMinPlayers) {
-        ready.push(pool);
+      const idx = pool.players.findIndex(p => p.playerId === playerId);
+      if (idx !== -1) {
+        pool.players.splice(idx, 1);
+        if (pool.players.length === 0) {
+          this.pools.delete(pool.poolId);
+        }
+        return true;
       }
     }
-
-    return ready;
+    return false;
   }
 
-  /** Get a specific pool */
-  getPool(region: Region, bracket: SkillBracket): MatchPool | undefined {
-    return this.pools.get(this.getPoolKey(region, bracket));
+  /** Check if any pool is ready to start a match */
+  getReadyPools(): MatchmakingPool[] {
+    return Array.from(this.pools.values())
+      .filter(p => p.players.length >= p.maxSize ||
+              (Date.now() - p.createdAt > this.config.poolTimeoutMs && p.players.length >= 2));
+  }
+
+  /** Get skill bracket from rank */
+  private getSkillBracket(rank: string): string {
+    if (this.config.skillBrackets.includes(rank)) return rank;
+    return "RECRUTA";
+  }
+
+  /** Get pool info */
+  getPool(poolId: string): MatchmakingPool | undefined {
+    return this.pools.get(poolId);
   }
 
   /** Get all pools */
-  getAllPools(): MatchPool[] {
+  getAllPools(): MatchmakingPool[] {
     return Array.from(this.pools.values());
   }
 
-  /** Get pool count */
-  getPoolCount(): number {
-    return this.pools.size;
+  /** Get stats */
+  getStats() {
+    return {
+      totalPools: this.pools.size,
+      totalPlayers: Array.from(this.pools.values())
+        .reduce((sum, p) => sum + p.players.length, 0),
+    };
   }
 
-  /** Get total players in all pools */
-  getTotalPlayersInPools(): number {
-    let total = 0;
-    for (const pool of this.pools.values()) {
-      total += pool.players.length;
-    }
-    return total;
-  }
-
-  /** Get config */
-  getConfig(): MatchmakingConfig {
-    return { ...this.config };
+  /** Reset (for testing) */
+  reset(): void {
+    this.pools.clear();
   }
 }
