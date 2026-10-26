@@ -5,7 +5,8 @@ import { KHAAOS_WORLDS, WORLD_ORDER, type WorldId } from "@shared/worlds";
 import {
   Sword, Shield, TreePine, Target, Truck, Zap, Clock, Users, Map,
   ChevronDown, ChevronUp, AlertTriangle, Star, Trophy, Radio,
-  Flame, Skull, Wind, CloudLightning, Droplets, Package, Globe2, MapPin, ShieldAlert
+  Flame, Skull, Wind, CloudLightning, Droplets, Package, Globe2, MapPin, ShieldAlert,
+  Camera, ExternalLink
 } from "lucide-react";
 
 /* ─── DATA ──────────────────────────────────────────────────────── */
@@ -144,6 +145,28 @@ const PULSO_EVENTS = [
   { icon: Skull, label: "Evento Surpresa", desc: "Evento desconhecido. O Caos define as regras.", mystery: true },
 ];
 
+const WORLD_VISUALS: Partial<Record<WorldId, {
+  src: string;
+  alt: string;
+  label: string;
+  detail: string;
+  href?: string;
+}>> = {
+  CIGKV: {
+    src: "/worlds/cigkv-map-visualization.png",
+    alt: "Mapa tático top-down do CIGKV com setores, zonas ZEX e fases do anel",
+    label: "MAPA TÁTICO VALIDADO",
+    detail: "Visualização top-down do vertical slice de treinamento, com setores, spawns, loot, hazards e fases do ring.",
+  },
+  Barburhen: {
+    src: "/worlds/barburhen-map-detailed.svg",
+    alt: "Mapa detalhado de Barburhen com setores, extração ferroviária e anel Água da Morte",
+    label: "LAYOUT UE5 / W1-C1",
+    detail: "Mapa detalhado de produção com setores industriais, parque central, extração ferroviária e anel Água da Morte.",
+    href: "/worlds/barburhen-map-3d.html",
+  },
+};
+
 /* ─── COMPONENT ─────────────────────────────────────────────────── */
 
 export default function Mundos() {
@@ -234,6 +257,9 @@ export default function Mundos() {
           </div>
         </div>
       </div>
+
+      {/* ── LIVE ACTION / UE5 VISUAL BRIEFING ── */}
+      <WorldVisualBriefing world={world} />
 
       {/* ── LORE ── */}
       <CyberCard variant="gold" title="KHAAOS VILLE" subtitle="ENCLAVE CYBER-MILITAR — BRIEFING OPERACIONAL">
@@ -406,7 +432,68 @@ export default function Mundos() {
 }
 
 /* ─── SUB-COMPONENTS ─────────────────────────────────────────────── */
-
+function WorldVisualBriefing({ world }: { world: (typeof KHAAOS_WORLDS)[WorldId] }) {
+  const visual = WORLD_VISUALS[world.id];
+  return (
+    <section aria-labelledby="world-visual-heading" className="border border-border/50 bg-black/35 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <Camera className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <h2 id="world-visual-heading" className="font-display text-lg font-bold tracking-widest text-primary">BRIEFING VISUAL / LIVE ACTION</h2>
+            <p className="mt-0.5 font-mono text-[10px] tracking-widest text-muted-foreground">UE5 PIPELINE · MATERIAL DE PRODUÇÃO · NÃO É MOCKUP DE GAMEPLAY</p>
+          </div>
+        </div>
+        <span className="border border-primary/30 bg-primary/5 px-2 py-1 font-mono text-[10px] tracking-widest text-primary">{world.name} / {world.biome}</span>
+      </div>
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.5fr)]">
+        <div className="relative min-h-[260px] overflow-hidden border border-border/40 bg-[#080d12]">
+          {visual ? (
+            <img
+              src={visual.src}
+              alt={visual.alt}
+              loading="lazy"
+              className="h-full max-h-[520px] min-h-[260px] w-full object-contain object-center"
+            />
+          ) : (
+            <div
+              aria-label={`Direção visual UE5 de ${world.name}; asset final ainda não anexado`}
+              className="flex min-h-[260px] items-end p-6"
+              style={{ background: `radial-gradient(circle at 65% 35%, ${world.accentColor}55 0%, transparent 35%), linear-gradient(135deg, #070b10 0%, ${world.accentColor}22 48%, #020406 100%)` }}
+            >
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.28em] text-white/60">UE5 BLOCKOUT / DIREÇÃO DE ARTE</p>
+                <p className="mt-2 max-w-xl font-display text-2xl font-black tracking-widest text-white">{world.biome}</p>
+                <p className="mt-2 max-w-xl text-xs leading-relaxed text-white/65">O contrato canônico já define o bioma, a ameaça e os POIs. A arte final Live Action/Unreal deste mundo ainda precisa ser montada no Editor.</p>
+              </div>
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-10 font-mono text-[10px] tracking-widest text-white/75">
+            <span>{visual?.label ?? "BLOCKOUT / ASSET PENDENTE"}</span>
+            <span>WORLD {world.order} · {world.dimensionsKm}</span>
+          </div>
+        </div>
+        <div className="flex flex-col justify-between border border-border/40 bg-card/30 p-5">
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.24em] text-accent">EXPERIÊNCIA DO JOGADOR</p>
+            <h3 className="mt-2 font-display text-xl font-black tracking-widest text-foreground">Leia o terreno antes de entrar</h3>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{visual?.detail ?? `A leitura de ${world.name} deve priorizar silhueta, cobertura, rotas de rotação e telemetria do hazard ${world.hazard.name}.`}</p>
+          </div>
+          <div className="mt-5 space-y-2 border-t border-border/30 pt-4 font-mono text-[10px] text-muted-foreground">
+            <p><span className="text-foreground">BIOMA:</span> {world.biome}</p>
+            <p><span className="text-foreground">AMEAÇA:</span> {world.hazard.name}</p>
+            <p><span className="text-foreground">POIs:</span> {world.pois.length} pontos estratégicos</p>
+            {visual?.href && (
+              <a href={visual.href} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 border border-primary/40 bg-primary/5 px-3 py-2 font-bold tracking-widest text-primary transition-colors hover:bg-primary/15">
+                Abrir visualizador 3D <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 function SectionHeader({ label, sub }: { label: string; sub: string }) {
   return (
     <div className="flex items-center gap-4">
