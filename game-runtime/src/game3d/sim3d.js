@@ -51,12 +51,21 @@ const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 const SCALE = { range: 1 / 2.2, bullet: 1 / 2.2 };
 export const WEAPONS3D = {};
 for (const [id, w] of Object.entries(WEAPONS)) {
+  const ballistic = {
+    sidearm: { gravity: 0.85, drag: 0.002, falloffStart: 24, falloffEnd: 92, minDamage: 0.62 },
+    smg: { gravity: 0.72, drag: 0.003, falloffStart: 18, falloffEnd: 76, minDamage: 0.52 },
+    rifle: { gravity: 0.48, drag: 0.0015, falloffStart: 38, falloffEnd: 150, minDamage: 0.72 },
+    sniper: { gravity: 0.22, drag: 0.0005, falloffStart: 90, falloffEnd: 300, minDamage: 0.84 },
+    energy: { gravity: 0.12, drag: 0.0008, falloffStart: 55, falloffEnd: 190, minDamage: 0.8 },
+    melee: { gravity: 0, drag: 0, falloffStart: 0, falloffEnd: 1, minDamage: 1 },
+  }[w.category] ?? { gravity: 0.8, drag: 0.002, falloffStart: 24, falloffEnd: 100, minDamage: 0.6 };
   WEAPONS3D[id] = {
     ...w,
     range: Math.round(w.range * SCALE.range),
     bulletSpeed: Math.round(w.projectileSpeed * SCALE.bullet) || 0,
     spread: { melee: 0, sidearm: 0.014, smg: 0.024, rifle: 0.013, sniper: 0.003, energy: 0.007 }[w.category] ?? 0.02,
     reload: { sidearm: 1.4, smg: 1.9, rifle: 2.1, sniper: 2.8, energy: 2.2, melee: 0 }[w.category] ?? 2,
+    ballistic,
   };
 }
 export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
@@ -705,7 +714,9 @@ export class KhaaosSim3D {
       const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
     }
     this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
-      owner: a.id, damage: w.damage * dmgScale, life: w.range / w.bulletSpeed, weapon: w.id });
+      owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
+      gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
+      life: w.range / w.bulletSpeed, weapon: w.id });
   }
   #aimDir(a, tx, ty, tz) {
     let dx = tx - a.x, dy = ty - (a.y + 1.55), dz = tz - a.z;
@@ -732,9 +743,13 @@ export class KhaaosSim3D {
     for (const b of this.bullets) {
       b.life -= dt;
       const ox = b.x, oy = b.y, oz = b.z;
+      const drag = Math.max(0, 1 - (b.drag ?? 0) * dt * 60);
+      b.vy -= (b.gravity ?? 0) * dt;
+      b.vx *= drag; b.vy *= drag; b.vz *= drag;
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
       if (b.y < 0) { b.life = 0; this.emit('impact', { x: b.x, y: 0.02, z: b.z, kind: 'ground' }); continue; }
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
+      b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
       let hitT = Infinity, hitBox = null;
@@ -755,7 +770,10 @@ export class KhaaosSim3D {
       }
       if (charHit && charT < hitT) {
         b.life = 0;
-        const dmg = b.damage * (charHit.head ? 1.75 : 1);
+        const profile = WEAPONS3D[b.weapon]?.ballistic;
+        const tFalloff = profile ? Math.max(0, Math.min(1, (b.distance - profile.falloffStart) / Math.max(0.001, profile.falloffEnd - profile.falloffStart))) : 0;
+        const falloff = profile ? 1 - tFalloff * (1 - profile.minDamage) : 1;
+        const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? 1.75 : 1);
         if (charHit.isPlayer) this.#hurtPlayer(dmg, b.owner, charHit.head ? 'headshot' : 'body');
         else this.#damageBot(charHit.ref, dmg, b.owner, charHit.head);
         this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg) });

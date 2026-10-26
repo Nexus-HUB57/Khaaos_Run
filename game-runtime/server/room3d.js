@@ -550,7 +550,9 @@ export class MatchRoom3D {
     this.bullets.push({
       id: this.nextBulletId++, x: ox, y: oy, z: oz,
       vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
-      owner: a.id, damage: w.damage * dmgScale, life: w.range / w.bulletSpeed, weapon: w.id,
+      owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
+      gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
+      life: w.range / w.bulletSpeed, weapon: w.id,
       lagTargets,
     });
   }
@@ -588,9 +590,13 @@ export class MatchRoom3D {
     for (const b of this.bullets) {
       b.life -= dt;
       const ox = b.x, oy = b.y, oz = b.z;
+      const drag = Math.max(0, 1 - (b.drag ?? 0) * dt * 60);
+      b.vy -= (b.gravity ?? 0) * dt;
+      b.vx *= drag; b.vy *= drag; b.vz *= drag;
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
       if (b.y < 0) { b.life = 0; this.#impactEvent(ox + (b.x - ox) * 0.5, 0.02, oz + (b.z - oz) * 0.5, 'ground', actors); continue; }
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
+      b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
       let hitT = Infinity, hitBox = null;
@@ -618,7 +624,10 @@ export class MatchRoom3D {
       }
       if (charHit && charT < hitT) {
         b.life = 0;
-        const dmg = b.damage * (charHit.head ? HEADSHOT_MULT : 1);
+        const profile = WEAPONS3D[b.weapon]?.ballistic;
+        const tFalloff = profile ? Math.max(0, Math.min(1, (b.distance - profile.falloffStart) / Math.max(0.001, profile.falloffEnd - profile.falloffStart))) : 0;
+        const falloff = profile ? 1 - tFalloff * (1 - profile.minDamage) : 1;
+        const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? HEADSHOT_MULT : 1);
         const hx = ox + dx * charT, hy = oy + dy * charT, hz = oz + dz * charT;
         this.#damage(charHit.ref, dmg, b.owner, charHit.head ? 'headshot' : 'body');
         this.#impactEvent(hx, hy, hz, 'flesh', actors, charHit.ref, charHit.head, Math.round(dmg), b.owner);

@@ -1,0 +1,34 @@
+{
+  "static_validation": {
+    "status": "passed",
+    "errors": [],
+    "warnings": [
+      "11 placeholder import markers are packaged; binary UE assets are not present in this checkout"
+    ],
+    "pending_import_markers": [
+      "Unreal/KhaaosRun/Content/VFX/.VFX_Loot_Pickup_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_MuzzleFlash_Assault_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_MuzzleFlash_Shotgun_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_MuzzleFlash_Sniper_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_Zone_Fog_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_Zone_Rain_pending_import",
+      "Unreal/KhaaosRun/Content/VFX/.VFX_Zone_Storm_pending_import",
+      "Unreal/KhaaosRun/Content/Weapons/.WPN_AssaultRifle_MK1_pending_import",
+      "Unreal/KhaaosRun/Content/Weapons/.WPN_Melee_Knife_pending_import",
+      "Unreal/KhaaosRun/Content/Weapons/.WPN_Shotgun_Breach_pending_import",
+      "Unreal/KhaaosRun/Content/Weapons/.WPN_Sniper_DMR_pending_import"
+    ],
+    "asset_file_count": 19
+  },
+  "package": {
+    "status": "created",
+    "path": "/home/ubuntu/Khaaos_Run/artifacts/ue5/KhaaosRun-CIGKV-FPS-slice.zip",
+    "bytes": 16671,
+    "sha256": "32de6eacebc443196665d90ec65a73ad7bc48bd3b62e73db1d11ad296c30a0ca",
+    "manifest_entries": 19
+  },
+  "engine_validation": {
+    "status": "skipped_no_engine",
+    "reason": "UE5.8 RunUAT/UnrealEditor was not found in this environment"
+  }
+}
