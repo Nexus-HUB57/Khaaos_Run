@@ -43,6 +43,7 @@ export class Sim3DView {
       inventory: { ammo: { '9MM': 45 }, medkit: 1, frag: 1, gloo: 1 },
       slots: { 1: 'g19' },
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
       dropPhase: null,
     };
   }
@@ -200,6 +201,7 @@ export class OnlineGame3D extends Game3D {
           z: pos?.z ?? serverPlayer.z,
           moving: this.predictor?.actor.moving ?? serverPlayer.moving,
           sprinting: this.predictor?.actor.sprinting ?? serverPlayer.sprinting,
+          crouching: this.predictor?.actor.crouching ?? serverPlayer.crouching,
           onGround: this.predictor?.actor.onGround ?? serverPlayer.onGround,
         };
       }

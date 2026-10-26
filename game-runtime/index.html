@@ -29,6 +29,16 @@
     <!-- crosshair dinâmico -->
     <div id="crosshair"><i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="ch dot"></i></div>
     <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <!-- Fase 5 — barra do espectador -->
+    <div id="spectatorBar" class="hidden">
+      <span class="spec-label">ESPECTANDO</span>
+      <b id="specName">—</b>
+      <span id="specPlacement" class="spec-chip"></span>
+      <span class="spec-hint">←/→</span>
+      <button id="specPrev" class="spec-btn" title="Operativo anterior">‹</button>
+      <button id="specNext" class="spec-btn" title="Próximo operativo">›</button>
+      <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
+    </div>
 
     <!-- minimapa + killfeed -->
     <div class="map-corner">
@@ -105,6 +115,7 @@
         <button class="tbtn small" data-key="medkit">✚</button>
         <button class="tbtn small" data-key="throw">💣</button>
         <button class="tbtn small" data-key="gloo">🧊</button>
+        <button class="tbtn small" data-key="crouch">⤓</button>
         <button class="tbtn" data-key="ads">◎</button>
         <button class="tbtn fire" data-key="fire">🔥</button>
       </div>

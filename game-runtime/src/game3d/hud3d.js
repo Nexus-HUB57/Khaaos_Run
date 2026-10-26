@@ -257,14 +257,27 @@ export class HUD {
 
   showZu() { $('#zuModal').classList.remove('hidden'); }
   hideZu() { $('#zuModal').classList.add('hidden'); }
+  // Fase 5 — barra do espectador
+  showSpectator({ name, placement } = {}) {
+    $('#spectatorBar')?.classList.remove('hidden');
+    if (name) $('#specName').textContent = name;
+    $('#specPlacement').textContent = placement ? `#${placement}` : '';
+  }
+  updateSpectator(name) {
+    const el = $('#specName');
+    if (el && name) el.textContent = name;
+  }
+  hideSpectator() { $('#spectatorBar')?.classList.add('hidden'); }
   showEnd(win, stats) {
     const m = $('#endModal');
     m.classList.remove('hidden');
+    const placement = stats?.placement && !win ? ` Posição #${stats.placement} entre os operativos do ring.` : '';
+    const winner = stats?.winner && !win ? ` Vencedor do ring: ${stats.winner}.` : '';
     $('#endTitle').textContent = win ? 'VOCÊ SOBREVIVEU AO RING' : 'VOCÊ FOI ELIMINADO';
     $('#endTitle').classList.toggle('win', win);
     $('#endText').textContent = win
       ? `Seed ${this.seed} concluída. ${stats.kills} abates, ${stats.xp} XP e ${stats.krc} KRC garantidos. O Marechal aguarda seu retorno ao QG.`
-      : `A mensagem de misericórdia aguarda no QG-War'I. ${stats.kills} abates antes da queda. O replay desta tentativa fica disponível no console.`;
+      : `A mensagem de misericórdia aguarda no QG-War'I. ${stats.kills} abates antes da queda.${placement}${winner} O replay desta tentativa fica disponível no console.`;
   }
   hideEnd() { $('#endModal').classList.add('hidden'); }
   setMatchStatus(txt) { $('#matchStatus').textContent = txt; }

@@ -79,6 +79,34 @@ export class Effects {
 
   hitFlesh(pos) { this.impact(pos, 'blood'); }
 
+  // Fase 5 — orifícios de bala: marcas escuras que grudam na superfície e somem.
+  // Pool fixo (mais antigo é reciclado) — sem crescimento descontrolado.
+  bulletHole(pos) {
+    if (!this.holeTex) this.holeTex = radialSprite('rgba(24,22,20,1)', 'rgba(24,22,20,0)');
+    this.holes ??= [];
+    let h = this.holes.find(h => h.life <= 0);
+    if (!h) {
+      if (this.holes.length >= 30) {
+        h = this.holes.reduce((a, b) => (a.life < b.life ? a : b)); // recicla o mais velho
+      } else {
+        const mesh = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: this.holeTex, transparent: true, depthWrite: false,
+          polygonOffset: true, polygonOffsetFactor: -2, rotation: Math.random() * Math.PI * 2,
+        }));
+        mesh.scale.set(.14, .14, 1);
+        this.scene.add(mesh);
+        h = { mesh, life: 0 };
+        this.holes.push(h);
+      }
+    }
+    h.mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - .5) * .04, (Math.random() - .5) * .04, (Math.random() - .5) * .04));
+    h.mesh.material.rotation = Math.random() * Math.PI * 2;
+    h.mesh.material.opacity = .92;
+    h.mesh.visible = true;
+    h.life = 7;
+    return h;
+  }
+
   // Fase 4 — explosão de granada: flash de luz, bola de fogo, fumaça, debris e anel
   explosion(pos) {
     // luz da explosão (mais forte e duradoura que o muzzle)
@@ -184,6 +212,16 @@ export class Effects {
         p.mesh.scale.set(s, s, 1);
         p.mesh.material.opacity = Math.min(1, p.life * 4);
         if (p.life <= 0) p.mesh.visible = false;
+      }
+    }
+    // Fase 5 — orifícios de bala: fade lento nos últimos 2s
+    if (this.holes) {
+      for (const h of this.holes) {
+        if (h.life > 0) {
+          h.life -= dt;
+          if (h.life < 2) h.mesh.material.opacity = Math.max(0, h.life / 2) * .92;
+          if (h.life <= 0) h.mesh.visible = false;
+        }
       }
     }
   }

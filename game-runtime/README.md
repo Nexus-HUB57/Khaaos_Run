@@ -15,9 +15,9 @@ Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e
 
 O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
 
-## Modo 3D — Battle Royale TPS (FreeFire-style)
+## Modo 3D — Battle Royale FPS (ritmo Free Fire/Fortnite)
 
-`index.html` (raiz do runtime) inicia o **modo 3D**: terceira pessoa (TPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
+`index.html` (raiz do runtime) inicia o **modo 3D** em primeira pessoa (FPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `?view=tps` mantém a câmera anterior para comparação e regressão visual. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
 
 | Sistema | Módulo | Responsabilidade |
 |---------|--------|------------------|
@@ -101,6 +101,16 @@ one-shots e predição durante a queda). `node --test test/server3d.test.js` val
 | Replicação online | `server/room3d.js` + `net3d.js` | Snapshot expõe `grenades` (interpolação posicional no cliente) e `walls` (id/x/z/rot/hp). Eventos `airdrop`, `land`, `frag`, `explosion`, `gloo`, `glooDown` entregues por raio. Anti-cheat `validateInput3D` valida `throw`/`gloo` como booleanos. Preditor local respeita as paredes autoritativas (colliders reconstruídos por snapshot, sem mutar o layout cacheado). |
 | Realismo PBR | `textures3d.js` + `world3d.js` | Normal maps procedurais (Sobel sobre o canvas de cor) para concreto/metal/terreno/asfalto — relevo real sob o sol. `scene.environment` via PMREM+RoomEnvironment (metais refletem de verdade, intensidade sutil 0.35). Vegetação instanciada (46 árvores em 2 draw calls + 30 pedras) fora dos distritos, decorativa (sem colisão — sim idêntica). 14 nuvens de crepúsculo com deriva lenta. |
 | Apresentação | `entities3d.js`, `effects3d.js`, `audio3d.js`, `hud3d.js` | Paraquedas procedural (dossel + suspensórios, só na fase `chute`), pose de queda com braços abertos; granada com LED do pavio piscando e tombo em voo; gloo com animação de deploy (ease-out) e brilho que decai com o HP. Explosão: bola de fogo + fumaça + debris + luz + tremor de câmera proporcional à distância. Áudio 100% procedural: vento de queda, abertura do paraquedas, aterrissagem, whoosh do arremesso, detonação (sub-bass + estilhaços), cristalização do gloo. HUD: altímetro com marca de abertura (45 m), contagens 💣/🧊 com teclas, botões touch novos. |
+
+### Agachamento, Espectador e Impactos de Combate (Fase 5)
+
+| Sistema | Módulo | Comportamento |
+|---------|--------|---------------|
+| Agachar | `src/game3d/sim3d.js` + `server/antiCheat.js` | Tecla `C` (toggle; touch segura ⤓): velocidade ×0.5, dispersão ×0.72, sprint cancelado enquanto agachado (e `jump` prevalece no frame do salto). `stepActorMovement` marca `a.crouching` (só no chão, nunca em queda/airdrop) — sim offline, `MatchRoom3D` e preditor replicam a mesma física. Snapshot replica `crouching` em `player` e `others`; `validateInput3D` aceita apenas booleano. Pose procedural: coxas à frente, joelhos dobrados, tronco −0.34 m; câmera desce de 1.62 m para ~1.15 m com interpolação. |
+| Combate bot-vs-bot | `sim3d.js` | A IA agora seleciona o ator vivo mais próximo COM linha de visão — jogador OU outros bots (antes só o jogador). O ring fica vivo: combates distantes acontecem sem o jogador. Alvo sob camuflagem (`concealment`) é ignorado na seleção. |
+| Modo espectador | `sim3d.js` + `room3d.js` + `main3d.js` + `hud3d.js` | Após a eliminação, a partida CONTINUA: o cliente entra em transmissão (`enterSpectate`) seguindo outro operativo vivo (←/→ ou botões ‹ › alternam; ✕ encerra). `KhaaosSim3D({ spectate: true })` segue até o último vivo/tempo; `MatchRoom3D` só encerra por tempo, último vivo ou sala vazia (humanos mortos permanecem recebendo snapshots — evento `eliminated` agora traz `placement`, e `matchEnd` traz `winner`). Tela final mostra posição (#N) e vencedor do ring. Legado `spectate: false` preservado (testes das fases 1–4). |
+| Impactos de combate | `effects3d.js` + `main3d.js` | Orifícios de bala persistentes em paredes/Gloo (sprites escuros com rotação aleatória, fade em 7 s, pool de 30 com reciclagem). Sangue/projeção de impacto mantidos do pool de partículas. |
+| FIX crítico de balística | `sim3d.js` + `room3d.js` | **Os projéteis dos bots nasciam NaN desde a Fase 3**: o tiro bot passava `{tx,ty,tz}` sem a origem do cano — `dir.tx - undefined = NaN` — e nenhum bot jamais acertou um tiro (offline E online). O disparo agora passa `ox/oy/oz` do `#muzzle`. Com o fix, bots realmente acertam (dano ×0.55 e erro humano preservados — dificuldade justa). |
 
 ## Relação com a aplicação web e UE5
 A aplicação principal (`server/`, `client/`, `shared/`) e `game-runtime/` têm manifests, processos e scripts distintos. A trilha UE5 é um componente C++ separado. Este repositório ainda não documenta aqui um protocolo versionado nem uma jornada integrada validada entre esses componentes. Consulte [`../Unreal/README.md`](../Unreal/README.md) e [`../docs/ROADMAP.md`](../docs/ROADMAP.md) para o estado e os gates pendentes.
