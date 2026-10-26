@@ -13,6 +13,7 @@ import { OidcClient } from './oidc.js';
 import { createSessionStore, PostgresAuditStore } from './store.js';
 import { AuditLog } from './audit.js';
 import { can } from './rbac.js';
+import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
 import { createDependencyHealth, summarize } from './health.js';
@@ -46,6 +47,7 @@ export function createAuthoritativeServer({
   adminToken = process.env.ADMIN_TOKEN || 'change-me',
   roomCapacity = 16,
   auth,
+  economy,
   store,
   rateStore,
   tls,
@@ -89,12 +91,10 @@ export function createAuthoritativeServer({
   const selectedAuditStore = auditStore
     || (process.env.KR_AUDIT_STORE === 'postgres' ? new PostgresAuditStore() : null);
   const audit = new AuditLog({ store: selectedAuditStore });
-  // Saúde real das dependências: sondas com latência medida (SELECT 1 / PING)
-  // e cache curto para o readiness não martelar o banco a cada requisição.
-  const healthMonitor = health || createDependencyHealth({ sessionStore: durable, rateStore: selectedRateStore, auditStore: selectedAuditStore });
-  // Gate de saturação do readiness: ao passar do limite de conexões vivas, a
-  // instância responde 503/overload para sair da rotação do balanceador.
-  const readyGateConfig = readyGate || (process.env.KR_READY_MAX_CONNECTIONS ? { maxConnections: Number(process.env.KR_READY_MAX_CONNECTIONS) } : null);
+  // Economia virtual (KRC): ledger de dupla entrada append-only, sem qualquer
+  // trilha de valor real (REAL_MONEY_ENABLED=false congelado). Injeção direta
+  // ou KR_ECONOMY_STORE=postgres (migração 003_economy_ledger.sql).
+  const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -281,6 +281,47 @@ export function createAuthoritativeServer({
           res.writeHead(502, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ error: 'oidc_exchange_failed', detail: error?.message }));
         }
+        return;
+      }
+      // ─── Economia virtual (KRC) ────────────────────────────────────────────
+      // Saldo/histórico são SEMPRE derivados da identidade do token — nunca de
+      // parâmetro — garantindo que um jogador só leia o próprio ledger.
+      if (url.pathname === '/economy/balance' && req.method === 'GET') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ ...(await economyService.balance(actor.sub)), userId: actor.sub }));
+        return;
+      }
+      if (url.pathname === '/economy/history' && req.method === 'GET') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const entries = await economyService.history(actor.sub, { sinceId: Number(url.searchParams.get('sinceId') || 0), limit: Number(url.searchParams.get('limit') || 50) });
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ entries, nextSinceId: entries.length ? entries[0].id : Number(url.searchParams.get('sinceId') || 0) }));
+        return;
+      }
+      if (url.pathname === '/economy/grant' && req.method === 'POST') {
+        const admin = guardHttp(req, res, 'economy:grant');
+        if (!admin) return;
+        const body = await jsonBody(req);
+        try {
+          const entry = await economyService.grant({ userId: body.userId, amount: body.amount, reason: body.reason, idempotencyKey: body.idempotencyKey, by: admin.username });
+          audit.record({ actor: admin.username, action: 'economy.grant', resource: body.userId ? `player:${body.userId}` : null, outcome: 'allow', detail: { amount: body.amount, idempotent: Boolean(body.idempotencyKey) } });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ entry, balance: await economyService.balance(body.userId) }));
+        } catch (error) {
+          const code = error instanceof EconomyError ? error.code : 'economy_error';
+          audit.record({ actor: admin.username, action: 'economy.grant', resource: body.userId ? `player:${body.userId}` : null, outcome: 'deny', detail: { code, amount: body.amount ?? null } });
+          res.writeHead(code === 'economy_insufficient_funds' ? 409 : 400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: code }));
+        }
+        return;
+      }
+      if (url.pathname === '/economy/compliance' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(await complianceReport({ store: economyService.store })));
         return;
       }
       if (url.pathname === '/admin.html') {
@@ -493,7 +534,8 @@ export function createAuthoritativeServer({
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
-    tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
+    economy: economyService,
+    tls: tlsConfig, oidc: oidcClient, audit,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);

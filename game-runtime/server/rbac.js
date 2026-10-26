@@ -12,6 +12,7 @@ export const PERMISSIONS = {
   'admin:metrics': 'Ler métricas e estado operacional',
   'keys:rotate': 'Rotacionar/derrubar chaves de assinatura',
   'audit:read': 'Ler a trilha de auditoria',
+  'economy:grant': 'Conceder créditos virtuais KRC (sem valor real)',
 };
 
 export const ROLE_PERMISSIONS = {
