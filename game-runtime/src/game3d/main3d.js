@@ -871,6 +871,13 @@ export class Game3D {
             ? `${e.name}: ${e.terminalLabel} a ${e.terminalDistance} m; marcado no minimapa por 4 s.`
             : `${e.name}: nenhum terminal ZEX ativo disponível.`;
           this.hud.feed('HABILIDADE', `${prefix}${message}`, e.isSelf === false ? 'warn' : 'good');
+          // Fase 9 — VFX/SFX sincronizados: aura no caster + assinatura sonora
+          if (e.x !== undefined) {
+            const pos = new THREE.Vector3(e.x, (e.y ?? 0) + 1.1, e.z);
+            this.effects.abilityAura(pos, e.effect);
+            const p = this.sim.player;
+            this.audio.ability(e.effect, e.isSelf ? 0 : Math.hypot(e.x - p.x, e.z - p.z));
+          }
           break;
         }
         case 'abilityUnavailable':

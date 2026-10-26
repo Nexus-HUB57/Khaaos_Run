@@ -10,6 +10,7 @@ export class Effects {
     this.flashes = [];
     this.particles = [];
     this.explosions = [];
+    this.abilityAuras = []; // Fase 9 — auras de habilidade (remotos vêem o cast)
     this.spriteTex = radialSprite();
     this.sparkTex = radialSprite('rgba(255,240,200,1)', 'rgba(255,160,60,0)');
     this.bloodTex = radialSprite('rgba(200,30,30,1)', 'rgba(120,10,10,0)');
@@ -161,6 +162,50 @@ export class Effects {
     }
   }
 
+  // ---------- Fase 9 — VFX de habilidade p/ remotos (aura no caster) ----------
+  // Aura curta no ponto do operativo que ativou a habilidade: anel aditivo que
+  // expande no solo + coluna de partículas ascendentes + brilho pontual. Cor e
+  // assinatura por família de efeito — remotos "leem" a habilidade de longe.
+  #abilityColor(effect) {
+    return {
+      heal: '#4dff88', speed: '#4dd8ff', dash: '#4dd8ff', precision: '#ffc44d',
+      damageReduction: '#9fb6c9', temporaryArmor: '#9fb6c9', recon: '#4d7dff',
+      stun: '#b04dff', concealment: '#8f7dff', ringRead: '#ff9a4d',
+      ringForecast: '#ff9a4d', terminalScan: '#59ffb0', ringResistance: '#7dffc9',
+    }[effect] ?? '#ffd9a0';
+  }
+
+  abilityAura(pos, effect = 'speed') {
+    const color = this.#abilityColor(effect);
+    // anel de solo que expande e some (0.55 s)
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.58, 28),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(pos.x, Math.max(0.06, pos.y - 0.8), pos.z);
+    this.scene.add(ring);
+    this.abilityAuras.push({ mesh: ring, life: .55, max: .55, kind: 'ring', color: new THREE.Color(color) });
+    // coluna de partículas ascendentes no caster
+    for (let i = 0; i < 14; i++) {
+      const p = this.#getParticle(this.spriteTex);
+      p.mesh.material.color.set(color);
+      p.mesh.position.set(pos.x + (Math.random() - .5) * .8, Math.max(.2, pos.y - .6) + Math.random() * 1.4, pos.z + (Math.random() - .5) * .8);
+      p.vel.set((Math.random() - .5) * .9, 2.2 + Math.random() * 2.4, (Math.random() - .5) * .9);
+      p.life = .4 + Math.random() * .45;
+      p.size = .22 + Math.random() * .2;
+      p.gravity = -1.2; // sobe acelerando (gravidade invertida)
+      p.mesh.material.opacity = .9;
+      p.mesh.visible = true;
+    }
+    // brilho pontual curto no peito do caster
+    this.muzzleLight.color.set(color);
+    this.muzzleLight.position.set(pos.x, pos.y + 1.2, pos.z);
+    this.muzzleLight.intensity = 60;
+    this.muzzleLightT = .16;
+    this.#restoreMuzzleColor = .3;
+  }
+
   #getParticle(tex) {
     let p = this.particles.find(p => p.life <= 0);
     if (!p) {
@@ -177,6 +222,18 @@ export class Effects {
   }
 
   update(dt) {
+    // Fase 9 — auras de habilidade: anel expande e some (0.55 s)
+    for (const a of this.abilityAuras) {
+      if (a.life > 0) {
+        a.life -= dt;
+        const k = 1 - Math.max(0, a.life) / a.max;
+        const s = .8 + k * 3.4; // anel expande ~4x
+        a.mesh.scale.set(s, s, 1);
+        a.mesh.material.opacity = Math.max(0, a.life / a.max) * .85;
+        if (a.life <= 0) { a.mesh.visible = false; this.scene.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose(); }
+      }
+    }
+    if (this.abilityAuras.length) this.abilityAuras = this.abilityAuras.filter((a) => a.life > 0);
     for (const t of this.tracerPool) {
       if (t.life > 0) {
         t.life -= dt;
