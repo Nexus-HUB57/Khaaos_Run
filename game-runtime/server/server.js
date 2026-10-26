@@ -95,6 +95,12 @@ export function createAuthoritativeServer({
   // trilha de valor real (REAL_MONEY_ENABLED=false congelado). Injeção direta
   // ou KR_ECONOMY_STORE=postgres (migração 003_economy_ledger.sql).
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
+  // Saúde real das dependências: sondas com latência medida (SELECT 1 / PING)
+  // e cache curto para o readiness não martelar o banco a cada requisição.
+  const healthMonitor = health || createDependencyHealth({ sessionStore: durable, rateStore: selectedRateStore, auditStore: selectedAuditStore });
+  // Gate de saturação do readiness: ao passar do limite de conexões vivas, a
+  // instância responde 503/overload para sair da rotação do balanceador.
+  const readyGateConfig = readyGate || (process.env.KR_READY_MAX_CONNECTIONS ? { maxConnections: Number(process.env.KR_READY_MAX_CONNECTIONS) } : null);
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -535,7 +541,7 @@ export function createAuthoritativeServer({
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
     economy: economyService,
-    tls: tlsConfig, oidc: oidcClient, audit,
+    tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
