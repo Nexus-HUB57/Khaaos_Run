@@ -97,6 +97,7 @@ export class MatchRoom3D {
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
       dropPhase: null, dropTarget: null, landed: false,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
@@ -285,7 +286,7 @@ export class MatchRoom3D {
   #actors() { return [...this.humans.values(), ...this.bots]; }
 
   defaultInputFor(actor) {
-    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };
+    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };
   }
 
   // ---------- passo de ator (idêntico à sim offline) ----------
@@ -767,7 +768,8 @@ export class MatchRoom3D {
       speed: a.speed, weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
       inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit, frag: a.inventory.frag ?? 0, gloo: a.inventory.gloo ?? 0 },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
-      moving: a.moving, sprinting: a.sprinting, ads: a.ads,
+      moving: a.moving, sprinting: a.sprinting, ads: a.ads, stamina: a.stamina,
+      crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,
       dropPhase: a.dropPhase ?? null,
       ackSeq: a.lastProcessedSeq,
     };
@@ -777,7 +779,7 @@ export class MatchRoom3D {
       id: a.id, name: a.name, isBot: a.isBot,
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, alive: a.alive, onGround: a.onGround,
-      moving: a.moving, sprinting: a.sprinting, ads: a.ads, kills: a.kills,
+      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,
       dropPhase: a.dropPhase ?? null,
     };
   }

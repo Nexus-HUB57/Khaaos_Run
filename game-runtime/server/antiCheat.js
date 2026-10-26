@@ -25,7 +25,7 @@ export function validateInput3D(previous, next, dt = 1/20) {
     if(delta>Math.PI) delta=Math.PI*2-delta; // wrap — vira da forma curta
     if(delta>MAX_YAW_RATE*dt) violations.push('yaw_rate');
   }
-  for(const flag of ['fire','ads','sprint','jump','interact','reload','medkit','throw','gloo']){
+  for(const flag of ['fire','ads','sprint','crouch','jump','interact','reload','medkit','throw','gloo']){
     if(next[flag]!==undefined && typeof next[flag]!=='boolean') violations.push('field_type');
   }
   if(next.slot!==undefined && next.slot!==0 && next.slot!==1 && next.slot!==2) violations.push('field_type');

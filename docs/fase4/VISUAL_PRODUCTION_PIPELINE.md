@@ -36,3 +36,9 @@
 3. Pass de iluminação dia nublado + variação de alerta do Ring.
 4. Kit de cobertura modular e um landmark do ProvingGrounds.
 5. Captura comparativa: editor UE, build UE e protótipo web, com métricas anexadas ao checkpoint.
+
+## Perfil Unreal versionado
+
+O primeiro perfil de materiais e iluminação está em `Unreal/KhaaosRun/Content/Maps/CIGKV/CIGKV_visual_profile.json`. Ele é um contrato de importação para o Editor UE5.8, não um substituto de `.uasset` ou `.umap`: o sandbox não contém UnrealEditor, UBT ou RunUAT e não consegue cozinhar shaders/mapas.
+
+O baseline de renderer está em `Unreal/KhaaosRun/Config/DefaultEngine.ini`. Antes de aprovar o slice, abrir o projeto no Editor, criar os assets nomeados no perfil, validar exposição e sombras em hardware alvo e executar os gates de performance. Não considerar o mundo visualmente pronto apenas por causa dos valores de INI.

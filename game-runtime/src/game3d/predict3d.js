@@ -18,6 +18,7 @@ export class LocalPredictor {
       x: 0, y: 0, z: 150, vy: 0, yaw: 0, pitch: 0,
       speed, weapon, alive: true,
       onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
     };
     this.err = { x: 0, y: 0, z: 0 };   // offset suavizado aplicado só ao RENDER
     this.pending = [];                  // inputs não confirmados (seq > ack)

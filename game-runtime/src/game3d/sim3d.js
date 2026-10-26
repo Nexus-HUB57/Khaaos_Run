@@ -63,7 +63,7 @@ export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
+  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
 });
 
 // ---------- utilitários de colisão ----------
@@ -114,10 +114,23 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
 // física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
 // Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
 export function stepActorMovement(a, input, dt, world) {
-  a.sprinting = !!(input.sprint && !input.ads);
+  const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
+  const sprintIntent = !!(input.sprint && !input.ads && hasMove);
+  a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
+  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1;
   a.ads = !!input.ads;
+  if (!a.sliding && a.onGround && sprintIntent && input.crouch && a.stamina > 0.1) {
+    a.sliding = true;
+    a.slideT = 0.68;
+  }
+  if (a.sliding) {
+    a.slideT = Math.max(0, (a.slideT ?? 0) - dt);
+    if (a.slideT <= 0 || !a.onGround) a.sliding = false;
+  }
+  a.crouching = !!input.crouch || !!a.sliding;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
   let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
+  if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;
   if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
   if (a.dropPhase) { a.sprinting = false; a.ads = false; sp = a.speed * DROP_SPEED_MULT; }
@@ -125,7 +138,7 @@ export function stepActorMovement(a, input, dt, world) {
   const len = Math.hypot(input.dx, input.dy) || 1;
   const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
-  a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
+  a.moving = hasMove;
   // frente do ator: -Z quando yaw=0 (convenção Three.js)
   // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
   const oldX = a.x, oldZ = a.z;
@@ -297,6 +310,7 @@ export class KhaaosSim3D {
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
       dropPhase: null, dropTarget: null };
   }
   #spawnBot(i) {
@@ -304,7 +318,8 @@ export class KhaaosSim3D {
     const jx = (this.rng.next() - .5) * 10, jz = (this.rng.next() - .5) * 10;
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
-      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false, revealedTicks: 0,
+      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,
       speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };

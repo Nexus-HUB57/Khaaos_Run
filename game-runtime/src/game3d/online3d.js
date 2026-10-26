@@ -43,6 +43,7 @@ export class Sim3DView {
       inventory: { ammo: { '9MM': 45 }, medkit: 1, frag: 1, gloo: 1 },
       slots: { 1: 'g19' },
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
       dropPhase: null,
     };
   }

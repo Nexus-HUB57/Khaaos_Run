@@ -267,6 +267,7 @@ export class Game3D {
       if (k === 'e') this.input.interact = true;
       if (k === 'q' && !e.repeat && !this.online) this.abilityPending = true;
       if (k === 'h') this.input.medkit = true;
+      if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
       // troca de slot: offline aplica na sim; online agenda no próximo input
@@ -506,18 +507,19 @@ export class Game3D {
     if (this.viewMode === 'fps') {
       const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch);
       const fx = -Math.sin(p.yaw) * cp, fy = sp, fz = -Math.cos(p.yaw) * cp;
-      const eye = new THREE.Vector3(p.x, p.y + 1.62, p.z);
+      const eyeHeight = p.sliding ? 0.92 : (p.crouching ? 1.12 : 1.62);
+      const eye = new THREE.Vector3(p.x, p.y + eyeHeight, p.z);
       this.camera.position.lerp(eye, Math.min(1, dt * 18));
       this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
-      this.cameraSway += dt * (p.sprinting ? 12 : 7);
-      const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sprinting ? .018 : .008) : 0;
+      this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
+      const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
       this.camera.position.y += bob;
       this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
       this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
       this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
       this.camKick *= Math.exp(-dt * 9);
       this.camera.rotation.z += this.camKick * .18;
-      const targetFov = p.ads ? 42 : (p.sprinting ? 72 : 68);
+      const targetFov = p.ads ? 42 : (p.sliding ? 74 : (p.sprinting ? 72 : 68));
       this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
       this.camera.updateProjectionMatrix();
       this.sun.position.set(p.x - 160, 160, p.z - 240);
@@ -587,6 +589,7 @@ export class Game3D {
       seq: this.sim.tick + 1,
       dx, dy,
       sprint: k.has('shift') || !!touch.sprint,
+      crouch: k.has('c') || !!touch.crouch,
       jump: k.has(' ') || !!touch.jump,
       fire: this.input.fire || !!touch.fire,
       ads: this.input.ads || !!touch.ads,
