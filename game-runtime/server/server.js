@@ -16,6 +16,8 @@ import { can } from './rbac.js';
 import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
+import { createDependencyHealth, summarize } from './health.js';
+import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_WS_PAYLOAD = 16 * 1024;
@@ -51,6 +53,8 @@ export function createAuthoritativeServer({
   tls,
   oidc,
   auditStore,
+  health,
+  readyGate,
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -91,6 +95,12 @@ export function createAuthoritativeServer({
   // trilha de valor real (REAL_MONEY_ENABLED=false congelado). Injeção direta
   // ou KR_ECONOMY_STORE=postgres (migração 003_economy_ledger.sql).
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
+  // Saúde real das dependências: sondas com latência medida (SELECT 1 / PING)
+  // e cache curto para o readiness não martelar o banco a cada requisição.
+  const healthMonitor = health || createDependencyHealth({ sessionStore: durable, rateStore: selectedRateStore, auditStore: selectedAuditStore });
+  // Gate de saturação do readiness: ao passar do limite de conexões vivas, a
+  // instância responde 503/overload para sair da rotação do balanceador.
+  const readyGateConfig = readyGate || (process.env.KR_READY_MAX_CONNECTIONS ? { maxConnections: Number(process.env.KR_READY_MAX_CONNECTIONS) } : null);
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -135,6 +145,13 @@ export function createAuthoritativeServer({
     return null;
   };
 
+  // Carga por região (salas, assentos, utilização) + recomendação de autoscaling.
+  const regionalLoad = () => regionLoads(rooms, { queue: queue.length }).map((load) => ({
+    ...load,
+    utilization: Number(load.utilization.toFixed(4)),
+    recommendation: recommend(load),
+  }));
+
   // Fail-open nos limitadores: indisponibilidade do rate store (Redis fora) não
   // pode derrubar a partida — o input flui sem limite e a degradação fica
   // sinalizada em metrics.rateStoreFailures para alarme externo.
@@ -176,19 +193,16 @@ export function createAuthoritativeServer({
       if (req.method === 'GET' && url.pathname === '/healthz') {
         const roomList = [...rooms.values()];
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, tls: Boolean(tlsConfig), oidc: Boolean(oidcClient) }));
+        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, backpressure: metrics.backpressure, regions: regionalLoad(), tls: Boolean(tlsConfig), oidc: Boolean(oidcClient) }));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/readyz') {
-        try {
-          await durable.ready?.();
-          await selectedRateStore.ready?.();
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-          res.end(JSON.stringify({ status: 'ready', checks: { sessionStore: true, rateStore: true } }));
-        } catch {
-          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-          res.end(JSON.stringify({ status: 'not_ready', checks: { sessionStore: false, rateStore: false } }));
-        }
+        const results = await healthMonitor.probeAll({ force: true });
+        const summary = summarize(results);
+        const saturated = readyGateConfig ? clients.size > readyGateConfig.maxConnections : false;
+        const status = !summary.ok ? 'not_ready' : saturated ? 'overload' : 'ready';
+        res.writeHead(status === 'ready' ? 200 : 503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ status, checks: summary.checks, latencyMs: summary.latencyMs, errors: summary.errors, load: { connections: clients.size, queue: queue.length, maxConnections: readyGateConfig?.maxConnections ?? null } }));
         return;
       }
       if (req.method === 'POST' && url.pathname === '/auth/login') {
@@ -366,6 +380,19 @@ export function createAuthoritativeServer({
         res.end(JSON.stringify({ events, nextSinceId: events.length ? events[0].id : Number(url.searchParams.get('sinceId') || 0) }));
         return;
       }
+      if (url.pathname === '/admin/ping' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        const dependencies = await healthMonitor.probeAll({ force: true });
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ dependencies, ok: summarize(dependencies).ok, now: Date.now() }));
+        return;
+      }
+      if (url.pathname === '/admin/regions' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ regions: regionalLoad(), thresholds: SCALE_DEFAULTS, now: Date.now() }));
+        return;
+      }
       if (url.pathname.startsWith('/admin/')) {
         const admin = guardHttp(req, res, 'admin:metrics');
         if (!admin) return;
@@ -514,7 +541,7 @@ export function createAuthoritativeServer({
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
     economy: economyService,
-    tls: tlsConfig, oidc: oidcClient, audit,
+    tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
