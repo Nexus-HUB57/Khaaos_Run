@@ -154,6 +154,15 @@
             <input type="checkbox" id="squadToggle" />
             <span>MODO SQUAD · DBNO <small>aliados revivem · ring de esquadrões</small></span>
           </label>
+          <div id="loginBox" class="private-room hidden">
+            <label for="loginUser">CONEXÃO // QG-WAR'I (LOGIN)</label>
+            <div class="private-actions">
+              <input id="loginUser" maxlength="24" placeholder="OPERATIVO" autocomplete="username" />
+              <input id="loginPass" type="password" maxlength="64" placeholder="SENHA" autocomplete="current-password" />
+              <button id="loginBtn" class="ghost-btn" type="button">ENTRAR</button>
+            </div>
+            <small class="login-hint">Autentica na plataforma e sincroniza o operativo no ring online.</small>
+          </div>
           <div id="privateRoomBox" class="private-room hidden">
             <label for="inviteCode">SALA PRIVADA · SQUAD (DBNO)</label>
             <div class="private-actions">

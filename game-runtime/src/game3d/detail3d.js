@@ -192,6 +192,49 @@ export function propPlacements(layout, { seed = 'props', density = 1 } = {}) {
 }
 
 /**
+ * Fase 8 — Tráfego urbano estático (sem colisão): carros e vans abandonados nas
+ * faixas das estradas, alinhados à direção da via, com espaçamento mínimo e
+ * afastados de loot/estruturas. Determinístico por seed do layout.
+ * @returns [{ type, x, z, rot, color }] — rot = yaw alinhado à via; color = índice de paleta.
+ */
+export function trafficPlacements(layout, { seed = 'traffic', density = 1 } = {}) {
+  const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
+  const roads = roadSegments(layout);
+  const colliders = layout.colliders;
+  const free = (x, z, m = 1.6) => colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
+  const lootClear = (x, z) => (layout.lootSpots || []).every(l => Math.hypot(x - l.x, z - l.z) > 4.5);
+  const out = [];
+  const push = (type, x, z, rot, color) => {
+    if (Math.abs(x) > 196 || Math.abs(z) > 196) return;
+    if (!free(x, z) || !lootClear(x, z)) return;
+    if (out.some(p => Math.hypot(p.x - x, p.z - z) < 9)) return; // um veículo não engarrafa o outro
+    out.push({ type, x: +x.toFixed(2), z: +z.toFixed(2), rot: +rot.toFixed(3), color });
+  };
+
+  for (const seg of roads) {
+    const len = Math.hypot(seg.x2 - seg.x1, seg.z2 - seg.z1);
+    if (len < 18) continue; // vias curtas não recebem tráfego
+    const ux = (seg.x2 - seg.x1) / len, uz = (seg.z2 - seg.z1) / len;
+    const nx = -uz, nz = ux;
+    const half = seg.width / 2;
+    const lane = Math.max(1.7, half * 0.52); // faixa de rolamento (não invada a calçada)
+    const yaw = Math.atan2(ux, uz);          // alinhado à via (modelo aponta +Z)
+    // ~1 carro a cada 34m × densidade, alternando faixas (mão dupla)
+    const count = Math.floor((len / 34) * density);
+    for (let i = 0; i < count; i++) {
+      const d = 12 + (i + rng.next()) * (len / Math.max(1, count)) * 0.9;
+      if (d > len - 8) break;
+      const side = (i % 2) ? 1 : -1;
+      const roll = rng.next();
+      const type = roll < .72 ? 'car' : 'van';
+      push(type, seg.x1 + ux * d + nx * lane * side, seg.z1 + uz * d + nz * lane * side,
+        yaw + (side < 0 ? Math.PI : 0), rng.int(0, 5));
+    }
+  }
+  return out;
+}
+
+/**
  * Detalhes de fachada RELATIVOS ao centro de uma estrutura.
  * Consumidos pelo world3d para pendurar decoração (portas, janelas, ACs, tubos,
  * caixa d'água, placa do setor) sem tocar em colliders.

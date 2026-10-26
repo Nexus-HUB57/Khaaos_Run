@@ -577,6 +577,12 @@ export function createAuthoritativeServer({
             send(ws, { type: 'private_joined', code: room.inviteCode, roomId: room.id, region: room.region, snapshot: room.snapshot(client.id) });
             return;
           }
+          if (message.type === 'set_operative') {
+            // Fase 8 — o cliente declara o operativo escolhido (LOBBY; validado na sala)
+            const room = getRoom(client);
+            if (room?.is3d) room.setOperative(client.id, String(message.operativeId || ''));
+            return;
+          }
           if (message.type === 'start') {
             const room = getRoom(client);
             if (!can(client.identity, 'room:start', room?.id)) {

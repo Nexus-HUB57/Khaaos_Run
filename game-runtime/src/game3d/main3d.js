@@ -5,7 +5,8 @@
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3d.js';
-import { buildScene, createRingWall, applyGltfProps } from './world3d.js';
+import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
+import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
@@ -291,7 +292,7 @@ export class Game3D {
       this.keys.add(k);
       if (k === 'r') this.input.reload = true;
       if (k === 'e') this.input.interact = true;
-      if (k === 'q' && !e.repeat && !this.online) this.abilityPending = true;
+      if (k === 'q' && !e.repeat) this.abilityPending = true; // Fase 8 — online também (autoritativa)
       if (k === 'h') this.input.medkit = true;
       if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
@@ -579,9 +580,13 @@ export class Game3D {
       seen.add(b.id);
       let entry = this.botOps.get(b.id);
       if (!entry) {
-        // Fase 7 — aliados do esquadrão em verde; acessórios por variant
+        // Fase 8 — identidade: paleta/acessórios pelo operativo do ator (op do snapshot);
+        // aliados do esquadrão em verde; fallback = paleta hash do id (compat legado)
         const ally = !!(s.squad && b.squad && b.squad === mySquad);
-        const op = createOperative({ skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
+        const catalog = operativeCatalog.find((o) => o.id === b.op);
+        const op = createOperative(catalog
+          ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary, variant: b.op }
+          : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
         this.scene.add(op.group);
         const name = this.makeNameTag(b.name, 0, ally);
         op.group.add(name);
@@ -633,6 +638,14 @@ export class Game3D {
     this.ringWall.scale.set(r.radius, 1, r.radius);
     const t = performance.now() / 1000;
     for (const u of this.ringWall.userData.uniforms) u.time.value = t;
+  }
+
+  // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
+  updateSkyPhase(dt) {
+    const target = nightnessFor(this.sim.ring?.pulse ?? 0);
+    this.nightT = this.nightT ?? 0;
+    this.nightT += (target - this.nightT) * Math.min(1, dt * 0.25); // ~12s de transição
+    applyNightness(this.scene, this.nightT);
   }
 
   updateCamera(dt) {
@@ -739,7 +752,7 @@ export class Game3D {
       medkit: this.input.medkit || !!touch.medkit,
       throw: this.input.throw || !!touch.throw,
       gloo: this.input.gloo || !!touch.gloo,
-      ability: !this.online && (this.abilityPending || abilityTouchPressed),
+      ability: this.abilityPending || abilityTouchPressed, // Fase 8 — online autoritativa
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
@@ -747,7 +760,6 @@ export class Game3D {
     this.input.throw = false; this.input.gloo = false;
     this.abilityPending = false;
     this.pendingSlot = 0;
-    if (this.online) delete input.ability;
     return input;
   }
 
@@ -844,6 +856,8 @@ export class Game3D {
         case 'weaponSwitch': break;
         case 'medkit': this.hud.feed('OFICINA', 'Kit médico aplicado. +30 VL.', 'good'); break;
         case 'ability': {
+          // Fase 8 — online: distingue o próprio disparo da habilidade de outro operativo
+          const prefix = (!e.isSelf && e.by) ? `${e.by} · ` : '';
           let message = `${e.name}: ${e.description}`;
           if (e.effect === 'heal') message = `${e.name}: +${Math.round(e.healed)} VL.`;
           else if (e.effect === 'recon') message = `${e.name}: ${e.targets} contato(s) marcado(s) no minimapa por 3 s.`;
@@ -853,7 +867,7 @@ export class Game3D {
           else if (e.effect === 'terminalScan') message = e.terminalLabel
             ? `${e.name}: ${e.terminalLabel} a ${e.terminalDistance} m; marcado no minimapa por 4 s.`
             : `${e.name}: nenhum terminal ZEX ativo disponível.`;
-          this.hud.feed('HABILIDADE', message, 'good');
+          this.hud.feed('HABILIDADE', `${prefix}${message}`, e.isSelf === false ? 'warn' : 'good');
           break;
         }
         case 'abilityUnavailable':
@@ -969,6 +983,7 @@ export class Game3D {
     this.syncLoot();
     this.syncEntities(dt);
     this.updateRing();
+    this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

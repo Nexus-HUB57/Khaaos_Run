@@ -60,6 +60,8 @@ export class NetClient3D {
         if (msg.resumeToken) { this.resume = msg.resumeToken; localStorage.setItem(RESUME_KEY, this.resume); }
         this.onStatus?.(`${msg.type === 'resumed' ? 'SESSÃO RETOMADA' : 'MATCHMAKING'} // ${msg.region || ''} // RING 3D`);
         if (msg.snapshot) this.push(msg.snapshot);
+        // Fase 8 — declara o operativo escolhido assim que entra numa sala (LOBBY)
+        this.#sendOperative();
         return;
       }
       // Fase 7 — salas privadas com código de convite
@@ -67,6 +69,7 @@ export class NetClient3D {
         this.myId = msg.id ?? this.myId;
         this.onStatus?.(`SALA PRIVADA CRIADA // CÓDIGO ${msg.code}`);
         if (msg.snapshot) this.push(msg.snapshot);
+        this.#sendOperative();
         this.onPrivateCreated?.(msg.code);
         return;
       }
@@ -74,6 +77,7 @@ export class NetClient3D {
         this.myId = msg.id ?? this.myId;
         this.onStatus?.(`SALA PRIVADA // CÓDIGO ${msg.code}`);
         if (msg.snapshot) this.push(msg.snapshot);
+        this.#sendOperative();
         this.onPrivateJoined?.(msg.code);
         return;
       }
@@ -174,6 +178,16 @@ export class NetClient3D {
   joinPrivate(code) {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify({ type: 'join_private', code }));
+  }
+
+  // Fase 8 — identidade do operativo: guarda e envia em LOBBY (id validado no servidor)
+  setOperative(operativeId) {
+    this.operativeId = operativeId;
+    this.#sendOperative();
+  }
+  #sendOperative() {
+    if (!this.operativeId || this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'set_operative', operativeId: this.operativeId }));
   }
 
   dispose() {
