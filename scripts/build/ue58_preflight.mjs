@@ -15,7 +15,10 @@
 //      no Build.cs); `.generated.h` exige o header dono existente;
 //   5. Headers UE: UCLASS/USTRUCT/UINTERFACE declaram GENERATED_BODY();
 //   6. Config: ini essenciais existem e GameDefaultMap aponta para mapa do
-//      projeto (warning se o .umap ainda não foi importado).
+//      projeto (warning se o .umap ainda não foi importado);
+//   7. Pipeline de mundos (Editor-Python) e camada EAC: contrato de build
+//      nunca quebrar — geradores presentes e detecção condicional do SDK
+//      (KHAAOS_EAC_SDK 0/1; stub sem binários é warning, não erro).
 // Saída: JSON estruturado com findings { severity, code, file, message }.
 // Exit 1 apenas em erros fatais (códigos UExxx), warnings (UWxxx) não falham.
 import fs from 'node:fs';
@@ -170,6 +173,29 @@ export function validateProject(root) {
       if (!hasUmap) add(WARN, 'UE1031', 'Config/DefaultEngine.ini', `GameDefaultMap "${mapName}" sem .umap em Content/ (importar mundo ainda pendente)`);
     } else {
       add(WARN, 'UE1032', 'Config/DefaultEngine.ini', 'GameDefaultMap não definido — build server não empacota sem mapa');
+    }
+  }
+
+  // ── 7) Pipeline de mundos + camada EAC (contrato: build nunca quebra) ────
+  const repoScripts = path.join(root, '..', '..', 'scripts', 'build');
+  if (!fs.existsSync(path.join(repoScripts, 'generate_worlds.py'))) {
+    add(WARN, 'UE1042', 'scripts/build/generate_worlds.py', 'pipeline de geração de mundos ausente (.umap/materiais/Niagara pendentes)');
+  }
+  if (!fs.existsSync(path.join(repoScripts, 'build_worlds.sh'))) {
+    add(WARN, 'UE1043', 'scripts/build/build_worlds.sh', 'runner do commandlet de mundos ausente');
+  }
+  const eacModule = (uproject.Modules || []).find((module) => module.Name === 'KhaaosEAC');
+  if (eacModule) {
+    const eacBuildCs = path.join(sourceDir, 'KhaaosEAC', 'KhaaosEAC.Build.cs');
+    if (!fs.existsSync(eacBuildCs)) {
+      add(FATAL, 'UE1044', 'Source/KhaaosEAC/KhaaosEAC.Build.cs', 'módulo KhaaosEAC registrado no .uproject sem Build.cs');
+    } else {
+      const eacText = fs.readFileSync(eacBuildCs, 'utf8');
+      if (!eacText.includes('KHAAOS_EAC_SDK') || !eacText.includes('KHAAOS_EAC_SDK_DIR')) {
+        add(FATAL, 'UE1041', 'Source/KhaaosEAC/KhaaosEAC.Build.cs', 'camada EAC sem detecção condicional do SDK — contrato exige KHAAOS_EAC_SDK_DIR + define KHAAOS_EAC_SDK (0/1) para não quebrar sem binários');
+      } else if (!fs.existsSync(path.join(sourceDir, 'KhaaosEAC', 'EACSDK')) && !process.env.KHAAOS_EAC_SDK_DIR) {
+        add(WARN, 'UE1040', 'Source/KhaaosEAC', 'binários do EAC SDK ausentes — modo stub (KHAAOS_EAC_SDK=0); download no dev portal da Epic é ação humana');
+      }
     }
   }
 
