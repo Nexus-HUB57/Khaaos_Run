@@ -289,6 +289,7 @@ export class KhaaosSim3D {
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
+    this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.world = getWorldLayout(this.seed, this.scenario.id);
@@ -479,6 +480,7 @@ export class KhaaosSim3D {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
+    if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -803,9 +805,31 @@ export class KhaaosSim3D {
       this.emit('acidRain', { damage: 1, intervalSeconds: 10 });
     }
   }
+  #stepTsunami(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.tsunamiActive) {
+      this.tsunamiTimer += dt;
+      if (this.tsunamiTimer >= hazard.intervalSeconds) {
+        this.tsunamiTimer -= hazard.intervalSeconds;
+        this.tsunamiRemaining = hazard.durationSeconds;
+        this.tsunamiActive = true;
+        this.emit('tsunamiStart', { durationSeconds: hazard.durationSeconds, submergeBelowY: hazard.submergeBelowY });
+      }
+    }
+    if (!this.tsunamiActive) return;
+    if (this.player.alive && this.player.y < hazard.submergeBelowY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'tsunami');
+    for (const bot of this.bots) if (bot.alive && bot.y < hazard.submergeBelowY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'tsunami');
+    this.tsunamiRemaining -= dt;
+    if (this.tsunamiRemaining <= 0) {
+      this.tsunamiRemaining = 0;
+      this.tsunamiActive = false;
+      this.emit('tsunamiEnd', {});
+    }
+  }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
-    if (bot.armor > 0 && kind !== 'acid') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
+    if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (bot.life <= 0) {
       bot.alive = false;
@@ -829,7 +853,7 @@ export class KhaaosSim3D {
       const soak = Math.min(p.temporaryArmor, dmg);
       p.temporaryArmor -= soak; dmg -= soak;
     }
-    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
+    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) { p.life = 0; p.alive = false; this.emit('eliminated', { kills: p.kills, by: ownerId }); }

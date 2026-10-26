@@ -34,6 +34,7 @@ export const SCENARIOS = Object.freeze({
     playerSpawn: { x: -90, z: 150 },
     ringDamageMultiplier: 1.75,
     krcMultiplier: 2,
+    survival: Object.freeze({ type: 'TSUNAMI_WAVE', intervalSeconds: 180, durationSeconds: 40, damagePerSecond: 6, submergeBelowY: 90 }),
     groundTint: '#b9d7d3',
     fogColor: '#29545e',
     sky: { top: '#071e30', mid: '#1f6470', horizon: '#9cc7b4' },
