@@ -129,7 +129,8 @@ export class RingAPI {
 
   /** Broadcast a Discord event for a world */
   async broadcastDiscord(worldId: string, eventType: DiscordEventType, data: unknown): Promise<boolean> {
-    return this.discord.broadcastEvent(eventType, { worldId, ...data });
+    const extra = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+    return this.discord.broadcastEvent(eventType, { worldId, ...extra });
   }
 
   /** Get world config */

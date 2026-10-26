@@ -182,7 +182,13 @@ export class AtomicLedger {
     this.balances.set(fromKey, fromBalanceAfter);
     this.balances.set(toKey, toBalanceAfter);
 
-    const fromEntry = this.createEntry(params, "TRANSFER", params.amount, fromBalanceBefore, fromBalanceAfter);
+    const fromEntry = this.createEntry(
+      { ...params, playerId: params.fromPlayerId },
+      "TRANSFER",
+      params.amount,
+      fromBalanceBefore,
+      fromBalanceAfter,
+    );
     const toEntry = this.createEntry(
       { ...params, playerId: params.toPlayerId },
       "TRANSFER",

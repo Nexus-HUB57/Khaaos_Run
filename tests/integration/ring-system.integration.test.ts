@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { RingAPI, type WorldRingConfig } from "@game/RingAPI";
+import { describe, it, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { RingAPI, type WorldRingConfig } from "../../server/game/RingAPI.ts";
 
 // ─── Custom World Configs for Testing ────────────────────────────────────────
 
@@ -22,30 +23,30 @@ describe("Ring System Integration Tests", () => {
 
   it("should load CIGKV world config", () => {
     const config = ringAPI.getWorldConfig("CIGKV");
-    expect(config).toBeDefined();
-    expect(config!.worldId).toBe("CIGKV");
-    expect(config!.initialRadius).toBe(500);
+    assert.notStrictEqual(config, undefined);
+    assert.strictEqual(config!.worldId, "CIGKV");
+    assert.strictEqual(config!.initialRadius, 500);
   });
 
   it("should load W1 with water zones", () => {
     const config = ringAPI.getWorldConfig("W1");
-    expect(config).toBeDefined();
-    expect(config!.hasWaterZones).toBe(true);
+    assert.notStrictEqual(config, undefined);
+    assert.strictEqual(config!.hasWaterZones, true);
   });
 
   it("should load all 5 world configs", () => {
     const configs = ringAPI.getAllWorldConfigs();
-    expect(configs).toHaveLength(5);
+    assert.strictEqual(configs.length, 5);
   });
 
   // ─── Ring State Management ────────────────────────────────────────────────
 
   it("should return ring state for a world", () => {
     const state = ringAPI.getRingState("CIGKV");
-    expect(state).toBeDefined();
-    expect(state!.worldId).toBe("CIGKV");
-    expect(state!.currentPhase).toBe(1);
-    expect(state!.currentRadius).toBe(500);
+    assert.notStrictEqual(state, undefined);
+    assert.strictEqual(state!.worldId, "CIGKV");
+    assert.strictEqual(state!.currentPhase, 1);
+    assert.strictEqual(state!.currentRadius, 500);
   });
 
   it("should update ring state for a world", () => {
@@ -54,35 +55,35 @@ describe("Ring System Integration Tests", () => {
       currentRadius: 250,
       damagePerTick: 5,
     });
-    expect(updated).toBeDefined();
-    expect(updated!.currentPhase).toBe(3);
-    expect(updated!.currentRadius).toBe(250);
-    expect(updated!.damagePerTick).toBe(5);
+    assert.notStrictEqual(updated, undefined);
+    assert.strictEqual(updated!.currentPhase, 3);
+    assert.strictEqual(updated!.currentRadius, 250);
+    assert.strictEqual(updated!.damagePerTick, 5);
     // worldId should be preserved
-    expect(updated!.worldId).toBe("CIGKV");
+    assert.strictEqual(updated!.worldId, "CIGKV");
   });
 
   it("should return undefined for non-existent world", () => {
     const state = ringAPI.getRingState("NONEXISTENT");
-    expect(state).toBeUndefined();
+    assert.strictEqual(state, undefined);
   });
 
   // ─── Airdrop Probability ──────────────────────────────────────────────────
 
   it("should return 30% airdrop probability for phase 1", () => {
     const prob = ringAPI.getAirdropProbability(1);
-    expect(prob).toBe(0.3);
+    assert.strictEqual(prob, 0.3);
   });
 
   it("should return 70% airdrop probability for phase 3", () => {
     const prob = ringAPI.getAirdropProbability(3);
-    expect(prob).toBe(0.7);
+    assert.strictEqual(prob, 0.7);
   });
 
   it("should return 100% airdrop probability for phase 5+", () => {
-    expect(ringAPI.getAirdropProbability(5)).toBe(1.0);
-    expect(ringAPI.getAirdropProbability(6)).toBe(1.0);
-    expect(ringAPI.getAirdropProbability(10)).toBe(1.0);
+    assert.strictEqual(ringAPI.getAirdropProbability(5), 1.0);
+    assert.strictEqual(ringAPI.getAirdropProbability(6), 1.0);
+    assert.strictEqual(ringAPI.getAirdropProbability(10), 1.0);
   });
 
   it("should have increasing airdrop probability with phase", () => {
@@ -91,36 +92,36 @@ describe("Ring System Integration Tests", () => {
     const p3 = ringAPI.getAirdropProbability(3);
     const p4 = ringAPI.getAirdropProbability(4);
     const p5 = ringAPI.getAirdropProbability(5);
-    expect(p1).toBeLessThan(p2);
-    expect(p2).toBeLessThan(p3);
-    expect(p3).toBeLessThan(p4);
-    expect(p4).toBeLessThan(p5);
+    assert.ok(p1 < p2);
+    assert.ok(p2 < p3);
+    assert.ok(p3 < p4);
+    assert.ok(p4 < p5);
   });
 
   // ─── Spectator Management ─────────────────────────────────────────────────
 
   it("should add spectator to a world", () => {
     const added = ringAPI.addSpectator("CIGKV", "spectator-1", "free");
-    expect(added).toBe(true);
+    assert.strictEqual(added, true);
   });
 
   it("should get spectators for a world", () => {
     ringAPI.addSpectator("CIGKV", "spec-1", "free");
     ringAPI.addSpectator("CIGKV", "spec-2", "follow");
     const spectators = ringAPI.getSpectators("CIGKV");
-    expect(spectators).toHaveLength(2);
+    assert.strictEqual(spectators.length, 2);
   });
 
   it("should remove spectator from a world", () => {
     ringAPI.addSpectator("CIGKV", "spec-1", "free");
     const removed = ringAPI.removeSpectator("CIGKV", "spec-1");
-    expect(removed).toBe(true);
-    expect(ringAPI.getSpectators("CIGKV")).toHaveLength(0);
+    assert.strictEqual(removed, true);
+    assert.strictEqual(ringAPI.getSpectators("CIGKV").length, 0);
   });
 
   it("should not add spectator to non-existent world", () => {
     const added = ringAPI.addSpectator("NONEXISTENT", "spec-1", "free");
-    expect(added).toBe(false);
+    assert.strictEqual(added, false);
   });
 
   // ─── Multi-World Pipeline ─────────────────────────────────────────────────
@@ -128,22 +129,22 @@ describe("Ring System Integration Tests", () => {
   it("should have correct phase counts across worlds", () => {
     const configs = ringAPI.getAllWorldConfigs();
     for (const config of configs) {
-      expect(config.phases).toBe(5);
+      assert.strictEqual(config.phases, 5);
     }
   });
 
   it("should identify worlds with water zones", () => {
     const configs = ringAPI.getAllWorldConfigs();
     const waterWorlds = configs.filter(c => c.hasWaterZones);
-    expect(waterWorlds).toHaveLength(2); // CIGKV and W1
-    expect(waterWorlds.map(w => w.worldId)).toContain("CIGKV");
-    expect(waterWorlds.map(w => w.worldId)).toContain("W1");
+    assert.strictEqual(waterWorlds.length, 2); // CIGKV and W1
+    assert.ok(waterWorlds.map(w => w.worldId).includes("CIGKV"));
+    assert.ok(waterWorlds.map(w => w.worldId).includes("W1"));
   });
 
   it("should have correct damage per phase across worlds", () => {
     const configs = ringAPI.getAllWorldConfigs();
     for (const config of configs) {
-      expect(config.damagePerPhase).toEqual([1, 3, 5, 10, 25]);
+      assert.deepStrictEqual(config.damagePerPhase, [1, 3, 5, 10, 25]);
     }
   });
 
@@ -151,15 +152,15 @@ describe("Ring System Integration Tests", () => {
     const configs = ringAPI.getAllWorldConfigs();
     const radii = configs.map(c => c.initialRadius);
     // All radii should be different
-    expect(new Set(radii).size).toBe(radii.length);
+    assert.strictEqual(new Set(radii).size, radii.length);
   });
 
   // ─── Discord Broadcast ────────────────────────────────────────────────────
 
   it("should provide Discord bot instance for broadcasting", () => {
     const discordBot = ringAPI.getDiscordBot();
-    expect(discordBot).toBeDefined();
-    expect(typeof discordBot.broadcastEvent).toBe("function");
+    assert.notStrictEqual(discordBot, undefined);
+    assert.strictEqual(typeof discordBot.broadcastEvent, "function");
   });
 
   // ─── Initial Ring States ──────────────────────────────────────────────────
@@ -167,9 +168,9 @@ describe("Ring System Integration Tests", () => {
   it("should initialize all worlds with phase 1", () => {
     for (const config of TEST_WORLD_CONFIGS) {
       const state = ringAPI.getRingState(config.worldId);
-      expect(state).toBeDefined();
-      expect(state!.currentPhase).toBe(1);
-      expect(state!.isFinalPhase).toBe(false);
+      assert.notStrictEqual(state, undefined);
+      assert.strictEqual(state!.currentPhase, 1);
+      assert.strictEqual(state!.isFinalPhase, false);
     }
   });
 });
