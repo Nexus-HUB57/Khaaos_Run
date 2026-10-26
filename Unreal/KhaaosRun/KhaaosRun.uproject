@@ -1,39 +1,45 @@
 {
-	"FileVersion": 3,
-	"EngineAssociation": "5.8",
-	"Category": "",
-	"Description": "Khaaos Run - Battle Royale in Chaotic Worlds | Devs Ph.D",
-	"Modules": [
-		{
-			"Name": "KhaaosRun",
-			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [ "Win64", "Linux", "Mac" ]
-		},
-		{
-			"Name": "KhaaosRunEditor",
-			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [ "Win64", "Mac" ]
-		}
-	],
-	"Plugins": [
-		{ "Name": "ModelingToolsEditorMode", "Enabled": true, "TargetAllowList": [ "Editor" ] },
-		{ "Name": "LyraExtender", "Enabled": true },
-		{ "Name": "GameplayAbilities", "Enabled": true },
-		{ "Name": "GameFeatures", "Enabled": true },
-		{ "Name": "EnhancedInput", "Enabled": true },
-		{ "Name": "OnlineSubsystem", "Enabled": true },
-		{ "Name": "OnlineSubsystemUtils", "Enabled": true },
-		{ "Name": "OnlineServicesInterface", "Enabled": true },
-		{ "Name": "Iris", "Enabled": true },
-		{ "Name": "SignificanceManager", "Enabled": true },
-		{ "Name": "StateTree", "Enabled": true },
-		{ "Name": "Niagara", "Enabled": true },
-		{ "Name": "PCG", "Enabled": true },
-		{ "Name": "AnimationBudgetAllocator", "Enabled": true },
-		{ "Name": "Metasound", "Enabled": true },
-		{ "Name": "EOSIntegrationKit", "Enabled": true }
-	],
-	"TargetPlatforms": [ "Windows", "Linux", "Mac" ]
+        "FileVersion": 3,
+        "EngineAssociation": "5.8",
+        "Category": "",
+        "Description": "Khaaos Run - Battle Royale in Chaotic Worlds | Devs Ph.D",
+        "Modules": [
+                {
+                        "Name": "KhaaosRun",
+                        "Type": "Runtime",
+                        "LoadingPhase": "Default",
+                        "PlatformAllowList": [ "Win64", "Linux", "Mac" ]
+                },
+                {
+                        "Name": "KhaaosRunEditor",
+                        "Type": "Editor",
+                        "LoadingPhase": "Default",
+                        "PlatformAllowList": [ "Win64", "Mac" ]
+                },
+                {
+                        "Name": "KhaaosEAC",
+                        "Type": "Runtime",
+                        "LoadingPhase": "Default",
+                        "PlatformAllowList": [ "Win64", "Linux" ]
+                }
+        ],
+        "Plugins": [
+                { "Name": "ModelingToolsEditorMode", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+                { "Name": "LyraExtender", "Enabled": true },
+                { "Name": "GameplayAbilities", "Enabled": true },
+                { "Name": "GameFeatures", "Enabled": true },
+                { "Name": "EnhancedInput", "Enabled": true },
+                { "Name": "OnlineSubsystem", "Enabled": true },
+                { "Name": "OnlineSubsystemUtils", "Enabled": true },
+                { "Name": "OnlineServicesInterface", "Enabled": true },
+                { "Name": "Iris", "Enabled": true },
+                { "Name": "SignificanceManager", "Enabled": true },
+                { "Name": "StateTree", "Enabled": true },
+                { "Name": "Niagara", "Enabled": true },
+                { "Name": "PCG", "Enabled": true },
+                { "Name": "AnimationBudgetAllocator", "Enabled": true },
+                { "Name": "Metasound", "Enabled": true },
+                { "Name": "EOSIntegrationKit", "Enabled": true }
+        ],
+        "TargetPlatforms": [ "Windows", "Linux", "Mac" ]
 }

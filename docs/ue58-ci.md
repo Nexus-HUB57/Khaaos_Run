@@ -85,3 +85,24 @@ design e versionar artefatos via LFS.
 - [ ] Secret `UE_CONTAINER_PAT` configurado no repo **(ação humana, 5 min)**
 - [ ] Primeiro build `KhaaosRunServer` verde no `UE5.8 Container Build`
 - [ ] (Opcional) runner self-hosted para Editor/cook
+
+## Camada EAC — build condicional com stub (entregue) ✅
+
+O bloqueio de binários não pode mais quebrar o build. O módulo
+`Source/KhaaosEAC/` detecta o SDK **em tempo de build**:
+
+| Estado | Condição | Comportamento |
+|---|---|---|
+| `KHAAOS_EAC_SDK=1` | env `KHAAOS_EAC_SDK_DIR` ou `Source/KhaaosEAC/EACSDK/` com `Sdk/anticheat/sdkdefines.h` | include paths + libs `eacserver`/`eacclient` (Win64 `.lib`/`.dll`, Linux `.so`) + `RuntimeDependencies` |
+| `KHAAOS_EAC_SDK=0` (stub) | SDK ausente | módulo compila; `KhaaosEACSupport::IsSDKAvailable() → false`; runtime opera só com validação local (`KhaaosAntiCheat`/`KhaaosMovementValidator`) |
+
+- O `.uproject` registra `KhaaosEAC` (Runtime, Win64/Linux) e `KhaaosRun` já
+  declara a dependência — quando os binários existirem, as chamadas C reais
+  entram via `Game/AntiCheat/KhaaosEACIntegration` (já estruturado).
+- Preflight valida o contrato: UE1041 (fatal) se o Build.cs do módulo perder a
+  detecção condicional; UE1040 (warning honesto) enquanto os binários não
+  existirem.
+- **Ação humana pendente (inalterada)**: baixar o EAC SDK no dev portal da Epic
+  (conta do jogo, aceitar termos) e descompactar em
+  `Unreal/KhaaosRun/Source/KhaaosEAC/EACSDK/` (ou apontar `KHAAOS_EAC_SDK_DIR`).
+  O preflight passa a sinalizar `KHAAOS_EAC_SDK=1` automaticamente.
