@@ -1,0 +1,118 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Skeetw_Mist",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.664260+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Skeetw fog mist - avian species atmospheric fog trail",
+    "category": "Species",
+    "subcategory": "Skeetw",
+    "species": "Skeetw",
+    "emitters": [
+      {
+        "emitter_name": "Emitter_FogTrail",
+        "spawn_rate": 20.0,
+        "lifetime": 4.0,
+        "initial_size": 50.0,
+        "initial_color": {
+          "r": 0.9,
+          "g": 0.9,
+          "b": 0.95,
+          "a": 0.08
+        },
+        "initial_velocity": 8.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_LimeWisps",
+        "spawn_rate": 10.0,
+        "lifetime": 3.0,
+        "initial_size": 25.0,
+        "initial_color": {
+          "r": 0.5,
+          "g": 0.9,
+          "b": 0.2,
+          "a": 0.05
+        },
+        "initial_velocity": 12.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "Turbulence",
+      "Drag",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Fog_Mist",
+      "sort_order": 0
+    },
+    "gpu_simulation_settings": {
+      "capacity": 256,
+      "spawn_rate": 20.0,
+      "bounds_scale": 3.0
+    },
+    "pool_config": {
+      "max_pool_size": 8,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 2
+  },
+  "species_vfx_config": {
+    "description": "Fog/bio particles - avian species",
+    "primary_color": [
+      0.9,
+      0.9,
+      0.95,
+      1.0
+    ],
+    "secondary_color": [
+      0.5,
+      0.9,
+      0.2,
+      0.75
+    ],
+    "emitter_types": [
+      "Mist",
+      "Feather",
+      "Glow"
+    ],
+    "particle_count_range": [
+      30,
+      150
+    ],
+    "lifetime_range": [
+      1.0,
+      6.0
+    ],
+    "size_range": [
+      15.0,
+      60.0
+    ],
+    "velocity_range": [
+      10.0,
+      60.0
+    ],
+    "gpu_sim_settings": {
+      "capacity": 512,
+      "spawn_rate": 30.0,
+      "bounds_scale": 3.0,
+      "random_seed": 57
+    }
+  },
+  "ue5_import_metadata": {
+    "content_path": "VFX/Species/Skeetw/VFX_Skeetw_Mist",
+    "package_name": "/Game/VFX/Species/Skeetw/VFX_Skeetw_Mist",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "a7b550075c0cb88e"
+}

@@ -1,0 +1,75 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Loot_Pickup",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.658269+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Loot pickup sparkle effect - rarity-colored glow",
+    "category": "Combat",
+    "subcategory": "Loot",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_Sparkle",
+        "spawn_rate": 60.0,
+        "lifetime": 1.0,
+        "initial_size": 5.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 0.9,
+          "b": 0.3,
+          "a": 1.0
+        },
+        "initial_velocity": 30.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Glow",
+        "spawn_rate": 20.0,
+        "lifetime": 2.0,
+        "initial_size": 25.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 0.8,
+          "b": 0.2,
+          "a": 0.3
+        },
+        "initial_velocity": 0.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Loot_Pickup",
+      "sort_order": 3
+    },
+    "gpu_simulation_settings": {
+      "capacity": 128,
+      "spawn_rate": 60.0,
+      "bounds_scale": 1.0
+    },
+    "pool_config": {
+      "max_pool_size": 16,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 2
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Combat/Loot/VFX_Loot_Pickup",
+    "package_name": "/Game/VFX/Combat/Loot/VFX_Loot_Pickup",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "7bfc84bce797a19e"
+}

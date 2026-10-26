@@ -1,0 +1,15 @@
+# UE5.8 Docker Build Ignore
+Intermediate/
+Saved/
+Binaries/
+DerivedDataCache/
+.vs/
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.obj
+*.tlog
+*.lastbuildstate
+*.unsuccessfulbuild
+*.log

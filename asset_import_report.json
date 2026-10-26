@@ -1,0 +1,574 @@
+{
+  "pipeline": "Khaaos_Run Asset Import Pipeline",
+  "started_at": "2026-10-26T23:13:38.583875+00:00",
+  "completed_at": "2026-10-26T23:13:38.684393+00:00",
+  "total_assets": 67,
+  "passed": 67,
+  "failed": 0,
+  "success_rate": "100.0%",
+  "by_type": {
+    "GameplayEffect": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "NiagaraSystem": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "DataTable": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    "manifest": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "uasset.json": {
+      "total": 56,
+      "passed": 56,
+      "failed": 0
+    }
+  },
+  "results": [
+    {
+      "asset_name": "GE_uassets",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/",
+      "status": "PASS",
+      "detail": "29 files generated",
+      "timestamp": "2026-10-26T23:13:38.624622+00:00"
+    },
+    {
+      "asset_name": "VFX_uassets",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/",
+      "status": "PASS",
+      "detail": "27 files generated",
+      "timestamp": "2026-10-26T23:13:38.671401+00:00"
+    },
+    {
+      "asset_name": "DT_SpeciesAbilities",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_SpeciesAbilities.csv",
+      "status": "PASS",
+      "detail": "",
+      "timestamp": "2026-10-26T23:13:38.671641+00:00"
+    },
+    {
+      "asset_name": "DT_GameplayEffects",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_GameplayEffects.csv",
+      "status": "PASS",
+      "detail": "",
+      "timestamp": "2026-10-26T23:13:38.671989+00:00"
+    },
+    {
+      "asset_name": "DT_VFXSystems",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_VFXSystems.csv",
+      "status": "PASS",
+      "detail": "",
+      "timestamp": "2026-10-26T23:13:38.673310+00:00"
+    },
+    {
+      "asset_name": "DT_WeaponBalance",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_WeaponBalance.csv",
+      "status": "PASS",
+      "detail": "",
+      "timestamp": "2026-10-26T23:13:38.673405+00:00"
+    },
+    {
+      "asset_name": "DT_LootTables",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_LootTables.csv",
+      "status": "PASS",
+      "detail": "",
+      "timestamp": "2026-10-26T23:13:38.673509+00:00"
+    },
+    {
+      "asset_name": "ASSET_IMPORT_MANIFEST",
+      "asset_type": "manifest",
+      "path": "Content/ASSET_IMPORT_MANIFEST.json",
+      "status": "PASS",
+      "detail": "61 assets cataloged",
+      "timestamp": "2026-10-26T23:13:38.680517+00:00"
+    },
+    {
+      "asset_name": "GE_Manifest.json",
+      "asset_type": "manifest",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/GE_Manifest.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.680685+00:00"
+    },
+    {
+      "asset_name": "Niagara_VFX_Manifest.json",
+      "asset_type": "manifest",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Niagara_VFX_Manifest.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.680769+00:00"
+    },
+    {
+      "asset_name": "ASSET_IMPORT_MANIFEST.json",
+      "asset_type": "manifest",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/ASSET_IMPORT_MANIFEST.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.680931+00:00"
+    },
+    {
+      "asset_name": "VFX_Zone_Storm.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Zone/Environment/VFX_Zone_Storm.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.682890+00:00"
+    },
+    {
+      "asset_name": "VFX_Zone_Rain.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Zone/Environment/VFX_Zone_Rain.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.682923+00:00"
+    },
+    {
+      "asset_name": "VFX_Zone_Fog.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Zone/Environment/VFX_Zone_Fog.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.682947+00:00"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Metal.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/Impact/VFX_BulletImpact_Metal.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.682969+00:00"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Dirt.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/Impact/VFX_BulletImpact_Dirt.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.682994+00:00"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Concrete.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/Impact/VFX_BulletImpact_Concrete.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683015+00:00"
+    },
+    {
+      "asset_name": "VFX_Loot_Pickup.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/Loot/VFX_Loot_Pickup.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683037+00:00"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Assault.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683058+00:00"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Shotgun.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Shotgun.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683078+00:00"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Sniper.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683102+00:00"
+    },
+    {
+      "asset_name": "VFX_Zheers_RadiationPulse.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Zheers/VFX_Zheers_RadiationPulse.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683131+00:00"
+    },
+    {
+      "asset_name": "VFX_Zheers_Glow.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Zheers/VFX_Zheers_Glow.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683160+00:00"
+    },
+    {
+      "asset_name": "VFX_Zheers_Mutation.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Zheers/VFX_Zheers_Mutation.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683186+00:00"
+    },
+    {
+      "asset_name": "VFX_Venex_Grid.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Venex/VFX_Venex_Grid.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683211+00:00"
+    },
+    {
+      "asset_name": "VFX_Venex_Circuit.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Venex/VFX_Venex_Circuit.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683235+00:00"
+    },
+    {
+      "asset_name": "VFX_Venex_Pulse.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Venex/VFX_Venex_Pulse.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683262+00:00"
+    },
+    {
+      "asset_name": "VFX_Skeetw_Mist.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Skeetw/VFX_Skeetw_Mist.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683288+00:00"
+    },
+    {
+      "asset_name": "VFX_Skeetw_Feather.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Skeetw/VFX_Skeetw_Feather.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683316+00:00"
+    },
+    {
+      "asset_name": "VFX_Onith_Bubble.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Onith/VFX_Onith_Bubble.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683341+00:00"
+    },
+    {
+      "asset_name": "VFX_Onith_Drip.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Onith/VFX_Onith_Drip.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683366+00:00"
+    },
+    {
+      "asset_name": "VFX_Onith_Smoke.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Onith/VFX_Onith_Smoke.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683394+00:00"
+    },
+    {
+      "asset_name": "VFX_Huran_Splash.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Huran/VFX_Huran_Splash.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683419+00:00"
+    },
+    {
+      "asset_name": "VFX_Huran_Bubble.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Huran/VFX_Huran_Bubble.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683446+00:00"
+    },
+    {
+      "asset_name": "VFX_Huran_Ripple.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Huran/VFX_Huran_Ripple.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683469+00:00"
+    },
+    {
+      "asset_name": "VFX_Khael_Shatter.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Khael/VFX_Khael_Shatter.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683524+00:00"
+    },
+    {
+      "asset_name": "VFX_Khael_Crystal.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Khael/VFX_Khael_Crystal.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683557+00:00"
+    },
+    {
+      "asset_name": "VFX_Khael_Frost.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/VFX/Species/Khael/VFX_Khael_Frost.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683581+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_DamageReduction.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_DamageReduction.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683604+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_SpeedBoost.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_SpeedBoost.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683623+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_Overclock.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_Overclock.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683644+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_Shielded.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_Shielded.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683666+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_Canalizacao.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_Canalizacao.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683684+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_HealOverTime.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_HealOverTime.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683703+00:00"
+    },
+    {
+      "asset_name": "GE_Buff_Regen.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Buff/GE_Buff_Regen.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683725+00:00"
+    },
+    {
+      "asset_name": "GE_Cooldown_Sprint.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cooldown/GE_Cooldown_Sprint.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683744+00:00"
+    },
+    {
+      "asset_name": "GE_Cooldown_Heal.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cooldown/GE_Cooldown_Heal.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683761+00:00"
+    },
+    {
+      "asset_name": "GE_Cooldown_GrapplingHook.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cooldown/GE_Cooldown_GrapplingHook.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683790+00:00"
+    },
+    {
+      "asset_name": "GE_Cooldown_Ultimate.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cooldown/GE_Cooldown_Ultimate.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683808+00:00"
+    },
+    {
+      "asset_name": "GE_Cooldown_Shield.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cooldown/GE_Cooldown_Shield.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683829+00:00"
+    },
+    {
+      "asset_name": "GE_Cost_Health.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cost/GE_Cost_Health.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683848+00:00"
+    },
+    {
+      "asset_name": "GE_Cost_Credits.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cost/GE_Cost_Credits.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683869+00:00"
+    },
+    {
+      "asset_name": "GE_Cost_Energy.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Cost/GE_Cost_Energy.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683892+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Frozen.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Frozen.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683916+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Disarmed.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Disarmed.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683939+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Silenced.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Silenced.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.683975+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Burning.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Burning.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684000+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Poisoned.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Poisoned.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684024+00:00"
+    },
+    {
+      "asset_name": "GE_Debuff_Slowed.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Debuff/GE_Debuff_Slowed.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684042+00:00"
+    },
+    {
+      "asset_name": "GE_Damage_Melee.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Combat/GE_Damage_Melee.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684060+00:00"
+    },
+    {
+      "asset_name": "GE_Damage_Bullet.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Combat/GE_Damage_Bullet.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684077+00:00"
+    },
+    {
+      "asset_name": "GE_Damage_Zone.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Combat/GE_Damage_Zone.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684095+00:00"
+    },
+    {
+      "asset_name": "GE_Damage_Explosion.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Combat/GE_Damage_Explosion.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684112+00:00"
+    },
+    {
+      "asset_name": "GE_Species_Huran_RegenAquatica.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Species/GE_Species_Huran_RegenAquatica.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684133+00:00"
+    },
+    {
+      "asset_name": "GE_Species_Zheers_Adaptabilidade.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684151+00:00"
+    },
+    {
+      "asset_name": "GE_Species_Onith_PeleEscamosa.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Species/GE_Species_Onith_PeleEscamosa.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684170+00:00"
+    },
+    {
+      "asset_name": "GE_Species_Skeetw_VooPlanador.uasset.json",
+      "asset_type": "uasset.json",
+      "path": "/home/z/my-project/Khaaos_Run/repo/Unreal/KhaaosRun/Content/GameplayEffects/Species/GE_Species_Skeetw_VooPlanador.uasset.json",
+      "status": "PASS",
+      "detail": "Valid JSON",
+      "timestamp": "2026-10-26T23:13:38.684189+00:00"
+    }
+  ]
+}

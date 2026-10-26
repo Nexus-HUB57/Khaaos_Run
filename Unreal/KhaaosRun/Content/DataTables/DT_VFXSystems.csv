@@ -1,0 +1,28 @@
+VFXName,Category,Subcategory,Species,EmitterCount,RenderType,GPUCapacity,PoolMaxSize,SignificanceRank,Description
+VFX_MuzzleFlash_Assault,Combat,MuzzleFlash,,2,Sprite,256,16,0,Assault rifle muzzle flash - bright flash with smoke wisps
+VFX_MuzzleFlash_Sniper,Combat,MuzzleFlash,,2,Sprite,256,8,0,Sniper muzzle flash - intense directed flash with shockwave ring
+VFX_MuzzleFlash_Shotgun,Combat,MuzzleFlash,,2,Sprite,512,16,0,Shotgun muzzle flash - wide cone flash with debris sparks
+VFX_BulletImpact_Metal,Combat,Impact,,2,Sprite,256,32,1,Bullet impact on metal - sparks + dent decal
+VFX_BulletImpact_Concrete,Combat,Impact,,2,Sprite,256,32,1,Bullet impact on concrete - dust puff + debris
+VFX_BulletImpact_Dirt,Combat,Impact,,2,Sprite,256,32,1,Bullet impact on dirt - soil spray + small dust cloud
+VFX_Loot_Pickup,Combat,Loot,,2,Sprite,128,16,2,Loot pickup sparkle effect - rarity-colored glow
+VFX_Zone_Fog,Zone,Environment,,2,Sprite,2048,4,0,Safe zone fog wall - dense rolling fog particles
+VFX_Zone_Rain,Zone,Environment,,2,Ribbon,4096,2,2,Zone rain effect - directional rain with splashes
+VFX_Zone_Storm,Zone,Environment,,3,Sprite,8192,2,1,Zone storm effect - heavy rain + lightning + wind debris
+VFX_Huran_Splash,Species,Huran,Huran,2,Sprite,512,8,1,Huran water splash - amphibious movement splash particles
+VFX_Huran_Ripple,Species,Huran,Huran,1,Mesh,256,16,2,Huran water ripple - expanding concentric ring on water surface
+VFX_Huran_Bubble,Species,Huran,Huran,1,Sprite,256,16,2,Huran bubble emitter - rising underwater/underfoot bubbles
+VFX_Khael_Crystal,Species,Khael,Khael,2,Mesh,256,8,1,Khael ice crystal formation - growing/shattering crystal shards
+VFX_Khael_Frost,Species,Khael,Khael,2,Sprite,256,8,2,Khael frost aura - cold mist emanating from character
+VFX_Khael_Shatter,Species,Khael,Khael,2,Mesh,512,8,0,Khael ice shatter burst - explosive crystal fragment burst
+VFX_Venex_Circuit,Species,Venex,Venex,2,Ribbon,1024,8,1,Venex circuit trace - neon circuit board pattern on surface
+VFX_Venex_Pulse,Species,Venex,Venex,2,Sprite,512,8,1,Venex neural pulse - expanding cyber ring pulse effect
+VFX_Venex_Grid,Species,Venex,Venex,2,Mesh,1024,4,2,Venex holographic grid - wireframe grid projection
+VFX_Onith_Smoke,Species,Onith,Onith,2,Sprite,512,8,1,Onith toxic smoke - poisonous green/purple smoke cloud
+VFX_Onith_Bubble,Species,Onith,Onith,2,Sprite,256,8,2,Onith toxic bubble - venom bubble that pops on contact
+VFX_Onith_Drip,Species,Onith,Onith,2,Sprite,128,16,2,Onith venom drip - dripping poison from surfaces/character
+VFX_Zheers_Glow,Species,Zheers,Zheers,2,Sprite,256,8,2,Zheers radiation glow - persistent yellow/green radioactive aura
+VFX_Zheers_Mutation,Species,Zheers,Zheers,2,Sprite,512,4,0,Zheers mutation burst - DNA helix particle burst on adapt trigger
+VFX_Zheers_RadiationPulse,Species,Zheers,Zheers,2,Sprite,512,4,1,Zheers radiation pulse wave - expanding radiation ring
+VFX_Skeetw_Mist,Species,Skeetw,Skeetw,2,Sprite,256,8,2,Skeetw fog mist - avian species atmospheric fog trail
+VFX_Skeetw_Feather,Species,Skeetw,Skeetw,2,Mesh,128,8,2,Skeetw feather trail - drifting feather particles during glide

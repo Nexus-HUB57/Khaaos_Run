@@ -1,0 +1,7 @@
+SpeciesID,SpeciesName,Type,PassiveTag,Ability1,Ability2,Ability3,Ultimate
+SPC_Huran,Huran,amphibian,Regeneracao_Aquatica,Splash_Dash,Water_Shield,Heal_Surge,Tidal_Wave
+SPC_Khael,Khael,mystic,Canalizacao_Mistica,Frost_Nova,Ice_Barrier,Crystal_Shard,Absolute_Zero
+SPC_Venex,Venex,cyborg,Overclock_Neural,Pulse_Burst,Circuit_Wall,EMP_Shock,System_Overload
+SPC_Onith,Onith,reptile,Pele_Escamosa,Venom_Spit,Toxic_Cloud,Scale_Armor,Plague_Nova
+SPC_Zheers,Zheers,humanoid,Adaptabilidade,Mutation_Burst,Rad_Pulse,Evolve,Adaptation_Field
+SPC_Skeetw,Skeetw,avian,Voo_Planador,Glide,Feather_Barrage,Mist_Cloak,Storm_Dive

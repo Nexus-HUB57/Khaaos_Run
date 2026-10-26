@@ -1,0 +1,292 @@
+{
+  "manifest_version": "1.0.0",
+  "project": "Khaaos_Run",
+  "engine_version": "5.8",
+  "generated_at": "2026-10-26T23:13:38.665026+00:00",
+  "total_vfx_systems": 27,
+  "categories": {
+    "Combat": 7,
+    "Zone": 3,
+    "Species": 17
+  },
+  "species_vfx_counts": {
+    "Huran": 3,
+    "Khael": 3,
+    "Venex": 3,
+    "Onith": 3,
+    "Zheers": 3,
+    "Skeetw": 2
+  },
+  "vfx_systems": [
+    {
+      "name": "VFX_MuzzleFlash_Assault",
+      "category": "Combat",
+      "subcategory": "MuzzleFlash",
+      "species": null,
+      "description": "Assault rifle muzzle flash - bright flash with smoke wisps",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault.uasset.json"
+    },
+    {
+      "name": "VFX_MuzzleFlash_Sniper",
+      "category": "Combat",
+      "subcategory": "MuzzleFlash",
+      "species": null,
+      "description": "Sniper muzzle flash - intense directed flash with shockwave ring",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper.uasset.json"
+    },
+    {
+      "name": "VFX_MuzzleFlash_Shotgun",
+      "category": "Combat",
+      "subcategory": "MuzzleFlash",
+      "species": null,
+      "description": "Shotgun muzzle flash - wide cone flash with debris sparks",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Shotgun.uasset.json"
+    },
+    {
+      "name": "VFX_BulletImpact_Metal",
+      "category": "Combat",
+      "subcategory": "Impact",
+      "species": null,
+      "description": "Bullet impact on metal - sparks + dent decal",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/Impact/VFX_BulletImpact_Metal.uasset.json"
+    },
+    {
+      "name": "VFX_BulletImpact_Concrete",
+      "category": "Combat",
+      "subcategory": "Impact",
+      "species": null,
+      "description": "Bullet impact on concrete - dust puff + debris",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/Impact/VFX_BulletImpact_Concrete.uasset.json"
+    },
+    {
+      "name": "VFX_BulletImpact_Dirt",
+      "category": "Combat",
+      "subcategory": "Impact",
+      "species": null,
+      "description": "Bullet impact on dirt - soil spray + small dust cloud",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/Impact/VFX_BulletImpact_Dirt.uasset.json"
+    },
+    {
+      "name": "VFX_Loot_Pickup",
+      "category": "Combat",
+      "subcategory": "Loot",
+      "species": null,
+      "description": "Loot pickup sparkle effect - rarity-colored glow",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Combat/Loot/VFX_Loot_Pickup.uasset.json"
+    },
+    {
+      "name": "VFX_Zone_Fog",
+      "category": "Zone",
+      "subcategory": "Environment",
+      "species": null,
+      "description": "Safe zone fog wall - dense rolling fog particles",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Zone/Environment/VFX_Zone_Fog.uasset.json"
+    },
+    {
+      "name": "VFX_Zone_Rain",
+      "category": "Zone",
+      "subcategory": "Environment",
+      "species": null,
+      "description": "Zone rain effect - directional rain with splashes",
+      "emitter_count": 2,
+      "render_type": "Ribbon",
+      "uasset_json_path": "VFX/Zone/Environment/VFX_Zone_Rain.uasset.json"
+    },
+    {
+      "name": "VFX_Zone_Storm",
+      "category": "Zone",
+      "subcategory": "Environment",
+      "species": null,
+      "description": "Zone storm effect - heavy rain + lightning + wind debris",
+      "emitter_count": 3,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Zone/Environment/VFX_Zone_Storm.uasset.json"
+    },
+    {
+      "name": "VFX_Huran_Splash",
+      "category": "Species",
+      "subcategory": "Huran",
+      "species": "Huran",
+      "description": "Huran water splash - amphibious movement splash particles",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Huran/VFX_Huran_Splash.uasset.json"
+    },
+    {
+      "name": "VFX_Huran_Ripple",
+      "category": "Species",
+      "subcategory": "Huran",
+      "species": "Huran",
+      "description": "Huran water ripple - expanding concentric ring on water surface",
+      "emitter_count": 1,
+      "render_type": "Mesh",
+      "uasset_json_path": "VFX/Species/Huran/VFX_Huran_Ripple.uasset.json"
+    },
+    {
+      "name": "VFX_Huran_Bubble",
+      "category": "Species",
+      "subcategory": "Huran",
+      "species": "Huran",
+      "description": "Huran bubble emitter - rising underwater/underfoot bubbles",
+      "emitter_count": 1,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Huran/VFX_Huran_Bubble.uasset.json"
+    },
+    {
+      "name": "VFX_Khael_Crystal",
+      "category": "Species",
+      "subcategory": "Khael",
+      "species": "Khael",
+      "description": "Khael ice crystal formation - growing/shattering crystal shards",
+      "emitter_count": 2,
+      "render_type": "Mesh",
+      "uasset_json_path": "VFX/Species/Khael/VFX_Khael_Crystal.uasset.json"
+    },
+    {
+      "name": "VFX_Khael_Frost",
+      "category": "Species",
+      "subcategory": "Khael",
+      "species": "Khael",
+      "description": "Khael frost aura - cold mist emanating from character",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Khael/VFX_Khael_Frost.uasset.json"
+    },
+    {
+      "name": "VFX_Khael_Shatter",
+      "category": "Species",
+      "subcategory": "Khael",
+      "species": "Khael",
+      "description": "Khael ice shatter burst - explosive crystal fragment burst",
+      "emitter_count": 2,
+      "render_type": "Mesh",
+      "uasset_json_path": "VFX/Species/Khael/VFX_Khael_Shatter.uasset.json"
+    },
+    {
+      "name": "VFX_Venex_Circuit",
+      "category": "Species",
+      "subcategory": "Venex",
+      "species": "Venex",
+      "description": "Venex circuit trace - neon circuit board pattern on surface",
+      "emitter_count": 2,
+      "render_type": "Ribbon",
+      "uasset_json_path": "VFX/Species/Venex/VFX_Venex_Circuit.uasset.json"
+    },
+    {
+      "name": "VFX_Venex_Pulse",
+      "category": "Species",
+      "subcategory": "Venex",
+      "species": "Venex",
+      "description": "Venex neural pulse - expanding cyber ring pulse effect",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Venex/VFX_Venex_Pulse.uasset.json"
+    },
+    {
+      "name": "VFX_Venex_Grid",
+      "category": "Species",
+      "subcategory": "Venex",
+      "species": "Venex",
+      "description": "Venex holographic grid - wireframe grid projection",
+      "emitter_count": 2,
+      "render_type": "Mesh",
+      "uasset_json_path": "VFX/Species/Venex/VFX_Venex_Grid.uasset.json"
+    },
+    {
+      "name": "VFX_Onith_Smoke",
+      "category": "Species",
+      "subcategory": "Onith",
+      "species": "Onith",
+      "description": "Onith toxic smoke - poisonous green/purple smoke cloud",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Onith/VFX_Onith_Smoke.uasset.json"
+    },
+    {
+      "name": "VFX_Onith_Bubble",
+      "category": "Species",
+      "subcategory": "Onith",
+      "species": "Onith",
+      "description": "Onith toxic bubble - venom bubble that pops on contact",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Onith/VFX_Onith_Bubble.uasset.json"
+    },
+    {
+      "name": "VFX_Onith_Drip",
+      "category": "Species",
+      "subcategory": "Onith",
+      "species": "Onith",
+      "description": "Onith venom drip - dripping poison from surfaces/character",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Onith/VFX_Onith_Drip.uasset.json"
+    },
+    {
+      "name": "VFX_Zheers_Glow",
+      "category": "Species",
+      "subcategory": "Zheers",
+      "species": "Zheers",
+      "description": "Zheers radiation glow - persistent yellow/green radioactive aura",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Zheers/VFX_Zheers_Glow.uasset.json"
+    },
+    {
+      "name": "VFX_Zheers_Mutation",
+      "category": "Species",
+      "subcategory": "Zheers",
+      "species": "Zheers",
+      "description": "Zheers mutation burst - DNA helix particle burst on adapt trigger",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Zheers/VFX_Zheers_Mutation.uasset.json"
+    },
+    {
+      "name": "VFX_Zheers_RadiationPulse",
+      "category": "Species",
+      "subcategory": "Zheers",
+      "species": "Zheers",
+      "description": "Zheers radiation pulse wave - expanding radiation ring",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Zheers/VFX_Zheers_RadiationPulse.uasset.json"
+    },
+    {
+      "name": "VFX_Skeetw_Mist",
+      "category": "Species",
+      "subcategory": "Skeetw",
+      "species": "Skeetw",
+      "description": "Skeetw fog mist - avian species atmospheric fog trail",
+      "emitter_count": 2,
+      "render_type": "Sprite",
+      "uasset_json_path": "VFX/Species/Skeetw/VFX_Skeetw_Mist.uasset.json"
+    },
+    {
+      "name": "VFX_Skeetw_Feather",
+      "category": "Species",
+      "subcategory": "Skeetw",
+      "species": "Skeetw",
+      "description": "Skeetw feather trail - drifting feather particles during glide",
+      "emitter_count": 2,
+      "render_type": "Mesh",
+      "uasset_json_path": "VFX/Species/Skeetw/VFX_Skeetw_Feather.uasset.json"
+    }
+  ]
+}

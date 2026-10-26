@@ -1,0 +1,77 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Zone_Fog",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.658525+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Safe zone fog wall - dense rolling fog particles",
+    "category": "Zone",
+    "subcategory": "Environment",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_FogWall",
+        "spawn_rate": 50.0,
+        "lifetime": 4.0,
+        "initial_size": 80.0,
+        "initial_color": {
+          "r": 0.4,
+          "g": 0.4,
+          "b": 0.5,
+          "a": 0.15
+        },
+        "initial_velocity": 10.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Wisps",
+        "spawn_rate": 20.0,
+        "lifetime": 3.0,
+        "initial_size": 40.0,
+        "initial_color": {
+          "r": 0.5,
+          "g": 0.5,
+          "b": 0.55,
+          "a": 0.1
+        },
+        "initial_velocity": 25.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "Turbulence",
+      "Drag",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Zone_Fog",
+      "sort_order": 0
+    },
+    "gpu_simulation_settings": {
+      "capacity": 2048,
+      "spawn_rate": 50.0,
+      "bounds_scale": 5.0
+    },
+    "pool_config": {
+      "max_pool_size": 4,
+      "auto_release_threshold": 10.0
+    },
+    "significance_rank": 0
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Zone/Environment/VFX_Zone_Fog",
+    "package_name": "/Game/VFX/Zone/Environment/VFX_Zone_Fog",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "599c05448acb40d0"
+}
