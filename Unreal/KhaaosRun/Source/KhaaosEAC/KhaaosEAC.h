@@ -18,14 +18,14 @@
  *   - KHAAOS_EAC_SDK=0  → modo stub: módulo compila sem SDK e o runtime opera
  *     apenas com a validação local (KhaaosMovementValidator/KhaaosAntiCheat).
  *
- * Namespace puro em C (sem UHT/UCLASS de propósito — nada aqui precisa de
- * reflexão e headers gerados dependem da engine).
+ * Namespace puro em C++ (sem reflexão/UHT de propósito — nada aqui precisa de
+ * headers gerados pela engine).
  */
 namespace KhaaosEACSupport
 {
-	/** true quando compilado com o SDK real presente (KHAAOS_EAC_SDK=1). */
-	KHAOOSEAC_API bool IsSDKAvailable();
+        /** true quando compilado com o SDK real presente (KHAAOS_EAC_SDK=1). */
+        KHAOOSEAC_API bool IsSDKAvailable();
 
-	/** Status legível: "stub" (sem binários) ou "sdk" (binários vinculados). */
-	KHAOOSEAC_API FString SdkStatus();
+        /** Status legível: "stub" (sem binários) ou "sdk" (binários vinculados). */
+        KHAOOSEAC_API FString SdkStatus();
 }
