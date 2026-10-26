@@ -387,3 +387,74 @@ body.locked .controls-hint { opacity: .25; }
 #spectatorBar .spec-btn.leave { border-color: rgba(232,106,122,.5); color: #e86a7a; }
 body.spectating #crosshair { display: none; }
 body.spectating #operativeAbility { opacity: .35; }
+
+/* ---------- Fase 7 — squads, DBNO e sala privada ---------- */
+.squad-row { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
+.squad-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid rgba(200,255,61,.3); border-radius: 4px;
+  background: rgba(200,255,61,.06); cursor: pointer;
+  font-family: var(--font-mono); color: #e8e3d5; font-size: 12px; letter-spacing: .08em;
+}
+.squad-toggle input { accent-color: #c8ff3d; width: 16px; height: 16px; cursor: pointer; }
+.squad-toggle small { display: block; color: var(--muted); font-size: 9px; letter-spacing: .06em; }
+.squad-toggle.hidden { display: none; }
+.private-room {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border: 1px solid rgba(232,106,122,.4); border-radius: 4px;
+  background: rgba(232,106,122,.07);
+  font-family: var(--font-mono); color: #e8e3d5; font-size: 11px; letter-spacing: .1em;
+}
+.private-room.hidden { display: none; }
+.private-actions { display: flex; gap: 8px; align-items: center; }
+.private-actions input {
+  width: 96px; padding: 8px 10px; text-transform: uppercase;
+  background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.25); border-radius: 3px;
+  color: #ffd28a; font-family: var(--font-mono); font-size: 14px; letter-spacing: .3em; text-align: center;
+}
+.private-actions .ghost-btn { padding: 8px 12px; font-size: 10px; }
+
+#knockOverlay {
+  position: fixed; left: 50%; bottom: 17%; transform: translateX(-50%);
+  z-index: 17; width: min(440px, 84vw);
+  padding: 14px 18px; border-radius: 4px;
+  background: linear-gradient(180deg, rgba(60,8,14,.88), rgba(24,6,10,.9));
+  border: 1px solid rgba(232,50,70,.55);
+  box-shadow: 0 0 40px rgba(160,10,25,.35), inset 0 0 24px rgba(90,0,10,.4);
+  text-align: center; pointer-events: none;
+  font-family: var(--font-mono);
+}
+#knockOverlay.hidden { display: none; }
+#knockOverlay .knock-title {
+  color: #ff4d63; font-size: 20px; letter-spacing: .42em; font-weight: 700;
+  text-shadow: 0 0 14px rgba(255,40,60,.7); margin-bottom: 8px;
+  animation: knockPulse 1.1s ease-in-out infinite;
+}
+@keyframes knockPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+#knockOverlay .knock-bar {
+  height: 8px; border-radius: 3px; overflow: hidden;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.14);
+  margin-bottom: 6px;
+}
+#knockOverlay #knockFill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ff4d63, #ff9a3d);
+  transition: width .3s linear;
+}
+#knockOverlay .revise-wrap, #knockOverlay .revive-wrap { margin: 6px 0 2px; }
+#knockOverlay .revive-wrap.hidden { display: none; }
+#knockOverlay .revive-label { color: #7dff8a; font-size: 10px; letter-spacing: .24em; margin-bottom: 4px; }
+#knockOverlay .revive-bar {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(125,255,138,.3);
+}
+#knockOverlay #reviveFill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #7dff8a, #c8ff3d);
+  transition: width .12s linear;
+}
+#knockOverlay .knock-hint { color: rgba(232,227,213,.75); font-size: 9.5px; letter-spacing: .08em; }
+#knockOverlay .knock-hint kbd {
+  padding: 1px 5px; border: 1px solid rgba(255,255,255,.3); border-radius: 3px;
+  background: rgba(255,255,255,.08); color: #ffd28a;
+}

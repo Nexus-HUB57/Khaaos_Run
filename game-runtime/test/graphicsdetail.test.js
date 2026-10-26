@@ -59,7 +59,7 @@ for (const seed of seeds) {
       for (const l of layout.lootSpots) {
         assert.ok(Math.hypot(p.x - l.x, p.z - l.z) > 3, `prop ${p.type} longe do loot (${l.x},${l.z})`);
       }
-      assert.ok(['lamp', 'barrel', 'tire', 'sandbag', 'pallet', 'barrierprop'].includes(p.type), 'tipo conhecido');
+      assert.ok(['lamp', 'barrel', 'tire', 'sandbag', 'pallet', 'barrierprop', 'crate', 'cone'].includes(p.type), 'tipo conhecido');
     }
   });
 

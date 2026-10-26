@@ -112,7 +112,7 @@ export function roadSegments(layout, { width = 7.5 } = {}) {
  * paletes e margens de calçada — ao longo das estradas e nas bordas de estruturas.
  * @returns [{ type, x, z, rot, s }]
  */
-export function propPlacements(layout, { seed = 'props' } = {}) {
+export function propPlacements(layout, { seed = 'props', density = 1 } = {}) {
   const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
   const roads = roadSegments(layout);
   const colliders = layout.colliders;
@@ -137,15 +137,23 @@ export function propPlacements(layout, { seed = 'props' } = {}) {
       push('lamp', seg.x1 + ux * d + nx * (half + 1.6) * side, seg.z1 + uz * d + nz * (half + 1.6) * side,
         Math.atan2(nx * side, nz * side) * -1);
     }
-    // barris e pneus rentes à borda (junk de beira de estrada)
-    const junk = seg.kind === 'radial' ? 5 : 3;
+    // barris e pneus rentes à borda (junk de beira de estrada) — densidade Fase 7
+    const junk = Math.round((seg.kind === 'radial' ? 5 : 3) * density);
     for (let i = 0; i < junk; i++) {
       const d = 10 + rng.next() * Math.max(4, len - 22);
       const side = rng.next() < .5 ? 1 : -1;
-      const type = rng.next() < .55 ? 'barrel' : 'tire';
+      const roll = rng.next();
+      const type = roll < .42 ? 'barrel' : roll < .68 ? 'tire' : roll < .84 ? 'cone' : 'barrel';
       push(type, seg.x1 + ux * d + nx * (half + .9 + rng.next() * .8) * side,
         seg.z1 + uz * d + nz * (half + .9 + rng.next() * .8) * side, rng.next() * Math.PI * 2,
         .85 + rng.next() * .4);
+    }
+    // caixotes de suprimento perto de estruturas logísticas (GLTF crate)
+    if (seg.kind === 'radial' && rng.next() < .5 * density) {
+      const d = 14 + rng.next() * Math.max(6, len - 30);
+      const side = rng.next() < .5 ? 1 : -1;
+      push('crate', seg.x1 + ux * d + nx * (half + 1.1) * side,
+        seg.z1 + uz * d + nz * (half + 1.1) * side, rng.next() * Math.PI, .9 + rng.next() * .35);
     }
     // paletes ocasionais
     if (seg.kind === 'ring' && rng.next() < .8) {
@@ -158,7 +166,18 @@ export function propPlacements(layout, { seed = 'props' } = {}) {
   // sacos de areia e barricadas de trincheira junto a estruturas grandes (h>=2)
   for (const s of layout.structures) {
     if (s.h < 2 || s.kind === 'monolith') continue;
-    const n = s.h >= 6 ? 2 : 1;
+    const n = Math.round((s.h >= 6 ? 2 : 1) * density);
+    // caixotes junto a depósitos/armazéns (Fase 7 — densidade de props)
+    if ((s.kind === 'warehouse' || s.kind === 'depot' || s.kind === 'hangar') && rng.next() < .75 * density) {
+      for (let i = 0; i < 2; i++) {
+        const side = rng.int(0, 3);
+        const off = (side === 0 ? [s.x + s.w / 2 + 1.4, s.z + (rng.next() - .5) * s.d]
+          : side === 1 ? [s.x - s.w / 2 - 1.4, s.z + (rng.next() - .5) * s.d]
+            : side === 2 ? [s.x + (rng.next() - .5) * s.w, s.z + s.d / 2 + 1.4]
+              : [s.x + (rng.next() - .5) * s.w, s.z - s.d / 2 - 1.4]);
+        push('crate', off[0], off[1], rng.next() * Math.PI, .85 + rng.next() * .4);
+      }
+    }
     for (let i = 0; i < n; i++) {
       const side = rng.int(0, 3);
       const off = (side === 0 ? [s.x + s.w / 2 + 1.8, s.z + (rng.next() - .5) * s.d]

@@ -4,13 +4,14 @@
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO } from './sim3d.js';
-import { buildScene, createRingWall } from './world3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3d.js';
+import { buildScene, createRingWall, applyGltfProps } from './world3d.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
+import { resolveQuality, qualityTier } from './quality3d.js';
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
@@ -24,7 +25,11 @@ export class Game3D {
     this.seed = seed;
     this.scenario = resolveScenario(scenarioId);
     this.selectedOperative = operativeCatalog[0];
-    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true });
+    // Fase 7 — modo squad (DBNO/revive) via ?squad=1; LOD mobile via ?q=low|medium|high
+    const urlParams = new URLSearchParams(location.search);
+    this.squadMode = urlParams.get('squad') === '1';
+    this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
+    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode });
     this.audio = new GameAudio();
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
@@ -81,7 +86,7 @@ export class Game3D {
   initRenderer() {
     this.renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#arena3d'), antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(innerWidth, innerHeight);
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -98,13 +103,12 @@ export class Game3D {
   // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback render direto)
   initPost() {
     const fxOff = new URLSearchParams(location.search).get('fx') === '0';
-    this.post = fxOff ? null : createPostFX(this.renderer, this.scene, this.camera, {
-      quality: this.isTouch() ? 'low' : 'high',
-    });
+    if (fxOff || !qualityTier(this.quality).bloom) { this.post = null; return; }
+    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: 'high' });
   }
 
   initWorld() {
-    const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer); // cenário + envmap PBR (renderer)
+    const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer, this.quality); // cenário + envmap PBR (renderer)
     this.scene = scene;
     this.sun = sun;
     this.ringWall = createRingWall();
@@ -113,11 +117,14 @@ export class Game3D {
     // fonte da luz segue o jogador (sombras estáveis)
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun.target);
+    // Fase 7 — props ganham modelos GLTF REAIS quando os assets carregam
+    // (fallback procedural permanece se o fetch falhar)
+    applyGltfProps(scene);
   }
 
   initEntities() {
-    // jogador
-    this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
+    // jogador (Fase 7 — variant do operativo define acessórios determinísticos)
+    this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
     this.playerOp.group.visible = this.viewMode !== 'fps';
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
@@ -127,13 +134,15 @@ export class Game3D {
     this.botOps = new Map();
     if (!this.online) {
       this.sim.bots.forEach((b, i) => {
+        const ally = this.sim.squad && b.squad && b.squad === this.sim.player.squad;
         const op = createOperative({
           skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
           vest: VEST_COLORS[i % VEST_COLORS.length],
+          variant: b.id,
         });
         this.scene.add(op.group);
-        attachWeapon(op.parts, op.group, b.weapon);
-        this.botOps.set(b.id, { op, weapon: b.weapon, name: this.makeNameTag(b.name, i) });
+        attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
+        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally), ally });
       });
     }
     // loot
@@ -164,6 +173,16 @@ export class Game3D {
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
+    // Fase 7 — toggle de squad offline (recarrega com ?squad=1)
+    const squadToggle = document.querySelector('#squadToggle');
+    if (squadToggle) {
+      squadToggle.checked = this.squadMode;
+      squadToggle.addEventListener('change', () => {
+        const url = new URL(location.href);
+        url.searchParams.set('squad', squadToggle.checked ? '1' : '0');
+        location.assign(url);
+      });
+    }
     select.replaceChildren(...operativeCatalog.map((operative) => {
       const option = document.createElement('option');
       option.value = operative.id;
@@ -206,7 +225,7 @@ export class Game3D {
     setText('#operativeDisplay', `OPERATIVO // ${operative.codename}`);
   }
 
-  makeNameTag(name, i) {
+  makeNameTag(name, i, ally = false) {
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 64;
     const ctx = canvas.getContext('2d');
@@ -214,7 +233,8 @@ export class Game3D {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(8,8,12,.55)';
     ctx.fillRect(48, 6, 160, 44);
-    ctx.fillStyle = i % 2 ? '#e86a7a' : '#d8a0aa';
+    // Fase 7 — aliados de squad em VERDE; inimigos em tons vermelhos
+    ctx.fillStyle = ally ? '#7dff8a' : (i % 2 ? '#e86a7a' : '#d8a0aa');
     ctx.fillText(name, 128, 36);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -529,22 +549,24 @@ export class Game3D {
     animateOperative(this.playerOp.parts, {
       t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+      knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
     });
-    if (airborne) {
+    if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
       this.playerOp.parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
       this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
-    // troca de arma visual
-    if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon) {
-      this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon);
-      this.playerWeapon.userData = { id: p.weapon };
+    // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
+    const pSkin = p.weaponSkin ?? null;
+    if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon || this.playerWeapon.userData?.skin !== pSkin) {
+      this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon, pSkin);
+      this.playerWeapon.userData = { id: p.weapon, skin: pSkin };
       if (this.viewMode === 'fps' && this.firstPersonWeapon) {
         this.firstPersonRig.remove(this.firstPersonWeapon.group);
         this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
-        this.firstPersonWeapon = createWeaponModel(p.weapon);
+        this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin);
         this.firstPersonRig.add(this.firstPersonWeapon.group);
         this.firstPersonWeapon.group.position.set(0, -.17, -.72);
         this.firstPersonWeapon.group.rotation.x = -.08;
@@ -552,40 +574,53 @@ export class Game3D {
     }
     // bots
     const seen = new Set();
+    const mySquad = s.player?.squad ?? null;
     for (const b of s.bots) {
       seen.add(b.id);
       let entry = this.botOps.get(b.id);
       if (!entry) {
-        const op = createOperative({ skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length] });
+        // Fase 7 — aliados do esquadrão em verde; acessórios por variant
+        const ally = !!(s.squad && b.squad && b.squad === mySquad);
+        const op = createOperative({ skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
         this.scene.add(op.group);
-        const name = this.makeNameTag(b.name, 0);
+        const name = this.makeNameTag(b.name, 0, ally);
         op.group.add(name);
-        attachWeapon(op.parts, op.group, b.weapon);
-        entry = { op, weapon: b.weapon, name };
+        attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally };
         this.botOps.set(b.id, entry);
       }
       const g = entry.op.group;
-      g.visible = b.alive || g.userData.deadVisible !== true;
-      if (!b.alive && g.visible) {
-        g.rotation.x = -Math.PI / 2.2; g.position.y = b.y + .35;
-        g.userData.deadVisible = true;
-        entry.name.visible = false;
+      // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
+      if (!b.alive && !b.knocked) {
+        if (!g.userData.deadVisible) {
+          g.visible = true;
+          g.rotation.x = -Math.PI / 2.2; g.position.y = b.y + .35;
+          g.userData.deadVisible = true;
+          entry.name.visible = false;
+        }
         continue;
       }
-      if (!b.alive) continue;
       g.userData.deadVisible = false;
+      g.visible = true;
+      g.rotation.x = 0;
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
-      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching });
+      // Fase 7 — caído rasteja (pose própria); de pé anima normal
+      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked });
       // Fase 4 — pose de queda para bots/remotos
-      if (b.dropPhase) {
+      if (b.dropPhase && !b.knocked) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
         entry.op.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
         entry.op.parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
         entry.op.parts.legL.hip.rotation.x = .5 + flap * .25;
         entry.op.parts.legR.hip.rotation.x = .35 - flap * .25;
       }
-      if (entry.weapon !== b.weapon) { attachWeapon(entry.op.parts, g, b.weapon); entry.weapon = b.weapon; }
+      // Fase 7 — troca de arma + skin por raridade
+      const bSkin = b.weaponSkin ?? null;
+      if (entry.weapon !== b.weapon || entry.skin !== bSkin) {
+        attachWeapon(entry.op.parts, g, b.weapon, bSkin);
+        entry.weapon = b.weapon; entry.skin = bSkin;
+      }
     }
     // Fase 4 — arremessáveis + paraquedas compartilham o mesmo contrato offline/online
     this.syncThrowables(dt);
@@ -748,10 +783,28 @@ export class Game3D {
         }
         case 'kill':
           this.hud.killfeed('VOCÊ', e.target, e.head, true);
-          this.hud.feed('ABATE', `${e.target} neutralizado. +${e.xp} XP / +${e.krc} KRC.`, 'good');
+          this.hud.feed('ABATE', `${e.target} neutralizado.${e.finish ? ' (finalização)' : ''} +${e.xp} XP / +${e.krc} KRC.`, 'good');
+          break;
+        case 'knock':
+          this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          break;
+        case 'botKnocked':
+          this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          break;
+        case 'botKnockFeed':
+          this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
+          break;
+        case 'revived':
+          this.hud.feed('SQUAD', `${e.by} reviveu ${e.targetName}.${e.target === 'player' ? ' De volta ao combate!' : ''}`, 'good');
+          this.audio?.pickup?.();
+          break;
+        case 'knocked':
+          this.hud.feed('ZU', `Você está NOCAUTEADO${e.by ? ` por ${e.by}` : ''} — aliados podem reviver. Rasteje para cobertura.`, 'bad');
+          this.audio?.heartbeat?.();
+          this.hud.damageFlash = .6;
           break;
         case 'killfeed':
-          this.hud.killfeed(e.killer, e.victim, !!e.head, false);
+          this.hud.killfeed(e.killer, e.victim, !!e.head, false, !!e.knock);
           break;
         case 'botKill':
           this.hud.killfeed('RING', e.target, false, false);
@@ -843,6 +896,28 @@ export class Game3D {
   updateInteractionPrompt() {
     const p = this.sim.player;
     if (!p.alive) { this.hud.prompt(null); return; }
+    // Fase 7 — caído: dica de rastejo + estado de revive em andamento
+    if (p.knocked) {
+      const reviving = (p.reviveProgress ?? 0) > 0;
+      this.hud.prompt(reviving ? `REVIVENDO VOCÊ — ${(p.reviveProgress / DBNO.reviveSeconds * 100) | 0}%` : 'NOCAUTADO — rasteje para cobertura e aguarde revive');
+      return;
+    }
+    // Fase 7 — reviver companheiro caído do mesmo esquadrão (prioridade sobre loot)
+    if (this.sim.squad) {
+      const candidates = [this.sim.player, ...(this.sim.bots ?? [])];
+      let mate = null, bestD = DBNO.reviveDistance;
+      for (const c of candidates) {
+        if (c === p || !c.alive || !c.knocked) continue;
+        if (p.squad && c.squad !== p.squad) continue;
+        const d = Math.hypot(c.x - p.x, c.z - p.z);
+        if (d < bestD) { bestD = d; mate = c; }
+      }
+      if (mate) {
+        const pct = Math.min(100, Math.round(((mate.reviveProgress ?? 0) / DBNO.reviveSeconds) * 100));
+        this.hud.prompt(`[E] SEGURE para reviver ${mate.name} — ${pct}%`);
+        return;
+      }
+    }
     let text = null;
     for (const i of this.sim.loot) {
       if (!i.active) continue;

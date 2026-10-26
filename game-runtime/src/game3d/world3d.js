@@ -10,11 +10,13 @@ import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
 import { roadSegments, propPlacements, facadeDetails, canopyTint } from './detail3d.js';
+import { qualityTier } from './quality3d.js';
+import { loadGltfModel, cloneModel } from './assets3d.js';
 import {
   concreteMaterial, metalMaterial, groundMaterial, asphaltMaterial,
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
   roadMaterial, sidewalkMaterial, crosswalkTexture, barrelMaterial,
-  sandbagMaterial, palletMaterial, signTexture, mountainTexture,
+  sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 
@@ -215,13 +217,50 @@ function place(mesh, face, u, y, s, off) {
   mesh.castShadow = false; mesh.receiveShadow = false;
 }
 
+// ---------- Fase 7 — sombras de contato (blob) sob props/árvores/pedras ----------
+// Um único InstancedMesh de planos com gradiente radial ancora cada objeto no
+// chão — custo de 1 draw call, sem depender da resolução do shadow map.
+const CONTACT_SHADOW_SIZES = {
+  lamp: 1.7, barrel: 1.05, tire: 1.0, sandbag: 1.7, pallet: 1.8,
+  barrierprop: 2.9, crate: 1.25, cone: 0.62,
+};
+function buildContactShadows(scene, entries) {
+  if (!entries.length) return;
+  const tex = contactShadowTexture();
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false, opacity: 1,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const im = new THREE.InstancedMesh(geo, mat, entries.length);
+  const dummy = new THREE.Object3D();
+  entries.forEach((e, i) => {
+    dummy.position.set(e.x, 0.012 + i * 0.0006, e.z); // stagger evita z-fighting entre blobs
+    dummy.rotation.set(-Math.PI / 2, 0, e.rot ?? 0);
+    dummy.scale.setScalar(e.size ?? 1);
+    dummy.updateMatrix();
+    im.setMatrixAt(i, dummy.matrix);
+  });
+  im.renderOrder = 1;
+  im.receiveShadow = false;
+  im.castShadow = false;
+  scene.add(im);
+}
+
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
-function buildProps(scene, layout) {
-  const props = propPlacements(layout);
+function buildProps(scene, layout, q) {
+  const props = propPlacements(layout, { density: q.propsFactor });
   if (!props.length) return;
+  // Fase 7 — sombras de contato sob TODOS os props
+  buildContactShadows(scene, props.map((p) => ({
+    x: p.x, z: p.z, rot: 0, size: (CONTACT_SHADOW_SIZES[p.type] ?? 1.2) * (p.s ?? 1),
+  })));
+  // Fase 7 — registro para o upgrade GLTF pós-load (applyGltfProps)
+  scene.userData.propPlacements = props;
   const dummy = new THREE.Object3D();
   const byType = (t) => props.filter(p => p.type === t);
-  const inst = (geo, mat, list, fill, { cast = true, receive = true } = {}) => {
+  const propInstances = {}; // Fase 7 — registro p/ substituição por GLTF
+  const inst = (geo, mat, list, fill, { cast = true, receive = true, type = null } = {}) => {
     if (!list.length) return;
     const im = new THREE.InstancedMesh(geo, mat, list.length);
     let i = 0;
@@ -229,6 +268,8 @@ function buildProps(scene, layout) {
     im.count = i;
     im.castShadow = cast; im.receiveShadow = receive;
     scene.add(im);
+    if (type) propInstances[type] = im;
+    return im;
   };
 
   // postes de luz: mastro + braço + cabeça emissiva
@@ -236,7 +277,7 @@ function buildProps(scene, layout) {
   const poleM = metalMaterial('#3c4046');
   inst(new THREE.CylinderGeometry(.07, .1, 5.2, 6), poleM, lamps, (p) => {
     dummy.position.set(p.x, 2.6, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(p.s);
-  }, { cast: false });
+  }, { cast: false, type: 'lamp-pole' });
   inst(new THREE.BoxGeometry(1.1, .1, .16), poleM, lamps, (p) => {
     dummy.position.set(p.x + Math.sin(p.rot) * .5, 5.1, p.z + Math.cos(p.rot) * .5);
     dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
@@ -247,10 +288,10 @@ function buildProps(scene, layout) {
     dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
   }, { cast: false, receive: false });
 
-  // barris (cilindro com anéis da textura)
+  // barris (cilindro com anéis da textura) — substituído por GLTF real pós-load
   inst(new THREE.CylinderGeometry(.34, .34, .95, 10), barrelMaterial('#4a5545'), byType('barrel'), (p) => {
     dummy.position.set(p.x, .48 * p.s, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
-  });
+  }, { type: 'barrel' });
   // alguns barris deitados
   inst(new THREE.CylinderGeometry(.34, .34, .95, 10), barrelMaterial('#5d5148'), byType('barrel').filter((_, i) => i % 4 === 3), (p) => {
     dummy.position.set(p.x, .34, p.z); dummy.rotation.set(Math.PI / 2, p.rot, 0); dummy.scale.setScalar(p.s);
@@ -277,12 +318,55 @@ function buildProps(scene, layout) {
   inst(new THREE.BoxGeometry(1.25, .14, 1.05), palletMaterial(), byType('pallet'), (p) => {
     dummy.position.set(p.x, .07, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
   });
-  // barricadas de concreto (jersey barrier com listras)
+  // barricadas de concreto (jersey barrier com listras) — GLTF real pós-load
   const barM = concreteMaterial(1);
   barM.color = new THREE.Color('#9a958b');
   inst(new THREE.BoxGeometry(2.2, .95, .55), barM, byType('barrierprop'), (p) => {
     dummy.position.set(p.x, .48, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
-  });
+  }, { type: 'barrierprop' });
+  // caixotes de suprimento (fallback procedural — GLTF substitui pós-load)
+  const crateM = new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: .85 });
+  inst(new THREE.BoxGeometry(.9, .9, .9), crateM, byType('crate'), (p) => {
+    dummy.position.set(p.x, .45 * p.s, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
+  }, { type: 'crate' });
+  // cones de trânsito (fallback procedural — GLTF substitui pós-load)
+  const coneM = new THREE.MeshStandardMaterial({ color: '#e65214', roughness: .7 });
+  inst(new THREE.ConeGeometry(.22, .7, 10), coneM, byType('cone'), (p) => {
+    dummy.position.set(p.x, .35 * p.s, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
+  }, { type: 'cone' });
+  // tipos com asset GLTF real (aplicados depois por applyGltfProps)
+  scene.userData.gltfPropTypes = ['barrel', 'crate', 'cone', 'barrierprop'];
+  scene.userData.propInstances = propInstances;
+}
+
+// Fase 7 — troca os props procedurais por modelos GLTF REAIS assim que carregam.
+// Se o fetch falhar (asset ausente/rede), o procedural PERMANECE — zero regressão.
+export function applyGltfProps(scene) {
+  const placements = scene.userData.propPlacements;
+  const types = scene.userData.gltfPropTypes;
+  const meshes = scene.userData.propInstances;
+  if (!placements || !types || !meshes) return;
+  const map = { barrel: 'barrel', crate: 'crate', cone: 'cone', barrierprop: 'barrier' };
+  for (const type of types) {
+    const asset = map[type];
+    if (!asset) continue;
+    loadGltfModel(asset).then((model) => {
+      if (!model) return;
+      const list = placements.filter((p) => p.type === type);
+      const old = meshes[type];
+      if (old) scene.remove(old);
+      const group = new THREE.Group();
+      for (const p of list) {
+        const clone = cloneModel(model);
+        if (!clone) continue;
+        clone.position.set(p.x, 0, p.z);
+        clone.rotation.y = p.rot ?? 0;
+        clone.scale.setScalar(p.s ?? 1);
+        group.add(clone);
+      }
+      scene.add(group);
+    });
+  }
 }
 
 // ---------- Fase 6 — cordilheira de fundo ----------
@@ -302,12 +386,13 @@ function buildMountains(scene, scenario) {
 }
 
 // ---------- Fase 4 — natureza: árvores, pedras e nuvens ----------
-function buildNature(scene, layout, rng) {
+function buildNature(scene, layout, rng, q) {
   const free = (x, z, m = 4) => layout.colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
   // ---- árvores (tronco levemente inclinado + copa com cor por instância) ----
-  const TREES = 52;
+  const TREES = Math.max(8, Math.round(52 * q.treeFactor));
+  const shadowSpots = []; // Fase 7 — sombras de contato da natureza
   const trunkGeo = new THREE.CylinderGeometry(.14, .32, 3.4, 6);
   const canopyGeo = new THREE.IcosahedronGeometry(1.7, 1);
   const trunkMat = new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: .95 });
@@ -323,6 +408,7 @@ function buildNature(scene, layout, rng) {
     const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
     if (!free(x, z) || !districtClear(x, z)) continue;
     const s = .8 + rng.next() * .7;
+    shadowSpots.push({ x, z, size: 3.1 * s });
     dummy.position.set(x, 1.7 * s, z);
     dummy.scale.setScalar(s);
     dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12); // inclinação orgânica
@@ -346,7 +432,7 @@ function buildNature(scene, layout, rng) {
   scene.add(trunks, canopies);
 
   // ---- arbustos (esferas achatadas escuras rentes ao chão) ----
-  const BUSH = 26;
+  const BUSH = Math.max(6, Math.round(26 * q.bushFactor));
   const bushGeo = new THREE.IcosahedronGeometry(.7, 1);
   const bushMat = new THREE.MeshStandardMaterial({ color: '#45542c', roughness: .95, flatShading: true });
   const bushes = new THREE.InstancedMesh(bushGeo, bushMat, BUSH);
@@ -365,7 +451,7 @@ function buildNature(scene, layout, rng) {
   scene.add(bushes);
 
   // ---- pedras ----
-  const ROCKS = 30;
+  const ROCKS = Math.max(6, Math.round(30 * q.rockFactor));
   const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
   const rockMat = new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .92, flatShading: true });
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, ROCKS);
@@ -374,14 +460,19 @@ function buildNature(scene, layout, rng) {
   while (ri < ROCKS && guard++ < 400) {
     const x = (rng.next() - .5) * 390, z = (rng.next() - .5) * 390;
     if (!free(x, z, 3) || !districtClear(x, z, 2)) continue;
+    const rs = .5 + rng.next() * .9;
+    shadowSpots.push({ x, z, size: 1.5 * rs });
     dummy.position.set(x, .25 + rng.next() * .2, z);
-    dummy.scale.set(.5 + rng.next() * .9, .35 + rng.next() * .5, .5 + rng.next() * .9);
+    dummy.scale.set(rs, .35 + rng.next() * .5, .5 + rng.next() * .9);
     dummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
     dummy.updateMatrix();
     rocks.setMatrixAt(ri++, dummy.matrix);
   }
   rocks.count = ri;
   scene.add(rocks);
+
+  // Fase 7 — sombras de contato sob árvores e pedras (ancoragem no chão)
+  if (q.contactShadows && shadowSpots.length) buildContactShadows(scene, shadowSpots);
 
   // ---- nuvens de crepúsculo ----
   const cloudTex = cloudTexture();
@@ -390,7 +481,7 @@ function buildNature(scene, layout, rng) {
     color: '#d8b8a8',
   });
   const cloudGroup = new THREE.Group();
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < q.cloudCount; i++) {
     const c = new THREE.Mesh(new THREE.PlaneGeometry(90 + rng.next() * 110, 34 + rng.next() * 40), cloudMat);
     const a = rng.next() * Math.PI * 2, r = 160 + rng.next() * 380;
     c.position.set(Math.cos(a) * r, 120 + rng.next() * 90, Math.sin(a) * r);
@@ -404,20 +495,23 @@ function buildNature(scene, layout, rng) {
 }
 
 // ---------- mundo completo ----------
-export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
+export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality = 'high') {
   const scenario = resolveScenario(scenarioId);
+  const q = qualityTier(quality);
   const layout = getWorldLayout(seed, scenario.id);
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0048 : 0.0038);
+  scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0046 : 0.0035);
   scene.userData.scenarioId = scenario.id;
   scene.userData.mapLabel = scenario.mapLabel;
 
   scene.add(createSky(scenario));
 
-  const sun = new THREE.DirectionalLight(scenario.id === 'Barburhen' ? '#dce9f3' : '#ffb37a', 2.6);
+  // Fase 7 — luz recalibrada: sol menos saturado, fill mais suave (contraste
+  // cinematográfico sem lavar as sombras); hemisfério amarra o chão ao céu.
+  const sun = new THREE.DirectionalLight(scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f', 2.35);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
   sun.shadow.camera.near = 10; sun.shadow.camera.far = 700;
   const S = 150;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
@@ -425,12 +519,12 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
   sun.shadow.bias = -0.0004;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(scenario.id === 'Barburhen' ? '#b9d0df' : '#8a6ab0', scenario.id === 'Barburhen' ? '#59646a' : '#3a3028', 1.08);
+  const hemi = new THREE.HemisphereLight(scenario.id === 'Barburhen' ? '#b9d0df' : '#8f74b4', scenario.id === 'Barburhen' ? '#5c676d' : '#4a3d2e', 1.18);
   scene.add(hemi);
-  const fill = new THREE.DirectionalLight('#6a5aa0', 0.55);
+  const fill = new THREE.DirectionalLight('#6a5aa0', 0.72);
   fill.position.set(140, 80, 180);
   scene.add(fill);
-  const back = new THREE.DirectionalLight('#a8885e', 0.6);
+  const back = new THREE.DirectionalLight('#a8885e', 0.55);
   back.position.set(60, 50, 240);
   scene.add(back);
 
@@ -499,10 +593,10 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
     } catch { /* fallback: materiais seguem sem envmap */ }
   }
 
-  // Fase 4/6 — natureza, cordilheira e props
-  buildNature(scene, layout, new SeededRng(`${seed}:nature`));
+  // Fase 4/6/7 — natureza, cordilheira e props (com tier de qualidade)
+  buildNature(scene, layout, new SeededRng(`${seed}:nature`), q);
   buildMountains(scene, scenario);
-  buildProps(scene, layout);
+  buildProps(scene, layout, q);
 
   for (const s of layout.structures) {
     const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
@@ -536,7 +630,7 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
 
   // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
   const bladeTex = grassBladeTexture();
-  const GRASS = 1500;
+  const GRASS = Math.max(200, Math.round(1500 * q.grassFactor));
   const seedRng = { s: 12345, next() { this.s = (this.s * 1103515245 + 12345) & 0x7fffffff; return this.s / 0x7fffffff; } };
   const grassGeo = new THREE.PlaneGeometry(.9, .7);
   const dummy = new THREE.Object3D();
@@ -583,5 +677,6 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null) {
 
   scene.userData.layout = layout;
   scene.userData.sectors = layout.sectors;
-  return { scene, layout, sun, materials: mats };
+  scene.userData.quality = quality;
+  return { scene, layout, sun, materials: mats, quality: q };
 }

@@ -23,6 +23,7 @@ export class Sim3DView {
     this.over = false;
     this.started = false;
     this.aliveCount = 1;
+    this.squad = false; // Fase 7 — ativado quando o snapshot traz squads (salas privadas)
     this.ring = { ...OFFLINE_RING };
     this.player = this.#placeholderPlayer();
     this.bots = [];
@@ -56,6 +57,7 @@ export class Sim3DView {
     this.over = s.over ?? this.over;
     this.started = s.started ?? this.started;
     this.aliveCount = s.aliveCount ?? this.aliveCount;
+    this.squad = !!(s.player?.squad || (s.others ?? []).some((o) => o.squad)); // Fase 7
     if (s.ring) this.ring = { ...s.ring };
     if (s.player) this.player = s.player;
     if (s.others) this.bots = s.others;
@@ -132,6 +134,34 @@ export class OnlineGame3D extends Game3D {
     };
     net.onEvent = (evt) => this.view.queueEvent(evt, net.myId);
     net.onRejected = (msg) => this.hud.feed('ANTI-CHEAT', `Input rejeitado: ${msg.violations?.join(', ')}`, 'bad');
+    // ---------- Fase 7 — salas privadas com código de convite ----------
+    const privateBox = document.querySelector('#privateRoomBox');
+    if (privateBox) privateBox.classList.remove('hidden');
+    const squadToggleBox = document.querySelector('#squadToggleBox');
+    if (squadToggleBox) squadToggleBox.classList.add('hidden'); // squad offline não se aplica ao online
+    document.querySelector('#createPrivateBtn')?.addEventListener('click', () => {
+      net.createPrivate();
+      this.hud.feed('SQUAD', 'Criando sala privada squad (DBNO)...', 'warn');
+    });
+    document.querySelector('#joinPrivateBtn')?.addEventListener('click', () => {
+      const input = document.querySelector('#inviteCode');
+      const code = input?.value?.trim();
+      if (!code) { this.hud.feed('SQUAD', 'Digite o código de convite (6 caracteres).', 'bad'); return; }
+      net.joinPrivate(code);
+    });
+    net.onPrivateCreated = (code) => {
+      this.hud.feed('SQUAD', `Sala privada criada! Código: ${code} — compartilhe com o esquadrão.`, 'good');
+      this.hud.setMatchStatus(`SALA PRIVADA // ${code}`);
+      const input = document.querySelector('#inviteCode');
+      if (input) input.value = code;
+      this.audio?.ui?.();
+    };
+    net.onPrivateJoined = (code) => {
+      this.hud.feed('SQUAD', `Entrou na sala privada ${code}. Esquadrão pronto — aperte CINTO para iniciar.`, 'good');
+      this.hud.setMatchStatus(`SALA PRIVADA // ${code}`);
+      this.audio?.ui?.();
+    };
+    net.onPrivateError = (message) => this.hud.feed('SQUAD', message, 'bad');
     this.pingTimer = setInterval(() => {
       if (!this.zuOpen) this.hud.setMatchStatus(`ONLINE // PING ${net.rtt ?? '—'}ms // ${this.view.aliveCount} VIVOS`);
     }, 3000);

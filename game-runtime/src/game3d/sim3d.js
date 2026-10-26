@@ -80,6 +80,96 @@ export const DEFAULT_INPUT = Object.freeze({
 // (padrão legado/testes) a morte encerra a partida imediatamente.
 export const SPECTATE_MIN_ALIVE = 2;
 
+// ---------- Fase 7 — Squad & DBNO (knockdown/revive, estilo FreeFire) ----------
+// No modo squad, dano letal NÃO elimina: o operativo cai NOCAUTEADO (knocked),
+// rasteja lentamente e sangra até o fim do contador. Um aliado do MESMO esquadrão,
+// vivo e de pé, que segure INTERAGIR por perto revive o companheiro. Dano recebido
+// já caído é letal (finalização). Companheiros caídos sangram mais rápido a cada
+// nocaute subsequente (bleedOutDecay).
+export const DBNO = {
+  bleedOutSeconds: 45,     // tempo de sangramento do 1º nocaute
+  bleedOutDecay: 0.72,     // multiplicador do contador a cada nocaute extra
+  reviveSeconds: 3.2,      // canalização de revive (segure E)
+  reviveDistance: 2.4,     // alcance do revive (m)
+  reviveLifeFraction: 0.4, // vida restaurada no revive
+  crawlSpeedMult: 0.42,    // velocidade rastejando
+};
+
+// Esquadrões determinísticos: ids na ordem recebida → grupos de `size` (sq-1..)
+export function assignSquads(actorIds, size = 4) {
+  const squads = {};
+  actorIds.forEach((id, i) => { squads[id] = `sq-${Math.floor(i / size) + 1}`; });
+  return squads;
+}
+
+// Aplica o estado de nocaute em um ator (vida já <= 0). Retorna o próprio ator.
+export function knockActor(a, ownerId, kind = 'body') {
+  a.knocked = true;
+  a.alive = true;
+  a.life = 0;
+  a.knockT = DBNO.bleedOutSeconds * Math.pow(DBNO.bleedOutDecay, a.downedCount ?? 0);
+  a.downedCount = (a.downedCount ?? 0) + 1;
+  a.reviveProgress = 0;
+  a.lastReviveTick = -1;
+  if (ownerId) a.lastHitBy = ownerId;
+  a.lastKnockKind = kind;
+  return a;
+}
+
+// Melhor alvo de revive para `actor`: companheiro do MESMO esquadrão, caído,
+// vivo, dentro do alcance — o mais próximo.
+export function reviveTargetFor(actor, candidates) {
+  let best = null, bestD = DBNO.reviveDistance;
+  for (const c of candidates) {
+    if (c === actor || !c.alive || !c.knocked) continue;
+    if (actor.squad && c.squad !== actor.squad) continue;
+    const d = Math.hypot(c.x - actor.x, c.z - actor.z);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+// Um passo de canalização de revive. Retorna true quando concluído.
+export function stepRevive(target, dt) {
+  target.reviveProgress = (target.reviveProgress ?? 0) + dt;
+  if (target.reviveProgress >= DBNO.reviveSeconds) {
+    target.knocked = false;
+    target.reviveProgress = 0;
+    target.life = Math.round(100 * DBNO.reviveLifeFraction);
+    return true;
+  }
+  return false;
+}
+
+// ---------- Fase 7 — balanceamento da letalidade dos bots ----------
+// Constantes CENTRALIZADAS (sim offline e MatchRoom3D consomem as MESMAS fórmulas).
+// Após o fix NaN da Fase 5, os bots finalmente acertam — o tuning reintroduz
+// tempo de reação, erro por distância e rajadas mais curtas, além de dano que
+// decai com a distância (bots continuam letais de perto, toleráveis de longe).
+export const BOT_COMBAT = {
+  dmgScaleClose: 0.55,  // dano boca do cano (fração do dano da arma)
+  dmgScaleFar: 0.34,    // dano no limite do decaimento
+  dmgFarStart: 14,      // m — início do decaimento de dano
+  dmgFarEnd: 64,        // m — fim do decaimento
+  aimErrBase: 0.5,      // erro humano base (m no ponto alvo)
+  aimErrPerM: 0.014,    // erro adicional por metro de distância
+  aimErrMax: 1.35,      // teto do erro
+  reactionMin: 0.38,    // s de reação ao adquirir alvo
+  reactionMax: 0.8,
+  burstMin: 2,          // tiros por rajada (antes: 3)
+  burstMax: 5,          // (antes: 6)
+  burstCooldownMin: 1.25, // pausa entre rajadas (antes: 1.1)
+  burstCooldownMax: 2.7,  // (antes: 2.5)
+  reloadChance: 0.25,
+};
+export function botAimError(d) {
+  return BOT_COMBAT.aimErrBase + Math.min(BOT_COMBAT.aimErrMax - BOT_COMBAT.aimErrBase, d * BOT_COMBAT.aimErrPerM);
+}
+export function botDamageScale(d) {
+  const t = clamp((d - BOT_COMBAT.dmgFarStart) / (BOT_COMBAT.dmgFarEnd - BOT_COMBAT.dmgFarStart), 0, 1);
+  return BOT_COMBAT.dmgScaleClose + (BOT_COMBAT.dmgScaleFar - BOT_COMBAT.dmgScaleClose) * t;
+}
+
 // ---------- utilitários de colisão ----------
 // Exportados para reuso pela MatchRoom3D autoritativa (server/room3d.js).
 export function circlePushAabb(px, pz, r, b) {
@@ -131,7 +221,9 @@ export function stepActorMovement(a, input, dt, world) {
   const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   const sprintIntent = !!(input.sprint && !input.ads && hasMove);
   a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
-  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1;  a.ads = !!input.ads;
+  // Fase 7 — caído não corre, não desliza e não salta: só rasteja
+  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1 && !a.knocked;  a.ads = !!input.ads;
+  if (a.knocked) a.sliding = false;
   if (!a.sliding && a.onGround && sprintIntent && input.crouch && a.stamina > 0.1) {
     a.sliding = true;
     a.slideT = 0.68;
@@ -144,6 +236,7 @@ export function stepActorMovement(a, input, dt, world) {
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
   let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
   if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
+  if (a.knocked) sp *= DBNO.crawlSpeedMult; // rastejar (DBNO)
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
   if (a.dropPhase) { a.sprinting = false; a.ads = false; a.crouching = false; sp = a.speed * DROP_SPEED_MULT; }
   if (Number.isFinite(a.abilityDistanceBudget)) sp = Math.min(sp, a.abilityDistanceBudget / Math.max(dt, 1e-6));
@@ -182,9 +275,10 @@ export function stepActorMovement(a, input, dt, world) {
     }
     return a;
   }
-  // vertical
-  if (!a.onGround || input.jump) {
-    if (a.onGround && input.jump) { a.vy = WORLD.jumpVel; a.onGround = false; }
+  // vertical (caído não salta — Fase 7)
+  const wantJump = !!input.jump && !a.knocked;
+  if (!a.onGround || wantJump) {
+    if (a.onGround && wantJump) { a.vy = WORLD.jumpVel; a.onGround = false; }
     a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
     if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
   }
@@ -287,7 +381,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false, squad = false } = {}) {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
@@ -297,10 +391,17 @@ export class KhaaosSim3D {
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
+    this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.player = this.#spawnPlayer();
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
+    // Fase 7 — esquadrões determinísticos: jogador lidera o sq-1 (3 aliados)
+    if (this.squad) {
+      const squads = assignSquads(['player', ...this.bots.map((b) => b.id)], 4);
+      this.player.squad = squads.player;
+      for (const b of this.bots) b.squad = squads[b.id];
+    }
     this.bullets = []; this.nextBulletId = 1;
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
     this.loot = this.#spawnLoot();
@@ -318,7 +419,8 @@ export class KhaaosSim3D {
   // ---------- spawn ----------
   #spawnPlayer() {
     return { id: 'player', name: 'ZHEERS-07', x: this.world.playerSpawn.x, y: 0, z: this.world.playerSpawn.z, vy: 0, yaw: 0, pitch: 0,
-      life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19',
+      life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19', weaponSkin: null,
+      knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       operativeId: 'OP_MALE_VANGUARD',
       temporaryArmor: 0,
       abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
@@ -333,9 +435,11 @@ export class KhaaosSim3D {
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), weaponSkin: null,
+      cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
-      ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };
+      ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
   }
   #spawnLoot() {
     const zones = ['armory', 'industrial', 'park', 'extraction'];
@@ -490,6 +594,14 @@ export class KhaaosSim3D {
     if (p.alive) this.#stepActor(p, input, dt, true);
     // --- bots ---
     for (const b of this.bots) if (b.alive) this.#stepBot(b, dt);
+    // --- Fase 7 — DBNO: sangramento, cancelamento de revive e mortes finais ---
+    for (const a of [p, ...this.bots]) {
+      if (!a.alive || !a.knocked) continue;
+      // revive interrompido (o revivador soltou E / saiu do alcance / morreu)
+      if ((a.reviveProgress ?? 0) > 0 && a.lastReviveTick !== this.tick) a.reviveProgress = 0;
+      a.knockT -= dt;
+      if (a.knockT <= 0) this.#finalizeDeath(a, null, 'bleedout');
+    }
     // --- projéteis e arremessáveis ---
     this.#stepBullets(dt);
     this.#stepThrowables(dt);
@@ -527,6 +639,10 @@ export class KhaaosSim3D {
     stepActorMovement(a, input, dt, this.physicsWorld);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
+    if (a.knocked) return;
+    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
+    if (this.squad && input.interact) this.#tryRevive(a, dt);
     if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
       a.abilityState.distanceRemaining = a.abilityDistanceBudget;
       if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeTicks = 0;
@@ -543,6 +659,16 @@ export class KhaaosSim3D {
         if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
         else if (input.fire) this.#fire(a, w);
       }
+    }
+  }
+
+  // Fase 7 — canalização de revive (aliado de pé, mesmo esquadrão, no alcance)
+  #tryRevive(a, dt) {
+    const mate = reviveTargetFor(a, [this.player, ...this.bots]);
+    if (!mate) return;
+    mate.lastReviveTick = this.tick;
+    if (stepRevive(mate, dt)) {
+      this.emit('revived', { by: a.name, target: mate.id, targetName: mate.name, life: mate.life });
     }
   }
 
@@ -614,13 +740,26 @@ export class KhaaosSim3D {
 
   #stepBot(b, dt) {
     const p = this.player;
+    // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
+    if (b.knocked) {
+      const ang = Math.atan2(b.x, b.z); // yaw apontando para o centro (frente = -Z)
+      b.yaw += Math.atan2(Math.sin(ang - b.yaw), Math.cos(ang - b.yaw)) * Math.min(1, dt * 4);
+      this.#stepActor(b, { ...DEFAULT_INPUT, dy: -0.5, yaw: b.yaw }, dt, false);
+      return;
+    }
     // Fase 5 — alvo: ator vivo mais próximo com LOS (jogador OU outros bots —
     // combate bot-vs-bot dá vida ao ring e sustenta o modo espectador)
+    // Fase 7 — squads: ignora o próprio esquadrão; prioriza alvos de pé
+    // (caídos são finalizados só quando não há ninguém de pé à vista)
     let target = null, bestD = BOT_SIGHT_3D;
-    for (const other of [p, ...this.bots]) {
-      if (other === b || !other.alive) continue;
-      const d = dist2d(b.x, b.z, other.x, other.z);
-      if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
+    for (const passKnocked of [false, true]) {
+      for (const other of [p, ...this.bots]) {
+        if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        if (this.squad && other.squad === b.squad) continue;
+        const d = dist2d(b.x, b.z, other.x, other.z);
+        if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
+      }
+      if (target) break;
     }
     // Fase 4 — na queda: deriva para o destino de aterrissagem, sem combate
     if (b.dropPhase) {
@@ -651,12 +790,20 @@ export class KhaaosSim3D {
       }
     }
     let tx, tz, run = 0.62;
+    // Fase 7 — resgate: sem inimigo de pé próximo, busca e revive companheiro caído
+    let rescuing = null;
+    if (this.squad) {
+      const mate = [p, ...this.bots].find((o) => o !== b && o.alive && o.knocked && o.squad === b.squad && dist2d(b.x, b.z, o.x, o.z) < 40);
+      if (mate && !(target && bestD < 24)) rescuing = mate;
+    }
     if (b.ai.state === 'engage' && target) {
       const ideal = 16;
       const away = bestD < ideal ? -1 : 1;
       b.ai.strafe += dt * 1.7;
       tx = target.x + Math.cos(b.ai.strafe) * away * 6; tz = target.z + Math.sin(b.ai.strafe) * away * 6;
       run = 1;
+    } else if (rescuing) {
+      tx = rescuing.x; tz = rescuing.z; run = 1;
     } else if (b.ai.state === 'hunt') {
       tx = b.ai.lx ?? p.x; tz = b.ai.lz ?? p.z;
       if (dist2d(b.x, b.z, tx, tz) < 5) b.ai.state = 'patrol';
@@ -670,12 +817,23 @@ export class KhaaosSim3D {
     const inAngle = Math.atan2(-ax, -az); // yaw apontando para o destino
     b.yaw += Math.atan2(Math.sin(inAngle - b.yaw), Math.cos(inAngle - b.yaw)) * Math.min(1, dt * 6);
     // frente do ator é -Z: para CAMINHAR na direção do yaw o input é dy negativo
-    const input = { ...DEFAULT_INPUT, dx: 0, dy: -run, yaw: b.yaw, pitch: 0 };
-    this.#stepActor(b, input, dt, false);
+    const inReviveRange = rescuing && dist2d(b.x, b.z, rescuing.x, rescuing.z) < DBNO.reviveDistance;
+    const input = { ...DEFAULT_INPUT, dx: 0, dy: inReviveRange ? 0 : -run, yaw: b.yaw, pitch: 0, interact: inReviveRange };
+    this.#stepActor(b, input, dt, false); // #tryRevive (via input.interact) canaliza o revive
+    if (inReviveRange) return; // canalizando: não atira
     // disparo — erro humano: espalha o ponto alvo em vez do cone de saída
+    // Fase 7 — tempo de reação ao adquirir um NOVO alvo antes do 1º tiro
     const w = WEAPONS3D[b.weapon];
-    if (sees && target && b.cooldown <= 0 && b.reloadT <= 0) {
-      const err = 0.45 + Math.min(1.2, bestD * 0.012);
+    if (sees && target) {
+      if (b.ai.reactTargetId !== target.id) {
+        b.ai.reactTargetId = target.id;
+        b.ai.reactT = BOT_COMBAT.reactionMin + this.rng.next() * (BOT_COMBAT.reactionMax - BOT_COMBAT.reactionMin);
+      }
+      b.ai.reactT -= dt;
+    } else b.ai.reactTargetId = null;
+    if (sees && target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
+      const err = botAimError(bestD);
+      const dmgScale = botDamageScale(bestD);
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
@@ -684,11 +842,11 @@ export class KhaaosSim3D {
         tx: target.x + (this.rng.next() - 0.5) * err * 2,
         ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
-      }, 0.012, w, 0.55);
+      }, 0.012, w, dmgScale);
       b.burst++;
-      if (b.burst >= (w.category === 'sniper' ? 1 : 3 + Math.floor(this.rng.next() * 4))) {
-        b.burst = 0; b.cooldown = 1.1 + this.rng.next() * 1.4;
-        if (this.rng.next() < 0.25) b.reloadT = w.reload;
+      if (b.burst >= (w.category === 'sniper' ? 1 : BOT_COMBAT.burstMin + Math.floor(this.rng.next() * (BOT_COMBAT.burstMax - BOT_COMBAT.burstMin + 1)))) {
+        b.burst = 0; b.cooldown = BOT_COMBAT.burstCooldownMin + this.rng.next() * (BOT_COMBAT.burstCooldownMax - BOT_COMBAT.burstCooldownMin);
+        if (this.rng.next() < BOT_COMBAT.reloadChance) b.reloadT = w.reload;
       } else b.cooldown = 1 / w.fireRate;
     }
   }
@@ -885,8 +1043,19 @@ export class KhaaosSim3D {
     if (!bot.alive) return;
     if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
+    if (ownerId) bot.lastHitBy = ownerId;
     if (bot.life <= 0) {
+      // Fase 7 — squads: primeiro dano letal NOCAUTEIA (finalização mata de vez)
+      if (this.squad && !bot.knocked) {
+        knockActor(bot, ownerId, head ? 'headshot' : kind);
+        if (ownerId === 'player') {
+          this.player.xp += head ? 60 : 40; this.player.krc += 5;
+          this.emit('botKnocked', { target: bot.name, head, xp: head ? 60 : 40, krc: 5 });
+        } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
+        return;
+      }
       bot.alive = false;
+      bot.knocked = false;
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
         this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
@@ -911,10 +1080,32 @@ export class KhaaosSim3D {
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {
-      p.life = 0; p.alive = false;
+      // Fase 7 — squads: nocaute com chance de revive; dano já caído elimina
+      if (this.squad && !p.knocked) {
+        knockActor(p, ownerId, kind);
+        this.emit('knocked', { by: ownerId, kind, knockT: p.knockT });
+        return;
+      }
+      p.life = 0; p.alive = false; p.knocked = false;
       // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
-      const placement = [this.player, ...this.bots].filter(a => a.alive).length + 1;
+      const placement = [this.player, ...this.bots].filter((a) => a.alive).length + 1;
       this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
+    }
+  }
+  // Fase 7 — morte final (sangramento no DBNO)
+  #finalizeDeath(a, ownerId, kind) {
+    a.alive = false;
+    a.knocked = false;
+    if (a.id === 'player') {
+      const placement = [this.player, ...this.bots].filter((x) => x.alive).length + 1;
+      this.emit('eliminated', { kills: a.kills, by: a.lastHitBy ?? null, placement });
+    } else {
+      const killerId = ownerId ?? a.lastHitBy ?? null;
+      if (killerId === 'player') {
+        const krc = Math.round(15 * this.scenario.krcMultiplier);
+        this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
+      } else this.emit('botKill', { target: a.name, kind });
     }
   }
 
@@ -951,6 +1142,7 @@ export class KhaaosSim3D {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
       a.slots[a.activeSlot] = id; a.weapon = id;
+      a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
       a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
       if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
       a.reloadT = 0;
@@ -982,6 +1174,7 @@ export class KhaaosSim3D {
     const old = WEAPONS3D[a.weapon];
     if (old && old.ammo !== 'none') a.inventory.ammo[old.ammo] = (a.inventory.ammo[old.ammo] || 0) + a.ammoMag;
     a.activeSlot = slot; a.weapon = a.slots[slot];
+    a.weaponSkin = null; // skin pertence à arma coletada, não ao slot
     const w = WEAPONS3D[a.weapon];
     a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
     if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;

@@ -15,7 +15,7 @@ import { AuditLog } from './audit.js';
 import { can } from './rbac.js';
 import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
-import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
+import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode, makeInviteCode, normalizeInviteCode, findRoomByCode } from './matchmaking.js';
 import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
@@ -530,6 +530,37 @@ export function createAuthoritativeServer({
         try {
           const message = JSON.parse(raw.toString());
           if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t }); return; }
+          // ---------- Fase 7 — salas privadas com código de convite (modo 3D) ----------
+          if (message.type === 'create_private') {
+            if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }
+            const rngCrypto = () => crypto.randomBytes(4).readUInt32BE(0) / 0x100000000;
+            const room = new MatchRoom3D({
+              id: `priv3d-${nextRoom++}`,
+              seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
+              region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
+              squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto),
+            });
+            rooms.set(room.id, room);
+            const position = queue.indexOf(client);
+            if (position >= 0) queue.splice(position, 1);
+            room.addPlayer(client.id, client.identity.username);
+            client.roomId = room.id;
+            audit.record({ actor: client.identity.username, action: 'room.private.create', resource: room.id, outcome: 'allow', detail: { code: room.inviteCode } });
+            send(ws, { type: 'private_created', code: room.inviteCode, roomId: room.id, region: room.region, snapshot: room.snapshot(client.id) });
+            return;
+          }
+          if (message.type === 'join_private') {
+            if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }
+            const room = findRoomByCode(rooms, normalizeInviteCode(message.code));
+            if (!room) { send(ws, { type: 'private_not_found', code: normalizeInviteCode(message.code) }); return; }
+            const position = queue.indexOf(client);
+            if (position >= 0) queue.splice(position, 1);
+            room.addPlayer(client.id, client.identity.username);
+            client.roomId = room.id;
+            audit.record({ actor: client.identity.username, action: 'room.private.join', resource: room.id, outcome: 'allow' });
+            send(ws, { type: 'private_joined', code: room.inviteCode, roomId: room.id, region: room.region, snapshot: room.snapshot(client.id) });
+            return;
+          }
           if (message.type === 'start') {
             const room = getRoom(client);
             if (!can(client.identity, 'room:start', room?.id)) {
