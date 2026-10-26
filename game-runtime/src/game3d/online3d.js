@@ -10,6 +10,7 @@ import { NetClient3D } from './net3d.js';
 import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
+import { officerCatalogEntries } from './officers.js';
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -124,10 +125,13 @@ export class OnlineGame3D extends Game3D {
     if (operativeSelect) operativeSelect.disabled = false; // Fase 8 — identidade sincroniza online
     const selectionStatus = document.querySelector('#contentSelectionStatus');
     if (selectionStatus) selectionStatus.textContent = 'ONLINE: o operativo sincroniza com a sala; a habilidade é autoritativa (Q).';
-    // Fase 8 — troca de operativo no LOBBY declara a identidade ao servidor
+    // Fase 8 — troca de operativo no LOBBY declara a identidade ao servidor.
+    // Fase 11 — a lista também contém as insígnias OCE (o servidor valida contra
+    // o plano do POJ — recusa chega como evento operative_error no feed).
     operativeSelect?.addEventListener('change', () => {
-      const operative = operativeCatalog.find((entry) => entry.id === operativeSelect.value);
-      if (operative) this.net?.setOperative(operative.id);
+      const officer = officerCatalogEntries().find((entry) => entry.id === operativeSelect.value);
+      const operative = officer ?? operativeCatalog.find((entry) => entry.id === operativeSelect.value);
+      if (operative) { this.selectedOperative = operative; this.net?.setOperative(operative.id); }
     });
     const seedInput = document.querySelector('#seedInput');
     if (seedInput) { seedInput.disabled = true; seedInput.value = 'SERVIDOR'; }
@@ -286,6 +290,8 @@ export class OnlineGame3D extends Game3D {
     const weapon = this.sim.player?.weapon ?? 'g19';
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
     this.playerWeapon.userData = { id: weapon };
+    // Fase 11 — ZU: trem de infiltração também no Ring online (só câmera)
+    this.startTrainIntro();
   }
 
   loop() {

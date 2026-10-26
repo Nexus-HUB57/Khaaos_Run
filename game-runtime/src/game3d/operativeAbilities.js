@@ -1,6 +1,27 @@
 // Khaaos Run — habilidades ativas locais dos 16 operativos canônicos.
 // Todos os efeitos são resolvidos pela simulação determinística; o modo online não os ativa.
 export const OPERATIVE_ABILITIES = Object.freeze({
+  // Fase 11 — Oficiais de Classe Especial JOGÁVEIS: habilidades canônicas da
+  // insígnia, mapeadas nos efeitos autoritativos existentes (dash/baluarte/recon)
+  // — nenhum efeito novo, mesmo caminho de validação dos 16 operativos.
+  OCE_01: Object.freeze({
+    operativeId: 'OCE_01', name: 'Carga do Marechal', effect: 'dash',
+    cooldownSeconds: 55, durationSeconds: 2,
+    parameters: Object.freeze({ speedMultiplier: 1.7, maxDistance: 9 }),
+    description: 'Arranque de insígnia da Classe Especial: avança até 9 metros em 2 segundos, parando em colisões.',
+  }),
+  OCE_02: Object.freeze({
+    operativeId: 'OCE_02', name: 'Baluarte da Classe Especial', effect: 'damageReduction',
+    cooldownSeconds: 55, durationSeconds: 6,
+    parameters: Object.freeze({ damageReduction: 0.25 }),
+    description: 'Disciplina de blindagem: reduz em 25% o dano direto recebido por 6 segundos.',
+  }),
+  OCE_03: Object.freeze({
+    operativeId: 'OCE_03', name: 'Varredura da Insígnia', effect: 'recon',
+    cooldownSeconds: 60, durationSeconds: 3,
+    parameters: Object.freeze({ radius: 34, revealSeconds: 3 }),
+    description: 'Varredura de comando: marca no minimapa inimigos vivos num raio de 34 metros por 3 segundos.',
+  }),
   OP_MALE_VANGUARD: Object.freeze({
     operativeId: 'OP_MALE_VANGUARD', name: 'Ruptura de Viela', effect: 'dash',
     cooldownSeconds: 55, durationSeconds: 2,

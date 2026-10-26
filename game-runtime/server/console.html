@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Khaaos Run — Console do Marechal // POJ</title>
+<style>
+  :root { --bg:#0a0c10; --panel:#11151c; --line:#232a35; --gold:#ffd75e; --txt:#e8e3d5; --dim:#8b93a3; --bad:#e86a7a; --good:#7dff8a; --warn:#ffc24b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font:15px/1.45 "Rajdhani","Segoe UI",system-ui,sans-serif; min-height:100vh; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 22px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#10131a,#0a0c10); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:19px; letter-spacing:.14em; text-transform:uppercase; }
+  header h1 b { color:var(--gold); }
+  header .spacer { flex:1; }
+  .chip { border:1px solid var(--line); border-radius:4px; padding:3px 10px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+  .chip.live { color:var(--good); border-color:#2e5c3a; }
+  .chip.warn { color:var(--warn); border-color:#5c4a1e; }
+  main { display:grid; grid-template-columns: 380px 1fr; gap:16px; padding:16px 22px; max-width:1500px; margin:0 auto; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:16px; }
+  h2 { font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); margin-bottom:10px; border-bottom:1px dashed var(--line); padding-bottom:6px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .kv { background:#0d1016; border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  .kv .k { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  .kv .v { font-size:17px; font-weight:700; }
+  .v.gold { color:var(--gold); } .v.good { color:var(--good); } .v.bad { color:var(--bad); } .v.warn { color:var(--warn); }
+  button { background:#161c26; color:var(--txt); border:1px solid #2b3547; border-radius:6px; padding:7px 12px; font:600 13px "Rajdhani",sans-serif; letter-spacing:.06em; cursor:pointer; text-transform:uppercase; }
+  button:hover { background:#1d2532; border-color:#3d4a63; }
+  button.gold { border-color:#6b5416; color:var(--gold); }
+  button.danger { border-color:#5c2830; color:var(--bad); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input, select { background:#0d1016; border:1px solid var(--line); color:var(--txt); border-radius:6px; padding:7px 10px; font:14px "Rajdhani",sans-serif; width:100%; }
+  label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); display:block; margin:8px 0 4px; }
+  .row { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:110px; }
+  .case { border:1px solid #3a3113; background:#141109; border-radius:8px; padding:12px 14px; margin-bottom:10px; }
+  .case.pendente { border-color:#5c4a1e; box-shadow:0 0 0 1px #2a2210 inset; }
+  .case .top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .case .id { color:var(--gold); font-weight:700; letter-spacing:.08em; }
+  .case .motivo { color:var(--warn); font-size:13px; }
+  .case .ev { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:8px 0; }
+  .case .ev .kv { padding:5px 8px; } .case .ev .v { font-size:14px; }
+  .verdicts { display:flex; gap:6px; flex-wrap:wrap; }
+  .verdicts button { font-size:11px; padding:6px 9px; }
+  .nota { margin-top:8px; }
+  .muted { color:var(--dim); font-size:12px; }
+  .ata { max-height:260px; overflow-y:auto; font-size:13px; }
+  .ata div { padding:4px 0; border-bottom:1px dotted #1c222c; }
+  .ata b { color:var(--gold); font-weight:600; }
+  .ata .t { color:#5b6372; font-size:11px; margin-right:6px; }
+  .hidden { display:none !important; }
+  #loginBox { max-width:380px; margin:12vh auto; }
+  .ok { color:var(--good); } .err { color:var(--bad); }
+  .hist { font-size:13px; }
+  .hist div { padding:5px 0; border-bottom:1px dotted #1c222c; }
+</style>
+</head>
+<body>
+<div id="loginBox">
+  <section>
+    <h2>Acesso do Marechal</h2>
+    <label>Operativo</label><input id="lgUser" value="kr_admin" autocomplete="username">
+    <label>Senha</label><input id="lgPass" type="password" value="kr123" autocomplete="current-password">
+    <div style="margin-top:12px"><button class="gold" id="lgBtn" style="width:100%">Assumir o comando</button></div>
+    <p class="muted" id="lgMsg" style="margin-top:8px">O Console do Marechal governa o Protocolo de Ordem de Jogo e julga a Corte Marcial.</p>
+  </section>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <h1>Console do <b>Marechal</b> — POJ</h1>
+  <span class="chip" id="faseChip">—</span>
+  <span class="chip" id="clockChip">—</span>
+  <div class="spacer"></div>
+  <span class="chip" id="meChip">—</span>
+  <button id="logoutBtn">Sair</button>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>Estado do Protocolo</h2>
+      <div class="grid">
+        <div class="kv"><div class="k">Mundo</div><div class="v gold" id="stMundo">—</div></div>
+        <div class="kv"><div class="k">Dia</div><div class="v" id="stDia">—</div></div>
+        <div class="kv"><div class="k">Inscritos</div><div class="v" id="stInsc">—</div></div>
+        <div class="kv"><div class="k">Sobreviventes</div><div class="v good" id="stVivos">—</div></div>
+        <div class="kv"><div class="k">CIGKV</div><div class="v" id="stCigkv">—</div></div>
+        <div class="kv"><div class="k">Contagem 24h</div><div class="v" id="stCount">—</div></div>
+        <div class="kv"><div class="k">Incursões abertas</div><div class="v" id="stInc">—</div></div>
+        <div class="kv"><div class="k">Oficiais (7º/9º)</div><div class="v gold" id="stOfic">—</div></div>
+        <div class="kv"><div class="k">Campeão</div><div class="v gold" id="stChamp">—</div></div>
+      </div>
+      <p class="muted" id="oficReason" style="margin-top:8px"></p>
+    </section>
+
+    <section>
+      <h2>Comandos do Marechal</h2>
+      <div class="row">
+        <button class="gold" id="btnSummon">Convocar incursão</button>
+        <button id="btnClose">Encerrar incursão aberta</button>
+        <button class="danger" id="btnChampion">Decidir campeão (11º)</button>
+      </div>
+      <label>Adiantar relógio do protocolo (segundos)</label>
+      <div class="row">
+        <input id="advSec" type="number" value="3600" min="1" step="60">
+        <button id="btnAdvance">Avançar</button>
+      </div>
+      <label style="margin-top:12px">Remeter militar à Corte Marcial (playerId · motivo)</label>
+      <div class="row">
+        <input id="cmPlayer" placeholder="playerId">
+        <select id="cmMotivo">
+          <option value="evasao">Evasão (8º)</option>
+          <option value="covardia_mundial">Covardia mundial</option>
+          <option value="desobediencia_final">Desobediência final (10º)</option>
+        </select>
+        <button class="danger" id="btnCM">Remeter</button>
+      </div>
+      <label style="margin-top:12px">Alistar militar (playerId · patente)</label>
+      <div class="row">
+        <input id="regPlayer" placeholder="playerId">
+        <select id="regPatente"></select>
+        <button id="btnReg">Alistar</button>
+      </div>
+      <p class="muted" id="cmdMsg" style="margin-top:8px"></p>
+    </section>
+
+    <section>
+      <h2>Ata do protocolo</h2>
+      <div class="ata" id="ata"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Banco da Corte Marcial — <span id="courtPend" class="gold">0</span> caso(s) pendente(s)</h2>
+      <div id="courtList"></div>
+    </section>
+    <section>
+      <h2>Histórico de julgamentos — <span id="courtDone" class="gold">0</span> caso(s)</h2>
+      <div class="hist" id="courtHist"></div>
+    </section>
+  </div>
+</main>
+</div>
+
+<script type="module">
+const PATENTES = ['Recruta','Soldado','Cabo','Sargento','Sargento-Mor','Tenente','Capitão','Major','Coronel','General'];
+const VEREDITOS = [
+  { id:'afastamento', label:'Afastamento desonroso' },
+  { id:'reducao_patente', label:'Redução de patente' },
+  { id:'honras_de_guerra', label:'Honras de guerra' },
+  { id:'absolvicao', label:'Absolvição' },
+];
+const $ = (s) => document.querySelector(s);
+let token = localStorage.getItem('kr_console_token') || '';
+let me = null;
+
+async function api(path, { method = 'GET', body } = {}) {
+  const res = await fetch(path, {
+    method,
+    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+const fmtClock = (s) => {
+  if (s == null) return '—';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : `${h}h ${String(m).padStart(2, '0')}m`;
+};
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function msg(text, ok = true) { const el = $('#cmdMsg'); el.textContent = text; el.className = ok ? 'ok' : 'err'; }
+
+// ---------- estado ----------
+async function refreshState() {
+  try {
+    const s = await api('/poj/state');
+    const faseLabel = { alistamento:'ALISTAMENTO', contagem_regressiva:'CONTAGEM 24H', guerra:'GUERRA', julgamento:'JULGAMENTO', encerrado:'ENCERRADO' }[s.phase] ?? s.phase;
+    $('#faseChip').textContent = faseLabel;
+    $('#faseChip').className = 'chip' + (s.phase === 'guerra' ? ' live' : s.phase === 'contagem_regressiva' ? ' warn' : '');
+    $('#clockChip').textContent = `T+${fmtClock(s.clock)}`;
+    $('#stMundo').textContent = s.world ?? '—';
+    $('#stDia').textContent = s.day ? `${s.day}/7` : '—';
+    $('#stInsc').textContent = (s.registrations ?? 0).toLocaleString('pt-BR');
+    $('#stVivos').textContent = s.phase === 'guerra' || s.phase === 'julgamento' ? s.survivorsCount : '—';
+    $('#stCigkv').textContent = s.cigkvOpen ? 'ABERTO' : 'FECHADO';
+    $('#stCigkv').className = 'v' + (s.cigkvOpen ? ' good' : '');
+    $('#stCount').textContent = s.countdown != null && s.countdown > 0 ? fmtClock(s.countdown) : '—';
+    $('#stInc').textContent = (s.incursionsOpen ?? []).length || '—';
+    const plan = s.officerPlan ?? {};
+    $('#stOfic').textContent = plan.allowed ? `${plan.officers ?? 3} · ${plan.minutesPerRing} min` : 'fora';
+    $('#stOfic').className = 'v' + (plan.allowed ? ' gold' : '');
+    $('#oficReason').textContent = plan.reason ?? '';
+    $('#stChamp').textContent = s.champion ? s.champion : '—';
+    // ata
+    $('#ata').innerHTML = (s.recentEvents ?? []).slice().reverse().map((e) =>
+      `<div><span class="t">${fmtClock(e.at)}</span><b>${esc(e.type)}</b> ${esc(Object.entries(e).filter(([k]) => !['at','type'].includes(k)).map(([k,v]) => `${k}=${Array.isArray(v) ? v.length : v}`).join(' '))}</div>`).join('');
+    // court summary do snapshot
+    $('#courtPend').textContent = s.court?.pendentes ?? 0;
+    $('#courtDone').textContent = s.court?.julgados ?? 0;
+  } catch { /* servidor ausente: silencioso */ }
+}
+
+// ---------- corte marcial ----------
+async function refreshCourt() {
+  try {
+    const d = await api('/poj/court-martial/cases');
+    const pend = (d.cases ?? []).filter((c) => c.status === 'pendente');
+    const done = (d.cases ?? []).filter((c) => c.status === 'julgado');
+    $('#courtPend').textContent = d.pendentes ?? pend.length;
+    $('#courtDone').textContent = d.julgados ?? done.length;
+    $('#courtList').innerHTML = pend.length ? pend.map(caseCard).join('') : '<p class="muted">Nenhum caso pendente. A Corte aguarda o relatório do protocolo.</p>';
+    $('#courtHist').innerHTML = done.length ? done.map(histRow).join('') : '<p class="muted">Sem julgamentos até o momento.</p>';
+    for (const c of pend) {
+      for (const v of VEREDITOS) {
+        const btn = document.querySelector(`[data-case="${c.id}"][data-ver="${v.id}"]`);
+        if (btn) btn.onclick = () => judge(c.id, v.id, v.label);
+      }
+    }
+  } catch (e) { $('#courtList').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+const caseCard = (c) => `
+  <div class="case pendente" data-case-box="${c.id}">
+    <div class="top">
+      <span class="id">${esc(c.id)}</span>
+      <span><b>${esc(c.name)}</b> <span class="muted">(${esc(c.patente)})</span></span>
+      <span class="motivo">${esc(c.motivoRotulo ?? c.motivo)}</span>
+      <span class="muted">${esc(c.world ?? '—')}${c.day ? ` · dia ${c.day}` : ''} · T+${fmtClock(c.clock)}</span>
+    </div>
+    <div class="ev">
+      <div class="kv"><div class="k">Evasões</div><div class="v">${c.evidencia?.evasoes ?? 0}</div></div>
+      <div class="kv"><div class="k">Incursões</div><div class="v">${c.evidencia?.incursoes ?? 0}</div></div>
+      <div class="kv"><div class="k">Kills</div><div class="v">${c.evidencia?.kills ?? 0}</div></div>
+      <div class="kv"><div class="k">XP</div><div class="v">${c.evidencia?.xp ?? 0}</div></div>
+      <div class="kv"><div class="k">Patente</div><div class="v">${esc(c.evidencia?.patente ?? '—')}</div></div>
+      <div class="kv"><div class="k">Vida</div><div class="v bad">consumida</div></div>
+    </div>
+    <div class="verdicts">
+      ${VEREDITOS.map((v) => `<button data-case="${c.id}" data-ver="${v.id}">${v.label}</button>`).join('')}
+    </div>
+    <div class="nota"><input placeholder="Nota do julgamento (opcional, vai para a ata)" data-nota="${c.id}"></div>
+  </div>`;
+
+const histRow = (c) => `<div><b class="gold">${esc(c.id)}</b> · <b>${esc(c.name)}</b> · ${esc(c.motivoRotulo ?? c.motivo)} → <span class="ok">${esc(c.veredito)}</span> · registro <b>${esc(c.evidencia?.registro ?? '—')}</b> · patente final ${esc(c.patenteFinal ?? '—')} · juiz ${esc(c.juiz)} ${c.nota ? `· “${esc(c.nota)}”` : ''}</div>`;
+
+async function judge(caseId, veredito, label) {
+  const nota = document.querySelector(`[data-nota="${caseId}"]`)?.value?.trim() || null;
+  try {
+    await api('/poj/court-martial/verdict', { method: 'POST', body: { caseId, veredito, nota } });
+    msg(`Veredito aplicado: ${label} — caso ${caseId} encerrado.`);
+    await Promise.all([refreshCourt(), refreshState()]);
+  } catch (e) { msg(`Falha no veredito: ${e.message}`, false); }
+}
+
+// ---------- comandos ----------
+const runCmd = (fn, okMsg) => async () => {
+  try { await fn(); msg(okMsg); await Promise.all([refreshState(), refreshCourt()]); }
+  catch (e) { msg(`Erro: ${e.message}`, false); }
+};
+$('#btnSummon').onclick = runCmd(() => api('/poj/summon', { method:'POST', body:{} }), 'Incursão convocada — todo sobrevivente ativo foi convocado.');
+$('#btnClose').onclick = runCmd(async () => {
+  // encerra a incursão aberta mais recente (ausentes respondem pelos 8º/10º)
+  const s = await api('/poj/state');
+  const open = (s.incursionsOpen ?? [])[0];
+  if (!open) throw new Error('nenhuma incursão aberta');
+  await api('/poj/close', { method:'POST', body:{ incursionId: open } });
+}, 'Incursão encerrada — ausentes respondem pelos artigos 8º/10º.');
+$('#btnChampion').onclick = runCmd(() => api('/poj/champion', { method:'POST', body:{} }), 'Julgamento do 11º artigo encerrado — campeão decidido.');
+$('#btnAdvance').onclick = runCmd(() => api('/poj/advance', { method:'POST', body:{ seconds: Number($('#advSec').value) || 0 } }), 'Relógio do protocolo adiantado.');
+$('#btnCM').onclick = runCmd(() => api('/poj/court-martial', { method:'POST', body:{ playerId: $('#cmPlayer').value.trim(), motivo: $('#cmMotivo').value } }), 'Militar remetido à Corte Marcial.');
+$('#btnReg').onclick = runCmd(() => api('/poj/register', { method:'POST', body:{ playerId: $('#regPlayer').value.trim(), patente: $('#regPatente').value } }), 'Militar alistado no protocolo.');
+
+// ---------- sessão ----------
+function bindPatentes() {
+  $('#regPatente').innerHTML = PATENTES.map((p) => `<option>${p}</option>`).join('');
+}
+async function boot() {
+  bindPatentes();
+  if (token) {
+    try { me = await api('/profile'); showApp(); return; } catch { token = ''; localStorage.removeItem('kr_console_token'); }
+  }
+  $('#loginBox').classList.remove('hidden');
+}
+function showApp() {
+  $('#loginBox').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#meChip').textContent = `${me?.username ?? '—'} · ${me?.patente ?? ''}`;
+  refreshState(); refreshCourt();
+  clearInterval(refreshState._t); clearInterval(refreshCourt._t);
+  refreshState._t = setInterval(refreshState, 2000);
+  refreshCourt._t = setInterval(refreshCourt, 3000);
+}
+$('#lgBtn').onclick = async () => {
+  const msgEl = $('#lgMsg');
+  try {
+    const r = await api('/auth/login', { method:'POST', body:{ username: $('#lgUser').value.trim(), password: $('#lgPass').value } });
+    token = r.token; localStorage.setItem('kr_console_token', token);
+    me = await api('/profile');
+    msgEl.textContent = 'Sessão confirmada — Console do Marechal ativo.';
+    showApp();
+  } catch (e) { msgEl.textContent = `Acesso recusado: ${e.message}`; }
+};
+$('#logoutBtn').onclick = () => { token = ''; localStorage.removeItem('kr_console_token'); location.reload(); };
+
+boot();
+</script>
+</body>
+</html>

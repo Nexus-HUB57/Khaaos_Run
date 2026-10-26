@@ -155,19 +155,24 @@ test('poj preceito anti-covardia: sobrevivente sem incursão no mundo é julgado
 });
 
 // ---------- 7º artigo: oficiais no início do 7º dia de Arukheea ----------
-test('poj 7º: >100.000 sobreviventes → 3 oficiais por no mínimo 3 min por Ring', () => {
+test('poj 7º: >10% dos inscritos → 3 oficiais por no mínimo 3 min por Ring', () => {
   const proto = make();
   const ids = enlist(proto, 10);
   openWar(proto);
   marchTo(proto, ids, 3, 7, 0.3); // Arukheea, dia 7, fora da janela das últimas 6 h
-  const plan = proto.officerEntryPlan(100_001);
+  // Fase 11 — limiar proporcional em alistamento comprimido: 10% de 10 = 1
+  assert.equal(proto.rule7MinSurvivors, 1);
+  const plan = proto.officerEntryPlan(2); // 2 sobreviventes de 10 (> 10%)
   assert.equal(plan.allowed, true);
   assert.equal(plan.article, '7º');
   assert.equal(plan.minutesPerRing, 3);
   assert.equal(plan.officers, 3);
-  const noEntry = proto.officerEntryPlan(100_000); // exatamente 10% NÃO autoriza (>100k)
+  const noEntry = proto.officerEntryPlan(1); // exatamente 10% NÃO autoriza (> 1)
   assert.equal(noEntry.allowed, false);
-  const outOfWindow = new (proto.constructor)().officerEntryPlan(999_999); // fora do 7º dia
+  // canônico: 1.000.000 → limiar exato dos 100.000 do regramento
+  const canonical = new (proto.constructor)();
+  assert.equal(canonical.rule7MinSurvivors, 100_000);
+  const outOfWindow = canonical.officerEntryPlan(999_999); // fora do 7º dia
   assert.equal(outOfWindow.allowed, false);
   assert.equal(outOfWindow.article, null);
 });

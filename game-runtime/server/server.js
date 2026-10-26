@@ -205,7 +205,7 @@ export function createAuthoritativeServer({
     }
   };
 
-  function assign(client) {
+  async function assign(client) {
     let room = chooseRoom(rooms, client.region, roomCapacity, client.mode);
     if (!room) {
       room = client.mode === '3d'
@@ -215,6 +215,17 @@ export function createAuthoritativeServer({
     }
     room.addPlayer(client.id, client.identity.username);
     client.roomId = room.id;
+    // Fase 11 — patente do perfil no nametag (KRC → hierarquia canônica).
+    // Resolvida ANTES do match_found (nametag correto já no primeiro snapshot);
+    // timeout curto: ledger lento não segura o matchmaking, evento patente
+    // complementa em tempo real (room3d emite 'patente' quando chega).
+    try {
+      const bal = await Promise.race([
+        economyService.balance(client.identity.sub).then((b) => b?.amount ?? 0),
+        new Promise((resolve) => setTimeout(() => resolve(null), 700)),
+      ]);
+      if (bal !== null) room.setPatente(client.id, rankProgress(bal).patente);
+    } catch { /* sem ledger → sem patente */ }
     const position = queue.indexOf(client);
     if (position >= 0) queue.splice(position, 1);
     send(client.ws, {
@@ -378,6 +389,12 @@ export function createAuthoritativeServer({
         res.end(fs.readFileSync(path.join(ROOT, 'admin.html')));
         return;
       }
+      // ---------- Fase 11 — Console do Marechal (POJ + Corte Marcial jogável) ----------
+      if (url.pathname === '/console' || url.pathname === '/console.html') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(path.join(ROOT, 'console.html')));
+        return;
+      }
       // ─── POJ — Protocolo de Ordem de Jogo ────────────────────────────────
       // Estado público do regramento; comandos do Marechal exigem poj:command.
       if (url.pathname === '/poj/state' && req.method === 'GET') {
@@ -492,6 +509,20 @@ export function createAuthoritativeServer({
       if (url.pathname === '/poj/advance' && req.method === 'POST') { await pojCommand((b) => pojService.advance(b), 'poj.advance'); return; }
       if (url.pathname === '/poj/champion' && req.method === 'POST') { await pojCommand(() => pojService.champion(), 'poj.champion'); return; }
       if (url.pathname === '/poj/court-martial' && req.method === 'POST') { await pojCommand((b) => pojService.courtMartial(b), 'poj.court_martial'); return; }
+      // ---------- Fase 11 — Corte Marcial jogável (console do Marechal) ----------
+      // GET: banco da Corte (leitura autenticada); POST /verdict: veredito do Marechal.
+      if (url.pathname === '/poj/court-martial/cases' && req.method === 'GET') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const status = new URL(req.url, 'http://localhost').searchParams.get('status');
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(pojService.courtCases(status === 'pendente' || status === 'julgado' ? status : null)));
+        return;
+      }
+      if (url.pathname === '/poj/court-martial/verdict' && req.method === 'POST') {
+        await pojCommand((b, actor) => pojService.courtVerdict(actor, b), 'poj.court_verdict');
+        return;
+      }
       if (url.pathname === '/admin/keys' && req.method === 'GET') {
         if (!guardHttp(req, res, 'keys:rotate')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -667,7 +698,7 @@ export function createAuthoritativeServer({
       level: 'info', event: 'ws.connect', trace: wsCtx,
       fields: { username: client.identity.username, mode, region: client.region, resumed: Boolean(resume), connections: clients.size },
     });
-    if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); assign(client); }
+    if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); await assign(client); }
     else send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) });
 
     ws.on('message', (raw) => {
@@ -714,7 +745,12 @@ export function createAuthoritativeServer({
           if (message.type === 'set_operative') {
             // Fase 8 — o cliente declara o operativo escolhido (LOBBY; validado na sala)
             const room = getRoom(client);
-            if (room?.is3d) room.setOperative(client.id, String(message.operativeId || ''));
+            if (room?.is3d) {
+              room.setOperative(client.id, String(message.operativeId || ''));
+              // Fase 11 — empurra snapshot imediato no LOBBY: erros de insígnia
+              // (operative_error) e patente chegam sem esperar o start da partida.
+              send(ws, { type: 'snapshot', snapshot: room.snapshot(client.id) });
+            }
             return;
           }
           if (message.type === 'start') {
