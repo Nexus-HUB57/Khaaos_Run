@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Debuff_Silenced",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.616108+00:00",
+  "generated_at": "2026-10-26T23:35:11.288126+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "HasDuration",
@@ -30,5 +30,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "cee6755c293751f3"
+  "checksum": "d858c649ae7be9b3"
 }

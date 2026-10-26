@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Zone_Storm",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.659032+00:00",
+  "generated_at": "2026-10-26T23:35:11.331189+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Zone storm effect - heavy rain + lightning + wind debris",
@@ -87,5 +87,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "abdf363811493edd"
+  "checksum": "bb7799965e1e2dec"
 }

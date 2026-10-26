@@ -2,7 +2,7 @@
   "manifest_version": "2.0.0",
   "project": "Khaaos_Run",
   "engine_version": "5.8",
-  "generated_at": "2026-10-26T23:13:38.679612+00:00",
+  "generated_at": "2026-10-26T23:35:11.353206+00:00",
   "generator": "import_all_assets.py",
   "total_assets": 61,
   "asset_type_counts": {
@@ -28,7 +28,7 @@
         "Effect.Buff.Canalizacao",
         "Ability.Passive.Species.Khael.CanalizacaoMistica"
       ],
-      "checksum": "02264895a9488bbd"
+      "checksum": "b765bf3bd62415a4"
     },
     {
       "asset_name": "GE_Buff_DamageReduction",
@@ -41,7 +41,7 @@
       "tags": [
         "Effect.Buff.DamageReduction"
       ],
-      "checksum": "386cab791db0988b"
+      "checksum": "05a510dba27c435b"
     },
     {
       "asset_name": "GE_Buff_HealOverTime",
@@ -54,7 +54,7 @@
       "tags": [
         "Effect.Buff.HealOverTime"
       ],
-      "checksum": "4089b6f1d4e740a4"
+      "checksum": "c1922070f044a2ae"
     },
     {
       "asset_name": "GE_Buff_Overclock",
@@ -68,7 +68,7 @@
         "Effect.Buff.Overclock",
         "Ability.Passive.Species.Venex.OverclockNeural"
       ],
-      "checksum": "5676112185b5b6e0"
+      "checksum": "726e3fa71bec5ea0"
     },
     {
       "asset_name": "GE_Buff_Regen",
@@ -82,7 +82,7 @@
         "Effect.Buff.Regen",
         "Ability.Passive.Species.Huran.RegeneracaoAquatica"
       ],
-      "checksum": "b67989b7fdc059dc"
+      "checksum": "7efeb414eba4dc68"
     },
     {
       "asset_name": "GE_Buff_Shielded",
@@ -95,7 +95,7 @@
       "tags": [
         "Effect.Buff.Shielded"
       ],
-      "checksum": "107aad686b098dc9"
+      "checksum": "9608682664d6bf2d"
     },
     {
       "asset_name": "GE_Buff_SpeedBoost",
@@ -108,7 +108,7 @@
       "tags": [
         "Effect.Buff.SpeedBoost"
       ],
-      "checksum": "ad89e2d53fdbb785"
+      "checksum": "b66491075ca9c844"
     },
     {
       "asset_name": "GE_Damage_Bullet",
@@ -121,7 +121,7 @@
       "tags": [
         "Effect.Damage.Bullet"
       ],
-      "checksum": "951dd78a16fd324a"
+      "checksum": "172a22efa9ef6046"
     },
     {
       "asset_name": "GE_Damage_Explosion",
@@ -134,7 +134,7 @@
       "tags": [
         "Effect.Damage.Explosion"
       ],
-      "checksum": "fd1ea71cc2ce7781"
+      "checksum": "9f2569c50c9a13b2"
     },
     {
       "asset_name": "GE_Damage_Melee",
@@ -147,7 +147,7 @@
       "tags": [
         "Effect.Damage.Melee"
       ],
-      "checksum": "f80f0b6f222475f2"
+      "checksum": "4dc5dc8e14e4fb64"
     },
     {
       "asset_name": "GE_Damage_Zone",
@@ -160,7 +160,7 @@
       "tags": [
         "Effect.Damage.Zone"
       ],
-      "checksum": "e69db8685dc37c63"
+      "checksum": "0f225e7d3b9f0c44"
     },
     {
       "asset_name": "GE_Cooldown_GrapplingHook",
@@ -173,7 +173,7 @@
       "tags": [
         "Cooldown.GrapplingHook"
       ],
-      "checksum": "d0c47ba945ef3d97"
+      "checksum": "76bd99e0359abe4f"
     },
     {
       "asset_name": "GE_Cooldown_Heal",
@@ -186,7 +186,7 @@
       "tags": [
         "Cooldown.Heal"
       ],
-      "checksum": "267900cf1805e1d5"
+      "checksum": "03feae173bb0cd71"
     },
     {
       "asset_name": "GE_Cooldown_Shield",
@@ -199,7 +199,7 @@
       "tags": [
         "Cooldown.Shield"
       ],
-      "checksum": "5d8d923f6776ef1d"
+      "checksum": "0a1d03f30cad1206"
     },
     {
       "asset_name": "GE_Cooldown_Sprint",
@@ -212,7 +212,7 @@
       "tags": [
         "Cooldown.Sprint"
       ],
-      "checksum": "2ed3b25799666ed0"
+      "checksum": "2a7eae302714c2b2"
     },
     {
       "asset_name": "GE_Cooldown_Ultimate",
@@ -225,7 +225,7 @@
       "tags": [
         "Cooldown.Ultimate"
       ],
-      "checksum": "c7eb576a8c8d5c78"
+      "checksum": "e8cad2d7abb64087"
     },
     {
       "asset_name": "GE_Cost_Credits",
@@ -236,7 +236,7 @@
       "import_order": 16,
       "dependencies": [],
       "tags": [],
-      "checksum": "30b78a77247bfcfb"
+      "checksum": "6d3c567bfd3a26b4"
     },
     {
       "asset_name": "GE_Cost_Energy",
@@ -247,7 +247,7 @@
       "import_order": 17,
       "dependencies": [],
       "tags": [],
-      "checksum": "5766c2587e07affe"
+      "checksum": "46ec95f82cc67bfd"
     },
     {
       "asset_name": "GE_Cost_Health",
@@ -258,7 +258,7 @@
       "import_order": 18,
       "dependencies": [],
       "tags": [],
-      "checksum": "44eece26b9782cb3"
+      "checksum": "7878dc6b820349c0"
     },
     {
       "asset_name": "GE_Debuff_Burning",
@@ -271,7 +271,7 @@
       "tags": [
         "Effect.Debuff.Burning"
       ],
-      "checksum": "b95bb7022ebaa6f3"
+      "checksum": "d234e424fb08e166"
     },
     {
       "asset_name": "GE_Debuff_Disarmed",
@@ -284,7 +284,7 @@
       "tags": [
         "Effect.Debuff.Disarmed"
       ],
-      "checksum": "6c6bc18b80404a01"
+      "checksum": "5e36fafef1dd35a1"
     },
     {
       "asset_name": "GE_Debuff_Frozen",
@@ -297,7 +297,7 @@
       "tags": [
         "Effect.Debuff.Frozen"
       ],
-      "checksum": "aa3df02905f3964b"
+      "checksum": "00f5e1f90b763151"
     },
     {
       "asset_name": "GE_Debuff_Poisoned",
@@ -310,7 +310,7 @@
       "tags": [
         "Effect.Debuff.Poisoned"
       ],
-      "checksum": "10c946fc8b2f92ad"
+      "checksum": "e5e5ae087cbbbe12"
     },
     {
       "asset_name": "GE_Debuff_Silenced",
@@ -323,7 +323,7 @@
       "tags": [
         "Effect.Debuff.Silenced"
       ],
-      "checksum": "cee6755c293751f3"
+      "checksum": "d858c649ae7be9b3"
     },
     {
       "asset_name": "GE_Debuff_Slowed",
@@ -336,7 +336,7 @@
       "tags": [
         "Effect.Debuff.Slowed"
       ],
-      "checksum": "7fdbe3631f4fe386"
+      "checksum": "ae97aabd8645046e"
     },
     {
       "asset_name": "GE_Species_Huran_RegenAquatica",
@@ -350,7 +350,7 @@
         "Effect.Buff.Regen",
         "Ability.Passive.Species.Huran.RegeneracaoAquatica"
       ],
-      "checksum": "7b0862d07cdf2c88"
+      "checksum": "f0b23805202d5be2"
     },
     {
       "asset_name": "GE_Species_Onith_PeleEscamosa",
@@ -364,7 +364,7 @@
         "Species.Onith",
         "Ability.Passive.Species.Onith.PeleEscamosa"
       ],
-      "checksum": "715be65403eb2e9b"
+      "checksum": "c46b8f3335b44f81"
     },
     {
       "asset_name": "GE_Species_Skeetw_VooPlanador",
@@ -378,7 +378,7 @@
         "Effect.Buff.Glide",
         "Ability.Passive.Species.Skeetw.VooPlanador"
       ],
-      "checksum": "0a6ee58b64d9b544"
+      "checksum": "81a30024f6c940e3"
     },
     {
       "asset_name": "GE_Species_Zheers_Adaptabilidade",
@@ -392,7 +392,7 @@
         "Effect.Buff.Adaptabilidade",
         "Ability.Passive.Species.Zheers.Adaptabilidade"
       ],
-      "checksum": "95e64e05098af94e"
+      "checksum": "de80d6a2fa1842fd"
     },
     {
       "asset_name": "VFX_BulletImpact_Concrete",
@@ -405,7 +405,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "04a964bf45ef71e6"
+      "checksum": "50727d3647c526d6"
     },
     {
       "asset_name": "VFX_BulletImpact_Dirt",
@@ -418,7 +418,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "432762a413f7cccb"
+      "checksum": "cbf668f21788d3ca"
     },
     {
       "asset_name": "VFX_BulletImpact_Metal",
@@ -431,7 +431,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "128b7b7e6fda0ccf"
+      "checksum": "ae995a99ca943d87"
     },
     {
       "asset_name": "VFX_Loot_Pickup",
@@ -444,7 +444,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "7bfc84bce797a19e"
+      "checksum": "effc3bb51ae78a64"
     },
     {
       "asset_name": "VFX_MuzzleFlash_Assault",
@@ -457,7 +457,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "738a81bea9e0eb70"
+      "checksum": "13259e1cbd3cf247"
     },
     {
       "asset_name": "VFX_MuzzleFlash_Shotgun",
@@ -470,7 +470,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "9d8910e6fb461fad"
+      "checksum": "bd48e8080a307c0f"
     },
     {
       "asset_name": "VFX_MuzzleFlash_Sniper",
@@ -483,7 +483,7 @@
       "tags": [
         "VFX.Combat"
       ],
-      "checksum": "eff26ce1af0a6a53"
+      "checksum": "ea92d491bb3d28ea"
     },
     {
       "asset_name": "VFX_Huran_Bubble",
@@ -499,7 +499,7 @@
         "VFX.Species",
         "Species.Huran"
       ],
-      "checksum": "3a89d55b54172484"
+      "checksum": "1bc5e62358a10532"
     },
     {
       "asset_name": "VFX_Huran_Ripple",
@@ -515,7 +515,7 @@
         "VFX.Species",
         "Species.Huran"
       ],
-      "checksum": "ea40edd9d5e9f0a2"
+      "checksum": "0876b9b8b60e60de"
     },
     {
       "asset_name": "VFX_Huran_Splash",
@@ -531,7 +531,7 @@
         "VFX.Species",
         "Species.Huran"
       ],
-      "checksum": "ab3c1a930c717b0c"
+      "checksum": "75a920db30801fa4"
     },
     {
       "asset_name": "VFX_Khael_Crystal",
@@ -547,7 +547,7 @@
         "VFX.Species",
         "Species.Khael"
       ],
-      "checksum": "f0c3d291af0459db"
+      "checksum": "997dd7a8bca58215"
     },
     {
       "asset_name": "VFX_Khael_Frost",
@@ -563,7 +563,7 @@
         "VFX.Species",
         "Species.Khael"
       ],
-      "checksum": "c7f1d143862793e7"
+      "checksum": "5acd1ff18a1b6723"
     },
     {
       "asset_name": "VFX_Khael_Shatter",
@@ -579,7 +579,7 @@
         "VFX.Species",
         "Species.Khael"
       ],
-      "checksum": "17cb159556a035a0"
+      "checksum": "9f63517fd55a4cb1"
     },
     {
       "asset_name": "VFX_Onith_Bubble",
@@ -595,7 +595,7 @@
         "VFX.Species",
         "Species.Onith"
       ],
-      "checksum": "eb9a4399e791de15"
+      "checksum": "1da21eec1b379ee3"
     },
     {
       "asset_name": "VFX_Onith_Drip",
@@ -611,7 +611,7 @@
         "VFX.Species",
         "Species.Onith"
       ],
-      "checksum": "511a4f41da5faca4"
+      "checksum": "436f1848df41649a"
     },
     {
       "asset_name": "VFX_Onith_Smoke",
@@ -627,7 +627,7 @@
         "VFX.Species",
         "Species.Onith"
       ],
-      "checksum": "bd829dc10473fb24"
+      "checksum": "6d9e695e7028cff1"
     },
     {
       "asset_name": "VFX_Skeetw_Feather",
@@ -643,7 +643,7 @@
         "VFX.Species",
         "Species.Skeetw"
       ],
-      "checksum": "469b451d7274adf1"
+      "checksum": "3b8af4ad663a9b6f"
     },
     {
       "asset_name": "VFX_Skeetw_Mist",
@@ -659,7 +659,7 @@
         "VFX.Species",
         "Species.Skeetw"
       ],
-      "checksum": "a7b550075c0cb88e"
+      "checksum": "0cb4c2cb59441b9e"
     },
     {
       "asset_name": "VFX_Venex_Circuit",
@@ -675,7 +675,7 @@
         "VFX.Species",
         "Species.Venex"
       ],
-      "checksum": "c11923e3ce5833c7"
+      "checksum": "bfab4f3be65b23b8"
     },
     {
       "asset_name": "VFX_Venex_Grid",
@@ -691,7 +691,7 @@
         "VFX.Species",
         "Species.Venex"
       ],
-      "checksum": "6ffbfb1369c5f9ff"
+      "checksum": "22d5c9a791a1ebf4"
     },
     {
       "asset_name": "VFX_Venex_Pulse",
@@ -707,7 +707,7 @@
         "VFX.Species",
         "Species.Venex"
       ],
-      "checksum": "e45d73a8e8746d9d"
+      "checksum": "c9382920aa8f7a9d"
     },
     {
       "asset_name": "VFX_Zheers_Glow",
@@ -723,7 +723,7 @@
         "VFX.Species",
         "Species.Zheers"
       ],
-      "checksum": "6615361b6a5e0e5c"
+      "checksum": "408304a9b6e9397a"
     },
     {
       "asset_name": "VFX_Zheers_Mutation",
@@ -739,7 +739,7 @@
         "VFX.Species",
         "Species.Zheers"
       ],
-      "checksum": "5647faff252378d6"
+      "checksum": "44209f3bb949dd55"
     },
     {
       "asset_name": "VFX_Zheers_RadiationPulse",
@@ -755,7 +755,7 @@
         "VFX.Species",
         "Species.Zheers"
       ],
-      "checksum": "9012e41e08341836"
+      "checksum": "b9a5186cdd2e2124"
     },
     {
       "asset_name": "VFX_Zone_Fog",
@@ -768,7 +768,7 @@
       "tags": [
         "VFX.Zone"
       ],
-      "checksum": "599c05448acb40d0"
+      "checksum": "de9330abd6c41195"
     },
     {
       "asset_name": "VFX_Zone_Rain",
@@ -781,7 +781,7 @@
       "tags": [
         "VFX.Zone"
       ],
-      "checksum": "e648bc2e9ad0c634"
+      "checksum": "fc6a64dc50efaa71"
     },
     {
       "asset_name": "VFX_Zone_Storm",
@@ -794,7 +794,7 @@
       "tags": [
         "VFX.Zone"
       ],
-      "checksum": "abdf363811493edd"
+      "checksum": "bb7799965e1e2dec"
     },
     {
       "asset_name": "DT_GameplayEffects",

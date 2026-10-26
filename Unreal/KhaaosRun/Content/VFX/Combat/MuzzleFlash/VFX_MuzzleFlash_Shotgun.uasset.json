@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_MuzzleFlash_Shotgun",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.657231+00:00",
+  "generated_at": "2026-10-26T23:35:11.328617+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Shotgun muzzle flash - wide cone flash with debris sparks",
@@ -72,5 +72,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "9d8910e6fb461fad"
+  "checksum": "bd48e8080a307c0f"
 }

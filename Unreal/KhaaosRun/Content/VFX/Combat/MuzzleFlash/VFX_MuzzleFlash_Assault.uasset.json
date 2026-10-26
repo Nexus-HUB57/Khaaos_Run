@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_MuzzleFlash_Assault",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.656132+00:00",
+  "generated_at": "2026-10-26T23:35:11.327239+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Assault rifle muzzle flash - bright flash with smoke wisps",
@@ -71,5 +71,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "738a81bea9e0eb70"
+  "checksum": "13259e1cbd3cf247"
 }

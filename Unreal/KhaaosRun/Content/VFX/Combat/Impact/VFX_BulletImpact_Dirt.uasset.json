@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_BulletImpact_Dirt",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.658026+00:00",
+  "generated_at": "2026-10-26T23:35:11.329721+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Bullet impact on dirt - soil spray + small dust cloud",
@@ -73,5 +73,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "432762a413f7cccb"
+  "checksum": "cbf668f21788d3ca"
 }

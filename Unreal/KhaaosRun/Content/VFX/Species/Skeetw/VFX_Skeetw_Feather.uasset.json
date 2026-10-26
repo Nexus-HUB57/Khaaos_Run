@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Skeetw_Feather",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.664669+00:00",
+  "generated_at": "2026-10-26T23:35:11.338638+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Skeetw feather trail - drifting feather particles during glide",
@@ -115,5 +115,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "469b451d7274adf1"
+  "checksum": "3b8af4ad663a9b6f"
 }

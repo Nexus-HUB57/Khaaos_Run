@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Cooldown_Shield",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.612402+00:00",
+  "generated_at": "2026-10-26T23:35:11.282113+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "HasDuration",
@@ -30,5 +30,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "5d8d923f6776ef1d"
+  "checksum": "0a1d03f30cad1206"
 }

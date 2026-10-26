@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Zheers_Mutation",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.663559+00:00",
+  "generated_at": "2026-10-26T23:35:11.337343+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Zheers mutation burst - DNA helix particle burst on adapt trigger",
@@ -112,5 +112,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "5647faff252378d6"
+  "checksum": "44209f3bb949dd55"
 }
