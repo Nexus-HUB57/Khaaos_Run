@@ -18,6 +18,7 @@ import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from '.
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode } from './matchmaking.js';
 import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
+import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_WS_PAYLOAD = 16 * 1024;
@@ -55,6 +56,7 @@ export function createAuthoritativeServer({
   auditStore,
   health,
   readyGate,
+  obs,
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -101,6 +103,10 @@ export function createAuthoritativeServer({
   // Gate de saturação do readiness: ao passar do limite de conexões vivas, a
   // instância responde 503/overload para sair da rotação do balanceador.
   const readyGateConfig = readyGate || (process.env.KR_READY_MAX_CONNECTIONS ? { maxConnections: Number(process.env.KR_READY_MAX_CONNECTIONS) } : null);
+  // Observabilidade distribuída: trace context W3C por requisição, spans em
+  // árvore, logs estruturados agregados e exporter Redis opcional (KR_OBS_EXPORTER=redis)
+  // para consolidar traces/logs de múltiplas instâncias num stream só.
+  const observability = obs || createObservability();
   const rooms = new Map();
   const clients = new Map();
   const queue = [];
@@ -189,10 +195,12 @@ export function createAuthoritativeServer({
 
   async function httpHandler(req, res) {
     const url = new URL(req.url, 'http://localhost');
+    const trace = req.trace || null;
+    const traceHeader = trace ? { traceparent: formatTraceparent({ traceId: trace.traceId, spanId: trace.spanId, sampled: trace.sampled }) } : null;
     try {
       if (req.method === 'GET' && url.pathname === '/healthz') {
         const roomList = [...rooms.values()];
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
         res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, backpressure: metrics.backpressure, regions: regionalLoad(), tls: Boolean(tlsConfig), oidc: Boolean(oidcClient) }));
         return;
       }
@@ -201,7 +209,7 @@ export function createAuthoritativeServer({
         const summary = summarize(results);
         const saturated = readyGateConfig ? clients.size > readyGateConfig.maxConnections : false;
         const status = !summary.ok ? 'not_ready' : saturated ? 'overload' : 'ready';
-        res.writeHead(status === 'ready' ? 200 : 503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.writeHead(status === 'ready' ? 200 : 503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
         res.end(JSON.stringify({ status, checks: summary.checks, latencyMs: summary.latencyMs, errors: summary.errors, load: { connections: clients.size, queue: queue.length, maxConnections: readyGateConfig?.maxConnections ?? null } }));
         return;
       }
@@ -380,6 +388,47 @@ export function createAuthoritativeServer({
         res.end(JSON.stringify({ events, nextSinceId: events.length ? events[0].id : Number(url.searchParams.get('sinceId') || 0) }));
         return;
       }
+      // Traces e logs agregados: ring buffer local desta instância, ou snapshot
+      // remoto (todas as instâncias via Redis Stream) com ?remote=1.
+      if (url.pathname === '/admin/traces' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'obs:read')) return;
+        if (url.searchParams.get('remote') === '1') {
+          if (!observability.exporter?.snapshotRemote) { res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'remote_exporter_not_configured' })); return; }
+          try {
+            const snapshot = await observability.exporter.snapshotRemote({ count: Number(url.searchParams.get('limit') || 200) });
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({ remote: true, spans: snapshot.spans, logs: snapshot.logs, now: Date.now() }));
+          } catch (error) {
+            res.writeHead(503, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'remote_exporter_unavailable', detail: String(error?.message || error) }));
+          }
+          return;
+        }
+        const spans = observability.queryTraces({
+          limit: Number(url.searchParams.get('limit') || 100),
+          sinceId: Number(url.searchParams.get('sinceId') || 0),
+          traceId: url.searchParams.get('traceId'),
+          minDurationMs: url.searchParams.get('minDurationMs') == null ? null : Number(url.searchParams.get('minDurationMs')),
+          name: url.searchParams.get('name'),
+          status: url.searchParams.get('status'),
+        });
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
+        res.end(JSON.stringify({ spans, nextSinceId: spans.length ? spans[0].seq : Number(url.searchParams.get('sinceId') || 0), dropped: observability.spans.dropped, metrics: { spansFinished: observability.metrics.spansFinished, spansDropped: observability.spans.dropped, exportFailures: observability.metrics.exportFailures }, now: Date.now() }));
+        return;
+      }
+      if (url.pathname === '/admin/logs' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'obs:read')) return;
+        const entries = observability.queryLogs({
+          limit: Number(url.searchParams.get('limit') || 100),
+          sinceId: Number(url.searchParams.get('sinceId') || 0),
+          level: url.searchParams.get('level'),
+          traceId: url.searchParams.get('traceId'),
+          event: url.searchParams.get('event'),
+        });
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
+        res.end(JSON.stringify({ logs: entries, nextSinceId: entries.length ? entries[0].seq : Number(url.searchParams.get('sinceId') || 0), dropped: observability.logs.dropped, now: Date.now() }));
+        return;
+      }
       if (url.pathname === '/admin/ping' && req.method === 'GET') {
         if (!guardHttp(req, res, 'admin:metrics')) return;
         const dependencies = await healthMonitor.probeAll({ force: true });
@@ -419,9 +468,13 @@ export function createAuthoritativeServer({
     }
   }
 
+  // Middleware de tracing: contexto W3C por requisição, span com duração,
+  // log estruturado e headers traceparent/x-request-id na resposta.
+  const tracedHandler = traceHttpHandler(observability, (req, res) => httpHandler(req, res));
+
   const server = tlsConfig
-    ? https.createServer({ cert: tlsConfig.cert, key: tlsConfig.key }, (req, res) => { void httpHandler(req, res); })
-    : http.createServer((req, res) => { void httpHandler(req, res); });
+    ? https.createServer({ cert: tlsConfig.cert, key: tlsConfig.key }, (req, res) => { void tracedHandler(req, res); })
+    : http.createServer((req, res) => { void tracedHandler(req, res); });
 
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
   const handleConnection = async (ws, req) => {
@@ -452,6 +505,19 @@ export function createAuthoritativeServer({
     }
     clients.set(client.id, client);
     metrics.connections++;
+    // Sessão WebSocket como trace de ciclo de vida: span por sessão + logs de
+    // entrada/saída amostrados (KR_OBS_WS_SAMPLE) para não inundar a 30 Hz.
+    const wsCtx = { traceId: crypto.randomBytes(16).toString('hex'), spanId: crypto.randomBytes(8).toString('hex') };
+    const wsSpan = observability.startSpan({
+      name: `ws session ${client.id}`,
+      traceId: wsCtx.traceId,
+      sampled: Math.random() < observability.wsSampleRate || metrics.reconnects === 0,
+      attributes: { 'ws.mode': mode, 'ws.username': client.identity.username, 'ws.region': client.region, 'ws.resume': Boolean(resume) },
+    });
+    observability.recordLog({
+      level: 'info', event: 'ws.connect', trace: wsCtx,
+      fields: { username: client.identity.username, mode, region: client.region, resumed: Boolean(resume), connections: clients.size },
+    });
     if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); assign(client); }
     else send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) });
 
@@ -518,6 +584,8 @@ export function createAuthoritativeServer({
     ws.on('close', () => {
       void durable.setSession(client.resumeToken, { id: client.id, userId: user.sub, roomId: client.roomId, expiresAt: Date.now() + 15000 }).catch?.(() => {});
       clients.delete(client.id);
+      observability.recordLog({ level: 'info', event: 'ws.disconnect', trace: wsCtx, fields: { username: client.identity.username, roomId: client.roomId, liveConnections: clients.size } });
+      wsSpan.finish('ok', { 'ws.durationMs': Date.now() - wsSpan.startedAt, 'ws.messages': metrics.messages });
     });
   };
   wss.on('connection', (ws, req) => { void handleConnection(ws, req).catch(() => ws.close(1011, 'server-error')); });
@@ -542,6 +610,7 @@ export function createAuthoritativeServer({
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
+    obs: observability,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
@@ -549,6 +618,7 @@ export function createAuthoritativeServer({
       await new Promise((resolve) => server.close(resolve));
       await durable.close?.();
       await selectedRateStore.close?.();
+      await observability.exporter?.close?.();
     },
   };
 }
