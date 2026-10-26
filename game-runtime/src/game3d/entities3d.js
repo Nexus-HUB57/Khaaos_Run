@@ -1,6 +1,11 @@
-// Khaaos Run — Entidades 3D: operativos humanoides articulados + arsenal low-poly.
-// Todos os modelos são procedurais (primitivas Three.js), zero assets externos.
+// Khaaos Run — Entidades 3D: operativos humanoides DETALHADOS + arsenal enriquecido.
+// Fase 6: modelos procedurais nível "próximo do FreeFire" — colete tático com
+// pouches, pads, luvas, capacete com óculos, rosto pintado, camuflagem por paleta.
+// Continuam zero assets externos; API de parts/anim PresERVADA (sim/rede intocadas).
 import * as THREE from 'three';
+import {
+  camoMaterial, faceTexture, goggleMaterial,
+} from './textures3d.js';
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? .82, metalness: opts.metal ?? .12, ...opts.extra });
 
@@ -8,6 +13,8 @@ const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughnes
 export const SKIN_TONES = ['#f2c9a0', '#d9a06b', '#b97a4b', '#8a5632', '#6b3f24', '#f7d7b8', '#a06a3f', '#5c3820'];
 export const VEST_COLORS_FALLBACK = ['#3a3f47', '#4a3d2e', '#37423a', '#443044', '#2e3a45', '#4d3a30'];
 const VEST_COLORS = VEST_COLORS_FALLBACK;
+const EYE_TONES = ['#f59e0b', '#3b82f6', '#22c55e', '#e879a0', '#d4d4d4', '#a855f7'];
+const TRIM_ACCENT = '#c8ff3d'; // verde ácido de comando (marca Khaaos)
 
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -15,67 +22,151 @@ function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   m.castShadow = true; m.receiveShadow = true;
   return m;
 }
+function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 8) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
+}
+// hash estável de string → índice (variedade determinística por cor/nome)
+function hashIdx(str, mod) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h % mod;
+}
+function darken(hex, f = .55) {
+  return '#' + new THREE.Color(hex).multiplyScalar(f).getHexString();
+}
 
-// ---------- operativo ----------
-export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], helmet = true } = {}) {
+// ---------- operativo (Fase 6) ----------
+// cores: skin, vest (primária), secondary (calça/boina), trim (faixas),
+// eyes, hair — todas opcionais com fallback coerente.
+export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true } = {}) {
   const g = new THREE.Group();
-  const skinM = M(skin, { rough: .65 });
-  const clothM = M('#2c2f33', { rough: .9 });
-  const vestM = M(vest, { rough: .75, metal: .25 });
-  const darkM = M('#17181b', { rough: .85 });
+  const camo = camoMaterial(hashIdx(vest, 4), { repeat: 1.4 }); // camuflagem coerente com a cor do colete (compartilhada/memoizada)
+  const sec = secondary ?? darken(vest, .6);
+  const eye = eyes ?? EYE_TONES[hashIdx(skin + vest, EYE_TONES.length)];
 
-  // tronco + colete
-  const torso = box(.52, .62, .3, clothM, 0, 1.22, 0);
-  const vestMesh = box(.56, .44, .36, vestM, 0, 1.26, 0);
-  g.add(torso, vestMesh);
-  // cabeça + capacete
-  const head = box(.26, .28, .26, skinM, 0, 1.68, 0);
-  g.add(head);
-  if (helmet) { const hm = box(.3, .14, .32, darkM, 0, 1.82, 0); g.add(hm); }
-  // quadril
-  g.add(box(.4, .22, .26, darkM, 0, .84, 0));
-  // pernas (2 partes p/ dobrar)
+  // ---- materiais (por instância p/ identidade de equipe) ----
+  const skinM = M(skin, { rough: .62 });
+  const vestM = M(vest, { rough: .78, metal: .18 });
+  const vestDarkM = M(darken(vest, .55), { rough: .85 });
+  const secM = M(sec, { rough: .88 });
+  const gearM = M('#1b1d20', { rough: .86, metal: .1 });
+  const gearM2 = M('#26282d', { rough: .8 });
+  const bootM = M('#141517', { rough: .7 });
+  const metalM = M('#4a4e55', { rough: .4, metal: .7 });
+  const trimM = new THREE.MeshStandardMaterial({ color: trim, emissive: trim, emissiveIntensity: .55, roughness: .5 });
+
+  // ---- quadril fixo: pelve + cinto tático + coldre ----
+  const pelvis = box(.42, .2, .28, secM, 0, .84, 0);
+  const belt = box(.46, .07, .31, gearM, 0, .94, 0);
+  const buckle = box(.08, .06, .04, metalM, 0, .94, -.155);
+  const holster = box(.1, .18, .08, gearM, .19, .82, -.06);
+  g.add(pelvis, belt, buckle, holster);
+
+  // ---- TRONCO (grupo — bob de corrida move tudo acima) ----
+  const torso = new THREE.Group();
+  torso.position.set(0, 1.22, 0);
+  const shirt = box(.5, .6, .29, camo, 0, 0, 0);
+  const vestMesh = box(.56, .46, .37, vestM, 0, .04, .01);
+  torso.add(shirt, vestMesh);
+  // pouches frontais de carregador (3) + porta-radio
+  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.06, -.21));
+  torso.add(box(.09, .13, .05, gearM, -.21, .1, -.19)); // radio
+  torso.add(cyl(.008, .008, .16, metalM, -.21, .2, -.18, 4)); // antena do radio
+  // zipper + fivela central
+  torso.add(box(.03, .42, .02, gearM2, 0, .04, -.19));
+  // ombreiras
+  torso.add(box(.17, .09, .2, gearM, -.31, .27, 0));
+  torso.add(box(.17, .09, .2, gearM, .31, .27, 0));
+  // mochila tática: corpo + straps + bedroll + faixa de equipe
+  const pack = box(.38, .42, .17, gearM2, 0, .02, .23);
+  torso.add(pack);
+  torso.add(box(.3, .05, .19, vestDarkM, 0, .12, .24));      // tampa
+  torso.add(cyl(.07, .07, .34, secM, 0, .27, .25, 8));        // bedroll no topo
+  torso.add(box(.34, .06, .02, trimM, 0, -.08, .325));        // faixa reflexiva
+  // costelas laterais do colete
+  torso.add(box(.03, .3, .3, vestDarkM, -.29, .04, 0));
+  torso.add(box(.03, .3, .3, vestDarkM, .29, .04, 0));
+  g.add(torso);
+
+  // ---- CABEÇA (grupo — pitch de mira) ----
+  const head = new THREE.Group();
+  head.position.set(0, .46, 0); // mundo ~1.68
+  const neck = cyl(.07, .08, .1, skinM, 0, -.13, 0, 6);
+  const skull = box(.25, .27, .25, skinM, 0, .01, 0);
+  head.add(neck, skull);
+  // rosto pintado (olhos/sobrancelhas/boca) na face FRONTAL (-z = frente)
+  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(skin, eye, hair), roughness: .58 });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(.24, .25), faceMat);
+  face.position.set(0, .01, -.127);
+  face.rotation.y = Math.PI; // plano olha para -z
+  head.add(face);
+  // capacete tático OU boina (variedade)
+  if (helmet) {
+    const dome = box(.3, .13, .32, gearM, 0, .17, .01);
+    const brim = box(.28, .04, .08, gearM, 0, .12, -.15);
+    const band = box(.305, .06, .325, goggleMaterial(), 0, .1, .01); // óculos empilhados
+    head.add(dome, brim, band);
+    head.add(box(.02, .07, .16, gearM2, -.15, .17, .01)); // trilhos laterais
+    head.add(box(.02, .07, .16, gearM2, .15, .17, .01));
+    head.add(box(.05, .05, .05, metalM, .09, .23, .08));   // mount NVG
+  } else {
+    const cap = box(.28, .1, .28, vestM, 0, .17, .01);
+    const brim = box(.24, .03, .12, vestM, 0, .13, -.16);
+    const hairBack = box(.24, .12, .06, M(hair, { rough: .95 }), 0, .06, .13);
+    head.add(cap, brim, hairBack);
+  }
+  torso.add(head);
+
+  // ---- pernas: coxa camuflada + bolso cargo + joelheira + bota ----
   const mkLeg = (side) => {
     const hip = new THREE.Group(); hip.position.set(side * .13, .84, 0);
-    const upper = box(.16, .42, .18, clothM, 0, -.21, 0);
+    const upper = box(.17, .42, .19, camo, 0, -.21, 0);
+    const cargo = box(.05, .16, .12, secM, side * .1, -.2, 0);
     const knee = new THREE.Group(); knee.position.set(0, -.42, 0);
-    const lower = box(.14, .4, .16, clothM, 0, -.2, 0);
-    const boot = box(.16, .1, .26, darkM, 0, -.42, .04);
-    knee.add(lower, boot); hip.add(upper, knee);
+    const lower = box(.15, .4, .17, camo, 0, -.2, 0);
+    const pad = box(.16, .14, .19, gearM, 0, -.02, -.005);
+    const boot = box(.17, .12, .28, bootM, 0, -.43, .05);
+    const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.5, .05);
+    knee.add(lower, pad, boot, sole); hip.add(upper, cargo, knee);
     g.add(hip);
     return { hip, knee };
   };
-  // braços (ombro + cotovelo)
+  // ---- braços: manga camuflada + cotoveleira + luva + faixa de equipe ----
   const mkArm = (side) => {
-    const shoulder = new THREE.Group(); shoulder.position.set(side * .34, 1.48, 0);
-    const upper = box(.13, .36, .15, clothM, 0, -.16, 0);
-    const elbow = new THREE.Group(); elbow.position.set(0, -.34, 0);
-    const lower = box(.11, .32, .13, skinM, 0, -.15, 0);
-    const hand = box(.11, .1, .12, darkM, 0, -.33, 0);
-    elbow.add(lower, hand); shoulder.add(upper, elbow);
-    g.add(shoulder);
+    const shoulder = new THREE.Group(); shoulder.position.set(side * .33, .26, 0); // local ao tronco (mundo 1.48)
+    const upper = box(.14, .34, .16, camo, 0, -.14, 0);
+    const pad = box(.16, .1, .18, gearM, 0, -.26, 0);
+    const stripe = box(.145, .05, .17, trimM, 0, -.05, 0);
+    const elbow = new THREE.Group(); elbow.position.set(0, -.32, 0);
+    const lower = box(.12, .3, .14, camo, 0, -.13, 0);
+    const glove = box(.13, .12, .14, gearM, 0, -.32, 0);
+    const cuff = box(.135, .06, .15, secM, 0, -.25, 0);
+    elbow.add(lower, cuff, glove); shoulder.add(upper, pad, stripe, elbow);
     return { shoulder, elbow };
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
   const armR = mkArm(1), armL = mkArm(-1);
-
-  // mochila tática
-  g.add(box(.36, .4, .16, M('#23262a', { rough: .95 }), 0, 1.24, -.24));
+  torso.add(armR.shoulder, armL.shoulder);
 
   return { group: g, parts: { head, torso, legL, legR, armL, armR } };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
-// crouch (Fase 5) dobra pernas e abaixa o tronco
+// crouch (Fase 5) dobra pernas e abaixa o tronco; Fase 6: respiração idle,
+// sway de tronco e cabeça acompanhando o passo.
 export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false } = {}) {
   if (dead) {
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
+    parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
+    parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
     return;
   }
   const swing = Math.sin(t * 9) * .62 * speedNorm;
   const swing2 = Math.cos(t * 9) * .5 * speedNorm;
   if (crouch) {
-    // agachado: coxas à frente, joelhos dobrados, tronco ~0.34m mais baixo
     parts.legL.hip.rotation.x = 1.15 + swing * .15;
     parts.legR.hip.rotation.x = 1.15 - swing * .15;
     parts.legL.knee.rotation.x = -1.45;
@@ -86,27 +177,32 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
     parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
   }
-  // braços seguram arma à frente; sobem/descem com pitch
   const aim = -Math.PI / 2 + pitch;
-  parts.armR.shoulder.rotation.x = aim + .18 - swing * .18;
-  parts.armL.shoulder.rotation.x = aim + .34 - (-swing) * .18;
+  const breathe = Math.sin(t * 2.1) * .022 * (1 - speedNorm); // idle: respiração
+  parts.armR.shoulder.rotation.x = aim + .18 - swing * .18 + breathe;
+  parts.armL.shoulder.rotation.x = aim + .34 + swing * .18 + breathe;
   parts.armR.elbow.rotation.x = ads ? -.28 : -.5;
   parts.armL.elbow.rotation.x = ads ? -.62 : -.85;
-  parts.head.rotation.x = pitch * .4;
-  // bob de corrida (agachado: tronco baixo, sem bob)
+  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
+  parts.torso.rotation.y = Math.sin(t * 9) * .07 * speedNorm; // sway do tronco no passo
+  parts.torso.rotation.x = speedNorm * .1 + breathe * .6;      // inclina ao correr
   const torsoY = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
   parts.torso.position.y = torsoY;
 }
 
-// ---------- arsenal ----------
-// Cada arma: grupo apontando para -Z (frente), com muzzle Marker no cano.
+// ---------- arsenal (Fase 6 — silhuetas ricas: miras, trilhos, carregadores) ----------
 export function createWeaponModel(id) {
   const g = new THREE.Group();
-  const gun = M('#22252a', { rough: .42, metal: .78 });
-  const gun2 = M('#15171a', { rough: .5, metal: .7 });
+  const gun = M('#23262b', { rough: .38, metal: .8 });
+  const gun2 = M('#15171a', { rough: .48, metal: .72 });
   const accent = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .9, roughness: .4 });
-  const wood = M('#6b4a26', { rough: .85 });
+  const furniture = camoMaterial(2, { repeat: 1 }); // pintura tática no furniture
   const add = (w, h, d, mat, x, y, z) => { const m = box(w, h, d, mat, x, y, z); g.add(m); return m; };
+  const sights = (zFront, zRear, y = .09) => { // massa de mira padrão
+    add(.012, .05, .02, gun2, 0, y, zFront);
+    add(.05, .04, .02, gun2, 0, y, zRear);
+  };
+  const mag = (x, y, z, tilt = .12) => { const m = add(.055, .2, .09, gun2, x, y, z); m.rotation.x = tilt; return m; };
   const muzzle = new THREE.Object3D();
   let muzzleZ = -.55;
 
@@ -114,42 +210,70 @@ export function createWeaponModel(id) {
     case 'g19': // pistola
       add(.07, .12, .3, gun, 0, 0, -.1);
       add(.06, .16, .09, gun2, 0, -.1, .04);
+      add(.02, .03, .2, gun2, .04, .062, -.12); // serrilhas do slide
+      add(.02, .03, .2, gun2, -.04, .062, -.12);
+      add(.05, .05, .05, gun2, 0, -.16, .04);   // base do carregador
+      sights(-.24, .03, .075);
       muzzleZ = -.28;
       break;
     case 'mp5': // submetrahadora
       add(.08, .11, .5, gun, 0, 0, -.12);
       add(.05, .2, .07, gun2, 0, -.13, -.02);
       add(.06, .09, .2, gun2, 0, -.02, .28);
+      add(.04, .12, .04, gun2, 0, .0, .34);     // coronha de arame
+      add(.05, .1, .1, furniture, 0, -.06, -.26); // foregrip
+      mag(0, -.12, -.02, .05);
+      sights(-.34, .06);
       muzzleZ = -.4;
       break;
     case 'm4': // fuzil
       add(.075, .1, .72, gun, 0, 0, -.18);
       add(.05, .16, .08, gun2, 0, -.12, .06);
-      add(.055, .07, .3, gun2, 0, .085, -.2);
+      add(.055, .07, .3, gun2, 0, .085, -.2);   // carry handle
       add(.07, .12, .16, gun2, 0, -.01, .3);
+      add(.06, .1, .22, furniture, 0, -.005, -.3); // handguard
+      for (let i = 0; i < 3; i++) add(.065, .115, .015, gun2, 0, -.005, -.24 + i * .07); // slots do trilho
+      mag(0, -.13, .06, .16);                   // carregador curvo
+      add(.06, .08, .2, furniture, 0, -.02, .42); // coronha
+      sights(-.5, .0);
       muzzleZ = -.56;
       break;
     case 'barrett': // sniper .338
       add(.09, .12, 1.05, gun, 0, 0, -.28);
       add(.06, .18, .09, gun2, 0, -.13, .12);
-      add(.07, .09, .34, gun2, 0, .1, -.3); // luneta
-      add(.09, .14, .3, wood, 0, -.02, .38);
-      muzzleZ = -.84;
+      add(.07, .09, .34, gun2, 0, .1, -.3);     // luneta
+      add(.09, .14, .3, furniture, 0, -.02, .38);
+      const lens = add(.055, .055, .02, new THREE.MeshStandardMaterial({ color: '#0a1a2a', emissive: '#3b82f6', emissiveIntensity: .8, roughness: .2 }), 0, .1, -.475);
+      lens.name = 'scopeLens';
+      add(.1, .04, .1, gun2, 0, .002, -.82);    // muzzle brake
+      add(.02, .16, .02, gun2, -.06, -.1, -.5);  // bipé
+      add(.02, .16, .02, gun2, .06, -.1, -.5);
+      sights(-.44, .12, .135);
+      muzzleZ = -.88;
       break;
-    case 'pulse': // rifle de energia
+    case 'pulse': { // rifle de energia
       add(.1, .12, .8, gun2, 0, 0, -.2);
       add(.06, .15, .1, gun2, 0, -.12, .08);
       const cell = add(.05, .05, .5, accent, 0, .09, -.22);
       cell.material = accent;
+      add(.02, .06, .3, accent, .052, .0, -.3);  // vents laterais
+      add(.02, .06, .3, accent, -.052, .0, -.3);
+      add(.08, .08, .1, gun, 0, .09, -.5);       // bloco de foco
+      sights(-.56, .1, .11);
       muzzleZ = -.62;
       break;
+    }
     case 'sucata': // lança de sucata
-      add(.06, .06, .8, wood, 0, 0, -.25);
+      add(.06, .06, .8, furniture, 0, 0, -.25);
       add(.14, .18, .05, gun2, 0, .02, -.62);
+      add(.05, .09, .12, M('#6e5433', { rough: .9 }), 0, -.06, -.1); // fita/punho
+      add(.03, .03, .2, gun2, .05, .06, -.3);    // pregos
+      add(.03, .03, .2, gun2, -.05, .06, -.34);
       muzzleZ = -.66;
       break;
     default:
       add(.07, .11, .4, gun, 0, 0, -.12);
+      sights(-.28, .05);
   }
   muzzle.position.set(0, .02, muzzleZ);
   g.add(muzzle);
@@ -159,7 +283,6 @@ export function createWeaponModel(id) {
 
 // orienta braços/arma no corpo — retorna o anchor da arma (na mão direita)
 export function attachWeapon(opParts, operativeGroup, weaponId) {
-  // remove arma anterior
   const old = operativeGroup.userData.weaponRig;
   if (old) { operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); }); }
   const model = createWeaponModel(weaponId);
@@ -169,19 +292,24 @@ export function attachWeapon(opParts, operativeGroup, weaponId) {
   return model;
 }
 
-// Rig enxuto de primeira pessoa: mãos/antebraços ficam presos à câmera,
-// enquanto a simulação continua usando o operativo completo para colisão e rede.
-export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[0] } = {}) {
+// Rig enxuto de primeira pessoa (Fase 6): mãos ENLUVADAS agarrando a arma,
+// mangas camufladas, peitoral do colete à vista. Materiais por instância —
+// o recolor do seletor de operativo não vaza para os demais personagens.
+export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null } = {}) {
   const rig = new THREE.Group();
-  const skinM = M(skin, { rough: .65 });
-  const clothM = M('#25292d', { rough: .9 });
-  const vestM = M(vest, { rough: .75, metal: .25 });
+  const skinM = M(skin, { rough: .62 });
+  const camoM = new THREE.MeshStandardMaterial({ color: '#3d4a2a', roughness: .92 }); // instância própria
+  const vestM = M(vest, { rough: .78, metal: .18 });
+  const gloveM = M('#1b1d20', { rough: .85 });
+  const secM = M(secondary ?? '#2c2f33', { rough: .88 });
   const makeArm = (side) => {
     const arm = new THREE.Group();
-    arm.position.set(side * .24, -.26, -.42);
-    arm.rotation.set(-.36, side * .08, side * .16);
-    arm.add(box(.16, .46, .16, clothM, 0, -.2, 0));
-    arm.add(box(.14, .18, .14, skinM, 0, -.5, -.02));
+    arm.position.set(side * .2, -.26, -.4);
+    arm.rotation.set(-.4, side * .14, side * .2);
+    arm.add(box(.16, .42, .16, camoM, 0, -.18, 0));          // manga
+    arm.add(box(.17, .07, .17, secM, 0, -.34, 0));           // punho
+    arm.add(box(.14, .16, .15, gloveM, 0, -.46, -.01));      // luva
+    arm.add(box(.12, .06, .12, skinM, 0, -.55, -.02));       // dedos à mostra
     rig.add(arm);
     return arm;
   };
@@ -189,17 +317,25 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
   const armR = makeArm(1);
   const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
   chest.rotation.x = -.24;
-  rig.add(chest);
+  const chestPouch = box(.14, .1, .05, M('#26282d', { rough: .8 }), 0, -.5, -.31);
+  rig.add(chest, chestPouch);
   rig.userData.arms = { armL, armR };
   return rig;
 }
 
-// ---------- loot no chão ----------
+// ---------- loot no chão (Fase 6: pad hexagonal de raridade) ----------
 export function createLootMesh(item) {
   const g = new THREE.Group();
   const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e' };
   const color = rarityColors[item.rarity] ?? (item.kind === 'consumable' ? '#ff6b2c' : item.kind === 'armor' ? '#42d9de' : '#b7c2c7');
-  // Fase 4 — arremessáveis com silhueta própria
+  // pad hexagonal emissivo sob o item
+  const pad = new THREE.Mesh(
+    new THREE.CylinderGeometry(.42, .48, .05, 6),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: .5, roughness: .5, transparent: true, opacity: .55 })
+  );
+  pad.position.y = .025;
+  pad.receiveShadow = true;
+  g.add(pad);
   if (item.kind === 'frag' || item.kind === 'gloo') {
     const frag = item.kind === 'frag';
     const mesh = frag
@@ -219,9 +355,9 @@ export function createLootMesh(item) {
   const isWeapon = item.kind === 'weapon';
   const size = isWeapon ? .5 : .34;
   const box_ = box(size, size, size, M(color, { rough: .5, metal: .5, extra: { emissive: color, emissiveIntensity: .22 } }));
-  box_.position.y = size / 2;
+  box_.position.y = size / 2 + .05;
+  box_.rotation.y = Math.PI / 4;
   g.add(box_);
-  // feixe vertical de raridade
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(.03, .05, 2.2, 6, 1, true),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35, depthWrite: false })
@@ -245,8 +381,7 @@ export function createTerminalMesh() {
   return g;
 }
 
-// ---------- Fase 4 — paraquedas (infiltração aérea) ----------
-// Dossel semiesférico + suspensórios; anexado ao grupo do operativo (y ~2.4).
+// ---------- Fase 4 — paraquedas ----------
 export function createParachute(color = '#c8622e') {
   const g = new THREE.Group();
   const canopy = new THREE.Mesh(
@@ -255,7 +390,6 @@ export function createParachute(color = '#c8622e') {
   );
   canopy.position.y = 2.55;
   canopy.castShadow = true;
-  // faixa de identificação (verde ácido de comando)
   const stripe = new THREE.Mesh(
     new THREE.TorusGeometry(1.88, .08, 8, 32),
     new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .5, roughness: .5 })
@@ -275,7 +409,7 @@ export function createParachute(color = '#c8622e') {
   return g;
 }
 
-// ---------- Fase 4 — granada FRAG (corpo em voo) ----------
+// ---------- Fase 4 — granada FRAG ----------
 export function createFragMesh() {
   const g = new THREE.Group();
   const body = new THREE.Mesh(
@@ -287,25 +421,21 @@ export function createFragMesh() {
   const pinLight = new THREE.Mesh(
     new THREE.SphereGeometry(.05, 6, 6),
     new THREE.MeshBasicMaterial({ color: '#ff3d52' })
-  ); // LED do pavio — pisca no update
+  );
   g.add(body, lever, pinLight);
   g.userData.led = pinLight;
   return g;
 }
 
-// ---------- Fase 4 — Gloo Wall (cobertura desdobrável) ----------
-// Parede de composto tático com painéis e brilho de contenção; hp barra no shader? —
-// mantém simples: emissive decai com o hp via userData.updateHp(fraction).
+// ---------- Fase 4 — Gloo Wall ----------
 export function createGlooMesh() {
   const g = new THREE.Group();
   const panel = new THREE.MeshStandardMaterial({ color: '#9fb8c6', roughness: .4, metalness: .15, emissive: '#2a4a58', emissiveIntensity: .35 });
   const wall = box(GLOO_W, GLOO_H, GLOO_D, panel, 0, GLOO_H / 2, 0);
-  // juntas dos 4 painéis
   const seam = M('#5f7684', { metal: .4, rough: .5 });
   for (let i = 1; i <= 3; i++) {
     g.add(box(.06, GLOO_H * .96, GLOO_D * 1.12, seam, -GLOO_W / 2 + (i * GLOO_W) / 4, GLOO_H / 2, 0));
   }
-  // topo com borda luminosa
   const edge = new THREE.MeshStandardMaterial({ color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: .8, roughness: .4 });
   g.add(box(GLOO_W * 1.01, .07, GLOO_D * 1.3, edge, 0, GLOO_H + .04, 0));
   g.add(wall);
@@ -315,4 +445,4 @@ export function createGlooMesh() {
   };
   return g;
 }
-const GLOO_W = 4, GLOO_H = 3, GLOO_D = .4; // espelha GLOO de sim3d (sem import p/ evitar ciclo)
+const GLOO_W = 4, GLOO_H = 3, GLOO_D = .4;
