@@ -1,0 +1,110 @@
+# =============================================================================
+# Khaaos Run — UE5.8 Compile via Official Container (Epic Games)
+# =============================================================================
+# Caminho de compilação REAL do UE5.8 em runners hosted: usa as imagens
+# oficiais de contêiner da Epic (ghcr.io/epicgames/unreal-engine), construídas
+# pela própria Epic a partir do código-fonte licenciado (EULA).
+#
+# PRÉ-REQUISITO (único passo manual, feito uma vez):
+#   1. Conta GitHub vinculada à Epic Games (aceitar a EULA da UE e vincular em
+#      https://epicgames.com/account/connected).
+#   2. PAT clássico dessa conta com escopo `read:packages`.
+#   3. Settings → Secrets and variables → Actions:
+#        - Secret  UE_CONTAINER_PAT   = o PAT (obrigatório para este build)
+#        - Variable UE_CONTAINER_IMAGE = tag da imagem (opcional; confira as
+#          tags publicadas em github.com/orgs/epicgames/packages — ex.
+#          dev-slim-5.8.0; o default abaixo assume dev-slim-5.8)
+#   Sem o secret o job de build é PULADO com resumo explicativo — a CI nunca
+#   falha por falta de engine: estrutura é validada no ue5-preflight.yml e a
+#   compilação exige o binário licenciado (container ou self-hosted).
+# Referência: https://unrealcontainers.com/docs/obtaining-images/epic
+# =============================================================================
+
+name: UE5.8 Container Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options: [Development, Shipping]
+        default: Development
+      target:
+        description: 'Build target'
+        type: choice
+        options: [KhaaosRunServer, KhaaosRun, KhaaosRunEditor]
+        default: KhaaosRunServer
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/**'
+      - '.github/workflows/ue58-container-build.yml'
+
+concurrency:
+  group: ue58-container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Engine image gate (UE_CONTAINER_PAT)
+    runs-on: ubuntu-latest
+    outputs:
+      has_pat: ${{ steps.check.outputs.has_pat }}
+    steps:
+      - name: Check Epic container credential
+        env:
+          UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+        run: |
+          if [ -n "$UE_CONTAINER_PAT" ]; then
+            echo "has_pat=true" >> $GITHUB_OUTPUT
+            echo "✅ UE_CONTAINER_PAT configurado — build de engine habilitado"
+          else
+            echo "has_pat=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ UE_CONTAINER_PAT ausente — build de engine PULADO (não é falha)."
+            echo "   Configure o PAT de conta vinculada à Epic; veja o cabeçalho"
+            echo "   deste workflow ou scripts/build/bootstrap_ue58_runner.sh (self-hosted)."
+          fi
+
+  build:
+    name: UBT Build (${{ github.event.inputs.target || 'KhaaosRunServer' }} / ${{ github.event.inputs.configuration || 'Development' }})
+    needs: gate
+    if: needs.gate.outputs.has_pat == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.UE_CONTAINER_PAT }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build target with UBT
+        env:
+          UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+        run: |
+          set -euo pipefail
+          UBT="/home/ue4/UnrealEngine/Engine/Build/BatchFiles/Build.sh"
+          if [ ! -f "$UBT" ]; then
+            # Layout das imagens dev varia (ENGINE_DIR pode diferir).
+            UBT="$(find / -maxdepth 6 -path '*/Engine/Build/BatchFiles/Build.sh' 2>/dev/null | head -1)"
+          fi
+          if [ -z "$UBT" ]; then
+            echo "::error::Build.sh da engine não encontrado na imagem — ajuste a variable UE_CONTAINER_IMAGE"
+            exit 1
+          fi
+          bash "$UBT" ${{ github.event.inputs.target || 'KhaaosRunServer' }} Linux \
+            ${{ github.event.inputs.configuration || 'Development' }} -project="$UPROJECT" -waitmutex
+
+      - name: Upload built binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: khaaos-${{ github.event.inputs.target || 'KhaaosRunServer' }}-${{ github.event.inputs.configuration || 'Development' }}-${{ github.sha }}
+          path: |
+            Unreal/KhaaosRun/Binaries/Linux/*
+          if-no-files-found: error
+          retention-days: 14

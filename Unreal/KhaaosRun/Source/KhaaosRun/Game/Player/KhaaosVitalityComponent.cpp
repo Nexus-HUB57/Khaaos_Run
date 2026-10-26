@@ -2,7 +2,7 @@
 
 #include "Game/Player/KhaaosVitalityComponent.h"
 #include "Game/AbilitySystem/KhaaosAbilityComponent.h"
-#include "KhaaosAttributeSet.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Character.h"

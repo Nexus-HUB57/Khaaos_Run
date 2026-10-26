@@ -13,7 +13,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "Game/Player/KhaaosVitalityComponent.h"
-#include "KhaaosAttributeSet.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
 
