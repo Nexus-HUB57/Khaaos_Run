@@ -184,6 +184,19 @@ Catálogo declarativo em `server/rbac.js` — única fonte de verdade de autoriz
 - **Auditoria append-only** (`server/audit.js`): ring buffer em memória com ids monotônicos + persistência opcional `PostgresAuditStore` (`KR_AUDIT_STORE=postgres`, migração `002_audit_events.sql`). Eventos: `auth.login` (allow/deny), `auth.logout`, `auth.oidc`, `key.rotate`, `key.drop`, `room.start` (por sala), `rbac.deny` (HTTP e WS, toda negativa é registrada; allows só em operações sensíveis para não gerar ruído).
 - **Consulta**: `GET /admin/audit?actor=&action=&outcome=&sinceId=&limit=` (exige `audit:read`), paginação estável por id.
 
+## Multi-instância, falha de processo, soak e fault injection
+
+O runtime é horizontal por design: sessões vivem no store compartilhável e o rate limit é atômico entre réplicas. A camada de resiliência operacional cobre:
+
+- **Multi-instância**: duas réplicas simultâneas compartilham o store em arquivo (ou Postgres/Redis em produção). Jogador da réplica A reconectando na réplica B degrada de forma graciosa — salas são por processo, então a sessão vira alocação nova, **nunca erro**.
+- **Falha de processo e reconnect pós-restart**: o `resumeToken` persistido sobrevive ao encerramento; a instância que sobe em seguida aceita o jogador de volta (alocação nova, sem crash).
+- **Fail-fresh na leitura de sessão**: store indisponível na conexão não bloqueia a entrada — o jogador entra novo e `metrics.storeReadFailures` sinaliza a degradação.
+- **Fail-open no rate limit**: Redis fora não derruba a partida; inputs continuam fluindo e `metrics.rateStoreFailures` expõe o período sem limite para alarme.
+- **Auditoria nunca bloqueia**: audit store quebrado é engolido silenciosamente — login e RBAC seguem normais.
+- **Soak com duração limitada**: 12 jogadores com churn contínuo (sai 1 / entra 1 a cada 300 ms), invariâncias de fluxo de snapshots, fila vazia, contadores consistentes e zero rejeições não tratadas. `KR_SOAK_MS` estende a duração em ambientes de soak reais.
+
+Cobertura: `test/multiinstance.test.js` (2), `test/fault-injection.test.js` (3) e `test/soak.test.js` (1, aceita `KR_SOAK_MS`).
+
 ## Painel anti-cheat
 
 ```bash
