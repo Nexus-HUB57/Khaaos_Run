@@ -228,7 +228,29 @@ export class OnlineGame3D extends Game3D {
       set('pojMundo', s.world ?? '—');
       set('pojDia', s.day ? `${s.day}/7` : '—');
       set('pojVivos', (s.phase === 'guerra' || s.phase === 'julgamento') ? String(s.survivorsCount ?? 0) : '—', s.phase === 'guerra' ? 'poj-live' : '');
+      // Fase 10 — patente do perfil (progressão KRC via /profile)
+      await this.refreshProfileChip();
     } catch { /* servidor sem /poj — painel permanece neutro */ }
+  }
+
+  // Fase 10 — chip PATENTE: progressão KRC do perfil autenticado (1º critério
+  // de desempate do 11º artigo). Sem sessão → chip neutro.
+  async refreshProfileChip() {
+    const node = document.querySelector('#pojPatente');
+    if (!node) return;
+    try {
+      const token = localStorage.getItem('kr_token');
+      const res = await fetch('/profile', {
+        cache: 'no-store',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) { node.textContent = '—'; return; }
+      const p = await res.json();
+      const pct = Math.round((p.progress ?? 0) * 100);
+      node.textContent = p.nextPatente
+        ? `${p.patente} · ${pct}% p/ ${p.nextPatente}`
+        : `${p.patente} · TOPO`;
+    } catch { node.textContent = '—'; }
   }
 
   // world rebuild quando a seed do servidor difere da local (uma vez, pré-partida)

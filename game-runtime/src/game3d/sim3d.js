@@ -7,6 +7,9 @@ import { WEAPONS, rollLoot } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
 import { resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
+// Fase 10 — Oficiais de Classe Especial (7º/9º artigos do POJ): identidade e
+// combate de elite compartilhados com a MatchRoom3D (mesma tabela canônica)
+import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './officers.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -421,7 +424,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false, squad = false } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
@@ -441,6 +444,13 @@ export class KhaaosSim3D {
       const squads = assignSquads(['player', ...this.bots.map((b) => b.id)], 4);
       this.player.squad = squads.player;
       for (const b of this.bots) b.squad = squads[b.id];
+    }
+    // Fase 10 — prévia offline dos Oficiais de Classe Especial (?officers=1):
+    // plano demonstrativo canônico (artigo 9º — faixa de 5 min por Ring)
+    this.officerMeta = null;
+    if (officers) {
+      for (let i = 0; i < SPECIAL_CLASS_OFFICERS.length; i++) this.bots.push(this.#spawnOfficer(i));
+      this.officerMeta = { deploySeconds: 5 * 60, elapsed: 0 };
     }
     this.bullets = []; this.nextBulletId = 1;
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
@@ -477,6 +487,24 @@ export class KhaaosSim3D {
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), weaponSkin: null,
       cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
+      dropPhase: null, dropTarget: null,
+      ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
+  }
+
+  // Fase 10 — Oficial de Classe Especial offline: identidade canônica + combate
+  // de elite (OFFICER_COMBAT via combatParams derivados de BOT_COMBAT)
+  #spawnOfficer(i) {
+    const def = SPECIAL_CLASS_OFFICERS[i];
+    const spot = this.world.botSpawns[(i + 3) % this.world.botSpawns.length];
+    const jx = (this.rng.next() - .5) * 10, jz = (this.rng.next() - .5) * 10;
+    return { id: `oce-${String(i + 1).padStart(2, '0')}`, name: def.name,
+      x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
+      life: 100, armor: def.armor, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0, speed: def.speed,
+      weapon: def.weapon, weaponSkin: null, operativeId: def.operativeId, officer: true,
+      officerCallsign: def.callsign, combat: officerCombatParams(BOT_COMBAT),
+      cooldown: this.rng.next() * 1.2, reloadT: 0, burst: 0,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
@@ -636,6 +664,15 @@ export class KhaaosSim3D {
     if (p.alive) this.#stepActor(p, input, dt, true);
     // --- bots ---
     for (const b of this.bots) if (b.alive) this.#stepBot(b, dt);
+    // --- Fase 10 — retirada dos oficiais ao fim da duração autorizada ---
+    if (this.officerMeta && this.bots.some((b) => b.officer)) {
+      this.officerMeta.elapsed += dt;
+      if (shouldWithdraw(this.officerMeta.elapsed, this.officerMeta.deploySeconds)) {
+        this.bots = this.bots.filter((b) => !b.officer);
+        this.emit('officers_departed', { reason: 'duracao_autorizada_encerrada' });
+        this.officerMeta = null;
+      }
+    }
     // --- Fase 7 — DBNO: sangramento, cancelamento de revive e mortes finais ---
     for (const a of [p, ...this.bots]) {
       if (!a.alive || !a.knocked) continue;
@@ -868,18 +905,21 @@ export class KhaaosSim3D {
     // disparo — erro humano: espalha o ponto alvo em vez do cone de saída
     // Fase 7 — tempo de reação ao adquirir um NOVO alvo antes do 1º tiro
     const w = WEAPONS3D[b.weapon];
+    // Fase 10 — parâmetros efetivos do ator (oficiais = tabela de elite)
+    const C = b.combat ?? BOT_COMBAT;
     if (sees && target) {
       if (b.ai.reactTargetId !== target.id) {
         b.ai.reactTargetId = target.id;
-        b.ai.reactT = BOT_COMBAT.reactionMin + this.rng.next() * (BOT_COMBAT.reactionMax - BOT_COMBAT.reactionMin);
+        b.ai.reactT = C.reactionMin + this.rng.next() * (C.reactionMax - C.reactionMin);
       }
       b.ai.reactT -= dt;
     } else b.ai.reactTargetId = null;
     if (sees && target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
       // Fase 9 — modificadores contra alvo no ar / pós-pouso (paraquedista protegido)
       const mods = botTargetModifiers(target);
-      const err = botAimError(bestD) * mods.errMult;
-      const dmgScale = botDamageScale(bestD) * mods.dmgMult;
+      const baseErr = C === BOT_COMBAT ? botAimError(bestD) : Math.min(C.aimErrMax, C.aimErrBase + bestD * C.aimErrPerM);
+      const err = baseErr * mods.errMult;
+      const dmgScale = botDamageScale(bestD) * mods.dmgMult * (C.dmgMult ?? 1);
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
@@ -890,9 +930,9 @@ export class KhaaosSim3D {
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
       }, 0.012, w, dmgScale);
       b.burst++;
-      if (b.burst >= (w.category === 'sniper' ? 1 : BOT_COMBAT.burstMin + Math.floor(this.rng.next() * (BOT_COMBAT.burstMax - BOT_COMBAT.burstMin + 1)))) {
-        b.burst = 0; b.cooldown = BOT_COMBAT.burstCooldownMin + this.rng.next() * (BOT_COMBAT.burstCooldownMax - BOT_COMBAT.burstCooldownMin);
-        if (this.rng.next() < BOT_COMBAT.reloadChance) b.reloadT = w.reload;
+      if (b.burst >= (w.category === 'sniper' ? 1 : C.burstMin + Math.floor(this.rng.next() * (C.burstMax - C.burstMin + 1)))) {
+        b.burst = 0; b.cooldown = C.burstCooldownMin + this.rng.next() * (C.burstCooldownMax - C.burstCooldownMin);
+        if (this.rng.next() < C.reloadChance) b.reloadT = w.reload;
       } else b.cooldown = 1 / w.fireRate;
     }
   }

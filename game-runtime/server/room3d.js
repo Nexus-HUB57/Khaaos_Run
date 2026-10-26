@@ -20,9 +20,16 @@ import {
 } from '../src/game3d/sim3d.js';
 // Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
+// Fase 10 — Oficiais de Classe Especial no Ring (7º/9º artigos do POJ)
+import { officerDeployment, officerCombatParams, shouldWithdraw } from '../src/game3d/officers.js';
 
 export const OPERATIVE_IDS = Object.keys(OPERATIVE_ABILITIES);
 export const ABILITY_TICK_RATE = 30; // convenção de ticks no snapshot (igual à sim offline)
+
+// Parâmetros de combate EFETIVOS dos oficiais: a tabela de elite deriva da
+// canônica BOT_COMBAT (mesma curva de decaimento de dano, erro escalado) —
+// calculada UMA vez no load, pura e determinística.
+const OFFICER_COMBAT_EFFECTIVE = officerCombatParams(BOT_COMBAT);
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -41,7 +48,7 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
@@ -50,6 +57,11 @@ export class MatchRoom3D {
     // conexão — o servidor resolve userId). Falha no callback NUNCA propaga
     // para o tick da sala.
     this.onMatchEnd = typeof onMatchEnd === 'function' ? onMatchEnd : null;
+    // Fase 10 — plano dos Oficiais de Classe Especial: função injetada pelo
+    // servidor (() => pojService.officerPlan()) consultada no INÍCIO da partida;
+    // a sala não importa o POJ — permanece desacoplada e testável.
+    this.officerPlanFn = typeof officerPlanFn === 'function' ? officerPlanFn : null;
+    this.officerMeta = null; // { count, article, deploySeconds, elapsed }
     this.matchIndex = 0;      // nº da partida nesta sala (salas são single-match hoje)
     this.matchId = null;      // "<roomId>#<matchIndex>" — chave de idempotência das recompensas
     this.matchRewarded = false;
@@ -199,6 +211,30 @@ export class MatchRoom3D {
     return bot;
   }
 
+  // Fase 10 — Oficial de Classe Especial: entidade de elite com identidade
+  // canônica (officers.js), blindagem/velocidade próprias e parâmetros de
+  // combate efetivos (OFFICER_COMBAT_EFFECTIVE) — o #stepBot preferirá b.combat.
+  #spawnOfficer(def) {
+    const spot = this.world.botSpawns[(def.slot + 3) % this.world.botSpawns.length];
+    const jx = (this.rng.next() - 0.5) * 10, jz = (this.rng.next() - 0.5) * 10;
+    const o = this.#baseActor(`oce-${String(def.slot + 1).padStart(2, '0')}`, def.name);
+    o.isBot = true;
+    o.officer = true;
+    o.officerCallsign = def.callsign;
+    o.x = spot.x + jx; o.z = spot.z + jz;
+    o.yaw = this.rng.next() * Math.PI * 2;
+    o.armor = def.armor;
+    o.speed = def.speed;
+    o.weapon = def.weapon;
+    o.ammoMag = WEAPONS3D[o.weapon].magazine;
+    o.cooldown = this.rng.next() * 1.2;
+    o.krc = 0;
+    o.operativeId = def.operativeId; // identidade visual sincronizada (Fase 8)
+    o.combat = OFFICER_COMBAT_EFFECTIVE;
+    o.ai = { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null };
+    return o;
+  }
+
   // ---------- protocolo ----------
   start(id, entry = 'belt') {
     const actor = this.humans.get(id);
@@ -216,6 +252,20 @@ export class MatchRoom3D {
     // preenche com bots até a capacidade (botFill limita o máximo de bots)
     const botCount = Math.max(0, Math.min(this.botFill, this.capacity - this.humans.size));
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
+    // Fase 10 — Oficiais de Classe Especial: implantados ACIMA do botFill quando
+    // o regramento autoriza (dia 7 de Arukheea — artigos 7º/9º do POJ)
+    const deployment = officerDeployment(this.officerPlanFn?.() ?? null);
+    if (deployment.length) {
+      for (const off of deployment) this.bots.push(this.#spawnOfficer(off));
+      this.officerMeta = {
+        count: deployment.length, article: deployment[0].article ?? null,
+        deploySeconds: deployment[0].deploySeconds, elapsed: 0,
+      };
+      this.#emitAll('officers_deployed', {
+        count: deployment.length, minutesPerRing: deployment[0].minutesPerRing,
+        article: this.officerMeta.article, names: deployment.map((o) => o.name),
+      });
+    }
     // Fase 4 — infiltração aérea: humanos e bots entram caindo do céu
     if (this.airdrop) {
       let idx = 0;
@@ -318,6 +368,18 @@ export class MatchRoom3D {
       if ((actor.reviveProgress ?? 0) > 0 && actor.lastReviveTick !== this.tickCount) actor.reviveProgress = 0;
       actor.knockT -= dt;
       if (actor.knockT <= 0) this.#finalizeDeath(actor, null, 'bleedout');
+    }
+
+    // --- Fase 10 — retirada dos Oficiais ao fim da duração autorizada (7º/9º) ---
+    // A saída NÃO é morte: eles deixam o Ring sem crédito de kill para ninguém
+    // (corpos remanescentes de oficiais caídos saem junto — a intervenção acabou).
+    if (this.officerMeta) {
+      this.officerMeta.elapsed += dt;
+      if (this.bots.some((b) => b.officer) && shouldWithdraw(this.officerMeta.elapsed, this.officerMeta.deploySeconds)) {
+        this.bots = this.bots.filter((b) => !b.officer);
+        this.#emitAll('officers_departed', { reason: 'duracao_autorizada_encerrada', article: this.officerMeta.article });
+        this.officerMeta = null;
+      }
     }
 
     // --- histórico de posições p/ lag compensation (após o movimento do tick) ---
@@ -632,6 +694,8 @@ export class MatchRoom3D {
     // Fase 7 — ignora o próprio esquadrão; prioriza alvos de pé (caídos só quando
     // não há ninguém de pé à vista — finalização). Bots online não resgatam.
     let target = null, bestD = BOT_SIGHT;
+    // Fase 10 — parâmetros efetivos do ator: oficiais usam a tabela de elite
+    const C = b.combat ?? BOT_COMBAT;
     for (const passKnocked of [false, true]) {
       for (const other of this.#actors()) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
@@ -682,15 +746,17 @@ export class MatchRoom3D {
     if (target) {
       if (b.ai.reactTargetId !== target.id) {
         b.ai.reactTargetId = target.id;
-        b.ai.reactT = BOT_COMBAT.reactionMin + this.rng.next() * (BOT_COMBAT.reactionMax - BOT_COMBAT.reactionMin);
+        b.ai.reactT = C.reactionMin + this.rng.next() * (C.reactionMax - C.reactionMin);
       }
       b.ai.reactT -= dt;
     } else b.ai.reactTargetId = null;
     if (target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
       // Fase 9 — modificadores contra alvo no ar / pós-pouso (paraquedista protegido)
       const mods = botTargetModifiers(target);
-      const err = botAimError(bestD) * mods.errMult;
-      const dmgScale = botDamageScale(bestD) * mods.dmgMult;
+      // Fase 10 — erro de elite: mesma forma da curva canônica, parâmetros do ator
+      const baseErr = C === BOT_COMBAT ? botAimError(bestD) : Math.min(C.aimErrMax, C.aimErrBase + bestD * C.aimErrPerM);
+      const err = baseErr * mods.errMult;
+      const dmgScale = botDamageScale(bestD) * mods.dmgMult * (C.dmgMult ?? 1);
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
@@ -701,9 +767,9 @@ export class MatchRoom3D {
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
       }, 0.012, w, dmgScale);
       b.burst = (b.burst ?? 0) + 1;
-      if (b.burst >= (w.category === 'sniper' ? 1 : BOT_COMBAT.burstMin + Math.floor(this.rng.next() * (BOT_COMBAT.burstMax - BOT_COMBAT.burstMin + 1)))) {
-        b.burst = 0; b.cooldown = BOT_COMBAT.burstCooldownMin + this.rng.next() * (BOT_COMBAT.burstCooldownMax - BOT_COMBAT.burstCooldownMin);
-        if (this.rng.next() < BOT_COMBAT.reloadChance) b.reloadT = w.reload;
+      if (b.burst >= (w.category === 'sniper' ? 1 : C.burstMin + Math.floor(this.rng.next() * (C.burstMax - C.burstMin + 1)))) {
+        b.burst = 0; b.cooldown = C.burstCooldownMin + this.rng.next() * (C.burstCooldownMax - C.burstCooldownMin);
+        if (this.rng.next() < C.reloadChance) b.reloadT = w.reload;
       } else b.cooldown = 1 / w.fireRate;
       if (!target.isBot) {
         // som posicional do tiro dos bots para todos os humanos próximos (raio 90m)
@@ -1141,6 +1207,8 @@ export class MatchRoom3D {
       knocked: !!a.knocked, squad: a.squad ?? null,
       // Fase 8 — identidade do operativo + marca de recon p/ minimapa
       op: a.operativeId ?? null, revealed: (a.revealedTicks ?? 0) > 0,
+      // Fase 10 — marca de Oficial de Classe Especial (render dourado + nametag)
+      officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
     };
   }
 
@@ -1149,6 +1217,7 @@ export class MatchRoom3D {
       id: this.id, mode: this.mode, seed: this.seed, region: this.region,
       players: this.humans.size, capacity: this.capacity,
       bots: this.bots.length, botsAlive: this.bots.filter((b) => b.alive).length,
+      officers: this.bots.filter((b) => b.officer).length, // Fase 10
       state: this.state, started: this.started,
       private: this.isPrivate, squad: this.squad,
       ageMs: Date.now() - this.createdAt, lastActivityMs: Date.now() - this.lastActivity,

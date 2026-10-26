@@ -27,10 +27,12 @@ export class Game3D {
     this.scenario = resolveScenario(scenarioId);
     this.selectedOperative = operativeCatalog[0];
     // Fase 7 — modo squad (DBNO/revive) via ?squad=1; LOD mobile via ?q=low|medium|high
+    // Fase 10 — prévia offline dos Oficiais de Classe Especial via ?officers=1
     const urlParams = new URLSearchParams(location.search);
     this.squadMode = urlParams.get('squad') === '1';
+    this.officersMode = urlParams.get('officers') === '1';
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
-    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode });
+    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode, officers: this.officersMode });
     this.audio = new GameAudio();
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
@@ -136,14 +138,17 @@ export class Game3D {
     if (!this.online) {
       this.sim.bots.forEach((b, i) => {
         const ally = this.sim.squad && b.squad && b.squad === this.sim.player.squad;
-        const op = createOperative({
-          skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
-          vest: VEST_COLORS[i % VEST_COLORS.length],
-          variant: b.id,
-        });
+        // Fase 10 — oficiais recebem paleta dourada canônica (identidade visual própria)
+        const op = createOperative(b.officer
+          ? { skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length], vest: '#b98a1e', variant: 'OCE_OFFICER' }
+          : {
+              skin: SKIN_TONES[(i * 3 + 1) % SKIN_TONES.length],
+              vest: VEST_COLORS[i % VEST_COLORS.length],
+              variant: b.id,
+            });
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally), ally });
+        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
       });
     }
     // loot
@@ -226,7 +231,7 @@ export class Game3D {
     setText('#operativeDisplay', `OPERATIVO // ${operative.codename}`);
   }
 
-  makeNameTag(name, i, ally = false) {
+  makeNameTag(name, i, ally = false, officer = false) {
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 64;
     const ctx = canvas.getContext('2d');
@@ -234,13 +239,18 @@ export class Game3D {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(8,8,12,.55)';
     ctx.fillRect(48, 6, 160, 44);
-    // Fase 7 — aliados de squad em VERDE; inimigos em tons vermelhos
-    ctx.fillStyle = ally ? '#7dff8a' : (i % 2 ? '#e86a7a' : '#d8a0aa');
+    // Fase 10 — Oficial de Classe Especial: moldura dourada + texto dourado
+    if (officer) {
+      ctx.strokeStyle = '#ffd75e'; ctx.lineWidth = 3;
+      ctx.strokeRect(48, 6, 160, 44);
+    }
+    // Fase 7 — aliados de squad em VERDE; inimigos em tons vermelhos; oficial em OURO
+    ctx.fillStyle = officer ? '#ffd75e' : ally ? '#7dff8a' : (i % 2 ? '#e86a7a' : '#d8a0aa');
     ctx.fillText(name, 128, 36);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    sprite.scale.set(2.2, .55, 1);
+    sprite.scale.set(officer ? 2.6 : 2.2, .55, 1);
     sprite.position.y = 2.25;
     sprite.renderOrder = 5;
     return sprite;
@@ -581,14 +591,16 @@ export class Game3D {
       let entry = this.botOps.get(b.id);
       if (!entry) {
         // Fase 8 — identidade: paleta/acessórios pelo operativo do ator (op do snapshot);
-        // aliados do esquadrão em verde; fallback = paleta hash do id (compat legado)
+        // aliados do esquadrão em verde; oficiais em OURO canônico (Fase 10); fallback = paleta hash do id (compat legado)
         const ally = !!(s.squad && b.squad && b.squad === mySquad);
         const catalog = operativeCatalog.find((o) => o.id === b.op);
-        const op = createOperative(catalog
-          ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary, variant: b.op }
-          : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
+        const op = createOperative(b.officer
+          ? { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: '#b98a1e', variant: 'OCE_OFFICER' }
+          : catalog
+            ? { skin: catalog.colors.skinTone, vest: ally ? '#2e7d4f' : catalog.colors.primary, variant: b.op }
+            : { skin: SKIN_TONES[(b.id.charCodeAt(4) * 7) % SKIN_TONES.length], vest: VEST_COLORS[b.id.charCodeAt(6) % VEST_COLORS.length], variant: b.id });
         this.scene.add(op.group);
-        const name = this.makeNameTag(b.name, 0, ally);
+        const name = this.makeNameTag(b.name, 0, ally, !!b.officer);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
         entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally };
@@ -879,6 +891,14 @@ export class Game3D {
         }
         case 'abilityUnavailable':
           this.hud.feed('HABILIDADE', 'Vida cheia: Coágulo de Campo não consumiu recarga.', 'warn');
+          break;
+        // ---------- Fase 10 — Oficiais de Classe Especial no Ring (POJ 7º/9º) ----------
+        case 'officers_deployed':
+          this.hud.feed('POJ', `${e.count} OFICIAIS DE CLASSE ESPECIAL entraram no Ring (artigo ${e.article ?? '—'}): ${(e.names ?? []).join(', ')}.`, 'warn');
+          this.audio?.ringWarn?.();
+          break;
+        case 'officers_departed':
+          this.hud.feed('POJ', 'Oficiais de Classe Especial se retiraram do Ring — duração autorizada encerrada.', 'warn');
           break;
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------

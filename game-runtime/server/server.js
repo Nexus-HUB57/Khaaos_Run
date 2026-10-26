@@ -21,6 +21,8 @@ import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
 import { createPojService, PojError } from './poj.js';
+// Fase 10 — patente do perfil (liderança): progressão canônica compartilhada
+import { rankProgress } from '../src/shared/rank.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_WS_PAYLOAD = 16 * 1024;
@@ -117,6 +119,18 @@ export function createAuthoritativeServer({
     }).catch((error) => {
       observability.recordLog({ level: 'warn', event: 'economy.match_rewards_failed', fields: { matchId, error: String(error?.message || error) } });
     });
+    // Fase 10 — ponte partida → POJ: presença/queda/carreira automáticas no fim
+    // de cada incursão 3D. Falha é contida — o POJ nunca derruba a recompensa.
+    try {
+      const pojResults = (results ?? []).map((r) => ({ ...r, userId: actorById.get(r.id)?.sub ?? null }));
+      const pojSummary = pojService.reportMatchResult({ matchId, results: pojResults });
+      if (pojSummary.reported) {
+        audit.record({ actor: 'system', action: 'poj.match_report', resource: matchId, outcome: 'allow', detail: { incursionId: pojSummary.incursionId, attended: pojSummary.attended, eliminated: pojSummary.eliminated, skipped: pojSummary.skipped } });
+        observability.recordLog({ level: 'info', event: 'poj.match_report', fields: { matchId, ...pojSummary } });
+      }
+    } catch (error) {
+      observability.recordLog({ level: 'warn', event: 'poj.match_report_failed', fields: { matchId, error: String(error?.message || error) } });
+    }
   };
   // Saúde real das dependências: sondas com latência medida (SELECT 1 / PING)
   // e cache curto para o readiness não martelar o banco a cada requisição.
@@ -195,7 +209,7 @@ export function createAuthoritativeServer({
     let room = chooseRoom(rooms, client.region, roomCapacity, client.mode);
     if (!room) {
       room = client.mode === '3d'
-        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd })
+        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan() })
         : new MatchRoom({ id: `ring-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
       rooms.set(room.id, room);
     }
@@ -371,11 +385,38 @@ export function createAuthoritativeServer({
         res.end(JSON.stringify(pojService.state()));
         return;
       }
+      // Fase 10 — perfil do operativo: patente (progressão KRC), próximo degrau
+      // e saldo. Qualquer sessão autenticada lê o PRÓPRIO perfil.
+      if (url.pathname === '/profile' && req.method === 'GET') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        let balance = 0;
+        try { balance = (await economyService.balance(actor.sub)).amount ?? 0; } catch { /* sem ledger → Recruta */ }
+        const rank = rankProgress(balance);
+        const pojPlayers = pojService.state().players ?? [];
+        const pojEntry = pojPlayers.find((p) => p.id === actor.sub) ?? null;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({
+          sub: actor.sub, username: actor.username,
+          krc: balance, patente: rank.patente, peso: rank.peso,
+          nextPatente: rank.nextPatente, xpForNext: rank.xpForNext, progress: rank.progress,
+          poj: pojEntry ? { status: pojEntry.status, incursoes: pojEntry.incursoes, kills: pojEntry.kills, xp: pojEntry.xp, evasions: pojEntry.evasions } : null,
+        }));
+        return;
+      }
       if (url.pathname === '/poj/register' && req.method === 'POST') {
         const actor = identityFor(req);
         if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
         const body = await jsonBody(req);
         try {
+          // Fase 10 — patente inicial = progressão KRC do perfil (coronel no KRC
+          // alista como Coronel); corpo explícito prevalece (validado no motor).
+          if (!body.patente) {
+            try {
+              const bal = (await economyService.balance(actor.sub)).amount ?? 0;
+              body.patente = rankProgress(bal).patente;
+            } catch { /* sem ledger → Recruta */ }
+          }
           const result = pojService.register(actor, body);
           audit.record({ actor: actor.username, action: 'poj.register', resource: `player:${result.playerId}`, outcome: 'allow', detail: { total: result.registrations } });
           res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -647,6 +688,7 @@ export function createAuthoritativeServer({
               seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
               region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
               squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto), onMatchEnd: handleMatchEnd,
+              officerPlanFn: () => pojService.officerPlan(),
             });
             rooms.set(room.id, room);
             const position = queue.indexOf(client);
