@@ -3,9 +3,13 @@
 // pouches, pads, luvas, capacete com óculos, rosto pintado, camuflagem por paleta.
 // Fase 7: acessórios determinísticos por operativo (variant), skins de arma por
 // raridade do loot e pose de rastejo do DBNO. API de parts/anim PRESERVADA.
+// Fase 9: realismo anatômico — crânio esférico com queixo/orelhas/nariz, rosto
+// em malha curva, membros em cápsula com juntas esféricas (silhueta suave em
+// movimento), torso cônico V-taper com deltoides, sombra de contato e pele com
+// poros/pseudo-SSS. Mesma assinatura de createOperative/animateOperative.
 import * as THREE from 'three';
 import {
-  camoMaterial, faceTexture, goggleMaterial,
+  camoMaterial, contactShadowTexture, faceTexture, goggleMaterial, skinMaterial,
 } from './textures3d.js';
 import { RARITIES } from '../shared/weapons.js';
 
@@ -18,14 +22,39 @@ const VEST_COLORS = VEST_COLORS_FALLBACK;
 const EYE_TONES = ['#f59e0b', '#3b82f6', '#22c55e', '#e879a0', '#d4d4d4', '#a855f7'];
 const TRIM_ACCENT = '#c8ff3d'; // verde ácido de comando (marca Khaaos)
 
+// ---------- Fase 9 — cache de geometrias (compartilhadas entre instâncias) ----------
+// Personagens repetem as mesmas cápsulas/esferas: memoizar geometria corta ~70% da
+// memória de malha com 24 atores simultâneos. Materiais seguem POR INSTÂNCIA.
+const _geo = new Map();
+function geo(key, factory) {
+  if (!_geo.has(key)) _geo.set(key, factory());
+  return _geo.get(key);
+}
+const sphereGeo = (r, w = 10, h = 8) => geo(`s${r}:${w}x${h}`, () => new THREE.SphereGeometry(r, w, h));
+const capsuleGeo = (r, l) => geo(`c${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 3, 8));
+const cylGeo = (rt, rb, h, seg = 10) => geo(`y${rt}:${rb}:${h}:${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg));
+
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   m.castShadow = true; m.receiveShadow = true;
   return m;
 }
+function ball(r, mat, x = 0, y = 0, z = 0, w = 10, h = 8, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(sphereGeo(r, w, h), mat);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.castShadow = true;
+  return m;
+}
+function capsule(r, l, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(capsuleGeo(r, l), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
+}
 function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 8) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+  const m = new THREE.Mesh(cylGeo(rt, rb, h, seg), mat);
   m.position.set(x, y, z);
   m.castShadow = true;
   return m;
@@ -110,18 +139,20 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   }
 }
 
-// ---------- operativo (Fase 6/7) ----------
+// ---------- operativo (Fase 6/7/9) ----------
 // cores: skin, vest (primária), secondary (calça/boina), trim (faixas),
 // eyes, hair — todas opcionais com fallback coerente.
 // variant (Fase 7): string do operativo/bot — deriva acessórios determinísticos.
+// Fase 9: anatomia curva — mesmos pivôs (quadril .84, ombros 1.48, cabeça 1.68),
+// mesma API de parts; nenhuma dependência externa de rig.
 export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true, variant = '' } = {}) {
   const g = new THREE.Group();
   const camo = camoMaterial(hashIdx(vest, 4), { repeat: 1.4 }); // camuflagem coerente com a cor do colete (compartilhada/memoizada)
   const sec = secondary ?? darken(vest, .6);
   const eye = eyes ?? EYE_TONES[hashIdx(skin + vest, EYE_TONES.length)];
 
-  // ---- materiais (por instância p/ identidade de equipe) ----
-  const skinM = M(skin, { rough: .62 });
+  // ---- materiais (por instância p/ identidade de equipe; pele memoizada Fase 9) ----
+  const skinM = skinMaterial(skin);
   const vestM = M(vest, { rough: .78, metal: .18 });
   const vestDarkM = M(darken(vest, .55), { rough: .85 });
   const secM = M(sec, { rough: .88 });
@@ -130,94 +161,127 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const bootM = M('#141517', { rough: .7 });
   const metalM = M('#4a4e55', { rough: .4, metal: .7 });
   const trimM = new THREE.MeshStandardMaterial({ color: trim, emissive: trim, emissiveIntensity: .55, roughness: .5 });
+  const hairM = M(hair, { rough: .95 });
 
-  // ---- quadril fixo: pelve + cinto tático + coldre ----
-  const pelvis = box(.42, .2, .28, secM, 0, .84, 0);
+  // ---- sombra de contato (Fase 9): ancora o ator no chão; fade controlado
+  // por animateOperative via `air` (infiltração aérea) ----
+  const shadow = new THREE.Mesh(
+    geo('shadowPlane', () => new THREE.PlaneGeometry(1.15, 1.15)),
+    new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, opacity: .8, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = .02;
+  shadow.renderOrder = 1;
+  g.add(shadow);
+
+  // ---- quadril fixo: pelve arredondada + cinto tático + coldre ----
+  const pelvis = ball(.2, secM, 0, .84, 0, 10, 8, 1.15, .6, .82);   // elipse = quadril humano
   const belt = box(.46, .07, .31, gearM, 0, .94, 0);
   const buckle = box(.08, .06, .04, metalM, 0, .94, -.155);
   const holster = box(.1, .18, .08, gearM, .19, .82, -.06);
   g.add(pelvis, belt, buckle, holster);
 
   // ---- TRONCO (grupo — bob de corrida move tudo acima) ----
+  // V-taper: peitoral cônico mais largo que o abdômen, seção elíptica
+  // (escala z) — silhueta atlética em vez de caixa.
   const torso = new THREE.Group();
   torso.position.set(0, 1.22, 0);
-  const shirt = box(.5, .6, .29, camo, 0, 0, 0);
-  const vestMesh = box(.56, .46, .37, vestM, 0, .04, .01);
-  torso.add(shirt, vestMesh);
+  const chest = cyl(.27, .225, .36, camo, 0, .1, 0, 12);
+  chest.scale.z = .64;
+  const abdomen = cyl(.225, .2, .18, camo, 0, -.15, 0, 12);
+  abdomen.scale.z = .6;
+  torso.add(chest, abdomen);
+  const vestMesh = box(.5, .42, .33, vestM, 0, .06, .01);           // plate carrier rígido sobre o peitoral
+  torso.add(vestMesh);
   // pouches frontais de carregador (3) + porta-radio
-  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.06, -.21));
-  torso.add(box(.09, .13, .05, gearM, -.21, .1, -.19)); // radio
-  torso.add(cyl(.008, .008, .16, metalM, -.21, .2, -.18, 4)); // antena do radio
+  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.04, -.185));
+  torso.add(box(.09, .13, .05, gearM, -.19, .12, -.17)); // radio
+  torso.add(cyl(.008, .008, .16, metalM, -.19, .22, -.16, 4)); // antena do radio
   // zipper + fivela central
-  torso.add(box(.03, .42, .02, gearM2, 0, .04, -.19));
-  // ombreiras
-  torso.add(box(.17, .09, .2, gearM, -.31, .27, 0));
-  torso.add(box(.17, .09, .2, gearM, .31, .27, 0));
+  torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
   // mochila tática: corpo + straps + bedroll + faixa de equipe
-  const pack = box(.38, .42, .17, gearM2, 0, .02, .23);
+  const pack = box(.38, .42, .17, gearM2, 0, .02, .22);
   torso.add(pack);
-  torso.add(box(.3, .05, .19, vestDarkM, 0, .12, .24));      // tampa
-  torso.add(cyl(.07, .07, .34, secM, 0, .27, .25, 8));        // bedroll no topo
-  torso.add(box(.34, .06, .02, trimM, 0, -.08, .325));        // faixa reflexiva
+  torso.add(box(.3, .05, .19, vestDarkM, 0, .12, .23));      // tampa
+  torso.add(cyl(.07, .07, .34, secM, 0, .27, .24, 8));        // bedroll no topo
+  torso.add(box(.34, .06, .02, trimM, 0, -.08, .305));        // faixa reflexiva
   // costelas laterais do colete
-  torso.add(box(.03, .3, .3, vestDarkM, -.29, .04, 0));
-  torso.add(box(.03, .3, .3, vestDarkM, .29, .04, 0));
+  torso.add(box(.03, .3, .28, vestDarkM, -.265, .06, 0));
+  torso.add(box(.03, .3, .28, vestDarkM, .265, .06, 0));
   g.add(torso);
 
-  // ---- CABEÇA (grupo — pitch de mira) ----
+  // ---- CABEÇA (grupo — pitch de mira; Fase 9: crânio esférico + rosto curvo) ----
   const head = new THREE.Group();
   head.position.set(0, .46, 0); // mundo ~1.68
-  const neck = cyl(.07, .08, .1, skinM, 0, -.13, 0, 6);
-  const skull = box(.25, .27, .25, skinM, 0, .01, 0);
-  head.add(neck, skull);
-  // rosto pintado (olhos/sobrancelhas/boca) na face FRONTAL (-z = frente)
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(skin, eye, hair), roughness: .58 });
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(.24, .25), faceMat);
-  face.position.set(0, .01, -.127);
-  face.rotation.y = Math.PI; // plano olha para -z
+  const neck = cyl(.07, .08, .12, skinM, 0, -.14, 0, 8);
+  // crânio: esfera escalada (mais alto que largo) + queixo/mandíbula
+  const skull = ball(.125, skinM, 0, .01, 0, 14, 12, .95, 1.06, 1.0);
+  const jaw = ball(.07, skinM, 0, -.075, -.015, 10, 8, 1.05, .8, 1.1);
+  const earL = ball(.028, skinM, -.115, .005, .01, 8, 6, .5, 1, .8);
+  const earR = ball(.028, skinM, .115, .005, .01, 8, 6, .5, 1, .8);
+  const nose = ball(.024, skinM, 0, -.02, -.118, 8, 6, .7, .95, 1);
+  head.add(neck, skull, jaw, earL, earR, nose);
+  // rosto PINTADO em malha CURVA (calota esférica voltada p/ -z = frente):
+  // acompanha o volume do crânio em vez de máscara plana
+  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(skin, eye, hair), roughness: .55 });
+  const face = new THREE.Mesh(
+    geo('facePatch', () => new THREE.SphereGeometry(.129, 14, 10, Math.PI * 1.5 - .9, 1.8, 1.05, .95)),
+    faceMat
+  );
+  face.position.set(0, .012, 0);
   head.add(face);
-  // capacete tático OU boina (variedade)
+  // franja/cabelo sob o capacete (nuca + laterais) — volume orgânico
+  if (!helmet) {
+    const hairBack = ball(.122, hairM, 0, .02, .035, 12, 10, .95, 1.0, 1.0);
+    hairBack.scale.set(.95, 1.02, .95);
+    head.add(hairBack);
+  }
+  // capacete tático OU boina (variedade) — gear rígido, boxes coerentes
   if (helmet) {
-    const dome = box(.3, .13, .32, gearM, 0, .17, .01);
-    const brim = box(.28, .04, .08, gearM, 0, .12, -.15);
-    const band = box(.305, .06, .325, goggleMaterial(), 0, .1, .01); // óculos empilhados
+    const dome = ball(.145, gearM, 0, .1, .01, 12, 10, 1.05, .85, 1.12); // casco arredondado
+    const brim = box(.28, .04, .08, gearM, 0, .1, -.15);
+    const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos empilhados
     head.add(dome, brim, band);
-    head.add(box(.02, .07, .16, gearM2, -.15, .17, .01)); // trilhos laterais
-    head.add(box(.02, .07, .16, gearM2, .15, .17, .01));
-    head.add(box(.05, .05, .05, metalM, .09, .23, .08));   // mount NVG
+    head.add(box(.02, .07, .16, gearM2, -.15, .15, .01)); // trilhos laterais
+    head.add(box(.02, .07, .16, gearM2, .15, .15, .01));
+    head.add(box(.05, .05, .05, metalM, .09, .21, .08));   // mount NVG
   } else {
-    const cap = box(.28, .1, .28, vestM, 0, .17, .01);
-    const brim = box(.24, .03, .12, vestM, 0, .13, -.16);
-    const hairBack = box(.24, .12, .06, M(hair, { rough: .95 }), 0, .06, .13);
-    head.add(cap, brim, hairBack);
+    const cap = box(.28, .1, .28, vestM, 0, .16, .01);
+    const brim = box(.24, .03, .12, vestM, 0, .12, -.16);
+    head.add(cap, brim);
   }
   torso.add(head);
 
-  // ---- pernas: coxa camuflada + bolso cargo + joelheira + bota ----
+  // ---- pernas (Fase 9): coxa/canela em cápsula + joelho esférico ----
   const mkLeg = (side) => {
     const hip = new THREE.Group(); hip.position.set(side * .13, .84, 0);
-    const upper = box(.17, .42, .19, camo, 0, -.21, 0);
+    const upper = capsule(.082, .26, camo, 0, -.21, 0);
     const cargo = box(.05, .16, .12, secM, side * .1, -.2, 0);
     const knee = new THREE.Group(); knee.position.set(0, -.42, 0);
-    const lower = box(.15, .4, .17, camo, 0, -.2, 0);
-    const pad = box(.16, .14, .19, gearM, 0, -.02, -.005);
+    const kneeCap = ball(.07, gearM, 0, -.01, -.005, 10, 8);       // joelheira orgânica
+    const lower = capsule(.066, .24, camo, 0, -.19, 0);
+    const pad = box(.15, .1, .17, gearM, 0, -.06, -.005);
     const boot = box(.17, .12, .28, bootM, 0, -.43, .05);
+    const toe = ball(.085, bootM, 0, -.44, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
     const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.5, .05);
-    knee.add(lower, pad, boot, sole); hip.add(upper, cargo, knee);
+    knee.add(kneeCap, lower, pad, boot, toe, sole); hip.add(upper, cargo, knee);
     g.add(hip);
     return { hip, knee };
   };
-  // ---- braços: manga camuflada + cotoveleira + luva + faixa de equipe ----
+  // ---- braços (Fase 9): deltoides no ombro + cápsulas + cotovelo esférico ----
   const mkArm = (side) => {
-    const shoulder = new THREE.Group(); shoulder.position.set(side * .33, .26, 0); // local ao tronco (mundo 1.48)
-    const upper = box(.14, .34, .16, camo, 0, -.14, 0);
-    const pad = box(.16, .1, .18, gearM, 0, -.26, 0);
-    const stripe = box(.145, .05, .17, trimM, 0, -.05, 0);
-    const elbow = new THREE.Group(); elbow.position.set(0, -.32, 0);
-    const lower = box(.12, .3, .14, camo, 0, -.13, 0);
-    const glove = box(.13, .12, .14, gearM, 0, -.32, 0);
-    const cuff = box(.135, .06, .15, secM, 0, -.25, 0);
-    elbow.add(lower, cuff, glove); shoulder.add(upper, pad, stripe, elbow);
+    const shoulder = new THREE.Group(); shoulder.position.set(side * .31, .24, 0); // local ao tronco (mundo 1.46)
+    const deltoid = ball(.09, camo, 0, .01, 0, 10, 8, 1.1, .95, 1); // ombro curvo
+    const upper = capsule(.062, .2, camo, 0, -.16, 0);
+    const pad = box(.15, .09, .16, gearM, 0, -.25, 0);
+    const stripe = box(.13, .05, .14, trimM, 0, -.05, 0);
+    const elbow = new THREE.Group(); elbow.position.set(0, -.31, 0);
+    const elbowCap = ball(.055, gearM, 0, -.01, .002, 8, 6);
+    const lower = capsule(.054, .18, camo, 0, -.15, 0);
+    const glove = box(.12, .12, .13, gearM, 0, -.31, 0);
+    const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
+    const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
+    elbow.add(elbowCap, lower, cuff, glove, knuckles); shoulder.add(deltoid, upper, pad, stripe, elbow);
     return { shoulder, elbow };
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
@@ -227,14 +291,26 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
   buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
 
-  return { group: g, parts: { head, torso, legL, legR, armL, armR } };
+  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow } };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
 // crouch (Fase 5) dobra pernas e abaixa o tronco; Fase 6: respiração idle,
 // sway de tronco e cabeça acompanhando o passo. Fase 7: pose de rastejo DBNO.
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false } = {}) {
+// Fase 9: movimento secundário — transferência de peso no idle, micro-olhar,
+// roll de passada, contra-rotação de cabeça e fade da sombra de contato por
+// `air` (altitude na infiltração). Frequências dessintonizadas evitam loop
+// mecânico; tudo determinístico (sem Math.random).
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0 } = {}) {
+  // sombra de contato: some com altitude (paraquedas) e no corpo morto
+  if (parts.shadow) {
+    const fade = dead ? 0 : Math.max(0, .8 - air * .1);
+    parts.shadow.material.opacity = fade;
+    const sc = 1 + Math.min(1.4, air * .05) * (dead ? 0 : 1);
+    parts.shadow.scale.set(sc, sc, 1);
+  }
   if (dead) {
+    parts.torso.scale.set(1, 1, 1);
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
@@ -243,9 +319,12 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   if (knocked) {
     // rastejar: tronco deitado, cotoveladas alternadas arrastando o corpo
     const crawl = Math.sin(t * 5.2) * .5;
+    parts.torso.scale.set(1, 1, 1);
     parts.torso.rotation.x = 1.22;
     parts.torso.rotation.y = Math.sin(t * 2.6) * .09;
+    parts.torso.rotation.z = Math.sin(t * 5.2) * .05;      // Fase 9: esforço do arrasto
     parts.torso.position.y = .5;
+    parts.torso.position.x = 0;
     parts.legL.hip.rotation.x = .85 + crawl * .18;
     parts.legR.hip.rotation.x = .85 - crawl * .18;
     parts.legL.knee.rotation.x = -.55;
@@ -255,9 +334,14 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.armR.elbow.rotation.x = -.35;
     parts.armL.elbow.rotation.x = -.35;
     parts.head.rotation.x = -.6;
+    parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
+    parts.head.rotation.z = 0;
     return;
   }
-  const swing = Math.sin(t * 9) * .62 * speedNorm;
+  const idle = 1 - Math.min(1, speedNorm);
+  const breathe = Math.sin(t * 2.1);                       // respiração
+  // ---- passada: frequência base + segunda harmônica (menos metronômico) ----
+  const swing = Math.sin(t * 9) * .62 * speedNorm + Math.sin(t * 9 + 1.9) * .05 * speedNorm;
   const swing2 = Math.cos(t * 9) * .5 * speedNorm;
   if (crouch) {
     parts.legL.hip.rotation.x = 1.15 + swing * .15;
@@ -269,18 +353,31 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legR.hip.rotation.x = -swing;
     parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
     parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+    // Fase 9: leve rotação lateral do quadril na passada (transferência de peso)
+    parts.legL.hip.rotation.z = Math.sin(t * 9) * .035 * speedNorm;
+    parts.legR.hip.rotation.z = Math.sin(t * 9) * .035 * speedNorm;
   }
   const aim = -Math.PI / 2 + pitch;
-  const breathe = Math.sin(t * 2.1) * .022 * (1 - speedNorm); // idle: respiração
-  parts.armR.shoulder.rotation.x = aim + .18 - swing * .18 + breathe;
-  parts.armL.shoulder.rotation.x = aim + .34 + swing * .18 + breathe;
-  parts.armR.elbow.rotation.x = ads ? -.28 : -.5;
-  parts.armL.elbow.rotation.x = ads ? -.62 : -.85;
+  // braços seguram a arma — swing macro proibido; micro-oscilação do passo
+  const armStep = Math.cos(t * 9) * .045 * speedNorm;
+  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
+  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
+  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6;
+  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6;
+  // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
+  const sway = Math.sin(t * 9) * .07 * speedNorm;
+  parts.torso.rotation.y = sway;
+  parts.torso.rotation.x = speedNorm * .1 + breathe * .014 * idle;
+  parts.torso.rotation.z = Math.sin(t * 9 + .4) * .05 * speedNorm   // roll de passada
+    + Math.sin(t * .7) * .028 * idle;                                // transferência de peso parado
+  parts.torso.position.x = Math.sin(t * .7) * .02 * idle;            // quadril desloca no idle
+  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  const br = 1 + breathe * .008 * idle;                              // peito expande no idle
+  parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
+  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
   parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
-  parts.torso.rotation.y = Math.sin(t * 9) * .07 * speedNorm; // sway do tronco no passo
-  parts.torso.rotation.x = speedNorm * .1 + breathe * .6;      // inclina ao correr
-  const torsoY = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
-  parts.torso.position.y = torsoY;
+  parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
+  parts.head.rotation.z = -parts.torso.rotation.z * .5;
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
