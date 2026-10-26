@@ -1,11 +1,12 @@
 // Khaaos Run — Cliente 3D (TPS Battle Royale // FreeFire-style)
 // Renderizador Three.js sobre a simulação determinística KhaaosSim3D.
 // Controles: WASD + mouse (pointer lock), RMB mira, Shift corre, Espaço salta,
-// R recarrega, E coleta, Q habilidade local, H medkit, 1..2 slots. Touch: joystick + botões.
+// C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
+// F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO } from './sim3d.js';
 import { buildScene, createRingWall } from './world3d.js';
-import { createOperative, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
@@ -23,7 +24,7 @@ export class Game3D {
     this.seed = seed;
     this.scenario = resolveScenario(scenarioId);
     this.selectedOperative = operativeCatalog[0];
-    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id });
+    this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true });
     this.audio = new GameAudio();
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
@@ -40,11 +41,17 @@ export class Game3D {
     this.online = !!net;
     this.pendingSlot = 0;
     this.netAccumulator = 0;
+    this.viewMode = new URLSearchParams(location.search).get('view') === 'tps' ? 'tps' : 'fps';
+    this.cameraSway = 0;
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
     this.wallMeshes = new Map();      // id → mesh
     this.parachutes = new Map();      // actorId → { chute, group }
     this.shake = 0;                   // tremor de câmera (explosões)
+    // Fase 5 — espectador + agachamento
+    this.spectating = false;
+    this.spectateTarget = null;
+    this.placement = null;
 
     this.initRenderer();
     this.initWorld();
@@ -64,6 +71,7 @@ export class Game3D {
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
     this.initContentSelectors();
+    this.initSpectatorUI();
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
@@ -111,6 +119,9 @@ export class Game3D {
     // jogador
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.scene.add(this.playerOp.group);
+    this.playerOp.group.visible = this.viewMode !== 'fps';
+    this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
+    this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
     // bots (no modo online os atores remotos chegam via snapshot)
     this.botOps = new Map();
@@ -170,7 +181,11 @@ export class Game3D {
       this.hud.setAbility(operative.id, this.online);
       this.scene.remove(this.playerOp.group);
       this.playerOp = createOperative({ skin: operative.colors.skinTone, vest: operative.colors.primary });
+      this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      this.firstPersonRig?.traverse((node) => {
+        if (node.isMesh && node.material?.color) node.material.color.set(operative.colors.primary);
+      });
       this.playerWeapon = null;
       this.renderOperativeCard(operative);
     });
@@ -214,6 +229,13 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
+    if (this.firstPersonRig) {
+      this.camera.add(this.firstPersonRig);
+      this.firstPersonWeapon = createWeaponModel(this.sim.player.weapon);
+      this.firstPersonRig.add(this.firstPersonWeapon.group);
+      this.firstPersonWeapon.group.position.set(0, -.17, -.72);
+      this.firstPersonWeapon.group.rotation.x = -.08;
+    }
     this.camKick = 0; // recuo visual do disparo (só câmera, não afeta a mira)
     this.initPost();
   }
@@ -251,8 +273,13 @@ export class Game3D {
       if (k === 'e') this.input.interact = true;
       if (k === 'q' && !e.repeat && !this.online) this.abilityPending = true;
       if (k === 'h') this.input.medkit = true;
+      if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
+      if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
+      // Fase 5 — espectador: troca o operativo acompanhado
+      if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
+      if (k === 'arrowright' && !e.repeat) this.spectateCycle(1);
       // troca de slot: offline aplica na sim; online agenda no próximo input
       if (k === '1') this.sim.switchSlot(1);
       if (k === '2') this.sim.switchSlot(2);
@@ -296,10 +323,99 @@ export class Game3D {
   #endMatch(win, stats) {
     if (this.ended) return;
     this.ended = true;
+    this.spectating = false;
+    this.spectateTarget = null;
+    document.body.classList.remove('spectating');
+    this.hud.hideSpectator();
+    if (this.firstPersonRig) this.firstPersonRig.visible = this.viewMode === 'fps';
     this.audio.stinger(win);
     this.hud.setMatchStatus(win ? 'SOBREVIVENTE' : 'ELIMINADO');
     this.hud.showEnd(win, stats);
     if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  // ---------- Fase 5 — modo espectador ----------
+  initSpectatorUI() {
+    document.querySelector('#specPrev')?.addEventListener('click', () => this.spectateCycle(-1));
+    document.querySelector('#specNext')?.addEventListener('click', () => this.spectateCycle(1));
+    document.querySelector('#specLeave')?.addEventListener('click', () => this.leaveSpectate());
+  }
+
+  // alvos vivos que o espectador pode acompanhar (bots/remotos; offline e online)
+  spectateTargets() {
+    return (this.sim.bots ?? []).filter((b) => b.alive);
+  }
+
+  enterSpectate(e) {
+    if (this.ended || this.spectating) return;
+    this.spectating = true;
+    this.placement = e?.placement ?? null;
+    this.spectateTarget = null;
+    document.body.classList.add('spectating');
+    // espectador usa câmera TPS no alvo: esconde as mãos FPS e mostra o corpo
+    if (this.firstPersonRig) this.firstPersonRig.visible = false;
+    this.playerOp.group.visible = true;
+    this.audio.stinger(false);
+    this.hud.setMatchStatus('ESPECTADOR');
+    this.hud.feed('CIGKV', `Você foi eliminado${this.placement ? ` — posição #${this.placement}` : ''}. Transmitindo o restante da partida.`, 'bad');
+    this.spectateCycle(1);
+    this.hud.showSpectator({ name: this.spectateTarget?.name ?? '—', placement: this.placement });
+  }
+
+  spectateCycle(dir = 1) {
+    if (!this.spectating) return;
+    const targets = this.spectateTargets();
+    if (!targets.length) {
+      this.spectateTarget = null;
+      this.hud.updateSpectator('AGUARDANDO');
+      return;
+    }
+    const idx = targets.findIndex((b) => b.id === this.spectateTarget?.id);
+    const next = idx < 0 ? 0 : (idx + dir + targets.length) % targets.length;
+    this.spectateTarget = targets[next];
+    this.hud.updateSpectator(this.spectateTarget.name ?? this.spectateTarget.id);
+  }
+
+  leaveSpectate() {
+    if (!this.spectating || this.ended) return;
+    const p = this.sim.player;
+    this.sim.over = true; // encerra a transmissão (partida segue no servidor no modo online)
+    this.#endMatch(false, { kills: p.kills, xp: p.xp, krc: p.krc, placement: this.placement });
+  }
+
+  // câmera de espectador: por trás do operativo acompanhado, com colisão simples
+  updateSpectateCamera(dt) {
+    const t = this.spectateTarget;
+    if (!t) return;
+    const fx = -Math.sin(t.yaw), fz = -Math.cos(t.yaw);
+    const eye = new THREE.Vector3(t.x, t.y + 2.0, t.z);
+    const desired = eye.clone().addScaledVector(new THREE.Vector3(fx, 0, fz), -5.2).add(new THREE.Vector3(0, 1.1, 0));
+    desired.y = Math.max(.6, desired.y);
+    // colisão: raycast do olhar do alvo até a câmera desejada
+    const dir = desired.clone().sub(eye);
+    const len = dir.length();
+    dir.normalize();
+    const ray = new THREE.Raycaster(eye, dir, 0, len);
+    ray.camera = this.camera;
+    const hits = ray.intersectObjects(this.scene.children, true)
+      .filter((h) => h.object.isMesh && h.object.visible && !h.object.userData.noCamBlock && h.distance > .2);
+    let finalPos = desired;
+    if (hits.length) {
+      const blocked = hits.find((h) => h.object.geometry?.type === 'BoxGeometry' || h.object.geometry?.type === 'CylinderGeometry');
+      if (blocked && blocked.distance < len) finalPos = eye.clone().addScaledVector(dir, Math.max(.6, blocked.distance - .3));
+    }
+    this.camera.position.lerp(finalPos, Math.min(1, dt * 5));
+    this.camera.lookAt(t.x, t.y + 1.35, t.z);
+    if (this.shake > 0.001) {
+      this.camera.position.x += (Math.random() - .5) * this.shake;
+      this.camera.position.y += (Math.random() - .5) * this.shake;
+      this.shake *= Math.exp(-dt * 6.5);
+    }
+    const targetFov = 62;
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
+    this.camera.updateProjectionMatrix();
+    this.sun.position.set(t.x - 160, 160, t.z - 240);
+    this.sun.target.position.set(t.x, 0, t.z);
   }
 
   // ---------- sincronização visual ----------
@@ -412,7 +528,7 @@ export class Game3D {
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
       t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
-      pitch: -p.pitch, dead: !p.alive, ads: p.ads,
+      pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
     });
     if (airborne) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -425,6 +541,14 @@ export class Game3D {
     if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon) {
       this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon);
       this.playerWeapon.userData = { id: p.weapon };
+      if (this.viewMode === 'fps' && this.firstPersonWeapon) {
+        this.firstPersonRig.remove(this.firstPersonWeapon.group);
+        this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
+        this.firstPersonWeapon = createWeaponModel(p.weapon);
+        this.firstPersonRig.add(this.firstPersonWeapon.group);
+        this.firstPersonWeapon.group.position.set(0, -.17, -.72);
+        this.firstPersonWeapon.group.rotation.x = -.08;
+      }
     }
     // bots
     const seen = new Set();
@@ -452,7 +576,7 @@ export class Game3D {
       g.userData.deadVisible = false;
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
-      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false });
+      animateOperative(entry.op.parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching });
       // Fase 4 — pose de queda para bots/remotos
       if (b.dropPhase) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
@@ -477,15 +601,43 @@ export class Game3D {
   }
 
   updateCamera(dt) {
+    // Fase 5 — espectador acompanha outro operativo
+    if (this.spectating && this.spectateTarget) { this.updateSpectateCamera(dt); return; }
     const p = this.sim.player;
     const rig = this.camRig;
+    if (this.viewMode === 'fps') {
+      const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch);
+      const fx = -Math.sin(p.yaw) * cp, fy = sp, fz = -Math.cos(p.yaw) * cp;
+      const eyeHeight = p.sliding ? 0.92 : (p.crouching ? 1.12 : 1.62);
+      const eye = new THREE.Vector3(p.x, p.y + eyeHeight, p.z);
+      this.camera.position.lerp(eye, Math.min(1, dt * 18));
+      this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
+      this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
+      const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
+      this.camera.position.y += bob;
+      this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
+      this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
+      this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
+      this.camKick *= Math.exp(-dt * 9);
+      this.camera.rotation.z += this.camKick * .18;
+      const targetFov = p.ads ? 42 : (p.sliding ? 74 : (p.sprinting ? 72 : 68));
+      this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
+      this.camera.updateProjectionMatrix();
+      this.sun.position.set(p.x - 160, 160, p.z - 240);
+      this.sun.target.position.set(p.x, 0, p.z);
+      return;
+    }
     const targetDist = p.ads ? 2.2 : (p.sprinting ? 5 : 4.4);
     rig.curDist += (targetDist - rig.curDist) * Math.min(1, dt * 8);
+    // altura do olhar: agachado ~1.15m / deslizando ~0.92m (Fase 5 + movimento avançado)
+    const eyeH = p.sliding ? 0.92 : (p.crouching ? 1.15 : 1.62);
+    if (!Number.isFinite(rig.curEye)) rig.curEye = eyeH;
+    rig.curEye += (eyeH - rig.curEye) * Math.min(1, dt * 10);
     // posição da câmera: atrás/abaixo do olhar com deslocamento de ombro
     const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch);
     const fx = -Math.sin(p.yaw) * cp, fy = sp, fz = -Math.cos(p.yaw) * cp;
     const rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
-    const eye = new THREE.Vector3(p.x, p.y + 1.62, p.z);
+    const eye = new THREE.Vector3(p.x, p.y + rig.curEye, p.z);
     const lookAt = eye.clone().addScaledVector(new THREE.Vector3(fx, fy, fz), 40);
     const shoulder = eye.clone().addScaledVector(new THREE.Vector3(rx, 0, rz), rig.shoulder * (p.ads ? .45 : 1));
     // origem recuada
@@ -542,9 +694,11 @@ export class Game3D {
       seq: this.sim.tick + 1,
       dx, dy,
       sprint: k.has('shift') || !!touch.sprint,
+      crouch: k.has('c') || !!touch.crouch,
       jump: k.has(' ') || !!touch.jump,
       fire: this.input.fire || !!touch.fire,
       ads: this.input.ads || !!touch.ads,
+      crouch: !!(this.input.crouch || touch.crouch), // Fase 5 — C alterna; touch segura
       reload: this.input.reload || !!touch.reload,
       interact: this.input.interact || !!touch.interact,
       medkit: this.input.medkit || !!touch.medkit,
@@ -586,9 +740,12 @@ export class Game3D {
           }
           break;
         }
-        case 'impact':
+        case 'impact': {
           this.effects.impact(new THREE.Vector3(e.x, e.y, e.z), e.kind);
+          // Fase 5 — orifício persistente em superfícies sólidas
+          if (e.kind === 'wall' || e.kind === 'gloo') this.effects.bulletHole(new THREE.Vector3(e.x, e.y, e.z));
           break;
+        }
         case 'kill':
           this.hud.killfeed('VOCÊ', e.target, e.head, true);
           this.hud.feed('ABATE', `${e.target} neutralizado. +${e.xp} XP / +${e.krc} KRC.`, 'good');
@@ -677,7 +834,8 @@ export class Game3D {
           this.hud.feed('ARSENAL', e.destroyed ? 'Gloo Wall destruída.' : 'Gloo Wall dissolvida.');
           break;
         case 'victory': this.#endMatch(true, e); break;
-        case 'eliminated': this.#endMatch(false, e); break;
+        case 'matchEnd': this.#endMatch(false, { kills: p.kills, xp: p.xp, krc: p.krc, ...e }); break;
+        case 'eliminated': this.enterSpectate(e); break;
       }
     }
   }

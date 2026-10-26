@@ -1,0 +1,102 @@
+{
+  "profile_name": "CIGKV_Realistic_FirstPerson_Slice",
+  "engine_target": "UE5.8",
+  "status": "editor_import_required",
+  "scope": "ArmoryHub_to_ProvingGrounds_corridor",
+  "units": "centimeters",
+  "materials": {
+    "master": "M_CIGKV_Master",
+    "instances": [
+      {
+        "name": "MI_CIGKV_Concrete_Wet",
+        "base_color": [0.32, 0.34, 0.36, 1.0],
+        "metallic": 0.0,
+        "roughness": 0.58,
+        "normal_strength": 0.72,
+        "ao_strength": 0.85,
+        "clear_coat": 0.0,
+        "notes": "Concrete urbano molhado; usar albedo/normal/roughness licenciados no Editor."
+      },
+      {
+        "name": "MI_CIGKV_Steel_Rusted",
+        "base_color": [0.20, 0.15, 0.11, 1.0],
+        "metallic": 0.86,
+        "roughness": 0.48,
+        "normal_strength": 0.62,
+        "ao_strength": 0.72,
+        "clear_coat": 0.05,
+        "notes": "Metal exposto de cobertura modular; máscara de ferrugem separada."
+      },
+      {
+        "name": "MI_CIGKV_Asphalt_Damp",
+        "base_color": [0.08, 0.09, 0.10, 1.0],
+        "metallic": 0.0,
+        "roughness": 0.68,
+        "normal_strength": 0.44,
+        "ao_strength": 0.78,
+        "clear_coat": 0.12,
+        "notes": "Asfalto de rota de combate; variação por decals e puddles no slice."
+      },
+      {
+        "name": "MI_CIGKV_Foliage_Dry",
+        "base_color": [0.16, 0.24, 0.10, 1.0],
+        "metallic": 0.0,
+        "roughness": 0.82,
+        "normal_strength": 0.36,
+        "ao_strength": 0.64,
+        "clear_coat": 0.0,
+        "notes": "Vegetação inicial do limite Park; translucência calibrada em material dedicado."
+      }
+    ]
+  },
+  "lighting": {
+    "directional_light": {
+      "name": "Sun_CIGKV",
+      "mobility": "Movable",
+      "intensity_lux": 65000,
+      "temperature_kelvin": 6200,
+      "rotation": { "pitch": -38, "yaw": -28, "roll": 0 },
+      "virtual_shadow_map": true,
+      "source_angle": 0.7
+    },
+    "sky_light": {
+      "name": "Sky_CIGKV",
+      "mobility": "Movable",
+      "real_time_capture": true,
+      "intensity": 0.75,
+      "lower_hemisphere_color": [0.035, 0.045, 0.06, 1.0]
+    },
+    "atmosphere": {
+      "sky_atmosphere": true,
+      "exponential_height_fog": true,
+      "fog_density": 0.012,
+      "fog_height_falloff": 0.18,
+      "volumetric_fog": false
+    },
+    "post_process": {
+      "unbound": true,
+      "exposure_mode": "Manual",
+      "exposure_compensation": 0.0,
+      "white_point": 6500,
+      "bloom_method": "Convolution",
+      "bloom_intensity": 0.08,
+      "motion_blur_amount": 0.15,
+      "lens_flare": false,
+      "color_grade": "CIGKV_Neutral_ColdShadows_WarmHighlights"
+    }
+  },
+  "performance_gates": {
+    "target_fps": 60,
+    "max_texture_pool_mb": 2048,
+    "nanite_required_for_static_high_poly": true,
+    "world_partition_required": true,
+    "validate_with": ["Stat Unit", "ProfileGPU", "Unreal Insights", "Shader Complexity", "Memory Insights"]
+  },
+  "editor_actions": [
+    "Criar M_CIGKV_Master e as quatro instâncias com parâmetros acima.",
+    "Criar Sun_CIGKV, Sky_CIGKV, SkyAtmosphere, ExponentialHeightFog e PostProcessVolume unbound no mapa.",
+    "Configurar World Partition/Data Layers e NavMesh do corredor.",
+    "Substituir texturas placeholder por fontes licenciadas e cozinhar o mapa no build alvo.",
+    "Capturar baseline de 60 FPS antes de aumentar densidade de vegetação ou destruição."
+  ]
+}
