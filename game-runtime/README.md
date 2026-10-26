@@ -178,6 +178,23 @@ npm run db:migrate && npm run test:real && npm run test:resilience
 
 Fluxo: `GET /auth/oidc/start` → 302 para o IdP com `state` single-use (cookie `HttpOnly` `SameSite=Lax`) e `nonce`; `GET /auth/oidc/callback?code&state` valida state (cookie ∩ query, TTL de 10 min, single-use), troca o código, verifica o `id_token` e provisiona o usuário (`preferred_username`/`email`, role `player` por padrão) emitindo a sessão KR. Cobertura: `test/security.test.js` (8 testes — rotação, revogação, TLS real com certificado openssl e fluxo OIDC contra um IdP HTTP local real).
 
+## Ping real, readiness e autoscaling por região
+
+O `/readyz` deixou de ser booleano e passou a executar **sondas reais** por dependência com latência medida (`SELECT 1` no Postgres, `PING` no Redis), timeout por sonda (`2 s`) e cache curto (`5 s`) para não martelar o banco a cada checagem:
+
+```json
+{ "status": "ready", "checks": { "sessionStore": true, "rateStore": true },
+  "latencyMs": { "sessionStore": 2, "rateStore": 1 },
+  "load": { "connections": 12, "queue": 0, "maxConnections": 200 } }
+```
+
+- **Ping real de operação**: `GET /admin/ping` força sondas frescas (sem cache) de todas as dependências — é o roundtrip de verdade, útil para dashboards e paginador.
+- **Gate de saturação (backpressure no readiness)**: com `readyGate: { maxConnections }` (ou `KR_READY_MAX_CONNECTIONS`), a instância passa a responder `503 { status: "overload" }` acima do limite vivo de conexões — sai da rotação do balanceador antes de degradar, e volta sozinha ao esvaziar.
+- **Autoscaling por região**: cálculo puro em `server/autoscale.js` sobre o estado de salas — utilização por região (jogadores/assentos), fila global distribuída na região mais cheia e recomendação determinística (`scale_out` ≥ 85% ou com fila; `scale_in` < 30% sem fila; `ok` na banda saudável). Exposto publicamente em `/healthz` (`regions[]`) e com thresholds em `GET /admin/regions`.
+- `server/health.js` é agnóstico de adapter: qualquer dependência com `ready()` entra no monitor (`sessionStore`, `rateStore`, audit store persistente).
+
+Cobertura: `test/health-autoscale.test.js` (5 testes — latência real, `probe_timeout`, monitor padrão, recomendação por região e ponta a ponta com gate de saturação).
+
 ## RBAC com auditoria e permissões por recurso
 
 Catálogo declarativo em `server/rbac.js` — única fonte de verdade de autorização:
@@ -227,4 +244,4 @@ npm run test:stress
 
 Os testes cobrem assinatura/RBAC, persistência, reconexão, escolha regional, rate limiting compartilhado entre duas instâncias e 24 conexões WebSocket autenticadas em múltiplas salas.
 
-Antes de produção ainda é necessário substituir o arquivo JSON por storage transacional, conectar um adapter Redis real, usar TLS, adicionar rotação de chaves, SSO/RBAC operacional, matchmaking por ping real e observabilidade distribuída.
+Antes de produção ainda é necessário: multi-instância com falha de processo/soak/fault injection, economia e compliance, e observabilidade distribuída (traces/logs agregados).
