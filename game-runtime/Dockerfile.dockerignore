@@ -1,0 +1,15 @@
+# Khaaos Run — contexto exclusivo do game-runtime/Dockerfile
+# O BuildKit usa ESTE arquivo (Dockerfile.dockerignore) no lugar do
+# .dockerignore da raiz quando o build é disparado com este Dockerfile.
+# O contexto é a raiz do repo (compose: context ../..); whitelist no padrão
+# canônico da documentação do Docker (re-incluir pai, excluir filhos de 1
+# nível, re-incluir os paths COPYados):
+*
+!game-runtime
+game-runtime/*
+!game-runtime/package.json
+!game-runtime/package-lock.json
+!game-runtime/server
+!game-runtime/src
+!game-runtime/scripts
+!game-runtime/migrations

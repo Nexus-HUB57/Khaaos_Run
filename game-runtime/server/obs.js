@@ -230,7 +230,7 @@ export class RedisObsExporter {
     this._ownClient = !client;
     if (!this.client) {
       if (!url) throw new Error('RedisObsExporter exige KR_OBS_REDIS_URL/KR_REDIS_URL/REDIS_URL ou client');
-      import('node:redis').then(async ({ createClient }) => {
+      import('redis').then(async ({ createClient }) => {
         this.client = createClient({ url });
         this.client.on('error', () => {});
         await this.client.connect();

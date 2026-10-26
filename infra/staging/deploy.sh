@@ -45,5 +45,13 @@ for attempt in $(seq 1 60); do
   fi
   sleep 2
 done
-echo "❌ /readyz não ficou 200 em 120 s"; cat /tmp/readyz.json 2>/dev/null || true
+echo "❌ /readyz não ficou 200 em 120 s — diagnóstico da stack:"
+echo "--- docker compose ps -a ---"
+docker compose ps -a || true
+echo "--- logs app (tail 80) ---"
+docker compose logs --tail=80 app || true
+echo "--- logs nginx (tail 30) ---"
+docker compose logs --tail=30 nginx || true
+echo "--- último readyz capturado ---"
+cat /tmp/readyz.json 2>/dev/null || true
 exit 1
