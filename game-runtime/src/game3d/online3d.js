@@ -201,6 +201,7 @@ export class OnlineGame3D extends Game3D {
           z: pos?.z ?? serverPlayer.z,
           moving: this.predictor?.actor.moving ?? serverPlayer.moving,
           sprinting: this.predictor?.actor.sprinting ?? serverPlayer.sprinting,
+          crouching: this.predictor?.actor.crouching ?? serverPlayer.crouching,
           onGround: this.predictor?.actor.onGround ?? serverPlayer.onGround,
         };
       }

@@ -11,6 +11,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
 export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
+export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (igual ao da sala online)
 
 // ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
 // A partida começa com os operativos caindo do céu: queda livre (SKY) até a
@@ -72,8 +73,12 @@ export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
-});
+  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,});
+
+// Fase 5 — Espectador: após a eliminação do jogador, a partida CONTINUA (bots
+// lutam entre si) e o cliente acompanha outro operativo. Com `spectate: false`
+// (padrão legado/testes) a morte encerra a partida imediatamente.
+export const SPECTATE_MIN_ALIVE = 2;
 
 // ---------- utilitários de colisão ----------
 // Exportados para reuso pela MatchRoom3D autoritativa (server/room3d.js).
@@ -126,8 +131,7 @@ export function stepActorMovement(a, input, dt, world) {
   const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   const sprintIntent = !!(input.sprint && !input.ads && hasMove);
   a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
-  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1;
-  a.ads = !!input.ads;
+  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1;  a.ads = !!input.ads;
   if (!a.sliding && a.onGround && sprintIntent && input.crouch && a.stamina > 0.1) {
     a.sliding = true;
     a.slideT = 0.68;
@@ -139,10 +143,9 @@ export function stepActorMovement(a, input, dt, world) {
   a.crouching = !!input.crouch || !!a.sliding;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
   let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
-  if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;
-  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
+  if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
-  if (a.dropPhase) { a.sprinting = false; a.ads = false; sp = a.speed * DROP_SPEED_MULT; }
+  if (a.dropPhase) { a.sprinting = false; a.ads = false; a.crouching = false; sp = a.speed * DROP_SPEED_MULT; }
   if (Number.isFinite(a.abilityDistanceBudget)) sp = Math.min(sp, a.abilityDistanceBudget / Math.max(dt, 1e-6));
   const len = Math.hypot(input.dx, input.dy) || 1;
   const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
@@ -284,7 +287,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV' } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false } = {}) {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
@@ -292,6 +295,7 @@ export class KhaaosSim3D {
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.player = this.#spawnPlayer();
@@ -320,8 +324,7 @@ export class KhaaosSim3D {
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      stamina: 100, crouching: false, sliding: false, slideT: 0,
-      dropPhase: null, dropTarget: null };
+      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
   }
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
@@ -329,8 +332,7 @@ export class KhaaosSim3D {
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,
-      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };
   }
@@ -490,8 +492,20 @@ export class KhaaosSim3D {
     this.#stepBullets(dt);
     this.#stepThrowables(dt);
     // --- fim de partida ---
+    const aliveAfter = [p, ...this.bots].filter(a => a.alive).length;
     if (p.alive && this.time <= 0) { this.over = true; this.emit('victory', { kills: p.kills, xp: p.xp, krc: p.krc }); }
-    if (!p.alive && !this.over) { this.over = true; this.emit('eliminated', { kills: p.kills }); }
+    if (!p.alive && !this.spectate && !this.over) { this.over = true; this.emit('eliminated', { kills: p.kills }); }
+    // Fase 5 — espectador: a partida segue até o último operativo (ou tempo zerar)
+    if (this.spectate && !this.over && (this.time <= 0 || aliveAfter <= 1)) {
+      this.over = true;
+      const winner = [p, ...this.bots].filter(a => a.alive).sort((a, b) => b.kills - a.kills)[0];
+      this.emit('matchEnd', {
+        reason: this.time <= 0 ? 'time' : 'last_alive',
+        winner: winner?.name ?? 'CIGKV',
+        placement: p.alive ? 1 : (this.placement ?? aliveAfter + 1),
+        kills: p.kills, xp: p.xp, krc: p.krc,
+      });
+    }
     return this.snapshot();
   }
 
@@ -598,6 +612,14 @@ export class KhaaosSim3D {
 
   #stepBot(b, dt) {
     const p = this.player;
+    // Fase 5 — alvo: ator vivo mais próximo com LOS (jogador OU outros bots —
+    // combate bot-vs-bot dá vida ao ring e sustenta o modo espectador)
+    let target = null, bestD = BOT_SIGHT_3D;
+    for (const other of [p, ...this.bots]) {
+      if (other === b || !other.alive) continue;
+      const d = dist2d(b.x, b.z, other.x, other.z);
+      if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
+    }
     // Fase 4 — na queda: deriva para o destino de aterrissagem, sem combate
     if (b.dropPhase) {
       const tx = b.dropTarget?.x ?? 0, tz = b.dropTarget?.z ?? 0;
@@ -611,12 +633,12 @@ export class KhaaosSim3D {
     }
     if ((b.ai.stunTicks ?? 0) > 0) { b.ai.stunTicks--; b.moving = false; return; }
     b.ai.think -= dt;
-    const d = dist2d(b.x, b.z, p.x, p.z);
     const concealed = p.abilityState?.effect === 'concealment' && p.abilityState.activeTicks > 0;
-    const sees = p.alive && !concealed && d < 85 && this.#hasLos(b, p);
-    if (sees) { b.ai.state = 'engage'; b.ai.lostT = 0; b.ai.lx = p.x; b.ai.lz = p.z; }
+    // alvos ocultos pela habilidade de camuflagem são ignorados na seleção
+    const sees = !!target && !(target === p && concealed);
+    if (sees) { b.ai.state = 'engage'; b.ai.lostT = 0; b.ai.lx = target.x; b.ai.lz = target.z; }
     else if (b.ai.state === 'engage') {
-      if (concealed) { b.ai.state = 'hunt'; b.ai.lostT = 5; }
+      if (concealed && target === p) { b.ai.state = 'hunt'; b.ai.lostT = 5; }
       else { b.ai.lostT += dt; if (b.ai.lostT > 5) b.ai.state = 'hunt'; }
     }
     if (b.ai.think <= 0) {
@@ -627,11 +649,11 @@ export class KhaaosSim3D {
       }
     }
     let tx, tz, run = 0.62;
-    if (b.ai.state === 'engage') {
+    if (b.ai.state === 'engage' && target) {
       const ideal = 16;
-      const away = d < ideal ? -1 : 1;
+      const away = bestD < ideal ? -1 : 1;
       b.ai.strafe += dt * 1.7;
-      tx = p.x + Math.cos(b.ai.strafe) * away * 6; tz = p.z + Math.sin(b.ai.strafe) * away * 6;
+      tx = target.x + Math.cos(b.ai.strafe) * away * 6; tz = target.z + Math.sin(b.ai.strafe) * away * 6;
       run = 1;
     } else if (b.ai.state === 'hunt') {
       tx = b.ai.lx ?? p.x; tz = b.ai.lz ?? p.z;
@@ -650,9 +672,17 @@ export class KhaaosSim3D {
     this.#stepActor(b, input, dt, false);
     // disparo — erro humano: espalha o ponto alvo em vez do cone de saída
     const w = WEAPONS3D[b.weapon];
-    if (sees && b.cooldown <= 0 && b.reloadT <= 0) {
-      const err = 0.45 + Math.min(1.2, d * 0.012);
-      this.#spawnBullet(b, { tx: p.x + (this.rng.next() - 0.5) * err * 2, ty: p.y + 1.2 + (this.rng.next() - 0.5) * err, tz: p.z + (this.rng.next() - 0.5) * err * 2 }, 0.012, w, 0.55);
+    if (sees && target && b.cooldown <= 0 && b.reloadT <= 0) {
+      const err = 0.45 + Math.min(1.2, bestD * 0.012);
+      // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
+      // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
+      const m = this.#muzzle(b);
+      this.#spawnBullet(b, {
+        ox: m.x, oy: m.y, oz: m.z,
+        tx: target.x + (this.rng.next() - 0.5) * err * 2,
+        ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
+        tz: target.z + (this.rng.next() - 0.5) * err * 2,
+      }, 0.012, w, 0.55);
       b.burst++;
       if (b.burst >= (w.category === 'sniper' ? 1 : 3 + Math.floor(this.rng.next() * 4))) {
         b.burst = 0; b.cooldown = 1.1 + this.rng.next() * 1.4;
@@ -697,7 +727,7 @@ export class KhaaosSim3D {
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const accuracy = isPlayer ? (a.abilityAccuracyMultiplier ?? 1) : 1;
     const spread = isPlayer
-      ? (w.spread / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1)
+      ? (w.spread / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
       : 0;
     this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55);
     this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z });
@@ -856,7 +886,12 @@ export class KhaaosSim3D {
     if (p.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
-    if (p.life <= 0) { p.life = 0; p.alive = false; this.emit('eliminated', { kills: p.kills, by: ownerId }); }
+    if (p.life <= 0) {
+      p.life = 0; p.alive = false;
+      // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
+      const placement = [this.player, ...this.bots].filter(a => a.alive).length + 1;
+      this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
+    }
   }
 
   // ---------- inventário ----------

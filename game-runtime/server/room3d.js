@@ -103,8 +103,7 @@ export class MatchRoom3D {
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
-      stamina: 100, crouching: false, sliding: false, slideT: 0,
-      dropPhase: null, dropTarget: null, landed: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null, landed: false,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
@@ -281,21 +280,26 @@ export class MatchRoom3D {
 
     // --- fim de partida ---
     const aliveAll = this.#actors().filter((a) => a.alive);
-    if (this.time <= 0 || aliveAll.length <= 1 || [...this.humans.values()].every((a) => !a.alive)) {
+    // Fase 5 — espectador: humanos mortos PERMANECEM na sala acompanhando a partida;
+    // o ring encerra apenas por tempo, último vivo ou sala vazia (todos desconectaram).
+    if (this.time <= 0 || aliveAll.length <= 1 || this.humans.size === 0) {
       this.state = ROOM_STATES.FINISHED;
       // 'eliminated' já foi emitido no momento da morte (#damage); aqui só falta a vitória
+      const winner = aliveAll.sort((a, b) => b.kills - a.kills)[0];
       for (const a of this.humans.values()) {
         if (a.alive) this.#emitTo(a.id, 'victory', { kills: a.kills, xp: a.xp, krc: a.krc });
       }
-      this.#emitAll('matchEnd', { reason: this.time <= 0 ? 'time' : aliveAll.length <= 1 ? 'last_alive' : 'humans_down' });
+      this.#emitAll('matchEnd', {
+        reason: this.time <= 0 ? 'time' : aliveAll.length <= 1 ? 'last_alive' : 'empty',
+        winner: winner?.name ?? 'CIGKV',
+      });
     }
     this.lastActivity = Date.now();
   }
   #actors() { return [...this.humans.values(), ...this.bots]; }
 
   defaultInputFor(actor) {
-    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };
-  }
+    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };  }
 
   // ---------- passo de ator (idêntico à sim offline) ----------
   #stepActor(a, input, dt) {
@@ -472,7 +476,11 @@ export class MatchRoom3D {
     const w = WEAPONS3D[b.weapon];
     if (target && b.cooldown <= 0 && b.reloadT <= 0) {
       const err = 0.45 + Math.min(1.2, bestD * 0.012);
+      // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
+      // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
+      const m = this.#muzzle(b);
       this.#spawnBullet(b, {
+        ox: m.x, oy: m.y, oz: m.z,
         tx: target.x + (this.rng.next() - 0.5) * err * 2,
         ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
@@ -528,7 +536,7 @@ export class MatchRoom3D {
     let dx = ax - m.x, dy = ay - m.y, dz = az - m.z;
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const spread = a.isBot ? 0
-      : w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1);
+      : w.spread * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1);
     // lag compensation: tiro humano é testado contra as posições que o ATIRADOR via
     // (rewind de rtt + buffer de interpolação); bots atiram no estado vivo atual.
     const lagTargets = a.isBot ? null : this.#lagTargetsFor(a);
@@ -654,9 +662,9 @@ export class MatchRoom3D {
     this.bullets = this.bullets.filter((b) => b.life > 0);
   }
   #impactEvent(x, y, z, kind, actors, victim = null, head = false, damage = 0, owner = undefined) {
-    // impactos são entregues apenas a humanos próximos (raio 110m) para economizar banda
+    // impactos são entregues apenas a humanos próximos (raio 110m) para economizar banda;
+    // humanos MORTOS também recebem (modo espectador: som/FX perto do corpo/alvo)
     for (const h of this.humans.values()) {
-      if (!h.alive) continue;
       const near = dist2d(h.x, h.z, x, z) < 110;
       if (!near) continue;
       if (kind === 'flesh' && victim) this.#emitTo(h.id, 'hit', { x, y, z, victim: victim.id, head, damage, owner, victimIsSelf: victim.id === h.id });
@@ -721,9 +729,10 @@ export class MatchRoom3D {
       } else {
         this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: actor.name, head: false });
       }
-      // feedback imediato de eliminação para a vítima humana (o modal de fim usa este evento)
+      // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
       if (!actor.isBot) {
-        this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : 'CIGKV') });
+        const placement = this.#actors().filter((a) => a.alive).length + 1;
+        this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : 'CIGKV') });
       }
     }
   }
@@ -819,8 +828,7 @@ export class MatchRoom3D {
       inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit, frag: a.inventory.frag ?? 0, gloo: a.inventory.gloo ?? 0 },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, stamina: a.stamina,
-      crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,
-      dropPhase: a.dropPhase ?? null,
+      crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
       ackSeq: a.lastProcessedSeq,
     };
   }
@@ -829,8 +837,7 @@ export class MatchRoom3D {
       id: a.id, name: a.name, isBot: a.isBot,
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, alive: a.alive, onGround: a.onGround,
-      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,
-      dropPhase: a.dropPhase ?? null,
+      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
     };
   }
 
