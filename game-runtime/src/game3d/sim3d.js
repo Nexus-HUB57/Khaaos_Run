@@ -170,6 +170,43 @@ export function botDamageScale(d) {
   return BOT_COMBAT.dmgScaleClose + (BOT_COMBAT.dmgScaleFar - BOT_COMBAT.dmgScaleClose) * t;
 }
 
+// ---------- Fase 9 — rebalance da letalidade contra PARAQUEDISTAS ----------
+// A infiltração aérea é o cartão de visita do Khaaos Run: nenhum operativo deve
+// morrer no céu antes de tocar o solo. Regras aplicadas IGUALMENTE pela sim
+// offline e pela MatchRoom3D (mesma tabela, mesmo contrato determinístico):
+//  1) queda livre ('sky') NUNCA é engajada;
+//  2) paraquedas aberto ('chute') só é engajável nos metros finais da descida
+//     (abaixo de chuteEngageMaxY), com erro dobrado e dano reduzido;
+//  3) pós-pouso existe uma janela de "impacto de pouso" (landingGraceSeconds)
+//     em que o alvo recém-aterrissado sofre menos dano e é mais difícil de acertar.
+export const DROP_ENGAGEMENT = Object.freeze({
+  chuteEngageMaxY: 18,       // m — teto de engajamento com paraquedas aberto
+  airborneErrMult: 2.0,      // erro humano ×2 contra alvo no ar
+  airborneDmgScale: 0.45,    // dano de bot ×0.45 contra alvo no ar
+  landingGraceSeconds: 1.5,  // janela de impacto de pouso (s)
+  graceErrMult: 1.6,         // erro ×1.6 durante a janela de pouso
+  graceDmgScale: 0.55,       // dano ×0.55 durante a janela de pouso
+});
+
+// Um bot pode ADQUIRIR este ator como alvo? (queda livre e chute alto são intocáveis)
+export function botCanEngage(target) {
+  if (!target) return false;
+  if (target.dropPhase === 'sky') return false;
+  if (target.dropPhase === 'chute' && (target.y ?? 0) > DROP_ENGAGEMENT.chuteEngageMaxY) return false;
+  return true;
+}
+
+// Modificadores de tiro do bot contra este alvo (erro e dano).
+export function botTargetModifiers(target) {
+  if (target?.dropPhase === 'chute') {
+    return { errMult: DROP_ENGAGEMENT.airborneErrMult, dmgMult: DROP_ENGAGEMENT.airborneDmgScale };
+  }
+  if ((target?.landGraceT ?? 0) > 0) {
+    return { errMult: DROP_ENGAGEMENT.graceErrMult, dmgMult: DROP_ENGAGEMENT.graceDmgScale };
+  }
+  return { errMult: 1, dmgMult: 1 };
+}
+
 // ---------- utilitários de colisão ----------
 // Exportados para reuso pela MatchRoom3D autoritativa (server/room3d.js).
 export function circlePushAabb(px, pz, r, b) {
@@ -218,6 +255,8 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
 // física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
 // Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
 export function stepActorMovement(a, input, dt, world) {
+  // Fase 9 — janela de impacto de pouso (contagem regressiva compartilhada)
+  if ((a.landGraceT ?? 0) > 0) a.landGraceT = Math.max(0, a.landGraceT - dt);
   const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
   const sprintIntent = !!(input.sprint && !input.ads && hasMove);
   a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
@@ -272,6 +311,7 @@ export function stepActorMovement(a, input, dt, world) {
     if (a.y <= 0) {
       a.y = 0; a.vy = 0; a.onGround = true; a.dropPhase = null;
       a.landed = true; // consumido pelo dono do step para emitir 'land'
+      a.landGraceT = DROP_ENGAGEMENT.landingGraceSeconds; // Fase 9 — impacto de pouso
     }
     return a;
   }
@@ -506,7 +546,8 @@ export class KhaaosSim3D {
     const p = this.player;
     const ability = getOperativeAbility(p.operativeId);
     const state = p.abilityState;
-    if (!this.started || !p.alive || state.cooldownTicks > 0) return false;
+    // Fase 9 — paridade com a sala online: sem habilidade caído ou no ar (infiltração)
+    if (!this.started || !p.alive || p.knocked || p.dropPhase || state.cooldownTicks > 0) return false;
     if (ability.effect === 'heal' && p.life >= 100) {
       this.emit('abilityUnavailable', { reason: 'life_full', name: ability.name });
       return false;
@@ -559,6 +600,7 @@ export class KhaaosSim3D {
       durationSeconds: ability.durationSeconds,
       cooldownSeconds: ability.cooldownSeconds,
       description: ability.description,
+      x: p.x, y: p.y, z: p.z, isSelf: true, // Fase 9 — posição p/ VFX/SFX (aura no caster)
       ...details,
     });
     if (ability.durationSeconds === 0) state.effect = null;
@@ -755,6 +797,8 @@ export class KhaaosSim3D {
     for (const passKnocked of [false, true]) {
       for (const other of [p, ...this.bots]) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        // Fase 9 — paraquedistas intocáveis: queda livre e chute alto fora da seleção
+        if (!botCanEngage(other)) continue;
         if (this.squad && other.squad === b.squad) continue;
         const d = dist2d(b.x, b.z, other.x, other.z);
         if (d < bestD && this.#hasLos(b, other)) { bestD = d; target = other; }
@@ -832,8 +876,10 @@ export class KhaaosSim3D {
       b.ai.reactT -= dt;
     } else b.ai.reactTargetId = null;
     if (sees && target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
-      const err = botAimError(bestD);
-      const dmgScale = botDamageScale(bestD);
+      // Fase 9 — modificadores contra alvo no ar / pós-pouso (paraquedista protegido)
+      const mods = botTargetModifiers(target);
+      const err = botAimError(bestD) * mods.errMult;
+      const dmgScale = botDamageScale(bestD) * mods.dmgMult;
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);

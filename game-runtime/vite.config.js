@@ -22,6 +22,7 @@ export default defineConfig({
       '/healthz': { target: 'http://localhost:8787' },
       '/readyz': { target: 'http://localhost:8787' },
       '/admin': { target: 'http://localhost:8787' },
+      '/poj': { target: 'http://localhost:8787' }, // Fase 9 — painel POJ no modal ZU
     },
   },
 });

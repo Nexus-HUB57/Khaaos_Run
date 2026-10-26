@@ -20,6 +20,7 @@ import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode, makeInviteCod
 import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
+import { createPojService, PojError } from './poj.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MAX_WS_PAYLOAD = 16 * 1024;
@@ -58,6 +59,7 @@ export function createAuthoritativeServer({
   health,
   readyGate,
   obs,
+  poj,
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -98,6 +100,9 @@ export function createAuthoritativeServer({
   // trilha de valor real (REAL_MONEY_ENABLED=false congelado). Injeção direta
   // ou KR_ECONOMY_STORE=postgres (migração 003_economy_ledger.sql).
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
+  // POJ — Protocolo de Ordem de Jogo: instância única do regramento da Guerra
+  // (alistamento → CIGKV → 24 h → 4 mundos × 7 dias → desempate do 11º artigo).
+  const pojService = poj || createPojService();
 
   // ---------- Recompensas KRC no fim da partida ----------
   // room3d dispara uma única vez por partida; aqui resolvemos client-id →
@@ -359,6 +364,93 @@ export function createAuthoritativeServer({
         res.end(fs.readFileSync(path.join(ROOT, 'admin.html')));
         return;
       }
+      // ─── POJ — Protocolo de Ordem de Jogo ────────────────────────────────
+      // Estado público do regramento; comandos do Marechal exigem poj:command.
+      if (url.pathname === '/poj/state' && req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(pojService.state()));
+        return;
+      }
+      if (url.pathname === '/poj/register' && req.method === 'POST') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const body = await jsonBody(req);
+        try {
+          const result = pojService.register(actor, body);
+          audit.record({ actor: actor.username, action: 'poj.register', resource: `player:${result.playerId}`, outcome: 'allow', detail: { total: result.registrations } });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          const code = error instanceof PojError ? error.code : 'poj_error';
+          res.writeHead(code === 'inscricao_duplicada' ? 409 : 409, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: code }));
+        }
+        return;
+      }
+      const pojCommand = async (fn, action, resource = null) => {
+        const actor = guardHttp(req, res, 'poj:command');
+        if (!actor) return true;
+        const body = req.method === 'POST' ? await jsonBody(req) : {};
+        try {
+          const result = fn(body, actor);
+          audit.record({ actor: actor.username, action, resource, outcome: 'allow' });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result ?? { ok: true }));
+        } catch (error) {
+          const code = error instanceof PojError ? error.code : 'poj_error';
+          const status = code === 'fora_de_guerra' || code === 'guerra_em_curso' ? 409 : 400;
+          audit.record({ actor: actor.username, action, resource, outcome: 'deny', detail: { code } });
+          res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: code }));
+        }
+        return true;
+      };
+      if (url.pathname === '/poj/summon' && req.method === 'POST') { await pojCommand(() => pojService.summon(), 'poj.summon'); return; }
+      if (url.pathname === '/poj/attend' && req.method === 'POST') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const isSelf = !actor.role || actor.role === 'player';
+        const body = await jsonBody(req);
+        if (isSelf) {
+          try {
+            const result = pojService.attend(actor, body);
+            audit.record({ actor: actor.username, action: 'poj.attend', resource: `incursion:${body.incursionId}`, outcome: 'allow' });
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify(result));
+          } catch (error) {
+            const code = error instanceof PojError ? error.code : 'poj_error';
+            res.writeHead(code === 'sem_reingresso' ? 403 : 400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({ error: code }));
+          }
+          return;
+        }
+        await pojCommand((b) => pojService.attend(actor, b), 'poj.attend');
+        return;
+      }
+      if (url.pathname === '/poj/close' && req.method === 'POST') { await pojCommand((b) => pojService.close(b), 'poj.close'); return; }
+      if (url.pathname === '/poj/eliminate' && req.method === 'POST') {
+        const actor = identityFor(req);
+        if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+        const body = await jsonBody(req);
+        const selfOnly = (!actor.role || actor.role === 'player');
+        if (selfOnly) {
+          try {
+            const result = pojService.eliminate(actor, body); // resolve ANTES do writeHead
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify(result));
+          } catch (error) {
+            const code = error instanceof PojError ? error.code : 'poj_error';
+            res.writeHead(code === 'sem_reingresso' ? 403 : 400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({ error: code }));
+          }
+          return;
+        }
+        await pojCommand((b) => pojService.eliminate(actor, b), 'poj.eliminate');
+        return;
+      }
+      if (url.pathname === '/poj/advance' && req.method === 'POST') { await pojCommand((b) => pojService.advance(b), 'poj.advance'); return; }
+      if (url.pathname === '/poj/champion' && req.method === 'POST') { await pojCommand(() => pojService.champion(), 'poj.champion'); return; }
+      if (url.pathname === '/poj/court-martial' && req.method === 'POST') { await pojCommand((b) => pojService.courtMartial(b), 'poj.court_martial'); return; }
       if (url.pathname === '/admin/keys' && req.method === 'GET') {
         if (!guardHttp(req, res, 'keys:rotate')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });

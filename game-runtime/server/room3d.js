@@ -16,6 +16,7 @@ import {
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
   throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
+  botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
 } from '../src/game3d/sim3d.js';
 // Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
@@ -499,7 +500,9 @@ export class MatchRoom3D {
         operativeId: ability.operativeId, by: a.name, isSelf: h.id === a.id,
         name: ability.name, effect: ability.effect,
         durationSeconds: ability.durationSeconds, cooldownSeconds: ability.cooldownSeconds,
-        description: ability.description, ...details,
+        description: ability.description,
+        x: a.x, y: a.y, z: a.z, // Fase 9 — posição p/ VFX/SFX (aura no caster remoto)
+        ...details,
       });
     }
     if (ability.durationSeconds === 0) state.effect = null;
@@ -632,6 +635,8 @@ export class MatchRoom3D {
     for (const passKnocked of [false, true]) {
       for (const other of this.#actors()) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        // Fase 9 — paraquedistas intocáveis: queda livre e chute alto fora da seleção
+        if (!botCanEngage(other)) continue;
         // Fase 8 — Véu Crepuscular: alvo ocultado é invisível para a IA
         if (other.abilityState?.effect === 'concealment' && other.abilityState.activeT > 0) continue;
         if (this.squad && other.squad === b.squad) continue;
@@ -682,8 +687,10 @@ export class MatchRoom3D {
       b.ai.reactT -= dt;
     } else b.ai.reactTargetId = null;
     if (target && b.cooldown <= 0 && b.reloadT <= 0 && (b.ai.reactT ?? 0) <= 0) {
-      const err = botAimError(bestD);
-      const dmgScale = botDamageScale(bestD);
+      // Fase 9 — modificadores contra alvo no ar / pós-pouso (paraquedista protegido)
+      const mods = botTargetModifiers(target);
+      const err = botAimError(bestD) * mods.errMult;
+      const dmgScale = botDamageScale(bestD) * mods.dmgMult;
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
