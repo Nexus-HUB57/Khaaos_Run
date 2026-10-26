@@ -169,6 +169,31 @@ export function attachWeapon(opParts, operativeGroup, weaponId) {
   return model;
 }
 
+// Rig enxuto de primeira pessoa: mãos/antebraços ficam presos à câmera,
+// enquanto a simulação continua usando o operativo completo para colisão e rede.
+export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[0] } = {}) {
+  const rig = new THREE.Group();
+  const skinM = M(skin, { rough: .65 });
+  const clothM = M('#25292d', { rough: .9 });
+  const vestM = M(vest, { rough: .75, metal: .25 });
+  const makeArm = (side) => {
+    const arm = new THREE.Group();
+    arm.position.set(side * .24, -.26, -.42);
+    arm.rotation.set(-.36, side * .08, side * .16);
+    arm.add(box(.16, .46, .16, clothM, 0, -.2, 0));
+    arm.add(box(.14, .18, .14, skinM, 0, -.5, -.02));
+    rig.add(arm);
+    return arm;
+  };
+  const armL = makeArm(-1);
+  const armR = makeArm(1);
+  const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
+  chest.rotation.x = -.24;
+  rig.add(chest);
+  rig.userData.arms = { armL, armR };
+  return rig;
+}
+
 // ---------- loot no chão ----------
 export function createLootMesh(item) {
   const g = new THREE.Group();

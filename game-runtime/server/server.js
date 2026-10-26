@@ -345,7 +345,7 @@ export function createAuthoritativeServer({
     const mode = normalizeMode(url.searchParams.get('mode'));
     const resume = url.searchParams.get('resume');
     const saved = resume ? await durable.getSession(resume) : null;
-    const blankInput3D = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
+    const blankInput3D = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, slot: 0 };
     let client;
     if (saved && saved.userId === user.sub && saved.expiresAt > Date.now() && rooms.get(saved.roomId)?.players.has(saved.id)) {
       client = { id: saved.id, ws, roomId: saved.roomId, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: normalizeRegion(user.region), resumeToken: resume, connectedAt: Date.now() };

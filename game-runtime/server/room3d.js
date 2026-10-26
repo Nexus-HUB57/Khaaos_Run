@@ -8,6 +8,7 @@
 // que o comportamento online seja idêntico ao offline (mesmas constantes e colisões).
 import { SeededRng } from '../src/shared/rng.js';
 import { rollLoot } from '../src/shared/weapons.js';
+import { resolveScenario } from '../src/game3d/scenarios.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
@@ -33,17 +34,18 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV' } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.scenario = resolveScenario(scenarioId);
     this.mode = '3d';
     this.is3d = true;
     this.rng = new SeededRng(`${this.seed}:room3d`);
-    this.world = getWorldLayout(this.seed);
+    this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.humans = new Map();   // id (client-id) -> actor
     this.players = this.humans; // alias de compatibilidade com o matchmaking/reconexão 2D
@@ -59,6 +61,10 @@ export class MatchRoom3D {
     this.tickCount = 0; // contador público no snapshot (método tick(dt) avança a sala)
     this.time = MATCH_TIME;
     this.pulseTimer = 0;
+    this.acidTimer = 0;
+    this.tsunamiTimer = 0;
+    this.tsunamiRemaining = 0;
+    this.tsunamiActive = false;
     this.state = ROOM_STATES.LOBBY;
     this.started = false;
     this.createdAt = Date.now();
@@ -96,8 +102,8 @@ export class MatchRoom3D {
       ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1,
-      alive: true, onGround: true, moving: false, sprinting: false, ads: false, crouching: false,
-      dropPhase: null, dropTarget: null, landed: false,
+      alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null, landed: false,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
@@ -240,6 +246,8 @@ export class MatchRoom3D {
         this.#damage(actor, (4 + this.ring.pulse * 1.4) * dt, null, 'ring');
       }
     }
+    if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
+    if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
 
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
@@ -291,8 +299,7 @@ export class MatchRoom3D {
   #actors() { return [...this.humans.values(), ...this.bots]; }
 
   defaultInputFor(actor) {
-    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, crouch: false, slot: 0 };
-  }
+    return { seq: actor.lastSeq, dx: 0, dy: 0, yaw: actor.yaw, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, slot: 0 };  }
 
   // ---------- passo de ator (idêntico à sim offline) ----------
   #stepActor(a, input, dt) {
@@ -559,7 +566,9 @@ export class MatchRoom3D {
     this.bullets.push({
       id: this.nextBulletId++, x: ox, y: oy, z: oz,
       vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
-      owner: a.id, damage: w.damage * dmgScale, life: w.range / w.bulletSpeed, weapon: w.id,
+      owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
+      gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
+      life: w.range / w.bulletSpeed, weapon: w.id,
       lagTargets,
     });
   }
@@ -597,9 +606,13 @@ export class MatchRoom3D {
     for (const b of this.bullets) {
       b.life -= dt;
       const ox = b.x, oy = b.y, oz = b.z;
+      const drag = Math.max(0, 1 - (b.drag ?? 0) * dt * 60);
+      b.vy -= (b.gravity ?? 0) * dt;
+      b.vx *= drag; b.vy *= drag; b.vz *= drag;
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
       if (b.y < 0) { b.life = 0; this.#impactEvent(ox + (b.x - ox) * 0.5, 0.02, oz + (b.z - oz) * 0.5, 'ground', actors); continue; }
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
+      b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
       let hitT = Infinity, hitBox = null;
@@ -627,7 +640,10 @@ export class MatchRoom3D {
       }
       if (charHit && charT < hitT) {
         b.life = 0;
-        const dmg = b.damage * (charHit.head ? HEADSHOT_MULT : 1);
+        const profile = WEAPONS3D[b.weapon]?.ballistic;
+        const tFalloff = profile ? Math.max(0, Math.min(1, (b.distance - profile.falloffStart) / Math.max(0.001, profile.falloffEnd - profile.falloffStart))) : 0;
+        const falloff = profile ? 1 - tFalloff * (1 - profile.minDamage) : 1;
+        const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? HEADSHOT_MULT : 1);
         const hx = ox + dx * charT, hy = oy + dy * charT, hz = oz + dz * charT;
         this.#damage(charHit.ref, dmg, b.owner, charHit.head ? 'headshot' : 'body');
         this.#impactEvent(hx, hy, hz, 'flesh', actors, charHit.ref, charHit.head, Math.round(dmg), b.owner);
@@ -655,9 +671,42 @@ export class MatchRoom3D {
       else this.#emitTo(h.id, 'impact', { x, y, z, kind });
     }
   }
+  #stepAcidRain(dt) {
+    this.acidTimer += dt;
+    if (this.acidTimer < 10) return;
+    const pulses = Math.floor(this.acidTimer / 10);
+    this.acidTimer -= pulses * 10;
+    for (let i = 0; i < pulses; i++) {
+      for (const actor of this.#actors()) if (actor.alive) this.#damage(actor, 1, null, 'acid');
+      this.#emitAll('acidRain', { damage: 1, intervalSeconds: 10 });
+    }
+  }
+  #stepTsunami(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.tsunamiActive) {
+      this.tsunamiTimer += dt;
+      if (this.tsunamiTimer >= hazard.intervalSeconds) {
+        this.tsunamiTimer -= hazard.intervalSeconds;
+        this.tsunamiRemaining = hazard.durationSeconds;
+        this.tsunamiActive = true;
+        this.#emitAll('tsunamiStart', { durationSeconds: hazard.durationSeconds, submergeBelowY: hazard.submergeBelowY });
+      }
+    }
+    if (!this.tsunamiActive) return;
+    for (const actor of this.#actors()) {
+      if (actor.alive && actor.y < hazard.submergeBelowY) this.#damage(actor, hazard.damagePerSecond * dt, null, 'tsunami');
+    }
+    this.tsunamiRemaining -= dt;
+    if (this.tsunamiRemaining <= 0) {
+      this.tsunamiRemaining = 0;
+      this.tsunamiActive = false;
+      this.#emitAll('tsunamiEnd', {});
+    }
+  }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
-    if (actor.armor > 0 && kind !== 'ring') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
+    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
     if (!actor.isBot) {
@@ -778,8 +827,8 @@ export class MatchRoom3D {
       speed: a.speed, weapon: a.weapon, ammoMag: a.ammoMag, reloadT: a.reloadT, activeSlot: a.activeSlot,
       inventory: { ammo: { ...a.inventory.ammo }, medkit: a.inventory.medkit, frag: a.inventory.frag ?? 0, gloo: a.inventory.gloo ?? 0 },
       slots: { ...a.slots }, alive: a.alive, onGround: a.onGround,
-      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching,
-      dropPhase: a.dropPhase ?? null,
+      moving: a.moving, sprinting: a.sprinting, ads: a.ads, stamina: a.stamina,
+      crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
       ackSeq: a.lastProcessedSeq,
     };
   }
@@ -788,8 +837,7 @@ export class MatchRoom3D {
       id: a.id, name: a.name, isBot: a.isBot,
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, alive: a.alive, onGround: a.onGround,
-      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, kills: a.kills,
-      dropPhase: a.dropPhase ?? null,
+      moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
     };
   }
 

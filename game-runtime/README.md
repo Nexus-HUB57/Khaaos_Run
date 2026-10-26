@@ -15,9 +15,9 @@ Dentro deste diretório, os comandos equivalentes são `npm ci`, `npm run dev` e
 
 O desenvolvimento local e os testes unitários não exigem a configuração dos adapters PostgreSQL/Redis. Testes/adapters reais e execução server-side com persistência exigem serviços e variáveis explicitamente configurados.
 
-## Modo 3D — Battle Royale TPS (FreeFire-style)
+## Modo 3D — Battle Royale FPS (ritmo Free Fire/Fortnite)
 
-`index.html` (raiz do runtime) inicia o **modo 3D**: terceira pessoa (TPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
+`index.html` (raiz do runtime) inicia o **modo 3D** em primeira pessoa (FPS) sobre a simulação determinística `src/game3d/sim3d.js`, renderizada com Three.js. `?view=tps` mantém a câmera anterior para comparação e regressão visual. `classic.html` preserva o modo tático 2D original. O build é multi-página (`vite.config.js`) e o deploy do GitHub Pages publica ambos (`/` 3D, `/classic.html` 2D).
 
 | Sistema | Módulo | Responsabilidade |
 |---------|--------|------------------|

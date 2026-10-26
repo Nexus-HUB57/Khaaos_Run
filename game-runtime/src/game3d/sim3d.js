@@ -52,21 +52,28 @@ const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 const SCALE = { range: 1 / 2.2, bullet: 1 / 2.2 };
 export const WEAPONS3D = {};
 for (const [id, w] of Object.entries(WEAPONS)) {
+  const ballistic = {
+    sidearm: { gravity: 0.85, drag: 0.002, falloffStart: 24, falloffEnd: 92, minDamage: 0.62 },
+    smg: { gravity: 0.72, drag: 0.003, falloffStart: 18, falloffEnd: 76, minDamage: 0.52 },
+    rifle: { gravity: 0.48, drag: 0.0015, falloffStart: 38, falloffEnd: 150, minDamage: 0.72 },
+    sniper: { gravity: 0.22, drag: 0.0005, falloffStart: 90, falloffEnd: 300, minDamage: 0.84 },
+    energy: { gravity: 0.12, drag: 0.0008, falloffStart: 55, falloffEnd: 190, minDamage: 0.8 },
+    melee: { gravity: 0, drag: 0, falloffStart: 0, falloffEnd: 1, minDamage: 1 },
+  }[w.category] ?? { gravity: 0.8, drag: 0.002, falloffStart: 24, falloffEnd: 100, minDamage: 0.6 };
   WEAPONS3D[id] = {
     ...w,
     range: Math.round(w.range * SCALE.range),
     bulletSpeed: Math.round(w.projectileSpeed * SCALE.bullet) || 0,
     spread: { melee: 0, sidearm: 0.014, smg: 0.024, rifle: 0.013, sniper: 0.003, energy: 0.007 }[w.category] ?? 0.02,
     reload: { sidearm: 1.4, smg: 1.9, rifle: 2.1, sniper: 2.8, energy: 2.2, melee: 0 }[w.category] ?? 2,
+    ballistic,
   };
 }
 export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
-  jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,
-  crouch: false, // Fase 5 — agachar: menor perfil, menos dispersão, movimento lento
-});
+  crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,});
 
 // Fase 5 — Espectador: após a eliminação do jogador, a partida CONTINUA (bots
 // lutam entre si) e o cliente acompanha outro operativo. Com `spectate: false`
@@ -121,21 +128,29 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
 // física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
 // Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
 export function stepActorMovement(a, input, dt, world) {
-  // Fase 5 — agachar: só no chão; sprint cancela o agachamento (e vice-versa);
-  // saltar no mesmo frame prevalece sobre o agachamento
-  a.crouching = !!(input.crouch && a.onGround && !a.dropPhase && !input.jump);
-  a.sprinting = !!(input.sprint && !input.ads && !a.crouching);
-  a.ads = !!input.ads;
+  const hasMove = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
+  const sprintIntent = !!(input.sprint && !input.ads && hasMove);
+  a.stamina = clamp((a.stamina ?? 100) + (sprintIntent ? -28 : 20) * dt, 0, 100);
+  a.sprinting = sprintIntent && !input.crouch && a.stamina > 0.1;  a.ads = !!input.ads;
+  if (!a.sliding && a.onGround && sprintIntent && input.crouch && a.stamina > 0.1) {
+    a.sliding = true;
+    a.slideT = 0.68;
+  }
+  if (a.sliding) {
+    a.slideT = Math.max(0, (a.slideT ?? 0) - dt);
+    if (a.slideT <= 0 || !a.onGround) a.sliding = false;
+  }
+  a.crouching = !!input.crouch || !!a.sliding;
   const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
-  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1) * (a.crouching ? 0.5 : 1);
-  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
+  let sp = a.speed * (a.abilitySpeedMultiplier ?? 1) * (a.sprinting ? 1.42 : 1) * (a.ads ? 0.55 : 1);
+  if (a.crouching) sp *= a.sliding ? 1.2 : 0.58;  if (w.category === 'sniper' && !a.ads) sp *= 0.9;
   // Fase 4 — queda/infiltração: deriva horizontal ampliada, sem sprint/ADS no ar
   if (a.dropPhase) { a.sprinting = false; a.ads = false; a.crouching = false; sp = a.speed * DROP_SPEED_MULT; }
   if (Number.isFinite(a.abilityDistanceBudget)) sp = Math.min(sp, a.abilityDistanceBudget / Math.max(dt, 1e-6));
   const len = Math.hypot(input.dx, input.dy) || 1;
   const mx = (input.dx / len) * sp * dt, mz = (input.dy / len) * sp * dt;
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
-  a.moving = Math.abs(input.dx) + Math.abs(input.dy) > 0.01;
+  a.moving = hasMove;
   // frente do ator: -Z quando yaw=0 (convenção Three.js)
   // rotação local→mundo em torno de Y: [x' = x·cosθ + z·sinθ; z' = -x·sinθ + z·cosθ]
   const oldX = a.x, oldZ = a.z;
@@ -276,7 +291,8 @@ export class KhaaosSim3D {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
-    this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0;
+    this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
+    this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
@@ -307,16 +323,16 @@ export class KhaaosSim3D {
       abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
-      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false, crouching: false,
-      dropPhase: null, dropTarget: null };
+      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
   }
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
     const jx = (this.rng.next() - .5) * 10, jz = (this.rng.next() - .5) * 10;
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
-      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false, crouching: false, revealedTicks: 0,
-      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null } };
   }
@@ -465,6 +481,8 @@ export class KhaaosSim3D {
     if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
+    if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
+    if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -729,7 +747,9 @@ export class KhaaosSim3D {
       const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
     }
     this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
-      owner: a.id, damage: w.damage * dmgScale, life: w.range / w.bulletSpeed, weapon: w.id });
+      owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
+      gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
+      life: w.range / w.bulletSpeed, weapon: w.id });
   }
   #aimDir(a, tx, ty, tz) {
     let dx = tx - a.x, dy = ty - (a.y + 1.55), dz = tz - a.z;
@@ -756,9 +776,13 @@ export class KhaaosSim3D {
     for (const b of this.bullets) {
       b.life -= dt;
       const ox = b.x, oy = b.y, oz = b.z;
+      const drag = Math.max(0, 1 - (b.drag ?? 0) * dt * 60);
+      b.vy -= (b.gravity ?? 0) * dt;
+      b.vx *= drag; b.vy *= drag; b.vz *= drag;
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
       if (b.y < 0) { b.life = 0; this.emit('impact', { x: b.x, y: 0.02, z: b.z, kind: 'ground' }); continue; }
       const len = Math.hypot(b.x - ox, b.y - oy, b.z - oz);
+      b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
       let hitT = Infinity, hitBox = null;
@@ -779,7 +803,10 @@ export class KhaaosSim3D {
       }
       if (charHit && charT < hitT) {
         b.life = 0;
-        const dmg = b.damage * (charHit.head ? 1.75 : 1);
+        const profile = WEAPONS3D[b.weapon]?.ballistic;
+        const tFalloff = profile ? Math.max(0, Math.min(1, (b.distance - profile.falloffStart) / Math.max(0.001, profile.falloffEnd - profile.falloffStart))) : 0;
+        const falloff = profile ? 1 - tFalloff * (1 - profile.minDamage) : 1;
+        const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? 1.75 : 1);
         if (charHit.isPlayer) this.#hurtPlayer(dmg, b.owner, charHit.head ? 'headshot' : 'body');
         else this.#damageBot(charHit.ref, dmg, b.owner, charHit.head);
         this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg) });
@@ -797,9 +824,42 @@ export class KhaaosSim3D {
     }
     this.bullets = this.bullets.filter(b => b.life > 0);
   }
-  #damageBot(bot, dmg, ownerId, head) {
+  #stepAcidRain(dt) {
+    this.acidTimer += dt;
+    if (this.acidTimer < 10) return;
+    const pulses = Math.floor(this.acidTimer / 10);
+    this.acidTimer -= pulses * 10;
+    for (let i = 0; i < pulses; i++) {
+      if (this.player.alive) this.#hurtPlayer(1, null, 'acid');
+      for (const bot of this.bots) if (bot.alive) this.#damageBot(bot, 1, null, false, 'acid');
+      this.emit('acidRain', { damage: 1, intervalSeconds: 10 });
+    }
+  }
+  #stepTsunami(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.tsunamiActive) {
+      this.tsunamiTimer += dt;
+      if (this.tsunamiTimer >= hazard.intervalSeconds) {
+        this.tsunamiTimer -= hazard.intervalSeconds;
+        this.tsunamiRemaining = hazard.durationSeconds;
+        this.tsunamiActive = true;
+        this.emit('tsunamiStart', { durationSeconds: hazard.durationSeconds, submergeBelowY: hazard.submergeBelowY });
+      }
+    }
+    if (!this.tsunamiActive) return;
+    if (this.player.alive && this.player.y < hazard.submergeBelowY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'tsunami');
+    for (const bot of this.bots) if (bot.alive && bot.y < hazard.submergeBelowY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'tsunami');
+    this.tsunamiRemaining -= dt;
+    if (this.tsunamiRemaining <= 0) {
+      this.tsunamiRemaining = 0;
+      this.tsunamiActive = false;
+      this.emit('tsunamiEnd', {});
+    }
+  }
+  #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
-    if (bot.armor > 0) { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
+    if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (bot.life <= 0) {
       bot.alive = false;
@@ -823,7 +883,7 @@ export class KhaaosSim3D {
       const soak = Math.min(p.temporaryArmor, dmg);
       p.temporaryArmor -= soak; dmg -= soak;
     }
-    if (p.armor > 0 && kind !== 'ring') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
+    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {

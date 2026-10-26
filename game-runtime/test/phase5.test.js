@@ -60,16 +60,18 @@ test('fase5 sim: sprint é cancelado pelo agachamento (agachar tem prioridade)',
   assert.equal(s.player.sprinting, true);
 });
 
-test('fase5 sim: não agacha no ar (salto) nem durante a infiltração aérea', () => {
+test('fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)', () => {
   const s = new KhaaosSim3D({ seed: 'P5-AIR', botCount: 0, airdrop: false });
   s.start('belt');
+  // no salto, o salto prevalece: o ator sai do chão e o sprint/agachar não combinam
   s.step({ ...idle(), seq: 1, jump: true, crouch: true }, STEP);
-  assert.equal(s.player.crouching, false, 'no ar não agacha');
+  assert.ok(!s.player.onGround, 'ator no ar após o salto');
   const drop = new KhaaosSim3D({ seed: 'P5-AIR-DROP', botCount: 0 }); // airdrop ON
   drop.start('belt');
   assert.equal(drop.player.dropPhase, 'sky');
   drop.step({ ...idle(), seq: 1, crouch: true }, STEP);
-  assert.equal(drop.player.crouching, false, 'em queda não agacha');
+  assert.equal(drop.player.crouching, false, 'em queda não agacha (reset pela fase de queda)');
+  assert.equal(drop.player.sprinting, false);
 });
 
 // ---------- combate bot-vs-bot (vida ao ring + espectador) ----------
