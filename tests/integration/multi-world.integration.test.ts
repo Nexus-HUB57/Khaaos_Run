@@ -3,7 +3,8 @@
  * Tests: CIGKV → W1 → W2 → W3 → W4, rank-gated progression
  * Copyright Nexus-HUB57
  */
-import { describe, it, expect } from 'vitest';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 
 // ─── World & Rank Definitions ─────────────────────────────────────────────
 const WORLDS = [
@@ -26,64 +27,64 @@ function canAccessWorld(playerRank: string, worldId: string): boolean {
 
 describe('Multi-World Progression', () => {
   it('should have 5 worlds in order', () => {
-    expect(WORLDS).toHaveLength(5);
-    WORLDS.forEach((w, i) => expect(w.order).toBe(i));
+    assert.equal(WORLDS.length, 5);
+    WORLDS.forEach((w, i) => assert.equal(w.order, i));
   });
 
   it('RECRUTA can only access CIGKV', () => {
-    expect(canAccessWorld('RECRUTA', 'CIGKV')).toBe(true);
-    expect(canAccessWorld('RECRUTA', 'Barburhen')).toBe(false);
-    expect(canAccessWorld('RECRUTA', 'Priadus')).toBe(false);
-    expect(canAccessWorld('RECRUTA', 'Ckesalth')).toBe(false);
-    expect(canAccessWorld('RECRUTA', 'Arukheea')).toBe(false);
+    assert.equal(canAccessWorld('RECRUTA', 'CIGKV'), true);
+    assert.equal(canAccessWorld('RECRUTA', 'Barburhen'), false);
+    assert.equal(canAccessWorld('RECRUTA', 'Priadus'), false);
+    assert.equal(canAccessWorld('RECRUTA', 'Ckesalth'), false);
+    assert.equal(canAccessWorld('RECRUTA', 'Arukheea'), false);
   });
 
   it('HURAN can access CIGKV + Barburhen', () => {
-    expect(canAccessWorld('HURAN', 'CIGKV')).toBe(true);
-    expect(canAccessWorld('HURAN', 'Barburhen')).toBe(true);
-    expect(canAccessWorld('HURAN', 'Priadus')).toBe(false);
+    assert.equal(canAccessWorld('HURAN', 'CIGKV'), true);
+    assert.equal(canAccessWorld('HURAN', 'Barburhen'), true);
+    assert.equal(canAccessWorld('HURAN', 'Priadus'), false);
   });
 
   it('VENEX can access CIGKV + Barburhen + Priadus', () => {
-    expect(canAccessWorld('VENEX', 'CIGKV')).toBe(true);
-    expect(canAccessWorld('VENEX', 'Barburhen')).toBe(true);
-    expect(canAccessWorld('VENEX', 'Priadus')).toBe(true);
-    expect(canAccessWorld('VENEX', 'Ckesalth')).toBe(false);
+    assert.equal(canAccessWorld('VENEX', 'CIGKV'), true);
+    assert.equal(canAccessWorld('VENEX', 'Barburhen'), true);
+    assert.equal(canAccessWorld('VENEX', 'Priadus'), true);
+    assert.equal(canAccessWorld('VENEX', 'Ckesalth'), false);
   });
 
   it('SKEETW can access W0-W3', () => {
-    expect(canAccessWorld('SKEETW', 'Ckesalth')).toBe(true);
-    expect(canAccessWorld('SKEETW', 'Arukheea')).toBe(false);
+    assert.equal(canAccessWorld('SKEETW', 'Ckesalth'), true);
+    assert.equal(canAccessWorld('SKEETW', 'Arukheea'), false);
   });
 
   it('ONITH can access all 5 worlds', () => {
     WORLDS.forEach(w => {
-      expect(canAccessWorld('ONITH', w.id)).toBe(true);
+      assert.equal(canAccessWorld('ONITH', w.id), true);
     });
   });
 
   it('OVERLORD and MALAKOR can access all worlds', () => {
     ['OVERLORD', 'MALAKOR'].forEach(rank => {
       WORLDS.forEach(w => {
-        expect(canAccessWorld(rank, w.id)).toBe(true);
+        assert.equal(canAccessWorld(rank, w.id), true);
       });
     });
   });
 
   it('world player counts are valid', () => {
     WORLDS.forEach(w => {
-      expect(w.players).toBeGreaterThan(0);
-      expect(w.players).toBeLessThanOrEqual(100);
+      assert.ok(w.players > 0);
+      assert.ok(w.players <= 100);
     });
   });
 
   it('CIGKV is the starting world (order 0)', () => {
-    expect(WORLDS[0].id).toBe('CIGKV');
-    expect(WORLDS[0].requiredRank).toBe('RECRUTA');
+    assert.equal(WORLDS[0].id, 'CIGKV');
+    assert.equal(WORLDS[0].requiredRank, 'RECRUTA');
   });
 
   it('Barburhen has highest player count (100)', () => {
     const max = Math.max(...WORLDS.map(w => w.players));
-    expect(max).toBe(100);
+    assert.equal(max, 100);
   });
 });

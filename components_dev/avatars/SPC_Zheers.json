@@ -1,156 +1,406 @@
 {
   "id": "SPC_Zheers",
   "name": "Zheers",
+  "codename": "ZHEERS_PHD",
   "type": "humanoid",
-  "base_health": 100,
-  "base_energy": 100,
-  "base_speed": 1.0,
-  "height_cm": 180,
-  "weight_kg": 75,
-  "skeleton": "SK_Manny",
-  "passive": "Adaptabilidade — +10% resistência ao ambiente local",
+  "species_tag": "Species.Zheers",
+  "lore": {
+    "origin": "Os Zheers sao a linhagem humana-colonial mais antiga do Sistema Khaaos. Descendentes dos primeiros colonizadores que atravessaram o Veu de Malakor ha 3.200 ciclos, desenvolveram biologia adaptativa - cada geracao absorve microtracos ambientais, resultando em fenotipos distintos por colonia. A CIGKV concentrou a maior diversidade genetica Zheers, tornando-os diplomatas e estrategistas naturais.",
+    "culture": "Sociedade meritocratica-oligarquica governada pelo Conselho dos Sete Portos. Cada Porto representa uma especialidade (Guerra, Navegacao, Forja, Medicina, Comercio, Espionagem, Filosofia). Ascensao por provacao - rituais de sobrevivencia nos mundos mais hostis. O titulo de Overlord e reservado aquele que sobreviveu aos 5 mundos consecutivos.",
+    "motivation": "Manter a hegemonia comercial e diplomatica da CIGKV enquanto expande influencia para os mundos exteriores. Cada Zheers no Battle Royale carrega o peso de representar seu Porto - derrota e desonra coletiva.",
+    "relationship_with_khaaos": "Os Zheers foram os primeiros a detectar o Pulso Khaaos. Acreditam que dominar o Pulso e a chave para transcender a biologia adaptativa. O Canhao Khaaos Prime foi construido por engenheiros Zheers."
+  },
+  "base_stats": {
+    "health": 100,
+    "energy": 100,
+    "speed": 1.0,
+    "stamina": 100,
+    "armor_base": 0,
+    "shield_capacity": 0,
+    "regen_health_per_sec": 0.5,
+    "regen_energy_per_sec": 1.0,
+    "regen_stamina_per_sec": 2.0,
+    "crit_chance": 0.05,
+    "crit_multiplier": 1.5
+  },
+  "stat_curves": {
+    "health_per_level": [
+      100,
+      110,
+      120,
+      135,
+      150,
+      170,
+      195,
+      225,
+      260,
+      300
+    ],
+    "energy_per_level": [
+      100,
+      108,
+      117,
+      128,
+      140,
+      154,
+      170,
+      188,
+      208,
+      230
+    ],
+    "speed_per_level": [
+      1.0,
+      1.02,
+      1.04,
+      1.07,
+      1.1,
+      1.14,
+      1.18,
+      1.23,
+      1.29,
+      1.35
+    ]
+  },
+  "physical": {
+    "height_cm": 180,
+    "weight_kg": 75,
+    "skeleton": "SK_Manny",
+    "morph_targets": [
+      "MT_Zheers_Athletic",
+      "MT_Zheers_Stocky",
+      "MT_Zheers_Lean"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 50.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 40.0,
+      "full_body_ik_blend": 0.8
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 1.0,
+      "cloth_damping": 0.3,
+      "cloth_stiffness": 0.7,
+      "loose_parts": [
+        "cape",
+        "holster_strap",
+        "pouch_flap"
+      ]
+    }
+  },
+  "passive": {
+    "name": "Adaptabilidade Ambiental",
+    "description": "+15% resistencia ao bioma local + 5% velocidade apos 30s no mesmo terreno. +2% por nivel.",
+    "tag": "Ability.Passive.Species.Zheers.Adaptabilidade",
+    "class": "KhaaosAbility_ZheersPassive",
+    "mechanics": [
+      {
+        "trigger": "on_enter_biome",
+        "effect": "resistance_bonus",
+        "value": 0.15
+      },
+      {
+        "trigger": "on_stay_terrain_30s",
+        "effect": "speed_bonus",
+        "value": 0.05
+      },
+      {
+        "trigger": "per_level",
+        "effect": "resistance_scale",
+        "value": 0.02
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Tiro Tatico",
+      "tag": "Ability.Active.Zheers.TiroTatico",
+      "cooldown": 8.0,
+      "energy_cost": 25,
+      "duration": 0.5,
+      "description": "+30% headshot damage por 1 tiro.",
+      "vfx": "VFX_Zheers_TacticalShot",
+      "sfx": "SFX_Zheers_TacticalShot"
+    },
+    {
+      "name": "Adaptacao Rapida",
+      "tag": "Ability.Active.Zheers.AdaptacaoRapida",
+      "cooldown": 25.0,
+      "energy_cost": 40,
+      "duration": 10.0,
+      "description": "+25% resistencia + 10% speed por 10s.",
+      "vfx": "VFX_Zheers_RapidAdapt",
+      "sfx": "SFX_Zheers_RapidAdapt"
+    },
+    {
+      "name": "Ressonancia do Porto",
+      "tag": "Ability.Active.Zheers.RessonanciaPorto",
+      "cooldown": 60.0,
+      "energy_cost": 60,
+      "duration": 15.0,
+      "description": "Ultimate: Aliados 20m +20% all stats por 15s.",
+      "vfx": "VFX_Zheers_PortoResonance",
+      "sfx": "SFX_Zheers_PortoResonance"
+    }
+  ],
   "skins": [
     {
       "id": "SKN_Zheers_Recruta",
       "name": "Recruta",
       "rarity": "COMUM",
       "color_primary": "#4A90D9",
+      "color_secondary": "#1E3A5F",
       "color_accent": "#FFFFFF",
-      "unlock_rank": "RECRUTA"
+      "color_emissive": "#000000",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Uniforme padrao CIGKV. Funcional, sem ornamentacao."
     },
     {
       "id": "SKN_Zheers_Veterano",
       "name": "Veterano",
       "rarity": "RARO",
       "color_primary": "#2563EB",
+      "color_secondary": "#1E40AF",
       "color_accent": "#93C5FD",
-      "unlock_rank": "HURAN"
+      "color_emissive": "#1D4ED8",
+      "material_override": "MAT_Zheers_Veterano_CarbonFiber",
+      "unlock_rank": "HURAN",
+      "description": "Fibra de carbono com placas balisticas. Marca de 10 eliminacoes."
     },
     {
       "id": "SKN_Zheers_CIGKV_Elite",
       "name": "CIGKV Elite",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
+      "color_secondary": "#5B21B6",
       "color_accent": "#C4B5FD",
-      "unlock_rank": "VENEX"
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Zheers_Elite_Holographic",
+      "unlock_rank": "VENEX",
+      "description": "Armadura holografica com projetor de identidade."
     },
     {
       "id": "SKN_Zheers_Guarda_Overlord",
       "name": "Guarda Overlord",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#92400E",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Zheers_Overlord_GoldPlating",
+      "unlock_rank": "ONITH",
+      "description": "Armadura cerimonial dourada dos Guardas. Emissao dourada a 200m."
     },
     {
       "id": "SKN_Zheers_Khaaos_Prime",
       "name": "Khaaos Prime",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Zheers_KhaaosPrime_LivingMetal",
+      "unlock_rank": "MALAKOR",
+      "description": "Metal vivo do Pulso - armadura pulsa em sincronia com o campo."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Zheers_01",
-      "name": "idle",
-      "skeleton": "SK_Manny"
+  "animations": {
+    "base_skeleton": "SK_Manny",
+    "blend_spaces": [
+      {
+        "id": "BS_Zheers_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Zheers_AimOffset",
+        "type": "1D",
+        "axes": [
+          "Pitch"
+        ],
+        "samples": 7
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Zheers_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Zheers_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_tactical_shot",
+        "name": "tactical_shot",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_rapid_adapt",
+        "name": "rapid_adapt",
+        "duration": 0.8,
+        "loop": false
+      },
+      {
+        "id": "ANM_Zheers_porto_resonance",
+        "name": "porto_resonance",
+        "duration": 2.0,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Metal",
+      "dirt": "SFX_FStep_Dirt",
+      "concrete": "SFX_FStep_Concrete",
+      "water": "SFX_FStep_Water"
     },
-    {
-      "id": "ANM_SPC_Zheers_02",
-      "name": "walk",
-      "skeleton": "SK_Manny"
+    "voice_lines": {
+      "eliminate": "VO_Zheers_Elim",
+      "eliminated": "VO_Zheers_Down",
+      "revive": "VO_Zheers_Revive",
+      "ultimate": "VO_Zheers_Ult"
     },
-    {
-      "id": "ANM_SPC_Zheers_03",
-      "name": "run",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_04",
-      "name": "sprint",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_05",
-      "name": "slide",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_06",
-      "name": "jump_start",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_08",
-      "name": "jump_land",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_12",
-      "name": "reload",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_13",
-      "name": "melee",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_14",
-      "name": "downed",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_15",
-      "name": "eliminated",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_16",
-      "name": "revive",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_19",
-      "name": "heal_use",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Zheers_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Manny"
-    }
-  ]
+    "ambient_emitter": "SFX_Zheers_Ambient_AdaptPulse"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Zheers_AdaptAura",
+    "ability_1": "VFX_Zheers_TacticalShot",
+    "ability_2": "VFX_Zheers_RapidAdapt",
+    "ultimate": "VFX_Zheers_PortoResonance",
+    "death": "VFX_Zheers_DeathAdapt",
+    "spawn": "VFX_Zheers_SpawnCIGKV"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

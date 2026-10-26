@@ -1,156 +1,411 @@
 {
   "id": "SPC_Venex",
   "name": "Venex",
+  "codename": "VENEX_PHD",
   "type": "cyborg",
-  "base_health": 90,
-  "base_energy": 110,
-  "base_speed": 1.1,
-  "height_cm": 185,
-  "weight_kg": 80,
-  "skeleton": "SK_Manny",
-  "passive": "Interface Neural — +10% eficiência de escudo",
+  "species_tag": "Species.Venex",
+  "lore": {
+    "origin": "Os Venex sao a consequencia da Primeira Guerra Khaaos - veteranos de todas as especies que perderam 60%+ do corpo e foram reconstruidos com tecnologia Khaael. Parte organico, parte maquina, cada Venex e unico. Nao nasceram Venex; tornaram-se.",
+    "culture": "Sem planeta, sem cla, sem biologia compartilhada - os Venex formam a Legiao dos Reforjados. A Forja Venex em Arukheea e onde novos Venex sao criados - 72 horas que 40% nao sobrevivem.",
+    "motivation": "Provar que a reconstrucao supera a biologia original. Cada eliminacao valida a Forja.",
+    "relationship_with_khaaos": "Os implantes Venex SAO Khaaos - energia do Pulso flui pelos circuitos. Um Venex dentro de um Pulso opera a 150% capacidade."
+  },
+  "base_stats": {
+    "health": 110,
+    "energy": 110,
+    "speed": 1.05,
+    "stamina": 90,
+    "armor_base": 10,
+    "shield_capacity": 25,
+    "regen_health_per_sec": 0.3,
+    "regen_energy_per_sec": 1.2,
+    "regen_stamina_per_sec": 1.5,
+    "crit_chance": 0.06,
+    "crit_multiplier": 1.6
+  },
+  "stat_curves": {
+    "health_per_level": [
+      110,
+      122,
+      136,
+      152,
+      170,
+      191,
+      215,
+      242,
+      273,
+      308
+    ],
+    "energy_per_level": [
+      110,
+      120,
+      131,
+      143,
+      156,
+      171,
+      187,
+      205,
+      225,
+      247
+    ],
+    "speed_per_level": [
+      1.05,
+      1.08,
+      1.11,
+      1.15,
+      1.19,
+      1.24,
+      1.29,
+      1.35,
+      1.42,
+      1.5
+    ]
+  },
+  "physical": {
+    "height_cm": 185,
+    "weight_kg": 85,
+    "skeleton": "SK_Manny",
+    "morph_targets": [
+      "MT_Venex_ChromeArm",
+      "MT_Venex_ReinforcedLegs",
+      "MT_Venex_NeuralCrown"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 48.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 48.0,
+      "full_body_ik_blend": 0.75
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 0.8,
+      "cloth_damping": 0.35,
+      "cloth_stiffness": 0.6,
+      "loose_parts": [
+        "cable_strands",
+        "armor_plating_hinges",
+        "hydraulic_tubes"
+      ]
+    }
+  },
+  "passive": {
+    "name": "Circuito Khaaos",
+    "description": "Shield passivo 25 que regenera 2/s apos 3s sem dano. +15% eficacia items. No Pulso: stats +25%.",
+    "tag": "Ability.Passive.Species.Venex.CircuitoKhaaos",
+    "class": "KhaaosAbility_VenexPassive",
+    "mechanics": [
+      {
+        "trigger": "passive",
+        "effect": "shield_passive",
+        "value": 25.0
+      },
+      {
+        "trigger": "3s_no_damage",
+        "effect": "shield_regen",
+        "value": 2.0
+      },
+      {
+        "trigger": "on_use_item",
+        "effect": "item_efficacy_bonus",
+        "value": 0.15
+      },
+      {
+        "trigger": "in_pulso",
+        "effect": "all_stats_boost",
+        "value": 0.25
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Overclock",
+      "tag": "Ability.Active.Venex.Overclock",
+      "cooldown": 8.0,
+      "energy_cost": 20,
+      "duration": 5.0,
+      "description": "+25% fire rate + 15% speed 5s. Consome 2% HP/s.",
+      "vfx": "VFX_Venex_Overclock",
+      "sfx": "SFX_Venex_Overclock"
+    },
+    {
+      "name": "Escudo de Circuitos",
+      "tag": "Ability.Active.Venex.CircuitShield",
+      "cooldown": 16.0,
+      "energy_cost": 30,
+      "duration": 6.0,
+      "description": "+50 shield temporario absorve 100% dano 6s. Slow 10%.",
+      "vfx": "VFX_Venex_CircuitShield",
+      "sfx": "SFX_Venex_CircuitShield"
+    },
+    {
+      "name": "Reforjo Khaaos",
+      "tag": "Ability.Active.Venex.KhaaosReforging",
+      "cooldown": 50.0,
+      "energy_cost": 50,
+      "duration": 15.0,
+      "description": "Ultimate: Full HP + shield + +30% all stats 15s.",
+      "vfx": "VFX_Venex_KhaaosReforging",
+      "sfx": "SFX_Venex_KhaaosReforging"
+    }
+  ],
   "skins": [
     {
       "id": "SKN_Venex_Recruta",
-      "name": "Recruta",
+      "name": "Recruta Ciborgue",
       "rarity": "COMUM",
-      "color_primary": "#8B5CF6",
-      "color_accent": "#DDD6FE",
-      "unlock_rank": "RECRUTA"
+      "color_primary": "#AF8A29E",
+      "color_secondary": "#57534E",
+      "color_accent": "#D6D3D1",
+      "color_emissive": "#22C55E",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Chrome basico com LEDs verdes."
     },
     {
       "id": "SKN_Venex_Veterano",
-      "name": "Veterano",
+      "name": "Veterano Reforjado",
       "rarity": "RARO",
-      "color_primary": "#7C3AED",
-      "color_accent": "#C4B5FD",
-      "unlock_rank": "HURAN"
+      "color_primary": "#6B7280",
+      "color_secondary": "#374151",
+      "color_accent": "#9CA3AF",
+      "color_emissive": "#10B981",
+      "material_override": "MAT_Venex_Veterano_BattleChrome",
+      "unlock_rank": "HURAN",
+      "description": "Chrome de batalha - placas titânio com circuitos expostos."
     },
     {
       "id": "SKN_Venex_CIGKV_Elite",
-      "name": "CIGKV Elite",
+      "name": "CIGKV Elite Neural",
       "rarity": "EPICO",
-      "color_primary": "#A855F7",
-      "color_accent": "#E9D5FF",
-      "unlock_rank": "VENEX"
+      "color_primary": "#7C3AED",
+      "color_secondary": "#4C1D95",
+      "color_accent": "#C4B5FD",
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Venex_Elite_NeuralLace",
+      "unlock_rank": "VENEX",
+      "description": "Neural lace - rede neuronal visivel sob placa transparente."
     },
     {
       "id": "SKN_Venex_Guarda_Overlord",
-      "name": "Guarda Overlord",
+      "name": "Guarda Overlord Cibernetico",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Venex_Overlord_GoldCircuit",
+      "unlock_rank": "ONITH",
+      "description": "Circuitos dourados - plating aureo com energia fluindo."
     },
     {
       "id": "SKN_Venex_Khaaos_Prime",
-      "name": "Khaaos Prime",
+      "name": "Arma Khaael Viva",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Venex_KhaaosPrime_LivingCircuit",
+      "unlock_rank": "MALAKOR",
+      "description": "Maquina e carne fundidos pelo Khaaos. Circuito vivo que pulsa."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Venex_01",
-      "name": "idle",
-      "skeleton": "SK_Manny"
+  "animations": {
+    "base_skeleton": "SK_Manny",
+    "blend_spaces": [
+      {
+        "id": "BS_Venex_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Venex_AimOffset",
+        "type": "1D",
+        "axes": [
+          "Pitch"
+        ],
+        "samples": 7
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Venex_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Venex_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_overclock",
+        "name": "overclock",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_circuit_shield",
+        "name": "circuit_shield",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Venex_khaaos_reforging",
+        "name": "khaaos_reforging",
+        "duration": 2.5,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Metal_Hydraulic",
+      "dirt": "SFX_FStep_Dirt_Mech",
+      "concrete": "SFX_FStep_Concrete_Mech",
+      "water": "SFX_FStep_Water_Short"
     },
-    {
-      "id": "ANM_SPC_Venex_02",
-      "name": "walk",
-      "skeleton": "SK_Manny"
+    "voice_lines": {
+      "eliminate": "VO_Venex_Elim",
+      "eliminated": "VO_Venex_Down",
+      "revive": "VO_Venex_Revive",
+      "ultimate": "VO_Venex_Ult"
     },
-    {
-      "id": "ANM_SPC_Venex_03",
-      "name": "run",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_04",
-      "name": "sprint",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_05",
-      "name": "slide",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_06",
-      "name": "jump_start",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_08",
-      "name": "jump_land",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_12",
-      "name": "reload",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_13",
-      "name": "melee",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_14",
-      "name": "downed",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_15",
-      "name": "eliminated",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_16",
-      "name": "revive",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_19",
-      "name": "heal_use",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Venex_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Manny"
-    }
-  ]
+    "ambient_emitter": "SFX_Venex_Ambient_CircuitHum"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Venex_CircuitPulse",
+    "ability_1": "VFX_Venex_Overclock",
+    "ability_2": "VFX_Venex_CircuitShield",
+    "ultimate": "VFX_Venex_KhaaosReforging",
+    "death": "VFX_Venex_DeathShutdown",
+    "spawn": "VFX_Venex_SpawnArukheea"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

@@ -2,6 +2,8 @@
 
 #include "Game/AbilitySystem/KhaaosEffectApplier.h"
 #include "Game/AbilitySystem/KhaaosGameplayEffects.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
+#include "Game/Zone/KhaaosSafeZone.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"
 
@@ -21,27 +23,33 @@ void UKhaaosEffectApplier::Deinitialize()
 
 // ─── Internal Helper ──────────────────────────────────────────────────────────
 
-FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyEffectCDO(UAbilitySystemComponent* ASC, UGameplayEffect* EffectCDO)
+FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyEffectInstance(
+	UAbilitySystemComponent* ASC,
+	UGameplayEffect* Effect,
+	AActor* Instigator,
+	AActor* EffectCauser)
 {
-	if (!ASC || !EffectCDO)
+	if (!ASC || !Effect)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("KhaaosEffectApplier::ApplyEffectCDO - Invalid ASC or EffectCDO"));
+		UE_LOG(LogTemp, Warning, TEXT("KhaaosEffectApplier::ApplyEffectInstance - Invalid ASC or Effect"));
 		return FActiveGameplayEffectHandle();
 	}
 
-	const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
-		EffectCDO->GetClass(),
-		1.0f,
-		ASC->MakeEffectContext()
-	);
-
-	if (!SpecHandle.IsValid())
+	FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+	if (Instigator || EffectCauser)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("KhaaosEffectApplier::ApplyEffectCDO - Failed to create spec"));
-		return FActiveGameplayEffectHandle();
+		AActor* ResolvedInstigator = Instigator ? Instigator : EffectCauser;
+		Context.AddInstigator(ResolvedInstigator, EffectCauser);
+	}
+	if (EffectCauser)
+	{
+		Context.AddSourceObject(EffectCauser);
 	}
 
-	return ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data);
+	// The factory returns a configured transient UGameplayEffect instance, not
+	// a distinct generated class/CDO. Build the spec from that exact instance.
+	const FGameplayEffectSpec Spec(Effect, Context, 1.0f);
+	return ASC->ApplyGameplayEffectSpecToSelf(Spec);
 }
 
 // ─── Apply Cooldown ───────────────────────────────────────────────────────────
@@ -55,7 +63,7 @@ FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyCooldown(UAbilitySystemCo
 	}
 
 	UGameplayEffect* CooldownGE = UKhaaosGameplayEffects::CreateCooldownEffect(CooldownTag, Duration);
-	return ApplyEffectCDO(ASC, CooldownGE);
+	return ApplyEffectInstance(ASC, CooldownGE);
 }
 
 // ─── Apply Cost ───────────────────────────────────────────────────────────────
@@ -69,7 +77,7 @@ FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyCost(UAbilitySystemCompon
 	}
 
 	UGameplayEffect* CostGE = UKhaaosGameplayEffects::CreateCostEffect(CostType, Amount);
-	return ApplyEffectCDO(ASC, CostGE);
+	return ApplyEffectInstance(ASC, CostGE);
 }
 
 // ─── Apply Buff ───────────────────────────────────────────────────────────────
@@ -83,7 +91,7 @@ FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyBuff(UAbilitySystemCompon
 	}
 
 	UGameplayEffect* BuffGE = UKhaaosGameplayEffects::CreateBuffEffect(BuffTag, Duration, Magnitude);
-	return ApplyEffectCDO(ASC, BuffGE);
+	return ApplyEffectInstance(ASC, BuffGE);
 }
 
 // ─── Apply Debuff ─────────────────────────────────────────────────────────────
@@ -97,7 +105,39 @@ FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyDebuff(UAbilitySystemComp
 	}
 
 	UGameplayEffect* DebuffGE = UKhaaosGameplayEffects::CreateDebuffEffect(DebuffTag, Duration, Magnitude);
-	return ApplyEffectCDO(ASC, DebuffGE);
+	return ApplyEffectInstance(ASC, DebuffGE);
+}
+
+FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyZoneDamage(
+	UAbilitySystemComponent* ASC,
+	float Damage,
+	AActor* EffectCauser)
+{
+	if (!ASC || Damage <= 0.0f || !Cast<AKhaaosSafeZone>(EffectCauser))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("KhaaosEffectApplier::ApplyZoneDamage - Invalid ASC, damage, or effect causer"));
+		return FActiveGameplayEffectHandle();
+	}
+
+	UGameplayEffect* ZoneDamageEffect = UKhaaosGameplayEffects::CreateZoneDamageEffect(Damage);
+	return ApplyEffectInstance(ASC, ZoneDamageEffect, EffectCauser, EffectCauser);
+}
+
+FActiveGameplayEffectHandle UKhaaosEffectApplier::ApplyDamage(
+	UAbilitySystemComponent* ASC,
+	float Damage,
+	FGameplayTag DamageType,
+	AActor* Instigator,
+	AActor* EffectCauser)
+{
+	if (!ASC || Damage <= 0.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("KhaaosEffectApplier::ApplyDamage - Invalid ASC or damage"));
+		return FActiveGameplayEffectHandle();
+	}
+
+	UGameplayEffect* DamageEffect = UKhaaosGameplayEffects::CreateDamageEffect(Damage, DamageType);
+	return ApplyEffectInstance(ASC, DamageEffect, Instigator, EffectCauser);
 }
 
 // ─── Remove Effect ────────────────────────────────────────────────────────────

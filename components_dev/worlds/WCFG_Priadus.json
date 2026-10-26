@@ -1,0 +1,465 @@
+{
+  "world_id": "Priadus",
+  "display_name": "Priadus — Cumes de Vento",
+  "codename": "W2_PRIADUS_MOUNTAIN",
+  "max_players": 75,
+  "required_rank": "SKEETW",
+  "next_world_id": "Ckesalth",
+  "is_final_world": false,
+  "map_bounds": 2500,
+  "sector_count": 10,
+  "biome": {
+    "type": "mountain_peaks",
+    "description": "Picos montanhosos com pontes suspensas, cavernas e correntes de ar",
+    "colors": {
+      "primary": "#4A5568",
+      "secondary": "#718096",
+      "accent": "#E53E3E",
+      "fog": "#2D3748"
+    },
+    "lighting": {
+      "ambient_intensity": 0.6,
+      "directional_intensity": 1.8,
+      "color_temp": 7000
+    },
+    "fog": {
+      "density": 0.015,
+      "start_m": 150,
+      "end_m": 2300,
+      "color": "#2D3748"
+    },
+    "atmosphere": {
+      "particles": "snow_flurry",
+      "wind_speed": 15.0,
+      "humidity": 0.2
+    }
+  },
+  "weather_system": {
+    "types": [
+      "clear",
+      "blizzard",
+      "wind_gale",
+      "fog_altitude"
+    ],
+    "frequency": {
+      "clear": 0.35,
+      "blizzard": 0.25,
+      "wind_gale": 0.25,
+      "fog_altitude": 0.15
+    },
+    "intensity": {
+      "blizzard": 0.9,
+      "wind_gale": 0.7,
+      "fog_altitude": 0.6
+    },
+    "effects": {
+      "blizzard": {
+        "visibility_m": -400,
+        "speed_modifier": -0.2,
+        "damage_per_second": 2
+      },
+      "wind_gale": {
+        "speed_modifier": -0.1,
+        "accuracy_modifier": -15
+      },
+      "fog_altitude": {
+        "visibility_m": -300,
+        "accuracy_modifier": -12
+      }
+    }
+  },
+  "poi_markers": [
+    {
+      "name": "Pico Khaaos",
+      "type": "summit",
+      "location": [
+        0,
+        0,
+        500
+      ],
+      "loot_tier": "legendary_pool",
+      "danger_level": 8
+    },
+    {
+      "name": "Ponte Suspensa",
+      "type": "bridge",
+      "location": [
+        400,
+        300,
+        250
+      ],
+      "loot_tier": "rare_pool",
+      "danger_level": 5
+    },
+    {
+      "name": "Caverna Leste",
+      "type": "cave",
+      "location": [
+        -600,
+        200,
+        100
+      ],
+      "loot_tier": "epic_pool",
+      "danger_level": 6
+    },
+    {
+      "name": "Base Camp",
+      "type": "camp",
+      "location": [
+        200,
+        -400,
+        50
+      ],
+      "loot_tier": "common_pool",
+      "danger_level": 2
+    },
+    {
+      "name": "Torre de Vigia",
+      "type": "sniper_nest",
+      "location": [
+        -200,
+        500,
+        350
+      ],
+      "loot_tier": "rare_pool",
+      "danger_level": 4
+    }
+  ],
+  "spawn_points": [
+    {
+      "location": [
+        750.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        606.8,
+        440.8,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        36.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        231.8,
+        713.3,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        72.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -231.8,
+        713.3,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        108.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -606.8,
+        440.8,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        144.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -750.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -606.8,
+        -440.8,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        216.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        -231.8,
+        -713.3,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        252.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        231.8,
+        -713.3,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        288.0
+      ],
+      "team": ""
+    },
+    {
+      "location": [
+        606.8,
+        -440.8,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        324.0
+      ],
+      "team": ""
+    }
+  ],
+  "loot_points": [
+    {
+      "location": [
+        500.0,
+        0.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        704.8,
+        256.5,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        766.0,
+        642.8,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        250.0,
+        433.0,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        130.2,
+        738.6,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        -173.6,
+        984.8,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        -250.0,
+        433.0,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        -574.5,
+        482.1,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        -939.7,
+        342.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        -500.0,
+        0.0,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        -704.8,
+        -256.5,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        -766.0,
+        -642.8,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        -250.0,
+        -433.0,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        -130.2,
+        -738.6,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    },
+    {
+      "location": [
+        173.6,
+        -984.8,
+        0.0
+      ],
+      "loot_pool": "epic_pool",
+      "spawn_weight": 0.7
+    },
+    {
+      "location": [
+        250.0,
+        -433.0,
+        0.0
+      ],
+      "loot_pool": "legendary_pool",
+      "spawn_weight": 0.5
+    },
+    {
+      "location": [
+        574.5,
+        -482.1,
+        0.0
+      ],
+      "loot_pool": "common_pool",
+      "spawn_weight": 1.0
+    },
+    {
+      "location": [
+        939.7,
+        -342.0,
+        0.0
+      ],
+      "loot_pool": "rare_pool",
+      "spawn_weight": 0.85
+    }
+  ],
+  "pulso_config": {
+    "radius": 750,
+    "duration_seconds": 100,
+    "rarity_boost_multiplier": 2.2,
+    "max_loot_drops": 15,
+    "damage_per_second": 6.0,
+    "shrink_rate": 9.0
+  },
+  "ambient_audio_zones": [
+    {
+      "zone_id": "AZ_Mountain",
+      "sound": "AMB_Wind_Howl",
+      "radius": 400
+    },
+    {
+      "zone_id": "AZ_Cave",
+      "sound": "AMB_Cave_Drip",
+      "radius": 200
+    },
+    {
+      "zone_id": "AZ_Summit",
+      "sound": "AMB_Wind_Fierce",
+      "radius": 300
+    }
+  ],
+  "material_layers": [
+    "MAT_Rock_Snow",
+    "MAT_Ice_Blue",
+    "MAT_Wood_Aged",
+    "MAT_Metal_Frozen"
+  ],
+  "loot_table_ids": [
+    "priadus_loot_table"
+  ],
+  "available_species": [
+    "Zheers",
+    "Skeetw",
+    "Venex",
+    "Khael"
+  ],
+  "world_tag": "World.Priadus"
+}

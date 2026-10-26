@@ -5,8 +5,17 @@
   "rarity": "RARO",
   "heal": 0,
   "defense": 0,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 5,
   "price": 84,
   "rarity_weight": 28,
-  "rarity_multiplier": 2.8
+  "rarity_multiplier": 2.8,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Rare",
+  "vfx_use": "VFX_None",
+  "sfx_use": "SFX_Material_Pickup",
+  "description": "Cristal energetico. Componente raro para armas epicas.",
+  "world_specific": []
 }

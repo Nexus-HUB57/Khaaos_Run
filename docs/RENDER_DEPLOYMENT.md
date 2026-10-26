@@ -1,41 +1,49 @@
 # Deploy para Render após CI
 
-## Fluxo automático
+## Fluxo de CI e deploy
 
-O workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) executa `npm run verify:all` em pushes para `main` e pull requests. O job `deploy` depende de `verify`, só roda para `push` em `refs/heads/main` e quando a Actions variable `RENDER_DEPLOY_ENABLED` é exatamente `true`. Ele solicita ao Render o SHA exato de `github.sha` e aguarda até `/healthz.json` anunciar o mesmo commit. Uma falha de teste, trigger ou health check deixa a execução vermelha. Deploys de staging são serializados para evitar concorrência.
+O workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) executa lint, testes unitários e de runtime, migrations sobre um PostgreSQL efêmero e builds em pushes para `main`/`develop` e pull requests. Em push para `main`, o job `Deploy to Render (after full CI)` só inicia depois que **todos** os jobs de validação/build passam; então aciona o Deploy Hook e aguarda `/healthz.json` confirmar o SHA exato publicado.
 
-O Blueprint [`render.yaml`](../render.yaml) liga o Web Service de staging à branch `main`, compila com `npm ci --include=dev --no-audit --no-fund && npm run build` e `node scripts/write-render-health.mjs`, inicia com `npm start`, configura `/healthz.json` e desativa deploy automático por push. A inclusão de devDependencies é necessária porque o build usa `tsx`. O script de build grava o arquivo estático com o `RENDER_GIT_COMMIT` fornecido pelo Render. Essa desativação é intencional: o GitHub Actions é o único gatilho de publicação, e o teste deve terminar antes de o Render receber uma solicitação.
+O workflow legado [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) permanece disponível apenas via `workflow_dispatch`; o gatilho automático de push foi removido para não contornar o gate de CI nem disparar um segundo deploy. A execução manual ainda faz seu próprio build e chama a API do Render, portanto confira o CI do mesmo SHA antes de usá-la. O Dockerfile em `server/` exige contexto de build na raiz do repositório.
 
-## Configuração inicial no Render
+O Blueprint [`render.yaml`](../render.yaml) configura o Web Service de staging na branch `main`, plano Free, região Oregon, build `npm ci --include=dev --no-audit --no-fund && npm run build && node scripts/write-render-health.mjs`, start `npm start`, health check `/healthz.json` e Auto-Deploy Off. O script de configuração também alinha o build command e o health check do serviço que já existe; essa alteração de configuração do serviço não inicia um deploy. A mudança de variáveis pode ter efeito de publicação: confirme o estado dos deploys no Render antes de iniciar um segundo.
 
-1. O serviço `khaaos-run-staging` já foi criado para `Nexus-HUB57/Khaaos_Run` na branch `main`, no plano Free e região Oregon. Use esse serviço e evite criar um Web Service duplicado; `render.yaml` é a referência declarativa para o staging. Não crie um segundo banco por engano se já houver PostgreSQL que deva ser preservado.
-2. Configure no ambiente de staging do Web Service `DATABASE_URL`, `SESSION_SECRET`, `WS_TOKEN_SECRET`, `REPL_ID` e `ZONE_OPERATOR_IDS`. `render.yaml` declara secrets com `sync: false`; os valores ficam no Render, não no GitHub nem no repositório. Use `SESSION_SECRET` e `WS_TOKEN_SECRET` aleatórios, fortes e independentes, com pelo menos 32 bytes.
-3. Confirme que o banco contém as tabelas requeridas, incluindo `sessions`; o app usa `connect-pg-simple` com `createTableIfMissing: false`. Não execute `npm run db:push` automaticamente como parte do deploy. Aplique migrações/schema apenas em procedimento revisado, com backup e ambiente correto.
-4. Abra **Settings** do Web Service → **Deploy Hook** e gere um hook. Trate a URL como credencial capaz de iniciar deploys; não cole em issue, chat, log ou arquivo versionado.
-5. No GitHub do repositório, em **Settings → Secrets and variables → Actions**, adicione o secret `RENDER_DEPLOY_HOOK_URL` com a URL inteira do Deploy Hook.
-6. Na seção **Variables** do mesmo local, adicione `RENDER_SERVICE_URL` com a origem pública do serviço, por exemplo `https://<seu-servico>.onrender.com` (sem `/` final). O workflow usa essa URL só para polling público de `/healthz.json`.
-7. Mantenha a variável `RENDER_DEPLOY_ENABLED` ausente ou diferente de `true` até o banco, as variáveis de runtime e o Deploy Hook estarem configurados. Depois de validar staging, defina-a como `true` para ativar deploy a cada push em `main`. A compatibilidade do callback OIDC continua sendo um gate separado e obrigatório antes de liberar produção.
-8. Verifique em Render que **Auto-Deploy** está `Off`, e confirme `healthCheckPath: /healthz.json`. Faça um commit de teste em `main` após revisão e observe os jobs Verify → Deploy → health check.
+## Bootstrap do Postgres staging
 
-## O que o workflow prova
+1. O serviço `khaaos-run-staging` está no plano Free e região Oregon. O PostgreSQL `khaaos-run-staging-db` também está em Oregon no plano Free; expira em 10 de novembro de 2026, tem limite de 1 GB e não oferece backups ([limites oficiais do Free Postgres](https://render.com/docs/free)). Use-o apenas para validação temporária de staging, nunca para dados reais de jogadores. Não crie outro Web Service ou banco por engano.
+2. Antes do deploy, confirme no ambiente do serviço se já estão configurados `SESSION_SECRET`, `WS_TOKEN_SECRET`, `REPL_ID` e `ZONE_OPERATOR_IDS`. `SESSION_SECRET` e `WS_TOKEN_SECRET` devem ser aleatórios, fortes, independentes e ter pelo menos 32 bytes. Não envie os valores em mensagens. Se esses segredos ainda não estiverem disponíveis, a migration pode mesmo assim ser aplicada, mas o processo web pode falhar depois e o health check não ficar saudável.
+3. No GitHub Actions, execute manualmente **Configure Render Staging Database** na branch `main` e confirme `confirm_staging=true`. O workflow usa o secret `API_KEY_RENDER` para buscar a conexão **interna** do Postgres, alinhar o comando de build para incluir `devDependencies`, definir `/healthz.json` como health check, gravar `DATABASE_URL` no serviço e ativar `RUN_DB_MIGRATIONS=true`. A URL não é exibida nem salva no repositório. Verifique a lista de deploys do Render após a execução; não inicie outro deploy se já houver um em andamento.
+4. Depois de confirmar o CI verde e a configuração, aguarde o deploy que possa ter sido iniciado pelas alterações de ambiente. Se nenhum deploy tiver começado, execute manualmente o workflow **Deploy** com `environment=staging`. A inicialização via `scripts/start.mjs` roda `npm run db:migrate` antes do servidor. Confirme nos logs do Render a mensagem de conclusão das migrations e o health check `/healthz.json`. Não use `db:push`.
+5. Depois de confirmar a migration, volte `RUN_DB_MIGRATIONS` para `false` no ambiente do serviço, para que deploys normais não reapliquem esse gate temporário. Essa alteração pode iniciar outro deploy; monitore-o e evite iniciar um deploy duplicado. Mantenha o Auto-Deploy do Render em **Off**. Até o workflow de deploy depender explicitamente do resultado do CI separado, prefira o `workflow_dispatch` manual após verificar os testes.
 
-`GET /healthz.json` serve um arquivo JSON estático com `status: ok` e `commit: RENDER_GIT_COMMIT`. O arquivo é gerado ao final do build, é público e não consulta banco nem altera `server/`; o GitHub Actions compara o campo `commit` com o SHA que acabou de passar pelo CI. Assim, uma resposta saudável da versão antiga não basta para marcar a nova publicação como concluída.
+## O que o health check prova
 
-O Deploy Hook responde quando Render aceita/agenda o deploy, não quando a aplicação já está pronta. Por isso, o workflow espera o health check do commit exato. Se um deploy terminar sem ficar saudável em até 30 minutos, o job falha; investigue os logs do Render e faça rollback manual conforme a política do serviço.
+`GET /healthz.json` serve um arquivo JSON estático com `status: ok` e `commit: RENDER_GIT_COMMIT`. O arquivo é gerado ao final do build, é público e não consulta banco nem altera `server/`. Uma resposta HTTP 200 isolada pode corresponder a uma versão anterior; verifique também o campo `commit`.
+
+A resposta do endpoint de deploy do Render confirma que o deploy foi aceito/agendado, não que a aplicação já está pronta. Se um deploy terminar sem ficar saudável, investigue os logs do Render e use rollback manual conforme a política do serviço.
 
 ## Login OIDC: gate obrigatório antes de produção
 
 O backend atual descobre `https://replit.com/oidc` e monta o callback como `https://<req.hostname>/api/callback`. A documentação de Replit Auth garante suporte para Development e Published Apps (`replit.dev`, `replit.app` e domínios customizados Replit), mas não afirma que um deployment em Render seja suportado. **Não presuma que login Replit funcionará em `onrender.com`.** Veja também a [análise de compatibilidade e plano de verificação](REPLIT_AUTH_RENDER_COMPATIBILITY.md).
 
-Antes de liberar tráfego real em Render, valide com a equipe/configuração do Replit que o `REPL_ID` pode autorizar o callback `https://<host-render>/api/callback` e post-logout URI `https://<host-render>`. Faça o teste de login/callback/logout e cookie Secure atrás do proxy. Se o issuer recusar domínio externo, não contorne validação de redirect: mantenha a produção no Replit ou planeje uma migração explícita para um provedor de identidade compatível, com estratégia de migração/ligação de usuários e testes. O deploy pode compilar e iniciar mesmo quando esse gate de autenticação falha.
+Antes de liberar tráfego real em Render, valide que o `REPL_ID` pode autorizar o callback `https://<host-render>/api/callback` e post-logout URI `https://<host-render>`. Faça o teste de login/callback/logout e cookie Secure atrás do proxy. Se o issuer recusar domínio externo, não contorne a validação de redirect: mantenha a produção no Replit ou planeje uma migração explícita para um provedor compatível, com estratégia de migração/ligação de usuários e testes.
 
 ## Secrets e credenciais
 
-No **GitHub Actions** ficam o secret `RENDER_DEPLOY_HOOK_URL` e as variables não sigilosas `RENDER_SERVICE_URL` e `RENDER_DEPLOY_ENABLED`. As variáveis da aplicação — em particular `DATABASE_URL`, chaves de sessão/WS e `REPL_ID` — ficam exclusivamente no ambiente Render. Webhook URLs de Discord/Slack são opcionais e só necessárias se a notificação de falha já configurada for desejada.
+Para habilitar o deploy automático gated, configure em **GitHub → Settings → Secrets and variables → Actions**:
+
+- **Repository variable `RENDER_DEPLOY_ENABLED`**: `true` (defina apenas depois que serviço, hook, URL e variáveis de runtime estiverem validados).
+- **Repository variable `RENDER_SERVICE_URL`**: origem HTTPS pública do serviço, sem barra final; o CI exige que `/healthz.json` confirme o SHA do push.
+- **Repository secret `RENDER_DEPLOY_HOOK_URL`**: URL do Deploy Hook gerado pelo serviço Render. Não compartilhe esse valor no chat nem o grave no repositório.
+
+O secret `API_KEY_RENDER` continua usado apenas pelos workflows manuais de bootstrap/API do Render; o CI automático não precisa da API key da conta. O workflow de bootstrap não escreve a chave nem a URL do banco nos logs. `DATABASE_URL`, chaves de sessão/WS e `REPL_ID` ficam no ambiente do Render. O service ID de staging é um identificador público e está fixado no workflow legado manual. Webhooks de Discord/Slack são opcionais e não determinam o sucesso do deploy da imagem.
 
 ## Referências oficiais
 
-- [Deploy Hooks do Render](https://render.com/docs/deploy-hooks)
-- [Deploys e auto-deploy do Render](https://render.com/docs/deploys)
+- [Render Postgres: criar e conectar](https://render.com/docs/postgresql-creating-connecting)
+- [Render API: recuperar conexão do Postgres](https://api-docs.render.com/reference/retrieve-postgres-connection-info)
+- [Render API: adicionar ou atualizar variável de ambiente](https://api-docs.render.com/reference/update-env-var)
+- [Render API: atualizar configuração do serviço](https://api-docs.render.com/reference/update-service)
+- [Render Deploy Hooks](https://render.com/docs/deploy-hooks)
 - [Blueprint YAML Reference](https://render.com/docs/blueprint-spec)
 - [Replit Auth](https://docs.replit.com/features/auth-and-identity/authentication) e [Custom Domains](https://docs.replit.com/features/publishing/custom-domains) do Replit

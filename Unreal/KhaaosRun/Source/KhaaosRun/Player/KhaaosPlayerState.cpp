@@ -2,28 +2,47 @@
 
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
-
+#include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
+#include "Game/AbilitySystem/KhaaosEffectApplier.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
+#include "Game/KhaaosGameMode.h"
+#include "Game/UI/KhaaosHUD.h"
+#include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Game/Zone/KhaaosSafeZone.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 
-// ─── Static XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ───────────────────
+// ─── EP555 XP thresholds, ordered high-to-low to make RankFromXp deterministic ──
 
-const TMap<EPatenteRank, int32> AKhaaosPlayerState::RankXpThresholds = {
-        { EPatenteRank::Zheers,   0     },
-        { EPatenteRank::Onith,   100    },
-        { EPatenteRank::Skeetw,  300    },
-        { EPatenteRank::Huran,   700    },
-        { EPatenteRank::Venex,  1500    },
-        { EPatenteRank::Khael,  3000    },
-        { EPatenteRank::Malakor,6000    },
-        { EPatenteRank::Overlord,10000   }
+const TArray<TPair<EPatenteRank, int32>> AKhaaosPlayerState::RankXpThresholds = {
+        { EPatenteRank::Overlord, 5000000 },
+        { EPatenteRank::Malakor,  1000000 },
+        { EPatenteRank::Khael,     500000 },
+        { EPatenteRank::Venex,     250000 },
+        { EPatenteRank::Huran,     100000 },
+        { EPatenteRank::Skeetw,     45000 },
+        { EPatenteRank::Onith,      15000 },
+        { EPatenteRank::Zheers,         0 }
 };
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
 AKhaaosPlayerState::AKhaaosPlayerState()
 {
-        // ── Core attributes (from TS AttributeSet / playerStats) ──
-        Health    = 100.0f;
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent->SetIsReplicated(true);
+	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+	NetUpdateFrequency = 100.0f;
+
+	KhaaosAttributeSet = CreateDefaultSubobject<UKhaaosAttributeSet>(TEXT("KhaaosAttributeSet"));
+	AbilitySystemComponent->AddAttributeSetSubobject(KhaaosAttributeSet);
+
+	// ── Core attributes (from TS AttributeSet / playerStats) ──
+	Health    = 100.0f;
         MaxHealth = 100.0f;
         Credits   = 0;
         Speed     = 1.0f;
@@ -61,10 +80,138 @@ AKhaaosPlayerState::AKhaaosPlayerState()
 
 // ─── RepNotify Callbacks ────────────────────────────────────────────────────────
 
-void AKhaaosPlayerState::OnRep_Health()
+void AKhaaosPlayerState::BeginPlay()
 {
-        // Client-side health bar UI update
-        OnHealthChanged.Broadcast(Health, 0.0f);
+	Super::BeginPlay();
+
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+
+	if (KhaaosAttributeSet)
+	{
+		Health = KhaaosAttributeSet->GetHealth();
+		MaxHealth = KhaaosAttributeSet->GetMaxHealth();
+		KhaaosAttributeSet->OnAttributeChanged.AddDynamic(this, &AKhaaosPlayerState::HandleAttributeChanged);
+		OutOfHealthDelegateHandle = KhaaosAttributeSet->OnOutOfHealth.AddUObject(
+			this,
+			&AKhaaosPlayerState::HandleOutOfHealth);
+	}
+}
+
+void AKhaaosPlayerState::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (KhaaosAttributeSet)
+	{
+		KhaaosAttributeSet->OnAttributeChanged.RemoveDynamic(this, &AKhaaosPlayerState::HandleAttributeChanged);
+		if (OutOfHealthDelegateHandle.IsValid())
+		{
+			KhaaosAttributeSet->OnOutOfHealth.Remove(OutOfHealthDelegateHandle);
+			OutOfHealthDelegateHandle.Reset();
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
+UAbilitySystemComponent* AKhaaosPlayerState::GetAbilitySystemComponent() const
+{
+	return AbilitySystemComponent;
+}
+
+void AKhaaosPlayerState::HandleGameplayCue(
+	AActor* Self,
+	FGameplayTag GameplayCueTag,
+	EGameplayCueEvent::Type EventType,
+	const FGameplayCueParameters& Parameters)
+{
+	(void)Parameters;
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	if (Self != this || GameplayCueTag != Tags.GameplayCue_Damage_Zone ||
+		EventType != EGameplayCueEvent::Executed)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PlayerController = It->Get();
+		if (!PlayerController || !PlayerController->IsLocalController() || PlayerController->PlayerState != this)
+		{
+			continue;
+		}
+
+		if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(PlayerController->GetHUD()))
+		{
+			if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
+			{
+				const float CurrentHealth = KhaaosAttributeSet ? KhaaosAttributeSet->GetHealth() : Health;
+				const float CurrentMaxHealth = KhaaosAttributeSet ? KhaaosAttributeSet->GetMaxHealth() : MaxHealth;
+				if (PlayerStatus != EPlayerStatus::Vivo || CurrentHealth <= 0.0f)
+				{
+					HUDWidget->StopSafeZoneWarningAudio();
+				}
+				else
+				{
+					HUDWidget->NotifySafeZoneDamageCue(CurrentHealth, CurrentMaxHealth);
+				}
+			}
+		}
+		break;
+	}
+}
+
+void AKhaaosPlayerState::HandleAttributeChanged(
+	UKhaaosAttributeSet* AttributeSet,
+	const FString& AttributeName,
+	float NewValue)
+{
+	if (AttributeSet != KhaaosAttributeSet)
+	{
+		return;
+	}
+
+	if (AttributeName == TEXT("Health"))
+	{
+		const float PreviousHealth = Health;
+		Health = NewValue;
+		OnHealthChanged.Broadcast(Health, Health - PreviousHealth);
+	}
+	else if (AttributeName == TEXT("MaxHealth"))
+	{
+		MaxHealth = NewValue;
+	}
+}
+
+void AKhaaosPlayerState::HandleOutOfHealth(
+	AActor* OwnerActor,
+	AActor* AvatarActor,
+	AActor* EffectCauser)
+{
+	(void)AvatarActor;
+	if (!HasAuthority() || OwnerActor != this || PlayerStatus != EPlayerStatus::Vivo)
+	{
+		return;
+	}
+
+	const bool bKilledByZone = Cast<AKhaaosSafeZone>(EffectCauser) != nullptr;
+	APlayerState* Eliminator = bKilledByZone ? nullptr : Cast<APlayerState>(EffectCauser);
+	const FString Cause = bKilledByZone ? TEXT("ZONA") : (Eliminator ? TEXT("PVP") : TEXT("QUEDA"));
+
+	if (UWorld* World = GetWorld())
+	{
+		if (AKhaaosGameMode* GameMode = World->GetAuthGameMode<AKhaaosGameMode>())
+		{
+			GameMode->EliminatePlayer(this, Eliminator, Cause);
+		}
+	}
 }
 
 void AKhaaosPlayerState::OnRep_Credits()
@@ -75,38 +222,146 @@ void AKhaaosPlayerState::OnRep_Credits()
 
 void AKhaaosPlayerState::OnRep_PlayerStatus()
 {
-        // Client-side status indicator update
+        // FIXED: Previously broadcast (PlayerStatus, PlayerStatus) — both params same
+        // Server-side SetPlayerStatus already broadcasts correct old→new.
+        // This client RepNotify provides secondary notification for client UI.
         OnPlayerStatusChanged.Broadcast(PlayerStatus, PlayerStatus);
+	if (PlayerStatus == EPlayerStatus::Vivo)
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* PlayerController = It->Get();
+			if (!PlayerController || !PlayerController->IsLocalController() || PlayerController->PlayerState != this)
+			{
+				continue;
+			}
+
+			if (AKhaaosHUD* KhaaosHUD = Cast<AKhaaosHUD>(PlayerController->GetHUD()))
+			{
+				if (UKhaaosHUDWidget* HUDWidget = KhaaosHUD->GetHUDWidget())
+				{
+					HUDWidget->StopSafeZoneWarningAudio();
+				}
+			}
+			break;
+		}
+	}
 }
 
 // ─── Server Authority Methods ───────────────────────────────────────────────────
 
 float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigator)
 {
-        if (GetLocalRole() != ROLE_Authority)
-        {
-                return 0.0f;
-        }
+	return ApplyDamageOfType(DamageAmount, FGameplayTag(), Instigator);
+}
+
+float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayTag& DamageType, APlayerState* Instigator)
+{
+	if (!HasAuthority() || !AbilitySystemComponent || !KhaaosAttributeSet)
+	{
+		return 0.0f;
+	}
 
         if (PlayerStatus != EPlayerStatus::Vivo || DamageAmount <= 0.0f)
         {
                 return 0.0f;
         }
 
-        float OldHealth = Health;
-        Health = FMath::Clamp(Health - DamageAmount, 0.0f, MaxHealth);
-        float ActualDamage = OldHealth - Health;
+	const float MitigatedDamage = UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
+		DamageAmount,
+		DamageType,
+		KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
+		KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+	if (MitigatedDamage <= 0.0f)
+	{
+		return 0.0f;
+	}
 
-        DamageDealt += DamageAmount;
+	const float OldHealth = KhaaosAttributeSet->GetHealth();
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UKhaaosEffectApplier* EffectApplier = GameInstance->GetSubsystem<UKhaaosEffectApplier>())
+		{
+			EffectApplier->ApplyDamage(
+				AbilitySystemComponent,
+				MitigatedDamage,
+				DamageType,
+				Instigator,
+				Instigator);
+		}
+	}
 
-        if (Health <= 0.0f)
-        {
-                SetPlayerStatus(EPlayerStatus::Eliminado);
-        }
+	const float ActualDamage = FMath::Max(0.0f, OldHealth - KhaaosAttributeSet->GetHealth());
+	DamageDealt += ActualDamage;
+	return ActualDamage;
+}
 
-        OnHealthChanged.Broadcast(Health, -ActualDamage);
+void AKhaaosPlayerState::SetSpeciesPassiveAbility(
+	TSubclassOf<UGameplayAbility> PassiveAbilityClass,
+	UObject* SourceObject)
+{
+	if (!HasAuthority() || !AbilitySystemComponent)
+	{
+		return;
+	}
 
-        return ActualDamage;
+	if (SpeciesPassiveAbilityHandle.IsValid())
+	{
+		const FGameplayAbilitySpec* ExistingSpec = AbilitySystemComponent->FindAbilitySpecFromHandle(SpeciesPassiveAbilityHandle);
+		if (ExistingSpec && ExistingSpec->Ability &&
+			ExistingSpec->Ability->GetClass() == PassiveAbilityClass.Get() && ExistingSpec->IsActive())
+		{
+			return;
+		}
+
+		AbilitySystemComponent->CancelAbilityHandle(SpeciesPassiveAbilityHandle);
+		AbilitySystemComponent->ClearAbility(SpeciesPassiveAbilityHandle);
+		SpeciesPassiveAbilityHandle = FGameplayAbilitySpecHandle();
+	}
+
+	if (!PassiveAbilityClass)
+	{
+		return;
+	}
+
+	const FGameplayAbilitySpec NewSpec(PassiveAbilityClass, 1, INDEX_NONE, SourceObject ? SourceObject : this);
+	SpeciesPassiveAbilityHandle = AbilitySystemComponent->GiveAbility(NewSpec);
+	if (!SpeciesPassiveAbilityHandle.IsValid() || !AbilitySystemComponent->TryActivateAbility(SpeciesPassiveAbilityHandle))
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("PlayerState: failed to grant/activate species passive %s"), *GetNameSafe(PassiveAbilityClass.Get()));
+		if (SpeciesPassiveAbilityHandle.IsValid())
+		{
+			AbilitySystemComponent->ClearAbility(SpeciesPassiveAbilityHandle);
+			SpeciesPassiveAbilityHandle = FGameplayAbilitySpecHandle();
+		}
+	}
+}
+
+float AKhaaosPlayerState::ApplyZoneDamage(float DamageAmount, AActor* EffectCauser)
+{
+	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo ||
+		DamageAmount <= 0.0f || !AbilitySystemComponent || !KhaaosAttributeSet || !EffectCauser)
+	{
+		return 0.0f;
+	}
+
+	const float OldHealth = KhaaosAttributeSet->GetHealth();
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UKhaaosEffectApplier* EffectApplier = GameInstance->GetSubsystem<UKhaaosEffectApplier>())
+		{
+			EffectApplier->ApplyZoneDamage(AbilitySystemComponent, DamageAmount, EffectCauser);
+		}
+	}
+
+	const float ActualDamage = FMath::Max(0.0f, OldHealth - KhaaosAttributeSet->GetHealth());
+	DamageDealt += ActualDamage;
+	return ActualDamage;
 }
 
 float AKhaaosPlayerState::Heal(float HealAmount)
@@ -121,13 +376,14 @@ float AKhaaosPlayerState::Heal(float HealAmount)
                 return 0.0f;
         }
 
-        float OldHealth = Health;
-        Health = FMath::Clamp(Health + HealAmount, 0.0f, MaxHealth);
-        float ActualHeal = Health - OldHealth;
-
-        OnHealthChanged.Broadcast(Health, ActualHeal);
-
-        return ActualHeal;
+	if (!KhaaosAttributeSet)
+	{
+		return 0.0f;
+	}
+	const float OldHealth = KhaaosAttributeSet->GetHealth();
+	KhaaosAttributeSet->Heal(HealAmount);
+	const float ActualHeal = FMath::Max(0.0f, KhaaosAttributeSet->GetHealth() - OldHealth);
+	return ActualHeal;
 }
 
 void AKhaaosPlayerState::GrantCredits(int32 Amount)
@@ -163,18 +419,17 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
 
 EPatenteRank AKhaaosPlayerState::RankFromXp(int32 Xp)
 {
-        // Walk thresholds from highest to lowest
-        EPatenteRank Result = EPatenteRank::Zheers;
-
+        // RankXpThresholds is an ordered TArray, not a hash map, so this
+        // high-to-low scan is deterministic and preserves the EP555 thresholds.
         for (const auto& Pair : RankXpThresholds)
         {
                 if (Xp >= Pair.Value)
                 {
-                        Result = Pair.Key;
+                        return Pair.Key;
                 }
         }
 
-        return Result;
+        return EPatenteRank::Zheers;
 }
 
 FString AKhaaosPlayerState::PatenteToString(EPatenteRank Rank)
@@ -199,10 +454,8 @@ void AKhaaosPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
         Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-        // Core attributes
-        DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, Health, COND_None, REPNOTIFY_Always);
-        DOREPLIFETIME(AKhaaosPlayerState, MaxHealth);
-        DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, Credits, COND_None, REPNOTIFY_Always);
+		// Health and MaxHealth replicate through the GAS AttributeSet.
+		DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, Credits, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME(AKhaaosPlayerState, Speed);
         DOREPLIFETIME(AKhaaosPlayerState, Energy);
         DOREPLIFETIME(AKhaaosPlayerState, MaxEnergy);

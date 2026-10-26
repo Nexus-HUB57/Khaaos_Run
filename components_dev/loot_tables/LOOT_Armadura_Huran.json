@@ -2,11 +2,22 @@
   "id": "LOOT_Armadura_Huran",
   "name": "Armadura Huran",
   "type": "Defesa",
-  "rarity": "LENDARIO",
+  "rarity": "EPICO",
   "heal": 0,
-  "defense": 90,
+  "defense": 40,
+  "use_time": 0.0,
   "auto_revive": false,
+  "stack_max": 1,
   "price": 880,
-  "rarity_weight": 4,
-  "rarity_multiplier": 22
+  "rarity_weight": 12,
+  "rarity_multiplier": 7.5,
+  "cooldown": 0.0,
+  "combo": null,
+  "vfx_pickup": "VFX_Loot_Pickup_Epic",
+  "vfx_use": "VFX_Armadura_Equip",
+  "sfx_use": "SFX_Armadura_Equip",
+  "description": "Armadura Huran. +40 defesa, +15% water resistance.",
+  "world_specific": [
+    "Barburhen"
+  ]
 }

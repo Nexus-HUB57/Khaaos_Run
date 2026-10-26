@@ -1,12 +1,11 @@
 {
-  "manifest_version": "1.0.0",
-  "generated_at": "2026-10-13T01:07:39.823339+00:00",
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-15T00:55:55.789010+00:00",
   "loot_item_count": 26,
   "curativo_count": 6,
-  "defesa_count": 6,
+  "defesa_count": 7,
   "utilidade_count": 7,
-  "recurso_count": 7,
-  "world_tables": 5,
+  "recurso_count": 6,
   "rarity_weights": {
     "COMUM": 55,
     "RARO": 28,
@@ -41,10 +40,16 @@
       "rarity": "RARO"
     },
     {
+      "id": "LOOT_Phoenix_Frasco",
+      "name": "Phoenix Frasco",
+      "type": "Curativo",
+      "rarity": "LENDARIO"
+    },
+    {
       "id": "LOOT_Seringa_Venex",
       "name": "Seringa Venex",
       "type": "Curativo",
-      "rarity": "RARO"
+      "rarity": "EPICO"
     },
     {
       "id": "LOOT_Adrenalina_Khael",
@@ -53,32 +58,32 @@
       "rarity": "EPICO"
     },
     {
-      "id": "LOOT_Phoenix_Frasco",
-      "name": "Phoenix Frasco",
-      "type": "Curativo",
-      "rarity": "LENDARIO"
-    },
-    {
-      "id": "LOOT_Capacete_Simples",
-      "name": "Capacete Simples",
+      "id": "LOOT_Shield_Lv1",
+      "name": "Shield Lv1",
       "type": "Defesa",
       "rarity": "COMUM"
+    },
+    {
+      "id": "LOOT_Shield_Lv2",
+      "name": "Shield Lv2",
+      "type": "Defesa",
+      "rarity": "RARO"
     },
     {
       "id": "LOOT_Colete_Khaaos",
       "name": "Colete Khaaos",
       "type": "Defesa",
-      "rarity": "RARO"
+      "rarity": "EPICO"
     },
     {
-      "id": "LOOT_Shield_Lv1",
-      "name": "Shield Lv1",
+      "id": "LOOT_Capacete_Simples",
+      "name": "Capacete Simples",
       "type": "Defesa",
       "rarity": "RARO"
     },
     {
-      "id": "LOOT_Shield_Lv2",
-      "name": "Shield Lv2",
+      "id": "LOOT_Armadura_Huran",
+      "name": "Armadura Huran",
       "type": "Defesa",
       "rarity": "EPICO"
     },
@@ -86,41 +91,17 @@
       "id": "LOOT_Escudo_Khael",
       "name": "Escudo Khael",
       "type": "Defesa",
-      "rarity": "EPICO"
-    },
-    {
-      "id": "LOOT_Armadura_Huran",
-      "name": "Armadura Huran",
-      "type": "Defesa",
       "rarity": "LENDARIO"
-    },
-    {
-      "id": "LOOT_Mochila_Tatica",
-      "name": "Mochila Tática",
-      "type": "Utilidade",
-      "rarity": "COMUM"
     },
     {
       "id": "LOOT_Granada_Frag",
       "name": "Granada Frag",
-      "type": "Utilidade",
+      "type": "Defesa",
       "rarity": "COMUM"
     },
     {
       "id": "LOOT_Granada_Zheers",
       "name": "Granada Zheers",
-      "type": "Utilidade",
-      "rarity": "EPICO"
-    },
-    {
-      "id": "LOOT_Grappling_Hook",
-      "name": "Grappling Hook",
-      "type": "Utilidade",
-      "rarity": "RARO"
-    },
-    {
-      "id": "LOOT_Drone_Recon",
-      "name": "Drone Recon",
       "type": "Utilidade",
       "rarity": "RARO"
     },
@@ -134,12 +115,30 @@
       "id": "LOOT_Beacon_Pulso",
       "name": "Beacon Pulso",
       "type": "Utilidade",
+      "rarity": "RARO"
+    },
+    {
+      "id": "LOOT_Drone_Recon",
+      "name": "Drone Recon",
+      "type": "Utilidade",
+      "rarity": "EPICO"
+    },
+    {
+      "id": "LOOT_Grappling_Hook",
+      "name": "Grappling Hook",
+      "type": "Utilidade",
       "rarity": "LENDARIO"
+    },
+    {
+      "id": "LOOT_Mochila_Tatica",
+      "name": "Mochila Tatica",
+      "type": "Utilidade",
+      "rarity": "COMUM"
     },
     {
       "id": "LOOT_AmmoBox_556",
       "name": "AmmoBox 5.56",
-      "type": "Recurso",
+      "type": "Utilidade",
       "rarity": "COMUM"
     },
     {
@@ -174,7 +173,7 @@
     },
     {
       "id": "LOOT_Material_Nucleo",
-      "name": "Material Núcleo",
+      "name": "Material Nucleo",
       "type": "Recurso",
       "rarity": "EPICO"
     }

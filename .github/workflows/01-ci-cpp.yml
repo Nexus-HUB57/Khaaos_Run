@@ -1,5 +1,5 @@
 {
-  "name": "01 — CI C++ Compile",
+  "name": "01 — C++ Logic Tests",
   "on": {
     "push": {
       "branches": [
@@ -21,12 +21,12 @@
           "uses": "actions/checkout@v4"
         },
         {
-          "name": "Install UE5.8 Toolchain",
-          "run": "sudo apt-get update && sudo apt-get install -y build-essential clang-16 lld-16"
+          "name": "Install C++ test toolchain",
+          "run": "sudo apt-get update && sudo apt-get install -y build-essential"
         },
         {
-          "name": "Compile KhaaosRun Module",
-          "run": "echo 'UE5 compile step — requires self-hosted runner in production'"
+          "name": "Run production CIGKV logic tests",
+          "run": "bash scripts/test_ue5_logic.sh"
         }
       ]
     }

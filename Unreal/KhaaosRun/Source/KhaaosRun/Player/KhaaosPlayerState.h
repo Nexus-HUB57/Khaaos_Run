@@ -3,7 +3,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "AbilitySystemInterface.h"
+#include "GameplayCueInterface.h"
+#include "GameplayAbilitySpec.h"
+#include "GameplayTagContainer.h"
 #include "KhaaosPlayerState.generated.h"
+
+class UAbilitySystemComponent;
+class UGameplayAbility;
+class UKhaaosAttributeSet;
 
 // ─── Enums ported from schema.ts ──────────────────────────────────────────────
 
@@ -49,21 +57,34 @@ enum class EEliminationCause : uint8
  * scoreboard and matchmaking.
  */
 UCLASS(Abstract)
-class AKhaaosPlayerState : public APlayerState
+class AKhaaosPlayerState : public APlayerState, public IAbilitySystemInterface, public IGameplayCueInterface
 {
 	GENERATED_BODY()
 
 public:
 	AKhaaosPlayerState();
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	virtual void HandleGameplayCue(AActor* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
+
+	/** GAS owner for persistent player attributes/effects. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Abilities")
+	TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
+
+	/** GAS AttributeSet; Health/MaxHealth are the authoritative values. */
+	UPROPERTY()
+	TObjectPtr<UKhaaosAttributeSet> KhaaosAttributeSet;
 
 	// ─── Core Attributes (from TS AttributeSet / playerStats) ──────────────
 
-	/** Current health. */
-	UPROPERTY(ReplicatedUsing = OnRep_Health, BlueprintReadOnly, Category = "Khaaos|Attributes")
+	/** Compatibility mirror of the replicated GAS Health attribute. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Khaaos|Attributes")
 	float Health;
 
-	/** Maximum health. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Attributes")
+	/** Compatibility mirror of the replicated GAS MaxHealth attribute. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Khaaos|Attributes")
 	float MaxHealth;
 
 	/** Currency credits (KRC). */
@@ -165,9 +186,6 @@ public:
 	// ─── RepNotify Callbacks ────────────────────────────────────────────────
 
 	UFUNCTION()
-	void OnRep_Health();
-
-	UFUNCTION()
 	void OnRep_Credits();
 
 	UFUNCTION()
@@ -192,9 +210,18 @@ public:
 
 	// ─── Server Authority Methods ───────────────────────────────────────────
 
-	/** Apply damage (server only). Returns actual damage applied. */
+	/** Apply untyped damage (server only). Returns actual damage applied. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	float ApplyDamage(float DamageAmount, APlayerState* Instigator);
+
+	/** Apply typed damage (server only) so species passives can filter it. */
+	float ApplyDamageOfType(float DamageAmount, const FGameplayTag& DamageType, APlayerState* Instigator);
+
+	/** Replace the current species passive ability; null removes any previous passive. */
+	void SetSpeciesPassiveAbility(TSubclassOf<UGameplayAbility> PassiveAbilityClass, UObject* SourceObject = nullptr);
+
+	/** Apply one instant SafeZone hit and preserve SafeZone as EffectCauser. */
+	float ApplyZoneDamage(float DamageAmount, AActor* EffectCauser);
 
 	/** Heal (server only). Returns actual healing applied. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
@@ -218,7 +245,16 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+private:
+	UFUNCTION()
+	void HandleAttributeChanged(UKhaaosAttributeSet* AttributeSet, const FString& AttributeName, float NewValue);
+
+	void HandleOutOfHealth(AActor* OwnerActor, AActor* AvatarActor, AActor* EffectCauser);
+
+	FDelegateHandle OutOfHealthDelegateHandle;
+	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
+
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 
-	static const TMap<EPatenteRank, int32> RankXpThresholds;
+	static const TArray<TPair<EPatenteRank, int32>> RankXpThresholds;
 };

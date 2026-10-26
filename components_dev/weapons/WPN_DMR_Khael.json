@@ -1,17 +1,136 @@
 {
   "id": "WPN_DMR_Khael",
-  "name": "DMR Khael",
+  "name": "DMR Khael MR-12",
+  "codename": "KHAEL_MR12_DMR",
   "slot": "PRIMARY",
   "category": "DMR",
+  "category_tag": "Weapon.Category.DMR",
+  "rarity": "EPICO",
+  "rarity_tag": "Loot.Rarity.EPICO",
+  "fire_mode": "Semi",
   "damage": 55,
   "fire_rate": 180,
   "accuracy": 88,
   "range": 120,
   "mag": 10,
   "reload": 2.5,
-  "rarity": "EPICO",
-  "price": 675,
-  "headshot": 2.5,
-  "speed_mod": 0.88,
-  "ammo": "7.62mm"
+  "headshot_multiplier": 2.5,
+  "speed_modifier": 0.9,
+  "ammo_type": "7.62mm",
+  "burst_count": 1,
+  "pellet_count": 1,
+  "ballistic": {
+    "muzzle_velocity_ms": 780,
+    "drag_coefficient": 0.007,
+    "gravity_scale": 0.9,
+    "penetration_depth_cm": 30
+  },
+  "recoil": {
+    "pitch_per_shot": 1.2,
+    "yaw_range": 0.15,
+    "recovery_speed": 3.5,
+    "pattern": [
+      1.2,
+      1.2494,
+      1.2143,
+      1.0837,
+      0.904,
+      0.7446,
+      0.6532,
+      0.6301,
+      0.6349,
+      0.6177
+    ]
+  },
+  "damage_falloff": {
+    "near_range_m": 50,
+    "far_range_m": 120,
+    "falloff_curve": "linear",
+    "min_damage_percent": 72
+  },
+  "vfx": {
+    "muzzle_flash": "VFX_MFlash_DMR",
+    "tracer": "VFX_Tracer_762",
+    "shell_eject": "VFX_Shell_762",
+    "impact_default": "VFX_Impact_Concrete",
+    "impact_flesh": "VFX_Impact_Flesh_Med"
+  },
+  "sfx": {
+    "fire": "SFX_DMR_Khael_Fire",
+    "fire_suppressed": "SFX_DMR_Khael_Supp",
+    "reload_magout": "SFX_DMR_MagOut",
+    "reload_magin": "SFX_DMR_MagIn",
+    "reload_charge": "SFX_DMR_Charge",
+    "dryfire": "SFX_Dryfire_762",
+    "equip": "SFX_DMR_Equip"
+  },
+  "attachments": {
+    "optic": [
+      {
+        "id": "ATT_ACOG_4x",
+        "name": "ACOG 4x",
+        "modifiers": {
+          "accuracy": 10,
+          "range": 20
+        }
+      },
+      {
+        "id": "ATT_Scope_8x",
+        "name": "Scope 8x",
+        "modifiers": {
+          "accuracy": 15,
+          "range": 30
+        }
+      }
+    ],
+    "barrel": [
+      {
+        "id": "ATT_Supp_762",
+        "name": "Suppressor 7.62",
+        "modifiers": {
+          "range": -8,
+          "damage": -3
+        }
+      }
+    ],
+    "foregrip": [
+      {
+        "id": "ATT_Grip_Angled",
+        "name": "Angled Grip",
+        "modifiers": {
+          "accuracy": 4,
+          "recoil": -0.1
+        }
+      }
+    ],
+    "stock": [],
+    "magazine": [
+      {
+        "id": "ATT_Mag_762_Ext",
+        "name": "Extended Mag 7.62",
+        "modifiers": {
+          "mag": 5,
+          "reload": 0.4
+        }
+      }
+    ]
+  },
+  "economy": {
+    "price": 550,
+    "krc_cost": 420,
+    "craft_materials": [
+      {
+        "id": "LOOT_Material_Metal",
+        "count": 10
+      },
+      {
+        "id": "LOOT_Material_Cristal",
+        "count": 3
+      }
+    ]
+  },
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0"
+  }
 }

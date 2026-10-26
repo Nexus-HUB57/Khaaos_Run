@@ -4,7 +4,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/EngineSubsystem.h"
 #include "Http.h"
-#include "KhaaosAttributeSet.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
 #include "EconomyBridge.generated.h"
 
 // ─── Economy Data Types (from EconomyEngine.ts) ───────────────────────────────

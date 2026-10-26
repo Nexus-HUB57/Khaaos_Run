@@ -157,6 +157,9 @@ export default function LootPage() {
     queryKey: ["/api/loot"],
     refetchInterval: 3000,
   });
+  const { data: zonePermissions } = useQuery<{ canManageZone: boolean }>({
+    queryKey: ["/api/zone/permissions"],
+  });
 
   const lootItemsRef = useRef<LootItem[]>([]);
   useEffect(() => { lootItemsRef.current = lootItems; }, [lootItems]);
@@ -261,16 +264,16 @@ export default function LootPage() {
             ST_ITEMDATA · SERVER_PICKUPITEM RPC · {available.length} ITENS DISPONÍVEIS
           </p>
         </div>
-        <Button
-          data-testid="button-spawn-loot"
-          onClick={() => spawnLoot.mutate()}
-          disabled={spawnLoot.isPending}
-          variant="outline"
-          className="border-accent/40 text-accent hover:bg-accent/10 font-display tracking-widest text-xs gap-2"
-        >
-          <RefreshCw className={cn("w-4 h-4", spawnLoot.isPending && "animate-spin")} />
-          SPAWNAR LOOT
-        </Button>
+      {zonePermissions?.canManageZone && <Button
+        data-testid="button-spawn-loot"
+        onClick={() => spawnLoot.mutate()}
+        disabled={spawnLoot.isPending}
+        variant="outline"
+        className="border-accent/40 text-accent hover:bg-accent/10 font-display tracking-widest text-xs gap-2"
+      >
+        <RefreshCw className={cn("w-4 h-4", spawnLoot.isPending && "animate-spin")} />
+        SPAWNAR LOOT
+      </Button>}
       </div>
 
       {/* Eliminated warning */}

@@ -34,13 +34,13 @@ struct FKhaaosEffectSpec
 /**
  * UKhaaosGameplayEffects
  *
- * Central factory for constructing UGameplayEffect CDOs at runtime.
+ * Central factory for constructing transient UGameplayEffect instances at runtime.
  * Each static method builds a fully configured GameplayEffect with
  * correct DurationPolicy, Modifiers, GrantedTags, and StackingType.
  *
  * Usage:
  *   UGameplayEffect* Cooldown = UKhaaosGameplayEffects::CreateCooldownEffect(Tag, 2.0f);
- *   FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(Cooldown->GetClass(), 1.0f, ASC->MakeEffectContext());
+ *   FGameplayEffectSpec Spec(Cooldown, ASC->MakeEffectContext(), 1.0f);
  */
 UCLASS(BlueprintType, Abstract)
 class UKhaaosGameplayEffects : public UObject
@@ -102,14 +102,16 @@ public:
 	 */
 	static UGameplayEffect* CreateDamageEffect(float Damage, FGameplayTag DamageType);
 
-	// ─── Zone Damage (DOT) ────────────────────────────────────────────────────
+	/** Create the persistent Onith passive effect; Reduction is a fraction in [0, 1]. */
+	static UGameplayEffect* CreateOnithPassiveEffect(float Reduction);
+
+	// ─── Instant SafeZone Damage ───────────────────────────────────────────────
 
 	/**
-	 * Create an infinite-duration zone damage effect.
-	 * Applies DamagePerSecond via a periodic modifier.
-	 * Must be removed manually when the player leaves the zone.
+	 * Create a single instant zone-damage hit.
+	 * The authoritative GameMode owns the tick and applies this once per tick.
 	 */
-	static UGameplayEffect* CreateZoneDamageEffect(float DamagePerSecond);
+	static UGameplayEffect* CreateZoneDamageEffect(float DamagePerHit);
 
 private:
 

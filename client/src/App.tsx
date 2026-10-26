@@ -9,6 +9,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { Loader2 } from "lucide-react";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
+const MarshalConsole = lazy(() => import("@/pages/marshal-console"));
 const Bank = lazy(() => import("@/pages/bank"));
 const Inventory = lazy(() => import("@/pages/inventory"));
 const Market = lazy(() => import("@/pages/market"));
@@ -71,6 +72,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/marshal-console">
+        <ProtectedRoute component={MarshalConsole} />
       </Route>
       <Route path="/mundos">
         <ProtectedRoute component={Mundos} />

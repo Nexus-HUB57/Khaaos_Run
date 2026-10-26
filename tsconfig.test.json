@@ -18,7 +18,7 @@
       "@server/*": ["./server/*"],
       "@shared/*": ["./shared/*"]
     },
-    "types": ["vitest/globals"]
+    "types": ["node"]
   },
   "include": [
     "server/**/*.ts",

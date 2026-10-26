@@ -15,6 +15,8 @@
  */
 
 import type { WebSocket } from "ws";
+import type { WorldId } from "./orchestration";
+import { distributedState } from "./DistributedState";
 
 export type QueueMode = "solo" | "duo" | "squad";
 
@@ -23,6 +25,7 @@ export interface QueueEntry {
   displayName: string;
   rating: number;
   mode: QueueMode;
+  worldId: WorldId;
   ws: WebSocket | null;
   enqueuedAt: number;
   /** Expanding half-width of acceptable rating delta */
@@ -63,7 +66,8 @@ export type MatchmakingEvent =
   | { type: "error"; message: string };
 
 type SendFn = (ws: WebSocket, msg: MatchmakingEvent) => void;
-type CreateLobbyFn = (players: { userId: string; displayName: string; rating: number; ws: WebSocket | null }[]) => Promise<string>;
+type MatchPlayer = { userId: string; displayName: string; rating: number; ws: WebSocket | null };
+type CreateLobbyFn = (players: MatchPlayer[], worldId: WorldId) => Promise<string>;
 
 export class MatchmakingService {
   private queue = new Map<string, QueueEntry>();
@@ -84,7 +88,7 @@ export class MatchmakingService {
 
   start() {
     if (this.tickHandle) return;
-    this.tickHandle = setInterval(() => this.tick(), this.config.tickIntervalMs);
+    this.tickHandle = setInterval(() => void this.tickDistributed(), this.config.tickIntervalMs);
     console.log("[Matchmaking] service started");
   }
 
@@ -102,6 +106,7 @@ export class MatchmakingService {
     rating: number,
     ws: WebSocket | null,
     mode: QueueMode = "solo",
+    worldId: WorldId = "CIGKV",
   ) {
     // Leave any previous queue slot
     this.queue.delete(userId);
@@ -111,11 +116,16 @@ export class MatchmakingService {
       displayName,
       rating: rating || 1000,
       mode,
+      worldId,
       ws,
       enqueuedAt: Date.now(),
       currentDelta: this.config.initialDelta,
     };
     this.queue.set(userId, entry);
+    void distributedState.upsertQueueEntry({
+      userId, displayName, rating: entry.rating, mode, worldId: entry.worldId, enqueuedAt: entry.enqueuedAt,
+      currentDelta: entry.currentDelta, nodeId: distributedState.nodeId,
+    });
 
     if (ws) {
       this.send(ws, {
@@ -131,6 +141,7 @@ export class MatchmakingService {
     const entry = this.queue.get(userId);
     if (!entry) return;
     this.queue.delete(userId);
+    void distributedState.removeQueueEntry(userId);
     if (entry.ws) {
       this.send(entry.ws, { type: "queue_left" });
     }
@@ -150,6 +161,16 @@ export class MatchmakingService {
     return this.queue.size;
   }
 
+  getTelemetry(worldId: WorldId, now = Date.now()): { count: number; p95WaitSeconds: number | null } {
+    const waits = [...this.queue.values()]
+      .filter((entry) => entry.worldId === worldId)
+      .map((entry) => Math.max(0, (now - entry.enqueuedAt) / 1000))
+      .sort((a, b) => a - b);
+    if (!waits.length) return { count: 0, p95WaitSeconds: null };
+    const p95 = waits[Math.max(0, Math.ceil(waits.length * 0.95) - 1)];
+    return { count: waits.length, p95WaitSeconds: Math.round(p95 * 10) / 10 };
+  }
+
   getStatus(userId: string) {
     const entry = this.queue.get(userId);
     if (!entry) return null;
@@ -165,6 +186,32 @@ export class MatchmakingService {
   }
 
   // ─── Internals ───────────────────────────────────────────────────────────
+
+  private async tickDistributed(): Promise<void> {
+    const lock = await distributedState.acquireLock("matchmaking:tick", this.config.tickIntervalMs + 1_000);
+    if (!lock) return;
+    try {
+      const remoteEntries = await distributedState.getQueueEntries();
+      for (const remote of remoteEntries) {
+        const existing = this.queue.get(remote.userId);
+        if (!existing) {
+          this.queue.set(remote.userId, {
+            userId: remote.userId,
+            displayName: remote.displayName,
+            rating: remote.rating,
+            mode: remote.mode,
+            worldId: remote.worldId ?? "CIGKV",
+            ws: null,
+            enqueuedAt: remote.enqueuedAt,
+            currentDelta: remote.currentDelta,
+          });
+        }
+      }
+      this.tick();
+    } finally {
+      await distributedState.releaseLock("matchmaking:tick", lock);
+    }
+  }
 
   private positionOf(userId: string): number {
     const ordered = [...this.queue.values()].sort((a, b) => a.enqueuedAt - b.enqueuedAt);
@@ -221,6 +268,7 @@ export class MatchmakingService {
       const candidates = remaining.filter((e) => {
         if (used.has(e.userId)) return false;
         if (e.mode !== seed.mode) return false;
+        if (e.worldId !== seed.worldId) return false;
         // Mutual rating window (both must accept each other)
         const delta = Math.max(seed.currentDelta, e.currentDelta);
         return Math.abs(e.rating - seed.rating) <= delta;
@@ -258,6 +306,7 @@ export class MatchmakingService {
   }
 
   private async formMatch(matched: QueueEntry[]) {
+    await Promise.all(matched.map((entry) => distributedState.removeQueueEntry(entry.userId)));
     const players = matched.map((m) => ({
       userId: m.userId,
       displayName: m.displayName,
@@ -265,7 +314,7 @@ export class MatchmakingService {
       ws: m.ws,
     }));
 
-    const roomId = await this.createLobby(players);
+    const roomId = await this.createLobby(players, matched[0].worldId);
 
     const payload: MatchmakingEvent = {
       type: "match_found",

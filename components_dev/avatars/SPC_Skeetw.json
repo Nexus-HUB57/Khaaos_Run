@@ -1,156 +1,438 @@
 {
   "id": "SPC_Skeetw",
   "name": "Skeetw",
+  "codename": "SKEETW_PHD",
   "type": "avian",
-  "base_health": 80,
-  "base_energy": 120,
-  "base_speed": 1.3,
-  "height_cm": 170,
-  "weight_kg": 55,
-  "skeleton": "SK_Gwen",
-  "passive": "Voo Planado — velocidade +15% após queda",
+  "species_tag": "Species.Skeetw",
+  "lore": {
+    "origin": "Os Skeetw nasceram nos Cumes de Vento de Priadus - picos de 12km onde o ar e tao rarefeito que apenas criaturas com sistema respiratorio quadruplo sobrevivem. Suas asas vestigiais permitem planar por 200m, e sua visao espectral enxerga atraves de camuflagem e ilusoes.",
+    "culture": "Nomades do ceu - vivem em ninhos-cidade suspensos por cabos de Khaael nas falésias de Priadus. Governacao por Consenso de Voo - decisoes tomadas enquanto todos planam em formacao. O conceito de chao e culturalmente inferior.",
+    "motivation": "Dominar o espaco aereo - a verdadeira vantagem tatica. Um Skeetw que nunca toca o chao e considerado imaculado.",
+    "relationship_with_khaaos": "Os Skeetw descobriram que o Pulso Khaaos cria correntes de ar anomales - ventos Khaaos que permitem voo sustentado sem gasto energetico. A exploracao dessas correntes e a ciencia Aerokhaasia."
+  },
+  "base_stats": {
+    "health": 80,
+    "energy": 120,
+    "speed": 1.15,
+    "stamina": 80,
+    "armor_base": 0,
+    "shield_capacity": 0,
+    "regen_health_per_sec": 0.4,
+    "regen_energy_per_sec": 1.5,
+    "regen_stamina_per_sec": 1.5,
+    "crit_chance": 0.08,
+    "crit_multiplier": 1.8
+  },
+  "stat_curves": {
+    "health_per_level": [
+      80,
+      88,
+      97,
+      107,
+      118,
+      131,
+      145,
+      161,
+      179,
+      199
+    ],
+    "energy_per_level": [
+      120,
+      130,
+      141,
+      153,
+      166,
+      181,
+      197,
+      215,
+      234,
+      255
+    ],
+    "speed_per_level": [
+      1.15,
+      1.18,
+      1.21,
+      1.25,
+      1.29,
+      1.34,
+      1.39,
+      1.45,
+      1.52,
+      1.6
+    ]
+  },
+  "physical": {
+    "height_cm": 172,
+    "weight_kg": 55,
+    "skeleton": "SK_Gwen",
+    "morph_targets": [
+      "MT_Skeetw_Slender",
+      "MT_Skeetw_WingSpan",
+      "MT_Skeetw_DiveForm"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 40.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 50.0,
+      "full_body_ik_blend": 0.9
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 2.0,
+      "cloth_damping": 0.15,
+      "cloth_stiffness": 0.4,
+      "loose_parts": [
+        "wing_membrane",
+        "feather_cape",
+        "leg_straps"
+      ]
+    }
+  },
+  "passive": {
+    "name": "Visao Espectral",
+    "description": "Enxerga atraves de camuflagem e fumaca (20m). +10% crit chance em alvos detectados. Gliding: plana 3s apos pulo, -50% fall damage.",
+    "tag": "Ability.Passive.Species.Skeetw.VisaoEspectral",
+    "class": "KhaaosAbility_SkeetwPassive",
+    "mechanics": [
+      {
+        "trigger": "passive",
+        "effect": "see_through_stealth",
+        "value": 20.0
+      },
+      {
+        "trigger": "on_detect_stealthed",
+        "effect": "crit_chance_bonus",
+        "value": 0.1
+      },
+      {
+        "trigger": "on_fall",
+        "effect": "glide",
+        "value": 3.0,
+        "duration": 3.0
+      },
+      {
+        "trigger": "on_landing_after_glide",
+        "effect": "fall_damage_reduction",
+        "value": 0.5
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Mergulho de Predador",
+      "tag": "Ability.Active.Skeetw.DiveAttack",
+      "cooldown": 10.0,
+      "energy_cost": 30,
+      "duration": 0.0,
+      "description": "Dive bomb - 70 dano area 5m. +50% dano acima 20m altitude.",
+      "vfx": "VFX_Skeetw_DiveAttack",
+      "sfx": "SFX_Skeetw_DiveAttack"
+    },
+    {
+      "name": "Corrente Khaaos",
+      "tag": "Ability.Active.Skeetw.KhaaosWind",
+      "cooldown": 20.0,
+      "energy_cost": 40,
+      "duration": 6.0,
+      "description": "+30% speed + flight sustentado 6s.",
+      "vfx": "VFX_Skeetw_KhaaosWind",
+      "sfx": "SFX_Skeetw_KhaaosWind"
+    },
+    {
+      "name": "Tempestade Espectral",
+      "tag": "Ability.Active.Skeetw.SpectralStorm",
+      "cooldown": 50.0,
+      "energy_cost": 50,
+      "duration": 8.0,
+      "description": "Ultimate: Tempestade 15m - inimigos revealed, -20% speed, 15 dano/s 8s.",
+      "vfx": "VFX_Skeetw_SpectralStorm",
+      "sfx": "SFX_Skeetw_SpectralStorm"
+    }
+  ],
   "skins": [
     {
       "id": "SKN_Skeetw_Recruta",
-      "name": "Recruta",
+      "name": "Recruta Alado",
       "rarity": "COMUM",
       "color_primary": "#06B6D4",
-      "color_accent": "#A5F3FC",
-      "unlock_rank": "RECRUTA"
+      "color_secondary": "#164E63",
+      "color_accent": "#67E8F9",
+      "color_emissive": "#000000",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Penas ciano naturais de Priadus."
     },
     {
       "id": "SKN_Skeetw_Veterano",
-      "name": "Veterano",
+      "name": "Veterano dos Cumes",
       "rarity": "RARO",
       "color_primary": "#0891B2",
-      "color_accent": "#67E8F9",
-      "unlock_rank": "HURAN"
+      "color_secondary": "#155E75",
+      "color_accent": "#A5F3FC",
+      "color_emissive": "#06B6D4",
+      "material_override": "MAT_Skeetw_Veterano_WindEtched",
+      "unlock_rank": "HURAN",
+      "description": "Penas esculpidas pelo vento - padrao aerodinamico."
     },
     {
       "id": "SKN_Skeetw_CIGKV_Elite",
-      "name": "CIGKV Elite",
+      "name": "CIGKV Elite Alado",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
+      "color_secondary": "#4C1D95",
       "color_accent": "#C4B5FD",
-      "unlock_rank": "VENEX"
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Skeetw_Elite_SpectralFeather",
+      "unlock_rank": "VENEX",
+      "description": "Penas spectrais que emitem luz propria."
     },
     {
       "id": "SKN_Skeetw_Guarda_Overlord",
-      "name": "Guarda Overlord",
+      "name": "Guarda Overlord Celestial",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Skeetw_Overlord_SolarPlume",
+      "unlock_rank": "ONITH",
+      "description": "Plumas solares - energia estelar capturada."
     },
     {
       "id": "SKN_Skeetw_Khaaos_Prime",
-      "name": "Khaaos Prime",
+      "name": "Asa Khaael",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Skeetw_KhaaosPrime_VoidWing",
+      "unlock_rank": "MALAKOR",
+      "description": "Asas do vazio - tecido interdimensional substitui penas."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Skeetw_01",
-      "name": "idle",
-      "skeleton": "SK_Gwen"
+  "animations": {
+    "base_skeleton": "SK_Gwen",
+    "blend_spaces": [
+      {
+        "id": "BS_Skeetw_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Skeetw_AimOffset",
+        "type": "1D",
+        "axes": [
+          "Pitch"
+        ],
+        "samples": 7
+      },
+      {
+        "id": "BS_Skeetw_Glide",
+        "type": "1D",
+        "axes": [
+          "DescentRate"
+        ],
+        "samples": 5
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Skeetw_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_glide_idle",
+        "name": "glide_idle",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Skeetw_glide_dive",
+        "name": "glide_dive",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_glide_land",
+        "name": "glide_land",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_dive_attack",
+        "name": "dive_attack",
+        "duration": 0.8,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_khaaos_wind",
+        "name": "khaaos_wind",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Skeetw_spectral_storm",
+        "name": "spectral_storm",
+        "duration": 1.8,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Metal_Light",
+      "dirt": "SFX_FStep_Dirt_Light",
+      "concrete": "SFX_FStep_Concrete_Light",
+      "water": "SFX_FStep_Air"
     },
-    {
-      "id": "ANM_SPC_Skeetw_02",
-      "name": "walk",
-      "skeleton": "SK_Gwen"
+    "voice_lines": {
+      "eliminate": "VO_Skeetw_Elim",
+      "eliminated": "VO_Skeetw_Down",
+      "revive": "VO_Skeetw_Revive",
+      "ultimate": "VO_Skeetw_Ult"
     },
-    {
-      "id": "ANM_SPC_Skeetw_03",
-      "name": "run",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_04",
-      "name": "sprint",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_05",
-      "name": "slide",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_06",
-      "name": "jump_start",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_08",
-      "name": "jump_land",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_12",
-      "name": "reload",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_13",
-      "name": "melee",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_14",
-      "name": "downed",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_15",
-      "name": "eliminated",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_16",
-      "name": "revive",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_19",
-      "name": "heal_use",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Skeetw_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Gwen"
-    }
-  ]
+    "ambient_emitter": "SFX_Skeetw_Ambient_WindWhisper"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Skeetw_SpectralEyes",
+    "ability_1": "VFX_Skeetw_DiveAttack",
+    "ability_2": "VFX_Skeetw_KhaaosWind",
+    "ultimate": "VFX_Skeetw_SpectralStorm",
+    "death": "VFX_Skeetw_DeathFeatherBurst",
+    "spawn": "VFX_Skeetw_SpawnPriadus"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

@@ -1,156 +1,407 @@
 {
   "id": "SPC_Onith",
   "name": "Onith",
+  "codename": "ONITH_PHD",
   "type": "reptile",
-  "base_health": 120,
-  "base_energy": 80,
-  "base_speed": 0.9,
-  "height_cm": 190,
-  "weight_kg": 95,
-  "skeleton": "SK_Manny",
-  "passive": "Escamas Refletivas — +15% defesa contra projéteis",
+  "species_tag": "Species.Onith",
+  "lore": {
+    "origin": "Os Onith emergiram dos Pantanos de Onith-Kar no mundo de Ckesalth ha 4.800 ciclos. Evoluíram de predadores escamados que cacavam nas termicas vulcanicas - suas escamas refletem projeites como armadura natural. Quando os colonizadores Zheers chegaram a Ckesalth, os Onith ja haviam desenvolvido civilizacao baseada em rituais de sobrevivencia extremos.",
+    "culture": "Sociedade clanica regida pela Lei do Sangue Quente. Cada cla e liderado por um Matriarca que provou superioridade em combate ritual. Os jovens devem sobreviver ao Rito da Escama - 7 dias nas Geysers de Ckesalth sem armas.",
+    "motivation": "Provar que forca bruta e resiliencia natural superam qualquer tecnologia. Cada Onith busca eliminacoes para fortalecer o cla e evoluir escamas - cada eliminacao fortalece temporariamente a armadura natural.",
+    "relationship_with_khaaos": "Os Onith foram os ultimos a aceitar o Pulso Khaaos. Mas quando um Matriarca sobreviveu dentro de um Pulso por 90 segundos, as escamas absorveram energia Khaaos, criando a primeira Escama Khaael."
+  },
+  "base_stats": {
+    "health": 120,
+    "energy": 80,
+    "speed": 0.9,
+    "stamina": 130,
+    "armor_base": 15,
+    "shield_capacity": 0,
+    "regen_health_per_sec": 0.8,
+    "regen_energy_per_sec": 0.6,
+    "regen_stamina_per_sec": 2.5,
+    "crit_chance": 0.03,
+    "crit_multiplier": 1.3
+  },
+  "stat_curves": {
+    "health_per_level": [
+      120,
+      135,
+      152,
+      172,
+      195,
+      222,
+      253,
+      288,
+      328,
+      375
+    ],
+    "energy_per_level": [
+      80,
+      86,
+      93,
+      101,
+      110,
+      120,
+      131,
+      143,
+      156,
+      170
+    ],
+    "speed_per_level": [
+      0.9,
+      0.92,
+      0.94,
+      0.97,
+      1.0,
+      1.03,
+      1.07,
+      1.11,
+      1.16,
+      1.22
+    ]
+  },
+  "physical": {
+    "height_cm": 190,
+    "weight_kg": 95,
+    "skeleton": "SK_Manny",
+    "morph_targets": [
+      "MT_Onith_Bulked",
+      "MT_Onith_Armored",
+      "MT_Onith_Sleek"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 55.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 45.0,
+      "full_body_ik_blend": 0.7
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 0.5,
+      "cloth_damping": 0.5,
+      "cloth_stiffness": 0.9,
+      "loose_parts": [
+        "tail_sheathe",
+        "shoulder_spikes"
+      ]
+    }
+  },
+  "passive": {
+    "name": "Escamas Refletivas",
+    "description": "+20% defesa contra projeites. Apos dano, +5% armadura por 5s (stack 3x). Eliminacoes concedem +3% armadura permanente.",
+    "tag": "Ability.Passive.Species.Onith.EscamasRefletivas",
+    "class": "KhaaosAbility_OnithPassive",
+    "mechanics": [
+      {
+        "trigger": "on_hit_projectile",
+        "effect": "damage_reduction",
+        "value": 0.2
+      },
+      {
+        "trigger": "on_damage_taken",
+        "effect": "armor_stack",
+        "value": 0.05,
+        "duration": 5.0,
+        "max_stacks": 3
+      },
+      {
+        "trigger": "on_elimination",
+        "effect": "armor_permanent",
+        "value": 0.03
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Golpe Escamoso",
+      "tag": "Ability.Active.Onith.GolpeEscamoso",
+      "cooldown": 6.0,
+      "energy_cost": 20,
+      "duration": 0.0,
+      "description": "Ataque melee 80 dano + knockback 5m.",
+      "vfx": "VFX_Onith_ScaleStrike",
+      "sfx": "SFX_Onith_ScaleStrike"
+    },
+    {
+      "name": "Armadura Termal",
+      "tag": "Ability.Active.Onith.ArmaduraTermal",
+      "cooldown": 18.0,
+      "energy_cost": 35,
+      "duration": 8.0,
+      "description": "+30 armadura + 3HP/s regen por 8s.",
+      "vfx": "VFX_Onith_ThermalArmor",
+      "sfx": "SFX_Onith_ThermalArmor"
+    },
+    {
+      "name": "Furia do Matriarca",
+      "tag": "Ability.Active.Onith.FuriaMatriarca",
+      "cooldown": 55.0,
+      "energy_cost": 55,
+      "duration": 12.0,
+      "description": "Ultimate: +40% dano, +20% speed, imunidade CC 12s.",
+      "vfx": "VFX_Onith_MatriarchFury",
+      "sfx": "SFX_Onith_MatriarchFury"
+    }
+  ],
   "skins": [
     {
       "id": "SKN_Onith_Recruta",
-      "name": "Recruta",
+      "name": "Recruta Escamoso",
       "rarity": "COMUM",
       "color_primary": "#22C55E",
+      "color_secondary": "#14532D",
       "color_accent": "#86EFAC",
-      "unlock_rank": "RECRUTA"
+      "color_emissive": "#000000",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Escamas verdes naturais de Ckesalth."
     },
     {
       "id": "SKN_Onith_Veterano",
-      "name": "Veterano",
+      "name": "Veterano Termal",
       "rarity": "RARO",
       "color_primary": "#16A34A",
+      "color_secondary": "#064E3B",
       "color_accent": "#BBF7D0",
-      "unlock_rank": "HURAN"
+      "color_emissive": "#059669",
+      "material_override": "MAT_Onith_Veterano_HeatTreated",
+      "unlock_rank": "HURAN",
+      "description": "Escamas tratadas termalmente - padrao de calor visivel."
     },
     {
       "id": "SKN_Onith_CIGKV_Elite",
-      "name": "CIGKV Elite",
+      "name": "CIGKV Elite Reptiliano",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
+      "color_secondary": "#4C1D95",
       "color_accent": "#C4B5FD",
-      "unlock_rank": "VENEX"
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Onith_Elite_BioLuminescent",
+      "unlock_rank": "VENEX",
+      "description": "Escamas bioluminescentes com pulso ritmico."
     },
     {
       "id": "SKN_Onith_Guarda_Overlord",
-      "name": "Guarda Overlord",
+      "name": "Guarda Overlord Escamoso",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Onith_Overlord_MagmaForged",
+      "unlock_rank": "ONITH",
+      "description": "Escamas forjadas em magma - veias de lava visiveis."
     },
     {
       "id": "SKN_Onith_Khaaos_Prime",
-      "name": "Khaaos Prime",
+      "name": "Escama Khaael",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Onith_KhaaosPrime_LivingScale",
+      "unlock_rank": "MALAKOR",
+      "description": "Escamas absorveram Pulso Khaaos - semi-vivas. Distorcao espacial."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Onith_01",
-      "name": "idle",
-      "skeleton": "SK_Manny"
+  "animations": {
+    "base_skeleton": "SK_Manny",
+    "blend_spaces": [
+      {
+        "id": "BS_Onith_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Onith_AimOffset",
+        "type": "1D",
+        "axes": [
+          "Pitch"
+        ],
+        "samples": 7
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Onith_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Onith_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_scale_strike",
+        "name": "scale_strike",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_thermal_armor",
+        "name": "thermal_armor",
+        "duration": 0.8,
+        "loop": false
+      },
+      {
+        "id": "ANM_Onith_matriarch_fury",
+        "name": "matriarch_fury",
+        "duration": 1.5,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Metal_Heavy",
+      "dirt": "SFX_FStep_Dirt_Heavy",
+      "concrete": "SFX_FStep_Concrete_Heavy",
+      "water": "SFX_FStep_Water_Splash"
     },
-    {
-      "id": "ANM_SPC_Onith_02",
-      "name": "walk",
-      "skeleton": "SK_Manny"
+    "voice_lines": {
+      "eliminate": "VO_Onith_Elim",
+      "eliminated": "VO_Onith_Down",
+      "revive": "VO_Onith_Revive",
+      "ultimate": "VO_Onith_Ult"
     },
-    {
-      "id": "ANM_SPC_Onith_03",
-      "name": "run",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_04",
-      "name": "sprint",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_05",
-      "name": "slide",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_06",
-      "name": "jump_start",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_08",
-      "name": "jump_land",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_12",
-      "name": "reload",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_13",
-      "name": "melee",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_14",
-      "name": "downed",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_15",
-      "name": "eliminated",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_16",
-      "name": "revive",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_19",
-      "name": "heal_use",
-      "skeleton": "SK_Manny"
-    },
-    {
-      "id": "ANM_SPC_Onith_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Manny"
-    }
-  ]
+    "ambient_emitter": "SFX_Onith_Ambient_ScaleRattle"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Onith_ScaleGlint",
+    "ability_1": "VFX_Onith_ScaleStrike",
+    "ability_2": "VFX_Onith_ThermalArmor",
+    "ultimate": "VFX_Onith_MatriarchFury",
+    "death": "VFX_Onith_DeathShatter",
+    "spawn": "VFX_Onith_SpawnCkesalth"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

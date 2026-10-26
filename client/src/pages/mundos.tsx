@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { CyberCard } from "@/components/cyber-card";
 import { cn } from "@/lib/utils";
+import { KHAAOS_WORLDS, WORLD_ORDER, type WorldId } from "@shared/worlds";
 import {
   Sword, Shield, TreePine, Target, Truck, Zap, Clock, Users, Map,
   ChevronDown, ChevronUp, AlertTriangle, Star, Trophy, Radio,
-  Flame, Skull, Wind, CloudLightning, Droplets, Package
+  Flame, Skull, Wind, CloudLightning, Droplets, Package, Globe2, MapPin, ShieldAlert
 } from "lucide-react";
 
 /* ─── DATA ──────────────────────────────────────────────────────── */
@@ -69,9 +70,9 @@ const ZU_MODES = [
     id: 1,
     title: "Zu 1 — Colisão com a Manada",
     question: "Risco de Colisão — Apertar os Cintos? S/N",
-    desc: "O caminhão perde o controle ao atropelar uma manada de bois. Quem está com o cinto apertado não sofre danos. Os demais sofrem dano conforme o impacto.",
+    desc: "O caminhão perde o controle ao atropelar uma manada de bois. Escolha apertar o cinto ou continuar sem cinto.",
     loot: ["20× Facas", "10× Pistola 9MM", "20× Munições 9MM", "20× Kits de Primeiros Socorros", "5× Fuzil Barrett MRAD (MK22)", "20× Munições Barrett"],
-    choice: { safe: "Apertar o Cinto", risk: "Ficar Solto", safePenalty: "5–7s para se soltar após colisão", riskPenalty: "Até -30% Vitalidade" },
+    choice: { safe: "Apertar o Cinto", risk: "Ficar Solto", safeOutcome: "0% de dano na entrada", unsafeOutcome: "30% da vida máxima" },
     icon: Truck,
     color: "text-amber-400",
     border: "border-amber-500/30",
@@ -81,9 +82,9 @@ const ZU_MODES = [
     id: 2,
     title: "Zu 2 — Desmoronamento",
     question: "Alto Risco de Desmoronamento — Saltar do Caminhão? S/N",
-    desc: "Uma rocha gigante atinge o caminhão fazendo-o capotar diversas vezes. Quem salta não sofre danos. Os demais sofrem dano conforme o impacto.",
+    desc: "Uma rocha gigante atinge o caminhão, que capota. Escolha saltar ou permanecer dentro.",
     loot: ["15× Granadas", "10× SMG", "30× Munições SMG", "10× Kits Médicos", "3× Sniper L115A3", "15× Munições Sniper"],
-    choice: { safe: "Saltar do Caminhão", risk: "Permanecer Dentro", safePenalty: "Queda livre — risco de posição", riskPenalty: "Dano por capotagem" },
+    choice: { safe: "Saltar do Caminhão", risk: "Permanecer Dentro", safeOutcome: "0% de dano na entrada", unsafeOutcome: "25% da vida máxima" },
     icon: AlertTriangle,
     color: "text-orange-400",
     border: "border-orange-500/30",
@@ -93,9 +94,9 @@ const ZU_MODES = [
     id: 3,
     title: "Zu 3 — Queda na Ponte",
     question: "Ponte com Trilho Quebrado — Usar Máscara de Oxigênio? S/N",
-    desc: "O caminhão cai da ponte devido ao trilho quebrado e submerge na água. Quem usa máscara de oxigênio não sofre danos. Os demais sofrem dano conforme o tempo submersos.",
+    desc: "O caminhão cai da ponte devido ao trilho quebrado e submerge na água. Escolha usar máscara de oxigênio ou continuar sem máscara.",
     loot: ["10× Facas de Combate", "8× Pistola .44 Magnum", "25× Munições .44", "15× Antídotos", "2× Rifle Anti-Material", "10× Munições Anti-Material"],
-    choice: { safe: "Usar Máscara O₂", risk: "Sem Máscara", safePenalty: "Nenhum dano inicial", riskPenalty: "Dano por tempo submerso" },
+    choice: { safe: "Usar Máscara O₂", risk: "Sem Máscara", safeOutcome: "0% de dano na entrada", unsafeOutcome: "30% da vida máxima" },
     icon: Droplets,
     color: "text-blue-400",
     border: "border-blue-500/30",
@@ -147,6 +148,8 @@ const PULSO_EVENTS = [
 
 export default function Mundos() {
   const [expandedZu, setExpandedZu] = useState<number | null>(null);
+  const [selectedWorld, setSelectedWorld] = useState<WorldId>("CIGKV");
+  const world = KHAAOS_WORLDS[selectedWorld];
 
   return (
     <div className="space-y-10 pb-8">
@@ -171,6 +174,63 @@ export default function Mundos() {
             <Stat icon={Clock} label="Duração do Ring" value="3h" />
             <Stat icon={Map} label="Zonas ZEX" value="15" />
             <Stat icon={Zap} label="Pulso Khaaos" value="10min" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── ATLAS MULTI-MUNDO ── */}
+      <div>
+        <SectionHeader label="ATLAS MULTI-MUNDO" sub="CONTRATO CANÔNICO · CIGKV → W4/C4" />
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {WORLD_ORDER.map((id) => {
+              const item = KHAAOS_WORLDS[id];
+              const active = id === selectedWorld;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSelectedWorld(id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "min-h-[132px] border p-3 text-left transition-all hover:-translate-y-0.5",
+                    active ? "border-primary bg-primary/10 shadow-[0_0_20px_-8px_rgba(255,120,40,0.8)]" : "border-border/40 bg-black/30 hover:border-primary/50",
+                  )}
+                  style={active ? { borderColor: item.accentColor } : undefined}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Globe2 className="h-4 w-4" style={{ color: item.accentColor }} aria-hidden="true" />
+                    <span className="font-mono text-[10px] text-muted-foreground">{id === "CIGKV" ? "TREINO" : `W${item.order}/C${item.order}`}</span>
+                  </div>
+                  <p className="mt-4 font-display text-sm font-black tracking-widest text-foreground">{item.name}</p>
+                  <p className="mt-1 line-clamp-2 font-mono text-[10px] leading-relaxed text-muted-foreground">{item.biome}</p>
+                </button>
+              );
+            })}
+          </div>
+          <div className="border border-border/40 bg-black/40 p-5" style={{ boxShadow: `inset 3px 0 0 ${world.accentColor}` }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.25em] text-muted-foreground">BRIEFING DO MUNDO {world.order}</p>
+                <h2 className="mt-1 font-display text-2xl font-black tracking-widest" style={{ color: world.accentColor }}>{world.name}</h2>
+              </div>
+              <ShieldAlert className="h-7 w-7" style={{ color: world.accentColor }} aria-hidden="true" />
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{world.subtitle}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-[10px]">
+              <WorldMetric label="CAPACIDADE" value={world.recommendedPlayers} />
+              <WorldMetric label="DURAÇÃO-ALVO" value={`${world.targetDurationMinutes} min`} />
+              <WorldMetric label="ESCALA" value={world.dimensionsKm} />
+              <WorldMetric label="ZEX" value={`${world.zexNodes.length} nós`} />
+            </div>
+            <div className="mt-4 border-t border-border/30 pt-4">
+              <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-foreground">
+                <MapPin className="h-3.5 w-3.5" style={{ color: world.accentColor }} aria-hidden="true" />
+                {world.pois.slice(0, 3).map((poi) => poi.name).join(" · ")}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground"><span className="text-foreground">Ameaça:</span> {world.hazard.name}. {world.hazard.counterplay}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground"><span className="text-foreground">Acesso:</span> {world.unlockRule.description}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -243,6 +303,21 @@ export default function Mundos() {
       {/* ── ZU — ENTRY MODES ── */}
       <div>
         <SectionHeader label="ZU — ENTRADA PARA O RING" sub="3 FORMATOS DE INGRESSO AO CIGKV" />
+        <div
+          role="note"
+          aria-label="Prazo e consequência da decisão de entrada"
+          className="mt-4 flex items-start gap-3 border border-amber-500/30 bg-amber-500/5 p-4"
+        >
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+          <div>
+            <p className="font-mono text-xs font-bold tracking-widest text-amber-300">
+              6 SEGUNDOS PARA DECIDIR APÓS A CINEMÁTICA
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Sem resposta no prazo, vale a opção arriscada. Os cards mostram o dano inicial aplicado pelo servidor em cada variante.
+            </p>
+          </div>
+        </div>
         <div className="mt-4 space-y-4">
           {ZU_MODES.map(zu => (
             <ZuCard key={zu.id} zu={zu} expanded={expandedZu === zu.id} onToggle={() => setExpandedZu(expandedZu === zu.id ? null : zu.id)} />
@@ -356,6 +431,15 @@ function Stat({ icon: Icon, label, value }: { icon: any; label: string; value: s
   );
 }
 
+function WorldMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-border/30 bg-black/30 p-2">
+      <p className="text-[9px] tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-[11px] font-bold text-foreground" title={value}>{value}</p>
+    </div>
+  );
+}
+
 function EnvironmentCard({ env }: { env: typeof ENVIRONMENTS[0] }) {
   return (
     <div className={cn("p-4 border-2 bg-black/30 hover:bg-black/50 transition-all group", env.borderColor)}
@@ -387,6 +471,8 @@ function ZuCard({ zu, expanded, onToggle }: { zu: typeof ZU_MODES[0]; expanded: 
       <button
         className="w-full p-5 flex items-center justify-between gap-4 text-left"
         onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={`zu-details-${zu.id}`}
         data-testid={`button-zu-${zu.id}`}
       >
         <div className="flex items-center gap-4">
@@ -400,20 +486,20 @@ function ZuCard({ zu, expanded, onToggle }: { zu: typeof ZU_MODES[0]; expanded: 
       </button>
 
       {expanded && (
-        <div className="px-5 pb-5 space-y-5 border-t border-border/30 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div id={`zu-details-${zu.id}`} className="px-5 pb-5 space-y-5 border-t border-border/30 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
           <p className="text-sm font-body text-muted-foreground leading-relaxed">{zu.desc}</p>
 
           {/* Choice Matrix */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="p-3 border border-green-500/30 bg-green-500/5">
               <p className="text-[10px] font-mono text-green-400 tracking-widest mb-1">ESCOLHA SEGURA</p>
               <p className="text-sm font-display font-bold text-foreground">{zu.choice.safe}</p>
-              <p className="text-[11px] font-mono text-muted-foreground mt-2">{zu.choice.safePenalty}</p>
+              <p className="text-[11px] font-mono text-muted-foreground mt-2">{zu.choice.safeOutcome}</p>
             </div>
             <div className="p-3 border border-red-500/30 bg-red-500/5">
               <p className="text-[10px] font-mono text-destructive tracking-widest mb-1">ESCOLHA ARRISCADA</p>
               <p className="text-sm font-display font-bold text-foreground">{zu.choice.risk}</p>
-              <p className="text-[11px] font-mono text-muted-foreground mt-2">{zu.choice.riskPenalty}</p>
+              <p className="text-[11px] font-mono text-muted-foreground mt-2">{zu.choice.unsafeOutcome}</p>
             </div>
           </div>
 

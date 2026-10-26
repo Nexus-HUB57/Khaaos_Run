@@ -1,6 +1,6 @@
 {
   "name": "khaaos-run",
-  "version": "0.4.0",
+  "version": "0.15.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,25 @@
     "test": "node --test test/*.test.js",
     "test:stress": "node --test test/stress.test.js",
     "test:infra": "node --test test/infrastructure.test.js",
+    "test:economy": "node --test test/economy.test.js",
     "server": "node server/server.js",
+    "db:migrate": "node scripts/migrate.js",
+    "test:real": "node --test test/real-adapters.test.js",
+    "test:resilience": "node --test test/real-resilience.test.js",
+    "test:multiinstance": "node --test test/multiinstance.test.js",
+    "test:faults": "node --test test/fault-injection.test.js",
+    "test:soak": "node --test test/soak.test.js",
+    "coverage": "c8 --all --include='server/**/*.js' --include='src/**/*.js' --exclude='test/**' --exclude='scripts/**' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage npm test",
     "preview": "vite preview --host 0.0.0.0"
   },
-  "dependencies": { "ws": "^8.18.0" },
-  "devDependencies": { "vite": "^6.1.0" }
+  "dependencies": {
+    "pg": "^8.16.3",
+    "redis": "^5.12.1",
+    "three": "^0.169.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "c8": "^12.0.0",
+    "vite": "^6.1.0"
+  }
 }

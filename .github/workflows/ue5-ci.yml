@@ -9,11 +9,19 @@ on:
     branches: [main, 'feat/ue5-*']
     paths:
       - 'Unreal/**'
+      - 'tests/ue5/**'
+      - 'scripts/test_ue5_logic.sh'
+      - 'scripts/verify-all.mjs'
+      - 'package.json'
       - '.github/workflows/ue5-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'Unreal/**'
+      - 'tests/ue5/**'
+      - 'scripts/test_ue5_logic.sh'
+      - 'scripts/verify-all.mjs'
+      - 'package.json'
       - '.github/workflows/ue5-ci.yml'
 
 permissions:
@@ -119,9 +127,9 @@ jobs:
               echo "::warning::$hdr missing #pragma once"
             fi
 
-            # Check for UCLASS/USTRUCT/UENUM without generated_body
-            if grep -q "UCLASS\|USTRUCT\|UENUM" "$hdr" && ! grep -q "GENERATED_BODY\|GENERATED_UCLASS_BODY\|GENERATED_USTRUCT_BODY" "$hdr"; then
-              echo "::error::$hdr has UE5 macro without GENERATED_BODY"
+            # UCLASS and USTRUCT require a generated body; UENUM does not.
+            if grep -q "UCLASS\|USTRUCT" "$hdr" && ! grep -q "GENERATED_BODY\|GENERATED_UCLASS_BODY\|GENERATED_USTRUCT_BODY" "$hdr"; then
+              echo "::error::$hdr has UCLASS/USTRUCT without a generated body"
               ERRORS=$((ERRORS + 1))
             fi
 
@@ -203,7 +211,21 @@ jobs:
           echo "✅ No merge conflict markers found"
 
   # ---------------------------------------------------------------------------
-  # Job 4: Security scan for hardcoded credentials
+  # Job 4: Execute portable CIGKV gameplay rules without a UE installation
+  # ---------------------------------------------------------------------------
+  test-cigkv-loot-rules:
+    name: Test CIGKV Loot Rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile and run MinPhase and rarity tests
+        run: bash scripts/test_ue5_logic.sh
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Security scan for hardcoded credentials
   # ---------------------------------------------------------------------------
   security-scan:
     name: Security Scan

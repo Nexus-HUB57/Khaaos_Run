@@ -3,27 +3,20 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - 'game-runtime/**'
-      - 'infra/**'
-      - 'docker-compose*.yml'
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: "Target environment"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - staging
           - production
       region:
-        description: 'Target region (all for multi-region)'
+        description: "Target region (all for multi-region)"
         required: false
-        default: 'all'
+        default: "all"
         type: choice
         options:
           - all
@@ -31,14 +24,14 @@ on:
           - na1
           - eu1
       rolling:
-        description: 'Rolling deployment'
+        description: "Rolling deployment"
         required: false
         default: false
         type: boolean
 
 concurrency:
   group: deploy-${{ github.event.inputs.environment || 'staging' }}
-  cancel-in-progress: false  # Never cancel deployments
+  cancel-in-progress: false # Never cancel deployments
 
 env:
   REGISTRY: ghcr.io
@@ -120,7 +113,7 @@ jobs:
       - name: Build Server Image
         uses: docker/build-push-action@v5
         with:
-          context: ./server
+          context: .
           file: ./server/Dockerfile
           push: true
           tags: |
@@ -153,13 +146,12 @@ jobs:
 
       - name: Deploy via Render
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_API_KEY: ${{ secrets.API_KEY_RENDER }}
+          RENDER_SERVICE_ID: srv-db6183o473hc73co8n10
         run: |
           if [ -z "$RENDER_API_KEY" ]; then
-            echo "⚠️  RENDER_API_KEY not configured — skipping Render deploy"
-            echo "    Configure via: https://dashboard.render.com/account/api-keys"
-            exit 0
+            echo "::error::Missing GitHub Actions secret API_KEY_RENDER"
+            exit 1
           fi
 
           echo "=== Deploying to Render Staging ==="
@@ -169,7 +161,11 @@ jobs:
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json")
 
-          echo "Deploy trigger: HTTP $HTTP_CODE"
+          if [[ ! "$HTTP_CODE" =~ ^2[0-9]{2}$ ]]; then
+            echo "::error::Render deploy trigger failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Render accepted staging deploy (HTTP $HTTP_CODE)"
 
       - name: Health Check
         run: |
@@ -283,7 +279,7 @@ jobs:
             -d '{
               "embeds": [{
                 "title": "🚀 Deploy Successful",
-                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "description": "Environment: ${{ inputs.environment }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "color": 3066993
               }]
             }' || true
@@ -296,7 +292,7 @@ jobs:
             -d '{
               "embeds": [{
                 "title": "❌ Deploy Failed",
-                "description": "Environment: ${{ github.event.inputs.environment || '\''staging'\'' }\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "description": "Environment: ${{ inputs.environment }}\nCommit: ${{ github.sha }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                 "color": 15158332
               }]
             }' || true

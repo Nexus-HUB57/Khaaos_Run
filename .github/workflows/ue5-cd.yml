@@ -184,10 +184,13 @@ jobs:
           if [[ -n "$DISCORD_WEBHOOK_URL" ]]; then
             message="Imagem do servidor de ${REPOSITORY} publicada (commit ${COMMIT:0:7}). Tags: ${IMAGE_TAGS}"
             payload=$(jq -n --arg content "$message" '{content: $content}')
-            curl --fail --silent --show-error --max-time 15 \
+            if curl --fail --silent --show-error --max-time 15 \
               -H 'Content-Type: application/json' \
-              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null
-            echo "Notification sent"
+              -d "$payload" "$DISCORD_WEBHOOK_URL" >/dev/null; then
+              echo "Notification sent"
+            else
+              echo "::warning::Discord notification failed; the GHCR image was already published."
+            fi
           else
             echo "No Discord webhook configured; skipping notification"
           fi

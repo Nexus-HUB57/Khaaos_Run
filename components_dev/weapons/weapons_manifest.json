@@ -1,84 +1,95 @@
 {
-  "manifest_version": "1.0.0",
-  "generated_at": "2026-10-13T01:07:39.821254+00:00",
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-15T00:55:55.789010+00:00",
   "weapon_count": 11,
   "weapons": [
     {
       "id": "WPN_Pistol_Onith",
-      "name": "Pistol Onith",
+      "name": "Pistol Onith MK-IV",
       "slot": "SECONDARY",
       "category": "PISTOL",
-      "rarity": "RARO"
+      "rarity": "COMUM",
+      "fire_mode": "Semi"
     },
     {
       "id": "WPN_SMG_Huran",
-      "name": "SMG Huran",
-      "slot": "PRIMARY",
+      "name": "SMG Huran PDW-9",
+      "slot": "SECONDARY",
       "category": "SMG",
-      "rarity": "RARO"
+      "rarity": "RARO",
+      "fire_mode": "Auto"
     },
     {
       "id": "WPN_AssaultRifle_MK1",
-      "name": "Assault Rifle MK1",
+      "name": "Assault Rifle MK1-F",
       "slot": "PRIMARY",
       "category": "ASSAULT_RIFLE",
-      "rarity": "RARO"
+      "rarity": "RARO",
+      "fire_mode": "Auto"
     },
     {
       "id": "WPN_Carbine_Venex",
-      "name": "Carbine Venex",
+      "name": "Carbine Venex CR-7",
       "slot": "PRIMARY",
       "category": "CARBINE",
-      "rarity": "RARO"
+      "rarity": "RARO",
+      "fire_mode": "Auto"
     },
     {
       "id": "WPN_Sniper_DMR",
-      "name": "Sniper DMR",
+      "name": "Sniper Khaaos SRS-1",
       "slot": "PRIMARY",
       "category": "SNIPER",
-      "rarity": "EPICO"
+      "rarity": "EPICO",
+      "fire_mode": "Semi"
     },
     {
       "id": "WPN_DMR_Khael",
-      "name": "DMR Khael",
+      "name": "DMR Khael MR-12",
       "slot": "PRIMARY",
       "category": "DMR",
-      "rarity": "EPICO"
+      "rarity": "EPICO",
+      "fire_mode": "Semi"
     },
     {
       "id": "WPN_Shotgun_Breach",
-      "name": "Shotgun Breach",
+      "name": "Shotgun Breach SG-12",
       "slot": "PRIMARY",
       "category": "SHOTGUN",
-      "rarity": "RARO"
+      "rarity": "RARO",
+      "fire_mode": "Semi"
     },
     {
       "id": "WPN_LMG_Skeetw",
-      "name": "LMG Skeetw",
+      "name": "LMG Skeetw MG-6",
       "slot": "PRIMARY",
       "category": "LMG",
-      "rarity": "EPICO"
+      "rarity": "EPICO",
+      "fire_mode": "Auto"
     },
     {
       "id": "WPN_Knife_Combat",
-      "name": "Knife Combat",
+      "name": "Faca de Combate K-7",
       "slot": "MELEE",
-      "category": "KNIFE",
-      "rarity": "COMUM"
+      "category": "MELEE",
+      "rarity": "COMUM",
+      "fire_mode": "Melee"
     },
     {
       "id": "WPN_Espada_Overlord",
       "name": "Espada Overlord",
       "slot": "MELEE",
-      "category": "SWORD",
-      "rarity": "LENDARIO"
+      "category": "MELEE",
+      "rarity": "LENDARIO",
+      "fire_mode": "Melee"
     },
     {
       "id": "WPN_Canhao_KhaaosPrime",
-      "name": "Canhão Khaaos Prime",
+      "name": "Canhao Khaaos Prime",
       "slot": "PRIMARY",
       "category": "EXOTIC",
-      "rarity": "MITICO"
+      "rarity": "MITICO",
+      "fire_mode": "Charge"
     }
   ]
 }

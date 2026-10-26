@@ -1,156 +1,429 @@
 {
   "id": "SPC_Khael",
   "name": "Khael",
+  "codename": "KHAEL_PHD",
   "type": "mystic",
-  "base_health": 70,
-  "base_energy": 150,
-  "base_speed": 0.95,
-  "height_cm": 178,
-  "weight_kg": 65,
-  "skeleton": "SK_Gwen",
-  "passive": "Energia Khaael — custo de habilidade -20%",
+  "species_tag": "Species.Khael",
+  "lore": {
+    "origin": "Os Khael sao a anomalia - nao evoluiram, nao foram construidos, nao nasceram. Manifestaram-se quando o primeiro Pulso Khaaos rasgou o tecido entre mundos ha 1.000 ciclos. Entidades de energia pura que aprenderam a condensar em forma fisica.",
+    "culture": "Compartilham uma Consciencia de Enxame parcial - a Teia Khaael. Cada Khael e um no na Teia, recebendo fragmentos de percepcao de todos os outros. Governam pelo Sonho Compartilhado.",
+    "motivation": "Manter o Pulso Khaaos ativo - sem ele, os Khael deixam de existir. O Battle Royale e um ritual de sustentacao.",
+    "relationship_with_khaaos": "Os Khael SAO Khaaos - a manifestacao consciente dele. O Canhao Khaaos Prime e, para os Khael, um irmao."
+  },
+  "base_stats": {
+    "health": 70,
+    "energy": 150,
+    "speed": 0.95,
+    "stamina": 60,
+    "armor_base": 0,
+    "shield_capacity": 0,
+    "regen_health_per_sec": 0.3,
+    "regen_energy_per_sec": 2.0,
+    "regen_stamina_per_sec": 1.0,
+    "crit_chance": 0.1,
+    "crit_multiplier": 2.0
+  },
+  "stat_curves": {
+    "health_per_level": [
+      70,
+      78,
+      87,
+      97,
+      109,
+      123,
+      139,
+      157,
+      178,
+      202
+    ],
+    "energy_per_level": [
+      150,
+      162,
+      175,
+      189,
+      205,
+      223,
+      243,
+      265,
+      289,
+      316
+    ],
+    "speed_per_level": [
+      0.95,
+      0.97,
+      0.99,
+      1.02,
+      1.05,
+      1.09,
+      1.13,
+      1.18,
+      1.24,
+      1.31
+    ]
+  },
+  "physical": {
+    "height_cm": 178,
+    "weight_kg": 65,
+    "skeleton": "SK_Gwen",
+    "morph_targets": [
+      "MT_Khael_Ethereal",
+      "MT_Khael_Condensed",
+      "MT_Khael_Dissipating"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 35.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 55.0,
+      "full_body_ik_blend": 0.95
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 3.0,
+      "cloth_damping": 0.1,
+      "cloth_stiffness": 0.2,
+      "loose_parts": [
+        "energy_shroud",
+        "floating_shards",
+        "particle_trail"
+      ]
+    }
+  },
+  "passive": {
+    "name": "Canalizacao Mistica",
+    "description": "-25% custo energia habilidades. No Pulso: regen energia +100%, dano abilities +20%. Auto-revive 1x (30% HP).",
+    "tag": "Ability.Passive.Species.Khael.CanalizacaoMistica",
+    "class": "KhaaosAbility_KhaelPassive",
+    "mechanics": [
+      {
+        "trigger": "on_ability_use",
+        "effect": "energy_cost_reduction",
+        "value": 0.25
+      },
+      {
+        "trigger": "in_pulso",
+        "effect": "energy_regen_boost",
+        "value": 1.0
+      },
+      {
+        "trigger": "in_pulso",
+        "effect": "ability_damage_boost",
+        "value": 0.2
+      },
+      {
+        "trigger": "on_death_first_time",
+        "effect": "auto_revive",
+        "value": 0.3
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Projetil Khaael",
+      "tag": "Ability.Active.Khael.KhaaelProjectile",
+      "cooldown": 5.0,
+      "energy_cost": 15,
+      "duration": 0.0,
+      "description": "Projetil energia pura - 55 dano + 15 dano/s DoT 3s. Penetra 1 alvo.",
+      "vfx": "VFX_Khael_KhaaelProjectile",
+      "sfx": "SFX_Khael_KhaaelProjectile"
+    },
+    {
+      "name": "Fase Khaael",
+      "tag": "Ability.Active.Khael.KhaaelPhase",
+      "cooldown": 18.0,
+      "energy_cost": 35,
+      "duration": 4.0,
+      "description": "Intangivel 4s - atravessa paredes, imune dano, -50% speed.",
+      "vfx": "VFX_Khael_KhaaelPhase",
+      "sfx": "SFX_Khael_KhaaelPhase"
+    },
+    {
+      "name": "Ruptura do Pulso",
+      "tag": "Ability.Active.Khael.PulsoRupture",
+      "cooldown": 45.0,
+      "energy_cost": 45,
+      "duration": 6.0,
+      "description": "Ultimate: Micro-Pulso 12m - inimigos: 30 dano/s + silence 3s. Aliados: +15% all stats.",
+      "vfx": "VFX_Khael_PulsoRupture",
+      "sfx": "SFX_Khael_PulsoRupture"
+    }
+  ],
   "skins": [
     {
       "id": "SKN_Khael_Recruta",
-      "name": "Recruta",
+      "name": "Recruta Etereo",
       "rarity": "COMUM",
       "color_primary": "#F472B6",
+      "color_secondary": "#831843",
       "color_accent": "#FBCFE8",
-      "unlock_rank": "RECRUTA"
+      "color_emissive": "#EC4899",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Forma condensada minima - translucidez rosa."
     },
     {
       "id": "SKN_Khael_Veterano",
-      "name": "Veterano",
+      "name": "Veterano Manifesto",
       "rarity": "RARO",
       "color_primary": "#EC4899",
+      "color_secondary": "#9D174D",
       "color_accent": "#F9A8D4",
-      "unlock_rank": "HURAN"
+      "color_emissive": "#F472B6",
+      "material_override": "MAT_Khael_Veterano_CrystalForm",
+      "unlock_rank": "HURAN",
+      "description": "Forma cristalina - fragmentos flutuantes."
     },
     {
       "id": "SKN_Khael_CIGKV_Elite",
-      "name": "CIGKV Elite",
+      "name": "CIGKV Elite Dimensional",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
+      "color_secondary": "#4C1D95",
       "color_accent": "#C4B5FD",
-      "unlock_rank": "VENEX"
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Khael_Elite_DimensionalRift",
+      "unlock_rank": "VENEX",
+      "description": "Rift dimensional visivel. Fragmentos interdimensionais."
     },
     {
       "id": "SKN_Khael_Guarda_Overlord",
-      "name": "Guarda Overlord",
+      "name": "Guarda Overlord Arcano",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Khael_Overlord_SolarManifest",
+      "unlock_rank": "ONITH",
+      "description": "Manifestacao solar - energia estelar condensada."
     },
     {
       "id": "SKN_Khael_Khaaos_Prime",
-      "name": "Khaaos Prime",
+      "name": "Khaaos Encarnado",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Khael_KhaaosPrime_PureKhaaos",
+      "unlock_rank": "MALAKOR",
+      "description": "O Pulso personificado - forma pura de energia Khaaos."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Khael_01",
-      "name": "idle",
-      "skeleton": "SK_Gwen"
+  "animations": {
+    "base_skeleton": "SK_Gwen",
+    "blend_spaces": [
+      {
+        "id": "BS_Khael_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Khael_Float",
+        "type": "1D",
+        "axes": [
+          "Altitude"
+        ],
+        "samples": 5
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Khael_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_idle_float",
+        "name": "idle_float",
+        "duration": 2.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_phase_walk",
+        "name": "phase_walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Khael_khaael_projectile",
+        "name": "khaael_projectile",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_khaael_phase",
+        "name": "khaael_phase",
+        "duration": 0.8,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_pulso_rupture",
+        "name": "pulso_rupture",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Khael_auto_revive",
+        "name": "auto_revive",
+        "duration": 1.5,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Ethereal",
+      "dirt": "SFX_FStep_Ethereal",
+      "concrete": "SFX_FStep_Ethereal",
+      "water": "SFX_FStep_Ethereal"
     },
-    {
-      "id": "ANM_SPC_Khael_02",
-      "name": "walk",
-      "skeleton": "SK_Gwen"
+    "voice_lines": {
+      "eliminate": "VO_Khael_Elim",
+      "eliminated": "VO_Khael_Down",
+      "revive": "VO_Khael_Revive",
+      "ultimate": "VO_Khael_Ult"
     },
-    {
-      "id": "ANM_SPC_Khael_03",
-      "name": "run",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_04",
-      "name": "sprint",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_05",
-      "name": "slide",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_06",
-      "name": "jump_start",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_08",
-      "name": "jump_land",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_12",
-      "name": "reload",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_13",
-      "name": "melee",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_14",
-      "name": "downed",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_15",
-      "name": "eliminated",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_16",
-      "name": "revive",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_19",
-      "name": "heal_use",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Khael_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Gwen"
-    }
-  ]
+    "ambient_emitter": "SFX_Khael_Ambient_PulsoHum"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Khael_MysticAura",
+    "ability_1": "VFX_Khael_KhaaelProjectile",
+    "ability_2": "VFX_Khael_KhaaelPhase",
+    "ultimate": "VFX_Khael_PulsoRupture",
+    "death": "VFX_Khael_DeathDissolve",
+    "spawn": "VFX_Khael_SpawnManifest"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

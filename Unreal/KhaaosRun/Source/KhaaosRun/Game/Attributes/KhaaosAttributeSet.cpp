@@ -1,7 +1,11 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Game/Attributes/KhaaosAttributeSet.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "KhaaosRun.h"
+#include "AbilitySystemComponent.h"
+#include "GameplayEffectExtension.h"
+#include "Net/UnrealNetwork.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -12,12 +16,55 @@ UKhaaosAttributeSet::UKhaaosAttributeSet()
 
 // ─── Mutation Methods ───────────────────────────────────────────────────────────
 
+float UKhaaosAttributeSet::CalculateSpeciesMitigatedDamage(
+	float DamageAmount,
+	const FGameplayTag& DamageType,
+	float ProjectileReduction,
+	float ExplosionReduction)
+{
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	float Reduction = 0.0f;
+	if (DamageType.IsValid() && DamageType == Tags.Effect_Damage_Bullet)
+	{
+		Reduction = ProjectileReduction;
+	}
+	else if (DamageType.IsValid() && DamageType == Tags.Effect_Damage_Explosion)
+	{
+		Reduction = ExplosionReduction;
+	}
+
+	return DamageAmount * (1.0f - FMath::Clamp(Reduction, 0.0f, 1.0f));
+}
+
 float UKhaaosAttributeSet::ApplyDamage(float DamageAmount, AActor* Instigator)
+{
+	return ApplyDamageOfType(DamageAmount, Instigator, FGameplayTag());
+}
+
+float UKhaaosAttributeSet::ApplyDamageOfType(
+	float DamageAmount,
+	AActor* Instigator,
+	const FGameplayTag& DamageType)
 {
         if (DamageAmount <= 0.0f)
         {
                 return 0.0f;
         }
+
+	DamageAmount = CalculateSpeciesMitigatedDamage(
+		DamageAmount,
+		DamageType,
+		GetOnithProjectileDamageReduction(),
+		GetOnithExplosionDamageReduction());
+	if (DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
 
         // Reduce damage by defense rating (diminishing returns)
         float EffectiveDamage = DamageAmount;
@@ -32,10 +79,22 @@ float UKhaaosAttributeSet::ApplyDamage(float DamageAmount, AActor* Instigator)
         // Apply damage multiplier from instigator (via weapon)
         EffectiveDamage *= DamageMultiplier;
 
-        float OldHealth = Health;
-        SetHealth(FMath::Clamp(Health - EffectiveDamage, 0.0f, MaxHealth));
+        const float OldHealth = GetHealth();
+        SetHealth(FMath::Clamp(GetHealth() - EffectiveDamage, 0.0f, GetMaxHealth()));
 
-        float ActualDamage = OldHealth - Health;
+        const float ActualDamage = OldHealth - GetHealth();
+        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
+
+        if (GetHealth() <= 0.0f && !bOutOfHealthAlreadyBroadcast)
+        {
+                UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
+                AActor* OwnerActor = ASC ? ASC->GetOwnerActor() : nullptr;
+                if (OwnerActor && OwnerActor->HasAuthority())
+                {
+                        bOutOfHealthAlreadyBroadcast = true;
+                        OnOutOfHealth.Broadcast(OwnerActor, ASC->GetAvatarActor(), Instigator);
+                }
+        }
 
         UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAttributeSet::ApplyDamage - %.2f raw → %.2f effective (defense=%.1f)"),
                 DamageAmount, ActualDamage, DefenseRating);
@@ -50,10 +109,15 @@ float UKhaaosAttributeSet::Heal(float HealAmount)
                 return 0.0f;
         }
 
-        float OldHealth = Health;
-        SetHealth(FMath::Clamp(Health + HealAmount, 0.0f, MaxHealth));
+        const float OldHealth = GetHealth();
+        SetHealth(FMath::Clamp(GetHealth() + HealAmount, 0.0f, GetMaxHealth()));
 
-        float ActualHeal = Health - OldHealth;
+        const float ActualHeal = GetHealth() - OldHealth;
+        if (GetHealth() > 0.0f)
+        {
+                bOutOfHealthAlreadyBroadcast = false;
+        }
+        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
         return ActualHeal;
 }
 
@@ -96,12 +160,12 @@ void UKhaaosAttributeSet::RegenerateEnergy(float Amount)
 
 bool UKhaaosAttributeSet::IsAlive() const
 {
-        return Health > 0.0f;
+        return GetHealth() > 0.0f;
 }
 
 bool UKhaaosAttributeSet::IsFullHealth() const
 {
-        return FMath::IsNearlyEqual(Health, MaxHealth);
+        return FMath::IsNearlyEqual(GetHealth(), GetMaxHealth());
 }
 
 void UKhaaosAttributeSet::ResetToDefaults()
@@ -112,28 +176,96 @@ void UKhaaosAttributeSet::ResetToDefaults()
 void UKhaaosAttributeSet::InitFromSchemaDefaults()
 {
         // Defaults from schema.ts playerStats
-        Health           = DefaultMaxHealth;
-        MaxHealth        = DefaultMaxHealth;
+        InitHealth(DefaultMaxHealth);
+        InitMaxHealth(DefaultMaxHealth);
         Energy           = DefaultMaxEnergy;
         MaxEnergy        = DefaultMaxEnergy;
         Credits          = DefaultCredits;
         Speed            = DefaultSpeed;
         DamageMultiplier = 1.0f;
         DefenseRating    = 0.0f;
+        InitOnithProjectileDamageReduction(0.0f);
+        InitOnithExplosionDamageReduction(0.0f);
         AttackRange      = 15.0f;  // 15% of map
 }
 
-// ─── Internal Setters ───────────────────────────────────────────────────────────
+// ─── GAS Attribute callbacks and replication ────────────────────────────────────
 
-void UKhaaosAttributeSet::SetHealth(float NewHealth)
+void UKhaaosAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
-        float OldHealth = Health;
-        Health = NewHealth;
+        Super::PostGameplayEffectExecute(Data);
 
-        if (!FMath::IsNearlyEqual(OldHealth, Health))
+        const FGameplayAttribute& ModifiedAttribute = Data.EvaluatedData.Attribute;
+        if (ModifiedAttribute == GetMaxHealthAttribute())
         {
-                OnAttributeChanged.Broadcast(this, TEXT("Health"), Health);
+                SetMaxHealth(FMath::Max(GetMaxHealth(), 1.0f));
+                SetHealth(FMath::Clamp(GetHealth(), 0.0f, GetMaxHealth()));
+                OnAttributeChanged.Broadcast(this, TEXT("MaxHealth"), GetMaxHealth());
+                OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
+                return;
         }
+
+        if (ModifiedAttribute != GetHealthAttribute())
+        {
+                return;
+        }
+
+        SetHealth(FMath::Clamp(GetHealth(), 0.0f, GetMaxHealth()));
+        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
+
+        if (GetHealth() > 0.0f)
+        {
+                bOutOfHealthAlreadyBroadcast = false;
+                return;
+        }
+
+        SetHealth(0.0f);
+        UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
+        AActor* OwnerActor = ASC ? ASC->GetOwnerActor() : nullptr;
+        if (!OwnerActor || !OwnerActor->HasAuthority() || bOutOfHealthAlreadyBroadcast)
+        {
+                return;
+        }
+
+        bOutOfHealthAlreadyBroadcast = true;
+        const FGameplayEffectContextHandle& EffectContext = Data.EffectSpec.GetContext();
+        OnOutOfHealth.Broadcast(
+                OwnerActor,
+                ASC->GetAvatarActor(),
+                EffectContext.GetEffectCauser());
+}
+
+void UKhaaosAttributeSet::OnRep_Health(const FGameplayAttributeData& OldHealth)
+{
+        GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, Health, OldHealth);
+        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
+}
+
+void UKhaaosAttributeSet::OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth)
+{
+        GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, MaxHealth, OldMaxHealth);
+        OnAttributeChanged.Broadcast(this, TEXT("MaxHealth"), GetMaxHealth());
+}
+
+void UKhaaosAttributeSet::OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, OldReduction);
+	OnAttributeChanged.Broadcast(this, TEXT("OnithProjectileDamageReduction"), GetOnithProjectileDamageReduction());
+}
+
+void UKhaaosAttributeSet::OnRep_OnithExplosionDamageReduction(const FGameplayAttributeData& OldReduction)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, OldReduction);
+	OnAttributeChanged.Broadcast(this, TEXT("OnithExplosionDamageReduction"), GetOnithExplosionDamageReduction());
+}
+
+void UKhaaosAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+        Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, Health, COND_None, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_None, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_None, REPNOTIFY_Always);
 }
 
 void UKhaaosAttributeSet::SetEnergy(float NewEnergy)

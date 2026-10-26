@@ -2,11 +2,24 @@
   "id": "LOOT_Seringa_Venex",
   "name": "Seringa Venex",
   "type": "Curativo",
-  "rarity": "RARO",
-  "heal": 75,
+  "rarity": "EPICO",
+  "heal": 30,
   "defense": 0,
+  "use_time": 2.0,
   "auto_revive": false,
-  "price": 168,
-  "rarity_weight": 28,
-  "rarity_multiplier": 2.8
+  "stack_max": 3,
+  "price": 375,
+  "rarity_weight": 12,
+  "rarity_multiplier": 7.5,
+  "cooldown": 8.0,
+  "combo": {
+    "trigger_item": "LOOT_Adrenalina_Khael",
+    "effect": "DoT_heal_boost",
+    "description": "Usar Seringa + Adrenalina: 30 HP instant + 10 HP/s por 8s"
+  },
+  "vfx_pickup": "VFX_Loot_Pickup_Epic",
+  "vfx_use": "VFX_Heal_Seringa",
+  "sfx_use": "SFX_Seringa_Use",
+  "description": "Seringa Venex. 30 HP instant + DoT de 5 HP/s por 6s.",
+  "world_specific": []
 }

@@ -3,6 +3,7 @@
 #include "Game/AbilitySystem/KhaaosAbility_Combat.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "KhaaosRun.h"
+#include "Player/KhaaosCharacter.h"
 
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Character.h"
@@ -111,25 +112,36 @@ void UKhaaosAbility_Shoot::ServerShoot_Implementation(const FVector& TraceStart,
                 return;
         }
 
-        // Apply damage via Gameplay Ability System
-        UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitActor);
-        if (TargetASC)
+        float FinalDamage = BaseDamage;
+
+        // Check for headshot (hit bone name contains "head")
+        if (HitResult.BoneName.ToString().Contains(TEXT("head"), ESearchCase::IgnoreCase))
         {
-                // Apply damage gameplay effect
-                const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
-
-                float FinalDamage = BaseDamage;
-
-                // Check for headshot (hit bone name contains "head")
-                if (HitResult.BoneName.ToString().Contains(TEXT("head"), ESearchCase::IgnoreCase))
-                {
-                        FinalDamage *= HeadshotMultiplier;
-                        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosAbility_Shoot::ServerShoot - HEADSHOT! Damage: %.1f"), FinalDamage);
-                }
-
-                UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosAbility_Shoot::ServerShoot - Hit %s for %.1f damage"),
-                        *HitActor->GetName(), FinalDamage);
+                FinalDamage *= HeadshotMultiplier;
+                UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosAbility_Shoot::ServerShoot - HEADSHOT! Damage: %.1f"), FinalDamage);
         }
+
+		const FGameplayTag BulletDamageTag = FKhaaosGameplayTags::Get().Effect_Damage_Bullet;
+		// KhaaosCharacter owns shield/health flow and reads Onith modifiers from PlayerState's ASC.
+		if (AKhaaosCharacter* TargetCharacter = Cast<AKhaaosCharacter>(HitActor))
+		{
+			TargetCharacter->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo(), BulletDamageTag);
+		}
+		else if (UKhaaosVitalityComponent* Vitality = HitActor->FindComponentByClass<UKhaaosVitalityComponent>())
+		{
+			Vitality->ApplyDamage(FinalDamage, GetAvatarActorFromActorInfo());
+        }
+        else if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitActor))
+        {
+                if (const UKhaaosAttributeSet* ConstAttr = TargetASC->GetSet<UKhaaosAttributeSet>())
+                {
+					const_cast<UKhaaosAttributeSet*>(ConstAttr)->ApplyDamageOfType(
+						FinalDamage, GetAvatarActorFromActorInfo(), BulletDamageTag);
+                }
+        }
+
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosAbility_Shoot::ServerShoot - Hit %s for %.1f damage"),
+                *HitActor->GetName(), FinalDamage);
 
         // Client: impact VFX
         ClientSpawnImpactVFX(HitResult.ImpactPoint, HitResult.ImpactNormal);

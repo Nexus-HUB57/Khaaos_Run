@@ -1,5 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, uuid, varchar, index, uniqueIndex, check, bigserial } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -13,6 +13,113 @@ export const PatenteKR = {
   ZHEERS: "ZHEERS", ONITH: "ONITH", SKEETW: "SKEETW", HURAN: "HURAN",
   VENEX: "VENEX", KHAEL: "KHAEL", MALAKOR: "MALAKOR", OVERLORD: "OVERLORD",
 } as const;
+
+export type Rank = keyof typeof PatenteKR;
+
+/** Canonical EP555 command ladder. Keep the same cutoffs in the UE5 config. */
+export const EP555_RANKS = [
+  { id: "ZHEERS", xpRequired: 0, designation: "Unidade de Infantaria de Base" },
+  { id: "ONITH", xpRequired: 15_000, designation: "Operador Tático de Incursão" },
+  { id: "SKEETW", xpRequired: 45_000, designation: "SubOficial de Operações" },
+  { id: "HURAN", xpRequired: 100_000, designation: "Líder de Esquadrão" },
+  { id: "VENEX", xpRequired: 250_000, designation: "Comandante de Regimento" },
+  { id: "KHAEL", xpRequired: 500_000, designation: "Estrategista de Divisão" },
+  { id: "MALAKOR", xpRequired: 1_000_000, designation: "Alto Comissário de Guerra" },
+  { id: "OVERLORD", xpRequired: 5_000_000, designation: "General Supremo do Khaaos" },
+] as const satisfies readonly { id: Rank; xpRequired: number; designation: string }[];
+
+export const RANK_XP_THRESHOLDS = Object.fromEntries(
+  EP555_RANKS.map(({ id, xpRequired }) => [id, xpRequired]),
+) as Record<Rank, number>;
+
+export interface RankProgress {
+  rank: Rank;
+  currentXp: number;
+  currentThreshold: number;
+  nextRank: Rank | null;
+  nextThreshold: number | null;
+  xpToNext: number;
+  progressPct: number;
+}
+
+export function getRankProgress(xp: number): RankProgress {
+  const currentXp = Number.isFinite(xp) ? Math.max(0, Math.floor(xp)) : 0;
+  let currentIndex = 0;
+  for (let index = 1; index < EP555_RANKS.length; index += 1) {
+    if (currentXp < EP555_RANKS[index].xpRequired) break;
+    currentIndex = index;
+  }
+
+  const current = EP555_RANKS[currentIndex];
+  const next = EP555_RANKS[currentIndex + 1] ?? null;
+  const span = next ? next.xpRequired - current.xpRequired : 0;
+
+  return {
+    rank: current.id,
+    currentXp,
+    currentThreshold: current.xpRequired,
+    nextRank: next?.id ?? null,
+    nextThreshold: next?.xpRequired ?? null,
+    xpToNext: next ? Math.max(0, next.xpRequired - currentXp) : 0,
+    progressPct: next
+      ? Math.min(100, Math.max(0, ((currentXp - current.xpRequired) / span) * 100))
+      : 100,
+  };
+}
+
+export function rankFromXp(xp: number): Rank {
+  return getRankProgress(xp).rank;
+}
+
+export const SPECIALIZATION_IDS = [
+  "INFANTARIA",
+  "FUZILEIROS",
+  "RASTREADORES",
+  "COMUNICACOES_HACKER",
+  "PILOTO_AERONAVES",
+  "SNIPER",
+  "ENGENHARIA_TATICA",
+  "COMANDOS_SELVA",
+  "MOTORISTA_PESADOS",
+  "PARAQUEDISTAS",
+  "ANTI_BOMBAS",
+  "MEDICO_COMBATE",
+] as const;
+
+export type SpecializationId = typeof SPECIALIZATION_IDS[number];
+
+/** EP555 minimum rank and Morth requirements; Morth currently maps to confirmed PvP kills. */
+export const EP555_SPECIALIZATIONS = [
+  { id: "INFANTARIA", name: "Infantaria", callsign: "Uuivo", rank: "ZHEERS", morthRequired: 25, focus: "Combate corpo a corpo" },
+  { id: "FUZILEIROS", name: "Fuzileiros", callsign: "Avalanche", rank: "ZHEERS", morthRequired: 50, focus: "Operações táticas" },
+  { id: "RASTREADORES", name: "Rastreadores", callsign: "Ferro", rank: "ZHEERS", morthRequired: 50, focus: "Exploração e adaptação" },
+  { id: "COMUNICACOES_HACKER", name: "Comunicações / Hacker", callsign: "Abismo", rank: "ZHEERS", morthRequired: 75, focus: "IA e espionagem avançada" },
+  { id: "PILOTO_AERONAVES", name: "Piloto de Aeronaves", callsign: "Asa", rank: "ONITH", morthRequired: 100, focus: "Ataques aéreos" },
+  { id: "SNIPER", name: "Sniper de Elite", callsign: "Mira", rank: "SKEETW", morthRequired: 150, focus: "Precisão de longo alcance" },
+  { id: "ENGENHARIA_TATICA", name: "Engenharia Tática", callsign: "Névoa", rank: "HURAN", morthRequired: 200, focus: "Ações estratégicas" },
+  { id: "COMANDOS_SELVA", name: "Comandos Selva", callsign: "ComNoes", rank: "VENEX", morthRequired: 250, focus: "Perímetros e emboscadas" },
+  { id: "MOTORISTA_PESADOS", name: "Motorista de Pesados", callsign: "Couraça", rank: "VENEX", morthRequired: 300, focus: "Blindados e logística" },
+  { id: "PARAQUEDISTAS", name: "Paraquedistas", callsign: "Raio", rank: "KHAEL", morthRequired: 500, focus: "Ação secreta e infiltração" },
+  { id: "ANTI_BOMBAS", name: "Anti-Bombas", callsign: "Nulo", rank: "MALAKOR", morthRequired: 750, focus: "Explosivos e demolição" },
+  { id: "MEDICO_COMBATE", name: "Médico de Combate", callsign: "Égide", rank: "OVERLORD", morthRequired: 1_000, focus: "Salvamento e suporte" },
+] as const satisfies readonly {
+  id: SpecializationId;
+  name: string;
+  callsign: string;
+  rank: Rank;
+  morthRequired: number;
+  focus: string;
+}[];
+
+export function canUnlockSpecialization(
+  specialization: typeof EP555_SPECIALIZATIONS[number],
+  xp: number,
+  morth: number,
+): boolean {
+  const currentRankIndex = EP555_RANKS.findIndex(({ id }) => id === rankFromXp(xp));
+  const requiredRankIndex = EP555_RANKS.findIndex(({ id }) => id === specialization.rank);
+  return currentRankIndex >= requiredRankIndex && morth >= specialization.morthRequired;
+}
 
 export const Rarity = {
   COMUM: "COMUM", RARO: "RARO", EPICO: "EPICO", LENDARIO: "LENDARIO", MITICO: "MITICO",
@@ -81,6 +188,7 @@ export const playerStats = pgTable("player_stats", {
   kills: integer("kills").notNull().default(0),
   deaths: integer("deaths").notNull().default(0),
   lastSalaryDate: timestamp("last_salary_date"),
+  specializationId: text("specialization_id"),
   // Persistent competitive ranking
   rating: integer("rating").notNull().default(1000), // ELO-like
   matchesPlayed: integer("matches_played").notNull().default(0),
@@ -95,7 +203,11 @@ export const bankAccounts = pgTable("bank_accounts", {
   weaponsBalance: numeric("weapons_balance").notNull().default("0"),
   bonusBalance: numeric("bonus_balance").notNull().default("0"),
   fbmBalance: numeric("fbm_balance").notNull().default("0"),
-});
+}, (table) => ({
+  weaponsNonnegative: check("bank_weapons_nonnegative", sql`${table.weaponsBalance} >= 0`),
+  bonusNonnegative: check("bank_bonus_nonnegative", sql`${table.bonusBalance} >= 0`),
+  fbmNonnegative: check("bank_fbm_nonnegative", sql`${table.fbmBalance} >= 0`),
+}));
 
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
@@ -104,8 +216,101 @@ export const transactions = pgTable("transactions", {
   amountKrc: numeric("amount_krc").notNull(),
   amountUsd: numeric("amount_usd"),
   description: text("description"),
+  operationId: uuid("operation_id"),
   timestamp: timestamp("timestamp").defaultNow(),
-});
+}, (table) => ({
+  amountKrcNonnegative: check("transactions_amount_krc_nonnegative", sql`${table.amountKrc} >= 0`),
+  amountUsdNonnegative: check("transactions_amount_usd_nonnegative", sql`${table.amountUsd} IS NULL OR ${table.amountUsd} >= 0`),
+}));
+
+export const economyIdempotency = pgTable("economy_idempotency", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  responseStatus: integer("response_status"),
+  responseBody: jsonb("response_body").$type<Record<string, unknown>>(),
+  operationId: uuid("operation_id").notNull().defaultRandom(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userKeyUnique: uniqueIndex("economy_idempotency_user_key_unique").on(table.userId, table.idempotencyKey),
+  operationIdUnique: uniqueIndex("economy_idempotency_operation_id_unique").on(table.operationId),
+  createdAtIndex: index("economy_idempotency_created_at_idx").on(table.createdAt),
+  idempotencyKeyFormat: check("economy_idem_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
+  requestHashSha256: check("economy_idem_hash_sha256", sql`length(${table.requestHash}) = 64`),
+  responseStatusValid: check("economy_idem_response_status_valid", sql`${table.responseStatus} IS NULL OR ${table.responseStatus} BETWEEN 100 AND 599`),
+}));
+
+export const economyLedgerEntries = pgTable("economy_ledger_entries", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  operationId: uuid("operation_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  userId: text("user_id").notNull(),
+  lineNumber: integer("line_number").notNull(),
+  accountCode: text("account_code").notNull(),
+  side: text("side").notNull(),
+  amountKrc: numeric("amount_krc").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  operationLineUnique: uniqueIndex("economy_ledger_operation_line_unique").on(table.operationId, table.lineNumber),
+  userKeyLineUnique: uniqueIndex("economy_ledger_user_key_line_unique").on(table.userId, table.idempotencyKey, table.lineNumber),
+  userAccountTime: index("economy_ledger_user_account_time_idx").on(table.userId, table.accountCode, table.createdAt, table.id),
+  idempotencyKeyFormat: check("economy_ledger_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
+  positiveLineNumber: check("economy_ledger_line_number_positive", sql`${table.lineNumber} > 0`),
+  validSide: check("economy_ledger_side_valid", sql`${table.side} IN ('DEBIT', 'CREDIT')`),
+  positiveAmount: check("economy_ledger_amount_positive", sql`${table.amountKrc} > 0`),
+  validAccount: check("economy_ledger_account_valid", sql`${table.accountCode} IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'equity.opening_balance')`),
+}));
+
+export const paymentOrders = pgTable("payment_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  provider: text("provider").notNull().default("stripe"),
+  productId: text("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  priceBrlMinor: numeric("price_brl_minor", { precision: 12, scale: 0 }).notNull(),
+  krcMinorUnits: numeric("krc_minor_units", { precision: 20, scale: 0 }).notNull(),
+  currency: text("currency").notNull().default("brl"),
+  status: text("status").notNull().default("created"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  stripeSessionId: text("stripe_session_id"),
+  checkoutUrl: text("checkout_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  paidAt: timestamp("paid_at"),
+  fulfilledAt: timestamp("fulfilled_at"),
+}, (table) => ({
+  userIdempotencyUnique: uniqueIndex("payment_orders_user_idempotency_unique").on(table.userId, table.idempotencyKey),
+  stripeSessionUnique: uniqueIndex("payment_orders_stripe_session_unique").on(table.stripeSessionId),
+  userCreatedIndex: index("payment_orders_user_created_idx").on(table.userId, table.createdAt),
+  providerValid: check("payment_orders_provider_valid", sql`${table.provider} = 'stripe'`),
+  currencyBrl: check("payment_orders_currency_brl", sql`${table.currency} = 'brl'`),
+  statusValid: check("payment_orders_status_valid", sql`${table.status} IN ('created', 'pending', 'fulfilled', 'failed', 'expired', 'rejected')`),
+  pricePositive: check("payment_orders_price_positive", sql`${table.priceBrlMinor} >= 50`),
+  krcPositive: check("payment_orders_krc_positive", sql`${table.krcMinorUnits} > 0`),
+  requestHashSha256: check("payment_orders_request_hash_sha256", sql`length(${table.requestHash}) = 64`),
+}));
+
+export const paymentWebhookEvents = pgTable("payment_webhook_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  provider: text("provider").notNull().default("stripe"),
+  eventId: text("event_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  orderId: uuid("order_id"),
+  status: text("status").notNull().default("received"),
+  errorCode: text("error_code"),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+}, (table) => ({
+  providerEventUnique: uniqueIndex("payment_webhook_events_provider_event_unique").on(table.provider, table.eventId),
+  orderIndex: index("payment_webhook_events_order_idx").on(table.orderId, table.receivedAt),
+  providerValid: check("payment_webhook_events_provider_valid", sql`${table.provider} = 'stripe'`),
+  statusValid: check("payment_webhook_events_status_valid", sql`${table.status} IN ('received', 'processed', 'ignored', 'rejected')`),
+  payloadHashSha256: check("payment_webhook_events_payload_hash_sha256", sql`length(${table.payloadHash}) = 64`),
+}));
 
 export const loans = pgTable("loans", {
   id: serial("id").primaryKey(),
@@ -116,7 +321,13 @@ export const loans = pgTable("loans", {
   daysRemaining: integer("days_remaining").notNull(),
   isPaid: boolean("is_paid").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  principalNonnegative: check("loans_principal_nonnegative", sql`${table.principal} >= 0`),
+  interestNonnegative: check("loans_interest_nonnegative", sql`${table.interest} >= 0`),
+  totalDueNonnegative: check("loans_total_due_nonnegative", sql`${table.totalDue} >= 0`),
+  daysRemainingNonnegative: check("loans_days_remaining_nonnegative", sql`${table.daysRemaining} >= 0`),
+  isPaidPresent: check("loans_is_paid_present", sql`${table.isPaid} IS NOT NULL`),
+}));
 
 export const items = pgTable("items", {
   id: serial("id").primaryKey(),
@@ -130,7 +341,11 @@ export const items = pgTable("items", {
   stats: jsonb("stats").$type<Record<string, number>>(),
   imageUrl: text("image_url"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  durabilityNonnegative: check("items_durability_nonnegative", sql`${table.durability} >= 0`),
+  maxDurabilityNonnegative: check("items_max_durability_nonnegative", sql`${table.maxDurability} >= 0`),
+  durabilityWithinMaximum: check("items_durability_within_maximum", sql`${table.durability} <= ${table.maxDurability}`),
+}));
 
 // BP_SafeZone Actor equivalent
 export const zoneSessions = pgTable("zone_sessions", {
@@ -187,6 +402,39 @@ export const matchResults = pgTable("match_results", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Special Class governance audit; isolated from player profiles, banks and match state.
+export const marshalCouncils = pgTable("marshal_councils", {
+  id: uuid("id").primaryKey(),
+  actorId: text("actor_id").notNull(),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  worldId: varchar("world_id", { length: 8 }).notNull(),
+  periodSeconds: integer("period_seconds"),
+  telemetrySnapshot: jsonb("telemetry_snapshot").$type<Record<string, unknown>>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("queued"),
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  errorCode: varchar("error_code", { length: 64 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  actorIdempotency: uniqueIndex("marshal_councils_actor_idempotency_uq").on(table.actorId, table.idempotencyKey),
+  actorCreated: index("marshal_councils_actor_created_idx").on(table.actorId, table.createdAt),
+  statusUpdated: index("marshal_councils_status_updated_idx").on(table.status, table.updatedAt),
+}));
+
+export const marshalProposals = pgTable("marshal_proposals", {
+  id: uuid("id").primaryKey(),
+  councilId: uuid("council_id").notNull().references(() => marshalCouncils.id, { onDelete: "cascade" }),
+  actorId: text("actor_id").notNull(),
+  subject: varchar("subject", { length: 120 }).notNull(),
+  governance: jsonb("governance").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  councilSubject: uniqueIndex("marshal_proposals_council_subject_uq").on(table.councilId, table.subject),
+  actorCreated: index("marshal_proposals_actor_created_idx").on(table.actorId, table.createdAt),
+}));
+
 // === RELATIONS ===
 export const playerStatsRelations = relations(playerStats, ({ one }) => ({
   user: one(users, { fields: [playerStats.userId], references: [users.id] }),
@@ -212,6 +460,7 @@ export const insertItemSchema = createInsertSchema(items).omit({ id: true, creat
 // === TYPES ===
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
+export type EconomyIdempotency = typeof economyIdempotency.$inferSelect;
 export type Loan = typeof loans.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type PlayerStats = typeof playerStats.$inferSelect;
@@ -219,30 +468,8 @@ export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;
 export type Elimination = typeof eliminations.$inferSelect;
 export type MatchResult = typeof matchResults.$inferSelect;
-export type Rank = keyof typeof PatenteKR;
-
-/** XP thresholds for patente progression */
-export const RANK_XP_THRESHOLDS: Record<string, number> = {
-  ZHEERS: 0,
-  ONITH: 200,
-  SKEETW: 500,
-  HURAN: 1000,
-  VENEX: 2000,
-  KHAEL: 4000,
-  MALAKOR: 8000,
-  OVERLORD: 15000,
-};
-
-export function rankFromXp(xp: number): string {
-  const order = ["OVERLORD", "MALAKOR", "KHAEL", "VENEX", "HURAN", "SKEETW", "ONITH", "ZHEERS"];
-  for (const r of order) {
-    if (xp >= (RANK_XP_THRESHOLDS[r] ?? 0)) return r;
-  }
-  return "ZHEERS";
-}
-
-export interface DepositRequest { amountUsd: number; }
-export interface TransferRequest { amountKrc: number; destination: "fbm" | "weapons" | "bonus"; }
+export interface DepositRequest { amountUsd: number | string; }
+export interface TransferRequest { amountKrc: number | string; destination: "fbm" | "bonus"; }
 export interface LoanRequest { amountKrc: number; days: number; }
 export interface CreateItemRequest { name: string; type: keyof typeof ItemType; rarity?: keyof typeof Rarity; }
 
@@ -263,3 +490,37 @@ export interface ZoneStatus {
   centerX: number;
   centerY: number;
 }
+
+// === DISCORD INTEGRATION TABLES ===
+
+/** Discord ↔ EOS account links (bidirectional) */
+export const discordLinks = pgTable("discord_links", {
+  id: serial("id").primaryKey(),
+  discordId: varchar("discord_id", { length: 32 }).notNull(),
+  discordUsername: varchar("discord_username", { length: 64 }).notNull().default("Unknown"),
+  eosId: varchar("eos_id", { length: 64 }).notNull(),
+  playerName: varchar("player_name", { length: 64 }).notNull().default("Unknown"),
+  hasBetaRole: boolean("has_beta_role").notNull().default(false),
+  linkedAt: timestamp("linked_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_discord_links_discord_id").on(table.discordId),
+  uniqueIndex("idx_discord_links_eos_id").on(table.eosId),
+]);
+
+/** Tournaments (persisted, replaces in-memory Map) */
+export const tournaments = pgTable("tournaments", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  state: varchar("state", { length: 32 }).notNull().default("registration"),
+  registeredCount: integer("registered_count").notNull().default(0),
+  maxParticipants: integer("max_participants").notNull().default(64),
+  currentRound: integer("current_round").notNull().default(0),
+  rounds: integer("rounds").notNull().default(6),
+  minElo: integer("min_elo").notNull().default(0),
+  prizePool: integer("prize_pool").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type DiscordLink = typeof discordLinks.$inferSelect;
+export type Tournament = typeof tournaments.$inferSelect;
