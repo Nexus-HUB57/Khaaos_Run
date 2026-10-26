@@ -1,0 +1,50 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Species_Onith_PeleEscamosa",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.617202+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Infinite",
+    "duration_magnitude": -1.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.OnithProjectileDamageReduction",
+        "modifier_op": "Additive",
+        "magnitude": 0.15,
+        "channel": "Primary"
+      },
+      {
+        "attribute": "Attribute.OnithExplosionDamageReduction",
+        "modifier_op": "Additive",
+        "magnitude": 0.15,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Species.Onith",
+      "Ability.Passive.Species.Onith.PeleEscamosa"
+    ],
+    "required_tags": [
+      "Species.Onith"
+    ],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Species/GE_Species_Onith_PeleEscamosa",
+    "package_name": "/Game/GameplayEffects/Species/GE_Species_Onith_PeleEscamosa",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "715be65403eb2e9b"
+}

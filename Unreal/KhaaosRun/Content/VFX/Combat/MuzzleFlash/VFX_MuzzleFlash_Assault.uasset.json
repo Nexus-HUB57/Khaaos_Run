@@ -1,0 +1,75 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_MuzzleFlash_Assault",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.656132+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Assault rifle muzzle flash - bright flash with smoke wisps",
+    "category": "Combat",
+    "subcategory": "MuzzleFlash",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_Flash",
+        "spawn_rate": 500.0,
+        "lifetime": 0.08,
+        "initial_size": 15.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 0.8,
+          "b": 0.3,
+          "a": 1.0
+        },
+        "initial_velocity": 200.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Smoke",
+        "spawn_rate": 30.0,
+        "lifetime": 0.5,
+        "initial_size": 8.0,
+        "initial_color": {
+          "r": 0.5,
+          "g": 0.5,
+          "b": 0.5,
+          "a": 0.5
+        },
+        "initial_velocity": 40.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_MuzzleFlash",
+      "sort_order": 10
+    },
+    "gpu_simulation_settings": {
+      "capacity": 256,
+      "spawn_rate": 500.0,
+      "bounds_scale": 1.0
+    },
+    "pool_config": {
+      "max_pool_size": 16,
+      "auto_release_threshold": 2.0
+    },
+    "significance_rank": 0
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault",
+    "package_name": "/Game/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "738a81bea9e0eb70"
+}

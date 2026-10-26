@@ -1,0 +1,115 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Venex_Grid",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.661932+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Venex holographic grid - wireframe grid projection",
+    "category": "Species",
+    "subcategory": "Venex",
+    "species": "Venex",
+    "emitters": [
+      {
+        "emitter_name": "Emitter_GridLines",
+        "spawn_rate": 80.0,
+        "lifetime": 2.0,
+        "initial_size": 2.0,
+        "initial_color": {
+          "r": 0.0,
+          "g": 0.8,
+          "b": 0.2,
+          "a": 0.3
+        },
+        "initial_velocity": 0.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_GridNodes",
+        "spawn_rate": 40.0,
+        "lifetime": 3.0,
+        "initial_size": 4.0,
+        "initial_color": {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.3,
+          "a": 0.5
+        },
+        "initial_velocity": 0.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Mesh",
+      "material": "M_VFX_Cyber_Grid",
+      "sort_order": 1
+    },
+    "gpu_simulation_settings": {
+      "capacity": 1024,
+      "spawn_rate": 80.0,
+      "bounds_scale": 4.0
+    },
+    "pool_config": {
+      "max_pool_size": 4,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 2
+  },
+  "species_vfx_config": {
+    "description": "Cyber particles - cyborg species",
+    "primary_color": [
+      0.0,
+      1.0,
+      0.3,
+      1.0
+    ],
+    "secondary_color": [
+      1.0,
+      0.5,
+      0.0,
+      0.9
+    ],
+    "emitter_types": [
+      "Circuit",
+      "Pulse",
+      "Grid"
+    ],
+    "particle_count_range": [
+      100,
+      500
+    ],
+    "lifetime_range": [
+      0.1,
+      1.5
+    ],
+    "size_range": [
+      2.0,
+      15.0
+    ],
+    "velocity_range": [
+      100.0,
+      400.0
+    ],
+    "gpu_sim_settings": {
+      "capacity": 2048,
+      "spawn_rate": 200.0,
+      "bounds_scale": 3.0,
+      "random_seed": 99
+    }
+  },
+  "ue5_import_metadata": {
+    "content_path": "VFX/Species/Venex/VFX_Venex_Grid",
+    "package_name": "/Game/VFX/Species/Venex/VFX_Venex_Grid",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "6ffbfb1369c5f9ff"
+}

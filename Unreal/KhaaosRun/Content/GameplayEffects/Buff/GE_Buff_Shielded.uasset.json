@@ -1,0 +1,41 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Buff_Shielded",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.614200+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "HasDuration",
+    "duration_magnitude": 10.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Shield",
+        "modifier_op": "Additive",
+        "magnitude": 50.0,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Buff.Shielded"
+    ],
+    "required_tags": [],
+    "stacking_type": "StackByDuration",
+    "stack_limit_count": 3
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Buff/GE_Buff_Shielded",
+    "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Shielded",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "107aad686b098dc9"
+}

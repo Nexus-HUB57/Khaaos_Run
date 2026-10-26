@@ -1,0 +1,75 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_MuzzleFlash_Sniper",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.656941+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Sniper muzzle flash - intense directed flash with shockwave ring",
+    "category": "Combat",
+    "subcategory": "MuzzleFlash",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_Flash",
+        "spawn_rate": 800.0,
+        "lifetime": 0.05,
+        "initial_size": 25.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 0.9,
+          "b": 0.5,
+          "a": 1.0
+        },
+        "initial_velocity": 400.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_ShockRing",
+        "spawn_rate": 100.0,
+        "lifetime": 0.15,
+        "initial_size": 30.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 0.7,
+          "b": 0.2,
+          "a": 0.6
+        },
+        "initial_velocity": 150.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_MuzzleFlash_Sniper",
+      "sort_order": 10
+    },
+    "gpu_simulation_settings": {
+      "capacity": 256,
+      "spawn_rate": 800.0,
+      "bounds_scale": 1.5
+    },
+    "pool_config": {
+      "max_pool_size": 8,
+      "auto_release_threshold": 2.0
+    },
+    "significance_rank": 0
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper",
+    "package_name": "/Game/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "eff26ce1af0a6a53"
+}

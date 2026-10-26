@@ -1,0 +1,41 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Damage_Melee",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.616836+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Instant",
+    "duration_magnitude": 0.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Health",
+        "modifier_op": "Additive",
+        "magnitude": -45.0,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Damage.Melee"
+    ],
+    "required_tags": [],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Combat/GE_Damage_Melee",
+    "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Melee",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "f80f0b6f222475f2"
+}

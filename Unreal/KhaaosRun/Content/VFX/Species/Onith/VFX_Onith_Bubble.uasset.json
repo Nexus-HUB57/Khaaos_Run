@@ -1,0 +1,118 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Onith_Bubble",
+  "version": 1,
+  "generated_at": "2026-10-26T23:13:38.662542+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Onith toxic bubble - venom bubble that pops on contact",
+    "category": "Species",
+    "subcategory": "Onith",
+    "species": "Onith",
+    "emitters": [
+      {
+        "emitter_name": "Emitter_VenomBubble",
+        "spawn_rate": 10.0,
+        "lifetime": 5.0,
+        "initial_size": 15.0,
+        "initial_color": {
+          "r": 0.3,
+          "g": 0.9,
+          "b": 0.1,
+          "a": 0.6
+        },
+        "initial_velocity": 25.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_DripTrail",
+        "spawn_rate": 30.0,
+        "lifetime": 1.5,
+        "initial_size": 2.0,
+        "initial_color": {
+          "r": 0.2,
+          "g": 0.7,
+          "b": 0.05,
+          "a": 0.4
+        },
+        "initial_velocity": 40.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "GravityForce",
+      "Drag",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Toxic_Bubble",
+      "sort_order": 2
+    },
+    "gpu_simulation_settings": {
+      "capacity": 256,
+      "spawn_rate": 30.0,
+      "bounds_scale": 1.5
+    },
+    "pool_config": {
+      "max_pool_size": 8,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 2
+  },
+  "species_vfx_config": {
+    "description": "Toxic particles - reptile species",
+    "primary_color": [
+      0.2,
+      0.8,
+      0.1,
+      1.0
+    ],
+    "secondary_color": [
+      0.5,
+      0.1,
+      0.8,
+      0.85
+    ],
+    "emitter_types": [
+      "Smoke",
+      "Bubble",
+      "Drip"
+    ],
+    "particle_count_range": [
+      40,
+      250
+    ],
+    "lifetime_range": [
+      1.0,
+      5.0
+    ],
+    "size_range": [
+      10.0,
+      50.0
+    ],
+    "velocity_range": [
+      20.0,
+      80.0
+    ],
+    "gpu_sim_settings": {
+      "capacity": 768,
+      "spawn_rate": 50.0,
+      "bounds_scale": 2.0,
+      "random_seed": 13
+    }
+  },
+  "ue5_import_metadata": {
+    "content_path": "VFX/Species/Onith/VFX_Onith_Bubble",
+    "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Bubble",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "eb9a4399e791de15"
+}

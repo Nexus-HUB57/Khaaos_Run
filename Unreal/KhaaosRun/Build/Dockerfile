@@ -6,6 +6,10 @@
 # Stage 1 (builder): ~50GB — Compiles UE5.8 Linux dedicated server
 # Stage 2 (runtime): ~5GB  — Minimal Ubuntu runtime with server binary
 #
+# Build Arguments:
+#   BUILD_CONFIG — Development|Shipping (default: Development)
+#   UE5_TAG      — Epic container tag (default: dev-slim-5.8)
+#
 # Ports:
 #   7777  — Game traffic (UDP)
 #   7778  — Beacon port (UDP)
@@ -13,11 +17,16 @@
 #
 # Usage:
 #   docker build -t khaaos-server:latest .
+#   docker build --build-arg BUILD_CONFIG=Shipping -t khaaos-server:prod .
 #   docker run -p 7777:7777/udp -p 7778:7778/udp -p 27015:27015/udp khaaos-server
 # =============================================================================
 
+# ── Build Arguments ─────────────────────────────────────────────────────────────
+ARG BUILD_CONFIG=Development
+ARG UE5_TAG=dev-slim-5.8
+
 # ── Stage 1: Build UE5 Linux Server ──────────────────────────────────────────────
-FROM ghcr.io/epicgames/unreal-engine:dev-slim-5.8 AS builder
+FROM ghcr.io/epicgames/unreal-engine:${UE5_TAG} AS builder
 
 LABEL maintainer="devs@khaaos.run" \
       org.opencontainers.image.title="Khaaos Run Dedicated Server Builder" \
@@ -31,6 +40,9 @@ WORKDIR /project
 COPY KhaaosRun.uproject .
 COPY Source/ Source/
 COPY Config/ Config/
+COPY Content/ Content/
+# Copy project plugins if they exist
+COPY Plugins/ Plugins/
 
 # Generate project files
 RUN /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh \
@@ -39,19 +51,21 @@ RUN /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh
       -engine
 
 # Build dedicated server target (Linux Server)
+ARG BUILD_CONFIG
 RUN /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/Build.sh \
-      KhaaosRunServer Linux Development \
+      KhaaosRunServer Linux ${BUILD_CONFIG} \
       -project=/project/KhaaosRun.uproject \
       -WaitMutex -FromDist
 
 # Package the server build
+ARG BUILD_CONFIG
 RUN /home/ue4/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh \
       BuildCookRun \
       -project=/project/KhaaosRun.uproject \
       -noP4 \
       -platform=Linux \
       -target=KhaaosRunServer \
-      -serverconfig \
+      -serverconfig=${BUILD_CONFIG} \
       -cook \
       -build \
       -stage \

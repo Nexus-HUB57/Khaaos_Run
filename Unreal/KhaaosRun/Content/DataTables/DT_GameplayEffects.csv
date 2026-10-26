@@ -1,0 +1,30 @@
+GEName,Category,DurationPolicy,Duration,ModifierCount,GrantedTags,RequiredTags,StackingType,StackLimit,Description
+GE_Cooldown_Sprint,Cooldown,HasDuration,1.0,0,Cooldown.Sprint,,NoStacking,1,Sprint cooldown - 1s between sprint activations
+GE_Cooldown_Shield,Cooldown,HasDuration,8.0,0,Cooldown.Shield,,NoStacking,1,Shield cooldown - 8s recharge time
+GE_Cooldown_Heal,Cooldown,HasDuration,12.0,0,Cooldown.Heal,,NoStacking,1,Heal cooldown - 12s between self-heal uses
+GE_Cooldown_Ultimate,Cooldown,HasDuration,45.0,0,Cooldown.Ultimate,,NoStacking,1,Ultimate ability cooldown - 45s
+GE_Cooldown_GrapplingHook,Cooldown,HasDuration,15.0,0,Cooldown.GrapplingHook,,NoStacking,1,Grappling hook cooldown - 15s
+GE_Cost_Health,Cost,Instant,0.0,1,,Attribute.Health,NoStacking,1,Instant health cost - subtracts from health attribute
+GE_Cost_Energy,Cost,Instant,0.0,1,,Attribute.Energy,NoStacking,1,Instant energy cost - subtracts from energy attribute
+GE_Cost_Credits,Cost,Instant,0.0,1,,Attribute.Credits,NoStacking,1,Instant credits cost - subtracts from credits attribute
+GE_Buff_SpeedBoost,Buff,HasDuration,5.0,1,Effect.Buff.SpeedBoost,,NoStacking,5,40% speed boost for 5s - sprint/movement buff
+GE_Buff_Shielded,Buff,HasDuration,10.0,1,Effect.Buff.Shielded,,NoStacking,5,Shield buff - adds 50 shield points for 10s
+GE_Buff_HealOverTime,Buff,HasDuration,7.0,1,Effect.Buff.HealOverTime,,NoStacking,5,Heal over time - 5 HP/s for 7s (35 total)
+GE_Buff_DamageReduction,Buff,HasDuration,8.0,1,Effect.Buff.DamageReduction,,NoStacking,5,30% damage reduction for 8s
+GE_Buff_Regen,Buff,Infinite,-1.0,1,Effect.Buff.Regen|Ability.Passive.Species.Huran.RegeneracaoAquatica,Species.Huran,NoStacking,5,"Huran passive - infinite aquatic regeneration, 2 HP/s"
+GE_Buff_Canalizacao,Buff,Infinite,-1.0,1,Effect.Buff.Canalizacao|Ability.Passive.Species.Khael.CanalizacaoMistica,Species.Khael,NoStacking,5,"Khael passive - infinite mystic channeling, +3 Energy/s"
+GE_Buff_Overclock,Buff,HasDuration,6.0,2,Effect.Buff.Overclock|Ability.Passive.Species.Venex.OverclockNeural,Species.Venex,NoStacking,5,Venex passive - 25% speed boost + energy drain for 6s
+GE_Debuff_Slowed,Debuff,HasDuration,4.0,1,Effect.Debuff.Slowed,,NoStacking,5,50% slow for 4s
+GE_Debuff_Burning,Debuff,HasDuration,5.0,1,Effect.Debuff.Burning,,NoStacking,5,Burning DOT - 3 HP/s damage for 5s (15 total)
+GE_Debuff_Frozen,Debuff,HasDuration,3.0,1,Effect.Debuff.Frozen,,NoStacking,5,Frozen - 90% speed reduction for 3s (Khael ability)
+GE_Debuff_Poisoned,Debuff,HasDuration,8.0,1,Effect.Debuff.Poisoned,,NoStacking,5,Poisoned DOT - 2 HP/s damage for 8s (Onith ability)
+GE_Debuff_Silenced,Debuff,HasDuration,4.0,0,Effect.Debuff.Silenced,,NoStacking,5,Silenced - blocks ability activation for 4s
+GE_Debuff_Disarmed,Debuff,HasDuration,3.0,0,Effect.Debuff.Disarmed,,NoStacking,5,Disarmed - blocks weapon use for 3s
+GE_Damage_Bullet,Combat,Instant,0.0,1,Effect.Damage.Bullet,,NoStacking,1,Instant bullet damage - base 30 HP
+GE_Damage_Explosion,Combat,Instant,0.0,1,Effect.Damage.Explosion,,NoStacking,1,"Instant radial explosion damage - base 60 HP, 500cm radius"
+GE_Damage_Melee,Combat,Instant,0.0,1,Effect.Damage.Melee,,NoStacking,1,Instant melee damage - base 45 HP
+GE_Damage_Zone,Combat,Instant,0.0,1,Effect.Damage.Zone,,NoStacking,1,Instant safe zone tick damage - 5 HP per tick
+GE_Species_Onith_PeleEscamosa,Species,Infinite,-1.0,2,Species.Onith|Ability.Passive.Species.Onith.PeleEscamosa,Species.Onith,NoStacking,1,Onith passive - 15% projectile/explosion damage reduction (scaly skin)
+GE_Species_Zheers_Adaptabilidade,Species,Infinite,-1.0,1,Effect.Buff.Adaptabilidade|Ability.Passive.Species.Zheers.Adaptabilidade,Species.Zheers,NoStacking,1,"Zheers passive - adaptability scaling, all stats +1% per stack"
+GE_Species_Skeetw_VooPlanador,Species,Infinite,-1.0,2,Effect.Buff.Glide|Ability.Passive.Species.Skeetw.VooPlanador,Species.Skeetw,NoStacking,1,"Skeetw passive - gliding flight, 5s duration, 70% fall speed reduction"
+GE_Species_Huran_RegenAquatica,Species,Infinite,-1.0,1,Effect.Buff.Regen|Ability.Passive.Species.Huran.RegeneracaoAquatica,Species.Huran,NoStacking,1,Huran species passive - aquatic regeneration 3 HP/s in water zones
