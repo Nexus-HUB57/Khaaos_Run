@@ -65,18 +65,27 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], h
   return { group: g, parts: { head, torso, legL, legR, armL, armR } };
 }
 
-// pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false } = {}) {
+// pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
+// crouch (Fase 5) dobra pernas e abaixa o tronco
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false } = {}) {
   if (dead) {
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     return;
   }
   const swing = Math.sin(t * 9) * .62 * speedNorm;
   const swing2 = Math.cos(t * 9) * .5 * speedNorm;
-  parts.legL.hip.rotation.x = swing;
-  parts.legR.hip.rotation.x = -swing;
-  parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
-  parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+  if (crouch) {
+    // agachado: coxas à frente, joelhos dobrados, tronco ~0.34m mais baixo
+    parts.legL.hip.rotation.x = 1.15 + swing * .15;
+    parts.legR.hip.rotation.x = 1.15 - swing * .15;
+    parts.legL.knee.rotation.x = -1.45;
+    parts.legR.knee.rotation.x = -1.45;
+  } else {
+    parts.legL.hip.rotation.x = swing;
+    parts.legR.hip.rotation.x = -swing;
+    parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
+    parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+  }
   // braços seguram arma à frente; sobem/descem com pitch
   const aim = -Math.PI / 2 + pitch;
   parts.armR.shoulder.rotation.x = aim + .18 - swing * .18;
@@ -84,8 +93,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   parts.armR.elbow.rotation.x = ads ? -.28 : -.5;
   parts.armL.elbow.rotation.x = ads ? -.62 : -.85;
   parts.head.rotation.x = pitch * .4;
-  // bob de corrida
-  parts.torso.position.y = 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  // bob de corrida (agachado: tronco baixo, sem bob)
+  const torsoY = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  parts.torso.position.y = torsoY;
 }
 
 // ---------- arsenal ----------
