@@ -33,7 +33,7 @@
 - [x] Implementar RBAC com auditoria e permissões por recurso. Cobertura: `test/rbac.test.js` (7 testes) — catálogo declarativo (`server/rbac.js`: `room:join/start/input` restritos à própria sala, `admin:metrics`, `keys:rotate`, `audit:read`), trilha append-only (`server/audit.js` ring buffer + `PostgresAuditStore` migração `002_audit_events.sql`), guards HTTP 403 com evento `rbac.deny`, `/admin/audit` com filtros (`actor/action/outcome/sinceId`), payload de métricas sem dados por usuário para papéis não elevados e `room:start` auditado por sala no WebSocket.
 - [ ] Adicionar ping real, health/readiness de dependências, backpressure e autoscaling por região.
 - [ ] Testar múltiplas instâncias, falha de processo, reconnect após reinício, soak e fault injection.
-- [ ] Definir economia e compliance antes de conectar qualquer valor real, carteira, resgate ou custódia.
+- [x] Definir economia e compliance antes de conectar qualquer valor real, carteira, resgate ou custódia. Cobertura: `docs/economy-compliance.md` (contrato) + `server/economy.js` — moeda única KRC sem lastro, `REAL_MONEY_ENABLED=false` congelado + `assertRealMoneyDisabled()` bloqueando trilhas de valor real, ledger de dupla entrada append-only (`Ledger` memória + `PostgresEconomyStore`, migração `003_economy_ledger.sql`), idempotência por chave única, teto diário (`KR_ECONOMY_DAILY_CAP`), odds publicadas obrigatórias (`requireOdds`), RBAC `economy:grant` (admin) e endpoints `/economy/balance|history|grant|compliance` com leitura derivada do token. Testes: `test/economy.test.js` (6).
 
 ## Dependências externas bloqueadoras
 

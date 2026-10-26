@@ -194,6 +194,18 @@ Com JWT admin, o painel atualiza a cada segundo com conexões, autenticações f
 
 Para observabilidade de infraestrutura, `GET /healthz` é um liveness público e não consulta dependências lentas. `GET /readyz` é um readiness público que confirma a presença dos adapters obrigatórios de sessão e rate limit. O WebSocket limita payloads a 16 KiB, desativa compressão por mensagem e encerra conexões que acumularem mais de 256 KiB de saída pendente.
 
+## Economia virtual e compliance (KRC)
+
+Contrato definido em `docs/economy-compliance.md` e aplicado por código em `server/economy.js`: moeda única **KRC** (soft currency de gameplay), **sem compra, venda, saque, carteira, resgate ou custódia** — `REAL_MONEY_ENABLED` é `false` congelado e `assertRealMoneyDisabled()` falha alto em qualquer trilha de valor real.
+
+- **Ledger de dupla entrada append-only**: todo lançamento move valor inteiro positivo de uma conta para outra (`treasury:rewards` → `player:*`, `player:*` → `treasury:spends`); saldo é derivado, nunca mutado; correção é lançamento de reversão. Implementações: `Ledger` (memória) e `PostgresEconomyStore` (`KR_ECONOMY_STORE=postgres`, migração `003_economy_ledger.sql`).
+- **Idempotência por chave única** (`idempotency_key` no banco): retry nunca duplica prêmio — replay devolve o lançamento original.
+- **Teto diário por jogador** (`KR_ECONOMY_DAILY_CAP`, padrão 250.000 KRC) com `economy_cap_exceeded` auditado; concessão é permissão `economy:grant` (admin) na matriz RBAC.
+- **Odds publicadas obrigatórias**: sorteio sem `registerOdds()` não rola (`requireOdds` → `odds_not_published`); probabilidades fora de 1 são rejeitadas — transparência de loot box antes de qualquer mecânica de azar existir.
+- **Leitura só do próprio ledger**: `/economy/balance` e `/economy/history` derivam a conta do token (`actor.sub`), nunca de parâmetro; `/economy/grant` exige `economy:grant`; `/economy/compliance` (admin) reporta moeda, integridade do ledger, odds publicadas e guards ativos.
+
+Cobertura: `test/economy.test.js` (6 testes — ledger, idempotência, teto, bloqueio de valor real, odds, HTTP ponta a ponta + PostgreSQL opt-in).
+
 ## Testes
 
 ```bash
