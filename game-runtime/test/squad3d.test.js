@@ -7,7 +7,7 @@ import {
   assignSquads, knockActor, reviveTargetFor, stepRevive, botAimError, botDamageScale,
 } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
-import { makeInviteCode, normalizeInviteCode, findRoomByCode } from '../server/matchmaking.js';
+import { makeInviteCode, normalizeInviteCode, findRoomByCode, chooseRoom } from '../server/matchmaking.js';
 import { QUALITY_TIERS, resolveQuality, qualityTier } from '../src/game3d/quality3d.js';
 
 const STEP = 1 / 30;
@@ -335,6 +335,19 @@ test('fase7 privadas: findRoomByCode só aceita privada 3D aberta com vaga', () 
   rooms.set('public', mk('public', { isPrivate: false }));
   rooms.set('d2', mk('d2', { is3d: false }));
   assert.equal(findRoomByCode(rooms, 'KX7T2Q')?.id, 'ok', 'só a sala elegível');
+});
+
+test('fase7 privadas: matchmaking público nunca seleciona sala que exige convite', () => {
+  const privateRoom = {
+    mode: '3d', region: 'sa-east', isPrivate: true, started: false,
+    players: new Map(), capacity: 16, id: 'private-room',
+  };
+  const rooms = new Map([['private-room', privateRoom]]);
+  assert.equal(chooseRoom(rooms, 'sa-east', 16, '3d'), null);
+
+  const publicRoom = { ...privateRoom, isPrivate: false, id: 'public-room' };
+  rooms.set('public-room', publicRoom);
+  assert.equal(chooseRoom(rooms, 'sa-east', 16, '3d')?.id, 'public-room');
 });
 
 test('fase7 room: sala privada guarda código e metadados', () => {
