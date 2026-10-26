@@ -8,6 +8,7 @@
 // que o comportamento online seja idêntico ao offline (mesmas constantes e colisões).
 import { SeededRng } from '../src/shared/rng.js';
 import { rollLoot } from '../src/shared/weapons.js';
+import { resolveScenario } from '../src/game3d/scenarios.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
@@ -33,17 +34,18 @@ export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV' } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.scenario = resolveScenario(scenarioId);
     this.mode = '3d';
     this.is3d = true;
     this.rng = new SeededRng(`${this.seed}:room3d`);
-    this.world = getWorldLayout(this.seed);
+    this.world = getWorldLayout(this.seed, this.scenario.id);
     this.ring = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
     this.humans = new Map();   // id (client-id) -> actor
     this.players = this.humans; // alias de compatibilidade com o matchmaking/reconexão 2D
@@ -59,6 +61,7 @@ export class MatchRoom3D {
     this.tickCount = 0; // contador público no snapshot (método tick(dt) avança a sala)
     this.time = MATCH_TIME;
     this.pulseTimer = 0;
+    this.acidTimer = 0;
     this.state = ROOM_STATES.LOBBY;
     this.started = false;
     this.createdAt = Date.now();
@@ -241,6 +244,7 @@ export class MatchRoom3D {
         this.#damage(actor, (4 + this.ring.pulse * 1.4) * dt, null, 'ring');
       }
     }
+    if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
 
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
@@ -655,9 +659,19 @@ export class MatchRoom3D {
       else this.#emitTo(h.id, 'impact', { x, y, z, kind });
     }
   }
+  #stepAcidRain(dt) {
+    this.acidTimer += dt;
+    if (this.acidTimer < 10) return;
+    const pulses = Math.floor(this.acidTimer / 10);
+    this.acidTimer -= pulses * 10;
+    for (let i = 0; i < pulses; i++) {
+      for (const actor of this.#actors()) if (actor.alive) this.#damage(actor, 1, null, 'acid');
+      this.#emitAll('acidRain', { damage: 1, intervalSeconds: 10 });
+    }
+  }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
-    if (actor.armor > 0 && kind !== 'ring') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
+    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
     if (!actor.isBot) {

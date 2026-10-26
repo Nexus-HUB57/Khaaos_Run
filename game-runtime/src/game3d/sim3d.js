@@ -288,7 +288,7 @@ export class KhaaosSim3D {
     this.seed = String(seed);
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
-    this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0;
+    this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.world = getWorldLayout(this.seed, this.scenario.id);
@@ -478,6 +478,7 @@ export class KhaaosSim3D {
     if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
+    if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -791,9 +792,20 @@ export class KhaaosSim3D {
     }
     this.bullets = this.bullets.filter(b => b.life > 0);
   }
-  #damageBot(bot, dmg, ownerId, head) {
+  #stepAcidRain(dt) {
+    this.acidTimer += dt;
+    if (this.acidTimer < 10) return;
+    const pulses = Math.floor(this.acidTimer / 10);
+    this.acidTimer -= pulses * 10;
+    for (let i = 0; i < pulses; i++) {
+      if (this.player.alive) this.#hurtPlayer(1, null, 'acid');
+      for (const bot of this.bots) if (bot.alive) this.#damageBot(bot, 1, null, false, 'acid');
+      this.emit('acidRain', { damage: 1, intervalSeconds: 10 });
+    }
+  }
+  #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
-    if (bot.armor > 0) { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
+    if (bot.armor > 0 && kind !== 'acid') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (bot.life <= 0) {
       bot.alive = false;
@@ -817,7 +829,7 @@ export class KhaaosSim3D {
       const soak = Math.min(p.temporaryArmor, dmg);
       p.temporaryArmor -= soak; dmg -= soak;
     }
-    if (p.armor > 0 && kind !== 'ring') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
+    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) { p.life = 0; p.alive = false; this.emit('eliminated', { kills: p.kills, by: ownerId }); }
