@@ -34,8 +34,9 @@ echo "== 3. LB nginx round-robin entre réplicas =="
 FIRST_XREQ=$(curl -fsS -D - -o /dev/null "$BASE/healthz" | grep -i '^x-request-id:' | head -1)
 STATUSES=$(for _ in $(seq 1 12); do curl -s -o /dev/null -w '%{http_code} ' "$BASE/healthz"; done)
 echo "  12 requisições: ${STATUSES}"
-ALL_200=$(echo "$STATUSES" | tr ' ' '\n' | grep -cv '^200$' || true)
-if [ "$ALL_200" != "0" ]; then fail "alguma requisição ao LB não foi 200"; fi
+# printf por palavra: não gera linha vazia de espaço residual (bug de contagem).
+NON200=$(printf '%s\n' $STATUSES | grep -cv '^200$' || true)
+if [ "$NON200" != "0" ]; then fail "alguma requisição ao LB não foi 200 (${NON200} de 12)"; fi
 # Coerência de instância única: uptimeMs cresce monotonicamente na MESMA réplica;
 # com N réplicas, o uptime parece "andar para trás" ocasionalmente. Contamos quantas vezes voltou.
 UPTIMES=$(for _ in $(seq 1 10); do curl -fsS "$BASE/healthz" | grep -o '"uptimeMs":[0-9]*' | cut -d: -f2; done)
