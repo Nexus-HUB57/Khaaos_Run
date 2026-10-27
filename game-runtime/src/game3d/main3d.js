@@ -12,6 +12,7 @@ import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, crea
 import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
+import { loadAudioMix, saveAudioMix } from './audiomix.js'; // Fase 19 — mixagem KR_AUDIO_*
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
@@ -42,6 +43,8 @@ export class Game3D {
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
     this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode, officers: this.officersMode });
     this.audio = new GameAudio();
+    // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
+    this.audio.setMix(loadAudioMix());
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -91,9 +94,37 @@ export class Game3D {
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
     this.initContentSelectors();
     this.initSpectatorUI();
+    this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
+  // Painel único (jogador + espectador): 4 sliders → audio.setMix ao vivo +
+  // saveAudioMix imediato. Headless-safe: tudo atrás da existência do DOM.
+  initAudioMixer() {
+    const btn = document.querySelector('#audioBtn');
+    const panel = document.querySelector('#audioMixer');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+      this.audio?.ui?.();
+    });
+    for (const input of panel.querySelectorAll('input[type="range"][data-channel]')) {
+      const ch = input.dataset.channel;
+      const out = panel.querySelector(`[data-out="${ch}"]`);
+      const sync = () => {
+        input.value = String(Math.round((this.audio?.mix?.[ch] ?? 1) * 100));
+        if (out) out.textContent = `${input.value}%`;
+      };
+      sync();
+      input.addEventListener('input', () => {
+        const mix = this.audio?.setMix({ [ch]: Number(input.value) / 100 });
+        if (mix) saveAudioMix(mix);
+        if (out) out.textContent = `${input.value}%`;
+      });
+    }
   }
 
   // ---------- infra (protegidos: reusados pelo OnlineGame3D) ----------

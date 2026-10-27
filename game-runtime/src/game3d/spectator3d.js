@@ -91,6 +91,87 @@ export function spectateHref(code = '') {
   return `/?spectate=${encodeURIComponent(room)}`;
 }
 
+// ───Fase 19: DIRETOR AUTOMÁTICO da câmera FOLLOW──────────────────────────
+// A transmissão deve contar a história do mundo: quando um hazard ameaça,
+// a câmera corta para quem está sob perigo REAL — computado do MESMO payload
+// autoritativo do pipeline (players + ringState + WORLD_HAZARD). Sinais:
+// nocaute (DBNO), dano recente (vida caiu entre batches — tsunami/lava/ácido
+// mordendo), zona geométrica da anomalia (anchors), fora do ring, vida baixa.
+export const DANGER_WEIGHTS = Object.freeze({
+  knocked: 40,       // nocauteado — morrendo AGORA (finalização disponível)
+  hazardDamage: 35,  // vida caiu com hazard ativo — o mundo está mordendo
+  anchorZone: 30,    // dentro do raio de um pilar da anomalia Khaaos
+  outsideRing: 20,   // fora do cerco — dano de ring garantido
+  recentDamage: 15,  // vida caiu (combate) desde o batch anterior
+  lowHealth: 10,     // vida ≤ LOW_HEALTH_THRESHOLD — à beira da eliminação
+});
+export const LOW_HEALTH_THRESHOLD = 30;
+
+// Fase 19 — margem p/ RE-CORTE dentro do MESMO hazard: só troca de alvo quando
+// alguém está MUITO mais ameaçado que o seguido (≥ 1 tier de peso + folga) —
+// drama de diretor sem jitter por ruído (dano de ring 20 < margem; domo 30,
+// nocaute 40 e dano sob hazard 35 ≥ margem).
+export const AUTO_RETARGET_MARGIN = 25;
+
+/**
+ * Score de perigo de um jogador do pipeline (0..∞, maior = mais urgente).
+ * Puro e determinístico: o mesmo payload gera sempre o MESMO score.
+ * ctx: { hazard: { hazard, anchors?, anchorRadius? } | null,
+ *        ringState: { ringCenter: [x,y,z], currentRadius } | null,
+ *        prevHealth: { [id]: vida do batch anterior } }
+ */
+export function dangerScore(p = {}, ctx = {}) {
+  const { hazard = null, ringState = null, prevHealth = {} } = ctx;
+  let score = 0;
+  if (p.isDowned) score += DANGER_WEIGHTS.knocked;
+  // dano recente: vida caiu desde o último batch (histórico do remote)
+  const before = prevHealth[String(p.id)];
+  const dropped = Number.isFinite(before) && (p.health ?? 0) < before - .5;
+  if (dropped) score += hazard ? DANGER_WEIGHTS.hazardDamage : DANGER_WEIGHTS.recentDamage;
+  // anomalia Khaaos: PERIGO GEOMÉTRICO — dentro do domo de um pilar é dano certo
+  if (hazard?.hazard === 'gravity' && Array.isArray(hazard.anchors) && hazard.anchors.length > 0) {
+    const r = Number.isFinite(hazard.anchorRadius) ? hazard.anchorRadius : 28;
+    if (hazard.anchors.some((a) => Math.hypot((p.posX ?? 0) - (a.x ?? 0), (p.posY ?? 0) - (a.z ?? 0)) <= r)) {
+      score += DANGER_WEIGHTS.anchorZone;
+    }
+  }
+  // ring: fora do cerco é dano garantido (dados autoritativos do batch)
+  if (ringState && Array.isArray(ringState.ringCenter)) {
+    const cx = ringState.ringCenter[0] ?? 0, cz = ringState.ringCenter[2] ?? 0;
+    const radius = Number.isFinite(ringState.currentRadius) ? ringState.currentRadius : Infinity;
+    if (Math.hypot((p.posX ?? 0) - cx, (p.posY ?? 0) - cz) > radius) score += DANGER_WEIGHTS.outsideRing;
+  }
+  if ((p.health ?? 0) <= LOW_HEALTH_THRESHOLD) score += DANGER_WEIGHTS.lowHealth;
+  return score;
+}
+
+/** Ordem de urgência (vivos apenas): score desc → abates desc → vida ASC
+ *  (mais ferido = mais urgente) → id (determinismo byte a byte). */
+export function prioritizeByHazard(players = [], ctx = {}) {
+  return (players ?? [])
+    .filter((p) => p && !p.isEliminated)
+    .map((p) => ({ p, score: dangerScore(p, ctx) }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if ((b.p.kills ?? 0) !== (a.p.kills ?? 0)) return (b.p.kills ?? 0) - (a.p.kills ?? 0);
+      if ((a.p.health ?? 0) !== (b.p.health ?? 0)) return (a.p.health ?? 0) - (b.p.health ?? 0);
+      return String(a.p.id).localeCompare(String(b.p.id));
+    })
+    .map((e) => e.p);
+}
+
+/** Alvo mais ameaçado (ou null — sem vivos). */
+export function pickHazardTarget(players = [], ctx = {}) {
+  return prioritizeByHazard(players, ctx)[0] ?? null;
+}
+
+/** Snapshot de vida p/ detectar dano entre batches (id → health). */
+export function snapshotHealth(players = []) {
+  const out = {};
+  for (const p of players ?? []) if (p && p.id != null) out[String(p.id)] = p.health ?? 0;
+  return out;
+}
+
 // ───remote: cliente WS do pipeline (socket injetável p/ testes)───────────────
 
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
@@ -106,6 +187,15 @@ export class SpectatorRemote {
     // Fase 18 — evento BRUTO do pipeline p/ cada novidade (após dedupe):
     // alimenta o SpectatorView (contrato da sim) sem passar pelo feed.
     this.onEvent = onEvent;
+    // Fase 19 — diretor automático: corta p/ o alvo mais ameaçado quando um
+    // hazard começa (ou quando o alvo seguido morre). Navegação manual
+    // (prev/next) reserva o hazard corrente — o diretor só retoma no PRÓXIMO.
+    this.onAutoFollow = null;     // (picked, 'hazard-start'|'target-lost')
+    this.autoFollow = true;       // LIGADO por padrão: a transmissão narra o perigo
+    this.activeHazard = null;     // último WORLD_HAZARD start sem end (payload completo)
+    this._prevHealth = {};        // vida do batch anterior (detecção de dano)
+    this._autoHoldHazard = null;  // hazard reservado pela navegação manual
+    this._autoHeld = null;        // quem reivindica o hazard corrente: 'auto'|'manual'
     this.status = 'AGUARDANDO';
     this.delayMs = null;          // vem no SPECTATOR_WELCOME (anti-ghosting)
     this.spectatorId = null;
@@ -163,12 +253,88 @@ export class SpectatorRemote {
           const line = eventToFeed(e);
           if (line) { this.feed.unshift(line); if (this.feed.length > 8) this.feed.pop(); this.onFeed?.(line, e); }
           this.onEvent?.(e); // Fase 18 — contrato bruto (view ingere hazards)
+          if (e.type === 'WORLD_HAZARD') this.#trackHazard(e.data ?? {}); // Fase 19 — diretor
         }
         this.onBatch?.(this.last);
+        this.#autoFollowTick(); // Fase 19 — decisão de corte APÓS aplicar o batch
         break;
       }
       default: break; // tipos futuros são ignorados com elegância
     }
+  }
+
+  // Fase 19 — rastreio do hazard ativo (mesma semântica do banner da view:
+  // start grava com payload COMPLETO p/ a geometria da anomalia; end limpa e
+  // re-arma o diretor; ácido é pulse — nunca grava estado persistente).
+  #trackHazard(d = {}) {
+    if (!WORLD_HAZARD_INFO[d.hazard]) return; // desconhecido nunca dirige a câmera
+    if (d.phase === 'end') { this.activeHazard = null; this._autoHoldHazard = null; this._autoHeld = null; return; }
+    if (d.phase === 'start') this.activeHazard = { hazard: d.hazard, ...d };
+  }
+
+  // Fase 19 — decide se o diretor corta. Três gatilhos, em ordem de drama:
+  // (a) hazard NOVO começou (diferente do reservado) → 'hazard-start';
+  // (b) alvo seguido sumiu/morreu → 'target-lost';
+  // (c) DURANTE um hazard, alguém ficou MUITO mais ameaçado que o alvo
+  //     (score ≥ seguido + AUTO_RETARGET_MARGIN) → 'hazard-escalation'.
+  // Sem alvo escolhido e sem hazard → sem corte: FREECAM/RING_CENTER não é
+  // sequestrado sem motivo.
+  #autoPick(players = []) {
+    if (!this.autoFollow) return null;
+    const followId = this.followPlayerId;
+    const current = followId != null
+      ? (players ?? []).find((p) => String(p.id) === String(followId)) ?? null
+      : null;
+    const targetLost = followId != null && (!current || current.isEliminated);
+    const hazardKind = this.activeHazard?.hazard ?? null;
+    const hazardFresh = hazardKind !== null && hazardKind !== this._autoHoldHazard;
+    const ctx = {
+      hazard: this.activeHazard,
+      ringState: this.last?.ringState ?? null,
+      prevHealth: this._prevHealth,
+    };
+    if (!targetLost && !hazardFresh) {
+      // (c) escalada dentro do mesmo hazard — corte só com margem clara e
+      // SOMENTE se o hazard não foi reservado pela navegação manual
+      if (!hazardKind || !current || current.isEliminated) return null;
+      if (this._autoHeld === 'manual') return null;
+      const top = pickHazardTarget(players, ctx);
+      if (!top || String(top.id) === String(current.id)) return null;
+      if (dangerScore(top, ctx) < dangerScore(current, ctx) + AUTO_RETARGET_MARGIN) return null;
+      this._autoReason = 'hazard-escalation';
+      return top; // hold permanece (mesmo hazard em curso)
+    }
+    const pick = pickHazardTarget(players, ctx);
+    if (!pick) return null;
+    this._autoReason = targetLost && !hazardFresh ? 'target-lost' : 'hazard-start';
+    this._autoHoldHazard = hazardKind;
+    this._autoHeld = 'auto';
+    return pick;
+  }
+
+  #autoFollowTick() {
+    const players = this.last?.players ?? [];
+    const picked = this.#autoPick(players);
+    this._prevHealth = snapshotHealth(players); // histórico p/ o próximo batch
+    if (!picked) return;
+    this.setCamera('FOLLOW_PLAYER', picked.id);
+    this.onAutoFollow?.(picked, this._autoReason);
+  }
+
+  /** Fase 19 — liga/desliga o diretor. Ao LIGAR, corta imediatamente p/ o alvo
+   *  mais ameaçado (o gesto do usuário tem resposta na hora). */
+  setAutoFollow(on = !this.autoFollow) {
+    this.autoFollow = !!on;
+    if (this.autoFollow) {
+      this._autoHoldHazard = null;
+      this._autoHeld = null;
+      const picked = this.#autoPick(this.last?.players ?? []);
+      if (picked) {
+        this.setCamera('FOLLOW_PLAYER', picked.id);
+        this.onAutoFollow?.(picked, this._autoReason);
+      }
+    }
+    return this.autoFollow;
   }
 
   setCamera(mode, followPlayerId = null) {
@@ -185,6 +351,11 @@ export class SpectatorRemote {
     if (alive.length === 0) { this.setCamera('FOLLOW_PLAYER', null); return null; }
     const idx = Math.max(0, alive.findIndex((p) => p.id === this.followPlayerId));
     const next = alive[(((idx + dir) % alive.length) + alive.length) % alive.length];
+    // Fase 19 — navegação manual reserva o hazard corrente: o diretor não
+    // disputa o controle durante ESTE hazard (nem por escalada); retoma no
+    // próximo (novo start).
+    this._autoHoldHazard = this.activeHazard?.hazard ?? null;
+    this._autoHeld = 'manual';
     this.setCamera('FOLLOW_PLAYER', next.id);
     return next;
   }
@@ -378,6 +549,7 @@ export function spectatorViewModel(state = {}) {
     followName: follow ? (follow.displayName ?? follow.name ?? follow.id) : null,
     ring,
     hazard,
+    autoFollow: !!state.autoFollow, // Fase 19 — diretor automático (botão AUTO)
     top: standings.slice(0, 8).map((p, i) => ({
       rank: i + 1,
       id: String(p.id),
@@ -393,8 +565,10 @@ export function spectatorViewModel(state = {}) {
 }
 
 export class SpectatorHUD {
-  constructor({ onCamera = null, onFollowCycle = null, onDisconnect = null } = {}) {
+  constructor({ onCamera = null, onFollowCycle = null, onDisconnect = null, onAutoToggle = null } = {}) {
     this.onCamera = onCamera; this.onFollowCycle = onFollowCycle; this.onDisconnect = onDisconnect;
+    // Fase 19 — botão AUTO: liga/desliga o diretor automático da câmera
+    this.onAutoToggle = onAutoToggle;
     const doc = typeof document !== 'undefined' ? document : null;
     this.root = doc?.querySelector('#spectatorHud') ?? null;
     this.feedRoot = doc?.querySelector('#specFeed') ?? null;
@@ -405,6 +579,7 @@ export class SpectatorHUD {
     });
     doc?.querySelector('#specFollowPrev')?.addEventListener('click', () => this.onFollowCycle?.(-1));
     doc?.querySelector('#specFollowNext')?.addEventListener('click', () => this.onFollowCycle?.(1));
+    doc?.querySelector('#specAuto')?.addEventListener('click', () => this.onAutoToggle?.());
     doc?.querySelector('#specDisconnect')?.addEventListener('click', () => this.onDisconnect?.());
   }
 
@@ -418,6 +593,8 @@ export class SpectatorHUD {
     const root = this.root;
     if (root) {
       root.classList.toggle('cam-follow', vm.camMode === 'FOLLOW_PLAYER');
+      // Fase 19 — estado visual do diretor automático (botão AUTO aceso/apagado)
+      root.querySelector('#specAuto')?.classList.toggle('active', vm.autoFollow);
       set('#specStatus', vm.status);
       set('#specDelay', vm.delaySec != null ? `ATRASO ${vm.delaySec}s` : 'ATRASO —');
       set('#specAlive', `◇ ${String(vm.alive).padStart(2, '0')} VIVOS`);
@@ -475,8 +652,18 @@ function createSpectatorGame(Game3D) {
       this.specHud = new SpectatorHUD({
         onCamera: (mode) => { this.camMode = mode; remote.setCamera(mode, this.camMode === 'FOLLOW_PLAYER' ? remote.followPlayerId : null); },
         onFollowCycle: (dir) => { const f = remote.cycleFollow(dir); if (f) this.camMode = 'FOLLOW_PLAYER'; },
+        onAutoToggle: () => remote.setAutoFollow(), // Fase 19 — diretor on/off
         onDisconnect: () => remote.dispose(),
       });
+      // Fase 19 — diretor automático: a transmissão NARRA o corte no feed
+      remote.onAutoFollow = (pick, reason) => {
+        this.camMode = 'FOLLOW_PLAYER';
+        const nm = pick.displayName ?? pick.name ?? String(pick.id).slice(-6);
+        const why = reason === 'hazard-start' ? 'sob ameaça do mundo'
+          : reason === 'hazard-escalation' ? 'perigo maior no mundo'
+          : 'alvo anterior perdido';
+        this.specHud.pushFeed({ who: 'CÂMERA', cls: 'warn', msg: `corte automático → ${nm} (${why})` });
+      };
       remote.onStatus = (s) => {
         this.hud.setMatchStatus(`ESPECTADOR // ${s}`);
         this._specStatus = s;
@@ -546,6 +733,7 @@ function createSpectatorGame(Game3D) {
         camMode: this.camMode,
         followId: this.remote.followPlayerId,
         hazard: this.view.hazardActive, // Fase 18 — banner do hazard ativo
+        autoFollow: this.remote.autoFollow, // Fase 19 — botão AUTO aceso/apagado
       });
       if (this.post) this.post.render(dt);
       else this.renderer.render(this.scene, this.camera);
