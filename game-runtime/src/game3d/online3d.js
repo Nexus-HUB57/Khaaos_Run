@@ -440,6 +440,9 @@ export class OnlineGame3D extends Game3D {
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

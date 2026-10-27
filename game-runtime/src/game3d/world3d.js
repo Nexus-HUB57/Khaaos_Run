@@ -10,6 +10,8 @@ import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
 import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements } from './detail3d.js';
+import { buildTrafficVehicles } from './vehicles3d.js';
+import { buildWorldMarks } from './worldmarks3d.js';
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -105,67 +107,15 @@ export function createRingWall() {
   return group;
 }
 
-// ---------- Fase 8 — tráfego urbano estático (carros/vans abandonados) ----------
-const CAR_COLORS = ['#8a2f2b', '#2b4a6f', '#5d5f63', '#6f5a2b', '#3d5a3a', '#26282c'];
-const TRAFFIC_DIMS = {
-  car: { L: 4.3, W: 1.86, H: .6, cabL: 2.15, cabW: 1.62, cabH: .58, cabOff: -.25, wheelR: .34 },
-  van: { L: 5.3, W: 2.0, H: .82, cabL: 3.5, cabW: 1.76, cabH: .8, cabOff: .35, wheelR: .4 },
-};
+// ---------- Fase 8/16 — tráfego urbano estático (carros/vans no padrão do jogo) ----------
+// Fase 16 (P0): a silhueta dos veículos foi reconstruída em vehicles3d.js
+// (casco + capô + greenhouse em prisma + rodas cilíndricas + luzes); as
+// placements continuam EXATAMENTE as mesmas (posições/yaw/cor — zero gameplay).
 function buildTraffic(scene, layout, q) {
   const traffic = trafficPlacements(layout, { density: q.trafficFactor ?? 1 });
   if (!traffic.length) return;
   scene.userData.trafficPlacements = traffic; // registro p/ inspeção e2e
-  const dummy = new THREE.Object3D();
-  const glassMat = new THREE.MeshStandardMaterial({ color: '#10141c', roughness: .25, metalness: .6 });
-  const tireMat = new THREE.MeshStandardMaterial({ color: '#0c0d0f', roughness: .95 });
-  for (const type of ['car', 'van']) {
-    const list = traffic.filter((t) => t.type === type);
-    if (!list.length) continue;
-    const d = TRAFFIC_DIMS[type];
-    const baseY = d.wheelR * .9;
-    const bodies = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(d.W, d.H, d.L),
-      new THREE.MeshStandardMaterial({ roughness: .42, metalness: .55 }),
-      list.length,
-    );
-    const cabs = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(d.cabW, d.cabH, d.cabL),
-      glassMat,
-      list.length,
-    );
-    // rodas low-poly (caixas pretas alinhadas ao yaw do veículo)
-    const wheels = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(.24, d.wheelR * 2, d.wheelR * 1.7),
-      tireMat,
-      list.length * 4,
-    );
-    list.forEach((t, i) => {
-      const cos = Math.cos(t.rot), sin = Math.sin(t.rot);
-      const at = (lx, lz, y) => { dummy.position.set(t.x + cos * lx + sin * lz, y, t.z - sin * lx + cos * lz); };
-      // corpo
-      at(0, 0, baseY + d.H / 2);
-      dummy.rotation.set(0, t.rot, 0); dummy.scale.setScalar(1); dummy.updateMatrix();
-      bodies.setMatrixAt(i, dummy.matrix);
-      bodies.setColorAt(i, new THREE.Color(CAR_COLORS[t.color % CAR_COLORS.length]));
-      // cabine (deslocada no eixo local Z)
-      at(0, d.cabOff, baseY + d.H + d.cabH / 2 - .05);
-      dummy.updateMatrix();
-      cabs.setMatrixAt(i, dummy.matrix);
-      // rodas nos 4 cantos
-      let wi = i * 4;
-      for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-        at(sx * (d.W / 2 + .05), sz * (d.L / 2.65), d.wheelR);
-        dummy.updateMatrix();
-        wheels.setMatrixAt(wi++, dummy.matrix);
-      }
-    });
-    for (const m of [bodies, cabs, wheels]) {
-      m.castShadow = true; m.receiveShadow = true;
-      m.instanceMatrix.needsUpdate = true;
-      scene.add(m);
-    }
-    bodies.instanceColor.needsUpdate = true;
-  }
+  scene.userData.trafficStats = buildTrafficVehicles(scene, traffic);
   // sombras de contato sob os veículos (blobs retangulares aproximados)
   buildContactShadows(scene, traffic.map((t) => ({
     x: t.x, z: t.z, rot: t.rot, size: t.type === 'van' ? 3.4 : 2.8,
@@ -676,8 +626,10 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   buildNature(scene, layout, new SeededRng(`${seed}:nature`), q);
   buildMountains(scene, scenario);
   buildProps(scene, layout, q);
-  // Fase 8 — tráfego urbano estático nas estradas (carros/vans com sombra de contato)
+  // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);
+  // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte
+  buildWorldMarks(scene, layout, scenario);
 
   for (const s of layout.structures) {
     const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);

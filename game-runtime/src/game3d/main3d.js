@@ -1236,6 +1236,9 @@ export class Game3D {
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

@@ -91,3 +91,68 @@ test('startAt ignora valores inválidos/negativos (fallback determinístico em 0
   assert.equal(c.t, 0);
   a.dispose(); b.dispose(); c.dispose();
 });
+
+// ---------- Fase 16 (P0) — trem no padrão do jogo: via permanente + anatomia ferroviária ----------
+test('via permanente: lastro, dormentes instanciados e 2 trilhos (fim da placa flutuante)', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  const group = scene.getObjectByName('zu-train-intro');
+  assert.ok(group, 'grupo do trem registrado');
+  const rails = group.children.filter((o) => o.isMesh && Math.abs(o.position.z - intro.railZ) > .5);
+  assert.ok(rails.length >= 2, `2 trilhos separados (${rails.length})`);
+  const sleepers = group.children.find((o) => o.isInstancedMesh);
+  assert.ok(sleepers, 'dormentes instanciados');
+  assert.ok(sleepers.count >= 600, `dormentes cobrem a via (${sleepers.count})`);
+  const ballast = group.children.find((o) => o.isMesh && o.geometry.type === 'BoxGeometry' && o.geometry.parameters.depth > 4);
+  assert.ok(ballast, 'lastro sob os dormentes');
+  intro.dispose();
+});
+
+test('locomotiva com anatomia ferroviária: bogies, rodas cilíndricas, nariz, cabine e farol', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  const loco = intro.cars[0];
+  assert.ok(loco.isGroup, 'locomotiva é composição (não caixa solta)');
+  let cylinders = 0, emissive = 0, boxes = 0;
+  loco.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.geometry.type === 'CylinderGeometry') cylinders++;
+    if (o.geometry.type === 'BoxGeometry') boxes++;
+    if (o.material?.emissiveIntensity > .8) emissive++;
+  });
+  // 2 bogies × 3 eixos × 2 lados (roda+aro) + 2 exaustores + 2 anéis
+  assert.ok(cylinders >= 16, `rodas/eixos cilíndricos na locomotiva (${cylinders})`);
+  assert.ok(boxes >= 6, `carroceria/cabine/teto/saias (${boxes})`);
+  assert.ok(emissive >= 3, `farol + janelas + anéis de exaustão emissivos (${emissive})`);
+  // vagões: 4 veículos, cada vagão com bogies rodando e janelas iluminadas
+  assert.equal(intro.cars.length, 4, 'locomotiva + 3 vagões');
+  let wagonWheels = 0;
+  for (const car of intro.cars.slice(1)) {
+    car.traverse((o) => { if (o.isMesh && o.geometry.type === 'CylinderGeometry') wagonWheels++; });
+  }
+  assert.ok(wagonWheels >= 24, `todos os bogies dos vagões rodam (${wagonWheels})`);
+  // rodas dos bogies com eixo transversal ao trilho (rotation.x = π/2);
+  // exaustores são verticais e não contam — procura entre TODOS os cilindros
+  const wheelsCyl = [];
+  loco.traverse((o) => { if (o.isMesh && o.geometry.type === 'CylinderGeometry') wheelsCyl.push(o); });
+  assert.ok(
+    wheelsCyl.some((o) => Math.abs(Math.abs(o.rotation.x) - Math.PI / 2) < .01),
+    'pelo menos as rodas dos bogies têm eixo transversal',
+  );
+  intro.dispose();
+});
+
+test('veículos do trem seguem a cabeça com offsets preservados (fila sincronizada)', () => {
+  const scene = mkScene();
+  const intro = new TrainIntro({ scene, spawn: { x: 0, z: 118 }, skippable: false });
+  intro.update(.7);
+  const head = intro.headX(intro.t);
+  intro.cars.forEach((car, i) => {
+    const expected = head - intro.dir * car.userData.offset;
+    assert.ok(Math.abs(car.position.x - expected) < 1e-9, `carro ${i} acompanha a cabeça`);
+  });
+  // gaps consistentes: offsets crescem com len + vão
+  assert.ok(intro.cars[1].userData.offset > intro.cars[0].userData.offset, 'fila em ordem');
+  assert.ok(intro.trainLength > 4 * 11, 'comprimento total coerente');
+  intro.dispose();
+});

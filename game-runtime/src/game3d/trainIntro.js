@@ -7,6 +7,7 @@
 // Determinística no tempo (timeline em segundos), skippável (clique/tecla/toque)
 // e sem dependência de rede — o mesmo módulo serve offline e online.
 import * as THREE from 'three';
+import { frustumPrism } from './prisms3d.js';
 import { TRAIN_INTRO_DURATION_MS } from '../shared/clock.js';
 
 const TIMELINE = Object.freeze({
@@ -40,38 +41,160 @@ export class TrainIntro {
     }
   }
 
-  // Trem de 4 segmentos + trilho na direção X, passando a ~28 m do spawn.
+  // Trem de 4 veículos (locomotiva + 3 vagões) + via permanente completa,
+  // na direção X, passando a ~28 m do spawn. Fase 16 (P0): fim das caixas
+  // flutuando numa placa — agora há LASTRO, DORMENTES, 2 TRILHOS, BOGIES com
+  // rodas cilíndricas, nariz inclinado, cabine envidraçada, exaustores, farol,
+  // tetos com beiral, janelas iluminadas, portas e engates entre veículos.
   #build() {
-    const metal = new THREE.MeshStandardMaterial({ color: '#2c3138', roughness: .55, metalness: .65 });
-    const accent = new THREE.MeshStandardMaterial({ color: '#b98a1e', roughness: .4, metalness: .5, emissive: '#4a3405', emissiveIntensity: .5 });
-    const glow = new THREE.MeshStandardMaterial({ color: '#ffd75e', emissive: '#ffd75e', emissiveIntensity: 1.4, roughness: .3 });
-    const railMat = new THREE.MeshStandardMaterial({ color: '#191d22', roughness: .8, metalness: .3 });
     const dir = this.spawn.x >= 0 ? 1 : -1;
     this.dir = dir;
-    // trilho reto atravessando a zona (placa fina, Some de longe — custo zero)
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(520, 0.12, 3.4), railMat);
-    rail.position.set(0, 0.1, this.spawn.z + (this.spawn.z >= 0 ? 30 : -30));
-    this.group.add(rail);
-    this.railZ = rail.position.z;
-    // composição do trem: locomotiva + 3 vagões, em fila no eixo X
+    const g = this.group;
+    const railZ = this.spawn.z + (this.spawn.z >= 0 ? 30 : -30);
+    this.railZ = railZ;
+
+    // ---- materiais (assinatura Khaaos: metal frio + acento âmbar + glow ácido) ----
+    const metal = new THREE.MeshStandardMaterial({ color: '#2c3138', roughness: .55, metalness: .65 });
+    const metalDark = new THREE.MeshStandardMaterial({ color: '#191d22', roughness: .7, metalness: .55 });
+    const accent = new THREE.MeshStandardMaterial({ color: '#b98a1e', roughness: .4, metalness: .5, emissive: '#4a3405', emissiveIntensity: .5 });
+    const glow = new THREE.MeshStandardMaterial({ color: '#ffd75e', emissive: '#ffd75e', emissiveIntensity: 1.4, roughness: .3 });
+    const windowLit = new THREE.MeshStandardMaterial({ color: '#2a2118', emissive: '#ffcf7a', emissiveIntensity: .85, roughness: .3 });
+    const ballastMat = new THREE.MeshStandardMaterial({ color: '#3b352c', roughness: .97 });
+    const sleeperMat = new THREE.MeshStandardMaterial({ color: '#4a3a26', roughness: .95 });
+    const railMat = new THREE.MeshStandardMaterial({ color: '#565b63', roughness: .35, metalness: .85 });
+
+    // ---- via permanente: lastro → dormentes instanciados → 2 trilhos ----
+    const ballast = new THREE.Mesh(new THREE.BoxGeometry(520, .22, 4.4), ballastMat);
+    ballast.position.set(0, .11, railZ);
+    g.add(ballast);
+    const SLEEPER_STEP = .75, SPAN = 520;
+    const sleeperCount = Math.floor(SPAN / SLEEPER_STEP);
+    const sleepers = new THREE.InstancedMesh(new THREE.BoxGeometry(2.6, .1, .26), sleeperMat, sleeperCount);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < sleeperCount; i++) {
+      dummy.position.set(-SPAN / 2 + i * SLEEPER_STEP, .24, railZ);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      sleepers.setMatrixAt(i, dummy.matrix);
+    }
+    sleepers.instanceMatrix.needsUpdate = true;
+    g.add(sleepers);
+    for (const side of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(SPAN, .16, .1), railMat);
+      rail.position.set(0, .34, railZ + side * .75);
+      g.add(rail);
+    }
+
+    // ---- bogie: castelo + eixos com rodas cilíndricas (eixo ao longo do Z) ----
+    const mkBogie = (wheelsPerSide, x) => {
+      const bogie = new THREE.Group();
+      bogie.position.set(x, .95, 0);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(2.6, .5, 2.5), metalDark);
+      frame.position.y = .25;
+      bogie.add(frame);
+      for (let a = 0; a < wheelsPerSide; a++) {
+        for (const side of [-1, 1]) {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, .16, 12), metalDark);
+          wheel.rotation.x = Math.PI / 2;                 // eixo Y → Z (rola no X)
+          wheel.position.set((a - (wheelsPerSide - 1) / 2) * 1.15, 0, side * 1.18);
+          bogie.add(wheel);
+          const rim = new THREE.Mesh(new THREE.CylinderGeometry(.3, .3, .18, 10), railMat);
+          rim.rotation.x = Math.PI / 2;
+          rim.position.copy(wheel.position);
+          bogie.add(rim);
+        }
+      }
+      return bogie;
+    };
+
+    // ---- composição: locomotiva + 3 vagões, em fila no eixo X ----
     this.cars = [];
     const specs = [
-      { len: 14, h: 4.4, lead: true },
-      { len: 11, h: 3.8 },
-      { len: 11, h: 3.8 },
-      { len: 11, h: 3.8 },
+      { len: 14, lead: true },
+      { len: 11 },
+      { len: 11 },
+      { len: 11 },
     ];
     let offset = 0;
     for (const s of specs) {
-      const car = new THREE.Mesh(new THREE.BoxGeometry(s.len, s.h, 4.2), s.lead ? accent : metal);
-      car.position.y = s.h / 2 + 1.1;
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(s.len * .92, .34, .2), glow);
-      strip.position.set(0, s.h * .55, 2.2);
-      car.add(strip);
+      const car = new THREE.Group();                       // grupo = veículo inteiro
+      const L = s.len;
+      if (s.lead) {
+        // corpo principal + nariz inclinado (prisma frustrado)
+        const body = new THREE.Mesh(new THREE.BoxGeometry(L - 3.2, 2.1, 3.0), metal);
+        body.position.set(1.6 - (3.2 - 3.2) / 2, 2.25, 0);
+        car.add(body);
+        const nose = new THREE.Mesh(frustumPrism({ wB: 3.0, wT: 2.2, lB: 3.4, lT: 2.0, h: 2.1 }), accent);
+        nose.position.set(-L / 2 + 1.7, 1.2, 0);
+        nose.rotation.y = Math.PI;                         // afila para a frente (-x local)
+        car.add(nose);
+        // cabine envidraçada (faixa emissiva morna) + teto com beiral
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.5, 2.7), metal);
+        cab.position.set(L / 2 - 2.2, 3.55, 0);
+        car.add(cab);
+        const cabGlass = new THREE.Mesh(new THREE.BoxGeometry(2.7, .5, 2.76), windowLit);
+        cabGlass.position.set(L / 2 - 2.2, 3.72, 0);
+        car.add(cabGlass);
+        const cabRoof = new THREE.Mesh(new THREE.BoxGeometry(3.7, .18, 2.9), metalDark);
+        cabRoof.position.set(L / 2 - 2.2, 4.4, 0);
+        car.add(cabRoof);
+        // exaustores com anel emissivo
+        for (const ex of [-.9, .2]) {
+          const stack = new THREE.Mesh(new THREE.CylinderGeometry(.22, .28, .7, 8), metalDark);
+          stack.position.set(L / 2 - 3.4 + ex + .5, 4.75, 0);
+          car.add(stack);
+          const ring = new THREE.Mesh(new THREE.CylinderGeometry(.24, .24, .1, 8), glow);
+          ring.position.set(stack.position.x, 5.08, 0);
+          car.add(ring);
+        }
+        // farol + faixa de comando na face frontal
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(.17, 10, 8), glow);
+        lamp.position.set(-L / 2 + .35, 1.75, 0);
+        car.add(lamp);
+        // saias laterais escondendo o rancho da carroceria
+        for (const side of [-1, 1]) {
+          const skirt = new THREE.Mesh(new THREE.BoxGeometry(L - 3.2, .55, .14), metalDark);
+          skirt.position.set(1.6, 1.28, side * 1.5);
+          car.add(skirt);
+        }
+        car.add(mkBogie(3, -L / 2 + 2.6));
+        car.add(mkBogie(3, L / 2 - 2.6));
+        this.leadAccentMat = accent;                       // pulso no update (fase anterior)
+      } else {
+        // vagão: corpo + teto com beiral + janelas iluminadas + portas + chassis
+        const body = new THREE.Mesh(new THREE.BoxGeometry(L, 2.5, 3.0), metal);
+        body.position.y = 2.4;
+        car.add(body);
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(L + .35, .18, 3.3), metalDark);
+        roof.position.y = 3.74;
+        car.add(roof);
+        const band = new THREE.Mesh(new THREE.BoxGeometry(L * .86, .45, 3.04), windowLit);
+        band.position.y = 2.95;
+        car.add(band);
+        for (const side of [-1, 1]) for (const dx of [-1.7, 1.7]) {
+          const door = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.9, .08), metalDark);
+          door.position.set(dx, 2.2, side * 1.52);
+          car.add(door);
+        }
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(L - .2, .4, 2.6), metalDark);
+        chassis.position.y = 1.02;
+        car.add(chassis);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(L * .9, .12, .06), glow);
+        stripe.position.set(0, 1.62, 1.52);
+        car.add(stripe);
+        car.add(mkBogie(2, -L / 2 + 1.9));
+        car.add(mkBogie(2, L / 2 - 1.9));
+      }
+      // engates nas duas extremidades (ponteiam o vão entre veículos)
+      for (const end of [-1, 1]) {
+        const coupler = new THREE.Mesh(new THREE.BoxGeometry(1.1, .24, .22), metalDark);
+        coupler.position.set(end * (L / 2 + .55), 1.12, 0);
+        car.add(coupler);
+      }
       car.userData.offset = offset;
-      offset += s.len + 2.4;
+      offset += L + 2.4;
       this.cars.push(car);
-      this.group.add(car);
+      g.add(car);
     }
     this.trainLength = offset;
     // entrada: da borda contrária ao spawn, alinhada com o trilho
@@ -89,8 +212,7 @@ export class TrainIntro {
     const head = this.headX(this.t);
     for (const car of this.cars) car.position.x = head - this.dir * car.userData.offset;
     // farol da locomotiva pulsa levemente (presença noturna)
-    const lead = this.cars[0];
-    if (lead) lead.material.emissiveIntensity = .5 + Math.sin(this.t * 9) * .18;
+    if (this.leadAccentMat) this.leadAccentMat.emissiveIntensity = .5 + Math.sin(this.t * 9) * .18;
     if (this.t >= TIMELINE.DURATION) this.#finish();
     return this.done;
   }
