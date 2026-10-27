@@ -2,7 +2,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpSKW01.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 #include "NiagaraComponent.h"
 
 // Skeetw ethnicity: Tweek-fog native - mist-walker geneline
