@@ -20,17 +20,29 @@ set -a; source .env; set +a
 SCALE_APP="${2:-}"
 if [ "${1:-}" = "--scale" ] && [ -n "$SCALE_APP" ]; then
   echo "→ Escalando app para ${SCALE_APP} réplicas"
-  docker compose up -d --build postgres redis
+  docker compose up -d --build postgres redis redis-replica
   docker compose run --rm migrate
   docker compose up -d --scale "app=${SCALE_APP}" nginx
 else
   echo "→ Build + subida da stack completa"
   docker compose build app
-  docker compose up -d postgres redis
+  docker compose up -d postgres redis redis-replica
   echo "→ Migrações versionadas (001/002/003)"
   docker compose run --rm migrate
   docker compose up -d app nginx
 fi
+
+# F17: espera a réplica Redis sincronizar com o master (topologia 2 nós reais
+# que o smoke cross-node valida). Falha aqui = topologia de staging quebrada.
+echo "→ Esperando réplica Redis sincronizar (master_link_status:up)..."
+for attempt in $(seq 1 30); do
+  if docker compose exec -T redis-replica redis-cli INFO replication 2>/dev/null | grep -q master_link_status:up; then
+    echo "✅ réplica Redis sincronizada (tentativa ${attempt})"
+    break
+  fi
+  [ "$attempt" = "30" ] && { echo "❌ réplica Redis não sincronizou em 60 s"; docker compose logs --tail=30 redis-replica; exit 1; }
+  sleep 2
+done
 
 echo "→ Esperando /readyz ficar 200 (sondas reais de PG/Redis)..."
 for attempt in $(seq 1 60); do
