@@ -16,6 +16,9 @@ import { WebSocketServer } from 'ws';
 
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
 
+/** Path canônico do endpoint WS da transmissão (roteamento de upgrade). */
+export const SPECTATOR_WS_PATH = '/ws/spectator';
+
 export const SpectatorConfig = {
   /** Atraso anti-ghosting (ms) antes do espectador receber o estado */
   delayMs: 10_000,
@@ -73,11 +76,41 @@ export class SpectatorPipeline {
     this.counter = 0;
   }
 
-  /** Registra o endpoint /ws/spectator no HTTP server do game node. */
-  attach(httpServer) {
-    this.wss = new WebSocketServer({ server: httpServer, path: '/ws/spectator', maxPayload: 16 * 1024 });
+  /**
+   * Registra o endpoint /ws/spectator no HTTP server do game node.
+   *
+   * O WSS roda em modo noServer e o roteamento do upgrade é feito aqui de
+   * forma SEGURA: com `{ server }` direto, o ws≥8 entrega TODOS os eventos
+   * 'upgrade' a este WSS — inclusive os do jogo (/ws) — e ele aborta com 400
+   * os paths que não são seus DEPOIS de outro WSS já ter escrito o 101 no
+   * mesmo socket. O cliente, já em modo de frames, lê "HTTP/1.1 400..." como
+   * frame (primeiro byte 0x48 seta RSV1) e cai com WS_ERR_UNEXPECTED_RSV_1.
+   *
+   * `autoRoute` (default) registra um listener que reivindica APENAS o
+   * próprio path e NÃO toca em sockets de outros endpoints. Passe
+   * `{ autoRoute: false }` quando o http server já tem um roteador central
+   * (server.js) que despacha /ws e /ws/spectator.
+   */
+  attach(httpServer, { autoRoute = true } = {}) {
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
     this.wss.on('connection', (ws, req) => this.#onConnection(ws, req));
+    if (httpServer && autoRoute) {
+      this._httpServer = httpServer;
+      this._upgradeListener = (req, socket, head) => {
+        let pathname = '/';
+        try { pathname = new URL(req.url || '/', 'ws://localhost').pathname; } catch { socket.destroy(); return; }
+        if (pathname === SPECTATOR_WS_PATH) this.handleUpgrade(req, socket, head);
+        // Outros paths: intocados — o WSS dono (ex.: /ws do jogo) trata.
+      };
+      httpServer.on('upgrade', this._upgradeListener);
+    }
     return this;
+  }
+
+  /** Entrega ao WSS interno um upgrade já classificado como /ws/spectator. */
+  handleUpgrade(req, socket, head) {
+    if (!this.wss) { socket.destroy(); return; }
+    this.wss.handleUpgrade(req, socket, head, this.wss.emit.bind(this.wss, 'connection'));
   }
 
   #onConnection(ws, req) {
@@ -245,6 +278,11 @@ export class SpectatorPipeline {
   }
 
   destroy() {
+    if (this._httpServer && this._upgradeListener) {
+      try { this._httpServer.off('upgrade', this._upgradeListener); } catch { /* já removido */ }
+    }
+    this._httpServer = null;
+    this._upgradeListener = null;
     for (const room of this.rooms.values()) clearInterval(room.timer);
     this.rooms.clear();
     for (const client of this.spectators.values()) {

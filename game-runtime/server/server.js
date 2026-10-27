@@ -688,9 +688,24 @@ export function createAuthoritativeServer({
     ? https.createServer({ cert: tlsConfig.cert, key: tlsConfig.key }, (req, res) => { void tracedHandler(req, res); })
     : http.createServer((req, res) => { void tracedHandler(req, res); });
 
-  const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
-  // Fase 14 — endpoint do espectador no MESMO http server (path próprio).
-  spectatorPipeline.attach(server);
+  // ws≥8: todo WebSocketServer criado com { server } recebe TODOS os eventos
+  // 'upgrade' do http server e aborta com 400 os paths que não são seus —
+  // DEPOIS de outro WSS já ter escrito o 101 no mesmo socket. O cliente, já
+  // em modo de frames, lê "HTTP/1.1 400..." como frame (primeiro byte 0x48
+  // seta RSV1) e cai com WS_ERR_UNEXPECTED_RSV_1. Solução: WSS em noServer +
+  // UM roteador central que entrega cada upgrade ao WSS dono do path.
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
+  // Fase 14 — endpoint do espectador no MESMO http server (path próprio);
+  // autoRoute=false: o despacho dos dois paths é centralizado no roteador.
+  spectatorPipeline.attach(server, { autoRoute: false });
+  const routeUpgrade = (req, socket, head) => {
+    let pathname = '/';
+    try { pathname = new URL(req.url || '/', 'ws://localhost').pathname; } catch { socket.destroy(); return; }
+    if (pathname === '/ws') wss.handleUpgrade(req, socket, head, wss.emit.bind(wss, 'connection'));
+    else if (pathname === '/ws/spectator') spectatorPipeline.handleUpgrade(req, socket, head);
+    else socket.destroy();
+  };
+  server.on('upgrade', routeUpgrade);
   const handleConnection = async (ws, req) => {
     const url = new URL(req.url, 'ws://localhost');
     const token = url.searchParams.get('token');
@@ -874,6 +889,7 @@ export function createAuthoritativeServer({
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      try { server.off('upgrade', routeUpgrade); } catch { /* já removido */ }
       spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão
       for (const client of clients.values()) client.ws.close();
       await new Promise((resolve) => server.close(resolve));
