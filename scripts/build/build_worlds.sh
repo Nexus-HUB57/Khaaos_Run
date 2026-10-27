@@ -33,7 +33,34 @@ if [ "${1:-}" = "--check" ]; then
   # Fase 1 — pipeline Barburhen OBJ + colliders complexos (selftests determinísticos)
   python3 "$REPO_ROOT/scripts/build/export_barburhen_obj.py" --selftest >/dev/null || fail barburhen_obj_selftest
   python3 "$REPO_ROOT/scripts/build/bake_barburhen_colliders.py" --selftest >/dev/null || fail barburhen_colliders_selftest
+  # Fase 2 — mundos 2-5 (Priadus/Ckesalth/Arukheea/CIGKV): OBJ + colliders engine-less
+  python3 "$REPO_ROOT/scripts/build/export_world_obj.py" --selftest >/dev/null || fail world_obj_selftest
+  python3 "$REPO_ROOT/scripts/build/bake_world_colliders.py" --selftest >/dev/null || fail world_colliders_selftest
+  # Manifestos commitados (quando presentes) devem respeitar o contrato de import
+  python3 - "$REPO_ROOT" <<'PY' || fail world_colliders_manifest_contract
+import json, os, sys
+root = sys.argv[1]
+for world in ("Priadus", "Ckesalth", "Arukheea", "CIGKV"):
+    path = os.path.join(root, "Unreal", "KhaaosRun", "Content", world, f"{world}_colliders.json")
+    if not os.path.isfile(path):
+        continue  # geração é opt-in; manifest ausente não falha o check
+    data = json.load(open(path, encoding="utf-8"))
+    assert data["version"] == 1, world
+    assert data["import"]["collision_complexity"] == "UseComplexAsSimple", world
+    assert data["objects"], world
+PY
   echo 'KHR_WORLDGEN_RESULT_JSON: {"status":"ok","mode":"check","maps":[],"materials":[],"niagara":[],"warnings":[]}'
+  exit 0
+fi
+
+# ── Modo engine-less: bake dos colliders dos mundos 2-5 (sem editor) ─────────
+if [ "${1:-}" = "--colliders" ]; then
+  python3 "$REPO_ROOT/scripts/build/export_world_obj.py" --all >/dev/null || fail world_obj_export
+  for world in priadus ckesalth arukheea cigkv; do
+    python3 "$REPO_ROOT/scripts/build/bake_world_colliders.py" "--world=$world" \
+      || fail "world_colliders_bake:${world}"
+  done
+  echo 'KHR_WORLDGEN_RESULT_JSON: {"status":"ok","mode":"colliders","maps":["Priadus","Ckesalth","Arukheea","CIGKV"],"materials":[],"niagara":[],"warnings":[]}'
   exit 0
 fi
 

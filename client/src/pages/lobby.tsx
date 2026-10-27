@@ -29,6 +29,8 @@ export default function LobbyPage() {
     startMatch,
     createLobby,
     joinByCode,
+    invitePlayer,
+    inviteIssued,
     kickPlayer,
     cancelCountdown,
     leave,
@@ -36,6 +38,7 @@ export default function LobbyPage() {
 
   const [codeInput, setCodeInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
 
   const me = players.find((p) => p.userId === localId);
   const isHost = me?.isHost || room?.hostId === localId;
@@ -175,6 +178,40 @@ export default function LobbyPage() {
                     CÓDIGO: {room.inviteCode}
                     {copied && <span className="text-emerald-400 text-xs">COPIADO</span>}
                   </button>
+                )}
+                {isHost && (
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <p className="text-[10px] font-mono text-muted-foreground tracking-widest mb-2">
+                      M1 · CONVITE LIGADO A JOGADOR (uso único · quotas)
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={inviteInput}
+                        onChange={(e) => setInviteInput(e.target.value)}
+                        placeholder="userId do operativo convidado"
+                        className="h-8 font-mono text-xs bg-black/40"
+                        maxLength={256}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 font-mono text-xs"
+                        disabled={!inviteInput.trim()}
+                        onClick={() => {
+                          invitePlayer?.(inviteInput.trim());
+                          setInviteInput("");
+                        }}
+                      >
+                        <KeyRound className="w-3 h-3 mr-1" /> CONVIDAR
+                      </Button>
+                    </div>
+                    {inviteIssued && (
+                      <p className="text-[10px] font-mono text-emerald-400 mt-2">
+                        CONVITE EMITIDO → {inviteIssued.invitedUserId} · expira{' '}
+                        {new Date(inviteIssued.expiresAt).toLocaleTimeString()}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 

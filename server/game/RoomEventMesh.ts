@@ -41,6 +41,27 @@ export type RoomMeshRecord = {
   updatedAt: number;
 };
 
+/**
+ * Convite de lobby privado LIGADO a jogador (roadmap M1): o código da sala
+ * sozinho NÃO autoriza entrada — o dono emite um convite por jogador-alvo e
+ * somente esse userId pode consumi-lo (uso único, TTL, revogável).
+ *
+ * Escrita APENAS pelo nó dono da sala (mesma invariantes do índice de
+ * salas); leitura por qualquer nó (pré-verificação na origem do túnel).
+ */
+export type RoomInviteRecord = {
+  code: string;
+  roomId: string;
+  worldId: string;
+  nodeId: string;
+  invitedUserId: string;
+  issuedBy: string;
+  createdAt: number;
+  expiresAt: number;
+  status: "pending" | "used" | "revoked";
+  usedAt: number | null;
+};
+
 export type MeshMirrorOutcome = "mirrored" | "unchanged" | "throttled";
 
 export type RoomLostHandler = (record: RoomMeshRecord, reason: "lease_expired" | "stale_self") => void;
@@ -62,15 +83,31 @@ interface MeshStore {
   /** Sliding-TTL lease da sala; true se o lease estava/está vivo. */
   touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<void>;
   leaseAlive(roomId: string): Promise<boolean>;
+  /** Convites ligados a jogador: HASH por código (campo = invitedUserId). */
+  putInvite(record: RoomInviteRecord, ttlMs: number): Promise<void>;
+  getInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null>;
+  consumeInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null>;
+  revokeInvite(code: string, invitedUserId: string): Promise<void>;
+  listInvites(code: string): Promise<RoomInviteRecord[]>;
+  purgeInvites(code: string): Promise<void>;
 }
 
 // Barramento local compartilhado entre instâncias do MESMO processo — simula
 // a semântica do Redis com um Map global (fallback single-node + testes que
 // simulam dois nós sem Redis externo).
-const localBus: { records: Map<string, RoomMeshRecord>; leases: Map<string, { nodeId: string; expiresAt: number }> } = {
+const localBus: {
+  records: Map<string, RoomMeshRecord>;
+  leases: Map<string, { nodeId: string; expiresAt: number }>;
+  invites: Map<string, Map<string, RoomInviteRecord>>;
+} = {
   records: new Map(),
   leases: new Map(),
+  invites: new Map(),
 };
+
+function inviteExpired(record: RoomInviteRecord, now = Date.now()): boolean {
+  return record.expiresAt <= now;
+}
 
 class LocalMeshStore implements MeshStore {
   async putRecord(record: RoomMeshRecord): Promise<void> {
@@ -93,6 +130,34 @@ class LocalMeshStore implements MeshStore {
   async leaseAlive(roomId: string): Promise<boolean> {
     const lease = localBus.leases.get(roomId);
     return Boolean(lease && lease.expiresAt > Date.now());
+  }
+  async putInvite(record: RoomInviteRecord, _ttlMs: number): Promise<void> {
+    const byUser = localBus.invites.get(record.code) ?? new Map<string, RoomInviteRecord>();
+    byUser.set(record.invitedUserId, { ...record });
+    localBus.invites.set(record.code, byUser);
+  }
+  async getInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    const record = localBus.invites.get(code)?.get(invitedUserId);
+    if (!record || inviteExpired(record)) return null;
+    return { ...record };
+  }
+  async consumeInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    const record = localBus.invites.get(code)?.get(invitedUserId);
+    if (!record || record.status !== "pending" || inviteExpired(record)) return null;
+    record.status = "used";
+    record.usedAt = Date.now();
+    return { ...record };
+  }
+  async revokeInvite(code: string, invitedUserId: string): Promise<void> {
+    localBus.invites.get(code)?.delete(invitedUserId);
+  }
+  async listInvites(code: string): Promise<RoomInviteRecord[]> {
+    const byUser = localBus.invites.get(code);
+    if (!byUser) return [];
+    return [...byUser.values()].filter((record) => !inviteExpired(record)).map((record) => ({ ...record }));
+  }
+  async purgeInvites(code: string): Promise<void> {
+    localBus.invites.delete(code);
   }
 }
 
@@ -146,6 +211,53 @@ class RedisMeshStore implements MeshStore {
   }
   async leaseAlive(roomId: string): Promise<boolean> {
     return (await this.client.exists(this.leaseKey(roomId))) === 1;
+  }
+  private inviteKey(code: string): string {
+    return `${this.prefix}:invite:${code}`;
+  }
+  async putInvite(record: RoomInviteRecord, ttlMs: number): Promise<void> {
+    await this.client.hSet(this.inviteKey(record.code), record.invitedUserId, JSON.stringify(record));
+    // PISO de TTL no CHAVE inteira: nenhum convite sobrevive ao seu expiresAt
+    // + folga (expiração LÓGICA é pelo campo expiresAt; TTL limita memória).
+    await this.client.set(`${this.inviteKey(record.code)}:ttl`, "1", { PX: Math.max(ttlMs, 1_000) });
+  }
+  async getInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    const raw = await this.client.hGet(this.inviteKey(code), invitedUserId);
+    if (!raw) return null;
+    try {
+      const record = JSON.parse(raw) as RoomInviteRecord;
+      return inviteExpired(record) ? null : record;
+    } catch {
+      return null;
+    }
+  }
+  async consumeInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    const record = await this.getInvite(code, invitedUserId);
+    if (!record || record.status !== "pending") return null;
+    record.status = "used";
+    record.usedAt = Date.now();
+    await this.client.hSet(this.inviteKey(code), invitedUserId, JSON.stringify(record));
+    return record;
+  }
+  async revokeInvite(code: string, invitedUserId: string): Promise<void> {
+    await this.client.hDel(this.inviteKey(code), invitedUserId);
+  }
+  async listInvites(code: string): Promise<RoomInviteRecord[]> {
+    const values = await this.client.hVals(this.inviteKey(code));
+    return values.flatMap((raw) => {
+      try {
+        const record = JSON.parse(raw) as RoomInviteRecord;
+        return record && record.invitedUserId && !inviteExpired(record) ? [record] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+  async purgeInvites(code: string): Promise<void> {
+    const records = await this.listInvites(code);
+    for (const record of records) {
+      await this.client.hDel(this.inviteKey(code), record.invitedUserId);
+    }
   }
 }
 
@@ -251,6 +363,42 @@ export class RoomEventMesh {
           (record.status === "LOBBY" || record.status === "COUNTDOWN"),
       ) ?? null
     );
+  }
+
+  // ── Convites ligados a jogador (roadmap M1) ───────────────────────────────
+  // Escrita pelo nó dono (issue/consume/revoke/purge); leitura por qualquer
+  // nó (pré-verificação do túnel cross-node). Falhas NUNCA propagam para o
+  // fluxo do jogo: o RoomManager envolve com catch.
+
+  /** Dono: registra/atualiza convite (re-convite refresca TTL e status). */
+  async issueInvite(record: RoomInviteRecord, ttlMs: number): Promise<void> {
+    await this.store.putInvite(record, ttlMs);
+  }
+
+  /** Qualquer nó: convite pendente e não expirado do usuário, ou null. */
+  async getPendingInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    const record = await this.store.getInvite(code, invitedUserId).catch(() => null);
+    return record && record.status === "pending" ? record : null;
+  }
+
+  /** Dono: consumo único (pending → used); null se inexistente/usado/expirado. */
+  async consumeInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null> {
+    return this.store.consumeInvite(code, invitedUserId).catch(() => null);
+  }
+
+  /** Dono: revoga convite pendente (ex.: kick do host). */
+  async revokeInvite(code: string, invitedUserId: string): Promise<void> {
+    await this.store.revokeInvite(code, invitedUserId).catch(() => undefined);
+  }
+
+  /** Dono: lista convites vivos do código (quota de pendentes por sala). */
+  async listInvites(code: string): Promise<RoomInviteRecord[]> {
+    return this.store.listInvites(code).catch(() => []);
+  }
+
+  /** Dono: sala fechada — remove todos os convites do código. */
+  async purgeInvites(code: string): Promise<void> {
+    await this.store.purgeInvites(code).catch(() => undefined);
   }
 
   // ── Cache síncrono (para listLobbies/getRoomSummary sync do RoomManager) ──

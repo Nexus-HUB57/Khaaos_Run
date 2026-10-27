@@ -206,6 +206,26 @@ test("join_code em sala de OUTRO nó responde ROOM_REMOTE_NODE sem vazar estado"
   });
   await other.mirrorRoom(record);
 
+  // M1: sem convite ligado a ESTE jogador, o túnel NEM abre — rejeição
+  // uniforme sem oráculo (não revela sala remota/estado).
+  const stranger = fakeSocket();
+  await (roomManager as any).handleMessage("mesh-stranger-9", "Visitante", stranger.socket, {
+    type: "join_code", code: "REMOTEX1",
+  });
+  const strangerError = stranger.messages.find((m: any) => m.type === "error");
+  assert.equal(strangerError?.code, "INVITE_REQUIRED");
+  assert.equal(strangerError?.message, "Código de lobby inválido, expirado ou sem convite válido para este operativo");
+
+  // Com convite PENDENTE ligado ao convidado (visível cross-node no mesh),
+  // a origem pré-verifica e responde o redirecionamento ROOM_REMOTE_NODE
+  // (relay indisponível neste cenário de teste) — sem vazar estado.
+  const now = Date.now();
+  await mesh.issueInvite({
+    code: "REMOTEX1", roomId: record.id, worldId: record.worldId, nodeId: other.nodeId,
+    invitedUserId: "mesh-guest-1", issuedBy: "other-host", createdAt: now,
+    expiresAt: now + 60 * 60_000, status: "pending", usedAt: null,
+  }, 60 * 60_000);
+
   const guest = fakeSocket();
   await (roomManager as any).handleMessage("mesh-guest-1", "Visitante", guest.socket, {
     type: "join_code", code: "REMOTEX1",
@@ -221,16 +241,17 @@ test("join_code em sala de OUTRO nó responde ROOM_REMOTE_NODE sem vazar estado"
   assert.equal(error.players, undefined);
   assert.equal(error.hostId, undefined);
 
-  // Código inexistente continua com a mensagem canônica.
+  // Código inexistente continua com a mensagem canônica uniforme (M1).
   const guest2 = fakeSocket();
   await (roomManager as any).handleMessage("mesh-guest-2", "Visitante", guest2.socket, {
     type: "join_code", code: "NAOEXISTE99",
   });
   const invalid = guest2.messages.find((m: any) => m.type === "error");
-  assert.equal(invalid.message, "Código de lobby inválido ou expirado");
-  assert.equal(invalid.code, undefined);
+  assert.equal(invalid.message, "Código de lobby inválido, expirado ou sem convite válido para este operativo");
+  assert.equal(invalid.code, "INVITE_REQUIRED");
 
   await mesh.markRoomClosed(record.id, "cleanup");
+  await mesh.purgeInvites("REMOTEX1");
 });
 
 test("getRoomSummary cross-node usa o cache do mesh com marca remote", async () => {
@@ -269,4 +290,122 @@ test("listLobbies mescla lobbies remotos do mesh (públicos apenas)", async () =
 
   await mesh.markRoomClosed("remote-public-1", "test-cleanup");
   await mesh.markRoomClosed("remote-private-1", "test-cleanup");
+});
+
+// ─── Convites ligados a jogador (roadmap M1) — store do mesh ────────────────
+
+import type { RoomInviteRecord } from "../../server/game/RoomEventMesh.ts";
+
+function makeInvite(overrides: Partial<RoomInviteRecord> = {}): RoomInviteRecord {
+  const now = Date.now();
+  return {
+    code: "MESHINV1",
+    roomId: "room-invite-1",
+    worldId: "CIGKV",
+    nodeId: "node-A",
+    invitedUserId: "user-a",
+    issuedBy: "host-1",
+    createdAt: now,
+    expiresAt: now + 60 * 60_000,
+    status: "pending",
+    usedAt: null,
+    ...overrides,
+  };
+}
+
+test("mesh invite store: convite emitido num nó é legível em outro (barramento local)", async () => {
+  const meshA = new RoomEventMesh({ nodeId: "mesh-inv-node-a", enabled: false });
+  const meshB = new RoomEventMesh({ nodeId: "mesh-inv-node-b", enabled: false });
+
+  await meshA.issueInvite(makeInvite({ nodeId: meshA.nodeId }), 60 * 60_000);
+
+  // Leitura cruzada: a origem do túnel pré-verifica o convite no índice.
+  const seenByB = await meshB.getPendingInvite("MESHINV1", "user-a");
+  assert.equal(seenByB?.roomId, "room-invite-1");
+  assert.equal(seenByB?.status, "pending");
+
+  // Quota: listInvites enxerga os vivos do código a partir de qualquer nó.
+  assert.equal((await meshB.listInvites("MESHINV1")).length, 1);
+
+  // Consumo único (dono): primeira chamada consome; segunda falha.
+  const consumed = await meshA.consumeInvite("MESHINV1", "user-a");
+  assert.equal(consumed?.status, "used");
+  assert.notEqual(consumed?.usedAt, null);
+  const replay = await meshA.consumeInvite("MESHINV1", "user-a");
+  assert.equal(replay, null);
+  // E o consumo é visível cross-node (o used impede getPending).
+  assert.equal(await meshB.getPendingInvite("MESHINV1", "user-a"), null);
+
+  // Revoada (kick do host) remove o registro.
+  await meshA.issueInvite(makeInvite({ invitedUserId: "user-c", nodeId: meshA.nodeId }), 60 * 60_000);
+  await meshA.revokeInvite("MESHINV1", "user-c");
+  assert.equal(await meshA.getPendingInvite("MESHINV1", "user-c"), null);
+
+  // Purge (sala fechada) limpa tudo do código.
+  await meshA.purgeInvites("MESHINV1");
+  assert.deepEqual(await meshA.listInvites("MESHINV1"), []);
+});
+
+test("mesh invite store: expiração lógica (TTL) e re-convite refrescam o registro", async () => {
+  const mesh = new RoomEventMesh({ nodeId: "mesh-inv-ttl", enabled: false });
+
+  await mesh.issueInvite(makeInvite({ invitedUserId: "user-exp", expiresAt: Date.now() - 1 }), 60 * 60_000);
+  assert.equal(await mesh.getPendingInvite("MESHINV1", "user-exp"), null);
+  // Expirados são filtrados também na listagem de quota.
+  assert.deepEqual(await mesh.listInvites("MESHINV1"), []);
+
+  // Re-convite do mesmo alvo sobrescreve (refresh de TTL/status).
+  await mesh.issueInvite(makeInvite({ invitedUserId: "user-refresh", status: "used", usedAt: Date.now() }), 60 * 60_000);
+  assert.equal(await mesh.getPendingInvite("MESHINV1", "user-refresh"), null);
+  await mesh.issueInvite(makeInvite({ invitedUserId: "user-refresh" }), 60 * 60_000);
+  const refreshed = await mesh.getPendingInvite("MESHINV1", "user-refresh");
+  assert.equal(refreshed?.status, "pending");
+
+  await mesh.purgeInvites("MESHINV1");
+});
+
+test("mesh invite store: adaptador Redis (hSet/hGet/hVals) com a mesma semântica", async () => {
+  const hashes = new Map<string, Map<string, string>>();
+  const client: any = {
+    hSet: async (key: string, field: string, value: string) => {
+      if (!hashes.has(key)) hashes.set(key, new Map());
+      hashes.get(key)!.set(field, value);
+    },
+    hDel: async (key: string, field: string) => { hashes.get(key)?.delete(field); },
+    hGet: async (key: string, field: string) => hashes.get(key)?.get(field) ?? null,
+    hVals: async (key: string) => [...(hashes.get(key)?.values() ?? [])],
+    set: async (_key: string, _value: string, _options: { PX: number }) => undefined,
+    exists: async () => 0,
+  };
+
+  const mesh = new RoomEventMesh({
+    nodeId: "mesh-inv-redis",
+    enabled: true,
+    prefix: "khaaos_invite_test",
+    redisClientProvider: () => client,
+  });
+
+  await mesh.issueInvite(makeInvite({ invitedUserId: "user-r1" }), 60 * 60_000);
+  await mesh.issueInvite(makeInvite({ invitedUserId: "user-r2" }), 60 * 60_000);
+  assert.equal((await mesh.listInvites("MESHINV1")).length, 2);
+
+  const consumed = await mesh.consumeInvite("MESHINV1", "user-r1");
+  assert.equal(consumed?.status, "used");
+  assert.equal(await mesh.consumeInvite("MESHINV1", "user-r1"), null);
+  assert.equal((await mesh.getPendingInvite("MESHINV1", "user-r2"))?.status, "pending");
+
+  await mesh.revokeInvite("MESHINV1", "user-r2");
+  assert.equal(await mesh.getPendingInvite("MESHINV1", "user-r2"), null);
+  await mesh.purgeInvites("MESHINV1");
+  assert.deepEqual(await mesh.listInvites("MESHINV1"), []);
+
+  // Sem provider Redis conectado → fallback barramento local (degradação).
+  const fallback = new RoomEventMesh({
+    nodeId: "mesh-inv-fallback",
+    enabled: true,
+    redisClientProvider: () => null,
+  });
+  await fallback.issueInvite(makeInvite({ code: "LOCALINV9", invitedUserId: "user-l1" }), 60 * 60_000);
+  assert.equal((await fallback.getPendingInvite("LOCALINV9", "user-l1"))?.status, "pending");
+  await fallback.purgeInvites("LOCALINV9");
 });
