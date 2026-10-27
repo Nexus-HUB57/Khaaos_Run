@@ -1,140 +1,75 @@
-# ══════════════════════════════════════════════════════════════
+# ============================================================================
 # Khaaos Run — Terraform Variables
-# Multi-region production: sa1 (São Paulo), na1 (Virginia), eu1 (Frankfurt)
-# ══════════════════════════════════════════════════════════════
+# ============================================================================
+# Customizable variables for region, instance type, and project configuration.
 
-# ─── Cloudflare ─────────────────────────────────────────────────
-variable "cloudflare_api_token" {
-  description = "Cloudflare API token for DNS/CDN management"
+# ─── Region ──────────────────────────────────────────────────────────────────
+variable "region" {
   type        = string
-  sensitive   = true
+  default     = "cn-hangzhou"
+  description = "Alibaba Cloud region. cn-hangzhou has best GPU availability in China."
 }
 
-variable "cloudflare_zone_id" {
-  description = "Cloudflare Zone ID for khaaos.run"
+# ─── Instance Configuration ──────────────────────────────────────────────────
+variable "instance_name" {
   type        = string
+  default     = "khaaos-run-gpu-validator"
+  description = "ECS instance name for the GPU validator."
 }
 
-# ─── Docker / ECS ──────────────────────────────────────────────
-variable "ecs_image_tag" {
-  description = "Docker image tag for ECS deployment"
+# vgn6i family: NVIDIA T4 Virtual GPU — ideal for headless UE5 rendering
+# Alternatives:
+#   ecs.vgn6i-m4.xlarge   — T4 vGPU, 4 vCPU, 16GB RAM  (~¥5.8/hr)
+#   ecs.vgn6i-m8.2xlarge  — T4 vGPU, 8 vCPU, 32GB RAM  (~¥11.6/hr)
+#   ecs.gn7i-c16g1-4      — A10 GPU,  16 vCPU, 60GB RAM (~¥15.8/hr) [recommended]
+#   ecs.gn6v-c8g1-2       — V100 GPU, 8 vCPU, 32GB RAM  (~¥28.0/hr)
+variable "gpu_instance_type" {
   type        = string
-  default     = "latest"
+  default     = "ecs.vgn6i-m4.xlarge"
+  description = "ECS GPU instance type. vgn6i = NVIDIA T4 vGPU (cost-effective for headless rendering)."
 }
 
-variable "economy_api_image" {
-  description = "Economy API Docker image URI (ECR)"
-  type        = string
-  default     = "khaaos-run/economy-api"
-}
-
-# ─── Database ──────────────────────────────────────────────────
-variable "db_password" {
-  description = "PostgreSQL master password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.r6g.large"
-}
-
-# ─── Redis / ElastiCache ───────────────────────────────────────
-variable "redis_node_type" {
-  description = "ElastiCache Redis node type"
-  type        = string
-  default     = "cache.r6g.large"
-}
-
-# ─── JWT / Auth ────────────────────────────────────────────────
-variable "jwt_secret" {
-  description = "JWT signing secret"
-  type        = string
-  sensitive   = true
-}
-
-# ─── EOS (Epic Online Services) ────────────────────────────────
-variable "eos_product_id" {
-  description = "EOS Product ID from Epic Dev Portal"
-  type        = string
-  sensitive   = true
-}
-
-variable "eos_sandbox_id" {
-  description = "EOS Sandbox ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "eos_deployment_id" {
-  description = "EOS Deployment ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "eos_client_id" {
-  description = "EOS Client ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "eos_client_secret" {
-  description = "EOS Client Secret"
-  type        = string
-  sensitive   = true
-}
-
-# ─── Networking (per region) ───────────────────────────────────
-variable "vpc_cidr_sa1" {
-  description = "VPC CIDR for sa1 (São Paulo)"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "vpc_cidr_na1" {
-  description = "VPC CIDR for na1 (Virginia)"
-  type        = string
-  default     = "10.1.0.0/16"
-}
-
-variable "vpc_cidr_eu1" {
-  description = "VPC CIDR for eu1 (Frankfurt)"
-  type        = string
-  default     = "10.2.0.0/16"
-}
-
-# ─── UE5 Dedicated Server ──────────────────────────────────────
-variable "game_server_instance_type" {
-  description = "EC2 instance type for UE5 dedicated server"
-  type        = string
-  default     = "c6i.2xlarge"
-}
-
-variable "max_game_servers_per_region" {
-  description = "Maximum game server instances per region"
+# ─── Disk ─────────────────────────────────────────────────────────────────────
+variable "system_disk_size" {
   type        = number
-  default     = 10
+  default     = 100
+  description = "System disk size in GB. Minimum 100GB for UE5 Editor + shaders + dependencies."
 }
 
-# ─── Monitoring ────────────────────────────────────────────────
-variable "grafana_admin_password" {
-  description = "Grafana admin password"
+variable "system_disk_category" {
   type        = string
-  sensitive   = true
+  default     = "cloud_essd"
+  description = "Disk category. cloud_essd = Enhanced SSD (best IOPS for UE5 compilation)."
 }
 
-variable "slack_webhook_url" {
-  description = "Slack webhook URL for AlertManager notifications"
+# ─── Network ─────────────────────────────────────────────────────────────────
+variable "vpc_cidr" {
   type        = string
-  sensitive   = true
-  default     = ""
+  default     = "172.16.0.0/12"
+  description = "VPC CIDR block."
 }
 
-variable "discord_webhook_url" {
-  description = "Discord webhook URL for AlertManager notifications"
+variable "vswitch_cidr" {
   type        = string
-  sensitive   = true
-  default     = ""
+  default     = "172.16.1.0/24"
+  description = "VSwitch CIDR block."
+}
+
+variable "internet_bandwidth" {
+  type        = number
+  default     = 5
+  description = "Internet max bandwidth out (Mbps). 5 Mbps for SSH + asset download."
+}
+
+# ─── Tags ────────────────────────────────────────────────────────────────────
+variable "environment" {
+  type        = string
+  default     = "Staging-Validation"
+  description = "Environment tag for resource organization."
+}
+
+variable "project" {
+  type        = string
+  default     = "KhaaosRun-PhD"
+  description = "Project tag."
 }
