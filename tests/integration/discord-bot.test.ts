@@ -1,10 +1,12 @@
 /**
  * KHAAOS RUN — Unit Tests: DiscordBot
  * ======================================
+ * Porta node:test da suíte da API "PhD-level" (#125) — runner padrão do repo.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { DiscordBot, type DiscordBotConfig, type DiscordEventType } from "@game/DiscordBot";
+import { describe, it, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { DiscordBot, type DiscordEventType } from "../../server/game/DiscordBot.ts";
 
 describe("DiscordBot", () => {
   let bot: DiscordBot;
@@ -23,11 +25,11 @@ describe("DiscordBot", () => {
 
   describe("construction", () => {
     it("should create bot with webhook config", () => {
-      expect(bot).toBeDefined();
+      assert.notStrictEqual(bot, undefined);
     });
 
     it("should report operational when webhook is set", () => {
-      expect(bot.isOperational()).toBe(true);
+      assert.strictEqual(bot.isOperational(), true);
     });
 
     it("should not be operational without webhook or token", () => {
@@ -35,7 +37,7 @@ describe("DiscordBot", () => {
         webhookUrl: "",
         botToken: "",
       });
-      expect(emptyBot.isOperational()).toBe(false);
+      assert.strictEqual(emptyBot.isOperational(), false);
     });
   });
 
@@ -44,14 +46,14 @@ describe("DiscordBot", () => {
   describe("stats", () => {
     it("should return initial stats", () => {
       const stats = bot.getStats();
-      expect(stats).toHaveProperty("messagesSent");
-      expect(stats).toHaveProperty("messagesDropped");
-      expect(stats).toHaveProperty("eventsProcessed");
-      expect(stats).toHaveProperty("isConnected");
-      expect(stats).toHaveProperty("queueSize");
-      expect(stats.messagesSent).toBe(0);
-      expect(stats.messagesDropped).toBe(0);
-      expect(stats.eventsProcessed).toBe(0);
+      assert.ok("messagesSent" in stats);
+      assert.ok("messagesDropped" in stats);
+      assert.ok("eventsProcessed" in stats);
+      assert.ok("isConnected" in stats);
+      assert.ok("queueSize" in stats);
+      assert.strictEqual(stats.messagesSent, 0);
+      assert.strictEqual(stats.messagesDropped, 0);
+      assert.strictEqual(stats.eventsProcessed, 0);
     });
   });
 
@@ -65,13 +67,13 @@ describe("DiscordBot", () => {
     ];
 
     it("should define all 11 event types", () => {
-      expect(eventTypes).toHaveLength(11);
+      assert.strictEqual(eventTypes.length, 11);
     });
 
     it("each event type should be a non-empty string", () => {
       for (const type of eventTypes) {
-        expect(type).toBeTruthy();
-        expect(typeof type).toBe("string");
+        assert.ok(type, `event type ${type} truthy`);
+        assert.strictEqual(typeof type, "string");
       }
     });
   });
@@ -87,39 +89,39 @@ describe("DiscordBot", () => {
         worldId: "cigkv",
       });
       // Result may be false due to fake webhook
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should process kill feed events", async () => {
       const result = await bot.sendKillFeed("Killer", "HURAN", "Victim", "VENEX", "AssaultRifle");
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should process match start events", async () => {
       const result = await bot.sendMatchStart("room_1", 50, "cigkv");
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should process match end events", async () => {
       const result = await bot.sendMatchEnd("room_1", "winner", "KHAEL", 15);
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should process ring phase events", async () => {
       const result = await bot.sendRingPhase("cigkv", 3, 5);
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should process world transition events", async () => {
       const result = await bot.sendWorldTransition("cigkv", "barburhen", 30);
-      expect(typeof result).toBe("boolean");
+      assert.strictEqual(typeof result, "boolean");
     });
 
     it("should increment eventsProcessed on broadcast", async () => {
       const before = bot.getStats().eventsProcessed;
       await bot.broadcastEvent("SPECTATOR_JOIN", { spectatorId: "spec_1" });
       const after = bot.getStats().eventsProcessed;
-      expect(after).toBe(before + 1);
+      assert.strictEqual(after, before + 1);
     });
   });
 
@@ -129,7 +131,7 @@ describe("DiscordBot", () => {
     it("should shutdown gracefully", async () => {
       await bot.shutdown();
       const stats = bot.getStats();
-      expect(stats.isConnected).toBe(false);
+      assert.strictEqual(stats.isConnected, false);
     });
   });
 });

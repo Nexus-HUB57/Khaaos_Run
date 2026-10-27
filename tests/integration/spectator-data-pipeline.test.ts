@@ -1,14 +1,16 @@
 /**
  * KHAAOS RUN — Unit Tests: SpectatorDataPipeline
  * ================================================
+ * Porta node:test da suíte da API "PhD-level" (#125) — runner padrão do repo.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, beforeEach, afterEach } from "node:test";
+import assert from "node:assert/strict";
 import {
   SpectatorDataPipeline,
   SpectatorConfig,
   type SpectatorGameData,
-} from "@game/SpectatorDataPipeline";
+} from "../../server/game/SpectatorDataPipeline.ts";
 
 describe("SpectatorDataPipeline", () => {
   let pipeline: SpectatorDataPipeline;
@@ -25,23 +27,23 @@ describe("SpectatorDataPipeline", () => {
 
   describe("configuration", () => {
     it("should have 10-second delay configured", () => {
-      expect(SpectatorConfig.delayMs).toBe(10_000);
+      assert.strictEqual(SpectatorConfig.delayMs, 10_000);
     });
 
     it("should have 500 max spectators per room", () => {
-      expect(SpectatorConfig.maxSpectatorsPerRoom).toBe(500);
+      assert.strictEqual(SpectatorConfig.maxSpectatorsPerRoom, 500);
     });
 
     it("should have 200ms batch interval", () => {
-      expect(SpectatorConfig.batchIntervalMs).toBe(200);
+      assert.strictEqual(SpectatorConfig.batchIntervalMs, 200);
     });
 
     it("should have 5000 global max spectators", () => {
-      expect(SpectatorConfig.globalMaxSpectators).toBe(5_000);
+      assert.strictEqual(SpectatorConfig.globalMaxSpectators, 5_000);
     });
 
     it("should have max 20 events per batch", () => {
-      expect(SpectatorConfig.maxEventsPerBatch).toBe(20);
+      assert.strictEqual(SpectatorConfig.maxEventsPerBatch, 20);
     });
   });
 
@@ -49,13 +51,13 @@ describe("SpectatorDataPipeline", () => {
 
   describe("lifecycle", () => {
     it("should create pipeline successfully", () => {
-      expect(pipeline).toBeDefined();
-      expect(pipeline.getSpectatorCount()).toBe(0);
+      assert.notStrictEqual(pipeline, undefined);
+      assert.strictEqual(pipeline.getSpectatorCount(), 0);
     });
 
     it("should destroy cleanly", () => {
       pipeline.destroy();
-      expect(pipeline.getSpectatorCount()).toBe(0);
+      assert.strictEqual(pipeline.getSpectatorCount(), 0);
     });
   });
 
@@ -79,7 +81,7 @@ describe("SpectatorDataPipeline", () => {
       };
 
       // Should not throw (no spectators yet, just silently drops)
-      expect(() => pipeline.pushGameData("room_1", data)).not.toThrow();
+      assert.doesNotThrow(() => pipeline.pushGameData("room_1", data));
     });
   });
 
@@ -87,15 +89,15 @@ describe("SpectatorDataPipeline", () => {
 
   describe("query methods", () => {
     it("should return 0 spectators for unknown room", () => {
-      expect(pipeline.getSpectatorCount("nonexistent")).toBe(0);
+      assert.strictEqual(pipeline.getSpectatorCount("nonexistent"), 0);
     });
 
     it("should return empty array for unknown room spectators", () => {
-      expect(pipeline.getSpectators("nonexistent")).toEqual([]);
+      assert.deepStrictEqual(pipeline.getSpectators("nonexistent"), []);
     });
 
     it("should return 0 for unknown delay buffer", () => {
-      expect(pipeline.getDelayBufferSize("nonexistent")).toBe(0);
+      assert.strictEqual(pipeline.getDelayBufferSize("nonexistent"), 0);
     });
   });
 
@@ -118,7 +120,7 @@ describe("SpectatorDataPipeline", () => {
       // Without actual WebSocket connections, delay buffer won't be initialized
       // This tests the data acceptance path
       pipeline.pushGameData("room_delay_test", data);
-      expect(pipeline.getDelayBufferSize("room_delay_test")).toBe(0);
+      assert.strictEqual(pipeline.getDelayBufferSize("room_delay_test"), 0);
     });
   });
 });

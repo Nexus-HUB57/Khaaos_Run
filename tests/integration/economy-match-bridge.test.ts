@@ -1,9 +1,11 @@
 /**
  * KHAAOS RUN — Unit Tests: EconomyMatchBridge
  * =============================================
+ * Porta node:test da suíte da API "PhD-level" (#125) — runner padrão do repo.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, beforeEach } from "node:test";
+import assert from "node:assert/strict";
 import {
   EconomyMatchBridge,
   SPECIES_CONFIG,
@@ -13,7 +15,7 @@ import {
   type KillEvent,
   type PhaseSurvivalEvent,
   type WorldTransitionEvent,
-} from "@game/EconomyMatchBridge";
+} from "../../server/game/EconomyMatchBridge.ts";
 
 describe("EconomyMatchBridge", () => {
   let bridge: EconomyMatchBridge;
@@ -27,24 +29,21 @@ describe("EconomyMatchBridge", () => {
   describe("SPECIES_CONFIG", () => {
     it("should define all 6 species", () => {
       const species = Object.keys(SPECIES_CONFIG) as SpeciesKey[];
-      expect(species).toHaveLength(6);
-      expect(species).toContain("HURAN");
-      expect(species).toContain("KHAEL");
-      expect(species).toContain("VENEX");
-      expect(species).toContain("ONITH");
-      expect(species).toContain("ZHEERS");
-      expect(species).toContain("SKEETW");
+      assert.strictEqual(species.length, 6);
+      for (const s of ["HURAN", "KHAEL", "VENEX", "ONITH", "ZHEERS", "SKEETW"]) {
+        assert.ok(species.includes(s as SpeciesKey), `espécie ${s} presente`);
+      }
     });
 
     it("should have kill multipliers > 0 for all species", () => {
-      for (const [key, config] of Object.entries(SPECIES_CONFIG)) {
-        expect(config.killMultiplier).toBeGreaterThan(0);
+      for (const config of Object.values(SPECIES_CONFIG)) {
+        assert.ok(config.killMultiplier > 0);
       }
     });
 
     it("KHAEL should have highest kill multiplier", () => {
       const maxMult = Math.max(...Object.values(SPECIES_CONFIG).map(s => s.killMultiplier));
-      expect(SPECIES_CONFIG.KHAEL.killMultiplier).toBe(maxMult);
+      assert.strictEqual(SPECIES_CONFIG.KHAEL.killMultiplier, maxMult);
     });
   });
 
@@ -52,13 +51,13 @@ describe("EconomyMatchBridge", () => {
 
   describe("KILL_RARITY_MODIFIER", () => {
     it("should define 6 rarity tiers", () => {
-      expect(Object.keys(KILL_RARITY_MODIFIER)).toHaveLength(6);
+      assert.strictEqual(Object.keys(KILL_RARITY_MODIFIER).length, 6);
     });
 
     it("should have ascending multipliers by rarity", () => {
       const tiers = ["COMUM", "INCOMUM", "RARO", "EPICO", "LENDARIO", "MITICO"] as const;
       for (let i = 1; i < tiers.length; i++) {
-        expect(KILL_RARITY_MODIFIER[tiers[i]]).toBeGreaterThan(KILL_RARITY_MODIFIER[tiers[i - 1]]);
+        assert.ok(KILL_RARITY_MODIFIER[tiers[i]] > KILL_RARITY_MODIFIER[tiers[i - 1]]);
       }
     });
   });
@@ -80,41 +79,41 @@ describe("EconomyMatchBridge", () => {
 
     it("should calculate base kill reward for HURAN + COMUM", () => {
       const result = bridge.calculateKillReward(baseKill);
-      expect(result.eventType).toBe("KILL");
-      expect(result.playerId).toBe("killer_1");
-      expect(result.krcAmount).toBeGreaterThan(0);
+      assert.strictEqual(result.eventType, "KILL");
+      assert.strictEqual(result.playerId, "killer_1");
+      assert.ok(result.krcAmount > 0);
       // base (150) × species (1.3) × rarity (1.0) × water (1.0) × downed (1.0) = 195
-      expect(result.krcAmount).toBe(195);
+      assert.strictEqual(result.krcAmount, 195);
     });
 
     it("should apply species multiplier correctly", () => {
       const khaelKill: KillEvent = { ...baseKill, victimSpecies: "KHAEL" };
       const result = bridge.calculateKillReward(khaelKill);
       // 150 × 1.5 = 225
-      expect(result.krcAmount).toBe(225);
+      assert.strictEqual(result.krcAmount, 225);
     });
 
     it("should apply rarity multiplier correctly", () => {
       const legendaryKill: KillEvent = { ...baseKill, victimSkinRarity: "LENDARIO" };
       const result = bridge.calculateKillReward(legendaryKill);
       // 150 × 1.3 × 3.5 = 682.5 → 683
-      expect(result.krcAmount).toBe(683);
+      assert.strictEqual(result.krcAmount, 683);
     });
 
     it("should apply water bonus for Huran in water", () => {
       const waterKill: KillEvent = { ...baseKill, victimInWater: true };
       const result = bridge.calculateKillReward(waterKill);
       // 150 × 1.3 × 1.0 × 1.3 = 253.5 → 254
-      expect(result.krcAmount).toBe(254);
-      expect(result.breakdown.waterBonus).toBe(1.3);
+      assert.strictEqual(result.krcAmount, 254);
+      assert.strictEqual(result.breakdown.waterBonus, 1.3);
     });
 
     it("should reduce reward for downed victim", () => {
       const downedKill: KillEvent = { ...baseKill, victimWasDowned: true };
       const result = bridge.calculateKillReward(downedKill);
       // 150 × 1.3 × 1.0 × 1.0 × 0.3 = 58.5 → 59
-      expect(result.krcAmount).toBe(59);
-      expect(result.breakdown.downedModifier).toBe(0.3);
+      assert.strictEqual(result.krcAmount, 59);
+      assert.strictEqual(result.breakdown.downedModifier, 0.3);
     });
 
     it("should cap at maxKillReward", () => {
@@ -125,16 +124,16 @@ describe("EconomyMatchBridge", () => {
         victimInWater: true,
       };
       const result = bridge.calculateKillReward(extremeKill);
-      expect(result.krcAmount).toBeLessThanOrEqual(EconomyMatchConfig.maxKillReward);
+      assert.ok(result.krcAmount <= EconomyMatchConfig.maxKillReward);
     });
 
     it("should include full breakdown", () => {
       const result = bridge.calculateKillReward(baseKill);
-      expect(result.breakdown).toHaveProperty("base");
-      expect(result.breakdown).toHaveProperty("speciesMultiplier");
-      expect(result.breakdown).toHaveProperty("rarityMultiplier");
-      expect(result.breakdown).toHaveProperty("waterBonus");
-      expect(result.breakdown).toHaveProperty("downedModifier");
+      assert.ok("base" in result.breakdown);
+      assert.ok("speciesMultiplier" in result.breakdown);
+      assert.ok("rarityMultiplier" in result.breakdown);
+      assert.ok("waterBonus" in result.breakdown);
+      assert.ok("downedModifier" in result.breakdown);
     });
   });
 
@@ -151,9 +150,9 @@ describe("EconomyMatchBridge", () => {
       const r1 = bridge.calculatePhaseSurvivalReward(phase1);
       const r3 = bridge.calculatePhaseSurvivalReward(phase3);
 
-      expect(r1.krcAmount).toBe(200);  // 200 × 1
-      expect(r3.krcAmount).toBe(600);  // 200 × 3
-      expect(r3.krcAmount).toBeGreaterThan(r1.krcAmount);
+      assert.strictEqual(r1.krcAmount, 200);  // 200 × 1
+      assert.strictEqual(r3.krcAmount, 600);  // 200 × 3
+      assert.ok(r3.krcAmount > r1.krcAmount);
     });
   });
 
@@ -166,8 +165,8 @@ describe("EconomyMatchBridge", () => {
         timestamp: Date.now(),
       };
       const result = bridge.calculateWorldTransitionCost(event);
-      expect(result.krcAmount).toBe(-50_000);
-      expect(result.eventType).toBe("WORLD_TRANSITION");
+      assert.strictEqual(result.krcAmount, -50_000);
+      assert.strictEqual(result.eventType, "WORLD_TRANSITION");
     });
   });
 
@@ -200,19 +199,19 @@ describe("EconomyMatchBridge", () => {
       bridge.recordReward("room_test", transResult);
 
       const summary = bridge.getMatchSummary("room_test");
-      expect(summary).not.toBeNull();
-      expect(summary!.totalKrcMinted).toBeGreaterThan(0);
-      expect(summary!.totalKrcBurned).toBe(50_000);
-      expect(summary!.killRewards).toBeGreaterThan(0);
-      expect(summary!.phaseRewards).toBeGreaterThan(0);
-      expect(summary!.transitionCosts).toBe(50_000);
+      assert.notStrictEqual(summary, null);
+      assert.ok(summary!.totalKrcMinted > 0);
+      assert.strictEqual(summary!.totalKrcBurned, 50_000);
+      assert.ok(summary!.killRewards > 0);
+      assert.ok(summary!.phaseRewards > 0);
+      assert.strictEqual(summary!.transitionCosts, 50_000);
 
       const finalized = bridge.finalizeMatchEconomy("room_test");
-      expect(finalized).not.toBeNull();
-      expect(finalized!.players.size).toBe(1);
+      assert.notStrictEqual(finalized, null);
+      assert.ok(finalized!.players.size === 1);
 
       bridge.destroyMatchEconomy("room_test");
-      expect(bridge.getMatchSummary("room_test")).toBeNull();
+      assert.strictEqual(bridge.getMatchSummary("room_test"), null);
     });
   });
 });
