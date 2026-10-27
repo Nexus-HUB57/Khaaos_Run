@@ -17,3 +17,6 @@ game-runtime/coverage/
 .data/
 __pycache__/
 artifacts/release/
+
+# dumps locais de infra (redis rdb, sqlite auxiliares)
+*.rdb

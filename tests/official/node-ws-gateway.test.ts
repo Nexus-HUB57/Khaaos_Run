@@ -367,3 +367,127 @@ test("RoomManager: destruição da sala derruba sessões relayadas com room_clos
     __resetLocalRelayBusForTests();
   }
 });
+
+// ─── Regressão F16: lazy wrappers adotam Redis quando ele surge depois ──────
+
+function fakeRedisClient() {
+  const hashes = new Map<string, Map<string, string>>();
+  const leases = new Map<string, string>();
+  const subscribers: ((raw: string) => void)[] = [];
+  const published: { channel: string; message: string }[] = [];
+  const client: any = {
+    hSet: async (key: string, field: string, value: string) => {
+      if (!hashes.has(key)) hashes.set(key, new Map());
+      hashes.get(key)!.set(field, value);
+    },
+    hDel: async (key: string, field: string) => {
+      hashes.get(key)?.delete(field);
+    },
+    hVals: async (key: string) => [...(hashes.get(key)?.values() ?? [])],
+    set: async (key: string, value: string, _options: { PX: number }) => {
+      leases.set(key, value);
+    },
+    exists: async (key: string) => (leases.has(key) ? 1 : 0),
+    publish: async (channel: string, message: string) => {
+      published.push({ channel, message });
+      for (const sub of [...subscribers]) sub(message);
+      return subscribers.length;
+    },
+    duplicate: () => ({
+      connect: async () => undefined,
+      subscribe: async (_channel: string, handler: (raw: string) => void) => {
+        subscribers.push(handler);
+      },
+      close: async () => undefined,
+      quit: async () => undefined,
+    }),
+  };
+  return { client, hashes, leases, published };
+}
+
+test("gateway lazy: registro de nós adota o índice Redis quando o cliente surge depois do boot", async () => {
+  const fake = fakeRedisClient();
+  let client: any = null;
+  const gw = new NodeWsGateway({
+    nodeId: `lazy-reg-${uniqueId("t")}`,
+    enabled: true,
+    prefix: "khaaos_lazy",
+    endpoint: "http://127.0.0.1:1",
+    redisClientProvider: () => client,
+  });
+  try {
+    await gw.start(); // provider null → fallback local
+    await (gw as any).__heartbeatNowForTests();
+    assert.equal(
+      fake.hashes.get("khaaos_lazy:nodes:index")?.size ?? 0,
+      0,
+      "sem Redis: nada escrito no índice distribuído",
+    );
+
+    client = fake.client; // Redis "sobe" depois do boot
+    await (gw as any).__heartbeatNowForTests();
+    const field = [...(fake.hashes.get("khaaos_lazy:nodes:index")?.keys() ?? [])][0];
+    assert.ok(field, "nó registrado no índice Redis após a adoção tardia");
+    const entry = JSON.parse(fake.hashes.get("khaaos_lazy:nodes:index")!.get(field)!);
+    assert.equal(entry.nodeId, (gw as any).nodeId);
+    assert.equal(entry.endpoint, "http://127.0.0.1:1");
+    assert.ok([...fake.leases.keys()].some((k) => k.startsWith("khaaos_lazy:node:") && k.endsWith(":alive")), "lease de vivacidade no Redis");
+  } finally {
+    await gw.stop();
+  }
+});
+
+test("gateway lazy: túnel c2s cross-node funciona sobre Redis adotado tardiamente", async () => {
+  const fake = fakeRedisClient();
+  let client: any = null;
+  const suffix = uniqueId("lazy");
+  const nodeOrigin = `lazy-O-${suffix}`;
+  const nodeHost = `lazy-H-${suffix}`;
+  const hostReceived: { userId: string; msg: any }[] = [];
+  const origin = new NodeWsGateway({
+    nodeId: nodeOrigin,
+    enabled: true,
+    prefix: "khaaos_lazy",
+    redisClientProvider: () => client,
+  });
+  const host = new NodeWsGateway({
+    nodeId: nodeHost,
+    enabled: true,
+    prefix: "khaaos_lazy",
+    redisClientProvider: () => client,
+    callbacks: {
+      onSessionStart: () => {},
+      onClientMessage: (_socket, userId, _displayName, msg) => {
+        hostReceived.push({ userId, msg });
+      },
+    },
+  });
+  try {
+    await host.start(); // ambos bootam SEM Redis (fallback local)
+    await origin.start();
+    assert.equal(fake.published.length, 0, "sem Redis: nada publicado via Redis");
+
+    client = fake.client; // Redis "sobe"
+    await host.__heartbeatNowForTests(); // host (receptor) inscreve o canal relay
+    await origin.__heartbeatNowForTests(); // origem descobre o host no índice
+
+    const { socket } = fakeSocket();
+    const opened = (origin as any).openRelay("u-lazy", "Lazy", socket, nodeHost, `room-${suffix}`, "CIGKV");
+    assert.equal(opened, true, "túnel aceito após a adoção tardia");
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(origin.relayedRoomId("u-lazy"), `room-${suffix}`);
+    const delivered = hostReceived.find((m) => m.userId === "u-lazy");
+    assert.ok(delivered, "join sintético entregue ao host através do Redis adotado tarde");
+    assert.equal(delivered.msg.type, "join");
+    assert.equal(delivered.msg.roomId, `room-${suffix}`);
+    assert.ok(
+      fake.published.some((p) => p.channel === `khaaos_lazy:relay:${nodeHost}`),
+      "publicação passou pelo transporte Redis (não pelo barramento local)",
+    );
+  } finally {
+    await origin.stop();
+    await host.stop();
+  }
+});

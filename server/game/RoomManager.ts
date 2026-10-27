@@ -33,9 +33,11 @@ import { deriveCombatLoadout, getLootWeight, hasValidDurability } from "./loadou
 import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
+import { computeMatchPayouts, settleMatchPayouts } from "./EconomyPayoutSettlement";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
 import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integrations/auth/origin";
+import { routeWebSocketUpgrade } from "./wsUpgradeRouter";
 import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
@@ -298,9 +300,12 @@ class RoomManager {
   }
 
   attach(httpServer: Server) {
+    // noServer + roteador compartilhado: o SpectatorPipeline (/ws/spectator)
+    // vive no MESMO httpServer e um listener ws com `{ server }` responde 400
+    // a paths alheios, matando o handshake deste servidor (corrida contra o
+    // verifyClient async). Detalhes em wsUpgradeRouter.ts.
     this.wss = new WebSocketServer({
-      server: httpServer,
-      path: "/ws",
+      noServer: true,
       maxPayload: 16 * 1024,
       perMessageDeflate: false,
       handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
@@ -328,6 +333,9 @@ class RoomManager {
           done(true);
         })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
+    });
+    routeWebSocketUpgrade(httpServer, "/ws", (req, socket, head) => {
+      this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit("connection", ws, req));
     });
     this.matchmaking.start();
 
@@ -395,6 +403,7 @@ class RoomManager {
           ws.close(1011, "Realtime security unavailable");
           return;
         }
+        let msgType: string | undefined;
         try {
           const parsed = clientMessageSchema.safeParse(JSON.parse(raw.toString()));
           if (!parsed.success) {
@@ -402,6 +411,7 @@ class RoomManager {
             return;
           }
           const msg = parsed.data as ClientMessage;
+          msgType = msg.type;
           if ((msg.type === "join" || msg.type === "queue" || msg.type === "create_lobby") && msg.worldId && isWorldId(msg.worldId)) {
             this.socketWorlds.set(ws, msg.worldId);
           } else if (msg.type === "join" && !msg.roomId) {
@@ -414,7 +424,15 @@ class RoomManager {
           const activeRoomId = this.userToRoom.get(userId);
           const activeWorld = activeRoomId ? this.rooms.get(activeRoomId)?.worldId : undefined;
           if (activeWorld) this.socketWorlds.set(ws, activeWorld);
-        } catch {
+        } catch (error) {
+          // Observabilidade: o cliente recebe apenas "Invalid message" (sem
+          // leak), mas o servidor registra a causa real para diagnóstico
+          // (console.warn inspeciona a cadeia .cause do drizzle/pg).
+          console.warn("[RoomManager] message handler error", {
+            userId,
+            type: msgType,
+            error,
+          });
           this.send(ws, { type: "error", message: "Invalid message" });
         }
       });
@@ -1132,6 +1150,30 @@ class RoomManager {
           });
           this.broadcastRoomState(room);
         });
+
+      // Fase 16 — payouts KRC do fim de partida (2PC + Idempotency-Key
+      // determinística payout.<roomId>.<userId>): PREPARE reserva na treasury,
+      // COMMIT credita a wallet; crash entre fases é concluído pelo recovery.
+      // Falha de settlement NUNCA propaga para o fluxo da partida.
+      const payouts = computeMatchPayouts(participants.map((p) => ({
+        userId: p.userId,
+        kills: p.kills,
+        placement: p.placement,
+        totalPlayers: participants.length,
+      })));
+      if (payouts.length > 0) {
+        settleMatchPayouts(room.id, payouts)
+          .then((summary) => {
+            console.log("[Payouts] settlement concluído", {
+              roomId: summary.roomId,
+              totalKrcCommitted: summary.totalKrcCommitted,
+              players: summary.settled.length,
+            });
+          })
+          .catch((err) => {
+            console.error("[Payouts] settlement falhou (recovery cobrirá)", err);
+          });
+      }
     }
   }
 
