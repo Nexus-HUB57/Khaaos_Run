@@ -229,3 +229,85 @@ test('variedade de operativos: 16 variantes constroem sem erro e com estruturas 
     }
   }
 });
+
+// ---------- Fase 16 (P1) — locomoção HUMANA (fim da robotização na passada) ----------
+test('pivô do tornozelo existe e os pés rolam calcanhar→ponta em contrafase', () => {
+  const { parts } = createOperative({ variant: 'onith' });
+  assert.ok(parts.legL.foot && parts.legR.foot, 'parts.leg*.foot expostos (additivo)');
+  // em uma passada completa os dois pés variam (rolagem) e ficam em contrafase
+  const footL = [], footR = [];
+  for (let i = 0; i <= 40; i++) {
+    animateOperative(parts, { t: i / 30, speedNorm: 1 });
+    footL.push(parts.legL.foot.rotation.x);
+    footR.push(parts.legR.foot.rotation.x);
+  }
+  const range = (a) => Math.max(...a) - Math.min(...a);
+  assert.ok(range(footL) > .3, `pé esquerdo rola na passada (${range(footL).toFixed(2)})`);
+  assert.ok(range(footR) > .3, `pé direito rola na passada (${range(footR).toFixed(2)})`);
+  // contrafase: as trajetórias dos dois pés nunca coincidem (fases opostas)
+  assert.notEqual(footL.map((v) => v.toFixed(3)).join(','), footR.map((v) => v.toFixed(3)).join(','), 'fases opostas entre os pés');
+  // repouso: peso desloca nos pés (sem rigidez de estátua)
+  const idleZ = new Set();
+  for (let i = 0; i < 120; i++) {
+    animateOperative(parts, { t: i / 30, speedNorm: 0 });
+    idleZ.add(parts.legL.foot.rotation.z.toFixed(4));
+  }
+  assert.ok(idleZ.size > 10, `transferência de peso no pé no idle (${idleZ.size})`);
+  // poses especiais também controlam os pés (sem congelar no último passo)
+  animateOperative(parts, { t: 1, speedNorm: .5, crouch: true });
+  assert.ok(Math.abs(parts.legL.foot.rotation.x - .2) < 1e-9, 'agachado apoia nos antepés');
+  animateOperative(parts, { t: 2, speedNorm: 0, knocked: true });
+  assert.ok(parts.legL.foot.rotation.x > .2, 'rastejo arrasta a ponta do pé');
+});
+
+test('cadência escala com a velocidade (andar ≠ sprint no relógio da passada)', () => {
+  const { parts } = createOperative({ variant: 'onith' });
+  // conta zero-crossings de hip.x (passos) em 3 s para cada velocidade
+  const steps = (speedNorm) => {
+    let crossings = 0, prev = null;
+    for (let i = 0; i <= 90; i++) {
+      animateOperative(parts, { t: i / 30, speedNorm });
+      const v = Math.sign(parts.legL.hip.rotation.x);
+      if (prev !== null && v !== prev && v !== 0) crossings++;
+      prev = v;
+    }
+    return crossings;
+  };
+  const walk = steps(.35);
+  const sprint = steps(1);
+  assert.ok(sprint > walk, `sprint cadencia mais que caminhada (${sprint} > ${walk})`);
+});
+
+test('inércia de sprint: tronco inclina para dentro proporcional à velocidade', () => {
+  const { parts } = createOperative({ variant: 'onith' });
+  // mesma fase de passada em duas velocidades — a inclinação média cresce
+  const leanAt = (speedNorm) => {
+    let sum = 0;
+    for (let i = 0; i <= 45; i++) {
+      animateOperative(parts, { t: i / 30, speedNorm });
+      sum += parts.torso.rotation.x;
+    }
+    return sum / 46;
+  };
+  const slow = leanAt(.2);
+  const fast = leanAt(1);
+  assert.ok(fast > slow + .05, `lean sprint (${fast.toFixed(3)}) > andando (${slow.toFixed(3)})`);
+});
+
+test('pelve gira contra o tronco (transferência de peso real, não torso de placa)', () => {
+  const { parts } = createOperative({ variant: 'onith' });
+  const pelvisY = new Set(), footFin = [];
+  for (let i = 0; i < 90; i++) {
+    animateOperative(parts, { t: i / 30, speedNorm: 1 });
+    pelvisY.add(parts.legL.hip.rotation.y.toFixed(3));
+    footFin.push(Number.isFinite(parts.legL.foot.rotation.x + parts.legR.foot.rotation.x));
+  }
+  assert.ok(pelvisY.size > 12, `pelve oscila no eixo Y (${pelvisY.size})`);
+  assert.ok(footFin.every(Boolean), 'pés sempre finitos');
+  // e a rotação da pelve é ANTI-correlata ao sway do tronco (mesma frequência, sinais opostos)
+  animateOperative(parts, { t: .04, speedNorm: 1 });
+  const pelv = parts.legL.hip.rotation.y;
+  const sway = parts.torso.rotation.y;
+  assert.ok(Math.sign(pelv) === -Math.sign(sway) || Math.abs(pelv) < .005 || Math.abs(sway) < .005,
+    `pelve (${pelv.toFixed(3)}) contra o tronco (${sway.toFixed(3)})`);
+});
