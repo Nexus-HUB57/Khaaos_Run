@@ -1,0 +1,13 @@
+{
+  "asset_class": "NiagaraSystem",
+  "asset_name": "VFX_MuzzleFlash_Shotgun",
+  "description": "Shotgun muzzle flash with spread embers",
+  "type": "Combat",
+  "pool_size": 16,
+  "use_pooling": true,
+  "auto_destroy": true,
+  "significance_rank": 1,
+  "gpu_particles": true,
+  "max_particles": 512,
+  "budget_ms": 0.5
+}
