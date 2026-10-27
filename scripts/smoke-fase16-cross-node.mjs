@@ -26,9 +26,12 @@
 //   node scripts/smoke-fase16-cross-node.mjs
 //   SMOKE_EXTERNAL=1 SMOKE_NODE_A_PORT=8900 SMOKE_NODE_B_PORT=8901 \
 //     node scripts/smoke-fase16-cross-node.mjs
+//   SMOKE_EXTERNAL=1 SMOKE_KILL_COMMAND="docker compose -f infra/staging/docker-compose.yml kill app-a" \
+//     node scripts/smoke-fase16-cross-node.mjs   # morte de nó REAL no staging gerenciado
 //
 // Infra esperada: PostgreSQL (DATABASE_URL migrado) + Redis master
 // (REDIS_URL) + réplica opcional (SMOKE_REPLICA_URL) já em execução.
+// redis-cli é resolvido em: REDIS_CLI → PATH (redis-tools) → sandbox legado.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
@@ -64,12 +67,33 @@ async function poll(fn, tries, everyMs = 500) {
 }
 
 // ─── Redis helpers (verificação de 2 nós reais via RESP direto) ─────────────
+// redis-cli portável: REDIS_CLI explícito → PATH (redis-tools em CI/staging)
+// → caminho legado do sandbox (self-hosted). Falha RÁPIDA com instrução.
+function resolveRedisCli() {
+  const candidates = [
+    process.env.REDIS_CLI,
+    "redis-cli", // resolve via PATH pelo execFileSync abaixo
+    "/home/z/my-project/runtime-infra/redis-7.4.1/src/redis-cli", // sandbox self-hosted
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      return candidate;
+    } catch { /* tenta o próximo */ }
+  }
+  console.error(
+    "[f16] redis-cli não encontrado. Instale redis-tools (apt) ou exporte REDIS_CLI=/caminho/redis-cli",
+  );
+  process.exit(3);
+}
+const REDIS_CLI_BIN = resolveRedisCli();
+
 function redisCommand(url, ...parts) {
   const parsed = new URL(url);
   const args = ["-h", parsed.hostname, "-p", parsed.port || "6379"];
   if (parsed.password) args.push("-a", parsed.password, "--no-auth-warning");
   args.push(...parts.map(String));
-  return execFileSync("/home/z/my-project/runtime-infra/redis-7.4.1/src/redis-cli", args, { encoding: "utf8" }).trim();
+  return execFileSync(REDIS_CLI_BIN, args, { encoding: "utf8" }).trim();
 }
 
 function nodeEnv(nodeId, port) {
@@ -273,13 +297,25 @@ assert.ok(p2Ticks > 0, "zone_tick s2c A→B entregue ao cliente relayado");
 
 // ═══ 5. Combate cross-node: abate através do túnel ═══════════════════════════
 console.log("[f16] 5. combate cross-node (p1 abate p2 através do túnel)");
-for (let shot = 0; shot < 10; shot++) {
+// Atualizações de posição frescas do p2: o rewind do lag-comp precisa de
+// histórico recente no nó dono (histórico velho → MISS por distância e a
+// bateria pode terminar sem abate — flakiness observada no guard de CI).
+for (let tick = 0; tick < 4; tick++) {
+  send(p2, { type: "position", x: 50, y: 50 });
+  send(p1, { type: "position", x: 50, y: 50 });
+  await sleep(120);
+}
+// 16 tiros a 850 ms (> cooldown de 800 ms): eliminação garantida mesmo com
+// 2-3 misses de lag-comp — o guard não pode ser flaky.
+let eliminated = null;
+let eliminatedP2 = null;
+for (let shot = 0; shot < 16 && !eliminated; shot++) {
   send(p1, { type: "attack", targetId: "kr_player2" });
   await sleep(850);
+  eliminated = (p1.byType.get("player_eliminated") ?? []).find((m) => m.userId === "kr_player2") ?? null;
 }
-const eliminated = await waitMessage(p1, "player_eliminated", (m) => m.userId === "kr_player2", 20);
+eliminatedP2 = (p2.byType.get("player_eliminated") ?? []).find((m) => m.userId === "kr_player2") ?? null;
 assert.ok(eliminated && eliminated.eliminatorId === "kr_player", "abate aplicado no nó dono (A)");
-const eliminatedP2 = await waitMessage(p2, "player_eliminated", (m) => m.userId === "kr_player2", 20);
 assert.ok(eliminatedP2, "player_eliminated entregue à vítima relayada em B");
 console.log("[f16] abate cross-node OK (eliminado visível no dono e no relayado)");
 
@@ -330,10 +366,18 @@ const unbalanced = await pgQuery(
 assert.equal(unbalanced[0].n, 0, "todas as operações do ledger balanceadas");
 console.log("[f16] PAGOS 2PC OK — claims COMMITTED, ledger balanceado, wallets creditadas uma vez");
 
-// ═══ 7. Morte do nó dono (apenas modo self-hosted) ═══════════════════════════
-if (!EXTERNAL) {
-  console.log("[f16] 7. morte do nó dono (SIGKILL no A)");
-  nodeA.kill("SIGKILL");
+// ═══ 7. Morte do nó dono ═════════════════════════════════════════════════════
+const KILL_COMMAND = process.env.SMOKE_KILL_COMMAND || "";
+if (!EXTERNAL || KILL_COMMAND) {
+  console.log("[f16] 7. morte do nó dono" + (EXTERNAL ? " (SMOKE_KILL_COMMAND em staging gerenciado)" : " (SIGKILL no A)"));
+  if (EXTERNAL) {
+    // Staging gerenciado: o mecanismo de morte é injetado pelo deployer
+    // (ex.: SMOKE_KILL_COMMAND="docker compose -f infra/staging/docker-compose.yml kill app-a").
+    const { execSync } = await import("node:child_process");
+    execSync(KILL_COMMAND, { stdio: "inherit" });
+  } else {
+    nodeA.kill("SIGKILL");
+  }
   // Janela para o Redis reaproveitar a conexão morta (SIGKILL → FIN/RST):
   // sem isso o publish do próximo passo pode contar o subscriber moribundo.
   await sleep(600);
@@ -344,12 +388,14 @@ if (!EXTERNAL) {
   console.log(`[f16] ROOM_NODE_LOST OK (motivo: ${lost.reason ?? lost.message?.slice(0, 40)})`);
 
   // Reconcile do mesh: sala do nó A some do índice Redis (lease expira).
+  // Pior caso: lease 30 s (última batida ≤10 s antes da morte) + ciclo de
+  // heartbeat/reconcile de 10 s do nó sobrevivente ≈ 40 s — janela de 60 s.
   const cleaned = await poll(() => {
     try {
       const raw = redisCommand(REDIS_URL, "HGET", `${REDIS_NAMESPACE}:rooms:index`, lobbyId);
       return raw === "" || raw === null ? true : null;
     } catch { return null; }
-  }, 60, 500);
+  }, 100, 600);
   assert.ok(cleaned, "mesh reconciliou: sala do nó morto removida do índice Redis");
   console.log("[f16] reconcile OK — sala órfã removida do índice distribuído");
 
@@ -359,7 +405,7 @@ if (!EXTERNAL) {
   assert.ok(reanchored, "p2 reancorado em sala local do nó B após a perda do nó");
   console.log(`[f16] reancoragem OK — nova sala local em B: ${reanchored.roomId}`);
 } else {
-  console.log("[f16] 7. SMOKE_EXTERNAL=1 — teste de morte de nó pulado (staging gerenciado)");
+  console.log("[f16] 7. SMOKE_EXTERNAL=1 sem SMOKE_KILL_COMMAND — morte de nó pulada (staging gerenciado)");
 }
 
 try { p1.ws.close(); p2.ws.close(); } catch {}
