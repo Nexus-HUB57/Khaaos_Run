@@ -17,6 +17,9 @@ on:
       - 'Unreal/KhaaosRun/**'
       - 'scripts/build/ue58_preflight.mjs'
       - 'scripts/build/fix_ue1021_includes.py'
+      - 'scripts/build/export_barburhen_obj.py'
+      - 'scripts/build/bake_barburhen_colliders.py'
+      - 'scripts/build/import_barburhen_map.py'
       - '.github/workflows/ue5-preflight.yml'
   push:
     branches: [main]
@@ -24,6 +27,9 @@ on:
       - 'Unreal/KhaaosRun/**'
       - 'scripts/build/ue58_preflight.mjs'
       - 'scripts/build/fix_ue1021_includes.py'
+      - 'scripts/build/export_barburhen_obj.py'
+      - 'scripts/build/bake_barburhen_colliders.py'
+      - 'scripts/build/import_barburhen_map.py'
       - '.github/workflows/ue5-preflight.yml'
 
 concurrency:
@@ -53,6 +59,17 @@ jobs:
           python3 scripts/build/fix_ue1021_includes.py selftest
           python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun
 
+      - name: Fase 1 — Barburhen OBJ + colliders complexos (engine-less)
+        # Pipeline determinística do mapa Barburhen: export OBJ + baking de
+        # colliders complexos + contrato de import. Os selftests validam
+        # parser/decimação/determinismo byte a byte SEM engine.
+        run: |
+          python3 scripts/build/export_barburhen_obj.py --selftest
+          python3 scripts/build/bake_barburhen_colliders.py --selftest
+          python3 scripts/build/export_barburhen_obj.py mvp_output/assets/worlds/Barburhen_Map.obj
+          python3 scripts/build/bake_barburhen_colliders.py mvp_output/assets/worlds/Barburhen_Map.obj mvp_output/assets/worlds/Barburhen_colliders.json
+          ls -la mvp_output/assets/worlds/
+
       - name: Validate UE5.8 project structure
         run: node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun
 
@@ -66,6 +83,7 @@ jobs:
             echo "|--------|--------|"
             echo "| EngineAssociation 5.8 | $(node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Guard UE1021 (fix_ue1021_includes) | $(python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo VIOLAÇÃO) |"
+            echo "| Fase 1 — Barburhen OBJ + colliders | $(python3 scripts/build/export_barburhen_obj.py --selftest >/dev/null 2>&1 && python3 scripts/build/bake_barburhen_colliders.py --selftest >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Game/Editor/Server targets | ✅ validados no preflight |"
             echo "| Includes de projeto | ✅ resolvidos em Source/ |"
           } >> $GITHUB_STEP_SUMMARY
