@@ -28,6 +28,7 @@ import {
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
+import { NodeWsGateway } from "./NodeWsGateway";
 import { deriveCombatLoadout, getLootWeight, hasValidDurability } from "./loadout";
 import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
@@ -242,6 +243,26 @@ class RoomManager {
     publishControl: (event) => distributedState.publishControl(event),
   });
 
+  /**
+   * Node WS Gateway (proxy cross-node — auditoria Fase 2): roteia mensagens
+   * de clientes por nodeId até o nó dono da sala (RelaySocket), mantendo o
+   * socket no nó de origem. Sem Redis/gateway, o caminho legado
+   * (ROOM_REMOTE_NODE + reconexão) permanece intacto.
+   */
+  readonly gateway = new NodeWsGateway({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient() as never,
+    callbacks: {
+      onSessionStart: (socket) => this.registerSocket(socket.userId, socket as unknown as WebSocket),
+      onClientMessage: (socket, userId, displayName, msg, relayAuthorized) =>
+        this.handleMessage(userId, displayName, socket as unknown as WebSocket, msg as ClientMessage, { relayInviteAuthorized: relayAuthorized }),
+      onSessionEnd: (socket) => {
+        this.unregisterSocket(socket.userId, socket as unknown as WebSocket);
+        this.onDisconnect(socket.userId, socket as unknown as WebSocket);
+      },
+    },
+  });
+
   /** Attach to existing HTTP server */
   constructor() {
     this.matchmaking = new MatchmakingService(
@@ -312,6 +333,14 @@ class RoomManager {
 
     // Event Mesh: leases + reconcile (queda de nó, órfãos self) a cada 10s.
     this.mesh.startHeartbeat(() => new Set(this.rooms.keys()));
+
+    // Gateway cross-node: registro de nós + canal relay deste nó (best-effort;
+    // sem Redis fica desabilitado e o caminho legado ROOM_REMOTE_NODE vale).
+    void this.gateway.start().catch((error) => {
+      console.warn("[RoomManager] gateway cross-node indisponível", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     this.wss.on("connection", (ws, req) => {
       const userId = (req as typeof req & { khaaosUserId?: string }).khaaosUserId;
@@ -393,6 +422,8 @@ class RoomManager {
       ws.on("close", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        // Gateway: se este socket sustentava um túnel relay, encerra (cls).
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -400,6 +431,7 @@ class RoomManager {
       ws.on("error", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -410,6 +442,14 @@ class RoomManager {
 
   stop() {
     this.matchmaking.stop();
+    void this.gateway.stop().catch(() => undefined);
+  }
+
+  /** Somente testes: alinha mesh + gateway deste manager a um nodeId de
+   *  barramento LOCAL (multi-nó simulado no mesmo processo, sem Redis). */
+  async __startLocalBusNodeForTests(nodeId: string): Promise<void> {
+    (this as unknown as { mesh: RoomEventMesh }).mesh = new RoomEventMesh({ nodeId, enabled: false });
+    await this.gateway.__startLocalBusForTests(nodeId);
   }
 
   isInLiveMatch(userId: string): boolean {
@@ -429,7 +469,12 @@ class RoomManager {
     displayName: string,
     ws: WebSocket,
     msg: ClientMessage,
+    relayContext?: { relayInviteAuthorized?: boolean },
   ) {
+    // Gateway cross-node: usuário com túnel ativo tem a mensagem roteada ao
+    // nó dono da sala. Operações de âncora (join/queue/create_lobby/join_code)
+    // encerram o túnel e caem para o dispatch LOCAL abaixo.
+    if (this.gateway.routeIfRelayed(userId, msg as unknown as { type: string } & Record<string, unknown>)) return;
     switch (msg.type) {
       case "join": {
         if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
@@ -442,8 +487,18 @@ class RoomManager {
           this.send(ws, { type: "error", message: requestedRoom.isPrivate ? "Sala não encontrada" : "A sala pertence a outro mundo" });
           break;
         }
+        // Gateway: roomId explícito que só existe em OUTRO nó → túnel relay
+        // (antes disso o join caia silenciosamente em um lobby local novo).
+        // Salas PRIVADAS remotas NUNCA relayam por roomId cru — exigem
+        // join_code (a autorização de convite via túnel vem do hop de relay).
+        if (msg.roomId && !requestedRoom) {
+          const remote = await this.mesh.getRemoteRoom(msg.roomId).catch(() => null);
+          if (remote && !remote.isPrivate && this.gateway.relaySupported(remote.nodeId)) {
+            if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
+          }
+        }
         const roomId = msg.roomId || this.findOrCreateLobby(worldId);
-        await this.joinRoom(userId, displayName, ws, roomId, worldId);
+        await this.joinRoom(userId, displayName, ws, roomId, worldId, relayContext?.relayInviteAuthorized === true);
         break;
       }
       case "resume": {
@@ -1559,6 +1614,8 @@ class RoomManager {
     this.rooms.delete(roomId);
     // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
     void this.mesh.markRoomClosed(roomId, "destroyed").catch(() => undefined);
+    // Gateway: sessões relayadas desta sala recebem drop (cliente reentra).
+    this.gateway.dropSessionsForRoom(roomId);
   }
 
   // ─── Lobby controls ──────────────────────────────────────────────────────
@@ -1677,6 +1734,13 @@ class RoomManager {
       // índice distribuído antes de declarar o código inválido.
       const remote = await this.mesh.findRemoteByInviteCode(normalized).catch(() => null);
       if (remote) {
+        // Gateway: com registro de nós vivo, ABRIMOS TÚNEL — o socket fica
+        // neste nó e as mensagens são roteadas por nodeId ao dono da sala.
+        // O join sintético carrega ra=1 (autorização do hop, validada AQUI
+        // na origem contra o índice do mesh).
+        if (this.gateway.relaySupported(remote.nodeId)) {
+          if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId, { inviteAuthorized: true })) return;
+        }
         this.send(ws, {
           type: "error",
           code: "ROOM_REMOTE_NODE",
@@ -1903,3 +1967,5 @@ class RoomManager {
 }
 
 export const roomManager = new RoomManager();
+// Classe exportada para testes multi-nó (instâncias adicionais no mesmo processo).
+export { RoomManager as RoomManagerClass };
