@@ -347,8 +347,12 @@ export function skinMaterial(skin = '#d9a06b') {
 }
 
 // ---- rosto pintado (olhos, sobrancelhas, sombreado) ----
-export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717') {
-  return memo(`face:${skin}:${eyes}:${hair}`, () => {
+// Fase 12 — blendshapes faciais: cada expressão é uma VARIANTE da textura do
+// rosto (mesma base de sombreado/anatomia, olhos-sobrancelhas-boca redesenha-
+// dos). `expression`: 'neutral' | 'blink' | 'pain' | 'shout' | 'death' |
+// 'knocked'. Memoizada por combo+expressão — trocar map no rig é barato.
+export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717', expression = 'neutral') {
+  return memo(`face:${skin}:${eyes}:${hair}:${expression}`, () => {
     const [c, x] = canvas(128);
     x.fillStyle = skin; x.fillRect(0, 0, 128, 128);
     // sombreado lateral + bochechas
@@ -370,27 +374,84 @@ export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717'
     const jaw = x.createLinearGradient(0, 92, 0, 128);
     jaw.addColorStop(0, 'rgba(0,0,0,0)'); jaw.addColorStop(1, 'rgba(30,16,10,0.30)');
     x.fillStyle = jaw; x.fillRect(0, 92, 128, 36);
-    // olhos
+    // ---- olhos/sobrancelhas/boca por expressão (Fase 12) ----
     const eyeY = 58;
-    for (const ex of [40, 88]) {
-      x.fillStyle = '#f5f0e8'; x.beginPath(); x.ellipse(ex, eyeY, 9, 5.5, 0, 0, 7); x.fill();
-      const iris = x.createRadialGradient(ex - 1.4, eyeY - 1.4, .8, ex, eyeY, 4.6);
-      iris.addColorStop(0, eyes); iris.addColorStop(1, '#10100e');
-      x.fillStyle = iris; x.beginPath(); x.arc(ex, eyeY, 4.4, 0, 7); x.fill();
-      x.fillStyle = '#10100e'; x.beginPath(); x.arc(ex, eyeY, 2.1, 0, 7); x.fill();
-      x.fillStyle = 'rgba(255,255,255,0.85)'; // reflexo — olho "vivo"
-      x.beginPath(); x.arc(ex - 1.8, eyeY - 1.8, 1.1, 0, 7); x.fill();
-      // sobrancelha
-      x.strokeStyle = hair; x.lineWidth = 3.4; x.beginPath();
-      x.moveTo(ex - 11, eyeY - 10); x.quadraticCurveTo(ex, eyeY - 14, ex + 11, eyeY - 9); x.stroke();
+    const lid = (ex, close) => { // pálpebra: pele + linha do cílio
+      if (close <= 0) return;
+      x.fillStyle = skin; x.beginPath(); x.ellipse(ex, eyeY - close * 2.6, 10, close * 3.4, 0, 0, 7); x.fill();
+      x.strokeStyle = 'rgba(20,14,10,.75)'; x.lineWidth = 1.6; x.beginPath();
+      x.moveTo(ex - 8, eyeY - close * 1.5); x.quadraticCurveTo(ex, eyeY - close * 4, ex + 8, eyeY - close * 1.5); x.stroke();
+    };
+    const brows = (dy, tilt) => { // tilt: + = inner UP (preocupação), − = franzida
+      x.strokeStyle = hair; x.lineWidth = 3.4;
+      for (const [ex, mir] of [[40, 1], [88, -1]]) {
+        x.beginPath();
+        x.moveTo(ex - 11, eyeY - 10 + dy - tilt * mir);
+        x.quadraticCurveTo(ex, eyeY - 14 + dy, ex + 11, eyeY - 9 + dy + tilt * mir);
+        x.stroke();
+      }
+    };
+    const eyePair = (open = 1, pupilLift = 0, wide = 1) => {
+      for (const ex of [40, 88]) {
+        if (open > .25) {
+          x.fillStyle = '#f5f0e8'; x.beginPath(); x.ellipse(ex, eyeY, 9 * wide, 5.5 * open * wide, 0, 0, 7); x.fill();
+          const iris = x.createRadialGradient(ex - 1.4, eyeY - 1.4 - pupilLift, .8, ex, eyeY - pupilLift, 4.6);
+          iris.addColorStop(0, eyes); iris.addColorStop(1, '#10100e');
+          x.fillStyle = iris; x.beginPath(); x.arc(ex, eyeY - pupilLift, 4.4, 0, 7); x.fill();
+          x.fillStyle = '#10100e'; x.beginPath(); x.arc(ex, eyeY - pupilLift, 2.1, 0, 7); x.fill();
+          x.fillStyle = 'rgba(255,255,255,0.85)'; // reflexo — olho "vivo"
+          x.beginPath(); x.arc(ex - 1.8, eyeY - 1.8 - pupilLift, 1.1, 0, 7); x.fill();
+        }
+        lid(ex, 1 - open);
+      }
+    };
+    const mouth = (open = 0, curve = 0, grit = false) => {
+      x.strokeStyle = 'rgba(0,0,0,.3)'; x.lineWidth = 2.6;
+      x.beginPath(); x.moveTo(64, 62); x.quadraticCurveTo(60, 80, 64, 84); x.stroke();
+      if (grit) { // dentes cerrados
+        x.fillStyle = '#e8e2d6'; x.fillRect(50, 94, 28, 7);
+        x.strokeStyle = 'rgba(60,40,30,.8)'; x.lineWidth = 1.2;
+        for (let gx = 54; gx <= 74; gx += 5) { x.beginPath(); x.moveTo(gx, 94); x.lineTo(gx, 101); x.stroke(); }
+        x.strokeStyle = 'rgba(70,30,20,.65)'; x.lineWidth = 2.4; x.beginPath();
+        x.moveTo(48, 94); x.quadraticCurveTo(64, 104, 80, 94); x.stroke();
+        return;
+      }
+      if (open > 0) { // boca aberta (grito/dor/morte)
+        x.fillStyle = 'rgba(52,22,16,.82)'; x.beginPath();
+        x.ellipse(64, 100 + curve * 2, 8 + open * 4, 3 + open * 8, 0, 0, 7); x.fill();
+        x.strokeStyle = 'rgba(70,30,20,.65)'; x.lineWidth = 2.6; x.beginPath();
+        x.moveTo(50, 96 + curve * 2); x.quadraticCurveTo(64, 94 + curve * 4, 78, 96 + curve * 2); x.stroke();
+      } else {
+        x.strokeStyle = 'rgba(70,30,20,.65)'; x.lineWidth = 3; x.beginPath();
+        x.moveTo(50, 98); x.quadraticCurveTo(64, 104 + curve * 8, 78, 98); x.stroke();
+        x.fillStyle = 'rgba(150,64,52,0.28)'; // lábio inferior — volume
+        x.beginPath(); x.ellipse(64, 102, 10, 3.2, 0, 0, 7); x.fill();
+      }
+    };
+    switch ((expression || 'neutral').toLowerCase()) {
+      case 'blink':
+        brows(-1.5, 0); eyePair(.06); mouth(0, 0);
+        break;
+      case 'pain': // dor: sobrancelhas em V invertido interno, olhos apertados, boca aberta
+        brows(1, -2.6); eyePair(.32); mouth(.42, -.5);
+        x.fillStyle = 'rgba(160,60,40,.16)'; // rubor de dor na testa/glabela
+        x.beginPath(); x.ellipse(64, 48, 26, 10, 0, 0, 7); x.fill();
+        break;
+      case 'shout': // grito: sobrancelhas altas, olhos arregalados, boca em O
+        brows(-6, 2.2); eyePair(1.25, 0, 1.08); mouth(.85, .6);
+        break;
+      case 'death': // morte: pálpebras caídas, íris rolada p/ cima, boca frouxa, palidez
+        brows(-2, 1); eyePair(.3, 2.2); mouth(.22, .3);
+        x.fillStyle = 'rgba(168,178,192,.16)'; x.fillRect(0, 0, 128, 128); // palidez
+        break;
+      case 'knocked': // caído (DBNO): careta assimétrica + dentes cerrados
+        brows(0, -1.8); eyePair(.3); lid(40, .35); mouth(0, 0, true);
+        x.fillStyle = 'rgba(120,50,40,.20)'; x.beginPath(); x.ellipse(94, 76, 12, 7, .3, 0, 7); x.fill(); // hematomas
+        x.beginPath(); x.ellipse(34, 76, 10, 6, -.2, 0, 7); x.fill();
+        break;
+      default: // neutral
+        brows(0, 0); eyePair(1); mouth(0, 0);
     }
-    // nariz + boca
-    x.strokeStyle = 'rgba(0,0,0,.3)'; x.lineWidth = 2.6;
-    x.beginPath(); x.moveTo(64, 62); x.quadraticCurveTo(60, 80, 64, 84); x.stroke();
-    x.strokeStyle = 'rgba(70,30,20,.65)'; x.lineWidth = 3;
-    x.beginPath(); x.moveTo(50, 98); x.quadraticCurveTo(64, 104, 78, 98); x.stroke();
-    x.fillStyle = 'rgba(150,64,52,0.28)'; // lábio inferior — volume
-    x.beginPath(); x.ellipse(64, 102, 10, 3.2, 0, 0, 7); x.fill();
     // barba/crocante sutil (tom do cabelo, alpha baixo)
     x.globalAlpha = .35; x.fillStyle = hair;
     x.fillRect(30, 92, 68, 26);

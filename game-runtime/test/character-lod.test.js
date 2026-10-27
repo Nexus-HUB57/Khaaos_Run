@@ -38,7 +38,7 @@ test('decisão: full perto, proxy médio, hidden longe (limiares do tier high)',
   assert.equal(lodDecision(5, 'full', th), 'full');
   assert.equal(lodDecision(th.full - .1, 'full', th), 'full');
   assert.equal(lodDecision(th.full + .1, 'full', th), 'proxy');
-  assert.equal(lodDecision(th.cull - 1, 'proxy', th), 'proxy');
+  assert.equal(lodDecision(th.cull - 1, 'proxy', th), 'silhouette', 'Fase 12: além do limiar sil o proxy cede p/ silhueta');
   assert.equal(lodDecision(th.cull + 1, 'full', th), 'hidden');
   assert.equal(lodDecision(400, undefined, th), 'hidden', 'primeira chamada sem nível atual');
 });
@@ -50,10 +50,10 @@ test('histerese: oscilar na fronteira NÃO alterna o nível a cada frame', () =>
   assert.equal(lodDecision(29.9, 'proxy', th), 'proxy', 'abaixo do limiar mas acima da histerese: permanece proxy');
   assert.equal(lodDecision(27, 'proxy', th), 'proxy');
   assert.equal(lodDecision(25.4, 'proxy', th), 'full', 'só retorna com ~15% de folga');
-  // entra em hidden em cull=280; só sai abaixo de 238
+  // entra em hidden em cull=280; só sai abaixo de 238 — e volta como SILHUETA (≥ sil)
   assert.equal(lodDecision(281, 'proxy', th), 'hidden');
   assert.equal(lodDecision(250, 'hidden', th), 'hidden');
-  assert.equal(lodDecision(237, 'hidden', th), 'proxy');
+  assert.equal(lodDecision(237, 'hidden', th), 'silhouette', 'Fase 12: re-entrada além de sil = silhueta, não proxy');
 });
 
 test('tiers: mobile simplifica mais perto e culla antes (low < medium < high)', () => {
