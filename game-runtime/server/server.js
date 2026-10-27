@@ -104,7 +104,9 @@ export function createAuthoritativeServer({
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
   // POJ — Protocolo de Ordem de Jogo: instância única do regramento da Guerra
   // (alistamento → CIGKV → 24 h → 4 mundos × 7 dias → desempate do 11º artigo).
-  const pojService = poj || createPojService();
+  // Fase 12 — recebe a economia REAL: vereditos da Corte Marcial movem KRC no
+  // ledger (prêmio/multa idempotentes por caso).
+  const pojService = poj || createPojService({ economy: economyService });
 
   // ---------- Recompensas KRC no fim da partida ----------
   // room3d dispara uma única vez por partida; aqui resolvemos client-id →
@@ -147,6 +149,21 @@ export function createAuthoritativeServer({
   const queue = [];
   let nextClient = 1;
   let nextRoom = 1;
+  // Fase 12 — ponte veredito → Ring: o POJ não conhece salas/WS; o servidor
+  // entrega o court_verdict ao militar julgado via snapshot da sala dele e
+  // atualiza a patente do nametag ao vivo (setPatente emite evento 'patente').
+  pojService.setNotifier?.((playerId, event) => {
+    let delivered = 0;
+    for (const c of clients.values()) {
+      if (c.identity?.sub !== playerId) continue;
+      const room = c.roomId ? rooms.get(c.roomId) : null;
+      if (!room || typeof room.emitExternal !== 'function') continue;
+      if (event.patente && typeof room.setPatente === 'function') room.setPatente(c.id, event.patente);
+      room.emitExternal(c.id, event.type, event);
+      delivered++;
+    }
+    return delivered;
+  });
   const metrics = {
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
@@ -450,7 +467,8 @@ export function createAuthoritativeServer({
         if (!actor) return true;
         const body = req.method === 'POST' ? await jsonBody(req) : {};
         try {
-          const result = fn(body, actor);
+          // Fase 12 — veredito é assíncrono (efeito KRC no ledger): sempre await.
+          const result = await fn(body, actor);
           audit.record({ actor: actor.username, action, resource, outcome: 'allow' });
           res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           res.end(JSON.stringify(result ?? { ok: true }));
@@ -709,7 +727,7 @@ export function createAuthoritativeServer({
         if (!limited.allowed) { metrics.rateLimited++; send(ws, { type: 'rate_limited', retryAt: limited.resetAt }); return; }
         try {
           const message = JSON.parse(raw.toString());
-          if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t }); return; }
+          if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t, te: message.te, now: Date.now() }); return; }
           // ---------- Fase 7 — salas privadas com código de convite (modo 3D) ----------
           if (message.type === 'create_private') {
             if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }

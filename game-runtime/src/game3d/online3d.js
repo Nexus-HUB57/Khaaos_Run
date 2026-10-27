@@ -11,6 +11,7 @@ import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
+import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -290,8 +291,41 @@ export class OnlineGame3D extends Game3D {
     const weapon = this.sim.player?.weapon ?? 'g19';
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
     this.playerWeapon.userData = { id: weapon };
-    // Fase 11 — ZU: trem de infiltração também no Ring online (só câmera)
-    this.startTrainIntro();
+    // Fase 12 — o trem NÃO começa no clique: todos (iniciador e remotos) esperam
+    // o anúncio AUTORITATIVO da sala (matchStart.train) e sincronizam pelo
+    // relógio do servidor — o mesmo frame do trem em todas as telas.
+  }
+
+  // Fase 12 — matchStart autoritativo chegou (evento dentro do snapshot).
+  // Remoto: fecha o modal ZU, arma a câmara e sincroniza o trem do ZU.
+  onMatchStartEvent(e) {
+    if (this.zuOpen) {
+      try {
+        this.zuOpen = false;
+        this.hud.hideZu();
+        this.hud.setMatchStatus('MATCH ONLINE // RING');
+        this.audio.init(); this.audio.resume();
+        if (!this.isTouch()) this.renderer.domElement.requestPointerLock?.();
+        const weapon = this.sim.player?.weapon ?? 'g19';
+        this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
+        this.playerWeapon.userData = { id: weapon };
+      } catch { /* entrada do remoto é best-effort — partida nunca quebra */ }
+    }
+    this.syncTrainWithServer(e?.train ?? null);
+  }
+
+  // Trem do ZU sincronizado: elapsed = relógio do servidor − train.startedAt.
+  // Todos os remotos reconstruem o MESMO frame da cinemática; quem chega atraso
+  // (rede lenta, aba em background) entra no fim da timeline ou pula direto.
+  syncTrainWithServer(train) {
+    if (!train || this.trainIntro) return;
+    const key = `${train.startedAt}`;
+    if (this._trainSyncedFor === key) return; // um trem por partida (anúncio único)
+    this._trainSyncedFor = key;
+    const duration = Number(train.durationMs) || TRAIN_INTRO_DURATION_MS;
+    const elapsed = this.net?.serverElapsed?.(train.startedAt);
+    if (!Number.isFinite(elapsed) || elapsed > duration + TRAIN_INTRO_GRACE_MS || elapsed < -500) return;
+    this.startTrainIntro(Math.max(0, elapsed) / 1000);
   }
 
   loop() {
@@ -334,6 +368,11 @@ export class OnlineGame3D extends Game3D {
     }
     this.predictor?.update(dt);
 
+    // Fase 12 — eventos do servidor são consumidos SEMPRE (mesmo com o modal ZU
+    // aberto): o matchStart autoritativo é o que FECHA o modal do remoto e
+    // sincroniza o trem. O envio de input continua gated no modal (abaixo).
+    if (!this.ended) this.handleEvents();
+
     // envio de input a 30Hz (enquanto a partida estiver ativa) + predição local
     if (!this.zuOpen && !this.ended) {
       this.netAccumulator = (this.netAccumulator ?? 0) + dt;
@@ -344,7 +383,6 @@ export class OnlineGame3D extends Game3D {
         this.predictor?.onInput(input);
         this.netAccumulator -= 1 / 30;
       }
-      this.handleEvents();
     }
 
     this.syncLoot();

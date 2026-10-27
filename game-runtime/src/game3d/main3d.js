@@ -380,13 +380,16 @@ export class Game3D {
     this.startTrainIntro();
   }
 
-  // Fase 11 — cinemática do trem do ZU (offline e online; skippable)
-  startTrainIntro() {
+  // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
+  // Fase 12 — startAt (s) = entrada sincronizada pelo relógio do servidor no
+  // modo online (todos os remotos veem o MESMO frame do trem).
+  startTrainIntro(startAt = 0) {
     try {
       const p = this.sim.player ?? { x: 0, z: 118 };
       this.trainIntro = new TrainIntro({
         scene: this.scene,
         spawn: { x: p.x ?? 0, z: p.z ?? 118 },
+        startAt,
         onDone: () => { this.trainIntro = null; },
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
@@ -944,6 +947,10 @@ export class Game3D {
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
+          // Fase 12 — remotos entram na partida AQUI (modal ZU fecha, trem
+          // sincronizado pelo startedAt do servidor). O iniciador local já
+          // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
+          this.onMatchStartEvent?.(e);
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1021,6 +1028,17 @@ export class Game3D {
         case 'patente': // Fase 11 — patente do perfil confirmada pelo servidor
           this.hud.feed('POJ', `Patente confirmada no nametag: ${e.patente}.`, 'good');
           break;
+        case 'court_verdict': { // Fase 12 — veredito da Corte Marcial ao vivo
+          const rotulo = { afastamento: 'AFASTAMENTO DESONROSO', reducao_patente: 'REDUÇÃO DE PATENTE',
+            honras_de_guerra: 'HONRAS DE GUERRA', absolvicao: 'ABSOLVIÇÃO' }[e.veredito] ?? String(e.veredito ?? '').toUpperCase();
+          const krcTxt = e.krcApplied
+            ? `${e.krcDelta >= 0 ? '+' : ''}${e.krcDelta} KRC${e.krcBalance != null ? ` (saldo ${e.krcBalance})` : ''}`
+            : 'sem efeito em KRC';
+          this.hud.feed('CORTE MARCIAL', `Caso ${e.caseId}: ${rotulo} — registro ${e.registro ?? '—'}, ${krcTxt}.`, e.krcDelta >= 0 ? 'good' : 'bad');
+          if (e.patente) this.hud.feed('POJ', `Registro militar atualizado: patente ${e.patente}.`, 'warn');
+          this.audio?.ui?.();
+          break;
+        }
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
         case 'airdrop':

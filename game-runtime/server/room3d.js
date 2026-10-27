@@ -24,6 +24,8 @@ import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativ
 import { officerDeployment, officerCombatParams, shouldWithdraw } from '../src/game3d/officers.js';
 import { SPECIAL_CLASS_OFFICERS } from '../src/game3d/officers.js';
 import { PATENTE_HIERARQUIA } from '../src/game3d/poj.js';
+// Fase 12 — anúncio autoritativo do trem do ZU (duração canônica compartilhada)
+import { TRAIN_INTRO_DURATION_MS } from '../src/shared/clock.js';
 // Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
 const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
@@ -243,6 +245,14 @@ export class MatchRoom3D {
     if (changed) this.#emitTo(id, 'patente', { patente });
     return true;
   }
+  // Fase 12 — evento externo à sala (ex.: court_verdict do POJ) entra pela
+  // MESMA fila dos eventos nativos: viaja no próximo snapshot do alvo, sem
+  // canal novo e sem quebrar o contrato snapshot/events do cliente.
+  emitExternal(humanId, type, payload = {}) {
+    if (!this.humans.has(humanId)) return false;
+    this.#emitTo(humanId, type, payload);
+    return true;
+  }
   removePlayer(id) {
     const actor = this.humans.get(id);
     this.humans.delete(id);
@@ -337,7 +347,12 @@ export class MatchRoom3D {
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
     }
-    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length });
+    // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
+    // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
+    // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
+    // join decidem tocar ou pular pelo elapsed).
+    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
+    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
     return true;
@@ -1237,6 +1252,9 @@ export class MatchRoom3D {
       walls: this.walls.filter((w) => w.active).map((w) => ({ id: w.id, x: w.x, z: w.z, rot: w.rot, hp: Math.round(w.hp), owner: w.owner })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
       terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),
+      // Fase 12 — anúncio autoritativo do trem (late join/reconexão sincronizam
+      // ou pulam a cinemática pelo elapsed; null antes do primeiro start).
+      train: this.trainAnnounce ?? null,
       events: forId ? this.drainEvents(forId) : [],
       online: true,
     };
