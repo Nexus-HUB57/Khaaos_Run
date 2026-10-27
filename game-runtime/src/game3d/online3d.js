@@ -459,10 +459,25 @@ export class OnlineGame3D extends Game3D {
 }
 
 // ---------- bootstrap ----------
+// FIX "ZU não aplicado no preview": em produção o cliente NÃO é servido pelo
+// servidor autoritativo — o preview da plataforma expõe apenas o :3000 (Next).
+// As APIs HTTP são encaminhadas por rewrites do Next; o UPGRADE de WebSocket,
+// porém, não é proxyável pelo Next. O roteador de borda da plataforma encami-
+// nha WS quando a requisição carrega ?XTransformPort=<porta> (padrão do
+// Caddyfile da plataforma). Em host não-local, o WS anexa o query e passa a
+// alcançar o servidor autoritativo — snapshots, trem do ZU e matchmaking.
+export function onlineServerUrl() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const local = ['localhost', '127.0.0.1', '0.0.0.0', ''].includes(location.hostname);
+  const tp = new URLSearchParams(location.search).get('XTransformPort');
+  const edge = tp || (!local ? '8787' : ''); // explícito > preview (borda) > local
+  // SEM barra final: NetClient3D concatena `${url}/ws?token=…` e o roteador de
+  // borda casa `query XTransformPort=*` em qualquer posição do query.
+  return `${proto}://${location.host}${edge ? `?XTransformPort=${edge}` : ''}`;
+}
+
 export function bootstrapOnline() {
-  const net = new NetClient3D({
-    url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`,
-  });
+  const net = new NetClient3D({ url: onlineServerUrl() });
   const game = new OnlineGame3D('CIGKV-3D-01', net);
   window.KhaaosOnline3D = { game, net };
   return game;

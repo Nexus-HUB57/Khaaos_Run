@@ -812,7 +812,15 @@ export class Game3D {
     this.ringWall.position.set(r.x, 23, r.z);
     this.ringWall.scale.set(r.radius, 1, r.radius);
     const t = performance.now() / 1000;
-    for (const u of this.ringWall.userData.uniforms) u.time.value = t;
+    for (const u of this.ringWall.userData.uniforms) {
+      u.time.value = t;
+      // FIX "mundo vermelho": parede acompanha o fog REAL da cena (applyNightness
+      // muda cor do fog por pulso — sem isto a parede ignorava a névoa a 800 m).
+      if (this.scene.fog) {
+        u.fogColor.value.copy(this.scene.fog.color);
+        u.fogDensity.value = this.scene.fog.density ?? 0.0035;
+      }
+    }
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)

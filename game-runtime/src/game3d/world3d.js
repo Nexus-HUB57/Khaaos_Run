@@ -34,6 +34,13 @@ function createSky(scenario) {
       mid: { value: new THREE.Color(scenario.sky.mid) },
       horizon: { value: new THREE.Color(scenario.sky.horizon) },
       sunDir: { value: new THREE.Vector3(-.55, .18, -.82).normalize() },
+      // FIX "mundo vermelho" (parte 3 — causa raiz): abaixo do horizonte o domo
+      // era 100% `horizon` (laranja vivo). No paraquedas (135 m), o chão só
+      // cobre 440×440 m — todo o "vazio" fora dele mostrava o interior do domo
+      // LARANJA: o mapa inteiro ficava vermelho do alto. O shader agora decai
+      // para o fogColor abaixo do horizonte (leitura de solo distante na névoa,
+      // como em qualquer BR). Uniform sincronizado no applyNightness.
+      fogColor: { value: new THREE.Color(scenario.fogColor) },
       // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite
       night: { value: 0 },
       nTop: { value: new THREE.Color(NIGHT.skyTop) },
@@ -47,7 +54,7 @@ function createSky(scenario) {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: `
-      uniform vec3 top, mid, horizon, sunDir;
+      uniform vec3 top, mid, horizon, sunDir, fogColor;
       uniform float night;
       uniform vec3 nTop, nMid, nHorizon;
       varying vec3 vDir;
@@ -59,6 +66,11 @@ function createSky(scenario) {
         vec3 ncol = mix(nHorizon, nMid, smoothstep(0.0, 0.28, h));
         ncol = mix(ncol, nTop, smoothstep(0.25, 0.85, h));
         col = mix(col, ncol, night);
+        // FIX "mundo vermelho": abaixo do horizonte decai p/ o fog do cenário
+        // (escuro, dessaturado) — o "vazio" fora do chão lê como solo na névoa.
+        float under = smoothstep(0.0, -0.22, vDir.y);
+        vec3 below = fogColor * mix(.9, .25, night);
+        col = mix(col, below, under);
         float sun = max(dot(normalize(vDir), sunDir), 0.0);
         col += vec3(1.0, .62, .3) * pow(sun, 22.0) * 1.35 * (1.0 - night * 0.88);   // halo cede à noite
         col += vec3(1.0, .85, .6) * pow(sun, 380.0) * 3.2 * (1.0 - night * 0.86);   // disco vira "lua"
@@ -73,6 +85,13 @@ function createSky(scenario) {
 }
 
 // ---------- parede do anel (zona segura) ----------
+// FIX visual (regressão "mundo vermelho"): o ShaderMaterial da parede NÃO
+// participa do FogExp2 da cena — no Ring de 800 m a parede ficava visível a
+// 800 m como uma cortina vermelha nítida dominando o céu durante a QUEDA
+// LIVRE. O shader agora replica o FogExp2 do renderer (mesma fórmula
+// 1-exp(-(d·density)²)): a parede some na névoa quando distante e volta a
+// aparecer quando o Ring encolhe. uniforms de fog são sincronizados a cada
+// frame no updateRing (acompanham applyNightness).
 export function createRingWall() {
   const group = new THREE.Group();
   const mk = (radius, opacity, color) => {
@@ -81,21 +100,27 @@ export function createRingWall() {
       transparent: true, side: THREE.DoubleSide, depthWrite: false,
       uniforms: {
         time: { value: 0 }, color: { value: new THREE.Color(color) }, opacity: { value: opacity },
+        fogColor: { value: new THREE.Color('#57382f') }, fogDensity: { value: 0.0035 },
       },
       vertexShader: `
-        varying vec2 vUv; varying vec3 vPos;
+        varying vec2 vUv; varying vec3 vPos; varying float vDepth;
         void main() { vUv = uv; vPos = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vDepth = -mvPosition.z;
+          gl_Position = projectionMatrix * mvPosition; }`,
       fragmentShader: `
         uniform float time; uniform vec3 color; uniform float opacity;
-        varying vec2 vUv; varying vec3 vPos;
+        uniform vec3 fogColor; uniform float fogDensity;
+        varying vec2 vUv; varying vec3 vPos; varying float vDepth;
         void main() {
           float grid = step(.975, fract(vUv.x * 70.0)) + step(.96, fract(vUv.y * 18.0 - time * .18));
           float edgeTop = smoothstep(1.0, .82, vUv.y);
           float edgeBottom = smoothstep(0.0, .10, vUv.y);
           float a = (0.05 + grid * .16) * edgeTop * edgeBottom;
           float wave = smoothstep(.4, 1., fract(vUv.y * 2.2 - time * .1)) * .05;
-          gl_FragColor = vec4(color, (a + wave) * opacity);
+          float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vDepth * vDepth);
+          vec3 col = mix(color, fogColor, clamp(fogFactor, 0.0, 1.0));
+          gl_FragColor = vec4(col, (a + wave) * opacity * (1.0 - clamp(fogFactor, 0.0, 1.0)));
         }`,
     });
     return new THREE.Mesh(geo, mat);
@@ -529,7 +554,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const q = qualityTier(quality);
   const layout = getWorldLayout(seed, scenario.id);
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0046 : 0.0035);
+  // FIX "mundo vermelho" (parte 2): density 0.0035 deixava o solo a 200-400 m
+  // com 39-86% do fogColor quente durante a QUEDA LIVRE — o mapa inteiro
+  // ficava vermelho do alto. 0.0026 mantém a leitura de profundidade no chão
+  // (30 m ≈ 0.6%) e devolve a visibilidade do mapa no paraquedas.
+  scene.fog = new THREE.FogExp2(new THREE.Color(scenario.fogColor), scenario.id === 'Barburhen' ? 0.0036 : 0.0026);
   scene.userData.scenarioId = scenario.id;
   scene.userData.mapLabel = scenario.mapLabel;
 
@@ -744,6 +773,9 @@ export function applyNightness(scene, t) {
     u.horizon.value.set(st.skyHorizon);
   }
   if (scene.fog) scene.fog.color.set(st.fog);
+  // FIX "mundo vermelho": o domo usa o fogColor abaixo do horizonte — acompanha
+  // a cor do fog em cada pulso (noite → 'below' fica bem escuro no shader).
+  if (u?.fogColor) u.fogColor.value.set(st.fog);
   const { sun, hemi, fill, back } = scene.userData.nightLights ?? {};
   sun?.color.set(st.sunColor); if (sun) sun.intensity = st.sunIntensity;
   if (hemi) hemi.intensity = st.hemiIntensity;
