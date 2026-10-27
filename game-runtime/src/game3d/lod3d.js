@@ -50,6 +50,56 @@ export function lodDecision(dist, current = 'full', th = LOD_TIERS.high) {
   return 'full';
 }
 
+// ---------- LOD por frustum (Fase 13) ----------
+// A cadeia por distância ignora ONDE o ator está na tela: 24 atores fora de visão
+// continuam no nível detalhado (~50 draw calls cada) e sendo animados. O frustum
+// resolve em duas frentes conservadoras:
+//   1. ator FORA do cone de visão por N frames seguidos → distância EFETIVA
+//      penalizada (acelera full→proxy→silhouette→hidden — tudo que está fora da
+//      tela pode custar zero sem pop visível);
+//   2. atores PERTES (dist < minDist = limiar full do tier) NUNCA são penalizados —
+//      sombra/pose dos próximos permanecem corretas quando a câmera vira.
+// O teste de cone usa margem angular de segurança + raio do ator: só recorta o que
+// está BEM fora (ator meio visível na borda continua inside).
+
+// margem angular de segurança (≈4°) — evita flicker na borda do frustum
+export const FRUSTUM_MARGIN = 0.07;
+
+// Teste puro: o ator (esfera de raio `radius`) está no frustum da câmera?
+// cam = { fov (graus, convenção THREE), aspect }. Cone do half-FOV DIAGONAL
+// (o frustum real é maior que o vertical) + atan2(radius, dist) do ator + margem.
+export function frustumContains(camPos, camDir, cam, actorPos, radius = .9) {
+  const dx = actorPos.x - camPos.x, dy = actorPos.y - camPos.y, dz = actorPos.z - camPos.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-6) return true;                       // ator NA câmera: dentro
+  const dot = (dx * camDir.x + dy * camDir.y + dz * camDir.z) / len;
+  if (dot <= 0) return false;                        // atrás da câmera
+  const halfV = Math.tan(cam.fov * Math.PI / 360);   // half-FOV vertical
+  const halfDiag = Math.atan(halfV * Math.sqrt(1 + cam.aspect * cam.aspect));
+  const actorAng = Math.atan2(radius, len);          // esfera do ator projeta ângulo
+  const limit = Math.min(Math.PI / 2, halfDiag + actorAng + FRUSTUM_MARGIN);
+  return Math.acos(Math.min(1, dot)) <= limit;
+}
+
+// Portão por ator: conta frames fora e devolve { inside, effectiveDist }.
+// penalty só aplica APÓS framesOut frames consecutivos fora E dist ≥ minDist
+// (atores próximos ficam detalhados mesmo fora de tela — sombra entra no quadro
+// quando a câmera vira). Reentrada zera o contador (histerese da cadeia cuida
+// da transição de volta).
+export function createFrustumGate({ fovY = 75, aspect = 16 / 9, penalty = 1.4, framesOut = 18, minDist = 0 } = {}) {
+  const cam = { fov: fovY, aspect };
+  let out = 0;
+  return {
+    get outFrames() { return out; },
+    update(dist, camPos, camDir, actorPos, radius = .9) {
+      const inside = frustumContains(camPos, camDir, cam, actorPos, radius);
+      out = inside ? 0 : Math.min(out + 1, framesOut * 2);
+      const penalized = !inside && out >= framesOut && dist >= minDist;
+      return { inside, effectiveDist: penalized ? dist * penalty : dist };
+    },
+  };
+}
+
 // ---------- proxy low-poly (Fase 10) ----------
 // Homem-palito anatômico: pelve + tronco cônico + cabeça esférica + membros em
 // cápsula com os MESMOS pivôs do modelo detalhado. Sem rosto, acessórios,

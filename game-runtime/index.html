@@ -40,6 +40,30 @@
       <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
     </div>
 
+    <!-- Fase 13 — HUD do espectador remoto (pipeline /ws/spectator: feed atrasado 10 s, batches 5 Hz) -->
+    <div id="spectatorHud" class="hidden">
+      <div class="spec-top">
+        <span class="spec-live"><i></i>LIVE</span>
+        <b id="specStatus">CONECTANDO…</b>
+        <span id="specDelay" class="spec-chip" title="Atraso anti-ghosting do pipeline">ATRASO —</span>
+        <span id="specAlive" class="spec-chip">◇ 00 VIVOS</span>
+      </div>
+      <div id="specRing" class="spec-ring" title="Estado autoritativo do Ring (atrasado)">RING F1 · 800m · ESTÁVEL · 00:00</div>
+      <div class="spec-standings-label">RANKING DA SALA · TOP 8</div>
+      <div id="specStandings" class="spec-standings"></div>
+      <div class="spec-cams">
+        <button class="spec-btn" data-cam="FREECAM" title="Órbita livre ao redor do ring">LIVRE</button>
+        <button class="spec-btn" data-cam="FOLLOW_PLAYER" title="Seguir operativo">SEGUIR</button>
+        <button class="spec-btn" data-cam="OVERHEAD" title="Câmera aérea">AÉREA</button>
+        <button class="spec-btn" data-cam="RING_CENTER" title="Centro do ring girando">CENTRO</button>
+        <span class="spec-hint">ALVO</span>
+        <button class="spec-btn" id="specFollowPrev" title="Operativo anterior">‹</button>
+        <button class="spec-btn" id="specFollowNext" title="Próximo operativo">›</button>
+        <button class="spec-btn leave" id="specDisconnect" title="Encerrar transmissão">✕</button>
+      </div>
+    </div>
+    <div id="specFeed" class="hidden"></div>
+
     <!-- minimapa + killfeed -->
     <div class="map-corner">
       <div class="minimap-frame"><canvas id="minimap" width="196" height="196"></canvas><span class="compass">N</span></div>
