@@ -21,6 +21,8 @@ import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
 import { createPojService, PojError } from './poj.js';
+// Fase 14 — pipeline de espectador no game node (/ws/spectator + métricas /admin)
+import { SpectatorPipeline } from './spectator.js';
 // Fase 10 — patente do perfil (liderança): progressão canônica compartilhada
 import { rankProgress } from '../src/shared/rank.js';
 
@@ -107,6 +109,10 @@ export function createAuthoritativeServer({
   // Fase 12 — recebe a economia REAL: vereditos da Corte Marcial movem KRC no
   // ledger (prêmio/multa idempotentes por caso).
   const pojService = poj || createPojService({ economy: economyService });
+  // Fase 14 — transmissão de espectadores no próprio game node: o cliente 3D
+  // conecta em same-origin /ws/spectator (dev proxy /ws → :8787; produção é o
+  // CMD da imagem). Sem plateia, custo zero — timers só existem por sala ocupada.
+  const spectatorPipeline = new SpectatorPipeline();
 
   // ---------- Recompensas KRC no fim da partida ----------
   // room3d dispara uma única vez por partida; aqui resolvemos client-id →
@@ -653,7 +659,9 @@ export function createAuthoritativeServer({
         const payload = {
           metrics,
           queue: queue.length,
-          rooms: [...rooms.values()].map((room) => room.metrics()),
+          rooms: [...rooms.values()].map((room) => ({ ...room.metrics(), spectators: spectatorPipeline.countFor(room.id) })),
+          // Fase 14 — métricas da transmissão (espectadores, pacotes, bytes, pico)
+          spectators: spectatorPipeline.metrics(),
           // dados por usuário (usernames, strikes) só para papéis elevados
           clients: elevated ? [...clients.values()].map((client) => ({ id: client.id, username: client.identity.username, role: client.identity.role, region: client.region, roomId: client.roomId, strikes: client.violations.count, suspicious: client.violations.suspicious })) : undefined,
           sessions: (await durable.listSessions()).length,
@@ -681,6 +689,8 @@ export function createAuthoritativeServer({
     : http.createServer((req, res) => { void tracedHandler(req, res); });
 
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
+  // Fase 14 — endpoint do espectador no MESMO http server (path próprio).
+  spectatorPipeline.attach(server);
   const handleConnection = async (ws, req) => {
     const url = new URL(req.url, 'ws://localhost');
     const token = url.searchParams.get('token');
@@ -841,6 +851,8 @@ export function createAuthoritativeServer({
     metrics.ticks++;
     for (const room of rooms.values()) {
       room.tick(1 / 20);
+      // Fase 14 — transmissão: salas 3D alimentam o pipeline (custo zero sem plateia)
+      if (room.mode === '3d') spectatorPipeline.pushRoom(room);
       for (const client of clients.values()) if (client.roomId === room.id) send(client.ws, { type: 'snapshot', snapshot: room.snapshot(client.id), events: [] });
     }
   }, 50);
@@ -855,12 +867,14 @@ export function createAuthoritativeServer({
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
+    spectator: spectatorPipeline, // Fase 14 — pipeline da transmissão exposto p/ testes/operação
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
     obs: observability,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão
       for (const client of clients.values()) client.ws.close();
       await new Promise((resolve) => server.close(resolve));
       await durable.close?.();

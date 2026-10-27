@@ -12,6 +12,7 @@ import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
 import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
+import { spectateHref } from './spectator3d.js'; // Fase 14 — botão ASSISTIR (transmissão)
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -169,6 +170,12 @@ export class OnlineGame3D extends Game3D {
       const code = input?.value?.trim();
       if (!code) { this.hud.feed('SQUAD', 'Digite o código de convite (6 caracteres).', 'bad'); return; }
       net.joinPrivate(code);
+    });
+    // Fase 14 — botão ASSISTIR: abre a transmissão da sala (?spectate=SALA).
+    // Sem código, cai na sala default do pipeline (partidas abertas/matchmaking).
+    document.querySelector('#spectateBtn')?.addEventListener('click', () => {
+      const code = document.querySelector('#inviteCode')?.value?.trim() ?? '';
+      window.location.href = spectateHref(code);
     });
     net.onPrivateCreated = (code) => {
       this.hud.feed('SQUAD', `Sala privada criada! Código: ${code} — compartilhe com o esquadrão.`, 'good');

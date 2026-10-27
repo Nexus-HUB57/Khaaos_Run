@@ -42,6 +42,8 @@ export interface SpectatorGameData {
 
 export interface SpectatorPlayerSnapshot {
   id: string;
+  /** Nome real do jogador exibido no standings do HUD de espectador (Fase 14). */
+  displayName?: string;
   species: string;
   posX: number;
   posY: number;
@@ -64,6 +66,16 @@ export interface SpectatorEvent {
   type: "ELIMINATION" | "WORLD_TRANSITION" | "RING_PHASE" | "AIRDROP" | "REVIVE";
   data: Record<string, any>;
   timestamp: number;
+}
+
+/** Métricas da transmissão — consumidas pela superfície de administração. */
+export interface SpectatorPipelineMetrics {
+  totalSpectators: number;
+  peakSpectators: number;
+  rooms: { roomId: string; spectators: number; packetsSent: number; bytesSent: number; delayBufferSize: number }[];
+  totals: { packetsSent: number; bytesSent: number };
+  limits: { delayMs: number; maxSpectatorsPerRoom: number; globalMaxSpectators: number; batchIntervalMs: number };
+  now: number;
 }
 
 // ─── Spectator Data Pipeline Config ─────────────────────────────────────────
@@ -176,6 +188,9 @@ export class SpectatorDataPipeline {
   private batchAggregators: Map<string, BatchAggregator> = new Map(); // roomId → batch aggregator
   private batchTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private totalSpectators: number = 0;
+  private peakSpectators: number = 0;
+  private roomTotals: Map<string, { packetsSent: number; bytesSent: number }> = new Map();
+  private grandTotals: { packetsSent: number; bytesSent: number } = { packetsSent: 0, bytesSent: 0 };
 
   /**
    * Attach WebSocket server for spectator connections.
@@ -221,6 +236,7 @@ export class SpectatorDataPipeline {
       }
       roomSet.add(spectatorId);
       this.totalSpectators++;
+      this.peakSpectators = Math.max(this.peakSpectators, this.totalSpectators);
 
       // Send welcome
       ws.send(JSON.stringify({ type: "SPECTATOR_WELCOME", spectatorId, roomId, cameraMode, delayMs: SpectatorConfig.delayMs }));
@@ -260,6 +276,7 @@ export class SpectatorDataPipeline {
         this.stopBatchTimer(client.roomId);
         this.delayBuffers.delete(client.roomId);
         this.batchAggregators.delete(client.roomId);
+        this.roomTotals.delete(client.roomId);
       }
     }
     this.totalSpectators--;
@@ -340,6 +357,9 @@ export class SpectatorDataPipeline {
     if (!roomSet) return;
 
     const payloadBytes = Buffer.byteLength(payload);
+    const roomTotals = this.roomTotals.get(roomId) ?? { packetsSent: 0, bytesSent: 0 };
+    const beforePackets = roomTotals.packetsSent;
+    const beforeBytes = roomTotals.bytesSent;
     for (const specId of roomSet) {
       const client = this.spectators.get(specId);
       if (!client || client.ws.readyState !== 1) continue;
@@ -352,8 +372,13 @@ export class SpectatorDataPipeline {
         client.ws.send(payload);
         client.bytesSent += payloadBytes;
         client.packetsSent++;
+        roomTotals.packetsSent++;
+        roomTotals.bytesSent += payloadBytes;
       } catch { /* send failed */ }
     }
+    this.roomTotals.set(roomId, roomTotals);
+    this.grandTotals.packetsSent += roomTotals.packetsSent - beforePackets;
+    this.grandTotals.bytesSent += roomTotals.bytesSent - beforeBytes;
   }
 
   // ─── Query Methods ────────────────────────────────────────────────────────
@@ -375,6 +400,29 @@ export class SpectatorDataPipeline {
     return this.delayBuffers.get(roomId)?.size ?? 0;
   }
 
+  /** Fase 14 — métricas da transmissão p/ a superfície de administração. */
+  getMetrics(): SpectatorPipelineMetrics {
+    return {
+      totalSpectators: this.totalSpectators,
+      peakSpectators: this.peakSpectators,
+      rooms: [...this.roomSpectators.entries()].map(([roomId, set]) => ({
+        roomId,
+        spectators: set.size,
+        packetsSent: this.roomTotals.get(roomId)?.packetsSent ?? 0,
+        bytesSent: this.roomTotals.get(roomId)?.bytesSent ?? 0,
+        delayBufferSize: this.delayBuffers.get(roomId)?.size ?? 0,
+      })),
+      totals: { packetsSent: this.grandTotals.packetsSent, bytesSent: this.grandTotals.bytesSent },
+      limits: {
+        delayMs: SpectatorConfig.delayMs,
+        maxSpectatorsPerRoom: SpectatorConfig.maxSpectatorsPerRoom,
+        globalMaxSpectators: SpectatorConfig.globalMaxSpectators,
+        batchIntervalMs: SpectatorConfig.batchIntervalMs,
+      },
+      now: Date.now(),
+    };
+  }
+
   /**
    * Cleanup all resources.
    */
@@ -385,6 +433,7 @@ export class SpectatorDataPipeline {
     this.roomSpectators.clear();
     this.delayBuffers.clear();
     this.batchAggregators.clear();
+    this.roomTotals.clear();
     this.wss?.close();
     console.log("[SpectatorPipeline] Destroyed");
   }

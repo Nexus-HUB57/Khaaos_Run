@@ -516,6 +516,13 @@ body.spectating #hitmarker { display: none !important; }
   color: #ffd28a; font-family: var(--font-mono); font-size: 14px; letter-spacing: .3em; text-align: center;
 }
 .private-actions .ghost-btn { padding: 8px 12px; font-size: 10px; }
+/* Fase 14 — botão ASSISTIR (transmissão da sala): destaque teal de broadcast */
+.private-actions .ghost-btn.spectate {
+  border-color: rgba(66,217,222,.55); color: #42d9de; letter-spacing: .18em;
+}
+.private-actions .ghost-btn.spectate:hover {
+  border-color: #42d9de; background: rgba(66,217,222,.12); box-shadow: 0 0 14px rgba(66,217,222,.25);
+}
 /* Fase 8 — login da plataforma no modal ZU */
 #loginBox { border-color: rgba(102,204,255,.4); background: rgba(64,140,200,.08); }
 #loginBox .private-actions input { text-transform: none; letter-spacing: .12em; text-align: left; }

@@ -63,6 +63,13 @@ export function eventToFeed(e = {}) {
   }
 }
 
+// Fase 14 — URL da transmissão: /?spectate=SALA&cam=… (botão ASSISTIR do modal
+// ZU aponta para cá). Sala vazia cai na sala "default" do pipeline.
+export function spectateHref(code = '') {
+  const room = String(code ?? '').trim() || 'default';
+  return `/?spectate=${encodeURIComponent(room)}`;
+}
+
 // ───remote: cliente WS do pipeline (socket injetável p/ testes)───────────────
 
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
@@ -218,7 +225,9 @@ export class SpectatorView {
     }
     this.bots = (batch.players ?? []).map((p) => ({
       id: String(p.id),
-      name: p.name ?? p.species ?? String(p.id).slice(-6),
+      // Fase 14 — nome REAL do jogador (displayName do pipeline); fallbacks:
+      // name legado → espécie → cauda do id.
+      name: p.displayName ?? p.name ?? p.species ?? String(p.id).slice(-6),
       op: p.species ?? null,
       x: p.posX ?? 0, y: 0, z: p.posY ?? 0,
       yaw: p.yaw ?? 0,
@@ -288,12 +297,12 @@ export function spectatorViewModel(state = {}) {
     delaySec: Number.isFinite(state.delayMs) ? Math.round(state.delayMs / 1000) : null,
     alive: alive.length,
     camMode: state.camMode ?? 'RING_CENTER',
-    followName: follow ? (follow.name ?? follow.id) : null,
+    followName: follow ? (follow.displayName ?? follow.name ?? follow.id) : null,
     ring,
     top: standings.slice(0, 8).map((p, i) => ({
       rank: i + 1,
       id: String(p.id),
-      name: p.name ?? p.species ?? String(p.id).slice(-6),
+      name: p.displayName ?? p.name ?? p.species ?? String(p.id).slice(-6),
       kills: p.kills ?? 0,
       life: Math.max(0, Math.round(p.health ?? 0)),
       shield: Math.max(0, Math.round(p.shield ?? 0)),

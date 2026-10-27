@@ -1258,12 +1258,13 @@ export class Game3D {
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
 const query = new URLSearchParams(location.search);
 const online = query.get('online') === '1';
-const spectateRoom = query.get('spectate'); // Fase 13 — espectador remoto (pipeline /ws/spectator)
+const spectateRoom = query.get('spectate'); // Fase 13/14 — espectador remoto (pipeline /ws/spectator)
 const scenarioId = query.get('scenario') || 'CIGKV';
-if (spectateRoom) {
+if (query.has('spectate')) {
   // modo espectador: transmissão atrasada do servidor, sem jogador local
-  // (import dinâmico evita ciclo ESM — mesmo padrão do online3d)
-  import('./spectator3d.js').then(({ bootstrapSpectator }) => bootstrapSpectator({ roomId: spectateRoom, camera: query.get('cam') }));
+  // (import dinâmico evita ciclo ESM — mesmo padrão do online3d).
+  // Fase 14 — presença do parâmetro basta: ?spectate= vazio cai na sala default.
+  import('./spectator3d.js').then(({ bootstrapSpectator }) => bootstrapSpectator({ roomId: spectateRoom || 'default', camera: query.get('cam') }));
 } else if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
   import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
