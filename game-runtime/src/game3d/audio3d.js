@@ -1,11 +1,18 @@
 // Khaaos Run — Áudio procedural (WebAudio): tiros, impacto, recarga, zona, UI.
 // Nenhum arquivo externo — tudo sintetizado em tempo real.
+// Fase 19 — mixagem: master + barramentos sfx/world/ui (KR_AUDIO_*, audiomix.js).
+import { DEFAULT_AUDIO_MIX, normalizeAudioMix } from './audiomix.js';
 
 export class GameAudio {
   constructor() {
     this.ctx = null;
     this.master = null;
     this.enabled = true;
+    // Fase 19 — mixagem persistida (KR_AUDIO_*): master + barramentos por
+    // família. buses só existem após init(); setMix funciona antes (contrato
+    // de estado headless) e é aplicado aos ganhos no init.
+    this.mix = { ...DEFAULT_AUDIO_MIX };
+    this.buses = null; // { sfx, world, ui } → master (criados no init)
     // Fase 18 — camadas contínuas de sobrevivência (contrato de estado
     // testável sem AudioContext: kind → { kind, intensity, startedAt }).
     this.survivalLayers = {};
@@ -17,11 +24,37 @@ export class GameAudio {
     if (!AC) return;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.5;
+    this.master.gain.value = this.mix.master;
     this.master.connect(this.ctx.destination);
+    // Fase 19 — barramentos da mixagem: cada família de som desemboca num
+    // canal com volume próprio (sliders do HUD) antes do master.
+    this.buses = {};
+    for (const ch of ['sfx', 'world', 'ui']) {
+      const g = this.ctx.createGain();
+      g.gain.value = this.mix[ch];
+      g.connect(this.master);
+      this.buses[ch] = g;
+    }
     this.#startAmbient();
   }
   resume() { this.ctx?.resume?.(); }
+
+  // ---------- Fase 19 — mixagem de volume (KR_AUDIO_*) ----------
+  /**
+   * Aplica mixagem parcial (0..1 por canal). Normaliza (clamp/defaults via
+   * audiomix.js), funciona ANTES do init (contrato de estado headless) e AO
+   * VIVO com ctx (ganhos aplicados direto — sliders já são contínuos).
+   * @returns mixagem normalizada completa (cópia).
+   */
+  setMix(partial = {}) {
+    this.mix = normalizeAudioMix(partial, this.mix);
+    if (this.master) this.master.gain.value = this.mix.master;
+    if (this.buses) for (const ch of Object.keys(this.buses)) this.buses[ch].gain.value = this.mix[ch];
+    return { ...this.mix };
+  }
+
+  // barramento de saída de uma família de sons (fallback master p/ robustez)
+  #bus(ch) { return this.buses?.[ch] ?? this.master; }
 
   #noiseBuffer(dur = .5) {
     const sr = this.ctx.sampleRate, buf = this.ctx.createBuffer(1, sr * dur, sr);
@@ -45,7 +78,7 @@ export class GameAudio {
     const lfo = this.ctx.createOscillator(); lfo.frequency.value = .13;
     const lfoG = this.ctx.createGain(); lfoG.gain.value = .025;
     lfo.connect(lfoG); lfoG.connect(g.gain);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.#bus('world'));
     src.start(); lfo.start();
   }
 
@@ -69,7 +102,7 @@ export class GameAudio {
     bp.frequency.exponentialRampToValueAtTime(140, t + cfg.dur);
     const g = this.ctx.createGain();
     this.#env(g, t, .002, cfg.dur, cfg.peak * vol);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
     src.start(t); src.stop(t + cfg.dur * 2 + .05);
     // crack inicial
     const osc = this.ctx.createOscillator();
@@ -77,7 +110,7 @@ export class GameAudio {
     osc.frequency.exponentialRampToValueAtTime(60, t + .06);
     const og = this.ctx.createGain();
     this.#env(og, t, .001, .06, .3 * vol);
-    osc.connect(og); og.connect(this.master);
+    osc.connect(og); og.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .1);
   }
 
@@ -90,7 +123,7 @@ export class GameAudio {
     osc.frequency.exponentialRampToValueAtTime(head ? 900 : 650, t + .07);
     const g = this.ctx.createGain();
     this.#env(g, t, .001, .07, head ? .5 : .35);
-    osc.connect(g); g.connect(this.master);
+    osc.connect(g); g.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .1);
   }
 
@@ -103,7 +136,7 @@ export class GameAudio {
     osc.frequency.exponentialRampToValueAtTime(70, t + .16);
     const g = this.ctx.createGain();
     this.#env(g, t, .004, .16, .4);
-    osc.connect(g); g.connect(this.master);
+    osc.connect(g); g.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .2);
   }
 
@@ -117,7 +150,7 @@ export class GameAudio {
       hp.type = 'highpass'; hp.frequency.value = 2400;
       const g = this.ctx.createGain();
       this.#env(g, t + off, .002, .05, .25);
-      src.connect(hp); hp.connect(g); g.connect(this.master);
+      src.connect(hp); hp.connect(g); g.connect(this.#bus('sfx'));
       src.start(t + off);
     });
   }
@@ -130,7 +163,7 @@ export class GameAudio {
       osc.type = 'triangle'; osc.frequency.value = f;
       const g = this.ctx.createGain();
       this.#env(g, t + i * .07, .005, .1, .28);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('sfx'));
       osc.start(t + i * .07); osc.stop(t + i * .07 + .15);
     });
   }
@@ -143,7 +176,7 @@ export class GameAudio {
       osc.type = 'sine'; osc.frequency.value = 520;
       const g = this.ctx.createGain();
       this.#env(g, t + off, .01, .2, .3);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('ui'));
       osc.start(t + off); osc.stop(t + off + .3);
     });
   }
@@ -158,7 +191,7 @@ export class GameAudio {
       osc.frequency.exponentialRampToValueAtTime(40, t + off + .1);
       const g = this.ctx.createGain();
       this.#env(g, t + off, .005, .12, i ? .35 : .5);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('sfx'));
       osc.start(t + off); osc.stop(t + off + .2);
     });
   }
@@ -173,7 +206,7 @@ export class GameAudio {
       osc.frequency.value = f;
       const g = this.ctx.createGain();
       this.#env(g, t + i * .16, .01, .4, .3);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('ui'));
       osc.start(t + i * .16); osc.stop(t + i * .16 + .5);
     });
   }
@@ -185,7 +218,7 @@ export class GameAudio {
     osc.type = 'square'; osc.frequency.value = 1200;
     const g = this.ctx.createGain();
     this.#env(g, t, .001, .04, .12);
-    osc.connect(g); g.connect(this.master);
+    osc.connect(g); g.connect(this.#bus('ui'));
     osc.start(t); osc.stop(t + .06);
   }
 
@@ -200,7 +233,7 @@ export class GameAudio {
       const bp = this.ctx.createBiquadFilter();
       bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = .55;
       const g = this.ctx.createGain(); g.gain.value = 0;
-      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.connect(bp); bp.connect(g); g.connect(this.#bus('world'));
       src.start();
       this.windGain = g;
     }
@@ -221,7 +254,7 @@ export class GameAudio {
     bp.frequency.exponentialRampToValueAtTime(300, t + .22);
     const g = this.ctx.createGain();
     this.#env(g, t, .01, .22, .5);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
     src.start(t);
   }
 
@@ -234,7 +267,7 @@ export class GameAudio {
     osc.frequency.exponentialRampToValueAtTime(45, t + .12);
     const g = this.ctx.createGain();
     this.#env(g, t, .004, .14, .45);
-    osc.connect(g); g.connect(this.master);
+    osc.connect(g); g.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .2);
   }
 
@@ -249,7 +282,7 @@ export class GameAudio {
     bp.frequency.exponentialRampToValueAtTime(500, t + .12);
     const g = this.ctx.createGain();
     this.#env(g, t, .01, .12, .3);
-    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
     src.start(t);
   }
 
@@ -264,7 +297,7 @@ export class GameAudio {
     sub.frequency.exponentialRampToValueAtTime(28, t + .4);
     const sg = this.ctx.createGain();
     this.#env(sg, t, .005, .42, .8 * vol);
-    sub.connect(sg); sg.connect(this.master);
+    sub.connect(sg); sg.connect(this.#bus('sfx'));
     sub.start(t); sub.stop(t + .5);
     // corpo
     const src = this.ctx.createBufferSource();
@@ -274,7 +307,7 @@ export class GameAudio {
     lp.frequency.exponentialRampToValueAtTime(120, t + .5);
     const g = this.ctx.createGain();
     this.#env(g, t, .003, .55, .75 * vol);
-    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.connect(lp); lp.connect(g); g.connect(this.#bus('sfx'));
     src.start(t);
     // estilhaços (curtos pings metálicos decrescentes)
     for (let i = 0; i < 5; i++) {
@@ -283,7 +316,7 @@ export class GameAudio {
       ping.type = 'triangle'; ping.frequency.value = 1800 + Math.random() * 2200;
       const pg = this.ctx.createGain();
       this.#env(pg, t + off, .001, .05, .1 * vol);
-      ping.connect(pg); pg.connect(this.master);
+      ping.connect(pg); pg.connect(this.#bus('sfx'));
       ping.start(t + off); ping.stop(t + off + .08);
     }
   }
@@ -299,7 +332,7 @@ export class GameAudio {
       osc.frequency.exponentialRampToValueAtTime(760 + i * 260, t + off + .1);
       const g = this.ctx.createGain();
       this.#env(g, t + off, .008, .12, .22);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('sfx'));
       osc.start(t + off); osc.stop(t + off + .18);
     });
   }
@@ -335,7 +368,7 @@ export class GameAudio {
         const g = this.ctx.createGain();
         g.gain.setValueAtTime(0, t);
         g.gain.setTargetAtTime(target, t, .7); // fade-in ~2 s
-        g.connect(this.master);
+        g.connect(this.#bus('world'));
         return g;
       };
       const mkNoise = () => {
@@ -432,7 +465,7 @@ export class GameAudio {
       if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
       const g = this.ctx.createGain();
       this.#env(g, t + off, at, dur, peak);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('ui'));
       osc.start(t + off); osc.stop(t + off + dur + .1);
     };
     const noise = (f0, f1, dur, peak, type = 'bandpass', off = 0) => {
@@ -444,7 +477,7 @@ export class GameAudio {
       bp.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
       const g = this.ctx.createGain();
       this.#env(g, t + off, .01, dur, peak);
-      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.connect(bp); bp.connect(g); g.connect(this.#bus('ui'));
       src.start(t + off); src.stop(t + off + dur * 2 + .05);
     };
     switch (kind) {
@@ -481,7 +514,7 @@ export class GameAudio {
       osc.frequency.exponentialRampToValueAtTime(f * .82, t + off + .05);
       const g = this.ctx.createGain();
       this.#env(g, t + off, .001, .05, i ? .32 : .26);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('sfx'));
       osc.start(t + off); osc.stop(t + off + .09);
     });
   }
@@ -496,7 +529,7 @@ export class GameAudio {
     osc.frequency.exponentialRampToValueAtTime(150, t + .09);
     const g = this.ctx.createGain();
     this.#env(g, t, .002, .09, .3);
-    osc.connect(g); g.connect(this.master);
+    osc.connect(g); g.connect(this.#bus('sfx'));
     osc.start(t); osc.stop(t + .12);
   }
 
@@ -514,7 +547,7 @@ export class GameAudio {
       if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
       const g = this.ctx.createGain();
       this.#env(g, t + off, at, dur, peak * vol);
-      osc.connect(g); g.connect(this.master);
+      osc.connect(g); g.connect(this.#bus('sfx'));
       osc.start(t + off); osc.stop(t + off + dur + .1);
     };
     const noise = (f0, f1, dur, peak, type = 'bandpass', off = 0) => {
@@ -526,7 +559,7 @@ export class GameAudio {
       bp.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
       const g = this.ctx.createGain();
       this.#env(g, t + off, .01, dur, peak * vol);
-      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
       src.start(t + off); src.stop(t + off + dur * 2 + .05);
     };
     switch (effect) {

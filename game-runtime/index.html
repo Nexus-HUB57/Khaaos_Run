@@ -23,6 +23,7 @@
         <span class="pulse-chip" id="pulseValue">PULSO 00</span>
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
+      <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
@@ -58,6 +59,7 @@
         <button class="spec-btn" data-cam="FOLLOW_PLAYER" title="Seguir operativo">SEGUIR</button>
         <button class="spec-btn" data-cam="OVERHEAD" title="Câmera aérea">AÉREA</button>
         <button class="spec-btn" data-cam="RING_CENTER" title="Centro do ring girando">CENTRO</button>
+        <button class="spec-btn" id="specAuto" title="Fase 19 — diretor automático: corta para o alvo mais ameaçado (hazard ativo, nocaute, fora do ring, dano recente)">AUTO</button>
         <span class="spec-hint">ALVO</span>
         <button class="spec-btn" id="specFollowPrev" title="Operativo anterior">‹</button>
         <button class="spec-btn" id="specFollowNext" title="Próximo operativo">›</button>
@@ -251,6 +253,16 @@
           <button id="ataCloseBtn" class="primary-btn">FECHAR ATA</button>
         </div>
       </div>
+    </div>
+
+    <!-- Fase 19 — mixagem de volume (KR_AUDIO_*): 4 canais, persistência imediata -->
+    <div id="audioMixer" class="audio-mixer hidden">
+      <div class="section-label">MIXAGEM // ÁUDIO</div>
+      <label><span>GERAL</span><input type="range" min="0" max="100" step="1" data-channel="master" aria-label="Volume geral" /><b data-out="master">50%</b></label>
+      <label><span>EFEITOS</span><input type="range" min="0" max="100" step="1" data-channel="sfx" aria-label="Volume dos efeitos" /><b data-out="sfx">100%</b></label>
+      <label><span>MUNDO</span><input type="range" min="0" max="100" step="1" data-channel="world" aria-label="Volume do mundo (ambiente + sobrevivências)" /><b data-out="world">100%</b></label>
+      <label><span>INTERFACE</span><input type="range" min="0" max="100" step="1" data-channel="ui" aria-label="Volume da interface e avisos" /><b data-out="ui">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_AUDIO_*)</small>
     </div>
 
     <script type="module" src="/src/game3d/main3d.js"></script>
