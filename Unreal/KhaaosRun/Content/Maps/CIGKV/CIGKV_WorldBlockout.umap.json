@@ -1,0 +1,9 @@
+{
+  "schema": "khaaos.ue5.umap-intake/v1",
+  "world_id": "CIGKV",
+  "display_name": "CIGKV_KhaaosVille",
+  "engine_target": "UE5.8",
+  "source_config": "Unreal/KhaaosRun/Content/Maps/CIGKV/CIGKV_level_data.json",
+  "status": "source_intake_requires_editor_import",
+  "poi_count": 0
+}

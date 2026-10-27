@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu3ChoiceMade, bool, bUsedMask);
  * - Loot: armadilhas de caça + munição
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API AZu3CigkvImpact : public AActor
+class KHAAOSRUN_API AZu3CigkvImpact : public AActor
 {
 	GENERATED_BODY()
 

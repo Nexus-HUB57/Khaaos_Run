@@ -27,7 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu1ChoiceMade, bool, bSeatbeltFas
  * - Niagara + Som 3D
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API AZu1CigkvImpact : public AActor
+class KHAAOSRUN_API AZu1CigkvImpact : public AActor
 {
 	GENERATED_BODY()
 

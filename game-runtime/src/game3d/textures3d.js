@@ -1,6 +1,14 @@
 // Khaaos Run — Texturas procedurais (canvas) para materiais PBR sem assets externos.
 import * as THREE from 'three';
 
+// PRNG estável: a aparência procedural não pode mudar a cada reload ou entre
+// clientes. O estado é privado ao módulo e não participa da simulação/gameplay.
+let textureSeed = 0x4b52554e;
+function random() {
+  textureSeed = (textureSeed * 1664525 + 1013904223) >>> 0;
+  return textureSeed / 0x100000000;
+}
+
 function canvas(size = 256) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -9,7 +17,7 @@ function canvas(size = 256) {
 function noise(ctx, size, amount = 0.12, alpha = 0.5) {
   const img = ctx.getImageData(0, 0, size, size), d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const n = (Math.random() - 0.5) * amount * 255;
+    const n = (random() - 0.5) * amount * 255;
     d[i] = Math.max(0, Math.min(255, d[i] + n));
     d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n));
     d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n));
@@ -75,16 +83,16 @@ function concreteCanvas() {
   const [c, x] = canvas(256);
   x.fillStyle = '#8d8a84'; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 900; i++) {
-    x.fillStyle = `rgba(${60 + Math.random() * 60},${58 + Math.random() * 58},${54 + Math.random() * 55},.18)`;
-    x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, Math.random() * 7, 0, 7); x.fill();
+    x.fillStyle = `rgba(${60 + random() * 60},${58 + random() * 58},${54 + random() * 55},.18)`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, random() * 7, 0, 7); x.fill();
   }
   // rachaduras
   x.strokeStyle = 'rgba(40,38,36,.35)'; x.lineWidth = 1;
   for (let i = 0; i < 8; i++) {
     x.beginPath();
-    let px = Math.random() * 256, py = Math.random() * 256;
+    let px = random() * 256, py = random() * 256;
     x.moveTo(px, py);
-    for (let s = 0; s < 8; s++) { px += (Math.random() - .5) * 60; py += (Math.random() - .5) * 60; x.lineTo(px, py); }
+    for (let s = 0; s < 8; s++) { px += (random() - .5) * 60; py += (random() - .5) * 60; x.lineTo(px, py); }
     x.stroke();
   }
   // juntas de placas
@@ -108,8 +116,8 @@ function metalCanvas(base = '#7a4a2b') {
   }
   // ferrugem
   for (let i = 0; i < 60; i++) {
-    x.fillStyle = `rgba(${120 + Math.random() * 60},${50 + Math.random() * 30},20,${0.06 + Math.random() * 0.12})`;
-    x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 3 + Math.random() * 16, 0, 7); x.fill();
+    x.fillStyle = `rgba(${120 + random() * 60},${50 + random() * 30},20,${0.06 + random() * 0.12})`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, 3 + random() * 16, 0, 7); x.fill();
   }
   noise(x, 256, 0.08);
   return c;
@@ -122,16 +130,16 @@ function groundCanvas() {
   const [c, x] = canvas(512);
   x.fillStyle = '#6d5f45'; x.fillRect(0, 0, 512, 512);
   for (let i = 0; i < 2600; i++) {
-    const r = Math.random();
-    x.fillStyle = r < .5 ? `rgba(96,84,58,${.2 + Math.random() * .3})`
-      : r < .8 ? `rgba(120,104,72,${.15 + Math.random() * .3})`
-        : `rgba(84,92,52,${.12 + Math.random() * .25})`; // manchas de grama seca
-    x.beginPath(); x.arc(Math.random() * 512, Math.random() * 512, 2 + Math.random() * 22, 0, 7); x.fill();
+    const r = random();
+    x.fillStyle = r < .5 ? `rgba(96,84,58,${.2 + random() * .3})`
+      : r < .8 ? `rgba(120,104,72,${.15 + random() * .3})`
+        : `rgba(84,92,52,${.12 + random() * .25})`; // manchas de grama seca
+    x.beginPath(); x.arc(random() * 512, random() * 512, 2 + random() * 22, 0, 7); x.fill();
   }
   // pedrinhas
   for (let i = 0; i < 300; i++) {
-    x.fillStyle = `rgba(${90 + Math.random() * 50},${86 + Math.random() * 46},${80 + Math.random() * 40},.5)`;
-    x.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    x.fillStyle = `rgba(${90 + random() * 50},${86 + random() * 46},${80 + random() * 40},.5)`;
+    x.fillRect(random() * 512, random() * 512, 1 + random() * 3, 1 + random() * 3);
   }
   noise(x, 512, 0.09);
   return c;
@@ -146,8 +154,8 @@ function asphaltCanvas() {
   const [c, x] = canvas(256);
   x.fillStyle = '#3c3d40'; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 1400; i++) {
-    x.fillStyle = `rgba(${Math.random() < .5 ? 20 : 78},${Math.random() < .5 ? 20 : 78},${Math.random() < .5 ? 22 : 82},.22)`;
-    x.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 4, 1 + Math.random() * 4);
+    x.fillStyle = `rgba(${random() < .5 ? 20 : 78},${random() < .5 ? 20 : 78},${random() < .5 ? 22 : 82},.22)`;
+    x.fillRect(random() * 256, random() * 256, 1 + random() * 4, 1 + random() * 4);
   }
   noise(x, 256, 0.07);
   return c;
@@ -160,10 +168,10 @@ export function cloudTexture() {
   const [c, x] = canvas(256);
   x.clearRect(0, 0, 256, 256);
   for (let i = 0; i < 26; i++) {
-    const cx = 40 + Math.random() * 176, cy = 90 + Math.random() * 76;
-    const r = 18 + Math.random() * 42;
+    const cx = 40 + random() * 176, cy = 90 + random() * 76;
+    const r = 18 + random() * 42;
     const g = x.createRadialGradient(cx, cy, 2, cx, cy, r);
-    const a = .05 + Math.random() * .09;
+    const a = .05 + random() * .09;
     g.addColorStop(0, `rgba(236,222,214,${a})`);
     g.addColorStop(1, 'rgba(236,222,214,0)');
     x.fillStyle = g;
@@ -180,7 +188,7 @@ export function windowsTexture() {
   x.fillStyle = '#2e3238'; x.fillRect(0, 0, 256, 256);
   for (let wy = 10; wy < 246; wy += 32) {
     for (let wx = 8; wx < 246; wx += 28) {
-      const lit = Math.random();
+      const lit = random();
       x.fillStyle = lit < .12 ? '#ffd28a' : lit < .3 ? '#5a6b78' : '#1a2026';
       x.fillRect(wx, wy, 18, 22);
       x.strokeStyle = 'rgba(0,0,0,.6)'; x.lineWidth = 2;
@@ -198,8 +206,8 @@ export function crateTexture() {
   x.strokeRect(4, 4, 120, 120);
   x.beginPath(); x.moveTo(4, 4); x.lineTo(124, 124); x.moveTo(124, 4); x.lineTo(4, 124); x.stroke();
   for (let i = 0; i < 40; i++) {
-    x.strokeStyle = `rgba(70,50,26,${.1 + Math.random() * .2})`; x.lineWidth = 1;
-    x.beginPath(); const y = Math.random() * 128; x.moveTo(0, y); x.lineTo(128, y + (Math.random() - .5) * 8); x.stroke();
+    x.strokeStyle = `rgba(70,50,26,${.1 + random() * .2})`; x.lineWidth = 1;
+    x.beginPath(); const y = random() * 128; x.moveTo(0, y); x.lineTo(128, y + (random() - .5) * 8); x.stroke();
   }
   noise(x, 128, 0.1);
   return tex(c, {});
@@ -210,15 +218,15 @@ export function grassBladeTexture() {
   const [c, x] = canvas(64);
   x.clearRect(0, 0, 64, 64);
   for (let i = 0; i < 14; i++) {
-    const bx = 6 + Math.random() * 52;
-    const h = 26 + Math.random() * 34;
+    const bx = 6 + random() * 52;
+    const h = 26 + random() * 34;
     const g = x.createLinearGradient(0, 64, 0, 64 - h);
     g.addColorStop(0, '#4a5a28'); g.addColorStop(1, '#7d8f3e');
     x.fillStyle = g;
     x.beginPath();
     x.moveTo(bx - 2, 64);
-    x.quadraticCurveTo(bx + (Math.random() - .5) * 14, 64 - h * .6, bx + (Math.random() - .5) * 20, 64 - h);
-    x.quadraticCurveTo(bx + 2 + (Math.random() - .5) * 8, 64 - h * .5, bx + 2, 64);
+    x.quadraticCurveTo(bx + (random() - .5) * 14, 64 - h * .6, bx + (random() - .5) * 20, 64 - h);
+    x.quadraticCurveTo(bx + 2 + (random() - .5) * 8, 64 - h * .5, bx + 2, 64);
     x.fill();
   }
   const t = new THREE.CanvasTexture(c);
@@ -284,13 +292,13 @@ function camoCanvas(palette = 0) {
   for (let layer = 1; layer < 4; layer++) {
     x.fillStyle = pal[layer];
     for (let i = 0; i < 14; i++) {
-      const cx = Math.random() * 256, cy = Math.random() * 256;
-      const r = 14 + Math.random() * 30;
+      const cx = random() * 256, cy = random() * 256;
+      const r = 14 + random() * 30;
       x.beginPath();
       // blob irregular (8 vértices com raio ruidoso) — sem emendas no tile
       for (let k = 0; k <= 8; k++) {
         const a = (k / 8) * Math.PI * 2;
-        const rr = r * (.7 + Math.random() * .5);
+        const rr = r * (.7 + random() * .5);
         const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
         k === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
       }
@@ -325,13 +333,13 @@ export function skinMaterial(skin = '#d9a06b') {
     // base neutra (roughness médio); poros = pontos mais ásperos (claros)
     x.fillStyle = '#9a9a9a'; x.fillRect(0, 0, 128, 128);
     for (let i = 0; i < 900; i++) {
-      const a = .10 + Math.random() * .16;
-      x.fillStyle = Math.random() < .62 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * .8})`;
-      x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, .6 + Math.random() * 1.3, 0, 7); x.fill();
+      const a = .10 + random() * .16;
+      x.fillStyle = random() < .62 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a * .8})`;
+      x.beginPath(); x.arc(random() * 128, random() * 128, .6 + random() * 1.3, 0, 7); x.fill();
     }
     // manchas macias de oleosidade (testa/nariz ficam mais "brilhantes")
     for (let i = 0; i < 26; i++) {
-      const g = x.createRadialGradient(64, 64, 2, 32 + Math.random() * 64, 32 + Math.random() * 64, 8 + Math.random() * 20);
+      const g = x.createRadialGradient(64, 64, 2, 32 + random() * 64, 32 + random() * 64, 8 + random() * 20);
       g.addColorStop(0, 'rgba(255,255,255,0.10)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       x.fillStyle = g; x.fillRect(0, 0, 128, 128);
     }
@@ -468,19 +476,19 @@ function roadCanvas() {
   x.fillStyle = '#37383c'; x.fillRect(0, 0, 256, 256);
   // agregado
   for (let i = 0; i < 1500; i++) {
-    x.fillStyle = `rgba(${Math.random() < .5 ? 18 : 70},${Math.random() < .5 ? 18 : 70},${Math.random() < .5 ? 20 : 74},.2)`;
-    x.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    x.fillStyle = `rgba(${random() < .5 ? 18 : 70},${random() < .5 ? 18 : 70},${random() < .5 ? 20 : 74},.2)`;
+    x.fillRect(random() * 256, random() * 256, 1 + random() * 3, 1 + random() * 3);
   }
   // remendos de asfalto
   for (let i = 0; i < 5; i++) {
     x.fillStyle = 'rgba(24,25,28,.5)';
-    x.fillRect(Math.random() * 200, Math.random() * 200, 20 + Math.random() * 50, 14 + Math.random() * 30);
+    x.fillRect(random() * 200, random() * 200, 20 + random() * 50, 14 + random() * 30);
   }
   // rachaduras
   x.strokeStyle = 'rgba(14,14,16,.5)'; x.lineWidth = 1.2;
   for (let i = 0; i < 6; i++) {
-    x.beginPath(); let px = Math.random() * 256, py = Math.random() * 256; x.moveTo(px, py);
-    for (let s = 0; s < 6; s++) { px += (Math.random() - .5) * 50; py += (Math.random() - .5) * 50; x.lineTo(px, py); }
+    x.beginPath(); let px = random() * 256, py = random() * 256; x.moveTo(px, py);
+    for (let s = 0; s < 6; s++) { px += (random() - .5) * 50; py += (random() - .5) * 50; x.lineTo(px, py); }
     x.stroke();
   }
   // bordas brancas contínuas (verticais no tile)
@@ -501,8 +509,8 @@ function sidewalkCanvas() {
   const [c, x] = canvas(256);
   x.fillStyle = '#8f8b82'; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 700; i++) {
-    x.fillStyle = `rgba(${70 + Math.random() * 50},${66 + Math.random() * 48},${60 + Math.random() * 44},.16)`;
-    x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, Math.random() * 5, 0, 7); x.fill();
+    x.fillStyle = `rgba(${70 + random() * 50},${66 + random() * 48},${60 + random() * 44},.16)`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, random() * 5, 0, 7); x.fill();
   }
   // juntas de lajes 64px
   x.strokeStyle = 'rgba(52,50,46,.55)'; x.lineWidth = 3;
@@ -540,8 +548,8 @@ export function barrelMaterial(base = '#4a5545') {
       x.fillStyle = g; x.fillRect(0, y - 8, 128, 16);
     }
     for (let i = 0; i < 26; i++) {
-      x.fillStyle = `rgba(${110 + Math.random() * 50},${58 + Math.random() * 26},18,${.08 + Math.random() * .14})`;
-      x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 8, 0, 7); x.fill();
+      x.fillStyle = `rgba(${110 + random() * 50},${58 + random() * 26},18,${.08 + random() * .14})`;
+      x.beginPath(); x.arc(random() * 128, random() * 128, 2 + random() * 8, 0, 7); x.fill();
     }
     noise(x, 128, 0.08);
     return pbr(c, { repeat: 1, rough: .62, metal: .45, strength: 1.4 });
@@ -554,8 +562,8 @@ export function sandbagMaterial() {
     const [c, x] = canvas(128);
     x.fillStyle = '#7d7354'; x.fillRect(0, 0, 128, 128);
     for (let i = 0; i < 500; i++) {
-      x.fillStyle = `rgba(${120 + Math.random() * 30},${108 + Math.random() * 26},${74 + Math.random() * 20},.2)`;
-      x.fillRect(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 4, 1 + Math.random() * 2);
+      x.fillStyle = `rgba(${120 + random() * 30},${108 + random() * 26},${74 + random() * 20},.2)`;
+      x.fillRect(random() * 128, random() * 128, 2 + random() * 4, 1 + random() * 2);
     }
     x.strokeStyle = 'rgba(60,54,36,.5)'; x.lineWidth = 2;
     for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(0, i * 26 + 13); x.lineTo(128, i * 26 + 9); x.stroke(); }
@@ -572,9 +580,9 @@ export function palletMaterial() {
     x.fillStyle = '#5a4426';
     for (let i = 0; i < 128; i += 22) x.fillRect(0, i, 128, 14); // tábuas
     for (let i = 0; i < 30; i++) {
-      x.strokeStyle = `rgba(40,28,12,${.15 + Math.random() * .2})`; x.lineWidth = 1;
-      const y = Math.random() * 128;
-      x.beginPath(); x.moveTo(0, y); x.lineTo(128, y + (Math.random() - .5) * 6); x.stroke();
+      x.strokeStyle = `rgba(40,28,12,${.15 + random() * .2})`; x.lineWidth = 1;
+      const y = random() * 128;
+      x.beginPath(); x.moveTo(0, y); x.lineTo(128, y + (random() - .5) * 6); x.stroke();
     }
     noise(x, 128, 0.09);
     return pbr(c, { repeat: 1, rough: .9, strength: 1.8 });
@@ -617,8 +625,8 @@ export function mountainTexture(tint = '#3a2438') {
       let px = 0;
       x.lineTo(0, 512 - hBase - 40);
       while (px < 512) {
-        px += 30 + Math.random() * 55;
-        const peak = 512 - hBase - Math.random() * 70;
+        px += 30 + random() * 55;
+        const peak = 512 - hBase - random() * 70;
         x.lineTo(px, peak);
       }
       x.lineTo(512, 512); x.closePath();

@@ -12,7 +12,7 @@ class AZu2CigkvImpact;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu2WidgetChoice, bool, bJumped);
 
 UCLASS()
-class KHAOSRUN_API UZu2ChoiceWidget : public UUserWidget
+class KHAAOSRUN_API UZu2ChoiceWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

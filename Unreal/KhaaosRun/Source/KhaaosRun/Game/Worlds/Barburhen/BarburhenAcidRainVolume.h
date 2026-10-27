@@ -35,7 +35,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAcidRainTick, APawn*, Player, fl
  *   Podem acumular.
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API ABarburhenAcidRainVolume : public AActor
+class KHAAOSRUN_API ABarburhenAcidRainVolume : public AActor
 {
 	GENERATED_BODY()
 

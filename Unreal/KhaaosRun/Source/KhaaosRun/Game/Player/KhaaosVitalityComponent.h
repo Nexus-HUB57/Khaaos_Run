@@ -28,7 +28,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDebuffRemoved, FGameplayTag, Debu
  * Coloque este componente no Character / PlayerState do projeto.
  */
 UCLASS(ClassGroup = (Khaaos), meta = (BlueprintSpawnableComponent))
-class KHAOSRUN_API UKhaaosVitalityComponent : public UActorComponent
+class KHAAOSRUN_API UKhaaosVitalityComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

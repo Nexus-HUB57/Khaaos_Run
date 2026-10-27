@@ -31,7 +31,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnForgePurchaseFailed, FName, Item
  * - UI aberta por overlap ou Interact
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API AKhaaosArmorerForge : public AActor
+class KHAAOSRUN_API AKhaaosArmorerForge : public AActor
 {
 	GENERATED_BODY()
 
