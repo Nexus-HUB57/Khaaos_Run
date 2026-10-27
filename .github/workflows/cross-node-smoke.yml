@@ -87,7 +87,9 @@ jobs:
       REDIS_URL: redis://127.0.0.1:56379
       SMOKE_REPLICA_URL: redis://127.0.0.1:56380
       REDIS_NAMESPACE: khaaos_f16_ci
-      NODE_ENV: production
+      # NODE_ENV de propósito AUSENTE no job: com NODE_ENV=production o npm
+      # omite devDependencies (drizzle-kit/tsx/esbuild/vite) e quebra migrate
+      # e build. O smoke já força NODE_ENV=production nos nós que ele sobe.
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +122,7 @@ jobs:
         run: npm ci
 
       - name: Migrações versionadas (0000→0007, cadeia da economia 2PC)
-        run: npx drizzle-kit migrate
+        run: npm run db:migrate
 
       - name: Build de produção (dist/index.cjs — nós reais do smoke)
         run: npm run build
