@@ -1,0 +1,13 @@
+{
+  "asset_class": "NiagaraSystem",
+  "asset_name": "VFX_Zone_Rain",
+  "description": "Rain particle system with splashes and puddles",
+  "type": "Zone",
+  "pool_size": 16,
+  "use_pooling": true,
+  "auto_destroy": true,
+  "significance_rank": 2,
+  "gpu_particles": true,
+  "max_particles": 2048,
+  "budget_ms": 1.0
+}
