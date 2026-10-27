@@ -75,6 +75,7 @@ export interface RelayTransport {
 /** Redis: canal dedicado `<ns>:relay:<nodeId>` por nó (produção multi-nó). */
 export class RedisRelayTransport implements RelayTransport {
   private subscriber: { subscribe?: unknown } | null = null;
+  private startRequested = false;
   constructor(
     private readonly clientProvider: () => {
       publish: (channel: string, message: string) => Promise<unknown>;
@@ -95,11 +96,19 @@ export class RedisRelayTransport implements RelayTransport {
     const client = this.clientProvider();
     if (!client) return false;
     const receivers = Number(await client.publish(this.channel(targetNodeId), JSON.stringify(envelope)));
+    if (process.env.SMOKE_DEBUG) {
+      console.log("[RedisRelayTransport] publish", { target: targetNodeId, channel: this.channel(targetNodeId), receivers });
+    }
     return receivers > 0;
   }
   async start(onEnvelope: (envelope: RelayEnvelope) => void): Promise<void> {
     const client = this.clientProvider();
-    if (!client || this.subscriber) return;
+    if (!client || this.subscriber || this.startRequested) return;
+    // Marca ANTES do await: resolve() do lazy dispara este start em paralelo
+    // com o start() aguardado pelo gateway — sem a marca, os dois correm e
+    // o canal fica com DUAS inscrições (publish conta 2 receivers, envelopes
+    // entregues em duplicidade).
+    this.startRequested = true;
     const subscriber = client.duplicate();
     await subscriber.connect();
     await subscriber.subscribe(this.channel(this.selfNodeId), (raw) => {
@@ -345,13 +354,16 @@ export class NodeWsGateway {
       const prefix = this.prefix;
       const nodeId = this.nodeId;
       // Wrapper: usa Redis quando conectado, barramento local caso contrário.
+      // Factories retornam null sem cliente — o lazy re-resolve a cada uso
+      // (padrão do mesh): Redis subindo depois do boot é adotado no próximo
+      // ciclo, sem reinício do processo.
       this.transport = new LazyTransport(() => {
         const client = provider();
-        return client ? new RedisRelayTransport(() => client as never, nodeId, prefix) : new LocalRelayTransport(nodeId);
+        return client ? new RedisRelayTransport(() => client as never, nodeId, prefix) : null;
       }, this.transport);
       this.registryStore = new LazyNodeRegistry(() => {
         const client = provider();
-        return client ? new RedisNodeRegistryStore(client, prefix) : new LocalNodeRegistryStore();
+        return client ? new RedisNodeRegistryStore(client, prefix) : null;
       }, this.registryStore);
     }
     this.callbacks = options?.callbacks ?? {};
@@ -397,11 +409,25 @@ export class NodeWsGateway {
   private async heartbeat(): Promise<void> {
     try {
       await this.registerSelf();
+      // Receptor: se Redis subiu depois do boot, inscreve o canal relay AGORA
+      // (sem isso só o publicador adotaria o transporte Redis).
+      await (this.transport as { refresh?: () => Promise<boolean> }).refresh?.();
       const nodes = await this.registryStore.list();
       const seen = new Set<string>();
       for (const node of nodes) {
         if (node.nodeId === this.nodeId) continue;
-        const alive = await this.registryStore.leaseAlive(node.nodeId);
+        let alive = false;
+        try {
+          alive = await this.registryStore.leaseAlive(node.nodeId);
+        } catch (error) {
+          if (process.env.SMOKE_DEBUG) {
+            console.warn("[NodeWsGateway] leaseAlive falhou", {
+              node: node.nodeId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+          continue; // lease indeterminado NÃO remove o nó do índice
+        }
         if (!alive) {
           await this.registryStore.remove(node.nodeId);
           this.knownNodes.delete(node.nodeId);
@@ -421,7 +447,22 @@ export class NodeWsGateway {
         }
       }
       this.knownNodes = seen;
-    } catch {
+      if (process.env.SMOKE_DEBUG) {
+        console.log("[NodeWsGateway] heartbeat", {
+          self: this.nodeId,
+          listed: nodes.length,
+          known: [...seen],
+          started: this.started,
+          enabled: this.enabled,
+        });
+      }
+    } catch (error) {
+      if (process.env.SMOKE_DEBUG) {
+        console.warn("[NodeWsGateway] heartbeat falhou", {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack?.split("\n")[1] : undefined,
+        });
+      }
       // heartbeat é best-effort
     }
   }
@@ -472,6 +513,9 @@ export class NodeWsGateway {
   /** Mensagem do cliente: true se foi roteada pelo túnel (não processar local). */
   routeIfRelayed(userId: string, msg: { type: string } & Record<string, unknown>): boolean {
     const relayed = this.originByUser.get(userId);
+    if (process.env.SMOKE_DEBUG) {
+      console.log("[NodeWsGateway] routeIfRelayed", { userId, type: msg.type, relayed: relayed ? { target: relayed.targetNode, session: relayed.session } : null });
+    }
     if (!relayed) return false;
     // Âncora de sala: encerra o túnel e processa LOCALMENTE (troca de sala).
     if (["join", "queue", "create_lobby", "join_code"].includes(msg.type)) {
@@ -483,6 +527,7 @@ export class NodeWsGateway {
       u: userId, d: (msg as { displayName?: string }).displayName ? String((msg as { displayName?: string }).displayName) : "",
       m: msg,
     } satisfies RelayEnvelope).then((ok) => {
+      if (process.env.SMOKE_DEBUG) console.log("[NodeWsGateway] c2s publish ok=", ok, { session: relayed.session, target: relayed.targetNode });
       if (!ok) this.failRelay(relayed.session, "publish_failed");
     }).catch(() => this.failRelay(relayed.session, "publish_failed"));
     return true;
@@ -679,18 +724,46 @@ export class NodeWsGateway {
 
 class LazyTransport implements RelayTransport {
   private active: RelayTransport;
+  private redisTransport: RelayTransport | null = null;
+  private startHandler: ((envelope: RelayEnvelope) => void) | null = null;
   constructor(
-    private readonly factory: () => RelayTransport,
-    fallback: RelayTransport,
+    /** Retorna o transporte Redis quando o cliente existe; null caso contrário. */
+    private readonly factory: () => RelayTransport | null,
+    private readonly fallback: RelayTransport,
   ) {
     this.active = fallback;
   }
+  /** Resolve o transporte Redis na primeira oportunidade (padrão do mesh:
+   *  se Redis subir depois do boot, o próximo uso já publica por lá).
+   *  NÃO inicia o transporte — quem inicia é start()/refresh(), uma única
+   *  vez (double-start = inscrição dupla no canal). */
+  private resolve(): RelayTransport {
+    if (!this.redisTransport) {
+      const resolved = this.factory();
+      if (resolved) {
+        this.redisTransport = resolved;
+        this.active = resolved;
+      }
+    }
+    return this.active;
+  }
   publish(targetNodeId: string, envelope: RelayEnvelope): Promise<boolean> {
-    return this.active.publish(targetNodeId, envelope);
+    return this.resolve().publish(targetNodeId, envelope);
   }
   async start(onEnvelope: (envelope: RelayEnvelope) => void): Promise<void> {
-    this.active = this.factory();
+    this.startHandler = onEnvelope;
+    this.resolve(); // tenta Redis imediatamente; fica no fallback se indisponível
     await this.active.start(onEnvelope);
+  }
+  /** (Re)resolve e INSCREVE o canal relay de forma aguardável — usado pelo
+   *  heartbeat para o papel de RECEPTOR (nada publica por este nó). */
+  async refresh(): Promise<boolean> {
+    const previous = this.active;
+    this.resolve();
+    if (this.active !== previous && this.startHandler) {
+      await this.active.start(this.startHandler).catch(() => undefined);
+    }
+    return this.redisTransport !== null;
   }
   async stop(): Promise<void> {
     await this.active.stop().catch(() => undefined);
@@ -699,25 +772,39 @@ class LazyTransport implements RelayTransport {
 
 class LazyNodeRegistry implements NodeRegistryStore {
   private active: NodeRegistryStore;
+  private redisStore: NodeRegistryStore | null = null;
   constructor(
-    private readonly factory: () => NodeRegistryStore,
-    fallback: NodeRegistryStore,
+    /** Retorna o registro Redis quando o cliente existe; null caso contrário. */
+    private readonly factory: () => NodeRegistryStore | null,
+    private readonly fallback: NodeRegistryStore,
   ) {
     this.active = fallback;
   }
+  /** Resolve o registro Redis na primeira oportunidade (padrão do mesh:
+   *  registro no índice distribuído assim que o client existir). */
+  private resolve(): NodeRegistryStore {
+    if (!this.redisStore) {
+      const resolved = this.factory();
+      if (resolved) {
+        this.redisStore = resolved;
+        this.active = resolved;
+      }
+    }
+    return this.active;
+  }
   put(entry: NodeRegistryEntry): Promise<void> {
-    return this.active.put(entry);
+    return this.resolve().put(entry);
   }
   remove(nodeId: string): Promise<void> {
-    return this.active.remove(nodeId);
+    return this.resolve().remove(nodeId);
   }
   list(): Promise<NodeRegistryEntry[]> {
-    return this.active.list();
+    return this.resolve().list();
   }
   touchLease(nodeId: string, ttlMs: number): Promise<void> {
-    return this.active.touchLease(nodeId, ttlMs);
+    return this.resolve().touchLease(nodeId, ttlMs);
   }
   async leaseAlive(nodeId: string): Promise<boolean> {
-    return this.active.leaseAlive(nodeId);
+    return this.resolve().leaseAlive(nodeId);
   }
 }

@@ -15,6 +15,7 @@
 
 import { WebSocket, WebSocketServer } from "ws";
 import type { Server } from "http";
+import { routeWebSocketUpgrade } from "./wsUpgradeRouter";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -181,7 +182,15 @@ export class SpectatorDataPipeline {
    * Attach WebSocket server for spectator connections.
    */
   attach(httpServer: Server): void {
-    this.wss = new WebSocketServer({ server: httpServer, path: "/ws/spectator" });
+    // noServer + roteador compartilhado: o RoomManager (/ws) vive no MESMO
+    // httpServer e um listener ws com `{ server }` responde 400 a paths
+    // alheios, matando os DOIS handshakes (o do próprio espectador inclusive,
+    // pois o listener do RoomManager é registrado primeiro). Detalhes em
+    // wsUpgradeRouter.ts.
+    this.wss = new WebSocketServer({ noServer: true });
+    routeWebSocketUpgrade(httpServer, "/ws/spectator", (req, socket, head) => {
+      this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit("connection", ws, req));
+    });
 
     this.wss.on("connection", (ws: WebSocket, req) => {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
