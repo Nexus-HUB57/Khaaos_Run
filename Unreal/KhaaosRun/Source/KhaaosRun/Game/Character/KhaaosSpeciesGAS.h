@@ -140,6 +140,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Species|GAS")
 	TSubclassOf<UGameplayEffect> GetSpeciesEffectClass(const FName& EffectName) const;
 
+	// ─── Proteção Ambiental (ex.: chuva ácida de Barburhen — Fase 1) ──────
+
+	/**
+	 * Concede/remove a proteção contra a chuva ácida de Barburhen via GAS:
+	 * aplica um GameplayEffect que concede a tag World.Barburhen.AcidProtection
+	 * (UKhaaosGameplayEffects::CreateTagGrantEffect). O equipamento (colete/
+	 * máscara anti-ácido) chama com bEnabled=true ao equipar e false ao remover.
+	 * DurationSeconds <= 0 → proteção INFINITA até remoção explícita.
+	 * Retorna true se o estado da proteção mudou.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Khaaos|Species|GAS")
+	bool SetAcidProtection(bool bEnabled, float DurationSeconds = 0.0f);
+
+	/** A proteção anti-ácido está ativa na ASC? (consulta da tag concedida) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Species|GAS")
+	bool HasAcidProtection() const;
+
 	// ─── Delegates ─────────────────────────────────────────────────────────
 
 	/** Broadcast when species traits are applied. */
@@ -216,6 +233,10 @@ protected:
 	/** Active GameplayEffect handles from current species (for removal). */
 	UPROPERTY()
 	TArray<FActiveGameplayEffectHandle> ActiveEffectHandles;
+
+	/** Handle da proteção anti-ácido (colete/máscara — ciclo próprio de vida). */
+	UPROPERTY()
+	FActiveGameplayEffectHandle AcidProtectionHandle;
 
 private:
 

@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Zheers_RadiationPulse",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.663865+00:00",
+  "generated_at": "2026-10-26T23:35:11.337756+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Zheers radiation pulse wave - expanding radiation ring",
@@ -113,5 +113,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "9012e41e08341836"
+  "checksum": "b9a5186cdd2e2124"
 }

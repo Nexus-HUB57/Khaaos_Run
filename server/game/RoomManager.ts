@@ -28,16 +28,20 @@ import {
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
+import { NodeWsGateway } from "./NodeWsGateway";
 import { deriveCombatLoadout, getLootWeight, hasValidDurability } from "./loadout";
 import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
+import { computeMatchPayouts, settleMatchPayouts } from "./EconomyPayoutSettlement";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
 import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integrations/auth/origin";
+import { routeWebSocketUpgrade } from "./wsUpgradeRouter";
 import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
+import { RoomEventMesh, type RoomMeshRecord } from "./RoomEventMesh";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -172,7 +176,7 @@ export type ServerMessage =
   | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string; code?: string }
+  | { type: "error"; message: string; code?: string; roomId?: string; nodeId?: string; endpoint?: string | null }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: QueueMode }
   | { type: "queue_left" }
@@ -229,6 +233,38 @@ class RoomManager {
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
 
+  /**
+   * Redis Event Mesh (auditoria Fase 0/2): espelha o índice de salas em
+   * HASH Redis + leases de vivacidade, publica eventos entre nós e detecta
+   * morte de nó via reconcile. Estado autoritativo continua LOCAL (sockets
+   * são deste processo); o mesh é o barramento de descoberta/eventos.
+   */
+  readonly mesh = new RoomEventMesh({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient(),
+    publishControl: (event) => distributedState.publishControl(event),
+  });
+
+  /**
+   * Node WS Gateway (proxy cross-node — auditoria Fase 2): roteia mensagens
+   * de clientes por nodeId até o nó dono da sala (RelaySocket), mantendo o
+   * socket no nó de origem. Sem Redis/gateway, o caminho legado
+   * (ROOM_REMOTE_NODE + reconexão) permanece intacto.
+   */
+  readonly gateway = new NodeWsGateway({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient() as never,
+    callbacks: {
+      onSessionStart: (socket) => this.registerSocket(socket.userId, socket as unknown as WebSocket),
+      onClientMessage: (socket, userId, displayName, msg, relayAuthorized) =>
+        this.handleMessage(userId, displayName, socket as unknown as WebSocket, msg as ClientMessage, { relayInviteAuthorized: relayAuthorized }),
+      onSessionEnd: (socket) => {
+        this.unregisterSocket(socket.userId, socket as unknown as WebSocket);
+        this.onDisconnect(socket.userId, socket as unknown as WebSocket);
+      },
+    },
+  });
+
   /** Attach to existing HTTP server */
   constructor() {
     this.matchmaking = new MatchmakingService(
@@ -264,9 +300,12 @@ class RoomManager {
   }
 
   attach(httpServer: Server) {
+    // noServer + roteador compartilhado: o SpectatorPipeline (/ws/spectator)
+    // vive no MESMO httpServer e um listener ws com `{ server }` responde 400
+    // a paths alheios, matando o handshake deste servidor (corrida contra o
+    // verifyClient async). Detalhes em wsUpgradeRouter.ts.
     this.wss = new WebSocketServer({
-      server: httpServer,
-      path: "/ws",
+      noServer: true,
       maxPayload: 16 * 1024,
       perMessageDeflate: false,
       handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
@@ -295,7 +334,21 @@ class RoomManager {
         })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
     });
+    routeWebSocketUpgrade(httpServer, "/ws", (req, socket, head) => {
+      this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit("connection", ws, req));
+    });
     this.matchmaking.start();
+
+    // Event Mesh: leases + reconcile (queda de nó, órfãos self) a cada 10s.
+    this.mesh.startHeartbeat(() => new Set(this.rooms.keys()));
+
+    // Gateway cross-node: registro de nós + canal relay deste nó (best-effort;
+    // sem Redis fica desabilitado e o caminho legado ROOM_REMOTE_NODE vale).
+    void this.gateway.start().catch((error) => {
+      console.warn("[RoomManager] gateway cross-node indisponível", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     this.wss.on("connection", (ws, req) => {
       const userId = (req as typeof req & { khaaosUserId?: string }).khaaosUserId;
@@ -350,6 +403,7 @@ class RoomManager {
           ws.close(1011, "Realtime security unavailable");
           return;
         }
+        let msgType: string | undefined;
         try {
           const parsed = clientMessageSchema.safeParse(JSON.parse(raw.toString()));
           if (!parsed.success) {
@@ -357,6 +411,7 @@ class RoomManager {
             return;
           }
           const msg = parsed.data as ClientMessage;
+          msgType = msg.type;
           if ((msg.type === "join" || msg.type === "queue" || msg.type === "create_lobby") && msg.worldId && isWorldId(msg.worldId)) {
             this.socketWorlds.set(ws, msg.worldId);
           } else if (msg.type === "join" && !msg.roomId) {
@@ -369,7 +424,15 @@ class RoomManager {
           const activeRoomId = this.userToRoom.get(userId);
           const activeWorld = activeRoomId ? this.rooms.get(activeRoomId)?.worldId : undefined;
           if (activeWorld) this.socketWorlds.set(ws, activeWorld);
-        } catch {
+        } catch (error) {
+          // Observabilidade: o cliente recebe apenas "Invalid message" (sem
+          // leak), mas o servidor registra a causa real para diagnóstico
+          // (console.warn inspeciona a cadeia .cause do drizzle/pg).
+          console.warn("[RoomManager] message handler error", {
+            userId,
+            type: msgType,
+            error,
+          });
           this.send(ws, { type: "error", message: "Invalid message" });
         }
       });
@@ -377,6 +440,8 @@ class RoomManager {
       ws.on("close", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        // Gateway: se este socket sustentava um túnel relay, encerra (cls).
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -384,6 +449,7 @@ class RoomManager {
       ws.on("error", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -394,6 +460,14 @@ class RoomManager {
 
   stop() {
     this.matchmaking.stop();
+    void this.gateway.stop().catch(() => undefined);
+  }
+
+  /** Somente testes: alinha mesh + gateway deste manager a um nodeId de
+   *  barramento LOCAL (multi-nó simulado no mesmo processo, sem Redis). */
+  async __startLocalBusNodeForTests(nodeId: string): Promise<void> {
+    (this as unknown as { mesh: RoomEventMesh }).mesh = new RoomEventMesh({ nodeId, enabled: false });
+    await this.gateway.__startLocalBusForTests(nodeId);
   }
 
   isInLiveMatch(userId: string): boolean {
@@ -413,7 +487,12 @@ class RoomManager {
     displayName: string,
     ws: WebSocket,
     msg: ClientMessage,
+    relayContext?: { relayInviteAuthorized?: boolean },
   ) {
+    // Gateway cross-node: usuário com túnel ativo tem a mensagem roteada ao
+    // nó dono da sala. Operações de âncora (join/queue/create_lobby/join_code)
+    // encerram o túnel e caem para o dispatch LOCAL abaixo.
+    if (this.gateway.routeIfRelayed(userId, msg as unknown as { type: string } & Record<string, unknown>)) return;
     switch (msg.type) {
       case "join": {
         if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
@@ -426,8 +505,18 @@ class RoomManager {
           this.send(ws, { type: "error", message: requestedRoom.isPrivate ? "Sala não encontrada" : "A sala pertence a outro mundo" });
           break;
         }
+        // Gateway: roomId explícito que só existe em OUTRO nó → túnel relay
+        // (antes disso o join caia silenciosamente em um lobby local novo).
+        // Salas PRIVADAS remotas NUNCA relayam por roomId cru — exigem
+        // join_code (a autorização de convite via túnel vem do hop de relay).
+        if (msg.roomId && !requestedRoom) {
+          const remote = await this.mesh.getRemoteRoom(msg.roomId).catch(() => null);
+          if (remote && !remote.isPrivate && this.gateway.relaySupported(remote.nodeId)) {
+            if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
+          }
+        }
         const roomId = msg.roomId || this.findOrCreateLobby(worldId);
-        await this.joinRoom(userId, displayName, ws, roomId, worldId);
+        await this.joinRoom(userId, displayName, ws, roomId, worldId, relayContext?.relayInviteAuthorized === true);
         break;
       }
       case "resume": {
@@ -1061,6 +1150,30 @@ class RoomManager {
           });
           this.broadcastRoomState(room);
         });
+
+      // Fase 16 — payouts KRC do fim de partida (2PC + Idempotency-Key
+      // determinística payout.<roomId>.<userId>): PREPARE reserva na treasury,
+      // COMMIT credita a wallet; crash entre fases é concluído pelo recovery.
+      // Falha de settlement NUNCA propaga para o fluxo da partida.
+      const payouts = computeMatchPayouts(participants.map((p) => ({
+        userId: p.userId,
+        kills: p.kills,
+        placement: p.placement,
+        totalPlayers: participants.length,
+      })));
+      if (payouts.length > 0) {
+        settleMatchPayouts(room.id, payouts)
+          .then((summary) => {
+            console.log("[Payouts] settlement concluído", {
+              roomId: summary.roomId,
+              totalKrcCommitted: summary.totalKrcCommitted,
+              players: summary.settled.length,
+            });
+          })
+          .catch((err) => {
+            console.error("[Payouts] settlement falhou (recovery cobrirá)", err);
+          });
+      }
     }
   }
 
@@ -1489,6 +1602,35 @@ class RoomManager {
       };
       this.send(recipient.ws, payload);
     }
+    // Event Mesh: toda mudança de estado visível atualiza o índice
+    // distribuído (dedupe por fingerprint + throttle dentro do mesh).
+    this.mirrorRoomSafely(room);
+  }
+
+  private toMeshRecord(room: BattleRoom): RoomMeshRecord {
+    return {
+      id: room.id,
+      worldId: room.worldId,
+      status: room.status,
+      playerCount: room.players.size,
+      maxPlayers: room.maxPlayers,
+      isPrivate: room.isPrivate,
+      inviteCode: room.inviteCode,
+      hostId: room.hostId,
+      nodeId: this.mesh.nodeId,
+      createdAt: room.createdAt,
+      updatedAt: Date.now(),
+    };
+  }
+
+  /** Fire-and-forget: falha do mesh NUNCA propaga para o fluxo do jogo. */
+  private mirrorRoomSafely(room: BattleRoom): void {
+    this.mesh.mirrorRoom(this.toMeshRecord(room)).catch((error) => {
+      console.warn("[RoomManager] mesh mirror falhou", {
+        roomId: room.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   private broadcast(room: BattleRoom, msg: ServerMessage) {
@@ -1512,6 +1654,10 @@ class RoomManager {
     if (room.tickHandle) clearInterval(room.tickHandle);
     if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
+    // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
+    void this.mesh.markRoomClosed(roomId, "destroyed").catch(() => undefined);
+    // Gateway: sessões relayadas desta sala recebem drop (cliente reentra).
+    this.gateway.dropSessionsForRoom(roomId);
   }
 
   // ─── Lobby controls ──────────────────────────────────────────────────────
@@ -1626,6 +1772,27 @@ class RoomManager {
         (r.status === "LOBBY" || r.status === "COUNTDOWN"),
     );
     if (!room) {
+      // Event Mesh: o lobby pode existir em OUTRO nó — lookup fresco no
+      // índice distribuído antes de declarar o código inválido.
+      const remote = await this.mesh.findRemoteByInviteCode(normalized).catch(() => null);
+      if (remote) {
+        // Gateway: com registro de nós vivo, ABRIMOS TÚNEL — o socket fica
+        // neste nó e as mensagens são roteadas por nodeId ao dono da sala.
+        // O join sintético carrega ra=1 (autorização do hop, validada AQUI
+        // na origem contra o índice do mesh).
+        if (this.gateway.relaySupported(remote.nodeId)) {
+          if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId, { inviteAuthorized: true })) return;
+        }
+        this.send(ws, {
+          type: "error",
+          code: "ROOM_REMOTE_NODE",
+          roomId: remote.id,
+          nodeId: remote.nodeId,
+          endpoint: process.env.NODE_PUBLIC_URL ?? null,
+          message: "Este lobby está hospedado em outro nó; reconecte no endpoint indicado",
+        });
+        return;
+      }
       this.send(ws, { type: "error", message: "Código de lobby inválido ou expirado" });
       return;
     }
@@ -1794,7 +1961,22 @@ class RoomManager {
 
   getRoomSummary(roomId: string) {
     const room = this.rooms.get(roomId);
-    if (!room) return null;
+    if (!room) {
+      // Event Mesh: sala de outro nó, via cache síncrono do reconcile.
+      const remote = this.mesh.getCachedRoom(roomId);
+      if (remote) {
+        return {
+          id: remote.id,
+          worldId: remote.worldId,
+          status: remote.status,
+          playerCount: remote.playerCount,
+          maxPlayers: remote.maxPlayers,
+          remote: true,
+          nodeId: remote.nodeId,
+        };
+      }
+      return null;
+    }
     return {
       id: room.id,
       worldId: room.worldId,
@@ -1805,7 +1987,7 @@ class RoomManager {
   }
 
   listLobbies() {
-    return [...this.rooms.values()]
+    const local = [...this.rooms.values()]
       .filter((r) => !r.isPrivate && (r.status === "LOBBY" || r.status === "COUNTDOWN"))
       .map((r) => ({
         id: r.id,
@@ -1813,7 +1995,19 @@ class RoomManager {
         playerCount: r.players.size,
         maxPlayers: r.maxPlayers,
       }));
+    // Event Mesh: lobbies de outros nós (cache atualizado pelo heartbeat).
+    const remote = this.mesh.listRemoteLobbiesSync().map((record) => ({
+      id: record.id,
+      status: record.status,
+      playerCount: record.playerCount,
+      maxPlayers: record.maxPlayers,
+      remote: true,
+      nodeId: record.nodeId,
+    }));
+    return [...local, ...remote];
   }
 }
 
 export const roomManager = new RoomManager();
+// Classe exportada para testes multi-nó (instâncias adicionais no mesmo processo).
+export { RoomManager as RoomManagerClass };

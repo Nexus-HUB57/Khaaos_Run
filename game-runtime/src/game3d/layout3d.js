@@ -151,5 +151,9 @@ export function buildWorldLayout(seed, scenarioId = 'CIGKV') {
     if (free(x, z, 2)) lootSpots.push({ x, z, ...lootZoneFor(x, z) });
   }
 
-  return { seed, scenarioId: scenario.id, size: 400, structures, colliders, districts, sectors: districts, terminals, botSpawns, lootSpots, playerSpawn: { ...scenario.playerSpawn } };
+  return {
+    seed, scenarioId: scenario.id, size: 400, structures, colliders, districts, sectors: districts,
+    terminals, botSpawns, lootSpots, playerSpawn: { ...scenario.playerSpawn },
+    quantumAnchors: (scenario.survival?.anchors ?? []).map((anchor) => ({ ...anchor, radius: scenario.survival.anchorRadius })),
+  };
 }

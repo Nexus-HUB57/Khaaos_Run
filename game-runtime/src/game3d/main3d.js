@@ -8,7 +8,8 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
-import { createCharacterLOD, buildOperativeProxy } from './lod3d.js';
+import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
+import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
@@ -67,6 +68,7 @@ export class Game3D {
     this.placement = null;
     // Fase 10 — reação de impacto: atorId → { angle, power, age }
     this.hitFX = new Map();
+    this.deathFX = new Map();   // Fase 12 — queda direcional por ator (ângulo/power capturados no fim)
 
     this.initRenderer();
     this.initWorld();
@@ -154,6 +156,7 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : b.id }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
@@ -380,13 +383,16 @@ export class Game3D {
     this.startTrainIntro();
   }
 
-  // Fase 11 — cinemática do trem do ZU (offline e online; skippable)
-  startTrainIntro() {
+  // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
+  // Fase 12 — startAt (s) = entrada sincronizada pelo relógio do servidor no
+  // modo online (todos os remotos veem o MESMO frame do trem).
+  startTrainIntro(startAt = 0) {
     try {
       const p = this.sim.player ?? { x: 0, z: 118 };
       this.trainIntro = new TrainIntro({
         scene: this.scene,
         spawn: { x: p.x ?? 0, z: p.z ?? 118 },
+        startAt,
         onDone: () => { this.trainIntro = null; },
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
@@ -430,6 +436,16 @@ export class Game3D {
     document.querySelector('#specPrev')?.addEventListener('click', () => this.spectateCycle(-1));
     document.querySelector('#specNext')?.addEventListener('click', () => this.spectateCycle(1));
     document.querySelector('#specLeave')?.addEventListener('click', () => this.leaveSpectate());
+    // Fase 13 — replay da ata da Corte na UI do eliminado: reabre a ata do caso
+    // próprio (busca online via mine=1) a partir da barra de espectador.
+    document.querySelector('#specAta')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#endAtaBtn')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#ataReplayBtn')?.addEventListener('click', () => this.hud.replayCourtAta());
+    document.querySelector('#ataCloseBtn')?.addEventListener('click', () => this.hud.hideCourtAta());
+    // clique no card adianta a encenação (skip)
+    document.querySelector('#ataTimeline')?.addEventListener('click', () => {
+      (this.hud.ataNodes ?? []).forEach((n) => n.classList.add('shown'));
+    });
   }
 
   // alvos vivos que o espectador pode acompanhar (bots/remotos; offline e online)
@@ -451,6 +467,9 @@ export class Game3D {
     this.hud.feed('CIGKV', `Você foi eliminado${this.placement ? ` — posição #${this.placement}` : ''}. Transmitindo o restante da partida.`, 'bad');
     this.spectateCycle(1);
     this.hud.showSpectator({ name: this.spectateTarget?.name ?? '—', placement: this.placement });
+    // Fase 13 — o eliminado passa a ver o replay da ata do SEU caso na Corte:
+    // a busca é async (HTTP mine=1) e o caso pode demorar um tick para abrir.
+    this.onEliminated?.(e);
   }
 
   spectateCycle(dir = 1) {
@@ -615,11 +634,27 @@ export class Game3D {
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
     pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
-    if (!p.alive && !pg.userData.deadPose) {
-      pg.rotation.x = -Math.PI / 2.2; pg.position.y = .35;
+    if (!p.alive) {
+      // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
+      let dfx = this.deathFX.get('player');
+      if (!dfx) {
+        const hf = this.hitFX.get('player');
+        dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: 3 };
+        this.deathFX.set('player', dfx);
+      }
+      dfx.age += dt;
+      const df = deathFall(dfx);
+      pg.rotation.order = 'YXZ';          // yaw primeiro; queda em x/z locais ao modelo
+      pg.rotation.x = df.rotX;
+      pg.rotation.z = df.rotZ;
+      pg.position.y = .35;
       pg.userData.deadPose = true;
     }
-    if (p.alive) pg.userData.deadPose = false, pg.rotation.x = 0;
+    if (p.alive) {
+      pg.userData.deadPose = false;
+      this.deathFX.delete('player');
+      pg.rotation.x = 0; pg.rotation.z = 0;
+    }
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
     const airborne = !!p.dropPhase;
@@ -629,6 +664,7 @@ export class Game3D {
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
+      death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
     });
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -654,6 +690,9 @@ export class Game3D {
     // bots
     const seen = new Set();
     const mySquad = s.player?.squad ?? null;
+    // Fase 13 — direção da câmera UMA vez por frame (frustum de todos os atores)
+    if (!this._camDir) this._camDir = new THREE.Vector3();
+    this.camera.getWorldDirection(this._camDir);
     for (const b of s.bots) {
       seen.add(b.id);
       let entry = this.botOps.get(b.id);
@@ -671,13 +710,14 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : (catalog ? b.op : b.id) }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
@@ -690,30 +730,54 @@ export class Game3D {
       }
       const g = entry.op.group;
       // Fase 10 — LOD por distância à câmera (corpos no chão também culam)
+      // Fase 13 — LOD por FRUSTUM: fora do cone de visão por ~0,3 s a distância
+      // efetiva é penalizada (downgrade acelerado sem pop) e a ANIMAÇÃO congela;
+      // atores próximos (dist < limiar full do tier) nunca são penalizados —
+      // a sombra deles precisa existir quando a câmera vira.
       const cam = this.camera.position;
-      entry.op.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z));
-      // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
+      entry.frustum ??= createFrustumGate({ fovY: this.camera.fov, aspect: this.camera.aspect, minDist: entry.op.th.full });
+      const fg = entry.frustum.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z), cam, this._camDir, b);
+      entry.op.update(fg.effectiveDist);
+      entry.frozen = !fg.inside;
+      // morto FINAL (sem DBNO ou já finalizado): queda DIRECIONAL (Fase 12)
       if (!b.alive && !b.knocked) {
-        if (!g.userData.deadVisible) {
+        let dfx = this.deathFX.get(b.id);
+        if (!dfx) {
+          const hf = this.hitFX.get(b.id);
+          dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: (b.id.charCodeAt(4) || 7) % 97 };
+          this.deathFX.set(b.id, dfx);
           g.visible = true;
-          g.rotation.x = -Math.PI / 2.2; g.position.y = b.y + .35;
-          g.userData.deadVisible = true;
+          g.rotation.order = 'YXZ';
           entry.name.visible = false;
         }
+        dfx.age += dt;
+        const df = deathFall(dfx);
+        g.rotation.x = df.rotX;
+        g.rotation.z = df.rotZ;
+        g.position.y = b.y + .35;
+        g.userData.deadVisible = true;
+        // agonia aditiva nos membros (se o nível ativo do LOD tem parts)
+        // Fase 13 — congelada fora do frustum (rotação da raiz continua: barata)
+        const dparts = entry.op.activeParts();
+        if (dparts && !entry.frozen) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
         continue;
       }
       g.userData.deadVisible = false;
+      this.deathFX.delete(b.id);
       g.visible = true;
-      g.rotation.x = 0;
+      g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
+      // Fase 12 — no nível silhueta activeParts() → null (nada a animar)
+      // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
+      // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
       // Fase 4 — pose de queda para bots/remotos
-      if (b.dropPhase && !b.knocked) {
+      if (b.dropPhase && !b.knocked && parts && !entry.frozen) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
         parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
         parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
@@ -944,6 +1008,10 @@ export class Game3D {
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
+          // Fase 12 — remotos entram na partida AQUI (modal ZU fecha, trem
+          // sincronizado pelo startedAt do servidor). O iniciador local já
+          // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
+          this.onMatchStartEvent?.(e);
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1021,6 +1089,20 @@ export class Game3D {
         case 'patente': // Fase 11 — patente do perfil confirmada pelo servidor
           this.hud.feed('POJ', `Patente confirmada no nametag: ${e.patente}.`, 'good');
           break;
+        case 'court_verdict': { // Fase 12 — veredito da Corte Marcial ao vivo
+          // Fase 13 — cache p/ ata do eliminado: enriquece o replay com o ΔKRC
+          // entregue ao vivo mesmo quando o docket do servidor ainda não o tem.
+          (this.courtVerdictEvents ??= {})[e.caseId] = e;
+          const rotulo = { afastamento: 'AFASTAMENTO DESONROSO', reducao_patente: 'REDUÇÃO DE PATENTE',
+            honras_de_guerra: 'HONRAS DE GUERRA', absolvicao: 'ABSOLVIÇÃO' }[e.veredito] ?? String(e.veredito ?? '').toUpperCase();
+          const krcTxt = e.krcApplied
+            ? `${e.krcDelta >= 0 ? '+' : ''}${e.krcDelta} KRC${e.krcBalance != null ? ` (saldo ${e.krcBalance})` : ''}`
+            : 'sem efeito em KRC';
+          this.hud.feed('CORTE MARCIAL', `Caso ${e.caseId}: ${rotulo} — registro ${e.registro ?? '—'}, ${krcTxt}.`, e.krcDelta >= 0 ? 'good' : 'bad');
+          if (e.patente) this.hud.feed('POJ', `Registro militar atualizado: patente ${e.patente}.`, 'warn');
+          this.audio?.ui?.();
+          break;
+        }
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
         case 'airdrop':
@@ -1154,6 +1236,9 @@ export class Game3D {
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);
@@ -1176,8 +1261,14 @@ export class Game3D {
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
 const query = new URLSearchParams(location.search);
 const online = query.get('online') === '1';
+const spectateRoom = query.get('spectate'); // Fase 13/14 — espectador remoto (pipeline /ws/spectator)
 const scenarioId = query.get('scenario') || 'CIGKV';
-if (online) {
+if (query.has('spectate')) {
+  // modo espectador: transmissão atrasada do servidor, sem jogador local
+  // (import dinâmico evita ciclo ESM — mesmo padrão do online3d).
+  // Fase 14 — presença do parâmetro basta: ?spectate= vazio cai na sala default.
+  import('./spectator3d.js').then(({ bootstrapSpectator }) => bootstrapSpectator({ roomId: spectateRoom || 'default', camera: query.get('cam') }));
+} else if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
   import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
 } else {

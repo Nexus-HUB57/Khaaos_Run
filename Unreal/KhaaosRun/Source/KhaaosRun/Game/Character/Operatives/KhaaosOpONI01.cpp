@@ -2,7 +2,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpONI01.h"
-#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"#include "NiagaraComponent.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
+#include "NiagaraComponent.h"
 
 // Onith ethnicity: Nithrox spore-tolerant - mycelial-symbiont geneline
 

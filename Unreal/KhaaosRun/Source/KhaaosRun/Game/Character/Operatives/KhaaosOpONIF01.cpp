@@ -2,7 +2,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpONIF01.h"
-#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"#include "NiagaraComponent.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
+#include "NiagaraComponent.h"
 
 // Onith ethnicity: Nithrox spore-healer - toxin-neutral geneline
 

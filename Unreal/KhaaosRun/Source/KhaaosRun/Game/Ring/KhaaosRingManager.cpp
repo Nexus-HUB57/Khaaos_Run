@@ -2,7 +2,9 @@
 // Ring Manager — Full Implementation
 // Manages ring lifecycle: shrink, damage, phase transitions, world portals
 
-#include "Game/Ring/KhaaosRingManager.h"#include "Game/Ring/KhaaosRingSubsystem.h"#include "Game/KhaaosGameState.h"
+#include "Game/Ring/KhaaosRingManager.h"
+#include "Game/Ring/KhaaosRingSubsystem.h"
+#include "Game/KhaaosGameState.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"

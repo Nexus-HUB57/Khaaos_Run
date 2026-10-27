@@ -563,18 +563,14 @@ export class MatchFlow {
     if (!this.spectatorPipeline) return;
 
     const world = this.getCurrentWorld();
-    const spectatorEvents: SpectatorEvent[] = this.eventLog.slice(-5).map(e => ({
-      type: e.type as any,
-      data: e.data,
-      timestamp: e.timestamp,
-    }));
-
     const data: SpectatorGameData = {
       type: "MATCH_TICK",
       roomId: this.state.roomId,
       timestamp: Date.now(),
       players: Array.from(this.state.players.values()).map(p => ({
         id: p.id,
+        // Fase 14 — nome real no standings do espectador (antes: só id/species)
+        displayName: p.displayName,
         species: p.species,
         posX: p.posX,
         posY: p.posY,
@@ -591,10 +587,44 @@ export class MatchFlow {
         isShrinking: world.isShrinking,
         nextPhaseIn: this.config.phaseDurationSeconds,
       },
-      events: spectatorEvents,
+      events: this.toSpectatorEvents(),
     };
 
     this.spectatorPipeline.pushGameData(this.state.roomId, data);
+  }
+
+  /**
+   * Fase 14 — traduz o eventLog interno para o vocabulário do espectador
+   * (ELIMINATION/REVIVE/RING_PHASE/WORLD_TRANSITION) com NOMES REAIS — o
+   * eventLog bruto só carrega ids (PLAYER_DOWNED/PLAYER_ELIMINATED/…), que
+   * o HUD da transmissão não exibia.
+   */
+  private toSpectatorEvents(): SpectatorEvent[] {
+    const nameOf = (id?: string) => this.state.players.get(id ?? "")?.displayName ?? id ?? "—";
+    const out: SpectatorEvent[] = [];
+    for (const e of this.eventLog.slice(-8)) {
+      const d = e.data ?? {};
+      switch (e.type) {
+        case "PLAYER_DOWNED":
+          out.push({ type: "ELIMINATION", data: { killer: nameOf(d.killerId), victim: nameOf(d.victimId), weapon: d.weapon, knock: true }, timestamp: e.timestamp });
+          break;
+        case "PLAYER_ELIMINATED":
+          out.push({ type: "ELIMINATION", data: { killer: nameOf(d.killerId), victim: nameOf(d.victimId), weapon: d.weapon, knock: false }, timestamp: e.timestamp });
+          break;
+        case "PLAYER_REVIVED":
+          out.push({ type: "REVIVE", data: { by: nameOf(d.reviverId), victim: nameOf(d.playerId) }, timestamp: e.timestamp });
+          break;
+        case "RING_PHASE_ADVANCE":
+          out.push({ type: "RING_PHASE", data: { phase: d.newPhase, isShrinking: true }, timestamp: e.timestamp });
+          break;
+        case "WORLD_TRANSITION_START":
+          out.push({ type: "WORLD_TRANSITION", data: { to: d.to }, timestamp: e.timestamp });
+          break;
+        default:
+          break; // eventos internos (JOIN/COUNTDOWN/ECONOMY) não são de interesse público
+      }
+    }
+    return out;
   }
 
   // ─── Utilities ────────────────────────────────────────────────────────────

@@ -30,6 +30,9 @@ if [ "${1:-}" = "--check" ]; then
   for fn in create_materials build_menu_map build_br_map create_niagara main; do
     grep -q "^def ${fn}(" "$SCRIPT" || fail "missing_function:${fn}"
   done
+  # Fase 1 — pipeline Barburhen OBJ + colliders complexos (selftests determinísticos)
+  python3 "$REPO_ROOT/scripts/build/export_barburhen_obj.py" --selftest >/dev/null || fail barburhen_obj_selftest
+  python3 "$REPO_ROOT/scripts/build/bake_barburhen_colliders.py" --selftest >/dev/null || fail barburhen_colliders_selftest
   echo 'KHR_WORLDGEN_RESULT_JSON: {"status":"ok","mode":"check","maps":[],"materials":[],"niagara":[],"warnings":[]}'
   exit 0
 fi

@@ -12,7 +12,7 @@ class AZu3CigkvImpact;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu3WidgetChoice, bool, bUsedMask);
 
 UCLASS()
-class KHAOSRUN_API UZu3ChoiceWidget : public UUserWidget
+class KHAAOSRUN_API UZu3ChoiceWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

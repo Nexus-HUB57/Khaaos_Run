@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Loot_Pickup",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.658269+00:00",
+  "generated_at": "2026-10-26T23:35:11.330094+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Loot pickup sparkle effect - rarity-colored glow",
@@ -71,5 +71,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "7bfc84bce797a19e"
+  "checksum": "effc3bb51ae78a64"
 }

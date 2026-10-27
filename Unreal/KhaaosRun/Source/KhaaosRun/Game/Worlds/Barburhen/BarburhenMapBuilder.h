@@ -18,7 +18,7 @@ class UDataTable;
  * Não substitui o Landscape/meshes – organiza a lógica espacial.
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API ABarburhenMapBuilder : public AActor
+class KHAAOSRUN_API ABarburhenMapBuilder : public AActor
 {
 	GENERATED_BODY()
 

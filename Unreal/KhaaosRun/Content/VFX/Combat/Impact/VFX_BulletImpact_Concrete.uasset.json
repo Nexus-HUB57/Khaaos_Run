@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_BulletImpact_Concrete",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.657778+00:00",
+  "generated_at": "2026-10-26T23:35:11.329360+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Bullet impact on concrete - dust puff + debris",
@@ -73,5 +73,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "04a964bf45ef71e6"
+  "checksum": "50727d3647c526d6"
 }

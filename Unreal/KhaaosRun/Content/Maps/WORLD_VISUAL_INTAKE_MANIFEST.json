@@ -1,0 +1,31 @@
+{
+  "schema": "khaaos.world-visual-intake/v1",
+  "engine_target": "UE5.8",
+  "worlds": [
+    {
+      "world_id": "CIGKV",
+      "path": "Unreal/KhaaosRun/Content/Maps/CIGKV",
+      "status": "generated_source_intake"
+    },
+    {
+      "world_id": "Barburhen",
+      "path": "Unreal/KhaaosRun/Content/Maps/Barburhen",
+      "status": "generated_source_intake"
+    },
+    {
+      "world_id": "Priadus",
+      "path": "Unreal/KhaaosRun/Content/Maps/Priadus",
+      "status": "generated_source_intake"
+    },
+    {
+      "world_id": "Ckesalth",
+      "path": "Unreal/KhaaosRun/Content/Maps/Ckesalth",
+      "status": "generated_source_intake"
+    },
+    {
+      "world_id": "Arukheea",
+      "path": "Unreal/KhaaosRun/Content/Maps/Arukheea",
+      "status": "generated_source_intake"
+    }
+  ]
+}

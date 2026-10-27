@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Venex_Circuit",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.661261+00:00",
+  "generated_at": "2026-10-26T23:35:11.334336+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Venex circuit trace - neon circuit board pattern on surface",
@@ -112,5 +112,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "c11923e3ce5833c7"
+  "checksum": "bfab4f3be65b23b8"
 }

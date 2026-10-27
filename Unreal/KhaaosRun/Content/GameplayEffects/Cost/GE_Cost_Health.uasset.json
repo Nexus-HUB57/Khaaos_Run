@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Cost_Health",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.613428+00:00",
+  "generated_at": "2026-10-26T23:35:11.283517+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "Instant",
@@ -37,5 +37,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "44eece26b9782cb3"
+  "checksum": "7878dc6b820349c0"
 }

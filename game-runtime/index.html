@@ -37,8 +37,33 @@
       <span class="spec-hint">←/→</span>
       <button id="specPrev" class="spec-btn" title="Operativo anterior">‹</button>
       <button id="specNext" class="spec-btn" title="Próximo operativo">›</button>
+      <button id="specAta" class="spec-btn" title="Reproduzir ata da Corte Marcial">ATA</button>
       <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
     </div>
+
+    <!-- Fase 13 — HUD do espectador remoto (pipeline /ws/spectator: feed atrasado 10 s, batches 5 Hz) -->
+    <div id="spectatorHud" class="hidden">
+      <div class="spec-top">
+        <span class="spec-live"><i></i>LIVE</span>
+        <b id="specStatus">CONECTANDO…</b>
+        <span id="specDelay" class="spec-chip" title="Atraso anti-ghosting do pipeline">ATRASO —</span>
+        <span id="specAlive" class="spec-chip">◇ 00 VIVOS</span>
+      </div>
+      <div id="specRing" class="spec-ring" title="Estado autoritativo do Ring (atrasado)">RING F1 · 800m · ESTÁVEL · 00:00</div>
+      <div class="spec-standings-label">RANKING DA SALA · TOP 8</div>
+      <div id="specStandings" class="spec-standings"></div>
+      <div class="spec-cams">
+        <button class="spec-btn" data-cam="FREECAM" title="Órbita livre ao redor do ring">LIVRE</button>
+        <button class="spec-btn" data-cam="FOLLOW_PLAYER" title="Seguir operativo">SEGUIR</button>
+        <button class="spec-btn" data-cam="OVERHEAD" title="Câmera aérea">AÉREA</button>
+        <button class="spec-btn" data-cam="RING_CENTER" title="Centro do ring girando">CENTRO</button>
+        <span class="spec-hint">ALVO</span>
+        <button class="spec-btn" id="specFollowPrev" title="Operativo anterior">‹</button>
+        <button class="spec-btn" id="specFollowNext" title="Próximo operativo">›</button>
+        <button class="spec-btn leave" id="specDisconnect" title="Encerrar transmissão">✕</button>
+      </div>
+    </div>
+    <div id="specFeed" class="hidden"></div>
 
     <!-- minimapa + killfeed -->
     <div class="map-corner">
@@ -178,6 +203,7 @@
               <input id="inviteCode" maxlength="6" placeholder="CÓDIGO" autocomplete="off" />
               <button id="createPrivateBtn" class="ghost-btn" type="button">CRIAR SALA</button>
               <button id="joinPrivateBtn" class="ghost-btn" type="button">ENTRAR</button>
+              <button id="spectateBtn" class="ghost-btn spectate" type="button" title="Abrir a transmissão da sala no pipeline /ws/spectator (atraso 10 s)">ASSISTIR</button>
             </div>
           </div>
         </div>
@@ -208,6 +234,20 @@
         <div class="modal-actions">
           <button id="endBtn" class="primary-btn">NOVA INSERÇÃO</button>
           <button id="replayBtn" class="ghost-btn">EXPORTAR REPLAY</button>
+          <button id="endAtaBtn" class="ghost-btn hidden">REPRODUZIR ATA DA CORTE</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="courtAtaModal" class="modal hidden">
+      <div class="modal-card ata-card">
+        <span class="eyebrow">CORTE MARCIAL · ATA OFICIAL DO PROCESSO</span>
+        <h2 id="ataTitle">ATA DO CASO —</h2>
+        <p class="ata-sub">Reprodução encenada do processo militar — clique para adiantar.</p>
+        <div id="ataTimeline" class="ata-timeline"></div>
+        <div class="modal-actions">
+          <button id="ataReplayBtn" class="ghost-btn">REPRODUZIR NOVAMENTE</button>
+          <button id="ataCloseBtn" class="primary-btn">FECHAR ATA</button>
         </div>
       </div>
     </div>

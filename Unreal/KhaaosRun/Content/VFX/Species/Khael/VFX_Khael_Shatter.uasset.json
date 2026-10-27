@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Khael_Shatter",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.660968+00:00",
+  "generated_at": "2026-10-26T23:35:11.333941+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Khael ice shatter burst - explosive crystal fragment burst",
@@ -114,5 +114,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "17cb159556a035a0"
+  "checksum": "9f63517fd55a4cb1"
 }

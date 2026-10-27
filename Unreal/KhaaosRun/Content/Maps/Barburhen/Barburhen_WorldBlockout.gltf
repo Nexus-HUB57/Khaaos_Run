@@ -1,0 +1,32 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "khaaos-generate-world-asset-packages"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Barburhen_WorldBlockout",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SM_Barburhen_WorldBlockout",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "SM_Barburhen_WorldBlockout",
+      "primitives": []
+    }
+  ],
+  "extras": {
+    "world_id": "Barburhen",
+    "source_contract": "WCFG/canonical world data",
+    "requires_ue_import": true
+  }
+}

@@ -322,7 +322,7 @@ export function stepActorMovement(a, input, dt, world) {
   const wantJump = !!input.jump && !a.knocked;
   if (!a.onGround || wantJump) {
     if (a.onGround && wantJump) { a.vy = WORLD.jumpVel; a.onGround = false; }
-    a.vy += WORLD.gravity * dt; a.y += a.vy * dt;
+    a.vy += WORLD.gravity * (a.gravityScale ?? 1) * dt; a.y += a.vy * dt;
     if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
   }
   return a;
@@ -431,6 +431,7 @@ export class KhaaosSim3D {
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
     this.volcanicTimer = 0; this.volcanicRemaining = 0; this.volcanicActive = false;
+    this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
@@ -659,6 +660,7 @@ export class KhaaosSim3D {
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
     if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
+    if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -1125,6 +1127,50 @@ export class KhaaosSim3D {
       this.emit('eruptionEnd', {});
     }
   }
+  #stepGravityAnomaly(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.quantumActive) {
+      this.quantumTimer += dt;
+      if (this.quantumTimer >= hazard.intervalSeconds) {
+        this.quantumTimer -= hazard.intervalSeconds;
+        this.quantumRemaining = hazard.durationSeconds;
+        this.quantumActive = true;
+        this.emit('gravityAnomalyStart', {
+          durationSeconds: hazard.durationSeconds,
+          gravityScale: hazard.gravityScale,
+          anchorRadius: hazard.anchorRadius,
+          anchors: hazard.anchors,
+        });
+      }
+    }
+    const actors = [this.player, ...this.bots];
+    for (const actor of actors) actor.gravityScale = this.quantumActive ? hazard.gravityScale : 1;
+    if (!this.quantumActive) return;
+    for (const actor of actors) {
+      if (!actor.alive || hazard.anchors.some((anchor) => Math.hypot(actor.x - anchor.x, actor.z - anchor.z) <= hazard.anchorRadius)) continue;
+      this.#drainQuantumShield(actor, hazard.damagePerSecond * dt);
+    }
+    this.quantumRemaining -= dt;
+    if (this.quantumRemaining <= 0) {
+      this.quantumRemaining = 0;
+      this.quantumActive = false;
+      for (const actor of actors) actor.gravityScale = 1;
+      this.emit('gravityAnomalyEnd', {});
+    }
+  }
+  #drainQuantumShield(actor, amount) {
+    let remaining = amount;
+    const temporary = Math.min(actor.temporaryArmor ?? 0, remaining);
+    actor.temporaryArmor = (actor.temporaryArmor ?? 0) - temporary;
+    remaining -= temporary;
+    const shield = Math.min(actor.armor ?? 0, remaining);
+    actor.armor = Math.max(0, (actor.armor ?? 0) - shield);
+    remaining -= shield;
+    if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
+    if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
+    if (actor.life <= 0) actor.alive = false;
+  }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
     if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
@@ -1272,6 +1318,7 @@ export class KhaaosSim3D {
   // ---------- snapshot / replay ----------
   snapshot() {
     return { seed: this.seed, scenarioId: this.scenario.id, tick: this.tick, time: this.time, over: this.over, started: this.started,
+      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.volcanicActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.volcanicRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),

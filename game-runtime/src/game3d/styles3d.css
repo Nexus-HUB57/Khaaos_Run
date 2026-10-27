@@ -388,6 +388,88 @@ body.locked .controls-hint { opacity: .25; }
 body.spectating #crosshair { display: none; }
 body.spectating #operativeAbility { opacity: .35; }
 
+/* ---------- Fase 13 — espectador remoto (pipeline /ws/spectator) ---------- */
+/* modo transmissão: painéis de JOGADOR saem de cena, HUD de broadcast entra */
+body.spectating .vitals,
+body.spectating .weapon-panel,
+body.spectating .mission-panel,
+body.spectating .controls-hint,
+body.spectating .feed-panel,
+body.spectating #spectatorBar,
+body.spectating .seed-box,
+body.spectating #altimeter,
+body.spectating #knockOverlay,
+body.spectating #hitmarker { display: none !important; }
+
+#spectatorHud {
+  position: fixed; top: 64px; left: 18px; z-index: 18; width: 264px;
+  padding: 10px 12px 12px; background: rgba(11,8,20,.85);
+  border: 1px solid rgba(200,255,61,.28); border-radius: 4px;
+  font-family: var(--font-mono); pointer-events: auto;
+}
+#spectatorHud.hidden { display: none; }
+#spectatorHud .spec-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#spectatorHud .spec-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #ff5f6d; font-size: 10px; letter-spacing: .22em; font-weight: 700;
+}
+#spectatorHud .spec-live i {
+  width: 7px; height: 7px; border-radius: 50%; background: #ff5f6d;
+  animation: spec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes spec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+#spectatorHud #specStatus { color: #ffd28a; font-size: 11px; letter-spacing: .08em; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#spectatorHud .spec-chip {
+  color: var(--acid); font-size: 9px; letter-spacing: .1em;
+  border: 1px solid rgba(200,255,61,.3); border-radius: 3px; padding: 2px 5px;
+}
+#spectatorHud .spec-ring {
+  color: #e8e3d5; font-size: 11px; letter-spacing: .06em; margin-bottom: 8px;
+  padding: 5px 7px; border: 1px solid rgba(255,107,44,.4); border-radius: 3px;
+  background: rgba(255,107,44,.08);
+}
+#spectatorHud .spec-ring.shrinking { color: #ffb52e; border-color: rgba(255,181,46,.7); }
+#spectatorHud .spec-standings-label { color: var(--muted); font-size: 8px; letter-spacing: .2em; margin-bottom: 4px; }
+#spectatorHud .spec-standings { display: flex; flex-direction: column; gap: 3px; }
+#spectatorHud .spec-row {
+  display: grid; grid-template-columns: 20px 1fr 40px 64px; align-items: center; gap: 6px;
+  color: #e8e3d5; font-size: 11px; padding: 2px 4px; border-radius: 2px;
+}
+#spectatorHud .spec-row:nth-child(1) { background: rgba(255,210,138,.1); }
+#spectatorHud .spec-row b { color: var(--acid); font-size: 9px; }
+#spectatorHud .spec-row .spec-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .04em; }
+#spectatorHud .spec-row .spec-kills { color: #ffd28a; font-size: 10px; text-align: right; }
+#spectatorHud .spec-row .spec-life { display: block; height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+#spectatorHud .spec-row .spec-life em { display: block; height: 100%; background: linear-gradient(90deg, #ff6b2c, #c8ff3d); }
+#spectatorHud .spec-row.out { opacity: .38; }
+#spectatorHud .spec-row.out .spec-life em { background: #5a4046; }
+#spectatorHud .spec-row.down .spec-name::after { content: ' · NOCAUTE'; color: #e86a7a; font-size: 8px; }
+#spectatorHud .spec-cams { display: flex; align-items: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+#spectatorHud .spec-btn {
+  height: 24px; padding: 0 8px; border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.06); color: #e8e3d5; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; cursor: pointer;
+}
+#spectatorHud .spec-btn:hover { background: rgba(255,255,255,.14); }
+#spectatorHud .spec-cams.cam-follow [data-cam='FOLLOW_PLAYER'] { border-color: rgba(200,255,61,.7); color: var(--acid); }
+#spectatorHud .spec-btn.leave { border-color: rgba(232,106,122,.5); color: #e86a7a; }
+#spectatorHud .spec-hint { color: var(--muted); font-size: 8px; letter-spacing: .14em; margin-left: 2px; }
+
+#specFeed {
+  position: fixed; left: 18px; bottom: 96px; z-index: 17; width: 300px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-family: var(--font-mono); pointer-events: none;
+}
+#specFeed.hidden { display: none; }
+#specFeed .spec-feed-entry {
+  padding: 4px 8px; font-size: 10px; letter-spacing: .04em; color: #cfc9b8;
+  background: rgba(11,8,20,.72); border-left: 2px solid rgba(200,255,61,.4); border-radius: 2px;
+}
+#specFeed .spec-feed-entry b { color: #ffd28a; }
+#specFeed .spec-feed-entry.kill { border-left-color: #ff5f6d; }
+#specFeed .spec-feed-entry.good { border-left-color: #39ff88; }
+#specFeed .spec-feed-entry.warn { border-left-color: #ffb52e; }
+
 /* ---------- Fase 7 — squads, DBNO e sala privada ---------- */
 .squad-row { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
 
@@ -434,6 +516,13 @@ body.spectating #operativeAbility { opacity: .35; }
   color: #ffd28a; font-family: var(--font-mono); font-size: 14px; letter-spacing: .3em; text-align: center;
 }
 .private-actions .ghost-btn { padding: 8px 12px; font-size: 10px; }
+/* Fase 14 — botão ASSISTIR (transmissão da sala): destaque teal de broadcast */
+.private-actions .ghost-btn.spectate {
+  border-color: rgba(66,217,222,.55); color: #42d9de; letter-spacing: .18em;
+}
+.private-actions .ghost-btn.spectate:hover {
+  border-color: #42d9de; background: rgba(66,217,222,.12); box-shadow: 0 0 14px rgba(66,217,222,.25);
+}
 /* Fase 8 — login da plataforma no modal ZU */
 #loginBox { border-color: rgba(102,204,255,.4); background: rgba(64,140,200,.08); }
 #loginBox .private-actions input { text-transform: none; letter-spacing: .12em; text-align: left; }
@@ -484,3 +573,28 @@ body.spectating #operativeAbility { opacity: .35; }
   padding: 1px 5px; border: 1px solid rgba(255,255,255,.3); border-radius: 3px;
   background: rgba(255,255,255,.08); color: #ffd28a;
 }
+
+/* ---------- Fase 13 — replay da ata da Corte Marcial ---------- */
+.ata-card { width: min(680px, 94vw); }
+.ata-sub { font-size: 12px !important; color: var(--muted) !important; margin-bottom: 14px !important; }
+.ata-timeline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.ata-step {
+  border-left: 3px solid var(--volcanic); padding: 8px 12px; border-radius: 3px;
+  background: rgba(255,255,255,.03); opacity: 0; transform: translateX(-8px);
+  transition: opacity .28s ease-out, transform .28s ease-out;
+}
+.ata-step.shown { opacity: 1; transform: none; }
+.ata-step h4 {
+  margin: 0 0 4px; font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 2.4px; color: #d9a05a;
+}
+.ata-step .ata-line { margin: 0; font-size: 13px; line-height: 1.5; color: #e8e2f2; }
+.ata-step.good { border-left-color: var(--acid); }
+.ata-step.good h4 { color: var(--acid); }
+.ata-step.bad { border-left-color: #e86a7a; }
+.ata-step.bad h4 { color: #e86a7a; }
+.ata-step.warn { border-left-color: #ffd28a; }
+.ata-step.warn h4 { color: #ffd28a; }
+.ata-step.pending { border-left-color: rgba(255,255,255,.22); opacity: 0; }
+.ata-step.pending.shown { opacity: .78; }
+.ata-step.pending .ata-line { color: var(--muted); font-style: italic; }

@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Khael_Frost",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.660654+00:00",
+  "generated_at": "2026-10-26T23:35:11.333504+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Khael frost aura - cold mist emanating from character",
@@ -114,5 +114,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "c7f1d143862793e7"
+  "checksum": "5acd1ff18a1b6723"
 }

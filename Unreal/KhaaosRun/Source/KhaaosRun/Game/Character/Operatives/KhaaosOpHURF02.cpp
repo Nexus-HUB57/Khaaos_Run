@@ -2,7 +2,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpHURF02.h"
-#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"#include "NiagaraComponent.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
+#include "NiagaraComponent.h"
 
 // Huran ethnicity: Ruvok-dal elite matriarch - reinforced geneline
 

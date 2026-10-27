@@ -64,7 +64,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVeteranTokenGranted, int32, Rank)
  * - Transferência ocorre ao sair do ring / entrar em Barburhen
  */
 UCLASS(ClassGroup = (Khaaos), meta = (BlueprintSpawnableComponent))
-class KHAOSRUN_API UKhaaosTransferSystem : public UActorComponent
+class KHAAOSRUN_API UKhaaosTransferSystem : public UActorComponent
 {
 	GENERATED_BODY()
 

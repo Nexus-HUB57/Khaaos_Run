@@ -1,7 +1,10 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 // Ring Component — Per-player ring status, damage, and zone detection
 
-#include "Game/Ring/KhaaosRingComponent.h"#include "Game/Ring/KhaaosRingManager.h"#include "Game/Ring/KhaaosZoneHazardComponent.h"#include "GameFramework/Character.h"
+#include "Game/Ring/KhaaosRingComponent.h"
+#include "Game/Ring/KhaaosRingManager.h"
+#include "Game/Ring/KhaaosZoneHazardComponent.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/PlayerState.h"
 
 UKhaaosRingComponent::UKhaaosRingComponent()

@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Huran_Ripple",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.659770+00:00",
+  "generated_at": "2026-10-26T23:35:11.332089+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Huran water ripple - expanding concentric ring on water surface",
@@ -98,5 +98,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "ea40edd9d5e9f0a2"
+  "checksum": "0876b9b8b60e60de"
 }

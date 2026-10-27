@@ -15,3 +15,8 @@ game-runtime/coverage/
 
 # runtime session store (qualquer profundidade)
 .data/
+__pycache__/
+artifacts/release/
+
+# dumps locais de infra (redis rdb, sqlite auxiliares)
+*.rdb

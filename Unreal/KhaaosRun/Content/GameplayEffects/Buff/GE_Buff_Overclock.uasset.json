@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Buff_Overclock",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.615099+00:00",
+  "generated_at": "2026-10-26T23:35:11.286529+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "HasDuration",
@@ -46,5 +46,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "5676112185b5b6e0"
+  "checksum": "726e3fa71bec5ea0"
 }

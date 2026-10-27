@@ -21,6 +21,8 @@ import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
 import { createPojService, PojError } from './poj.js';
+// Fase 14 — pipeline de espectador no game node (/ws/spectator + métricas /admin)
+import { SpectatorPipeline } from './spectator.js';
 // Fase 10 — patente do perfil (liderança): progressão canônica compartilhada
 import { rankProgress } from '../src/shared/rank.js';
 
@@ -104,7 +106,13 @@ export function createAuthoritativeServer({
   const economyService = economy || new Economy({ store: process.env.KR_ECONOMY_STORE === 'postgres' ? new PostgresEconomyStore() : undefined });
   // POJ — Protocolo de Ordem de Jogo: instância única do regramento da Guerra
   // (alistamento → CIGKV → 24 h → 4 mundos × 7 dias → desempate do 11º artigo).
-  const pojService = poj || createPojService();
+  // Fase 12 — recebe a economia REAL: vereditos da Corte Marcial movem KRC no
+  // ledger (prêmio/multa idempotentes por caso).
+  const pojService = poj || createPojService({ economy: economyService });
+  // Fase 14 — transmissão de espectadores no próprio game node: o cliente 3D
+  // conecta em same-origin /ws/spectator (dev proxy /ws → :8787; produção é o
+  // CMD da imagem). Sem plateia, custo zero — timers só existem por sala ocupada.
+  const spectatorPipeline = new SpectatorPipeline();
 
   // ---------- Recompensas KRC no fim da partida ----------
   // room3d dispara uma única vez por partida; aqui resolvemos client-id →
@@ -147,6 +155,21 @@ export function createAuthoritativeServer({
   const queue = [];
   let nextClient = 1;
   let nextRoom = 1;
+  // Fase 12 — ponte veredito → Ring: o POJ não conhece salas/WS; o servidor
+  // entrega o court_verdict ao militar julgado via snapshot da sala dele e
+  // atualiza a patente do nametag ao vivo (setPatente emite evento 'patente').
+  pojService.setNotifier?.((playerId, event) => {
+    let delivered = 0;
+    for (const c of clients.values()) {
+      if (c.identity?.sub !== playerId) continue;
+      const room = c.roomId ? rooms.get(c.roomId) : null;
+      if (!room || typeof room.emitExternal !== 'function') continue;
+      if (event.patente && typeof room.setPatente === 'function') room.setPatente(c.id, event.patente);
+      room.emitExternal(c.id, event.type, event);
+      delivered++;
+    }
+    return delivered;
+  });
   const metrics = {
     startedAt: Date.now(), connections: 0, rejections: 0, violations: 0, bans: 0,
     messages: 0, ticks: 0, rateLimited: 0, reconnects: 0, authFailures: 0,
@@ -450,7 +473,8 @@ export function createAuthoritativeServer({
         if (!actor) return true;
         const body = req.method === 'POST' ? await jsonBody(req) : {};
         try {
-          const result = fn(body, actor);
+          // Fase 12 — veredito é assíncrono (efeito KRC no ledger): sempre await.
+          const result = await fn(body, actor);
           audit.record({ actor: actor.username, action, resource, outcome: 'allow' });
           res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           res.end(JSON.stringify(result ?? { ok: true }));
@@ -514,9 +538,15 @@ export function createAuthoritativeServer({
       if (url.pathname === '/poj/court-martial/cases' && req.method === 'GET') {
         const actor = identityFor(req);
         if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
-        const status = new URL(req.url, 'http://localhost').searchParams.get('status');
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        const status = params.get('status');
+        // Fase 13 — mine=1: replay da ata na UI do jogador eliminado. O próprio
+        // militar enxerga SOMENTE os seus casos (privacidade do processo);
+        // admin/Marechal continua com o docket completo.
+        const mine = params.get('mine') === '1' || params.get('mine') === 'true';
+        const mineSub = mine && actor.role !== 'admin' ? actor.sub : null;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        res.end(JSON.stringify(pojService.courtCases(status === 'pendente' || status === 'julgado' ? status : null)));
+        res.end(JSON.stringify(pojService.courtCases(status === 'pendente' || status === 'julgado' ? status : null, mineSub)));
         return;
       }
       if (url.pathname === '/poj/court-martial/verdict' && req.method === 'POST') {
@@ -629,7 +659,9 @@ export function createAuthoritativeServer({
         const payload = {
           metrics,
           queue: queue.length,
-          rooms: [...rooms.values()].map((room) => room.metrics()),
+          rooms: [...rooms.values()].map((room) => ({ ...room.metrics(), spectators: spectatorPipeline.countFor(room.id) })),
+          // Fase 14 — métricas da transmissão (espectadores, pacotes, bytes, pico)
+          spectators: spectatorPipeline.metrics(),
           // dados por usuário (usernames, strikes) só para papéis elevados
           clients: elevated ? [...clients.values()].map((client) => ({ id: client.id, username: client.identity.username, role: client.identity.role, region: client.region, roomId: client.roomId, strikes: client.violations.count, suspicious: client.violations.suspicious })) : undefined,
           sessions: (await durable.listSessions()).length,
@@ -657,6 +689,8 @@ export function createAuthoritativeServer({
     : http.createServer((req, res) => { void tracedHandler(req, res); });
 
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD, perMessageDeflate: false });
+  // Fase 14 — endpoint do espectador no MESMO http server (path próprio).
+  spectatorPipeline.attach(server);
   const handleConnection = async (ws, req) => {
     const url = new URL(req.url, 'ws://localhost');
     const token = url.searchParams.get('token');
@@ -709,7 +743,7 @@ export function createAuthoritativeServer({
         if (!limited.allowed) { metrics.rateLimited++; send(ws, { type: 'rate_limited', retryAt: limited.resetAt }); return; }
         try {
           const message = JSON.parse(raw.toString());
-          if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t }); return; }
+          if (message.type === 'ping') { send(ws, { type: 'pong', t: message.t, te: message.te, now: Date.now() }); return; }
           // ---------- Fase 7 — salas privadas com código de convite (modo 3D) ----------
           if (message.type === 'create_private') {
             if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }
@@ -817,6 +851,8 @@ export function createAuthoritativeServer({
     metrics.ticks++;
     for (const room of rooms.values()) {
       room.tick(1 / 20);
+      // Fase 14 — transmissão: salas 3D alimentam o pipeline (custo zero sem plateia)
+      if (room.mode === '3d') spectatorPipeline.pushRoom(room);
       for (const client of clients.values()) if (client.roomId === room.id) send(client.ws, { type: 'snapshot', snapshot: room.snapshot(client.id), events: [] });
     }
   }, 50);
@@ -831,12 +867,14 @@ export function createAuthoritativeServer({
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
+    spectator: spectatorPipeline, // Fase 14 — pipeline da transmissão exposto p/ testes/operação
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
     obs: observability,
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão
       for (const client of clients.values()) client.ws.close();
       await new Promise((resolve) => server.close(resolve));
       await durable.close?.();

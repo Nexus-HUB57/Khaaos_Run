@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Cooldown_GrapplingHook",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.613228+00:00",
+  "generated_at": "2026-10-26T23:35:11.283202+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "HasDuration",
@@ -30,5 +30,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "d0c47ba945ef3d97"
+  "checksum": "76bd99e0359abe4f"
 }

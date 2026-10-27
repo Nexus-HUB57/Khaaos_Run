@@ -5,8 +5,20 @@
 import {
   ProtocoloDeOrdemDeJogo, PojError, PATENTE_HIERARQUIA, FASES,
 } from '../src/game3d/poj.js';
+import { EconomyError } from './economy.js';
 
 export { PojError, PATENTE_HIERARQUIA, FASES };
+
+// Fase 12 — efeito de cada veredito no KRC REAL da economia (ledger de dupla
+// entrada, idempotência por caso — retry do HTTP nunca paga duas vezes).
+// Prêmios saem do tesouro de recompensas; multas debitam até o saldo (zero
+// saldo → multa presa, sem saldo negativo — ver Economy.fine).
+export const KRC_POR_VEREDITO = Object.freeze({
+  afastamento: { kind: 'fine', amount: 250 },        // desonrado — multa cheia
+  reducao_patente: { kind: 'fine', amount: 100 },    // degradado — multa parcial
+  honras_de_guerra: { kind: 'grant', amount: 200 },  // honrado — prêmio memorial
+  absolvicao: { kind: 'grant', amount: 100 },        // absolvido — reparação
+});
 
 // Idempotência da ponte partida→POJ é POR SERVÍÇO (instância do protocolo).
 const REPORTED_MATCH_LIMIT = 2000;
@@ -14,14 +26,60 @@ const REPORTED_MATCH_LIMIT = 2000;
 // Constantes comprimíveis por env para staging/smoke (produção usa os canônicos
 // 1.000.000/500.000 e dias de 24 h).
 export function createPojService(overrides = {}) {
+  // Fase 12 — `economy` é a ponte para o KRC real dos vereditos (o resto dos
+  // overrides vai ao motor canônico; compatível com todos os usos anteriores).
+  const { economy = null, ...protoOverrides } = overrides;
   const proto = new ProtocoloDeOrdemDeJogo({
     daySeconds: Number(process.env.KR_POJ_DAY_SECONDS) || 24 * 3600,
     enlistmentTotal: Number(process.env.KR_POJ_ENLISTMENT_TOTAL) || undefined,
     cigkvTrigger: Number(process.env.KR_POJ_CIGKV_TRIGGER) || undefined,
     marshalSeed: process.env.KR_POJ_MARSHAL_SEED || 'Marechal-Khaaos',
-    ...overrides,
+    ...protoOverrides,
   });
+  // Fase 12 — notifier: entregador de eventos ao vivo do POJ (court_verdict).
+  // Registrado pelo server.js; recebe (playerId, evento) e roteia para os WS.
+  let notifier = null;
   const reportedMatches = new Map();
+  // Fase 12 — aplica o efeito KRC do veredito no ledger REAL. Erro de economia
+  // é CONTIDO: o veredito (registro militar) já é válido; o krc devolve o código
+  // para o console/ata. Idempotência: court:<caseId>:<veredito> — retry do HTTP
+  // e replay do POST nunca pagam ou multam duas vezes.
+  const courtKrcEffect = async (caso) => {
+    const rule = KRC_POR_VEREDITO[caso.veredito];
+    if (!economy || !rule) return { kind: 'none', amount: 0, delta: 0, applied: false };
+    const idempotencyKey = `court:${caso.id}:${caso.veredito}`;
+    try {
+      if (rule.kind === 'grant') {
+        await economy.grant({
+          userId: caso.playerId, amount: rule.amount,
+          reason: `court_marcial:${caso.veredito}`, idempotencyKey, by: 'corte_marcial',
+        });
+        const balance = await economy.balance(caso.playerId);
+        return {
+          kind: rule.kind, amount: rule.amount, applied: true,
+          delta: rule.amount, balance: balance?.amount ?? 0,
+        };
+      }
+      const fine = await economy.fine({
+        userId: caso.playerId, amount: rule.amount,
+        reason: `court_marcial:${caso.veredito}`, idempotencyKey, by: 'corte_marcial',
+      });
+      if (!fine.applied) {
+        return { ...rule, delta: 0, applied: false, skipped: 'zero_balance' };
+      }
+      const balance = await economy.balance(caso.playerId);
+      // multa parcial: delta é o que FOI debitado (min(saldo, multa)), não a regra cheia
+      return {
+        kind: rule.kind, amount: rule.amount, applied: true,
+        delta: -fine.applied, balance: balance?.amount ?? 0,
+      };
+    } catch (error) {
+      return {
+        kind: rule.kind, amount: rule.amount, delta: 0, applied: false,
+        error: error instanceof EconomyError ? error.code : String(error?.message || error),
+      };
+    }
+  };
   const trimReportedMatches = () => {
     while (reportedMatches.size > REPORTED_MATCH_LIMIT) {
       reportedMatches.delete(reportedMatches.keys().next().value);
@@ -79,17 +137,46 @@ export function createPojService(overrides = {}) {
     },
     // ---------- Fase 11 — Corte Marcial jogável (console do Marechal) ----------
     // GET /poj/court-martial — banco da Corte: casos pendentes + histórico.
-    courtCases(status = null) {
-      return proto.courtDocket(status);
+    // Fase 13 — courtCases(status, mineSub): com mineSub, o docket devolve
+    // APENAS os casos daquele jogador (replay da ata na UI do eliminado).
+    // Contagens (pendentes/julgados) também escopadas — sem leak de agregados.
+    courtCases(status = null, mineSub = null) {
+      const docket = proto.courtDocket(status);
+      if (mineSub == null) return docket;
+      const mine = String(mineSub);
+      const cases = docket.cases.filter((c) => String(c.playerId) === mine);
+      return {
+        mine: true,
+        pendentes: cases.filter((c) => c.status === 'pendente').length,
+        julgados: cases.filter((c) => c.status === 'julgado').length,
+        cases,
+      };
     },
     // POST /poj/court-martial/verdict — veredito do Marechal sobre um caso.
-    // Efeitos no registro (patente/XP); a vida única NUNCA é restaurada.
-    courtVerdict(actor, body = {}) {
-      return proto.courtVerdict(String(body.caseId), String(body.veredito || body.verdict || ''), {
+    // Efeitos no registro (patente/XP) + Fase 12: efeito no KRC REAL da economia
+    // (prêmio/multa idempotentes por caso) + evento court_verdict ao vivo para
+    // o militar julgado. A vida única NUNCA é restaurada.
+    async courtVerdict(actor, body = {}) {
+      const result = proto.courtVerdict(String(body.caseId), String(body.veredito || body.verdict || ''), {
         judge: actor?.username || 'Marechal-Khaaos',
         note: body.nota ?? body.note ?? null,
       });
+      const caso = result.caso;
+      const krc = await courtKrcEffect(caso);
+      caso.krc = krc; // ata/histórico do console mostram o efeito econômico
+      try {
+        notifier?.(caso.playerId, {
+          type: 'court_verdict', caseId: caso.id, veredito: caso.veredito,
+          registro: caso.registro ?? null, patente: caso.patenteFinal ?? null,
+          xp: caso.xpVeredito ?? 0, juiz: caso.juiz,
+          krcDelta: krc?.delta ?? 0, krcApplied: !!krc?.applied, krcBalance: krc?.balance ?? null,
+        });
+      } catch { /* notifier é best-effort — veredito nunca falha por entrega */ }
+      return { ok: true, caso, krc };
     },
+    // Fase 12 — registra o entregador de eventos ao vivo (server.js roteia
+    // por sala/WS; sem entregador o veredito segue válido, só não toca o Ring).
+    setNotifier(fn) { notifier = typeof fn === 'function' ? fn : null; },
     // Plano de entrada dos Oficiais (leve — sem snapshot completo)
     officerPlan() {
       return proto.officerEntryPlan();

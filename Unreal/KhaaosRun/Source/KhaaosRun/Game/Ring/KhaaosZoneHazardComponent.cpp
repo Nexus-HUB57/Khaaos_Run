@@ -1,7 +1,9 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 // Zone Hazard Component — World-specific environmental hazards
 
-#include "Game/Ring/KhaaosZoneHazardComponent.h"#include "Game/Ring/KhaaosRingManager.h"
+#include "Game/Ring/KhaaosZoneHazardComponent.h"
+#include "Game/Ring/KhaaosRingManager.h"
+
 UKhaaosZoneHazardComponent::UKhaaosZoneHazardComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;

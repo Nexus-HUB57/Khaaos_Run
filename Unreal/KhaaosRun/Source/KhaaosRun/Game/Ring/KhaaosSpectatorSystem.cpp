@@ -1,7 +1,8 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 // Spectator System — Broadcast, Discord integration, AI commentator
 
-#include "Game/Ring/KhaaosSpectatorSystem.h"#include "HttpModule.h"
+#include "Game/Ring/KhaaosSpectatorSystem.h"
+#include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Serialization/JsonSerializer.h"

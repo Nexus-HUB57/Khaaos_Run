@@ -2,7 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Game/Ring/KhaaosRingManager.h"#include "Ring/KhaaosRingComponent.generated.h"
+#include "Game/Ring/KhaaosRingManager.h"
+#include "Ring/KhaaosRingComponent.generated.h"
 
 UCLASS(ClassGroup=(Khaaos), meta=(BlueprintSpawnableComponent))
 class UKhaaosRingComponent : public UActorComponent

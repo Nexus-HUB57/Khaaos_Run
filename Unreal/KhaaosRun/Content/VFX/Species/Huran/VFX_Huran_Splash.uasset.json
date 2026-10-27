@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Huran_Splash",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.659343+00:00",
+  "generated_at": "2026-10-26T23:35:11.331587+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Huran water splash - amphibious movement splash particles",
@@ -114,5 +114,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "ab3c1a930c717b0c"
+  "checksum": "75a920db30801fa4"
 }
