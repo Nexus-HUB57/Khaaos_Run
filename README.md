@@ -63,6 +63,7 @@
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
 | **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 
 ---
@@ -532,6 +533,22 @@ Todos os sistemas abaixo estão implementados em C++20 no diretório `Unreal/Kha
 | **KhaaosDDoSProtection** | — | — | 50/s global, 5/IP, auto-block 30min |
 | **KhaaosMonitorDashboard** | — | — | Server/Game/Security metrics, 5s collection |
 | **KhaaosLaunchChecklist** | — | — | 14 checks de pre-launch no código UE5; execução/aceite dependem do build |
+
+### 16. Player Experience — Graphics & Characters
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosGraphicsPresetSubsystem** | .h + .cpp | 408 | 5 quality presets (Low→PhD), auto GPU VRAM detection, DLSS/FSR/XeSS/TSR upscaler, console command application |
+| **KhaaosDynamicResolution** | .h + .cpp | 291 | GPU-time dynamic resolution scaling, 4 modes (Off/Conservative/Aggressive/Adaptive), 8-frame moving average, hysteresis with separate scale up/down speeds |
+| **KhaaosMaterialOptimizer** | .h + .cpp | 227 | Texture streaming budget (9 groups), batch MID parameter updates, distant material optimization (emissive→0, mip bias, normal disable) |
+| **KhaaosSpeciesLODManager** | .h + .cpp | 340 | Per-species skeletal mesh LOD (5 levels: LOD0-LOD4), distance + screen-size thresholds, morph/emissive/VFX/bone count disable per LOD level |
+| **KhaaosPostProcessManager** | .h + .cpp | 390 | Species-specific post-process effects pipeline, 9 effect types (Bloom/CA/DoF/Distortion/MotionBlur/ColorGrading/Vignette/ScreenFade/Custom), fade blending, GPU budget optimizer |
+| **KhaaosCharacterCustomizer** | .h + .cpp | 280 | Morph targets (5 categories) + color channels (5 channels), 6 species-specific presets (9 morphs each), JSON serialization |
+| **KhaaosAnimationBlendManager** | .h + .cpp | 410 | Physics-driven animation per species, 8 physics parts (Tail/Wings/Crystal/GillPulse/CyberLimb/EarBounce/Membrane/None), spring-damper simulation, gameplay event reactions |
+| **KhaaosAccessorySocketSystem** | .h + .cpp | 283 | Socket-based cosmetic attachment with instanced meshes, draw call optimization, first-person visibility toggle |
+| **KhaaosSkinSystem** | .h + .cpp | — | Skin rarity pipeline (COMUM→MITICO), material/mesh/VFX overrides, cosmetic loadout (8 slots), shop ownership |
+| **KhaaosCosmeticValidator** | .h + .cpp | 340 | Server-side loadout validation, 8 result types, anti-cheat rate limiting (10 failures/300s → flag), species compatibility, battle pass tier checks |
+| **KhaaosGraphicsBenchmarkCommandlet** | .h + .cpp | 320 | Headless CI/CD benchmark (8 suites), validates presets/LOD/post-process/materials/DRS/cosmetics/customizer/animation |
 
 ### Módulos UE5 no Build.cs
 
