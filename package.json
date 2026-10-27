@@ -12,7 +12,6 @@
     "db:migrate": "drizzle-kit migrate",
     "economy:reconcile": "tsx scripts/economy-reconcile.ts",
     "economy:idempotency:prune": "tsx scripts/prune-economy-idempotency.ts",
-    "test:game": "npm --prefix game-runtime test",
     "test:official": "node --import tsx --test tests/official/*.test.ts tests/official/dashboard-transactions.test.tsx && node --test tests/official/*.test.js",
     "test:agent-packet-loss": "node --import tsx --test tests/official/agent-packet-loss-chaos.test.ts",
     "test:marshal-load": "node --import tsx --test tests/performance/marshal-console-load.test.ts",
@@ -25,7 +24,9 @@
     "test:game:stress": "npm --prefix game-runtime run test:stress",
     "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
-    "verify:all": "node scripts/verify-all.mjs"
+    "verify:all": "node scripts/verify-all.mjs",
+    "guard:tests": "node scripts/guard-test-runner.mjs",
+    "test:game": "npm --prefix game-runtime test"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

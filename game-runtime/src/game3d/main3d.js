@@ -8,7 +8,7 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
-import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette } from './lod3d.js';
+import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
@@ -690,6 +690,9 @@ export class Game3D {
     // bots
     const seen = new Set();
     const mySquad = s.player?.squad ?? null;
+    // Fase 13 — direção da câmera UMA vez por frame (frustum de todos os atores)
+    if (!this._camDir) this._camDir = new THREE.Vector3();
+    this.camera.getWorldDirection(this._camDir);
     for (const b of s.bots) {
       seen.add(b.id);
       let entry = this.botOps.get(b.id);
@@ -714,7 +717,7 @@ export class Game3D {
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
@@ -727,8 +730,15 @@ export class Game3D {
       }
       const g = entry.op.group;
       // Fase 10 — LOD por distância à câmera (corpos no chão também culam)
+      // Fase 13 — LOD por FRUSTUM: fora do cone de visão por ~0,3 s a distância
+      // efetiva é penalizada (downgrade acelerado sem pop) e a ANIMAÇÃO congela;
+      // atores próximos (dist < limiar full do tier) nunca são penalizados —
+      // a sombra deles precisa existir quando a câmera vira.
       const cam = this.camera.position;
-      entry.op.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z));
+      entry.frustum ??= createFrustumGate({ fovY: this.camera.fov, aspect: this.camera.aspect, minDist: entry.op.th.full });
+      const fg = entry.frustum.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z), cam, this._camDir, b);
+      entry.op.update(fg.effectiveDist);
+      entry.frozen = !fg.inside;
       // morto FINAL (sem DBNO ou já finalizado): queda DIRECIONAL (Fase 12)
       if (!b.alive && !b.knocked) {
         let dfx = this.deathFX.get(b.id);
@@ -747,8 +757,9 @@ export class Game3D {
         g.position.y = b.y + .35;
         g.userData.deadVisible = true;
         // agonia aditiva nos membros (se o nível ativo do LOD tem parts)
+        // Fase 13 — congelada fora do frustum (rotação da raiz continua: barata)
         const dparts = entry.op.activeParts();
-        if (dparts) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
+        if (dparts && !entry.frozen) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
         continue;
       }
       g.userData.deadVisible = false;
@@ -761,10 +772,12 @@ export class Game3D {
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
       // Fase 12 — no nível silhueta activeParts() → null (nada a animar)
+      // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
+      // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      if (parts) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
       // Fase 4 — pose de queda para bots/remotos
-      if (b.dropPhase && !b.knocked && parts) {
+      if (b.dropPhase && !b.knocked && parts && !entry.frozen) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
         parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
         parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
@@ -1245,8 +1258,13 @@ export class Game3D {
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
 const query = new URLSearchParams(location.search);
 const online = query.get('online') === '1';
+const spectateRoom = query.get('spectate'); // Fase 13 — espectador remoto (pipeline /ws/spectator)
 const scenarioId = query.get('scenario') || 'CIGKV';
-if (online) {
+if (spectateRoom) {
+  // modo espectador: transmissão atrasada do servidor, sem jogador local
+  // (import dinâmico evita ciclo ESM — mesmo padrão do online3d)
+  import('./spectator3d.js').then(({ bootstrapSpectator }) => bootstrapSpectator({ roomId: spectateRoom, camera: query.get('cam') }));
+} else if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
   import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
 } else {
