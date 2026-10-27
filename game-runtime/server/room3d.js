@@ -116,6 +116,9 @@ export class MatchRoom3D {
     this.volcanicTimer = 0;
     this.volcanicRemaining = 0;
     this.volcanicActive = false;
+    this.quantumTimer = 0;
+    this.quantumRemaining = 0;
+    this.quantumActive = false;
     this.state = ROOM_STATES.LOBBY;
     this.started = false;
     this.createdAt = Date.now();
@@ -423,6 +426,7 @@ export class MatchRoom3D {
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
     if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
+    if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
 
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
@@ -1101,6 +1105,50 @@ export class MatchRoom3D {
       this.#emitAll('eruptionEnd', {});
     }
   }
+  #stepGravityAnomaly(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.quantumActive) {
+      this.quantumTimer += dt;
+      if (this.quantumTimer >= hazard.intervalSeconds) {
+        this.quantumTimer -= hazard.intervalSeconds;
+        this.quantumRemaining = hazard.durationSeconds;
+        this.quantumActive = true;
+        this.#emitAll('gravityAnomalyStart', {
+          durationSeconds: hazard.durationSeconds,
+          gravityScale: hazard.gravityScale,
+          anchorRadius: hazard.anchorRadius,
+          anchors: hazard.anchors,
+        });
+      }
+    }
+    const actors = this.#actors();
+    for (const actor of actors) actor.gravityScale = this.quantumActive ? hazard.gravityScale : 1;
+    if (!this.quantumActive) return;
+    for (const actor of actors) {
+      if (!actor.alive || hazard.anchors.some((anchor) => Math.hypot(actor.x - anchor.x, actor.z - anchor.z) <= hazard.anchorRadius)) continue;
+      this.#drainQuantumShield(actor, hazard.damagePerSecond * dt);
+    }
+    this.quantumRemaining -= dt;
+    if (this.quantumRemaining <= 0) {
+      this.quantumRemaining = 0;
+      this.quantumActive = false;
+      for (const actor of actors) actor.gravityScale = 1;
+      this.#emitAll('gravityAnomalyEnd', {});
+    }
+  }
+  #drainQuantumShield(actor, amount) {
+    let remaining = amount;
+    const temporary = Math.min(actor.temporaryArmor ?? 0, remaining);
+    actor.temporaryArmor = (actor.temporaryArmor ?? 0) - temporary;
+    remaining -= temporary;
+    const shield = Math.min(actor.armor ?? 0, remaining);
+    actor.armor = Math.max(0, (actor.armor ?? 0) - shield);
+    remaining -= shield;
+    if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
+    if (!actor.isBot) this.#emitTo(actor.id, 'shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
+    if (actor.life <= 0) actor.alive = false;
+  }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
     // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
@@ -1239,10 +1287,11 @@ export class MatchRoom3D {
     const self = this.humans.get(forId) ?? null;
     const actors = this.#actors();
     return {
-      mode: '3d', roomId: this.id, region: this.region, seed: this.seed,
+      mode: '3d', roomId: this.id, region: this.region, seed: this.seed, scenarioId: this.scenario.id,
       tick: this.tickCount, time: this.time,
       state: this.state, started: this.started,
       over: this.state === ROOM_STATES.FINISHED,
+      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.volcanicActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.volcanicRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring },
       aliveCount: actors.filter((a) => a.alive).length,
       player: self ? this.#selfView(self) : null,
