@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "Ring/KhaaosRingManager.h"
-#include "Ring/KhaaosSpectatorSystem.generated.h"
+#include "Game/Ring/KhaaosRingManager.h"#include "Ring/KhaaosSpectatorSystem.generated.h"
 
 UENUM(BlueprintType)
 enum class ESpectatorCameraMode : uint8

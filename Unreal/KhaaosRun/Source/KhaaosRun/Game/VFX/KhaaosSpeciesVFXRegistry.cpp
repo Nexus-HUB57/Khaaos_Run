@@ -1,8 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
-#include "NiagaraComponent.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"#include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Engine/World.h"

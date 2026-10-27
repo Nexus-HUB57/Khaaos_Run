@@ -2,8 +2,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpSKWF02.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
-#include "NiagaraComponent.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"#include "NiagaraComponent.h"
 
 // Skeetw ethnicity: Tweek elite fog-queen - mist-empress geneline
 

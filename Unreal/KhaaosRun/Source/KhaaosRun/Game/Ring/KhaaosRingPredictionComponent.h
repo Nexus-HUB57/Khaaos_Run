@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Ring/KhaaosRingManager.h"
-#include "Ring/KhaaosRingPredictionComponent.generated.h"
+#include "Game/Ring/KhaaosRingManager.h"#include "Ring/KhaaosRingPredictionComponent.generated.h"
 
 UENUM(BlueprintType)
 enum class EPredictionAccuracy : uint8
