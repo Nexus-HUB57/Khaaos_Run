@@ -16,7 +16,11 @@ test("token WS: rejeita token expirado, adulterado ou malformado", () => {
   const { token } = createWsAccessToken("user-42", NOW);
   const [payload, signature] = token.split(".");
   assert.equal(verifyWsAccessToken(token, NOW + 60), null);
-  assert.equal(verifyWsAccessToken(`${payload}.${signature.slice(0, -1)}x`, NOW), null);
+  // Adulteração robusta: flipar o PRIMEIRO char sempre muda os bytes decodificados.
+  // (flipar só o último era flaky ~1/64: quando o último char já era 'x', o
+  // token "adulterado" era idêntico ao original e a assinatura passava.)
+  const tamperedSignature = (signature[0] === "A" ? "B" : "A") + signature.slice(1);
+  assert.equal(verifyWsAccessToken(`${payload}.${tamperedSignature}`, NOW), null);
   assert.equal(verifyWsAccessToken("not-a-token", NOW), null);
 });
 

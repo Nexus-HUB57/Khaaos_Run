@@ -61,6 +61,11 @@ class RingStateManager {
   private discordWebhookUrl: string = "";
   private broadcastEnabled: boolean = true;
 
+  /** Fase 12-fix: leitura pública do estado de broadcast (era privado e vazava nas rotas) */
+  isBroadcastEnabled(): boolean {
+    return this.broadcastEnabled;
+  }
+
   constructor(ringConfig: any) {
     // Load config from ring_config.json
     if (ringConfig?.world_pipeline) {
@@ -211,7 +216,7 @@ export function createRingAPI(ringConfig: any): {
   const router = (app: Express) => {
     // ─── Ring State ──────────────────────────────────────────────────────────
 
-    app.get("/api/ring/state/:worldId", (req: Request, res: Response) => {
+    app.get("/api/ring/state/:worldId", (req: Request<{ worldId: string }>, res: Response) => {
       const state = ringManager.getRingState(req.params.worldId);
       if (!state) {
         return res.status(404).json({ error: "World not found or ring not initialized" });
@@ -219,7 +224,7 @@ export function createRingAPI(ringConfig: any): {
       res.json(state);
     });
 
-    app.get("/api/ring/config/:worldId", (req: Request, res: Response) => {
+    app.get("/api/ring/config/:worldId", (req: Request<{ worldId: string }>, res: Response) => {
       const config = ringManager.getRingConfig(req.params.worldId);
       if (!config) {
         return res.status(404).json({ error: "World config not found" });
@@ -227,7 +232,7 @@ export function createRingAPI(ringConfig: any): {
       res.json(config);
     });
 
-    app.post("/api/ring/state/:worldId", (req: Request, res: Response) => {
+    app.post("/api/ring/state/:worldId", (req: Request<{ worldId: string }>, res: Response) => {
       const updated = ringManager.updateRingState(req.params.worldId, req.body);
       
       // Auto-broadcast phase changes to Discord
@@ -255,14 +260,14 @@ export function createRingAPI(ringConfig: any): {
       res.json(session);
     });
 
-    app.post("/api/ring/spectator/:id/camera", (req: Request, res: Response) => {
+    app.post("/api/ring/spectator/:id/camera", (req: Request<{ id: string }>, res: Response) => {
       ringManager.setSpectatorCamera(req.params.id, req.body.cameraMode);
       res.json({ ok: true });
     });
 
     // ─── Airdrop ────────────────────────────────────────────────────────────
 
-    app.get("/api/ring/airdrop/probability/:phase", (req: Request, res: Response) => {
+    app.get("/api/ring/airdrop/probability/:phase", (req: Request<{ phase: string }>, res: Response) => {
       const phase = parseInt(req.params.phase);
       res.json({ phase, probability: ringManager.getAirdropProbability(phase) });
     });
@@ -272,12 +277,12 @@ export function createRingAPI(ringConfig: any): {
     app.post("/api/ring/broadcast", async (req: Request, res: Response) => {
       const { eventType, data } = req.body;
       await ringManager.broadcastToDiscord(eventType, data);
-      res.json({ ok: true, broadcast: ringManager.broadcastEnabled });
+      res.json({ ok: true, broadcast: ringManager.isBroadcastEnabled() });
     });
 
     app.get("/api/ring/discord/status", (_req: Request, res: Response) => {
       res.json({ 
-        enabled: ringManager.broadcastEnabled, 
+        enabled: ringManager.isBroadcastEnabled(), 
         webhookConfigured: !!process.env.DISCORD_WEBHOOK_URL 
       });
     });
