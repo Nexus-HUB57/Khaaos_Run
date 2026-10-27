@@ -76,6 +76,14 @@ export class DistributedState {
     this.connected = false;
   }
 
+  /**
+   * Cliente Redis conectado (ou null). Compartilhado com subsistemas que
+   * precisam de primitivas próprias sobre a MESMA conexão (ex.: RoomEventMesh).
+   */
+  getRedisClient(): RedisLike | null {
+    return this.connected ? this.client : null;
+  }
+
   private key(name: string): string {
     return `${this.prefix}:${name}`;
   }

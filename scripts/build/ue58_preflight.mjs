@@ -193,8 +193,26 @@ export function validateProject(root) {
       const eacText = fs.readFileSync(eacBuildCs, 'utf8');
       if (!eacText.includes('KHAAOS_EAC_SDK') || !eacText.includes('KHAAOS_EAC_SDK_DIR')) {
         add(FATAL, 'UE1041', 'Source/KhaaosEAC/KhaaosEAC.Build.cs', 'camada EAC sem detecção condicional do SDK — contrato exige KHAAOS_EAC_SDK_DIR + define KHAAOS_EAC_SDK (0/1) para não quebrar sem binários');
-      } else if (!fs.existsSync(path.join(sourceDir, 'KhaaosEAC', 'EACSDK')) && !process.env.KHAAOS_EAC_SDK_DIR) {
-        add(WARN, 'UE1040', 'Source/KhaaosEAC', 'binários do EAC SDK ausentes — modo stub (KHAAOS_EAC_SDK=0); download no dev portal da Epic é ação humana');
+      } else {
+        const explicitSdkDir = process.env.KHAAOS_EAC_SDK_DIR;
+        const localSdkDir = path.join(sourceDir, 'KhaaosEAC', 'EACSDK');
+        const sdkDir = explicitSdkDir || (fs.existsSync(localSdkDir) ? localSdkDir : null);
+        if (sdkDir) {
+          // SDK EXPLICITAMENTE fornecido: valida o layout do pacote oficial —
+          // pacote quebrado é erro (falta lib no link custa mais caro que
+          // falhar aqui); válido → sem warning, build usa KHAAOS_EAC_SDK=1.
+          const sdkLayout = [
+            'Sdk/anticheat/sdkdefines.h',
+          ];
+          const missing = sdkLayout.filter((rel) => !fs.existsSync(path.join(sdkDir, rel)));
+          const hasLib = ['Sdk/lib/anticheat/libeacserver.so', 'Sdk/lib/anticheat/libeacclient.so', 'Sdk/lib/anticheat/eacserver.lib', 'Sdk/lib/anticheat/eacclient.lib']
+            .some((rel) => fs.existsSync(path.join(sdkDir, rel)));
+          if (missing.length || !hasLib) {
+            add(FATAL, 'UE1045', sdkDir, `pacote EAC SDK fornecido mas inválido${missing.length ? ` (falta: ${missing.join(', ')})` : ''}${!hasLib ? ' (nenhuma lib eacserver/eacclient em Sdk/lib/anticheat)' : ''} — use scripts/build/setup_eac_sdk.sh para resolver/validar`);
+          }
+        } else {
+          add(WARN, 'UE1040', 'Source/KhaaosEAC', 'binários do EAC SDK ausentes — modo stub (KHAAOS_EAC_SDK=0); download no dev portal da Epic é ação humana (pipeline headless: scripts/build/setup_eac_sdk.sh)');
+        }
       }
     }
   }

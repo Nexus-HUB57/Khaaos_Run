@@ -38,6 +38,7 @@ import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integration
 import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
+import { RoomEventMesh, type RoomMeshRecord } from "./RoomEventMesh";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ export type ServerMessage =
   | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string; code?: string }
+  | { type: "error"; message: string; code?: string; roomId?: string; nodeId?: string; endpoint?: string | null }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: QueueMode }
   | { type: "queue_left" }
@@ -228,6 +229,18 @@ class RoomManager {
   private socketWorlds = new WeakMap<WebSocket, WorldId>();
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
+
+  /**
+   * Redis Event Mesh (auditoria Fase 0/2): espelha o índice de salas em
+   * HASH Redis + leases de vivacidade, publica eventos entre nós e detecta
+   * morte de nó via reconcile. Estado autoritativo continua LOCAL (sockets
+   * são deste processo); o mesh é o barramento de descoberta/eventos.
+   */
+  readonly mesh = new RoomEventMesh({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient(),
+    publishControl: (event) => distributedState.publishControl(event),
+  });
 
   /** Attach to existing HTTP server */
   constructor() {
@@ -296,6 +309,9 @@ class RoomManager {
       },
     });
     this.matchmaking.start();
+
+    // Event Mesh: leases + reconcile (queda de nó, órfãos self) a cada 10s.
+    this.mesh.startHeartbeat(() => new Set(this.rooms.keys()));
 
     this.wss.on("connection", (ws, req) => {
       const userId = (req as typeof req & { khaaosUserId?: string }).khaaosUserId;
@@ -1489,6 +1505,35 @@ class RoomManager {
       };
       this.send(recipient.ws, payload);
     }
+    // Event Mesh: toda mudança de estado visível atualiza o índice
+    // distribuído (dedupe por fingerprint + throttle dentro do mesh).
+    this.mirrorRoomSafely(room);
+  }
+
+  private toMeshRecord(room: BattleRoom): RoomMeshRecord {
+    return {
+      id: room.id,
+      worldId: room.worldId,
+      status: room.status,
+      playerCount: room.players.size,
+      maxPlayers: room.maxPlayers,
+      isPrivate: room.isPrivate,
+      inviteCode: room.inviteCode,
+      hostId: room.hostId,
+      nodeId: this.mesh.nodeId,
+      createdAt: room.createdAt,
+      updatedAt: Date.now(),
+    };
+  }
+
+  /** Fire-and-forget: falha do mesh NUNCA propaga para o fluxo do jogo. */
+  private mirrorRoomSafely(room: BattleRoom): void {
+    this.mesh.mirrorRoom(this.toMeshRecord(room)).catch((error) => {
+      console.warn("[RoomManager] mesh mirror falhou", {
+        roomId: room.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   private broadcast(room: BattleRoom, msg: ServerMessage) {
@@ -1512,6 +1557,8 @@ class RoomManager {
     if (room.tickHandle) clearInterval(room.tickHandle);
     if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
+    // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
+    void this.mesh.markRoomClosed(roomId, "destroyed").catch(() => undefined);
   }
 
   // ─── Lobby controls ──────────────────────────────────────────────────────
@@ -1626,6 +1673,20 @@ class RoomManager {
         (r.status === "LOBBY" || r.status === "COUNTDOWN"),
     );
     if (!room) {
+      // Event Mesh: o lobby pode existir em OUTRO nó — lookup fresco no
+      // índice distribuído antes de declarar o código inválido.
+      const remote = await this.mesh.findRemoteByInviteCode(normalized).catch(() => null);
+      if (remote) {
+        this.send(ws, {
+          type: "error",
+          code: "ROOM_REMOTE_NODE",
+          roomId: remote.id,
+          nodeId: remote.nodeId,
+          endpoint: process.env.NODE_PUBLIC_URL ?? null,
+          message: "Este lobby está hospedado em outro nó; reconecte no endpoint indicado",
+        });
+        return;
+      }
       this.send(ws, { type: "error", message: "Código de lobby inválido ou expirado" });
       return;
     }
@@ -1794,7 +1855,22 @@ class RoomManager {
 
   getRoomSummary(roomId: string) {
     const room = this.rooms.get(roomId);
-    if (!room) return null;
+    if (!room) {
+      // Event Mesh: sala de outro nó, via cache síncrono do reconcile.
+      const remote = this.mesh.getCachedRoom(roomId);
+      if (remote) {
+        return {
+          id: remote.id,
+          worldId: remote.worldId,
+          status: remote.status,
+          playerCount: remote.playerCount,
+          maxPlayers: remote.maxPlayers,
+          remote: true,
+          nodeId: remote.nodeId,
+        };
+      }
+      return null;
+    }
     return {
       id: room.id,
       worldId: room.worldId,
@@ -1805,7 +1881,7 @@ class RoomManager {
   }
 
   listLobbies() {
-    return [...this.rooms.values()]
+    const local = [...this.rooms.values()]
       .filter((r) => !r.isPrivate && (r.status === "LOBBY" || r.status === "COUNTDOWN"))
       .map((r) => ({
         id: r.id,
@@ -1813,6 +1889,16 @@ class RoomManager {
         playerCount: r.players.size,
         maxPlayers: r.maxPlayers,
       }));
+    // Event Mesh: lobbies de outros nós (cache atualizado pelo heartbeat).
+    const remote = this.mesh.listRemoteLobbiesSync().map((record) => ({
+      id: record.id,
+      status: record.status,
+      playerCount: record.playerCount,
+      maxPlayers: record.maxPlayers,
+      remote: true,
+      nodeId: record.nodeId,
+    }));
+    return [...local, ...remote];
   }
 }
 
