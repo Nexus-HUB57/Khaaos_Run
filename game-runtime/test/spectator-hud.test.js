@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  computeStandings, formatCountdown, ringSummary, eventToFeed,
+  computeStandings, formatCountdown, ringSummary, eventToFeed, spectateHref,
   SPECTATOR_CAMERAS, SpectatorRemote, SpectatorView,
   spectatorCameraPose, spectatorViewModel, SpectatorHUD,
 } = await import('../src/game3d/spectator3d.js');
@@ -181,4 +181,47 @@ test('SpectatorHUD: headless-safe (sem document não explode) e update devolve a
   assert.equal(vm.top[0].kills, 2);
   assert.equal(vm.status, 'LIVE');
   hud.show(); hud.hide(); // no-ops seguros
+});
+
+// ---------- Fase 14 — nomes reais no standings + botão ASSISTIR ----------
+test('spectateHref: código da sala na URL ?spectate=; vazio cai na sala default', () => {
+  assert.equal(spectateHref('ABC123'), '/?spectate=ABC123');
+  assert.equal(spectateHref('  ABC123  '), '/?spectate=ABC123', 'espaços das bordas não vazam na URL');
+  assert.equal(spectateHref(''), '/?spectate=default');
+  assert.equal(spectateHref(), '/?spectate=default');
+  assert.equal(spectateHref(null), '/?spectate=default');
+  assert.equal(spectateHref('SALA 7'), '/?spectate=SALA%207', 'sala com espaço é codificada');
+});
+
+test('displayName do pipeline vence: standings do HUD e bots da view mostram o NOME REAL', () => {
+  // antes: payload só trazia id/species → standings mostrava espécie ou cauda do id
+  const view = new SpectatorView();
+  view.applyBatch({
+    players: [
+      player({ id: 'conn_9f2', displayName: 'Sargento ZHEERS-03', species: 'ZHEERS' }),
+      player({ id: 'conn_abc', name: 'Legado-Name', species: 'HURAN' }),   // name legado (2º na cadeia)
+      player({ id: 'conn_x9', species: 'KHAEL' }),                          // sem nome → espécie
+      player({ id: 'zz1', species: undefined, name: undefined }),           // nada → cauda do id
+    ],
+    ringState: ringState(),
+  });
+  assert.deepEqual(view.bots.map((b) => b.name), ['Sargento ZHEERS-03', 'Legado-Name', 'KHAEL', 'zz1']);
+
+  const vm = spectatorViewModel({
+    players: [player({ id: 'c1', displayName: 'Khael Vance', kills: 5 })],
+    ringState: ringState(), status: 'LIVE', delayMs: 10000, followId: 'c1', feed: [],
+  });
+  assert.equal(vm.top[0].name, 'Khael Vance', 'ranking top 8 usa o displayName');
+  assert.equal(vm.followName, 'Khael Vance', 'alvo seguido usa o displayName');
+  assert.equal(vm.top[0].name.length > 0, true);
+});
+
+test('eventToFeed: eventos do MatchFlow traduzidos chegam com nomes reais', () => {
+  // toSpectatorEvents (servidor) agora emite ELIMINATION/REVIVE com nomes —
+  // o feed do espectador exibe exatamente esses dados.
+  const elim = eventToFeed({ type: 'ELIMINATION', data: { killer: 'Operative Alpha', victim: 'Bravo', weapon: 'WPN_AssaultRifle_MK1', knock: false } });
+  assert.equal(elim.msg, 'Operative Alpha eliminou Bravo');
+  assert.equal(elim.cls, 'kill');
+  const rev = eventToFeed({ type: 'REVIVE', data: { by: 'Med Alpha', victim: 'Bravo' } });
+  assert.equal(rev.msg, 'Med Alpha revivendo Bravo');
 });

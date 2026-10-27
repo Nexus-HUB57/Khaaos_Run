@@ -124,6 +124,10 @@ export class MatchRoom3D {
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.history = [];         // [{tick, at: [{id,x,y,z}]}] — rewind p/ lag compensation
+    // Fase 14 — log de eventos p/ ESPECTADORES (não-destrutivo, ao contrário
+    // das filas por humano): traduzido já no vocabulário do pipeline
+    // (ELIMINATION/RING_PHASE) — o pipeline /ws/spectator mescla no batch.
+    this.spectatorLog = [];
     // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls)
     this.physicsWorld = { colliders: this.world.colliders };
   }
@@ -139,6 +143,22 @@ export class MatchRoom3D {
   }
   #emitAll(type, payload = {}, exceptId = null) {
     for (const id of this.humans.keys()) if (id !== exceptId) this.#emitTo(id, type, payload);
+    // Fase 14 — espelho dos eventos de interesse público para a transmissão
+    // (killfeed já sai com patente/nome real; pulse vira RING_PHASE).
+    if (type === 'killfeed') {
+      this.spectatorLogEvent('ELIMINATION', {
+        killer: payload.killer ?? '—', victim: payload.victim ?? '—',
+        headshot: !!payload.head, knock: !!payload.knock,
+      });
+    } else if (type === 'pulse') {
+      this.spectatorLogEvent('RING_PHASE', { phase: payload.pulse, isShrinking: true });
+    }
+  }
+  // Fase 14 — evento para a transmissão (público: testes/pipeline externo).
+  // Ring buffer de 24: batches consomem no máx. 20 eventos por lote.
+  spectatorLogEvent(type, data = {}) {
+    this.spectatorLog.push({ type, data, timestamp: Date.now() });
+    if (this.spectatorLog.length > 24) this.spectatorLog.shift();
   }
   drainEvents(humanId) {
     const list = this.events.get(humanId) || [];
@@ -1306,6 +1326,40 @@ export class MatchRoom3D {
       train: this.trainAnnounce ?? null,
       events: forId ? this.drainEvents(forId) : [],
       online: true,
+    };
+  }
+  // Fase 14 — payload da TRANSMISSÃO (pipeline /ws/spectator): contrato do
+  // espectador com NOMES REAIS (displayName) — o standings do HUD mostra o
+  // nome do operative/patente, não o id de conexão. Não-destrutivo: não drena
+  // filas de eventos dos jogadores; usa o spectatorLog espelhado no #emitAll.
+  spectatorView() {
+    const actors = this.#actors();
+    return {
+      type: 'ROOM_TICK',
+      roomId: this.id,
+      timestamp: Date.now(),
+      tick: this.tickCount,
+      state: this.state,
+      players: actors.map((a) => ({
+        id: a.id,
+        displayName: a.name ?? a.id,
+        species: a.operativeId ?? null,
+        posX: a.x, posY: a.z,
+        yaw: a.yaw ?? 0,
+        health: Math.max(0, Math.round(a.life ?? 0)),
+        shield: Math.max(0, Math.round(a.armor ?? 0)),
+        isDowned: !!a.knocked && !!a.alive,
+        isEliminated: !a.alive,
+        kills: a.kills ?? 0,
+      })),
+      ringState: {
+        currentPhase: this.ring.pulse,
+        currentRadius: Math.round(this.ring.radius),
+        ringCenter: [this.ring.x, 0, this.ring.z],
+        isShrinking: this.ring.radius > this.ring.target,
+        nextPhaseIn: Math.max(0, Math.round(PULSE_INTERVAL - this.pulseTimer)),
+      },
+      events: this.spectatorLog.slice(-20).map((e) => ({ ...e })),
     };
   }
   #selfView(a) {
