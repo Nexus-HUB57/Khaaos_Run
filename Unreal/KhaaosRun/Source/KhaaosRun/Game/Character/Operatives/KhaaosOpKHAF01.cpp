@@ -2,7 +2,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpKHAF01.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 #include "NiagaraComponent.h"
 
 // Khael ethnicity: Cryok-thal frost-dancer - cryo-adapted geneline

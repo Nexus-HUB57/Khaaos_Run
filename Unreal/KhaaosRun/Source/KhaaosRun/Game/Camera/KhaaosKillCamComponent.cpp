@@ -1,14 +1,14 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Camera/KhaaosKillCamComponent.h"
+#include "Game/Camera/KhaaosKillCamComponent.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 #include "NiagaraFunctionLibrary.h"
 
 // ─── Log Category ─────────────────────────────────────────────────────────────

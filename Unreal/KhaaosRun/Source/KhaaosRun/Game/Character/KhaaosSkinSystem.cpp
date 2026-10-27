@@ -1,7 +1,7 @@
 // Khaaos Run — Skin & Cosmetic System Implementation
 // ====================================================
 
-#include "Character/KhaaosSkinSystem.h"
+#include "Game/Character/KhaaosSkinSystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
