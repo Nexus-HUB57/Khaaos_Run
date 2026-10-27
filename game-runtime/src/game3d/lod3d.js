@@ -8,11 +8,12 @@
 // (quality3d) escala os limiares — mobile simplifica mais perto e culla antes.
 import * as THREE from 'three';
 
-// Limiares base por tier (metros). full → troca p/ proxy; cull → esconde.
+// Limiares base por tier (metros). full → troca p/ proxy; sil → troca p/
+// silhueta sólida; cull → esconde. low simplifica mais perto e culla antes.
 export const LOD_TIERS = {
-  low: { full: 16, cull: 170 },
-  medium: { full: 22, cull: 220 },
-  high: { full: 30, cull: 280 },
+  low: { full: 16, sil: 65, cull: 170 },
+  medium: { full: 22, sil: 80, cull: 220 },
+  high: { full: 30, sil: 95, cull: 280 },
 };
 
 export function lodThresholds(tier = 'high') {
@@ -22,18 +23,29 @@ export function lodThresholds(tier = 'high') {
 // margem de histerese: voltar ao nível melhor exige aproximar 15% além do limiar
 const HYST = .15;
 
-// decisão pura: 'full' | 'proxy' | 'hidden'
+// decisão pura: 'full' | 'proxy' | 'silhouette' | 'hidden'
 // `current` é o nível atual (histerese); primeira chamada pode omitir.
+// Sem th.sil (wrapper 2 níveis legado), 'silhouette' nunca é emitida.
 export function lodDecision(dist, current = 'full', th = LOD_TIERS.high) {
+  const hasSil = th.sil != null;
   if (current === 'hidden') {
-    return dist < th.cull * (1 - HYST) ? (dist < th.full ? 'full' : 'proxy') : 'hidden';
+    if (dist >= th.cull * (1 - HYST)) return 'hidden';
+    if (dist < th.full) return 'full';
+    return hasSil && dist >= th.sil ? 'silhouette' : 'proxy';
+  }
+  if (current === 'silhouette') {
+    if (dist > th.cull) return 'hidden';
+    if (dist < th.sil * (1 - HYST)) return dist < th.full ? 'full' : 'proxy';
+    return 'silhouette';
   }
   if (current === 'proxy') {
-    if (dist < th.full * (1 - HYST)) return 'full';
     if (dist > th.cull) return 'hidden';
+    if (dist < th.full * (1 - HYST)) return 'full';
+    if (hasSil && dist >= th.sil) return 'silhouette';
     return 'proxy';
   }
   if (dist >= th.cull) return 'hidden';
+  if (hasSil && dist >= th.sil) return 'silhouette';
   if (dist >= th.full) return 'proxy';
   return 'full';
 }
@@ -128,20 +140,56 @@ export function buildOperativeProxy({ skin = '#d9a06b', vest = '#3a3f47' } = {})
   };
 }
 
+// ---------- silhueta sólida (Fase 12 — LOD 2) ----------
+// Um ÚNICO volume convexo (tronco-cápsula) + cabeça + sombra: 2 meshes, ~150
+// tris, UM material — silhueta legível a >80 m por um draw call ridículo.
+// Sem animação (activeParts() → null); rotação de morte na raiz continua
+// valendo porque a silhueta vive dentro do mesmo root.
+export function buildOperativeSilhouette({ vest = '#3a3f47' } = {}) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: vest, roughness: .92, metalness: .04 });
+  const body = new THREE.Mesh(pgeo('sil-body', () => new THREE.CapsuleGeometry(.27, .82, 2, 7)), mat);
+  body.position.y = .92;
+  body.castShadow = true;
+  const head = new THREE.Mesh(pgeo('sil-head', () => new THREE.SphereGeometry(.15, 7, 5)), mat);
+  head.position.y = 1.6;
+  head.castShadow = true;
+  const shadow = new THREE.Mesh(
+    pgeo('shadow', () => new THREE.PlaneGeometry(1.15, 1.15)),
+    new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .55, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = .02;
+  shadow.renderOrder = 1;
+  g.add(body, head, shadow);
+  return {
+    group: g,
+    parts: { shadow },
+    tris: (() => { let n = 0; g.traverse((o) => { if (o.isMesh) n += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; }); return n; })(),
+  };
+}
+
 // ---------- wrapper ----------
-// Root contém detail.group e proxy.group; update(dist) alterna visibilidade com
-// histerese. `parts` fica no DETALHADO (armas/anexos continuam funcionando);
-// activeParts() entrega o conjunto animável do nível ativo.
-export function createCharacterLOD(detail, proxy, { tier = 'high' } = {}) {
+// Root contém detail.group, proxy.group e (opcional) silhouette.group; update
+// (dist) alterna visibilidade com histerese. `parts` fica no DETALHADO (armas/
+// anexos continuam funcionando); activeParts() entrega o conjunto animável do
+// nível ativo — NULL no nível silhueta (nada para animar). Retrocompatível:
+// createCharacterLOD(detail, proxy, { tier }) segue 2 níveis sem silhueta.
+export function createCharacterLOD(detail, proxy, silhouette = null, opts = {}) {
+  if (silhouette && !silhouette.group) { opts = silhouette; silhouette = null; }  // assinatura legado
   const root = new THREE.Group();
   root.add(detail.group, proxy.group);
+  if (silhouette) root.add(silhouette.group);
   proxy.group.visible = false;
-  const th = lodThresholds(tier);
+  if (silhouette) silhouette.group.visible = false;
+  const thFull = lodThresholds(opts.tier);
+  const th = silhouette ? thFull : { full: thFull.full, cull: thFull.cull };  // legado sem sil
   const lod = {
     group: root,
     parts: detail.parts,
     detailParts: detail.parts,
     proxyParts: proxy.parts,
+    silhouetteParts: silhouette ? silhouette.parts : null,
     th,
     level: 'full',
     update(dist) {
@@ -152,12 +200,15 @@ export function createCharacterLOD(detail, proxy, { tier = 'high' } = {}) {
         const hidden = next === 'hidden';
         detail.group.visible = full;
         proxy.group.visible = next === 'proxy';
+        if (silhouette) silhouette.group.visible = next === 'silhouette';
         root.visible = !hidden;
       }
       return lod.level;
     },
     activeParts() {
-      return lod.level === 'proxy' ? proxy.parts : detail.parts;
+      if (lod.level === 'proxy') return proxy.parts;
+      if (lod.level === 'silhouette') return null;   // nada para animar a >80 m
+      return detail.parts;
     },
   };
   return lod;

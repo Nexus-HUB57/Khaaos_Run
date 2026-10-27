@@ -145,6 +145,105 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
 // variant (Fase 7): string do operativo/bot — deriva acessórios determinísticos.
 // Fase 9: anatomia curva — mesmos pivôs (quadril .84, ombros 1.48, cabeça 1.68),
 // mesma API de parts; nenhuma dependência externa de rig.
+// ---------- Fase 12 — blendshapes faciais ----------
+// O rosto é textura pintada em calota esférica + mandíbula geométrica: cada
+// "blendshape" é um PAR (variante de textura, pose da mandíbula). O rig troca
+// o map quando o peso cruza .5 (crossfade real exigiria shader dedicado) e
+// blendA a mandíbula continuamente — barato, determinístico e sem estado GPU.
+export const FACIAL_EXPRESSIONS = ['neutral', 'blink', 'pain', 'shout', 'death', 'knocked'];
+export const FACE_JAW = { neutral: 0, blink: 0, pain: .32, shout: .72, death: .26, knocked: .12 };
+
+export function createFaceRig(face, jaw, { skin, eye, hair } = {}) {
+  const mats = new Map();                    // expressão → material clonado c/ map
+  const baseMat = face.material;
+  const matFor = (name) => {
+    if (!mats.has(name)) {
+      const m = baseMat.clone();
+      m.map = faceTexture(skin, eye, hair, name);
+      mats.set(name, m);
+    }
+    return mats.get(name);
+  };
+  const JAW0 = { y: jaw.position.y, z: jaw.position.z, sy: jaw.scale.y };
+  const rig = {
+    face, jaw,
+    expression: 'neutral',
+    weight: 0,
+    set(name, w = 1) {
+      if (!FACIAL_EXPRESSIONS.includes(name)) return false;
+      const weight = Math.max(0, Math.min(1, w));
+      const target = weight >= .5 ? name : 'neutral';
+      if (rig.expression !== target) face.material = matFor(target);
+      rig.expression = target;
+      rig.weight = weight;
+      const base = FACE_JAW[name] ?? 0;
+      jaw.position.y = JAW0.y - base * .028 * weight;   // mandíbula desce
+      jaw.scale.y = JAW0.sy + base * .38 * weight;      // boca abre (volume)
+      jaw.position.z = JAW0.z + base * .012 * weight;   // projeta p/ frente
+      return true;
+    },
+    reset() { rig.set('neutral', 0); jaw.position.y = JAW0.y; jaw.scale.y = JAW0.sy; jaw.position.z = JAW0.z; },
+  };
+  return rig;
+}
+
+// ---------- Fase 12 — morte direcional (ragdoll fake por torque) ----------
+// Queda ANALÍTICA (sem física): impulso de torque no sentido OPOSTO ao tiro,
+// oscilação amortecida sub-crítica (pêndulo) e assentamento em θmax. Puro
+// (zero THREE) para testes determinísticos; rotação aplicada na RAIZ do LOD
+// (válido nos 3 níveis). angle = direção DO atirador (0 = frente, +π/2 = lado
+// +x, π = costas), power 0..1, seed = assimetria determinística do actor.
+export const DEATH_FALL = { impulse: .09, settleT: 1.15, lambda: 2.6, omega: 6 };
+
+export function deathFallMax(power = 1) {
+  return 1.25 + .45 * Math.max(0, Math.min(1, power));
+}
+
+export function deathFall({ angle = 0, power = 1, age = 0, seed = 0 } = {}) {
+  const a = Math.max(0, Number.isFinite(age) ? age : 0);
+  const p = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 1));
+  const thMax = deathFallMax(p);
+  let th;
+  if (a < DEATH_FALL.impulse) {
+    const k = a / DEATH_FALL.impulse;
+    th = thMax * .5 * k * k;                                  // aceleração do torque
+  } else if (a < DEATH_FALL.settleT) {
+    const dt = a - DEATH_FALL.impulse;
+    const drop = thMax * .5 * Math.exp(-DEATH_FALL.lambda * dt) * Math.cos(DEATH_FALL.omega * dt);
+    th = thMax - drop;                                        // contínuo em .5·thMax
+    if (th > thMax * 1.12) th = thMax * 1.12;                 // quique limitado no chão
+    if (th < 0) th = 0;
+    if (a > DEATH_FALL.settleT * .8) {                        // assentamento suave
+      const k2 = (a - DEATH_FALL.settleT * .8) / (DEATH_FALL.settleT * .2);
+      const s = k2 * k2 * (3 - 2 * k2);
+      th += (thMax - th) * s;
+    }
+  } else {
+    th = thMax;                                               // assentado
+  }
+  const flail = a < DEATH_FALL.settleT
+    ? Math.min(1, a / DEATH_FALL.impulse) * (1 - Math.max(0, (a - DEATH_FALL.impulse) / (DEATH_FALL.settleT - DEATH_FALL.impulse)))
+    : 0;
+  const h = Math.sin(seed * 127.1 + 311.7) * 43758.5453;      // hash determinístico
+  const asym = h - Math.floor(h);                             // 0..1
+  const back = Math.cos(angle), side = Math.sin(angle);
+  return {
+    th,
+    settled: a >= DEATH_FALL.settleT,
+    flail,
+    rotX: th * back,   // tiro da frente (angle 0) → cai de costas
+    rotZ: th * side,   // tiro do lado +x (angle +π/2) → tomba p/ −x, longe do atirador
+    joints: {
+      armL: flail * (.85 + .4 * asym),
+      armR: flail * (.85 + .4 * (1 - asym)),
+      elbow: flail * .7,
+      legL: flail * .5 * (.6 + .5 * asym),
+      legR: flail * .5 * (1.1 - .5 * asym),
+      head: flail * .45 * side,
+    },
+  };
+}
+
 export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true, variant = '' } = {}) {
   const g = new THREE.Group();
   const camo = camoMaterial(hashIdx(vest, 4), { repeat: 1.4 }); // camuflagem coerente com a cor do colete (compartilhada/memoizada)
@@ -230,6 +329,8 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   );
   face.position.set(0, .012, 0);
   head.add(face);
+  // Fase 12 — rig de blendshapes faciais (expressões + mandíbula articulada)
+  const faceRig = createFaceRig(face, jaw, { skin, eye, hair });
   // franja/cabelo sob o capacete (nuca + laterais) — volume orgânico
   if (!helmet) {
     const hairBack = ball(.122, hairM, 0, .02, .035, 12, 10, .95, 1.0, 1.0);
@@ -291,7 +392,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
   buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
 
-  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow } };
+  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow, face: faceRig } };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
@@ -304,7 +405,11 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // Fase 10: `hit` = reação de impacto direcional { angle, power, age } — flinch
 // ADITIVO sobre a pose base (não a substitui): ângulo em espaço do personagem
 // (0 = frente, +π/2 = lado +x, π = costas), power 0..1 e age em segundos.
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null } = {}) {
+// Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
+// (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
+// (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+  let hitEnv = 0;                                            // acopla rosto à dor
   // sombra de contato: some com altitude (paraquedas) e no corpo morto
   if (parts.shadow) {
     const fade = dead ? 0 : Math.max(0, .8 - air * .1);
@@ -317,6 +422,18 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
+    if (parts.face) parts.face.set('death', 1);
+    // Fase 12 — agonia: membros abrem pelo envelope do fall (assimétrico)
+    if (death && death.power > 0) {
+      const j = deathFall(death).joints;
+      parts.armL.shoulder.rotation.z = Math.min(1.5, parts.armL.shoulder.rotation.z + j.armL);
+      parts.armR.shoulder.rotation.z = Math.max(-1.5, parts.armR.shoulder.rotation.z - j.armR);
+      parts.armL.elbow.rotation.x -= j.elbow * .8;
+      parts.armR.elbow.rotation.x -= j.elbow * .8;
+      parts.legL.hip.rotation.x = Math.min(1.2, parts.legL.hip.rotation.x + j.legL);
+      parts.legR.hip.rotation.x = Math.max(-1.2, parts.legR.hip.rotation.x - j.legR);
+      parts.head.rotation.y += j.head;
+    }
     return;
   }
   if (knocked) {
@@ -339,6 +456,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.head.rotation.x = -.6;
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
+    if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
     return;
   }
   const idle = 1 - Math.min(1, speedNorm);
@@ -389,6 +507,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     const ATTACK = .06, TAU = .17;
     const age = Math.max(0, hit.age ?? 0);
     const env = (age < ATTACK ? age / ATTACK : Math.exp(-(age - ATTACK) / TAU)) * Math.min(1, hit.power);
+    hitEnv = env;
     if (env > .001) {
       const side = Math.sin(hit.angle ?? 0);   // + = impacto no lado +x do modelo
       const front = Math.cos(hit.angle ?? 0);  // + = impacto na frente (-z)
@@ -402,6 +521,15 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
       parts.armL.shoulder.rotation.z += side * env * .12;
       parts.armR.elbow.rotation.x += front * env * .18;   // antebraços recuam
       parts.armL.elbow.rotation.x += front * env * .18;
+    }
+  }
+  // ---- Fase 12 — blendshapes faciais: dor do impacto > piscar automático ----
+  const face = parts.face;
+  if (face) {
+    if (hitEnv > .12) face.set('pain', Math.min(1, hitEnv * 1.25));
+    else {
+      const bp = t % 3.6;                       // ciclo dessincronizado (t já tem offset por ator)
+      if (bp < .11) face.set('blink', 1); else face.set('neutral', 0);
     }
   }
 }

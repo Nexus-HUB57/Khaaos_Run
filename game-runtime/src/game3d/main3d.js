@@ -8,7 +8,8 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
-import { createCharacterLOD, buildOperativeProxy } from './lod3d.js';
+import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette } from './lod3d.js';
+import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { HUD } from './hud3d.js';
@@ -67,6 +68,7 @@ export class Game3D {
     this.placement = null;
     // Fase 10 — reação de impacto: atorId → { angle, power, age }
     this.hitFX = new Map();
+    this.deathFX = new Map();   // Fase 12 — queda direcional por ator (ângulo/power capturados no fim)
 
     this.initRenderer();
     this.initWorld();
@@ -154,6 +156,7 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : b.id }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
@@ -615,11 +618,27 @@ export class Game3D {
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
     pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
-    if (!p.alive && !pg.userData.deadPose) {
-      pg.rotation.x = -Math.PI / 2.2; pg.position.y = .35;
+    if (!p.alive) {
+      // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
+      let dfx = this.deathFX.get('player');
+      if (!dfx) {
+        const hf = this.hitFX.get('player');
+        dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: 3 };
+        this.deathFX.set('player', dfx);
+      }
+      dfx.age += dt;
+      const df = deathFall(dfx);
+      pg.rotation.order = 'YXZ';          // yaw primeiro; queda em x/z locais ao modelo
+      pg.rotation.x = df.rotX;
+      pg.rotation.z = df.rotZ;
+      pg.position.y = .35;
       pg.userData.deadPose = true;
     }
-    if (p.alive) pg.userData.deadPose = false, pg.rotation.x = 0;
+    if (p.alive) {
+      pg.userData.deadPose = false;
+      this.deathFX.delete('player');
+      pg.rotation.x = 0; pg.rotation.z = 0;
+    }
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
     const airborne = !!p.dropPhase;
@@ -629,6 +648,7 @@ export class Game3D {
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
+      death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
     });
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -671,6 +691,7 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : (catalog ? b.op : b.id) }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
@@ -692,28 +713,42 @@ export class Game3D {
       // Fase 10 — LOD por distância à câmera (corpos no chão também culam)
       const cam = this.camera.position;
       entry.op.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z));
-      // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
+      // morto FINAL (sem DBNO ou já finalizado): queda DIRECIONAL (Fase 12)
       if (!b.alive && !b.knocked) {
-        if (!g.userData.deadVisible) {
+        let dfx = this.deathFX.get(b.id);
+        if (!dfx) {
+          const hf = this.hitFX.get(b.id);
+          dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: (b.id.charCodeAt(4) || 7) % 97 };
+          this.deathFX.set(b.id, dfx);
           g.visible = true;
-          g.rotation.x = -Math.PI / 2.2; g.position.y = b.y + .35;
-          g.userData.deadVisible = true;
+          g.rotation.order = 'YXZ';
           entry.name.visible = false;
         }
+        dfx.age += dt;
+        const df = deathFall(dfx);
+        g.rotation.x = df.rotX;
+        g.rotation.z = df.rotZ;
+        g.position.y = b.y + .35;
+        g.userData.deadVisible = true;
+        // agonia aditiva nos membros (se o nível ativo do LOD tem parts)
+        const dparts = entry.op.activeParts();
+        if (dparts) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
         continue;
       }
       g.userData.deadVisible = false;
+      this.deathFX.delete(b.id);
       g.visible = true;
-      g.rotation.x = 0;
+      g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
+      // Fase 12 — no nível silhueta activeParts() → null (nada a animar)
       const parts = entry.op.activeParts();
-      animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      if (parts) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
       // Fase 4 — pose de queda para bots/remotos
-      if (b.dropPhase && !b.knocked) {
+      if (b.dropPhase && !b.knocked && parts) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
         parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
         parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
