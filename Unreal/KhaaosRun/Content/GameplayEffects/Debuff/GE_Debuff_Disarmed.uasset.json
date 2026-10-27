@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Debuff_Disarmed",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.616276+00:00",
+  "generated_at": "2026-10-26T23:35:11.288393+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "HasDuration",
@@ -30,5 +30,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "6c6bc18b80404a01"
+  "checksum": "5e36fafef1dd35a1"
 }

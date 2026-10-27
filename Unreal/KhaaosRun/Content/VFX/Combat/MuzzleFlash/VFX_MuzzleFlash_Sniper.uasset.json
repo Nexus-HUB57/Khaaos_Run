@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_MuzzleFlash_Sniper",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.656941+00:00",
+  "generated_at": "2026-10-26T23:35:11.328124+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Sniper muzzle flash - intense directed flash with shockwave ring",
@@ -71,5 +71,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "eff26ce1af0a6a53"
+  "checksum": "ea92d491bb3d28ea"
 }

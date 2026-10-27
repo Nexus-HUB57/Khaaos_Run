@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Damage_Zone",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.617019+00:00",
+  "generated_at": "2026-10-26T23:35:11.289542+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "Instant",
@@ -39,5 +39,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "e69db8685dc37c63"
+  "checksum": "0f225e7d3b9f0c44"
 }

@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Damage_Bullet",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.616457+00:00",
+  "generated_at": "2026-10-26T23:35:11.288682+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "Instant",
@@ -37,5 +37,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "951dd78a16fd324a"
+  "checksum": "172a22efa9ef6046"
 }

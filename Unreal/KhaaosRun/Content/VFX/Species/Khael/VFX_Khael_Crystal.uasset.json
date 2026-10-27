@@ -3,7 +3,7 @@
   "asset_class": "UNiagaraSystem",
   "asset_name": "VFX_Khael_Crystal",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.660314+00:00",
+  "generated_at": "2026-10-26T23:35:11.333078+00:00",
   "generator": "generate_vfx_uassets.py",
   "niagara_system_spec": {
     "description": "Khael ice crystal formation - growing/shattering crystal shards",
@@ -113,5 +113,5 @@
     "asset_registry_type": "NiagaraSystem",
     "import_script": "import_vfx_to_ue5.py"
   },
-  "checksum": "f0c3d291af0459db"
+  "checksum": "997dd7a8bca58215"
 }

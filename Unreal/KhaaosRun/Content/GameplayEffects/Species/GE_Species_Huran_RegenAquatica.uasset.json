@@ -3,7 +3,7 @@
   "asset_class": "UGameplayEffect",
   "asset_name": "GE_Species_Huran_RegenAquatica",
   "version": 1,
-  "generated_at": "2026-10-26T23:13:38.617889+00:00",
+  "generated_at": "2026-10-26T23:35:11.290839+00:00",
   "generator": "generate_ge_uassets.py",
   "f_gameplay_effect_spec": {
     "duration_policy": "Infinite",
@@ -40,5 +40,5 @@
     "asset_registry_type": "GameplayEffect",
     "import_script": "import_ge_to_ue5.py"
   },
-  "checksum": "7b0862d07cdf2c88"
+  "checksum": "f0b23805202d5be2"
 }
