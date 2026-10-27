@@ -10,6 +10,7 @@
  *   - Rich embeds with species-colored accents
  *   - Rate-limited to prevent Discord API abuse
  */
+import { WebSocket } from "ws"; // Fase 12-fix: classe do ws (com .on) — o global do Node é EventTarget sem .on
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
