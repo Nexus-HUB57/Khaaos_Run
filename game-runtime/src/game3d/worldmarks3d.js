@@ -21,6 +21,7 @@
 // contagens expostas p/ inspeção e2e.
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
+import { ParticleSystem, Emitter } from './particles3d.js';
 import { frustumPrism } from './prisms3d.js';
 
 const RING_MIN = 205, RING_MAX = 340;
@@ -131,9 +132,9 @@ function marksBarburhen(group, scene, scenario, rng) {
     }
     counts.coolingTowers++;
   }
-  // chaminés com colunas de fumaça (billboards que sobem e derivam)
-  const smokeMat = new THREE.MeshBasicMaterial({ color: '#c9d2d8', transparent: true, opacity: .34, depthWrite: false });
-  const smokes = [];
+  // chaminés com colunas de fumaça REAL (partículas pooled — Fase 17):
+  // emissor contínuo por chaminé, empuxo negativo (sobe) + deriva de vento
+  const emitters = [];
   for (let i = 0; i < 3; i++) {
     const s = ringSpot(rng);
     const h = 22 + rng.next() * 10;
@@ -142,15 +143,18 @@ function marksBarburhen(group, scene, scenario, rng) {
     const band = new THREE.Mesh(new THREE.CylinderGeometry(1.14, 1.14, 1.2, 12), rust);
     band.position.set(s.x, h - 2, s.z);
     group.add(stack, band);
-    const puffs = [];
-    for (let p = 0; p < 5; p++) {
-      const puff = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), smokeMat);
-      puff.position.set(s.x, h + 1 + p * 3, s.z);
-      puff.userData.phase = p / 5;
-      group.add(puff);
-      smokes.push(puff);
-      puffs.push(puff);
-    }
+    const emitter = new Emitter(particles(scene), {
+      origin: { x: s.x, y: h + 1, z: s.z },
+      rate: 5,
+      params: () => ({
+        dx: (rng.next() - .5) * 1.2, dz: (rng.next() - .5) * 1.2,
+        vx: 1.6 + rng.next() * 1.2, vy: 2.2 + rng.next() * 1.4, vz: (rng.next() - .5) * 1.2,
+        size: 2.6 + rng.next() * 1.8, growth: 1.5, life: 5 + rng.next() * 3,
+        drag: .35, gravity: -0.55, alpha: .32,
+        color: [.79, .82, .85], endColor: [.62, .66, .7],
+      }),
+    });
+    emitters.push(emitter);
     counts.smokestacks++;
   }
   // ponte de dutos entre dois suportes NO MESMO SETOR angular (o vão nunca
@@ -173,21 +177,8 @@ function marksBarburhen(group, scene, scenario, rng) {
     group.add(leg);
   }
   counts.pipeBridges++;
-  return { counts, animators: [smokeDrift(smokes)] };
+  return { counts, animators: emitters.map((e) => (dt, t) => e.update(dt, t)) };
 }
-
-function smokeDrift(smokes) {
-  return (dt, t) => {
-    for (const s of smokes) {
-      const k = (t * .05 + s.userData.phase) % 1;
-      s.position.y += Math.sin(k * Math.PI * 2) * .0035;      // sobe/desce suave
-      s.material.opacity = .3 * (1 - k) + .06;
-      s.quaternion.copy(smokeQuat(t * .1 + s.userData.phase * 6));
-    }
-  };
-}
-const _q = new THREE.Quaternion(), _e = new THREE.Euler();
-function smokeQuat(a) { _e.set(0, a, 0); return _q.setFromEuler(_e); }
 
 // ---------- Priadus — Arquipélago Abissal ----------
 function marksPriadus(group, scene, scenario, rng) {
@@ -394,19 +385,34 @@ function marksArukheea(group, scene, scenario, rng) {
     }
     group.add(pylonGroup);
   }
-  // fendas do vazio (planos emissivos verticais pulsantes)
+  // fendas do vazio (planos emissivos verticais pulsantes) + motos de vazio
   const riftMats = [];
+  const riftEmitters = [];
   for (let i = 0; i < 4; i++) {
     const s = ringSpot(rng, 3.3);
+    const riftY = 14 + rng.next() * 10;
+    const riftH = 10 + rng.next() * 8;
     const mat = new THREE.MeshBasicMaterial({ color: '#9be8ff', transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false });
-    const rift = new THREE.Mesh(new THREE.PlaneGeometry(.8, 10 + rng.next() * 8), mat);
-    rift.position.set(s.x, 14 + rng.next() * 10, s.z);
+    const rift = new THREE.Mesh(new THREE.PlaneGeometry(.8, riftH), mat);
+    rift.position.set(s.x, riftY, s.z);
     rift.rotation.y = rng.next() * Math.PI;
     group.add(rift);
     riftMats.push(mat);
     counts.rifts++;
+    // Fase 17 — motos do vazio escapando da fenda (partículas reais)
+    riftEmitters.push(new Emitter(particles(scene), {
+      origin: { x: s.x, y: riftY, z: s.z },
+      rate: 1.2,
+      params: () => ({
+        dx: (rng.next() - .5) * .8, dy: (rng.next() - .5) * riftH * .8, dz: (rng.next() - .5) * .8,
+        vx: (rng.next() - .5) * .6, vy: .8 + rng.next() * 1.2, vz: (rng.next() - .5) * .6,
+        size: .35 + rng.next() * .45, growth: 0, life: 4 + rng.next() * 3,
+        drag: .1, gravity: -0.6, alpha: .75,
+        color: [.61, .91, 1], endColor: [.24, .66, .78],
+      }),
+    }));
   }
-  return { counts, animators: [fragmentDrift(frags, drifters), riftPulse(riftMats)] };
+  return { counts, animators: [fragmentDrift(frags, drifters), riftPulse(riftMats), ...riftEmitters.map((e) => (dt, t) => e.update(dt, t))] };
 }
 
 function fragmentDrift(inst, drifters) {
@@ -443,6 +449,19 @@ const BUILDERS = {
 };
 
 /**
+ * Sistema de partículas compartilhado da cena (1 draw call, pool fixo).
+ * Recriado por cena; se buildWorldMarks rodar 2× na mesma cena, reutiliza.
+ */
+function particles(scene) {
+  if (!scene.userData.particles) {
+    const system = new ParticleSystem({ capacity: 1024, name: 'world-particles' });
+    scene.add(system.points);
+    scene.userData.particles = system;
+  }
+  return scene.userData.particles;
+}
+
+/**
  * Constrói os marcos do mundo p/ o cenário e registra animadores/contagens em
  * scene.userData.worldMarks. Puro visual: anel 205–340 m, sem colisores.
  * @returns {{ id: string, counts: Record<string, number>, animators: Function[] }}
@@ -457,7 +476,10 @@ export function buildWorldMarks(scene, layout, scenario) {
   group.name = `world-marks:${scenario.id}`;
   const built = builder(group, scene, scenario, rng);
   registry.counts = built.counts;
-  registry.animators = built.animators;
+  // Fase 17 — tick do sistema de partículas SEMPRE primeiro (emissores dos
+  // marcos escrevem no mesmo frame; update integra depois dos spawns).
+  const system = particles(scene);
+  registry.animators = [(dt, t) => system.update(dt, t), ...built.animators];
   scene.add(group);
   return registry;
 }

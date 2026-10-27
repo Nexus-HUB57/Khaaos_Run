@@ -20,6 +20,7 @@ import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
+import { SurvivalFX } from './survivalfx3d.js';
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -132,6 +133,9 @@ export class Game3D {
     // Fase 7 — props ganham modelos GLTF REAIS quando os assets carregam
     // (fallback procedural permanece se o fetch falhar)
     applyGltfProps(scene);
+    // Fase 17 — FX das sobrevivências do mundo (tsunami/lava/gravidade/ácido):
+    // consome os eventos da sim/servidor e materializa a regra de dano por altura.
+    this.survivalFX = new SurvivalFX(scene, this.scenario, { particles: scene.userData.particles ?? null });
   }
 
   initEntities() {
@@ -1104,6 +1108,43 @@ export class Game3D {
           break;
         }
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
+        // ---------- Fase 17 — sobrevivências do mundo (FX + aviso) ----------
+        case 'tsunamiStart':
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .22);
+          this.audio?.ringWarn?.();
+          this.hud.feed('SOBREVIVÊNCIA', `TSUNAMI: nível do mar subindo até ${Math.round(e.submergeBelowY ?? 90)}m — busque terreno ALTO (${Math.round(e.durationSeconds ?? 40)}s).`, 'bad');
+          break;
+        case 'tsunamiEnd':
+          this.survivalFX?.handleEvent(e);
+          this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
+          break;
+        case 'eruptionStart':
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .3);
+          this.audio?.ringWarn?.();
+          this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          break;
+        case 'eruptionEnd':
+          this.survivalFX?.handleEvent(e);
+          this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
+          break;
+        case 'gravityAnomalyStart':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.ringWarn?.();
+          this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
+          break;
+        case 'gravityAnomalyEnd':
+          this.survivalFX?.handleEvent(e);
+          this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
+          break;
+        case 'acidRain':
+          this.survivalFX?.handleEvent(e);
+          if (!this._acidWarned || performance.now() - this._acidWarned > 30000) {
+            this._acidWarned = performance.now();
+            this.hud.feed('SOBREVIVÊNCIA', 'Chuva ácida no setor — procure cobertura.', 'warn');
+          }
+          break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
         case 'airdrop':
           this.hud.feed('ZU', `Infiltração aérea confirmada. Altitude ${Math.round(e.altitude)}m — paraquedas abre a 45m.`, 'warn');
@@ -1239,6 +1280,8 @@ export class Game3D {
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
     const marksAnim = this.scene.userData.worldMarks?.animators;
     if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
+    // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
+    this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);
