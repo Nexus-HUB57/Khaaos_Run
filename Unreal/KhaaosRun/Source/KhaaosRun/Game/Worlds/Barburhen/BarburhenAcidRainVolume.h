@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/BoxComponent.h"
+#include "GameplayTagContainer.h"
 #include "NiagaraSystem.h"
 #include "Sound/SoundCue.h"
 #include "BarburhenAcidRainVolume.generated.h"
@@ -37,68 +38,76 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAcidRainTick, APawn*, Player, fl
 UCLASS(Blueprintable, BlueprintType)
 class KHAOSRUN_API ABarburhenAcidRainVolume : public AActor
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
 public:
-	ABarburhenAcidRainVolume();
+        ABarburhenAcidRainVolume();
 
 protected:
-	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+        virtual void BeginPlay() override;
+        virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
-	/** % da vitalidade máxima por tick (0.01 = 1 %). Sincronizado pelo MapBuilder. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float DamagePercentPerTick = 0.01f;
+        /** % da vitalidade máxima por tick (0.01 = 1 %). Sincronizado pelo MapBuilder. */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+        float DamagePercentPerTick = 0.01f;
 
-	/** Intervalo entre ticks (segundos). Oficial = 10. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain", meta = (ClampMin = "0.5"))
-	float TickInterval = 10.0f;
+        /** Intervalo entre ticks (segundos). Oficial = 10. */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain", meta = (ClampMin = "0.5"))
+        float TickInterval = 10.0f;
 
-	/** Medo adicional por tick (0–100 scale). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
-	float FearPerTick = 2.0f;
+        /** Medo adicional por tick (0–100 scale). */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
+        float FearPerTick = 2.0f;
 
-	/** Se true, ignora quem tem tag HasAcidProtection (colete/máscara). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
-	bool bRequireNoProtection = true;
+        /** Se true, ignora quem tem tag HasAcidProtection (colete/máscara). */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
+        bool bRequireNoProtection = true;
 
-	/** Tag de proteção (Forja: colete / máscara). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
-	FName ProtectionTag = FName(TEXT("HasAcidProtection"));
+        /** Tag de proteção (Forja: colete / máscara) — caminho legado por actor tag. */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
+        FName ProtectionTag = FName(TEXT("HasAcidProtection"));
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain|FX")
-	UNiagaraSystem* RainFX;
+        /** Tag GAS de proteção (canônica): concedida por GameplayEffect
+         *  (UKhaaosGameplayEffects::CreateTagGrantEffect) quando o colete/máscara
+         *  anti-ácido está equipado. O volume consulta a AbilitySystemComponent
+         *  do personagem além do actor tag legado. */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain")
+        FGameplayTag ProtectionGameplayTag = FGameplayTag::RequestGameplayTag(FName("World.Barburhen.AcidProtection"));
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain|Audio")
-	USoundCue* RainAmbientLoop;
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain|FX")
+        UNiagaraSystem* RainFX;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UBoxComponent* RainVolume;
+        UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AcidRain|Audio")
+        USoundCue* RainAmbientLoop;
 
-	UPROPERTY(BlueprintAssignable, Category = "AcidRain|Events")
-	FOnAcidRainTick OnAcidRainTick;
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+        UBoxComponent* RainVolume;
 
-	UFUNCTION(BlueprintCallable, Category = "AcidRain")
-	void SetRainActive(bool bActive);
+        UPROPERTY(BlueprintAssignable, Category = "AcidRain|Events")
+        FOnAcidRainTick OnAcidRainTick;
 
-	UFUNCTION(BlueprintPure, Category = "AcidRain")
-	bool IsRainActive() const { return bRainActive; }
+        UFUNCTION(BlueprintCallable, Category = "AcidRain")
+        void SetRainActive(bool bActive);
 
-	/** DPS equivalente (para UI/debug): DamagePercentPerTick / TickInterval */
-	UFUNCTION(BlueprintPure, Category = "AcidRain")
-	float GetEquivalentDamagePerSecond() const
-	{
-		return TickInterval > 0.f ? DamagePercentPerTick / TickInterval : 0.f;
-	}
+        UFUNCTION(BlueprintPure, Category = "AcidRain")
+        bool IsRainActive() const { return bRainActive; }
+
+        /** DPS equivalente (para UI/debug): DamagePercentPerTick / TickInterval */
+        UFUNCTION(BlueprintPure, Category = "AcidRain")
+        float GetEquivalentDamagePerSecond() const
+        {
+                return TickInterval > 0.f ? DamagePercentPerTick / TickInterval : 0.f;
+        }
 
 protected:
-	void ApplyRainTick();
-	bool HasAcidProtection(AActor* Actor) const;
+        void ApplyRainTick();
+        /** Proteção = actor tag legado OR tag GAS ativa na ASC (GE do equipamento). */
+        bool HasAcidProtection(AActor* Actor) const;
 
-	FTimerHandle RainTimerHandle;
-	bool bRainActive = true;
+        FTimerHandle RainTimerHandle;
+        bool bRainActive = true;
 
-	UPROPERTY()
-	UAudioComponent* AmbientAudio = nullptr;
+        UPROPERTY()
+        UAudioComponent* AmbientAudio = nullptr;
 };

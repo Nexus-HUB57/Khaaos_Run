@@ -27,6 +27,7 @@
  *   Weapon.Category.{Pistol,SMG,AssaultRifle,Carbine,Sniper,DMR,Shotgun,LMG,Knife,Sword,Exotic}
  *   Species.{Zheers,Onith,Skeetw,Huran,Venex,Khael}
  *   World.{CIGKV,Barburhen,Priadus,Ckesalth,Arukheea}
+ *   World.Barburhen.AcidProtection (chuva ácida W1/C1 — colete/máscara via GAS)
  *   AI.State.{Patrol,Chase,Attack,Retreat,Dead}
  *   AI.Difficulty.{Easy,Medium,Hard,Elite}
  */
@@ -397,6 +398,11 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|World")
 	FGameplayTag World_Barburhen;
+
+	/** Proteção contra a chuva ácida de Barburhen — concedida por GameplayEffect
+	 *  (colete/máscara). O ABarburhenAcidRainVolume consulta via ASC. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|World")
+	FGameplayTag World_Barburhen_AcidProtection;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tags|World")
 	FGameplayTag World_Priadus;

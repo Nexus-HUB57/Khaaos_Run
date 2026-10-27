@@ -4,6 +4,8 @@
 #include "Game/Character/KhaaosSpeciesGAS.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"
+#include "Game/AbilitySystem/KhaaosGameplayEffects.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "GameplayAbilitySpec.h"
 #include "Engine/DataTable.h"
 #include "UObject/UObjectGlobals.h"
@@ -384,4 +386,70 @@ int32 UKhaaosSpeciesGAS::ApplySkeetwTraits()
         }
 
         return Count;
+}
+
+// ─── Proteção Ambiental (chuva ácida de Barburhen — Fase 1) ──────────────────
+
+bool UKhaaosSpeciesGAS::SetAcidProtection(bool bEnabled, float DurationSeconds)
+{
+        if (!AbilitySystemComponent)
+        {
+                return false;
+        }
+
+        const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+        if (!Tags.World_Barburhen_AcidProtection.IsValid())
+        {
+                UE_LOG(LogKhaaosSpeciesGAS, Warning, TEXT("SetAcidProtection: tag World.Barburhen.AcidProtection não registrada"));
+                return false;
+        }
+
+        // Estado desejado = sem proteção: remove o GE ativo (se houver).
+        if (!bEnabled)
+        {
+                if (AcidProtectionHandle.IsValid())
+                {
+                        AbilitySystemComponent->RemoveActiveGameplayEffect(AcidProtectionHandle);
+                        AcidProtectionHandle = FActiveGameplayEffectHandle();
+                        return true;
+                }
+                return false;
+        }
+
+        // Já protegido: idempotente (sem segunda aplicação — sem stack indevido).
+        if (AcidProtectionHandle.IsValid())
+        {
+                return false;
+        }
+
+        UGameplayEffect* GrantEffect = UKhaaosGameplayEffects::CreateTagGrantEffect(Tags.World_Barburhen_AcidProtection, DurationSeconds);
+        if (!GrantEffect)
+        {
+                UE_LOG(LogKhaaosSpeciesGAS, Warning, TEXT("SetAcidProtection: falha ao criar GE de concessão"));
+                return false;
+        }
+
+        FGameplayEffectContextHandle ContextHandle = AbilitySystemComponent->MakeEffectContext();
+        ContextHandle.AddSourceObject(GetOwner());
+        FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(GrantEffect, 1.0f, ContextHandle);
+        if (!SpecHandle.IsValid())
+        {
+                return false;
+        }
+        AcidProtectionHandle = AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+        return AcidProtectionHandle.IsValid();
+}
+
+bool UKhaaosSpeciesGAS::HasAcidProtection() const
+{
+        if (!AbilitySystemComponent)
+        {
+                return false;
+        }
+        const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+        if (!Tags.World_Barburhen_AcidProtection.IsValid())
+        {
+                return false;
+        }
+        return AbilitySystemComponent->HasMatchingGameplayTag(Tags.World_Barburhen_AcidProtection);
 }

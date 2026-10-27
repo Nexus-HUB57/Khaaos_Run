@@ -140,6 +140,7 @@ GameplayTags.GameplayCue_Damage_Zone, "GameplayCue.Damage.Zone");
 	GameplayTags.Species_Khael = RequestTag(GameplayTags.Species_Khael, "Species.Khael");
 	GameplayTags.World_CIGKV = RequestTag(GameplayTags.World_CIGKV, "World.CIGKV");
 	GameplayTags.World_Barburhen = RequestTag(GameplayTags.World_Barburhen, "World.Barburhen");
+	GameplayTags.World_Barburhen_AcidProtection = RequestTag(GameplayTags.World_Barburhen_AcidProtection, "World.Barburhen.AcidProtection");
 	GameplayTags.World_Priadus = RequestTag(GameplayTags.World_Priadus, "World.Priadus");
 	GameplayTags.World_Ckesalth = RequestTag(GameplayTags.World_Ckesalth, "World.Ckesalth");
 	GameplayTags.World_Arukheea = RequestTag(GameplayTags.World_Arukheea, "World.Arukheea");

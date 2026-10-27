@@ -293,3 +293,34 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerH
 
 	return Effect;
 }
+
+// ─── CreateTagGrantEffect ────────────────────────────────────────────────────
+
+UGameplayEffect* UKhaaosGameplayEffects::CreateTagGrantEffect(FGameplayTag Tag, float Duration)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_TagGrant"));
+	if (!Effect || !Tag.IsValid())
+	{
+		return nullptr;
+	}
+
+	// Duration > 0 → HasDuration (expira sozinho); <= 0 → Infinite (remove
+	// explicitamente quando o equipamento sai — padrão dos passivos).
+	if (Duration > 0.f)
+	{
+		FGameplayEffectSpecDurationSpec DurationSpec;
+		DurationSpec.Duration = FScalableFloat(Duration);
+		Effect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
+		Effect->DurationMagnitude = DurationSpec;
+	}
+	else
+	{
+		Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+	}
+
+	FGameplayTagContainer GrantedTags;
+	GrantedTags.AddTag(Tag);
+	Effect->GrantedTags = GrantedTags;
+
+	return Effect;
+}
