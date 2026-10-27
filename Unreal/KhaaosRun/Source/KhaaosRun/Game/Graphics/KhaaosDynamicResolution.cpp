@@ -89,7 +89,7 @@ void UKhaaosDynamicResolution::UpdateDynamicResolution(float CurrentGPUTimeMs, f
     CurrentResX = FMath::RoundToInt(static_cast<float>(BaseResX) * CurrentResolutionFraction);
     CurrentResY = FMath::RoundToInt(static_cast<float>(BaseResY) * CurrentResolutionFraction);
 
-    // Garantir resoluções pares (exigência de muitos GPU/encoders)
+    // Garantir resoluções pares (exigência de muitos GPUs/encoders)
     CurrentResX = CurrentResX & ~1;
     CurrentResY = CurrentResY & ~1;
 
@@ -103,7 +103,7 @@ void UKhaaosDynamicResolution::ApplyResolutionToViewport()
     {
         // Atualizar a primary screen percentage para o valor calculado
         const float ScreenPercentage = CurrentResolutionFraction * 100.0f;
-        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.DynamicRes.OperationMode 2"))); // Auto
+        GEngine->Exec(nullptr, TEXT("r.DynamicRes.OperationMode 2")); // Auto
         GEngine->Exec(nullptr, *FString::Printf(TEXT("r.DynamicRes.TargetScreenPercentage %.1f"), ScreenPercentage));
         GEngine->Exec(nullptr, *FString::Printf(TEXT("r.DynamicRes.MinScreenPercentage %.1f"), DRSConfig.MinResolutionFraction * 100.0f));
         GEngine->Exec(nullptr, *FString::Printf(TEXT("r.DynamicRes.MaxScreenPercentage %.1f"), DRSConfig.MaxResolutionFraction * 100.0f));
