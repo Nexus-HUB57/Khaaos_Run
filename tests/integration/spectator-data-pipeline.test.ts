@@ -8,7 +8,7 @@ import {
   SpectatorDataPipeline,
   SpectatorConfig,
   type SpectatorGameData,
-} from "@game/SpectatorDataPipeline";
+} from "../../../server/game/SpectatorDataPipeline";
 
 describe("SpectatorDataPipeline", () => {
   let pipeline: SpectatorDataPipeline;

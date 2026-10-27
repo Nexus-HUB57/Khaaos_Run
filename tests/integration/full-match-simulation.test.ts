@@ -11,10 +11,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchPlayer } from "@game/MatchFlow";
-import { EconomyMatchBridge, SPECIES_CONFIG, type SpeciesKey } from "@game/EconomyMatchBridge";
-import { SpectatorDataPipeline } from "@game/SpectatorDataPipeline";
-import { DiscordBot } from "@game/DiscordBot";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchPlayer } from "../../../server/game/MatchFlow";
+import { EconomyMatchBridge, SPECIES_CONFIG, type SpeciesKey } from "../../../server/game/EconomyMatchBridge";
+import { SpectatorDataPipeline } from "../../../server/game/SpectatorDataPipeline";
+import { DiscordBot } from "../../../server/game/DiscordBot";
 
 // ─── Test Operatives ────────────────────────────────────────────────────────
 

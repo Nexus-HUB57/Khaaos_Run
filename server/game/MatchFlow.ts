@@ -370,12 +370,6 @@ export class MatchFlow {
     const victim = this.state.players.get(victimId);
     if (!killer || !victim || victim.isEliminated) return;
 
-    // If victim is already downed, this is a finish-off (eliminate immediately)
-    if (victim.isDowned) {
-      this.eliminatePlayer(killerId, victimId, weapon);
-      return;
-    }
-
     // Apply damage: Shield → Health
     let remainingDamage = damage;
     if (victim.shield > 0) {
@@ -387,39 +381,10 @@ export class MatchFlow {
     victim.lastDamageAt = Date.now();
 
     if (victim.health <= 0 && !victim.isDowned) {
-      // Victim is downed — immediately credit killer and record economy
+      // Victim is downed (30s bleed-out timer)
       victim.health = 0;
       victim.isDowned = true;
-      killer.kills++;
-      this.state.totalEliminations++;
       this.logEvent("PLAYER_DOWNED", { victimId, killerId, weapon });
-
-      // Record kill economy reward immediately (full reward, not downed modifier)
-      const killEvent: KillEvent = {
-        killerId,
-        victimId,
-        victimSpecies: victim.species,
-        victimSkinRarity: victim.skinRarity,
-        victimInWater: victim.inWaterZone,
-        victimWasDowned: false, // Fresh down, not a finish-off
-        timestamp: Date.now(),
-        worldId: this.getCurrentWorld().worldId,
-        phase: this.getCurrentWorld().currentPhase,
-      };
-
-      const reward = this.economyBridge.calculateKillReward(killEvent);
-      this.economyBridge.recordReward(this.state.roomId, reward);
-      this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
-      killer.krcEarned += reward.krcAmount;
-
-      // Discord kill feed
-      this.discordBot?.sendKillFeed(
-        killer.displayName,
-        killer.species,
-        victim.displayName,
-        victim.species,
-        weapon
-      );
 
       // Auto-eliminate after 30 seconds if not revived
       setTimeout(() => {
@@ -434,15 +399,44 @@ export class MatchFlow {
    * Eliminate a downed player (ragdoll).
    */
   private eliminatePlayer(killerId: string, victimId: string, weapon: string): void {
+    const killer = this.state.players.get(killerId);
     const victim = this.state.players.get(victimId);
     if (!victim || victim.isEliminated) return;
 
-    // If victim was already downed, kill credit and economy were already given in processKill.
-    // This just transitions to full elimination (ragdoll state).
     victim.isEliminated = true;
     victim.isDowned = false;
+    this.state.totalEliminations++;
 
-    this.logEvent("PLAYER_ELIMINATED", { killerId, victimId, weapon });
+    if (killer) killer.kills++;
+
+    // Economy reward
+    const killEvent: KillEvent = {
+      killerId,
+      victimId,
+      victimSpecies: victim.species,
+      victimSkinRarity: victim.skinRarity,
+      victimInWater: victim.inWaterZone,
+      victimWasDowned: victim.isDowned,
+      timestamp: Date.now(),
+      worldId: this.getCurrentWorld().worldId,
+      phase: this.getCurrentWorld().currentPhase,
+    };
+
+    const reward = this.economyBridge.calculateKillReward(killEvent);
+    this.economyBridge.recordReward(this.state.roomId, reward);
+    this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
+    if (killer) killer.krcEarned += reward.krcAmount;
+
+    // Discord kill feed
+    this.discordBot?.sendKillFeed(
+      killer?.displayName || killerId,
+      killer?.species || "HURAN",
+      victim.displayName,
+      victim.species,
+      weapon
+    );
+
+    this.logEvent("PLAYER_ELIMINATED", { killerId, victimId, weapon, reward: reward.krcAmount });
   }
 
   /**

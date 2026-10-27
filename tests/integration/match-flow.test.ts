@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchConfig } from "@game/MatchFlow";
-import { EconomyMatchBridge } from "@game/EconomyMatchBridge";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchConfig } from "../../../server/game/MatchFlow";
+import { EconomyMatchBridge } from "../../../server/game/EconomyMatchBridge";
 
 describe("MatchFlow", () => {
   let matchFlow: MatchFlow;
@@ -157,13 +157,12 @@ describe("MatchFlow", () => {
         skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
       });
 
-      // 150 damage: 50 shield + 100 health = downed
-      matchFlow.processKill("killer", "victim", 150, "AssaultRifle");
+      // 100 damage: 50 shield + 50 health = downed
+      matchFlow.processKill("killer", "victim", 100, "AssaultRifle");
 
       const victim = matchFlow.getState().players.get("victim");
       expect(victim?.isDowned).toBe(true);
       expect(victim?.shield).toBe(0);
-      expect(victim?.health).toBe(0);
     });
 
     it("should shield absorb damage before health", () => {

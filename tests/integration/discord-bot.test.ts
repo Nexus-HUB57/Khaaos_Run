@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { DiscordBot, type DiscordBotConfig, type DiscordEventType } from "@game/DiscordBot";
+import { DiscordBot, type DiscordBotConfig, type DiscordEventType } from "../../../server/game/DiscordBot";
 
 describe("DiscordBot", () => {
   let bot: DiscordBot;

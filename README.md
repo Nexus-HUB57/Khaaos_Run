@@ -999,4 +999,62 @@ Semana  1   4   8   11  15  23  28
 
 ---
 
+## Novos Subsistemas — Sessão 2026-10-27
+
+### Otimizações Gráficas (3 novos subsistemas C++20)
+
+1. **KhaaosGraphicsPresetSubsystem** (UEngineSubsystem) — 5 presets de qualidade adaptativos (Low/Medium/High/Ultra/PhD) com auto-detecção de GPU via VRAM, integração DLSS/FSR/XeSS/TSR, e aplicação automática de console commands. Tabela:
+
+   | Preset | Resolução | Target FPS | Shadow | AO    | Lumen | Upscaler |
+   |--------|-----------|------------|--------|-------|-------|----------|
+   | Low    | 720p      | 30         | Low    | Off   | No    | TSR      |
+   | Medium | 1080p     | 60         | Medium | SSAO  | No    | TSR      |
+   | High   | 1440p     | 60         | High   | GTAO  | Yes   | FSR      |
+   | Ultra  | 4K        | 60         | Ultra  | Lumen | Yes   | DLSS     |
+   | PhD    | 4K        | 120        | RT     | Lumen | Yes   | DLSS     |
+
+2. **KhaaosDynamicResolution** (UEngineSubsystem) — Escalação dinâmica de resolução baseada em utilização de GPU com média móvel de 8 frames e histerese. Modos: Off/Conservative (80-100%)/Aggressive (50-100%)/Adaptive. Mantém frame budget <16ms@60fps ou <8.33ms@120fps.
+
+3. **KhaaosMaterialOptimizer** (UEngineSubsystem) — Streaming budget adaptativo de textura (1GB-8GB pool baseado em VRAM), 9 grupos de textura com prioridades, batch updates de MaterialInstanceDynamic para redução de draw calls, e otimização de materiais distantes (mip bias, emissive shutoff, normal map LOD).
+
+### Personalização de Personagens (2 novos subsistemas C++20)
+
+4. **KhaaosCharacterCustomizer** (UActorComponent) — Sistema de morph targets com 7+ morphs comuns (Face_Width, Chin_Prominence, Nose_Size, Brow_Ridge, Body_Muscle, Body_Shoulders, Body_Waist) + 2 morphs species-specific por espécie (ex: Gill_Size/Webbing_Extent para Huran, Crystal_Size/Rune_Glow para Khael, Cyber_Implant/Optic_Lens para Venex, etc.). 5 canais de cor (SkinTone, EyeColor, HairColor, AccentColor, EmissiveColor) com paletas species-specific. Budget de 8 morphs ativos simultâneos. Serialização JSON para EOS Cloud Save.
+
+5. **KhaaosAccessorySocketSystem** (UActorComponent) — Sistema otimizado de attachment de acessórios cosméticos via sockets do skeletal mesh com instancing para redução de draw calls. Suporta 8 slots cosméticos (HEAD, BODY, LEGS, BACK, MELEE, PARACHUTE, EMOTE, BANNER). HideInFirstPerson para câmera FP. Draw call batching por material.
+
+### Economia 2PC (2 novos arquivos C++20 + 1 TypeScript)
+
+6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
+
+7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header.
+
+### CI/CD e Pipeline
+
+8. **.github/workflows/ue5-headless-compile.yml** — GitHub Actions workflow 8 steps: checkout→LFS pull→nvidia-smi→Xorg init→GenerateProjectFiles+Build→KhaaosVFXValidation Commandlet→Log analysis→Artifact upload. Rejeita PRs se [FAIL] detectado nos 48 abilities ou 27 VFX.
+
+9. **scripts/pipeline/parse_acid_rain_volumes.py** — Parser de volumes de chuva ácida do mapa Barburhen W1/C1. Lê .umap.json, extrai ABarburhenAcidRainVolume actors, calcula damage_per_tick (0.01 = -1% Vitality por tick de 10s), exporta CSV para KhaaosDataTables C++.
+
+### Infraestrutura Atualizada
+
+10. **Terraform variables.tf** — Instância default atualizada de `ecs.vgn6i-m4.xlarge` (DEPRECATED) para `ecs.gn6i-c4g1.xlarge` (NVIDIA T4 física, 16GB VRAM, sem licença GRID). Nova variável `gpu_driver_type` (tesla/grid).
+
+11. **gpu_machine_bootstrap.sh v4.0** — Suporte a driver Tesla (gn6i T4 física, sem GRID) e GRID (vgn7i-vws/sgn8ia com licença vWS). Auto-detecção de BusID via lspci, geração automática de xorg.conf.d com BusID correto.
+
+### Dados Cosméticos (3 novos JSON)
+
+12. **emote_catalog.json** — 13 emotes em 5 categorias (EXPRESSAO, ACAO, DANCA, MEDITACAO, INTERACAO) e 5 raridades. 5 species-exclusive (Huran GillFlare, Onith TailWhip, Venex SystemCheck, Skeetw SpreadWings, Zheers Oath).
+
+13. **skin_shop_catalog.json** — 12 itens de loja: 8 skins, 2 gliders, 1 banner, 1 weapon skin. Pricing 800-8000 KRC. Daily deals (24h rotation, 10-30% discount) e Featured items (7d rotation).
+
+14. **battle_pass_season1.json** — Temporada 1 "Estação da Convergência": 100 tiers, Free Track (20 rewards, 2800 KRC total) + Premium Track (20 rewards, 4200 KRC total). Tier 100 Premium: Skeetw Solar Phoenix (MITICO).
+
+### Higienização de Repositório
+
+- Removido diretório `script/` (singular) — conteúdo unificado em `scripts/` (plural)
+- Removido diretório `.aistudio/` (artefatos temporários de IDE)
+- parse_acid_rain_volumes.py validado: 4 volumes exportados para CSV
+
+---
+
 <sub>Khaaos Run · Plataforma Battle Royale multi-mundo · Nível Devs Ph.D · Equipe Nexus</sub>

@@ -13,7 +13,7 @@ import {
   type KillEvent,
   type PhaseSurvivalEvent,
   type WorldTransitionEvent,
-} from "@game/EconomyMatchBridge";
+} from "../../../server/game/EconomyMatchBridge";
 
 describe("EconomyMatchBridge", () => {
   let bridge: EconomyMatchBridge;
