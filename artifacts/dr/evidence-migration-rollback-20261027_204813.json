@@ -1,0 +1,20 @@
+{
+  "timestamp": "20261027_204813",
+  "gate": "M2 rollback de versão/migration",
+  "environment": "ephemeral embedded PostgreSQL 16 (disposable database khaaos_migration_rollback)",
+  "forward_migrations": ["0002_economy_idempotency", "0003_economy_invariants", "0004_correlated_append_only_ledger"],
+  "rollback_script": "migrations/rollback/0004_correlated_append_only_ledger.down.sql",
+  "verification": {
+    "ledger_objects_removed": true,
+    "operation_id_columns_removed": true,
+    "base_data_intact": "mr-alice:900, mr-bob:120",
+    "invariants_from_0003_still_present": 2,
+    "writes_accepted_after_rollback": true
+  },
+  "rto_ms": 7,
+  "rpo": {
+    "definition": "dados descartados pelo rollback = histórico do ledger append-only (0004)",
+    "expected_loss": "economy_ledger_entries + economy_ledger_migration_state",
+    "mitigation": "backup prévio obrigatório via scripts/m2_e2e/dr_backup_restore.sh"
+  }
+}

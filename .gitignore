@@ -20,3 +20,6 @@ artifacts/release/
 
 # dumps locais de infra (redis rdb, sqlite auxiliares)
 *.rdb
+
+# M2 DR: dumps binários são efêmeros; evidências JSON sim ficam
+artifacts/dr/*.dump
