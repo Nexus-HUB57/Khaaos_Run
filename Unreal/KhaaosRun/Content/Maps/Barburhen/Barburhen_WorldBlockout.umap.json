@@ -1,0 +1,9 @@
+{
+  "schema": "khaaos.ue5.umap-intake/v1",
+  "world_id": "Barburhen",
+  "display_name": "Barburhen — Mundo Aquatico",
+  "engine_target": "UE5.8",
+  "source_config": "components_dev/worlds/WCFG_Barburhen.json",
+  "status": "source_intake_requires_editor_import",
+  "poi_count": 5
+}

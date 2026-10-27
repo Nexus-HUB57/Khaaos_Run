@@ -1,0 +1,32 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "khaaos-generate-world-asset-packages"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "CIGKV_WorldBlockout",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SM_CIGKV_WorldBlockout",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "SM_CIGKV_WorldBlockout",
+      "primitives": []
+    }
+  ],
+  "extras": {
+    "world_id": "CIGKV",
+    "source_contract": "WCFG/canonical world data",
+    "requires_ue_import": true
+  }
+}

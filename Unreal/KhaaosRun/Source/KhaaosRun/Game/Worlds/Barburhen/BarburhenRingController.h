@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRingRadiusChanged, float, Curren
  * Quem fica fora sofre chuva ácida intensificada / eliminação.
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API ABarburhenRingController : public AActor
+class KHAAOSRUN_API ABarburhenRingController : public AActor
 {
 	GENERATED_BODY()
 
