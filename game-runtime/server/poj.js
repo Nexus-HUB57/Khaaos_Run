@@ -137,8 +137,20 @@ export function createPojService(overrides = {}) {
     },
     // ---------- Fase 11 — Corte Marcial jogável (console do Marechal) ----------
     // GET /poj/court-martial — banco da Corte: casos pendentes + histórico.
-    courtCases(status = null) {
-      return proto.courtDocket(status);
+    // Fase 13 — courtCases(status, mineSub): com mineSub, o docket devolve
+    // APENAS os casos daquele jogador (replay da ata na UI do eliminado).
+    // Contagens (pendentes/julgados) também escopadas — sem leak de agregados.
+    courtCases(status = null, mineSub = null) {
+      const docket = proto.courtDocket(status);
+      if (mineSub == null) return docket;
+      const mine = String(mineSub);
+      const cases = docket.cases.filter((c) => String(c.playerId) === mine);
+      return {
+        mine: true,
+        pendentes: cases.filter((c) => c.status === 'pendente').length,
+        julgados: cases.filter((c) => c.status === 'julgado').length,
+        cases,
+      };
     },
     // POST /poj/court-martial/verdict — veredito do Marechal sobre um caso.
     // Efeitos no registro (patente/XP) + Fase 12: efeito no KRC REAL da economia

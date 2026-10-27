@@ -37,6 +37,7 @@
       <span class="spec-hint">←/→</span>
       <button id="specPrev" class="spec-btn" title="Operativo anterior">‹</button>
       <button id="specNext" class="spec-btn" title="Próximo operativo">›</button>
+      <button id="specAta" class="spec-btn" title="Reproduzir ata da Corte Marcial">ATA</button>
       <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
     </div>
 
@@ -208,6 +209,20 @@
         <div class="modal-actions">
           <button id="endBtn" class="primary-btn">NOVA INSERÇÃO</button>
           <button id="replayBtn" class="ghost-btn">EXPORTAR REPLAY</button>
+          <button id="endAtaBtn" class="ghost-btn hidden">REPRODUZIR ATA DA CORTE</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="courtAtaModal" class="modal hidden">
+      <div class="modal-card ata-card">
+        <span class="eyebrow">CORTE MARCIAL · ATA OFICIAL DO PROCESSO</span>
+        <h2 id="ataTitle">ATA DO CASO —</h2>
+        <p class="ata-sub">Reprodução encenada do processo militar — clique para adiantar.</p>
+        <div id="ataTimeline" class="ata-timeline"></div>
+        <div class="modal-actions">
+          <button id="ataReplayBtn" class="ghost-btn">REPRODUZIR NOVAMENTE</button>
+          <button id="ataCloseBtn" class="primary-btn">FECHAR ATA</button>
         </div>
       </div>
     </div>

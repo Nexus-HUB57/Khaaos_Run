@@ -436,6 +436,16 @@ export class Game3D {
     document.querySelector('#specPrev')?.addEventListener('click', () => this.spectateCycle(-1));
     document.querySelector('#specNext')?.addEventListener('click', () => this.spectateCycle(1));
     document.querySelector('#specLeave')?.addEventListener('click', () => this.leaveSpectate());
+    // Fase 13 — replay da ata da Corte na UI do eliminado: reabre a ata do caso
+    // próprio (busca online via mine=1) a partir da barra de espectador.
+    document.querySelector('#specAta')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#endAtaBtn')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#ataReplayBtn')?.addEventListener('click', () => this.hud.replayCourtAta());
+    document.querySelector('#ataCloseBtn')?.addEventListener('click', () => this.hud.hideCourtAta());
+    // clique no card adianta a encenação (skip)
+    document.querySelector('#ataTimeline')?.addEventListener('click', () => {
+      (this.hud.ataNodes ?? []).forEach((n) => n.classList.add('shown'));
+    });
   }
 
   // alvos vivos que o espectador pode acompanhar (bots/remotos; offline e online)
@@ -457,6 +467,9 @@ export class Game3D {
     this.hud.feed('CIGKV', `Você foi eliminado${this.placement ? ` — posição #${this.placement}` : ''}. Transmitindo o restante da partida.`, 'bad');
     this.spectateCycle(1);
     this.hud.showSpectator({ name: this.spectateTarget?.name ?? '—', placement: this.placement });
+    // Fase 13 — o eliminado passa a ver o replay da ata do SEU caso na Corte:
+    // a busca é async (HTTP mine=1) e o caso pode demorar um tick para abrir.
+    this.onEliminated?.(e);
   }
 
   spectateCycle(dir = 1) {
@@ -1064,6 +1077,9 @@ export class Game3D {
           this.hud.feed('POJ', `Patente confirmada no nametag: ${e.patente}.`, 'good');
           break;
         case 'court_verdict': { // Fase 12 — veredito da Corte Marcial ao vivo
+          // Fase 13 — cache p/ ata do eliminado: enriquece o replay com o ΔKRC
+          // entregue ao vivo mesmo quando o docket do servidor ainda não o tem.
+          (this.courtVerdictEvents ??= {})[e.caseId] = e;
           const rotulo = { afastamento: 'AFASTAMENTO DESONROSO', reducao_patente: 'REDUÇÃO DE PATENTE',
             honras_de_guerra: 'HONRAS DE GUERRA', absolvicao: 'ABSOLVIÇÃO' }[e.veredito] ?? String(e.veredito ?? '').toUpperCase();
           const krcTxt = e.krcApplied
