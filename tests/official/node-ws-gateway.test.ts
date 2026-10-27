@@ -279,6 +279,15 @@ test("RoomManager: join_code cross-node abre túnel quando o relay está dispon�
     (managerHost as any).broadcastRoomState(room);
     await new Promise((resolve) => setImmediate(resolve));
 
+    // M1: o túnel por join_code exige convite ligado ao convidado (o dono
+    // emite; a origem pré-verifica no mesh antes de abrir o relay).
+    const now = Date.now();
+    await (managerHost as any).mesh.issueInvite({
+      code: "RELAY77", roomId, worldId: "CIGKV", nodeId: nodeB,
+      invitedUserId: "u-guest", issuedBy: "u-owner", createdAt: now,
+      expiresAt: now + 60 * 60_000, status: "pending", usedAt: null,
+    }, 60 * 60_000);
+
     const { state, socket } = fakeSocket();
     await (managerOrigin as any).handleMessage("u-guest", "Guest", socket, { type: "join_code", code: "relay77" });
     await new Promise((resolve) => setImmediate(resolve));
@@ -316,6 +325,15 @@ test("RoomManager: sem gateway ativo o caminho legado ROOM_REMOTE_NODE permanece
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+
+    // M1: mesmo no caminho legado, o convite ligado ao jogador é obrigatório
+    // (a origem pré-verifica o binding no mesh antes do redirecionamento).
+    const nowLegacy = Date.now();
+    await (managerLegacy as any).mesh.issueInvite({
+      code: "LEGACY1", roomId: `legacy-room-${suffix}`, worldId: "CIGKV", nodeId: remoteOwner.nodeId,
+      invitedUserId: "u-any", issuedBy: "u-owner", createdAt: nowLegacy,
+      expiresAt: nowLegacy + 60 * 60_000, status: "pending", usedAt: null,
+    }, 60 * 60_000);
 
     const { state, socket } = fakeSocket();
     await (managerLegacy as any).handleMessage("u-any", "Any", socket, { type: "join_code", code: "LEGACY1" });
