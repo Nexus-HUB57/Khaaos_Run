@@ -58,9 +58,30 @@ export function eventToFeed(e = {}) {
       return { who: 'RING', cls: 'warn', msg: `Fase ${d.phase ?? '—'} do Ring: ${d.isShrinking ? 'o cerco está fechando' : 'aguardando encolher'}` };
     case 'WORLD_TRANSITION':
       return { who: 'ZU', cls: 'warn', msg: `Transição de mundo → ${d.to ?? '—'}` };
+    // Fase 18 — sobrevivências do mundo na transmissão (banner + FX + áudio)
+    case 'WORLD_HAZARD':
+      return worldHazardFeedLine(d);
     default:
       return null;
   }
+}
+
+// Descrição do hazard p/ feed e banner — MESMA gramática dos avisos do
+// jogador (main3d), para que a transmissão conte a mesma história.
+export const WORLD_HAZARD_INFO = Object.freeze({
+  tsunami: { label: 'TSUNAMI', hint: 'nível do mar subindo — terreno ALTO é a única salvação' },
+  lava: { label: 'ERUPÇÃO', hint: 'lava subindo — as mesas são a única salvação' },
+  gravity: { label: 'ANOMALIA KHAOS', hint: 'gravidade instável — domos de contenção nos pilões' },
+  acid: { label: 'CHUVA ÁCIDA', hint: 'chuva ácida no setor — procure cobertura' },
+});
+
+export function worldHazardFeedLine(d = {}) {
+  const info = WORLD_HAZARD_INFO[d.hazard];
+  if (!info) return null; // hazard desconhecido nunca quebra o feed
+  if (d.phase === 'end') return { who: 'MUNDO', cls: 'good', msg: `${info.label} recuando — área liberada.` };
+  if (d.phase === 'pulse') return { who: 'MUNDO', cls: 'warn', msg: `${info.label}: ${info.hint}.` };
+  const dur = Number.isFinite(d.durationSeconds) ? ` (${Math.round(d.durationSeconds)}s)` : '';
+  return { who: 'MUNDO', cls: 'bad', msg: `${info.label} ATIVO${dur}: ${info.hint}.` };
 }
 
 // Fase 14 — URL da transmissão: /?spectate=SALA&cam=… (botão ASSISTIR do modal
@@ -75,13 +96,16 @@ export function spectateHref(code = '') {
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
 
 export class SpectatorRemote {
-  constructor({ roomId = 'default', camera = 'RING_CENTER', url = null, socketFactory = null, onStatus = null, onBatch = null, onFeed = null } = {}) {
+  constructor({ roomId = 'default', camera = 'RING_CENTER', url = null, socketFactory = null, onStatus = null, onBatch = null, onFeed = null, onEvent = null } = {}) {
     this.roomId = roomId;
     this.camera = SPECTATOR_CAMERAS.includes(camera) ? camera : 'RING_CENTER';
     this.followPlayerId = null;
     this.url = url;
     this.socketFactory = socketFactory;
     this.onStatus = onStatus; this.onBatch = onBatch; this.onFeed = onFeed;
+    // Fase 18 — evento BRUTO do pipeline p/ cada novidade (após dedupe):
+    // alimenta o SpectatorView (contrato da sim) sem passar pelo feed.
+    this.onEvent = onEvent;
     this.status = 'AGUARDANDO';
     this.delayMs = null;          // vem no SPECTATOR_WELCOME (anti-ghosting)
     this.spectatorId = null;
@@ -138,6 +162,7 @@ export class SpectatorRemote {
           if (this._seenEvents.size > 400) this._seenEvents.clear(); // teto de memória
           const line = eventToFeed(e);
           if (line) { this.feed.unshift(line); if (this.feed.length > 8) this.feed.pop(); this.onFeed?.(line, e); }
+          this.onEvent?.(e); // Fase 18 — contrato bruto (view ingere hazards)
         }
         this.onBatch?.(this.last);
         break;
@@ -196,6 +221,44 @@ export class SpectatorView {
     this.walls = [];
     this.batchCount = 0;
     this.lastBatchAt = 0;
+    // Fase 18 — hazard ativo da transmissão (banner do HUD) + fila de eventos
+    // no CONTRATO da sim: o handleEvents herdado do Game3D processa tsunami/
+    // lava/anomalia/ácido com o MESMO SurvivalFX/áudio/aviso do jogador.
+    this.hazardActive = null;     // { hazard, phase } do último start sem end
+    this.#hazardQueue = [];
+  }
+
+  #hazardQueue = [];
+
+  /**
+   * Fase 18 — ingere evento BRUTO do pipeline (remote.onEvent) e traduz
+   * WORLD_HAZARD p/ o vocabulário da sim (tsunamiStart/eruptionStart/…).
+   * Parâmetros autoritativos passam intactos — o SurvivalFX do espectador
+   * materializa a MESMA regra de dano por altura do jogador.
+   */
+  ingestEvent(e = {}) {
+    if (e?.type !== 'WORLD_HAZARD') return false;
+    const d = e.data ?? {};
+    if (!WORLD_HAZARD_INFO[d.hazard]) return true; // hazard desconhecido: sem fila, sem banner
+    const simEvent = this.#hazardSimEvent(d);
+    if (simEvent) this.#hazardQueue.push(simEvent);
+    if (d.hazard === 'acid') return true; // pulse curto: sem banner persistente
+    if (d.phase === 'end') this.hazardActive = null;
+    else if (d.phase === 'start') this.hazardActive = { hazard: d.hazard, phase: 'active' };
+    return true;
+  }
+
+  #hazardSimEvent(d = {}) {
+    switch (`${d.hazard}:${d.phase}`) {
+      case 'tsunami:start': return { type: 'tsunamiStart', submergeBelowY: d.submergeBelowY ?? 90, durationSeconds: d.durationSeconds ?? 40 };
+      case 'tsunami:end': return { type: 'tsunamiEnd', submergeBelowY: d.submergeBelowY };
+      case 'lava:start': return { type: 'eruptionStart', lavaBelowY: d.lavaBelowY ?? 180, durationSeconds: d.durationSeconds ?? 35 };
+      case 'lava:end': return { type: 'eruptionEnd', lavaBelowY: d.lavaBelowY };
+      case 'gravity:start': return { type: 'gravityAnomalyStart', gravityScale: d.gravityScale ?? .35, anchors: d.anchors ?? [], anchorRadius: d.anchorRadius ?? 28, durationSeconds: d.durationSeconds ?? 30 };
+      case 'gravity:end': return { type: 'gravityAnomalyEnd', gravityScale: d.gravityScale };
+      case 'acid:pulse': return { type: 'acidRain', damage: d.damage ?? 1 };
+      default: return null; // combinação desconhecida nunca quebra a view
+    }
   }
 
   #placeholder() {
@@ -243,7 +306,14 @@ export class SpectatorView {
   }
 
   step() { /* transmissão: nenhum tick local — o estado vem dos batches */ }
-  consumeEvents() { return []; }
+
+  /** Fase 18 — drena a fila de hazard no contrato da sim (handleEvents do Game3D). */
+  consumeEvents() {
+    if (!this.#hazardQueue.length) return [];
+    const out = this.#hazardQueue;
+    this.#hazardQueue = [];
+    return out;
+  }
 }
 
 // ───câmeras de broadcast (puro: devolve pose pos/look, sem tocar câmera)──────
@@ -292,6 +362,14 @@ export function spectatorViewModel(state = {}) {
   const follow = state.followId
     ? (standings.find((p) => p.id === state.followId) ?? null)
     : null;
+  // Fase 18 — hazard ativo da transmissão p/ o banner (#specHazard).
+  // Hazard sem info registrada cai no fallback label=KIND.toUpperCase().
+  const info = WORLD_HAZARD_INFO[state.hazard?.hazard];
+  const hazard = state.hazard ? {
+    label: info?.label ?? String(state.hazard.hazard).toUpperCase(),
+    hint: info?.hint ?? '',
+    kind: state.hazard.hazard,
+  } : null;
   return {
     status: state.status ?? 'AGUARDANDO',
     delaySec: Number.isFinite(state.delayMs) ? Math.round(state.delayMs / 1000) : null,
@@ -299,6 +377,7 @@ export function spectatorViewModel(state = {}) {
     camMode: state.camMode ?? 'RING_CENTER',
     followName: follow ? (follow.displayName ?? follow.name ?? follow.id) : null,
     ring,
+    hazard,
     top: standings.slice(0, 8).map((p, i) => ({
       rank: i + 1,
       id: String(p.id),
@@ -344,6 +423,17 @@ export class SpectatorHUD {
       set('#specAlive', `◇ ${String(vm.alive).padStart(2, '0')} VIVOS`);
       set('#specRing', `RING ${vm.ring.fase} · ${vm.ring.raio} · ${vm.ring.estado} · ${vm.ring.contagem}`);
       root.querySelector('#specRing')?.classList.toggle('shrinking', vm.ring.shrinking);
+      // Fase 18 — banner de hazard da transmissão (TSUNAMI/LAVA/ANOMALIA/ÁCIDO)
+      const hz = root.querySelector('#specHazard');
+      if (hz) {
+        if (vm.hazard) {
+          hz.textContent = `${vm.hazard.label} — ${vm.hazard.hint}`;
+          hz.className = `spec-hazard hazard-${vm.hazard.kind}`;
+        } else {
+          hz.textContent = '';
+          hz.className = 'spec-hazard hidden';
+        }
+      }
       // ranking
       const list = root.querySelector('#specStandings');
       if (list) {
@@ -392,6 +482,9 @@ function createSpectatorGame(Game3D) {
         this._specStatus = s;
       };
       remote.onBatch = (batch) => this.view.applyBatch(batch);
+      // Fase 18 — evento bruto do pipeline alimenta a view (contrato da sim):
+      // o handleEvents() do loop processa hazards com SurvivalFX/áudio/avisos.
+      remote.onEvent = (e) => this.view.ingestEvent(e);
       remote.onFeed = (line, e) => {
         this.specHud.pushFeed(line);
         // killfeed clássico (canto superior) também recebe eliminações
@@ -435,8 +528,14 @@ function createSpectatorGame(Game3D) {
       this.animT += dt;
       this.syncLoot();
       this.syncEntities(dt);          // atores atrasados + LOD + frustum (Fase 13)
+      this.handleEvents();            // Fase 18 — hazards da transmissão (FX/áudio/aviso)
       this.updateRing();
       this.updateSkyPhase(dt);
+      // Fase 18 — marcos animados + sobrevivências na TRANSMISSÃO (antes o
+      // espectador via fumaça/marcos congelados e nenhum tsunami/lava).
+      const marksAnim = this.scene.userData.worldMarks?.animators;
+      if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
+      this.survivalFX?.update(dt, this.animT);
       this.updateSpectatorCamera(dt);
       this.effects.update(dt);
       this.specHud.update({
@@ -446,6 +545,7 @@ function createSpectatorGame(Game3D) {
         ringState: this.remote.last?.ringState ?? null,
         camMode: this.camMode,
         followId: this.remote.followPlayerId,
+        hazard: this.view.hazardActive, // Fase 18 — banner do hazard ativo
       });
       if (this.post) this.post.render(dt);
       else this.renderer.render(this.scene, this.camera);
@@ -466,6 +566,10 @@ export async function bootstrapSpectator({ roomId = 'default', camera = null } =
   const remote = new SpectatorRemote({ roomId, camera: camera ?? 'RING_CENTER' });
   const game = new SpectatorGame3D('CIGKV-3D-01', remote);
   remote.connect();
+  // Fase 18 — áudio da transmissão: ctx desbloqueado no 1º gesto (política de
+  // autoplay dos navegadores). Sem gesto, tudo continua no-op com elegância.
+  const unlockAudio = () => { game.audio?.init?.(); game.audio?.resume?.(); };
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
   window.KhaaosSpectator3D = { game, remote };
   return game;
 }

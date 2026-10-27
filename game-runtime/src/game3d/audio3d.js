@@ -6,6 +6,10 @@ export class GameAudio {
     this.ctx = null;
     this.master = null;
     this.enabled = true;
+    // Fase 18 — camadas contínuas de sobrevivência (contrato de estado
+    // testável sem AudioContext: kind → { kind, intensity, startedAt }).
+    this.survivalLayers = {};
+    this.survivalNodes = {};   // kind → nós WebAudio p/ teardown com fade
   }
   init() {
     if (this.ctx) return;
@@ -298,6 +302,202 @@ export class GameAudio {
       osc.connect(g); g.connect(this.master);
       osc.start(t + off); osc.stop(t + off + .18);
     });
+  }
+
+  // ---------- Fase 18 — sobrevivências imersivas + game feel de abate ----------
+  // Camadas CONTÍNUAS de áudio por hazard do mundo (tsunami/lava/gravidade/
+  // ácido): cada camada é um pequeno grafo WebAudio criado no start e
+  // desvanecido no stop (setTargetAtTime) — identidade sonora POR MUNDO em
+  // vez do ringWarn genérico. Sem ctx (headless/testes) tudo é no-op, mas o
+  // CONTRATO de estado (survivalLayers) continua registrado p/ verificação.
+  // Assinaturas curtas (hazardStinger/killConfirm/knockTick) fecham o game
+  // feel: o jogador OUVE o que ameaça e CONFIRMA o que abate.
+
+  // perfis de mixagem por hazard (ganho alvo da camada contínua)
+  #SURVIVAL_GAIN = { tsunami: .5, lava: .55, gravity: .3, acid: .24 };
+
+  /**
+   * Liga/desliga a camada contínua de um hazard.
+   * @param {'tsunami'|'lava'|'gravity'|'acid'} kind
+   * @param {boolean} on
+   * @param {{ intensity?: number, duration?: number }} opts
+   *   intensity escala o ganho (0..1+); duration (s) agenda auto-off (hazard
+   *   curto como a chuva ácida) — só agenda com ctx real (sem timer headless).
+   */
+  survival(kind, on = true, { intensity = 1, duration = 0 } = {}) {
+    if (on) this.survivalLayers[kind] = { kind, intensity, startedAt: Date.now() };
+    else delete this.survivalLayers[kind];
+    if (!this.ctx || !this.enabled) return;
+    if (on && !this.survivalNodes[kind]) {
+      const t = this.ctx.currentTime;
+      const base = (this.#SURVIVAL_GAIN[kind] ?? .3) * Math.max(0, intensity);
+      const mkGain = (target) => {
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.setTargetAtTime(target, t, .7); // fade-in ~2 s
+        g.connect(this.master);
+        return g;
+      };
+      const mkNoise = () => {
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.#noiseBuffer(3); src.loop = true;
+        return src;
+      };
+      const nodes = [], gains = [];
+      if (kind === 'tsunami') {
+        // rumble grave + rush de água modulado (massa d'água se aproximando)
+        const rSrc = mkNoise();
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 95; lp.Q.value = .5;
+        const rG = mkGain(base * .8);
+        rSrc.connect(lp); lp.connect(rG); rSrc.start();
+        const wSrc = mkNoise();
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 560; bp.Q.value = .45;
+        const wG = mkGain(base * .34);
+        const lfo = this.ctx.createOscillator(); lfo.frequency.value = .18;
+        const lfoG = this.ctx.createGain(); lfoG.gain.value = base * .18;
+        lfo.connect(lfoG); lfoG.connect(wG.gain);
+        wSrc.connect(bp); bp.connect(wG); wSrc.start(); lfo.start();
+        nodes.push(rSrc, wSrc, lfo); gains.push(rG, wG);
+      } else if (kind === 'lava') {
+        // rumble vulcânico (sub oscilando) + corpo de fogo abafado
+        const sub = this.ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(36, t);
+        const wob = this.ctx.createOscillator(); wob.frequency.value = .9;
+        const wobG = this.ctx.createGain(); wobG.gain.value = 6;
+        wob.connect(wobG); wobG.connect(sub.frequency);
+        const sG = mkGain(base * .9);
+        sub.connect(sG); sub.start(); wob.start();
+        const fSrc = mkNoise();
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 140; lp.Q.value = .7;
+        const fG = mkGain(base * .5);
+        fSrc.connect(lp); lp.connect(fG); fSrc.start();
+        nodes.push(sub, wob, fSrc); gains.push(sG, fG);
+      } else if (kind === 'gravity') {
+        // hum etéreo: par detunado (batimento) + shimmer alto em tremolo
+        const o1 = this.ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 110;
+        const o2 = this.ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 113.7;
+        const hG = mkGain(base * .8);
+        o1.connect(hG); o2.connect(hG); o1.start(); o2.start();
+        const sh = this.ctx.createOscillator(); sh.type = 'sine'; sh.frequency.value = 660;
+        const shG = mkGain(base * .12);
+        const tre = this.ctx.createOscillator(); tre.frequency.value = 2.4;
+        const treG = this.ctx.createGain(); treG.gain.value = base * .1;
+        tre.connect(treG); treG.connect(shG.gain);
+        sh.connect(shG); sh.start(); tre.start();
+        nodes.push(o1, o2, sh, tre); gains.push(hG, shG);
+      } else if (kind === 'acid') {
+        // hiss de chuva ácida (ruído filtrado agudo)
+        const n = mkNoise();
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 3600; hp.Q.value = .4;
+        const nG = mkGain(base);
+        n.connect(hp); hp.connect(nG); n.start();
+        nodes.push(n); gains.push(nG);
+      }
+      this.survivalNodes[kind] = { nodes, gains };
+      if (duration > 0) {
+        // hazard curto: auto-off programado (áudio real apenas)
+        setTimeout(() => { if (this.survivalLayers[kind]) this.survival(kind, false); }, duration * 1000);
+      }
+    } else if (!on && this.survivalNodes[kind]) {
+      // fade-out e teardown (nós param sozinhos; desconexão tardia segura)
+      const t = this.ctx.currentTime;
+      const { nodes, gains } = this.survivalNodes[kind];
+      for (const g of gains) g.gain.setTargetAtTime(0, t, .45);
+      setTimeout(() => {
+        for (const n of nodes) { try { n.stop?.(); } catch { /* já parado */ } try { n.disconnect?.(); } catch { /* já solto */ } }
+        for (const g of gains) { try { g.disconnect?.(); } catch { /* já solto */ } }
+      }, 1600);
+      delete this.survivalNodes[kind];
+    }
+  }
+
+  /** Mata TODAS as camadas de sobrevivência (fim de partida/espectador sai). */
+  stopAllSurvival() {
+    for (const kind of Object.keys(this.survivalLayers)) this.survival(kind, false);
+  }
+
+  /** Alerta de ENTRADA de hazard — assinatura curta distinta por mundo. */
+  hazardStinger(kind = 'tsunami') {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const tone = (type, f0, f1, at, dur, peak, off = 0) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f0, t + off);
+      if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, at, dur, peak);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + off); osc.stop(t + off + dur + .1);
+    };
+    const noise = (f0, f1, dur, peak, type = 'bandpass', off = 0) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.#noiseBuffer(dur * 2);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = type;
+      bp.frequency.setValueAtTime(f0, t + off);
+      bp.frequency.exponentialRampToValueAtTime(f1, t + off + dur);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, .01, dur, peak);
+      src.connect(bp); bp.connect(g); g.connect(this.master);
+      src.start(t + off); src.stop(t + off + dur * 2 + .05);
+    };
+    switch (kind) {
+      case 'tsunami': // sirene de maremoto: dois dias descendo
+        tone('sawtooth', 196, 98, .02, .9, .3);
+        tone('sawtooth', 199, 100, .02, .9, .18, .02); // detune — batimento
+        break;
+      case 'lava': // duplo estrondo + fenda abrindo
+        tone('sine', 70, 32, .005, .5, .6);
+        tone('sine', 70, 32, .005, .5, .45, .3);
+        noise(500, 90, .7, .3, 'lowpass');
+        break;
+      case 'gravity': // glissando INVERTIDO — o mundo de cabeça pra baixo
+        tone('sine', 220, 880, .01, .55, .26);
+        tone('sine', 227, 908, .01, .55, .18, .03);
+        break;
+      case 'acid': // duplo hiss corrosivo
+        noise(4200, 2600, .16, .3, 'highpass');
+        noise(4200, 2600, .16, .24, 'highpass', .22);
+        break;
+      default: tone('sine', 520, 520, .01, .2, .3);
+    }
+  }
+
+  /** Confirmação de abate (estilo battle royale: tick seco; headshot pinga). */
+  killConfirm(head = false) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const notes = head ? [[1180, 0], [1760, .07]] : [[720, 0], [540, .05]];
+    notes.forEach(([f, off], i) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = head ? 'triangle' : 'square';
+      osc.frequency.setValueAtTime(f, t + off);
+      osc.frequency.exponentialRampToValueAtTime(f * .82, t + off + .05);
+      const g = this.ctx.createGain();
+      this.#env(g, t + off, .001, .05, i ? .32 : .26);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t + off); osc.stop(t + off + .09);
+    });
+  }
+
+  /** Tick de nocaute (alvo derrubado — finalização disponível). */
+  knockTick() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(260, t);
+    osc.frequency.exponentialRampToValueAtTime(150, t + .09);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .002, .09, .3);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + .12);
   }
 
   // ---------- Fase 9 — SFX de habilidade p/ remotos (assinatura por família) ----------

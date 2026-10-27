@@ -429,6 +429,20 @@ body.spectating #hitmarker { display: none !important; }
   background: rgba(255,107,44,.08);
 }
 #spectatorHud .spec-ring.shrinking { color: #ffb52e; border-color: rgba(255,181,46,.7); }
+/* Fase 18 — banner de sobrevivência na transmissão (identidade por mundo) */
+#spectatorHud .spec-hazard {
+  font-size: 10px; letter-spacing: .08em; margin-bottom: 8px; padding: 5px 7px;
+  border-radius: 3px; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35);
+  animation: specHazardPulse 1.6s ease-in-out infinite;
+}
+#spectatorHud .spec-hazard.hazard-tsunami { color: #7fd8e8; border-color: rgba(127,216,232,.75); background: rgba(20,84,96,.32); }
+#spectatorHud .spec-hazard.hazard-lava { color: #ff8a4d; border-color: rgba(255,90,20,.8); background: rgba(96,26,8,.4); }
+#spectatorHud .spec-hazard.hazard-gravity { color: #9fe8ff; border-color: rgba(120,220,255,.7); background: rgba(30,52,96,.35); }
+#spectatorHud .spec-hazard.hazard-acid { color: #a8e86a; border-color: rgba(120,220,60,.7); background: rgba(42,72,18,.35); }
+@keyframes specHazardPulse {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
 #spectatorHud .spec-standings-label { color: var(--muted); font-size: 8px; letter-spacing: .2em; margin-bottom: 4px; }
 #spectatorHud .spec-standings { display: flex; flex-direction: column; gap: 3px; }
 #spectatorHud .spec-row {

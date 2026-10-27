@@ -21,6 +21,7 @@ import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
 import { SurvivalFX } from './survivalfx3d.js';
+import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -126,7 +127,12 @@ export class Game3D {
     this.sun = sun;
     this.ringWall = createRingWall();
     scene.add(this.ringWall);
-    this.effects = new Effects(scene);
+    this.effects = new Effects(scene, {
+      // Fase 18 — partículas de combate no pool compartilhado da cena
+      // (1 draw call p/ TODO o FX: marcos + sobrevivências + combate).
+      particles: scene.userData.particles ?? null,
+      rng: new SeededRng(`${this.seed}:effects`),
+    });
     // fonte da luz segue o jogador (sombras estáveis)
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun.target);
@@ -429,6 +435,7 @@ export class Game3D {
     document.body.classList.remove('spectating');
     this.hud.hideSpectator();
     if (this.firstPersonRig) this.firstPersonRig.visible = this.viewMode === 'fps';
+    this.audio.stopAllSurvival?.(); // Fase 18 — camadas de hazard morrem com a partida
     this.audio.stinger(win);
     this.hud.setMatchStatus(win ? 'SOBREVIVENTE' : 'ELIMINADO');
     this.hud.showEnd(win, stats);
@@ -985,12 +992,15 @@ export class Game3D {
         case 'kill':
           this.hud.killfeed('VOCÊ', e.target, e.head, true);
           this.hud.feed('ABATE', `${e.target} neutralizado.${e.finish ? ' (finalização)' : ''} +${e.xp} XP / +${e.krc} KRC.`, 'good');
+          this.audio?.killConfirm?.(e.head); // Fase 18 — confirmação sonora de abate
           break;
         case 'knock':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
           break;
         case 'botKnocked':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
           break;
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
@@ -1108,38 +1118,45 @@ export class Game3D {
           break;
         }
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
-        // ---------- Fase 17 — sobrevivências do mundo (FX + aviso) ----------
+        // ---------- Fase 17/18 — sobrevivências do mundo (FX + áudio imersivo) ----------
         case 'tsunamiStart':
           this.survivalFX?.handleEvent(e);
           this.shake = Math.max(this.shake, .22);
-          this.audio?.ringWarn?.();
+          this.audio?.survival?.('tsunami', true);
+          this.audio?.hazardStinger?.('tsunami');
           this.hud.feed('SOBREVIVÊNCIA', `TSUNAMI: nível do mar subindo até ${Math.round(e.submergeBelowY ?? 90)}m — busque terreno ALTO (${Math.round(e.durationSeconds ?? 40)}s).`, 'bad');
           break;
         case 'tsunamiEnd':
           this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('tsunami', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
           break;
         case 'eruptionStart':
           this.survivalFX?.handleEvent(e);
           this.shake = Math.max(this.shake, .3);
-          this.audio?.ringWarn?.();
+          this.audio?.survival?.('lava', true);
+          this.audio?.hazardStinger?.('lava');
           this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
           break;
         case 'eruptionEnd':
           this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('lava', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
           break;
         case 'gravityAnomalyStart':
           this.survivalFX?.handleEvent(e);
-          this.audio?.ringWarn?.();
+          this.audio?.survival?.('gravity', true);
+          this.audio?.hazardStinger?.('gravity');
           this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
           break;
         case 'gravityAnomalyEnd':
           this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('gravity', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
           break;
         case 'acidRain':
           this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('acid', true, { duration: 2.2 }); // hiss curto por pulso
           if (!this._acidWarned || performance.now() - this._acidWarned > 30000) {
             this._acidWarned = performance.now();
             this.hud.feed('SOBREVIVÊNCIA', 'Chuva ácida no setor — procure cobertura.', 'warn');
