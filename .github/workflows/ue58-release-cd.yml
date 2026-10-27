@@ -1,0 +1,240 @@
+# Khaaos Run — CI/CD canônico UE5.8 + stress integrado dos cinco mundos
+name: UE5.8 Release CI/CD
+
+on:
+  pull_request:
+    paths:
+      - 'Unreal/**'
+      - 'game-runtime/**'
+      - 'scripts/build/**'
+      - 'scripts/performance/**'
+      - 'docs/performance/**'
+      - '.github/workflows/ue58-release-cd.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/**'
+      - 'game-runtime/**'
+      - 'scripts/build/**'
+      - 'scripts/performance/**'
+      - 'docs/performance/**'
+      - '.github/workflows/ue58-release-cd.yml'
+  workflow_dispatch:
+    inputs:
+      run_engine:
+        description: 'Executar build/stress real no runner UE5.8 licenciado'
+        required: true
+        default: false
+        type: boolean
+      publish:
+        description: 'Publicar o pacote como GitHub Release'
+        required: true
+        default: false
+        type: boolean
+      deploy:
+        description: 'Executar o hook de deploy do ambiente protegido'
+        required: true
+        default: false
+        type: boolean
+      environment:
+        description: 'Ambiente de promoção'
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  group: ue58-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Validate project and runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            game-runtime/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix game-runtime --no-audit --no-fund
+      - name: UE1021 include guard
+        run: |
+          python3 scripts/build/fix_ue1021_includes.py selftest
+          python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun
+      - name: UE5.8 engine-less preflight
+        run: node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun
+      - name: Runtime and TypeScript validation
+        run: |
+          npm run check
+          npm --prefix game-runtime test
+          bash scripts/test_ue5_logic.sh
+
+  stress:
+    name: Stress all five worlds
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run integrated five-world stress proxy
+        run: |
+          mkdir -p artifacts/performance
+          node scripts/performance/ue58_all_world_stress.mjs \
+            --duration-seconds 30 \
+            --players-per-world 60 \
+            --run-engine \
+            --output artifacts/performance/ue58-all-worlds-stress.json \
+            --markdown docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ue58-performance-${{ github.sha }}
+          path: |
+            artifacts/performance/ue58-all-worlds-stress.json
+            docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md
+          retention-days: 30
+
+  ue-build:
+    name: Build and cook UE5.8 package
+    needs: [validate, stress]
+    if: inputs.run_engine == true && vars.UE58_ENABLED == 'true'
+    runs-on: [self-hosted, linux, ue5.8, x64]
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      UE5_ROOT: ${{ vars.UE5_ROOT || '/opt/UnrealEngine' }}
+      UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Verify UE5.8 installation
+        run: |
+          test -x "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd"
+          test -x "$UE5_ROOT/Engine/Build/BatchFiles/Linux/Build.sh"
+      - name: Build dedicated server Shipping
+        run: |
+          "$UE5_ROOT/Engine/Build/BatchFiles/Linux/Build.sh" \
+            KhaaosRunServer Linux Shipping "$UPROJECT" -waitmutex
+      - name: Cook, stage and pak all configured maps
+        run: |
+          mkdir -p Build/Staging
+          "$UE5_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
+            -project="$UPROJECT" -noP4 -utf8output -serverconfig=Shipping \
+            -server -build -cook -stage -pak -archive \
+            -archivedirectory="${{ github.workspace }}/Build/Staging"
+      - name: Run UE5.8 stress hook
+        env:
+          UE5_WORLD_STRESS_COMMAND: ${{ vars.UE5_WORLD_STRESS_COMMAND }}
+        run: |
+          test -n "$UE5_WORLD_STRESS_COMMAND"
+          node scripts/performance/ue58_all_world_stress.mjs --run-engine \
+            --duration-seconds 60 --players-per-world 60 \
+            --output Build/Staging/ue58-all-worlds-stress.json \
+            --markdown Build/Staging/UE58_LIVE_ACTION_FPS_REPORT.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ue58-cooked-${{ github.sha }}
+          path: Build/Staging
+          retention-days: 30
+
+  package:
+    name: Package final release
+    needs: [validate, stress, ue-build]
+    if: always() && needs.validate.result == 'success' && needs.stress.result == 'success' && (needs.ue-build.result == 'success' || needs.ue-build.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ue58-performance-${{ github.sha }}
+          path: .
+      - name: Download cooked package when the engine job ran
+        if: needs.ue-build.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ue58-cooked-${{ github.sha }}
+          path: Build/Staging
+      - name: Create reproducible release archive
+        run: |
+          python3 scripts/build/package_ue58_release.py \
+            --staging Build/Staging \
+            --output artifacts/release/khaaos-run-ue58-${{ github.sha }}.tar.gz \
+            --report artifacts/release/khaaos-run-ue58-${{ github.sha }}.report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: khaaos-run-ue58-release-${{ github.sha }}
+          path: |
+            artifacts/release/khaaos-run-ue58-${{ github.sha }}.tar.gz
+            artifacts/release/khaaos-run-ue58-${{ github.sha }}.report.json
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub Release
+    needs: package
+    if: inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: khaaos-run-ue58-release-${{ github.sha }}
+          path: artifacts/release
+      - name: Publish package and report
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+          name: Khaaos Run UE5.8 build ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            artifacts/release/khaaos-run-ue58-${{ github.sha }}.tar.gz
+            artifacts/release/khaaos-run-ue58-${{ github.sha }}.report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy final package
+    needs: [package, publish]
+    if: inputs.deploy == true && inputs.publish == true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: khaaos-run-ue58-release-${{ github.sha }}
+          path: artifacts/release
+      - name: Execute protected deployment hook
+        env:
+          KHAAOS_DEPLOY_COMMAND: ${{ secrets.KHAAOS_DEPLOY_COMMAND }}
+          PACKAGE: artifacts/release/khaaos-run-ue58-${{ github.sha }}.tar.gz
+          ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+        run: |
+          if [ -z "$KHAAOS_DEPLOY_COMMAND" ]; then
+            echo "::error::Configure KHAAOS_DEPLOY_COMMAND in the protected environment $ENVIRONMENT"
+            exit 1
+          fi
+          export KHAAOS_PACKAGE="$PACKAGE"
+          export KHAAOS_ENVIRONMENT="$ENVIRONMENT"
+          bash -lc "$KHAAOS_DEPLOY_COMMAND"
