@@ -1,9 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 // Airdrop Manager — Spawns airdrops based on ring phase with probability
 
-#include "Ring/KhaaosAirdropManager.h"
-#include "Ring/KhaaosRingSubsystem.h"
-#include "Engine/World.h"
+#include "Game/Ring/KhaaosAirdropManager.h"#include "Game/Ring/KhaaosRingSubsystem.h"#include "Engine/World.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 

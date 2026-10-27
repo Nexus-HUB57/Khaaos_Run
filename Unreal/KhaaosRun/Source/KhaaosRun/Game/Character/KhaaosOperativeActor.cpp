@@ -2,8 +2,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/KhaaosOperativeActor.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
-
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 DEFINE_LOG_CATEGORY_STATIC(LogKhaaosOperative, Log, All);
 
 AKhaaosOperativeActor::AKhaaosOperativeActor()

@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Ring/KhaaosRingManager.h"
-#include "Ring/KhaaosAirdropManager.generated.h"
+#include "Game/Ring/KhaaosRingManager.h"#include "Ring/KhaaosAirdropManager.generated.h"
 
 UENUM(BlueprintType)
 enum class EAirdropType : uint8

@@ -1,8 +1,7 @@
 // Khaaos Run — Emote System Implementation
 // ==========================================
 
-#include "Character/KhaaosEmoteSystem.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Game/Character/KhaaosEmoteSystem.h"#include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "NiagaraFunctionLibrary.h"

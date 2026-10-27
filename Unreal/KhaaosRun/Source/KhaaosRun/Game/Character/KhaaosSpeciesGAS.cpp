@@ -1,8 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Character/KhaaosSpeciesGAS.h"
-#include "AbilitySystemComponent.h"
+#include "Game/Character/KhaaosSpeciesGAS.h"#include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"
 #include "GameplayAbilitySpec.h"
 #include "Engine/DataTable.h"

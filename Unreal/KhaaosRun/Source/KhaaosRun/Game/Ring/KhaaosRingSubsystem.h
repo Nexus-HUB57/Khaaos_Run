@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "Ring/KhaaosRingManager.h"
-#include "Ring/KhaaosRingSubsystem.generated.h"
+#include "Game/Ring/KhaaosRingManager.h"#include "Ring/KhaaosRingSubsystem.generated.h"
 
 USTRUCT(BlueprintType)
 struct FRingWorldConfig
