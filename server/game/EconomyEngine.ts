@@ -15,6 +15,7 @@
  */
 
 import { Rarity, ItemType } from "@shared/schema";
+import { computeLoanTerms, LOAN_DAILY_INTEREST_PERCENT } from "@shared/money";
 
 // ─── Tunable parameters (live balance knobs) ─────────────────────────────────
 
@@ -55,11 +56,11 @@ export const EconomyConfig = {
   /** Fraction of purchase price that is burned (removed from circulation) */
   burnRateOnPurchase: 0.35,
 
-  /** Loan interest rate per day */
-  loanDailyInterest: 0.04,
+  /** Loan interest rate per day — DERIVADO do contrato canônico (shared/money). Não editar à mão. */
+  loanDailyInterest: Number(LOAN_DAILY_INTEREST_PERCENT) / 100,
 
-  /** Max concurrent open loans per player */
-  maxOpenLoans: 2,
+  /** Max concurrent open loans per player — espelha o limite aplicado por EconomyService.requestLoan (autoridade: serviço). */
+  maxOpenLoans: 3,
 
   /** Target velocity of KRC (transactions per player per day) for health checks */
   targetVelocity: 3.5,
@@ -188,14 +189,18 @@ export function probeEconomyHealth(params: {
 
 // ─── Loan pricing ────────────────────────────────────────────────────────────
 
+/**
+ * M2: delega ao contrato canônico `computeLoanTerms` (shared/money) —
+ * a MESMA função usada pela cobrança em EconomyService.requestLoan.
+ * Aritmética em minor units (bigint); sem juros de ponto flutuante.
+ */
 export function computeLoan(principal: number, days: number) {
-  const interest = principal * EconomyConfig.loanDailyInterest * days;
-  const totalDue = principal + interest;
+  const terms = computeLoanTerms(principal, days);
   return {
-    principal,
-    interest: Math.round(interest * 100) / 100,
-    totalDue: Math.round(totalDue * 100) / 100,
-    days,
-    apr: EconomyConfig.loanDailyInterest * 365,
+    principal: terms.principal,
+    interest: terms.interest,
+    totalDue: terms.totalDue,
+    days: terms.days,
+    apr: Number(terms.apr),
   };
 }

@@ -1,7 +1,27 @@
 import { createHash } from "node:crypto";
-import { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits } from "@shared/money";
+import {
+  calculateLoanInterestMinorUnits,
+  computeLoanTerms,
+  fromMinorUnits,
+  LOAN_DAYS_MAX,
+  LOAN_DAYS_MIN,
+  LOAN_DAILY_INTEREST_PERCENT,
+  LOAN_PRINCIPAL_MAX_KRC,
+  LOAN_PRINCIPAL_MIN_KRC,
+  toMinorUnits,
+} from "@shared/money";
 
-export { calculateLoanInterestMinorUnits, fromMinorUnits, toMinorUnits };
+export {
+  calculateLoanInterestMinorUnits,
+  computeLoanTerms,
+  fromMinorUnits,
+  LOAN_DAYS_MAX,
+  LOAN_DAYS_MIN,
+  LOAN_DAILY_INTEREST_PERCENT,
+  LOAN_PRINCIPAL_MAX_KRC,
+  LOAN_PRINCIPAL_MIN_KRC,
+  toMinorUnits,
+};
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);

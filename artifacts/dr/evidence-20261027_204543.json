@@ -1,0 +1,34 @@
+{
+  "timestamp": "20261027_204543",
+  "gate": "M2 backup/restore com RPO/RTO",
+  "environment": "ephemeral embedded PostgreSQL 16 (disposable *_dr/*_restore databases)",
+  "backup": {
+    "tool": "pg_dump -Fc (single transaction)",
+    "file": "/home/z/my-project/khaaos-run/artifacts/dr/khaaos_dr_20261027_204543.dump",
+    "size_bytes": 31070,
+    "sha256": "98eec61a617be95888fe2f488af36fe28e7371dc96f6a7a0899d8002ebf20300",
+    "duration_ms": 35,
+    "t_backup_utc": "2026-10-27T20:45:43Z",
+    "wal_lsn_at_backup": "0/49894A8"
+  },
+  "restore": {
+    "tool": "pg_restore --no-owner -1",
+    "database": "khaaos_restore_target",
+    "t_disaster_utc": "2026-10-27T20:45:44Z",
+    "rto_ms": 42
+  },
+  "verification": {
+    "row_counts_before": { "loans": 1, "transactions": 1, "bank_accounts": 3, "economy_ledger_entries": 2 },
+    "checksums_match_pre_disaster": true,
+    "ledger_net": "0",
+    "economic_constraints_present": 2,
+    "append_only_triggers_present": 3,
+    "failures": 0
+  },
+  "rpo": {
+    "definition": "linhas confirmadas após o fim do backup e perdidas no desastre",
+    "post_backup_writes_lost": 1,
+    "evidence_row": "dr-dave ausente no restore",
+    "operational_target": "pg_dump por janela agendada; RPO <= intervalo entre backups (recomendado: 5 min via WAL contínuo em staging)"
+  }
+}

@@ -630,6 +630,8 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     try {
       const input = parseMutationBody(req, res, loanPreviewInput);
       if (!input) return;
+      // M2: preview usa o MESMO contrato canônico da cobrança (computeLoanTerms
+      // via EconomyEngine.computeLoan) — gate loan-parity: preview === débito.
       res.json(computeLoan(input.principal, input.days));
     } catch {
       res.status(400).json({ message: "Invalid loan params" });
