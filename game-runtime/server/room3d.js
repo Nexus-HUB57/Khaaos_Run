@@ -29,6 +29,20 @@ import { TRAIN_INTRO_DURATION_MS } from '../src/shared/clock.js';
 // Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
 const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
+// Fase 18 — espelho de hazard p/ a TRANSMISSÃO: evento da sim/servidor →
+// vocabulário WORLD_HAZARD { hazard, phase }. O payload autoritativo
+// (submergeBelowY/lavaBelowY/anchors/gravityScale) segue intacto — o cliente
+// materializa a MESMA regra de dano por altura com o SurvivalFX dele.
+const HAZARD_SPECTATOR_MIRROR = Object.freeze({
+  tsunamiStart: { hazard: 'tsunami', phase: 'start' },
+  tsunamiEnd: { hazard: 'tsunami', phase: 'end' },
+  eruptionStart: { hazard: 'lava', phase: 'start' },
+  eruptionEnd: { hazard: 'lava', phase: 'end' },
+  gravityAnomalyStart: { hazard: 'gravity', phase: 'start' },
+  gravityAnomalyEnd: { hazard: 'gravity', phase: 'end' },
+  acidRain: { hazard: 'acid', phase: 'pulse' },
+});
+
 export const OPERATIVE_IDS = Object.keys(OPERATIVE_ABILITIES);
 export const ABILITY_TICK_RATE = 30; // convenção de ticks no snapshot (igual à sim offline)
 
@@ -153,6 +167,12 @@ export class MatchRoom3D {
     } else if (type === 'pulse') {
       this.spectatorLogEvent('RING_PHASE', { phase: payload.pulse, isShrinking: true });
     }
+    // Fase 18 — sobrevivências do mundo na TRANSMISSÃO: o espectador vê o
+    // tsunami/lava/anomalia com os MESMOS FX (SurvivalFX), áudio e banner.
+    // Parâmetros autoritativos (submergeBelowY/lavaBelowY/anchors) vão no
+    // payload — o cliente materializa a MESMA regra de dano por altura.
+    const mirror = HAZARD_SPECTATOR_MIRROR[type];
+    if (mirror) this.spectatorLogEvent('WORLD_HAZARD', { hazard: mirror.hazard, phase: mirror.phase, ...payload });
   }
   // Fase 14 — evento para a transmissão (público: testes/pipeline externo).
   // Ring buffer de 24: batches consomem no máx. 20 eventos por lote.

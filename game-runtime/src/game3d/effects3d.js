@@ -1,16 +1,24 @@
-// Khaaos Run — Efeitos: tracers, muzzle flash, impactos, explosões e partículas (pooled).
+// Khaaos Run — Efeitos: tracers, muzzle flash, impactos, explosões e partículas.
+// Fase 18 — partículas de combate migram para o POOL da cena (particles3d.js,
+// 1 draw call, determinístico com SeededRng injetado): impactos, sangue,
+// fumaça/faíscas de explosão, cristais de gloo e fumaça de muzzle. Sem pool
+// (testes headless antigos / fallback), o caminho legado de sprites segue
+// intacto — zero quebra de contrato.
 import * as THREE from 'three';
 import { radialSprite } from './textures3d.js';
 
 export class Effects {
   #restoreMuzzleColor = 0;
-  constructor(scene) {
+  constructor(scene, { particles = null, rng = null } = {}) {
     this.scene = scene;
     this.tracers = [];
     this.flashes = [];
     this.particles = [];
     this.explosions = [];
     this.abilityAuras = []; // Fase 9 — auras de habilidade (remotos vêem o cast)
+    // Fase 18 — pool compartilhado + rng injetado (determinismo); null = legado
+    this.pool = particles;
+    this.rng = rng;
     this.spriteTex = radialSprite();
     this.sparkTex = radialSprite('rgba(255,240,200,1)', 'rgba(255,160,60,0)');
     this.bloodTex = radialSprite('rgba(200,30,30,1)', 'rgba(120,10,10,0)');
@@ -53,9 +61,65 @@ export class Effects {
     this.muzzleLight.position.copy(pos);
     this.muzzleLight.intensity = 26;
     this.muzzleLightT = .05;
+    // Fase 18 — fumaça de queima rápida + 2 faíscas no pool (envelope curto)
+    if (this.pool) {
+      const rnd = this.rng ? () => this.rng.next() : Math.random;
+      this.pool.spawn({
+        x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * .6, vy: .9 + rnd() * .5, vz: (rnd() - .5) * .6,
+        size: .3 + rnd() * .22, growth: .8, life: .3 + rnd() * .25, drag: .3, gravity: -0.4, alpha: .32,
+        color: [.82, .78, .7], endColor: [.5, .48, .45],
+      });
+      for (let i = 0; i < 2; i++) {
+        this.pool.spawn({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 5, vy: rnd() * 2.6, vz: (rnd() - .5) * 5,
+          size: .05 + rnd() * .05, growth: -.04, life: .12 + rnd() * .12, drag: .08, gravity: 9, alpha: .95,
+          color: [1, .8, .4], endColor: [.85, .3, .06],
+        });
+      }
+    }
   }
 
   impact(pos, kind = 'wall') {
+    // Fase 18 — caminho do POOL (determinístico): faíscas de solda em
+    // superfície, poeira no chão e sangue — cores/verbos por kind.
+    if (this.pool) {
+      const rnd = this.rng ? () => this.rng.next() : Math.random;
+      const burst = (n, fn) => { for (let i = 0; i < n; i++) this.pool.spawn(fn()); };
+      if (kind === 'blood') {
+        burst(9, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 4.6, vy: rnd() * 3.4 + .6, vz: (rnd() - .5) * 4.6,
+          size: .1 + rnd() * .09, growth: -.02, life: .3 + rnd() * .28, drag: .06, gravity: 14, alpha: .92,
+          color: [.55, .06, .05], endColor: [.25, .02, .02],
+        }));
+        return;
+      }
+      if (kind === 'ground') {
+        burst(7, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 3.6, vy: 1.4 + rnd() * 2.6, vz: (rnd() - .5) * 3.6,
+          size: .08 + rnd() * .08, growth: .05, life: .28 + rnd() * .3, drag: .05, gravity: 11, alpha: .85,
+          color: [.5, .44, .34], endColor: [.3, .27, .22],
+        }));
+        burst(2, () => ({
+          x: pos.x, y: pos.y + .05, z: pos.z, vx: (rnd() - .5) * .7, vy: .6 + rnd() * .5, vz: (rnd() - .5) * .7,
+          size: .3 + rnd() * .2, growth: 1.1, life: .5 + rnd() * .25, drag: .4, gravity: -0.5, alpha: .3,
+          color: [.55, .5, .42], endColor: [.38, .35, .3],
+        }));
+        return;
+      }
+      // wall / gloo: faíscas quentes + poeira de rasgo
+      burst(10, () => ({
+        x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.4, vy: rnd() * 4.4 + .8, vz: (rnd() - .5) * 6.4,
+        size: .05 + rnd() * .06, growth: -.03, life: .22 + rnd() * .3, drag: .06, gravity: 9.5, alpha: .95,
+        color: [1, .8, .38], endColor: [.85, .32, .07],
+      }));
+      burst(2, () => ({
+        x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * .8, vy: .5 + rnd() * .6, vz: (rnd() - .5) * .8,
+        size: .22 + rnd() * .18, growth: .9, life: .4 + rnd() * .2, drag: .4, gravity: -0.5, alpha: .3,
+        color: [.6, .58, .54], endColor: [.42, .4, .38],
+      }));
+      return;
+    }
+    // ---------- caminho legado (sprites) — fallback sem pool ----------
     const n = kind === 'ground' ? 8 : 12;
     for (let i = 0; i < n; i++) {
       const p = this.#getParticle(kind === 'blood' ? this.bloodTex : this.sparkTex);
@@ -78,7 +142,7 @@ export class Effects {
     }
   }
 
-  hitFlesh(pos) { this.impact(pos, 'blood'); }
+  hitFlesh(pos) { this.impact(pos, 'blood'); } // Fase 18 — pool já resolve 'blood' dentro de impact
 
   // Fase 5 — orifícios de bala: marcas escuras que grudam na superfície e somem.
   // Pool fixo (mais antigo é reciclado) — sem crescimento descontrolado.
@@ -124,6 +188,27 @@ export class Effects {
     fire.scale.set(.5, .5, 1);
     this.scene.add(fire);
     this.explosions.push({ mesh: fire, life: .38, max: 4.6 });
+    // Fase 18 — fumaça + faíscas no POOL (determinístico)
+    if (this.pool) {
+      const rnd = this.rng ? () => this.rng.next() : Math.random;
+      for (let i = 0; i < 10; i++) {
+        this.pool.spawn({
+          x: pos.x + (rnd() - .5) * 1.4, y: pos.y + rnd() * .5, z: pos.z + (rnd() - .5) * 1.4,
+          vx: (rnd() - .5) * 2.4, vy: 1.6 + rnd() * 2.2, vz: (rnd() - .5) * 2.4,
+          size: .8 + rnd() * .9, growth: 1.5, life: .9 + rnd() * .7, drag: .5, gravity: -1.2, alpha: .5,
+          color: [.3, .28, .26], endColor: [.46, .44, .42],
+        });
+      }
+      for (let i = 0; i < 16; i++) {
+        this.pool.spawn({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 15, vy: rnd() * 8.4 + 2, vz: (rnd() - .5) * 15,
+          size: .07 + rnd() * .07, growth: -.05, life: .3 + rnd() * .35, drag: .04, gravity: 15, alpha: .95,
+          color: [1, .66, .2], endColor: [.42, .1, .03],
+        });
+      }
+      return;
+    }
+    // ---------- caminho legado (sprites) — fallback sem pool ----------
     // fumaça (normal blending, sobe lentamente)
     for (let i = 0; i < 10; i++) {
       const p = this.#getParticle(this.smokeTex);
@@ -150,6 +235,20 @@ export class Effects {
 
   // Fase 4 — impacto/deploy de Gloo Wall (cristalização)
   glooPuff(pos) {
+    // Fase 18 — cristais no POOL (azul-gelo subindo)
+    if (this.pool) {
+      const rnd = this.rng ? () => this.rng.next() : Math.random;
+      for (let i = 0; i < 8; i++) {
+        this.pool.spawn({
+          x: pos.x + (rnd() - .5) * 2.4, y: pos.y + rnd() * 2.2, z: pos.z + (rnd() - .5) * .8,
+          vx: (rnd() - .5) * 1.2, vy: .6 + rnd(), vz: (rnd() - .5) * 1.2,
+          size: .3 + rnd() * .3, growth: .5, life: .5 + rnd() * .4, drag: .3, gravity: -0.6, alpha: .55,
+          color: [.6, .88, .96], endColor: [.36, .62, .82],
+        });
+      }
+      return;
+    }
+    // ---------- caminho legado (sprites) ----------
     for (let i = 0; i < 8; i++) {
       const p = this.#getParticle(this.smokeTex);
       p.mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - .5) * 2.4, Math.random() * 2.2, (Math.random() - .5) * .8));
