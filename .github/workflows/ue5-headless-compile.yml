@@ -63,6 +63,19 @@ jobs:
           echo "UE5 found: ${UE_INSTALL_DIR}"
           ls "${UE_INSTALL_DIR}/Engine/Binaries/Linux/" | head -5
 
+      - name: Resolve EAC SDK (real vs stub)
+        # SDK real do EAC (KHAAOS_EAC_SDK_DIR / EACSDK/ local / EAC_SDK_URL).
+        # Sem SDK o build segue em stub — nunca quebra (contrato UE1040);
+        # go-live usa --require em pipeline de produção.
+        run: |
+          set -euo pipefail
+          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
+          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
+          if [[ "${EAC_SDK_MODE}" == "real" ]]; then
+            echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV
+          fi
+          echo "EAC mode: ${EAC_SDK_MODE}"
+
       - name: Generate Project Files
         run: |
           bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
@@ -91,6 +104,7 @@ jobs:
           echo "| Config | ${{ github.event.inputs.configuration || 'Development' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Target | ${{ github.event.inputs.target || 'Server' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| UE5 | $(cat ${UE_INSTALL_DIR}/Engine/Build/Build.version 2>/dev/null | grep MajorVersion || echo '5.8') |" >> $GITHUB_STEP_SUMMARY
+          echo "| EAC SDK | ${EAC_SDK_MODE:-stub} (real exige 'EAC Status: Active' no smoke) |" >> $GITHUB_STEP_SUMMARY
           echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
 
   validate-replication:

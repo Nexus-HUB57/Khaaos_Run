@@ -83,6 +83,19 @@ jobs:
         with:
           lfs: true
 
+      - name: Resolve EAC SDK (real vs stub)
+        # SDK real do EAC (KHAAOS_EAC_SDK_DIR / EACSDK/ local / EAC_SDK_URL).
+        # Sem SDK o build segue em stub — nunca quebra (contrato UE1040);
+        # go-live usa bash scripts/build/setup_eac_sdk.sh --require.
+        run: |
+          set -euo pipefail
+          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
+          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
+          if [[ "${EAC_SDK_MODE}" == "real" ]]; then
+            echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV
+          fi
+          echo "EAC mode: ${EAC_SDK_MODE}"
+
       - name: Build target with UBT
         env:
           UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject

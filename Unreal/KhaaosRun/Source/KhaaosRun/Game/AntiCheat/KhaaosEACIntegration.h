@@ -21,12 +21,12 @@ class UKhaaosAntiCheat;
 UENUM(BlueprintType)
 enum class EKhaaosEACStatus : uint8
 {
-	NotInitialized   UMETA(DisplayName = "Not Initialized"),
-	Initializing     UMETA(DisplayName = "Initializing"),
-	Running          UMETA(DisplayName = "Running"),
-	Failed           UMETA(DisplayName = "Failed"),
-	ShuttingDown     UMETA(DisplayName = "Shutting Down"),
-	Disabled         UMETA(DisplayName = "Disabled")
+        NotInitialized   UMETA(DisplayName = "Not Initialized"),
+        Initializing     UMETA(DisplayName = "Initializing"),
+        Running          UMETA(DisplayName = "Running"),
+        Failed           UMETA(DisplayName = "Failed"),
+        ShuttingDown     UMETA(DisplayName = "Shutting Down"),
+        Disabled         UMETA(DisplayName = "Disabled")
 };
 
 // ─── EAC Violation Severity ──────────────────────────────────────────────────
@@ -40,10 +40,10 @@ enum class EKhaaosEACStatus : uint8
 UENUM(BlueprintType)
 enum class EKhaaosEACViolationSeverity : uint8
 {
-	Informational  UMETA(DisplayName = "Informational"),
-	Minor          UMETA(DisplayName = "Minor"),
-	Major          UMETA(DisplayName = "Major"),
-	Critical       UMETA(DisplayName = "Critical")
+        Informational  UMETA(DisplayName = "Informational"),
+        Minor          UMETA(DisplayName = "Minor"),
+        Major          UMETA(DisplayName = "Major"),
+        Critical       UMETA(DisplayName = "Critical")
 };
 
 // ─── EAC Violation Event ─────────────────────────────────────────────────────
@@ -57,35 +57,35 @@ enum class EKhaaosEACViolationSeverity : uint8
 USTRUCT(BlueprintType)
 struct FKhaaosEACViolation
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
-	/** ID do jogador que violou. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	int32 PlayerId = -1;
+        /** ID do jogador que violou. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        int32 PlayerId = -1;
 
-	/** Tipo de violação (string do EAC SDK). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString ViolationType;
+        /** Tipo de violação (string do EAC SDK). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString ViolationType;
 
-	/** Severidade da violação. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	EKhaaosEACViolationSeverity Severity = EKhaaosEACViolationSeverity::Minor;
+        /** Severidade da violação. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        EKhaaosEACViolationSeverity Severity = EKhaaosEACViolationSeverity::Minor;
 
-	/** Descrição detalhada da violação. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString Description;
+        /** Descrição detalhada da violação. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString Description;
 
-	/** Timestamp da violação. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString Timestamp;
+        /** Timestamp da violação. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString Timestamp;
 
-	/** ID da sessão de jogo quando a violação ocorreu. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString GameSessionId;
+        /** ID da sessão de jogo quando a violação ocorreu. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString GameSessionId;
 
-	/** Se a violação resultou em strike. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bStrikeIssued : 1;
+        /** Se a violação resultou em strike. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bStrikeIssued : 1;
 };
 
 // ─── EAC Client Info ─────────────────────────────────────────────────────────
@@ -98,31 +98,31 @@ struct FKhaaosEACViolation
 USTRUCT(BlueprintType)
 struct FKhaaosEACClientInfo
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
-	/** ID do jogador. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	int32 PlayerId = -1;
+        /** ID do jogador. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        int32 PlayerId = -1;
 
-	/** EAC Session Handle (server-side). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString EACSessionHandle;
+        /** EAC Session Handle (server-side). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString EACSessionHandle;
 
-	/** Se o cliente está validado pelo EAC. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bIsValidated : 1;
+        /** Se o cliente está validado pelo EAC. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bIsValidated : 1;
 
-	/** Número de violações do cliente. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	int32 ViolationCount = 0;
+        /** Número de violações do cliente. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        int32 ViolationCount = 0;
 
-	/** Timestamp do registro. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString RegistrationTimestamp;
+        /** Timestamp do registro. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString RegistrationTimestamp;
 
-	/** Se o cliente está conectado. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bIsConnected : 1;
+        /** Se o cliente está conectado. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bIsConnected : 1;
 };
 
 // ─── EAC Production Metrics ──────────────────────────────────────────────────
@@ -135,35 +135,35 @@ struct FKhaaosEACClientInfo
 USTRUCT(BlueprintType)
 struct FKhaaosEACMetrics
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
-	/** Total de clientes registrados. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 RegisteredClients = 0;
+        /** Total de clientes registrados. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 RegisteredClients = 0;
 
-	/** Total de violações detectadas. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 ViolationsDetected = 0;
+        /** Total de violações detectadas. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 ViolationsDetected = 0;
 
-	/** Total de strikes emitidos via integração. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 StrikesIssued = 0;
+        /** Total de strikes emitidos via integração. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 StrikesIssued = 0;
 
-	/** Total de kicks por EAC. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 PlayerKicks = 0;
+        /** Total de kicks por EAC. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 PlayerKicks = 0;
 
-	/** Total de sessões validadas. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 SessionsValidated = 0;
+        /** Total de sessões validadas. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 SessionsValidated = 0;
 
-	/** Total de falhas de validação. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	int32 ValidationFailures = 0;
+        /** Total de falhas de validação. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        int32 ValidationFailures = 0;
 
-	/** Uptime do EAC em segundos. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
-	float UptimeSeconds = 0.0f;
+        /** Uptime do EAC em segundos. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC|Metrics")
+        float UptimeSeconds = 0.0f;
 };
 
 // ─── Delegates ───────────────────────────────────────────────────────────────
@@ -211,245 +211,248 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnEACClientValidated, int32, Playe
 UCLASS(Config = Game, defaultconfig, meta = (DisplayName = "Khaaos EAC Integration"))
 class UKhaaosEACIntegration : public UGameInstanceSubsystem
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
 public:
-	UKhaaosEACIntegration();
+        UKhaaosEACIntegration();
 
-	// ─── Lifecycle ────────────────────────────────────────────────────────────
+        // ─── Lifecycle ────────────────────────────────────────────────────────────
 
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-	virtual void Deinitialize() override;
+        virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+        virtual void Deinitialize() override;
 
-	// ─── EAC SDK Initialization ───────────────────────────────────────────────
+        // ─── EAC SDK Initialization ───────────────────────────────────────────────
 
-	/**
-	 * Inicializa o EAC SDK.
-	 * No servidor: inicia eac_server.
-	 * No cliente: inicia eac_client.
-	 *
-	 * @param ProductId    EOS Product ID (EAC usa o mesmo)
-	 * @param SandboxId    EOS Sandbox ID
-	 * @param DeploymentId EOS Deployment ID
-	 * @param bIsDedicatedServer  Se é servidor dedicado
-	 * @return true se inicialização foi iniciada com sucesso
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	bool InitializeEAC(const FString& ProductId, const FString& SandboxId,
-		const FString& DeploymentId, bool bIsDedicatedServer);
+        /**
+         * Inicializa o EAC SDK.
+         * No servidor: inicia eac_server.
+         * No cliente: inicia eac_client.
+         *
+         * @param ProductId    EOS Product ID (EAC usa o mesmo)
+         * @param SandboxId    EOS Sandbox ID
+         * @param DeploymentId EOS Deployment ID
+         * @param bIsDedicatedServer  Se é servidor dedicado
+         * @return true se inicialização foi iniciada com sucesso
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        bool InitializeEAC(const FString& ProductId, const FString& SandboxId,
+                const FString& DeploymentId, bool bIsDedicatedServer);
 
-	/** Shutdown do EAC SDK. Libera todos os handles. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void ShutdownEAC();
+        /** Shutdown do EAC SDK. Libera todos os handles. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void ShutdownEAC();
 
-	// ─── Client Operations ────────────────────────────────────────────────────
+        // ─── Client Operations ────────────────────────────────────────────────────
 
-	/**
-	 * Inicia o anti-cheat no cliente.
-	 * Deve ser chamado após EOS login e antes de entrar em partida.
-	 * @return true se EAC client foi iniciado com sucesso
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	bool StartAntiCheat();
+        /**
+         * Inicia o anti-cheat no cliente.
+         * Deve ser chamado após EOS login e antes de entrar em partida.
+         * @return true se EAC client foi iniciado com sucesso
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        bool StartAntiCheat();
 
-	/** Para o anti-cheat no cliente. Chamado ao sair da partida. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void StopAntiCheat();
+        /** Para o anti-cheat no cliente. Chamado ao sair da partida. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void StopAntiCheat();
 
-	/**
-	 * Define o ID da sessão de jogo atual no EAC client.
-	 * O EAC usa isso para correlacionar violações com sessões.
-	 * @param SessionId  ID da sessão (do EOS Session)
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void SetGameSessionId(const FString& SessionId);
+        /**
+         * Define o ID da sessão de jogo atual no EAC client.
+         * O EAC usa isso para correlacionar violações com sessões.
+         * @param SessionId  ID da sessão (do EOS Session)
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void SetGameSessionId(const FString& SessionId);
 
-	/**
-	 * Registra handler para mensagens do EAC (client-side).
-	 * Mensagens incluem: kick, update required, etc.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void RegisterMessageHandler();
+        /**
+         * Registra handler para mensagens do EAC (client-side).
+         * Mensagens incluem: kick, update required, etc.
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void RegisterMessageHandler();
 
-	// ─── Server Operations ────────────────────────────────────────────────────
+        // ─── Server Operations ────────────────────────────────────────────────────
 
-	/**
-	 * Registra um cliente no EAC server.
-	 * Chamado quando um jogador entra na partida.
-	 * @param PlayerId  ID do jogador
-	 * @param ClientHandle  Handle do cliente (do EAC SDK)
-	 * @return true se registro foi bem-sucedido
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	bool RegisterClient(int32 PlayerId, const FString& ClientHandle);
+        /**
+         * Registra um cliente no EAC server.
+         * Chamado quando um jogador entra na partida.
+         * @param PlayerId  ID do jogador
+         * @param ClientHandle  Handle do cliente (do EAC SDK)
+         * @return true se registro foi bem-sucedido
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        bool RegisterClient(int32 PlayerId, const FString& ClientHandle);
 
-	/**
-	 * Desregistra um cliente do EAC server.
-	 * Chamado quando um jogador sai da partida.
-	 * @param PlayerId  ID do jogador
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void UnregisterClient(int32 PlayerId);
+        /**
+         * Desregistra um cliente do EAC server.
+         * Chamado quando um jogador sai da partida.
+         * @param PlayerId  ID do jogador
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void UnregisterClient(int32 PlayerId);
 
-	/**
-	 * Valida a sessão EAC de um cliente.
-	 * Verifica se o cliente está rodando EAC e é legítimo.
-	 * @param PlayerId  ID do jogador para validar
-	 * @return true se a sessão é válida
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	bool ValidateSession(int32 PlayerId);
+        /**
+         * Valida a sessão EAC de um cliente.
+         * Verifica se o cliente está rodando EAC e é legítimo.
+         * @param PlayerId  ID do jogador para validar
+         * @return true se a sessão é válida
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        bool ValidateSession(int32 PlayerId);
 
-	/**
-	 * Valida todos os clientes registrados.
-	 * Usado periodicamente pelo servidor.
-	 * @return Número de clientes com sessão inválida
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	int32 ValidateAllSessions();
+        /**
+         * Valida todos os clientes registrados.
+         * Usado periodicamente pelo servidor.
+         * @return Número de clientes com sessão inválida
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        int32 ValidateAllSessions();
 
-	// ─── Status Queries ───────────────────────────────────────────────────────
+        // ─── Status Queries ───────────────────────────────────────────────────────
 
-	/** Verifica se o EAC está rodando. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	bool IsEACRunning() const;
+        /** Verifica se o EAC está rodando. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        bool IsEACRunning() const;
 
-	/** Retorna o status atual do EAC. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	EKhaaosEACStatus GetEACStatus() const { return CurrentStatus; }
+        /** Retorna o status atual do EAC. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        EKhaaosEACStatus GetEACStatus() const { return CurrentStatus; }
 
-	/** Verifica se EAC é obrigatório para jogar. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	bool IsEACMandatory() const { return bEACMandatory; }
+        /** Verifica se EAC é obrigatório para jogar. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        bool IsEACMandatory() const { return bEACMandatory; }
 
-	/** Retorna métricas de produção do EAC. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	FKhaaosEACMetrics GetMetrics() const { return Metrics; }
+        /** Retorna métricas de produção do EAC. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        FKhaaosEACMetrics GetMetrics() const { return Metrics; }
 
-	/** Retorna informações de um cliente registrado. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	FKhaaosEACClientInfo GetClientInfo(int32 PlayerId) const;
+        /** Retorna informações de um cliente registrado. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        FKhaaosEACClientInfo GetClientInfo(int32 PlayerId) const;
 
-	/** Retorna todas as violações recentes. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	TArray<FKhaaosEACViolation> GetRecentViolations() const;
+        /** Retorna todas as violações recentes. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        TArray<FKhaaosEACViolation> GetRecentViolations() const;
 
-	// ─── Violation Handling ───────────────────────────────────────────────────
+        // ─── Violation Handling ───────────────────────────────────────────────────
 
-	/**
-	 * Processa uma violação EAC.
-	 * Mapeia severidade para strikes no KhaaosAntiCheat.
-	 * Violations críticas resultam em kick imediato.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
-	void HandleEACViolation(const FKhaaosEACViolation& Violation);
+        /**
+         * Processa uma violação EAC.
+         * Mapeia severidade para strikes no KhaaosAntiCheat.
+         * Violations críticas resultam em kick imediato.
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|EAC")
+        void HandleEACViolation(const FKhaaosEACViolation& Violation);
 
-	/**
-	 * Mapeia severidade EAC para número de strikes.
-	 * Informational: 0, Minor: 1, Major: 2, Critical: 3
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
-	int32 SeverityToStrikes(EKhaaosEACViolationSeverity Severity) const;
+        /**
+         * Mapeia severidade EAC para número de strikes.
+         * Informational: 0, Minor: 1, Major: 2, Critical: 3
+         */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|EAC")
+        int32 SeverityToStrikes(EKhaaosEACViolationSeverity Severity) const;
 
-	// ─── Configuration ────────────────────────────────────────────────────────
+        // ─── Configuration ────────────────────────────────────────────────────────
 
-	/** Se EAC é obrigatório (kick jogadores sem EAC). */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bEACMandatory : 1;
+        /** Se EAC é obrigatório (kick jogadores sem EAC). */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bEACMandatory : 1;
 
-	/** Se EAC está habilitado nesta build. */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bEACEnabled : 1;
+        /** Se EAC está habilitado nesta build. */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bEACEnabled : 1;
 
-	/** Caminho para o EAC SDK. */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString EACSdkPath;
+        /** Caminho para o EAC SDK. */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString EACSdkPath;
 
-	/** Intervalo de polling para validação de sessão (segundos). */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	float ValidationPollInterval;
+        /** Intervalo de polling para validação de sessão (segundos). */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        float ValidationPollInterval;
 
-	/** Máximo de violações antes de kick automático. */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	int32 MaxViolationsBeforeKick;
+        /** Máximo de violações antes de kick automático. */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        int32 MaxViolationsBeforeKick;
 
-	/** Se deve logar violations informativas. */
-	UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
-	uint8 bLogInformationalViolations : 1;
+        /** Se deve logar violations informativas. */
+        UPROPERTY(Config, BlueprintReadOnly, Category = "Khaaos|EAC")
+        uint8 bLogInformationalViolations : 1;
 
-	// ─── State ────────────────────────────────────────────────────────────────
+        // ─── State ────────────────────────────────────────────────────────────────
 
-	/** Status atual do EAC. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	EKhaaosEACStatus CurrentStatus;
+        /** Status atual do EAC. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        EKhaaosEACStatus CurrentStatus;
 
-	/** ID da sessão de jogo atual (client). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
-	FString CurrentGameSessionId;
+        /** ID da sessão de jogo atual (client). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|EAC")
+        FString CurrentGameSessionId;
 
-	// ─── Delegates ────────────────────────────────────────────────────────────
+        // ─── Delegates ────────────────────────────────────────────────────────────
 
-	/** Broadcast quando violação EAC é detectada. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
-	FOnEACViolation OnEACViolation;
+        /** Broadcast quando violação EAC é detectada. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
+        FOnEACViolation OnEACViolation;
 
-	/** Broadcast quando status EAC muda. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
-	FOnEACStatusChanged OnEACStatusChanged;
+        /** Broadcast quando status EAC muda. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
+        FOnEACStatusChanged OnEACStatusChanged;
 
-	/** Broadcast quando cliente é validado. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
-	FOnEACClientValidated OnEACClientValidated;
+        /** Broadcast quando cliente é validado. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|EAC")
+        FOnEACClientValidated OnEACClientValidated;
 
 private:
 
-	/** Clientes registrados no EAC (server-side). */
-	TMap<int32, FKhaaosEACClientInfo> RegisteredClients;
+        /** Clientes registrados no EAC (server-side). */
+        TMap<int32, FKhaaosEACClientInfo> RegisteredClients;
 
-	/** Violações recentes (últimas N). */
-	TArray<FKhaaosEACViolation> RecentViolations;
+        /** Violações recentes (últimas N). */
+        TArray<FKhaaosEACViolation> RecentViolations;
 
-	/** Métricas de produção. */
-	FKhaaosEACMetrics Metrics;
+        /** Métricas de produção. */
+        FKhaaosEACMetrics Metrics;
 
-	/** Timer handle para validação periódica. */
-	FTimerHandle ValidationTimerHandle;
+        /** Timer handle para validação periódica. */
+        FTimerHandle ValidationTimerHandle;
 
-	/** Timestamp de inicialização do EAC. */
-	double EACStartTime = 0.0;
+        /** Timer handle da bomba de callbacks do SDK real (KHAAOS_EAC_SDK=1). */
+        FTimerHandle SdkPumpTimerHandle;
 
-	/** Se é servidor dedicado. */
-	bool bIsDedicatedServer = false;
+        /** Timestamp de inicialização do EAC. */
+        double EACStartTime = 0.0;
 
-	/** Se o EAC client foi iniciado. */
-	bool bEACClientStarted = false;
+        /** Se é servidor dedicado. */
+        bool bIsDedicatedServer = false;
 
-	/** Se o EAC server foi iniciado. */
-	bool bEACServerStarted = false;
+        /** Se o EAC client foi iniciado. */
+        bool bEACClientStarted = false;
 
-	/** Máximo de violações recentes para manter. */
-	static constexpr int32 MaxRecentViolations = 100;
+        /** Se o EAC server foi iniciado. */
+        bool bEACServerStarted = false;
 
-	// ─── Internal Operations ──────────────────────────────────────────────────
+        /** Máximo de violações recentes para manter. */
+        static constexpr int32 MaxRecentViolations = 100;
 
-	/** Callback de violação do EAC (server-side). */
-	void OnEACClientViolationCallback(int32 PlayerId, const FString& ViolationType, const FString& Description);
+        // ─── Internal Operations ──────────────────────────────────────────────────
 
-	/** Callback de mensagem do EAC (client-side). */
-	void OnEACMessageCallback(const FString& MessageType, const FString& MessageData);
+        /** Callback de violação do EAC (server-side). */
+        void OnEACClientViolationCallback(int32 PlayerId, const FString& ViolationType, const FString& Description);
 
-	/** Timer callback para validação periódica de sessões. */
-	void OnValidationTimer();
+        /** Callback de mensagem do EAC (client-side). */
+        void OnEACMessageCallback(const FString& MessageType, const FString& MessageData);
 
-	/** Emite strike via KhaaosAntiCheat para uma violação. */
-	void IssueStrikeForViolation(const FKhaaosEACViolation& Violation);
+        /** Timer callback para validação periódica de sessões. */
+        void OnValidationTimer();
 
-	/** Kick jogador por violação EAC. */
-	void KickPlayerForEACViolation(int32 PlayerId, const FString& Reason);
+        /** Emite strike via KhaaosAntiCheat para uma violação. */
+        void IssueStrikeForViolation(const FKhaaosEACViolation& Violation);
 
-	/** Atualiza status do EAC e broadcast. */
-	void SetEACStatus(EKhaaosEACStatus NewStatus);
+        /** Kick jogador por violação EAC. */
+        void KickPlayerForEACViolation(int32 PlayerId, const FString& Reason);
 
-	/** Atualiza métricas de uptime. */
-	void UpdateUptimeMetrics();
+        /** Atualiza status do EAC e broadcast. */
+        void SetEACStatus(EKhaaosEACStatus NewStatus);
+
+        /** Atualiza métricas de uptime. */
+        void UpdateUptimeMetrics();
 };
