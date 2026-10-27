@@ -532,9 +532,15 @@ export function createAuthoritativeServer({
       if (url.pathname === '/poj/court-martial/cases' && req.method === 'GET') {
         const actor = identityFor(req);
         if (!actor) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
-        const status = new URL(req.url, 'http://localhost').searchParams.get('status');
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        const status = params.get('status');
+        // Fase 13 — mine=1: replay da ata na UI do jogador eliminado. O próprio
+        // militar enxerga SOMENTE os seus casos (privacidade do processo);
+        // admin/Marechal continua com o docket completo.
+        const mine = params.get('mine') === '1' || params.get('mine') === 'true';
+        const mineSub = mine && actor.role !== 'admin' ? actor.sub : null;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        res.end(JSON.stringify(pojService.courtCases(status === 'pendente' || status === 'julgado' ? status : null)));
+        res.end(JSON.stringify(pojService.courtCases(status === 'pendente' || status === 'julgado' ? status : null, mineSub)));
         return;
       }
       if (url.pathname === '/poj/court-martial/verdict' && req.method === 'POST') {

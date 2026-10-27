@@ -484,3 +484,28 @@ body.spectating #operativeAbility { opacity: .35; }
   padding: 1px 5px; border: 1px solid rgba(255,255,255,.3); border-radius: 3px;
   background: rgba(255,255,255,.08); color: #ffd28a;
 }
+
+/* ---------- Fase 13 — replay da ata da Corte Marcial ---------- */
+.ata-card { width: min(680px, 94vw); }
+.ata-sub { font-size: 12px !important; color: var(--muted) !important; margin-bottom: 14px !important; }
+.ata-timeline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.ata-step {
+  border-left: 3px solid var(--volcanic); padding: 8px 12px; border-radius: 3px;
+  background: rgba(255,255,255,.03); opacity: 0; transform: translateX(-8px);
+  transition: opacity .28s ease-out, transform .28s ease-out;
+}
+.ata-step.shown { opacity: 1; transform: none; }
+.ata-step h4 {
+  margin: 0 0 4px; font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 2.4px; color: #d9a05a;
+}
+.ata-step .ata-line { margin: 0; font-size: 13px; line-height: 1.5; color: #e8e2f2; }
+.ata-step.good { border-left-color: var(--acid); }
+.ata-step.good h4 { color: var(--acid); }
+.ata-step.bad { border-left-color: #e86a7a; }
+.ata-step.bad h4 { color: #e86a7a; }
+.ata-step.warn { border-left-color: #ffd28a; }
+.ata-step.warn h4 { color: #ffd28a; }
+.ata-step.pending { border-left-color: rgba(255,255,255,.22); opacity: 0; }
+.ata-step.pending.shown { opacity: .78; }
+.ata-step.pending .ata-line { color: var(--muted); font-style: italic; }

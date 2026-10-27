@@ -102,6 +102,9 @@ export class OnlineGame3D extends Game3D {
     this.view.onSwitchSlot = (slot) => { this.pendingSlot = slot; };
     this.sim = this.view;
     this.hud.sim = this.view;
+    // Fase 13 — replay da ata da Corte na UI do eliminado: o hook dispara a
+    // busca do caso próprio (mine=1) quando a eliminação é confirmada.
+    this.onEliminated = () => this.#fetchMyCourtAta();
     // predição client-side (Fase 3): mundo local idêntico ao da sala (seed sincronizada)
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
@@ -207,6 +210,47 @@ export class OnlineGame3D extends Game3D {
     }, 3000);
     net.connect();
     this.hud.feed('CIGKV', 'Modo online: sala autoritativa. Escolha a entrada ZU.', 'good');
+  }
+
+  // ---------- Fase 13 — ata da Corte do próprio eliminado ----------
+  // GET /poj/court-martial/cases?mine=1 (autenticado) retorna apenas os casos
+  // do jogador — a ata é privacidade pessoal, não docket público. Enriquece
+  // com o court_verdict ao vivo (ΔKRC) quando o docket ainda não o carrega.
+  async #fetchMyCourtAta({ silent = false } = {}) {
+    try {
+      // pequena folga: o caso é aberto no servidor no mesmo fluxo da queda,
+      // mas o report partida→POJ pode chegar um instante depois do evento.
+      await new Promise((r) => setTimeout(r, silent ? 0 : 900));
+      const token = localStorage.getItem('kr_token');
+      const res = await fetch('/poj/court-martial/cases?mine=1', {
+        cache: 'no-store',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return null;
+      const docket = await res.json();
+      const cases = Array.isArray(docket.cases) ? docket.cases : [];
+      if (!cases.length) {
+        if (!silent) this.hud.feed('CORTE MARCIAL', 'Nenhum caso aberto em seu nome — eliminação sem Corte.', 'warn');
+        return null;
+      }
+      const latest = cases[cases.length - 1];
+      this.myCourtCase = latest;
+      this.hud.setCourtAtaAvailable(true);
+      if (!silent) this.hud.showCourtAta(latest, { krcEvent: this.courtVerdictEvents?.[latest.id] });
+      return latest;
+    } catch {
+      if (!silent) this.hud.feed('CORTE MARCIAL', 'Ata indisponível agora — reabra pelo botão ATA do espectador.', 'bad');
+      return null;
+    }
+  }
+
+  async openMyCourtAta() {
+    if (this.myCourtCase) {
+      this.hud.setCourtAtaAvailable(true);
+      this.hud.showCourtAta(this.myCourtCase, { krcEvent: this.courtVerdictEvents?.[this.myCourtCase.id] });
+      return;
+    }
+    await this.#fetchMyCourtAta({ silent: false });
   }
 
   // ---------- Fase 9 — painel POJ: estado do Protocolo de Ordem de Jogo ----------
