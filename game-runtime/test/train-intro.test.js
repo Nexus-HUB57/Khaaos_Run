@@ -62,3 +62,32 @@ test('cameraPose posiciona a câmera perto do trilho e converge com o tempo', ()
   assert.ok(Math.abs(early.z - intro.railZ) > Math.abs(late.z - intro.railZ), 'aproxima-se do trilho');
   intro.dispose();
 });
+
+// ---------- Fase 12 — entrada sincronizada pelo relógio do servidor ----------
+test('startAt sincronizado: remoto entra no meio da timeline e conclui no mesmo instante global', () => {
+  let doneCalls = 0;
+  // remoto recebeu o anúncio 2,2 s depois do startedAt do servidor
+  const intro = new TrainIntro({ scene: mkScene(), spawn: { x: 0, z: 118 }, skippable: false, startAt: 2.2, onDone: () => doneCalls++ });
+  assert.equal(intro.t, 2.2);
+  const headLate = intro.headX(intro.t);
+  // referência: quem começou no 0 já percorreu 2,2 s — MESMO frame do trem
+  const reference = new TrainIntro({ scene: mkScene(), spawn: { x: 0, z: 118 }, skippable: false });
+  reference.update(2.2);
+  assert.ok(Math.abs(reference.headX(reference.t) - headLate) < 1e-6, 'remoto vê o mesmo frame');
+  // restam DURATION − 2,2 s: conclui dentro da janela correta
+  let elapsed = 0;
+  while (!intro.update(1 / 60) && elapsed < 10) elapsed += 1 / 60;
+  assert.ok(Math.abs(elapsed - (3.4 - 2.2)) < 0.05, `conclui em ~1,2 s (foi ${elapsed.toFixed(2)}s)`);
+  assert.equal(doneCalls, 1);
+  reference.dispose();
+});
+
+test('startAt ignora valores inválidos/negativos (fallback determinístico em 0)', () => {
+  const a = new TrainIntro({ scene: mkScene(), skippable: false, startAt: -3 });
+  assert.equal(a.t, 0);
+  const b = new TrainIntro({ scene: mkScene(), skippable: false, startAt: NaN });
+  assert.equal(b.t, 0);
+  const c = new TrainIntro({ scene: mkScene(), skippable: false, startAt: 'x' });
+  assert.equal(c.t, 0);
+  a.dispose(); b.dispose(); c.dispose();
+});

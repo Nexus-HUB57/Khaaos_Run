@@ -7,22 +7,26 @@
 // Determinística no tempo (timeline em segundos), skippável (clique/tecla/toque)
 // e sem dependência de rede — o mesmo módulo serve offline e online.
 import * as THREE from 'three';
+import { TRAIN_INTRO_DURATION_MS } from '../shared/clock.js';
 
 const TIMELINE = Object.freeze({
   APPROACH: 0,      // trem surge na borda, câmera acompanha
   OVERSPAWN: 2.0,   // trem cruza a zona de desembarque (pico da cena)
-  SETTLE: 3.4,      // handover para a câmera do jogador
-  DURATION: 3.4,
+  SETTLE: TRAIN_INTRO_DURATION_MS / 1000, // handover para a câmera do jogador
+  DURATION: TRAIN_INTRO_DURATION_MS / 1000,
 });
 
 export class TrainIntro {
   // spawn = { x, z } do jogador local; onDone chamado UMA vez no fim/skip.
-  constructor({ scene, spawn = { x: 0, z: 118 }, onDone = null, skippable = true } = {}) {
+  // startAt (segundos) = entrada sincronizada no meio da timeline — o anúncio
+  // autoritativo da sala traz startedAt do servidor e o cliente reconstrói
+  // exatamente o mesmo frame do trem que os demais remotos estão vendo.
+  constructor({ scene, spawn = { x: 0, z: 118 }, onDone = null, skippable = true, startAt = 0 } = {}) {
     this.scene = scene;
     this.spawn = spawn;
     this.onDone = onDone;
     this.skippable = skippable;
-    this.t = 0;
+    this.t = Math.max(0, Number(startAt) || 0);
     this.done = false;
     this.group = new THREE.Group();
     this.group.name = 'zu-train-intro';

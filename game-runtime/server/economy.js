@@ -219,6 +219,7 @@ export class PostgresEconomyStore {
 const accountFor = (userId) => `player:${String(userId)}`;
 const TREASURY_REWARDS = 'treasury:rewards';
 const TREASURY_SPENDS = 'treasury:spends';
+const TREASURY_FINES = 'treasury:fines';
 
 const startOfDayUtc = (at = Date.now()) => {
   const date = new Date(at);
@@ -263,6 +264,25 @@ export class Economy {
       type: 'spend', debitAccount: account, creditAccount: TREASURY_SPENDS,
       amount, reason: reason || 'purchase', idempotencyKey: idempotencyKey || null, meta: { userId: String(userId) },
     });
+  }
+
+  // Multa (Corte Marcial: afastamento/redução de patente). Diferente do gasto:
+  // NUNCA falha por saldo insuficiente — debita o que houver (min(saldo, multa))
+  // e zera o resto; saldo zero nem abre lançamento. Garantia central: a MESMA
+  // idempotencyKey jamais debita duas vezes (store deduplica a entrada).
+  async fine({ userId, amount, reason, idempotencyKey, by = 'system' }) {
+    if (!userId) throw new EconomyError('invalid_user');
+    if (!Number.isInteger(amount) || amount <= 0) throw new EconomyError('invalid_amount');
+    const account = accountFor(userId);
+    const current = await this.store.balance(account);
+    const applied = Math.min(Math.max(0, current), amount);
+    if (applied <= 0) return { applied: 0, requested: amount, entry: null, skipped: 'zero_balance' };
+    const entry = await this.store.appendEntry({
+      type: 'fine', debitAccount: account, creditAccount: TREASURY_FINES,
+      amount: applied, reason: reason || 'court_fine', idempotencyKey: idempotencyKey || null,
+      meta: { userId: String(userId), requested: amount, by },
+    });
+    return { applied, requested: amount, entry, skipped: null };
   }
 
   async history(userId, options = {}) {
