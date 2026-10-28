@@ -1372,6 +1372,9 @@ export class Game3D {
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
     const marksAnim = this.scene.userData.worldMarks?.animators;
     if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
+    // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
+    const dressingAnim = this.scene.userData.districtDressing?.animators;
+    if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
     // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
     this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);

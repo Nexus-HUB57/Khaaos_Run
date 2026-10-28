@@ -12,6 +12,7 @@ import { resolveScenario } from './scenarios.js';
 import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements } from './detail3d.js';
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
+import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -274,11 +275,12 @@ function place(mesh, face, u, y, s, off) {
 // ---------- Fase 7 — sombras de contato (blob) sob props/árvores/pedras ----------
 // Um único InstancedMesh de planos com gradiente radial ancora cada objeto no
 // chão — custo de 1 draw call, sem depender da resolução do shadow map.
+// Fase 22 — exportada para o dressing dos distritos reusar a MESMA infra.
 const CONTACT_SHADOW_SIZES = {
   lamp: 1.7, barrel: 1.05, tire: 1.0, sandbag: 1.7, pallet: 1.8,
   barrierprop: 2.9, crate: 1.25, cone: 0.62,
 };
-function buildContactShadows(scene, entries) {
+export function buildContactShadows(scene, entries) {
   if (!entries.length) return;
   const tex = contactShadowTexture();
   const mat = new THREE.MeshBasicMaterial({
@@ -439,8 +441,30 @@ function buildMountains(scene, scenario) {
   }
 }
 
+// ---------- Fase 22 — paletas de vegetação POR CENÁRIO ----------
+// A copa e a grama acompanham a identidade do mundo (antes: sempre oliva
+// crepuscular do CIGKV, mesmo no deserto de lava ou no arquipélago).
+const CANOPY_PALETTES = {
+  CIGKV: [0x6a7a3c, 0x59682f, 0x7d8443, 0x8a6f3c],                 // oliva crepuscular (original)
+  Barburhen: [0x3f5f4a, 0x35523f, 0x4a6a50, 0x5d6b5a],             // pinhais frios
+  Priadus: [0x2f5d43, 0x275043, 0x3a6b52, 0x4a6b3f],               // dossel pantanoso
+  Ckesalth: [0x7a6f3c, 0x8a7444, 0x6b6034, 0x6e5636],              // arbustos secos do deserto
+  Arukheea: [0x5f6f8a, 0x54647f, 0x6b7f9a, 0x7a6f9a],              // flora cinza-astral
+};
+const GRASS_TINTS = {
+  CIGKV: ['#c9cfa0', '#b3bd8c'],                                   // original
+  Barburhen: ['#a8c0b4', '#94b0a4'],                               // capim gélido
+  Priadus: ['#5f7f6a', '#4f6f5c'],                                 // capim de mangue
+  Ckesalth: ['#c9b078', '#bfa267'],                                // capim seco dourado
+  Arukheea: ['#9aa4b8', '#8a94ac'],                                // capim de cinza astral
+};
+function scenarioCanopyTint(scenario, rng) {
+  const palette = CANOPY_PALETTES[scenario.id] ?? CANOPY_PALETTES.CIGKV;
+  return palette[Math.floor(rng.next() * palette.length) % palette.length];
+}
+
 // ---------- Fase 4 — natureza: árvores, pedras e nuvens ----------
-function buildNature(scene, layout, rng, q) {
+function buildNature(scene, layout, rng, q, scenario = null) {
   const free = (x, z, m = 4) => layout.colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
@@ -468,7 +492,7 @@ function buildNature(scene, layout, rng, q) {
     dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12); // inclinação orgânica
     dummy.updateMatrix();
     trunks.setMatrixAt(ti, dummy.matrix);
-    tint.setHex(canopyTint(rng));
+    tint.setHex(scenario ? scenarioCanopyTint(scenario, rng) : canopyTint(rng));
     for (let k = 0; k < 3 && ci < TREES * 3; k++) {
       dummy.position.set(x + (rng.next() - .5) * .9, (3.2 + k * .95) * s, z + (rng.next() - .5) * .9);
       const cs = s * (1.1 - k * .27);
@@ -652,9 +676,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   }
 
   // Fase 4/6/7 — natureza, cordilheira e props (com tier de qualidade)
-  buildNature(scene, layout, new SeededRng(`${seed}:nature`), q);
+  buildNature(scene, layout, new SeededRng(`${seed}:nature`), q, scenario);
   buildMountains(scene, scenario);
   buildProps(scene, layout, q);
+  // Fase 22 — cenários vivos: kits por distrito DENTRO da arena (zero colliders)
+  buildDistrictDressing(scene, layout, scenario, q, {
+    contactShadows: (entries) => buildContactShadows(scene, entries),
+  });
   // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte
@@ -705,7 +733,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     }
     if (ok) blades.push([x, z, seedRng.next() * Math.PI]);
   }
-  ['#c9cfa0', '#b3bd8c'].forEach((tintCol, half) => {
+  const grassTints = GRASS_TINTS[scenario.id] ?? GRASS_TINTS.CIGKV;
+  grassTints.forEach((tintCol, half) => {
     const grassMat = new THREE.MeshStandardMaterial({
       map: bladeTex.clone(), alphaTest: .45, side: THREE.DoubleSide, roughness: 1, color: tintCol,
     });

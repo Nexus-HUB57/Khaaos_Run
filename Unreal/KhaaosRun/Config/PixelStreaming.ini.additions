@@ -1,0 +1,32 @@
+
+; ─── Pixel Streaming Configuration ─────────────────────────────────────────
+; Remote visual validation of 48 abilities and 27 VFX Niagara via browser
+[/Script/PixelStreaming.PixelStreamingSettings]
+; Encoder settings for NVIDIA T4 vGPU
+CaptureUseFence=True
+EncoderRateControl=CBR
+EncoderTargetBitrate=8000000
+EncoderMaxBitrate=15000000
+EncoderMinQP=0
+EncoderMaxQP=51
+EncoderMultipass=Full
+EncoderIntraRefreshPeriod=30
+EncoderIntraRefreshCount=1
+; WebRTC settings
+WebRTCDisableResolutionChange=False
+WebRTCMaxFramerate=60
+; Pixel Streaming input
+AllowPixelStreamingCommands=True
+PixelStreamingInputLatencyMS=0
+; Hooking
+HookGetViewport=true
+; Degradation preference for adaptive quality
+DegradationPreference=MAINTAIN_RESOLUTION
+
+[/Script/PixelStreaming.PixelStreamerDelegates]
+; Callbacks for validation automation
+OnDataChannelMessage=KhaaosVFXManager_ValidateMessage
+
+[/Script/Engine.Engine]
+; Net driver for Pixel Streaming
++NetDriverDefinitions=(DefName="GameNetDriver",DriverClassName="/Script/PixelStreaming.PixelStreamingNetDriver",DriverClassNameFallback="/Script/OnlineSubsystemUtils.IpNetDriver")
