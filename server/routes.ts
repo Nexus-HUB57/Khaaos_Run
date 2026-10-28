@@ -35,25 +35,21 @@ import {
   economyBatchSimulationInput,
 } from "./game/mutationSchemas";
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
-import { metrics, METRICS_CONTENT_TYPE } from "./game/metrics";
+import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
+import { registerMetricsRoutes } from "./routes/metrics";
+import { economy2pcService } from "./game/economy2pcService";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
   await distributedState.connect();
 
-  // ── M3 — /metrics (Prometheus exposition; staging SRE) ───────────────────
-  // Desligável por env (KR_METRICS_ENABLED=0); sem dados sensíveis — só
-  // agregados de cardinalidade baixa (método/rota normalizada/status).
-  app.get("/metrics", (_req, res) => {
-    if (process.env.KR_METRICS_ENABLED === "0") {
-      res.status(404).json({ message: "Not found" });
-      return;
-    }
-    res.setHeader("Content-Type", METRICS_CONTENT_TYPE);
-    res.setHeader("Cache-Control", "no-store");
-    res.send(metrics.render());
-  });
+  // ── OBSERVABILITY (antes de tudo: /metrics + /healthz sem auth) ──────────
+  registerMetricsRoutes(app);
+
+  // ── ECONOMY 2PC (antes de registerApiRoutes: auth própria, sem OIDC) ─────
+  registerEconomy2PCRoutes(app);
+  economy2pcService.startRecoveryLoop();
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);

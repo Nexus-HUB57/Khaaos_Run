@@ -1,0 +1,100 @@
+# =============================================================================
+# Khaaos Run — Staging com 2 RÉPLICAS REAIS de aplicação (modo distribuído)
+# =============================================================================
+# Override do docker-compose.yml para o smoke cross-replica AO VIVO (M4):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.2replicas.yml up -d
+#   # ou: bash deploy.sh --replicas 2
+#
+# Diferenças vs. `--scale app=2`:
+#   - Identidades DETERMINÍSTICAS: staging-app-a / staging-app-b (KR_REPLICA_ID),
+#     visíveis no /healthz.distributed.replicaId, no índice de salas (prefixo do
+#     roomId) e no registro kr:replica:* do Redis;
+#   - Endereços públicos DIRETOS por réplica (ports 8081/8082 no host) — o
+#     redirect cross-réplica aponta para o DONO de fato, não para o LB;
+#   - nginx sobe com nginx-2replicas.conf (upstream estático das duas réplicas).
+#
+# O par app (escala livre, HOSTNAME como id) continua disponível para o
+# autoscaler; os dois perfis NÃO devem subir simultaneamente (ports/upstream).
+# =============================================================================
+
+services:
+  # Réplica A — dono determinístico para o smoke (KR_REPLICA_URL = endereço
+  # público no HOST: o cliente do smoke roda no host e reconecta ao dono).
+  app-a:
+    build:
+      context: ../..
+      dockerfile: game-runtime/Dockerfile
+    environment:
+      PORT: "8787"
+      KR_DATABASE_URL: postgres://khaaos:${KR_PG_PASSWORD}@postgres:5432/${KR_PG_DB:-khaaos_staging}
+      KR_RATE_STORE: redis
+      KR_REDIS_URL: redis://redis:6379
+      KR_AUDIT_STORE: postgres
+      KR_ECONOMY_STORE: postgres
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?configure ADMIN_TOKEN no .env}
+      AUTH_SECRET: ${AUTH_SECRET:?configure AUTH_SECRET no .env}
+      KR_READY_MAX_CONNECTIONS: ${KR_READY_MAX_CONNECTIONS:-2000}
+      KR_REGION: ${KR_REGION:-sa-east}
+      MATCH_SEED: ${MATCH_SEED:-CIGKV-staging}
+      KR_DEV_AUTH: "0"
+      KR_DISTRIBUTED: "1"
+      KR_OWNERSHIP_TTL_MS: ${KR_OWNERSHIP_TTL_MS:-15000}
+      KR_OWNERSHIP_HEARTBEAT_MS: ${KR_OWNERSHIP_HEARTBEAT_MS:-5000}
+      # Usuários de operação/smoke — o smoke cross-replica loga por réplica.
+      KR_USERS_JSON: ${KR_USERS_JSON:-}
+      KR_REPLICA_ID: staging-app-a
+      KR_REPLICA_URL: ${KR_APP_A_URL:-http://127.0.0.1:8081}
+    ports:
+      - "${KR_APP_A_PORT:-8081}:8787"
+    expose:
+      - "8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Réplica B — recebe o join cross-réplica e redireciona ao dono (A).
+  app-b:
+    build:
+      context: ../..
+      dockerfile: game-runtime/Dockerfile
+    environment:
+      PORT: "8787"
+      KR_DATABASE_URL: postgres://khaaos:${KR_PG_PASSWORD}@postgres:5432/${KR_PG_DB:-khaaos_staging}
+      KR_RATE_STORE: redis
+      KR_REDIS_URL: redis://redis:6379
+      KR_AUDIT_STORE: postgres
+      KR_ECONOMY_STORE: postgres
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?configure ADMIN_TOKEN no .env}
+      AUTH_SECRET: ${AUTH_SECRET:?configure AUTH_SECRET no .env}
+      KR_READY_MAX_CONNECTIONS: ${KR_READY_MAX_CONNECTIONS:-2000}
+      KR_REGION: ${KR_REGION:-sa-east}
+      MATCH_SEED: ${MATCH_SEED:-CIGKV-staging}
+      KR_DEV_AUTH: "0"
+      KR_DISTRIBUTED: "1"
+      KR_OWNERSHIP_TTL_MS: ${KR_OWNERSHIP_TTL_MS:-15000}
+      KR_OWNERSHIP_HEARTBEAT_MS: ${KR_OWNERSHIP_HEARTBEAT_MS:-5000}
+      KR_USERS_JSON: ${KR_USERS_JSON:-}
+      KR_REPLICA_ID: staging-app-b
+      KR_REPLICA_URL: ${KR_APP_B_URL:-http://127.0.0.1:8082}
+    ports:
+      - "${KR_APP_B_PORT:-8082}:8787"
+    expose:
+      - "8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # LB com upstream ESTÁTICO das duas réplicas (round-robin determinístico).
+  nginx:
+    volumes:
+      - ./nginx-2replicas.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app-a
+      - app-b

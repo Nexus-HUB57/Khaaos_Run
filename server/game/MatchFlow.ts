@@ -430,9 +430,6 @@ export class MatchFlow {
     }
   }
 
-  /**
-   * Eliminate a downed player (ragdoll).
-   */
   private eliminatePlayer(killerId: string, victimId: string, weapon: string): void {
     const victim = this.state.players.get(victimId);
     if (!victim || victim.isEliminated) return;

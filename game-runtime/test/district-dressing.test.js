@@ -218,3 +218,57 @@ test('cenários preservados: SCENARIOS intactos pela Fase 22 (contrato de gamepl
   assert.equal(SCENARIOS.CKESALTH.survival.type, 'VOLCANIC_LAVA');
   assert.equal(SCENARIOS.ARUKHEEA.survival.anchors.length, 4);
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Fase 26 — PARTÍCULAS REAIS no miolo da arena (fumaça/fendas):
+// fogueiras soltam fumaça + fagulhas, lavapatches cospem brasas + wisp de
+// calor, fendas do vazio derivam motos e a torre de destilação emite fagulhas
+// — tudo no MESMO pool compartilhado dos marcos (1 draw call, ticker único).
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Fase 26: fogueiras do Ckesalth soltam fumaça + fagulhas REAIS', () => {
+  const { scene } = buildScene(77, 'Ckesalth', null, 'high');
+  const system = scene.userData.particles;
+  assert.ok(system, 'pool compartilhado existe (districts cria, marks reutiliza)');
+  const dressing = scene.userData.districtDressing;
+  assert.ok(dressing.counts.campfire >= 1, `fogueira presente (${dressing.counts.campfire})`);
+  const before = system.activeCount;
+  for (let i = 0; i < 120; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
+  assert.ok(system.activeCount > before, `fumaça/fagulhas vivas (${before} → ${system.activeCount})`);
+});
+
+test('Fase 26: lavapatches (fendas de lava) cospem brasas — Encosta Média/Pico', () => {
+  const { scene } = buildScene(77, 'Ckesalth', null, 'high');
+  const dressing = scene.userData.districtDressing;
+  assert.ok(dressing.counts.lavapatch >= 2, `lavapatches presentes (${dressing.counts.lavapatch})`);
+  const system = scene.userData.particles;
+  for (let i = 0; i < 180; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
+  assert.ok(system.activeCount > 0, `brasas vivas (${system.activeCount})`);
+  // partículas nascem DENTRO da arena (brasas em x/z |p| ≤ BOUND)
+  const snap = system.snapshot();
+  const inside = snap.filter((p) => Math.abs(p.x) <= 172 && Math.abs(p.z) <= 172).length;
+  assert.ok(inside >= Math.floor(snap.length * .9), `brasas na arena (${inside}/${snap.length})`);
+});
+
+test('Fase 26: fenda do vazio no EAST VOID SANCTUM deriva motos (Arukheea)', () => {
+  const { scene } = buildScene(33, 'Arukheea', null, 'high');
+  const dressing = scene.userData.districtDressing;
+  assert.ok(dressing.counts.rift >= 1, `fenda de distrito presente (${dressing.counts.rift})`);
+  const system = scene.userData.particles;
+  for (let i = 0; i < 240; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
+  assert.ok(system.activeCount > 0, `motos do vazio vivas (${system.activeCount})`);
+});
+
+test('Fase 26: CENÁRIOS SEM fontes de partículas ficam com o pool ocioso e integram', () => {
+  for (const id of ['CIGKV', 'Barburhen', 'Priadus']) {
+    const { scene } = buildScene(21, id, null, 'high');
+    const system = scene.userData.particles;
+    assert.ok(system, `${id}: pool existe (marcos criam/reutilizam)`);
+    for (let i = 0; i < 60; i++) {
+      for (const fn of scene.userData.districtDressing?.animators ?? []) fn(1 / 60, i / 60);
+      for (const fn of scene.userData.worldMarks?.animators ?? []) fn(1 / 60, i / 60);
+    }
+    // CIGKV/Barburhen/Priadus: sem emissor de distrito — pool ocioso ou só marcos
+    assert.ok(Number.isFinite(system.activeCount), `${id}: estado finito`);
+  }
+});

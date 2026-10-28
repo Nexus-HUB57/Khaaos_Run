@@ -1,24 +1,230 @@
-{
-  "name": "13 — Monitoring Check",
-  "on": {
-    "schedule": [
-      {
-        "cron": "*/15 * * * *"
-      }
-    ]
-  },
-  "jobs": {
-    "monitor": {
-      "runs-on": "ubuntu-latest",
-      "steps": [
-        {
-          "uses": "actions/checkout@v4"
-        },
-        {
-          "name": "Health Check",
-          "run": "curl -sf https://api.khaaos.run/health || echo 'API unreachable'"
-        }
-      ]
-    }
-  }
-}
+# =============================================================================
+# Khaaos Run — 13 Monitoring Validation
+# =============================================================================
+# Três camadas de validação de observabilidade:
+#
+#   1. validate-monitoring-config  → estático: prometheus.yml, dashboards
+#      Grafana JSON, painéis 2PC e métricas implementadas no server.
+#   2. staging-dashboard-validation → AO VIVO: sobe a stack de staging
+#      (PostgreSQL 16 + Redis 7 REAIS em service containers), aplica
+#      migrações, sobe o servidor em modo produção e valida o dashboard
+#      Grafana ↔ /metrics ↔ fluxo 2PC de ponta a ponta
+#      (scripts/validate_monitoring_staging.py).
+#   3. production-health → sondas de produção (warning-only).
+#
+# Disparo: workflow_dispatch (manual, qualquer branch), push/PR em main
+# com paths de monitoring/server, e cron de 15 min para sondas.
+# =============================================================================
+
+name: 13 — Monitoring Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_2pc_live:
+        description: 'Pular o fluxo 2PC ao vivo no staging (só config estática + health)'
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'monitoring/**'
+      - 'infra/grafana/**'
+      - 'infra/alerting/**'
+      - 'server/game/metricsRegistry.ts'
+      - 'server/routes/metrics.ts'
+      - 'scripts/validate_monitoring_staging.py'
+      - '.github/workflows/13-monitoring.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'monitoring/**'
+      - 'infra/grafana/**'
+      - 'infra/alerting/**'
+      - 'server/game/metricsRegistry.ts'
+      - 'server/routes/metrics.ts'
+      - 'scripts/validate_monitoring_staging.py'
+      - '.github/workflows/13-monitoring.yml'
+  schedule:
+    # Health check de produção a cada 15 min
+    - cron: '*/15 * * * *'
+
+jobs:
+  validate-monitoring-config:
+    name: Valida Prometheus + Grafana + métricas 2PC (estático)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prometheus config parse
+        run: |
+          python3 - <<'EOF'
+          import yaml, sys
+          with open('monitoring/prometheus/prometheus.yml') as f:
+              cfg = yaml.safe_load(f)
+          jobs = [j['job_name'] for j in cfg.get('scrape_configs', [])]
+          assert 'khaaos-economy-api' in jobs, f"job khaaos-economy-api ausente: {jobs}"
+          print("OK: prometheus.yml parseia; jobs:", jobs)
+          EOF
+
+      - name: Grafana dashboards JSON válidos
+        run: |
+          python3 - <<'EOF'
+          import json, glob, sys
+          files = sorted(glob.glob('infra/grafana/*.json'))
+          assert files, "nenhum dashboard encontrado em infra/grafana/"
+          for path in files:
+              with open(path) as f:
+                  d = json.load(f)
+              assert d.get('title'), f"{path}: sem title"
+              assert d.get('panels'), f"{path}: sem panels"
+              print(f"OK: {path} — {len(d['panels'])} painéis")
+          EOF
+
+      - name: Dashboard Economy expõe painéis 2PC
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open('infra/grafana/khaaos-economy-dashboard.json') as f:
+              d = json.load(f)
+          blob = json.dumps(d)
+          required = [
+              'khaaos_economy_2pc_requests_total',
+              'khaaos_economy_2pc_escrows',
+              'khaaos_economy_2pc_oldest_prepared_age_seconds',
+              'khaaos_economy_2pc_phase_duration_ms_bucket',
+              'Two-Phase Commit (2PC)',
+          ]
+          missing = [r for r in required if r not in blob]
+          assert not missing, f"painéis 2PC ausentes no dashboard: {missing}"
+          print("OK: dashboard khaaos-economy com painéis 2PC completos")
+          EOF
+
+      - name: Métricas 2PC implementadas no server
+        run: |
+          python3 - <<'EOF'
+          import sys
+          src = open('server/game/metricsRegistry.ts').read()
+          required = [
+              'khaaos_economy_2pc_requests_total',
+              'khaaos_economy_2pc_errors_total',
+              'khaaos_economy_2pc_gc_recovered_total',
+              'khaaos_economy_2pc_phase_duration_ms',
+              'khaaos_economy_2pc_escrows',
+              'khaaos_economy_2pc_oldest_prepared_age_seconds',
+          ]
+          missing = [r for r in required if r not in src]
+          assert not missing, f"métricas ausentes no metricsRegistry: {missing}"
+          routes = open('server/routes/metrics.ts').read()
+          assert '/metrics' in routes and '/healthz' in routes, "rotas /metrics e /healthz ausentes"
+          print("OK: métricas 2PC e rotas de observabilidade presentes")
+          EOF
+
+  staging-dashboard-validation:
+    name: Staging AO VIVO — dashboard Grafana ↔ /metrics ↔ 2PC
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: khaaos_staging
+          POSTGRES_USER: khaaos
+          POSTGRES_PASSWORD: khaaos_ci_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U khaaos -d khaaos_staging"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgres://khaaos:khaaos_ci_pw@localhost:5432/khaaos_staging
+      TEST_DATABASE_URL: postgres://khaaos:khaaos_ci_pw@localhost:5432/khaaos_ci_test
+      KR_STAGING_URL: http://127.0.0.1:8787
+      STAGING_SESSION_SECRET: khaaos-staging-ci-session-secret-0123456789abcdef0123456789abcdef
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Banco *_test para as suítes de integração
+        run: |
+          PGPASSWORD=khaaos_ci_pw psql -h 127.0.0.1 -p 5432 -U khaaos -d khaaos_staging \
+            -c "CREATE DATABASE khaaos_ci_test"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Suítes E2E 2PC + observabilidade (PostgreSQL 16 real)
+        run: |
+          node --import tsx --test \
+            tests/integration/economy-2pc.postgres.test.ts \
+            tests/integration/economy-2pc-observability.test.ts
+
+      - name: Build de produção (cliente + bundle do servidor)
+        run: npm run build
+
+      - name: Subir staging (migrações Drizzle + servidor em modo produção)
+        run: |
+          RUN_DB_MIGRATIONS=true NODE_ENV=production PORT=8787 \
+          REDIS_URL=redis://127.0.0.1:6379 \
+          PUBLIC_ORIGIN=https://127.0.0.1 \
+          SESSION_SECRET_CURRENT="${STAGING_SESSION_SECRET}" \
+            node scripts/start.mjs > /tmp/staging-server.log 2>&1 &
+
+          up=0
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8787/healthz > /dev/null 2>&1; then
+              up=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ $up -ne 1 ]]; then
+            echo "::error::staging não subiu em 120s — log do servidor:"
+            tail -60 /tmp/staging-server.log
+            exit 1
+          fi
+          echo "staging up: $(curl -s http://127.0.0.1:8787/healthz | head -c 200)"
+
+      - name: Validar /healthz + /metrics + fluxo 2PC + contrato dashboard
+        run: |
+          python3 scripts/validate_monitoring_staging.py \
+            --base-url http://127.0.0.1:8787 \
+            --dashboard infra/grafana/khaaos-economy-dashboard.json \
+            ${{ github.event.inputs.skip_2pc_live == 'true' && '--skip-2pc' || '' }}
+
+      - name: Upload do log do staging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-server-log
+          path: /tmp/staging-server.log
+          retention-days: 7
+
+  production-health:
+    name: Health check produção
+    runs-on: ubuntu-latest
+    steps:
+      - name: API health
+        run: curl -sf https://api.khaaos.run/health || echo '::warning::API unreachable'
+      - name: 2PC health (postgres/health)
+        run: curl -sf https://api.khaaos.run/api/economy/2pc/health || echo '::warning::2PC health unreachable'

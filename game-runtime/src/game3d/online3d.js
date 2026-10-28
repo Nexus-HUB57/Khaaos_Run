@@ -7,7 +7,7 @@
 // bootstrapOnline conecta o NetClient3D e injeta o modo online no Game3D.
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
-import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
+import { MATCH_TIME, WORLD, getWorldLayout, glooCollider, doorCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
@@ -83,6 +83,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }
@@ -120,8 +123,12 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
-    this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
+    // Fase 25 — preditor enxerga as PORTAS: colliders do plano determinístico
+    // joined ao estado do snapshot (só id/hp/ativo viajam — o vão é estático)
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
     const scenarioSelect = document.querySelector('#scenarioSelect');
     if (scenarioSelect) {
@@ -311,6 +318,21 @@ export class OnlineGame3D extends Game3D {
     } catch { node.textContent = '—'; }
   }
 
+  // Fase 25 — colliders do preditor = estáticos + gloo ativas + portas ativas
+  #rebuildPredictorColliders() {
+    if (!this.predictorWorld) return;
+    const layout = getWorldLayout(this.seed);
+    const staticColliders = layout.colliders;
+    const gloo = (this.view.walls ?? []).filter((w) => w.active !== false).map(glooCollider);
+    const doorState = new Map((this.view.doors ?? []).map((d) => [d.id, d]));
+    const doors = (layout.doors ?? [])
+      .map((d) => ({ ...d, active: doorState.get(d.id)?.active !== false }))
+      .filter((d) => d.active)
+      .map(doorCollider);
+    const dynamic = [...gloo, ...doors];
+    this.predictorWorld.colliders = dynamic.length ? staticColliders.concat(dynamic) : staticColliders;
+  }
+
   // world rebuild quando a seed do servidor difere da local (uma vez, pré-partida)
   _applyWorldSeed(seed) {
     this.seed = seed;
@@ -328,7 +350,10 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.feed('CIGKV', `Sincronizado com a seed da sala: ${seed}.`, 'good');
   }
 
@@ -439,6 +464,7 @@ export class OnlineGame3D extends Game3D {
     }
 
     this.syncLoot();
+    this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)

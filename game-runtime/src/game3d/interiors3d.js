@@ -341,7 +341,8 @@ const FURN = {
  * NÃO adiciona malhas — as cascas entram via buildShellHost no loop de
  * estruturas do world3d (substituindo a caixa sólida, collider intacto).
  * Registry em scene.userData.interiors: { id, counts, animators, placements,
- * shells (Map estrutura→spec), group, mats }.
+ * shells (Map estrutura→spec), doorPanels (Map id→grupo do painel — Fase 25),
+ * group, mats }.
  */
 export function buildInteriors(scene, layout, scenario, q) {
   if (scene.userData.interiors) return scene.userData.interiors;

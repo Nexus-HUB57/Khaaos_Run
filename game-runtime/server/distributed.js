@@ -263,6 +263,7 @@ export function createDistributed({
   ownership = null,
   relay = null,
   registry = null,
+  invites = null, // M4 — store de convites compartilhável (testes multi-réplica)
   redisUrl = null,
   ttlMs = 15_000,
   heartbeatMs = 5_000,
@@ -289,9 +290,55 @@ export function createDistributed({
   }
   const own = ownership || new MemoryOwnership();
   const rly = relay || null;
+  // ── M4 — Índice de convites COMPARTILHADO entre réplicas ────────────────────
+  // O código de convite de salas privadas nasce LOCAL à réplica dona; sem um
+  // índice compartilhado, `join_private` numa outra réplica responde
+  // `private_not_found` e o jogador não entra — o cross-replica de fato
+  // dependia de adivinhar o nó certo. O índice mapeia code → {roomId, réplica}
+  // no MESMO store da posse (Redis no staging; Map nos testes determinísticos),
+  // com TTL próprio (convites sobrevivem a heartbeats curtos, mas expiram com
+  // a sala). Escrita APENAS na criação (dono); leitura por qualquer réplica.
+  const inviteTtlMs = Number(process.env.KR_INVITE_TTL_MS || 30 * 60_000);
+  const localInvites = invites || new Map(); // code → { roomId, replicaId, expiresAt } (driver memória)
+  const INVITE_KEY = (code) => `kr:invite:${code}`;
+  const publishInvite = async (code, roomId) => {
+    if (!enabled) return false;
+    const record = { roomId, replicaId: id };
+    try {
+      if (redisClient) await redisClient.set(INVITE_KEY(code), JSON.stringify(record), { PX: inviteTtlMs });
+      else localInvites.set(code, { ...record, expiresAt: now() + inviteTtlMs });
+      metrics.invitesPublished++;
+      return true;
+    } catch { return false; } // fail-open: convite continua válido localmente
+  };
+  const lookupInvite = async (code) => {
+    if (!enabled) return null;
+    metrics.inviteLookups++;
+    try {
+      let found = null;
+      if (redisClient) {
+        const raw = await redisClient.get(INVITE_KEY(code));
+        found = raw ? JSON.parse(raw) : null;
+      } else {
+        const e = localInvites.get(code);
+        if (!e || e.expiresAt <= now()) { if (e) localInvites.delete(code); found = null; }
+        else found = { roomId: e.roomId, replicaId: e.replicaId };
+      }
+      if (found) metrics.inviteHits++;
+      return found;
+    } catch { return null; }
+  };
+  const dropInvite = async (code) => {
+    if (!enabled) return;
+    try {
+      if (redisClient) await redisClient.del(INVITE_KEY(code));
+      else localInvites.delete(code);
+    } catch { /* best-effort: TTL cobre o resíduo */ }
+  };
   const metrics = {
     acquired: 0, renewed: 0, lost: 0, released: 0, fenceViolations: 0,
     redirects: 0, mirrorApplied: 0, mirrorGaps: 0, publishes: 0,
+    invitesPublished: 0, inviteLookups: 0, inviteHits: 0,
   };
   let heartbeatTimer = null;
   let mirrorTimer = null;
@@ -300,6 +347,13 @@ export function createDistributed({
   const frozen = new Set(); // salas congeladas por perda de lease (owner_lost)
 
   async function heartbeat() {
+    // Registro de réplicas também é renovado no heartbeat: sem isso, uma
+    // réplica VIVA sumiria do registry quando TTL (2× lease) vencesse — o
+    // playbook P3 documenta exatamente esse modo de falha (redirect a dono
+    // vivo devolve null e o cliente cai em alocação nova).
+    if (address && registry) {
+      try { await registry.register(id, address, ttlMs * 2); } catch { /* rede oscilou: próxima passada */ }
+    }
     for (const [roomId, fence] of held) {
       try {
         const r = await ownership.acquire(roomId, id, ttlMs);
@@ -318,7 +372,7 @@ export function createDistributed({
 
   async function mirrorLoop() {
     try {
-      const events = await relay.read(relayGlobalKey(), mirror.lastSeq, { limit: 64 });
+      const events = await relay.read(GLOBAL_STREAM_KEY, mirror.lastSeq, { limit: 64 });
       const accepted = mirror.feed(events);
       metrics.mirrorApplied += accepted.length;
       for (const e of accepted) mirrorHandlers.get(e.type)?.(e.payload, e);
@@ -327,12 +381,17 @@ export function createDistributed({
 
   const mirrorHandlers = new Map();
   const mirror = new RelayConsumer({ onGap: () => {} });
+  // Stream GLOBAL de ciclo de vida: binding de CLAUSURA (não propriedade do
+  // objeto retornado — referenciá-lo como identificador dentro de mirrorLoop/
+  // publish lançava ReferenceError silenciado pelo catch, deixando o relay
+  // entre réplicas inerte: mirrorApplied eternamente 0).
+  const GLOBAL_STREAM_KEY = '__global__';
 
   return {
     enabled: Boolean(enabled),
     replicaId: id,
     metrics,
-    relayGlobalKey: () => '__global__',
+    relayGlobalKey: () => GLOBAL_STREAM_KEY,
     frozen,
     held,
     ready: distributedReady || (async () => true),
@@ -411,8 +470,20 @@ export function createDistributed({
     publish(roomId, type, payload) {
       if (!enabled || !rly) return null;
       metrics.publishes++;
-      return rly.publish(roomId, type, payload);
+      const event = rly.publish(roomId, type, payload);
+      // Espelho GLOBAL de ciclo de vida: o mirrorLoop de cada réplica consome o
+      // stream '__global__' — sem esta publicação o relay entre réplicas é
+      // INERTE (publish escreve só no stream por sala; o mirror lê o global e
+      // mirrorApplied fica eternamente em 0). O roomId vai no payload para as
+      // réplicas remotas terem contexto. Best-effort: nunca derruba o caller.
+      void Promise.resolve(rly.publish(GLOBAL_STREAM_KEY, type, { ...(payload ?? {}), roomId })).catch(() => {});
+      return event;
     },
     isFrozen(roomId) { return frozen.has(roomId); },
+    // M4 — índice de convites compartilhado (cross-replica join)
+    publishInvite,
+    lookupInvite,
+    dropInvite,
+    inviteTtlMs,
   };
 }

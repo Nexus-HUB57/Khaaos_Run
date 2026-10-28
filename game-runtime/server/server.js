@@ -13,6 +13,7 @@ import { OidcClient } from './oidc.js';
 import { createSessionStore, PostgresAuditStore } from './store.js';
 import { AuditLog } from './audit.js';
 import { can } from './rbac.js';
+import { createEosBridge, eosConfigFromEnv } from './eos.js';
 import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
 import { grantMatchRewards } from './rewards.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
@@ -67,6 +68,7 @@ export function createAuthoritativeServer({
   obs,
   poj,
   distributed, // M3 — camada distribuída injetável (testes/staging)
+  eos, // M4 — ponte EOS nativa injetável (testes: config de teste explícita)
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -83,7 +85,19 @@ export function createAuthoritativeServer({
     : null);
   const oidcClient = oidcConfig ? new OidcClient(oidcConfig) : null;
   const oidcSubjectsAdmin = new Set(String(process.env.KR_OIDC_ADMIN_SUBJECTS || '').split(',').filter(Boolean));
-  const users = process.env.KR_USERS_JSON ? JSON.parse(process.env.KR_USERS_JSON) : [];
+  // KR_USERS_JSON: parse RESILIENTE — JSON malformado (ex.: aspas consumidas
+  // por `source .env` no deploy) não pode derrubar o runtime em crash loop:
+  // degrada para users=[] com sinal claro no log; login falha honestamente.
+  let users = [];
+  if (process.env.KR_USERS_JSON) {
+    try {
+      users = JSON.parse(process.env.KR_USERS_JSON);
+      if (!Array.isArray(users)) throw new Error('KR_USERS_JSON deve ser um array');
+    } catch (error) {
+      users = [];
+      console.error('[KR_USERS_JSON] inválido — boot segue SEM usuários estáticos (login falhará até corrigir):', String(error?.message || error).slice(0, 200));
+    }
+  }
   // KR_DEV_AUTH=1 provisiona usuários de desenvolvimento (NUNCA usar em produção).
   if (process.env.KR_DEV_AUTH === '1' && users.length === 0) {
     users.push(
@@ -172,6 +186,11 @@ export function createAuthoritativeServer({
   // comportamento single-node é EXATAMENTE o de antes (no-op total).
   const distributedLayer = distributed || createDistributed({
     enabled: process.env.KR_DISTRIBUTED === '1',
+    // M4 — identidade de réplica ESTÁVEL: KR_REPLICA_ID (override explícito) →
+    // HOSTNAME (estável por container no compose/autoscaler) → aleatório.
+    // Estabilidade importa: o registro de réplicas (redirect cross-réplica) e
+    // o smoke ao vivo apontam para IDs previsíveis por réplica.
+    replicaId: process.env.KR_REPLICA_ID || process.env.HOSTNAME || null,
     address: process.env.KR_REPLICA_URL || null,
     redisUrl: process.env.KR_REDIS_URL || process.env.REDIS_URL || null,
     ttlMs: Number(process.env.KR_OWNERSHIP_TTL_MS || 15_000),
@@ -378,6 +397,27 @@ export function createAuthoritativeServer({
         gauge('khaaos_runtime_process_resident_memory_bytes', 'RSS do processo', mem.rss);
         gauge('khaaos_runtime_process_heap_used_bytes', 'Heap V8 em uso', mem.heapUsed);
         gauge('khaaos_runtime_process_uptime_seconds', 'Uptime do processo', process.uptime());
+        // M3/M4 — camada distribuída (ownership/fencing/convites). Séries só
+        // existem quando KR_DISTRIBUTED=1: single-node não ganha ruído novo.
+        if (distributedLayer.enabled) {
+          const dist = distributedLayer.metrics || {};
+          const dcounter = (name, help, value) => counter(name, help, Number(value || 0));
+          gauge('khaaos_runtime_replica_info', 'Identidade da réplica (valor sempre 1)', 1, `{replica_id="${distributedLayer.replicaId}"}`);
+          dcounter('khaaos_runtime_distributed_acquired_total', 'Posses de sala adquiridas', dist.acquired);
+          dcounter('khaaos_runtime_distributed_renewed_total', 'Renovações de lease (heartbeat)', dist.renewed);
+          dcounter('khaaos_runtime_distributed_lost_total', 'Posses perdidas para outra réplica', dist.lost);
+          dcounter('khaaos_runtime_distributed_released_total', 'Leases liberados no encerramento de salas', dist.released);
+          dcounter('khaaos_runtime_distributed_fence_violations_total', 'Mutação sob fence inválido (fencing)', dist.fenceViolations);
+          dcounter('khaaos_runtime_distributed_redirects_total', 'Redirecionamentos ao dono da sala', dist.redirects);
+          dcounter('khaaos_runtime_distributed_publishes_total', 'Eventos publicados no relay', dist.publishes);
+          dcounter('khaaos_runtime_distributed_mirror_applied_total', 'Eventos do relay aplicados no espelho', dist.mirrorApplied);
+          dcounter('khaaos_runtime_distributed_mirror_gaps_total', 'Gaps de seq detectados no espelho', dist.mirrorGaps);
+          dcounter('khaaos_runtime_distributed_invites_published_total', 'Convites publicados no índice compartilhado', dist.invitesPublished);
+          dcounter('khaaos_runtime_distributed_invite_lookups_total', 'Consultas ao índice de convites', dist.inviteLookups);
+          dcounter('khaaos_runtime_distributed_invite_hits_total', 'Consultas resolvidas no índice de convites', dist.inviteHits);
+          gauge('khaaos_runtime_distributed_held_rooms', 'Salas com lease vivo nesta réplica', distributedLayer.held ? distributedLayer.held.size : 0);
+          gauge('khaaos_runtime_distributed_frozen_rooms', 'Salas congeladas (owner_lost/fence)', distributedLayer.frozen ? distributedLayer.frozen.size : 0);
+        }
         res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
         res.end(`${lines.join('\n')}\n`);
         return;
@@ -653,6 +693,64 @@ export function createAuthoritativeServer({
         await pojCommand((b, actor) => pojService.courtVerdict(actor, b), 'poj.court_verdict');
         return;
       }
+      // ── M4 — Ponte EOS nativa (Unreal/KhaaosRun/.../Game/EOS ↔ runtime) ────
+      // status: SEM segredos (o UE5 client/dedicated consulta a disponibilidade).
+      if (url.pathname === '/eos/status' && req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', ...(traceHeader || {}) });
+        res.end(JSON.stringify({ ...eosBridge.status(), now: Date.now() }));
+        return;
+      }
+      // Sessões: o DEDICATED SERVER (papel service/admin) ancora a sessão EOS
+      // nativa à sala que ESTA réplica possui — fencing: sem posse, sem sessão.
+      if (url.pathname === '/eos/sessions' && req.method === 'POST') {
+        if (!guardHttp(req, res, 'eos:operate')) return;
+        try {
+          const body = await jsonBody(req);
+          // Fencing AUTORITATIVO na camada HTTP (independente de injeção de
+          // bridge em testes): sessão EOS só ancora em sala possuída por
+          // ESTA réplica — lease vivo e não congelada.
+          const ownsRoom = (() => {
+            if (!body?.roomId || !rooms.has(body.roomId)) return false;
+            if (!distributedLayer.enabled) return true;
+            return Boolean(distributedLayer.held && distributedLayer.held.has(body.roomId)) && !distributedLayer.isFrozen(body.roomId);
+          })();
+          if (!ownsRoom) {
+            const error = new Error(`sala ${body?.roomId} não é possuída por esta réplica — sessão EOS não pode ancorar (fencing)`);
+            error.code = 'EOS_ROOM_NOT_OWNED';
+            throw error;
+          }
+          const result = eosBridge.registerSession(body);
+          audit.record({ actor: identityFor(req)?.username || 'eos-service', action: 'eos.session.register', resource: result.roomId, outcome: 'allow', detail: { sessionId: result.sessionId } });
+          res.writeHead(result.created ? 201 : 200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          audit.record({ actor: 'eos-service', action: 'eos.session.register', outcome: 'deny', detail: { code: error.code, reason: String(error?.message || error).slice(0, 200) } });
+          const code = error.code === 'EOS_ROOM_NOT_OWNED' || error.code === 'EOS_ROOM_REQUIRED' ? 409 : error.code === 'EOS_SESSION_ID_INVALID' ? 422 : 503;
+          res.writeHead(code, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: error.code || 'eos_error', detail: error.message }));
+        }
+        return;
+      }
+      const eosSessionMatch = url.pathname.match(/^\/eos\/sessions\/([^/]+)\/(heartbeat|end)$/);
+      if (eosSessionMatch && req.method === 'POST') {
+        if (!guardHttp(req, res, 'eos:operate')) return;
+        const [, sessionId, action] = eosSessionMatch;
+        try {
+          const result = action === 'heartbeat' ? eosBridge.heartbeat(sessionId) : eosBridge.endSession(sessionId);
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(error.code === 'EOS_SESSION_UNKNOWN' ? 404 : 503, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: error.code || 'eos_error', detail: error.message }));
+        }
+        return;
+      }
+      if (url.pathname === '/eos/sessions' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ sessions: eosBridge.list(), status: eosBridge.status(), now: Date.now() }));
+        return;
+      }
       if (url.pathname === '/admin/keys' && req.method === 'GET') {
         if (!guardHttp(req, res, 'keys:rotate')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -860,10 +958,24 @@ export function createAuthoritativeServer({
       level: 'info', event: 'ws.connect', trace: wsCtx,
       fields: { username: client.identity.username, mode, region: client.region, resumed: Boolean(resume), connections: clients.size },
     });
+    // M4 — buffer de mensagens durante o setup da conexão: o assign automático
+    // pode levar centenas de ms (sala 3D + consulta de patente), e o handler
+    // definitivo só era anexado DEPOIS — qualquer mensagem do cliente nesse
+    // intervalo (create_private/join_private/ping imediatos) era PERDIDA sem
+    // resposta nem erro. O handler provisório acumula; o drain injeta na
+    // ordem de chegada quando o setup termina.
+    const earlyMessages = [];
+    let connectionReady = false;
+    const earlyHandler = (raw) => { if (!connectionReady) earlyMessages.push(raw); };
+    ws.on('message', earlyHandler);
+
     if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); await assign(client); }
     else send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) });
 
-    ws.on('message', (raw) => {
+    connectionReady = true;
+    ws.off('message', earlyHandler);
+
+    const messageHandler = (raw) => {
       void (async () => {
         metrics.messages++;
         if (raw.length > MAX_WS_PAYLOAD) { metrics.oversized++; ws.close(4009, 'payload-too-large'); return; }
@@ -888,6 +1000,9 @@ export function createAuthoritativeServer({
             room.fence = lease.fence ?? 0;
             rooms.set(room.id, room);
             void distributedLayer.publish(room.id, 'room_open', { region: room.region, mode: '3d', capacity: room.capacity, private: true });
+            // M4 — convite visível às OUTRAS réplicas: o índice compartilhado
+            // permite join cross-réplica pelo código (redirect ao dono).
+            void distributedLayer.publishInvite(room.inviteCode, room.id);
             const position = queue.indexOf(client);
             if (position >= 0) queue.splice(position, 1);
             if (!(await guardedJoin(room, client))) return; // M3
@@ -897,8 +1012,27 @@ export function createAuthoritativeServer({
           }
           if (message.type === 'join_private') {
             if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }
-            const room = findRoomByCode(rooms, normalizeInviteCode(message.code));
-            if (!room) { send(ws, { type: 'private_not_found', code: normalizeInviteCode(message.code) }); return; }
+            const code = normalizeInviteCode(message.code);
+            const room = findRoomByCode(rooms, code);
+            if (!room && distributedLayer.enabled) {
+              // M4 — join cross-réplica: a sala não é desta réplica. O índice
+              // de convites compartilhado resolve o dono; o registry fornece
+              // o endereço público do dono (KR_REPLICA_URL) e o cliente é
+              // redirecionado — a AUTORIDADE da sala nunca se duplica.
+              const ref = await distributedLayer.lookupInvite(code);
+              const target = ref?.roomId ? await distributedLayer.redirectFor(ref.roomId) : null;
+              if (ref?.roomId && ref.replicaId === distributedLayer.replicaId) {
+                // Dono é a própria réplica e a sala não está no mapa local:
+                // sala morreu (restart) — sem para onde redirecionar.
+                send(ws, { type: 'private_not_found', code }); return;
+              }
+              if (target?.to) {
+                audit.record({ actor: client.identity.username, action: 'room.private.cross_replica_redirect', resource: ref.roomId, outcome: 'allow', detail: { owner: target.owner, to: target.to } });
+                send(ws, { type: 'redirect', roomId: ref.roomId, code, to: target.to, owner: target.owner, reason: 'cross_replica' });
+                return;
+              }
+            }
+            if (!room) { send(ws, { type: 'private_not_found', code }); return; }
             const position = queue.indexOf(client);
             if (position >= 0) queue.splice(position, 1);
             if (!(await guardedJoin(room, client))) return; // M3 — mutação sob fence
@@ -967,7 +1101,10 @@ export function createAuthoritativeServer({
           metrics.violations++;
         }
       })().catch(() => ws.close(1011, 'server-error'));
-    });
+    };
+    // M4 — drain do buffer de setup (ordem de chegada preservada) + handler definitivo.
+    for (const raw of earlyMessages.splice(0)) messageHandler(raw);
+    ws.on('message', messageHandler);
     ws.on('close', () => {
       void durable.setSession(client.resumeToken, { id: client.id, userId: user.sub, roomId: client.roomId, expiresAt: Date.now() + 15000 }).catch?.(() => {});
       clients.delete(client.id);
@@ -999,7 +1136,7 @@ export function createAuthoritativeServer({
   }, 50);
   const cleanup = setInterval(() => {
     void (async () => {
-      for (const [id, room] of rooms) if (room.players.size === 0 && Date.now() - room.lastActivity > 60000) { rooms.delete(id); await distributedLayer.release(id); frozenNotified.delete(id); } // M3 — lease liberado junto
+      for (const [id, room] of rooms) if (room.players.size === 0 && Date.now() - room.lastActivity > 60000) { rooms.delete(id); await distributedLayer.release(id); if (room.isPrivate && room.inviteCode) await distributedLayer.dropInvite(room.inviteCode); frozenNotified.delete(id); } // M3 — lease liberado junto · M4 — convite removido do índice
       if (typeof durable.cleanupExpired === 'function') await durable.cleanupExpired();
       else for (const session of await durable.listSessions()) if (session.expiresAt < Date.now()) await durable.deleteSession(session.id);
     })().catch(() => {});
@@ -1015,10 +1152,23 @@ export function createAuthoritativeServer({
     ...(distributedLayer.metrics || {}),
   });
 
+  // M4 — ponte EOS NATIVA (credential-gated): sem credenciais responde
+  // `unconfigured` e rejeita operações — o mock vive só nos unit tests.
+  // Sessões EOS ancoram em salas POSSUÍDAS por esta réplica (fencing M3/M4).
+  const eosBridge = eos || createEosBridge({
+    config: eosConfigFromEnv(),
+    isRoomOwnedLocally: (roomId) => {
+      if (!rooms.has(roomId)) return false;
+      if (!distributedLayer.enabled) return true;
+      return Boolean(distributedLayer.held && distributedLayer.held.has(roomId)) && !distributedLayer.isFrozen(roomId);
+    },
+  });
+  eosBridge.start();
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.(), distributedLayer.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
     distributed: distributedLayer, // M3 — exposto p/ testes/operação
+    eos: eosBridge, // M4 — ponte EOS nativa exposta p/ testes/operação
     spectator: spectatorPipeline, // Fase 14 — pipeline da transmissão exposto p/ testes/operação
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
@@ -1026,6 +1176,7 @@ export function createAuthoritativeServer({
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      eosBridge.stop(); // M4 — encerra timers/estado da ponte EOS
       await distributedLayer.stop().catch(() => {}); // M3 — libera leases/registros
       try { server.off('upgrade', routeUpgrade); } catch { /* já removido */ }
       spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão

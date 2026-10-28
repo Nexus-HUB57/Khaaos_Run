@@ -77,7 +77,8 @@ test('fase4 sim: granada consome inventário, detona no pavio e mata bot no epic
   const s = groundSim('FRAG-1', 1);
   s.start('belt');
   const p = s.player, bot = s.bots[0];
-  s.world.colliders.length = 0; // linha unitária (physicsWorld aliasa o array)
+  s.world.colliders.length = 0;
+  s.doors.length = 0; s.syncPhysicsWorld(); // Fase 25 — painéis fora da linha unitária (dinâmico)
   assert.equal(p.inventory.frag, 1);
   s.step({ ...idle(0), throw: true }, STEP);
   assert.equal(p.inventory.frag, 0, 'granada consumida');

@@ -118,6 +118,26 @@ export const OPERATIVE_ABILITIES = Object.freeze({
     parameters: Object.freeze({ damageReduction: 0.25 }),
     description: 'Reduz em 25% o dano direto recebido por 4 segundos, sem conceder invulnerabilidade.',
   }),
+  // Fase 26 — TALON (Hacker & Urban Runner · Agilidade e Informação).
+  // "Invasão de Campo": pulso de varredura digital que REVELA rivais ATRÁS de
+  // cobertura (paredes, construções e Paredes de Gel — sem checagem de LOS, é
+  // essa a assinatura da skill) com silhueta laranja para Talon e aliados, e
+  // acelera salto/escala (vault) em 15% enquanto ativo. Progressão Lv1→Lv6
+  // é META-DE-DADOS (UI/progressão): a sim resolve os parâmetros-base canônicos.
+  OP_MALE_TALON: Object.freeze({
+    operativeId: 'OP_MALE_TALON', name: 'Invasão de Campo', effect: 'fieldScan',
+    cooldownSeconds: 65, durationSeconds: 6,
+    parameters: Object.freeze({ radius: 20, revealSeconds: 4, vaultSpeedMultiplier: 1.15 }),
+    description: 'Pulso de varredura em raio de 20 m por 6 s: rivais atrás de cobertura ganham silhueta laranja por 4 s; salto/escala 15% mais rápidos enquanto ativo.',
+    levelProgression: Object.freeze([
+      Object.freeze({ level: 1, radius: 15, durationSeconds: 4, cooldownSeconds: 80 }),
+      Object.freeze({ level: 2, radius: 17, durationSeconds: 4.6, cooldownSeconds: 74 }),
+      Object.freeze({ level: 3, radius: 19, durationSeconds: 5.2, cooldownSeconds: 68 }),
+      Object.freeze({ level: 4, radius: 21, durationSeconds: 5.8, cooldownSeconds: 63 }),
+      Object.freeze({ level: 5, radius: 23, durationSeconds: 6.4, cooldownSeconds: 59 }),
+      Object.freeze({ level: 6, radius: 25, durationSeconds: 7, cooldownSeconds: 55 }),
+    ]),
+  }),
 });
 
 export function getOperativeAbility(operativeId) {

@@ -466,6 +466,16 @@ export function glooCollider(wall) {
   return { minX: wall.x - w / 2, maxX: wall.x + w / 2, minZ: wall.z - d / 2, maxZ: wall.z + d / 2, yMin: 0, yMax: GLOO.h, kind: 'gloo', wallId: wall.id };
 }
 
+// ---------- Fase 25 — PORTA DESTRUTÍVEL ----------
+// Painel físico no vão da porta (interiorsPlan.doorPanelFor): bloqueia
+// movimento/balas/LOS enquanto ativa; hp cai com balas, granadas e
+// corpo-a-corpo (melee é eficaz — 2,5×). Quebrada => collider sai e o vão
+// fica LIVRE (evento 'doorDown' p/ o visual esconder o painel).
+export const DOOR = Object.freeze({ hp: 90, meleeMult: 2.5 });
+export function doorCollider(door) {
+  return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
+}
+
 // Posição/rotação de deploy: à frente do ator, alinhada à direção de visão (0/90°).
 export function glooDeployPlacement(a) {
   const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
@@ -491,6 +501,9 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
     const access = hollowAccess(layout, scenario);
     layout.colliders = access.colliders;
     layout.floors = access.floors;
+    // Fase 25 — portas destrutíveis (estado dinâmico nasce daqui) + loot interior
+    layout.doors = access.doors;
+    layout.interiorSpots = access.lootSpots;
     layout.access = { replaced: access.replaced, windows: access.windows, mezzanines: access.mezzanines };
     // Fase 25 — VÃOS DE PORTA em mundo (folha dinâmica fechada/aberta/destruída)
     // + plano de interiores anexado (loot interior/mezanino e pathing da IA)
@@ -538,9 +551,11 @@ export class KhaaosSim3D {
     this.loot = this.#spawnLoot();
     this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
-    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls).
-    // ALIAS da lista do layout quando não há paredes — mutações externas no layout
-    // (ex.: testes que removem colliders) continuam valendo para balas/LOS/movimento.
+    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls + portas).
+    // ALIAS da lista do layout quando não há dinâmicos — mutações externas no
+    // layout (ex.: testes que removem colliders) continuam valendo para
+    // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
+    // s.doors e re-sincronizam via syncPhysicsWorld()).
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
     // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
     this.#syncPhysicsWorld();
@@ -637,6 +652,11 @@ export class KhaaosSim3D {
     }
     return items;
   }
+  #interiorLootCount(items) {
+    let n = 0;
+    for (const it of items) if (String(it.id).startsWith('loot-i')) n++;
+    return n;
+  }
 
   // ---------- protocolo ----------
   start(entry = 'belt') {
@@ -712,6 +732,15 @@ export class KhaaosSim3D {
       for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
       state.targetIds = targets.map((bot) => bot.id);
       details.targets = targets.length;
+    } else if (ability.effect === 'fieldScan') {
+      // Fase 26 — Invasão de Campo (Talon): o pulso ATRAVESSA cobertura — sem
+      // checagem de LOS (paredes/construções/Gloo não protegem da varredura).
+      // revealedTicks alimenta minimapa (hud3d) e silhueta laranja 3D (main3d).
+      const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
+      for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
+      state.targetIds = targets.map((bot) => bot.id);
+      details.targets = targets.length;
+      details.radius = params.radius;
     } else if (ability.effect === 'stun') {
       const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
       for (const bot of targets) bot.ai.stunTicks = Math.ceil(params.stunSeconds * this.tickRate);
@@ -827,6 +856,11 @@ export class KhaaosSim3D {
       const active = a.abilityState.activeTicks > 0;
       a.abilitySpeedMultiplier = active && (ability.effect === 'speed' || ability.effect === 'dash')
         ? ability.parameters.speedMultiplier : 1;
+      // Fase 26 — Talon: salto/escala (vault) +15% enquanto o pulso está ativo
+      // (aplica só no ar — a.y > 0.05 — para não virar buff de corrida plano).
+      if (active && ability.effect === 'fieldScan' && a.y > 0.05) {
+        a.abilitySpeedMultiplier = Math.max(a.abilitySpeedMultiplier, ability.parameters.vaultSpeedMultiplier);
+      }
       a.abilityDistanceBudget = active && ability.effect === 'dash' ? a.abilityState.distanceRemaining : undefined;
       a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
     }
@@ -888,7 +922,7 @@ export class KhaaosSim3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
   }
   #stepThrowables(dt) {
@@ -908,7 +942,20 @@ export class KhaaosSim3D {
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
-    if (changed) this.#syncPhysicsWorld();
+    if (changed) this.syncPhysicsWorld();
+    this.#stepDoors();
+  }
+  // Fase 25 — portas: quebra quando hp esgota (collider sai do mundo físico)
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (!d.active) continue;
+      if (d.hp <= 0) {
+        d.active = false; changed = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, rot: d.rot });
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -916,9 +963,14 @@ export class KhaaosSim3D {
       const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
       if (dmg <= 0) continue;
       if (a.id === 'player') this.#hurtPlayer(dmg, g.owner, 'explosion');
-      else this.#damageBot(a, dmg, g.owner, false);
+      else {
+        this.#damageBot(a, dmg, g.owner, false);
+        // Fase 27 — número de dano da explosão (mesma gramática do hit de bala;
+        // o FX/áudio da explosão cobre o impacto — o consumo decide o que mostrar)
+        this.emit('hit', { x: a.x, y: a.y + 1, z: a.z, victim: a.id, head: false, damage: Math.round(dmg), owner: g.owner, kind: 'explosion' });
+      }
     }
-    // granada desgasta gloo walls no raio
+    // granada desgasta gloo walls e PORTAS no raio
     let changed = false;
     for (const w of this.walls) {
       if (!w.active) continue;
@@ -1189,13 +1241,39 @@ export class KhaaosSim3D {
     if (a.cooldown > 0) return false;
     a.cooldown = 1 / w.fireRate;
     const reach = 2.4;
+    let hitFlesh = false;
     for (const b of this.bots) {
       if (!b.alive) continue;
       if (dist2d(a.x, a.z, b.x, b.z) < reach && Math.abs(a.y - b.y) < 2) {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(b.z - a.z, b.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damageBot(b, w.damage, a.id, false); this.emit('melee', { target: b.id }); break; }
+        if (diff < 1.2) {
+          this.#damageBot(b, w.damage, a.id, false);
+          // Fase 28 — evento 'melee' com o CONTRATO do número de dano: o
+          // atacante vê o número flutuante na mesma gramática do hit de bala.
+          this.emit('melee', {
+            target: b.id, x: b.x, y: (b.y ?? 0) + 1, z: b.z,
+            victim: b.id, owner: a.id,
+            damage: Math.max(1, Math.round(w.damage)), head: false,
+          });
+          hitFlesh = true; break;
+        }
+      }
+    }
+    // Fase 25 — melee arrebenta PORTA (a pá/cano é a ferramenta clássica de
+    // entrada silenciosa: sem o estrondo de tiro nem o custo de granada).
+    // Ângulo de frente REAL (atan2(fz, fx)) — não usa a convenção trocada do
+    // ramo de bots acima (paridade legada preservada lá).
+    if (!hitFlesh) {
+      const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const d of this.doors) {
+        if (!d.active) continue;
+        const cx = clamp(a.x, d.x - d.hw, d.x + d.hw), cz = clamp(a.z, d.z - d.hd, d.z + d.hd);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
+        const ang = Math.atan2(d.z - a.z, d.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
+        if (diff < 1.25) { d.hp -= w.damage * DOOR.meleeMult; this.emit('doorHit', { id: d.id, x: d.x, z: d.z }); break; }
       }
     }
     this.emit('swing', { owner: a.id });
@@ -1239,7 +1317,9 @@ export class KhaaosSim3D {
         const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? 1.75 : 1);
         if (charHit.isPlayer) this.#hurtPlayer(dmg, b.owner, charHit.head ? 'headshot' : 'body');
         else this.#damageBot(charHit.ref, dmg, b.owner, charHit.head);
-        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg) });
+        // Fase 27 — `owner` identifica o atirador (números de dano/hitmarker
+        // só para acertos PRÓPRIOS; bot×bot deixa de vazar no marker).
+        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg), owner: b.owner });
         continue;
       }
       if (hitT < len) {
@@ -1369,7 +1449,8 @@ export class KhaaosSim3D {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
           this.player.xp += head ? 60 : 40; this.player.krc += 5;
-          this.emit('botKnocked', { target: bot.name, head, xp: head ? 60 : 40, krc: 5 });
+          // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
