@@ -944,7 +944,7 @@ export class KhaaosSim3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe (TypeError no deploy da Gloo)
+    this.syncPhysicsWorld();
     this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
   }
   #stepThrowables(dt) {
@@ -963,6 +963,22 @@ export class KhaaosSim3D {
       if (!w.active) continue;
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
+    }
+    if (changed) this.syncPhysicsWorld();
+    // Fase 25 — sweep de folhas: hp ≤ 0 por QUALQUER caminho (balas/explosão
+    // via #damageDoor, ou mutação direta em testes/harness) => destroyed +
+    // doorDown + física sincronizada. #damageDoor flipa destroyed na hora,
+    // então este sweep nunca reemite doorDown duplicado.
+    this.#stepDoors();
+  }
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; changed = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
+      }
     }
     if (changed) this.syncPhysicsWorld();
   }
