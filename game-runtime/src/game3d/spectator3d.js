@@ -816,6 +816,9 @@ function createSpectatorGame(Game3D) {
       // Fase 22 — cenários vivos na TRANSMISSÃO (mesmo padrão dos marcos)
       const dressingAnim = this.scene.userData.districtDressing?.animators;
       if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+      // Fase 23 — interiores na TRANSMISSÃO (flicker de lâmpadas/telas)
+      const interiorsAnim = this.scene.userData.interiors?.animators;
+      if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
       this.survivalFX?.update(dt, this.animT);
       this.updateSpectatorCamera(dt);
       this.effects.update(dt);

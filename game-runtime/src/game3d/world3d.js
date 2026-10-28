@@ -13,6 +13,8 @@ import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlaceme
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
+import { buildInteriors, buildShellHost } from './interiors3d.js'; // Fase 23 — interiores reais
+import { buildTerrain, terrainHeightAt } from './terrain3d.js'; // Fase 23 — relevo do terreno
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -189,6 +191,8 @@ function buildRoads(scene, layout) {
 }
 
 // ---------- Fase 6 — fachadas detalhadas (decoro SEM colliders) ----------
+// Fase 23 — estruturas com casca (interiors3d) têm porta REAL: a porta pintada
+// da fachada é pulada; ruínas (paredes quebradas) também não recebem janelas.
 const KIND_SIGN = { barrack: 'ARMAMENTO', hangar: 'PROVING', warehouse: 'SUPRIMENTOS', building: 'CIVIC', depot: 'MUNIÇÃO', ruin: 'RUÍNA', pavilion: 'QUIOSQUE', tower: 'TORRE' };
 let _winMats = null;
 function windowBandMaterials() {
@@ -202,7 +206,7 @@ function windowBandMaterials() {
   });
   return _winMats;
 }
-function buildFacades(scene, layout) {
+function buildFacades(scene, layout, shellSet = null) {
   const concreteDark = concreteMaterial(1.2);
   concreteDark.color = new THREE.Color('#56534e');
   const doorM = new THREE.MeshStandardMaterial({ color: '#2a2c30', roughness: .7, metalness: .3 });
@@ -215,10 +219,12 @@ function buildFacades(scene, layout) {
   for (const s of layout.structures) {
     const details = facadeDetails(s);
     if (!details.length) continue;
+    const shelled = shellSet?.has(s) ?? false;
     const host = new THREE.Group();
     host.position.set(s.x, s.yMin, s.z); // y local 0 = chão; v é altura do chão
     host.rotation.y = s.rot ?? 0;
     for (const d of details) {
+      if (shelled && (d.kind === 'door' || (d.kind === 'windows' && s.kind === 'ruin'))) continue; // Fase 23
       const y = d.v + d.h / 2;
       let m = null;
       if (d.kind === 'door') {
@@ -610,13 +616,9 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   back.position.set(60, 50, 240);
   scene.add(back);
 
-  // ---- terreno ----
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(440, 440),
-    groundMaterial(34, scenario.groundTint)
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
+  // ---- terreno (Fase 23: relevo por elevação FORA da área jogável; plano
+  // jogável permanece y=0 exato — entidades/sombras/loot intactos) ----
+  const ground = buildTerrain(scenario);
   scene.add(ground);
 
   // praça central de asfalto
@@ -688,15 +690,26 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte
   buildWorldMarks(scene, layout, scenario);
 
+  // Fase 23 — interiores reais: cascas com porta/mobília substituem a caixa
+  // sólida das estruturas-habitação (colliders do layout intactos)
+  const interiors = buildInteriors(scene, layout, scenario, q);
+
   for (const s of layout.structures) {
-    const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
-    const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(s.x, s.yMin + s.h / 2, s.z);
-    mesh.rotation.y = s.rot ?? 0;
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
-    if (s.h >= 6 && s.kind !== 'monolith') {
+    const shellSpec = interiors.shells.get(s);
+    if (shellSpec) {
+      // Fase 23 — casca habitável no lugar da caixa (mesma transform; o sim
+      // continua tratando a estrutura como sólida, exatamente como antes)
+      interiors.group.add(buildShellHost(s, shellSpec, interiors.mats));
+    } else {
+      const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
+      const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(s.x, s.yMin + s.h / 2, s.z);
+      mesh.rotation.y = s.rot ?? 0;
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      scene.add(mesh);
+    }
+    if (s.h >= 6 && s.kind !== 'monolith' && !shellSpec) { // Fase 23 — cascas têm teto próprio
       const cap = new THREE.Mesh(new THREE.BoxGeometry(s.w * 1.04, .5, s.d * 1.04), mats.wall);
       cap.position.set(s.x, s.yMin + s.h + .25, s.z);
       cap.castShadow = true; cap.receiveShadow = true;
@@ -716,7 +729,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   }
 
   // Fase 6 — fachadas detalhadas por cima das estruturas (depois dos meshes base)
-  buildFacades(scene, layout);
+  // Fase 23 — shells recebem o Set p/ pular porta pintada (agora é vão real)
+  buildFacades(scene, layout, interiors.shells);
 
   // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
   const bladeTex = grassBladeTexture();
@@ -743,7 +757,9 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     let gi = 0;
     for (let i = half; i < blades.length; i += 2) {
       const [x, z, rot] = blades[i];
-      dummy.position.set(x, .32, z);
+      // Fase 23 — grama acompanha o relevo (só muda além da área jogável;
+      // dentro do plano segue em y=.32 como sempre)
+      dummy.position.set(x, .32 + terrainHeightAt(x, z, scenario.id), z);
       dummy.rotation.set(0, rot, 0);
       dummy.updateMatrix();
       grass.setMatrixAt(gi++, dummy.matrix);
