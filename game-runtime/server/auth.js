@@ -13,7 +13,13 @@ import crypto from 'node:crypto';
 
 const b64 = (v) => Buffer.from(v).toString('base64url');
 const unb64 = (v) => Buffer.from(v, 'base64url').toString('utf8');
-const randomKid = () => crypto.randomBytes(6).toString('hex');
+// kid DETERMINÍSTICO por secret: réplicas com o MESMO AUTH_SECRET derivam a
+// MESMA kid e validam tokens umas das outras (verificação stateless entre
+// réplicas do staging). Kid aleatório por processo quebrava o resume/redirect
+// cross-replica: o token emitido pela réplica A era rejeitado na B com
+// auth_required (kid filtrado sem fallback, por design anti cross-key).
+// Rotação continua segura: secret novo → kid novo (1-1 com o secret).
+const kidFromSecret = (secret) => crypto.createHash('sha256').update(String(secret)).digest('hex').slice(0, 12);
 const REVOCATION_MARGIN_SECONDS = 60; // folga de relógio além do exp
 
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -81,10 +87,10 @@ export class AuthService {
     this.keys = [];
     if (Array.isArray(keys) && keys.length > 0) {
       for (const key of keys) {
-        this.keys.push({ kid: key.kid || randomKid(), secret: String(key.secret), state: key.state || 'active' });
+        this.keys.push({ kid: key.kid || kidFromSecret(key.secret), secret: String(key.secret), state: key.state || 'active' });
       }
     } else {
-      this.keys.push({ kid: randomKid(), secret, state: 'active' });
+      this.keys.push({ kid: kidFromSecret(secret), secret, state: 'active' });
     }
     this.users = new Map(users.map((u) => [u.username, { ...u }]));
     this.revoked = new Map(); // jti → { expiresAt } (epoch segundos)
@@ -105,7 +111,7 @@ export class AuthService {
     const current = this.activeKey;
     if (current.secret === newSecret) return { kid: current.kid, rotated: false, keys: this.keyInfo() };
     current.state = 'retired';
-    const kid = randomKid();
+    const kid = kidFromSecret(newSecret);
     this.keys.unshift({ kid, secret: newSecret, state: 'active' });
     return { kid, rotated: true, keys: this.keyInfo() };
   }

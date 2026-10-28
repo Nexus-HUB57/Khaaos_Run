@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
+import { createClient } from 'redis';
 
 const { Pool } = pg;
 
@@ -108,8 +109,76 @@ export class PostgresSessionStore {
   }
 }
 
+// Sessões no REDIS REAL — réplica agnóstica: qualquer réplica com o mesmo
+// KR_REDIS_URL lê a MESMA sessão de resume. É o que permite o redirect M3
+// funcionar entre PROCESSOS reais (o dono antigo morre e a réplica B sabe a
+// sala original) sem exigir PostgreSQL no caminho do jogo.
+export class RedisSessionStore {
+  constructor({ url = process.env.KR_REDIS_URL || process.env.REDIS_URL, client, prefix = 'kr:session:' } = {}) {
+    if (!client && !url) throw new Error('KR_REDIS_URL ou REDIS_URL é obrigatório para KR_SESSION_STORE=redis');
+    this.prefix = prefix;
+    this.external = Boolean(client);
+    this.client = client || createClient({ url });
+    this.connectPromise = this.external
+      ? Promise.resolve()
+      : this.client.connect().then(() => this.client.ping());
+  }
+
+  async ready() {
+    await this.connectPromise;
+    return true;
+  }
+
+  async setSession(id, session) {
+    // TTL do Redis = janela de resume: expira sozinho (sem cleanup ativo).
+    const ttlMs = Math.max(1_000, Number(session?.expiresAt || 0) - Date.now());
+    await this.client.set(this.prefix + id, JSON.stringify(session), { PX: ttlMs });
+    return session;
+  }
+
+  async getSession(id) {
+    const raw = await this.client.get(this.prefix + id);
+    if (!raw) return null;
+    try {
+      const session = JSON.parse(raw);
+      if (session && session.expiresAt <= Date.now()) { await this.deleteSession(id); return null; }
+      return session;
+    } catch { return null; }
+  }
+
+  async deleteSession(id) {
+    await this.client.del(this.prefix + id);
+  }
+
+  async listSessions() {
+    const live = [];
+    const now = Date.now();
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.client.scan(cursor, { MATCH: `${this.prefix}*`, COUNT: 200 });
+      cursor = next;
+      if (keys.length) {
+        const raws = await this.client.mGet(keys);
+        for (const raw of raws) {
+          if (!raw) continue;
+          try { const s = JSON.parse(raw); if (s && s.expiresAt > now) live.push(s); } catch { /* corrompida: ignora */ }
+        }
+      }
+    } while (cursor !== '0');
+    return live;
+  }
+
+  // As chaves expiram pelo PX do SET — nada a limpar ativamente.
+  async cleanupExpired() { return 0; }
+
+  async close() {
+    if (!this.external && this.client.isOpen) { try { await this.client.quit(); } catch { /* já fechado */ } }
+  }
+}
+
 export function createSessionStore({ mode = process.env.KR_SESSION_STORE || 'json', filePath } = {}) {
   if (mode === 'postgres') return new PostgresSessionStore();
+  if (mode === 'redis') return new RedisSessionStore();
   if (mode !== 'json') throw new Error(`KR_SESSION_STORE inválido: ${mode}`);
   return new DurableJsonStore(filePath || process.env.KR_STORE || path.join(process.cwd(), '.data', 'server.json'));
 }
