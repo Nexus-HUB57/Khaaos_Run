@@ -271,10 +271,11 @@ export class Effects {
       damageReduction: '#9fb6c9', temporaryArmor: '#9fb6c9', recon: '#4d7dff',
       stun: '#b04dff', concealment: '#8f7dff', ringRead: '#ff9a4d',
       ringForecast: '#ff9a4d', terminalScan: '#59ffb0', ringResistance: '#7dffc9',
+      fieldScan: '#fb923c', // Fase 26 — assinatura laranja da Invasão de Campo
     }[effect] ?? '#ffd9a0';
   }
 
-  abilityAura(pos, effect = 'speed') {
+  abilityAura(pos, effect = 'speed', radius = 18) {
     const color = this.#abilityColor(effect);
     // anel de solo que expande e some (0.55 s)
     const ring = new THREE.Mesh(
@@ -285,6 +286,21 @@ export class Effects {
     ring.position.set(pos.x, Math.max(0.06, pos.y - 0.8), pos.z);
     this.scene.add(ring);
     this.abilityAuras.push({ mesh: ring, life: .55, max: .55, kind: 'ring', color: new THREE.Color(color) });
+    // Fase 26 — Invasão de Campo (Talon): PULSO DE VARREDURA em escala real —
+    // anel de raio ~params.radius que cresce do caster até o limite (0.9 s),
+    // legível até 35 m (spec de skill ativa do BR).
+    if (effect === 'fieldScan') {
+      const R = Math.max(10, Math.min(28, radius));
+      const scan = new THREE.Mesh(
+        new THREE.RingGeometry(R * .82, R, 48),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      scan.rotation.x = -Math.PI / 2;
+      scan.position.set(pos.x, Math.max(.08, pos.y - .8), pos.z);
+      scan.scale.setScalar(.04);
+      this.scene.add(scan);
+      this.abilityAuras.push({ mesh: scan, life: .9, max: .9, kind: 'scan', color: new THREE.Color(color) });
+    }
     // coluna de partículas ascendentes no caster
     for (let i = 0; i < 14; i++) {
       const p = this.#getParticle(this.spriteTex);
@@ -326,9 +342,9 @@ export class Effects {
       if (a.life > 0) {
         a.life -= dt;
         const k = 1 - Math.max(0, a.life) / a.max;
-        const s = .8 + k * 3.4; // anel expande ~4x
+        const s = a.kind === 'scan' ? .04 + (1 - Math.pow(1 - k, 3)) * .96 : .8 + k * 3.4; // scan cresce até o raio real
         a.mesh.scale.set(s, s, 1);
-        a.mesh.material.opacity = Math.max(0, a.life / a.max) * .85;
+        a.mesh.material.opacity = Math.max(0, a.life / a.max) * (a.kind === 'scan' ? .55 : .85);
         if (a.life <= 0) { a.mesh.visible = false; this.scene.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose(); }
       }
     }
