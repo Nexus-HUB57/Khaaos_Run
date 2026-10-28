@@ -1,0 +1,122 @@
+# =============================================================================
+# Khaaos Run — Stack de staging CROSS-REPLICA (M3/M4): 2 réplicas REAIS do
+# servidor autoritativo + Redis REAL com KR_DISTRIBUTED=1.
+# =============================================================================
+# Diferença para docker-compose.yml (staging base): aqui o objetivo é provar ao
+# vivo a cadeia distribuída — ownership/fencing de salas no Redis, redirect ao
+# dono vivo, relay entre réplicas e failover — com DOIS processos separados
+# (app-a e app-b), cada um anunciando o próprio endereço (KR_REPLICA_URL).
+#
+# Uso (a partir desta pasta):
+#   cp .env.example .env                 # segredos base
+#   docker compose -f docker-compose.cross-replica.yml up -d --build
+#   bash verify-cross-replica.sh         # smoke cross-replica AO VIVO
+#   docker compose -f docker-compose.cross-replica.yml down -v
+#
+# Contrato do smoke (grep): CROSS_REPLICA_SMOKE_OK
+#
+# Sessões de resume vivem no MESMO Redis (KR_SESSION_STORE=redis) — é o que
+# permite a réplica B redirecionar a reconexão de um jogador cuja sala vive na
+# réplica A, inclusive entre processos/containers separados.
+#
+# KR_REPLICA_URL: endereço ANUNCIADO no registro para os CLIENTES seguirem o
+# redirect. Default aponta para as portas expostas no host (127.0.0.1:8791/92)
+# porque o consumidor do redirect é o cliente externo (smoke/jogador). Em
+# staging público, aponte para os endereços roteáveis dos nós.
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${KR_PG_DB:-khaaos_staging}
+      POSTGRES_USER: ${KR_PG_USER:-khaaos}
+      POSTGRES_PASSWORD: ${KR_PG_PASSWORD:?configure KR_PG_PASSWORD no .env}
+    volumes:
+      - pgdata_xrep:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KR_PG_USER:-khaaos} -d ${KR_PG_DB:-khaaos_staging}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata_xrep:/data
+    # Host port: o smoke cross-replica (attach) lê as chaves de ownership
+    # DIRETAMENTE do Redis real p/ provar o lease (evidência, não mock).
+    ports:
+      - "${KR_XREP_REDIS_PORT:-6399}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: game-runtime/Dockerfile
+    entrypoint: ["npm", "run", "db:migrate"]
+    environment:
+      KR_DATABASE_URL: postgres://khaaos:${KR_PG_PASSWORD}@postgres:5432/${KR_PG_DB:-khaaos_staging}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app-a:
+    build:
+      context: ../..
+      dockerfile: game-runtime/Dockerfile
+    environment: &xrep_app_env
+      PORT: "8787"
+      KR_DISTRIBUTED: "1"
+      KR_REDIS_URL: redis://redis:6379
+      KR_SESSION_STORE: redis
+      KR_RATE_STORE: redis
+      KR_OWNERSHIP_TTL_MS: ${KR_OWNERSHIP_TTL_MS:-15000}
+      KR_OWNERSHIP_HEARTBEAT_MS: ${KR_OWNERSHIP_HEARTBEAT_MS:-5000}
+      KR_DATABASE_URL: postgres://khaaos:${KR_PG_PASSWORD}@postgres:5432/${KR_PG_DB:-khaaos_staging}
+      KR_AUDIT_STORE: postgres
+      KR_ECONOMY_STORE: postgres
+      KR_REPLICA_URL: ${KR_REPLICA_URL_A:-ws://127.0.0.1:8791}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?configure ADMIN_TOKEN no .env}
+      AUTH_SECRET: ${AUTH_SECRET:?configure AUTH_SECRET no .env}
+      KR_USERS_JSON: ${KR_USERS_JSON:-}
+      MATCH_SEED: ${MATCH_SEED:-CIGKV-xrep}
+      KR_REGION: ${KR_REGION:-sa-east}
+      KR_DEV_AUTH: "0"
+      KR_METRICS_ENABLED: ${KR_METRICS_ENABLED:-1}
+    ports:
+      - "${KR_XREP_PORT_A:-8791}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  app-b:
+    build:
+      context: ../..
+      dockerfile: game-runtime/Dockerfile
+    environment:
+      <<: *xrep_app_env
+      KR_REPLICA_URL: ${KR_REPLICA_URL_B:-ws://127.0.0.1:8792}
+    ports:
+      - "${KR_XREP_PORT_B:-8792}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata_xrep:
+  redisdata_xrep:

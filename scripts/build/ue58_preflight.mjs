@@ -135,12 +135,37 @@ export function validateProject(root) {
         }
         continue;
       }
+      // Módulos do projeto (sourceDir/*) — o UBT com os PrivateIncludePaths dos
+      // Build.cs resolve includes contra esses roots (KhaaosRunEditor → KhaaosRun).
+      const projectModuleDirs = fs.existsSync(sourceDir)
+        ? fs.readdirSync(sourceDir, { withFileTypes: true }).filter((entry) => entry.isDirectory() && fs.existsSync(path.join(sourceDir, entry.name, `${entry.name}.Build.cs`))).map((entry) => entry.name)
+        : [];
+      const moduleRoots = projectModuleDirs.flatMap((name) => [
+        path.join(sourceDir, name, inc),
+        path.join(sourceDir, name, 'Public', inc),
+      ]);
       const resolvesLocally = headerSet.has(path.resolve(path.dirname(file), inc))
-        || [path.join(sourceDir, moduleFor(file), inc), path.join(sourceDir, inc), path.join(sourceDir, moduleFor(file), 'Public', inc), path.join(sourceDir, moduleFor(file), 'Classes', inc)]
+        || [
+          path.join(sourceDir, moduleFor(file), inc),
+          path.join(sourceDir, inc),
+          path.join(sourceDir, moduleFor(file), 'Public', inc),
+          path.join(sourceDir, moduleFor(file), 'Classes', inc),
+          // Includes cross-módulo na forma canônica ("Game/<SubDir>/X.h" num
+          // módulo vizinho): os Build.cs do projeto expõem os roots dos módulos
+          // irmãos via PrivateIncludePaths (KhaaosRunEditor → KhaaosRun), então
+          // o preflight resolve contra TODOS os roots de módulo conhecidos.
+          ...moduleRoots,
+        ]
             .some((candidate) => headerSet.has(candidate));
       if (resolvesLocally) continue;
       const firstSegment = inc.split('/')[0];
       const basenameKnown = headerNames.has(path.basename(inc));
+      // "Commandlets/Commandlet.h" é include de ENGINE (UnrealEd — UCommandlet);
+      // o primeiro segmento colide com o dir Commandlets/ do módulo editor. Um
+      // include Commandlets/* com basename que NÃO é header do projeto é engine
+      // (ex.: Commandlet.h); typo em commandlet do projeto (basename presente)
+      // continua sendo flaggado.
+      if (firstSegment === 'Commandlets' && !basenameKnown) continue;
       if (projectDirs.has(firstSegment) || basenameKnown) {
         add(FATAL, 'UE1021', path.relative(sourceDir, file), `include de projeto "${inc}" não resolve em Source/ (namespace de projeto conhecido)`);
       }
