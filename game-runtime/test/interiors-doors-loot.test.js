@@ -197,20 +197,28 @@ test('porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorM
 // 4. SIM OFFLINE — dano quebra a porta; evento + mundo físico atualizado
 // ============================================================================
 
-test('sim offline: hp esgotado emite doorDown, desativa painel e limpa o mundo físico', () => {
-  const s = new KhaaosSim3D({ seed: 'F25-SIM-1', botCount: 2, airdrop: false });
+test('sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo físico', () => {
+  const s = new KhaaosSim3D({ seed: 'F25-SIM-1', botCount: 0, airdrop: false });
   s.start('belt');
-  assert.equal(s.doors.length, s.world.doors.length, 'painéis nasceram do layout');
+  assert.equal(s.doors.length, s.world.doors.length, 'folhas nasceram do layout');
   // HOTFIX pós-merge #185 — vocabulário canônico: folha íntegra = !destroyed && !open
   assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === DOOR.hp));
+  // HOTFIX pós-reconcile #194/#196 — a destruição é EXCLUSIVAMENTE via
+  // #damageDoor (hp mutado direto vaza estado — o sweep foi removido):
+  // cruzamos o limiar com UM golpe canônico em folha pré-desgastada.
   const d = s.doors[0];
-  d.hp = 0;
-  s.step(idle(), STEP);
-  assert.equal(d.destroyed, true, 'folha destruída (hp esgotado)');
+  d.hp = 1;
+  const p = s.player;
+  p.weapon = 'sucata'; p.slots[1] = 'sucata';
+  // jogador no lado EXTERIOR da folha (normal aponta pra fora), a 1,4 m do centro
+  p.x = d.x + (d.nx ?? 0) * 1.4; p.z = d.z + (d.nz ?? 0) * 1.4; p.y = 0;
+  const dx = d.x - p.x, dz = d.z - p.z;
+  const yaw = Math.atan2(-dx, -dz);
+  for (let i = 0; i < 30 && !d.destroyed; i++) s.step(idle({ yaw, fire: true }), STEP);
+  assert.equal(d.destroyed, true, 'folha destruída no limiar (hp esgotado)');
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'doorDown' && e.id === d.id), 'evento doorDown emitido');
   assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === d.id), false, 'collider saiu do mundo físico');
-  assert.ok(s.physicsWorld.colliders.some((c) => c.doorId !== undefined || true), 'resto intacto');
 });
 
 test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)', () => {
@@ -238,8 +246,8 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
 
-  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === leaf.id));
-  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === leaf.id), false, 'collider saiu do mundo físico');
+  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
+  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === panel.id), false, 'collider saiu do mundo físico');
   assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood na folha p/ FX');
 
 });
@@ -340,7 +348,7 @@ test('buildScene: FOLHAS registradas (registry.doors, id → pivô+folha) e peç
     // fecho), dobradiça no pivot; current/target/broken são o estado da animação.
     assert.ok(reg.doors instanceof Map, `${id}: registry doors`);
     assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
-    for (const [doorId, ctl] of reg.doors) {
+    for (const [doorId, h] of reg.doors) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
       assert.ok(h.leaf.children.length === 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
       assert.ok(h.pivot.children.includes(h.leaf), `${id}: folha pendurada no pivô da dobradiça`);
