@@ -4,7 +4,7 @@
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR } from './sim3d.js';
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
@@ -1263,6 +1263,15 @@ export class Game3D {
           }
           break;
         }
+        // Fase 25 — portas: áudio dos toggles (creak) e da destruição (madeira)
+        case 'doorToggle': {
+          this.audio.door?.(e.open, Math.hypot(e.x - p.x, e.z - p.z));
+          break;
+        }
+        case 'doorDown': {
+          this.audio.doorDown?.(Math.hypot(e.x - p.x, e.z - p.z));
+          break;
+        }
         case 'victory': this.#endMatch(true, e); break;
         case 'matchEnd': this.#endMatch(false, { kills: p.kills, xp: p.xp, krc: p.krc, ...e }); break;
         case 'eliminated': this.enterSpectate(e); break;
@@ -1317,11 +1326,11 @@ export class Game3D {
         return;
       }
     }
-    let text = null;
+    let text = null, textD = Infinity;
     for (const i of this.sim.loot) {
       if (!i.active) continue;
       const d = Math.hypot(i.x - p.x, i.z - p.z);
-      if (d < 2.6) { text = `[E] Coletar ${i.name || i.id}${i.rarity ? ' — ' + i.rarity : ''}`; break; }
+      if (d < 2.6 && d < textD) { text = `[E] Coletar ${i.name || i.id}${i.rarity ? ' — ' + i.rarity : ''}`; textD = d; }
     }
     if (!text) {
       for (const t of this.sim.terminals) {
@@ -1329,7 +1338,40 @@ export class Game3D {
         if (Math.hypot(t.x - p.x, t.z - p.z) < 3.4) { text = `[E] Extrair dados no ${t.label || 'terminal ZEX'}`; break; }
       }
     }
+    // Fase 25 — porta no alcance (estilo Free Fire): mostra se for o alvo MAIS
+    // PRÓXIMO do E (mesma regra do #interact da sim)
+    if (!p.knocked) {
+      let door = null, doorD = Infinity;
+      for (const d of this.sim.doors ?? []) {
+        if (d.destroyed) continue;
+        const dd = Math.hypot(d.x - p.x, d.z - p.z);
+        if (dd < 2.3 && dd < doorD) { door = d; doorD = dd; }
+      }
+      if (door && doorD <= textD) text = door.open ? '[E] Fechar porta' : '[E] Abrir porta';
+    }
     this.hud.prompt(text);
+  }
+
+  // Fase 25 — folhas de porta seguem o estado autoritativo (sim offline OU
+  // snapshots da sala — mesmo código nos dois modos). Posição do vão vem do
+  // layout determinístico (snapshots não carregam x/z das portas).
+  #syncDoorVisuals() {
+    const reg = this.scene.userData.interiors;
+    const doorsState = this.sim?.doors;
+    if (!reg?.doors?.size || !doorsState?.length) return;
+    const layoutDoors = this.scene.userData.layout?.doors ?? [];
+    for (const sd of doorsState) {
+      const h = reg.doors.get(sd.id);
+      if (!h) continue;
+      if (sd.destroyed && !h.broken) {
+        h.broken = true;
+        h.leaf.visible = false;
+        const gp = layoutDoors.find((d) => d.id === sd.id);
+        if (gp) this.effects.impact(new THREE.Vector3(gp.x, gp.yMin + 1.15, gp.z), 'wood');
+      } else if (!sd.destroyed) {
+        h.target = sd.open ? DOOR.openAngle : 0;
+      }
+    }
   }
 
   // Fase 4 — áudio de queda + deriva das nuvens (chamado pelos dois loops)
@@ -1380,6 +1422,7 @@ export class Game3D {
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
     const interiorsAnim = this.scene.userData.interiors?.animators;
     if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
+    this.#syncDoorVisuals(); // Fase 25 — folhas seguem o estado autoritativo
     // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
     this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);

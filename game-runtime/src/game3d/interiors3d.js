@@ -27,7 +27,7 @@ import {
   plankMaterial, concreteMaterial, crateTexture, barrelMaterial,
   palletMaterial, sandbagMaterial, signTexture,
 } from './textures3d.js';
-import { ACCENTS, MEZZ, interiorDressing } from './interiorsPlan.js';
+import { ACCENTS, MEZZ, DOOR_MECH, interiorDressing } from './interiorsPlan.js';
 
 // ============================================================================
 // PARTE 1 — plano puro (Fase 24): placements/janelas/escada moram em
@@ -370,9 +370,23 @@ export function buildInteriors(scene, layout, scenario, q) {
     animators,
     placements,
     shells,
+    // Fase 25 — folhas de porta: doorId → { pivot, leaf, openSign, current, target, broken }
+    // preenchido pelo world3d quando cada buildShellHost entra na cena
+    doors: new Map(),
     mats,
     group,
   };
+  // animator das folhas: persegue o alvo autoritativo (0 fechada / openAngle
+  // aberta); quebrada => recolhe e some (a lascas ficam por conta do FX)
+  animators.push((dt) => {
+    for (const h of registry.doors.values()) {
+      const target = h.broken ? 0 : h.target;
+      const next = h.current + (target - h.current) * Math.min(1, dt * 6.5);
+      h.current = Math.abs(next - target) < 0.002 ? target : next;
+      h.pivot.rotation.y = h.openSign * h.current;
+      if (h.broken && h.leaf.visible) h.leaf.visible = false;
+    }
+  });
   scene.userData.interiors = registry;
   return registry;
 }
@@ -475,6 +489,62 @@ export function buildShellHost(s, spec, m) {
       };
       jamb(doorC - dw / 2 - .07);
       jamb(doorC + dw / 2 + .07);
+      // ---- Fase 25 — FOLHA da porta (dobradiça + madeira + maçaneta) ----
+      // Fecha o vão visualmente; abre para DENTRO (estilo Free Fire) girando no
+      // pivô do batente. Estado autoritativo vem de sim/room3d via main3d —
+      // MESMO vão de doorwaysOf (física e visual nunca divergem).
+      const leafW = dw - DOOR_MECH.leafGap, leafH = dh - .08;
+      const horizontal = face === 'front' || face === 'back';   // vão corre em X local
+      const hingeSide = rngShape.next() < .5 ? -1 : 1;      // lado da dobradiça (determinístico)
+      const hingeU = doorC + hingeSide * dw / 2;
+      const pivot = new THREE.Group();
+      if (face === 'front') pivot.position.set(hingeU, 0, -d / 2 + T / 2);
+      if (face === 'back') pivot.position.set(hingeU, 0, d / 2 - T / 2);
+      if (face === 'left') pivot.position.set(-w / 2 + T / 2, 0, hingeU);
+      if (face === 'right') pivot.position.set(w / 2 - T / 2, 0, hingeU);
+      host.add(pivot);
+      const leaf = new THREE.Group();
+      pivot.add(leaf);
+      // painel de tábuas: offset NO EIXO DO VÃO (X p/ horizontal, Z p/ vertical)
+      const offU = -hingeSide * leafW / 2;
+      const leafThick = .09;
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? leafW : leafThick, leafH, horizontal ? leafThick : leafW), m.woodDark);
+      panel.position.set(horizontal ? offU : 0, leafH / 2, horizontal ? 0 : offU);
+      panel.castShadow = panel.receiveShadow = true;
+      leaf.add(panel);
+      // travessas horizontais + diagonal (leitura de porta de madeira)
+      const brace = (by) => {
+        const bMesh = new THREE.Mesh(new THREE.BoxGeometry(
+          horizontal ? leafW * .92 : leafThick + .04, .16, horizontal ? leafThick + .04 : leafW * .92), m.wood);
+        bMesh.position.set(horizontal ? offU : 0, by, horizontal ? 0 : offU);
+        bMesh.castShadow = true;
+        leaf.add(bMesh);
+      };
+      brace(leafH * .22);
+      brace(leafH * .78);
+      const diag = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? leafW * .78 : leafThick + .02, .12, horizontal ? leafThick + .02 : leafW * .78), m.wood);
+      diag.position.set(horizontal ? offU : 0, leafH * .5, horizontal ? 0 : offU);
+      diag.rotation.z = horizontal ? .52 : 0;
+      diag.rotation.x = horizontal ? 0 : .52;
+      diag.castShadow = true;
+      leaf.add(diag);
+      // maçaneta (lado oposto à dobradiça, 1,05 m)
+      const handleX = -hingeSide * (leafW - .18);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(.08, .08, .3), m.steel);
+      if (horizontal) handle.position.set(handleX, 1.05, 0);
+      else { handle.position.set(0, 1.05, handleX); handle.rotation.y = Math.PI / 2; }
+      handle.castShadow = true;
+      leaf.add(handle);
+      // sinal de abertura: folha gira PARA DENTRO do interior (−normal)
+      // front/back: interior = ±Z local; left/right: interior = ∓X local
+      const openSign = hingeSide * (face === 'front' || face === 'right' ? 1 : -1);
+      host.userData.doorHandle = {
+        id: `door-${spec.index}`,
+        pivot, leaf, openSign,
+        current: 0, target: 0, broken: false,
+      };
       continue;
     }
     if (ruin) {

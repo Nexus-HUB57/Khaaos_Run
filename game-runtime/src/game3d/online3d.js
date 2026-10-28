@@ -35,6 +35,7 @@ export class Sim3DView {
     this.terminals = [];
     this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
     this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
+    this.doors = [];     // Fase 25 — estado das folhas de porta (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -73,6 +74,7 @@ export class Sim3DView {
       // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
       this.onWallsChanged?.(this.walls);
     }
+    if (s.doors) this.doors = s.doors; // Fase 25 — folhas seguem o estado da sala
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
