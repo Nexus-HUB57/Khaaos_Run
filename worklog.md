@@ -139,7 +139,7 @@ Work Log:
 - Event contract closed BOTH sides with parity: (1) offline sim — bullet 'hit' gains owner: b.owner (FIXES latent bug: hitmarker/audio leaked into bot×bot fights because owner was undefined), #detonate emits 'hit' kind 'explosion' per victim with rounded damage, botKnocked gains victim (id); (2) authoritative server (room3d.js #detonate) — explosion 'hit' delivered ONLY to grenade owner within 110m (band economy; canonical TS trail has no MatchRoom3D twin — no parity work needed)
 - Consumption (main3d): number ONLY on own hits (owner === 'player'; online3d.queueEvent already localized owner via own()), explosion shows number WITHOUT hitmarker/hitFlesh (explosion FX/audio already cover it), NOCAUTE popup spawns at last hit position (KNOCK_MEMORY_S 1.2s) on 'botKnocked' (offline) and 'knock' (online, same batch), pool ticked in the render loop with camera, clear() on startMatch
 - Tests: test/damage-numbers.test.js (13 — projection, tiers, hash, pool with fake DOM, zero damage rejected, ring buffer, rise+fade+expiry, knock popup memory window + clear, headless-safe, offline sim bullet/frag/knock contracts, room explosion owner-only delivery + bullet contract intact)
-- Pipeline: branch feat/game3d-fase27-danos-flutuantes → CI → merge → main re-verified (status below)
+- Pipeline: branch feat/game3d-fase27-danos-flutuantes → PR #178 → CI 34 checks (0 fail, só Build Server lento no fim) → merged 8ac3555 → main re-verified (0 fail) e RE-verificada após merge concorrente do PR #179 (head 2035a66: 25 success + 5 skipped + 0 fail)
 
 Stage Summary:
 - Combat feedback closes the loop: every own hit now speaks Free Fire language (white/red numbers, knock popup) — zero drift for sims, purely additive event fields
