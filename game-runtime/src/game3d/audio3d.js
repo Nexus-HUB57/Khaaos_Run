@@ -454,6 +454,100 @@ export class GameAudio {
     for (const kind of Object.keys(this.survivalLayers)) this.survival(kind, false);
   }
 
+  // ---------- Fase 26 — ZU derailment (rumble/crash/alarme/tinnitus) ----------
+  // Estado testável headless (sem AudioContext): flags persistem mesmo sem ctx.
+
+  /** Rumble contínuo do trem em alta velocidade (ruído grave + LFO de trilho). */
+  trainRumble(on = true, intensity = .5) {
+    this.trainRumbleOn = on ? { intensity } : null;
+    if (on) {
+      if (this.trainRumbleNodes || !this.ctx || !this.enabled) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.#noiseBuffer(1.5); src.loop = true;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 110; lp.Q.value = .7;
+      const g = this.ctx.createGain(); g.gain.value = .0001;
+      const lfo = this.ctx.createOscillator(); lfo.frequency.value = 5.2; // clack do trilho
+      const lfoG = this.ctx.createGain(); lfoG.gain.value = .06 * intensity;
+      lfo.connect(lfoG); lfoG.connect(g.gain);
+      src.connect(lp); lp.connect(g); g.connect(this.#bus('world'));
+      g.gain.exponentialRampToValueAtTime(Math.max(.001, .24 * intensity), this.ctx.currentTime + .6);
+      src.start(); lfo.start();
+      this.trainRumbleNodes = { src, lfo, g };
+    } else if (this.trainRumbleNodes) {
+      const { src, lfo, g } = this.trainRumbleNodes;
+      this.trainRumbleNodes = null;
+      try {
+        g.gain.exponentialRampToValueAtTime(.0001, this.ctx.currentTime + .8);
+        setTimeout(() => { try { src.stop(); lfo.stop(); } catch { /* já parado */ } }, 900);
+      } catch { /* teardown best-effort */ }
+    }
+  }
+
+  /** Colisão metálica do descarrilo: burst de ruído + parciais inarmônicos. */
+  metalCrash(distance = 0) {
+    this.lastMetalCrash = { distance, at: Date.now() };
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const att = Math.max(.25, 1 - distance / 120); // atenuação por distância
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.9);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 420; bp.Q.value = .8;
+    const g = this.ctx.createGain();
+    this.#env(g, t, .005, .85, .9 * att);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
+    src.start(t);
+    // parciais metálicos (clamp de vagão + trilho estalando)
+    for (const [f, dur] of [[196, .9], [311, .6], [523, .35], [1244, .18]]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = f * (1 + (Math.random() - .5) * .02);
+      const og = this.ctx.createGain();
+      this.#env(og, t, .004, dur, .16 * att);
+      o.connect(og); og.connect(this.#bus('sfx'));
+      o.start(t); o.stop(t + dur + .1);
+    }
+  }
+
+  /** Sirene de alarme pós-derail (loop dois-tons; ligar/desligar). */
+  alarmSiren(on = true) {
+    this.alarmSirenOn = on ? { startedAt: Date.now() } : null;
+    if (on) {
+      if (this.alarmNodes || !this.ctx || !this.enabled) return;
+      const o = this.ctx.createOscillator();
+      o.type = 'square'; o.frequency.value = 660;
+      const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = .9;
+      const lfoG = this.ctx.createGain(); lfoG.gain.value = 190;
+      lfo.connect(lfoG); lfoG.connect(o.frequency);
+      const g = this.ctx.createGain(); g.gain.value = .0001;
+      g.gain.exponentialRampToValueAtTime(.05, this.ctx.currentTime + .5);
+      o.connect(g); g.connect(this.#bus('world'));
+      o.start(); lfo.start();
+      this.alarmNodes = { o, lfo, g };
+    } else if (this.alarmNodes) {
+      const { o, lfo, g } = this.alarmNodes;
+      this.alarmNodes = null;
+      try {
+        g.gain.exponentialRampToValueAtTime(.0001, this.ctx.currentTime + .6);
+        setTimeout(() => { try { o.stop(); lfo.stop(); } catch { /* já parado */ } }, 700);
+      } catch { /* teardown best-effort */ }
+    }
+  }
+
+  /** Tinnitus pós-explosão: seno agudo decrescente (dano auditivo temporário). */
+  tinnitus(duration = 2.5) {
+    this.lastTinnitus = { duration, at: Date.now() };
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = 'sine'; o.frequency.value = 3180;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(.055, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + Math.max(.5, duration));
+    o.connect(g); g.connect(this.#bus('sfx'));
+    o.start(t); o.stop(t + Math.max(.5, duration) + .1);
+  }
+
   /** Alerta de ENTRADA de hazard — assinatura curta distinta por mundo. */
   hazardStinger(kind = 'tsunami') {
     if (!this.ctx || !this.enabled) return;

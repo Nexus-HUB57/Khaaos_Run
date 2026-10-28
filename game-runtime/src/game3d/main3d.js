@@ -443,6 +443,8 @@ export class Game3D {
   // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
   // Fase 12 — startAt (s) = entrada sincronizada pelo relógio do servidor no
   // modo online (todos os remotos veem o MESMO frame do trem).
+  // Fase 26 — offline roda o modo 'derail' (QTE de emergência + descarrilo);
+  // online permanece 'pass' — o servidor segue autoritativo (sem QTE local).
   startTrainIntro(startAt = 0) {
     try {
       const p = this.sim.player ?? { x: 0, z: 118 };
@@ -450,10 +452,37 @@ export class Game3D {
         scene: this.scene,
         spawn: { x: p.x ?? 0, z: p.z ?? 118 },
         startAt,
-        onDone: () => { this.trainIntro = null; },
+        mode: this.online ? 'pass' : 'derail',
+        audio: this.audio,
+        onDone: (outcome) => this.#applyTrainIntroOutcome(outcome),
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
     } catch { /* cinematic é best-effort — nunca bloqueia a partida */ }
+  }
+
+  // Fase 26 — consequências do QTE do trem (APENAS offline: a sim local é
+  // autoritativa; no online o outcome é null e nada é aplicado). Custo de vida
+  // com piso 10 (nunca mata — o ZU não elimina fora do regramento do POJ) e
+  // atordoamento = trava de input local (a sim não muda).
+  #applyTrainIntroOutcome(outcome) {
+    const crates = this.trainIntro?.crateLoot ?? null;
+    this.trainIntro = null;
+    if (!outcome?.choice) return;
+    const p = this.sim?.player;
+    if (p) {
+      if (outcome.hpCost > 0) p.life = Math.max(10, p.life - outcome.hpCost);
+      if (outcome.stunSeconds > 0) this.trainStunUntil = performance.now() + outcome.stunSeconds * 1000;
+    }
+    const msgs = {
+      seatbelt: 'Cinto travado a tempo — impacto absorvido, mas você cai atordoado.',
+      jump: 'Salto de emergência! Controle imediato, mas o impacto custou vida.',
+      fail: 'Sem reação a tempo — deslizamento violento: vida e consciência perdidas.',
+    };
+    this.hud.feed('ZU', msgs[outcome.choice] ?? 'Desembarque concluído.', outcome.choice === 'fail' ? 'bad' : 'warn');
+    // Caixas do destroço viram loot REAL (formas consumidas por sim.#pickup)
+    if (crates?.length && this.sim?.loot) {
+      for (const c of crates) if (this.sim.loot.length < 72) this.sim.loot.push({ ...c });
+    }
   }
 
   restart(nextSeed) {
@@ -871,6 +900,9 @@ export class Game3D {
       // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
       if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      // Fase 26 — silhueta LARANJA do fieldScan (revelado atrás de cobertura):
+      // offline revela por revealedTicks; online pelo flag revealed do snapshot.
+      this.#setBotRevealGlow(entry, !!(b.revealedTicks > 0 || b.revealed));
       // Fase 4 — pose de queda para bots/remotos
       if (b.dropPhase && !b.knocked && parts && !entry.frozen) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
@@ -1012,12 +1044,41 @@ export class Game3D {
     this.sun.target.position.set(p.x, 0, p.z);
   }
 
+  // Fase 26 — silhueta LARANJA do fieldScan: tinge os materiais do operativo
+  // revelado (revelação atrás de cobertura é o contrato da skill — o pulso
+  // atravessa paredes/Gloo). Sem churn por frame: só transiciona na mudança.
+  #setBotRevealGlow(entry, revealed) {
+    if (!entry?.op?.group) return;
+    if (entry.revealGlow === revealed) return;
+    entry.revealGlow = revealed;
+    entry._revealStore ??= new Map();
+    entry.op.group.traverse((o) => {
+      if (!o.isMesh || !o.material?.emissive) return;
+      const m = o.material;
+      let store = entry._revealStore.get(m);
+      if (!store) {
+        store = { emissive: m.emissive.getHex(), intensity: m.emissiveIntensity };
+        entry._revealStore.set(m, store);
+      }
+      if (revealed) {
+        m.emissive.setHex(0xf97316);
+        m.emissiveIntensity = Math.max(store.intensity, .8);
+      } else {
+        m.emissive.setHex(store.emissive);
+        m.emissiveIntensity = store.intensity;
+      }
+    });
+  }
+
   buildSimInput(dt) {
     const k = this.keys;
     let dx = (k.has('d') ? 1 : 0) - (k.has('a') ? 1 : 0);
     let dy = (k.has('s') ? 1 : 0) - (k.has('w') ? 1 : 0);
     // touch joystick
     if (this.hud.joy?.active) { dx = this.hud.joy.dx; dy = this.hud.joy.dy; }
+    // Fase 26 — atordoamento pós-QTE do trem: trava movimento/ação, mantém olhar
+    const trainStunned = this.trainStunUntil && performance.now() < this.trainStunUntil;
+    if (trainStunned) { dx = 0; dy = 0; }
     const touch = this.hud.touchState ?? {};
     const abilityTouch = !!touch.ability;
     const abilityTouchPressed = abilityTouch && !this.abilityTouchDown;
@@ -1026,18 +1087,18 @@ export class Game3D {
       ...this.input,
       seq: this.sim.tick + 1,
       dx, dy,
-      sprint: k.has('shift') || !!touch.sprint,
+      sprint: !trainStunned && (k.has('shift') || !!touch.sprint),
       crouch: k.has('c') || !!touch.crouch,
-      jump: k.has(' ') || !!touch.jump,
-      fire: this.input.fire || !!touch.fire,
+      jump: !trainStunned && (k.has(' ') || !!touch.jump),
+      fire: !trainStunned && (this.input.fire || !!touch.fire),
       ads: this.input.ads || !!touch.ads,
       crouch: !!(this.input.crouch || touch.crouch), // Fase 5 — C alterna; touch segura
-      reload: this.input.reload || !!touch.reload,
-      interact: this.input.interact || !!touch.interact,
-      medkit: this.input.medkit || !!touch.medkit,
-      throw: this.input.throw || !!touch.throw,
-      gloo: this.input.gloo || !!touch.gloo,
-      ability: this.abilityPending || abilityTouchPressed, // Fase 8 — online autoritativa
+      reload: !trainStunned && (this.input.reload || !!touch.reload),
+      interact: !trainStunned && (this.input.interact || !!touch.interact),
+      medkit: !trainStunned && (this.input.medkit || !!touch.medkit),
+      throw: !trainStunned && (this.input.throw || !!touch.throw),
+      gloo: !trainStunned && (this.input.gloo || !!touch.gloo),
+      ability: !trainStunned && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
@@ -1166,6 +1227,7 @@ export class Game3D {
           let message = `${e.name}: ${e.description}`;
           if (e.effect === 'heal') message = `${e.name}: +${Math.round(e.healed)} VL.`;
           else if (e.effect === 'recon') message = `${e.name}: ${e.targets} contato(s) marcado(s) no minimapa por 3 s.`;
+          else if (e.effect === 'fieldScan') message = `${e.name}: pulso de ${Math.round(e.radius ?? 20)} m — ${e.targets} rival(s) atrás de cobertura com silhueta laranja por 4 s.`;
           else if (e.effect === 'stun') message = `${e.name}: ${e.targets} bot(s) interrompido(s) sem dano.`;
           else if (e.effect === 'ringRead') message = `${e.name}: próximo pulso em ${e.nextPulseSeconds.toFixed(1)} s.`;
           else if (e.effect === 'ringForecast') message = `${e.name}: próximo pulso em ${e.nextPulseSeconds.toFixed(1)} s; raio-alvo ${Math.round(e.targetRadius)} m.`;
@@ -1176,7 +1238,7 @@ export class Game3D {
           // Fase 9 — VFX/SFX sincronizados: aura no caster + assinatura sonora
           if (e.x !== undefined) {
             const pos = new THREE.Vector3(e.x, (e.y ?? 0) + 1.1, e.z);
-            this.effects.abilityAura(pos, e.effect);
+            this.effects.abilityAura(pos, e.effect, e.radius ?? 18);
             const p = this.sim.player;
             this.audio.ability(e.effect, e.isSelf ? 0 : Math.hypot(e.x - p.x, e.z - p.z));
           }
@@ -1444,7 +1506,11 @@ export class Game3D {
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
     for (const b of this.scene.userData.beacons ?? []) b.material.color.setRGB(.9 + bl * .1, .1, .18);
     // rotação lenta do loot
-    for (const mesh of this.lootMeshes.values()) mesh.rotation.y += dt * 1.6;
+    for (const mesh of this.lootMeshes.values()) {
+      mesh.rotation.y += dt * 1.6;
+      // Fase 26 — fecho emissivo PULSANTE da caixa de morte (leitura de loot a distância)
+      if (mesh.userData?.clasp) mesh.userData.clasp.emissiveIntensity = .7 + Math.sin(performance.now() * .004) * .5;
+    }
     // HUD
     if (!this.zuOpen) {
       this.hud.update(dt, this.input);

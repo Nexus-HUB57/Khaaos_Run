@@ -334,5 +334,26 @@
       "hair": "#09090b"
     },
     "lore": "Kalaripayattu tático e projeção de barreira Égide contra as marés de choque em Arukheea."
+  },
+  {
+    "id": "OP_MALE_TALON",
+    "codename": "TALON",
+    "fullName": "Talon · Corredor Urbano M-09",
+    "gender": "MASCULINO",
+    "ethnicity": "Híbrido Metropolitano",
+    "rank": "ZHEERS",
+    "specialization": "AGILIDADE_E_INFORMACAO",
+    "defaultWorld": "CIGKV",
+    "svgPathContent": "Content/Avatars/male/op_male_talon.svg",
+    "svgPathPublic": "/avatars/male/op_male_talon.svg",
+    "colors": {
+      "primary": "#38BDF8",
+      "secondary": "#0EA5E9",
+      "trim": "#FB923C",
+      "skinTone": "#c68642",
+      "eyes": "#22d3ee",
+      "hair": "#1e40af"
+    },
+    "lore": "Praticante de parkour e hacker de subúrbio que descobriu os segredos de monitoramento das arenas. Usa agilidade e traquitanas cibernéticas para virar o jogo a favor do squad."
   }
 ]

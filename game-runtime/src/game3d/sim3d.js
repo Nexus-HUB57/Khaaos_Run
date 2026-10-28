@@ -707,6 +707,15 @@ export class KhaaosSim3D {
       for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
       state.targetIds = targets.map((bot) => bot.id);
       details.targets = targets.length;
+    } else if (ability.effect === 'fieldScan') {
+      // Fase 26 — Invasão de Campo (Talon): o pulso ATRAVESSA cobertura — sem
+      // checagem de LOS (paredes/construções/Gloo não protegem da varredura).
+      // revealedTicks alimenta minimapa (hud3d) e silhueta laranja 3D (main3d).
+      const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
+      for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
+      state.targetIds = targets.map((bot) => bot.id);
+      details.targets = targets.length;
+      details.radius = params.radius;
     } else if (ability.effect === 'stun') {
       const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
       for (const bot of targets) bot.ai.stunTicks = Math.ceil(params.stunSeconds * this.tickRate);
@@ -820,6 +829,11 @@ export class KhaaosSim3D {
       const active = a.abilityState.activeTicks > 0;
       a.abilitySpeedMultiplier = active && (ability.effect === 'speed' || ability.effect === 'dash')
         ? ability.parameters.speedMultiplier : 1;
+      // Fase 26 — Talon: salto/escala (vault) +15% enquanto o pulso está ativo
+      // (aplica só no ar — a.y > 0.05 — para não virar buff de corrida plano).
+      if (active && ability.effect === 'fieldScan' && a.y > 0.05) {
+        a.abilitySpeedMultiplier = Math.max(a.abilitySpeedMultiplier, ability.parameters.vaultSpeedMultiplier);
+      }
       a.abilityDistanceBudget = active && ability.effect === 'dash' ? a.abilityState.distanceRemaining : undefined;
       a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
     }
