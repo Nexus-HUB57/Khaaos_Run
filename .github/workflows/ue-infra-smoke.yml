@@ -1,0 +1,65 @@
+# Khaaos Run — UE Infra (Unreal Cloud DDC 1.5.0 + Lore Server)
+# P1 end-to-end: puxa as imagens do contrato, valida o secret
+# UNREAL_ENGINE_LOGIN funcionalmente (login no ghcr) e executa o smoke
+# da stack (probes oficiais do chart + porta HTTP do Lore).
+name: UE Infra (Cloud DDC + Lore)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/ue-infra/**'
+      - 'scripts/infra/ue_infra_smoke.mjs'
+      - '.github/workflows/ue-infra-smoke.yml'
+
+jobs:
+  ue-infra:
+    name: UE infra compose (Cloud DDC 1.5.0 + loreserver) — smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar secret UNREAL_ENGINE_LOGIN (login ghcr funcional)
+        env:
+          UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
+        run: |
+          if [ -z "$UE_LOGIN" ]; then
+            echo "::warning::UNREAL_ENGINE_LOGIN ausente — imagens do contrato são públicas; seguindo sem login"
+            exit 0
+          fi
+          # Formatos aceitos: "user:token" ou apenas o token (usuário fixo do org owner)
+          if [[ "$UE_LOGIN" == *:* ]]; then
+            LOGIN_USER="${UE_LOGIN%%:*}"; LOGIN_TOKEN="${UE_LOGIN#*:}"
+          else
+            LOGIN_USER="Nexus-HUB57"; LOGIN_TOKEN="$UE_LOGIN"
+          fi
+          if echo "$LOGIN_TOKEN" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin; then
+            echo "UNREAL_ENGINE_LOGIN_VALID=ok" >> "$GITHUB_ENV"
+            echo "✅ docker login ghcr.io com UNREAL_ENGINE_LOGIN OK"
+          else
+            echo "::warning::secret UNREAL_ENGINE_LOGIN presente mas NÃO autentica no ghcr — revisar valor/escopo read:packages (imagens públicas: o smoke segue)"
+          fi
+
+      - name: Pull do contrato P1 (com validação de digests)
+        run: |
+          docker pull ghcr.io/epicgames/unreal-cloud-ddc:1.5.0
+          docker pull ghcr.io/epicgames/lore/loreserver:sha256-042ab40c1adbd5db686c76d85269e20f548b677dc56452cef95c5d9812370b17
+          docker images | grep -E "unreal-cloud-ddc|loreserver"
+
+      - name: Subir stack (compose)
+        run: docker compose -f infra/ue-infra/docker-compose.yml up -d
+
+      - name: Smoke UE Infra (probes DDC + porta HTTP Lore)
+        run: node scripts/infra/ue_infra_smoke.mjs
+
+      - name: Logs de diagnóstico (apenas em falha)
+        if: failure()
+        run: |
+          docker compose -f infra/ue-infra/docker-compose.yml ps -a || true
+          docker compose -f infra/ue-infra/docker-compose.yml logs --tail 100 || true
+
+      - name: Derrubar stack
+        if: always()
+        run: docker compose -f infra/ue-infra/docker-compose.yml down -v --remove-orphans || true

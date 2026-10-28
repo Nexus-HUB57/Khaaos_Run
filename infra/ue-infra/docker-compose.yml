@@ -1,0 +1,44 @@
+# =============================================================================
+# Khaaos Run — UE Infra: Unreal Cloud DDC 1.5.0 + Lore Server (P1 end-to-end)
+# =============================================================================
+# Stack de infraestrutura de assets/compilação do M4:
+#   - unreal-cloud-ddc: cache derivado compartilhado (acelera builds UE5.8 no
+#     runner licenciado — UBT/UAT leem/escrevem DDC em HTTP).
+#   - loreserver: servidor do sistema de versionamento Lore (fonte de verdade
+#     para repositórios/assets, endpoint de push/clone/resolução).
+#
+# Fatos extraídos do Helm chart OCI 1.5.0 (ghcr.io/epicgames/unreal-cloud-ddc:1.5.0_helm)
+# e da doc oficial de deploy do Lore (docs/how-to/deploy-local-lore-server.md):
+#   - DDC: probes oficiais health/live e health/ready na porta 80 do container.
+#   - Lore: 41337/tcp (gRPC), 41337/udp (QUIC), 41339/tcp (HTTP); dados em
+#     /data; config extra carregada de /etc/lore/config.
+#
+# Subir:  docker compose -f infra/ue-infra/docker-compose.yml up -d
+# Smoke:  node scripts/infra/ue_infra_smoke.mjs
+# Parar:  docker compose -f infra/ue-infra/docker-compose.yml down -v
+# =============================================================================
+name: khaaos-ue-infra
+
+services:
+  unreal-cloud-ddc:
+    image: ghcr.io/epicgames/unreal-cloud-ddc:1.5.0
+    container_name: khaaos-ddc
+    ports:
+      - "8080:80"   # host 8080 → container 80 (porta default da imagem 1.5.0)
+    restart: unless-stopped
+
+  loreserver:
+    # Tag de digest conforme contrato P1 (equivale ao commit 042ab40 da imagem).
+    image: ghcr.io/epicgames/lore/loreserver:sha256-042ab40c1adbd5db686c76d85269e20f548b677dc56452cef95c5d9812370b17
+    container_name: khaaos-lore
+    ports:
+      - "41337:41337/tcp"  # gRPC
+      - "41337:41337/udp"  # QUIC
+      - "41339:41339"      # HTTP
+    volumes:
+      - lore-data:/data                                   # stores persistentes
+      - ./loreserver/config:/etc/lore/config:ro           # local.toml (stores)
+    restart: unless-stopped
+
+volumes:
+  lore-data:
