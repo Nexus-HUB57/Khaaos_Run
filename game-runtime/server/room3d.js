@@ -13,6 +13,7 @@ import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
   FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT, DOOR,
+  doorHpFor, doorMeleeMultFor,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
   throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
@@ -127,8 +128,6 @@ export class MatchRoom3D {
     this.bullets = [];
     this.grenades = [];        // Fase 4: granadas FRAG em voo
     this.walls = [];           // Fase 4: Gloo Walls ativas
-    // Fase 25 — folhas de porta (estado autoritativo da sala): FECHADAS/íntegras
-    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: DOOR.hp, cooldown: 0 }));
     this.nextBulletId = 1;
     this.nextThrowableId = 1;
     this.loot = [];
@@ -163,8 +162,9 @@ export class MatchRoom3D {
     this._dmgLogAt = new Map(); // victimId -> último timestamp logado (rate-limit)
     // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls + portas)
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
-    // Fase 25 — folhas de porta (estado autoritativo da sala): FECHADAS/íntegras
-    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: DOOR.hp, cooldown: 0 }));
+    // Fase 25 — folhas de porta (estado autoritativo da sala): FECHADAS/íntegras;
+    // hp pelo MATERIAL (hangar = metal 500, madeira 200) — mesma regra da sim
+    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: doorHpFor(d.kind), cooldown: 0 }));
     this.interiorLootSpots = [];
     this.syncPhysicsWorld();
   }
@@ -855,7 +855,7 @@ export class MatchRoom3D {
       if (d.destroyed) continue;
       if (d.hp <= 0) {
         d.destroyed = true; d.open = false; changed = true;
-        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
+        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, kind: d.kind, rot: d.rot });
       }
     }
     if (changed) this.syncPhysicsWorld();
@@ -1234,8 +1234,8 @@ export class MatchRoom3D {
         if (diff < 1.25) {
           // caminho CANÔNICO de dano (mesma regra da sim offline): #damageDoor
           // flipa destroyed, emite doorDown global e re-sincroniza a física
-          this.#damageDoor(d, w.damage * DOOR.meleeMult, a.id);
-          this.#emitTo(a.id, 'doorHit', { id: d.id, x: d.x, z: d.z });
+          this.#damageDoor(d, w.damage * doorMeleeMultFor(d.kind), a.id);
+          this.#emitTo(a.id, 'doorHit', { id: d.id, x: d.x, z: d.z, kind: d.kind });
           break;
         }
       }
@@ -1552,7 +1552,7 @@ export class MatchRoom3D {
     if (d.destroyed || (d.cooldown ?? 0) > 0) return false;
     d.open = !d.open;
     d.cooldown = DOOR.toggleCooldown;
-    this.#emitAll('doorToggle', { id: d.id, open: d.open, x: d.x, z: d.z, y: d.yMin, owner: ownerId });
+    this.#emitAll('doorToggle', { id: d.id, open: d.open, x: d.x, z: d.z, y: d.yMin, kind: d.kind, owner: ownerId });
     this.syncPhysicsWorld();
     return true;
   }
@@ -1561,7 +1561,7 @@ export class MatchRoom3D {
     d.hp -= dmg;
     if (d.hp <= 0) {
       d.destroyed = true; d.open = false;
-      this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, owner: ownerId ?? null });
+      this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, kind: d.kind, owner: ownerId ?? null });
       this.syncPhysicsWorld();
     }
   }

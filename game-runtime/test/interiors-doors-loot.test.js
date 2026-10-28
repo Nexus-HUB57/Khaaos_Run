@@ -13,10 +13,10 @@ import * as THREE from 'three';
 import { buildScene } from '../src/game3d/world3d.js';
 import {
   interiorDressing, hollowAccess, DOOR_KINDS, SHELL_KINDS,
-  localPointToWorld, doorBoxCollider,
+  localPointToWorld, doorBoxCollider, doorMaterialOf,
 } from '../src/game3d/interiorsPlan.js';
 import {
-  getWorldLayout, stepActorMovement, KhaaosSim3D, DOOR, DEFAULT_INPUT,
+  getWorldLayout, stepActorMovement, KhaaosSim3D, DOOR, doorHpFor, DEFAULT_INPUT,
 } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { resolveScenario, SCENARIOS } from '../src/game3d/scenarios.js';
@@ -200,9 +200,9 @@ test('porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorM
 test('sim offline: hp esgotado emite doorDown, desativa painel e limpa o mundo físico', () => {
   const s = new KhaaosSim3D({ seed: 'F25-SIM-1', botCount: 2, airdrop: false });
   s.start('belt');
-  assert.equal(s.doors.length, s.world.doors.length, 'painéis nasceram do layout');
-  // HOTFIX pós-merge #185 — vocabulário canônico: folha íntegra = !destroyed && !open
-  assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === DOOR.hp));
+  assert.equal(s.doors.length, s.world.doors.length, 'folhas nasceram do layout');
+  // CALIBRAÇÃO 25.1 — hp pelo MATERIAL: hangar (metal 500) ≠ madeira (200)
+  assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === doorHpFor(d.kind)));
   const d = s.doors[0];
   d.hp = 0;
   s.step(idle(), STEP);
@@ -234,18 +234,20 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
     s.step(idle({ yaw, pitch, fire: true }), STEP);
     broke = panel.destroyed;
   }
-  assert.ok(panel.hp < DOOR.hp, `painel desgastado (hp ${panel.hp}/${DOOR.hp})`);
+  assert.ok(panel.hp < doorHpFor(panel.kind), `folha desgastada (hp ${panel.hp}/${doorHpFor(panel.kind)})`);
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
-  // HOTFIX pós-merge #185 — impacto de folha agora é kind 'wood' (contrato novo)
-  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood p/ FX');
+  // CALIBRAÇÃO 25.1 — kind do impacto segue o MATERIAL (wood lascas / metal faíscas)
+  assert.ok(events.some((e) => e.type === 'impact' && e.kind === doorMaterialOf(panel.kind)), `impactos do tipo ${doorMaterialOf(panel.kind)} p/ FX`);
 });
 
-test('sim offline: MELEE arrebenta a porta rápido (mult 2,5×) e prioriza carne', () => {
+test('sim offline: MELEE arrebenta a folha de MADEIRA rápido (mult 3,0×) e prioriza carne', () => {
   const s = new KhaaosSim3D({ seed: 'F25-MELEE', botCount: 0, airdrop: false });
   s.start('belt');
-  const spec = interiorDressing(s.world, s.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
+  const spec = interiorDressing(s.world, s.scenario, { density: 1 })
+    .structures.find((sp) => DOOR_KINDS.has(sp.kind) && doorMaterialOf(sp.kind) === 'wood');
+  assert.ok(spec, 'CIGKV tem estrutura com folha de madeira');
   const st = s.world.structures[spec.index];
   // HOTFIX pós-merge #185 — folhas são doorways (structIndex)
   const panel = s.doors.find((d) => d.structIndex === spec.index);
@@ -258,9 +260,11 @@ test('sim offline: MELEE arrebenta a porta rápido (mult 2,5×) e prioriza carne
   const dx = panel.x - p.x, dz = panel.z - p.z;
   const yaw = Math.atan2(-dx, -dz);
   for (let i = 0; i < 30 * 4 && !panel.destroyed; i++) s.step(idle({ yaw, fire: true }), STEP);
-  assert.ok(panel.destroyed, `melee quebrou a porta (hp ${panel.hp})`);
+  assert.ok(panel.destroyed, `melee quebrou a folha (hp ${panel.hp})`);
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'doorHit'), 'feedback doorHit por golpe');
+  // calibração 25.1: madeira 200 / sucata 24×3.0 = 72 por golpe => 3 golpes
+  assert.ok(panel.hp > -80, `sem overkill absurdo (hp ${panel.hp})`);
 });
 
 // ============================================================================
