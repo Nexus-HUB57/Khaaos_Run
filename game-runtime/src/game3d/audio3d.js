@@ -337,6 +337,87 @@ export class GameAudio {
     });
   }
 
+  // ---------- Fase 25 — portas funcionais/destrutíveis ----------
+  // dobradiça: ranger de serra (abrir sobe, fechar desce) + estalo do trinco
+  door(open = true, distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.1, .85 - distance / 60);
+    // ranger: sawtooth com vibrato curto (a folha acelera na dobradiça)
+    const creak = this.ctx.createOscillator();
+    creak.type = 'sawtooth';
+    if (open) creak.frequency.setValueAtTime(150, t);
+    else creak.frequency.setValueAtTime(310, t);
+    creak.frequency.exponentialRampToValueAtTime(open ? 330 : 145, t + .3);
+    const wob = this.ctx.createOscillator(); wob.frequency.value = 11;
+    const wobG = this.ctx.createGain(); wobG.gain.value = 24;
+    wob.connect(wobG); wobG.connect(creak.frequency);
+    const cg = this.ctx.createGain();
+    this.#env(cg, t, .03, .3, .16 * vol);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 2.2;
+    creak.connect(lp); lp.connect(cg); cg.connect(this.#bus('sfx'));
+    creak.start(t); creak.stop(t + .4); wob.start(t); wob.stop(t + .4);
+    // estalo do trinco no fim do curso (fechar: mais seco)
+    const latch = this.ctx.createBufferSource();
+    latch.buffer = this.#noiseBuffer(.05);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1800;
+    const lg = this.ctx.createGain();
+    this.#env(lg, t + (open ? .3 : .26), .001, .04, (open ? .18 : .3) * vol);
+    latch.connect(hp); hp.connect(lg); lg.connect(this.#bus('sfx'));
+    latch.start(t + (open ? .3 : .26));
+  }
+
+  // madeira ESTILHAÇANDO: trinca grave, rajada de lascas e tábuas no chão
+  doorDown(distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.12, .95 - distance / 70);
+    // trinca inicial: corpo de ruído médio-grave caindo (a folha cede)
+    const crack = this.ctx.createBufferSource();
+    crack.buffer = this.#noiseBuffer(.4);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.setValueAtTime(950, t);
+    bp.frequency.exponentialRampToValueAtTime(240, t + .35);
+    bp.Q.value = .8;
+    const cg = this.ctx.createGain();
+    this.#env(cg, t, .004, .38, .8 * vol);
+    crack.connect(bp); bp.connect(cg); cg.connect(this.#bus('sfx'));
+    crack.start(t);
+    // estalos secos (fibras rompendo): 3 transientes quadrados descendentes
+    [0, .07, .13].forEach((off, i) => {
+      const snap = this.ctx.createOscillator();
+      snap.type = 'square';
+      snap.frequency.setValueAtTime(230 - i * 55, t + off);
+      snap.frequency.exponentialRampToValueAtTime(70, t + off + .05);
+      const sg = this.ctx.createGain();
+      this.#env(sg, t + off, .001, .05, .34 * vol);
+      snap.connect(sg); sg.connect(this.#bus('sfx'));
+      snap.start(t + off); snap.stop(t + off + .08);
+    });
+    // lascas voando: pings de madeira (triangle, 600–1900 Hz, aleatórios)
+    for (let i = 0; i < 6; i++) {
+      const off = .04 + Math.random() * .3;
+      const chip = this.ctx.createOscillator();
+      chip.type = 'triangle';
+      chip.frequency.value = 600 + Math.random() * 1300;
+      const chg = this.ctx.createGain();
+      this.#env(chg, t + off, .001, .06, .12 * vol);
+      chip.connect(chg); chg.connect(this.#bus('sfx'));
+      chip.start(t + off); chip.stop(t + off + .09);
+    }
+    // baque das tábuas no chão (sub grave amortecido)
+    const thud = this.ctx.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(95, t + .12);
+    thud.frequency.exponentialRampToValueAtTime(38, t + .4);
+    const tg = this.ctx.createGain();
+    this.#env(tg, t + .12, .006, .3, .5 * vol);
+    thud.connect(tg); tg.connect(this.#bus('sfx'));
+    thud.start(t + .12); thud.stop(t + .5);
+  }
+
   // ---------- Fase 18 — sobrevivências imersivas + game feel de abate ----------
   // Camadas CONTÍNUAS de áudio por hazard do mundo (tsunami/lava/gravidade/
   // ácido): cada camada é um pequeno grafo WebAudio criado no start e

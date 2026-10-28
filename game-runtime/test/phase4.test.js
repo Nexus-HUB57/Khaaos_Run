@@ -131,8 +131,10 @@ test('fase4 sim: gloo deploy bloqueia movimento e balas; expira após a duraçã
   const s = groundSim('GLOO-1', 0); // sem bots: isola a parede
   s.start('belt');
   const p = s.player;
+  // Fase 25 — mundo físico COMPOSTO (layout + folhas): limpa os dois p/ isolar a gloo
   s.world.colliders.length = 0;
-  s.doors.length = 0; s.syncPhysicsWorld(); // Fase 25 — painéis fora da linha unitária (dinâmico)
+  s.doors.length = 0;
+  s.physicsWorld.colliders = s.world.colliders;
   p.x = 0; p.z = 0; p.yaw = 0; // frente = -Z
   assert.equal(p.inventory.gloo, 1);
   s.step({ ...idle(0), gloo: true }, STEP);

@@ -1,0 +1,74 @@
+# =============================================================================
+# Khaaos Run — UE Infra: Unreal Cloud DDC 1.5.0 + ScyllaDB + Lore Server (P1)
+# =============================================================================
+# Stack de infraestrutura de assets/compilação do M4:
+#   - unreal-cloud-ddc: cache derivado compartilhado (acelera builds UE5.8 no
+#     runner licenciado — UBT/UAT leem/escrevem DDC em HTTP).
+#   - scylla: metadata store OBRIGATÓRIO do DDC 1.5.0 (Jupiter valida
+#     ScyllaSettings no boot — evidência de CI 2026-10-28:
+#     "DataAnnotation validation failed for 'ScyllaSettings': LocalDatacenterName/
+#     LocalKeyspaceSuffix required"). Config extraída do Helm chart OCI 1.5.0
+#     (seção Scylla + auth desabilitada por default) e do boot real do container.
+#   - loreserver: servidor do sistema de versionamento Lore (fonte de verdade
+#     para repositórios/assets, endpoint de push/clone/resolução).
+#
+# Fatos extraídos do Helm chart OCI 1.5.0 (ghcr.io/epicgames/unreal-cloud-ddc:1.5.0_helm)
+# e da doc oficial de deploy do Lore (docs/how-to/deploy-local-lore-server.md):
+#   - DDC: probes oficiais health/live e health/ready na porta 80 do container.
+#   - Lore: 41337/tcp (gRPC), 41337/udp (QUIC), 41339/tcp (HTTP); dados em
+#     /data; config extra carregada de /etc/lore/config.
+#
+# Subir:  docker compose -f infra/ue-infra/docker-compose.yml up -d
+# Smoke:  node scripts/infra/ue_infra_smoke.mjs
+# Parar:  docker compose -f infra/ue-infra/docker-compose.yml down -v
+# =============================================================================
+name: khaaos-ue-infra
+
+services:
+  unreal-cloud-ddc:
+    image: ghcr.io/epicgames/unreal-cloud-ddc:1.5.0
+    container_name: khaaos-ddc
+    ports:
+      - "8080:80"   # host 8080 → container 80 (porta default da imagem 1.5.0)
+    environment:
+      # Metadata store — seção "Scylla" do chart (classe ScyllaSettings).
+      # ASP.NET: __ no env equivale a aninhamento no appsettings.
+      Scylla__ConnectionString: "Contact Points=scylla"
+      Scylla__LocalDatacenterName: datacenter1   # DC default do scylla single-node
+      Scylla__LocalKeyspaceSuffix: khaaos        # exigido por [Required] no boot
+      # JupiterStartup.ScyllaFactory: "Default Keyspace has to be specified"
+      # (evidência de CI 3ª run, 2026-10-28)
+      Scylla__DefaultKeyspace: unrealcloudddc
+      Scylla__LocalReplicationStrategy: SimpleStrategy  # single-node (exemplo ABC do chart)
+    depends_on:
+      - scylla
+    restart: unless-stopped
+
+  scylla:
+    image: scylladb/scylla:5.2
+    container_name: khaaos-ddc-scylla
+    # Perfil mínimo para CI/staging (host com poucos núcleos)
+    command: --smp 1 --memory 512M --overprovisioned 1
+    volumes:
+      - scylla-data:/var/lib/scylla
+    restart: unless-stopped
+
+  loreserver:
+    # Contrato P1 amd64: a tag de digest sha256-042ab40… original é a variante
+    # linux/arm64 (Graviton3/SVE) — "no matching manifest for linux/amd64" em
+    # host amd64 (evidência: run de CI 2026-10-28). O ghcr publica pares
+    # <ver> (amd64) + <ver>-graviton (arm64); amd64 usa a tag simples.
+    image: ghcr.io/epicgames/lore/loreserver:0.12
+    container_name: khaaos-lore
+    ports:
+      - "41337:41337/tcp"  # gRPC
+      - "41337:41337/udp"  # QUIC
+      - "41339:41339"      # HTTP
+    volumes:
+      - lore-data:/data                                   # stores persistentes
+      - ./loreserver/config:/etc/lore/config:ro           # local.toml (stores)
+    restart: unless-stopped
+
+volumes:
+  lore-data:
+  scylla-data:

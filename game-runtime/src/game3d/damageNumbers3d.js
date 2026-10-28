@@ -32,11 +32,24 @@ export const DMG_KNOCK_LIFE_S = 1.5;
 export const KNOCK_MEMORY_S = 1.2;
 // pop de escala no nascimento (0.12 s) — impacto sem flicker
 export const DMG_POP_S = 0.12;
+// Fase 29 — dano AMBIENTAL: maior que corpo, menor que headshot (o mundo
+// mordeu — destaque sem roubar a cena do headshot).
+export const DMG_HAZARD_SCALE = 1.2;
+
+/** Fase 29 — sufixo de cor por kind de hazard (MESMA paleta do banner). */
+export const HAZARD_TIER_CLASSES = Object.freeze({
+  tsunami: 'hz-tsunami',
+  eruption: 'hz-lava',
+  ring: 'hz-ring',
+  acid: 'hz-acid',
+  quantum: 'hz-gravity',
+});
 
 /** Gramática visual por tier — tests fixam as classes. */
-export function damageTier({ head = false, knock = false } = {}) {
+export function damageTier({ head = false, knock = false, hazard = false, kind = null } = {}) {
   if (knock) return { cls: 'dmg-knock', scale: 1.18, text: 'NOCAUTE' };
   if (head) return { cls: 'dmg-head', scale: DMG_HEAD_SCALE };
+  if (hazard) return { cls: `dmg-hazard ${HAZARD_TIER_CLASSES[kind] ?? 'hz-ring'}`, scale: DMG_HAZARD_SCALE };
   return { cls: 'dmg-body', scale: 1 };
 }
 
@@ -85,11 +98,12 @@ export class DamageNumbers3D {
 
   get size() { return this.pool.length; }
 
-  /** Registra um número. `victim` só alimenta o stagger anti-sobreposição. */
-  spawn({ x, y, z, damage, head = false, knock = false, victim = null } = {}) {
+  /** Registra um número. `victim` só alimenta o stagger anti-sobreposição.
+   * Fase 29 — `hazard` + `kind` escolhem o tier ambiental (cor por hazard). */
+  spawn({ x, y, z, damage, head = false, knock = false, victim = null, hazard = false, kind = null } = {}) {
     const dmg = Math.max(0, Math.round(Number(damage) || 0));
     if (!knock && dmg <= 0) return null; // dano zero não é informação
-    const tier = damageTier({ head, knock });
+    const tier = damageTier({ head, knock, hazard, kind });
     // lembra o acerto (popup de nocaute nasce aqui se vier no mesmo batch)
     if (!knock) this._mem = { x, y, z, age: 0 };
     const entry = {

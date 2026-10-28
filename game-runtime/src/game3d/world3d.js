@@ -701,9 +701,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       // Fase 23 — casca habitável no lugar da caixa (mesma transform; o sim
       // continua tratando a estrutura como sólida, exatamente como antes)
       const host = buildShellHost(s, shellSpec, interiors.mats);
-      // Fase 25 — painel de porta destrutível registrado por id (syncDoors lê)
-      if (host.userData.doorPanel) interiors.doorPanels.set(host.userData.doorPanel.id, host.userData.doorPanel.group);
       interiors.group.add(host);
+      // Fase 25 — folha de porta registrada p/ o animator (abrir/fechar/quebrar)
+      // FIX Fase 25/29 — o registry guarda o PIVÔ (group com .visible p/ o
+      // syncDoors legado); o estado da folha vive em pivot.userData.handle.
+      if (host.userData.doorHandle) interiors.doors.set(host.userData.doorHandle.id, host.userData.doorHandle.pivot);
     } else {
       const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
       const geo = new THREE.BoxGeometry(s.w, s.h, s.d);

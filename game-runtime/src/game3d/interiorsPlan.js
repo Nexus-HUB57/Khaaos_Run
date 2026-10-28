@@ -299,6 +299,115 @@ export function lootSpotsForStructure(layout, s, spec) {
 
 const EPS = 1e-4;
 
+// ============================================================================
+// Fase 25 — PORTAS FUNCIONAIS (pura): abrir/fechar com E, destrutíveis.
+// A Fase 24 deixou o vão da porta LIVRE (dá pra entrar); a Fase 25 coloca uma
+// FOLHA no vão: fechada ela colide (movimento/balas/LOS), aberta ela balança
+// para dentro (só visual — não colide, como no Free Fire) e destruída some
+// para sempre. Estado autoritativo vive em sim3d/room3d; ESTE módulo fornece
+// a GEOMETRIA determinística do vão (fonte única p/ física e visual).
+// ============================================================================
+
+// mecânica da porta — MESMOS números em sim offline, MatchRoom3D e visual
+export const DOOR_MECH = {
+  hp: 130,            // vida da folha (pistola ~10 tiros; granada no epicentro derruba)
+  interactRange: 2.3, // alcance do E (m, centro do vão → ator)
+  toggleCooldown: .6, // s entre toggles (anti-thrash de tecla/bot)
+  leafGap: .12,       // folha um pouco menor que o vão (não raspa no batente)
+  openAngle: 1.92,    // rad (~110°) — abertura para DENTRO do interior
+};
+
+/**
+ * Vãos de porta em COORDENADAS DE MUNDO — um por estrutura-casca. Consumido por:
+ *  - sim3d/room3d: folha DINÂMICA (doorBoxCollider quando fechada) + interação
+ *    contextual (E) + pathing de bots por portas;
+ *  - interiors3d: folha visual com dobradiça (MESMO vão).
+ * Campos: id, structIndex, kind, x/z (centro do vão no plano da parede),
+ * yMin (base), w/h (folha), nx/nz (normal EXTERIOR unitária), hx/hz (dobradiça,
+ * visual), horizontal (vão corre em X local), rot + pegada (fx/fz/fw/fd)
+ * p/ footprintHas (pathing de bots).
+ */
+export function doorwaysOf(layout, dressing) {
+  const out = [];
+  for (const spec of dressing.structures) {
+    const s = layout.structures[spec.index];
+    // quiosque: só 4 postes + telhado — sem parede, sem vão, sem folha
+    if (s.kind === 'pavilion') continue;
+    const { face, w: dw, h: dh, u } = spec.door;
+    const horizontal = face === 'front' || face === 'back';
+    // centro do vão NO MEIO da espessura da parede (espaço local) — folha e
+    // collider centram no mesmo plano (T/2 da face externa para dentro)
+    const plane = face === 'front' ? -s.d / 2 + T / 2 : face === 'back' ? s.d / 2 - T / 2 : face === 'right' ? s.w / 2 - T / 2 : -s.w / 2 + T / 2;
+    const cxl = horizontal ? u : plane;
+    const czl = horizontal ? plane : u;
+    const c = localPointToWorld(s, cxl, czl);
+    // normal EXTERIOR: rotaciona o deslocamento normal (local) p/ mundo
+    const nxl = face === 'right' ? 1 : face === 'left' ? -1 : 0;
+    const nzl = face === 'front' ? -1 : face === 'back' ? 1 : 0;
+    const n = localPointToWorld(s, cxl + nxl, czl + nzl);
+    let nx = n.x - c.x, nz = n.z - c.z;
+    const nl = Math.hypot(nx, nz) || 1; nx = +(nx / nl).toFixed(4); nz = +(nz / nl).toFixed(4);
+    // dobradiça no batente u0 (visual; lado determinístico do vão)
+    const hL = horizontal ? [u - dw / 2, plane] : [plane, u - dw / 2];
+    const hw = localPointToWorld(s, hL[0], hL[1]);
+    out.push({
+      id: `door-${spec.index}`,
+      structIndex: spec.index,
+      index: spec.index, // FIX Fase 25/29 — alias de compatibilidade (testes e
+                         // consumidores legados leem .index; canônico é structIndex)
+      kind: s.kind,
+      x: +c.x.toFixed(3), z: +c.z.toFixed(3),
+      yMin: s.yMin,
+      // FIX Fase 25/29 — campos legados que o refactor deixou de emitir:
+      // yMax (mira/pitch de tiro no painel), hw/hd (meia-extensão do vão p/
+      // doorCollider legado e HUD). doorBoxCollider continua canônico.
+      yMax: +(s.yMin + dh).toFixed(3),
+      hw: +(dw / 2).toFixed(3),
+      hd: +(T / 2).toFixed(3),
+      w: dw, h: dh,
+      nx, nz,
+      hx: +hw.x.toFixed(3), hz: +hw.z.toFixed(3),
+      horizontal,
+      rot: s.rot ?? 0,
+      fx: s.x, fz: s.z, fw: s.w, fd: s.d,   // pegada da estrutura (pathing)
+    });
+  }
+  return out;
+}
+
+/**
+ * Collider da folha FECHADA (AABB de mundo, marcado com doorId p/ dano de
+ * bala/explosão). Aberta/destruída => null (não colide — o movimento atravessa,
+ * balas passam, LOS enxerga). Rotação axis-aligned (0/90°) => AABB exato.
+ */
+export function doorBoxCollider(door) {
+  if (!door || door.open || door.destroyed) return null;
+  const c = Math.abs(Math.cos(door.rot ?? 0)), s = Math.abs(Math.sin(door.rot ?? 0));
+  // extensão do vão no mundo: horizontal corre em X local; senão em Z local.
+  // A ESPESSURA corre na direção da normal (parede) — T/2 para cada lado.
+  const ax = door.horizontal ? c : s;
+  const az = door.horizontal ? s : c;
+  const hx = (ax * door.w) / 2 + Math.abs(door.nx) * (T / 2);
+  const hz = (az * door.w) / 2 + Math.abs(door.nz) * (T / 2);
+  return {
+    minX: door.x - hx, maxX: door.x + hx,
+    minZ: door.z - hz, maxZ: door.z + hz,
+    yMin: door.yMin, yMax: door.yMin + door.h,
+    kind: 'door', doorId: door.id,
+  };
+}
+
+/**
+ * Ponto dentro da PEGADA da estrutura dona da porta (espaço local por inversa
+ * da rotação Y — usada pela IA p/ saber quem está "de dentro" vs "de fora").
+ */
+export function footprintHas(door, x, z, margin = 0) {
+  const dx = x - door.fx, dz = z - door.fz;
+  const c = Math.cos(door.rot ?? 0), s = Math.sin(door.rot ?? 0);
+  const lx = c * dx - s * dz, lz = s * dx + c * dz;
+  return Math.abs(lx) <= door.fw / 2 + margin && Math.abs(lz) <= door.fd / 2 + margin;
+}
+
 /**
  * Decompõe as estruturas-casca em paredes (com vão de porta REAL e faixas de
  * janela), postes de pavilhão, escada/mezanino e guarda-corpo — tudo em AABBs

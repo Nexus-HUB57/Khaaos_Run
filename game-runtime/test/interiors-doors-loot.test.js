@@ -231,7 +231,8 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
-  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'door'), 'impactos do tipo door p/ FX');
+  // Fase 25/29 — impacto na folha usa o kind 'wood' (vocabulário de FX da madeira)
+  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos na folha p/ FX');
 });
 
 test('sim offline: MELEE arrebenta a porta rápido (mult 2,5×) e prioriza carne', () => {
@@ -257,15 +258,16 @@ test('sim offline: MELEE arrebenta a porta rápido (mult 2,5×) e prioriza carne
 // 5. LOOT INTERIOR NO SIM — ids, y de mezanino e intactos externos
 // ============================================================================
 
-test('sim offline: loot interior nos ids loot-i*, mezanino pegável só de cima', () => {
+test('sim offline: loot interior por sectorId (térreo + mezanino), pegável só de cima', () => {
   const s = new KhaaosSim3D({ seed: 'F25-LOOT-SIM', botCount: 2, airdrop: false });
-  const interior = s.loot.filter((i) => String(i.id).startsWith('loot-i'));
+  // Fase 25/29 — ids de loot passaram ao catálogo; a marca de interior é sectorId
+  const interior = s.loot.filter((i) => i.sectorId === 'interior');
   assert.ok(interior.length >= 5, `itens internos gerados (${interior.length})`);
   const mezzItems = interior.filter((i) => Math.abs(i.y - 2.95) < .01);
   assert.ok(mezzItems.length >= 2, `itens de mezanino (${mezzItems.length})`);
   // externos intactos (contrato Fase 4/6): 24 bases (ids de catálogo no offline) + 6 arremessáveis
   assert.equal(s.loot.length - interior.length - 6, 24);
-  assert.equal(s.loot.filter((i) => /^loot-t\d+$/.test(i.id)).length, 6);
+  assert.equal(s.loot.filter((i) => i.kind === 'frag' || i.kind === 'gloo').length, 6);
   // gate de coleta por altura: mezanino (2,95) NÃO é pegável do chão, sim de cima
   const m = mezzItems[0];
   assert.ok(Math.abs(m.y - 0) > 2.2, 'do chão não pega (Δy > 2,2)');
@@ -296,8 +298,8 @@ test('room3d: portas autoritativas (snapshot, doorDown global, collider fora do 
   // o snapshot DRENA os eventos — doorDown vem nele (não num drainEvents posterior)
   assert.ok(snap2.events.some((e) => e.type === 'doorDown' && e.id === d.id), 'doorDown entregue ao humano');
   assert.equal(room.physicsWorld.colliders.some((c) => c.doorId === d.id), false, 'collider fora do mundo da sala');
-  // loot interior no servidor
-  const interior = room.loot.filter((i) => String(i.id).startsWith('loot-i'));
+  // loot interior no servidor (marca sectorId — Fase 25/29)
+  const interior = room.loot.filter((i) => i.sectorId === 'interior');
   assert.ok(interior.length >= 5, `loot interno autoritativo (${interior.length})`);
   assert.ok(interior.some((i) => Math.abs(i.y - 2.95) < .01), 'mezanino no servidor');
   // transmissão também carrega o estado
@@ -334,17 +336,20 @@ test('room3d: bala do humano desgasta a porta (autoritativo, ponta a ponta)', ()
 // 7. VISUAL — painéis registrados por id no registry de interiores
 // ============================================================================
 
-test('buildScene: doorPanels registrados (id → grupo) e painel completo (6 peças)', () => {
+test('buildScene: doorPanels registrados (id → pivô) e folha completa (5 peças)', () => {
   for (const id of IDS) {
     const { scene, layout } = buildScene(2525, id, null, 'high');
     const reg = scene.userData.interiors;
+    // Fase 25/29 — registry unificado: doors === doorPanels (alias), valor = pivô
     assert.ok(reg.doorPanels instanceof Map, `${id}: registry doorPanels`);
     assert.equal(reg.doorPanels.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
-    for (const [doorId, group] of reg.doorPanels) {
+    for (const [doorId, pivot] of reg.doorPanels) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
-      assert.equal(group.children.length, 6, `${id}: painel+2 travessas+maçaneta+2 dobradiças`);
-      assert.equal(group.visible, true, `${id}: painel visível (porta fechada)`);
-      const slab = group.children[0];
+      assert.ok(pivot.userData?.handle, `${id}: pivô carrega o estado da folha`);
+      const leaf = pivot.userData.handle.leaf;
+      assert.equal(leaf.children.length, 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
+      assert.equal(pivot.visible, true, `${id}: painel visível (porta fechada)`);
+      const slab = leaf.children[0];
       const p = slab.geometry.parameters;
       assert.ok(p.height >= 2.2, `${id}: painel da base à verga`);
     }

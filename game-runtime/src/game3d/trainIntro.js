@@ -77,13 +77,17 @@ export class TrainIntro {
     this.#build();
     scene.add(this.group);
     this._skip = (e) => {
-      // Fase 26 — durante a janela do QTE, teclado decide; clique fora decide
-      // via botões (stopPropagation) — não pular por engano.
-      if (this.mode === 'derail' && this.qteOpen && e?.type === 'pointerdown') return;
-      if (this.mode === 'derail' && this.qteOpen && e?.type === 'keydown') {
+      // Fase 26/28 — durante a janela do QTE a decisão é SOBRE a cinemática:
+      // teclado 1/2/c/e decide, clique/touch fora decidem via botões
+      // (stopPropagation) e QUALQUER OUTRA tecla é ignorada — nunca pula por
+      // engano nem escapa do custo canônico (timeout = falha).
+      const qteLocked = this.mode === 'derail' && this.qteOpen && !this.outcome;
+      if (qteLocked && e?.type !== 'keydown') return; // pointerdown/touchstart fora dos botões: sem skip
+      if (qteLocked && e?.type === 'keydown') {
         const k = String(e?.key ?? '').toLowerCase();
-        if (k === '1' || k === 'c') return this.chooseQTE('seatbelt');
-        if (k === '2' || k === 'e') return this.chooseQTE('jump');
+        if (k === '1' || k === 'c') { this.chooseQTE('seatbelt'); return; }
+        if (k === '2' || k === 'e') { this.chooseQTE('jump'); return; }
+        return; // Fase 28 — outras teclas NÃO pulam o QTE (contrato: timeout = falha)
       }
       this.skip();
     };
@@ -397,11 +401,20 @@ export class TrainIntro {
 
   // decisão do QTE (teclado 1/2 · botões · testes headless chamam direto)
   chooseQTE(choice) {
-    if (this.done || !this.qteOpen) return false;
+    if (this.done || !this.qteOpen || this.outcome) return false; // Fase 28 — outcome resolvido não é sobrescrito
     if (!QTE_OUTCOMES[choice]) return false;
     this.outcome = { ...QTE_OUTCOMES[choice] };
     this.#setQteVisible(false);
     return true;
+  }
+
+  // Fase 28 — true quando a tecla pertence à decisão do QTE ATIVO (derail com
+  // janela aberta e sem outcome). O Game3D consome essas teclas ANTES do input
+  // do jogo: [1]/[2] não trocam arma, c não agacha, e não interage — e nenhuma
+  // outra tecla escapa do QTE (timeout = falha, não fuga).
+  consumesKey(k) {
+    return this.mode === 'derail' && this.qteOpen && !this.outcome
+      && (k === '1' || k === '2' || k === 'c' || k === 'e');
   }
 
   // posição da cabeça do trem no tempo t (determinística; pós-derail trava no
