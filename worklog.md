@@ -127,3 +127,21 @@ Stage Summary:
 - Director closes the perception→action loop: measures its own broadcast behavior and retunes margin/weights live, no redeploy
 - Playable-area smoke/crack density (campfires, lava cracks, void rifts) with zero new draw calls
 - World landmarks now REACT to their own survival events (tsunami/lava/gravity/acid) — broadcast and offline share the same reaction path via SurvivalFX
+
+---
+Task ID: 10
+Agent: Main
+Task: Fase 27 — números de dano flutuantes (assinatura Free Fire) + conserto do vazamento de hitmarker bot×bot
+
+Work Log:
+- New pure module src/game3d/damageNumbers3d.js — DOM pool (ring buffer cap 24), deterministic world→screen projection (projectToScreen, behind-camera/offscreen invisible with 5% margin), age-driven rise (easeOut)+scale pop+fade (no wall clock, no CSS animation), stagger anti-overlap by victim hash (−1|0|1 × 26 px), headless-safe (no document => math continues, DOM skipped)
+- Free Fire grammar: body white 19px / HEADSHOT red 24px (dmg-head) / NOCAUTE amber uppercase popup 1.5s (dmg-knock); #damageNumbers layer in index.html (pointer-events none, z-15) + styles in styles3d.css
+- Event contract closed BOTH sides with parity: (1) offline sim — bullet 'hit' gains owner: b.owner (FIXES latent bug: hitmarker/audio leaked into bot×bot fights because owner was undefined), #detonate emits 'hit' kind 'explosion' per victim with rounded damage, botKnocked gains victim (id); (2) authoritative server (room3d.js #detonate) — explosion 'hit' delivered ONLY to grenade owner within 110m (band economy; canonical TS trail has no MatchRoom3D twin — no parity work needed)
+- Consumption (main3d): number ONLY on own hits (owner === 'player'; online3d.queueEvent already localized owner via own()), explosion shows number WITHOUT hitmarker/hitFlesh (explosion FX/audio already cover it), NOCAUTE popup spawns at last hit position (KNOCK_MEMORY_S 1.2s) on 'botKnocked' (offline) and 'knock' (online, same batch), pool ticked in the render loop with camera, clear() on startMatch
+- Tests: test/damage-numbers.test.js (13 — projection, tiers, hash, pool with fake DOM, zero damage rejected, ring buffer, rise+fade+expiry, knock popup memory window + clear, headless-safe, offline sim bullet/frag/knock contracts, room explosion owner-only delivery + bullet contract intact)
+- Pipeline: branch feat/game3d-fase27-danos-flutuantes → CI → merge → main re-verified (status below)
+
+Stage Summary:
+- Combat feedback closes the loop: every own hit now speaks Free Fire language (white/red numbers, knock popup) — zero drift for sims, purely additive event fields
+- Latent fix: hitmarker + flesh audio no longer fire for bot-vs-bot hits (owner was undefined)
+- 692 tests — 679 pass, 0 fail, 13 skipped (opt-in); vite build OK

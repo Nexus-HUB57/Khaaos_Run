@@ -803,6 +803,15 @@ export class MatchRoom3D {
       const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
       if (dmg <= 0) continue;
       this.#damage(a, dmg, g.owner === a.id ? null : g.owner, 'explosion');
+      // Fase 27 — número de dano da explosão p/ o DONO da granada (paridade com
+      // a sim offline): mesmo contrato do 'hit' de bala (kind distingue o FX —
+      // cliente mostra só o número, sem hitmarker/flesh que a explosão já cobre)
+      if (g.owner && g.owner !== a.id) {
+        const owner = this.humans.get(g.owner);
+        if (owner && dist2d(owner.x, owner.z, a.x, a.z) < 110) {
+          this.#emitTo(g.owner, 'hit', { x: a.x, y: a.y + 1, z: a.z, victim: a.id, head: false, damage: Math.round(dmg), owner: g.owner, kind: 'explosion' });
+        }
+      }
     }
     let changed = false;
     for (const w of this.walls) {

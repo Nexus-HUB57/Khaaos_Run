@@ -102,6 +102,17 @@ kbd {
 #hitmarker i:nth-child(4) { transform: rotate(315deg) translate(8px, 0); }
 #hitmarker.head i { background: var(--red); box-shadow: 0 0 6px var(--red); }
 
+/* ---------- Fase 27 — números de dano flutuantes (assinatura Free Fire) ---------- */
+#damageNumbers { position: fixed; inset: 0; z-index: 15; pointer-events: none; overflow: hidden; }
+.dmg-num {
+  position: absolute; display: none; will-change: left, top, opacity, transform;
+  font-family: 'Arial Black', 'Segoe UI', sans-serif; font-weight: 900; font-size: 19px;
+  color: #fff; letter-spacing: .5px; white-space: nowrap;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 1px 2px rgba(0,0,0,.9), 0 0 12px rgba(0,0,0,.5);
+}
+.dmg-head { color: #ff4d4d; font-size: 24px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,61,82,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-knock { color: var(--gold); font-size: 17px; letter-spacing: 2.5px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 12px rgba(255,181,46,.6), 0 1px 2px rgba(0,0,0,.9); }
+
 /* ---------- minimapa ---------- */
 .map-corner { position: fixed; top: 64px; right: 14px; z-index: 18; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 .minimap-frame {

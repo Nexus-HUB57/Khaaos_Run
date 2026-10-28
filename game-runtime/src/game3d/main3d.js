@@ -23,6 +23,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
+import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
 import './styles3d.css';
 
@@ -170,6 +171,9 @@ export class Game3D {
     // fonte da luz segue o jogador (sombras estáveis)
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun.target);
+    // Fase 27 — números de dano flutuantes (assinatura Free Fire): pool de DOM
+    // sobre o canvas, mundo-ancorado pela câmera; headless-safe (sem document vira no-op)
+    this.damageNumbers = new DamageNumbers3D({ container: typeof document !== 'undefined' ? document.querySelector('#damageNumbers') : null });
     // Fase 7 — props ganham modelos GLTF REAIS quando os assets carregam
     // (fallback procedural permanece se o fetch falhar)
     applyGltfProps(scene);
@@ -424,6 +428,7 @@ export class Game3D {
   startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
+    this.damageNumbers?.clear(); // Fase 27 — partida nova, tela limpa
     this.zuOpen = false;
     this.hud.hideZu();
     this.hud.setMatchStatus('RING EM OPERAÇÃO');
@@ -1060,11 +1065,17 @@ export class Game3D {
             this.audio.hurt();
             this.hud.damageFlash = .4;
             this.#registerHit(e.victim, e); // Fase 10 — corpo também reage
+          } else if (e.kind === 'explosion') {
+            // Fase 27 — granada: SÓ o número (FX/áudio da explosão já cobrem o
+            // impacto — sem hitmarker/flesh duplicado); resta no acerto próprio
+            if (e.owner === 'player') this.damageNumbers?.spawn({ x: e.x, y: e.y, z: e.z, damage: e.damage, victim: e.victim });
           } else if (e.owner === undefined || e.owner === 'player') {
-            // hitmarker apenas para acertos próprios (offline não envia owner)
+            // hitmarker/número apenas para acertos próprios (Fase 27: o sim
+            // envia owner — bot×bot deixa de vazar no marker)
             this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
             this.audio.hit(e.head);
             this.hud.hitmarker(e.head);
+            this.damageNumbers?.spawn({ x: e.x, y: e.y, z: e.z, damage: e.damage, head: e.head, victim: e.victim });
           }
           // Fase 10 — TODO alvo de carne reage ao impacto (bots/remotos incluídos)
           if (e.victim !== 'player') this.#registerHit(e.victim, e);
@@ -1084,10 +1095,12 @@ export class Game3D {
         case 'knock':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
           this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
+          this.damageNumbers?.popupKnock(); // Fase 27 — online: mesmo popup (knock chega no batch do hit)
           break;
         case 'botKnocked':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
           this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
+          this.damageNumbers?.popupKnock(); // Fase 27 — popup NOCAUTE onde o hit letal pousou
           break;
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
@@ -1424,6 +1437,8 @@ export class Game3D {
     this.updateCamera(dt);
     this.effects.update(dt);
     this.deathDecals?.update(dt, this.camera.position); // Fase 20 — fade + LOD dos decals pela câmera
+    // Fase 27 — números de dano: re-projeta âncoras, sobe e some (determinístico)
+    this.damageNumbers?.update(dt, { camera: this.camera, width: innerWidth, height: innerHeight });
     this.updateDropFX(dt);
     // beacon pulse
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
