@@ -482,6 +482,42 @@ export class NodeWsGateway {
     return this.knownNodes.has(targetNodeId);
   }
 
+  /**
+   * Decisão de relay SEM corrida de boot (F16/F17): o cache knownNodes só
+   * popula no heartbeat (5 s), mas joins remotos chegam logo após o registro
+   * do peer. Esta versão async faz uma leitura FRESCA do registro quando o
+   * cache ainda não conhece o alvo — elimina o falso ROOM_REMOTE_NODE na
+   * janela entre registro no Redis e primeiro heartbeat.
+   */
+  async ensureNodeKnown(targetNodeId: string): Promise<boolean> {
+    if (!this.enabled || !this.started) return false;
+    if (targetNodeId === this.nodeId) return false;
+    if (this.knownNodes.has(targetNodeId)) return true;
+    try {
+      const nodes = await this.registryStore.list();
+      const target = nodes.find((node) => node.nodeId === targetNodeId);
+      if (!target) return false;
+      const alive = await this.registryStore.leaseAlive(targetNodeId).catch(() => false);
+      if (!alive) return false;
+      this.knownNodes.add(targetNodeId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Endpoint público do nó alvo (para o fallback ROOM_REMOTE_NODE apontar
+   *  o cliente para o dono REAL, não para este nó). */
+  async remoteNodeEndpoint(targetNodeId: string): Promise<string | null> {
+    if (!this.enabled) return null;
+    try {
+      const nodes = await this.registryStore.list();
+      return nodes.find((node) => node.nodeId === targetNodeId)?.endpoint ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Abre túnel para a sala remota e envia o join sintético.
    *  inviteAuthorized: true APENAS quando a origem validou o código de
    *  convite (join_code) — nunca derivado de mensagem do cliente. */

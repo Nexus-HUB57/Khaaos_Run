@@ -8,9 +8,10 @@
 //      replicando (chave escrita no master lida na réplica);
 //   2. Registro de nós: <ns>:nodes:index com os dois nós + canais
 //      <ns>:relay:<nodeId> ativos no PUBSUB;
-//   3. Cross-node por invite code: p1 cria lobby PRIVADO no nó A; p2 conecta
-//      no nó B e entra por join_code — túnel relay (socket fica em B, sala
-//      autoritativa em A) com welcome + room_state de volta;
+//   3. Cross-node por invite code (M1): p1 cria lobby PRIVADO no nó A e emite
+//      invite_player para p2; p2 conecta no nó B e entra por join_code — túnel
+//      relay (socket fica em B, sala autoritativa em A) com welcome +
+//      room_state de volta;
 //   4. Partida real: host inicia, countdown 10s, IN_PROGRESS com zone_tick
 //      fluindo para o cliente RELEADO em B; movimento de p2 roteado B→A
 //      (posição converge no snapshot do nó dono);
@@ -251,6 +252,14 @@ assert.ok(p1State, "room_state com inviteCode no nó A");
 const lobbyId = p1State.room.id;
 const inviteCode = p1State.room.inviteCode;
 assert.ok(lobbyId && inviteCode, "lobby + código de convite emitidos");
+
+// M1 — convite LIGADO a jogador: o host emite invite_player para o participante
+// remoto. O código da sala sozinho NÃO autoriza mais entrada (join por código
+// sem convite pendente → INVITE_REQUIRED na origem e no dono).
+send(p1, { type: "invite_player", targetUserId: "kr_player2" });
+const issued = await waitMessage(p1, "invite_issued", (m) => m.invitedUserId === "kr_player2", 40);
+assert.ok(issued, "invite ligado a kr_player2 emitido pelo host (M1)");
+
 console.log(`[f16] lobby ${lobbyId} (código ${inviteCode}) hospedado em smoke-node-a`);
 
 const p2 = await wsConnect(PORT_B, tokenP2);

@@ -113,7 +113,7 @@ jobs:
           bash "$UBT" ${{ github.event.inputs.target || 'KhaaosRunServer' }} Linux \
             ${{ github.event.inputs.configuration || 'Development' }} -project="$UPROJECT" -waitmutex
 
-      - name: EAC Dedicated Smoke (exigir 'EAC Status: Active' no binário construído)
+      - name: "EAC Dedicated Smoke (exigir 'EAC Status: Active' no binário construído)"
         # Fase 0.3 (auditoria): valida o binário do servidor dedicado REAL
         # construído no passo anterior. Com SDK real o smoke é ESTRITO (exit 0
         # só com 'EAC Status: Active' no log); com stub marca SKIPPED

@@ -100,7 +100,7 @@ jobs:
             KhaaosRunServer Linux ${{ github.event.inputs.configuration || 'Development' }} \
             "${UPROJECT}" -waitmutex
 
-      - name: EAC Dedicated Smoke (exigir 'EAC Status: Active')
+      - name: "EAC Dedicated Smoke (exigir 'EAC Status: Active')"
         # Fase 0.3 (auditoria): contra o servidor dedicado REAL. Modo estrito
         # é o PADRÃO do smoke — só executa com SDK real; com stub o passo
         # marca SKIPPED com aviso (contrato UE1040: stub nunca quebra o build
