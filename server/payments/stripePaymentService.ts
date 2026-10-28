@@ -263,7 +263,10 @@ export class StripePaymentService {
 
       const krcMinor = BigInt(order.krcMinorUnits);
       const amountKrc = fromMinorUnits(krcMinor);
-      const idempotencyKey = `stripe-order:${order.id}`;
+      // M4 — idempotency_key dentro do formato canônico do ledger (0005:
+      // "^[A-Za-z0-9._~-]{16,128}$") — ":" violava economy_ledger_key_format
+      // e o fulfillment falhava sempre que a constraint estava aplicada.
+      const idempotencyKey = `stripe-order-${order.id}`;
       const operationId = randomUUID();
 
       await tx.insert(bankAccounts).values({ userId: order.userId }).onConflictDoNothing();
