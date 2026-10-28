@@ -13,6 +13,8 @@ import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlaceme
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
+import { buildingInteriors, buildBuildingInteriors } from './interiors3d.js'; // Fase 23 — interiores
+import { terrainVertexData, terrainSeedNum } from './terrain3d.js'; // Fase 23b — elevação visual
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -202,7 +204,7 @@ function windowBandMaterials() {
   });
   return _winMats;
 }
-function buildFacades(scene, layout) {
+function buildFacades(scene, layout, skipWindows = null) {
   const concreteDark = concreteMaterial(1.2);
   concreteDark.color = new THREE.Color('#56534e');
   const doorM = new THREE.MeshStandardMaterial({ color: '#2a2c30', roughness: .7, metalness: .3 });
@@ -212,9 +214,15 @@ function buildFacades(scene, layout) {
   const frameM = new THREE.MeshStandardMaterial({ color: '#3a3d42', roughness: .6, metalness: .4 });
   const rng = new SeededRng(`${layout.seed}:facades`);
   const facades = new THREE.Group();
-  for (const s of layout.structures) {
-    const details = facadeDetails(s);
-    if (!details.length) continue;
+  layout.structures.forEach((s, si) => {
+    let details = facadeDetails(s);
+    if (!details.length) return;
+    // Fase 23 — prédios com casca oca têm buracos VERDADEIROS: sem bandas de
+    // janela/porta pintadas por cima (mantém placa/AC/caixa/tubo do topo)
+    if (skipWindows?.has(si)) {
+      details = details.filter((d) => d.kind !== 'windows' && d.kind !== 'door');
+      if (!details.length) return;
+    }
     const host = new THREE.Group();
     host.position.set(s.x, s.yMin, s.z); // y local 0 = chão; v é altura do chão
     host.rotation.y = s.rot ?? 0;
@@ -257,7 +265,7 @@ function buildFacades(scene, layout) {
       if (m) host.add(m);
     }
     facades.add(host);
-  }
+  });
   scene.add(facades);
 }
 // posiciona um decore na face indicada (espaço LOCAL da estrutura)
@@ -610,12 +618,25 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   back.position.set(60, 50, 240);
   scene.add(back);
 
-  // ---- terreno ----
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(440, 440),
-    groundMaterial(34, scenario.groundTint)
-  );
-  ground.rotation.x = -Math.PI / 2;
+  // ---- terreno (Fase 23b — elevação visual + cor por vértice) ----
+  // Plano segmentado: y=0 DENTRO da área jogável (gameplay/decals exatos);
+  // colinas determinísticas FORA (bound 200 → borda 220) com mistura de rocha.
+  const groundGeo = new THREE.PlaneGeometry(440, 440, 110, 110);
+  groundGeo.rotateX(-Math.PI / 2);
+  const tSeed = terrainSeedNum(seed, scenario.id);
+  const tData = terrainVertexData(groundGeo.attributes.position.array, {
+    tints: GRASS_TINTS[scenario.id] ?? GRASS_TINTS.CIGKV,
+    seedNum: tSeed,
+  });
+  {
+    const pos = groundGeo.attributes.position;
+    for (let i = 0; i < tData.heights.length; i++) pos.setY(i, tData.heights[i]);
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(tData.colors, 3));
+    groundGeo.computeVertexNormals();
+  }
+  const groundMat = groundMaterial(34, scenario.groundTint);
+  groundMat.vertexColors = true;
+  const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
   scene.add(ground);
 
@@ -659,6 +680,14 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   };
   const containerMats = [metalRust, metalBlue, metalGreen, metalGray];
 
+  // Fase 23 — plano de interiores ANTES do loop de estruturas: os prédios
+  // elegíveis trocam a caixa sólida pela casca oca (colliders intactos).
+  const interiorPlan = buildingInteriors(layout, {
+    fraction: q.interiorFactor ?? 1,
+    density: q.interiorDensity ?? 1,
+  });
+  const interiorIdx = new Set(interiorPlan.buildings.map((b) => b.index));
+
   // Fase 6 — envmap coerente com o céu do cenário (antes: RoomEnvironment genérico)
   if (renderer) {
     try {
@@ -688,19 +717,23 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte
   buildWorldMarks(scene, layout, scenario);
 
-  for (const s of layout.structures) {
+  layout.structures.forEach((s, si) => {
     const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
     const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(s.x, s.yMin + s.h / 2, s.z);
     mesh.rotation.y = s.rot ?? 0;
     mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
-    if (s.h >= 6 && s.kind !== 'monolith') {
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(s.w * 1.04, .5, s.d * 1.04), mats.wall);
-      cap.position.set(s.x, s.yMin + s.h + .25, s.z);
-      cap.castShadow = true; cap.receiveShadow = true;
-      scene.add(cap);
+    // Fase 23 — prédio com interior NÃO ganha caixa sólida nem cap (a casca oca
+    // de interiors3d desenha as paredes com buracos + laje própria)
+    if (!interiorIdx.has(si)) {
+      scene.add(mesh);
+      if (s.h >= 6 && s.kind !== 'monolith') {
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(s.w * 1.04, .5, s.d * 1.04), mats.wall);
+        cap.position.set(s.x, s.yMin + s.h + .25, s.z);
+        cap.castShadow = true; cap.receiveShadow = true;
+        scene.add(cap);
+      }
     }
     if (s.h >= 8) {
       const ant = new THREE.Mesh(new THREE.CylinderGeometry(.08, .12, 4.5, 6), mats.silo);
@@ -713,10 +746,16 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       scene.userData.beacons = scene.userData.beacons || [];
       scene.userData.beacons.push(beacon);
     }
-  }
+  });
 
   // Fase 6 — fachadas detalhadas por cima das estruturas (depois dos meshes base)
-  buildFacades(scene, layout);
+  buildFacades(scene, layout, interiorIdx);
+
+  // Fase 23 — interiores mobiliados (casca oca + vidro + móveis + pendentes)
+  buildBuildingInteriors(scene, layout, interiorPlan, {
+    contactShadows: (entries) => buildContactShadows(scene, entries),
+    exteriorMaterial: (kind) => mats[kind] ?? mats.wall,
+  });
 
   // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
   const bladeTex = grassBladeTexture();
