@@ -13,6 +13,7 @@ import { OidcClient } from './oidc.js';
 import { createSessionStore, PostgresAuditStore } from './store.js';
 import { AuditLog } from './audit.js';
 import { can } from './rbac.js';
+import { createEosBridge, eosConfigFromEnv } from './eos.js';
 import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError } from './economy.js';
 import { grantMatchRewards } from './rewards.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
@@ -67,6 +68,7 @@ export function createAuthoritativeServer({
   obs,
   poj,
   distributed, // M3 — camada distribuída injetável (testes/staging)
+  eos, // M4 — ponte EOS nativa injetável (testes: config de teste explícita)
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -679,6 +681,64 @@ export function createAuthoritativeServer({
         await pojCommand((b, actor) => pojService.courtVerdict(actor, b), 'poj.court_verdict');
         return;
       }
+      // ── M4 — Ponte EOS nativa (Unreal/KhaaosRun/.../Game/EOS ↔ runtime) ────
+      // status: SEM segredos (o UE5 client/dedicated consulta a disponibilidade).
+      if (url.pathname === '/eos/status' && req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', ...(traceHeader || {}) });
+        res.end(JSON.stringify({ ...eosBridge.status(), now: Date.now() }));
+        return;
+      }
+      // Sessões: o DEDICATED SERVER (papel service/admin) ancora a sessão EOS
+      // nativa à sala que ESTA réplica possui — fencing: sem posse, sem sessão.
+      if (url.pathname === '/eos/sessions' && req.method === 'POST') {
+        if (!guardHttp(req, res, 'eos:operate')) return;
+        try {
+          const body = await jsonBody(req);
+          // Fencing AUTORITATIVO na camada HTTP (independente de injeção de
+          // bridge em testes): sessão EOS só ancora em sala possuída por
+          // ESTA réplica — lease vivo e não congelada.
+          const ownsRoom = (() => {
+            if (!body?.roomId || !rooms.has(body.roomId)) return false;
+            if (!distributedLayer.enabled) return true;
+            return Boolean(distributedLayer.held && distributedLayer.held.has(body.roomId)) && !distributedLayer.isFrozen(body.roomId);
+          })();
+          if (!ownsRoom) {
+            const error = new Error(`sala ${body?.roomId} não é possuída por esta réplica — sessão EOS não pode ancorar (fencing)`);
+            error.code = 'EOS_ROOM_NOT_OWNED';
+            throw error;
+          }
+          const result = eosBridge.registerSession(body);
+          audit.record({ actor: identityFor(req)?.username || 'eos-service', action: 'eos.session.register', resource: result.roomId, outcome: 'allow', detail: { sessionId: result.sessionId } });
+          res.writeHead(result.created ? 201 : 200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          audit.record({ actor: 'eos-service', action: 'eos.session.register', outcome: 'deny', detail: { code: error.code, reason: String(error?.message || error).slice(0, 200) } });
+          const code = error.code === 'EOS_ROOM_NOT_OWNED' || error.code === 'EOS_ROOM_REQUIRED' ? 409 : error.code === 'EOS_SESSION_ID_INVALID' ? 422 : 503;
+          res.writeHead(code, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: error.code || 'eos_error', detail: error.message }));
+        }
+        return;
+      }
+      const eosSessionMatch = url.pathname.match(/^\/eos\/sessions\/([^/]+)\/(heartbeat|end)$/);
+      if (eosSessionMatch && req.method === 'POST') {
+        if (!guardHttp(req, res, 'eos:operate')) return;
+        const [, sessionId, action] = eosSessionMatch;
+        try {
+          const result = action === 'heartbeat' ? eosBridge.heartbeat(sessionId) : eosBridge.endSession(sessionId);
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(error.code === 'EOS_SESSION_UNKNOWN' ? 404 : 503, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: error.code || 'eos_error', detail: error.message }));
+        }
+        return;
+      }
+      if (url.pathname === '/eos/sessions' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ sessions: eosBridge.list(), status: eosBridge.status(), now: Date.now() }));
+        return;
+      }
       if (url.pathname === '/admin/keys' && req.method === 'GET') {
         if (!guardHttp(req, res, 'keys:rotate')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -1080,10 +1140,23 @@ export function createAuthoritativeServer({
     ...(distributedLayer.metrics || {}),
   });
 
+  // M4 — ponte EOS NATIVA (credential-gated): sem credenciais responde
+  // `unconfigured` e rejeita operações — o mock vive só nos unit tests.
+  // Sessões EOS ancoram em salas POSSUÍDAS por esta réplica (fencing M3/M4).
+  const eosBridge = eos || createEosBridge({
+    config: eosConfigFromEnv(),
+    isRoomOwnedLocally: (roomId) => {
+      if (!rooms.has(roomId)) return false;
+      if (!distributedLayer.enabled) return true;
+      return Boolean(distributedLayer.held && distributedLayer.held.has(roomId)) && !distributedLayer.isFrozen(roomId);
+    },
+  });
+  eosBridge.start();
   const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.(), distributedLayer.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
     distributed: distributedLayer, // M3 — exposto p/ testes/operação
+    eos: eosBridge, // M4 — ponte EOS nativa exposta p/ testes/operação
     spectator: spectatorPipeline, // Fase 14 — pipeline da transmissão exposto p/ testes/operação
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
@@ -1091,6 +1164,7 @@ export function createAuthoritativeServer({
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      eosBridge.stop(); // M4 — encerra timers/estado da ponte EOS
       await distributedLayer.stop().catch(() => {}); // M3 — libera leases/registros
       try { server.off('upgrade', routeUpgrade); } catch { /* já removido */ }
       spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão

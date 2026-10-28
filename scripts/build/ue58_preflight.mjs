@@ -121,6 +121,12 @@ export function validateProject(root) {
           .flatMap((entry) => [entry.name, ...fs.readdirSync(path.join(sourceDir, entry.name), { withFileTypes: true }).filter((sub) => sub.isDirectory()).map((sub) => sub.name)])
       : [],
   );
+  // M4 — módulos de TOPO do Source (provedores de include): um módulo dependido
+  // que expõe a própria raiz (PublicIncludePaths.Add(ModuleDirectory)) torna
+  // includes "Game/..." resolvíveis cross-módulo — modelo do KhaaosRun.Build.cs.
+  const moduleTopDirs = fs.existsSync(sourceDir)
+    ? fs.readdirSync(sourceDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+    : [];
   let includeChecked = 0;
   for (const file of cppFiles) {
     const text = fs.readFileSync(file, 'utf8');
@@ -139,9 +145,19 @@ export function validateProject(root) {
         || [path.join(sourceDir, moduleFor(file), inc), path.join(sourceDir, inc), path.join(sourceDir, moduleFor(file), 'Public', inc), path.join(sourceDir, moduleFor(file), 'Classes', inc)]
             .some((candidate) => headerSet.has(candidate));
       if (resolvesLocally) continue;
+      // M4 — include raizado no módulo PROVIDER ("Game/..." via KhaaosRun):
+      // resolve quando ALGUM módulo de topo expõe a raiz com o caminho inteiro.
+      const resolvesViaProviderModule = moduleTopDirs.some((m) =>
+        headerSet.has(path.resolve(sourceDir, m, inc)) || headerSet.has(path.resolve(sourceDir, m, 'Public', inc)));
+      if (resolvesViaProviderModule) continue;
       const firstSegment = inc.split('/')[0];
       const basenameKnown = headerNames.has(path.basename(inc));
-      if (projectDirs.has(firstSegment) || basenameKnown) {
+      // Diretórios de convenção da ENGINE (UnrealEd/Commandlets, Module/Public…):
+      // existem como subdir do projeto, mas includes com essa raiz são da engine
+      // (ex.: "Commandlets/Commandlet.h" ← UnrealEd) — não são include de projeto.
+      const ENGINE_CONVENTION_DIRS = new Set(['Commandlets', 'Public', 'Private', 'Classes', 'Internationalization', 'Tests']);
+      const projectRooted = projectDirs.has(firstSegment) && !ENGINE_CONVENTION_DIRS.has(firstSegment);
+      if (projectRooted || basenameKnown) {
         add(FATAL, 'UE1021', path.relative(sourceDir, file), `include de projeto "${inc}" não resolve em Source/ (namespace de projeto conhecido)`);
       }
     }
