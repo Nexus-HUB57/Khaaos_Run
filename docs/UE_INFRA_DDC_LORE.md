@@ -26,7 +26,15 @@ foram validadas por HTTP 200 na API de registry do ghcr antes da implementação
 | Serviço | Imagem (contrato P1) | Portas | Persistência |
 |---|---|---|---|
 | `unreal-cloud-ddc` | `ghcr.io/epicgames/unreal-cloud-ddc:1.5.0` | host 8080 → container 80 | efêmero (cache; volume opcional) |
-| `loreserver` | `ghcr.io/epicgames/lore/loreserver:sha256-042ab40…` | 41337 tcp+udp, 41339 | volume `lore-data:/data` + `local.toml` (stores em `/data/immutable` e `/data/mutable`) |
+| `loreserver` | `ghcr.io/epicgames/lore/loreserver:0.12` (amd64) | 41337 tcp+udp, 41339 | volume `lore-data:/data` + `local.toml` (stores em `/data/immutable` e `/data/mutable`) |
+
+**Correção do contrato P1 (evidência de CI, 2026-10-28)**: o digest original
+`sha256-042ab40…` é a variante **linux/arm64 (Graviton3/SVE)** — em host
+amd64 o pull falha com *"no matching manifest for linux/amd64"* (run do
+workflow `UE Infra` antes do fix). O ghcr do Lore publica o par
+`<ver>` (amd64, single-manifest) + `<ver>-graviton` (arm64/SVE); para hosts
+amd64 (incluindo os runners `ubuntu-latest`) o contrato usa a tag simples
+`0.12`. Para graviton/arm64, usar `0.12-graviton`.
 
 O `local.toml` (infra/ue-infra/loreserver/config/local.toml) segue o mínimo
 recomendado pela doc oficial: stores persistentes no volume; o certificado
@@ -60,9 +68,10 @@ Pipeline de quatro estágios, com honestidade em cada um:
    públicas) — mas emite `::warning::` explícito para revisão do escopo
    `read:packages`. Quando o acesso a imagens privadas da Epic entrar no
    contrato, o login passa a ser bloqueante.
-2. **Pull do contrato** — `docker pull` literal das duas referências do P1
-   (a tag de digest `sha256-042ab40…` é a notação de tag do ghcr para o
-   commit da imagem).
+2. **Pull do contrato** — `docker pull` das duas referências: container
+   `unreal-cloud-ddc:1.5.0` e `loreserver:0.12` (amd64 — ver correção do
+   contrato na seção 2; o digest original `sha256-042ab40…` permanece
+   documentado como a variante arm64/Graviton3).
 3. **Compose up + smoke** — `docker compose up -d` e o smoke da seção 3.
 4. **Telemetria de falha** — em erro, `compose ps` + logs (tail 100) e
    teardown `down -v --remove-orphans` no `always()`.
