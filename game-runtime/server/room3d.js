@@ -153,6 +153,11 @@ export class MatchRoom3D {
     // das filas por humano): traduzido já no vocabulário do pipeline
     // (ELIMINATION/RING_PHASE) — o pipeline /ws/spectator mescla no batch.
     this.spectatorLog = [];
+    // Fase 28 — DANOs para a transmissão (números flutuantes do espectador
+    // FOLLOW). Anel separado do spectatorLog (não deixa ELIMINATION/RING_PHASE
+    // afogar em rajada de combate) + rate-limit por vítima (banda sob controle).
+    this.spectatorDamageLog = [];
+    this._dmgLogAt = new Map(); // victimId -> último timestamp logado (rate-limit)
     // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls + portas)
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
     this.syncPhysicsWorld();
@@ -194,6 +199,33 @@ export class MatchRoom3D {
   spectatorLogEvent(type, data = {}) {
     this.spectatorLog.push({ type, data, timestamp: Date.now() });
     if (this.spectatorLog.length > 24) this.spectatorLog.shift();
+  }
+
+  // Fase 28 — dano para a transmissão: anel de 10, rate-limit de 150 ms por
+  // vítima (dano contínuo de hazard/tick não inunda a banda) e timestamp
+  // ESTRITAMENTE crescente (o cliente deduplica por type:timestamp — dois
+  // eventos no mesmo ms nunca se colidem).
+  #logSpectatorDamage(actor, dmg, ownerId, kind, knocked) {
+    if (!(dmg > 0)) return;
+    const now = Date.now();
+    const last = this._dmgLogAt.get(actor.id) ?? 0;
+    if (now - last < 150) return;
+    this._dmgLogAt.set(actor.id, now);
+    const ts = this.spectatorDamageLog.length
+      ? Math.max(now, this.spectatorDamageLog[this.spectatorDamageLog.length - 1].timestamp + 1)
+      : now;
+    this.spectatorDamageLog.push({
+      type: 'DAMAGE',
+      data: {
+        x: actor.x, y: (actor.y ?? 0) + 1, z: actor.z,
+        victim: actor.id, attacker: ownerId ?? null,
+        damage: Math.max(1, Math.round(dmg)),
+        head: kind === 'headshot', kind: kind ?? 'flesh',
+        knocked: !!knocked,
+      },
+      timestamp: ts,
+    });
+    if (this.spectatorDamageLog.length > 10) this.spectatorDamageLog.shift();
   }
   drainEvents(humanId) {
     const list = this.events.get(humanId) || [];
@@ -1081,7 +1113,18 @@ export class MatchRoom3D {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(other.z - a.z, other.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damage(other, w.damage, a.id, false); this.#emitTo(a.id, 'melee', { target: other.id }); hitFlesh = true; break; }
+        // Fase 28 — evento 'melee' com o CONTRATO do número de dano (x/y/z,
+        // victim, owner, damage): o atacante humano vê o número flutuante na
+        // mesma gramática do hit de bala.
+        if (diff < 1.2) {
+          this.#damage(other, w.damage, a.id, false);
+          this.#emitTo(a.id, 'melee', {
+            target: other.id, x: other.x, y: (other.y ?? 0) + 1, z: other.z,
+            victim: other.id, owner: a.id,
+            damage: Math.max(1, Math.round(w.damage)), head: false,
+          });
+          hitFlesh = true; break;
+        }
       }
     }
     // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real)
@@ -1295,6 +1338,9 @@ export class MatchRoom3D {
     if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
+    // Fase 28 — dano na TRANSMISSÃO: evento DAMAGE (número flutuante do
+    // espectador FOLLOW).knocked = este dano nocauteou (popup NOCAUTE).
+    this.#logSpectatorDamage(actor, dmg, ownerId, kind, actor.life <= 0 && this.squad && !actor.knocked);
     if (!actor.isBot) {
       this.#emitTo(actor.id, 'hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, actor.life) });
     }
@@ -1492,7 +1538,11 @@ export class MatchRoom3D {
       },
       // Fase 25 — estado das portas na TRANSMISSÃO (painel some quando quebrada)
       doors: this.doors.map((d) => ({ id: d.id, hp: Math.round(d.hp), active: d.active })),
-      events: this.spectatorLog.slice(-20).map((e) => ({ ...e })),
+      // Fase 28 — eventos públicos + DANOs da transmissão intercalados por
+      // tempo (o cliente deduplica pela chave type:timestamp).
+      events: [...this.spectatorLog.slice(-20), ...this.spectatorDamageLog]
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map((e) => ({ ...e })),
     };
   }
   #selfView(a) {
