@@ -734,8 +734,10 @@ export class SpectatorView {
       dropPhase: null,
       weapon: 'g19',
     }));
-    // Fase 25 — estado das portas da transmissão (id/hp/active; posição é estática)
-    if (Array.isArray(batch.doors)) this.doors = batch.doors.map((d) => ({ ...d, active: d.active !== false }));
+    // Fase 25 — estado das FOLHAS da transmissão (id/open/destroyed/hp;
+    // posição é estática — o vão vem do layout pela seed). `active` mantido
+    // como derivado p/ compatibilidade com consumidores legados.
+    if (Array.isArray(batch.doors)) this.doors = batch.doors.map((d) => ({ ...d, open: !!d.open, destroyed: !!d.destroyed, active: d.destroyed !== true && d.active !== false }));
   }
 
   step() { /* transmissão: nenhum tick local — o estado vem dos batches */ }

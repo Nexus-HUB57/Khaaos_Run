@@ -347,13 +347,11 @@ test('buildShellHost: folhas registradas == vãos do layout; animator converge; 
   reg.group.traverse((o) => { if (o.isMesh && o.geometry?.parameters?.depth === 0.09) panels++; });
   assert.ok(panels >= reg.doors.size, `painéis de folha presentes (${panels})`);
   // animator: alvo aberto converge para openAngle com o SINAL da dobradiça
-  // Fase 25/29 — registry guarda o PIVÔ com estado em userData.handle
-  const pivot = reg.doors.values().next().value;
-  const h = pivot.userData.handle;
+  const h = reg.doors.values().next().value;
   h.target = DOOR_MECH.openAngle;
   for (let i = 0; i < 120; i++) for (const fn of reg.animators) fn(1 / 60, i / 60);
   assert.ok(Math.abs(h.current - DOOR_MECH.openAngle) < 0.01, `animator converge (${h.current.toFixed(3)})`);
-  assert.ok(Math.abs(pivot.rotation.y) > 1.5, 'pivô girou para dentro');
+  assert.ok(Math.abs(h.pivot.rotation.y) > 1.5, 'pivô girou para dentro');
   // quebra: folha some da cena (animator materializa o broken)
   h.broken = true;
   for (const fn of reg.animators) fn(1 / 60, 0);

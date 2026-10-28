@@ -703,9 +703,7 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       const host = buildShellHost(s, shellSpec, interiors.mats);
       interiors.group.add(host);
       // Fase 25 — folha de porta registrada p/ o animator (abrir/fechar/quebrar)
-      // FIX Fase 25/29 — o registry guarda o PIVÔ (group com .visible p/ o
-      // syncDoors legado); o estado da folha vive em pivot.userData.handle.
-      if (host.userData.doorHandle) interiors.doors.set(host.userData.doorHandle.id, host.userData.doorHandle.pivot);
+      if (host.userData.doorHandle) interiors.doors.set(host.userData.doorHandle.id, host.userData.doorHandle);
     } else {
       const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
       const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
