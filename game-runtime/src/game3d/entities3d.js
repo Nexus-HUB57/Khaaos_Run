@@ -356,12 +356,20 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(cyl(.008, .008, .16, metalM, -.19, .22, -.16, 4)); // antena do radio
   // zipper + fivela central
   torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
-  // mochila tática: corpo + straps + bedroll + faixa de equipe
+  // mochila tática: corpo + straps + bedroll + faixa de equipe (BASE — a
+  // Fase 28 substitui por níveis Nv1-3 quando o ator equipa mochila)
   const pack = box(.38, .42, .17, gearM2, 0, .02, .22);
+  pack.userData.basePack = true;
   torso.add(pack);
-  torso.add(box(.3, .05, .19, vestDarkM, 0, .12, .23));      // tampa
-  torso.add(cyl(.07, .07, .34, secM, 0, .27, .24, 8));        // bedroll no topo
-  torso.add(box(.34, .06, .02, trimM, 0, -.08, .305));        // faixa reflexiva
+  const packLid = box(.3, .05, .19, vestDarkM, 0, .12, .23);
+  packLid.userData.basePack = true;
+  torso.add(packLid);
+  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 8);
+  bedroll.userData.basePack = true;
+  torso.add(bedroll);
+  const teamStripe = box(.34, .06, .02, trimM, 0, -.08, .305);
+  teamStripe.userData.basePack = true;
+  torso.add(teamStripe);
   // costelas laterais do colete
   torso.add(box(.03, .3, .28, vestDarkM, -.265, .06, 0));
   torso.add(box(.03, .3, .28, vestDarkM, .265, .06, 0));
@@ -396,17 +404,22 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     head.add(hairBack);
   }
   // capacete tático OU boina (variedade) — gear rígido, boxes coerentes
+  // (Fase 28: marcados baseHeadGear — o gear Nv2+ os substitui)
   if (helmet) {
     const dome = ball(.145, gearM, 0, .1, .01, 12, 10, 1.05, .85, 1.12); // casco arredondado
     const brim = box(.28, .04, .08, gearM, 0, .1, -.15);
     const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos empilhados
+    dome.userData.baseHeadGear = brim.userData.baseHeadGear = band.userData.baseHeadGear = true;
     head.add(dome, brim, band);
-    head.add(box(.02, .07, .16, gearM2, -.15, .15, .01)); // trilhos laterais
-    head.add(box(.02, .07, .16, gearM2, .15, .15, .01));
-    head.add(box(.05, .05, .05, metalM, .09, .21, .08));   // mount NVG
+    const railL = box(.02, .07, .16, gearM2, -.15, .15, .01); // trilhos laterais
+    const railR = box(.02, .07, .16, gearM2, .15, .15, .01);
+    const nvg = box(.05, .05, .05, metalM, .09, .21, .08);   // mount NVG
+    railL.userData.baseHeadGear = railR.userData.baseHeadGear = nvg.userData.baseHeadGear = true;
+    head.add(railL, railR, nvg);
   } else {
     const cap = box(.28, .1, .28, vestM, 0, .16, .01);
     const brim = box(.24, .03, .12, vestM, 0, .12, -.16);
+    cap.userData.baseHeadGear = brim.userData.baseHeadGear = true;
     head.add(cap, brim);
   }
   torso.add(head);
@@ -455,7 +468,9 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
   const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
 
-  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null } };
+  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null };
+  parts.userData = { vestColor: vest }; // Fase 28 — tinge o gear com a cor da equipe
+  return { group: g, parts };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
@@ -691,6 +706,43 @@ export function createWeaponModel(id, skin = null) {
       sights(-.5, .0);
       muzzleZ = -.56;
       break;
+    case 'ar47': { // Fase 28 — AR-47 (7.62) com 4 SOCKETS reais p/ anexos
+      const woodM = M('#6e4a2a', { rough: .62, metal: .08 }); // madeira envelhecida
+      const woodDarkM = M('#54371e', { rough: .66, metal: .06 });
+      // receiver + tampa do gas system (silhueta AK imediata)
+      add(.075, .11, .5, gun, 0, 0, -.05);
+      add(.035, .05, .34, gun2, 0, .075, -.16);       // gas tube sobre o cano
+      add(.06, .09, .26, woodM, 0, -.005, -.38);      // handguard de madeira
+      add(.05, .1, .08, woodDarkM, 0, -.02, -.5);     // escavilho frontal
+      // coronha oca de madeira (esqueleto AK)
+      add(.05, .09, .1, woodM, 0, -.01, .24);
+      add(.05, .16, .06, woodM, 0, -.04, .36);
+      add(.045, .04, .16, woodM, 0, -.08, .3);
+      // pistol grip inclinado
+      const grip = add(.05, .12, .07, woodDarkM, 0, -.11, .12); grip.rotation.x = .38;
+      // mira de ferro em torre (frontal alta — silhueta AK-47)
+      add(.012, .07, .02, gun2, 0, .1, -.52);
+      add(.045, .05, .03, gun2, 0, .095, .14);
+      const barrel = add(.03, .03, .16, gun2, 0, .015, -.6); // cano exposto
+      barrel.name = 'barrel';
+      muzzleZ = -.68;
+      // ---- 4 SOCKETS (Fase 28): âncoras reais p/ anexos; nomes estáveis ----
+      const sockets = {
+        muzzle: { pos: [0, .015, -.74] },             // boca: corta-chamas/silenciador
+        optic: { pos: [0, .11, -.05] },               // trilho lateral: red dot/4x
+        mag: { pos: [0, -.1, -.02] },                 // poço do carregador
+        grip: { pos: [0, -.075, -.3] },               // under-barrel: foregrip/lanterna
+      };
+      g.userData.sockets = {};
+      for (const [name, { pos }] of Object.entries(sockets)) {
+        const s = new THREE.Group();
+        s.name = `socket_${name}`;
+        s.position.set(...pos);
+        g.add(s);
+        g.userData.sockets[name] = s;
+      }
+      break;
+    }
     case 'barrett': // sniper .338
       add(.09, .12, 1.05, gun, 0, 0, -.28);
       add(.06, .18, .09, gun2, 0, -.13, .12);
@@ -873,6 +925,39 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
 // ---------- loot no chão (Fase 6: pad hexagonal de raridade) ----------
 export function createLootMesh(item) {
   const g = new THREE.Group();
+  // ---- Fase 28 — tipos com FÁBRICA DEDICADA (assinatura Free Fire) ----
+  if (item.kind === 'deathBox') {
+    const db = createDeathBox({ seed: item.seed ?? 1, accent: item.accent ?? '#ffb52e', name: item.victimName ?? '' });
+    db.position.y = 0;                 // fábrica já assenta no chão
+    return db;
+  }
+  if (item.kind === 'supplyDrop') {
+    const sd = createSupplyDrop({ seed: item.seed ?? 1 });
+    sd.position.y = 0;
+    return sd;
+  }
+  if (item.kind === 'helmet' || item.kind === 'vest' || item.kind === 'pack') {
+    const gearColors = { vest: '#42d9de', helmet: '#a875ff', pack: '#7dd87d' };
+    const color = gearColors[item.kind] ?? '#b7c2c7';
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(.42, .48, .05, 6),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: .5, roughness: .5, transparent: true, opacity: .55 })
+    );
+    pad.position.y = .025;
+    g.add(pad);
+    const lv = Math.max(1, Math.min(4, item.level || 1));
+    const gearMesh = buildGearMesh(item.kind, lv);
+    gearMesh.position.y = .05;
+    gearMesh.scale.setScalar(1.15);
+    g.add(gearMesh);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.03, .05, 2.0, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35, depthWrite: false })
+    );
+    beam.position.y = 1.0;
+    g.add(beam);
+    return g;
+  }
   const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e' };
   const color = rarityColors[item.rarity] ?? (item.kind === 'consumable' ? '#ff6b2c' : item.kind === 'armor' ? '#42d9de' : '#b7c2c7');
   // pad hexagonal emissivo sob o item
