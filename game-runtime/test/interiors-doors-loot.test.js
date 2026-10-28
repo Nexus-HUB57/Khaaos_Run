@@ -237,9 +237,11 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
   assert.ok(panel.hp < doorHpFor(panel.kind), `folha desgastada (hp ${panel.hp}/${doorHpFor(panel.kind)})`);
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
+
   assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
-  // CALIBRAÇÃO 25.1 — kind do impacto segue o MATERIAL (wood lascas / metal faíscas)
-  assert.ok(events.some((e) => e.type === 'impact' && e.kind === doorMaterialOf(panel.kind)), `impactos do tipo ${doorMaterialOf(panel.kind)} p/ FX`);
+  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === panel.id), false, 'collider saiu do mundo físico');
+  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood na folha p/ FX');
+
 });
 
 test('sim offline: MELEE arrebenta a folha de MADEIRA rápido (mult 3,0×) e prioriza carne', () => {
@@ -367,13 +369,14 @@ test('buildScene: doorPanels registrados (id → grupo) e painel completo (6 pe�
     assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
     for (const [doorId, ctl] of reg.doors) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
-      assert.ok(ctl.pivot && ctl.leaf, `${id}: controlador pivot/leaf`);
-      assert.equal(ctl.leaf.children.length, 5, `${id}: painel+2 travessas+maçaneta+fecho`);
-      assert.equal(ctl.broken, false, `${id}: folha íntegra no spawn`);
-      assert.equal(ctl.target, 0, `${id}: fechada no spawn`);
-      const slab = ctl.leaf.children[0];
-      const p = slab.geometry.parameters;
-      assert.ok(p.height >= 2.2, `${id}: painel da base à verga`);
+      const h = ctl; // controlador de animação { pivot, leaf, openSign, current, target, broken }
+      assert.ok(h.leaf.children.length === 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
+      assert.ok(h.pivot.children.includes(h.leaf), `${id}: folha pendurada no pivô da dobradiça`);
+      assert.equal(h.current, 0, `${id}: fechada no spawn`);
+      const panel = h.leaf.children[0];
+      const p = panel.geometry.parameters;
+      assert.ok(p.height >= 2.2, `${id}: folha da base à verga`);
+
     }
   }
 });
