@@ -23,6 +23,7 @@
 #include "Game/AntiCheat/KhaaosMovementValidator.h"
 #include "Game/Level/KhaaosCIGKVLevel.h"
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Game/UI/Widgets/KhaaosMobileControlsWidget.h"
 #include "Game/World/CIGKV/KhaaosZuCinematicComponent.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -49,6 +50,19 @@ void AKhaaosPlayerController::BeginPlay()
 
 	// ── Create HUD ──
 	CreateHUD();
+	// A custom UMG subclass owns the mobile layout; the default virtual joystick
+	// stays disabled to avoid presenting two competing touch-control schemes.
+#if PLATFORM_ANDROID || PLATFORM_IOS
+	if (IsLocalController() && MobileTouchControlsClass)
+	{
+		MobileTouchControls = CreateWidget<UKhaaosMobileControlsWidget>(this, MobileTouchControlsClass);
+		if (MobileTouchControls)
+		{
+			MobileTouchControls->AddToPlayerScreen(100);
+			UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosPlayerController: Mobile touch HUD created"));
+		}
+	}
+#endif
 
 	// ── Cache character reference ──
 	CacheCharacterRef();
@@ -59,11 +73,41 @@ void AKhaaosPlayerController::BeginPlay()
 void AKhaaosPlayerController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// CharacterMovement consumes pending input every movement frame. Reapply the
+	// virtual-stick value while the custom HUD is alive so a stationary finger
+	// continues to move the character.
+	if (IsLocalController() && MobileTouchControls && CachedCharacter && !CachedCharacter->bIsDead)
+	{
+		HandleMove(FInputActionValue(MobileTouchMoveAxis));
+	}
+	if (IsLocalController() && bLocalFireHeld && GetWorld())
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (Now >= NextFireHeartbeatTimestamp)
+		{
+			ServerSetFireHeld(true);
+			NextFireHeartbeatTimestamp = Now + 0.25; // 4 Hz; do not enqueue an RPC every frame.
+		}
+	}
 
 	// ── Server-side movement validation (anti-cheat) ──
-	if (HasAuthority() && GetPawn())
+	if (HasAuthority())
 	{
-		ValidateMovement(DeltaSeconds);
+		const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		if (bServerFireButtonDown && (Now - LastFireInputTimestamp) > 2.0)
+		{
+			// A suspended mobile app or dead connection may never deliver release.
+			bServerFireHeld = false;
+			bServerFireButtonDown = false;
+		}
+		else if (bServerFireHeld && GetPawn())
+		{
+			TryServerFireShot();
+		}
+		if (GetPawn())
+		{
+			ValidateMovement(DeltaSeconds);
+		}
 	}
 }
 
@@ -119,60 +163,60 @@ void AKhaaosPlayerController::SetupInputComponent()
 	}
 	if (IT.Jump)
 	{
-		EnhancedInputComp->BindAction(IT.Jump, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleJump);
+		EnhancedInputComp->BindAction(IT.Jump, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleJump);
 	}
 
 	// ── Ability actions ──
 	if (IT.Shoot)
 	{
-		EnhancedInputComp->BindAction(IT.Shoot, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleFire);
+		EnhancedInputComp->BindAction(IT.Shoot, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleFire);
 		EnhancedInputComp->BindAction(IT.Shoot, ETriggerEvent::Completed, this, &AKhaaosPlayerController::HandleStopFire);
 	}
 	if (IT.Reload)
 	{
-		EnhancedInputComp->BindAction(IT.Reload, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleReload);
+		EnhancedInputComp->BindAction(IT.Reload, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleReload);
 	}
 	if (IT.Sprint)
 	{
-		EnhancedInputComp->BindAction(IT.Sprint, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleSprint);
+		EnhancedInputComp->BindAction(IT.Sprint, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleSprint);
 		EnhancedInputComp->BindAction(IT.Sprint, ETriggerEvent::Completed, this, &AKhaaosPlayerController::HandleSprintRelease);
 	}
 	if (IT.Slide)
 	{
-		EnhancedInputComp->BindAction(IT.Slide, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleSlide);
+		EnhancedInputComp->BindAction(IT.Slide, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleSlide);
 	}
 	if (IT.ADS)
 	{
-		EnhancedInputComp->BindAction(IT.ADS, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleADS);
+		EnhancedInputComp->BindAction(IT.ADS, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleADS);
 		EnhancedInputComp->BindAction(IT.ADS, ETriggerEvent::Completed, this, &AKhaaosPlayerController::HandleADSRelease);
 	}
 	if (IT.Melee)
 	{
-		EnhancedInputComp->BindAction(IT.Melee, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleMelee);
+		EnhancedInputComp->BindAction(IT.Melee, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleMelee);
 	}
 	if (IT.Interact)
 	{
-		EnhancedInputComp->BindAction(IT.Interact, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleInteract);
+		EnhancedInputComp->BindAction(IT.Interact, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleInteract);
 	}
 	if (IT.Ultimate)
 	{
-		EnhancedInputComp->BindAction(IT.Ultimate, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleUltimate);
+		EnhancedInputComp->BindAction(IT.Ultimate, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleUltimate);
 	}
 	if (IT.Shield)
 	{
-		EnhancedInputComp->BindAction(IT.Shield, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleUseItem);
+		EnhancedInputComp->BindAction(IT.Shield, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleUseItem);
 	}
 	if (IT.Heal)
 	{
-		EnhancedInputComp->BindAction(IT.Heal, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleUseItem);
+		EnhancedInputComp->BindAction(IT.Heal, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleUseItem);
 	}
 	if (IT.GrapplingHook)
 	{
-		EnhancedInputComp->BindAction(IT.GrapplingHook, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleInteract);
+		EnhancedInputComp->BindAction(IT.GrapplingHook, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleInteract);
 	}
 	if (IT.PauseMenu)
 	{
-		EnhancedInputComp->BindAction(IT.PauseMenu, ETriggerEvent::Triggered, this, &AKhaaosPlayerController::HandleScoreboard);
+		EnhancedInputComp->BindAction(IT.PauseMenu, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleScoreboard);
 		EnhancedInputComp->BindAction(IT.PauseMenu, ETriggerEvent::Completed, this, &AKhaaosPlayerController::HandleScoreboardRelease);
 	}
 
@@ -205,6 +249,15 @@ void AKhaaosPlayerController::HandleLook(const FInputActionValue& Value)
 	CachedCharacter->LookUp(LookVector.Y);
 }
 
+void AKhaaosPlayerController::SetMobileTouchMoveAxis(FVector2D Axis)
+{
+	if (Axis.SizeSquared() > 1.0f)
+	{
+		Axis.Normalize();
+	}
+	MobileTouchMoveAxis = Axis;
+}
+
 void AKhaaosPlayerController::HandleJump(const FInputActionValue& Value)
 {
 	if (CachedCharacter && !CachedCharacter->bIsDead)
@@ -219,11 +272,14 @@ void AKhaaosPlayerController::HandleFire(const FInputActionValue& Value)
 	{
 		return;
 	}
-	ServerFire();
+	bLocalFireHeld = true;
+	NextFireHeartbeatTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() + 0.25 : 0.0;
+	ServerSetFireHeld(true);
 }
 
 void AKhaaosPlayerController::HandleStopFire(const FInputActionValue& Value)
 {
+	bLocalFireHeld = false;
 	ServerStopFire();
 }
 
@@ -419,21 +475,7 @@ void AKhaaosPlayerController::HandleMelee(const FInputActionValue& Value)
 
 void AKhaaosPlayerController::ServerFire_Implementation()
 {
-	AKhaaosCharacter* Char = Cast<AKhaaosCharacter>(GetPawn());
-	if (!Char || Char->bIsDead)
-	{
-		return;
-	}
-
-	// Fire via weapon component
-	if (UKhaaosWeaponComponent* WeaponComp = Char->GetWeaponComponent())
-	{
-		if (WeaponComp->ConsumeAmmo())
-		{
-			WeaponComp->AddRecoil();
-			UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosPlayerController: ServerFire"));
-		}
-	}
+	TryServerFireShot();
 }
 
 bool AKhaaosPlayerController::ServerFire_Validate()
@@ -441,8 +483,86 @@ bool AKhaaosPlayerController::ServerFire_Validate()
 	return true;
 }
 
+void AKhaaosPlayerController::ServerSetFireHeld_Implementation(bool bHeld)
+{
+	if (!bHeld)
+	{
+		bServerFireHeld = false;
+		bServerFireButtonDown = false;
+		return;
+	}
+
+	const bool bWasButtonDown = bServerFireButtonDown;
+	bServerFireButtonDown = true;
+	LastFireInputTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (!bWasButtonDown)
+	{
+		bServerFireHeld = true;
+		TryServerFireShot();
+	}
+	else if (!bServerFireHeld)
+	{
+		AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(GetPawn());
+		UKhaaosWeaponComponent* WeaponComponent = Character ? Character->GetWeaponComponent() : nullptr;
+		if (WeaponComponent
+			&& WeaponComponent->GetActiveFireMode() == EWeaponFireMode::Auto
+			&& WeaponComponent->CanFire())
+		{
+			bServerFireHeld = true;
+		}
+	}
+}
+
+bool AKhaaosPlayerController::ServerSetFireHeld_Validate(bool bHeld)
+{
+	return true;
+}
+
+void AKhaaosPlayerController::TryServerFireShot()
+{
+	AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(GetPawn());
+	if (!Character || Character->bIsDead)
+	{
+		bServerFireHeld = false;
+		return;
+	}
+
+	UKhaaosWeaponComponent* WeaponComponent = Character->GetWeaponComponent();
+	const UKhaaosWeaponDataAsset* WeaponData = WeaponComponent ? WeaponComponent->GetCurrentWeapon() : nullptr;
+	if (!WeaponComponent || !WeaponData)
+	{
+		bServerFireHeld = false;
+		return;
+	}
+
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const double MinimumInterval = 60.0 / static_cast<double>(FMath::Max(WeaponData->FireRate, 1));
+	if (bHasServerFired && (Now - LastServerFireTimestamp) + KINDA_SMALL_NUMBER < MinimumInterval)
+	{
+		return;
+	}
+
+	if (!WeaponComponent->ConsumeAmmo())
+	{
+		bServerFireHeld = false;
+		return;
+	}
+
+	WeaponComponent->AddRecoil();
+	LastServerFireTimestamp = Now;
+	bHasServerFired = true;
+	UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosPlayerController: ServerFire at authoritative weapon cadence"));
+
+	// Only automatic mode repeats on server tick. Semi/burst/charge modes fire
+	// once per press until their dedicated burst/charge processing is added.
+	bServerFireHeld = bServerFireButtonDown
+		&& WeaponComponent->GetActiveFireMode() == EWeaponFireMode::Auto;
+}
+
 void AKhaaosPlayerController::ServerStopFire_Implementation()
 {
+	bServerFireHeld = false;
+	bServerFireButtonDown = false;
 	UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosPlayerController: ServerStopFire"));
 }
 
