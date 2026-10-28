@@ -318,10 +318,12 @@ export const DOOR_MECH = {
   openSpeed: 8.5,     // ganho do animator visual (exponencial) — ~0,35 s p/ 95% do curso
 };
 
-// Fase 25.1 — MATERIAL da folha por tipo de estrutura: hangar recebe porta
-// METÁLICA (hp/melee específicos vivem no sim3d.DOOR — convenção do repo);
-// os demais interiores seguem com madeira.
-export function doorMaterialOf(kind) { return kind === 'hangar' ? 'metal' : 'wood'; }
+// Fase 25.1/26 — MATERIAL da folha por tipo de estrutura: hangar e DEPOT
+// recebem porta METÁLICA (hp/melee específicos vivem no sim3d.DOOR —
+// convenção do repo); os demais interiores seguem com madeira.
+// Fase 26 (depot): o depósito guarda material sensível — folha metálica de
+// rolete tem a MESMA leitura industrial do hangar e cobra munição de entrada.
+export function doorMaterialOf(kind) { return (kind === 'hangar' || kind === 'depot') ? 'metal' : 'wood'; }
 
 /**
  * Vãos de porta em COORDENADAS DE MUNDO — um por estrutura-casca. Consumido por:
@@ -379,6 +381,93 @@ export function doorwaysOf(layout, dressing) {
     });
   }
   return out;
+}
+
+// ============================================================================
+// Fase 26 — JANELAS DESTRUTÍVEIS (pura): o vidro vira PAINEL com HP.
+// A Fase 24 deixou a faixa de janela como VÃO aberto (balas/LOS passavam);
+// a Fase 26 coloca VIDRO nela: intacto ele RACHA com bala (para o projétil)
+// e ESTILHAÇA no segundo impacto (a bala então SEGUE com dano cheio) —
+// corpo-a-corpo e granada estilhaçam na hora. LOS NUNCA é bloqueada pelo
+// vidro (transparente — bots enxergam e atiram pelas janelas como antes);
+// o bloqueio é só BALÍSTICO enquanto o vidro está íntegro.
+// Estado autoritativo vive em sim3d/room3d (como as folhas de porta);
+// ESTE módulo fornece a geometria determinística do painel (fonte única).
+// ============================================================================
+
+// mecânica do vidro — MESMOS números em sim offline, MatchRoom3D e visual
+export const WINDOW_MECH = {
+  hp: 30,             // vida do vidro (g19 22 dmg racha; m4/ak estilhaçam no 1º tiro)
+  interactRange: 2.3, // alcance do E (consistente com a porta)
+};
+
+/**
+ * Painéis de VIDRO em COORDENADAS DE MUNDO — um por abertura de spec.windows
+ * (determinístico: id `win-<estrutura>-<k>` na ordem do dressing). MESMO
+ * plano de parede do doorwaysOf (centro da espessura T/2).
+ * Campos: id, structIndex/index, kind, x/z (centro do painel), y0/y1 (banda
+ * vertical MUNDIAL), w/h (vão), nx/nz (normal EXTERIOR), horizontal, rot e
+ * pegada da estrutura (fx/fz/fw/fd) p/ HUD/consultas.
+ */
+export function windowPanelsOf(layout, dressing) {
+  const out = [];
+  for (const spec of dressing.structures) {
+    const s = layout.structures[spec.index];
+    const wins = spec.windows ?? [];
+    if (!wins.length) continue;
+    const yBase = s.yMin ?? 0;
+    wins.forEach((win, k) => {
+      const face = win.face;
+      const horizontal = face === 'front' || face === 'back';
+      // centro do painel NO MEIO da espessura da parede — MESMO plano das folhas
+      const plane = face === 'front' ? -s.d / 2 + T / 2 : face === 'back' ? s.d / 2 - T / 2 : face === 'right' ? s.w / 2 - T / 2 : -s.w / 2 + T / 2;
+      const uc = (win.u0 + win.u1) / 2;
+      const cxl = horizontal ? uc : plane;
+      const czl = horizontal ? plane : uc;
+      const c = localPointToWorld(s, cxl, czl);
+      // normal EXTERIOR (mesma rotação das folhas de porta)
+      const nxl = face === 'right' ? 1 : face === 'left' ? -1 : 0;
+      const nzl = face === 'front' ? -1 : face === 'back' ? 1 : 0;
+      const n = localPointToWorld(s, cxl + nxl, czl + nzl);
+      let nx = n.x - c.x, nz = n.z - c.z;
+      const nl = Math.hypot(nx, nz) || 1; nx = +(nx / nl).toFixed(4); nz = +(nz / nl).toFixed(4);
+      out.push({
+        id: `win-${spec.index}-${k}`,
+        structIndex: spec.index,
+        index: spec.index, // alias de compatibilidade (mesmo contrato das folhas)
+        kind: s.kind,
+        x: +c.x.toFixed(3), z: +c.z.toFixed(3),
+        y0: +(yBase + win.y0).toFixed(3), y1: +(yBase + win.y1).toFixed(3),
+        yMin: +(yBase + win.y0).toFixed(3), yMax: +(yBase + win.y1).toFixed(3),
+        w: +(win.u1 - win.u0).toFixed(3), h: +(win.y1 - win.y0).toFixed(3),
+        nx, nz, horizontal,
+        rot: s.rot ?? 0,
+        fx: s.x, fz: s.z, fw: s.w, fd: s.d,
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * Collider do vidro ÍNTEGRO (AABB de mundo, marcado com windowId p/ dano de
+ * bala/explosão). Destruído => null (balas/LOS/movimento passam livres).
+ * Vidro NUNCA entra no caminho da LOS — os consumidores (sim3d/room3d
+ * #hasLos) pulam colliders kind === 'window' explicitamente.
+ */
+export function windowBoxCollider(win) {
+  if (!win || win.destroyed) return null;
+  const c = Math.abs(Math.cos(win.rot ?? 0)), s = Math.abs(Math.sin(win.rot ?? 0));
+  const ax = win.horizontal ? c : s;
+  const az = win.horizontal ? s : c;
+  const hx = (ax * win.w) / 2 + Math.abs(win.nx) * (T / 2);
+  const hz = (az * win.w) / 2 + Math.abs(win.nz) * (T / 2);
+  return {
+    minX: win.x - hx, maxX: win.x + hx,
+    minZ: win.z - hz, maxZ: win.z + hz,
+    yMin: win.y0, yMax: win.y1,
+    kind: 'window', windowId: win.id,
+  };
 }
 
 /**

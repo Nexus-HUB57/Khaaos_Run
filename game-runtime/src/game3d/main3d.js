@@ -4,7 +4,8 @@
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR } from './sim3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, doorHpFor } from './sim3d.js';
+import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
@@ -670,39 +671,49 @@ export class Game3D {
     }
   }
 
-  // ---------- Fase 25 — sincronização visual das PORTAS destrutíveis ----------
-  // Funciona nos 3 modos: sim offline (KhaaosSim3D.doors), online (Sim3DView.doors
-  // dos snapshots) e transmissão (SpectatorView.doors do batch). O painel some
-  // quando o servidor/sim marca active=false; FX de quebra toca UMA vez.
+  // ---------- Fase 25/26 — sincronização visual de PORTAS + JANELAS ----------
+  // Canônica nos 3 modos: sim offline (KhaaosSim3D), online (Sim3DView dos
+  // snapshots) e transmissão (SpectatorView do batch). As folhas seguem o
+  // estado autoritativo (alvo de rotação/quebra) e o vidro some + cacos quando
+  // o servidor/sim marca destroyed. Posição dos vãos vem do layout
+  // determinístico (snapshots/batches não carregam x/z).
   syncDoors() {
-    const doors = this.sim.doors;
-    if (!doors || !Array.isArray(doors)) return;
-    const panels = this.scene.userData.interiors?.doorPanels;
-    if (!panels) return;
-    for (const d of doors) {
-      // FIX Fase 25/29 — o registry guarda o HANDLE da folha ({ pivot, leaf,
-      // broken... }); o grupo escondível é o PIVÔ (handle.pivot). Sem o ??,
-      // group.visible era undefined e o painel quebrado nunca sumia.
-      const handle = panels.get(d.id);
-      const group = handle?.pivot ?? handle;
-      if (!group) continue;
-      // Fase 25/29 — contrato unificado: legado (active/hp) ou novo (destroyed)
-      const open = d.destroyed === true || d.active === false || (Number.isFinite(d.hp) && d.hp <= 0);
-      if (open && group.visible) {
-        group.visible = false;
-        if (!this.doorBrokenFx.has(d.id)) {
-          this.doorBrokenFx.add(d.id);
-          const cy = ((d.yMin ?? 0) + (d.yMax ?? 2.5)) / 2;
-          for (let i = 0; i < 3; i++) {
-            this.effects.impact(new THREE.Vector3(
-              d.x + (Math.random() - .5) * (d.hw ?? .8) * 1.4,
-              cy + (Math.random() - .5) * 1.1,
-              d.z + (Math.random() - .5) * (d.hd ?? .8) * 1.4), 'wall');
+    const reg = this.scene.userData.interiors;
+    if (!reg?.doors?.size && !reg?.glass?.size) return;
+    const layoutDoors = this.scene.userData.layout?.doors ?? [];
+    const layoutWins = this.scene.userData.layout?.windows ?? [];
+    // ---- folhas de porta (abrir/fechar/quebrar) ----
+    for (const sd of this.sim?.doors ?? []) {
+      const h = reg.doors.get(sd.id);
+      if (!h) continue;
+      if (sd.destroyed && !h.broken) {
+        h.broken = true;
+        h.leaf.visible = false;
+        const gp = layoutDoors.find((d) => d.id === sd.id);
+        if (gp) this.effects.impact(new THREE.Vector3(gp.x, gp.yMin + 1.15, gp.z), 'wood');
+      } else if (!sd.destroyed) {
+        h.target = sd.open ? DOOR.openAngle : 0;
+      }
+    }
+    // ---- Fase 26 — painéis de vidro (estilhaça some + cacos UMA vez) ----
+    for (const sw of this.sim?.windows ?? []) {
+      const mesh = reg.glass.get(sw.id);
+      if (!mesh) continue;
+      if (sw.destroyed && mesh.visible) {
+        mesh.visible = false;
+        if (!this.doorBrokenFx.has(sw.id)) {
+          this.doorBrokenFx.add(sw.id);
+          const gp = layoutWins.find((w) => w.id === sw.id);
+          if (gp) {
+            const cy = (gp.y0 + gp.y1) / 2;
+            for (let i = 0; i < 2; i++) {
+              this.effects.impact(new THREE.Vector3(
+                gp.x + (Math.random() - .5) * gp.w * .7,
+                cy + (Math.random() - .5) * gp.h * .7,
+                gp.z + (Math.random() - .5) * .3), 'glass');
+            }
           }
-          if (this.audio?.impact) this.audio.impact(new THREE.Vector3(d.x, cy, d.z), 'wall');
         }
-      } else if (!open && !group.visible) {
-        group.visible = true; // (futuro: abrir/fechar sem quebrar)
       }
     }
   }
@@ -1447,12 +1458,23 @@ export class Game3D {
         }
         // Fase 25 — portas: áudio dos toggles (creak) e da destruição (madeira)
         case 'doorToggle': {
-          // Fase 25.1 — material vem no payload (kind da folha: hangar = metal)
-          this.audio.door?.(e.open, Math.hypot(e.x - p.x, e.z - p.z), e.kind);
+          // Fase 25.1/26 — material derivado do kind da estrutura (hangar/depot
+          // = metal): o evento carrega o kind, o áudio espera 'metal'/'wood'
+          this.audio.door?.(e.open, Math.hypot(e.x - p.x, e.z - p.z), doorMaterialOf(e.kind));
           break;
         }
         case 'doorDown': {
-          this.audio.doorDown?.(Math.hypot(e.x - p.x, e.z - p.z), e.kind);
+          this.audio.doorDown?.(Math.hypot(e.x - p.x, e.z - p.z), doorMaterialOf(e.kind));
+          break;
+        }
+        // Fase 26 — vidro: estilhaço audível no windowDown + ping no melee
+        case 'windowDown': {
+          this.audio.windowDown?.(Math.hypot(e.x - p.x, e.z - p.z));
+          this.effects.impact(new THREE.Vector3(e.x, (e.y ?? 2) + .3, e.z), 'glass');
+          break;
+        }
+        case 'windowHit': {
+          this.effects.impact(new THREE.Vector3(e.x, (e.y ?? 2) + .3, e.z), 'glass');
           break;
         }
         case 'victory': this.#endMatch(true, e); break;
@@ -1486,11 +1508,12 @@ export class Game3D {
 
   updateInteractionPrompt() {
     const p = this.sim.player;
-    if (!p.alive) { this.hud.prompt(null); return; }
+    if (!p.alive) { this.hud.prompt(null); this.hud.target(null); return; }
     // Fase 7 — caído: dica de rastejo + estado de revive em andamento
     if (p.knocked) {
       const reviving = (p.reviveProgress ?? 0) > 0;
       this.hud.prompt(reviving ? `REVIVENDO VOCÊ — ${(p.reviveProgress / DBNO.reviveSeconds * 100) | 0}%` : 'NOCAUTADO — rasteje para cobertura e aguarde revive');
+      this.hud.target(null);
       return;
     }
     // Fase 7 — reviver companheiro caído do mesmo esquadrão (prioridade sobre loot)
@@ -1506,6 +1529,7 @@ export class Game3D {
       if (mate) {
         const pct = Math.min(100, Math.round(((mate.reviveProgress ?? 0) / DBNO.reviveSeconds) * 100));
         this.hud.prompt(`[E] SEGURE para reviver ${mate.name} — ${pct}%`);
+        this.hud.target(null);
         return;
       }
     }
@@ -1523,6 +1547,10 @@ export class Game3D {
     }
     // Fase 25 — porta no alcance (estilo Free Fire): mostra se for o alvo MAIS
     // PRÓXIMO do E (mesma regra do #interact da sim)
+    // Fase 26 — BARRA DE HP do alvo quebrável (porta/janela): painel HUD com
+    // nome + hp/max enquanto o alvo está no alcance (doors/windows da sim OU
+    // do snapshot — mesmo código nos 3 modos). Íntegro some do painel.
+    let target = null, doorText = null;
     if (!p.knocked) {
       let door = null, doorD = Infinity;
       for (const d of this.sim.doors ?? []) {
@@ -1530,32 +1558,29 @@ export class Game3D {
         const dd = Math.hypot(d.x - p.x, d.z - p.z);
         if (dd < 2.3 && dd < doorD) { door = d; doorD = dd; }
       }
-      if (door && doorD <= textD) text = door.open ? '[E] Fechar porta' : '[E] Abrir porta';
-    }
-    this.hud.prompt(text);
-  }
-
-  // Fase 25 — folhas de porta seguem o estado autoritativo (sim offline OU
-  // snapshots da sala — mesmo código nos dois modos). Posição do vão vem do
-  // layout determinístico (snapshots não carregam x/z das portas).
-  #syncDoorVisuals() {
-    const reg = this.scene.userData.interiors;
-    const doorsState = this.sim?.doors;
-    if (!reg?.doors?.size || !doorsState?.length) return;
-    const layoutDoors = this.scene.userData.layout?.doors ?? [];
-    for (const sd of doorsState) {
-      const h = reg.doors.get(sd.id);
-      if (!h) continue;
-      if (sd.destroyed && !h.broken) {
-        h.broken = true;
-        h.leaf.visible = false;
-        const gp = layoutDoors.find((d) => d.id === sd.id);
-        if (gp) this.effects.impact(new THREE.Vector3(gp.x, gp.yMin + 1.15, gp.z), 'wood');
-      } else if (!sd.destroyed) {
-        h.target = sd.open ? DOOR.openAngle : 0;
+      if (door && doorD <= textD) {
+        doorText = door.open ? '[E] Fechar porta' : '[E] Abrir porta';
+        target = { label: doorMaterialOf(door.kind) === 'metal' ? 'PORTA METÁLICA' : 'PORTA', hp: Math.max(0, Math.round(door.hp ?? 0)), max: doorHpFor(door.kind), cls: doorMaterialOf(door.kind) };
+      }
+      // Fase 26 — janela no alcance (o E não interage com vidro; o painel é
+      // informativo: mostra a integridade do vidro que você vai arrebentar)
+      let win = null, winD = Infinity;
+      for (const w of this.sim.windows ?? []) {
+        if (w.destroyed) continue;
+        const dd = Math.hypot(w.x - p.x, w.z - p.z);
+        if (dd < 2.3 && dd < winD && Math.abs((w.y0 ?? 0) - p.y) < 3.2) { win = w; winD = dd; }
+      }
+      if (win && (!door || winD < doorD)) {
+        target = { label: 'JANELA', hp: Math.max(0, Math.round(win.hp ?? 0)), max: WINDOW.hp, cls: 'glass' };
       }
     }
+    this.hud.prompt(doorText);
+    this.hud.target(target);
   }
+
+  // Fase 25/26 — a sincronização visual de portas+janelas é o syncDoors()
+  // canônico (acima); o antigo #syncDoorVisuals privado foi ABSORVIDO por ele
+  // (antes o online/espectador não animava folhas — só o modo offline).
 
   // Fase 4 — áudio de queda + deriva das nuvens (chamado pelos dois loops)
   updateDropFX(dt) {
@@ -1591,7 +1616,7 @@ export class Game3D {
       this.handleEvents();
     }
     this.syncLoot();
-    this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
+    this.syncDoors(); // Fase 25/26 — folhas de porta + vidro seguem o estado autoritativo
     this.syncEntities(dt);
     this.applyGearVisuals(); // Fase 28 — espelha gear da sim na silhueta (com cachê)
     this.updateRing();
@@ -1607,7 +1632,6 @@ export class Game3D {
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
     const interiorsAnim = this.scene.userData.interiors?.animators;
     if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
-    this.#syncDoorVisuals(); // Fase 25 — folhas seguem o estado autoritativo
     // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
     this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);

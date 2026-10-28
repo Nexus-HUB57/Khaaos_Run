@@ -642,6 +642,7 @@ export class SpectatorView {
     this.grenades = [];
     this.walls = [];
     this.doors = [];    // Fase 25 — estado das portas no batch da transmissão
+    this.windows = [];  // Fase 26 — estado do vidro no batch da transmissão
     this.batchCount = 0;
     this.lastBatchAt = 0;
     // Fase 18 — hazard ativo da transmissão (banner do HUD) + fila de eventos
@@ -738,6 +739,9 @@ export class SpectatorView {
     // posição é estática — o vão vem do layout pela seed). `active` mantido
     // como derivado p/ compatibilidade com consumidores legados.
     if (Array.isArray(batch.doors)) this.doors = batch.doors.map((d) => ({ ...d, open: !!d.open, destroyed: !!d.destroyed, active: d.destroyed !== true && d.active !== false }));
+    // Fase 26 — estado do VIDRO da transmissão (mesma gramática das folhas;
+    // syncDoors do Game3D estilhaça o painel no modo espectador)
+    if (Array.isArray(batch.windows)) this.windows = batch.windows.map((w) => ({ ...w, destroyed: !!w.destroyed, active: w.destroyed !== true && w.active !== false }));
   }
 
   step() { /* transmissão: nenhum tick local — o estado vem dos batches */ }

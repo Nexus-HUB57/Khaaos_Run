@@ -463,6 +463,53 @@ export class GameAudio {
     thud.start(t + .12); thud.stop(t + .5);
   }
 
+  // Fase 26 — VIDRO ESTILHAÇANDO: estalo agudo inicial (o painel cede),
+  // cascata de cacos (pings triangle/dessintonizados caindo) + sopro de ruído
+  // passa-alta (o "chhh" das lascas varrendo o chão). Sem baque grave — vidro
+  // não pesa: a assinatura é BRILHANTE e rápida, contrasta com madeira/metal.
+  windowDown(distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.1, .8 - distance / 55);
+    // estalo do painel cedendo: transiente quadrado agudo curtíssimo
+    const snap = this.ctx.createOscillator();
+    snap.type = 'square';
+    snap.frequency.setValueAtTime(1750, t);
+    snap.frequency.exponentialRampToValueAtTime(520, t + .05);
+    const sg = this.ctx.createGain();
+    this.#env(sg, t, .001, .05, .5 * vol);
+    snap.connect(sg); sg.connect(this.#bus('sfx'));
+    snap.start(t); snap.stop(t + .08);
+    // cascata de cacos: 9 pings brilhantes dessintonizados (queda ~0,5 s)
+    for (let i = 0; i < 9; i++) {
+      const off = .02 + Math.random() * .42;
+      const shard = this.ctx.createOscillator();
+      shard.type = 'triangle';
+      shard.frequency.value = 1900 + Math.random() * 2600;
+      const shg = this.ctx.createGain();
+      this.#env(shg, t + off, .001, .07, .13 * vol);
+      shard.connect(shg); shg.connect(this.#bus('sfx'));
+      shard.start(t + off); shard.stop(t + off + .1);
+    }
+    // sopro das lascas no chão: ruído passa-alta com decay rápido
+    const spray = this.ctx.createBufferSource();
+    spray.buffer = this.#noiseBuffer(.45);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 3400;
+    const spg = this.ctx.createGain();
+    this.#env(spg, t + .02, .01, .42, .3 * vol);
+    spray.connect(hp); hp.connect(spg); spg.connect(this.#bus('sfx'));
+    spray.start(t + .02);
+    // ring cristalino residual (a janela "assobia" meio segundo após quebrar)
+    const ring = this.ctx.createOscillator();
+    ring.type = 'sine';
+    ring.frequency.value = 3150;
+    const rg = this.ctx.createGain();
+    this.#env(rg, t + .06, .01, .5, .06 * vol);
+    ring.connect(rg); rg.connect(this.#bus('sfx'));
+    ring.start(t + .06); ring.stop(t + .62);
+  }
+
   // ---------- Fase 18 — sobrevivências imersivas + game feel de abate ----------
   // Camadas CONTÍNUAS de áudio por hazard do mundo (tsunami/lava/gravidade/
   // ácido): cada camada é um pequeno grafo WebAudio criado no start e

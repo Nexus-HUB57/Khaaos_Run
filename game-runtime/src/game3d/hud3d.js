@@ -268,6 +268,23 @@ export class HUD {
     else el.classList.remove('visible');
   }
 
+  // Fase 26 — BARRA DE HP do alvo quebrável (porta/janela) no alcance.
+  // info = null esconde; senão { label, hp, max, cls } — cls pinta a barra
+  // (metal = aço, wood = âmbar, glass = ciano-vidro). Igual à vida do jogador:
+  // atualização por frame, zero reflow além do width da barra.
+  target(info) {
+    const el = $('#targetPanel');
+    if (!el) return;
+    if (!info || !info.max) { el.classList.remove('visible'); return; }
+    $('#targetLabel').textContent = info.label;
+    $('#targetHp').textContent = `${info.hp}/${info.max}`;
+    el.dataset.mat = info.cls || 'wood';
+    const pct = Math.max(0, Math.min(100, (info.hp / info.max) * 100));
+    $('#targetFill').style.width = `${pct}%`;
+    el.classList.toggle('low', pct <= 34);
+    el.classList.add('visible');
+  }
+
   showZu() { $('#zuModal').classList.remove('hidden'); }
   hideZu() { $('#zuModal').classList.add('hidden'); }
   // Fase 5 — barra do espectador

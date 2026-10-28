@@ -13,6 +13,7 @@ import { buildWorldLayout } from './layout3d.js';
 import {
   hollowAccess, doorwaysOf, doorBoxCollider, footprintHas,
   localPointToWorld, MEZZ, DOOR_MECH, doorMaterialOf,
+  windowPanelsOf, windowBoxCollider, WINDOW_MECH,
 } from './interiorsPlan.js';
 import { resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
@@ -35,10 +36,16 @@ export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (
 // range e amassa, mas cobra munição (g19 ~23 balas).
 export const DOOR = Object.freeze({ ...DOOR_MECH, meleeMult: 3.0, hpMetal: 500, meleeMultMetal: 2.0 });
 
-// hp/mult da folha pelo MATERIAL (hangar = metal, resto = madeira) — fonte
+// hp/mult da folha pelo MATERIAL (hangar/depot = metal, resto = madeira) — fonte
 // única usada por sim offline, MatchRoom3D e testes
 export function doorHpFor(kind) { return doorMaterialOf(kind) === 'metal' ? DOOR.hpMetal : DOOR.hp; }
 export function doorMeleeMultFor(kind) { return doorMaterialOf(kind) === 'metal' ? DOOR.meleeMultMetal : DOOR.meleeMult; }
+
+// Fase 26 — janelas destrutíveis (vidro): MESMOS números na sim offline,
+// MatchRoom3D e visual. Intacto: bala RACHA (para no vidro); a quebra libera
+// a passagem (a bala que estilhaça SEGUE com dano cheio). Melee sempre
+// estilhaça no 1º golpe (72×4 ≫ 30) e granada no raio idem porta (×2).
+export const WINDOW = Object.freeze({ ...WINDOW_MECH, meleeMult: 4.0 });
 
 // ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
 // A partida começa com os operativos caindo do céu: queda livre (SKY) até a
@@ -518,6 +525,8 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
     // + plano de interiores anexado (loot interior/mezanino e pathing da IA)
     layout.dressing = access.dressing;
     layout.doors = doorwaysOf(layout, access.dressing);
+    // Fase 26 — PAINÉIS DE VIDRO das janelas (mesma fonte do vão visual)
+    layout.windows = windowPanelsOf(layout, access.dressing);
     layoutCache.set(key, layout);
   }
   return layoutCache.get(key);
@@ -558,6 +567,8 @@ export class KhaaosSim3D {
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
     // Fase 25 — folhas de porta (estado autoritativo): todas FECHADAS e íntegras
     this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: doorHpFor(d.kind), cooldown: 0 }));
+    // Fase 26 — painéis de vidro (estado autoritativo): todos ÍNTEGROS
+    this.windows = (this.world.windows ?? []).map((w) => ({ ...w, hp: WINDOW.hp, destroyed: false }));
     this.loot = this.#spawnLoot();
     this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
@@ -580,7 +591,11 @@ export class KhaaosSim3D {
     // Fase 25 — folhas FECHADAS colidem (movimento/balas/LOS); abertas/destruídas não
     const leafs = [];
     for (const d of this.doors) { if (!d.open && !d.destroyed) { const box = doorBoxCollider(d); if (box) leafs.push(box); } }
-    const dyn = active.length || leafs.length ? active.concat(leafs) : [];
+    // Fase 26 — VIDRO ÍNTEGRO colide BALISTICAMENTE (movimento/balas); a LOS
+    // ignora colliders kind 'window' (#hasLos) — vidro é transparente p/ visão.
+    const panes = [];
+    for (const w of this.windows) { if (!w.destroyed) { const box = windowBoxCollider(w); if (box) panes.push(box); } }
+    const dyn = active.length || leafs.length || panes.length ? active.concat(leafs, panes) : [];
     this.physicsWorld.colliders = dyn.length ? this.world.colliders.concat(dyn) : this.world.colliders;
   }
 
@@ -1018,6 +1033,16 @@ export class KhaaosSim3D {
       const dd = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (dd <= FRAG.radius) this.#damageDoor(d, FRAG.damage * (1 - dd / FRAG.radius) * 2, g.owner);
     }
+    // Fase 26 — explosão ESTILHAÇA o vidro no raio (mesma atenuação da porta ×2)
+    for (const pane of this.windows) {
+      if (pane.destroyed) continue;
+      const box = windowBoxCollider(pane);
+      if (!box) continue;
+      const cx = clamp(g.x, box.minX, box.maxX), cz = clamp(g.z, box.minZ, box.maxZ);
+      const cy = clamp(g.y, box.yMin, box.yMax);
+      const dd = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (dd <= FRAG.radius) this.#damageWindow(pane, FRAG.damage * (1 - dd / FRAG.radius) * 2, g.owner);
+    }
     this.emit('explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
   }
 
@@ -1172,6 +1197,9 @@ export class KhaaosSim3D {
     dx /= len; dy /= len; dz /= len;
     for (const box of this.physicsWorld.colliders) {
       if (box.noBlock) continue;
+      // Fase 26 — vidro é TRANSPARENTE p/ visão (bots enxergam por janelas
+      // como na Fase 24); o bloqueio do vidro é só balístico (#stepBullets).
+      if (box.kind === 'window') continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
     return true;
@@ -1314,6 +1342,29 @@ export class KhaaosSim3D {
         }
       }
     }
+    // Fase 26 — melee ESTILHAÇA vidro no 1º golpe (a coturnada/cano na janela
+    // é a entrada silenciosa clássica). Mesma gramática da porta: facing real
+    // + alcance no AABB do painel íntegro + caminho canônico #damageWindow.
+    if (!hitFlesh) {
+      const forwardAng2 = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const pane of this.windows) {
+        const box = windowBoxCollider(pane);
+        if (!box) continue; // já estilhaçado
+        const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach) continue;
+        // banda vertical: ator alcança o vidro (pés no chão, braço até ~2,2 m)
+        if (box.yMin > a.y + 2.2 || box.yMax < a.y + .4) continue;
+        const ang = Math.atan2(pane.z - a.z, pane.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng2), Math.cos(ang - forwardAng2)));
+        if (diff < 1.25) {
+          // caminho CANÔNICO de dano: #damageWindow flipa destroyed, emite
+          // windowDown e re-sincroniza o mundo físico (mult 4× estilhaça no 1º)
+          this.#damageWindow(pane, w.damage * WINDOW.meleeMult, a.id);
+          this.emit('windowHit', { id: pane.id, x: pane.x, z: pane.z, y: pane.y0 });
+          break;
+        }
+      }
+    }
     this.emit('swing', { owner: a.id });
     return true;
   }
@@ -1361,6 +1412,18 @@ export class KhaaosSim3D {
         continue;
       }
       if (hitT < len) {
+        // Fase 26 — vidro ANTES do consumo da bala: íntegro, a bala PARA nele
+        // (racha); ao estilhaçar, a MESMA bala SEGUE com dano cheio (life não
+        // é zerada) — vidro não segura projétil, estilo Free Fire.
+        if (hitBox?.windowId) {
+          const pane = this.windows.find(w => w.id === hitBox.windowId);
+          if (pane && !pane.destroyed) {
+            this.#damageWindow(pane, b.damage, b.owner);
+            this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: 'glass' });
+            if (!pane.destroyed) b.life = 0;   // rachou: bala consumida no vidro
+            continue;                           // estilhaçou: bala segue em voo
+          }
+        }
         b.life = 0;
         // Fase 4 — balas desgastam Gloo Walls (cobertura destrutível)
         if (hitBox?.wallId) {
@@ -1654,6 +1717,17 @@ export class KhaaosSim3D {
       this.syncPhysicsWorld();
     }
   }
+  // Fase 26 — destruição do painel de vidro (caminho canônico: flipa
+  // destroyed, emite windowDown e re-sincroniza o mundo físico)
+  #damageWindow(w, dmg, ownerId) {
+    if (w.destroyed) return;
+    w.hp -= dmg;
+    if (w.hp <= 0) {
+      w.destroyed = true;
+      this.emit('windowDown', { id: w.id, x: w.x, z: w.z, y: w.y0, kind: w.kind, owner: ownerId ?? null });
+      this.syncPhysicsWorld();
+    }
+  }
   #pickup(a, item) {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
@@ -1732,6 +1806,8 @@ export class KhaaosSim3D {
       grenades: this.grenades.map(g => ({ ...g })), walls: this.walls.map(w => ({ ...w })),
       // Fase 25 — estado das folhas de porta (aberta/fechada/destruída + hp)
       doors: this.doors.map(d => ({ id: d.id, open: d.open, destroyed: d.destroyed, hp: Math.round(d.hp) })),
+      // Fase 26 — estado do vidro (hp + quebrado) p/ HUD e visual
+      windows: this.windows.map(w => ({ id: w.id, destroyed: w.destroyed, hp: Math.round(w.hp) })),
       terminals: this.terminals.map(t => ({ ...t })), replayLength: this.replay.length };
   }
   applySnapshot(s) {
@@ -1750,6 +1826,13 @@ export class KhaaosSim3D {
       for (const sd of s.doors) {
         const d = this.doors.find(x => x.id === sd.id);
         if (d) { d.open = !!sd.open; d.destroyed = !!sd.destroyed; d.hp = sd.hp ?? d.hp; d.cooldown = 0; }
+      }
+    }
+    // Fase 26 — estado do vidro (idempotente p/ snapshots antigos)
+    if (s.windows) {
+      for (const sw of s.windows) {
+        const w = this.windows.find(x => x.id === sw.id);
+        if (w) { w.destroyed = !!sw.destroyed; w.hp = sw.hp ?? w.hp; }
       }
     }
     this.syncPhysicsWorld();

@@ -270,17 +270,22 @@ test('DOOR: constantes compartilhadas (sim offline e sala usam os MESMOS número
 });
 
 // ============================================================================
-// 2.1 FASE 25.1 — MATERIAL: hangar tem porta METÁLICA (calibração 25.1)
+// 2.1 FASE 25.1/26 — MATERIAL: hangar E depot têm porta METÁLICA (Fase 26
+// estende o metal ao depot — depósito guarda material sensível)
 // ============================================================================
 
-test('doorMaterialOf: hangar = METAL; barrack/warehouse/depot/building = madeira', () => {
+test('doorMaterialOf: hangar/depot = METAL; barrack/warehouse/building = madeira', () => {
   assert.equal(doorMaterialOf('hangar'), 'metal');
-  for (const k of ['barrack', 'warehouse', 'depot', 'building']) assert.equal(doorMaterialOf(k), 'wood');
+  for (const k of ['hangar', 'depot']) assert.equal(doorMaterialOf(k), 'metal'); // Fase 26
+  for (const k of ['barrack', 'warehouse', 'building']) assert.equal(doorMaterialOf(k), 'wood');
   // kinds sem casca caem em madeira (fail-safe)
   assert.equal(doorMaterialOf('ruin'), 'wood');
 });
 
-test('hp por material no sim: hangar = hpMetal (500), madeira = hp (200)', () => {
+test('hp por material no sim: hangar/depot = hpMetal (500), madeira = hp (200)', () => {
+  assert.equal(doorHpFor('hangar'), DOOR.hpMetal);
+  assert.equal(doorHpFor('depot'), DOOR.hpMetal);   // Fase 26 — depot metálico
+  assert.equal(doorHpFor('barrack'), DOOR.hp);
   const sim = new KhaaosSim3D({ seed: 'F25-MAT', botCount: 0, scenarioId: 'CIGKV', airdrop: false });
   const metal = sim.doors.find((x) => doorMaterialOf(x.kind) === 'metal');
   const wood = sim.doors.find((x) => doorMaterialOf(x.kind) === 'wood');
