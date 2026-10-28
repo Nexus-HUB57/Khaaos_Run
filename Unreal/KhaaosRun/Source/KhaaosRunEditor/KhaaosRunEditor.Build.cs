@@ -3,6 +3,7 @@
 
 using UnrealBuildTool;
 using System;
+using System.IO;
 
 public class KhaaosRunEditor : ModuleRules
 {
@@ -34,6 +35,14 @@ public class KhaaosRunEditor : ModuleRules
 
                 // C++20 matching game module
                 CppStandard = CppStandardVersion.Cpp20;
+
+                // Os commandlets do editor incluem headers do módulo de jogo na
+                // forma canônica do repo ("Game/<SubDir>/Header.h") — o root do
+                // módulo KhaaosRun entra no caminho de includes PRIVADO deste
+                // módulo (caminho relativo ao repositório; nada de absoluto,
+                // contrato UE1013). Sem isto o UBT não resolve os includes
+                // cross-módulo dos commandlets.
+                PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "..", "KhaaosRun"));
 
                 bUseUnity = false;
                 bEnforceIWYU = true;
