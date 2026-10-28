@@ -56,6 +56,12 @@ services:
       # FilesystemSettings.RootDir é [Required] (Settings.cs).
       UnrealCloudDDC__StorageImplementations__0: FileSystem
       Filesystem__RootDir: /mnt/ddc
+      # S3Settings valida [Required] incondicionalmente no DI (Jupiter.Startup
+      # AddOptions<S3Settings>.ValidateDataAnnotations), mesmo com backend
+      # FileSystem — valores inertes aqui (CreateS3 não é chamado).
+      # Evidência de CI 8ª run.
+      S3__ConnectionString: "unused-filesystem-backend"
+      S3__BucketName: "unused-filesystem-backend"
     depends_on:
       - scylla
     restart: unless-stopped
