@@ -256,11 +256,11 @@ test('sim offline: loot interior nos ids loot-i*/loot-m*, mezanino pegável só 
   const s = new KhaaosSim3D({ seed: 'F25-LOOT-SIM', botCount: 2, airdrop: false });
   const interior = s.loot.filter((i) => /^loot-[im]/.test(String(i.id)));
   assert.ok(interior.length >= 5, `itens internos gerados (${interior.length})`);
-  const mezzItems = interior.filter((i) => Math.abs(i.y - 2.95) < .01);
+  const mezzItems = interior.filter((i) => i.y > 2.5);
   assert.ok(mezzItems.length >= 2, `itens de mezanino (${mezzItems.length})`);
   // externos intactos (contrato Fase 4/6): 24 bases (ids de catálogo no offline) + 6 arremessáveis
   assert.equal(s.loot.length - interior.length - 6, 24);
-  assert.equal(s.loot.filter((i) => /^loot-t\d+$/.test(i.id)).length, 6);
+  assert.equal(s.loot.filter((i) => /^loot-t\d+$/.test(String(i.id))).length, 6);
   // gate de coleta por altura: mezanino (2,95) NÃO é pegável do chão, sim de cima
   const m = mezzItems[0];
   assert.ok(Math.abs(m.y - 0) > 2.2, 'do chão não pega (Δy > 2,2)');

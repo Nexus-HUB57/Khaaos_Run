@@ -14,7 +14,7 @@ import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
   FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT, DOOR,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
-  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement, doorCollider,
+  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
 } from '../src/game3d/sim3d.js';
@@ -819,7 +819,7 @@ export class MatchRoom3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.syncPhysicsWorld();
+    this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe (TypeError no deploy da Gloo)
     // deploy é global (a parede é visível/replicada para todos)
     for (const h of this.humans.values()) {
       if (!h.alive) continue;
@@ -872,14 +872,10 @@ export class MatchRoom3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
-    // Fase 25 — granada desgasta PORTAS no raio
-    for (const d of this.doors) {
-      if (!d.active) continue;
-      const cx = clamp(g.x, d.x - d.hw, d.x + d.hw), cz = clamp(g.z, d.z - d.hd, d.z + d.hd);
-      const cy = clamp(g.y, d.yMin, d.yMax);
-      const dist = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
-      if (dist <= FRAG.radius) { d.hp -= FRAG.damage * (1 - dist / FRAG.radius) * 2; changed = true; }
-    }
+    // Fase 25 — granada desgasta PORTAS no raio: HOTFIX pós-merge #185 — o
+    // hunk antigo (vocabulário hw/hd/active em doorways → NaN) foi REMOVIDO;
+    // a quebra canônica da explosão vive no bloco de baixo (doorBoxCollider +
+    // #damageDoor, mesma atenuação das gloo).
     if (changed) {
       for (const w of this.walls) {
         if (w.active && w.hp <= 0) {
@@ -1207,7 +1203,11 @@ export class MatchRoom3D {
         }
       }
     }
-    // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real)
+    // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real).
+    // HOTFIX pós-merge #185: o bloco antigo lia `d.active`/`d.hw`/`d.hd` —
+    // campos que não existem nas folhas (doorways) — e o melee NUNCA mais
+    // machucava porta no servidor. AABB canônica via doorBoxCollider + rota
+    // #damageDoor (doorDown global + física sincronizada).
     if (!hitFlesh) {
       const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
       for (const d of this.doors) {

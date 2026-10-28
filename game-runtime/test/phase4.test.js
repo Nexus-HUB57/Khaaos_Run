@@ -78,7 +78,10 @@ test('fase4 sim: granada consome inventário, detona no pavio e mata bot no epic
   s.start('belt');
   const p = s.player, bot = s.bots[0];
   s.world.colliders.length = 0;
-  s.doors.length = 0; s.syncPhysicsWorld(); // Fase 25 — painéis fora da linha unitária (dinâmico)
+  // Fase 25 — painéis fora da linha unitária (dinâmico). HOTFIX pós-merge
+  // #185: #syncPhysicsWorld virou privada — o teste limpa os colliders direto
+  // (mesmo efeito: linha de arremesso livre, floors intactos).
+  s.doors.length = 0; s.physicsWorld.colliders = [];
   assert.equal(p.inventory.frag, 1);
   s.step({ ...idle(0), throw: true }, STEP);
   assert.equal(p.inventory.frag, 0, 'granada consumida');

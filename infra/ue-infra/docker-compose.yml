@@ -33,7 +33,11 @@ services:
     environment:
       # Metadata store — seção "Scylla" do chart (classe ScyllaSettings).
       # ASP.NET: __ no env equivale a aninhamento no appsettings.
-      Scylla__ConnectionString: "Contact Points=scylla"
+      # DefaultKeyspace é PARTE da connection string do driver Cassandra —
+      # Jupiter.Startup.cs ScyllaFactory valida
+      # CassandraConnectionStringBuilder.DefaultKeyspace ("Default Keyspace has
+      # to be specified") e depois faz ConnectAndCreateDefaultKeyspaceIfNotExists.
+      Scylla__ConnectionString: "Contact Points=scylla;Default Keyspace=unrealcloudddc"
       Scylla__LocalDatacenterName: datacenter1   # DC default do scylla single-node
       Scylla__LocalKeyspaceSuffix: khaaos        # exigido por [Required] no boot
     depends_on:
