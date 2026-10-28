@@ -11,6 +11,7 @@
 class AKhaaosHUD;
 class AKhaaosCharacter;
 class UKhaaosInputConfig;
+class UKhaaosMobileControlsWidget;
 class UInputAction;
 class UInputMappingContext;
 
@@ -127,11 +128,17 @@ public:
 	/** Handle melee attack. */
 	void HandleMelee(const FInputActionValue& Value);
 
+	/** Called by the mobile HUD; consumed continuously from Tick for character movement. */
+	void SetMobileTouchMoveAxis(FVector2D Axis);
+
 	// ─── Server RPCs ────────────────────────────────────────────────────────
 
 	/** Server: fire weapon. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerFire();
+	/** Server: begin/end held fire; automatic shots are paced authoritatively. */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerSetFireHeld(bool bHeld);
 
 	/** Server: stop firing. */
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -244,9 +251,31 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Controller|HUD")
 	TSubclassOf<AKhaaosHUD> HUDClass;
 
+	/** Optional UMG subclass containing the authored mobile touch layout. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Controller|HUD")
+	TSubclassOf<UKhaaosMobileControlsWidget> MobileTouchControlsClass;
+
 	/** Priority for input mapping context. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Controller|Input")
 	int32 InputMappingPriority = 0;
+
+private:
+	/** Active UMG touch HUD, retained to keep its input state alive. */
+	UPROPERTY(Transient)
+	TObjectPtr<UKhaaosMobileControlsWidget> MobileTouchControls;
+
+	/** Normalized left-stick input, replayed each local frame while HUD exists. */
+	FVector2D MobileTouchMoveAxis = FVector2D::ZeroVector;
+
+	/** Authoritative fire state and cadence tracking (server only). */
+	bool bServerFireHeld = false;
+	bool bServerFireButtonDown = false;
+	bool bHasServerFired = false;
+	double LastServerFireTimestamp = 0.0;
+	double LastFireInputTimestamp = 0.0;
+	bool bLocalFireHeld = false;
+	double NextFireHeartbeatTimestamp = 0.0;
+	void TryServerFireShot();
 
 protected:
 

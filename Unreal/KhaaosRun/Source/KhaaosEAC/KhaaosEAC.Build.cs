@@ -22,9 +22,12 @@ public class KhaaosEAC : ModuleRules
 		// ─── Detecção do SDK do Easy Anti-Cheat ─────────────────────────────
 		// Fontes válidas: env KHAAOS_EAC_SDK_DIR ou Source/KhaaosEAC/EACSDK/.
 		// O build NUNCA quebra sem SDK — modo stub (KHAAOS_EAC_SDK=0).
-		string sdkDir = ResolveSdkDir();
-		bool hasSdk = !string.IsNullOrEmpty(sdkDir)
-			&& File.Exists(Path.Combine(sdkDir, "Sdk", "anticheat", "sdkdefines.h"));
+			string sdkDir = ResolveSdkDir();
+			bool isEacSupportedPlatform = Target.Platform == UnrealTargetPlatform.Win64
+				|| Target.Platform == UnrealTargetPlatform.Linux;
+			bool hasSdk = isEacSupportedPlatform
+				&& !string.IsNullOrEmpty(sdkDir)
+				&& File.Exists(Path.Combine(sdkDir, "Sdk", "anticheat", "sdkdefines.h"));
 
 		if (hasSdk)
 		{

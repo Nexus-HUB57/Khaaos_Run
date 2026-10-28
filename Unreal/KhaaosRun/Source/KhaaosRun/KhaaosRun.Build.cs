@@ -41,6 +41,7 @@ public class KhaaosRun : ModuleRules
                         "ModularGameplay",
                         "ModularGameplayActors",
                         "CommonUI",
+                        "UMG",
                         "UIExtension",
                 });
 
