@@ -1,10 +1,17 @@
-// Khaaos Run — Fase 20: decals de morte direcional (backlog LOD/decals).
+// Khaaos Run — Fase 20/21: decals de morte direcional + explosão/gloo.
 // ==========================================================================
 // Marca de sangue no chão ORIENTADA pela direção da queda: a Fase 12 fornece o
 // ângulo do tiro no espaço LOCAL do modelo (0 = frente, +π/2 = lado +x, π =
 // costas) e o corpo cai LONGE do atirador — este módulo converte ângulo local
 // + yaw do ator na direção MUNDIAL da queda e orienta a poça/riscos/gotículas
 // nesse eixo, ancoradas no chão onde o corpo assentou.
+//
+// Fase 21 — a MESMA infraestrutura (pool ring buffer, LOD por drawRange com
+// histerese, fade de vida, 1 draw call/decal) agora serve 3 famílias de decal
+// via `kind`:
+//   'blood'   — morte direcional (Fase 20, comportamento preservado);
+//   'scorch'  — explosão de frag: disco de carbonização + raios radiais;
+//   'gloo'    — base de geada de Gloo Wall + cristais/estilhaços.
 //
 // Filosofia do pool de partículas (Fase 17) aplicada a decals:
 //   - 100% procedural: UMA geometria mesclada por decal (fan da poça + riscos
@@ -83,16 +90,93 @@ function hash(seed, k) {
 }
 
 /**
- * Plano do decal em espaço LOCAL (+z = direção da queda). Tudo derivado do
- * seed do ator + power do tiro — mesmo seed ⇒ mesmo plano (bit a bit).
+ * Plano do decal em espaço LOCAL (+z = direção da queda/blast). Tudo derivado
+ * do seed do ator + power do tiro — mesmo seed ⇒ mesmo plano (bit a bit).
  * power 0..1: 0 = poça mínima sem riscos; 1 = poça larga + riscos longos.
+ * kind: 'blood' (default) | 'scorch' (explosão) | 'gloo' (base de Gloo Wall).
  */
-export function decalPlan({ angle = 0, yaw = 0, power = 1, seed = 0 } = {}) {
+export function decalPlan({ kind = 'blood', angle = 0, yaw = 0, power = 1, seed = 0 } = {}) {
   const p = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 1));
   const s = Number.isFinite(seed) ? seed : 0;
   const dir = fallDirectionWorld({ angle, yaw });
   const yawWorld = decalYawWorld({ angle, yaw });
 
+  if (kind === 'scorch') {
+    // ---------- explosão de frag: carbonização RADIAL ----------
+    // sem direção dominante: raios espalham em círculo (blast não tem "frente")
+    const poolR = .65 + .55 * p;           // disco maior que a poça de sangue
+    const streaks = [];
+    if (p >= .25) {
+      const n = 4 + Math.round(hash(s, 1) * 3);                 // 4–7 raios
+      for (let i = 0; i < n; i++) {
+        streaks.push({
+          a: (i / n) * Math.PI * 2 + (hash(s, 2 + i * 4) - .5) * .5, // espalhados
+          off: (hash(s, 3 + i * 4) - .5) * poolR * .5,
+          s0: poolR * (.3 + .25 * hash(s, 4 + i * 4)),           // partem de perto do centro
+          len: poolR * (.7 + .9 * p) * (.6 + .5 * hash(s, 5 + i * 4)),
+          w: .10 + .12 * hash(s, 6 + i * 4),
+          alpha: .5 + .35 * hash(s, 7 + i * 4),
+        });
+      }
+    }
+    const droplets = [];
+    const nd = 3 + Math.round(hash(s, 11) * 3);                 // 3–6 estilhaços
+    for (let i = 0; i < nd; i++) {
+      const ang = hash(s, 12 + i * 2) * Math.PI * 2;
+      const dist = poolR * (1.1 + 1.4 * hash(s, 13 + i * 2)) * (.5 + .7 * p);
+      droplets.push({
+        x: Math.cos(ang) * dist, z: Math.sin(ang) * dist,
+        r: .03 + .05 * hash(s, 14 + i),
+        alpha: .45 + .4 * hash(s, 15 + i),
+      });
+    }
+    return {
+      kind, yawWorld, dx: dir.x, dz: dir.z, power: p,
+      poolR, poolStretch: 1 + .08 * p, poolOffset: 0,
+      streaks, droplets,
+      tint: hash(s, 21),
+      opacity: .8 + .12 * hash(s, 22),
+    };
+  }
+
+  if (kind === 'gloo') {
+    // ---------- base de Gloo Wall: geada + cristais ----------
+    const poolR = .5 + .35 * p;
+    const streaks = [];
+    if (p >= .25) {
+      const n = 3 + Math.round(hash(s, 1) * 2);                 // 3–5 cristais
+      for (let i = 0; i < n; i++) {
+        streaks.push({
+          a: (i / n) * Math.PI * 2 + (hash(s, 2 + i * 4) - .5) * .7,
+          off: (hash(s, 3 + i * 4) - .5) * poolR * .4,
+          s0: poolR * (.3 + .2 * hash(s, 4 + i * 4)),
+          len: poolR * (1.0 + .8 * p) * (.55 + .5 * hash(s, 5 + i * 4)),
+          w: .05 + .07 * hash(s, 6 + i * 4),                    // cristais finos
+          alpha: .55 + .3 * hash(s, 7 + i * 4),
+        });
+      }
+    }
+    const droplets = [];
+    const nd = 2 + Math.round(hash(s, 11) * 2);                 // 2–4 brilhos de gelo
+    for (let i = 0; i < nd; i++) {
+      const ang = hash(s, 12 + i * 2) * Math.PI * 2;
+      const dist = poolR * (1.05 + 1.2 * hash(s, 13 + i * 2));
+      droplets.push({
+        x: Math.cos(ang) * dist, z: Math.sin(ang) * dist,
+        r: .025 + .04 * hash(s, 14 + i),
+        alpha: .4 + .35 * hash(s, 15 + i),
+      });
+    }
+    return {
+      kind, yawWorld, dx: dir.x, dz: dir.z, power: p,
+      poolR, poolStretch: 1.15 + .15 * p, poolOffset: 0,
+      streaks, droplets,
+      tint: hash(s, 21),
+      opacity: .6 + .14 * hash(s, 22),
+    };
+  }
+
+  // ---------- morte direcional (Fase 20, preservado) ----------
   const poolR = .5 + .45 * p;            // raio da poça (m)
   const poolStretch = 1.2 + .35 * p;     // alongamento na direção da queda
   const poolOffset = .18 + .34 * p;      // centro deslocado p/ onde o corpo assentou
@@ -123,16 +207,21 @@ export function decalPlan({ angle = 0, yaw = 0, power = 1, seed = 0 } = {}) {
   }
 
   return {
-    yawWorld, dx: dir.x, dz: dir.z, power: p,
+    kind: 'blood', yawWorld, dx: dir.x, dz: dir.z, power: p,
     poolR, poolStretch, poolOffset, streaks, droplets,
     tint: hash(s, 21),                    // variação sutil de cor do sangue
     opacity: .74 + .16 * hash(s, 22),
   };
 }
 
-// sangue: vermelho escuro com variação sutil por decal (tint 0..1)
-export function decalColor(tint = .5) {
+// cor por família (tint 0..1 = variação sutil dentro da família):
+//   blood  — vermelho escuro (Fase 20, preservado)
+//   scorch — carvão/quase-preto com variação quente
+//   gloo   — azul-gelo pálido
+export function decalColor(tint = .5, kind = 'blood') {
   const t = Math.max(0, Math.min(1, Number.isFinite(tint) ? tint : .5));
+  if (kind === 'scorch') return { r: .09 + .05 * t, g: .085 + .045 * t, b: .075 + .04 * t };
+  if (kind === 'gloo') return { r: .50 + .08 * t, g: .72 + .08 * t, b: .84 + .05 * t };
   return { r: .30 + .07 * t, g: .035 + .025 * t, b: .045 + .02 * t };
 }
 
@@ -160,12 +249,20 @@ export function buildDecalGeometry(plan) {
   }
   const simpleVerts = pos.length / 3;
 
-  // riscos: quads ao longo do +z a partir da borda da poça
+  // riscos: quads ao longo da direção local (sangue: +z puro = queda;
+  // scorch/gloo: raios radiais com ângulo `a` e partida `s0` do centro).
+  // Com a=0 e s0=poolOffset+poolR*.35 a construção é IDÊNTICA à da Fase 20.
   for (const st of plan.streaks) {
-    const z0 = plan.poolOffset + plan.poolR * .35;
-    const z1 = z0 + st.len;
-    push(st.off - st.w / 2, z0); push(st.off - st.w / 2, z1); push(st.off + st.w / 2, z1);
-    push(st.off - st.w / 2, z0); push(st.off + st.w / 2, z1); push(st.off + st.w / 2, z0);
+    const a = st.a ?? 0;
+    const s0 = st.s0 ?? (plan.poolOffset + plan.poolR * .35);
+    const dx = Math.sin(a), dz = Math.cos(a);        // direção da marca
+    const px = Math.cos(a), pz = -Math.sin(a);       // perpendicular (largura)
+    const x0 = px * (st.off - st.w / 2) + dx * s0,        z0 = pz * (st.off - st.w / 2) + dz * s0;
+    const x1 = px * (st.off + st.w / 2) + dx * s0,        z1 = pz * (st.off + st.w / 2) + dz * s0;
+    const x2 = px * (st.off + st.w / 2) + dx * (s0 + st.len), z2 = pz * (st.off + st.w / 2) + dz * (s0 + st.len);
+    const x3 = px * (st.off - st.w / 2) + dx * (s0 + st.len), z3 = pz * (st.off - st.w / 2) + dz * (s0 + st.len);
+    push(x0, z0); push(x3, z3); push(x2, z2);
+    push(x0, z0); push(x2, z2); push(x1, z1);
   }
 
   // gotículas: mini-fans além dos riscos
@@ -210,22 +307,26 @@ export class DeathDecalSystem {
       scene.add(mesh);
       this.slots.push({
         mesh, material, alive: false, age: 0, level: 'full',
-        baseOpacity: .85, simpleVerts: 0, fullVerts: 0, plan: null,
+        baseOpacity: .85, simpleVerts: 0, fullVerts: 0, plan: null, kind: 'blood',
       });
     }
   }
 
   /**
-   * Registra um decal de morte. Recicla o slot mais antigo quando cheio.
-   * `angle` é o ângulo LOCAL do tiro (Fase 12), `yaw` o yaw do ator no
-   * snapshot — a orientação mundial é derivada aqui.
+   * Registra um decal. Recicla o slot mais antigo quando cheio.
+   * `kind` escolhe a família ('blood' morte direcional | 'scorch' explosão |
+   * 'gloo' base de Gloo Wall). Para 'blood', `angle` é o ângulo LOCAL do tiro
+   * (Fase 12) e `yaw` o yaw do ator no snapshot — a orientação mundial é
+   * derivada aqui; para 'scorch'/'gloo' a forma é radial e o yaw só gira o
+   * padrão (a assimetria vem do seed).
    * @returns {number} índice do slot escrito
    */
-  spawn({ x = 0, y = 0, z = 0, angle = 0, yaw = 0, power = 1, seed = 0 } = {}) {
+  spawn({ kind = 'blood', x = 0, y = 0, z = 0, angle = 0, yaw = 0, power = 1, seed = 0 } = {}) {
     const i = this.cursor;
     const s = this.slots[i];
     const replacing = s.alive;
-    const plan = decalPlan({ angle, yaw, power, seed });
+    const plan = decalPlan({ kind, angle, yaw, power, seed });
+    s.kind = plan.kind;
     s.mesh.geometry.dispose();
     const { geometry, simpleVerts, fullVerts } = buildDecalGeometry(plan);
     s.mesh.geometry = geometry;
@@ -236,7 +337,7 @@ export class DeathDecalSystem {
     s.alive = true;
     s.level = 'full';
     s.baseOpacity = plan.opacity;
-    const c = decalColor(plan.tint);
+    const c = decalColor(plan.tint, plan.kind);
     s.material.color.setRGB(c.r, c.g, c.b);
     s.mesh.position.set(x, y + EPS + (i % 6) * LAYER, z);
     s.mesh.rotation.y = plan.yawWorld;
@@ -289,7 +390,7 @@ export class DeathDecalSystem {
         x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z,
         yawWorld: s.mesh.rotation.y, age: s.age, level: s.level,
         opacity: s.material.opacity, poolR: s.plan.poolR, power: s.plan.power,
-        simpleVerts: s.simpleVerts, fullVerts: s.fullVerts,
+        kind: s.plan.kind, simpleVerts: s.simpleVerts, fullVerts: s.fullVerts,
       });
     }
     return out;
