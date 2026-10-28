@@ -124,6 +124,15 @@ public:
 
 	/** Handle ultimate ability. */
 	void HandleUltimate(const FInputActionValue& Value);
+	void HandleAbilitySlot(int32 SlotIndex);
+	void HandleAbilitySlot0(const FInputActionValue& Value);
+	void HandleAbilitySlot1(const FInputActionValue& Value);
+	void HandleAbilitySlot2(const FInputActionValue& Value);
+	void HandleAbilitySlot3(const FInputActionValue& Value);
+	void HandleAbilitySlot4(const FInputActionValue& Value);
+	void HandleAbilitySlot5(const FInputActionValue& Value);
+	void HandleAbilitySlot6(const FInputActionValue& Value);
+	void HandleAbilitySlot7(const FInputActionValue& Value);
 
 	/** Handle melee attack. */
 	void HandleMelee(const FInputActionValue& Value);
