@@ -146,6 +146,7 @@ public:
 	/** Enhanced jump with species modifier. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
 	virtual void Jump() override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 	// ─── Sprint ─────────────────────────────────────────────────────────────
 
@@ -187,6 +188,9 @@ public:
 	/** Apply species data asset: mesh, stats, passive ability. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Species")
 	void ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset);
+	void ApplySpeciesPresentation(FName SpeciesId);
+	void UpdateSpeciesMeshLOD(float MeshLODLevel);
+
 
 	/** Get currently applied species. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Species")
@@ -486,6 +490,12 @@ protected:
 
 	/** Time remaining in current slide. */
 	float SlideTimeRemaining = 0.0f;
+	float GlideTimeRemaining = 0.0f;
+	bool bIsGliding = false;
+	float DefaultGravityScale = 1.0f;
+	float DefaultAirControl = 0.35f;
+	int32 CurrentSpeciesMeshLOD = 0;
+	FName CachedSpeciesId;
 
 	/** Time since last damage taken (for out-of-combat regen). */
 	float TimeSinceLastDamage = 0.0f;
@@ -513,6 +523,10 @@ protected:
 
 	/** Tick slide timeout. */
 	void TickSlide(float DeltaSeconds);
+	void TickGlide(float DeltaSeconds);
+	void TickSpeciesWater(float DeltaSeconds);
+	void TryStartGlide();
+	void EndGlide();
 
 	/** Update replicated movement state enum. */
 	void UpdateMovementState();

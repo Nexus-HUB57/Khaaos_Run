@@ -82,6 +82,14 @@ public:
 	/** Ultimate ability. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Input")
 	TObjectPtr<UInputAction> Ultimate = nullptr;
+	TObjectPtr<UInputAction> Ability1 = nullptr;
+	TObjectPtr<UInputAction> Ability2 = nullptr;
+	TObjectPtr<UInputAction> Ability3 = nullptr;
+	TObjectPtr<UInputAction> Ability4 = nullptr;
+	TObjectPtr<UInputAction> Ability5 = nullptr;
+	TObjectPtr<UInputAction> Ability6 = nullptr;
+	TObjectPtr<UInputAction> Ability7 = nullptr;
+	TObjectPtr<UInputAction> Ability8 = nullptr;
 
 	/** Grappling hook. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Input")
@@ -133,6 +141,14 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Input")
 	FGameplayTag Tag_Input_Ultimate;
+	FGameplayTag Tag_Input_Ability1;
+	FGameplayTag Tag_Input_Ability2;
+	FGameplayTag Tag_Input_Ability3;
+	FGameplayTag Tag_Input_Ability4;
+	FGameplayTag Tag_Input_Ability5;
+	FGameplayTag Tag_Input_Ability6;
+	FGameplayTag Tag_Input_Ability7;
+	FGameplayTag Tag_Input_Ability8;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Input")
 	FGameplayTag Tag_Input_GrapplingHook;

@@ -263,6 +263,40 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateOnithPassiveEffect(float Reductio
 
 // ─── CreateZoneDamageEffect ──────────────────────────────────────────────────
 
+
+UGameplayEffect* UKhaaosGameplayEffects::CreateVenexOverclockEffect(float FireRateBonus, float ReloadSpeedBonus, float DurationSeconds)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_Species_Venex_Overclock"));
+	if (!Effect) return nullptr;
+	FGameplayEffectSpecDurationSpec DurationSpec; DurationSpec.Duration = FScalableFloat(FMath::Max(0.1f, DurationSeconds));
+	Effect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	Effect->DurationMagnitude = DurationSpec;
+	FGameplayModifierInfo F; F.Attribute = UKhaaosAttributeSet::GetFireRateBonusAttribute();
+	F.ModifierOp = EGameplayModOp::Additive; F.ModifierMagnitude = FScalableFloat(FireRateBonus); Effect->Modifiers.Add(F);
+	FGameplayModifierInfo R; R.Attribute = UKhaaosAttributeSet::GetReloadSpeedBonusAttribute();
+	R.ModifierOp = EGameplayModOp::Additive; R.ModifierMagnitude = FScalableFloat(ReloadSpeedBonus); Effect->Modifiers.Add(R);
+	return Effect;
+}
+UGameplayEffect* UKhaaosGameplayEffects::CreateSkeetwPassiveEffect(float AirSpeedBonus)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_Species_Skeetw_VooPlanador"));
+	if (!Effect) return nullptr;
+	Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+	FGameplayModifierInfo A; A.Attribute = UKhaaosAttributeSet::GetAirSpeedBonusAttribute();
+	A.ModifierOp = EGameplayModOp::Additive; A.ModifierMagnitude = FScalableFloat(AirSpeedBonus); Effect->Modifiers.Add(A);
+	return Effect;
+}
+UGameplayEffect* UKhaaosGameplayEffects::CreateHuranPassiveEffect(float HealBonus, float WaterRegen)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_Species_Huran_RegenAquatica"));
+	if (!Effect) return nullptr;
+	Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+	FGameplayModifierInfo H; H.Attribute = UKhaaosAttributeSet::GetHealBonusPercentAttribute();
+	H.ModifierOp = EGameplayModOp::Additive; H.ModifierMagnitude = FScalableFloat(HealBonus); Effect->Modifiers.Add(H);
+	FGameplayModifierInfo W; W.Attribute = UKhaaosAttributeSet::GetWaterRegenPerSecondAttribute();
+	W.ModifierOp = EGameplayModOp::Additive; W.ModifierMagnitude = FScalableFloat(WaterRegen); Effect->Modifiers.Add(W);
+	return Effect;
+}
 UGameplayEffect* UKhaaosGameplayEffects::CreateZoneDamageEffect(float DamagePerHit)
 {
 	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_ZoneDamage"));
