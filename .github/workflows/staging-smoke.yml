@@ -176,6 +176,11 @@ jobs:
         working-directory: infra/staging
         run: bash verify.sh
 
+      # O smoke roda no HOST (client WS): precisa do `ws` do game-runtime.
+      - name: Install game-runtime deps (ws p/ o smoke)
+        working-directory: game-runtime
+        run: npm ci --omit=dev
+
       - name: Smoke cross-replica ao vivo (7 estágios)
         working-directory: infra/staging
         run: node ../../scripts/run-staging-crossreplica-smoke.mjs --mode compose --kill-owner
