@@ -53,6 +53,8 @@ jobs:
         run: docker compose -f infra/ue-infra/docker-compose.yml up -d
 
       - name: Smoke UE Infra (probes DDC + porta HTTP Lore)
+        env:
+          SMOKE_ATTEMPTS: 60   # Scylla sobe (~30-60 s) antes do DDC criar schema
         run: node scripts/infra/ue_infra_smoke.mjs
 
       - name: Logs de diagnóstico (apenas em falha)
