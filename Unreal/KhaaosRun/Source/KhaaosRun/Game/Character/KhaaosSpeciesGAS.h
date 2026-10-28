@@ -130,6 +130,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Species|GAS")
 	void InitializeAttributes();
 
+	/** Initialize the real replicated AttributeSet from the selected operative profile. */
+	void InitializeAttributesForOperative(EKhaaosSpecies SpeciesID, float BaseHealth, float BaseEnergy, float BaseSpeed);
+
 	/** Override: initialize attributes from a specific data table. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Species|GAS")
 	void InitializeAttributesFromTable(UDataTable* InAttributeTable);

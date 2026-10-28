@@ -3,8 +3,12 @@
 
 #include "Game/Character/KhaaosSkinSystem.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "GameFramework/Actor.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Net/UnrealNetwork.h"
 
 // ─── Helper for rarity color mapping ─────────────────────────────
 
@@ -41,6 +45,37 @@ static float GetRarityEmissiveIntensity(EKhaaosSkinRarity Rarity)
 UKhaaosSkinSystem::UKhaaosSkinSystem()
 {
   PrimaryComponentTick.bCanEverTick = false;
+  SetIsReplicatedByDefault(true);
+}
+
+void UKhaaosSkinSystem::BeginPlay()
+{
+  Super::BeginPlay();
+
+  for (const FKhaaosSkinDef& SkinDef : SkinCatalog)
+  {
+    if (!SkinDef.SkinId.IsNone())
+    {
+      RegisterSkin(SkinDef);
+      if (SkinDef.bOwned)
+      {
+        OwnedSkins.Add(SkinDef.SkinId);
+      }
+    }
+  }
+
+  ApplyCosmetics();
+}
+
+void UKhaaosSkinSystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+  Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+  DOREPLIFETIME(UKhaaosSkinSystem, Loadout);
+}
+
+void UKhaaosSkinSystem::OnRep_Loadout()
+{
+  ApplyCosmetics();
 }
 
 // ─── Skin Registry ──────────────────────────────────────────────────────────
@@ -95,6 +130,7 @@ bool UKhaaosSkinSystem::EquipSkin(EKhaaosCosmeticSlot Slot, FName SkinId)
   const FKhaaosSkinDef* Def = SkinRegistry.Find(SkinId);
   if (!Def) return false;
   if (!OwnedSkins.Contains(SkinId)) return false;
+  if (Def->Slot != Slot) return false;
 
   // Equip to slot
   Loadout.EquippedSkins.Add(Slot, SkinId);
@@ -153,14 +189,13 @@ void UKhaaosSkinSystem::ApplyCosmetics()
     }
   }
 
-  // Apply HEAD slot (helmet/head accessory)
-  FName HeadSkinId = Loadout.EquippedSkins.FindRef(EKhaaosCosmeticSlot::HEAD);
-  // Head slot would attach a separate static/skeletal mesh component
-  // Implementation depends on character component hierarchy
+  // Modular accessories are separate components: cosmetics never replace the
+  // character's collision body or alter authoritative combat attributes.
+  const FName HeadSkinId = Loadout.EquippedSkins.FindRef(EKhaaosCosmeticSlot::HEAD);
+  ApplyAccessory(EKhaaosCosmeticSlot::HEAD, SkinRegistry.Find(HeadSkinId));
 
-  // Apply BACK slot (backpack/wings)
-  FName BackSkinId = Loadout.EquippedSkins.FindRef(EKhaaosCosmeticSlot::BACK);
-  // Back slot attaches to spine socket
+  const FName BackSkinId = Loadout.EquippedSkins.FindRef(EKhaaosCosmeticSlot::BACK);
+  ApplyAccessory(EKhaaosCosmeticSlot::BACK, SkinRegistry.Find(BackSkinId));
 
   // Apply MELEE slot (melee weapon skin)
   FName MeleeSkinId = Loadout.EquippedSkins.FindRef(EKhaaosCosmeticSlot::MELEE);
@@ -186,6 +221,9 @@ void UKhaaosSkinSystem::RevertToDefault()
 
   // Deactivate VFX
   DeactivateRarityVFX();
+
+  ClearAccessory(EKhaaosCosmeticSlot::HEAD);
+  ClearAccessory(EKhaaosCosmeticSlot::BACK);
 }
 
 // ─── Rarity Visual Effects ──────────────────────────────────────────────────
@@ -366,4 +404,70 @@ void UKhaaosSkinSystem::ApplyMeshOverride(const FKhaaosSkinDef& SkinDef)
       Mesh->SetSkeletalMeshAsset(NewMesh);
     }
   }
+}
+
+void UKhaaosSkinSystem::ApplyAccessory(EKhaaosCosmeticSlot Slot, const FKhaaosSkinDef* SkinDef)
+{
+  if (!SkinDef || SkinDef->AccessoryMesh.IsNull())
+  {
+    ClearAccessory(Slot);
+    return;
+  }
+
+  USkeletalMeshComponent* Mesh = ResolveCharacterMesh();
+  AActor* Owner = GetOwner();
+  if (!Mesh || !Owner) return;
+
+  UStaticMesh* AccessoryAsset = SkinDef->AccessoryMesh.LoadSynchronous();
+  if (!AccessoryAsset) return;
+
+  FName Socket = SkinDef->AttachSocket;
+  if (Socket.IsNone())
+  {
+    Socket = Slot == EKhaaosCosmeticSlot::HEAD ? FName(TEXT("head")) : FName(TEXT("spine_03"));
+  }
+
+  // Fail closed: never leave an accessory floating at the actor origin when
+  // a target rig/socket is missing or a mismatched skeleton is imported.
+  if (!Mesh->DoesSocketExist(Socket))
+  {
+    ClearAccessory(Slot);
+    return;
+  }
+
+  UStaticMeshComponent* Accessory = AccessoryComponents.FindRef(Slot);
+  if (!Accessory)
+  {
+    const FName ComponentName = Slot == EKhaaosCosmeticSlot::HEAD
+      ? FName(TEXT("KhaaosHeadAccessory"))
+      : FName(TEXT("KhaaosBackAccessory"));
+    Accessory = NewObject<UStaticMeshComponent>(Owner, ComponentName);
+    if (!Accessory) return;
+
+    Accessory->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Accessory->SetGenerateOverlapEvents(false);
+    Accessory->SetCanEverAffectNavigation(false);
+    Accessory->SetMobility(EComponentMobility::Movable);
+    Owner->AddInstanceComponent(Accessory);
+    AccessoryComponents.Add(Slot, Accessory);
+  }
+
+  Accessory->SetStaticMesh(AccessoryAsset);
+  Accessory->AttachToComponent(Mesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, Socket);
+  Accessory->SetRelativeTransform(FTransform::Identity);
+  Accessory->RegisterComponent();
+}
+
+void UKhaaosSkinSystem::ClearAccessory(EKhaaosCosmeticSlot Slot)
+{
+  TObjectPtr<UStaticMeshComponent>* Found = AccessoryComponents.Find(Slot);
+  if (!Found || !Found->Get()) return;
+
+  UStaticMeshComponent* Accessory = Found->Get();
+  AccessoryComponents.Remove(Slot);
+  if (AActor* Owner = GetOwner())
+  {
+    Owner->RemoveInstanceComponent(Accessory);
+  }
+  Accessory->DestroyComponent();
 }

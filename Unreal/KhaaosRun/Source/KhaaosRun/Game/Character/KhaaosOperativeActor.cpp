@@ -9,9 +9,17 @@ DEFINE_LOG_CATEGORY_STATIC(LogKhaaosOperative, Log, All);
 AKhaaosOperativeActor::AKhaaosOperativeActor()
 {
     PrimaryActorTick.bCanEverTick = true;
+    bReplicates = true;
+    SetReplicateMovement(true);
 
     // Create the Species GAS component (subobject owned by this actor)
     SpeciesGAS = CreateDefaultSubobject<UKhaaosSpeciesGAS>(TEXT("SpeciesGAS"));
+    CombatPerks = CreateDefaultSubobject<UKhaaosCombatPerkComponent>(TEXT("CombatPerks"));
+    Inventory = CreateDefaultSubobject<UKhaaosInventoryComponent>(TEXT("Inventory"));
+
+    // One cosmetic component per operative; visual attachments do not change
+    // gameplay collision, stats or the species GAS authority path.
+    SkinSystem = CreateDefaultSubobject<UKhaaosSkinSystem>(TEXT("SkinSystem"));
 }
 
 void AKhaaosOperativeActor::BeginPlay()
@@ -21,7 +29,7 @@ void AKhaaosOperativeActor::BeginPlay()
     // Initialize GAS attributes, then apply species traits via GameplayEffects
     if (SpeciesGAS)
     {
-        SpeciesGAS->InitializeAttributes();
+        SpeciesGAS->InitializeAttributesForOperative(SpeciesEnum, BaseHealth, BaseEnergy, BaseSpeed);
 
         if (SpeciesEnum != EKhaaosSpecies::NONE)
         {

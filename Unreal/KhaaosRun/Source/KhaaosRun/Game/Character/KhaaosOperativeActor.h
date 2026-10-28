@@ -6,6 +6,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Game/Character/KhaaosSpeciesGAS.h"
+#include "Game/Character/KhaaosSkinSystem.h"
+#include "Game/AbilitySystem/KhaaosCombatPerkComponent.h"
+#include "Game/Inventory/KhaaosInventoryComponent.h"
 #include "KhaaosOperativeActor.generated.h"
 
 /**
@@ -116,6 +119,18 @@ public:
     /** Species Gameplay Ability System component. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|GAS")
     TObjectPtr<UKhaaosSpeciesGAS> SpeciesGAS;
+
+    /** Modular cosmetic slots for authored headgear, armor and back equipment. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|Cosmetics")
+    TObjectPtr<UKhaaosSkinSystem> SkinSystem;
+
+    /** Server-authoritative combat perk loadout; perks are authored as GameplayEffects. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|Combat")
+    TObjectPtr<UKhaaosCombatPerkComponent> CombatPerks;
+
+    /** Server-authoritative item inventory and loot request endpoint. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|Inventory")
+    TObjectPtr<UKhaaosInventoryComponent> Inventory;
 
 protected:
     virtual void BeginPlay() override;
