@@ -306,6 +306,10 @@ export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_
 // existe na câmera FOLLOW e SOMENTE quando envolve o seguido (causou ou
 // sofreu): a transmissão narra a história do alvo, não vira radar de combate.
 // PURO e determinístico: evento bruto + contexto → payload do spawn ou null.
+// Fase 29 — o `kind` do dano atravessa (identidade do golpe) e os kinds
+// AMBIENTAIS ganham o tier hazard: a transmissão diferencia "o mundo mordeu"
+// (tsunami/lava/ring/ácido/anomalia) de um tiro — MESMA paleta do banner.
+export const HAZARD_DAMAGE_KINDS = Object.freeze(new Set(['tsunami', 'eruption', 'ring', 'acid', 'quantum']));
 export function specDamageSpawn(d = {}, followId = null, camMode = 'RING_CENTER') {
   if (camMode !== 'FOLLOW_PLAYER' || followId == null) return null;
   const x = Number(d.x), y = Number(d.y), z = Number(d.z), damage = Number(d.damage);
@@ -313,6 +317,7 @@ export function specDamageSpawn(d = {}, followId = null, camMode = 'RING_CENTER'
   if (!Number.isFinite(damage) || damage <= 0) return null;
   const attacker = d.attacker == null ? null : String(d.attacker);
   const victim = d.victim == null ? null : String(d.victim);
+  const kind = typeof d.kind === 'string' && d.kind.length > 0 ? d.kind.slice(0, 24) : null;
   const follow = String(followId);
   const involves = attacker === follow || victim === follow;
   if (!involves) return null;
@@ -322,6 +327,8 @@ export function specDamageSpawn(d = {}, followId = null, camMode = 'RING_CENTER'
     head: !!d.head,
     victim,
     knocked: !!d.knocked,
+    kind,
+    hazard: kind !== null && HAZARD_DAMAGE_KINDS.has(kind),
   };
 }
 

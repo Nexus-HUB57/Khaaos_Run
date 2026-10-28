@@ -112,6 +112,14 @@ kbd {
 }
 .dmg-head { color: #ff4d4d; font-size: 24px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,61,82,.65), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-knock { color: var(--gold); font-size: 17px; letter-spacing: 2.5px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 12px rgba(255,181,46,.6), 0 1px 2px rgba(0,0,0,.9); }
+/* Fase 29 — dano AMBIENTAL na transmissão: o mundo mordeu. Paleta idêntica ao
+   banner de hazard (#spectatorHud .spec-hazard.hazard-*) — identidade por mundo. */
+.dmg-hazard { font-size: 21px; }
+.dmg-hazard.hz-tsunami { color: #7fd8e8; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(127,216,232,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-lava { color: #ff8a4d; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,90,20,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-gravity { color: #9fe8ff; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,255,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-acid { color: #a8e86a; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,60,.6), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-ring { color: #ff6b2c; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,107,44,.65), 0 1px 2px rgba(0,0,0,.9); }
 
 /* ---------- minimapa ---------- */
 .map-corner { position: fixed; top: 64px; right: 14px; z-index: 18; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }

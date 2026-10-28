@@ -1207,7 +1207,10 @@ export class MatchRoom3D {
         // victim, owner, damage): o atacante humano vê o número flutuante na
         // mesma gramática do hit de bala.
         if (diff < 1.2) {
-          this.#damage(other, w.damage, a.id, false);
+          // Fase 29 — kind 'melee' no lugar de false: o DAMAGE da transmissão
+          // carrega a identidade do golpe (o funil #damage trata igual — só o
+          // vocabulário do evento fica honesto).
+          this.#damage(other, w.damage, a.id, 'melee');
           this.#emitTo(a.id, 'melee', {
             target: other.id, x: other.x, y: (other.y ?? 0) + 1, z: other.z,
             victim: other.id, owner: a.id,
@@ -1405,6 +1408,11 @@ export class MatchRoom3D {
     remaining -= shield;
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (!actor.isBot) this.#emitTo(actor.id, 'shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
+    // Fase 29 — dano da ANOMALIA nos números do espectador: o drain pousa fora
+    // do funil #damage (poupa blindagem temporária/armor antes da vida), então
+    // espelha aqui a VIDA perdida com kind 'quantum' (mesmo anel/rate-limit;
+    // sem knocked: morte pela anomalia não passa pelo DBNO deste caminho).
+    if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', false);
     if (actor.life <= 0) actor.alive = false;
   }
   #damage(actor, dmg, ownerId, kind) {
