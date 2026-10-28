@@ -965,6 +965,22 @@ export class KhaaosSim3D {
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
     if (changed) this.syncPhysicsWorld();
+    // Fase 25 — sweep de folhas: hp ≤ 0 por QUALQUER caminho (balas/explosão
+    // via #damageDoor, ou mutação direta em testes/harness) => destroyed +
+    // doorDown + física sincronizada. #damageDoor flipa destroyed na hora,
+    // então este sweep nunca reemite doorDown duplicado.
+    this.#stepDoors();
+  }
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; changed = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);

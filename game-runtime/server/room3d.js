@@ -845,6 +845,20 @@ export class MatchRoom3D {
       }
     }
     if (changed) this.syncPhysicsWorld();
+    // Fase 25 — sweep de folhas (mesma regra da sim offline): hp ≤ 0 por
+    // qualquer caminho => destroyed + doorDown GLOBAL p/ todos os humanos.
+    this.#stepDoors();
+  }
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; changed = true;
+        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = this.#actors();
@@ -1667,7 +1681,7 @@ export class MatchRoom3D {
       },
       // Fase 25 — estado das FOLHAS na TRANSMISSÃO (id/open/destroyed/hp;
       // a posição é estática — o cliente busca o vão no layout pela seed)
-      doors: this.doors.map((d) => ({ id: d.id, open: !!d.open, destroyed: !!d.destroyed, hp: Math.round(d.hp) })),
+      doors: this.doors.map((d) => ({ id: d.id, open: !!d.open, destroyed: !!d.destroyed, hp: Math.round(d.hp), active: !d.destroyed })),
       // Fase 28 — eventos públicos + DANOs da transmissão intercalados por
       // tempo (o cliente deduplica pela chave type:timestamp).
       events: [...this.spectatorLog.slice(-20), ...this.spectatorDamageLog]
