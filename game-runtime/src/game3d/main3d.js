@@ -8,6 +8,7 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
@@ -623,9 +624,19 @@ export class Game3D {
       active.add(item.id);
       if (!this.lootMeshes.has(item.id)) {
         const mesh = createLootMesh(item);
-        mesh.position.set(item.x, item.y - .45, item.z);
+        // Fase 28 — caixa de morte/airdrop/gear têm fábricas que já assentam
+        // no chão (sem o offset de flutuação do loot genérico)
+        const groundKinds = ['deathBox', 'supplyDrop', 'helmet', 'vest', 'pack'];
+        const yOff = groundKinds.includes(item.kind) ? 0 : item.y - .45;
+        mesh.position.set(item.x, yOff, item.z);
         this.scene.add(mesh);
         this.lootMeshes.set(item.id, mesh);
+        // Fase 28 — a caixa de airdrop DESCE de paraquedas (34 m de altitude)
+        if (item.kind === 'supplyDrop' && !item.landedT) {
+          item.landedT = 1;
+          mesh.position.y = 34;
+          (this.supplyDropDescent ??= []).push({ mesh, h: 34 });
+        }
       }
     }
     for (const [id, mesh] of this.lootMeshes) {
@@ -633,6 +644,25 @@ export class Game3D {
         this.scene.remove(mesh);
         this.lootMeshes.delete(id);
       }
+    }
+  }
+
+  // ---------- Fase 28 — equipamento VISÍVEL (capacete/colete/mochila) ----------
+  // Espelha o estado da sim (actor.gear) na silhueta dos operativos — jogador
+  // e bots. Cachê por ator: re-aplicar só quando o nível muda (getObjectByName
+  // + add/remove são baratos, mas evitados por frame).
+  applyGearVisuals() {
+    if (!this.sim) return;
+    const actors = [this.sim.player, ...(this.sim.bots ?? [])];
+    for (const a of actors) {
+      if (!a?.gear) continue;
+      const parts = a.id === 'player' ? this.playerOp?.parts : this.botOps.get(a.id)?.op?.parts;
+      if (!parts) continue;
+      const sig = `${a.gear.vest | 0}.${a.gear.helmet | 0}.${a.gear.pack | 0}`;
+      const cache = parts.userData?.gearSig;
+      if (cache === sig) continue;
+      parts.userData.gearSig = sig;
+      applyOperativeGear(parts, a.gear);
     }
   }
 
@@ -1214,6 +1244,24 @@ export class Game3D {
           this.audio.pickup();
           this.hud.feed('LOOT', `${e.item} adicionado à Packbag.`);
           break;
+        case 'gear': {
+          // Fase 28 — equipamento vira SILHUETA: aplica o nível novo no
+          // operativo (jogador ou bot dono do evento via nome do gear).
+          this.hud.feed('EQUIPAR', `${e.name ?? 'Equipamento'} equipado.`, 'good');
+          this.audio.pickup();
+          this.applyGearVisuals();
+          break;
+        }
+        case 'deathBox':
+          // Fase 28 — farol de espólio: caixa entra via syncLoot (item real);
+          // aqui só o toast tático.
+          this.hud.feed('ESPÓLIO', `${e.victim ?? 'Operativo'} abatido — caixa marcada no local.`, 'warn');
+          break;
+        case 'supplyDrop':
+          this.hud.feed('LOGÍSTICA', `Airdrop lançado — caixa blindada a ${Math.round(Math.hypot(e.x - p.x, e.z - p.z))}m. AR-47 lendário a bordo.`, 'warn');
+          this.audio.ringWarn(); // alarme tático (mesma família de avisos do Ring)
+          this.shake = Math.max(this.shake, .08);
+          break;
         case 'extract':
           this.hud.feed('ZEX', `Extração confirmada. Terminal ${e.count}/3. +250 XP.`, 'good');
           break;
@@ -1481,6 +1529,7 @@ export class Game3D {
     this.syncLoot();
     this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
     this.syncEntities(dt);
+    this.applyGearVisuals(); // Fase 28 — espelha gear da sim na silhueta (com cachê)
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
@@ -1510,7 +1559,23 @@ export class Game3D {
       mesh.rotation.y += dt * 1.6;
       // Fase 26 — fecho emissivo PULSANTE da caixa de morte (leitura de loot a distância)
       if (mesh.userData?.clasp) mesh.userData.clasp.emissiveIntensity = .7 + Math.sin(performance.now() * .004) * .5;
+      // Fase 28 — faróis (caixa de morte/airdrop) pulsam por opacidade
+      const beacon = mesh.getObjectByName('beacon') ?? mesh.getObjectByName('flare');
+      if (beacon?.material) beacon.material.opacity = .16 + .1 * (.5 + .5 * Math.sin(performance.now() * .0022 + (mesh.userData?.beaconT ?? 0)));
+      // Fase 28 — paraquedas do airdrop: encolhe e some após o pouso
+      if (mesh.userData?.kind === 'supplyDrop' && mesh.userData.canopy) {
+        mesh.userData.canopy.scale.multiplyScalar(Math.max(.965, 1 - dt * .35));
+        if (mesh.userData.canopy.scale.x < .02) { mesh.remove(mesh.userData.canopy); mesh.remove(mesh.userData.lines); mesh.userData.canopy = null; }
+      }
     }
+    // Fase 28 — paraquedas do airdrop descendo (aproximação visual suave)
+    for (const sd of this.supplyDropDescent ?? []) {
+      if (!sd.mesh.parent) continue;
+      sd.h = Math.max(0, sd.h - dt * 9);
+      sd.mesh.position.y = sd.h;
+      if (sd.h <= 0) { sd.mesh.position.y = 0; sd.done = true; }
+    }
+    if (this.supplyDropDescent) this.supplyDropDescent = this.supplyDropDescent.filter((s) => !s.done);
     // HUD
     if (!this.zuOpen) {
       this.hud.update(dt, this.input);
