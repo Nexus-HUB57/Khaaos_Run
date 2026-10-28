@@ -164,11 +164,7 @@ jobs:
             echo "KR_DISTRIBUTED=${KR_DISTRIBUTED}"
             echo "KR_OWNERSHIP_TTL_MS=${KR_OWNERSHIP_TTL_MS}"
             echo "KR_REPLICA_URL=http://127.0.0.1:8080"
-            # Valor entre ASPAS SIMPLES: o .env é lido por DOIS parsers
-            # (dotenv do compose + source do deploy.sh) e ambos preservam
-            # conteúdo single-quoted — sem isso as aspas duplas do JSON são
-            # stripadas e a app quebra no boot (lição do smoke 2026-10-28).
-            printf "KR_USERS_JSON='[{\"id\":\"u-smoke\",\"username\":\"smoke\",\"role\":\"player\",\"region\":\"sa-east\",\"passwordHash\":\"%s\"}]'\n" "${SMOKE_HASH}"
+            echo 'KR_USERS_JSON=[{"id":"u-smoke","username":"smoke","role":"player","region":"sa-east","passwordHash":"'"${SMOKE_HASH}"'"}]'
           } >> .env
           grep -c '=' .env
 
