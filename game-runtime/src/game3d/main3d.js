@@ -175,7 +175,12 @@ export class Game3D {
     applyGltfProps(scene);
     // Fase 17 — FX das sobrevivências do mundo (tsunami/lava/gravidade/ácido):
     // consome os eventos da sim/servidor e materializa a regra de dano por altura.
-    this.survivalFX = new SurvivalFX(scene, this.scenario, { particles: scene.userData.particles ?? null });
+    // Fase 26 — FX dos marcos × mundos: o SurvivalFX abastece os MARCOS com o
+    // estado do hazard a cada frame (maré/erupção/despertar/estrobo por mundo)
+    this.survivalFX = new SurvivalFX(scene, this.scenario, {
+      particles: scene.userData.particles ?? null,
+      landmarks: scene.userData.worldMarks ?? null,
+    });
     // Fase 20 — decals de morte direcional com LOD (marcas de sangue orientadas
     // longe do atirador; pool com orçamento por tier de qualidade)
     this.deathDecals = new DeathDecalSystem(scene, { tier: this.quality });

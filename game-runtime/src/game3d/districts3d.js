@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { roadSegments } from './detail3d.js';
 import { frustumPrism } from './prisms3d.js';
+import { Emitter, getSharedParticles, bindParticleTicker } from './particles3d.js';
 import {
   mudMaterial, waterPoolMaterial, snowMaterial, lavaMaterial,
   runeMaterial, riftMaterial, awningMaterial, plankMaterial,
@@ -697,6 +698,84 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   const animators = [];
   const shadows = [];
 
+  // ---------- Fase 26 — PARTÍCULAS REAIS no miolo da arena ----------
+  // Fumaça de fogueira + fagulhas, brasas nas fendas de lava, motos do vazio
+  // escapando das fendas e fagulhas da torre de destilação — o mesmo pool
+  // compartilhado dos marcos (1 draw call), com ticker idempotente (districts
+  // roda ANTES de buildWorldMarks em buildScene: quem cria, registra o tick).
+  const particleRng = new SeededRng(`${layout.seed}:${layout.scenarioId}:dressing-particles`);
+  const emitterAnimators = [];
+  const sharedSystem = getSharedParticles(scene);
+  if (sharedSystem) {
+    const emitters = [];
+    const addEmitter = (origin, rate, params) => {
+      if (emitters.length >= 12) return; // teto de orçamento (pior caso ~90 vivos)
+      emitters.push(new Emitter(sharedSystem, { origin, rate, params }));
+    };
+    for (const item of placements.items) {
+      if (item.type === 'campfire') {
+        // fumaça de fogueira: coluna cinza fina com brisa + deriva térmica
+        addEmitter({ x: item.x, y: .9 * item.s, z: item.z }, 2.4, () => ({
+          dx: (particleRng.next() - .5) * .3, dy: 0, dz: (particleRng.next() - .5) * .3,
+          vx: .5 + particleRng.next() * .5, vy: 1.6 + particleRng.next() * 1.1, vz: (particleRng.next() - .5) * .5,
+          size: .8 + particleRng.next() * .7, growth: .9, life: 2.6 + particleRng.next() * 1.6,
+          drag: .4, gravity: -0.5, alpha: .3,
+          color: [.36, .33, .3], endColor: [.55, .53, .5],
+        }));
+        // fagulhas: curtas, quentes, sobem rápido e morrem cedo
+        addEmitter({ x: item.x, y: .55 * item.s, z: item.z }, 1.3, () => ({
+          dx: (particleRng.next() - .5) * .35, dy: 0, dz: (particleRng.next() - .5) * .35,
+          vx: (particleRng.next() - .5) * 1.4, vy: 2.2 + particleRng.next() * 1.8, vz: (particleRng.next() - .5) * 1.4,
+          size: .16 + particleRng.next() * .14, growth: -.03, life: .55 + particleRng.next() * .5,
+          drag: .08, gravity: 3, alpha: .95,
+          color: [1, .72, .22], endColor: [.45, .12, .04],
+        }));
+      } else if (item.type === 'refinetower') {
+        // fagulhas da chama do flare da torre (fino, alto, contínuo)
+        addEmitter({ x: item.x, y: 7.5 * item.s, z: item.z }, 1, () => ({
+          dx: (particleRng.next() - .5) * .2, dy: 0, dz: (particleRng.next() - .5) * .2,
+          vx: (particleRng.next() - .5) * 1.1, vy: 2.4 + particleRng.next() * 1.6, vz: (particleRng.next() - .5) * 1.1,
+          size: .14 + particleRng.next() * .12, growth: -.02, life: .5 + particleRng.next() * .45,
+          drag: .08, gravity: 2.4, alpha: .85,
+          color: [1, .66, .2], endColor: [.4, .1, .03],
+        }));
+      } else if (item.type === 'rift') {
+        // Fase 26 — fenda do vazio DENTRO da arena: motos de vazio à deriva
+        // (mesma linguagem das fendas do horizonte da Fase 17)
+        addEmitter({ x: item.x, y: 1.2 * item.s, z: item.z }, 1.2, () => ({
+          dx: (particleRng.next() - .5) * .8, dy: (particleRng.next() - .5) * 1.8, dz: (particleRng.next() - .5) * .8,
+          vx: (particleRng.next() - .5) * .5, vy: .7 + particleRng.next() * 1, vz: (particleRng.next() - .5) * .5,
+          size: .3 + particleRng.next() * .35, growth: 0, life: 3.2 + particleRng.next() * 2.2,
+          drag: .1, gravity: -0.6, alpha: .72,
+          color: [.61, .91, 1], endColor: [.24, .66, .78],
+        }));
+      }
+    }
+    for (const p of placements.patches) {
+      if (p.type === 'lavapatch') {
+        // Fase 26 — fendas de lava: brasas saltam da crosta + wisp de calor
+        addEmitter({ x: p.x, y: .1, z: p.z }, 1.1, () => ({
+          dx: (particleRng.next() - .5) * p.r * 1.4, dy: 0, dz: (particleRng.next() - .5) * p.r * 1.4,
+          vx: (particleRng.next() - .5) * 1.4, vy: 2.4 + particleRng.next() * 2.2, vz: (particleRng.next() - .5) * 1.4,
+          size: .22 + particleRng.next() * .26, growth: -.03, life: .8 + particleRng.next() * .7,
+          drag: .1, gravity: 2.6, alpha: .88,
+          color: [1, .6, .16], endColor: [.38, .08, .03],
+        }));
+        addEmitter({ x: p.x, y: .25, z: p.z }, .55, () => ({
+          dx: (particleRng.next() - .5) * p.r, dy: 0, dz: (particleRng.next() - .5) * p.r,
+          vx: (particleRng.next() - .5) * .6, vy: 1.1 + particleRng.next() * .9, vz: (particleRng.next() - .5) * .6,
+          size: .9 + particleRng.next() * .8, growth: .8, life: 2.4 + particleRng.next() * 1.4,
+          drag: .45, gravity: -0.4, alpha: .22,
+          color: [.3, .24, .2], endColor: [.46, .42, .38],
+        }));
+      }
+    }
+    emitterAnimators.push(...emitters.map((e) => (dt, t) => e.update(dt, t)));
+    // DONO do tick se districts criou o sistema; se worldmarks/outra cena
+    // já registrou, nada a fazer (nunca 2× — ver bindParticleTicker).
+    bindParticleTicker(scene, sharedSystem, emitterAnimators);
+  }
+
   // ---------- patches de solo ----------
   const patchGeo = new THREE.CircleGeometry(1, 26);
   const byType = new Map();
@@ -753,6 +832,7 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
 
   if (shadows.length && contactShadows) contactShadows(shadows);
   scene.add(dressing);
+  animators.push(...emitterAnimators); // Fase 26 — partículas reais do dressing
 
   // ---------- animators (stateless, determinísticos por t) ----------
   if (floaters.length) {

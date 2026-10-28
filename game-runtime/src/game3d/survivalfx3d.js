@@ -12,6 +12,13 @@
 //   CIGKV    — acidRain: chuva ácida drizzle verde sobre a arena
 // Puro visual: NENHUM dano é aplicado aqui (o dano continua autoritativo na
 // sim/servidor — o FX só mostra a superfície da regra que já mata).
+//
+// Fase 26 — FX DOS MARCOS × MUNDOS: além da superfície na arena, o SurvivalFX
+// ABASTECE os marcos do mundo (deps.landmarks = registro de scene.userData.
+// worldMarks) com o estado do hazard a cada frame — kind + boost 0..1 (fade
+// in na subida, 1 na sustentação, fade out no recuo) + surfaceY. Os marcos
+// reagem: maré no anel oceânico (Priadus), erupção da tocha (CKESALTH),
+// despertar dos pilões (Arukheea), estrobo dos beacons (ácido/CIGKV).
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 
@@ -23,12 +30,16 @@ export class SurvivalFX {
   /**
    * @param {THREE.Scene} scene
    * @param {object} scenario cenário ativo (id + survival)
-   * @param {{ particles?: import('./particles3d.js').ParticleSystem }} deps
+   * @param {{ particles?: import('./particles3d.js').ParticleSystem, landmarks?: object }} deps
+   *        Fase 26 — `landmarks` é o registro de buildWorldMarks (possui
+   *        applyHazard(kind, boost, surfaceY)); opcional p/ testes headless.
    */
-  constructor(scene, scenario, { particles = null } = {}) {
+  constructor(scene, scenario, { particles = null, landmarks = null } = {}) {
     this.scene = scene;
     this.scenario = scenario;
     this.particles = particles;
+    this.landmarks = landmarks;
+    this._landmarkKind = null; // último kind empurrado (p/ zerar ao voltar a idle)
     this.rng = new SeededRng(`${scenario?.id ?? 'CIGKV'}:survival-fx`);
 
     this.group = new THREE.Group();
@@ -151,7 +162,35 @@ export class SurvivalFX {
 
   #emitDebt = {};
 
+  /** Fase 26 — intensidade 0..1 do hazard corrente p/ os marcos do mundo:
+   *  subida inclina (smoothstep do rise), sustentação = 1, recuo desce. */
+  #landmarkBoost() {
+    if (this.active === 'gravity') return this.gravityBoost;
+    if (this.active === 'acid') return 1; // pulse ativo = alerta pleno nos marcos
+    if (this.active === 'tsunami' || this.active === 'lava') {
+      if (this.phase === 'rising') return Math.min(1, this.elapsed / Math.max(.001, this.riseTime));
+      if (this.phase === 'sustained') return 1;
+      if (this.phase === 'receding') return Math.max(0, 1 - this.elapsed / RECEDE_SECONDS);
+    }
+    return 0;
+  }
+
+  /** Empurra o estado corrente aos marcos (idempotente: idle zera 1×). */
+  #pushLandmarks() {
+    if (!this.landmarks?.applyHazard) return;
+    if (this.active) {
+      this.landmarks.applyHazard(this.active, this.#landmarkBoost(), this.surface?.position.y ?? 0);
+      this._landmarkKind = this.active;
+    } else if (this._landmarkKind) {
+      this.landmarks.applyHazard(null, 0, 0);
+      this._landmarkKind = null;
+    }
+  }
+
   update(dt, t) {
+    // ---------- Fase 26 — estado p/ os marcos do mundo (sempre) ----------
+    this.#pushLandmarks();
+
     // ---------- superfície (tsunami/lava) ----------
     if (this.surface && (this.active === 'tsunami' || this.active === 'lava')) {
       this.elapsed += dt;
@@ -275,8 +314,12 @@ export class SurvivalFX {
     }
 
     // ---------- acidRain (CIGKV) ----------
+    if (this.acidT <= 0 && this.active === 'acid') this.active = null; // pulse acabou
     if (this.acidT > 0) {
       this.acidT -= dt;
+      // Fase 26 — ácido é pulse: marca 'acid' ativo enquanto o drizzle vive
+      this.active ??= 'acid';
+      this.#pushLandmarks();
       this.#particleRate(dt, {
         rate: 90,
         spawn: {
@@ -318,5 +361,6 @@ export class SurvivalFX {
     this.emitters.length = 0;
     this.surface = null;
     this.surfaceMat = null;
+    this.landmarks = null;
   }
 }
