@@ -45,6 +45,9 @@ services:
       # (auth.enabled: false). Evidência de CI 5ª run: "You must have at
       # least one scheme when authentication is enabled".
       Auth__Enabled: "false"
+      # JupiterSettings.CurrentSite [Required] (BaseStartup.cs): nome do site,
+      # único por deployment (multi-região). Evidência de CI 6ª run.
+      Jupiter__CurrentSite: khaaos-staging
     depends_on:
       - scylla
     restart: unless-stopped
