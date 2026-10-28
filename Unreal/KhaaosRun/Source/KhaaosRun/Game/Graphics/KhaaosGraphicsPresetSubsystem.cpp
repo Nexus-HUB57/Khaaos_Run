@@ -2,7 +2,7 @@
 // KHAAOS RUN - PLATAFORMA BATTLE ROYALE (MUNDO DEVS PH.D)
 // IMPLEMENTAÇÃO: UKhaaosGraphicsPresetSubsystem
 // Auto-detecção de GPU, presets adaptativos, DLSS/FSR/XeSS/TSR, console commands.
-// DATA: 2026-10-27
+// DATA: 2026-10-28
 // ==============================================================================
 
 #include "KhaaosGraphicsPresetSubsystem.h"
@@ -14,18 +14,31 @@ void UKhaaosGraphicsPresetSubsystem::Initialize(FSubsystemCollectionBase& Collec
 {
     Super::Initialize(Collection);
 
-    // Pré-construir todos os 5 perfis na inicialização
+    // Detectar plataforma mobile antes de construir presets
+    bDetectedMobile = DetectMobilePlatform();
+
+    // Pré-construir todos os 6 perfis na inicialização (incluindo Mobile)
+    CachedPresets.Add(EKhaaosQualityPreset::Mobile,  BuildPresetProfile(EKhaaosQualityPreset::Mobile));
     CachedPresets.Add(EKhaaosQualityPreset::Low,    BuildPresetProfile(EKhaaosQualityPreset::Low));
     CachedPresets.Add(EKhaaosQualityPreset::Medium,  BuildPresetProfile(EKhaaosQualityPreset::Medium));
     CachedPresets.Add(EKhaaosQualityPreset::High,    BuildPresetProfile(EKhaaosQualityPreset::High));
     CachedPresets.Add(EKhaaosQualityPreset::Ultra,   BuildPresetProfile(EKhaaosQualityPreset::Ultra));
     CachedPresets.Add(EKhaaosQualityPreset::PhD,     BuildPresetProfile(EKhaaosQualityPreset::PhD));
 
-    UE_LOG(LogTemp, Display, TEXT("[GraphicsPreset] Subsystem inicializado. 5 perfis pré-calculados."));
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPreset] Subsystem inicializado. 6 perfis pré-calculados. Mobile=%s"),
+        bDetectedMobile ? TEXT("SIM") : TEXT("NÃO"));
 }
 
 EKhaaosQualityPreset UKhaaosGraphicsPresetSubsystem::AutoDetectAndApply()
 {
+    // Se plataforma mobile detectada, forçar preset Mobile (Free Fire é mobile-first)
+    if (bDetectedMobile)
+    {
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPreset] Plataforma mobile detectada — forçando preset Mobile."));
+        ApplyPreset(EKhaaosQualityPreset::Mobile);
+        return EKhaaosQualityPreset::Mobile;
+    }
+
     const int32 VRAM = DetectGPUVRAM();
     EKhaaosQualityPreset DetectedPreset;
 
@@ -35,7 +48,7 @@ EKhaaosQualityPreset UKhaaosGraphicsPresetSubsystem::AutoDetectAndApply()
     else if (VRAM >= 4000)   DetectedPreset = EKhaaosQualityPreset::Medium;  // GTX 1060 (6GB)
     else                     DetectedPreset = EKhaaosQualityPreset::Low;      // Integrado
 
-    UE_LOG(LogTemp, Display, TEXT("[GraphicsPreset] Auto-detecção: VRAM=%dMB -> Preset=%s"),
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPreset] Auto-detecção: VRAM=%dMB -> Preset=%s"),
         VRAM, *UEnum::GetDisplayValueAsText(DetectedPreset).ToString());
 
     ApplyPreset(DetectedPreset);
@@ -54,11 +67,13 @@ void UKhaaosGraphicsPresetSubsystem::ApplyPreset(EKhaaosQualityPreset Preset)
 
         ApplyConsoleCommands(ActiveProfile);
 
-        UE_LOG(LogTemp, Display, TEXT("[GraphicsPreset] Preset %s aplicado: %dx%d @ %dfps, Upscaler=%s"),
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPreset] Preset %s aplicado: %dx%d @ %dfps, Upscaler=%s, PP=%d, VFX=%d, Stylized=%d, Atmo=%d"),
             *UEnum::GetDisplayValueAsText(Preset).ToString(),
             ActiveProfile.RenderResolutionX, ActiveProfile.RenderResolutionY,
             ActiveProfile.TargetFPS,
-            *UEnum::GetDisplayValueAsText(ActiveProfile.Upscaler).ToString());
+            *UEnum::GetDisplayValueAsText(ActiveProfile.Upscaler).ToString(),
+            ActiveProfile.PostProcessQuality, ActiveProfile.VFXQuality,
+            ActiveProfile.StylizedMaterialQuality, ActiveProfile.AtmosphereQuality);
 
         PresetChangedEvent.Broadcast(Preset);
     }
@@ -70,6 +85,28 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
 
     switch (Preset)
     {
+    case EKhaaosQualityPreset::Mobile:
+        // Mobile — Free Fire target: 720p@30fps, tudo minimizado para mobile
+        Profile.RenderResolutionX = 1280;  Profile.RenderResolutionY = 720;
+        Profile.ShadowQuality = EKhaaosShadowQuality::Low;
+        Profile.AmbientOcclusion = EKhaaosAOQuality::Off;
+        Profile.ViewDistanceScale = 0.3f;
+        Profile.TextureQuality = 0;
+        Profile.VFXBudgetPercent = 0.25f;
+        Profile.bEnableLumenGI = false;
+        Profile.bEnableNanite = false;
+        Profile.bEnableMotionBlur = false;
+        Profile.TargetFPS = 30;
+        Profile.Upscaler = EKhaaosUpscalerTech::FSR;  // FSR bom para mobile
+        // Novos subsistemas — mobile minimizado
+        Profile.PostProcessQuality = 1;    // PP mínimo (bloom + vignette só)
+        Profile.VFXQuality = 1;            // VFX Low
+        Profile.StylizedMaterialQuality = 1; // Materiais básicos
+        Profile.AtmosphereQuality = 1;     // Atmosfera mínima
+        Profile.SSRQuality = 0;            // Sem SSR em mobile
+        Profile.bIsMobilePreset = true;
+        break;
+
     case EKhaaosQualityPreset::Low:
         Profile.RenderResolutionX = 1280;  Profile.RenderResolutionY = 720;
         Profile.ShadowQuality = EKhaaosShadowQuality::Low;
@@ -82,6 +119,13 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
         Profile.bEnableMotionBlur = false;
         Profile.TargetFPS = 30;
         Profile.Upscaler = EKhaaosUpscalerTech::TSR;
+        // Novos subsistemas
+        Profile.PostProcessQuality = 1;
+        Profile.VFXQuality = 1;
+        Profile.StylizedMaterialQuality = 1;
+        Profile.AtmosphereQuality = 1;
+        Profile.SSRQuality = 0;
+        Profile.bIsMobilePreset = false;
         break;
 
     case EKhaaosQualityPreset::Medium:
@@ -96,6 +140,13 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
         Profile.bEnableMotionBlur = false;
         Profile.TargetFPS = 60;
         Profile.Upscaler = EKhaaosUpscalerTech::TSR;
+        // Novos subsistemas
+        Profile.PostProcessQuality = 2;
+        Profile.VFXQuality = 2;
+        Profile.StylizedMaterialQuality = 2;
+        Profile.AtmosphereQuality = 2;
+        Profile.SSRQuality = 1;
+        Profile.bIsMobilePreset = false;
         break;
 
     case EKhaaosQualityPreset::High:
@@ -110,6 +161,13 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
         Profile.bEnableMotionBlur = true;
         Profile.TargetFPS = 60;
         Profile.Upscaler = EKhaaosUpscalerTech::FSR;
+        // Novos subsistemas
+        Profile.PostProcessQuality = 3;
+        Profile.VFXQuality = 3;
+        Profile.StylizedMaterialQuality = 3;
+        Profile.AtmosphereQuality = 3;
+        Profile.SSRQuality = 2;
+        Profile.bIsMobilePreset = false;
         break;
 
     case EKhaaosQualityPreset::Ultra:
@@ -124,6 +182,13 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
         Profile.bEnableMotionBlur = true;
         Profile.TargetFPS = 60;
         Profile.Upscaler = EKhaaosUpscalerTech::DLSS;
+        // Novos subsistemas
+        Profile.PostProcessQuality = 4;
+        Profile.VFXQuality = 4;
+        Profile.StylizedMaterialQuality = 4;
+        Profile.AtmosphereQuality = 4;
+        Profile.SSRQuality = 3;
+        Profile.bIsMobilePreset = false;
         break;
 
     case EKhaaosQualityPreset::PhD:
@@ -138,6 +203,13 @@ FKhaaosGraphicsProfile UKhaaosGraphicsPresetSubsystem::BuildPresetProfile(EKhaao
         Profile.bEnableMotionBlur = true;
         Profile.TargetFPS = 120;
         Profile.Upscaler = EKhaaosUpscalerTech::DLSS;
+        // Novos subsistemas — PhD = tudo no máximo
+        Profile.PostProcessQuality = 4;
+        Profile.VFXQuality = 4;
+        Profile.StylizedMaterialQuality = 4;
+        Profile.AtmosphereQuality = 4;
+        Profile.SSRQuality = 3;
+        Profile.bIsMobilePreset = false;
         break;
     }
 
@@ -283,4 +355,21 @@ int32 UKhaaosGraphicsPresetSubsystem::DetectGPUVRAM() const
 #endif
 
     return 6144; // 6GB default (conservative)
+}
+
+bool UKhaaosGraphicsPresetSubsystem::DetectMobilePlatform() const
+{
+    // Detectar mobile via platform detection
+    // Android, iOS, ou command-line flag
+#if PLATFORM_ANDROID || PLATFORM_IOS
+    return true;
+#endif
+
+    // Verificar flag de linha de comando para forçar mobile (teste em desktop)
+    if (FCommandLine::HasParam(TEXT("mobile")))
+    {
+        return true;
+    }
+
+    return false;
 }
