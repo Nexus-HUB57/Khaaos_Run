@@ -346,6 +346,29 @@ O runtime é horizontal por design: sessões vivem no store compartilhável e o 
 
 Cobertura: `test/multiinstance.test.js` (2), `test/fault-injection.test.js` (3) e `test/soak.test.js` (1, aceita `KR_SOAK_MS`).
 
+## Cross-replica AO VIVO — 2 réplicas reais + Redis real (KR_DISTRIBUTED=1)
+
+O smoke cross-replica prova a cadeia distribuída inteira em **processos de
+sistema operacional separados** (não in-process), contra um Redis REAL:
+
+```bash
+# Spawn mode: sobe o Redis (PATH ou REDIS_SERVER_BIN) + 2 réplicas reais
+node scripts/smoke-cross-replica.mjs --redis-url redis://127.0.0.1:6379
+
+# Attach mode: staging compose já rodando (2 containers + PG/Redis reais)
+cd ../infra/staging && bash verify-cross-replica.sh
+```
+
+Etapas provadas (contrato `CROSS_REPLICA_SMOKE_OK`): ownership/fencing no Redis
+(`kr:own:{roomId}` com owner+fence), redirect ao dono vivo lido do registro
+(`kr:replica:{id}`), resume no dono sem duplicar jogador, relay global
+espelhado entre réplicas (`mirrorApplied > 0`), failover por SIGKILL com
+realocação elegante e epoch preservado, e SLO `smoke12` (p95 RTT < 150 ms,
+erros < 1%) contra a réplica viva. Para sessões de resume compartilhadas entre
+réplicas use `KR_SESSION_STORE=redis`; com o mesmo `AUTH_SECRET` os tokens
+validam em qualquer réplica (kid determinístico por secret). O guard de CI é o
+workflow **`16 — Cross-Replica Smoke (KR_DISTRIBUTED)`**.
+
 ## Painel anti-cheat
 
 ```bash

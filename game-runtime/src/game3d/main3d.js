@@ -1375,6 +1375,9 @@ export class Game3D {
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Fase 23 — interiores: flicker das lâmpadas e telas
+    const interiorsAnim = this.scene.userData.interiors?.animators;
+    if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
     // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
     this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);

@@ -68,9 +68,11 @@ fi
 # de ownership/fencing ativa, identidades distintas e registro de réplicas no
 # Redis. Detecta o perfil: determinístico (app-a/app-b) ou escala livre (app N).
 echo "== 5. Modo distribuído: 2 réplicas de app + fencing + registro no Redis =="
-DISTRIBUTED_ENABLED=$(grep -c '^KR_DISTRIBUTED=1' .env 2>/dev/null || true)
 COMPOSE_2R="docker compose -f docker-compose.yml -f docker-compose.2replicas.yml"
-if [ "$DISTRIBUTED_ENABLED" != "0" ] || $COMPOSE_2R ps --status running 2>/dev/null | grep -q app-a; then
+# O estágio só se aplica quando as RÉPLICAS determinísticas (app-a/app-b) estão
+# EM PÉ — KR_DISTRIBUTED=1 sozinho é modo distribuído single-node válido
+# (ex.: job antigo do CI com .env.example) e NÃO deve exigir as portas 8081/8082.
+if $COMPOSE_2R ps --status running 2>/dev/null | grep -q app-a; then
   # Endpoints diretos por réplica (modo determinístico) — fallback: LB.
   HA_A=$(curl -fsS "http://127.0.0.1:${KR_APP_A_PORT:-8081}/healthz" 2>/dev/null || true)
   HA_B=$(curl -fsS "http://127.0.0.1:${KR_APP_B_PORT:-8082}/healthz" 2>/dev/null || true)

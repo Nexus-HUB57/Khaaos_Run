@@ -85,7 +85,19 @@ export function createAuthoritativeServer({
     : null);
   const oidcClient = oidcConfig ? new OidcClient(oidcConfig) : null;
   const oidcSubjectsAdmin = new Set(String(process.env.KR_OIDC_ADMIN_SUBJECTS || '').split(',').filter(Boolean));
-  const users = process.env.KR_USERS_JSON ? JSON.parse(process.env.KR_USERS_JSON) : [];
+  // KR_USERS_JSON: parse RESILIENTE — JSON malformado (ex.: aspas consumidas
+  // por `source .env` no deploy) não pode derrubar o runtime em crash loop:
+  // degrada para users=[] com sinal claro no log; login falha honestamente.
+  let users = [];
+  if (process.env.KR_USERS_JSON) {
+    try {
+      users = JSON.parse(process.env.KR_USERS_JSON);
+      if (!Array.isArray(users)) throw new Error('KR_USERS_JSON deve ser um array');
+    } catch (error) {
+      users = [];
+      console.error('[KR_USERS_JSON] inválido — boot segue SEM usuários estáticos (login falhará até corrigir):', String(error?.message || error).slice(0, 200));
+    }
+  }
   // KR_DEV_AUTH=1 provisiona usuários de desenvolvimento (NUNCA usar em produção).
   if (process.env.KR_DEV_AUTH === '1' && users.length === 0) {
     users.push(

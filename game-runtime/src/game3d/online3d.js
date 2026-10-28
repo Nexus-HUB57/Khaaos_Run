@@ -446,6 +446,9 @@ export class OnlineGame3D extends Game3D {
     // Fase 22 — cenários vivos no modo online
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, performance.now() / 1000);
+    // Fase 23 — interiores no modo online (flicker de lâmpadas/telas)
+    const interiorsAnim = this.scene.userData.interiors?.animators;
+    if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

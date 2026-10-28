@@ -69,6 +69,36 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 
+if [ "$REPLICAS_MODE" = "1" ]; then
+  # M4 — no modo 2 réplicas o LB só fica realmente pronto quando AS DUAS
+  # réplicas escutam (readyz direto em cada porta publicada). Uma única
+  # requisição via LB pode cair na réplica pronta e mascarar a outra (502 no
+  # primeiro round-robin do verify). Espera as DUAS portas diretas.
+  echo "→ Esperando /readyz 200 nas réplicas diretas (8081 + 8082)..."
+  for attempt in $(seq 1 60); do
+    code_a=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${KR_APP_A_PORT:-8081}/readyz" || true)
+    code_b=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${KR_APP_B_PORT:-8082}/readyz" || true)
+    if [ "$code_a" = "200" ] && [ "$code_b" = "200" ]; then
+      echo "✅ app-a e app-b prontas (tentativa ${attempt})"
+      break
+    fi
+    [ "$attempt" = "60" ] && { echo "❌ réplicas diretas não ficaram prontas (a=$code_a b=$code_b)"; exit 1; }
+    sleep 2
+  done
+  # Readyz via LB (prova o upstream estático app-a/app-b).
+  for attempt in $(seq 1 30); do
+    code=$(curl -s -o /tmp/readyz.json -w '%{http_code}' "http://127.0.0.1:${KR_STAGING_PORT:-8080}/readyz" || true)
+    [ "$code" = "200" ] && break
+    [ "$attempt" = "30" ] && { echo "❌ /readyz via LB não ficou 200"; exit 1; }
+    sleep 2
+  done
+  echo "✅ ready 200 via LB (upstream estático)"
+  cat /tmp/readyz.json | head -c 600; echo
+  echo ""
+  echo "→ Gate de saturação ativo: KR_READY_MAX_CONNECTIONS=${KR_READY_MAX_CONNECTIONS:-2000}"
+  exit 0
+fi
+
 echo "→ Esperando /readyz ficar 200 (sondas reais de PG/Redis)..."
 for attempt in $(seq 1 60); do
   code=$(curl -s -o /tmp/readyz.json -w '%{http_code}' "http://127.0.0.1:${KR_STAGING_PORT:-8080}/readyz" || true)

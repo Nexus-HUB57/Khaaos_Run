@@ -347,10 +347,10 @@ export function createDistributed({
   const frozen = new Set(); // salas congeladas por perda de lease (owner_lost)
 
   async function heartbeat() {
-    // M4 — RENOVAÇÃO do registro de réplicas: sem isto, a entrada expira em
-    // ttlMs*2 (30 s no default) e o redirect cross-réplica começa a falhar
-    // (ownerOf → registry.lookup → null) mesmo com a réplica VIVA. O registro
-    // é renovado no mesmo cadencimento do heartbeat de leases.
+    // Registro de réplicas também é renovado no heartbeat: sem isso, uma
+    // réplica VIVA sumiria do registry quando TTL (2× lease) vencesse — o
+    // playbook P3 documenta exatamente esse modo de falha (redirect a dono
+    // vivo devolve null e o cliente cai em alocação nova).
     if (address && registry) {
       try { await registry.register(id, address, ttlMs * 2); } catch { /* rede oscilou: próxima passada */ }
     }
@@ -372,7 +372,7 @@ export function createDistributed({
 
   async function mirrorLoop() {
     try {
-      const events = await relay.read(relayGlobalKey(), mirror.lastSeq, { limit: 64 });
+      const events = await relay.read(GLOBAL_STREAM_KEY, mirror.lastSeq, { limit: 64 });
       const accepted = mirror.feed(events);
       metrics.mirrorApplied += accepted.length;
       for (const e of accepted) mirrorHandlers.get(e.type)?.(e.payload, e);
@@ -381,12 +381,17 @@ export function createDistributed({
 
   const mirrorHandlers = new Map();
   const mirror = new RelayConsumer({ onGap: () => {} });
+  // Stream GLOBAL de ciclo de vida: binding de CLAUSURA (não propriedade do
+  // objeto retornado — referenciá-lo como identificador dentro de mirrorLoop/
+  // publish lançava ReferenceError silenciado pelo catch, deixando o relay
+  // entre réplicas inerte: mirrorApplied eternamente 0).
+  const GLOBAL_STREAM_KEY = '__global__';
 
   return {
     enabled: Boolean(enabled),
     replicaId: id,
     metrics,
-    relayGlobalKey: () => '__global__',
+    relayGlobalKey: () => GLOBAL_STREAM_KEY,
     frozen,
     held,
     ready: distributedReady || (async () => true),
@@ -465,7 +470,14 @@ export function createDistributed({
     publish(roomId, type, payload) {
       if (!enabled || !rly) return null;
       metrics.publishes++;
-      return rly.publish(roomId, type, payload);
+      const event = rly.publish(roomId, type, payload);
+      // Espelho GLOBAL de ciclo de vida: o mirrorLoop de cada réplica consome o
+      // stream '__global__' — sem esta publicação o relay entre réplicas é
+      // INERTE (publish escreve só no stream por sala; o mirror lê o global e
+      // mirrorApplied fica eternamente em 0). O roomId vai no payload para as
+      // réplicas remotas terem contexto. Best-effort: nunca derruba o caller.
+      void Promise.resolve(rly.publish(GLOBAL_STREAM_KEY, type, { ...(payload ?? {}), roomId })).catch(() => {});
+      return event;
     },
     isFrozen(roomId) { return frozen.has(roomId); },
     // M4 — índice de convites compartilhado (cross-replica join)
