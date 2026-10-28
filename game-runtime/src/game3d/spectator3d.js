@@ -177,7 +177,7 @@ export function snapshotHealth(players = []) {
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
 
 export class SpectatorRemote {
-  constructor({ roomId = 'default', camera = 'RING_CENTER', url = null, socketFactory = null, onStatus = null, onBatch = null, onFeed = null, onEvent = null } = {}) {
+  constructor({ roomId = 'default', camera = 'RING_CENTER', url = null, socketFactory = null, onStatus = null, onBatch = null, onFeed = null, onEvent = null, metricsIntervalMs = 10_000 } = {}) {
     this.roomId = roomId;
     this.camera = SPECTATOR_CAMERAS.includes(camera) ? camera : 'RING_CENTER';
     this.followPlayerId = null;
@@ -203,6 +203,17 @@ export class SpectatorRemote {
     this.feed = [];               // linhas já traduzidas (mais novas primeiro)
     this.ws = null;
     this._seenEvents = new Set(); // dedupe type:timestamp (batchs repetem cauda)
+    // Fase 24 — métricas do DIRETOR p/ o /admin (transporte client→server):
+    // cortes por motivo/hazard, intervenções manuais e liga/desliga. Um frame
+    // DIRECTOR_METRICS sai a cada corte/ação + heartbeat periódico enquanto a
+    // transmissão está LIVE (o /admin vê dado fresco mesmo sem novidade).
+    this.metricsIntervalMs = Number.isFinite(metricsIntervalMs) && metricsIntervalMs >= 0 ? metricsIntervalMs : 10_000;
+    this._metricsTimer = null;
+    this._directorMetrics = {
+      cuts: { total: 0, byReason: {}, byHazard: {} },
+      manual: { followSelects: 0, cycles: 0 },
+      toggles: { on: 0, off: 0 },
+    };
   }
 
   _setStatus(s) { this.status = s; this.onStatus?.(s); }
@@ -224,7 +235,7 @@ export class SpectatorRemote {
     this.ws = ws;
     ws.onopen = () => this._setStatus('SINCRONIZANDO'); // welcome ainda não chegou (delay 10 s)
     ws.onmessage = (ev) => this.#handleMessage(String(ev.data));
-    ws.onclose = () => { this.ws = null; this._setStatus('TRANSMISSÃO ENCERRADA'); };
+    ws.onclose = () => { this.#stopMetricsHeartbeat(); this.ws = null; this._setStatus('TRANSMISSÃO ENCERRADA'); };
     ws.onerror = () => { /* onclose segue */ };
   }
 
@@ -236,6 +247,8 @@ export class SpectatorRemote {
         this.spectatorId = msg.spectatorId ?? null;
         this.delayMs = Number.isFinite(msg.delayMs) ? msg.delayMs : null;
         this._setStatus('LIVE');
+        this.#reportMetrics(); // estado inicial no /admin imediatamente
+        this.#startMetricsHeartbeat();
         break;
       case 'SPECTATOR_BATCH': {
         const data = msg.data ?? {};
@@ -318,6 +331,7 @@ export class SpectatorRemote {
     this._prevHealth = snapshotHealth(players); // histórico p/ o próximo batch
     if (!picked) return;
     this.setCamera('FOLLOW_PLAYER', picked.id);
+    this.#recordCut(this._autoReason, this.activeHazard?.hazard ?? null); // Fase 24
     this.onAutoFollow?.(picked, this._autoReason);
   }
 
@@ -325,12 +339,15 @@ export class SpectatorRemote {
    *  mais ameaçado (o gesto do usuário tem resposta na hora). */
   setAutoFollow(on = !this.autoFollow) {
     this.autoFollow = !!on;
+    this._directorMetrics.toggles[this.autoFollow ? 'on' : 'off']++; // Fase 24
+    this.#reportMetrics();
     if (this.autoFollow) {
       this._autoHoldHazard = null;
       this._autoHeld = null;
       const picked = this.#autoPick(this.last?.players ?? []);
       if (picked) {
         this.setCamera('FOLLOW_PLAYER', picked.id);
+        this.#recordCut(this._autoReason, this.activeHazard?.hazard ?? null); // Fase 24
         this.onAutoFollow?.(picked, this._autoReason);
       }
     }
@@ -357,6 +374,8 @@ export class SpectatorRemote {
     this._autoHoldHazard = this.activeHazard?.hazard ?? null;
     this._autoHeld = 'manual';
     this.setCamera('FOLLOW_PLAYER', next.id);
+    this._directorMetrics.manual.cycles++; // Fase 24 — intervenção manual
+    this.#reportMetrics();
     return next;
   }
 
@@ -371,10 +390,58 @@ export class SpectatorRemote {
     this._autoHoldHazard = this.activeHazard?.hazard ?? null;
     this._autoHeld = 'manual';
     this.setCamera('FOLLOW_PLAYER', target.id);
+    this._directorMetrics.manual.followSelects++; // Fase 24 — clique no standings
+    this.#reportMetrics();
     return target;
   }
 
+  // ─── Fase 24 — métricas do diretor: coleta + transporte client→server ──────
+
+  #recordCut(reason, hazardKind) {
+    const m = this._directorMetrics;
+    m.cuts.total++;
+    m.cuts.byReason[reason] = (m.cuts.byReason[reason] ?? 0) + 1;
+    if (hazardKind) m.cuts.byHazard[hazardKind] = (m.cuts.byHazard[hazardKind] ?? 0) + 1;
+    this.#reportMetrics();
+  }
+
+  /** Snapshot das métricas do diretor — consumido pelo frame DIRECTOR_METRICS
+   *  e disponível p/ o próprio HUD da transmissão depurar a direção. */
+  getMetrics() {
+    const m = this._directorMetrics;
+    return {
+      enabled: this.autoFollow,
+      cameraMode: this.camera,
+      followPlayerId: this.followPlayerId,
+      activeHazard: this.activeHazard?.hazard ?? null,
+      cuts: { total: m.cuts.total, byReason: { ...m.cuts.byReason }, byHazard: { ...m.cuts.byHazard } },
+      manual: { ...m.manual },
+      toggles: { ...m.toggles },
+      now: Date.now(),
+    };
+  }
+
+  /** Transporte: UM frame DIRECTOR_METRICS no WS do espectador (fire-and-forget;
+   *  o servidor sanitiza — payload do cliente nunca é confiável). */
+  #reportMetrics() {
+    if (this.ws?.readyState === 1) {
+      try { this.ws.send(JSON.stringify({ type: 'DIRECTOR_METRICS', metrics: this.getMetrics() })); } catch { /* socket morrendo */ }
+    }
+  }
+
+  #startMetricsHeartbeat() {
+    this.#stopMetricsHeartbeat();
+    if (!(this.metricsIntervalMs > 0)) return; // 0 desliga (testes)
+    this._metricsTimer = setInterval(() => this.#reportMetrics(), this.metricsIntervalMs);
+    if (this._metricsTimer?.unref) this._metricsTimer.unref(); // nunca segura o processo
+  }
+
+  #stopMetricsHeartbeat() {
+    if (this._metricsTimer) { clearInterval(this._metricsTimer); this._metricsTimer = null; }
+  }
+
   dispose() {
+    this.#stopMetricsHeartbeat();
     try { this.ws?.close(); } catch { /* já fechado */ }
     this.ws = null;
     this._setStatus('ENCERRADO');
