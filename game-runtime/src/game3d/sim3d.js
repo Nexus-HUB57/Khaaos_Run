@@ -28,8 +28,12 @@ export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
 export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (igual ao da sala online)
 
 // Fase 25 — portas funcionais/destrutíveis: MESMOS números na sim offline,
-// MatchRoom3D e predição (folha fechada colide; aberta balança sem colidir)
-export const DOOR = Object.freeze({ ...DOOR_MECH });
+// MatchRoom3D e predição (folha fechada colide; aberta balança sem colidir).
+// HOTFIX pós-merge #185: a resolução do conflito deixou DOIS `export const DOOR`
+// no módulo (SyntaxError — main não carregava). Unificação canônica: DOOR_MECH
+// (hp 130 + mech) + meleeMult 2.5 (o meleeMult vive SÓ aqui — contrato de
+// dano corpo-a-corpo na folha, usado pela sim e pelo room3d).
+export const DOOR = Object.freeze({ ...DOOR_MECH, meleeMult: 2.5 });
 
 // ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
 // A partida começa com os operativos caindo do céu: queda livre (SKY) até a
@@ -473,7 +477,8 @@ export function glooCollider(wall) {
 // movimento/balas/LOS enquanto ativa; hp cai com balas, granadas e
 // corpo-a-corpo (melee é eficaz — 2,5×). Quebrada => collider sai e o vão
 // fica LIVRE (evento 'doorDown' p/ o visual esconder o painel).
-export const DOOR = Object.freeze({ hp: 90, meleeMult: 2.5 });
+// HOTFIX: a segunda declaração de DOOR ({ hp: 90, meleeMult: 2.5 }) foi
+// REMOVIDA — identificador único no módulo; números canônicos no topo.
 export function doorCollider(door) {
   return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
 }
@@ -938,7 +943,7 @@ export class KhaaosSim3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.syncPhysicsWorld();
+    this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe (TypeError no deploy da Gloo)
     this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
   }
   #stepThrowables(dt) {
@@ -958,20 +963,22 @@ export class KhaaosSim3D {
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
-    if (changed) this.syncPhysicsWorld();
+    if (changed) this.#syncPhysicsWorld();
     this.#stepDoors();
   }
-  // Fase 25 — portas: quebra quando hp esgota (collider sai do mundo físico)
+  // Fase 25 — portas: quebra quando hp esgota (collider sai do mundo físico).
+  // HOTFIX pós-merge #185: vocabulário canônico é open/destroyed (o campo
+  // `active` não existe nas folhas — o sweep antigo nunca disparava).
   #stepDoors() {
     let changed = false;
     for (const d of this.doors) {
-      if (!d.active) continue;
+      if (d.destroyed) continue;
       if (d.hp <= 0) {
-        d.active = false; changed = true;
-        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, rot: d.rot });
+        d.destroyed = true; d.open = false; changed = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
       }
     }
-    if (changed) this.syncPhysicsWorld();
+    if (changed) this.#syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -1281,15 +1288,21 @@ export class KhaaosSim3D {
     // entrada silenciosa: sem o estrondo de tiro nem o custo de granada).
     // Ângulo de frente REAL (atan2(fz, fx)) — não usa a convenção trocada do
     // ramo de bots acima (paridade legada preservada lá).
+    // HOTFIX pós-merge #185: o bloco antigo lia `d.active`/`d.hw`/`d.hd` —
+    // campos que não existem nas folhas (doorways) — e o melee NUNCA mais
+    // machucava porta. AABB canônica via doorBoxCollider + rota #damageDoor
+    // (doorDown + física sincronizada no mesmo caminho das balas/explosão).
     if (!hitFlesh) {
       const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
       for (const d of this.doors) {
-        if (!d.active) continue;
-        const cx = clamp(a.x, d.x - d.hw, d.x + d.hw), cz = clamp(a.z, d.z - d.hd, d.z + d.hd);
+        if (d.open || d.destroyed) continue; // vão livre: nada p/ arrebentar
+        const box = doorBoxCollider(d);
+        if (!box) continue;
+        const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
         if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
         const ang = Math.atan2(d.z - a.z, d.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
-        if (diff < 1.25) { d.hp -= w.damage * DOOR.meleeMult; this.emit('doorHit', { id: d.id, x: d.x, z: d.z }); break; }
+        if (diff < 1.25) { this.#damageDoor(d, w.damage * DOOR.meleeMult, a.id); this.emit('doorHit', { id: d.id, x: d.x, z: d.z }); break; }
       }
     }
     this.emit('swing', { owner: a.id });
