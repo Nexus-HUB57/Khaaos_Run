@@ -26,7 +26,18 @@ foram validadas por HTTP 200 na API de registry do ghcr antes da implementação
 | Serviço | Imagem (contrato P1) | Portas | Persistência |
 |---|---|---|---|
 | `unreal-cloud-ddc` | `ghcr.io/epicgames/unreal-cloud-ddc:1.5.0` | host 8080 → container 80 | efêmero (cache; volume opcional) |
+| `scylla` | `scylladb/scylla:5.2` (perfil CI: `--smp 1 --memory 512M`) | interno (rede compose) | volume `scylla-data` |
 | `loreserver` | `ghcr.io/epicgames/lore/loreserver:0.12` (amd64) | 41337 tcp+udp, 41339 | volume `lore-data:/data` + `local.toml` (stores em `/data/immutable` e `/data/mutable`) |
+
+**Descoberta de CI (2ª run, 2026-10-28)**: o DDC 1.5.0 **não sobe sem
+ScyllaDB** — o boot valida `ScyllaSettings` com
+`LocalDatacenterName` e `LocalKeyspaceSuffix` obrigatórios
+(`DataAnnotation validation failed`, exception no `JupiterStartup`). O
+compose adiciona o serviço `scylla` e os envs `Scylla__ConnectionString`
+(seção `Scylla` do chart, formato ASP.NET `__`), `Scylla__LocalDatacenterName`
+(`datacenter1`, DC default do scylla single-node) e
+`Scylla__LocalKeyspaceSuffix`. Auth do DDC permanece desabilitada
+(`auth.enabled: false` no chart) — modo staging.
 
 **Correção do contrato P1 (evidência de CI, 2026-10-28)**: o digest original
 `sha256-042ab40…` é a variante **linux/arm64 (Graviton3/SVE)** — em host
