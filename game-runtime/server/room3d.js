@@ -819,7 +819,7 @@ export class MatchRoom3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe (TypeError no deploy da Gloo)
+    this.syncPhysicsWorld();
     // deploy é global (a parede é visível/replicada para todos)
     for (const h of this.humans.values()) {
       if (!h.alive) continue;
@@ -842,6 +842,20 @@ export class MatchRoom3D {
           if (!h.alive) continue;
           if (dist2d(h.x, h.z, w.x, w.z) < 110) this.#emitTo(h.id, 'glooDown', { id: w.id, destroyed: w.hp <= 0 });
         }
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
+    // Fase 25 — sweep de folhas (mesma regra da sim offline): hp ≤ 0 por
+    // qualquer caminho => destroyed + doorDown GLOBAL p/ todos os humanos.
+    this.#stepDoors();
+  }
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; changed = true;
+        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
       }
     }
     if (changed) this.syncPhysicsWorld();
@@ -1667,7 +1681,7 @@ export class MatchRoom3D {
       },
       // Fase 25 — estado das FOLHAS na TRANSMISSÃO (id/open/destroyed/hp;
       // a posição é estática — o cliente busca o vão no layout pela seed)
-      doors: this.doors.map((d) => ({ id: d.id, open: !!d.open, destroyed: !!d.destroyed, hp: Math.round(d.hp) })),
+      doors: this.doors.map((d) => ({ id: d.id, open: !!d.open, destroyed: !!d.destroyed, hp: Math.round(d.hp), active: !d.destroyed })),
       // Fase 28 — eventos públicos + DANOs da transmissão intercalados por
       // tempo (o cliente deduplica pela chave type:timestamp).
       events: [...this.spectatorLog.slice(-20), ...this.spectatorDamageLog]
