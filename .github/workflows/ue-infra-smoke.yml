@@ -45,7 +45,8 @@ jobs:
       - name: Pull do contrato P1 (com validação de digests)
         run: |
           docker pull ghcr.io/epicgames/unreal-cloud-ddc:1.5.0
-          docker pull ghcr.io/epicgames/lore/loreserver:sha256-042ab40c1adbd5db686c76d85269e20f548b677dc56452cef95c5d9812370b17
+          # amd64: tag simples (o digest sha256-042ab40… do contrato original é a variante arm64/Graviton3)
+          docker pull ghcr.io/epicgames/lore/loreserver:0.12
           docker images | grep -E "unreal-cloud-ddc|loreserver"
 
       - name: Subir stack (compose)

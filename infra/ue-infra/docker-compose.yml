@@ -28,8 +28,11 @@ services:
     restart: unless-stopped
 
   loreserver:
-    # Tag de digest conforme contrato P1 (equivale ao commit 042ab40 da imagem).
-    image: ghcr.io/epicgames/lore/loreserver:sha256-042ab40c1adbd5db686c76d85269e20f548b677dc56452cef95c5d9812370b17
+    # Contrato P1 amd64: a tag de digest sha256-042ab40… original é a variante
+    # linux/arm64 (Graviton3/SVE) — "no matching manifest for linux/amd64" em
+    # host amd64 (evidência: run de CI 2026-10-28). O ghcr publica pares
+    # <ver> (amd64) + <ver>-graviton (arm64); amd64 usa a tag simples.
+    image: ghcr.io/epicgames/lore/loreserver:0.12
     container_name: khaaos-lore
     ports:
       - "41337:41337/tcp"  # gRPC
