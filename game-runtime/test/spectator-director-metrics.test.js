@@ -135,6 +135,7 @@ describe('aggregateDirectorReports', () => {
       cuts: { total: 0, byReason: {}, byHazard: {} },
       manual: { followSelects: 0, cycles: 0 },
       toggles: { on: 0, off: 0 },
+      tuning: null, // Fase 26 — afinação só entra com relatório real
     });
   });
 });
@@ -282,6 +283,7 @@ describe('SpectatorPipeline — DIRECTOR_METRICS end to end', () => {
         cuts: { total: 0, byReason: {}, byHazard: {} },
         manual: { followSelects: 0, cycles: 0 },
         toggles: { on: 0, off: 0 },
+        tuning: null, // Fase 26 — sem relatório, sem afinação
       }, 'sem relatório: agregado zerado');
       ws.close();
     });

@@ -19,9 +19,20 @@
 // Tudo determinístico (SeededRng por seed+cenário), instanciado onde repete,
 // com ANIMATORS registrados em scene.userData.worldMarks (deriva/flicker) e
 // contagens expostas p/ inspeção e2e.
+//
+// Fase 26 — FX DOS MARCOS × MUNDOS: os marcos REAGEM à sobrevivência do
+// próprio mundo (registry.applyHazard — abastecido pelo SurvivalFX a cada
+// frame com { kind, boost 0..1, surfaceY }):
+//   Priadus  + tsunami  → o ANEL oceânico se agita e sobe (maré de tempestade);
+//   Ckesalth + lava     → a chama da tocha ERUPCIONA (escala/emissiva ×) e os
+//                         emissores reais de fagulhas/fumaça disparam;
+//   Arukheea + gravity  → anéis dos pilões GIRAM, cristal da espira e fendas
+//                         do vazio INCANDEM;
+//   CIGKV    + acid     → beacons dos mastros estroboscopiam (alerta);
+//   Barburhen           → sem sobrevivência no cenário — reação nula.
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
-import { ParticleSystem, Emitter } from './particles3d.js';
+import { Emitter, getSharedParticles, bindParticleTicker } from './particles3d.js';
 import { frustumPrism } from './prisms3d.js';
 
 const RING_MIN = 205, RING_MAX = 340;
@@ -59,7 +70,7 @@ function tower(group, mat, x, z, h = 9) {
 }
 
 // ---------- CIGKV — Campo de Instrução ----------
-function marksCigkv(group, scene, scenario, rng) {
+function marksCigkv(group, scene, scenario, rng, hazard) {
   const concrete = M('#8d8a80', { rough: .92 });
   const wood = M('#6e5433');
   const steel = M('#4c4f55', { metal: .6, rough: .45 });
@@ -100,19 +111,23 @@ function marksCigkv(group, scene, scenario, rng) {
     beacons.push(beacon);
     counts.masts++;
   }
-  return { counts, animators: [beaconPulse(beacons)] };
+  return { counts, animators: [beaconPulse(beacons, hazard)] };
 }
 
-function beaconPulse(beacons) {
+// Fase 26 — chuva ácida (CIGKV): beacons estroboscopiam enquanto o drizzle
+// está ativo (boost 1) — pulso 5× mais rápido + brilho de alerta.
+function beaconPulse(beacons, hazard) {
   return (dt, t) => {
+    const boost = hazard?.kind === 'acid' ? hazard.boost : 0;
+    const speed = 2.2 + boost * 11;
     for (let i = 0; i < beacons.length; i++) {
-      beacons[i].material.emissiveIntensity = .8 + Math.sin(t * 2.2 + i * 1.3) * .5;
+      beacons[i].material.emissiveIntensity = .8 + Math.sin(t * speed + i * 1.3) * (.5 + boost * .5);
     }
   };
 }
 
 // ---------- Barburhen — Protótipo do Setor Industrial ----------
-function marksBarburhen(group, scene, scenario, rng) {
+function marksBarburhen(group, scene, scenario, rng, hazard) { // sem sobrevivência no cenário — reação nula
   const concrete = M('#9aa7ae', { rough: .9 });
   const steel = M('#5d666d', { metal: .65, rough: .42 });
   const rust = M('#7a4a2b', { metal: .4, rough: .7 });
@@ -181,7 +196,7 @@ function marksBarburhen(group, scene, scenario, rng) {
 }
 
 // ---------- Priadus — Arquipélago Abissal ----------
-function marksPriadus(group, scene, scenario, rng) {
+function marksPriadus(group, scene, scenario, rng, hazard) {
   const counts = { waterPlane: 0, temple: 0, coralDomes: 0, mangroves: 0 };
   // lâmina d'água do arquipélago — ANEL no horizonte (190→360 m): a arena
   // permanece seca (gameplay intacto) e o mundo vira ilhas cercadas d'água.
@@ -255,17 +270,21 @@ function marksPriadus(group, scene, scenario, rng) {
   trunks.instanceMatrix.needsUpdate = true;
   canopies.instanceMatrix.needsUpdate = true;
   group.add(trunks, canopies);
-  return { counts, animators: [waterShimmer(water)] };
+  return { counts, animators: [waterShimmer(water, hazard)] };
 }
 
-function waterShimmer(water) {
+// Fase 26 — tsunami (Priadus): o oceano-anel é a ORIGEM da onda — maré de
+// tempestade sobe +6 m com ondulação agitada; opacidade fecha o céu d'água.
+function waterShimmer(water, hazard) {
   return (dt, t) => {
-    water.position.y = .3 + Math.sin(t * .8) * .045;
+    const boost = hazard?.kind === 'tsunami' ? hazard.boost : 0;
+    water.position.y = .3 + Math.sin(t * .8) * .045 + boost * (5.5 + Math.sin(t * 1.9) * 1.2);
+    if (boost > 0) water.material.opacity = Math.min(.95, .8 + boost * .15);
   };
 }
 
 // ---------- CKESALTH — Deserto Vertical / Refinaria das Almas ----------
-function marksCkesalth(group, scene, scenario, rng) {
+function marksCkesalth(group, scene, scenario, rng, hazard) {
   const counts = { mesas: 0, columns: 0, flareStack: 0, dunes: 0 };
   const rock = M('#a4744a', { rough: .96 });
   const rockDark = M('#7d5535', { rough: .97 });
@@ -305,6 +324,32 @@ function marksCkesalth(group, scene, scenario, rng) {
   group.add(stack, flame);
   flameMats.push(flame.material);
   counts.flareStack++;
+  // Fase 26 — tocha REAL (partículas pooled): fagulhas ascendentes + fumaça
+  // de queima contínua na ponta da tocha (antes: só cone emissivo estático).
+  const flareEmitters = [
+    new Emitter(particles(scene), {
+      origin: { x: fs.x, y: stackH + 2.2, z: fs.z },
+      rate: 4,
+      params: () => ({
+        dx: (rng.next() - .5) * .7, dy: 0, dz: (rng.next() - .5) * .7,
+        vx: (rng.next() - .5) * 2.2, vy: 3.4 + rng.next() * 3, vz: (rng.next() - .5) * 2.2,
+        size: .28 + rng.next() * .3, growth: -.04, life: .9 + rng.next() * .8,
+        drag: .12, gravity: 2.2, alpha: .9,
+        color: [1, .68, .2], endColor: [.4, .1, .03],
+      }),
+    }),
+    new Emitter(particles(scene), {
+      origin: { x: fs.x, y: stackH + 2.6, z: fs.z },
+      rate: 1.6,
+      params: () => ({
+        dx: (rng.next() - .5) * .5, dy: 0, dz: (rng.next() - .5) * .5,
+        vx: .8 + rng.next() * .8, vy: 2 + rng.next() * 1.4, vz: (rng.next() - .5) * .8,
+        size: 1.4 + rng.next() * 1.2, growth: 1.1, life: 3.2 + rng.next() * 2,
+        drag: .4, gravity: -0.5, alpha: .3,
+        color: [.32, .28, .26], endColor: [.5, .48, .46],
+      }),
+    }),
+  ];
   // dunas (esferas achatadas)
   const duneGeo = new THREE.SphereGeometry(9, 12, 8);
   const duneMat = M('#d8b27a', { rough: 1 });
@@ -321,19 +366,25 @@ function marksCkesalth(group, scene, scenario, rng) {
   }
   dunes.instanceMatrix.needsUpdate = true;
   group.add(dunes);
-  return { counts, animators: [flameFlicker(flameMats, flame)] };
+  return { counts, animators: [flameFlicker(flameMats, flame, hazard, flareEmitters), ...flareEmitters.map((e) => (dt, t) => e.update(dt, t))] };
 }
 
-function flameFlicker(mats, flame) {
+// Fase 26 — erupção (CKESALTH): a tocha ERUPCIONA com a lava — chama 3× mais
+// alta e brilhante, emissores reais disparam (fagulhas 4×, fumaça 3×).
+function flameFlicker(mats, flame, hazard, flareEmitters = []) {
   return (dt, t) => {
-    const k = 1.3 + Math.sin(t * 11) * .28 + Math.sin(t * 23.7) * .12;
+    const boost = hazard?.kind === 'lava' ? hazard.boost : 0;
+    const k = (1.3 + Math.sin(t * 11) * .28 + Math.sin(t * 23.7) * .12) * (1 + boost * 2.2);
     for (const m of mats) m.emissiveIntensity = k;
-    flame.scale.y = .9 + Math.sin(t * 9.3) * .16;
+    flame.scale.y = .9 + Math.sin(t * 9.3) * .16 + boost * 2;
+    for (let i = 0; i < flareEmitters.length; i++) {
+      flareEmitters[i].rate = (i === 0 ? 4 : 1.6) * (1 + boost * (i === 0 ? 3 : 2));
+    }
   };
 }
 
 // ---------- Arukheea — Singularidade Dimensional ----------
-function marksArukheea(group, scene, scenario, rng) {
+function marksArukheea(group, scene, scenario, rng, hazard) {
   const counts = { fragments: 0, spires: 0, anchorPylons: 0, rifts: 0 };
   const rockMat = M('#42505e', { rough: .8, metal: .2 });
   const crystalMat = new THREE.MeshStandardMaterial({ color: '#7fd8e8', emissive: '#3ba8c8', emissiveIntensity: .9, roughness: .25, metalness: .4 });
@@ -367,6 +418,7 @@ function marksArukheea(group, scene, scenario, rng) {
   counts.spires++;
   // pilões nos ANCHORS oficiais da gravidade (dados do cenário — mesma posição da sim;
   // DENTRO da arena por design, por isso o grupo próprio p/ o bounds test)
+  const pylonRings = [];
   const anchors = scenario.survival?.anchors ?? [];
   if (anchors.length) {
     const pylonGroup = new THREE.Group();
@@ -381,6 +433,7 @@ function marksArukheea(group, scene, scenario, rng) {
       ring.rotation.x = Math.PI / 2;
       pylon.add(pillar, ring);
       pylonGroup.add(pylon);
+      pylonRings.push(ring);
       counts.anchorPylons++;
     }
     group.add(pylonGroup);
@@ -396,6 +449,7 @@ function marksArukheea(group, scene, scenario, rng) {
     const rift = new THREE.Mesh(new THREE.PlaneGeometry(.8, riftH), mat);
     rift.position.set(s.x, riftY, s.z);
     rift.rotation.y = rng.next() * Math.PI;
+    rift.name = 'void-rift'; // Fase 26 — identificação p/ inspeção e2e (raios de luz são PlaneGeometry idêntico)
     group.add(rift);
     riftMats.push(mat);
     counts.rifts++;
@@ -412,7 +466,27 @@ function marksArukheea(group, scene, scenario, rng) {
       }),
     }));
   }
-  return { counts, animators: [fragmentDrift(frags, drifters), riftPulse(riftMats), ...riftEmitters.map((e) => (dt, t) => e.update(dt, t))] };
+  return {
+    counts,
+    animators: [
+      fragmentDrift(frags, drifters),
+      riftPulse(riftMats, hazard),
+      pylonAwakening(pylonRings, crystalMat, hazard), // Fase 26 — giro + incandescência
+      ...riftEmitters.map((e) => (dt, t) => e.update(dt, t)),
+    ],
+  };
+}
+
+// Fase 26 — anomalia KHAOS (Arukheea): os pilões ACORDAM — anéis giram 6×
+// mais rápido e o cristal (espira + anéis, mesmo material) incandesce.
+function pylonAwakening(rings, crystalMat, hazard) {
+  return (dt, t) => {
+    const boost = hazard?.kind === 'gravity' ? hazard.boost : 0;
+    for (let i = 0; i < rings.length; i++) {
+      rings[i].rotation.z += dt * (.5 + boost * 2.6) * (i % 2 ? -1 : 1);
+    }
+    crystalMat.emissiveIntensity = .9 * (1 + boost * 1.6);
+  };
 }
 
 function fragmentDrift(inst, drifters) {
@@ -431,10 +505,12 @@ function fragmentDrift(inst, drifters) {
   };
 }
 
-function riftPulse(mats) {
+// Fase 26 — fendas incandecem com a anomalia (opacidade ↑ com o boost)
+function riftPulse(mats, hazard) {
   return (dt, t) => {
+    const boost = hazard?.kind === 'gravity' ? hazard.boost : 0;
     for (let i = 0; i < mats.length; i++) {
-      mats[i].opacity = .4 + Math.sin(t * 1.7 + i * 2.1) * .22;
+      mats[i].opacity = Math.min(1, (.4 + Math.sin(t * 1.7 + i * 2.1) * .22) * (1 + boost * .8));
     }
   };
 }
@@ -453,33 +529,39 @@ const BUILDERS = {
  * Recriado por cena; se buildWorldMarks rodar 2× na mesma cena, reutiliza.
  */
 function particles(scene) {
-  if (!scene.userData.particles) {
-    const system = new ParticleSystem({ capacity: 1024, name: 'world-particles' });
-    scene.add(system.points);
-    scene.userData.particles = system;
-  }
-  return scene.userData.particles;
+  return getSharedParticles(scene);
 }
 
 /**
  * Constrói os marcos do mundo p/ o cenário e registra animadores/contagens em
  * scene.userData.worldMarks. Puro visual: anel 205–340 m, sem colisores.
- * @returns {{ id: string, counts: Record<string, number>, animators: Function[] }}
+ * Fase 26 — o registro expõe `applyHazard(kind, boost, surfaceY)`: o
+ * SurvivalFX abastece a cada frame e os animadores REAGEM (FX dos marcos ×
+ * mundos). Estado mutável compartilhado via `hazardState` (fechado nos
+ * animadores de cada mundo na criação — zero lookup por frame).
+ * @returns {{ id: string, counts: Record<string, number>, animators: Function[], applyHazard: Function, hazardState: object }}
  */
 export function buildWorldMarks(scene, layout, scenario) {
   const builder = BUILDERS[scenario.id];
-  const registry = { id: scenario.id, counts: {}, animators: [] };
+  const registry = { id: scenario.id, counts: {}, animators: [], hazardState: { kind: null, boost: 0, surfaceY: 0 } };
+  registry.applyHazard = (kind, boost, surfaceY = 0) => {
+    registry.hazardState.kind = kind; registry.hazardState.boost = boost; registry.hazardState.surfaceY = surfaceY;
+  };
   scene.userData.worldMarks = registry;
   if (!builder) return registry;                       // cenário sem marcos definidos
   const rng = new SeededRng(`${layout.seed}:${scenario.id}:marks`);
   const group = new THREE.Group();
   group.name = `world-marks:${scenario.id}`;
-  const built = builder(group, scene, scenario, rng);
+  const built = builder(group, scene, scenario, rng, registry.hazardState);
   registry.counts = built.counts;
   // Fase 17 — tick do sistema de partículas SEMPRE primeiro (emissores dos
   // marcos escrevem no mesmo frame; update integra depois dos spawns).
+  // Fase 26 — ticker idempotente por cena: districts roda ANTES dos marcos em
+  // buildScene e pode já ter registrado o tick (nunca 2× — integrar 2×
+  // aceleraria o tempo das partículas).
   const system = particles(scene);
-  registry.animators = [(dt, t) => system.update(dt, t), ...built.animators];
+  bindParticleTicker(scene, system, registry.animators);
+  registry.animators.push(...built.animators);
   scene.add(group);
   return registry;
 }

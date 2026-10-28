@@ -189,3 +189,80 @@ test('5 mundos: marcos + partículas + SurvivalFX integram sem erro nem NaN', ()
     fx.dispose();
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Fase 26 — FX DOS MARCOS × MUNDOS: o SurvivalFX abastece os MARCOS com o
+// estado do hazard a cada frame (kind + boost 0..1 + surfaceY) via registro
+// com applyHazard — a mesma fonte autoritativa que move a superfície.
+// ══════════════════════════════════════════════════════════════════════════
+
+function makeFXWithLandmarks(scenario) {
+  const scene = new THREE.Scene();
+  const particles = new ParticleSystem({ capacity: 512 });
+  scene.add(particles.points);
+  const pushes = [];
+  const landmarks = {
+    hazardState: null,
+    applyHazard(kind, boost, surfaceY) { pushes.push({ kind, boost, surfaceY }); this.hazardState = { kind, boost, surfaceY }; },
+  };
+  const fx = new SurvivalFX(scene, scenario, { particles, landmarks });
+  return { scene, particles, fx, pushes, landmarks };
+}
+
+test('Fase 26: tsunami abastece os marcos — boost 0→1 na subida, 1 na sustentação, 0 no recuo', () => {
+  const { fx, pushes } = makeFXWithLandmarks(PRIADUS);
+  fx.handleEvent({ type: 'tsunamiStart', durationSeconds: 40, submergeBelowY: 90 });
+  const rise = Math.min(10, 40 * .28);
+  let t = 0;
+  for (let i = 0; i < Math.ceil(rise / (1 / 30)); i++) { fx.update(1 / 30, t); t += 1 / 30; }
+  fx.update(1 / 30, t); // 1 frame de sustentação
+  const kinds = pushes.map((p) => p.kind);
+  assert.ok(kinds.every((k) => k === 'tsunami'), 'todo push é tsunami');
+  const boosts = pushes.map((p) => p.boost);
+  assert.ok(boosts[0] < .2, `primeiro boost quase zero (${boosts[0].toFixed(3)})`);
+  const last = pushes.at(-1);
+  assert.equal(last.boost, 1, 'sustentação = 1');
+  assert.ok(Math.abs(last.surfaceY - 90) < 1, `surfaceY acompanha a superfície (${last.surfaceY.toFixed(2)})`);
+  // recuo: boost desce monotonicamente até 0 e zerado no idle
+  pushes.length = 0;
+  fx.handleEvent({ type: 'tsunamiEnd' });
+  for (let i = 0; i < 10 * 30; i++) { fx.update(1 / 30, t); t += 1 / 30; }
+  const afterEnd = pushes.map((p) => p.boost);
+  assert.ok(afterEnd.length > 2, 'pushes no recuo');
+  assert.equal(afterEnd.at(-1), 0, 'recuo termina em boost 0');
+  assert.equal(pushes.at(-1).kind, null, 'idle zera o kind 1×');
+  // frame extra em idle NÃO empurra de novo (idempotente)
+  const len = pushes.length;
+  fx.update(1 / 30, t);
+  assert.equal(pushes.length, len, 'idle não repete push');
+});
+
+test('Fase 26: lava e gravidade abastecem os marcos com o MESMO contrato', () => {
+  const lava = makeFXWithLandmarks(CKESALTH);
+  lava.fx.handleEvent({ type: 'eruptionStart', durationSeconds: 35, lavaBelowY: 180 });
+  // push ocorre no INÍCIO do update (antes de elapsed avançar): 1º frame boost 0,
+  // frames seguintes sobem — mesmo smoothstep da superfície
+  for (let i = 0; i < 10; i++) lava.fx.update(1 / 30, i / 30);
+  assert.equal(lava.pushes.at(-1).kind, 'lava');
+  assert.ok(lava.pushes.at(-1).boost > 0, 'boost começa a subir');
+  const grav = makeFXWithLandmarks(ARUKHEEA);
+  grav.fx.handleEvent({ type: 'gravityAnomalyStart', durationSeconds: 30, anchors: ARUKHEEA.survival.anchors, anchorRadius: 28 });
+  grav.fx.update(1 / 30, 0);
+  grav.fx.update(1 / 30, 1 / 30);
+  assert.equal(grav.pushes.at(-1).kind, 'gravity');
+  assert.ok(grav.pushes.at(-1).boost > 0, 'gravityBoost flui para os marcos');
+  // ácido: pulse curto com boost 1
+  const acid = makeFXWithLandmarks({ id: 'CIGKV' });
+  acid.fx.handleEvent({ type: 'acidRain', damage: 1, intervalSeconds: 10 });
+  acid.fx.update(1 / 30, 0);
+  assert.equal(acid.pushes.at(-1).kind, 'acid');
+  assert.equal(acid.pushes.at(-1).boost, 1, 'pulse ativo = alerta pleno');
+});
+
+test('Fase 26: SEM landmarks (deps ausente) nada quebra — headless/testes antigos', () => {
+  const { fx } = makeFX(PRIADUS); // sem landmarks
+  fx.handleEvent({ type: 'tsunamiStart', durationSeconds: 40, submergeBelowY: 90 });
+  assert.doesNotThrow(() => { for (let i = 0; i < 10; i++) fx.update(1 / 30, i / 30); });
+  fx.handleEvent({ type: 'tsunamiEnd' });
+  assert.doesNotThrow(() => fx.update(1 / 30, 1));
+});
