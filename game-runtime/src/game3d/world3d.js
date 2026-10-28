@@ -704,6 +704,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       interiors.group.add(host);
       // Fase 25 — folha de porta registrada p/ o animator (abrir/fechar/quebrar)
       if (host.userData.doorHandle) interiors.doors.set(host.userData.doorHandle.id, host.userData.doorHandle);
+      // Fase 26 — painéis de vidro registrados p/ o visual de estilhaço
+      for (const gp of host.userData.glassPanels ?? []) if (gp.id) interiors.glass.set(gp.id, gp.mesh);
     } else {
       const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
       const geo = new THREE.BoxGeometry(s.w, s.h, s.d);

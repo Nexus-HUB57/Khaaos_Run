@@ -209,6 +209,40 @@ kbd {
 }
 #interactPrompt.visible { opacity: 1; }
 
+/* ---------- Fase 26 — HP do alvo quebrável (porta/janela) ---------- */
+#targetPanel {
+  position: fixed; left: 50%; top: 58%; transform: translateX(-50%) translateY(40px);
+  z-index: 17; width: 210px;
+  background: rgba(11,8,20,.85); border: 1px solid rgba(200,255,61,.4);
+  border-radius: 4px; padding: 7px 12px 9px;
+  opacity: 0; transition: opacity .12s, transform .12s; pointer-events: none;
+}
+#targetPanel.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+#targetPanel .tp-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-mono); margin-bottom: 5px;
+}
+#targetPanel .tp-head span { font-size: 10px; letter-spacing: 2px; color: var(--muted); }
+#targetPanel .tp-head b { font-size: 11px; color: var(--acid); font-variant-numeric: tabular-nums; }
+#targetPanel .tp-track {
+  height: 5px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden;
+}
+#targetPanel .tp-track i {
+  display: block; height: 100%; width: 100%; border-radius: 2px;
+  background: var(--acid); transition: width .1s linear;
+}
+/* material do alvo pinta a barra: aço / madeira / vidro */
+#targetPanel[data-mat="metal"] .tp-track i { background: linear-gradient(90deg, #9fb4c4, #5f7484); }
+#targetPanel[data-mat="metal"] .tp-head b { color: #b9cddc; }
+#targetPanel[data-mat="wood"]  .tp-track i { background: linear-gradient(90deg, #d9a45b, #96682f); }
+#targetPanel[data-mat="wood"]  .tp-head b { color: #e0b478; }
+#targetPanel[data-mat="glass"] .tp-track i { background: linear-gradient(90deg, #a8d8e8, #5fa5c2); }
+#targetPanel[data-mat="glass"] .tp-head b { color: #a8d8e8; }
+/* perto de quebrar: pisca vermelho (mesma gramática da vida baixa) */
+#targetPanel.low .tp-track i { background: var(--danger, #ff5a3c); animation: tpBlink .5s steps(2) infinite; }
+#targetPanel.low .tp-head b { color: var(--danger, #ff5a3c); }
+@keyframes tpBlink { 50% { opacity: .55; } }
+
 /* ---------- feed + missão ---------- */
 .feed-panel {
   position: fixed; left: 14px; top: 64px; z-index: 17; width: 280px;

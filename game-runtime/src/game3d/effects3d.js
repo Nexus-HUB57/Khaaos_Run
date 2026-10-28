@@ -135,6 +135,22 @@ export class Effects {
         }));
         return;
       }
+      // Fase 26 — VIDRO (janela rachando/estilhaçando): cacos ciano-brancos
+      // brilhantes e rápidos + lascas grandes caindo devagar (leitura de vidro,
+      // não de poeira — contraste com madeira/metal)
+      if (kind === 'glass') {
+        burst(10, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.2, vy: rnd() * 4.2 + .8, vz: (rnd() - .5) * 6.2,
+          size: .03 + rnd() * .05, growth: -.012, life: .2 + rnd() * .24, drag: .04, gravity: 13, alpha: .96,
+          color: [.82, .94, .98], endColor: [.42, .66, .78],
+        }));
+        burst(4, () => ({
+          x: pos.x, y: pos.y + .03, z: pos.z, vx: (rnd() - .5) * 2.6, vy: rnd() * 1.6 + .2, vz: (rnd() - .5) * 2.6,
+          size: .09 + rnd() * .1, growth: -.01, life: .42 + rnd() * .26, drag: .06, gravity: 12, alpha: .8,
+          color: [.7, .88, .95], endColor: [.3, .5, .62],
+        }));
+        return;
+      }
       // wall / gloo: faíscas quentes + poeira de rasgo
       burst(10, () => ({
         x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.4, vy: rnd() * 4.4 + .8, vz: (rnd() - .5) * 6.4,

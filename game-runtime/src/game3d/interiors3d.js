@@ -374,6 +374,8 @@ export function buildInteriors(scene, layout, scenario, q) {
     // Fase 25 — folhas de porta: doorId → { pivot, leaf, openSign, current, target, broken }
     // preenchido pelo world3d quando cada buildShellHost entra na cena
     doors: new Map(),
+    // Fase 26 — painéis de vidro: windowId → mesh (estilhaça some de cena)
+    glass: new Map(),
     mats,
     group,
   };
@@ -414,6 +416,11 @@ export function buildShellHost(s, spec, m) {
   const T = .26;              // espessura das paredes
   const ruin = s.kind === 'ruin';
   const pavilion = s.kind === 'pavilion';
+  // Fase 26 — registro dos painéis de vidro desta casca (id → mesh). O id é o
+  // MESMO de interiorsPlan.windowPanelsOf (`win-<estrutura>-<k>` na ordem de
+  // spec.windows) — física e visual nunca divergem.
+  const glassIds = new Map((spec.windows ?? []).map((win, k) => [win, `win-${spec.index}-${k}`]));
+  const glassPanels = [];
 
   // ---- piso ----
   box(host, w, .12, d, s.kind === 'building' || pavilion ? m.floorWood : m.floor, 0, .06, 0);
@@ -460,7 +467,9 @@ export function buildShellHost(s, spec, m) {
     piece(uc, win.y1 - .05, cw + ft, .08, m.frame, T + .06);   // verga
     piece(win.u0 + .05, yc, .08, ch, m.frame, T + .06);        // montante esq
     piece(win.u1 - .05, yc, .08, ch, m.frame, T + .06);        // montante dir
-    piece(uc, yc, cw, ch, m.glass, .08, true);                  // vidro
+    const glassMesh = piece(uc, yc, cw, ch, m.glass, .08, true); // vidro (Fase 26)
+    glassMesh.userData.windowId = glassIds.get(win) ?? null;
+    glassPanels.push({ id: glassMesh.userData.windowId, mesh: glassMesh });
   };
 
   const faces = ['front', 'back', 'left', 'right'];
@@ -661,6 +670,9 @@ export function buildShellHost(s, spec, m) {
     g.scale.setScalar(item.s);
     host.add(g);
   }
+
+  // Fase 26 — painéis de vidro registrados no host (world3d alimenta o registry)
+  if (glassPanels.length) host.userData.glassPanels = glassPanels;
 
   return host;
 }
