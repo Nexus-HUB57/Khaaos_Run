@@ -36,6 +36,10 @@ services:
       Scylla__ConnectionString: "Contact Points=scylla"
       Scylla__LocalDatacenterName: datacenter1   # DC default do scylla single-node
       Scylla__LocalKeyspaceSuffix: khaaos        # exigido por [Required] no boot
+      # JupiterStartup.ScyllaFactory: "Default Keyspace has to be specified"
+      # (evidência de CI 3ª run, 2026-10-28)
+      Scylla__DefaultKeyspace: unrealcloudddc
+      Scylla__LocalReplicationStrategy: SimpleStrategy  # single-node (exemplo ABC do chart)
     depends_on:
       - scylla
     restart: unless-stopped
