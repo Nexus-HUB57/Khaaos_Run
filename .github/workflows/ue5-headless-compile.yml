@@ -27,7 +27,8 @@ on:
         options: [Editor, Server]
         default: Server
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'Unreal/KhaaosRun/Source/**'
       - 'Unreal/KhaaosRun/Config/**'
@@ -62,6 +63,14 @@ jobs:
           fi
           echo "UE5 found: ${UE_INSTALL_DIR}"
           ls "${UE_INSTALL_DIR}/Engine/Binaries/Linux/" | head -5
+
+      - name: UHT Header Validation (pre-compile)
+        run: |
+          # Validação rápida de headers UCLASS/USTRUCT/UENUM antes do compile
+          # pesado — falha em segundos, sem gastar minutos de runner GPU.
+          python3 scripts/validate_uht.py || {
+            echo "::warning::UHT validation reportou problemas — compile continua para diagnóstico completo"
+          }
 
       - name: EAC smoke selftest (guard — roda sem UE/binário)
         # Mantém a lógica do smoke de EAC viva no CI Node: matcher
@@ -153,6 +162,44 @@ jobs:
           # Launch dedicated server + 2 clients, validate state sync
           echo "Replication validation requires UE5 running — placeholder for Fase 0.3"
           echo "Manual test: Launch server → connect 2 clients → verify no desync"
+
+  validate-graphics:
+    name: Graphics & Character Benchmark
+    runs-on: [self-hosted, linux, ue5.8, x64]
+    needs: compile
+    if: success()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Graphics Benchmark Commandlet
+        run: |
+          # Headless benchmark: presets, LOD, post-process, materials, cosmetics
+          "${UE_INSTALL_DIR}/Engine/Binaries/Linux/KhaaosRunEditor" \
+            "${UPROJECT}" \
+            -run=KhaaosGraphicsBenchmark \
+            -NullRHI -Unattended -NoSound -NullAudio \
+            -log -LogCmds="global LogTemp Display" \
+            2>&1 | tee graphics-benchmark.log
+
+      - name: Check for FAIL Tags
+        run: |
+          FAIL_COUNT=$(grep -c "\[FAIL\]" graphics-benchmark.log || true)
+          if [[ $FAIL_COUNT -gt 0 ]]; then
+            echo "::error::${FAIL_COUNT} benchmark failures detected"
+            grep "\[FAIL\]" graphics-benchmark.log
+            exit 1
+          fi
+          echo "All graphics benchmarks PASSED"
+
+      - name: Upload Benchmark Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphics-benchmark-report
+          path: graphics-benchmark.log
+          retention-days: 30
 
   load-test:
     name: 100-Bot Load Test

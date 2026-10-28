@@ -1,415 +1,262 @@
 {
-  "manifest_version": "1.0.0",
-  "project": "Khaaos_Run",
-  "engine_version": "5.8",
-  "generated_at": "2026-10-26T23:35:11.291122+00:00",
-  "total_gameplay_effects": 29,
-  "categories": {
-    "Cooldown": 5,
-    "Cost": 3,
-    "Buff": 7,
-    "Debuff": 6,
-    "Combat": 4,
-    "Species": 4
-  },
+  "version": "1.0",
+  "project": "KhaaosRun",
+  "engine": "5.8",
   "gameplay_effects": [
     {
-      "name": "GE_Cooldown_Sprint",
-      "category": "Cooldown",
-      "duration_policy": "HasDuration",
-      "duration": 1.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Cooldown.Sprint"
-      ],
-      "required_tags": [],
-      "description": "Sprint cooldown - 1s between sprint activations",
-      "uasset_json_path": "GameplayEffects/Cooldown/GE_Cooldown_Sprint.uasset.json"
+      "name": "GE_HuranRegen",
+      "path": "GameplayEffects/Species/GE_HuranRegen",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": 5.0,
+      "period": 1.0,
+      "tag": "Effect.Buff.HuranRegen",
+      "description": "+5 HP/s regeneration for Huran species"
     },
     {
-      "name": "GE_Cooldown_Shield",
-      "category": "Cooldown",
-      "duration_policy": "HasDuration",
-      "duration": 8.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Cooldown.Shield"
-      ],
-      "required_tags": [],
-      "description": "Shield cooldown - 8s recharge time",
-      "uasset_json_path": "GameplayEffects/Cooldown/GE_Cooldown_Shield.uasset.json"
+      "name": "GE_HuranWaterResist",
+      "path": "GameplayEffects/Species/GE_HuranWaterResist",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "RingDamageTaken",
+      "magnitude": 0.5,
+      "tag": "Effect.Buff.WaterResist",
+      "description": "50% ring damage reduction in water for Huran"
     },
     {
-      "name": "GE_Cooldown_Heal",
-      "category": "Cooldown",
-      "duration_policy": "HasDuration",
-      "duration": 12.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Cooldown.Heal"
-      ],
-      "required_tags": [],
-      "description": "Heal cooldown - 12s between self-heal uses",
-      "uasset_json_path": "GameplayEffects/Cooldown/GE_Cooldown_Heal.uasset.json"
+      "name": "GE_HuranSwimBonus",
+      "path": "GameplayEffects/Species/GE_HuranSwimBonus",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "SwimSpeed",
+      "magnitude": 1.2,
+      "tag": "Effect.Buff.SwimBonus",
+      "description": "+20% swim speed for Huran species"
     },
     {
-      "name": "GE_Cooldown_Ultimate",
-      "category": "Cooldown",
-      "duration_policy": "HasDuration",
-      "duration": 45.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Cooldown.Ultimate"
-      ],
-      "required_tags": [],
-      "description": "Ultimate ability cooldown - 45s",
-      "uasset_json_path": "GameplayEffects/Cooldown/GE_Cooldown_Ultimate.uasset.json"
+      "name": "GE_KhaelCryoResist",
+      "path": "GameplayEffects/Species/GE_KhaelCryoResist",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "CryoDamageTaken",
+      "magnitude": 0.3,
+      "tag": "Effect.Buff.CryoResist",
+      "description": "70% cryo damage reduction for Khael species"
     },
     {
-      "name": "GE_Cooldown_GrapplingHook",
-      "category": "Cooldown",
-      "duration_policy": "HasDuration",
-      "duration": 15.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Cooldown.GrapplingHook"
-      ],
-      "required_tags": [],
-      "description": "Grappling hook cooldown - 15s",
-      "uasset_json_path": "GameplayEffects/Cooldown/GE_Cooldown_GrapplingHook.uasset.json"
+      "name": "GE_VenexSpeedBonus",
+      "path": "GameplayEffects/Species/GE_VenexSpeedBonus",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "MoveSpeed",
+      "magnitude": 1.2,
+      "tag": "Effect.Buff.SpeedBonus",
+      "description": "+20% movement speed for Venex species"
     },
     {
-      "name": "GE_Cost_Health",
-      "category": "Cost",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [],
-      "required_tags": [
-        "Attribute.Health"
-      ],
-      "description": "Instant health cost - subtracts from health attribute",
-      "uasset_json_path": "GameplayEffects/Cost/GE_Cost_Health.uasset.json"
+      "name": "GE_OnithToxicResist",
+      "path": "GameplayEffects/Species/GE_OnithToxicResist",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "ToxicDamageTaken",
+      "magnitude": 0.85,
+      "tag": "Effect.Buff.ToxicResist",
+      "description": "15% toxic damage reduction for Onith species"
     },
     {
-      "name": "GE_Cost_Energy",
-      "category": "Cost",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [],
-      "required_tags": [
-        "Attribute.Energy"
-      ],
-      "description": "Instant energy cost - subtracts from energy attribute",
-      "uasset_json_path": "GameplayEffects/Cost/GE_Cost_Energy.uasset.json"
+      "name": "GE_ZheersRadResist",
+      "path": "GameplayEffects/Species/GE_ZheersRadResist",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Multiply",
+      "attribute": "RadDamageTaken",
+      "magnitude": 0.9,
+      "tag": "Effect.Buff.RadResist",
+      "description": "10% radiation damage reduction for Zheers species"
     },
     {
-      "name": "GE_Cost_Credits",
-      "category": "Cost",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [],
-      "required_tags": [
-        "Attribute.Credits"
-      ],
-      "description": "Instant credits cost - subtracts from credits attribute",
-      "uasset_json_path": "GameplayEffects/Cost/GE_Cost_Credits.uasset.json"
+      "name": "GE_SkeetwFogStealth",
+      "path": "GameplayEffects/Species/GE_SkeetwFogStealth",
+      "type": "Buff",
+      "duration": "Infinite",
+      "modifier": "Override",
+      "attribute": "Visibility",
+      "magnitude": 0.0,
+      "tag": "Effect.Buff.FogStealth",
+      "description": "Fog zone stealth activation for Skeetw species"
     },
     {
-      "name": "GE_Buff_SpeedBoost",
-      "category": "Buff",
-      "duration_policy": "HasDuration",
-      "duration": 5.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.SpeedBoost"
-      ],
-      "required_tags": [],
-      "description": "40% speed boost for 5s - sprint/movement buff",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_SpeedBoost.uasset.json"
+      "name": "GE_ShootDamage",
+      "path": "GameplayEffects/Combat/GE_ShootDamage",
+      "type": "Damage",
+      "duration": "Instant",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -25.0,
+      "tag": "Effect.Damage.Ballistic",
+      "description": "Shoot ability base damage (25)"
     },
     {
-      "name": "GE_Buff_Shielded",
-      "category": "Buff",
-      "duration_policy": "HasDuration",
-      "duration": 10.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.Shielded"
-      ],
-      "required_tags": [],
-      "description": "Shield buff - adds 50 shield points for 10s",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_Shielded.uasset.json"
+      "name": "GE_HeadshotDamage",
+      "path": "GameplayEffects/Combat/GE_HeadshotDamage",
+      "type": "Damage",
+      "duration": "Instant",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -50.0,
+      "tag": "Effect.Damage.Ballistic",
+      "description": "Headshot damage (2x multiplier)"
     },
     {
-      "name": "GE_Buff_HealOverTime",
-      "category": "Buff",
-      "duration_policy": "HasDuration",
-      "duration": 7.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.HealOverTime"
-      ],
-      "required_tags": [],
-      "description": "Heal over time - 5 HP/s for 7s (35 total)",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_HealOverTime.uasset.json"
+      "name": "GE_MeleeDamage",
+      "path": "GameplayEffects/Combat/GE_MeleeDamage",
+      "type": "Damage",
+      "duration": "Instant",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -50.0,
+      "tag": "Effect.Damage.Melee",
+      "description": "Melee ability damage (50)"
     },
     {
-      "name": "GE_Buff_DamageReduction",
-      "category": "Buff",
-      "duration_policy": "HasDuration",
-      "duration": 8.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.DamageReduction"
-      ],
-      "required_tags": [],
-      "description": "30% damage reduction for 8s",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_DamageReduction.uasset.json"
+      "name": "GE_UltimateDamage",
+      "path": "GameplayEffects/Combat/GE_UltimateDamage",
+      "type": "Damage",
+      "duration": "Instant",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -200.0,
+      "tag": "Effect.Damage.Area",
+      "description": "Ultimate area damage (200)"
     },
     {
-      "name": "GE_Buff_Regen",
-      "category": "Buff",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.Regen",
-        "Ability.Passive.Species.Huran.RegeneracaoAquatica"
-      ],
-      "required_tags": [
-        "Species.Huran"
-      ],
-      "description": "Huran passive - infinite aquatic regeneration, 2 HP/s",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_Regen.uasset.json"
+      "name": "GE_ShieldBuff",
+      "path": "GameplayEffects/Defense/GE_ShieldBuff",
+      "type": "Buff",
+      "duration": "HasDuration",
+      "modifier": "Add",
+      "attribute": "Shield",
+      "magnitude": 100.0,
+      "duration_seconds": 5.0,
+      "tag": "Effect.Buff.Shielded",
+      "description": "Shield barrier (100 HP, 5s)"
     },
     {
-      "name": "GE_Buff_Canalizacao",
-      "category": "Buff",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.Canalizacao",
-        "Ability.Passive.Species.Khael.CanalizacaoMistica"
-      ],
-      "required_tags": [
-        "Species.Khael"
-      ],
-      "description": "Khael passive - infinite mystic channeling, +3 Energy/s",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_Canalizacao.uasset.json"
+      "name": "GE_HealOverTime",
+      "path": "GameplayEffects/Defense/GE_HealOverTime",
+      "type": "HealOverTime",
+      "duration": "HasDuration",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": 50.0,
+      "duration_seconds": 3.0,
+      "period": 0.5,
+      "tag": "Effect.Buff.HealOverTime",
+      "description": "Heal over time (50 HP, 3s, 0.5s tick)"
     },
     {
-      "name": "GE_Buff_Overclock",
-      "category": "Buff",
-      "duration_policy": "HasDuration",
-      "duration": 6.0,
-      "modifier_count": 2,
-      "granted_tags": [
-        "Effect.Buff.Overclock",
-        "Ability.Passive.Species.Venex.OverclockNeural"
-      ],
-      "required_tags": [
-        "Species.Venex"
-      ],
-      "description": "Venex passive - 25% speed boost + energy drain for 6s",
-      "uasset_json_path": "GameplayEffects/Buff/GE_Buff_Overclock.uasset.json"
+      "name": "GE_SprintSpeed",
+      "path": "GameplayEffects/Movement/GE_SprintSpeed",
+      "type": "Buff",
+      "duration": "HasDuration",
+      "modifier": "Multiply",
+      "attribute": "MoveSpeed",
+      "magnitude": 1.5,
+      "tag": "Effect.Buff.SpeedBoost",
+      "description": "Sprint speed multiplier (1.5x)"
     },
     {
-      "name": "GE_Debuff_Slowed",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 4.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Debuff.Slowed"
-      ],
-      "required_tags": [],
-      "description": "50% slow for 4s",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Slowed.uasset.json"
+      "name": "GE_SlideSpeed",
+      "path": "GameplayEffects/Movement/GE_SlideSpeed",
+      "type": "Buff",
+      "duration": "HasDuration",
+      "modifier": "Multiply",
+      "attribute": "MoveSpeed",
+      "magnitude": 2.0,
+      "duration_seconds": 1.0,
+      "tag": "Effect.Buff.SpeedBoost",
+      "description": "Slide speed multiplier (2.0x)"
     },
     {
-      "name": "GE_Debuff_Burning",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 5.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Debuff.Burning"
-      ],
-      "required_tags": [],
-      "description": "Burning DOT - 3 HP/s damage for 5s (15 total)",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Burning.uasset.json"
+      "name": "GE_SlowDebuff",
+      "path": "GameplayEffects/Debuffs/GE_SlowDebuff",
+      "type": "Debuff",
+      "duration": "HasDuration",
+      "modifier": "Multiply",
+      "attribute": "MoveSpeed",
+      "magnitude": 0.5,
+      "duration_seconds": 3.0,
+      "tag": "Effect.Debuff.Slowed",
+      "description": "Slow debuff (50% speed, 3s)"
     },
     {
-      "name": "GE_Debuff_Frozen",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 3.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Debuff.Frozen"
-      ],
-      "required_tags": [],
-      "description": "Frozen - 90% speed reduction for 3s (Khael ability)",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Frozen.uasset.json"
+      "name": "GE_FreezeDebuff",
+      "path": "GameplayEffects/Debuffs/GE_FreezeDebuff",
+      "type": "Debuff",
+      "duration": "HasDuration",
+      "modifier": "Override",
+      "attribute": "MoveSpeed",
+      "magnitude": 0.0,
+      "duration_seconds": 2.0,
+      "tag": "Effect.Debuff.Frozen",
+      "description": "Freeze debuff (immobile, 2s)"
     },
     {
-      "name": "GE_Debuff_Poisoned",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 8.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Debuff.Poisoned"
-      ],
-      "required_tags": [],
-      "description": "Poisoned DOT - 2 HP/s damage for 8s (Onith ability)",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Poisoned.uasset.json"
+      "name": "GE_BurnDebuff",
+      "path": "GameplayEffects/Debuffs/GE_BurnDebuff",
+      "type": "Debuff",
+      "duration": "HasDuration",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -5.0,
+      "duration_seconds": 4.0,
+      "period": 1.0,
+      "tag": "Effect.Debuff.Burning",
+      "description": "Burn debuff (5 dmg/s, 4s)"
     },
     {
-      "name": "GE_Debuff_Silenced",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 4.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Effect.Debuff.Silenced"
-      ],
-      "required_tags": [],
-      "description": "Silenced - blocks ability activation for 4s",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Silenced.uasset.json"
+      "name": "GE_PoisonDebuff",
+      "path": "GameplayEffects/Debuffs/GE_PoisonDebuff",
+      "type": "Debuff",
+      "duration": "HasDuration",
+      "modifier": "Add",
+      "attribute": "Health",
+      "magnitude": -3.0,
+      "duration_seconds": 5.0,
+      "period": 1.0,
+      "tag": "Effect.Debuff.Poisoned",
+      "description": "Poison debuff (3 dmg/s, 5s)"
     },
     {
-      "name": "GE_Debuff_Disarmed",
-      "category": "Debuff",
-      "duration_policy": "HasDuration",
-      "duration": 3.0,
-      "modifier_count": 0,
-      "granted_tags": [
-        "Effect.Debuff.Disarmed"
-      ],
-      "required_tags": [],
-      "description": "Disarmed - blocks weapon use for 3s",
-      "uasset_json_path": "GameplayEffects/Debuff/GE_Debuff_Disarmed.uasset.json"
+      "name": "GE_EnergyCost",
+      "path": "GameplayEffects/Costs/GE_EnergyCost",
+      "type": "Cost",
+      "duration": "Instant",
+      "modifier": "Add",
+      "attribute": "Energy",
+      "magnitude": -10.0,
+      "tag": "Effect.Cost.Energy",
+      "description": "Energy cost template (override magnitude)"
     },
     {
-      "name": "GE_Damage_Bullet",
-      "category": "Combat",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Damage.Bullet"
-      ],
-      "required_tags": [],
-      "description": "Instant bullet damage - base 30 HP",
-      "uasset_json_path": "GameplayEffects/Combat/GE_Damage_Bullet.uasset.json"
-    },
-    {
-      "name": "GE_Damage_Explosion",
-      "category": "Combat",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Damage.Explosion"
-      ],
-      "required_tags": [],
-      "description": "Instant radial explosion damage - base 60 HP, 500cm radius",
-      "uasset_json_path": "GameplayEffects/Combat/GE_Damage_Explosion.uasset.json"
-    },
-    {
-      "name": "GE_Damage_Melee",
-      "category": "Combat",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Damage.Melee"
-      ],
-      "required_tags": [],
-      "description": "Instant melee damage - base 45 HP",
-      "uasset_json_path": "GameplayEffects/Combat/GE_Damage_Melee.uasset.json"
-    },
-    {
-      "name": "GE_Damage_Zone",
-      "category": "Combat",
-      "duration_policy": "Instant",
-      "duration": 0.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Damage.Zone"
-      ],
-      "required_tags": [],
-      "description": "Instant safe zone tick damage - 5 HP per tick",
-      "uasset_json_path": "GameplayEffects/Combat/GE_Damage_Zone.uasset.json"
-    },
-    {
-      "name": "GE_Species_Onith_PeleEscamosa",
-      "category": "Species",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 2,
-      "granted_tags": [
-        "Species.Onith",
-        "Ability.Passive.Species.Onith.PeleEscamosa"
-      ],
-      "required_tags": [
-        "Species.Onith"
-      ],
-      "description": "Onith passive - 15% projectile/explosion damage reduction (scaly skin)",
-      "uasset_json_path": "GameplayEffects/Species/GE_Species_Onith_PeleEscamosa.uasset.json"
-    },
-    {
-      "name": "GE_Species_Zheers_Adaptabilidade",
-      "category": "Species",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.Adaptabilidade",
-        "Ability.Passive.Species.Zheers.Adaptabilidade"
-      ],
-      "required_tags": [
-        "Species.Zheers"
-      ],
-      "description": "Zheers passive - adaptability scaling, all stats +1% per stack",
-      "uasset_json_path": "GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade.uasset.json"
-    },
-    {
-      "name": "GE_Species_Skeetw_VooPlanador",
-      "category": "Species",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 2,
-      "granted_tags": [
-        "Effect.Buff.Glide",
-        "Ability.Passive.Species.Skeetw.VooPlanador"
-      ],
-      "required_tags": [
-        "Species.Skeetw"
-      ],
-      "description": "Skeetw passive - gliding flight, 5s duration, 70% fall speed reduction",
-      "uasset_json_path": "GameplayEffects/Species/GE_Species_Skeetw_VooPlanador.uasset.json"
-    },
-    {
-      "name": "GE_Species_Huran_RegenAquatica",
-      "category": "Species",
-      "duration_policy": "Infinite",
-      "duration": -1.0,
-      "modifier_count": 1,
-      "granted_tags": [
-        "Effect.Buff.Regen",
-        "Ability.Passive.Species.Huran.RegeneracaoAquatica"
-      ],
-      "required_tags": [
-        "Species.Huran"
-      ],
-      "description": "Huran species passive - aquatic regeneration 3 HP/s in water zones",
-      "uasset_json_path": "GameplayEffects/Species/GE_Species_Huran_RegenAquatica.uasset.json"
+      "name": "GE_Cooldown",
+      "path": "GameplayEffects/Cooldowns/GE_Cooldown",
+      "type": "Cooldown",
+      "duration": "HasDuration",
+      "modifier": "Override",
+      "attribute": "None",
+      "magnitude": 1.0,
+      "duration_seconds": 5.0,
+      "tag": "Cooldown.Global",
+      "description": "Cooldown template (override duration)"
     }
-  ]
+  ],
+  "total_count": 22
 }

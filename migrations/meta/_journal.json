@@ -50,6 +50,13 @@
       "when": 1792482451437,
       "tag": "0007_match_payout_2pc",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793145742915,
+      "tag": "0006_economy-2pc-escrow",
+      "breakpoints": true
     }
   ]
 }
