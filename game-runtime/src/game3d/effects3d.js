@@ -120,6 +120,21 @@ export class Effects {
         }));
         return;
       }
+      // Fase 25.1 — METAL (folha do hangar levando bala): faíscas quentes +
+      // fragmentos cinza de chapa (diferente da lascas marrons da madeira)
+      if (kind === 'metal') {
+        burst(12, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 7, vy: rnd() * 4.6 + 1, vz: (rnd() - .5) * 7,
+          size: .04 + rnd() * .05, growth: -.02, life: .18 + rnd() * .22, drag: .05, gravity: 10, alpha: .95,
+          color: [1, .85, .45], endColor: [.9, .4, .08],
+        }));
+        burst(3, () => ({
+          x: pos.x, y: pos.y + .04, z: pos.z, vx: (rnd() - .5) * 3.4, vy: rnd() * 2.4 + .6, vz: (rnd() - .5) * 3.4,
+          size: .07 + rnd() * .08, growth: -.02, life: .3 + rnd() * .2, drag: .1, gravity: 11, alpha: .85,
+          color: [.52, .55, .58], endColor: [.3, .32, .34],
+        }));
+        return;
+      }
       // wall / gloo: faíscas quentes + poeira de rasgo
       burst(10, () => ({
         x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.4, vy: rnd() * 4.4 + .8, vz: (rnd() - .5) * 6.4,

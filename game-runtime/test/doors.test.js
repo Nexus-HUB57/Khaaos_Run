@@ -12,10 +12,10 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
   doorwaysOf, doorBoxCollider, footprintHas, DOOR_MECH,
-  interiorDressing, localRectToWorldAabb, localPointToWorld,
+  interiorDressing, localRectToWorldAabb, localPointToWorld, doorMaterialOf,
 } from '../src/game3d/interiorsPlan.js';
 import {
-  getWorldLayout, KhaaosSim3D, DOOR,
+  getWorldLayout, KhaaosSim3D, DOOR, doorHpFor,
 } from '../src/game3d/sim3d.js';
 import { resolveScenario } from '../src/game3d/scenarios.js';
 import { buildScene } from '../src/game3d/world3d.js';
@@ -157,10 +157,11 @@ test('folha fechada BLOQUEIA o jogador no vão; aberta deixa ATRAVESSAR', () => 
   assert.equal(stepIn(true), true, 'porta ABERTA permite atravessar');
 });
 
-test('balas estilhaçam a folha: hp cai, impact wood, doorDown e fim do collider', () => {
+test('balas estilhaçam a folha de MADEIRA: hp cai, impact wood, doorDown e fim do collider', () => {
   const sim = new KhaaosSim3D({ seed: 'F25-S3', botCount: 2, scenarioId: 'CIGKV', airdrop: false, spectate: true });
   sim.started = true;
-  const d = sim.doors[0];
+  const d = sim.doors.find((x) => doorMaterialOf(x.kind) === 'wood');
+  assert.ok(d, 'CIGKV tem folha de madeira');
   d.hp = 30;
   sim.bullets.push({ id: 1, x: d.x + d.nx * 4, y: 1.2, z: d.z + d.nz * 4, vx: -d.nx * 120, vy: 0, vz: -d.nz * 120, owner: 'player', damage: 40, baseDamage: 40, distance: 0, life: 1, weapon: 'g19' });
   sim.step(input(), 1 / 30);
@@ -269,6 +270,53 @@ test('DOOR: constantes compartilhadas (sim offline e sala usam os MESMOS número
 });
 
 // ============================================================================
+// 2.1 FASE 25.1 — MATERIAL: hangar tem porta METÁLICA (calibração 25.1)
+// ============================================================================
+
+test('doorMaterialOf: hangar = METAL; barrack/warehouse/depot/building = madeira', () => {
+  assert.equal(doorMaterialOf('hangar'), 'metal');
+  for (const k of ['barrack', 'warehouse', 'depot', 'building']) assert.equal(doorMaterialOf(k), 'wood');
+  // kinds sem casca caem em madeira (fail-safe)
+  assert.equal(doorMaterialOf('ruin'), 'wood');
+});
+
+test('hp por material no sim: hangar = hpMetal (500), madeira = hp (200)', () => {
+  const sim = new KhaaosSim3D({ seed: 'F25-MAT', botCount: 0, scenarioId: 'CIGKV', airdrop: false });
+  const metal = sim.doors.find((x) => doorMaterialOf(x.kind) === 'metal');
+  const wood = sim.doors.find((x) => doorMaterialOf(x.kind) === 'wood');
+  assert.ok(metal, 'CIGKV tem porta de hangar');
+  assert.ok(wood, 'CIGKV tem porta de madeira');
+  assert.equal(metal.hp, DOOR.hpMetal);
+  assert.equal(wood.hp, DOOR.hp);
+  assert.equal(metal.hp, doorHpFor('hangar'));
+  assert.equal(wood.hp, doorHpFor('barrack'));
+});
+
+test('balas AMASSAM a folha de METAL: impact metal, hp cai mas NÃO estilhaça fácil', () => {
+  const sim = new KhaaosSim3D({ seed: 'F25-METAL', botCount: 0, scenarioId: 'CIGKV', airdrop: false, spectate: true });
+  sim.started = true;
+  const d = sim.doors.find((x) => doorMaterialOf(x.kind) === 'metal');
+  assert.ok(d, 'CIGKV tem folha metálica');
+  sim.bullets.push({ id: 1, x: d.x + d.nx * 4, y: 1.2, z: d.z + d.nz * 4, vx: -d.nx * 120, vy: 0, vz: -d.nz * 120, owner: 'player', damage: 40, baseDamage: 40, distance: 0, life: 1, weapon: 'g19' });
+  sim.step(input(), 1 / 30);
+  assert.equal(d.destroyed, false, 'uma bala NÃO derruba o metal');
+  assert.ok(d.hp < DOOR.hpMetal && d.hp > 0, `metal desgastou (hp ${d.hp}/${DOOR.hpMetal})`);
+  assert.ok(sim.events.some((e) => e.type === 'impact' && e.kind === 'metal'), 'impacto do tipo metal (faíscas)');
+});
+
+test('doorDown da madeira carrega kind no payload (áudio escolhe o material)', () => {
+  const sim = new KhaaosSim3D({ seed: 'F25-KIND', botCount: 0, scenarioId: 'CIGKV', airdrop: false, spectate: true });
+  sim.started = true;
+  const d = sim.doors.find((x) => doorMaterialOf(x.kind) === 'wood');
+  d.hp = 10;
+  sim.bullets.push({ id: 1, x: d.x + d.nx * 4, y: 1.2, z: d.z + d.nz * 4, vx: -d.nx * 120, vy: 0, vz: -d.nz * 120, owner: 'player', damage: 40, baseDamage: 40, distance: 0, life: 1, weapon: 'g19' });
+  sim.step(input(), 1 / 30);
+  const ev = sim.events.find((e) => e.type === 'doorDown' && e.id === d.id);
+  assert.ok(ev, 'doorDown emitido');
+  assert.equal(ev.kind, d.kind, 'payload traz o kind da folha');
+});
+
+// ============================================================================
 // 3. SALA AUTORITATIVA — paridade online
 // ============================================================================
 
@@ -332,6 +380,11 @@ test('GameAudio: door()/doorDown() sem ctx não lançam (contrato headless)', ()
   assert.doesNotThrow(() => audio.door(false, 4));
   assert.doesNotThrow(() => audio.doorDown(0));
   assert.doesNotThrow(() => audio.doorDown(9));
+  // Fase 25.1 — variantes de material (metal = hangar) também são no-op seguras
+  assert.doesNotThrow(() => audio.door(true, 0, 'metal'));
+  assert.doesNotThrow(() => audio.door(false, 4, 'metal'));
+  assert.doesNotThrow(() => audio.doorDown(0, 'metal'));
+  assert.doesNotThrow(() => audio.doorDown(9, 'metal'));
 });
 
 // ============================================================================

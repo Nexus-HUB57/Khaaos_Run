@@ -27,7 +27,7 @@ import {
   plankMaterial, concreteMaterial, crateTexture, barrelMaterial,
   palletMaterial, sandbagMaterial, signTexture,
 } from './textures3d.js';
-import { ACCENTS, MEZZ, DOOR_MECH, interiorDressing } from './interiorsPlan.js';
+import { ACCENTS, MEZZ, DOOR_MECH, interiorDressing, doorMaterialOf } from './interiorsPlan.js';
 
 // ============================================================================
 // PARTE 1 — plano puro (Fase 24): placements/janelas/escada moram em
@@ -372,29 +372,22 @@ export function buildInteriors(scene, layout, scenario, q) {
     placements,
     shells,
     // Fase 25 — folhas de porta: doorId → { pivot, leaf, openSign, current, target, broken }
-    // preenchido pelo world3d quando cada buildShellHost entra na cena.
-    // FIX Fase 25/29 — 'doorPanels' é ALIAS do mesmo Map: o consumidor legado
-    // (main3d.syncDoors — some/mostra o painel via .visible) lê doorPanels,
-    // o animator novo lê doors. Uma única fonte de verdade, dois nomes.
+    // preenchido pelo world3d quando cada buildShellHost entra na cena
     doors: new Map(),
-    get doorPanels() { return this.doors; },
     mats,
     group,
   };
   // animator das folhas: persegue o alvo autoritativo (0 fechada / openAngle
-  // aberta); quebrada => recolhe e some (a lascas ficam por conta do FX).
-  // Aceita os DOIS formatos do registry: handle puro (legado) ou pivô com
-  // estado em userData.handle (canônico desde o fix Fase 25/29).
+  // aberta); quebrada => recolhe e some (a lascas ficam por conta do FX)
   animators.push((dt) => {
     for (const h of registry.doors.values()) {
-      const st = h.userData?.handle ?? h;
-      const pivot = st.pivot ?? h;
-      const leaf = st.leaf ?? null;
-      const target = st.broken ? 0 : st.target;
-      const next = st.current + (target - st.current) * Math.min(1, dt * 6.5);
-      st.current = Math.abs(next - target) < 0.002 ? target : next;
-      pivot.rotation.y = st.openSign * st.current;
-      if (st.broken && leaf && leaf.visible) leaf.visible = false;
+      const target = h.broken ? 0 : h.target;
+      // ganho calibrado (DOOR_MECH.openSpeed 8.5): ~0,35 s p/ 95% do curso —
+      // resposta estilo Free Fire (rápida, sem parecer porta de desenho animado)
+      const next = h.current + (target - h.current) * Math.min(1, dt * (DOOR_MECH.openSpeed ?? 8.5));
+      h.current = Math.abs(next - target) < 0.002 ? target : next;
+      h.pivot.rotation.y = h.openSign * h.current;
+      if (h.broken && h.leaf.visible) h.leaf.visible = false;
     }
   });
   scene.userData.interiors = registry;
@@ -504,6 +497,11 @@ export function buildShellHost(s, spec, m) {
       // pivô do batente. Estado autoritativo vem de sim/room3d via main3d —
       // MESMO vão de doorwaysOf (física e visual nunca divergem).
       const leafW = dw - DOOR_MECH.leafGap, leafH = dh - .08;
+      // Fase 25.1 — MATERIAL da folha: hangar = METÁLICA (aço escovado + nervuras);
+      // demais = madeira (tábuas + travessas + diagonal)
+      const metal = doorMaterialOf(s.kind) === 'metal';
+      const matPanel = metal ? m.steel : m.woodDark;
+      const matBrace = metal ? m.rust : m.wood;   // nervuras enferrujadas: leitura industrial
       const horizontal = face === 'front' || face === 'back';   // vão corre em X local
       const hingeSide = rngShape.next() < .5 ? -1 : 1;      // lado da dobradiça (determinístico)
       const hingeU = doorC + hingeSide * dw / 2;
@@ -519,14 +517,15 @@ export function buildShellHost(s, spec, m) {
       const offU = -hingeSide * leafW / 2;
       const leafThick = .09;
       const panel = new THREE.Mesh(new THREE.BoxGeometry(
-        horizontal ? leafW : leafThick, leafH, horizontal ? leafThick : leafW), m.woodDark);
+        horizontal ? leafW : leafThick, leafH, horizontal ? leafThick : leafW), matPanel);
       panel.position.set(horizontal ? offU : 0, leafH / 2, horizontal ? 0 : offU);
       panel.castShadow = panel.receiveShadow = true;
       leaf.add(panel);
-      // travessas horizontais + diagonal (leitura de porta de madeira)
+      // travessas horizontais + diagonal (leitura de porta de madeira; no metal
+      // viram NERVURAS de reforço — leitura de folha industrial)
       const brace = (by) => {
         const bMesh = new THREE.Mesh(new THREE.BoxGeometry(
-          horizontal ? leafW * .92 : leafThick + .04, .16, horizontal ? leafThick + .04 : leafW * .92), m.wood);
+          horizontal ? leafW * .92 : leafThick + .04, .16, horizontal ? leafThick + .04 : leafW * .92), matBrace);
         bMesh.position.set(horizontal ? offU : 0, by, horizontal ? 0 : offU);
         bMesh.castShadow = true;
         leaf.add(bMesh);
@@ -534,7 +533,7 @@ export function buildShellHost(s, spec, m) {
       brace(leafH * .22);
       brace(leafH * .78);
       const diag = new THREE.Mesh(new THREE.BoxGeometry(
-        horizontal ? leafW * .78 : leafThick + .02, .12, horizontal ? leafThick + .02 : leafW * .78), m.wood);
+        horizontal ? leafW * .78 : leafThick + .02, .12, horizontal ? leafThick + .02 : leafW * .78), matBrace);
       diag.position.set(horizontal ? offU : 0, leafH * .5, horizontal ? 0 : offU);
       diag.rotation.z = horizontal ? .52 : 0;
       diag.rotation.x = horizontal ? 0 : .52;
@@ -555,9 +554,6 @@ export function buildShellHost(s, spec, m) {
         pivot, leaf, openSign,
         current: 0, target: 0, broken: false,
       };
-      // FIX Fase 25/29 — estado TAMBÉM no pivô: o registry passa a guardar o
-      // GROUP (visible p/ syncDoors legado) e o animator lê userData.handle.
-      pivot.userData.handle = host.userData.doorHandle;
       continue;
     }
     if (ruin) {
