@@ -14,6 +14,10 @@
 #   sudo UE5_GITHUB_TOKEN=ghp_xxx RUNNER_URL=https://github.com/Nexus-HUB57/Khaaos_Run \
 #        RUNNER_TOKEN=<token de runner da UI de Settings→Actions→Runners> \
 #        bash scripts/build/bootstrap_ue58_runner.sh --all
+#   # 100% automatizado (Fase 28): RUNNER_TOKEN vem da API — basta um PAT
+#   # com escopo de admin de Actions (fine-grained: Administration read+write):
+#   sudo UE5_GITHUB_TOKEN=ghp_epic RUNNER_PAT=ghp_admin \
+#        bash scripts/build/bootstrap_ue58_runner.sh --all
 #   # ou por fases:
 #   bash scripts/build/bootstrap_ue58_runner.sh --prereqs
 #   bash scripts/build/bootstrap_ue58_runner.sh --engine
@@ -77,7 +81,22 @@ phase_engine() {
 
 phase_runner() {
   log "Fase 3/3 — registro do GitHub Actions runner (labels: ${RUNNER_LABELS})"
-  [ -n "${RUNNER_TOKEN:-}" ] || die "RUNNER_TOKEN ausente — gere em Settings → Actions → Runners → New self-hosted runner (válido ~1 h)"
+  # Fase 28 — RUNNER_TOKEN pode vir da API de registration-token (POST
+  # /repos/{owner}/{repo}/actions/runners/registration-token) com um PAT de
+  # administração: elimina o ÚLTIMO passo manual do bootstrap (a UI do GitHub
+  # expira o token em ~1 h e exigia navegação). RUNNER_TOKEN explícito vence.
+  if [ -z "${RUNNER_TOKEN:-}" ] && [ -n "${RUNNER_PAT:-}" ]; then
+    log "RUNNER_TOKEN ausente — obtendo registration-token via API (RUNNER_PAT)"
+    api_url="https://api.github.com/repos/${RUNNER_URL#https://github.com/}/actions/runners/registration-token"
+    resp=$(curl -fsSL -X POST \
+      -H "Authorization: Bearer ${RUNNER_PAT}" \
+      -H "Accept: application/vnd.github+json" "${api_url}") \
+      || die "falha ao obter registration-token — RUNNER_PAT tem escopo de administração de Actions neste repo?"
+    RUNNER_TOKEN=$(printf '%s' "$resp" | jq -r '.token // empty')
+    [ -n "$RUNNER_TOKEN" ] || die "resposta da API sem token — verifique o PAT"
+    log "registration-token obtido via API (válido ~1 h)"
+  fi
+  [ -n "${RUNNER_TOKEN:-}" ] || die "RUNNER_TOKEN/RUNNER_PAT ausentes — gere em Settings → Actions → Runners ou forneça RUNNER_PAT (válido ~1 h)"
   if [ ! -d "${RUNNER_DIR}" ]; then
     mkdir -p "${RUNNER_DIR}"
     RUNNER_ARCH="x64"

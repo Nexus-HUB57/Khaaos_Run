@@ -402,6 +402,10 @@ export class Game3D {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
+      // Fase 28 — QTE do trem (derail) consome as teclas da decisão (1/2/c/e):
+      // nunca vazam para o jogo (troca de slot/interagir/agachar) nem pulam a
+      // cinemática — o contrato é timeout = falha, não "qualquer tecla = fuga".
+      if (this.trainIntro?.consumesKey?.(k)) return;
       this.keys.add(k);
       if (k === 'r') this.input.reload = true;
       if (k === 'e') this.input.interact = true;
@@ -1146,6 +1150,18 @@ export class Game3D {
           this.effects.impact(new THREE.Vector3(e.x, e.y, e.z), e.kind);
           // Fase 5 — orifício persistente em superfícies sólidas (porta entra na Fase 25)
           if (e.kind === 'wall' || e.kind === 'gloo' || e.kind === 'door') this.effects.bulletHole(new THREE.Vector3(e.x, e.y, e.z));
+          break;
+        }
+        case 'melee': {
+          // Fase 28 — feedback corpo-a-corpo completo no acerto PRÓPRIO: número
+          // flutuante + hitmarker + puff de carne, a MESMA gramática do hit de
+          // bala (o evento só chega ao atacante no online; offline o owner filtra).
+          if (e.owner === 'player') {
+            this.effects.hitFlesh(new THREE.Vector3(e.x, e.y, e.z));
+            this.audio.hit(false);
+            this.hud.hitmarker(false);
+            this.damageNumbers?.spawn({ x: e.x, y: e.y, z: e.z, damage: e.damage, head: false, victim: e.victim });
+          }
           break;
         }
         case 'kill':

@@ -87,6 +87,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }

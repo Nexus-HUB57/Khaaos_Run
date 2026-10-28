@@ -301,6 +301,30 @@ export function snapshotHealth(players = []) {
 
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
 
+// ─── Fase 28 — DANOS na transmissão (números do espectador FOLLOW) ─────────
+// O servidor espelha dano autoritativo no evento DAMAGE do batch. O número só
+// existe na câmera FOLLOW e SOMENTE quando envolve o seguido (causou ou
+// sofreu): a transmissão narra a história do alvo, não vira radar de combate.
+// PURO e determinístico: evento bruto + contexto → payload do spawn ou null.
+export function specDamageSpawn(d = {}, followId = null, camMode = 'RING_CENTER') {
+  if (camMode !== 'FOLLOW_PLAYER' || followId == null) return null;
+  const x = Number(d.x), y = Number(d.y), z = Number(d.z), damage = Number(d.damage);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  if (!Number.isFinite(damage) || damage <= 0) return null;
+  const attacker = d.attacker == null ? null : String(d.attacker);
+  const victim = d.victim == null ? null : String(d.victim);
+  const follow = String(followId);
+  const involves = attacker === follow || victim === follow;
+  if (!involves) return null;
+  return {
+    x, y, z,
+    damage: Math.min(100_000, Math.round(damage)),
+    head: !!d.head,
+    victim,
+    knocked: !!d.knocked,
+  };
+}
+
 export class SpectatorRemote {
   constructor({ roomId = 'default', camera = 'RING_CENTER', url = null, socketFactory = null, onStatus = null, onBatch = null, onFeed = null, onEvent = null, metricsIntervalMs = 10_000 } = {}) {
     this.roomId = roomId;
@@ -621,14 +645,22 @@ export class SpectatorView {
   }
 
   #hazardQueue = [];
+  #damageQueue = []; // Fase 28 — dano bruto do pipeline (números do FOLLOW)
 
   /**
    * Fase 18 — ingere evento BRUTO do pipeline (remote.onEvent) e traduz
    * WORLD_HAZARD p/ o vocabulário da sim (tsunamiStart/eruptionStart/…).
    * Parâmetros autoritativos passam intactos — o SurvivalFX do espectador
    * materializa a MESMA regra de dano por altura do jogador.
+   * Fase 28 — DAMAGE (dano autoritativo) entra na fila própria dos números
+   * de dano do FOLLOW (consumo separado do contrato de hazards).
    */
   ingestEvent(e = {}) {
+    if (e?.type === 'DAMAGE') {
+      const d = e.data ?? {};
+      if (Number.isFinite(Number(d.damage)) && Number(d.damage) > 0) this.#damageQueue.push({ ...d });
+      return true;
+    }
     if (e?.type !== 'WORLD_HAZARD') return false;
     const d = e.data ?? {};
     if (!WORLD_HAZARD_INFO[d.hazard]) return true; // hazard desconhecido: sem fila, sem banner
@@ -706,6 +738,14 @@ export class SpectatorView {
     if (!this.#hazardQueue.length) return [];
     const out = this.#hazardQueue;
     this.#hazardQueue = [];
+    return out;
+  }
+
+  /** Fase 28 — drena os DANOS da transmissão (números flutuantes do FOLLOW). */
+  consumeDamage() {
+    if (!this.#damageQueue.length) return [];
+    const out = this.#damageQueue;
+    this.#damageQueue = [];
     return out;
   }
 }
@@ -926,6 +966,21 @@ function createSpectatorGame(Game3D) {
     }
 
     // câmeras de broadcast (FREECAM/FOLLOW/OVERHEAD/RING_CENTER) com suavização
+
+    // Fase 28 — números de dano da TRANSMISSÃO: drena os DAMAGE do batch e só
+    // nasce número no FOLLOW envolvendo o seguido (causou OU sofreu — a
+    // gramática Free Fire da transmissão). Fora do FOLLOW a fila é descartada.
+    handleEvents() {
+      const followId = this.remote.followPlayerId;
+      for (const d of this.view.consumeDamage()) {
+        const spawn = specDamageSpawn(d, followId, this.camMode);
+        if (!spawn) continue;
+        this.damageNumbers?.spawn(spawn);
+        if (spawn.knocked) this.damageNumbers?.popupKnock(); // NOCAUTE onde o número pousou
+      }
+      super.handleEvents(); // Fase 18 — hazards da transmissão (FX/áudio/aviso)
+    }
+
     updateSpectatorCamera(dt) {
       const r = this.view.ring;
       const follow = this.camMode === 'FOLLOW_PLAYER'
@@ -966,6 +1021,9 @@ function createSpectatorGame(Game3D) {
       if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
       this.survivalFX?.update(dt, this.animT);
       this.updateSpectatorCamera(dt);
+      // Fase 28 — números de dano da transmissão: mesma projeção/rise/fade do
+      // jogador (pool DOM compartilhado do Game3D).
+      this.damageNumbers?.update(dt, { camera: this.camera, width: innerWidth, height: innerHeight });
       this.effects.update(dt);
       this.specHud.update({
         status: this._specStatus,

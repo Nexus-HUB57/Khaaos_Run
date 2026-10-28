@@ -188,3 +188,82 @@ test('modo online intocado: default é pass — timeline 3.4 s e outcome null', 
   assert.equal(outcome, null, 'sem QTE no modo pass');
   intro.dispose();
 });
+
+// ─── Fase 28 — hardening do QTE: sem bypass e sem vazamento de input ───────
+
+const mkFakeWindow = () => {
+  const listeners = new Map();
+  return {
+    listeners,
+    addEventListener(type, fn) { (listeners.get(type) ?? listeners.set(type, []).get(type)).push(fn); },
+    removeEventListener(type, fn) { const l = listeners.get(type) ?? []; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); },
+    emit(type, ev) { for (const fn of listeners.get(type) ?? []) fn(ev); },
+  };
+};
+
+test('Fase 28: consumesKey — teclas da decisão consumidas SOMENTE na janela ativa', () => {
+  const intro = mkDerail({ skippable: true });
+  assert.equal(intro.consumesKey('1'), false, 'fora da janela: nada é consumido');
+  assert.equal(intro.consumesKey('w'), false);
+  runFor(intro, 4.7); // dentro da janela
+  for (const k of ['1', '2', 'c', 'e']) assert.equal(intro.consumesKey(k), true, `"${k}" é da decisão`);
+  for (const k of ['w', 'a', 's', 'd', ' ', 'r', 'f']) assert.equal(intro.consumesKey(k), false, `"${k}" NÃO é da decisão`);
+  intro.chooseQTE('jump'); // janela resolve
+  assert.equal(intro.consumesKey('1'), false, 'com outcome resolvido, nada mais é consumido');
+  intro.dispose();
+});
+
+test('Fase 28: tecla fora da decisão NÃO pula o QTE (contrato: timeout = falha)', () => {
+  globalThis.window = mkFakeWindow();
+  try {
+    let outcome = 'unset';
+    const intro = new TrainIntro({
+      scene: mkScene(), spawn: { x: 0, z: 118 }, skippable: true, mode: 'derail',
+      onDone: (o) => { outcome = o; },
+    });
+    runFor(intro, 4.7); // QTE aberto
+    assert.equal(intro.qteOpen, true);
+    // spam de movimento NÃO escapa do custo canônico...
+    window.emit('keydown', { type: 'keydown', key: 'w' });
+    window.emit('keydown', { type: 'keydown', key: ' ' });
+    window.emit('touchstart', { type: 'touchstart' });
+    window.emit('pointerdown', { type: 'pointerdown' });
+    assert.equal(intro.done, false, 'cinemática NÃO foi pulada durante o QTE');
+    assert.equal(outcome, 'unset');
+    // ...e a decisão continua disponível
+    assert.equal(intro.chooseQTE('seatbelt'), true);
+    // pós-decisão, teclas comuns voltam a pular o resto da cinemática
+    window.emit('keydown', { type: 'keydown', key: 'w' });
+    assert.equal(intro.done, true, 'pós-QTE o skip volta a funcionar');
+    intro.dispose();
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('Fase 28: tecla da decisão DURANTE o QTE escolhe (sem pular) — teclado 1/2/c/e', () => {
+  globalThis.window = mkFakeWindow();
+  try {
+    const intro = new TrainIntro({
+      scene: mkScene(), spawn: { x: 0, z: 118 }, skippable: true, mode: 'derail',
+      onDone: () => {},
+    });
+    runFor(intro, 4.7);
+    window.emit('keydown', { type: 'keydown', key: '2' });
+    assert.deepEqual(intro.outcome, { choice: 'jump', hpCost: 20, stunSeconds: 0 });
+    assert.equal(intro.done, false, 'decisão não encerra a cinemática');
+    intro.dispose();
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('Fase 28: outcome resolvido (timeout) não é sobrescrito por escolha tardia', () => {
+  const intro = mkDerail();
+  runFor(intro, 4.7); // QTE aberto, sem decisão
+  runFor(intro, 1.2); // atravessa QTE_CLOSE (5.75) → fail automático
+  assert.deepEqual(intro.outcome, { choice: 'fail', hpCost: 35, stunSeconds: 3.5 });
+  assert.equal(intro.chooseQTE('seatbelt'), false, 'escolha tardia é recusada');
+  assert.deepEqual(intro.outcome, { choice: 'fail', hpCost: 35, stunSeconds: 3.5 }, 'outcome canônico preservado');
+  intro.dispose();
+});

@@ -1159,7 +1159,17 @@ export class KhaaosSim3D {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(b.z - a.z, b.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damageBot(b, w.damage, a.id, false); this.emit('melee', { target: b.id }); hitFlesh = true; break; }
+        if (diff < 1.2) {
+          this.#damageBot(b, w.damage, a.id, false);
+          // Fase 28 — evento 'melee' com o CONTRATO do número de dano: o
+          // atacante vê o número flutuante na mesma gramática do hit de bala.
+          this.emit('melee', {
+            target: b.id, x: b.x, y: (b.y ?? 0) + 1, z: b.z,
+            victim: b.id, owner: a.id,
+            damage: Math.max(1, Math.round(w.damage)), head: false,
+          });
+          hitFlesh = true; break;
+        }
       }
     }
     // Fase 25 — melee arrebenta PORTA (a pá/cano é a ferramenta clássica de
