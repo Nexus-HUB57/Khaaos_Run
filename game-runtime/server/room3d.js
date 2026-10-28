@@ -12,9 +12,9 @@ import { resolveScenario } from '../src/game3d/scenarios.js';
 import { ROOM_STATES } from './room.js';
 import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
-  FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT,
+  FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT, DOOR,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
-  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
+  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement, doorCollider,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
 } from '../src/game3d/sim3d.js';
@@ -124,6 +124,8 @@ export class MatchRoom3D {
     this.bullets = [];
     this.grenades = [];        // Fase 4: granadas FRAG em voo
     this.walls = [];           // Fase 4: Gloo Walls ativas
+    // Fase 25: portas destrutíveis (painéis físicos nos vãos das cascas)
+    this.doors = (this.world.doors ?? []).map((d) => ({ id: d.id, index: d.index, x: d.x, z: d.z, rot: d.rot, kind: d.kind, hw: d.hw, hd: d.hd, yMin: d.yMin, yMax: d.yMax, hp: DOOR.hp, active: true }));
     this.nextBulletId = 1;
     this.nextThrowableId = 1;
     this.loot = [];
@@ -151,12 +153,16 @@ export class MatchRoom3D {
     // das filas por humano): traduzido já no vocabulário do pipeline
     // (ELIMINATION/RING_PHASE) — o pipeline /ws/spectator mescla no batch.
     this.spectatorLog = [];
-    // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls)
+    // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls + portas)
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    this.syncPhysicsWorld();
   }
-  #syncPhysicsWorld() {
-    const active = this.walls.filter((w) => w.active).map(glooCollider);
-    this.physicsWorld.colliders = active.length ? this.world.colliders.concat(active) : this.world.colliders;
+  syncPhysicsWorld() {
+    const dynamic = [
+      ...this.walls.filter((w) => w.active).map(glooCollider),
+      ...this.doors.filter((d) => d.active).map(doorCollider), // Fase 25
+    ];
+    this.physicsWorld.colliders = dynamic.length ? this.world.colliders.concat(dynamic) : this.world.colliders;
   }
 
   // ---------- eventos ----------
@@ -433,6 +439,26 @@ export class MatchRoom3D {
       const spot = this.world.lootSpots[(i * 7 + 3) % this.world.lootSpots.length];
       items.push({ id: `loot-t${i}`, x: spot.x + ((i % 2) - 0.5) * 1.6, z: spot.z + ((i % 3) - 1) * 1.4,
         y: 0.55, kind: bonus[i], name: bonus[i] === 'frag' ? 'Granada FRAG' : 'Gloo Wall', active: true });
+    }
+    // Fase 25 — loot INTERIOR (mesma fonte/cap da sim offline: chão junto à
+    // mobília + MEZANINO; y vem do spot — pegável só de cima no mezanino).
+    // STREAM DEDICADO (mesma razão da sim offline: rng legado intacto).
+    const interior = this.world.interiorSpots ?? [];
+    const lootRng = new SeededRng(`${this.seed}:interiorloot`);
+    let inner = 0;
+    for (let i = 0; i < interior.length && inner < 16; i++) {
+      const spot = interior[i];
+      const drop = rollLoot(lootRng, spot.lootZone ?? 'extraction', 1)[0];
+      const { id: dropId, weapon, ...rest } = drop;
+      items.push({
+        id: `loot-i${i}`, x: spot.x, z: spot.z, y: spot.y, ...rest,
+        name: drop.kind === 'weapon' ? drop.name : `${dropId}${drop.amount ? ` ×${drop.amount}` : ''}`.toUpperCase(),
+        weaponId: drop.kind === 'weapon' ? dropId : undefined,
+        ammoId: drop.kind === 'ammo' ? dropId : undefined,
+        resourceId: drop.kind === 'resource' ? dropId : undefined,
+        active: true,
+      });
+      inner++;
     }
     return items;
   }
@@ -730,7 +756,7 @@ export class MatchRoom3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     // deploy é global (a parede é visível/replicada para todos)
     for (const h of this.humans.values()) {
       if (!h.alive) continue;
@@ -755,7 +781,20 @@ export class MatchRoom3D {
         }
       }
     }
-    if (changed) this.#syncPhysicsWorld();
+    if (changed) this.syncPhysicsWorld();
+    this.#stepDoors();
+  }
+  // Fase 25 — portas: quebra quando hp esgota (evento GLOBAL: painel é marco fixo)
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (!d.active) continue;
+      if (d.hp <= 0) {
+        d.active = false; changed = true;
+        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, rot: d.rot });
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = this.#actors();
@@ -774,6 +813,14 @@ export class MatchRoom3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
+    // Fase 25 — granada desgasta PORTAS no raio
+    for (const d of this.doors) {
+      if (!d.active) continue;
+      const cx = clamp(g.x, d.x - d.hw, d.x + d.hw), cz = clamp(g.z, d.z - d.hd, d.z + d.hd);
+      const cy = clamp(g.y, d.yMin, d.yMax);
+      const dist = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (dist <= FRAG.radius) { d.hp -= FRAG.damage * (1 - dist / FRAG.radius) * 2; changed = true; }
+    }
     if (changed) {
       for (const w of this.walls) {
         if (w.active && w.hp <= 0) {
@@ -784,7 +831,8 @@ export class MatchRoom3D {
           }
         }
       }
-      this.#syncPhysicsWorld();
+      this.#stepDoors();
+      this.syncPhysicsWorld();
     }
     // explosão é evento global próximo (flash/áudio/shake)
     for (const h of this.humans.values()) {
@@ -1017,13 +1065,26 @@ export class MatchRoom3D {
     if (a.cooldown > 0) return false;
     a.cooldown = 1 / w.fireRate;
     const reach = 2.4;
+    let hitFlesh = false;
     for (const other of this.#actors()) {
       if (other === a || !other.alive) continue;
       if (dist2d(a.x, a.z, other.x, other.z) < reach && Math.abs(a.y - other.y) < 2) {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(other.z - a.z, other.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damage(other, w.damage, a.id, false); this.#emitTo(a.id, 'melee', { target: other.id }); break; }
+        if (diff < 1.2) { this.#damage(other, w.damage, a.id, false); this.#emitTo(a.id, 'melee', { target: other.id }); hitFlesh = true; break; }
+      }
+    }
+    // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real)
+    if (!hitFlesh) {
+      const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const d of this.doors) {
+        if (!d.active) continue;
+        const cx = clamp(a.x, d.x - d.hw, d.x + d.hw), cz = clamp(a.z, d.z - d.hd, d.z + d.hd);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
+        const ang = Math.atan2(d.z - a.z, d.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
+        if (diff < 1.25) { d.hp -= w.damage * DOOR.meleeMult; this.#emitTo(a.id, 'doorHit', { id: d.id, x: d.x, z: d.z }); break; }
       }
     }
     return true;
@@ -1084,7 +1145,12 @@ export class MatchRoom3D {
           const w = this.walls.find((wl) => wl.id === hitBox.wallId && wl.active);
           if (w) w.hp -= b.damage;
         }
-        this.#impactEvent(ox + dx * hitT, oy + dy * hitT, oz + dz * hitT, hitBox?.wallId ? 'gloo' : 'wall', actors);
+        // Fase 25 — balas desgastam PORTAS
+        if (hitBox?.doorId) {
+          const d = this.doors.find((dl) => dl.id === hitBox.doorId && dl.active);
+          if (d) d.hp -= b.damage;
+        }
+        this.#impactEvent(ox + dx * hitT, oy + dy * hitT, oz + dz * hitT, hitBox?.wallId ? 'gloo' : hitBox?.doorId ? 'door' : 'wall', actors);
       }
     }
     this.bullets = this.bullets.filter((b) => b.life > 0);
@@ -1373,6 +1439,8 @@ export class MatchRoom3D {
       bullets: aoi.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
       grenades: aoi.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
       walls: this.walls.filter((w) => w.active).map((w) => ({ id: w.id, x: w.x, z: w.z, rot: w.rot, hp: Math.round(w.hp), owner: w.owner })),
+      // Fase 25 — estado das portas (posição é estática no cliente; só hp/ativo viajam)
+      doors: this.doors.map((d) => ({ id: d.id, hp: Math.round(d.hp), active: d.active })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
       terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),
       // Fase 12 — anúncio autoritativo do trem (late join/reconexão sincronizam
@@ -1413,6 +1481,8 @@ export class MatchRoom3D {
         isShrinking: this.ring.radius > this.ring.target,
         nextPhaseIn: Math.max(0, Math.round(PULSE_INTERVAL - this.pulseTimer)),
       },
+      // Fase 25 — estado das portas na TRANSMISSÃO (painel some quando quebrada)
+      doors: this.doors.map((d) => ({ id: d.id, hp: Math.round(d.hp), active: d.active })),
       events: this.spectatorLog.slice(-20).map((e) => ({ ...e })),
     };
   }

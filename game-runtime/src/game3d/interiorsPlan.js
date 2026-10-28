@@ -227,6 +227,76 @@ export function interiorDressing(layout, scenario, { seed = 'interiors', density
 // Fase 24 — COLLIDERS OCOS + FLOORS (pura, consumida por getWorldLayout)
 // ============================================================================
 
+// ============================================================================
+// Fase 25 — PORTAS DESTRUTÍVEIS + LOOT INTERIOR (puro, consumido por
+// getWorldLayout → sim3d/room3d e pelo visual interiors3d)
+// ============================================================================
+
+// estruturas COM porta destrutível (painel físico no vão): ruína não tem porta
+// (abertura livre temática) e pavilhão não tem paredes — ambos ficam abertos.
+export const DOOR_KINDS = new Set(['barrack', 'hangar', 'warehouse', 'depot', 'building']);
+
+/**
+ * Painel de porta de UMA estrutura: AABB do VÃO da porta (mesma matemática
+ * das paredes ocas) + centro/rotação para o visual. O sim materializa o painel
+ * como collider DINÂMICO (sim3d.DOOR / room3d) enquanto hp > 0.
+ * @returns {{ id, index, kind, x, z, rot, w, h, hw, hd, yMin, yMax } | null}
+ */
+export function doorPanelFor(s, spec) {
+  if (!DOOR_KINDS.has(s.kind)) return null;
+  const face = spec.door.face;
+  const axis = wallAxis(s, face);
+  const band = wallBand(s, face);
+  const dw = spec.door.w, dh = spec.door.h, doorC = spec.door.u;
+  const aabb = localRectToWorldAabb(s, axis, doorC - dw / 2, doorC + dw / 2, band.v0, band.v1, s.yMin ?? 0, (s.yMin ?? 0) + dh, 'door');
+  // centro do painel: axis 'x' → u corre em lx; axis 'z' → u corre em lz
+  const bandMid = (band.v0 + band.v1) / 2;
+  const c = axis === 'x' ? localPointToWorld(s, doorC, bandMid) : localPointToWorld(s, bandMid, doorC);
+  return {
+    id: `door-${spec.index}`, index: spec.index, kind: s.kind,
+    x: c.x, z: c.z, rot: s.rot ?? 0, w: dw, h: dh,
+    hw: (aabb.maxX - aabb.minX) / 2, hd: (aabb.maxZ - aabb.minZ) / 2,
+    yMin: aabb.yMin, yMax: aabb.yMax,
+  };
+}
+
+// zona de loot por distrito — MESMA regra do layout3d (distrito mais próximo)
+const ZONE_BY_KIND = { armory: 'armory', proving: 'extraction', park: 'park', industrial: 'industrial', terminal: 'extraction' };
+function lootZoneForPoint(layout, x, z) {
+  const districts = layout.districts ?? [];
+  let best = districts[0], bestD = Infinity;
+  for (const d of districts) {
+    const dist = Math.hypot(x - d.cx, z - d.cz);
+    if (dist < bestD) { bestD = dist; best = d; }
+  }
+  return { sectorId: best?.kind ?? 'armory', sectorName: best?.name ?? '—', lootZone: ZONE_BY_KIND[best?.kind] ?? 'extraction' };
+}
+
+/**
+ * Spots de loot INTERIOR de UMA estrutura (deriva do dressing — ZERO rng novo:
+ * offsets fixos ao lado da mobília + centro da laje no mezanino).
+ * - chão: até 2 spots junto aos 2 primeiros móveis (y = piso + 0,55);
+ * - mezanino: 1 spot no CENTRO da laje (longe da chegada da escada, do
+ *   guarda-corpo e das bordas) — y = 2,4 + 0,55 (só pegável em cima).
+ */
+export function lootSpotsForStructure(layout, s, spec) {
+  const spots = [];
+  const push = (x, z, y, mezzanine) => {
+    spots.push({ x: +x.toFixed(2), z: +z.toFixed(2), y, interior: true, mezzanine, index: spec.index, ...lootZoneForPoint(layout, x, z) });
+  };
+  for (const item of (spec.items ?? []).slice(0, 2)) {
+    const p = localPointToWorld(s, item.u + .55, item.v + .3);
+    push(p.x, p.z, (s.yMin ?? 0) + .55, false);
+  }
+  if (spec.stairs) {
+    const st = spec.stairs;
+    const mz = st.mezzZ0 + (st.mezzZ1 - st.mezzZ0) * .45;
+    const p = localPointToWorld(s, 0, mz);
+    push(p.x, p.z, +(st.height + .55).toFixed(3), true);
+  }
+  return spots;
+}
+
 const EPS = 1e-4;
 
 /**
@@ -248,6 +318,8 @@ export function hollowAccess(layout, scenario, opts = {}) {
   // Fase 24 — IDEMPOTENTE: layout já oco (cache) traz os sólidos originais em
   // baseColliders; hollowAccess sempre parte dos sólidos, nunca dos segmentos.
   const legacyColliders = layout.baseColliders ?? layout.colliders;
+  const doors = [];
+  const lootSpots = [];
 
   layout.structures.forEach((s, i) => {
     const spec = shellByIndex.get(i);
@@ -256,6 +328,10 @@ export function hollowAccess(layout, scenario, opts = {}) {
       if (legacy) colliders.push(legacy);                 // estrutura sólida: intocada
       return;
     }
+    // Fase 25 — porta destrutível (painel no vão) + loot interior (chão/mezanino)
+    const panel = doorPanelFor(s, spec);
+    if (panel) doors.push(panel);
+    lootSpots.push(...lootSpotsForStructure(layout, s, spec));
     // fail-safe: o collider legado DEVE ser a pegada da estrutura (lockstep
     // addBox). Se não for (layout futuro), mantém sólido — nunca "mundo furado".
     if (legacy) {
@@ -361,5 +437,30 @@ export function hollowAccess(layout, scenario, opts = {}) {
     }
   });
 
-  return { colliders, floors, dressing, replaced: shellByIndex.size, windows, mezzanines, shells: shellByIndex.size };
+  // Fase 25 — spots de loot no chão NUNCA dentro de collider (ex.: postes do
+  // pavilhão, props sobrepostos pelo layout): nudge determinístico em direção
+  // ao centro da estrutura e, se ainda bloqueado, o spot é DESCARTADO — um
+  // loot dentro de sólido é inalcançável (polui o mapa sem gameplay).
+  const lootSpotsFree = [];
+  for (const spot of lootSpots) {
+    const s = layout.structures[spot.index];
+    if (!spot.mezzanine) {
+      for (let nudge = 0; nudge < 3; nudge++) {
+        const blocked = colliders.some((c) => c.yMin < spot.y + .4 && c.yMax > spot.y - .2
+          && spot.x >= c.minX && spot.x <= c.maxX && spot.z >= c.minZ && spot.z <= c.maxZ);
+        if (!blocked) break;
+        spot.x = +(spot.x + (s.x - spot.x) * .35).toFixed(2);
+        spot.z = +(spot.z + (s.z - spot.z) * .35).toFixed(2);
+      }
+    }
+    const blocked = colliders.some((c) => c.yMin < spot.y + .4 && c.yMax > spot.y - .2
+      && spot.x >= c.minX && spot.x <= c.maxX && spot.z >= c.minZ && spot.z <= c.maxZ);
+    if (!blocked) lootSpotsFree.push(spot);
+  }
+  // MEZANINO PRIMEIRO: o loot do piso alto é a recompensa-assinatura dos
+  // interiores — o cap do consumidor (sim/room3d) nunca o deixa de fora.
+  // sort é STABLE em V8: a ordem original dos spots de chão se preserva.
+  lootSpotsFree.sort((a, b) => (b.mezzanine ? 1 : 0) - (a.mezzanine ? 1 : 0));
+
+  return { colliders, floors, dressing, replaced: shellByIndex.size, windows, mezzanines, shells: shellByIndex.size, doors, lootSpots: lootSpotsFree };
 }

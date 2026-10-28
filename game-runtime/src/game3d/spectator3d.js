@@ -471,6 +471,7 @@ export class SpectatorView {
     this.terminals = [];
     this.grenades = [];
     this.walls = [];
+    this.doors = [];    // Fase 25 — estado das portas no batch da transmissão
     this.batchCount = 0;
     this.lastBatchAt = 0;
     // Fase 18 — hazard ativo da transmissão (banner do HUD) + fila de eventos
@@ -555,6 +556,8 @@ export class SpectatorView {
       dropPhase: null,
       weapon: 'g19',
     }));
+    // Fase 25 — estado das portas da transmissão (id/hp/active; posição é estática)
+    if (Array.isArray(batch.doors)) this.doors = batch.doors.map((d) => ({ ...d, active: d.active !== false }));
   }
 
   step() { /* transmissão: nenhum tick local — o estado vem dos batches */ }
@@ -805,6 +808,7 @@ function createSpectatorGame(Game3D) {
       const dt = Math.min(.1, this.clock.getDelta());
       this.animT += dt;
       this.syncLoot();
+      this.syncDoors(); // Fase 25 — painéis das portas destrutíveis na transmissão
       this.syncEntities(dt);          // atores atrasados + LOD + frustum (Fase 13)
       this.handleEvents();            // Fase 18 — hazards da transmissão (FX/áudio/aviso)
       this.updateRing();
