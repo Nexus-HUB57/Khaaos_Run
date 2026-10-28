@@ -42,12 +42,12 @@ function ue5PrepareBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Corpo EXATO de CommitPhase / AbortPhase. */
-function ue5CommitBody(transactionId = randomUUID()) {
-  return { transactionId };
+/** Corpo EXATO de CommitPhase / AbortPhase (bridge UE5 manda playerId em todas as fases). */
+function ue5CommitBody(transactionId = randomUUID(), playerId = 42) {
+  return { transactionId, playerId };
 }
-function ue5AbortBody(transactionId = randomUUID(), reason = "Client abort") {
-  return { transactionId, reason };
+function ue5AbortBody(transactionId = randomUUID(), reason = "Client abort", playerId = 42) {
+  return { transactionId, playerId, reason };
 }
 
 // ─── Schemas: prepare ──────────────────────────────────────────────────────
@@ -114,6 +114,14 @@ describe("2PC prepare schema — contrato UE5", () => {
 describe("2PC commit/abort schemas — contrato UE5", () => {
   it("commit aceita { transactionId } exato do UE5", () => {
     assert.equal(commitSchema.safeParse(ue5CommitBody()).success, true);
+  });
+
+  it("commit aceita { transactionId, playerId } (contrato atualizado do bridge)", () => {
+    // Em modo dev o servidor resolve ator sintético ue5-player-<playerId>;
+    // sem playerId o commit/abort do fluxo UE5 daria 403 (ator ue5-player-0).
+    assert.equal(commitSchema.safeParse({ transactionId: randomUUID(), playerId: 7 }).success, true);
+    assert.equal(commitSchema.safeParse({ transactionId: randomUUID() }).success, true,
+      "playerId continua opcional para nós confiáveis (x-2pc-node-secret)");
   });
 
   it("commit rejeita body vazio ou com id extra tipado errado", () => {

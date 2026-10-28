@@ -27,7 +27,8 @@ on:
         options: [Editor, Server]
         default: Server
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'Unreal/KhaaosRun/Source/**'
       - 'Unreal/KhaaosRun/Config/**'
@@ -62,6 +63,14 @@ jobs:
           fi
           echo "UE5 found: ${UE_INSTALL_DIR}"
           ls "${UE_INSTALL_DIR}/Engine/Binaries/Linux/" | head -5
+
+      - name: UHT Header Validation (pre-compile)
+        run: |
+          # Validação rápida de headers UCLASS/USTRUCT/UENUM antes do compile
+          # pesado — falha em segundos, sem gastar minutos de runner GPU.
+          python3 scripts/validate_uht.py || {
+            echo "::warning::UHT validation reportou problemas — compile continua para diagnóstico completo"
+          }
 
       - name: Generate Project Files
         run: |

@@ -52,10 +52,14 @@ export const prepareSchema = z.object({
 
 export const commitSchema = z.object({
   transactionId: z.string().regex(ECONOMY_2PC_TRANSACTION_ID_RE),
+  // UE5 (KhaaosEconomyBridge2PC.cpp) envia playerId em TODAS as fases: em modo
+  // dev o ator sintético ue5-player-<playerId> precisa casar com o escrow.
+  playerId: z.number().int().min(0).max(2_147_483_647).optional(),
 });
 
 export const abortSchema = z.object({
   transactionId: z.string().regex(ECONOMY_2PC_TRANSACTION_ID_RE),
+  playerId: z.number().int().min(0).max(2_147_483_647).optional(),
   reason: z.string().max(256).optional(),
 });
 

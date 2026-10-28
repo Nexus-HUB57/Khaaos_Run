@@ -6,7 +6,7 @@
 // HTTP integration via FHttpModule, idempotency key validation, timeout recovery.
 // ==============================================================================
 
-#include "Game/Character/KhaaosEconomyBridge2PC.h"
+#include "Game/Economy/KhaaosEconomyBridge2PC.h"
 #include "KhaaosRun.h"
 
 #include "HttpModule.h"
@@ -212,11 +212,27 @@ void UKhaaosEconomyBridge2PC::PreparePhase(const FString& TransactionID, const F
                 }
                 else
                 {
-                    // Prepare falhou no servidor — abort
+                    // Prepare falhou no servidor — abort. O server-side reporta
+                    // a causa em `code`/`message` (ex.: INSUFFICIENT_FUNDS 402).
                     FString Reason = TEXT("Prepare rejected by server");
-                    if (RootObject.IsValid() && RootObject->HasField(TEXT("reason")))
+                    if (RootObject.IsValid())
                     {
-                        Reason = RootObject->GetStringField(TEXT("reason"));
+                        if (RootObject->HasField(TEXT("code")))
+                        {
+                            Reason = RootObject->GetStringField(TEXT("code"));
+                            if (RootObject->HasField(TEXT("message")))
+                            {
+                                Reason += TEXT(" — ") + RootObject->GetStringField(TEXT("message"));
+                            }
+                        }
+                        else if (RootObject->HasField(TEXT("reason")))
+                        {
+                            Reason = RootObject->GetStringField(TEXT("reason"));
+                        }
+                        else if (RootObject->HasField(TEXT("message")))
+                        {
+                            Reason = RootObject->GetStringField(TEXT("message"));
+                        }
                     }
 
                     UE_LOG(LogKhaaosRun, Warning, TEXT("[2PC] Prepare falhou: %s (reason: %s)"), *TransactionID, *Reason);
@@ -262,9 +278,13 @@ void UKhaaosEconomyBridge2PC::CommitPhase(const FString& TransactionID, const FO
     UpdateTransactionStatus(TransactionID, EKhaaos2PCPhase::Commit, EKhaaos2PCStatus::Committing);
 
     // Construir JSON body para /api/economy/2pc/commit
+    // playerId acompanha TODAS as fases: em modo dev o servidor resolve o ator
+    // sintético ue5-player-<playerId>; sem ele commit/abort dariam 403.
     FString JsonBody = FString::Printf(TEXT(
-        "{\"transactionId\":\"%s\"}"),
-        *TransactionID
+        "{\"transactionId\":\"%s\","
+        "\"playerId\":%d}"),
+        *TransactionID,
+        Tx->PlayerID
     );
 
     // Enviar HTTP POST para commit
@@ -329,11 +349,13 @@ void UKhaaosEconomyBridge2PC::AbortPhase(const FString& TransactionID, const FSt
     // Salvar razão do abort
     Tx->AbortReason = Reason.IsEmpty() ? TEXT("Client abort") : Reason;
 
-    // Construir JSON body para /api/economy/2pc/abort
+    // Construir JSON body para /api/economy/2pc/abort (mesma regra do commit)
     FString JsonBody = FString::Printf(TEXT(
         "{\"transactionId\":\"%s\","
+        "\"playerId\":%d,"
         "\"reason\":\"%s\"}"),
         *TransactionID,
+        Tx->PlayerID,
         *Tx->AbortReason
     );
 
@@ -436,11 +458,13 @@ void UKhaaosEconomyBridge2PC::RecoverStaleTransactions()
             // Atualizar para timeout e abort
             UpdateTransactionStatus(TxID, EKhaaos2PCPhase::Abort, EKhaaos2PCStatus::Timeout);
 
-            // Enviar abort para servidor
+            // Enviar abort para servidor (playerId mantém o ator sintético correto)
             FString JsonBody = FString::Printf(TEXT(
                 "{\"transactionId\":\"%s\","
+                "\"playerId\":%d,"
                 "\"reason\":\"Timeout recovery (stale in %s state)\"}"),
                 *TxID,
+                Tx->PlayerID,
                 *UEnum::GetDisplayValueAsText(Tx->Status).ToString()
             );
 
@@ -515,16 +539,18 @@ void UKhaaosEconomyBridge2PC::SendPostRequest(const FString& Endpoint, const FSt
     Request->OnProcessRequestComplete().BindLambda(
         [Callback](FHttpRequestPtr Req, FHttpResponsePtr Resp, bool bWasSuccessful)
         {
-            if (bWasSuccessful && Resp.IsValid() && Resp->GetResponseCode() == 200)
+            // Contrato server-side: prepare responde 201 (fresh) ou 200 (replay);
+            // commit/abort respondem 200. Aceitar toda a faixa 2xx.
+            const int32 ResponseCode = Resp.IsValid() ? Resp->GetResponseCode() : 0;
+            if (bWasSuccessful && Resp.IsValid() && ResponseCode >= 200 && ResponseCode < 300)
             {
                 Callback(true, Resp->GetContentAsString());
             }
             else
             {
-                int32 Code = Resp.IsValid() ? Resp->GetResponseCode() : 0;
                 FString ErrorMsg = Resp.IsValid() ? Resp->GetContentAsString() : TEXT("");
                 UE_LOG(LogKhaaosRun, Warning, TEXT("[2PC] HTTP POST falhou: %s (code=%d, error=%s)"),
-                    *Req->GetURL(), Code, *ErrorMsg);
+                    *Req->GetURL(), ResponseCode, *ErrorMsg);
                 Callback(false, ErrorMsg);
             }
         }

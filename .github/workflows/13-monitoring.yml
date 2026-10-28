@@ -1,24 +1,106 @@
-{
-  "name": "13 — Monitoring Check",
-  "on": {
-    "schedule": [
-      {
-        "cron": "*/15 * * * *"
-      }
-    ]
-  },
-  "jobs": {
-    "monitor": {
-      "runs-on": "ubuntu-latest",
-      "steps": [
-        {
-          "uses": "actions/checkout@v4"
-        },
-        {
-          "name": "Health Check",
-          "run": "curl -sf https://api.khaaos.run/health || echo 'API unreachable'"
-        }
-      ]
-    }
-  }
-}
+name: 13 — Monitoring Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'monitoring/**'
+      - 'infra/grafana/**'
+      - 'infra/alerting/**'
+      - 'server/game/metricsRegistry.ts'
+      - 'server/routes/metrics.ts'
+      - '.github/workflows/13-monitoring.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'monitoring/**'
+      - 'infra/grafana/**'
+      - 'infra/alerting/**'
+      - 'server/game/metricsRegistry.ts'
+      - 'server/routes/metrics.ts'
+      - '.github/workflows/13-monitoring.yml'
+  schedule:
+    # Health check de produção a cada 15 min
+    - cron: '*/15 * * * *'
+
+jobs:
+  validate-monitoring-config:
+    name: Valida Prometheus + Grafana + métricas 2PC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prometheus config parse
+        run: |
+          python3 - <<'EOF'
+          import yaml, sys
+          with open('monitoring/prometheus.yml') as f:
+              cfg = yaml.safe_load(f)
+          jobs = [j['job_name'] for j in cfg.get('scrape_configs', [])]
+          assert 'khaaos-economy-api' in jobs, f"job khaaos-economy-api ausente: {jobs}"
+          print("OK: prometheus.yml parseia; jobs:", jobs)
+          EOF
+
+      - name: Grafana dashboards JSON válidos
+        run: |
+          python3 - <<'EOF'
+          import json, glob, sys
+          files = sorted(glob.glob('infra/grafana/*.json'))
+          assert files, "nenhum dashboard encontrado em infra/grafana/"
+          for path in files:
+              with open(path) as f:
+                  d = json.load(f)
+              assert d.get('title'), f"{path}: sem title"
+              assert d.get('panels'), f"{path}: sem panels"
+              print(f"OK: {path} — {len(d['panels'])} painéis")
+          EOF
+
+      - name: Dashboard Economy expõe painéis 2PC
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open('infra/grafana/khaaos-economy-dashboard.json') as f:
+              d = json.load(f)
+          blob = json.dumps(d)
+          required = [
+              'khaaos_economy_2pc_requests_total',
+              'khaaos_economy_2pc_escrows',
+              'khaaos_economy_2pc_oldest_prepared_age_seconds',
+              'khaaos_economy_2pc_phase_duration_ms_bucket',
+              'Two-Phase Commit (2PC)',
+          ]
+          missing = [r for r in required if r not in blob]
+          assert not missing, f"painéis 2PC ausentes no dashboard: {missing}"
+          print("OK: dashboard khaaos-economy com painéis 2PC completos")
+          EOF
+
+      - name: Métricas 2PC implementadas no server
+        run: |
+          python3 - <<'EOF'
+          import sys
+          src = open('server/game/metricsRegistry.ts').read()
+          required = [
+              'khaaos_economy_2pc_requests_total',
+              'khaaos_economy_2pc_errors_total',
+              'khaaos_economy_2pc_gc_recovered_total',
+              'khaaos_economy_2pc_phase_duration_ms',
+              'khaaos_economy_2pc_escrows',
+              'khaaos_economy_2pc_oldest_prepared_age_seconds',
+          ]
+          missing = [r for r in required if r not in src]
+          assert not missing, f"métricas ausentes no metricsRegistry: {missing}"
+          routes = open('server/routes/metrics.ts').read()
+          assert '/metrics' in routes and '/healthz' in routes, "rotas /metrics e /healthz ausentes"
+          print("OK: métricas 2PC e rotas de observabilidade presentes")
+          EOF
+
+  production-health:
+    name: Health check produção
+    runs-on: ubuntu-latest
+    steps:
+      - name: API health
+        run: curl -sf https://api.khaaos.run/health || echo '::warning::API unreachable'
+      - name: 2PC health (postgres/health)
+        run: curl -sf https://api.khaaos.run/api/economy/2pc/health || echo '::warning::2PC health unreachable'

@@ -148,12 +148,14 @@ O workflow `UE5 CD` valida em PR e constrói a imagem sem publicá-la. Em `main`
 ### Economy 2PC (Two-Phase Commit)
 | Sistema | Classe | Descrição |
 |---|---|---|
-| Economy Bridge 2PC | `UKhaaosEconomyBridge2PC` | C++/TS two-phase commit: PREPARE→COMMIT/ABORT, Idempotency-Key anti-double-spend, timeout recovery (10s check, 30s timeout) |
+| Economy Bridge 2PC | `UKhaaosEconomyBridge2PC` | C++/TS two-phase commit: PREPARE→COMMIT/ABORT, Idempotency-Key anti-double-spend, timeout recovery (10s check, 30s timeout). **v2:** HTTP aceita toda faixa 2xx (prepare fresh = 201), erro server lido de `code`/`message`, `playerId` em TODAS as fases (fix 403 dev-mode) |
 | Economy Bridge | `UEconomyBridgeSubsystem` | HTTP bridge: /api/economy/prices, /simulate, /health. TTL cache, rate limiting |
-| Armorer Forge | `AKhaaosArmorerForge` | Marketplace de equipamentos, DataTable catalog, KRC debit via Bankhaoos |
+| Armorer Forge | `AKhaaosArmorerForge` | Marketplace de equipamentos, DataTable catalog. **v2:** `TryPurchase` roteado pelo 2PC (escrow server-side → entrega pós-commit), fallback local Bankhaoos (`bUseTwoPhaseCommit=false`), guardas de compra única por jogador, `EndPlay` aborta pendências, idempotency key `forge.<item>.<guid32>` |
 | Shop System | `UKhaaosShopSystem` | Daily deals (24h), featured rotation (7d), Fisher-Yates shuffle, discount system |
 
-**2PC Flow:** `BeginTransaction(idempotencyKey)` → `PreparePhase()` [HTTP POST /api/economy/2pc/prepare] → `CommitPhase()` [HTTP POST /api/economy/2pc/commit] → `AbortPhase()` [on failure, HTTP POST /api/economy/2pc/abort]
+**2PC Flow (wired na Forja):** `TryPurchase` → `BeginTransaction(forge.<item>.<guid32>)` → `PreparePhase()` [POST /api/economy/2pc/prepare — escrow server-side] → auto-commit do bridge [POST /api/economy/2pc/commit com `playerId`] → `Handle2PCPurchaseCompleted` (débito no espelho local + entrega do item + feedback). Falha em qualquer fase → `AbortPhase()` (refund) → `Handle2PCPurchaseFailed`.
+
+**Observabilidade:** `GET /metrics` no economy-api expõe `khaaos_economy_2pc_*` (requests por fase/resultado, latência p95, escrows por status, GC) — dashboards em `infra/grafana/khaaos-economy-dashboard.json`; `GET /healthz` = postgres/health agregado.
 
 ## Novos Sistemas dos Devs (NÃO MODIFICAR)
 

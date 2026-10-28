@@ -36,12 +36,16 @@ import {
 } from "./game/mutationSchemas";
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
+import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
   await distributedState.connect();
+
+  // ── OBSERVABILITY (antes de tudo: /metrics + /healthz sem auth) ──────────
+  registerMetricsRoutes(app);
 
   // ── ECONOMY 2PC (antes de registerApiRoutes: auth própria, sem OIDC) ─────
   registerEconomy2PCRoutes(app);

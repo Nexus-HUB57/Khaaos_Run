@@ -32,6 +32,11 @@ import {
   type Economy2PCTransaction,
 } from "@shared/schema";
 import { fromMinorUnits, hashEconomicRequest, isValidIdempotencyKey, toMinorUnits } from "./economyMoney";
+import {
+  economy2pcMetrics,
+  phaseResultFromResponse,
+  type Economy2PCPhaseName,
+} from "./metricsRegistry";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ResponseBody = Record<string, unknown>;
@@ -85,7 +90,27 @@ export class Economy2PCService {
 
   // ─── Phase 1: PREPARE (escrow) ─────────────────────────────────────────────
 
+  /** Wrapper instrumentado (Prometheus): duração + resultado por fase. */
+  private async instrumentPhase(
+    phase: Economy2PCPhaseName,
+    run: () => Promise<Economy2PCResponse>,
+  ): Promise<Economy2PCResponse> {
+    const timer = economy2pcMetrics.startPhase(phase);
+    try {
+      const response = await run();
+      timer.end(phaseResultFromResponse(phase, response));
+      return response;
+    } catch (err) {
+      economy2pcMetrics.phaseError(phase);
+      throw err;
+    }
+  }
+
   async prepare(actorId: string, input: Prepare2PCInput): Promise<Economy2PCResponse> {
+    return this.instrumentPhase("prepare", () => this.prepareImpl(actorId, input));
+  }
+
+  private async prepareImpl(actorId: string, input: Prepare2PCInput): Promise<Economy2PCResponse> {
     if (typeof actorId !== "string" || !actorId.trim()) throw new Error("Actor ID is required");
     if (!isValidIdempotencyKey(input.idempotencyKey)) throw new RangeError("Chave de idempotência inválida");
     if (!Number.isSafeInteger(input.amountKrc) || input.amountKrc <= 0) {
@@ -295,6 +320,10 @@ export class Economy2PCService {
   // ─── Phase 2a: COMMIT (finalize) ───────────────────────────────────────────
 
   async commit(actorId: string | null, transactionId: string): Promise<Economy2PCResponse> {
+    return this.instrumentPhase("commit", () => this.commitImpl(actorId, transactionId));
+  }
+
+  private async commitImpl(actorId: string | null, transactionId: string): Promise<Economy2PCResponse> {
     if (!ECONOMY_2PC_TRANSACTION_ID_RE.test(transactionId)) {
       return { status: 400, body: { committed: false, message: "transactionId inválido" }, replayed: false };
     }
@@ -407,6 +436,10 @@ export class Economy2PCService {
   // ─── Phase 2b: ABORT (release + refund) ────────────────────────────────────
 
   async abort(actorId: string | null, transactionId: string, reason?: string): Promise<Economy2PCResponse> {
+    return this.instrumentPhase("abort", () => this.abortImpl(actorId, transactionId, reason));
+  }
+
+  private async abortImpl(actorId: string | null, transactionId: string, reason?: string): Promise<Economy2PCResponse> {
     if (!ECONOMY_2PC_TRANSACTION_ID_RE.test(transactionId)) {
       return { status: 400, body: { aborted: false, message: "transactionId inválido" }, replayed: false };
     }
@@ -514,6 +547,7 @@ export class Economy2PCService {
       });
       if (result) recovered += 1;
     }
+    economy2pcMetrics.gcRecovered(recovered);
     return recovered;
   }
 

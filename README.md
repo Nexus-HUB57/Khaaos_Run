@@ -1066,7 +1066,25 @@ node --import tsx --test tests/official/economy-2pc-contract.test.ts
 # E2E (PostgreSQL real; host local + sufixo _test)
 TEST_DATABASE_URL="postgresql://127.0.0.1:5432/khaaos_2pc_test?max=1" \
   node --import tsx --test tests/integration/economy-2pc.postgres.test.ts
+
+# Sem docker/psql local? Bridge PGlite (wire-protocol):
+node scripts/dev-pglite-socket.mjs --port 54329 &
+TEST_DATABASE_URL="postgresql://test:test@127.0.0.1:54329/khaaos_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc-observability.test.ts
 ```
+
+#### Wire do cliente UE5 + observability (P0 — fase 2)
+
+| Componente | Papel |
+|---|---|
+| `Game/Economy/KhaaosArmorerForge.h/.cpp` | `TryPurchase` roteado pelo **Two-Phase Commit**: `BeginTransaction` + `PreparePhase` (escrow server-side) → bridge auto-commita → `Handle2PCPurchaseCompleted` entrega o item e sincroniza o Bankhaoos local; falha → `Handle2PCPurchaseFailed` (abort já com refund). `bUseTwoPhaseCommit` (default true) mantém fallback local para offline. Guardas: 1 compra em andamento por jogador, `EndPlay` aborta pendências (GC reembolsa órfãos), idempotency key `forge.<item>.<guid32>` (charset server-safe). |
+| `Game/Economy/KhaaosEconomyBridge2PC.cpp` | **Fixes de contrato**: include `Game/Economy/` (path antigo quebrado), HTTP aceita toda faixa 2xx (`prepare` fresh = 201), erro server lido de `code`/`message`, e **`playerId` enviado em TODAS as fases** (commit/abort/recovery) — em modo dev o ator sintético `ue5-player-<playerId>` precisa casar com o escrow, senão 403. |
+| `server/game/metricsRegistry.ts` | Registry Prometheus hand-rolled (zero deps): `khaaos_economy_2pc_requests_total{phase,result}`, `khaaos_economy_2pc_errors_total{phase}`, `khaaos_economy_2pc_phase_duration_ms` (histograma 12 buckets), `khaaos_economy_2pc_gc_recovered_total`, gauges `khaaos_economy_2pc_escrows{status}` e `khaaos_economy_2pc_oldest_prepared_age_seconds`, `khaaos_up`, `khaaos_build_info`, `khaaos_process_uptime_seconds`. |
+| `server/routes/metrics.ts` | `GET /metrics` (text/plain; version=0.0.4 — scrape do job `khaaos-economy-api`) e `GET /healthz` (**postgres/health**: SELECT 1 com latência + saúde do 2PC; 503 se banco fora). Registrados antes de todas as rotas (sem auth). |
+| `server/game/economy2pcService.ts` | Instrumentado: wrappers `prepare/commit/abort` medem duração + resultado (`prepared/committed/aborted/replayed/rejected`), GC conta recuperações. |
+| `infra/grafana/khaaos-economy-dashboard.json` | Painéis 2PC: Prepares/s, Commits/s, Aborts+GC/s, Escrows PREPARED abertos, escrow mais antigo (s), taxa por fase/resultado e latência p95 por fase (`histogram_quantile`). Provisionado em produção via `infra/deploy/docker-compose.production.yml`. |
+| `tests/integration/economy-2pc-observability.test.ts` | 8 testes E2E HTTP (supertest + PostgreSQL real): payload Prometheus canônico, counters incrementam exatamente 1 por fase, abort/rejected refletidos, `/api/economy/2pc/health` com escrows, `/healthz` 200/503 (outage simulado), `/metrics` de pé com banco fora. |
+| CI | `05-test-integration.yml`: YAML corrigido + `npm run check` + PostgreSQL real (service container) rodando E2E + observability. `ue5-headless-compile.yml`: step de UHT pré-compile + `branches` corrigido. `13-monitoring.yml`: valida prometheus.yml, dashboards JSON e métricas 2PC (antes era JSON inválido). |
 
 ### CI/CD e Pipeline
 
