@@ -109,3 +109,29 @@ Stage Summary:
 - 8 benchmark suites for headless validation
 - CI/CD integration: KhaaosGraphicsBenchmark commandlet in ue5-headless-compile.yml
 - Artifact upload: graphics-benchmark-report with 30-day retention
+
+---
+Task ID: Graphics v3
+Agent: Main
+Task: Pipeline Gráfica v3 — fechar o gap visual vs Free Fire
+
+Work Log:
+- Diagnóstico: PostProcessManager usava CVars INEXISTENTES na engine (r.ColorGradingLUT, r.VignetteIntensity, r.UnderwaterDistortion, r.BloomIntensity, r.SceneChromaticAberration) — pós-processamento era cosmético, não real
+- Criado KhaaosPostProcessDirector.h/.cpp (WorldSubsystem): FPostProcessSettings REAL em APostProcessVolume unbounded (prioridade 100); assinatura FF = exposição fixa (Min==Max), tonemapper contraste (Slope 0.85/Toe 0.30/Shoulder 0.22), saturação 1.22x + tint quente, bloom threshold 0.85, grain 0, vignette 0.22; 5 moods (PadraoBattle/NoiteNeon/NebulosaAlien/AmanhecerVenenoso/LowEndLeve); overlay tint+vignette por espécie; crossfade via BlendWeight (FTSTicker)
+- Criado KhaaosLightingDirector.h/.cpp (WorldSubsystem): rig programático (DirectionalLight+SkyLight+ExponentialHeightFog+SkyAtmosphere) via SpawnActorDeferred; 4 presets (DiaSolarPadrao 12lux@6100K, TardeDourada, NoiteNeon, NebulosaVioleta); auto-mapping por mundo; CVars r.Shadow.CSM.MaxMobileCascades + r.Shadow.DistanceScale; guardas dedicated server/-NullRHI/commandlet
+- Criado KhaaosCharacterPopComponent.h/.cpp: rim light Fresnel por espécie (MID params RimLightIntensity/RimLightColor), custom depth stencil (1+espécie), point light de ancoragem (pawn local, cast shadows off, preset>Low), SetRimBoost(0-3) hook p/ skills
+- Criado Tests/KhaaosGraphicsV3Spec.cpp: 6 specs de automação (receitas, mapeamento de mundos, presets de luz, rim único por espécie, 7 estágios, WriteRecipeToSettings real)
+- Corrigido KhaaosPostProcessManager.cpp: CVars fake → r.SceneColorFringe.Intensity real + delegação ColorGrading/Vignette ao Director
+- KhaaosMaterialPipeline.h/.cpp: +RimLightIntensity/RimLightColor no perfil por espécie (6 cores de identidade) + aplicação no ApplyMaterialProfile
+- KhaaosGraphicsPipelineManager.h/.cpp: pipeline 5→7 estágios (POST_PROCESS_SETUP, LIGHTING_SETUP) com pre-aquecimento de receita e reaplicação se world existe
+- KhaaosGraphicsPresetSubsystem.cpp: +r.Tonemapper.Sharpen por tier (0.35-0.7), +r.ScreenPercentage 100 baseline, +r.TSR.History.SampleCount (4 High+/2 low)
+- KhaaosCharacter.h/.cpp: +CharacterPopComp (CreateDefaultSubobject) + InitializePop no ApplySpecies (FName→EKhaaosSpecies) + accessor GetCharacterPopComponent()
+- Validado: scripts/validate_uht.py 298/298 PASSED; balanceamento de chaves OK em 15 arquivos
+
+Stage Summary:
+- Pós-processamento REAL (FPostProcessSettings) substitui CVars fake — maior causa do gap visual
+- Rig de iluminação completo por mundo — sol/ambient/névoa/atmosfera estilo FF
+- Personagens com identidade visual por espécie (rim light) — "pop" de gameplay
+- Sharpen + TSR tuning mobile — nitidez característica do FF
+- Integração: 7 estágios no PipelineManager, aplicação automática no OnWorldBeginPlay
+- Próximo passo: compile na GPU runner + validação visual com screenshot em staging

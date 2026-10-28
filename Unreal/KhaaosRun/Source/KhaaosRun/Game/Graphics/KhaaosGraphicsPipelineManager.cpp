@@ -13,7 +13,10 @@
 #include "Game/Graphics/KhaaosSpeciesLODManager.h"
 #include "Game/Graphics/KhaaosDynamicResolution.h"
 #include "Game/Graphics/KhaaosPostProcessManager.h"
+#include "Game/Graphics/KhaaosPostProcessDirector.h"
+#include "Game/Graphics/KhaaosLightingDirector.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -22,8 +25,8 @@ void UKhaaosGraphicsPipelineManager::Initialize(FSubsystemCollectionBase& Collec
 {
     Super::Initialize(Collection);
 
-    // Construir array de estágios do pipeline
-    PipelineStages.SetNum(5);
+    // Construir array de estágios do pipeline (v3: 7 estágios)
+    PipelineStages.SetNum(7);
 
     PipelineStages[0].Stage = EKhaaosPipelineStage::INITIALIZATION;
     PipelineStages[0].EstimatedTimeMs = 5.0f;
@@ -37,15 +40,23 @@ void UKhaaosGraphicsPipelineManager::Initialize(FSubsystemCollectionBase& Collec
     PipelineStages[2].EstimatedTimeMs = 10.0f;
     PipelineStages[2].bCritical = true;
 
-    PipelineStages[3].Stage = EKhaaosPipelineStage::RUNTIME_OPTIMIZATION;
-    PipelineStages[3].EstimatedTimeMs = 3.0f;
+    PipelineStages[3].Stage = EKhaaosPipelineStage::POST_PROCESS_SETUP;
+    PipelineStages[3].EstimatedTimeMs = 8.0f;
     PipelineStages[3].bCritical = false;
 
-    PipelineStages[4].Stage = EKhaaosPipelineStage::HOT_RELOAD;
-    PipelineStages[4].EstimatedTimeMs = 15.0f;
+    PipelineStages[4].Stage = EKhaaosPipelineStage::LIGHTING_SETUP;
+    PipelineStages[4].EstimatedTimeMs = 12.0f;
     PipelineStages[4].bCritical = false;
 
-    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Subsystem inicializado. 5 estágios configurados."));
+    PipelineStages[5].Stage = EKhaaosPipelineStage::RUNTIME_OPTIMIZATION;
+    PipelineStages[5].EstimatedTimeMs = 3.0f;
+    PipelineStages[5].bCritical = false;
+
+    PipelineStages[6].Stage = EKhaaosPipelineStage::HOT_RELOAD;
+    PipelineStages[6].EstimatedTimeMs = 15.0f;
+    PipelineStages[6].bCritical = false;
+
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Subsystem inicializado. 7 estágios configurados (v3 gráficos)."));
 }
 
 void UKhaaosGraphicsPipelineManager::Deinitialize(FSubsystemCollectionBase& Collection)
@@ -127,7 +138,58 @@ void UKhaaosGraphicsPipelineManager::InitializePipeline()
         CompleteStage(EKhaaosPipelineStage::QUALITY_CALIBRATION, static_cast<float>(StageElapsed));
     }
 
-    // ── Estágio 4: RUNTIME_OPTIMIZATION ────────────────────────────────────
+    // ── Estágio 4: POST_PROCESS_SETUP (v3 — look Free Fire) ────────────────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Pre-aquecer a receita do mood padrão (dado puro, sem world)
+        const FKhaaosPostProcessRecipe StandardRecipe =
+            UKhaaosPostProcessDirector::BuildRecipeForMood(EKhaaosWorldMood::PadraoBattle);
+
+        // Se já existe mundo de jogo (re-execução), reaplica o mood agora;
+        // senão o diretor aplica no OnWorldBeginPlay
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            if (UKhaaosPostProcessDirector* PPDirector = PlayWorld->GetSubsystem<UKhaaosPostProcessDirector>())
+            {
+                PPDirector->ApplyMood(
+                    UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName()), 0.5f);
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Receita PP padrão pré-aquecida: Sat=%.2f Bloom=%.2f Sharpen=%.2f"),
+            StandardRecipe.Saturation, StandardRecipe.BloomIntensity, StandardRecipe.Sharpen);
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::POST_PROCESS_SETUP, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 5: LIGHTING_SETUP (v3 — rig de luz programático) ───────────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Validar config do preset padrão (dado puro); rig real nasce no BeginPlay
+        const FKhaaosLightingPresetConfig DefaultLighting =
+            UKhaaosLightingDirector::BuildConfigForPreset(EKhaaosLightingPreset::DiaSolarPadrao);
+
+        // Se já existe mundo de jogo, aplica o preset agora
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            if (UKhaaosLightingDirector* LightingDirector = PlayWorld->GetSubsystem<UKhaaosLightingDirector>())
+            {
+                LightingDirector->ApplyLightingPreset(
+                    UKhaaosLightingDirector::AutoPresetForWorld(PlayWorld->GetFName()));
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Config de luz padrão validada: Sol=%.1flux@%.0fK, Fog=%.3f"),
+            DefaultLighting.SunIntensityLux, DefaultLighting.SunTemperature, DefaultLighting.FogDensity);
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::LIGHTING_SETUP, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 6: RUNTIME_OPTIMIZATION ────────────────────────────────────
     {
         const double StageStart = FPlatformTime::Seconds();
 

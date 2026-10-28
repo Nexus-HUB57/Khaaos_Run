@@ -22,6 +22,8 @@ enum class EKhaaosPipelineStage : uint8
     INITIALIZATION          UMETA(DisplayName = "Initialization"),
     ASSET_LOADING           UMETA(DisplayName = "Asset Loading"),
     QUALITY_CALIBRATION     UMETA(DisplayName = "Quality Calibration"),
+    POST_PROCESS_SETUP      UMETA(DisplayName = "Post Process Setup"),
+    LIGHTING_SETUP          UMETA(DisplayName = "Lighting Setup"),
     RUNTIME_OPTIMIZATION    UMETA(DisplayName = "Runtime Optimization"),
     HOT_RELOAD              UMETA(DisplayName = "Hot Reload")
 };

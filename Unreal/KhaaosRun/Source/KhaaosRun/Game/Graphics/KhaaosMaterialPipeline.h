@@ -105,6 +105,15 @@ struct FKhaaosSpeciesMaterialProfile
     /** Override de Occlusion (-1 = usar default do material) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "-1.0", ClampMax = "1.0"))
     float ORMOverrideOcclusion = -1.0f;
+
+    /** Intensidade do rim light (Fresnel) — "character pop" estilo Free Fire.
+     *  0 = sem rim. Preenchido por espécie (identidade visual do elenco). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float RimLightIntensity = 0.0f;
+
+    /** Cor do rim light por espécie (ciano Huran, violeta Khael, magenta Venex...). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    FLinearColor RimLightColor = FLinearColor::White;
 };
 
 // ─── Material Pipeline Subsystem ──────────────────────────────────────────────

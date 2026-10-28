@@ -221,6 +221,29 @@ void UKhaaosGraphicsPresetSubsystem::ApplyConsoleCommands(const FKhaaosGraphicsP
 
         // Frame rate target
         GEngine->Exec(nullptr, *FString::Printf(TEXT("t.MaxFPS %d"), Profile.TargetFPS));
+
+        // ── Nitidez + AA tuning v3 (assinatura Free Fire) ───────────────────
+        // Sharpen tonemapper: mobile games usam nitidez agressiva para
+        // compensar resolução reduzida — chave para o "crisp" do FF
+        if (IConsoleVariable* CVarSharpen = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Tonemapper.Sharpen")))
+        {
+            const float Sharpen = Profile.TargetFPS >= 120 ? 0.7f :
+                                  Profile.TargetFPS >= 60  ? 0.5f : 0.35f;
+            CVarSharpen->Set(Sharpen, ECVF_SetByConsole);
+        }
+
+        // Baseline de screen percentage (DRS ajusta em runtime)
+        if (IConsoleVariable* CVarScreenPct = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
+        {
+            CVarScreenPct->Set(100.0f, ECVF_SetByConsole);
+        }
+
+        // TSR: histórico de amostras — presets High+ usam 4 samples (bordas
+        // limpas em movimento), presets baixos usam 2 (custo mínimo)
+        if (IConsoleVariable* CVarTSR = IConsoleManager::Get().FindConsoleVariable(TEXT("r.TSR.History.SampleCount")))
+        {
+            CVarTSR->Set(Profile.ViewDistanceScale >= 0.85f ? 4 : 2, ECVF_SetByConsole);
+        }
     }
 }
 
