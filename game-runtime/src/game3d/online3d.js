@@ -110,7 +110,7 @@ export class OnlineGame3D extends Game3D {
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
     // Fase 4 — preditor enxerga Gloo Walls (colliders dinâmicos) sem mutar o layout cacheado
-    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders, floors: getWorldLayout(this.seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -318,7 +318,7 @@ export class OnlineGame3D extends Game3D {
     this.initCamera(); // initCamera → initPost (composer acompanha nova cena/câmera)
     // preditor acompanha o novo layout (mesma seed autoritativa) + mundo físico próprio
     this.predictor = new LocalPredictor({ world: getWorldLayout(seed) });
-    this.predictorWorld = { colliders: getWorldLayout(seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(seed).colliders, floors: getWorldLayout(seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -447,6 +447,8 @@ export class OnlineGame3D extends Game3D {
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, performance.now() / 1000);
     // Fase 23 — interiores no modo online (flicker de lâmpadas/telas)
+    const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
+    if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
     const interiorsAnim = this.scene.userData.interiors?.animators;
     if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);

@@ -956,3 +956,40 @@ export function bannerMaterial(bg = '#8a2a22', glyph = '#e8d9a8') {
     return new THREE.MeshStandardMaterial({ map: tex(c, { srgb: true }), roughness: .85, side: THREE.DoubleSide });
   });
 }
+
+// ============================================================================
+// Fase 24 — RAIOS DE LUZ pelas janelas (light shafts)
+// ============================================================================
+
+// Gradiente vertical: opaco no topo (boca da janela) → transparente na base.
+// Mapeado com v=0 no topo do raio e v=1 no chão (UV do quad no lightshafts3d).
+export function lightShaftTexture() {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 128);
+  g.addColorStop(0, 'rgba(255,242,206,.5)');
+  g.addColorStop(.45, 'rgba(255,236,192,.2)');
+  g.addColorStop(1, 'rgba(255,232,180,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 8, 128);
+  const t = tex(c, { repeat: 1 });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+
+// Mancha de luz no piso: disco radial com falloff suave (poça do raio).
+export function lightPoolTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,240,204,.42)');
+  g.addColorStop(.55, 'rgba(255,236,196,.16)');
+  g.addColorStop(1, 'rgba(255,232,180,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 128, 128);
+  const t = tex(c, { repeat: 1 });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}

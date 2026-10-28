@@ -17,6 +17,7 @@ export const QUALITY_TIERS = {
     trafficFactor: 0.45,  // Fase 8 — menos caros no mobile
     dressingFactor: 0.7,  // Fase 22 — cenários vivos com kit reduzido no mobile
     interiorFactor: 0.55, // Fase 23 — mobília reduzida nos interiores no mobile
+    lightFactor: 0.4,     // Fase 24 — poucos raios de luz no mobile (custo de overdraw)
     bloom: false,
     contactShadows: true,   // barato (1 InstancedMesh) e sustenta a leitura visual
     gltfProps: true,
@@ -33,6 +34,7 @@ export const QUALITY_TIERS = {
     trafficFactor: 0.8,
     dressingFactor: 0.9,
     interiorFactor: 0.8,
+    lightFactor: 0.8,     // Fase 24 — maioria dos raios de luz
     bloom: true,
     contactShadows: true,
     gltfProps: true,
@@ -49,6 +51,7 @@ export const QUALITY_TIERS = {
     trafficFactor: 1,
     dressingFactor: 1,
     interiorFactor: 1,
+    lightFactor: 1,       // Fase 24 — todos os raios de luz
     bloom: true,
     contactShadows: true,
     gltfProps: true,
