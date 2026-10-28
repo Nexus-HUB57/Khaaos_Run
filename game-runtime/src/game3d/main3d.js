@@ -1447,11 +1447,12 @@ export class Game3D {
         }
         // Fase 25 — portas: áudio dos toggles (creak) e da destruição (madeira)
         case 'doorToggle': {
-          this.audio.door?.(e.open, Math.hypot(e.x - p.x, e.z - p.z));
+          // Fase 25.1 — material vem no payload (kind da folha: hangar = metal)
+          this.audio.door?.(e.open, Math.hypot(e.x - p.x, e.z - p.z), e.kind);
           break;
         }
         case 'doorDown': {
-          this.audio.doorDown?.(Math.hypot(e.x - p.x, e.z - p.z));
+          this.audio.doorDown?.(Math.hypot(e.x - p.x, e.z - p.z), e.kind);
           break;
         }
         case 'victory': this.#endMatch(true, e); break;

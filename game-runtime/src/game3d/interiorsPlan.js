@@ -310,12 +310,18 @@ const EPS = 1e-4;
 
 // mecânica da porta — MESMOS números em sim offline, MatchRoom3D e visual
 export const DOOR_MECH = {
-  hp: 130,            // vida da folha (pistola ~10 tiros; granada no epicentro derruba)
+  hp: 200,            // vida da folha DE MADEIRA (pistola ~10 balas; granada no epicentro derruba)
   interactRange: 2.3, // alcance do E (m, centro do vão → ator)
   toggleCooldown: .6, // s entre toggles (anti-thrash de tecla/bot)
   leafGap: .12,       // folha um pouco menor que o vão (não raspa no batente)
   openAngle: 1.92,    // rad (~110°) — abertura para DENTRO do interior
+  openSpeed: 8.5,     // ganho do animator visual (exponencial) — ~0,35 s p/ 95% do curso
 };
+
+// Fase 25.1 — MATERIAL da folha por tipo de estrutura: hangar recebe porta
+// METÁLICA (hp/melee específicos vivem no sim3d.DOOR — convenção do repo);
+// os demais interiores seguem com madeira.
+export function doorMaterialOf(kind) { return kind === 'hangar' ? 'metal' : 'wood'; }
 
 /**
  * Vãos de porta em COORDENADAS DE MUNDO — um por estrutura-casca. Consumido por:
