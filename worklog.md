@@ -145,3 +145,24 @@ Stage Summary:
 - Combat feedback closes the loop: every own hit now speaks Free Fire language (white/red numbers, knock popup) — zero drift for sims, purely additive event fields
 - Latent fix: hitmarker + flesh audio no longer fire for bot-vs-bot hits (owner was undefined)
 - 692 tests — 679 pass, 0 fail, 13 skipped (opt-in); vite build OK
+
+---
+Task ID: 11
+Agent: Main
+Task: Fase 28 — números de dano na TRANSMISSÃO (espectador FOLLOW) + números de melee + revisão do ZU pós-derail do PR #179 + automação UE5.8/EAC + P1 Android CLI 100% executável
+
+Work Log:
+- Spectator damage numbers: room3d mirrors authoritative damage as DAMAGE events for the /ws/spectator pipeline — dedicated ring of 10 (public ELIMINATION/RING_PHASE never drowned), 150 ms per-victim rate limit (tick-based hazard damage can't flood bandwidth), STRICTLY increasing timestamps (client dedupe key type:timestamp can never collide); spectatorView() interleaves public events + DAMAGE sorted by timestamp. Client: pure specDamageSpawn() — number only in FOLLOW camera and ONLY when it involves the followed player (dealt or received; never a combat radar), hostile input sanitized (finite coords, damage clamped 100k, string ids), NOCAUTE popup via knocked flag, pool ticked in the spectator loop with the player's projection
+- Melee numbers: 'melee' event now carries the number contract (x/y/z/victim/owner/damage) in offline sim AND authoritative server (#emitTo to attacker only); online3d.queueEvent localizes owner/victim via own(); main3d answers own hits with FULL feedback — floating number + hitmarker + flesh puff + audio (same grammar as bullet hits)
+- ZU post-derail review (PR #179) found and fixed 2 real defects: (a) QTE BYPASS — any non-decision key/touch during the window skipped the whole cinematic → onDone(null) → zero canonical cost ("any key = escape" violated "timeout = fail"); non-decision input now IGNORED during the window (skip restored after decision); (b) INPUT LEAK — QTE keys [1]/[2]/c/e also switched weapon/crouched/interacted in-game; TrainIntro.consumesKey() + keydown guard consume decision keys BEFORE game input; bonus: chooseQTE refuses to overwrite a resolved outcome (late key after timeout can't convert fail→seatbelt)
+- UE5.8/EAC automation: bootstrap_ue58_runner.sh now fetches RUNNER_TOKEN via API (RUNNER_PAT → POST actions/runners/registration-token) — runner bootstrap fully automated; NEW scripts/build/ue58_eac_unblock.mjs single-command blocker report (vars/secrets presence, ue5.8-labeled runner online, EAC SDK stub/real, DefaultEOS.ini placeholders, preflight) with the EXACT unlock command per item — verified against the live API: 6 blockers mapped (UE58_ENABLED/UE5_ROOT vars, no ue5.8 runner online, EOS_* secrets, UE_CONTAINER_PAT, EAC SDK download, ini injection)
+- P1 Android CLI (Windows-only by design): scripts/windows/install_android_cli.cmd (+ .ps1 fallback without curl) — validates curl.exe/TEMP, unique temp file per run (never stale), empty-download detection, exit code propagation, cleanup, CRLF; invariants pinned by tests
+- Tests: spectator-damage-numbers.test.js (7 — pure filter, hostile sanitization, view ingest/drain, ring DAMAGE + rate limit + ordering, melee contract server+offline, ring cap 10 + strictly increasing timestamps), zu-derail-qte.test.js (+4 — consumesKey, non-decision key can't skip QTE, decision keys work via window events, resolved outcome immutable), tests/integration/windows-scripts.test.ts (7 — CRLF, canonical URL, env validations, unique temp, empty download, exit propagation)
+- Pipeline: branch feat/game3d-fase28-espectador-melee-zu → PR #182 → CI 37 checks (25 success + 5 skipped + 0 fail) → merged f21bcc2 → main re-verified (30 checks: 25 success + 5 skipped + 0 fail; local on merged head: game-runtime 711 pass / 0 fail / 13 skipped; tsc 0; vite build OK)
+
+Stage Summary:
+- The broadcast now TELLS the combat story: followed player's deals and wounds speak Free Fire grammar (white/red numbers + NOCAUTE popup) with zero radar leakage — FOLLOW-only, followed-involved-only, bandwidth-rate-limited
+- Melee finally has complete feedback (number + marker + flesh + audio) on both offline and authoritative trails
+- ZU derail QTE is now tamper-proof: canonical costs (0/2.5s · 20 VL · 35 VL/3.5s) cannot be bypassed by key spam and can't leak into gameplay input
+- UE5.8/EAC unblock is now a single command (ue58_eac_unblock.mjs) with exact remediation per blocker; runner bootstrap needs zero UI steps
+- P1 Android CLI delivered as a real, error-proof Windows script pair — the original one-liner was the spec, the .cmd/.ps1 are the product
