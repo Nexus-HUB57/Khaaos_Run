@@ -109,3 +109,21 @@ Stage Summary:
 - 8 benchmark suites for headless validation
 - CI/CD integration: KhaaosGraphicsBenchmark commandlet in ue5-headless-compile.yml
 - Artifact upload: graphics-benchmark-report with 30-day retention
+
+---
+Task ID: 9
+Agent: Main
+Task: Fase 26 — diretor calibrado por métricas reais (margem/pesos) + partículas reais p/ fumaça/fendas + FX dos marcos × mundos
+
+Work Log:
+- Calibration: calibrateDirector() pure/deterministic in spectator3d.js — SpectatorRemote heartbeat recalibrates retarget margin + danger weights from REAL broadcast metrics (Fase 24 cuts/escalation/manual/toggles): twitchy→margin up, starved/manual-pressure→down, fatigue→down-weight minor signals, healthy→revert to Fase 19 mean; bands (min/max/step) preserve weight hierarchy; dangerScore accepts ctx.weights; tuning exposed via getMetrics().tuning
+- Parity: tuning whitelist in sanitizeDirectorReport (DIRECTOR_WEIGHT_KEYS vocabulary + clamp) in BOTH trails (server/game/SpectatorDataPipeline.ts + game-runtime/server/spectator.js); aggregate last-report-wins (tuning is STATE, not counter); admin.html Command Monitor shows MARGEM DE RECORTE + PESOS rows
+- Particles: getSharedParticles + bindParticleTicker idempotent per scene (districts build BEFORE worldmarks in buildScene — creator owns the tick); pool 1024→2048; real emitters for district campfires (smoke+sparks), lavapatches (embers+heat wisp), district void rift (motes), refinetower flare, CKESALTH horizon flare stack (was static cone)
+- Landmark FX × worlds: worldMarks registry gains applyHazard(kind, boost, surfaceY) fed by SurvivalFX every frame (boost 0→1 rising, 1 sustained, fade receding, acid=full alert) — Priadus ocean-ring storm surge; Ckesalth torch erupts 3× + emitters fire; Arukheea pylons awaken (rings spin + crystal incandesce + void rifts blaze); CIGKV beacons strobe on acid; Barburhen null (no survival event); pure visual, zero colliders, single draw call
+- Tests: director-calibration.test.js (14 new), worldmarks.test.js (+8 Fase 26), survival-fx.test.js (+3), district-dressing.test.js (+4), spectator-director-metrics JS (tuning contract) + TS (11, incl. E2E WS last-wins tuning)
+- Pipeline: branch feat/game3d-fase26-diretor-calibrado-fx-marcos → PR #176 → CI 24 success/0 fail (30 checks, 6 conditional skips) → merged 60d9615 → main re-verified (25 success/0 fail + local: 11 TS + 28 JS pass on merged head)
+
+Stage Summary:
+- Director closes the perception→action loop: measures its own broadcast behavior and retunes margin/weights live, no redeploy
+- Playable-area smoke/crack density (campfires, lava cracks, void rifts) with zero new draw calls
+- World landmarks now REACT to their own survival events (tsunami/lava/gravity/acid) — broadcast and offline share the same reaction path via SurvivalFX
