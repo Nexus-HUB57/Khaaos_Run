@@ -301,4 +301,6 @@ Esta seção registra o estado naquela data, não o estado atual. A revisão atu
 
 **Aceite:** artefatos de build e Automation Tests identificáveis com exit 0; mapa jogável e servidor dedicado demonstrados; dois clientes completam login→sessão→ação→reconnect; execução EOS não contém placeholders e produz logs verificáveis.
 
+**Progresso M4 (staging distribuído — entregue):** staging com **2 réplicas reais + Redis real** em modo distribuído (`KR_DISTRIBUTED=1`): ownership/fencing de sala em 2 réplicas com redirect cross-réplica por convite (índice compartilhado `kr:invite:*`, registry `kr:replica:*` renovado por heartbeat), métricas Prometheus `khaaos_runtime_distributed_*`, e o smoke ao vivo `F17_CROSSREPLICA_SMOKE_OK` configurado no CI (`staging-smoke.yml`, job `cross-replica-smoke`, incl. drill `--kill-owner`). Ver `docs/CROSS_REPLICA_SMOKE.md` e PB-08. A trilha UE5/EOS nativa avança conforme os pré-requisitos de licença/credenciais (ver `docs/M4_UE5_EOS_NATIVES.md`).
+
 **Ordem recomendada:** M0 (fechar a publicação/reprodutibilidade dos relatórios) → M1 → M2 → M3; M4 avança em paralelo somente quando houver licença, ambiente e credenciais necessários. Cada milestone exige evidência executada, não apenas arquivos/stubs ou status de issue.
