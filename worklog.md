@@ -184,3 +184,43 @@ Work Log:
 Stage Summary:
 - ON MAIN: Fase 29 (hazard damage numbers with per-world identity + environmental NOCAUTE + quantum anomaly in the pipeline) + UE58_ENABLED/UE5_ROOT provisioned (6→5 blockers; remaining 5 = human actions) + full repair of the merge storm (main 100% green end to end: CI 21✓/0✗, 768 tests/0 fail, tsc 0, build ✓)
 - Remaining backlog: real smoke/crack particles; landmark FX × worlds (tsunami/lava); sim interior-loot ids lose the loot-i* prefix to the catalog drop id (room3d preserves — cosmetic inconsistency registered); quantum anomaly death bypasses killfeed/finalizeDeath (pre-existing wart, registered)
+Task ID: 11
+Agent: Main
+Task: Fase 28 — números de dano na TRANSMISSÃO (espectador FOLLOW) + números de melee + revisão do ZU pós-derail do PR #179 + automação UE5.8/EAC + P1 Android CLI 100% executável
+
+Work Log:
+- Spectator damage numbers: room3d mirrors authoritative damage as DAMAGE events for the /ws/spectator pipeline — dedicated ring of 10 (public ELIMINATION/RING_PHASE never drowned), 150 ms per-victim rate limit (tick-based hazard damage can't flood bandwidth), STRICTLY increasing timestamps (client dedupe key type:timestamp can never collide); spectatorView() interleaves public events + DAMAGE sorted by timestamp. Client: pure specDamageSpawn() — number only in FOLLOW camera and ONLY when it involves the followed player (dealt or received; never a combat radar), hostile input sanitized (finite coords, damage clamped 100k, string ids), NOCAUTE popup via knocked flag, pool ticked in the spectator loop with the player's projection
+- Melee numbers: 'melee' event now carries the number contract (x/y/z/victim/owner/damage) in offline sim AND authoritative server (#emitTo to attacker only); online3d.queueEvent localizes owner/victim via own(); main3d answers own hits with FULL feedback — floating number + hitmarker + flesh puff + audio (same grammar as bullet hits)
+- ZU post-derail review (PR #179) found and fixed 2 real defects: (a) QTE BYPASS — any non-decision key/touch during the window skipped the whole cinematic → onDone(null) → zero canonical cost ("any key = escape" violated "timeout = fail"); non-decision input now IGNORED during the window (skip restored after decision); (b) INPUT LEAK — QTE keys [1]/[2]/c/e also switched weapon/crouched/interacted in-game; TrainIntro.consumesKey() + keydown guard consume decision keys BEFORE game input; bonus: chooseQTE refuses to overwrite a resolved outcome (late key after timeout can't convert fail→seatbelt)
+- UE5.8/EAC automation: bootstrap_ue58_runner.sh now fetches RUNNER_TOKEN via API (RUNNER_PAT → POST actions/runners/registration-token) — runner bootstrap fully automated; NEW scripts/build/ue58_eac_unblock.mjs single-command blocker report (vars/secrets presence, ue5.8-labeled runner online, EAC SDK stub/real, DefaultEOS.ini placeholders, preflight) with the EXACT unlock command per item — verified against the live API: 6 blockers mapped (UE58_ENABLED/UE5_ROOT vars, no ue5.8 runner online, EOS_* secrets, UE_CONTAINER_PAT, EAC SDK download, ini injection)
+- P1 Android CLI (Windows-only by design): scripts/windows/install_android_cli.cmd (+ .ps1 fallback without curl) — validates curl.exe/TEMP, unique temp file per run (never stale), empty-download detection, exit code propagation, cleanup, CRLF; invariants pinned by tests
+- Tests: spectator-damage-numbers.test.js (7 — pure filter, hostile sanitization, view ingest/drain, ring DAMAGE + rate limit + ordering, melee contract server+offline, ring cap 10 + strictly increasing timestamps), zu-derail-qte.test.js (+4 — consumesKey, non-decision key can't skip QTE, decision keys work via window events, resolved outcome immutable), tests/integration/windows-scripts.test.ts (7 — CRLF, canonical URL, env validations, unique temp, empty download, exit propagation)
+- Pipeline: branch feat/game3d-fase28-espectador-melee-zu → PR #182 → CI 37 checks (25 success + 5 skipped + 0 fail) → merged f21bcc2 → main re-verified (30 checks: 25 success + 5 skipped + 0 fail; local on merged head: game-runtime 711 pass / 0 fail / 13 skipped; tsc 0; vite build OK)
+
+Stage Summary:
+- The broadcast now TELLS the combat story: followed player's deals and wounds speak Free Fire grammar (white/red numbers + NOCAUTE popup) with zero radar leakage — FOLLOW-only, followed-involved-only, bandwidth-rate-limited
+- Melee finally has complete feedback (number + marker + flesh + audio) on both offline and authoritative trails
+- ZU derail QTE is now tamper-proof: canonical costs (0/2.5s · 20 VL · 35 VL/3.5s) cannot be bypassed by key spam and can't leak into gameplay input
+- UE5.8/EAC unblock is now a single command (ue58_eac_unblock.mjs) with exact remediation per blocker; runner bootstrap needs zero UI steps
+- P1 Android CLI delivered as a real, error-proof Windows script pair — the original one-liner was the spec, the .cmd/.ps1 are the product
+
+---
+Task ID: 11
+Agent: Main
+Task: Fase 28 — Arsenal & Equipamento FF (AR-47 4 sockets, gear por nível visível, caixa de morte, airdrop) + reparo residual do pipeline de folhas
+
+Work Log:
+- Novo módulo PURO headless-safe src/game3d/gear3d.js: buildGearMesh por nível (colete Nv1-4 — placas/gorjo/ombreiras blindadas + LED de equipe; capacete Nv1-3 — boné→casco→assalto com óculos balísticos + NVG; mochila Nv1-3 — assalto→campo→expedição com bedroll/bolsos/faixa), applyOperativeGear IDEMPOTENTE (substitui head-gear base via tag userData.baseHeadGear no Nv2+ e mochila base via userData.basePack), createDeathBox (tampa entreaberta, placa de nome, farol pulsante de time), createSupplyDrop (paraquedas + 4 suspensões + sinalizador vermelho), deathBoxContents (herda arma/munição/consumíveis/gear — determinístico), supplyDropEvent (agendador puro a ~38% da partida com jitter ±10% por seed), GEAR_ARMOR_BONUS/gearFromArmor (placa cerâmica reflete na silhueta)
+- shared/weapons.js: AR-47 no catálogo (7.62, 40 balas, sockets declarados), pools de loot com gear por zona + pool exclusivo supplyDrop (AR-47 LENDÁRIO garantido + medkit + placa), rollLoot respeita raridade pré-definida
+- entities3d.js: malha da AR-47 (receiver/gas tube/handguard de madeira/coronha esqueleto/mira em torre) com 4 SOCKETS nomeados (muzzle/optic/mag/grip) em userData.sockets; createLootMesh com fábricas dedicadas (deathBox/supplyDrop/gear com feixe por tipo); head-gear e mochila base marcados para substituição
+- sim3d.js: actor.gear {vest,helmet,pack} nos 3 spawns (oficiais chegam 2/1/1); #pickup trata helmet/vest/pack (nível nunca desce + bônus de armor + evento 'gear'), deathBox (bundle pelo mesmo caminho de coleta) e supplyDrop (pool exclusivo); #dropDeathBox nas 3 trilhas de morte final; agendador do airdrop no tick com seedHash determinístico; AMMO_CAP 7.62
+- main3d.js: 'gear' → applyGearVisuals() com cachê por assinatura (silhueta do jogador e bots espelha a sim); syncLoot assenta caixas/gear no chão e dispara a DESCIDA do airdrop de 34 m (paraquedas encolhe e some no pouso); faróis pulsam; toasts EQUIPAR/ESPÓLIO/LOGÍSTICA
+- Reparos residuais do main half-migrated (merges #192/#194/#195/#196/#199): syncPhysicsWorld duplicado/privado (SyntaxError derrubava módulos inteiros) unificado público; decay do cooldown de toggle das folhas restaurado; main3d.syncDoors deriva handle.pivot (painel quebrado voltou a sumir); varredura defensiva de folhas com hp esgotado (doorDown + collider fora); doorPanels como alias getter do registry; testes alinhados ao contrato canônico (structIndex, sectorId, kind 'wood', folha 5 peças)
+- Testes: test/gear3d.test.js (16 — catálogo/sockets, pools/raridade pré-definida, gearFromArmor, malhas monotônicas, idempotência/substituição de base, caixa determinística, conteúdo herdado, agendador único/determinístico, airdrop coletável com AR-47 lendário, placa→colete Nv4, seedHash)
+- Pipeline: branch feat/game3d-fase28-arsenal-equipamento-ff → PR #189 (obsoleta por merges paralelos) → PR #197/#200 → CI 12/12 success (incl. UE5.8 Release CI/CD — credenciais do container ativas) → merged bb3d39c → main re-verificada (11 workflows success + local: 768 testes — 755 pass, 0 fail, 13 skipped; tsc OK; vite build OK)
+
+Stage Summary:
+- O loot agora muda o CORPO (silhueta por nível de capacete/colete/mochila) — identidade instantânea à distância, gramática Free Fire
+- Espólio vira mecânica: matou, herdou (caixa de morte com farol + bundle)
+- Airdrop com AR-47 lendário cria pico de rota no meio da partida (determinístico por seed)
+- Zero mudança de física/balística/netcode; custo por frame ~0 (cachê por assinatura)
