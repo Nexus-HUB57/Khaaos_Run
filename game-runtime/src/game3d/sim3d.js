@@ -457,6 +457,16 @@ export function glooCollider(wall) {
   return { minX: wall.x - w / 2, maxX: wall.x + w / 2, minZ: wall.z - d / 2, maxZ: wall.z + d / 2, yMin: 0, yMax: GLOO.h, kind: 'gloo', wallId: wall.id };
 }
 
+// ---------- Fase 25 — PORTA DESTRUTÍVEL ----------
+// Painel físico no vão da porta (interiorsPlan.doorPanelFor): bloqueia
+// movimento/balas/LOS enquanto ativa; hp cai com balas, granadas e
+// corpo-a-corpo (melee é eficaz — 2,5×). Quebrada => collider sai e o vão
+// fica LIVRE (evento 'doorDown' p/ o visual esconder o painel).
+export const DOOR = Object.freeze({ hp: 90, meleeMult: 2.5 });
+export function doorCollider(door) {
+  return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
+}
+
 // Posição/rotação de deploy: à frente do ator, alinhada à direção de visão (0/90°).
 export function glooDeployPlacement(a) {
   const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
@@ -482,6 +492,9 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
     const access = hollowAccess(layout, scenario);
     layout.colliders = access.colliders;
     layout.floors = access.floors;
+    // Fase 25 — portas destrutíveis (estado dinâmico nasce daqui) + loot interior
+    layout.doors = access.doors;
+    layout.interiorSpots = access.lootSpots;
     layout.access = { replaced: access.replaced, windows: access.windows, mezzanines: access.mezzanines };
     layoutCache.set(key, layout);
   }
@@ -520,16 +533,24 @@ export class KhaaosSim3D {
     }
     this.bullets = []; this.nextBulletId = 1;
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
+    // Fase 25 — portas destrutíveis: painéis físicos nos vãos (bloqueiam até quebrarem)
+    this.doors = (this.world.doors ?? []).map((d) => ({ id: d.id, index: d.index, x: d.x, z: d.z, rot: d.rot, kind: d.kind, hw: d.hw, hd: d.hd, yMin: d.yMin, yMax: d.yMax, hp: DOOR.hp, active: true }));
     this.loot = this.#spawnLoot();
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
-    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls).
-    // ALIAS da lista do layout quando não há paredes — mutações externas no layout
-    // (ex.: testes que removem colliders) continuam valendo para balas/LOS/movimento.
+    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls + portas).
+    // ALIAS da lista do layout quando não há dinâmicos — mutações externas no
+    // layout (ex.: testes que removem colliders) continuam valendo para
+    // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
+    // s.doors e re-sincronizam via syncPhysicsWorld()).
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    this.syncPhysicsWorld();
   }
-  #syncPhysicsWorld() {
-    const active = this.walls.filter(w => w.active).map(glooCollider);
-    this.physicsWorld.colliders = active.length ? this.world.colliders.concat(active) : this.world.colliders;
+  syncPhysicsWorld() {
+    const dynamic = [
+      ...this.walls.filter(w => w.active).map(glooCollider),
+      ...this.doors.filter(d => d.active).map(doorCollider), // Fase 25
+    ];
+    this.physicsWorld.colliders = dynamic.length ? this.world.colliders.concat(dynamic) : this.world.colliders;
   }
 
   // ---------- spawn ----------
@@ -589,7 +610,27 @@ export class KhaaosSim3D {
       items.push({ id: `loot-t${i}`, x: spot.x + ((i % 2) - .5) * 1.6, z: spot.z + ((i % 3) - 1) * 1.4,
         y: 0.55, kind: bonus[i], name: bonus[i] === 'frag' ? 'Granada FRAG' : 'Gloo Wall', active: true });
     }
+    // Fase 25 — loot INTERIOR: pontos dentro dos interiores acessíveis (chão junto
+    // à mobília + MEZANINO — recompensa de subir a escada; pegável só de cima pois
+    // |y_loot − y_ator| < 2,2 na coleta). STREAM DEDICADO: o rng legado (bots/waypoints/
+    // arremessáveis) permanece BYTE A BYTE igual ao da Fase 24 — nenhum comportamento
+    // dependente de rng muda com o loot novo.
+    const interior = this.world.interiorSpots ?? [];
+    const lootRng = new SeededRng(`${this.seed}:interiorloot`);
+    const CAP = 16;
+    for (let i = 0; i < interior.length && this.#interiorLootCount(items) < CAP; i++) {
+      const spot = interior[i];
+      const drop = rollLoot(lootRng, spot.lootZone ?? 'extraction', 1)[0];
+      // id de instância ÚNICO por DEPOIS do spread (drop.id é o id de CATÁLOGO:
+      // sobrescreveria a chave e colidiria no visual/sync — ids loot-i* são da instância)
+      items.push({ ...drop, id: `loot-i${i}`, x: spot.x, z: spot.z, y: spot.y, sectorId: spot.sectorId, active: true });
+    }
     return items;
+  }
+  #interiorLootCount(items) {
+    let n = 0;
+    for (const it of items) if (String(it.id).startsWith('loot-i')) n++;
+    return n;
   }
 
   // ---------- protocolo ----------
@@ -840,7 +881,7 @@ export class KhaaosSim3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
   }
   #stepThrowables(dt) {
@@ -860,7 +901,20 @@ export class KhaaosSim3D {
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
-    if (changed) this.#syncPhysicsWorld();
+    if (changed) this.syncPhysicsWorld();
+    this.#stepDoors();
+  }
+  // Fase 25 — portas: quebra quando hp esgota (collider sai do mundo físico)
+  #stepDoors() {
+    let changed = false;
+    for (const d of this.doors) {
+      if (!d.active) continue;
+      if (d.hp <= 0) {
+        d.active = false; changed = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, rot: d.rot });
+      }
+    }
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -870,7 +924,7 @@ export class KhaaosSim3D {
       if (a.id === 'player') this.#hurtPlayer(dmg, g.owner, 'explosion');
       else this.#damageBot(a, dmg, g.owner, false);
     }
-    // granada desgasta gloo walls no raio
+    // granada desgasta gloo walls e PORTAS no raio
     let changed = false;
     for (const w of this.walls) {
       if (!w.active) continue;
@@ -880,7 +934,14 @@ export class KhaaosSim3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
-    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.#syncPhysicsWorld(); }
+    for (const d of this.doors) {
+      if (!d.active) continue;
+      const cx = clamp(g.x, d.x - d.hw, d.x + d.hw), cz = clamp(g.z, d.z - d.hd, d.z + d.hd);
+      const cy = clamp(g.y, d.yMin, d.yMax);
+      const dist = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (dist <= FRAG.radius) { d.hp -= FRAG.damage * (1 - dist / FRAG.radius) * 2; changed = true; }
+    }
+    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.#stepDoors(); this.syncPhysicsWorld(); }
     this.emit('explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
   }
 
@@ -1072,13 +1133,29 @@ export class KhaaosSim3D {
     if (a.cooldown > 0) return false;
     a.cooldown = 1 / w.fireRate;
     const reach = 2.4;
+    let hitFlesh = false;
     for (const b of this.bots) {
       if (!b.alive) continue;
       if (dist2d(a.x, a.z, b.x, b.z) < reach && Math.abs(a.y - b.y) < 2) {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(b.z - a.z, b.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damageBot(b, w.damage, a.id, false); this.emit('melee', { target: b.id }); break; }
+        if (diff < 1.2) { this.#damageBot(b, w.damage, a.id, false); this.emit('melee', { target: b.id }); hitFlesh = true; break; }
+      }
+    }
+    // Fase 25 — melee arrebenta PORTA (a pá/cano é a ferramenta clássica de
+    // entrada silenciosa: sem o estrondo de tiro nem o custo de granada).
+    // Ângulo de frente REAL (atan2(fz, fx)) — não usa a convenção trocada do
+    // ramo de bots acima (paridade legada preservada lá).
+    if (!hitFlesh) {
+      const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const d of this.doors) {
+        if (!d.active) continue;
+        const cx = clamp(a.x, d.x - d.hw, d.x + d.hw), cz = clamp(a.z, d.z - d.hd, d.z + d.hd);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
+        const ang = Math.atan2(d.z - a.z, d.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
+        if (diff < 1.25) { d.hp -= w.damage * DOOR.meleeMult; this.emit('doorHit', { id: d.id, x: d.x, z: d.z }); break; }
       }
     }
     this.emit('swing', { owner: a.id });
@@ -1132,7 +1209,12 @@ export class KhaaosSim3D {
           const w = this.walls.find(wl => wl.id === hitBox.wallId && wl.active);
           if (w) w.hp -= b.damage;
         }
-        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: hitBox?.wallId ? 'gloo' : 'wall' });
+        // Fase 25 — balas desgastam PORTAS (destrutíveis: abre caminho a tiro)
+        if (hitBox?.doorId) {
+          const d = this.doors.find(dl => dl.id === hitBox.doorId && dl.active);
+          if (d) d.hp -= b.damage;
+        }
+        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: hitBox?.wallId ? 'gloo' : hitBox?.doorId ? 'door' : 'wall' });
       }
     }
     this.bullets = this.bullets.filter(b => b.life > 0);
@@ -1401,7 +1483,7 @@ export class KhaaosSim3D {
     this.loot = (s.loot ?? this.loot).map(i => ({ ...i }));
     this.grenades = (s.grenades ?? this.grenades).map(g => ({ ...g }));
     this.walls = (s.walls ?? this.walls).map(w => ({ ...w }));
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
   exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, operativeId: this.player.operativeId, tickRate: this.tickRate, inputs: this.replay }; }

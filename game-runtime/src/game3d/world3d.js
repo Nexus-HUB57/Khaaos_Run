@@ -700,7 +700,10 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     if (shellSpec) {
       // Fase 23 — casca habitável no lugar da caixa (mesma transform; o sim
       // continua tratando a estrutura como sólida, exatamente como antes)
-      interiors.group.add(buildShellHost(s, shellSpec, interiors.mats));
+      const host = buildShellHost(s, shellSpec, interiors.mats);
+      // Fase 25 — painel de porta destrutível registrado por id (syncDoors lê)
+      if (host.userData.doorPanel) interiors.doorPanels.set(host.userData.doorPanel.id, host.userData.doorPanel.group);
+      interiors.group.add(host);
     } else {
       const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
       const geo = new THREE.BoxGeometry(s.w, s.h, s.d);

@@ -68,6 +68,7 @@ export class Game3D {
     this.wallMeshes = new Map();      // id → mesh
     this.wallPositions = new Map();   // Fase 21 — id → última posição conhecida (decal de glooDown)
     this.parachutes = new Map();      // actorId → { chute, group }
+    this.doorBrokenFx = new Set();    // Fase 25 — portas já com FX de quebra tocado
     this.shake = 0;                   // tremor de câmera (explosões)
     // Fase 5 — espectador + agachamento
     this.spectating = false;
@@ -596,6 +597,38 @@ export class Game3D {
     }
   }
 
+  // ---------- Fase 25 — sincronização visual das PORTAS destrutíveis ----------
+  // Funciona nos 3 modos: sim offline (KhaaosSim3D.doors), online (Sim3DView.doors
+  // dos snapshots) e transmissão (SpectatorView.doors do batch). O painel some
+  // quando o servidor/sim marca active=false; FX de quebra toca UMA vez.
+  syncDoors() {
+    const doors = this.sim.doors;
+    if (!doors || !Array.isArray(doors)) return;
+    const panels = this.scene.userData.interiors?.doorPanels;
+    if (!panels) return;
+    for (const d of doors) {
+      const group = panels.get(d.id);
+      if (!group) continue;
+      const open = d.active === false || (Number.isFinite(d.hp) && d.hp <= 0);
+      if (open && group.visible) {
+        group.visible = false;
+        if (!this.doorBrokenFx.has(d.id)) {
+          this.doorBrokenFx.add(d.id);
+          const cy = ((d.yMin ?? 0) + (d.yMax ?? 2.5)) / 2;
+          for (let i = 0; i < 3; i++) {
+            this.effects.impact(new THREE.Vector3(
+              d.x + (Math.random() - .5) * (d.hw ?? .8) * 1.4,
+              cy + (Math.random() - .5) * 1.1,
+              d.z + (Math.random() - .5) * (d.hd ?? .8) * 1.4), 'wall');
+          }
+          if (this.audio?.impact) this.audio.impact(new THREE.Vector3(d.x, cy, d.z), 'wall');
+        }
+      } else if (!open && !group.visible) {
+        group.visible = true; // (futuro: abrir/fechar sem quebrar)
+      }
+    }
+  }
+
   // ---------- Fase 4 — sincronização visual de arremessáveis/queda ----------
   // Funciona nos dois modos: a sim offline e a Sim3DView online expõem os mesmos
   // arrays (grenades/walls) traduzidos dos snapshots autoritativos.
@@ -1034,8 +1067,8 @@ export class Game3D {
         }
         case 'impact': {
           this.effects.impact(new THREE.Vector3(e.x, e.y, e.z), e.kind);
-          // Fase 5 — orifício persistente em superfícies sólidas
-          if (e.kind === 'wall' || e.kind === 'gloo') this.effects.bulletHole(new THREE.Vector3(e.x, e.y, e.z));
+          // Fase 5 — orifício persistente em superfícies sólidas (porta entra na Fase 25)
+          if (e.kind === 'wall' || e.kind === 'gloo' || e.kind === 'door') this.effects.bulletHole(new THREE.Vector3(e.x, e.y, e.z));
           break;
         }
         case 'kill':
@@ -1366,6 +1399,7 @@ export class Game3D {
       this.handleEvents();
     }
     this.syncLoot();
+    this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring

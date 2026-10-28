@@ -27,7 +27,7 @@ import {
   plankMaterial, concreteMaterial, crateTexture, barrelMaterial,
   palletMaterial, sandbagMaterial, signTexture,
 } from './textures3d.js';
-import { ACCENTS, MEZZ, interiorDressing } from './interiorsPlan.js';
+import { ACCENTS, MEZZ, interiorDressing, DOOR_KINDS } from './interiorsPlan.js';
 
 // ============================================================================
 // PARTE 1 — plano puro (Fase 24): placements/janelas/escada moram em
@@ -341,7 +341,8 @@ const FURN = {
  * NÃO adiciona malhas — as cascas entram via buildShellHost no loop de
  * estruturas do world3d (substituindo a caixa sólida, collider intacto).
  * Registry em scene.userData.interiors: { id, counts, animators, placements,
- * shells (Map estrutura→spec), group, mats }.
+ * shells (Map estrutura→spec), doorPanels (Map id→grupo do painel — Fase 25),
+ * group, mats }.
  */
 export function buildInteriors(scene, layout, scenario, q) {
   if (scene.userData.interiors) return scene.userData.interiors;
@@ -370,6 +371,7 @@ export function buildInteriors(scene, layout, scenario, q) {
     animators,
     placements,
     shells,
+    doorPanels: new Map(), // Fase 25 — preenchido pelo world3d via host.userData.doorPanel
     mats,
     group,
   };
@@ -475,6 +477,36 @@ export function buildShellHost(s, spec, m) {
       };
       jamb(doorC - dw / 2 - .07);
       jamb(doorC + dw / 2 + .07);
+      // Fase 25 — PAINEL da porta destrutível (MESMO vão dos colliders dinâmicos
+      // sim3d.DOOR/room3d): grupo painel + travessas + maçaneta + dobradiças.
+      // O estado (hp/quebra) chega via syncDoors — registry doorPanels por id.
+      if (DOOR_KINDS.has(s.kind)) {
+        const metal = s.kind === 'hangar' || s.kind === 'warehouse';
+        const horizontal = face === 'front' || face === 'back';
+        const dg = new THREE.Group();
+        // helper: peça em ESPAÇO DA PAREDE (u = ao longo, y = altura, t = fora da plane)
+        const part = (u, y, t, su, sy, st, mat) => {
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(
+            horizontal ? su : st, sy, horizontal ? st : su), mat);
+          mesh.position.set(horizontal ? u : t, y, horizontal ? t : u);
+          mesh.castShadow = mesh.receiveShadow = true;
+          dg.add(mesh);
+          return mesh;
+        };
+        part(doorC, dh / 2, 0, dw, dh, .12, metal ? m.steel : m.woodDark);           // painel
+        part(doorC, dh * .3, 0, dw - .24, .1, .16, metal ? m.frame : m.wood);        // travessa baixa
+        part(doorC, dh * .72, 0, dw - .24, .1, .16, metal ? m.frame : m.wood);       // travessa alta
+        part(doorC + dw / 2 - .38, dh * .48, .11, .26, .07, .05, m.steel);           // maçaneta
+        part(doorC - dw / 2 + .12, dh * .22, 0, .14, .12, T + .05, m.frame);         // dobradiça inf.
+        part(doorC - dw / 2 + .12, dh * .8, 0, .14, .12, T + .05, m.frame);          // dobradiça sup.
+        // grupo na PLANE da parede (mesma linha das cascas)
+        if (face === 'front') dg.position.set(0, 0, -d / 2 + T / 2);
+        else if (face === 'back') dg.position.set(0, 0, d / 2 - T / 2);
+        else if (face === 'right') dg.position.set(w / 2 - T / 2, 0, 0);
+        else dg.position.set(-w / 2 + T / 2, 0, 0);
+        host.add(dg);
+        host.userData.doorPanel = { id: `door-${spec.index}`, group: dg };
+      }
       continue;
     }
     if (ruin) {
