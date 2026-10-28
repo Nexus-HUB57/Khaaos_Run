@@ -5,16 +5,25 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
+import { sql } from "drizzle-orm";
 import { app } from "../index.js";
+import { db } from "../db/index.js";
+import { KHAADOS_SCHEMA_DDL } from "../db/ddl.js";
 
 describe("2PC Protocol — Integration Tests", () => {
   const playerId = 9001;
   let transactionId: string;
 
-  beforeAll(() => {
-    // Em testes, usamos IDs fixos para previsibilidade
-    transactionId = "00000000-0000-0000-0000-000000000001";
+  beforeAll(async () => {
+    // PGlite embutido (DATABASE_URL=pglite:memory no vitest.config.ts):
+    // aplicar o DDL espelho do schema antes de qualquer request tocar as tabelas
+    for (const statement of KHAADOS_SCHEMA_DDL) {
+      await db.execute(sql.raw(statement));
+    }
   });
+
+  // Em testes, usamos IDs fixos para previsibilidade
+  transactionId = "00000000-0000-0000-0000-000000000001";
 
   describe("POST /api/economy/2pc/prepare", () => {
     it("deve rejeitar request sem campos obrigatórios", async () => {

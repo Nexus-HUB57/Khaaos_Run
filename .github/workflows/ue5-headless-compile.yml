@@ -39,11 +39,13 @@ jobs:
       - name: Check GPU Runner Availability
         run: |
           echo "🔍 Verificando disponibilidade do GPU runner..."
-          # O runner 'self-hosted-gpu' deve estar registrado no repo settings.
-          # Se não disponível, o job de compilação será skipado.
-          RUNNER_LABEL="self-hosted-gpu"
-          echo "RUNNER_LABEL=$RUNNER_LABEL" >> $GITHUB_ENV
-          echo "✅ Runner label definido: $RUNNER_LABEL"
+          # O runner deve estar registrado no repo settings com os labels EXATOS
+          # definidos em scripts/setup-gpu-runner.sh (RUNNER_LABELS):
+          #   self-hosted,linux,gpu,ue5.8,x64
+          # Gere o token de registro com: scripts/register-gpu-runner-token.sh
+          RUNNER_LABELS="self-hosted,linux,gpu,ue5.8,x64"
+          echo "RUNNER_LABELS=$RUNNER_LABELS" >> $GITHUB_ENV
+          echo "✅ Labels exigidos: $RUNNER_LABELS"
 
       - name: Set UE5_INSTALL_DIR
         run: |
@@ -61,7 +63,8 @@ jobs:
   # ─── Job 2: UE5 Headless Compile ─────────────────────────────────────────
   ue5-headless-compile:
     name: UE5 Headless Compile
-    runs-on: [self-hosted, gpu]
+    # Labels EXATOS que o runner self-hosted registra (scripts/setup-gpu-runner.sh)
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
     needs: register-gpu-runner
     timeout-minutes: 120
     steps:
@@ -109,6 +112,21 @@ jobs:
             -build
           echo "✅ Compilação headless completa"
 
+      - name: Generate LUT + PostProcess Material Assets
+        run: |
+          # Gera no Content Browser: 5 texturas LUT (/Game/Graphics/LUTs/)
+          # e o material M_KhaaosColorGradeLUT (/Game/Graphics/Materials/).
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -run=KhaaosLUTMaterialBuilder \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "✅ Assets LUT + material de PostProcess gerados"
+
       - name: Run Headless Unit Tests
         run: |
           # Executar testes unitários no modo headless
@@ -131,6 +149,8 @@ jobs:
           path: |
             Unreal/KhaaosRun/Binaries/Linux/**
             Unreal/KhaaosRun/Intermediate/**
+            Unreal/KhaaosRun/Content/Graphics/LUTs/**
+            Unreal/KhaaosRun/Content/Graphics/Materials/**
           retention-days: 7
 
       - name: Build Summary

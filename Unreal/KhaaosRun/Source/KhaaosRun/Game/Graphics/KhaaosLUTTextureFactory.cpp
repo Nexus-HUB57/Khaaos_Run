@@ -286,6 +286,22 @@ UTexture2D* UKhaaosLUTTextureFactory::CreateTextureFromPixels(
     FMemory::Memcpy(MipData, Pixels.GetData(), Pixels.Num());
     Mip0.BulkData.Unlock();
 
+#if WITH_EDITORONLY_DATA
+    // Espelhar os pixels no Source (dados de origem do editor). Sem isso, o
+    // PlatformData tem o LUT correto mas o Source fica zerado — e o asset
+    // salvo no Content Browser (via KhaaosLUTMaterialBuilder) perde os pixels
+    // ao re-cozinhar para qualquer plataforma.
+    if (FTextureSourceMip* SourceMip = Texture->Source.GetMip(0))
+    {
+        void* SourceData = SourceMip->BulkData.Lock(LOCK_READ_WRITE);
+        if (SourceData)
+        {
+            FMemory::Memcpy(SourceData, Pixels.GetData(), Pixels.Num());
+        }
+        SourceMip->BulkData.Unlock();
+    }
+#endif
+
     // Atualizar a textura no render thread
     Texture->UpdateResource();
 

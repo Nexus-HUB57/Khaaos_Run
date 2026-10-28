@@ -294,6 +294,12 @@ twoPcRouter.post("/abort", async (req: Request, res: Response) => {
 twoPcRouter.get("/status/:transactionId", async (req: Request, res: Response) => {
   const { transactionId } = req.params;
 
+  // Guard: params do Express 5 não garantem string — sem isso o eq(uuid, ...)
+  // não resolve overload e o tsc build falha (comportamento de runtime idêntico)
+  if (typeof transactionId !== "string" || transactionId.length === 0) {
+    return res.status(400).json({ code: "VALIDATION_ERROR", message: "transactionId obrigatório" });
+  }
+
   const txRows = await db.select()
     .from(twoPcTransactions)
     .where(eq(twoPcTransactions.transactionId, transactionId))

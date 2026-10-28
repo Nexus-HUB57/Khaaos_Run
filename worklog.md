@@ -135,3 +135,47 @@ Stage Summary:
 - Sharpen + TSR tuning mobile — nitidez característica do FF
 - Integração: 7 estágios no PipelineManager, aplicação automática no OnWorldBeginPlay
 - Próximo passo: compile na GPU runner + validação visual com screenshot em staging
+
+---
+Task ID: Graphics v6 — Assets LUT + PostProcess no Content Browser
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- KhaaosLUTTextureFactory.cpp: patch WITH_EDITORONLY_DATA — pixels espelhados no Source (GetMip(0)) — sem isso assets LUT salvos perderiam pixels ao re-cozinhar
+- Criado KhaaosLUTMaterialBuilderCommandlet.h/.cpp (KhaaosRunEditor): gera programaticamente no Content Browser
+  - 5 texturas LUT persistentes /Game/Graphics/LUTs/T_KhaaosLUT_{PadraoBattle,NoiteNeon,NebulosaAlien,AmanhecerVenenoso,LowEndLeve} — duplicate do transient do factory, CompressionNone, TMGS_NoMipmaps, SRGB=false, LODGroup ColorLookupTable, FSavePackageArgs
+  - Material /Game/Graphics/Materials/M_KhaaosColorGradeLUT — MD_PostProcess (Unlit), BlendableLocation AfterTonemapping, grafo de ~35 nós: SceneTexture(PPI_PostProcessInput0) → ComponentMask → Saturate → UV strip math (U=(floor(B*q)*Size+R*q+0.5)/Size², V=(G*q+0.5)/Size) → TextureSampleParameter2D "LUTTexture" → Lerp LUTBlend → Desat+Lerp AdditionalSaturation → Multiply AdditionalTint → debug split-screen (ScreenPosition+If, esquerda=raw/direita=graded) → EmissiveColor
+  - 6 parâmetros idênticos aos que o runtime (KhaaosPostProcessLUTMaterial) define nos MIDs
+- KhaaosRunEditor.Build.cs: +AssetRegistry, +AssetTools
+- ue5-headless-compile.yml: FIX de label divergente (runs-on [self-hosted,gpu] vs script que registrava [self-hosted,linux,ue5.8,x64] — job nunca rodaria) → unificado em [self-hosted, linux, gpu, ue5.8, x64]; novo step "Generate LUT + PostProcess Material Assets" (-run=KhaaosLUTMaterialBuilder); artifacts incluem Content/Graphics/{LUTs,Materials}
+- setup-gpu-runner.sh: RUNNER_LABELS default alinhado + doc do helper
+- scripts/register-gpu-runner-token.sh (novo): gera RUNNER_REGISTRATION_TOKEN via API GitHub (POST /repos/{repo}/actions/runners/registration-token), usa GH_TOKEN ou PAT do remote; --list, --token-file (perms 600), nunca ecoa o token; token validado HTTP 201 contra Nexus-HUB57/Khaaos_Run
+- package.json: script canônico "test" = guard:tests && test:official (npm test agora é o entrypoint anti-reversão)
+- Testes de contrato: tests/official/lut-material-contract.test.ts (10 specs: domínio/blendable, cadeia do grafo, 6 parâmetros idênticos runtime↔commandlet, path único, 5 LUTs, Source mirror, Build.cs, step CI) + gpu-runner-labels.test.ts (4 specs: labels workflow↔script com deepEqual, essenciais, anti-vazamento de token, encadeamento)
+- Validado: validate_uht.py 298/298 no módulo game; Phase 1 limpa nos novos headers (fases 3-5 falham igual com arquivos antigos do HEAD — limitação pré-existente de paths fixos); npm test = 453 testes, 0 falhas (414 TS + 39 JS, 8 skipped por design)
+
+Stage Summary:
+- Material M_KhaaosColorGradeLUT agora EXISTE: gerado pelo builder em vez de depender de montagem manual no editor; runtime carrega o asset real e só usa ColorGradingLUT nativo como fallback
+- Pipeline de assets LUT reproduzível em CI (headless) e no editor (1 commandlet)
+- GPU runner: labels workflow↔runner consistentes + registro em 1 comando via API (sem Settings UI)
+- Próximo passo: registrar o runner na VM GPU (bash scripts/register-gpu-runner-token.sh com GH_TOKEN) e rodar o workflow ue5-headless-compile para compilar + gerar os assets
+
+---
+Task ID: Economy 2PC Server — PGlite + build limpo
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- economy-server: vitest subia a árvore e carregava o vitest.config.ts da RAIZ (vitest proibido pelo guard e ausente lá) → ERR_MODULE_NOT_FOUND. Criado economy-server/vitest.config.ts local (root ancorado, env DATABASE_URL=pglite:memory)
+- src/db/index.ts: suporte a PGlite (Postgres WASM em-processo) via DATABASE_URL=pglite: — createRequire(cwd) (compatível com build tsc NodeNext→CJS, sem import.meta); prod continua postgres.js/TCP sem carregar PGlite
+- src/db/ddl.ts (novo): DDL espelho de schema.ts (3 tabelas 2PC) aplicado no beforeAll da suíte
+- src/__tests__/2pc.integration.test.ts: beforeAll aplica DDL no PGlite
+- src/routes/2pc.ts: guard de params na rota status/:transactionId (Express 5 types) — consertava erro TS2769 pré-existente que quebrava npm run build
+- Fix de comportamento real: rotas commit/abort retornavam 500 em vez de 404 para transação inexistente quando o banco não estava acessível — agora os 404 são verificados contra Postgres REAL embutido (PGlite)
+- Validado: npm run build = 0 erros tsc; npm test (economy-server) = 6/6; npm test (raiz) = 453 testes 0 falhas
+
+Stage Summary:
+- Suíte 2PC integra contra Postgres real (WASM embutido) — os 404/409/403 não são mais mocks superficiais
+- Build tsc do economy-server volta a funcionar (era quebrado antes do guard de rotas)
+- Config vitest isolada por pacote — monorepo à prova do guard de testes
