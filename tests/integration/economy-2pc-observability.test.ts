@@ -81,6 +81,28 @@ async function applyMigrations(): Promise<void> {
         .filter((f) => /^\d{4}_.*\.sql$/.test(f))
         .sort();
 
+      // DB pré-migrado (ex.: step "Migrate" do 05-integration roda
+      // `drizzle-kit migrate` antes dos testes): o schema já existe mas
+      // _test_migrations_applied está vazio — reaplicar 0000 quebraria com
+      // "relation already exists" (a tag de cada arquivo só é gravada DEPOIS
+      // de todas as suas statements). Se o schema canônico já existe,
+      // sincroniza as tags e pula a aplicação; em DB fresco segue o fluxo
+      // normal (13-monitoring staging).
+      if (applied.size === 0) {
+        const pre = await client.query<{ t: string | null }>(
+          "SELECT to_regclass('public.bank_accounts') AS t",
+        );
+        if (pre.rows[0]?.t) {
+          for (const file of files) {
+            await client.query(
+              "INSERT INTO _test_migrations_applied (tag) VALUES ($1) ON CONFLICT DO NOTHING",
+              [file],
+            );
+          }
+          return; // finally libera o lock
+        }
+      }
+
       for (const file of files) {
         if (applied.has(file)) continue;
         const sql = readFileSync(join(migrationsDir, file), "utf8");
