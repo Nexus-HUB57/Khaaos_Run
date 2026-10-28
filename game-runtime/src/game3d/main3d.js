@@ -66,6 +66,7 @@ export class Game3D {
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
     this.wallMeshes = new Map();      // id → mesh
+    this.wallPositions = new Map();   // Fase 21 — id → última posição conhecida (decal de glooDown)
     this.parachutes = new Map();      // actorId → { chute, group }
     this.shake = 0;                   // tremor de câmera (explosões)
     // Fase 5 — espectador + agachamento
@@ -617,6 +618,7 @@ export class Game3D {
     for (const w of walls) {
       if (!w.active) { continue; }
       activeW.add(w.id);
+      this.wallPositions.set(w.id, { x: w.x, z: w.z }); // Fase 21 — cache p/ cacos no glooDown
       let mesh = this.wallMeshes.get(w.id);
       if (!mesh) {
         mesh = createGlooMesh();
@@ -1227,14 +1229,40 @@ export class Game3D {
           this.effects.explosion(new THREE.Vector3(e.x, e.y, e.z));
           this.audio.explosion(dist);
           this.shake = Math.max(this.shake, Math.max(0, .3 - dist * .004));
+          // Fase 21 — marca de explosão no chão (mesma infra de decals):
+          // explosão alta deixa marca mais fraca (blast dissipa no ar).
+          const yBlast = Number.isFinite(e.y) ? e.y : 0;
+          const scorchPower = Math.max(.55, Math.min(1, 1 - yBlast / 9));
+          this.deathDecals?.spawn({
+            kind: 'scorch', x: e.x, z: e.z, power: scorchPower,
+            seed: Math.floor(Math.abs(e.x * 73.13 + e.z * 179.71) * 100) % 100000,
+          });
           break;
         }
-        case 'gloo':
+        case 'gloo': {
           if (e.owner !== 'player') this.audio.gloo();
+          // Fase 21 — geada na base onde a parede assentou (dono tanto faz:
+          // a marca é do mundo, não do jogador)
+          this.deathDecals?.spawn({
+            kind: 'gloo', x: e.x, z: e.z, yaw: e.rot ?? 0, angle: Math.PI / 2,
+            power: .62,
+            seed: Math.floor(Math.abs(e.x * 131.7 + e.z * 57.3) * 100) % 100000,
+          });
           break;
-        case 'glooDown':
+        }
+        case 'glooDown': {
           this.hud.feed('ARSENAL', e.destroyed ? 'Gloo Wall destruída.' : 'Gloo Wall dissolvida.');
+          // Fase 21 — cacos de gelo onde a parede estava (cache de posições;
+          // o evento não traz x/z). Só quando DESTRUÍDA: dissolver não raspa o chão.
+          const wp = this.wallPositions.get(e.id);
+          if (wp && e.destroyed) {
+            this.deathDecals?.spawn({
+              kind: 'gloo', x: wp.x, z: wp.z, power: .95,
+              seed: Math.floor(Math.abs(wp.x * 211.3 + wp.z * 97.9) * 100) % 100000,
+            });
+          }
           break;
+        }
         case 'victory': this.#endMatch(true, e); break;
         case 'matchEnd': this.#endMatch(false, { kills: p.kills, xp: p.xp, krc: p.krc, ...e }); break;
         case 'eliminated': this.enterSpectate(e); break;

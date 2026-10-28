@@ -360,6 +360,20 @@ export class SpectatorRemote {
     return next;
   }
 
+  // Fase 21 — standings CLICÁVEIS: segue um jogador ESPECÍFICO do ranking com
+  // a MESMA semântica de reserva manual do prev/next (o diretor não disputa
+  // este hazard; retoma no próximo). Só vivos são seguíveis — clicar em
+  // eliminado/fora do TOP não faz nada (o HUD nem emite o clique).
+  followPlayer(id) {
+    const alive = computeStandings(this.last?.players ?? []).filter((p) => !p.isEliminated);
+    const target = alive.find((p) => String(p.id) === String(id)) ?? null;
+    if (!target) return null;
+    this._autoHoldHazard = this.activeHazard?.hazard ?? null;
+    this._autoHeld = 'manual';
+    this.setCamera('FOLLOW_PLAYER', target.id);
+    return target;
+  }
+
   dispose() {
     try { this.ws?.close(); } catch { /* já fechado */ }
     this.ws = null;
@@ -550,6 +564,7 @@ export function spectatorViewModel(state = {}) {
     ring,
     hazard,
     autoFollow: !!state.autoFollow, // Fase 19 — diretor automático (botão AUTO)
+    followId: state.followId != null ? String(state.followId) : null, // Fase 21 — highlight do alvo
     top: standings.slice(0, 8).map((p, i) => ({
       rank: i + 1,
       id: String(p.id),
@@ -565,10 +580,13 @@ export function spectatorViewModel(state = {}) {
 }
 
 export class SpectatorHUD {
-  constructor({ onCamera = null, onFollowCycle = null, onDisconnect = null, onAutoToggle = null } = {}) {
+  constructor({ onCamera = null, onFollowCycle = null, onFollowSelect = null, onDisconnect = null, onAutoToggle = null } = {}) {
     this.onCamera = onCamera; this.onFollowCycle = onFollowCycle; this.onDisconnect = onDisconnect;
     // Fase 19 — botão AUTO: liga/desliga o diretor automático da câmera
     this.onAutoToggle = onAutoToggle;
+    // Fase 21 — standings clicáveis: clique numa linha do ranking segue aquele
+    // jogador (reserva manual igual ao prev/next)
+    this.onFollowSelect = onFollowSelect;
     const doc = typeof document !== 'undefined' ? document : null;
     this.root = doc?.querySelector('#spectatorHud') ?? null;
     this.feedRoot = doc?.querySelector('#specFeed') ?? null;
@@ -616,8 +634,13 @@ export class SpectatorHUD {
       if (list) {
         list.replaceChildren(...vm.top.map((row) => {
           const el = this.root.ownerDocument.createElement('div');
-          el.className = `spec-row${row.alive ? '' : ' out'}${row.downed ? ' down' : ''}`;
+          const isFollow = vm.followId != null && String(vm.followId) === row.id;
+          el.className = `spec-row${row.alive ? '' : ' out'}${row.downed ? ' down' : ''}${row.alive ? ' clickable' : ''}${isFollow ? ' is-follow' : ''}`;
+          el.dataset.id = row.id;
           el.innerHTML = `<b>${String(row.rank).padStart(2, '0')}</b><span class="spec-name">${esc(row.name)}</span><span class="spec-kills">${String(row.kills).padStart(2, '0')} ✕</span><i class="spec-life"><em style="width:${row.life}%"></em></i>`;
+          if (row.alive && this.onFollowSelect) {
+            el.addEventListener('click', () => this.onFollowSelect(row.id));
+          }
           return el;
         }));
       }
@@ -652,6 +675,7 @@ function createSpectatorGame(Game3D) {
       this.specHud = new SpectatorHUD({
         onCamera: (mode) => { this.camMode = mode; remote.setCamera(mode, this.camMode === 'FOLLOW_PLAYER' ? remote.followPlayerId : null); },
         onFollowCycle: (dir) => { const f = remote.cycleFollow(dir); if (f) this.camMode = 'FOLLOW_PLAYER'; },
+        onFollowSelect: (id) => { const f = remote.followPlayer(id); if (f) this.camMode = 'FOLLOW_PLAYER'; }, // Fase 21 — ranking clicável
         onAutoToggle: () => remote.setAutoFollow(), // Fase 19 — diretor on/off
         onDisconnect: () => remote.dispose(),
       });

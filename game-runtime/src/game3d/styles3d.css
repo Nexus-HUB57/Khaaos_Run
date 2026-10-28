@@ -458,6 +458,11 @@ body.spectating #hitmarker { display: none !important; }
 #spectatorHud .spec-row.out { opacity: .38; }
 #spectatorHud .spec-row.out .spec-life em { background: #5a4046; }
 #spectatorHud .spec-row.down .spec-name::after { content: ' · NOCAUTE'; color: #e86a7a; font-size: 8px; }
+/* Fase 21 — standings clicáveis: linha viva segue aquele operativo */
+#spectatorHud .spec-row.clickable { cursor: pointer; transition: background .12s; }
+#spectatorHud .spec-row.clickable:hover { background: rgba(255,255,255,.09); }
+#spectatorHud .spec-row.is-follow { background: rgba(200,255,61,.12); box-shadow: inset 2px 0 0 var(--acid); }
+#spectatorHud .spec-row.is-follow .spec-name { color: var(--acid); }
 #spectatorHud .spec-cams { display: flex; align-items: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
 #spectatorHud .spec-btn {
   height: 24px; padding: 0 8px; border: 1px solid rgba(255,255,255,.22);
