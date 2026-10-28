@@ -1,0 +1,108 @@
+# =============================================================================
+# Khaaos Run — Alertas SLO com burn-rate multiwindow (M3)
+# =============================================================================
+# Política de budget (docs/SLO.md):
+#   - page (acionar humano AGORA): burn 14.4x em 1h COM 5m, ou 6x em 6h COM 30m
+#   - ticket (próximo dia útil): burn 3x em 3d COM 6h
+# Todos os alertas seguem o padrão Google SRE Workbook (multiwindow, multi-burn).
+# =============================================================================
+
+groups:
+  - name: khaaos-slo-alerts
+    interval: 1m
+    rules:
+      # ── PAGE: disponibilidade queimando budget rápido (14.4x / 1h + 5m) ──
+      - alert: KhaaosSLOAvailabilityFastBurn
+        expr: |
+          (khaaos:slo:http_availability_burn_1h > 14.4)
+          and (khaaos:slo:http_availability_burn_5m > 14.4)
+        for: 2m
+        labels:
+          severity: page
+          slo: availability
+        annotations:
+          summary: "SLO disponibilidade queimando 14.4x (1h+5m) em {{ $labels.job }}"
+          description: "Erro ratio atual consome o budget de 30 dias em ~2 dias. Investigar AGORA: playbooks de 5xx (docs/SRE_PLAYBOOKS.md — PB-01)."
+
+      # ── PAGE: disponibilidade queimando budget lento (6x / 6h + 30m) ──
+      - alert: KhaaosSLOAvailabilitySlowBurn
+        expr: |
+          (khaaos:slo:http_availability_burn_6h > 6)
+          and (khaaos:slo:http_availability_burn_30m > 6)
+        for: 15m
+        labels:
+          severity: page
+          slo: availability
+        annotations:
+          summary: "SLO disponibilidade queimando 6x (6h+30m) em {{ $labels.job }}"
+          description: "Degradação sustentada. Playbook PB-01 (5xx) ou PB-05 (saturação)."
+
+      # ── PAGE: latência queimando budget rápido ──
+      - alert: KhaaosSLOLatencyFastBurn
+        expr: |
+          (khaaos:slo:http_latency_burn_1h > 14.4)
+          and (khaaos:slo:http_latency_burn_5m > 14.4)
+        for: 2m
+        labels:
+          severity: page
+          slo: latency
+        annotations:
+          summary: "SLO latência (p99 < 500ms) queimando 14.4x em {{ $labels.job }}"
+          description: "Ver PB-02 (DB saturado) e PB-04 (storm de reconexão WS)."
+
+      # ── TICKET: esgotamento gradual (3x / 3d + 6h) ──
+      - alert: KhaaosSLOAvailabilityBudgetDrain
+        expr: |
+          (khaaos:slo:http_availability_burn_3d > 3)
+          and (khaaos:slo:http_availability_burn_6h > 3)
+        for: 1h
+        labels:
+          severity: ticket
+          slo: availability
+        annotations:
+          summary: "Budget de disponibilidade drenando (3x/3d) em {{ $labels.job }}"
+          description: "Budget será exaurido dentro do mês. Planejar correção estrutural."
+
+      # ── Relay cross-node degradado (SLO 99.9%) ──
+      - alert: KhaaosRelayPublishErrors
+        expr: khaaos:slo:relay_publish_ok_ratio_5m < 0.999
+        for: 5m
+        labels:
+          severity: page
+          slo: relay
+        annotations:
+          summary: "Relay cross-node com erros sustentados em {{ $labels.job }}"
+          description: "Túneis falhando (publish_failed). Ver PB-03 (mesh/relay) e checar índice de nós no Redis."
+
+      # ── Fences disparando = partição de rede / split-brain em curso ──
+      - alert: KhaaosRoomFencedSpike
+        expr: khaaos:slo:room_fenced_rate_5m > 0
+        for: 1m
+        labels:
+          severity: page
+          slo: ownership
+        annotations:
+          summary: "Salas sendo CERCADAS (fenced) — indício de partição ou nó zumbi"
+          description: "O fencing fez o trabalho dele, mas o evento é anômalo por design. Ver PB-03 (partição de rede) imediatamente."
+
+      # ── Pool de DB saturado (antecipa erro 5xx) ──
+      - alert: KhaaosDbPoolSaturated
+        expr: khaaos:slo:db_pool_saturation_ratio > 0.9
+        for: 5m
+        labels:
+          severity: ticket
+          slo: db
+        annotations:
+          summary: "Pool PostgreSQL acima de 90% de utilização"
+          description: "Risco de espera de conexão (khaaos_db_pool state=waiting). Ver PB-02."
+
+      # ── Nó de staging morto (2 réplicas esperadas) ──
+      - alert: KhaaosStagingReplicaMissing
+        expr: count(up{job="khaaos-runtime-staging"} == 1) < 2
+        for: 5m
+        labels:
+          severity: ticket
+          slo: availability
+        annotations:
+          summary: "Menos de 2 réplicas visíveis no staging"
+          description: "Topologia do M3 exige 2 réplicas. Re-escalar: docker compose up -d --scale app=2."

@@ -287,6 +287,12 @@ Esta seção registra o estado naquela data, não o estado atual. A revisão atu
 
 **Aceite:** teste com duas réplicas prova owner único e rejeita fencing antigo; reconnect mantém ordem e não duplica jogadores; soak acordado termina sem crescimento contínuo de memória/crashes e publica latências; readiness falha quando uma dependência necessária está indisponível.
 
+> **Progresso M3 (2026-10-28) — implementado e validado localmente contra infra real:**
+> - **Ownership/fencing de sala**: epoch monotônico por sala com lease atômico (Lua no Redis, espelhado no barramento local). Epoch gap > 1 entre aquisições do MESMO nó → sala CERCADA (fenced): autoridade drenada, cliente recebe `ROOM_NODE_LOST` com `reason="fenced"` e reancora. Split-brain de nó que volta de partição está fechado. Evidência: `tests/official/room-fencing.test.ts` (14/14) + smoke F16 completo (`F16_SMOKE_OK`) contra PostgreSQL 16 + Redis 7 master/réplica reais, incluindo morte do nó dono.
+> - **Métricas HTTP/DB/WS**: exposição Prometheus zero-dependency (`server/game/metrics.ts`) com RED de HTTP (rota normalizada), pool/queries do PostgreSQL, conexões/salas/túneis relay/mensagens WS, contadores de lease/fence; `/metrics` no app raiz e no game-runtime (`khaaos_runtime_*`), desligável por env. Verificado em produção local (39 séries).
+> - **SLOs e playbooks**: catálogo `docs/SLO.md` (disponibilidade 99,5%, latência p99 < 500 ms, relay 99,9%, orçamento de erro e política de burn), recording rules + alertas multiwindow multi-burn-rate (`monitoring/prometheus/rules/`), config Prometheus de staging para 2 réplicas (`prometheus-staging.yml`), playbooks PB-01…PB-07 (`docs/SRE_PLAYBOOKS.md`) com drill de morte de nó (PB-06) e rotação de credenciais (PB-07).
+> - **Pendente para aceite integral do M3**: load generator configurável substituindo o smoke local (perfis reproduzíveis p50/p95/p99) e soak de memória em staging gerenciado — exigem provisionamento aprovado.
+
 #### M4 — P2 paridade de produto e trilha UE5/EOS real
 
 - Executar testes browser e acessibilidade em ambiente de staging para clientes reais.

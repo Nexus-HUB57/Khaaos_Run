@@ -1,0 +1,116 @@
+# =============================================================================
+# Khaaos Run — SLO recording rules (M3) — staging/produção
+# =============================================================================
+# Pré-computa os SLIs e as janelas de burn-rate (multiwindow) usados pelos
+# alertas. Fontes: khaaos_http_* (app raiz TS) e khaaos_runtime_*/probe HTTP
+# (game-runtime). O catálogo dos SLOs com budgets vive em docs/SLO.md.
+# =============================================================================
+
+groups:
+  - name: khaaos-sli-recording
+    interval: 30s
+    rules:
+      # ── SLI 1: disponibilidade HTTP (não-5xx / total) por serviço ──
+      - record: khaaos:slo:http_availability_ratio_5m
+        expr: |
+          sum(rate(khaaos_http_requests_total{status!~"5.."}[5m])) by (job)
+          / clamp_min(sum(rate(khaaos_http_requests_total[5m])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_availability_ratio_30m
+        expr: |
+          sum(rate(khaaos_http_requests_total{status!~"5.."}[30m])) by (job)
+          / clamp_min(sum(rate(khaaos_http_requests_total[30m])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_availability_ratio_1h
+        expr: |
+          sum(rate(khaaos_http_requests_total{status!~"5.."}[1h])) by (job)
+          / clamp_min(sum(rate(khaaos_http_requests_total[1h])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_availability_ratio_6h
+        expr: |
+          sum(rate(khaaos_http_requests_total{status!~"5.."}[6h])) by (job)
+          / clamp_min(sum(rate(khaaos_http_requests_total[6h])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_availability_ratio_3d
+        expr: |
+          sum(rate(khaaos_http_requests_total{status!~"5.."}[3d])) by (job)
+          / clamp_min(sum(rate(khaaos_http_requests_total[3d])) by (job), 1e-10)
+
+      # ── SLI 2: latência HTTP (fração p99 dentro do objetivo de 500 ms) ──
+      - record: khaaos:slo:http_latency_ok_ratio_5m
+        expr: |
+          sum(rate(khaaos_http_request_duration_seconds_bucket{le="0.5"}[5m])) by (job)
+          / clamp_min(sum(rate(khaaos_http_request_duration_seconds_count[5m])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_latency_ok_ratio_30m
+        expr: |
+          sum(rate(khaaos_http_request_duration_seconds_bucket{le="0.5"}[30m])) by (job)
+          / clamp_min(sum(rate(khaaos_http_request_duration_seconds_count[30m])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_latency_ok_ratio_1h
+        expr: |
+          sum(rate(khaaos_http_request_duration_seconds_bucket{le="0.5"}[1h])) by (job)
+          / clamp_min(sum(rate(khaaos_http_request_duration_seconds_count[1h])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_latency_ok_ratio_6h
+        expr: |
+          sum(rate(khaaos_http_request_duration_seconds_bucket{le="0.5"}[6h])) by (job)
+          / clamp_min(sum(rate(khaaos_http_request_duration_seconds_count[6h])) by (job), 1e-10)
+
+      - record: khaaos:slo:http_latency_ok_ratio_3d
+        expr: |
+          sum(rate(khaaos_http_request_duration_seconds_bucket{le="0.5"}[3d])) by (job)
+          / clamp_min(sum(rate(khaaos_http_request_duration_seconds_count[3d])) by (job), 1e-10)
+
+      # ── SLI 3: saúde do relay cross-node (publicações ok / total) ──
+      - record: khaaos:slo:relay_publish_ok_ratio_5m
+        expr: |
+          sum(rate(khaaos_relay_publish_total{result="ok"}[5m])) by (job)
+          / clamp_min(sum(rate(khaaos_relay_publish_total[5m])) by (job), 1e-10)
+
+      - record: khaaos:slo:relay_publish_ok_ratio_1h
+        expr: |
+          sum(rate(khaaos_relay_publish_total{result="ok"}[1h])) by (job)
+          / clamp_min(sum(rate(khaaos_relay_publish_total[1h])) by (job), 1e-10)
+
+      # ── SLI 4: saneamento do ownership (fences são RAROS por design) ──
+      - record: khaaos:slo:room_fenced_rate_5m
+        expr: sum(rate(khaaos_room_fenced_total[5m]))
+
+      - record: khaaos:slo:db_pool_saturation_ratio
+        expr: |
+          (khaaos_db_pool{state="total"} - khaaos_db_pool{state="idle"})
+          / clamp_min(khaaos_db_pool{state="total"}, 1)
+
+      # ── SLI 5: runtime game (game-runtime) — rejeições WS ──
+      - record: khaaos:slo:runtime_ws_reject_rate_5m
+        expr: sum(rate(khaaos_runtime_ws_rejections_total[5m])) by (job)
+
+  - name: khaaos-burn-rate
+    interval: 30s
+    rules:
+      # ── Burn rate de DISPONIBILIDADE (objetivo 99.5% → budget 0.5%) ──
+      # Janelas multiwindow: 1h/5m (page rápido), 6h/30m (page lento),
+      # 3d/6h (ticket — esgotamento de budget).
+      - record: khaaos:slo:http_availability_burn_1h
+        expr: (1 - khaaos:slo:http_availability_ratio_1h) / 0.005
+      - record: khaaos:slo:http_availability_burn_5m
+        expr: (1 - khaaos:slo:http_availability_ratio_5m) / 0.005
+      - record: khaaos:slo:http_availability_burn_30m
+        expr: (1 - khaaos:slo:http_availability_ratio_30m) / 0.005
+      - record: khaaos:slo:http_availability_burn_6h
+        expr: (1 - khaaos:slo:http_availability_ratio_6h) / 0.005
+      - record: khaaos:slo:http_availability_burn_3d
+        expr: (1 - khaaos:slo:http_availability_ratio_3d) / 0.005
+
+      # ── Burn rate de LATÊNCIA (objetivo 99% < 500 ms → budget 1%) ──
+      - record: khaaos:slo:http_latency_burn_1h
+        expr: (1 - khaaos:slo:http_latency_ok_ratio_1h) / 0.01
+      - record: khaaos:slo:http_latency_burn_5m
+        expr: (1 - khaaos:slo:http_latency_ok_ratio_5m) / 0.01
+      - record: khaaos:slo:http_latency_burn_30m
+        expr: (1 - khaaos:slo:http_latency_ok_ratio_30m) / 0.01
+      - record: khaaos:slo:http_latency_burn_6h
+        expr: (1 - khaaos:slo:http_latency_ok_ratio_6h) / 0.01
+      - record: khaaos:slo:http_latency_burn_3d
+        expr: (1 - khaaos:slo:http_latency_ok_ratio_3d) / 0.01

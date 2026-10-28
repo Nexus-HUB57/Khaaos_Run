@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { metrics } from "./metrics";
 
 // ─── Room Event Mesh (Redis Event Mesh do RoomManager — auditoria Fase 0/2) ──
 //
@@ -64,11 +65,46 @@ export type RoomInviteRecord = {
 
 export type MeshMirrorOutcome = "mirrored" | "unchanged" | "throttled";
 
-export type RoomLostHandler = (record: RoomMeshRecord, reason: "lease_expired" | "stale_self") => void;
+export type RoomLostHandler = (
+  record: RoomMeshRecord,
+  reason: "lease_expired" | "stale_self" | "fenced",
+) => void;
+
+/**
+ * M3 — Fencing token de ownership de sala (epoch monotônico por sala).
+ *  - `renewed`: o lease era deste nó e foi renovado — epoch inalterado.
+ *  - `acquired`: o lease estava morto/era de outro nó e ESTE nó assumiu com um
+ *    epoch NOVO. Um epoch gap (> 1) entre aquisições do MESMO nó prova que
+ *    OUTRO nó deteve a sala no intervalo → o estado local pode divergir.
+ */
+export type LeaseRenewal = { outcome: "renewed" | "acquired"; epoch: number };
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const LEASE_TTL_MS = 30_000;
 const MIRROR_THROTTLE_MS = 1_500;
+
+// M3 — fencing: lease + epoch em UMA operação atômica no Redis.
+// KEYS[1] = lease, KEYS[2] = contador de epoch da sala.
+// ARGV[1] = nodeId, ARGV[2] = TTL ms.
+// Retorno: [status, epoch] — 1 = renovado (mesmo epoch), 2 = (re)adquirido
+// (epoch INCR). Qualquer troca de mãos incrementa o epoch: um nó que volta
+// de partição e reassume vê epoch gap e é cercado (fenced) pelo mesh.
+const RENEW_LEASE_SCRIPT = `
+local cur = redis.call('GET', KEYS[1])
+if cur then
+  local sep = string.find(cur, '|', 1, true)
+  if sep then
+    local holder = string.sub(cur, 1, sep - 1)
+    if holder == ARGV[1] then
+      redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
+      return {1, tonumber(string.sub(cur, sep + 1))}
+    end
+  end
+end
+local epoch = redis.call('INCR', KEYS[2])
+redis.call('SET', KEYS[1], ARGV[1] .. '|' .. epoch, 'PX', tonumber(ARGV[2]))
+return {2, epoch}
+`;
 
 // ─── Storage abstraction ─────────────────────────────────────────────────────
 // Hash index (roomId → JSON) + lease por sala. Duas implementações com a
@@ -80,8 +116,8 @@ interface MeshStore {
   removeRecord(roomId: string): Promise<void>;
   getRecord(roomId: string): Promise<RoomMeshRecord | null>;
   listRecords(): Promise<RoomMeshRecord[]>;
-  /** Sliding-TTL lease da sala; true se o lease estava/está vivo. */
-  touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<void>;
+  /** M3: sliding-TTL lease ATÔMICO com epoch de fencing por sala. */
+  touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<LeaseRenewal>;
   leaseAlive(roomId: string): Promise<boolean>;
   /** Convites ligados a jogador: HASH por código (campo = invitedUserId). */
   putInvite(record: RoomInviteRecord, ttlMs: number): Promise<void>;
@@ -99,17 +135,22 @@ const localBus: {
   records: Map<string, RoomMeshRecord>;
   leases: Map<string, { nodeId: string; expiresAt: number }>;
   invites: Map<string, Map<string, RoomInviteRecord>>;
+  /** M3: epoch de fencing por sala (mesma semântica do INCR Redis). */
+  fences: Map<string, number>;
 } = {
   records: new Map(),
   leases: new Map(),
   invites: new Map(),
+  fences: new Map(),
 };
 
 function inviteExpired(record: RoomInviteRecord, now = Date.now()): boolean {
   return record.expiresAt <= now;
 }
 
-class LocalMeshStore implements MeshStore {
+// Exportadas para testes de contrato (mesma semântica nos dois backends) e
+// reuso operacional — a seleção segue sendo por `store` (Redis vivo → Redis).
+export class LocalMeshStore implements MeshStore {
   async putRecord(record: RoomMeshRecord): Promise<void> {
     localBus.records.set(record.id, { ...record });
   }
@@ -124,8 +165,20 @@ class LocalMeshStore implements MeshStore {
   async listRecords(): Promise<RoomMeshRecord[]> {
     return [...localBus.records.values()].map((record) => ({ ...record }));
   }
-  async touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<void> {
-    localBus.leases.set(roomId, { nodeId, expiresAt: Date.now() + ttlMs });
+  async touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<LeaseRenewal> {
+    const now = Date.now();
+    const lease = localBus.leases.get(roomId);
+    if (lease && lease.nodeId === nodeId && lease.expiresAt > now) {
+      lease.expiresAt = now + ttlMs;
+      const epoch = localBus.fences.get(roomId) ?? 1;
+      localBus.fences.set(roomId, epoch);
+      return { outcome: "renewed", epoch };
+    }
+    // (re)aquisição: epoch monotônico — TODO cambio de mãos incrementa.
+    const epoch = (localBus.fences.get(roomId) ?? 0) + 1;
+    localBus.fences.set(roomId, epoch);
+    localBus.leases.set(roomId, { nodeId, expiresAt: now + ttlMs });
+    return { outcome: "acquired", epoch };
   }
   async leaseAlive(roomId: string): Promise<boolean> {
     const lease = localBus.leases.get(roomId);
@@ -161,7 +214,7 @@ class LocalMeshStore implements MeshStore {
   }
 }
 
-class RedisMeshStore implements MeshStore {
+export class RedisMeshStore implements MeshStore {
   constructor(
     /** Público para o mesh detectar rotação de conexão por identidade. */
     readonly client: {
@@ -171,6 +224,8 @@ class RedisMeshStore implements MeshStore {
       hVals: (key: string) => Promise<string[]>;
       set: (key: string, value: string, options: { PX: number }) => Promise<unknown>;
       exists: (key: string) => Promise<number>;
+      /** Opcional: EVAL Lua (touchLease atômico); ausente → fallback best-effort. */
+      eval?: (script: string, options: { keys: string[]; arguments: string[] }) => Promise<unknown>;
     },
     private readonly prefix: string,
   ) {}
@@ -179,6 +234,9 @@ class RedisMeshStore implements MeshStore {
   }
   private leaseKey(roomId: string): string {
     return `${this.prefix}:room:${roomId}:alive`;
+  }
+  private fenceKey(roomId: string): string {
+    return `${this.prefix}:room:${roomId}:fence`;
   }
   async putRecord(record: RoomMeshRecord): Promise<void> {
     await this.client.hSet(this.indexKey(), record.id, JSON.stringify(record));
@@ -206,8 +264,22 @@ class RedisMeshStore implements MeshStore {
       }
     });
   }
-  async touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<void> {
-    await this.client.set(this.leaseKey(roomId), nodeId, { PX: ttlMs });
+  async touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<LeaseRenewal> {
+    // M3 — lease + epoch ATÔMICOS (Lua): renovation sem troca de mãos mantém
+    // o epoch; qualquer outra escrita/assunção INCR o fence. Sem eval no
+    // cliente (surface de compatibilidade), fallback best-effort legado com
+    // outcome "renewed"/epoch 0 — o fence check ignora epoch 0.
+    if (typeof this.client.eval !== "function") {
+      await this.client.set(this.leaseKey(roomId), nodeId, { PX: ttlMs });
+      return { outcome: "renewed", epoch: 0 };
+    }
+    const result = await this.client.eval(RENEW_LEASE_SCRIPT, {
+      keys: [this.leaseKey(roomId), this.fenceKey(roomId)],
+      arguments: [nodeId, String(ttlMs)],
+    }) as number[];
+    const status = Number(result?.[0] ?? 0);
+    const epoch = Number(result?.[1] ?? 0);
+    return status === 1 ? { outcome: "renewed", epoch } : { outcome: "acquired", epoch };
   }
   async leaseAlive(roomId: string): Promise<boolean> {
     return (await this.client.exists(this.leaseKey(roomId))) === 1;
@@ -276,6 +348,8 @@ export class RoomEventMesh {
   /** Cache de registros de OUTROS nós, mantido por reconcile/eventos. */
   private readonly remoteCache = new Map<string, RoomMeshRecord>();
   private readonly lostHandlers = new Set<RoomLostHandler>();
+  /** M3 — último epoch de fencing conhecido para salas locais. */
+  private readonly localEpochs = new Map<string, number>();
 
   constructor(options?: {
     nodeId?: string;
@@ -327,7 +401,8 @@ export class RoomEventMesh {
     }
     const material: RoomMeshRecord = { ...record, nodeId: this.nodeId, updatedAt: now };
     await this.store.putRecord(material);
-    await this.store.touchLease(record.id, this.nodeId, LEASE_TTL_MS);
+    const renewal = await this.store.touchLease(record.id, this.nodeId, LEASE_TTL_MS);
+    this.localEpochs.set(record.id, renewal.epoch);
     this.fingerprints.set(record.id, { fingerprint, at: now });
     void this.publishControl({ type: "mesh:room_updated", roomId: record.id, status: record.status, playerCount: record.playerCount }).catch(() => undefined);
     return "mirrored";
@@ -472,22 +547,58 @@ export class RoomEventMesh {
   startHeartbeat(localRoomsProvider: () => Set<string>): void {
     if (this.heartbeatHandle) return;
     this.heartbeatHandle = setInterval(() => {
-      void (async () => {
-        try {
-          const localRooms = localRoomsProvider();
-          // Renova leases das salas locais (sliding).
-          for (const roomId of localRooms) {
-            await this.store.touchLease(roomId, this.nodeId, LEASE_TTL_MS);
-          }
-          await this.reconcile(localRooms);
-        } catch (error) {
-          console.warn("[RoomEventMesh] heartbeat ciclo falhou", {
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-      })();
+      void this.renewLeasesAndFence(localRoomsProvider()).catch((error) => {
+        console.warn("[RoomEventMesh] heartbeat ciclo falhou", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
     }, HEARTBEAT_INTERVAL_MS);
     this.heartbeatHandle.unref?.();
+  }
+
+  /**
+   * M3 — renova os leases das salas locais com epoch de fencing e aplica a
+   * decisão de fence: epoch gap > 1 entre aquisições do MESMO nó prova que
+   * outro nó deteve a sala no intervalo → dispara os handlers "fenced".
+   * Pública para o heartbeat e para verificação determinística em testes.
+   */
+  async renewLeasesAndFence(localRooms: Set<string>): Promise<{ fenced: string[] }> {
+    const fenced: string[] = [];
+    for (const roomId of localRooms) {
+      const renewal = await this.store.touchLease(roomId, this.nodeId, LEASE_TTL_MS);
+      if (renewal.epoch > 0) {
+        metrics.counter("khaaos_room_leases_total", { outcome: renewal.outcome });
+      }
+      const previous = this.localEpochs.get(roomId);
+      this.localEpochs.set(roomId, renewal.epoch);
+      if (
+        renewal.outcome === "acquired" &&
+        renewal.epoch > 0 &&
+        previous !== undefined &&
+        previous > 0 &&
+        renewal.epoch - previous > 1
+      ) {
+        // M3 — FENCED: nosso lease expirou e OUTRO nó deteve a sala no
+        // intervalo (epoch gap > 1). O estado local pode divergir do que os
+        // jogadores viram lá — drena a autoridade e força reancoragem (mesma
+        // UX da morte do nó dono, com razão auditável).
+        metrics.counter("khaaos_room_fenced_total");
+        const record = await this.store.getRecord(roomId);
+        if (record) {
+          fenced.push(roomId);
+          for (const handler of this.lostHandlers) {
+            try {
+              handler(record, "fenced");
+            } catch {
+              // handler do consumidor nunca derruba o heartbeat
+            }
+          }
+          void this.publishControl({ type: "mesh:room_fenced", roomId, ownerNode: this.nodeId, epoch: renewal.epoch }).catch(() => undefined);
+        }
+      }
+    }
+    await this.reconcile(localRooms);
+    return { fenced };
   }
 
   stopHeartbeat(): void {
