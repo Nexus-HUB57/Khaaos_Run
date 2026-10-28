@@ -238,8 +238,8 @@ test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)'
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
 
-  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === leaf.id));
-  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === leaf.id), false, 'collider saiu do mundo físico');
+  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
+  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === panel.id), false, 'collider saiu do mundo físico');
   assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood na folha p/ FX');
 
 });
@@ -342,6 +342,7 @@ test('buildScene: FOLHAS registradas (registry.doors, id → pivô+folha) e peç
     assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
     for (const [doorId, ctl] of reg.doors) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
+      const h = ctl; // controlador de animação { pivot, leaf, openSign, current, target, broken }
       assert.ok(h.leaf.children.length === 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
       assert.ok(h.pivot.children.includes(h.leaf), `${id}: folha pendurada no pivô da dobradiça`);
       assert.equal(h.current, 0, `${id}: fechada no spawn`);

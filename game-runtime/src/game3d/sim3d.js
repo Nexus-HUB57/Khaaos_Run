@@ -975,8 +975,19 @@ export class KhaaosSim3D {
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
     if (changed) this.syncPhysicsWorld();
-
-
+    // Fase 25 — varredura defensiva das folhas: hp esgotado (por qualquer via —
+    // dano direto, snapshot aplicado, hazard futuro) => destruída + doorDown +
+    // collider fora do mundo. Idempotente com #damageDoor (que já materializa
+    // a quebra no caminho de bala/melee/explosão).
+    let leafChanged = false;
+    for (const d of this.doors) {
+      if (d.destroyed || d.active === false) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; d.active = false; leafChanged = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin });
+      }
+    }
+    if (leafChanged) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
