@@ -7,7 +7,8 @@
 // bootstrapOnline conecta o NetClient3D e injeta o modo online no Game3D.
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
-import { MATCH_TIME, WORLD, getWorldLayout, glooCollider, doorCollider } from './sim3d.js';
+import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
+import { doorBoxCollider } from './interiorsPlan.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
@@ -325,10 +326,12 @@ export class OnlineGame3D extends Game3D {
     const staticColliders = layout.colliders;
     const gloo = (this.view.walls ?? []).filter((w) => w.active !== false).map(glooCollider);
     const doorState = new Map((this.view.doors ?? []).map((d) => [d.id, d]));
+    // Folha FECHADA/íntegra colide no preditor; aberta/destruída não —
+    // doorBoxCollider já devolve null nesses estados (MESMA geometria da sim/sala)
     const doors = (layout.doors ?? [])
-      .map((d) => ({ ...d, active: doorState.get(d.id)?.active !== false }))
-      .filter((d) => d.active)
-      .map(doorCollider);
+      .map((d) => { const st = doorState.get(d.id); return st ? { ...d, open: !!st.open, destroyed: !!st.destroyed } : d; })
+      .map(doorBoxCollider)
+      .filter(Boolean);
     const dynamic = [...gloo, ...doors];
     this.predictorWorld.colliders = dynamic.length ? staticColliders.concat(dynamic) : staticColliders;
   }
