@@ -127,6 +127,31 @@ jobs:
             -LogCmds="LogKhaaosRun Verbose"
           echo "✅ Assets LUT + material de PostProcess gerados"
 
+      - name: Validate LUTs Visually (PNG captures + report)
+        run: |
+          # Captura visual headless (sampling CPU, mesma matemática de UV do
+          # material): Strip_/Antes_/Depois_/Comparacao_<Mood>.png por mood +
+          # lut_visual_report.json (deltas médios/máximos) em Saved/LUTValidation/.
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -run=KhaaosLUTVisualValidator \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "✅ Capturas de validação dos LUTs geradas"
+
+      - name: Upload LUT Validation Captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lut-visual-validation-${{ github.sha }}
+          path: Unreal/KhaaosRun/Saved/LUTValidation/**
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Run Headless Unit Tests
         run: |
           # Executar testes unitários no modo headless

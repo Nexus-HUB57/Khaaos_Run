@@ -179,3 +179,26 @@ Stage Summary:
 - Suíte 2PC integra contra Postgres real (WASM embutido) — os 404/409/403 não são mais mocks superficiais
 - Build tsc do economy-server volta a funcionar (era quebrado antes do guard de rotas)
 - Config vitest isolada por pacote — monorepo à prova do guard de testes
+
+---
+Task ID: Graphics v7 — Validação visual dos LUTs + correção do runner Linux
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- BUG CRÍTICO corrigido no KhaaosRun.uproject: módulo KhaaosRunEditor tinha PlatformAllowList ["Win64","Mac"] — SEM Linux. O runner GPU (Linux) não carregaria NENHUM commandlet do editor (nem o LUTMaterialBuilder): o workflow inteiro de geração de assets estaria morto. Adicionado "Linux" (protegido por contrato no novo teste).
+- Criado KhaaosLUTVisualValidatorCommandlet.h/.cpp (KhaaosRunEditor): validação VISUAL dos LUTs com captura PNG headless (sampling 100% CPU, sem RHI):
+  - Por mood (5): Strip_<Mood>.png (strip cru Size²×Size), Antes_<Mood>.png / Depois_<Mood>.png (padrão de teste 512×256: hue sweep, saturação quente, rampa de cinza, 16 swatches de gameplay) e Comparacao_<Mood>.png (folha de contato antes/separador/depois)
+  - Sampling replica EXATAMENTE a matemática de UV do material M_KhaaosColorGradeLUT: U=(floor(B*q)*Size+R*q+0.5)/Size², V=(G*q+0.5)/Size — o preview prova o que o material vai amostrar
+  - Extração de pixels via Source.GetMip(0) (fallback PlatformData) — sobrevive a -NullRHI e re-cozimento
+  - Carregamento: asset persistente /Game/Graphics/LUTs/T_KhaaosLUT_* primeiro, fallback transient da factory (GenerateLUTForMood)
+  - Relatório lut_visual_report.json com meanDelta255/maxDelta255/pctPixelsChanged por mood (evidência numérica do grading); exit code 0 só se os 5 moods carregarem+salvarem
+- ue5-headless-compile.yml: novo step "Validate LUTs Visually (PNG captures + report)" (-run=KhaaosLUTVisualValidator, roda DEPOIS do builder) + artifact lut-visual-validation-<sha> (Saved/LUTValidation/**, 30 dias, if-no-files-found warn)
+- Teste de contrato tests/official/lut-visual-validation.test.ts (9 specs): herança UCommandlet, 5 assets + fallback, Source-based extraction, paridade sampling×material, 4 capturas PNG via ImageWrapper, chaves do JSON, ordem builder→validador no CI, artifact com retenção, Linux no PlatformAllowList do editor
+- Validado: validate_uht.py 298/298; contratos LUT/runner 22/22; economy-server npm install && npm test = 6/6 (2PC contra PGlite real); npm test raiz = 470 testes 0 falhas (8 skipped por design); bash -n OK em register-gpu-runner-token.sh e setup-gpu-runner.sh; JSON do .uproject e YAML do workflow válidos
+
+Stage Summary:
+- Validação visual dos LUTs agora é AUTOMÁTICA: após a 1ª compilação no runner GPU, as capturas Strip/Antes/Depois/Comparacao por mood saem no artifact do CI para inspeção humana
+- Runner GPU: registro em 1 comando (GH_TOKEN=<PAT> bash scripts/register-gpu-runner-token.sh) — token gerado via API, nunca impresso; --list para conferir no repo settings
+- Correção do .uproject destrava o pipeline de assets no Linux — sem ela nem o builder rodaria no runner
+- Próximo passo: registrar runner na VM GPU, disparar o workflow e conferir as capturas no artifact lut-visual-validation

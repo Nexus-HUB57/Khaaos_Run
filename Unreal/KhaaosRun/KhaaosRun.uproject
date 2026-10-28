@@ -14,7 +14,7 @@
                         "Name": "KhaaosRunEditor",
                         "Type": "Editor",
                         "LoadingPhase": "Default",
-                        "PlatformAllowList": [ "Win64", "Mac" ]
+                        "PlatformAllowList": [ "Win64", "Linux", "Mac" ]
                 },
                 {
                         "Name": "KhaaosEAC",
