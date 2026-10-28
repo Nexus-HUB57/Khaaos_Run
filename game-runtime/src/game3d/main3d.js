@@ -22,6 +22,7 @@ import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
 import { SurvivalFX } from './survivalfx3d.js';
+import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
 import './styles3d.css';
 
@@ -173,6 +174,9 @@ export class Game3D {
     // Fase 17 — FX das sobrevivências do mundo (tsunami/lava/gravidade/ácido):
     // consome os eventos da sim/servidor e materializa a regra de dano por altura.
     this.survivalFX = new SurvivalFX(scene, this.scenario, { particles: scene.userData.particles ?? null });
+    // Fase 20 — decals de morte direcional com LOD (marcas de sangue orientadas
+    // longe do atirador; pool com orçamento por tier de qualidade)
+    this.deathDecals = new DeathDecalSystem(scene, { tier: this.quality });
   }
 
   initEntities() {
@@ -683,6 +687,8 @@ export class Game3D {
         const hf = this.hitFX.get('player');
         dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: 3 };
         this.deathFX.set('player', dfx);
+        // Fase 20 — decal de morte: poça/riscos orientados longe do atirador
+        this.deathDecals?.spawn({ x: p.x, y: p.y, z: p.z, angle: dfx.angle, yaw: p.yaw, power: dfx.power, seed: dfx.seed });
       }
       dfx.age += dt;
       const df = deathFall(dfx);
@@ -791,6 +797,8 @@ export class Game3D {
           g.visible = true;
           g.rotation.order = 'YXZ';
           entry.name.visible = false;
+          // Fase 20 — decal de morte: poça/riscos orientados longe do atirador
+          this.deathDecals?.spawn({ x: b.x, y: b.y, z: b.z, angle: dfx.angle, yaw: b.yaw, power: dfx.power, seed: dfx.seed });
         }
         dfx.age += dt;
         const df = deathFall(dfx);
@@ -1340,6 +1348,7 @@ export class Game3D {
     this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);
     this.effects.update(dt);
+    this.deathDecals?.update(dt, this.camera.position); // Fase 20 — fade + LOD dos decals pela câmera
     this.updateDropFX(dt);
     // beacon pulse
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
