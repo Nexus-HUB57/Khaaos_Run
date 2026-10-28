@@ -106,6 +106,20 @@ export class Effects {
         }));
         return;
       }
+      // Fase 25 — madeira (folha de porta levando bala): lascas marrons + serragem
+      if (kind === 'wood') {
+        burst(9, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 5.2, vy: rnd() * 3.6 + .7, vz: (rnd() - .5) * 5.2,
+          size: .06 + rnd() * .07, growth: -.015, life: .26 + rnd() * .26, drag: .05, gravity: 12, alpha: .9,
+          color: [.48, .33, .17], endColor: [.3, .2, .1],
+        }));
+        burst(2, () => ({
+          x: pos.x, y: pos.y + .05, z: pos.z, vx: (rnd() - .5) * .8, vy: .5 + rnd() * .6, vz: (rnd() - .5) * .8,
+          size: .24 + rnd() * .18, growth: 1, life: .45 + rnd() * .2, drag: .4, gravity: -0.5, alpha: .28,
+          color: [.52, .42, .3], endColor: [.36, .3, .22],
+        }));
+        return;
+      }
       // wall / gloo: faíscas quentes + poeira de rasgo
       burst(10, () => ({
         x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.4, vy: rnd() * 4.4 + .8, vz: (rnd() - .5) * 6.4,

@@ -296,11 +296,16 @@ test('fase8 habilidade: concealment impede que a IA adquira o alvo ocultado', ()
   const room = makeRoom({ humans: 1, botFill: 1, seed: 'CC-1' });
   room.setOperative('p1', 'OP_FEMALE_STEALTH_ASIAN');
   room.start('p1', 'belt');
+  // Fase 25 — folhas dinâmicas no mundo físico: teste valida PERCEPÇÃO, não LOS
+  room.doors.length = 0;
+  room.physicsWorld.colliders = room.world.colliders;
   const p = room.humans.get('p1');
   const bot = room.bots[0];
-  // sem ocultação: bot engaja com LOS limpo (praça central)
-  p.x = 0; p.z = 0;
-  bot.x = 0; bot.z = -40;
+  // sem ocultação: bot engaja com LOS limpo (corredor x=12 — determinístico;
+  // Fase 25 mudou o fluxo do rng com o loot interior, então a patrulha "sortuda"
+  // da praça central não é mais estável)
+  p.x = 12; p.z = 0;
+  bot.x = 12; bot.z = -40;
   let engaged = false;
   for (let i = 1; i <= 40 && !engaged; i++) {
     room.input('p1', blankInput({ seq: i }));
@@ -312,10 +317,13 @@ test('fase8 habilidade: concealment impede que a IA adquira o alvo ocultado', ()
   const room2 = makeRoom({ humans: 1, botFill: 1, seed: 'CC-1' });
   room2.setOperative('p1', 'OP_FEMALE_STEALTH_ASIAN');
   room2.start('p1', 'belt');
+  // Fase 25 — mesmo mundo limpo da parte 1 (o teste valida ocultação, não LOS)
+  room2.doors.length = 0;
+  room2.physicsWorld.colliders = room2.world.colliders;
   const p2 = room2.humans.get('p1');
   const bot2 = room2.bots[0];
-  p2.x = 0; p2.z = 0;
-  bot2.x = 0; bot2.z = -40;
+  p2.x = 12; p2.z = 0;
+  bot2.x = 12; bot2.z = -40;
   room2.input('p1', blankInput({ seq: 1, ability: true })); // Véu Crepuscular 4s
   room2.tick(DT);
   for (let i = 2; i <= 60; i++) { room2.input('p1', blankInput({ seq: i })); room2.tick(DT); }
