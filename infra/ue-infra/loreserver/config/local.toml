@@ -1,0 +1,18 @@
+# Khaaos Run — config persistente do loreserver (carregada de /etc/lore/config)
+# Fonte: docs/how-to/deploy-local-lore-server.md (EpicGames/lore).
+# O container já armazena dados em /data; aqui apontamos os stores para
+# subdiretórios do volume persistente. O certificado QUIC fica efêmero
+# (regenerado a cada restart) — modo staging; para produção, gere cert.pem/
+# key.pem (openssl, CN=localhost) e descomente a seção [server.quic.certificate].
+
+[immutable_store.local]
+path = "/data/immutable"
+flush_delay_seconds = 10
+
+[mutable_store.local]
+path = "/data/mutable"
+flush_delay_seconds = 10
+
+# [server.quic.certificate]
+# cert_file = "/etc/lore/certs/cert.pem"
+# pkey_file = "/etc/lore/certs/key.pem"

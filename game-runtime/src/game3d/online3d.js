@@ -35,7 +35,7 @@ export class Sim3DView {
     this.terminals = [];
     this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
     this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
-    this.doors = [];     // Fase 25 — estado das portas (snapshots)
+    this.doors = [];     // Fase 25 — estado das folhas de porta (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -74,11 +74,7 @@ export class Sim3DView {
       // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
       this.onWallsChanged?.(this.walls);
     }
-    if (s.doors) {
-      // Fase 25 — portas (posição é estática no layout; hp/ativo vêm do servidor)
-      this.doors = s.doors.map((d) => ({ ...d, active: d.active !== false }));
-      this.onDoorsChanged?.(this.doors);
-    }
+    if (s.doors) this.doors = s.doors; // Fase 25 — folhas seguem o estado da sala
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
@@ -87,6 +83,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }
