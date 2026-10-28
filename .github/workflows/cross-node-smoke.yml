@@ -1,0 +1,157 @@
+# =============================================================================
+# Khaaos Run — Cross-Node Smoke (F16/F17) — guard de CI da cadeia multi-nó
+# =============================================================================
+# Executa o smoke cross-node COMPLETO (7 etapas) contra infra REAL em runner
+# hosted: PostgreSQL 16 (service container) + Redis 7 master (service
+# container) + Redis 7 RÉPLICA (docker run --network host) — e DOIS nós de
+# aplicação de produção (dist/index.cjs) que o próprio smoke sobe.
+#
+# Valida, em cada mudança da cadeia multi-nó:
+#   1. replicação Redis REAL (role:slave + probe master→réplica);
+#   2. registro dos nós no índice distribuído (mesh + gateway);
+#   3. túnel cross-node por invite code com privacidade;
+#   4. partida real através do túnel (movimento B→A converge no dono);
+#   5. combate cross-node (abate visível no dono e no relayado);
+#   6. payouts 2PC COMMITTED no PostgreSQL real com ledger balanceado;
+#   7. morte do nó dono (SIGKILL) → ROOM_NODE_LOST → reconcile → reancoragem.
+#
+# Este workflow é o guard pedido pela F16: regressões no RoomManager Event
+# Mesh, no gateway WS por nodeId ou nos payouts 2PC falham AQUI antes do
+# merge — não descobrimos em staging.
+# =============================================================================
+
+name: 15 — Cross-Node Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'server/game/**'
+      - 'server/routes.ts'
+      - 'server/replit_integrations/auth/**'
+      - 'shared/schema.ts'
+      - 'migrations/**'
+      - 'scripts/smoke-fase16-cross-node.mjs'
+      - 'scripts/run-f16-smoke-*.sh'
+      - 'infra/staging/**'
+      - '.github/workflows/cross-node-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/game/**'
+      - 'server/routes.ts'
+      - 'server/replit_integrations/auth/**'
+      - 'shared/schema.ts'
+      - 'migrations/**'
+      - 'scripts/smoke-fase16-cross-node.mjs'
+      - 'scripts/run-f16-smoke-*.sh'
+      - 'infra/staging/**'
+      - '.github/workflows/cross-node-smoke.yml'
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 9 * * 1" # drift semanal: segunda-feira 09:00 UTC
+
+concurrency:
+  group: cross-node-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke cross-node (PG real + 2 nós Redis reais + morte de nó)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: khaaos
+          POSTGRES_PASSWORD: khaaos_ci
+          POSTGRES_DB: khaaos_crossnode_smoke
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U khaaos -d khaaos_crossnode_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis-master:
+        image: redis:7-alpine
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://khaaos:khaaos_ci@127.0.0.1:55432/khaaos_crossnode_smoke
+      REDIS_URL: redis://127.0.0.1:56379
+      SMOKE_REPLICA_URL: redis://127.0.0.1:56380
+      REDIS_NAMESPACE: khaaos_f16_ci
+      # NODE_ENV de propósito AUSENTE no job: com NODE_ENV=production o npm
+      # omite devDependencies (drizzle-kit/tsx/esbuild/vite) e quebra migrate
+      # e build. O smoke já força NODE_ENV=production nos nós que ele sobe.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: redis-cli portável (redis-tools)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq redis-tools
+          redis-cli --version
+
+      - name: Réplica Redis REAL (2º nó — docker run host network)
+        run: |
+          docker run -d --name redis-replica --network host redis:7-alpine \
+            redis-server --port 56380 --replicaof 127.0.0.1 56379 \
+            --save '' --appendonly no --maxmemory 256mb
+          for i in $(seq 1 30); do
+            role=$(redis-cli -p 56380 INFO replication 2>/dev/null | grep -c "master_link_status:up" || true)
+            if [ "$(redis-cli -p 56379 ping 2>/dev/null)" = "PONG" ] && [ "$role" = "1" ]; then
+              echo "✅ réplica sincronizada com o master (tentativa ${i})"; exit 0
+            fi
+            sleep 1
+          done
+          echo "❌ réplica não sincronizou em 30 s"; docker logs redis-replica; exit 1
+
+      - name: Dependências
+        run: npm ci
+
+      - name: Migrações versionadas (0000→0007, cadeia da economia 2PC)
+        run: npm run db:migrate
+
+      - name: Build de produção (dist/index.cjs — nós reais do smoke)
+        run: npm run build
+
+      - name: Smoke cross-node F16 (7 etapas, morte de nó incluída)
+        run: |
+          set -o pipefail
+          node scripts/smoke-fase16-cross-node.mjs 2>&1 | tee /tmp/f16-smoke.log
+          grep -q "^F16_SMOKE_OK$" /tmp/f16-smoke.log || {
+            echo "❌ contrato F16_SMOKE_OK ausente"; exit 1;
+          }
+
+      - name: Resumo do contrato
+        if: always()
+        run: |
+          {
+            echo "## Cross-Node Smoke (F16) — resultado"
+            echo '```'
+            grep -E "^\[f16\]" /tmp/f16-smoke.log 2>/dev/null | tail -30 || echo "(log indisponível)"
+            echo '```'
+            grep -q "^F16_SMOKE_OK$" /tmp/f16-smoke.log 2>/dev/null \
+              && echo "**F16_SMOKE_OK** — cadeia multi-nó validada contra PG/Redis reais." \
+              || echo "**FALHA** — ver etapas acima."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log do smoke (artifact)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f16-smoke-log
+          path: /tmp/f16-smoke.log
+          retention-days: 7

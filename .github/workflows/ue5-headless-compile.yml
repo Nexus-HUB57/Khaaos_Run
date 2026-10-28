@@ -72,6 +72,24 @@ jobs:
             echo "::warning::UHT validation reportou problemas — compile continua para diagnóstico completo"
           }
 
+      - name: EAC smoke selftest (guard — roda sem UE/binário)
+        # Mantém a lógica do smoke de EAC viva no CI Node: matcher
+        # (Active/stub/absent) + contratos de exit code (3/0/4).
+        run: node scripts/build/eac_dedicated_smoke_selftest.mjs
+
+      - name: Resolve EAC SDK (real vs stub)
+        # SDK real do EAC (KHAAOS_EAC_SDK_DIR / EACSDK/ local / EAC_SDK_URL).
+        # Sem SDK o build segue em stub — nunca quebra (contrato UE1040);
+        # go-live usa --require em pipeline de produção.
+        run: |
+          set -euo pipefail
+          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
+          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
+          if [[ "${EAC_SDK_MODE}" == "real" ]]; then
+            echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV
+          fi
+          echo "EAC mode: ${EAC_SDK_MODE}"
+
       - name: Generate Project Files
         run: |
           bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
@@ -91,6 +109,27 @@ jobs:
             KhaaosRunServer Linux ${{ github.event.inputs.configuration || 'Development' }} \
             "${UPROJECT}" -waitmutex
 
+      - name: "EAC Dedicated Smoke (exigir 'EAC Status: Active')"
+        # Fase 0.3 (auditoria): contra o servidor dedicado REAL. Modo estrito
+        # é o PADRÃO do smoke — só executa com SDK real; com stub o passo
+        # marca SKIPPED com aviso (contrato UE1040: stub nunca quebra o build
+        # de PR) e o go-live exige reexecução estrita.
+        if: github.event.inputs.target != 'Editor'
+        run: |
+          set -euo pipefail
+          if [[ "${EAC_SDK_MODE:-stub}" != "real" ]]; then
+            echo "::warning::EAC SDK ausente — smoke estrito SKIPPED (go-live exige SDK real + 'EAC Status: Active')"
+            node scripts/build/eac_dedicated_smoke.mjs --allow-missing-input \
+              --reason "SDK stub: servidor dedicado logaria 'Running (stub)', nunca Active"
+          else
+            SERVER_BIN="$(find "${GITHUB_WORKSPACE}/Unreal/KhaaosRun/Binaries/Linux" -maxdepth 1 -name 'KhaaosRunServer*' 2>/dev/null | head -1 || true)"
+            if [[ -z "${SERVER_BIN}" ]]; then
+              echo "::error::SDK real presente mas binário do servidor não encontrado em Binaries/Linux"
+              exit 1
+            fi
+            node scripts/build/eac_dedicated_smoke.mjs --binary "${SERVER_BIN}" --timeout-ms 180000
+          fi
+
       - name: Compilation Summary
         if: always()
         run: |
@@ -100,6 +139,12 @@ jobs:
           echo "| Config | ${{ github.event.inputs.configuration || 'Development' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Target | ${{ github.event.inputs.target || 'Server' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| UE5 | $(cat ${UE_INSTALL_DIR}/Engine/Build/Build.version 2>/dev/null | grep MajorVersion || echo '5.8') |" >> $GITHUB_STEP_SUMMARY
+          echo "| EAC SDK | ${EAC_SDK_MODE:-stub} (real exige 'EAC Status: Active' no smoke) |" >> $GITHUB_STEP_SUMMARY
+          if [[ "${EAC_SDK_MODE:-stub}" == "real" ]]; then
+            echo "| EAC Smoke | executado (estrito — Active exigido) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| EAC Smoke | SKIPPED (stub — go-live exige SDK real) |" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
 
   validate-replication:

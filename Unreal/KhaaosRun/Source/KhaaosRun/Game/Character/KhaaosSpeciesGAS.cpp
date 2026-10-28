@@ -1,11 +1,16 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Character/KhaaosSpeciesGAS.h"
+#include "Game/Character/KhaaosSpeciesGAS.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffect.h"
+#include "Game/AbilitySystem/KhaaosGameplayEffects.h"
+#include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "GameplayAbilitySpec.h"
 #include "Engine/DataTable.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "UObject/UObjectGlobals.h"
 
 // ─── Log Category ─────────────────────────────────────────────────────────────
@@ -21,6 +26,8 @@ UKhaaosSpeciesGAS::UKhaaosSpeciesGAS()
         AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
         AbilitySystemComponent->SetIsReplicated(true);
         AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
+        AttributeSet = CreateDefaultSubobject<UKhaaosAttributeSet>(TEXT("KhaaosAttributeSet"));
+        AbilitySystemComponent->AddAttributeSetSubobject(CastChecked<UKhaaosAttributeSet>(AttributeSet));
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -136,16 +143,68 @@ void UKhaaosSpeciesGAS::RemoveSpeciesTraits()
 
 void UKhaaosSpeciesGAS::InitializeAttributes()
 {
-        if (!SpeciesAttributeTable.IsNull())
-        {
-                UDataTable* Table = SpeciesAttributeTable.LoadSynchronous();
-                InitializeAttributesFromTable(Table);
-        }
-        else
-        {
-                SetDefaultAttributes();
-                UE_LOG(LogKhaaosSpeciesGAS, Log, TEXT("InitializeAttributes: No data table set, using defaults for %s"), *GetNameSafe(GetOwner()));
-        }
+	InitializeAttributesForOperative(AppliedSpecies, 100.0f, 100.0f, 600.0f);
+}
+
+void UKhaaosSpeciesGAS::InitializeAttributesForOperative(
+	EKhaaosSpecies SpeciesID, float BaseHealth, float BaseEnergy, float BaseSpeed)
+{
+	if (!AbilitySystemComponent || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	AppliedSpecies = SpeciesID;
+	float Health = FMath::Max(BaseHealth, 1.0f);
+	float MaxHealth = Health;
+	float Energy = FMath::Max(BaseEnergy, 0.0f);
+	float MaxEnergy = Energy;
+	float Speed = FMath::Max(BaseSpeed, 0.0f);
+	float Shield = 0.0f;
+
+	if (!SpeciesAttributeTable.IsNull())
+	{
+		if (UDataTable* Table = SpeciesAttributeTable.LoadSynchronous())
+		{
+			FName RowName = FName(TEXT("Default"));
+			if (SpeciesID != EKhaaosSpecies::NONE)
+			{
+				if (const UEnum* SpeciesEnum = StaticEnum<EKhaaosSpecies>())
+				{
+					RowName = FName(*SpeciesEnum->GetNameStringByValue(static_cast<int64>(SpeciesID)));
+				}
+			}
+			FKhaaosSpeciesAttributeRow* Row = Table->FindRow<FKhaaosSpeciesAttributeRow>(RowName, TEXT("KhaaosSpeciesGAS::InitializeAttributesForOperative"));
+			if (!Row && RowName != FName(TEXT("Default")))
+			{
+				Row = Table->FindRow<FKhaaosSpeciesAttributeRow>(FName(TEXT("Default")), TEXT("KhaaosSpeciesGAS::InitializeAttributesFallback"));
+			}
+			if (Row)
+			{
+				Health = Row->Health;
+				MaxHealth = Row->MaxHealth;
+				Energy = Row->Energy;
+				MaxEnergy = Row->MaxEnergy;
+				Speed = Row->Speed;
+				Shield = Row->Shield;
+			}
+		}
+	}
+
+	UKhaaosAttributeSet* KhaaosAttributes = Cast<UKhaaosAttributeSet>(AttributeSet.Get());
+	if (!KhaaosAttributes)
+	{
+		return;
+	}
+	KhaaosAttributes->InitializeCombatProfile(Health, MaxHealth, Shield, Shield, Energy, MaxEnergy, Speed);
+
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		{
+			Movement->MaxWalkSpeed = Speed;
+		}
+	}
 }
 
 void UKhaaosSpeciesGAS::InitializeAttributesFromTable(UDataTable* InAttributeTable)
@@ -178,19 +237,15 @@ void UKhaaosSpeciesGAS::InitializeAttributesFromTable(UDataTable* InAttributeTab
 
         if (Row)
         {
-                // Apply attribute values through GameplayEffect or direct AttributeSet mutation
-                // Using SetNumericAttributeBase for immediate initialization
-                if (UAttributeSet* AttrSet = AttributeSet.Get())
+                if (UKhaaosAttributeSet* KhaaosAttributes = Cast<UKhaaosAttributeSet>(AttributeSet.Get()))
                 {
-                        // Note: In a full GAS implementation, these would use FGameplayAttributeData
-                        // and SetNumericAttributeBase on the ASC. For our custom attribute set:
-                        UE_LOG(LogKhaaosSpeciesGAS, Log,
-                                TEXT("Initialized attributes from table row '%s': HP=%.1f/%.1f, Energy=%.1f/%.1f, Speed=%.1f, Shield=%.1f"),
-                                *RowName.ToString(),
-                                Row->Health, Row->MaxHealth,
-                                Row->Energy, Row->MaxEnergy,
-                                Row->Speed, Row->Shield);
+                        KhaaosAttributes->InitializeCombatProfile(Row->Health, Row->MaxHealth,
+                                Row->Shield, Row->Shield, Row->Energy, Row->MaxEnergy, Row->Speed);
                 }
+		if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+		{
+			if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement()) Movement->MaxWalkSpeed = Row->Speed;
+		}
         }
         else
         {
@@ -201,9 +256,7 @@ void UKhaaosSpeciesGAS::InitializeAttributesFromTable(UDataTable* InAttributeTab
 
 void UKhaaosSpeciesGAS::SetDefaultAttributes()
 {
-        // Default attribute values (from schema.ts playerStats)
-        // In a full implementation, these set FGameplayAttributeData on the ASC
-        UE_LOG(LogKhaaosSpeciesGAS, Log, TEXT("SetDefaultAttributes: Health=100, MaxHealth=100, Energy=100, MaxEnergy=100, Speed=600, Shield=0"));
+	InitializeAttributesForOperative(AppliedSpecies, 100.0f, 100.0f, 600.0f);
 }
 
 // ─── GameplayEffect Accessors ─────────────────────────────────────────────────
@@ -384,4 +437,70 @@ int32 UKhaaosSpeciesGAS::ApplySkeetwTraits()
         }
 
         return Count;
+}
+
+// ─── Proteção Ambiental (chuva ácida de Barburhen — Fase 1) ──────────────────
+
+bool UKhaaosSpeciesGAS::SetAcidProtection(bool bEnabled, float DurationSeconds)
+{
+        if (!AbilitySystemComponent)
+        {
+                return false;
+        }
+
+        const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+        if (!Tags.World_Barburhen_AcidProtection.IsValid())
+        {
+                UE_LOG(LogKhaaosSpeciesGAS, Warning, TEXT("SetAcidProtection: tag World.Barburhen.AcidProtection não registrada"));
+                return false;
+        }
+
+        // Estado desejado = sem proteção: remove o GE ativo (se houver).
+        if (!bEnabled)
+        {
+                if (AcidProtectionHandle.IsValid())
+                {
+                        AbilitySystemComponent->RemoveActiveGameplayEffect(AcidProtectionHandle);
+                        AcidProtectionHandle = FActiveGameplayEffectHandle();
+                        return true;
+                }
+                return false;
+        }
+
+        // Já protegido: idempotente (sem segunda aplicação — sem stack indevido).
+        if (AcidProtectionHandle.IsValid())
+        {
+                return false;
+        }
+
+        UGameplayEffect* GrantEffect = UKhaaosGameplayEffects::CreateTagGrantEffect(Tags.World_Barburhen_AcidProtection, DurationSeconds);
+        if (!GrantEffect)
+        {
+                UE_LOG(LogKhaaosSpeciesGAS, Warning, TEXT("SetAcidProtection: falha ao criar GE de concessão"));
+                return false;
+        }
+
+        FGameplayEffectContextHandle ContextHandle = AbilitySystemComponent->MakeEffectContext();
+        ContextHandle.AddSourceObject(GetOwner());
+        FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(GrantEffect, 1.0f, ContextHandle);
+        if (!SpecHandle.IsValid())
+        {
+                return false;
+        }
+        AcidProtectionHandle = AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+        return AcidProtectionHandle.IsValid();
+}
+
+bool UKhaaosSpeciesGAS::HasAcidProtection() const
+{
+        if (!AbilitySystemComponent)
+        {
+                return false;
+        }
+        const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+        if (!Tags.World_Barburhen_AcidProtection.IsValid())
+        {
+                return false;
+        }
+        return AbilitySystemComponent->HasMatchingGameplayTag(Tags.World_Barburhen_AcidProtection);
 }

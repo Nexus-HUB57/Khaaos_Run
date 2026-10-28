@@ -423,6 +423,10 @@ export class ProtocoloDeOrdemDeJogo {
     caso.status = 'julgado'; caso.veredito = veredito; caso.juiz = String(judge);
     caso.nota = note ? String(note).slice(0, 280) : null; caso.julgadoEm = this.clock;
     caso.patenteFinal = p?.patente ?? null;
+    // Fase 12 — registro/xp do veredito NO CASO: fonte canônica para a ata do
+    // console, o evento court_verdict ao vivo e a ponte de KRC (server/poj.js).
+    caso.registro = efeito.registro;
+    caso.xpVeredito = efeito.xp;
     this.#log('veredito_corte_marcial', { caso: caso.id, playerId: caso.playerId, veredito, registro: efeito.registro, juiz: caso.juiz });
     return { ok: true, caso };
   }

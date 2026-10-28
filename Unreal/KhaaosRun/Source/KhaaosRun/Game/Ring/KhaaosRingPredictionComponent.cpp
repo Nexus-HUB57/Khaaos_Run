@@ -1,8 +1,8 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 // Ring Prediction Component — Shows next ring on minimap (FreeFire style)
 
-#include "Ring/KhaaosRingPredictionComponent.h"
-#include "Ring/KhaaosRingSubsystem.h"
+#include "Game/Ring/KhaaosRingPredictionComponent.h"
+#include "Game/Ring/KhaaosRingSubsystem.h"
 
 UKhaaosRingPredictionComponent::UKhaaosRingPredictionComponent()
 {

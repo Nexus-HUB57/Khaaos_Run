@@ -18,6 +18,7 @@ import {
   PROMETHEUS_CONTENT_TYPE,
   metricsRegistry,
 } from "../game/metricsRegistry";
+import { metrics as m3Metrics } from "../game/metrics";
 
 const DB_PING_TIMEOUT_MS = 3_000;
 const ESCROW_GAUGES_TTL_MS = 5_000;
@@ -161,9 +162,18 @@ async function checkEconomy2PC(): Promise<HealthzCheck> {
  */
 export function registerMetricsRoutes(app: Express): void {
   app.get("/metrics", async (_req, res) => {
+    // Gate herdado do M3 (staging SRE): KR_METRICS_ENABLED=0 desliga a
+    // exposição pública inteira (econômica e HTTP/WS/DB juntas).
+    if (process.env.KR_METRICS_ENABLED === "0") {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
     await refreshEscrowGaugesCached();
+    // Registro único: economia/2PC (metricsRegistry) + HTTP/WS/DB M3
+    // (game/metrics.ts) — mesma resposta, mesmo content type Prometheus 0.0.4.
     res.set("Content-Type", PROMETHEUS_CONTENT_TYPE);
-    res.status(200).send(metricsRegistry.render());
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).send(metricsRegistry.render() + m3Metrics.render());
   });
 
   app.get("/healthz", async (_req, res) => {

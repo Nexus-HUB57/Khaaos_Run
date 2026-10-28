@@ -19,6 +19,9 @@
 #include "NiagaraComponent.h"
 #include "KhaaosSkinSystem.generated.h"
 
+class UStaticMesh;
+class UStaticMeshComponent;
+
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
 UENUM(BlueprintType)
@@ -67,6 +70,18 @@ struct FKhaaosSkinDef
   /** Species this skin belongs to */
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
   FName SpeciesId;
+
+  /** Cosmetic slot this definition is authored for; prevents cross-slot equip. */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Cosmetics")
+  EKhaaosCosmeticSlot Slot = EKhaaosCosmeticSlot::BODY;
+
+  /** Optional modular accessory mesh for HEAD/BACK slots. */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Cosmetics")
+  TSoftObjectPtr<UStaticMesh> AccessoryMesh;
+
+  /** Manny/Gwen socket or bone used by AccessoryMesh (head or spine_03 by default). */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Cosmetics")
+  FName AttachSocket = NAME_None;
 
   /** Primary color (hex → LinearColor) */
   UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
@@ -131,6 +146,8 @@ class UKhaaosSkinSystem : public UActorComponent
 
 public:
   UKhaaosSkinSystem();
+
+  virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
   // ─── Skin Registry ──────────────────────────────────────────────────────
 
@@ -212,13 +229,24 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Khaaos|Skins")
   void SetEmissiveIntensity(float Intensity);
 
+protected:
+  virtual void BeginPlay() override;
+
+  /** Replicated appearance is re-applied locally; meshes themselves remain local assets. */
+  UFUNCTION()
+  void OnRep_Loadout();
+
 private:
+  /** Authored cosmetic definitions loaded into the local registry on BeginPlay. */
+  UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Skins", meta = (AllowPrivateAccess = "true"))
+  TArray<FKhaaosSkinDef> SkinCatalog;
+
   /** All registered skin definitions */
   UPROPERTY()
   TMap<FName, FKhaaosSkinDef> SkinRegistry;
 
   /** Current cosmetic loadout */
-  UPROPERTY()
+  UPROPERTY(ReplicatedUsing = OnRep_Loadout)
   FKhaaosCosmeticLoadout Loadout;
 
   /** Owned skin IDs */
@@ -241,6 +269,10 @@ private:
   UPROPERTY()
   UMaterialInstance* DefaultMaterial = nullptr;
 
+  /** Runtime components for currently attached modular accessories. */
+  UPROPERTY(Transient)
+  TMap<EKhaaosCosmeticSlot, TObjectPtr<UStaticMeshComponent>> AccessoryComponents;
+
   // ─── Internal ───────────────────────────────────────────────────────────
 
   /** Resolve the character mesh component from the owning actor */
@@ -251,4 +283,10 @@ private:
 
   /** Apply mesh override for a skin (RARO+) */
   void ApplyMeshOverride(const FKhaaosSkinDef& SkinDef);
+
+  /** Replace or remove the real mesh attached to a modular cosmetic slot. */
+  void ApplyAccessory(EKhaaosCosmeticSlot Slot, const FKhaaosSkinDef* SkinDef);
+
+  /** Destroy the currently mounted accessory component for a slot. */
+  void ClearAccessory(EKhaaosCosmeticSlot Slot);
 };

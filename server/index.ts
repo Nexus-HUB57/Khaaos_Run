@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeGameServices, shutdownGameServices } from "./game/GameServices";
+import { randomUUID } from "node:crypto";
+import { metrics, normalizeRoute } from "./game/metrics";
 
 const app = express();
 const httpServer = createServer(app);
@@ -55,10 +57,26 @@ app.use((req, res, next) => {
 
       log(logLine);
     }
+    // M3 — métricas RED de HTTP (cardinalidade baixa: rota normalizada).
+    const route = normalizeRoute(path);
+    metrics.counter("khaaos_http_requests_total", { method: req.method, route, status: String(res.statusCode) });
+    metrics.observe("khaaos_http_request_duration_seconds", duration / 1000, { method: req.method, route });
   });
 
   next();
 });
+
+// M3 — conexões HTTP ativas por contagem incremental de sockets (a API
+// getConnections() tem callback assíncrono e não serve a leitura síncrona
+// do scrape).
+let activeHttpConnections = 0;
+httpServer.on("connection", (socket) => {
+  activeHttpConnections += 1;
+  socket.once("close", () => {
+    activeHttpConnections = Math.max(0, activeHttpConnections - 1);
+  });
+});
+metrics.gaugeSampler("khaaos_http_active_connections", {}, () => activeHttpConnections);
 
 (async () => {
   await registerRoutes(httpServer, app);

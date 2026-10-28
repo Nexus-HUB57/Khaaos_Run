@@ -23,6 +23,7 @@
         <span class="pulse-chip" id="pulseValue">PULSO 00</span>
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
+      <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
@@ -37,8 +38,35 @@
       <span class="spec-hint">←/→</span>
       <button id="specPrev" class="spec-btn" title="Operativo anterior">‹</button>
       <button id="specNext" class="spec-btn" title="Próximo operativo">›</button>
+      <button id="specAta" class="spec-btn" title="Reproduzir ata da Corte Marcial">ATA</button>
       <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
     </div>
+
+    <!-- Fase 13 — HUD do espectador remoto (pipeline /ws/spectator: feed atrasado 10 s, batches 5 Hz) -->
+    <div id="spectatorHud" class="hidden">
+      <div class="spec-top">
+        <span class="spec-live"><i></i>LIVE</span>
+        <b id="specStatus">CONECTANDO…</b>
+        <span id="specDelay" class="spec-chip" title="Atraso anti-ghosting do pipeline">ATRASO —</span>
+        <span id="specAlive" class="spec-chip">◇ 00 VIVOS</span>
+      </div>
+      <div id="specRing" class="spec-ring" title="Estado autoritativo do Ring (atrasado)">RING F1 · 800m · ESTÁVEL · 00:00</div>
+      <div id="specHazard" class="spec-hazard hidden" title="Sobrevivência ativa no mundo (FX/áudio em sincronia com a partida)"></div>
+      <div class="spec-standings-label">RANKING DA SALA · TOP 8 · CLIQUE P/ SEGUIR</div>
+      <div id="specStandings" class="spec-standings"></div>
+      <div class="spec-cams">
+        <button class="spec-btn" data-cam="FREECAM" title="Órbita livre ao redor do ring">LIVRE</button>
+        <button class="spec-btn" data-cam="FOLLOW_PLAYER" title="Seguir operativo">SEGUIR</button>
+        <button class="spec-btn" data-cam="OVERHEAD" title="Câmera aérea">AÉREA</button>
+        <button class="spec-btn" data-cam="RING_CENTER" title="Centro do ring girando">CENTRO</button>
+        <button class="spec-btn" id="specAuto" title="Fase 19 — diretor automático: corta para o alvo mais ameaçado (hazard ativo, nocaute, fora do ring, dano recente)">AUTO</button>
+        <span class="spec-hint">ALVO</span>
+        <button class="spec-btn" id="specFollowPrev" title="Operativo anterior">‹</button>
+        <button class="spec-btn" id="specFollowNext" title="Próximo operativo">›</button>
+        <button class="spec-btn leave" id="specDisconnect" title="Encerrar transmissão">✕</button>
+      </div>
+    </div>
+    <div id="specFeed" class="hidden"></div>
 
     <!-- minimapa + killfeed -->
     <div class="map-corner">
@@ -178,6 +206,7 @@
               <input id="inviteCode" maxlength="6" placeholder="CÓDIGO" autocomplete="off" />
               <button id="createPrivateBtn" class="ghost-btn" type="button">CRIAR SALA</button>
               <button id="joinPrivateBtn" class="ghost-btn" type="button">ENTRAR</button>
+              <button id="spectateBtn" class="ghost-btn spectate" type="button" title="Abrir a transmissão da sala no pipeline /ws/spectator (atraso 10 s)">ASSISTIR</button>
             </div>
           </div>
         </div>
@@ -208,8 +237,32 @@
         <div class="modal-actions">
           <button id="endBtn" class="primary-btn">NOVA INSERÇÃO</button>
           <button id="replayBtn" class="ghost-btn">EXPORTAR REPLAY</button>
+          <button id="endAtaBtn" class="ghost-btn hidden">REPRODUZIR ATA DA CORTE</button>
         </div>
       </div>
+    </div>
+
+    <div id="courtAtaModal" class="modal hidden">
+      <div class="modal-card ata-card">
+        <span class="eyebrow">CORTE MARCIAL · ATA OFICIAL DO PROCESSO</span>
+        <h2 id="ataTitle">ATA DO CASO —</h2>
+        <p class="ata-sub">Reprodução encenada do processo militar — clique para adiantar.</p>
+        <div id="ataTimeline" class="ata-timeline"></div>
+        <div class="modal-actions">
+          <button id="ataReplayBtn" class="ghost-btn">REPRODUZIR NOVAMENTE</button>
+          <button id="ataCloseBtn" class="primary-btn">FECHAR ATA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 19 — mixagem de volume (KR_AUDIO_*): 4 canais, persistência imediata -->
+    <div id="audioMixer" class="audio-mixer hidden">
+      <div class="section-label">MIXAGEM // ÁUDIO</div>
+      <label><span>GERAL</span><input type="range" min="0" max="100" step="1" data-channel="master" aria-label="Volume geral" /><b data-out="master">50%</b></label>
+      <label><span>EFEITOS</span><input type="range" min="0" max="100" step="1" data-channel="sfx" aria-label="Volume dos efeitos" /><b data-out="sfx">100%</b></label>
+      <label><span>MUNDO</span><input type="range" min="0" max="100" step="1" data-channel="world" aria-label="Volume do mundo (ambiente + sobrevivências)" /><b data-out="world">100%</b></label>
+      <label><span>INTERFACE</span><input type="range" min="0" max="100" step="1" data-channel="ui" aria-label="Volume da interface e avisos" /><b data-out="ui">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_AUDIO_*)</small>
     </div>
 
     <script type="module" src="/src/game3d/main3d.js"></script>

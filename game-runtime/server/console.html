@@ -146,10 +146,10 @@
 <script type="module">
 const PATENTES = ['Recruta','Soldado','Cabo','Sargento','Sargento-Mor','Tenente','Capitão','Major','Coronel','General'];
 const VEREDITOS = [
-  { id:'afastamento', label:'Afastamento desonroso' },
-  { id:'reducao_patente', label:'Redução de patente' },
-  { id:'honras_de_guerra', label:'Honras de guerra' },
-  { id:'absolvicao', label:'Absolvição' },
+  { id:'afastamento', label:'Afastamento desonroso', krc:'−250 KRC', delta:-250 },
+  { id:'reducao_patente', label:'Redução de patente', krc:'−100 KRC', delta:-100 },
+  { id:'honras_de_guerra', label:'Honras de guerra', krc:'+200 KRC', delta:200 },
+  { id:'absolvicao', label:'Absolvição', krc:'+100 KRC', delta:100 },
 ];
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem('kr_console_token') || '';
@@ -240,18 +240,23 @@ const caseCard = (c) => `
       <div class="kv"><div class="k">Vida</div><div class="v bad">consumida</div></div>
     </div>
     <div class="verdicts">
-      ${VEREDITOS.map((v) => `<button data-case="${c.id}" data-ver="${v.id}">${v.label}</button>`).join('')}
+      ${VEREDITOS.map((v) => `<button data-case="${c.id}" data-ver="${v.id}" title="${esc(v.krc)} no KRC real">${v.label} · ${esc(v.krc)}</button>`).join('')}
     </div>
     <div class="nota"><input placeholder="Nota do julgamento (opcional, vai para a ata)" data-nota="${c.id}"></div>
   </div>`;
 
-const histRow = (c) => `<div><b class="gold">${esc(c.id)}</b> · <b>${esc(c.name)}</b> · ${esc(c.motivoRotulo ?? c.motivo)} → <span class="ok">${esc(c.veredito)}</span> · registro <b>${esc(c.evidencia?.registro ?? '—')}</b> · patente final ${esc(c.patenteFinal ?? '—')} · juiz ${esc(c.juiz)} ${c.nota ? `· “${esc(c.nota)}”` : ''}</div>`;
+const histRow = (c) => `<div><b class="gold">${esc(c.id)}</b> · <b>${esc(c.name)}</b> · ${esc(c.motivoRotulo ?? c.motivo)} → <span class="ok">${esc(c.veredito)}</span> · registro <b>${esc(c.evidencia?.registro ?? c.registro ?? '—')}</b> · patente final ${esc(c.patenteFinal ?? '—')} · <b class="gold">${c.krc?.delta ? `${c.krc.delta > 0 ? '+' : ''}${c.krc.delta} KRC${c.krc.applied === false ? ' (não aplicado)' : ''}` : 'KRC —'}</b> · juiz ${esc(c.juiz)} ${c.nota ? `· “${esc(c.nota)}”` : ''}</div>`;
 
 async function judge(caseId, veredito, label) {
   const nota = document.querySelector(`[data-nota="${caseId}"]`)?.value?.trim() || null;
   try {
-    await api('/poj/court-martial/verdict', { method: 'POST', body: { caseId, veredito, nota } });
-    msg(`Veredito aplicado: ${label} — caso ${caseId} encerrado.`);
+    const r = await api('/poj/court-martial/verdict', { method: 'POST', body: { caseId, veredito, nota } });
+    const krc = r.krc ?? null;
+    const krcTxt = krc && krc.kind !== 'none'
+      ? (krc.applied ? ` ${krc.delta > 0 ? '+' : ''}${krc.delta} KRC no ledger real (saldo ${krc.balance}).`
+                     : ` KRC: ${krc.skipped === 'zero_balance' ? 'multa presa — saldo zero' : `não aplicado (${krc.error ?? krc.skipped ?? 'indeterminado'})`}.`)
+      : '';
+    msg(`Veredito aplicado: ${label} — caso ${caseId} encerrado.${krcTxt}`);
     await Promise.all([refreshCourt(), refreshState()]);
   } catch (e) { msg(`Falha no veredito: ${e.message}`, false); }
 }

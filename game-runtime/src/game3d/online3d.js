@@ -11,6 +11,8 @@ import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
+import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
+import { spectateHref } from './spectator3d.js'; // Fase 14 — botão ASSISTIR (transmissão)
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -101,6 +103,9 @@ export class OnlineGame3D extends Game3D {
     this.view.onSwitchSlot = (slot) => { this.pendingSlot = slot; };
     this.sim = this.view;
     this.hud.sim = this.view;
+    // Fase 13 — replay da ata da Corte na UI do eliminado: o hook dispara a
+    // busca do caso próprio (mine=1) quando a eliminação é confirmada.
+    this.onEliminated = () => this.#fetchMyCourtAta();
     // predição client-side (Fase 3): mundo local idêntico ao da sala (seed sincronizada)
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
@@ -166,6 +171,12 @@ export class OnlineGame3D extends Game3D {
       if (!code) { this.hud.feed('SQUAD', 'Digite o código de convite (6 caracteres).', 'bad'); return; }
       net.joinPrivate(code);
     });
+    // Fase 14 — botão ASSISTIR: abre a transmissão da sala (?spectate=SALA).
+    // Sem código, cai na sala default do pipeline (partidas abertas/matchmaking).
+    document.querySelector('#spectateBtn')?.addEventListener('click', () => {
+      const code = document.querySelector('#inviteCode')?.value?.trim() ?? '';
+      window.location.href = spectateHref(code);
+    });
     net.onPrivateCreated = (code) => {
       this.hud.feed('SQUAD', `Sala privada criada! Código: ${code} — compartilhe com o esquadrão.`, 'good');
       this.hud.setMatchStatus(`SALA PRIVADA // ${code}`);
@@ -206,6 +217,47 @@ export class OnlineGame3D extends Game3D {
     }, 3000);
     net.connect();
     this.hud.feed('CIGKV', 'Modo online: sala autoritativa. Escolha a entrada ZU.', 'good');
+  }
+
+  // ---------- Fase 13 — ata da Corte do próprio eliminado ----------
+  // GET /poj/court-martial/cases?mine=1 (autenticado) retorna apenas os casos
+  // do jogador — a ata é privacidade pessoal, não docket público. Enriquece
+  // com o court_verdict ao vivo (ΔKRC) quando o docket ainda não o carrega.
+  async #fetchMyCourtAta({ silent = false } = {}) {
+    try {
+      // pequena folga: o caso é aberto no servidor no mesmo fluxo da queda,
+      // mas o report partida→POJ pode chegar um instante depois do evento.
+      await new Promise((r) => setTimeout(r, silent ? 0 : 900));
+      const token = localStorage.getItem('kr_token');
+      const res = await fetch('/poj/court-martial/cases?mine=1', {
+        cache: 'no-store',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return null;
+      const docket = await res.json();
+      const cases = Array.isArray(docket.cases) ? docket.cases : [];
+      if (!cases.length) {
+        if (!silent) this.hud.feed('CORTE MARCIAL', 'Nenhum caso aberto em seu nome — eliminação sem Corte.', 'warn');
+        return null;
+      }
+      const latest = cases[cases.length - 1];
+      this.myCourtCase = latest;
+      this.hud.setCourtAtaAvailable(true);
+      if (!silent) this.hud.showCourtAta(latest, { krcEvent: this.courtVerdictEvents?.[latest.id] });
+      return latest;
+    } catch {
+      if (!silent) this.hud.feed('CORTE MARCIAL', 'Ata indisponível agora — reabra pelo botão ATA do espectador.', 'bad');
+      return null;
+    }
+  }
+
+  async openMyCourtAta() {
+    if (this.myCourtCase) {
+      this.hud.setCourtAtaAvailable(true);
+      this.hud.showCourtAta(this.myCourtCase, { krcEvent: this.courtVerdictEvents?.[this.myCourtCase.id] });
+      return;
+    }
+    await this.#fetchMyCourtAta({ silent: false });
   }
 
   // ---------- Fase 9 — painel POJ: estado do Protocolo de Ordem de Jogo ----------
@@ -290,8 +342,41 @@ export class OnlineGame3D extends Game3D {
     const weapon = this.sim.player?.weapon ?? 'g19';
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
     this.playerWeapon.userData = { id: weapon };
-    // Fase 11 — ZU: trem de infiltração também no Ring online (só câmera)
-    this.startTrainIntro();
+    // Fase 12 — o trem NÃO começa no clique: todos (iniciador e remotos) esperam
+    // o anúncio AUTORITATIVO da sala (matchStart.train) e sincronizam pelo
+    // relógio do servidor — o mesmo frame do trem em todas as telas.
+  }
+
+  // Fase 12 — matchStart autoritativo chegou (evento dentro do snapshot).
+  // Remoto: fecha o modal ZU, arma a câmara e sincroniza o trem do ZU.
+  onMatchStartEvent(e) {
+    if (this.zuOpen) {
+      try {
+        this.zuOpen = false;
+        this.hud.hideZu();
+        this.hud.setMatchStatus('MATCH ONLINE // RING');
+        this.audio.init(); this.audio.resume();
+        if (!this.isTouch()) this.renderer.domElement.requestPointerLock?.();
+        const weapon = this.sim.player?.weapon ?? 'g19';
+        this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
+        this.playerWeapon.userData = { id: weapon };
+      } catch { /* entrada do remoto é best-effort — partida nunca quebra */ }
+    }
+    this.syncTrainWithServer(e?.train ?? null);
+  }
+
+  // Trem do ZU sincronizado: elapsed = relógio do servidor − train.startedAt.
+  // Todos os remotos reconstruem o MESMO frame da cinemática; quem chega atraso
+  // (rede lenta, aba em background) entra no fim da timeline ou pula direto.
+  syncTrainWithServer(train) {
+    if (!train || this.trainIntro) return;
+    const key = `${train.startedAt}`;
+    if (this._trainSyncedFor === key) return; // um trem por partida (anúncio único)
+    this._trainSyncedFor = key;
+    const duration = Number(train.durationMs) || TRAIN_INTRO_DURATION_MS;
+    const elapsed = this.net?.serverElapsed?.(train.startedAt);
+    if (!Number.isFinite(elapsed) || elapsed > duration + TRAIN_INTRO_GRACE_MS || elapsed < -500) return;
+    this.startTrainIntro(Math.max(0, elapsed) / 1000);
   }
 
   loop() {
@@ -334,6 +419,11 @@ export class OnlineGame3D extends Game3D {
     }
     this.predictor?.update(dt);
 
+    // Fase 12 — eventos do servidor são consumidos SEMPRE (mesmo com o modal ZU
+    // aberto): o matchStart autoritativo é o que FECHA o modal do remoto e
+    // sincroniza o trem. O envio de input continua gated no modal (abaixo).
+    if (!this.ended) this.handleEvents();
+
     // envio de input a 30Hz (enquanto a partida estiver ativa) + predição local
     if (!this.zuOpen && !this.ended) {
       this.netAccumulator = (this.netAccumulator ?? 0) + dt;
@@ -344,13 +434,15 @@ export class OnlineGame3D extends Game3D {
         this.predictor?.onInput(input);
         this.netAccumulator -= 1 / 30;
       }
-      this.handleEvents();
     }
 
     this.syncLoot();
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);
@@ -367,10 +459,25 @@ export class OnlineGame3D extends Game3D {
 }
 
 // ---------- bootstrap ----------
+// FIX "ZU não aplicado no preview": em produção o cliente NÃO é servido pelo
+// servidor autoritativo — o preview da plataforma expõe apenas o :3000 (Next).
+// As APIs HTTP são encaminhadas por rewrites do Next; o UPGRADE de WebSocket,
+// porém, não é proxyável pelo Next. O roteador de borda da plataforma encami-
+// nha WS quando a requisição carrega ?XTransformPort=<porta> (padrão do
+// Caddyfile da plataforma). Em host não-local, o WS anexa o query e passa a
+// alcançar o servidor autoritativo — snapshots, trem do ZU e matchmaking.
+export function onlineServerUrl() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const local = ['localhost', '127.0.0.1', '0.0.0.0', ''].includes(location.hostname);
+  const tp = new URLSearchParams(location.search).get('XTransformPort');
+  const edge = tp || (!local ? '8787' : ''); // explícito > preview (borda) > local
+  // SEM barra final: NetClient3D concatena `${url}/ws?token=…` e o roteador de
+  // borda casa `query XTransformPort=*` em qualquer posição do query.
+  return `${proto}://${location.host}${edge ? `?XTransformPort=${edge}` : ''}`;
+}
+
 export function bootstrapOnline() {
-  const net = new NetClient3D({
-    url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`,
-  });
+  const net = new NetClient3D({ url: onlineServerUrl() });
   const game = new OnlineGame3D('CIGKV-3D-01', net);
   window.KhaaosOnline3D = { game, net };
   return game;

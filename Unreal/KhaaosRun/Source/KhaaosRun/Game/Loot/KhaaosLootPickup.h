@@ -5,6 +5,8 @@
 #include "GameFramework/Actor.h"
 #include "KhaaosLootPickup.generated.h"
 
+class UKhaaosInventoryComponent;
+
 // ─── Enums ported from schema.ts ──────────────────────────────────────────────
 
 /** Loot rarity tiers (from schema.ts Rarity). */
@@ -105,6 +107,12 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Loot")
 	FString ItemName;
 
+	/** Stable item key and stack transferred into the authoritative inventory. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Loot")
+	FName InventoryItemID;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Loot")
+	int32 InventoryStackCount = 1;
+
 	/** Rarity tier. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Loot")
 	ELootRarity Rarity;
@@ -151,6 +159,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
 	bool TryPickup(const FString& PlayerId, float PlayerPosX, float PlayerPosY, float PickupRange);
 
+	/** Server-only transaction: add to inventory first, then atomically consume this pickup. */
+	bool TryPickupIntoInventory(UKhaaosInventoryComponent* Inventory);
+	void ConfigureInventoryItem(FName ItemID, int32 StackCount, EItemType InType);
+
 	/** Reset this pickup for a new match. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
 	void ResetPickup();
@@ -176,6 +188,10 @@ protected:
 	/** Pickup range in map units (config from TS). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Loot")
 	float DefaultPickupRange;
+
+	/** 3D interaction range for inventory pickups, in Unreal centimeters. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Loot", meta=(ClampMin="50.0", ClampMax="1000.0"))
+	float WorldPickupRangeCm = 250.0f;
 
 	/** Collision sphere for pickup detection. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Loot")

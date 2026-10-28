@@ -62,6 +62,16 @@ public:
 	FGameplayAttributeData MaxHealth;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxHealth)
 
+	/** Current shield pool consumed before health. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Shield, Category = "Khaaos|Attributes|Combat")
+	FGameplayAttributeData Shield;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, Shield)
+
+	/** Maximum shield pool. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxShield, Category = "Khaaos|Attributes|Combat")
+	FGameplayAttributeData MaxShield;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxShield)
+
 	/** Current energy (for abilities). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
 	float Energy;
@@ -164,6 +174,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	void InitFromSchemaDefaults();
 
+	/** Apply an authoritative operative profile before combat begins. */
+	void InitializeCombatProfile(float InHealth, float InMaxHealth, float InShield, float InMaxShield,
+		float InEnergy, float InMaxEnergy, float InSpeed);
+
 	// ─── Delegate ───────────────────────────────────────────────────────────
 
 	/** Broadcast when any attribute value changes. */
@@ -181,6 +195,12 @@ public:
 
 	UFUNCTION()
 	void OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth);
+
+	UFUNCTION()
+	void OnRep_Shield(const FGameplayAttributeData& OldShield);
+
+	UFUNCTION()
+	void OnRep_MaxShield(const FGameplayAttributeData& OldMaxShield);
 
 	UFUNCTION()
 	void OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction);

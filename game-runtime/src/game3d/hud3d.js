@@ -3,6 +3,7 @@
 import { RARITIES } from '../shared/weapons.js';
 import { WEAPONS3D, DBNO } from './sim3d.js';
 import { getOperativeAbility } from './operativeAbilities.js';
+import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -131,7 +132,10 @@ export class HUD {
     $('#reloadHint').classList.toggle('visible', reloading || (!reloading && p.ammoMag === 0));
     $('#reloadHint').textContent = reloading ? 'RECARREGANDO…' : 'SEM MUNIÇÃO — [R]';
     // topo
-    const alive = s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0);
+    // M3 — AOI: com fan-out por área de interesse o array bots NÃO contém todos
+    // os vivos do ring; o snapshot traz aliveCount autoritativo — usa-o quando
+    // existir (online), mantém a contagem local no modo offline.
+    const alive = s.aliveCount ?? (s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0));
     $('#aliveValue').textContent = String(alive).padStart(2, '0');
     const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     $('#matchClock').textContent = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
@@ -277,6 +281,74 @@ export class HUD {
     if (el && name) el.textContent = name;
   }
   hideSpectator() { $('#spectatorBar')?.classList.add('hidden'); }
+  // ---------- Fase 13 — replay da ata da Corte Marcial (jogador eliminado) ----------
+  // Renderiza a ata do caso e a reproduz encenada (passos revelados em ritmo
+  // fixo; clique adianta; botão reproduz novamente). Best-effort: nunca bloqueia.
+  showCourtAta(caso, extra = {}) {
+    const modal = $('#courtAtaModal');
+    const timeline = $('#ataTimeline');
+    if (!modal || !timeline || !caso) return;
+    this.#clearAtaTimers();
+    $('#ataTitle').textContent = `ATA DO CASO ${caso.id ?? '—'}`;
+    const steps = buildAtaSteps(caso, extra);
+    timeline.innerHTML = '';
+    const nodes = steps.map((step) => {
+      const el = document.createElement('div');
+      el.className = `ata-step${step.cls ? ` ${step.cls}` : ''}`;
+      const h = document.createElement('h4');
+      h.textContent = step.tag;
+      el.appendChild(h);
+      for (const line of step.lines) {
+        const p = document.createElement('p');
+        p.className = 'ata-line';
+        p.textContent = line;
+        el.appendChild(p);
+      }
+      timeline.appendChild(el);
+      return el;
+    });
+    this.ataNodes = nodes;
+    this.ataCase = { caso, extra };
+    modal.classList.remove('hidden');
+    this.#playAta();
+  }
+
+  #playAta() {
+    const nodes = this.ataNodes ?? [];
+    nodes.forEach((n) => n.classList.remove('shown'));
+    this.#clearAtaTimers();
+    let i = 0;
+    const reveal = () => {
+      if (i < nodes.length) {
+        nodes[i].classList.add('shown');
+        i += 1;
+        this.ataTimers.push(setTimeout(reveal, ATA_STEP_MS));
+      }
+    };
+    reveal();
+  }
+
+  #clearAtaTimers() {
+    (this.ataTimers ?? []).forEach(clearTimeout);
+    this.ataTimers = [];
+  }
+
+  hideCourtAta() {
+    this.#clearAtaTimers();
+    $('#courtAtaModal')?.classList.add('hidden');
+  }
+
+  replayCourtAta() {
+    if (this.ataCase) this.showCourtAta(this.ataCase.caso, this.ataCase.extra);
+  }
+
+  // Disponibilidade da ata: botões do espectador e do end modal aparecem só
+  // quando existe caso do próprio jogador (eliminado → caso aberto pelo POJ).
+  setCourtAtaAvailable(on) {
+    $('#specAta')?.classList.toggle('hidden', !on);
+    $('#endAtaBtn')?.classList.toggle('hidden', !on);
+  }
+
   showEnd(win, stats) {
     const m = $('#endModal');
     m.classList.remove('hidden');

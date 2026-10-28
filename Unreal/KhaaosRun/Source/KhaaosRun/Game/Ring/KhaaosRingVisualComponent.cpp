@@ -1,7 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
 // Copyright Nexus-HUB57. All Rights Reserved.
 
-#include "Ring/KhaaosRingVisualComponent.h"
+#include "Game/Ring/KhaaosRingVisualComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"

@@ -8,13 +8,15 @@
  *
  * Validates the full pipeline connecting MatchFlow, EconomyMatchBridge,
  * SpectatorDataPipeline, and DiscordBot.
+ * Porta node:test da suíte da API "PhD-level" (#125) — runner padrão do repo.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchPlayer } from "../../../server/game/MatchFlow";
-import { EconomyMatchBridge, SPECIES_CONFIG, type SpeciesKey } from "../../../server/game/EconomyMatchBridge";
-import { SpectatorDataPipeline } from "../../../server/game/SpectatorDataPipeline";
-import { DiscordBot } from "../../../server/game/DiscordBot";
+import { describe, it, beforeEach, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE } from "../../server/game/MatchFlow.ts";
+import { EconomyMatchBridge, SPECIES_CONFIG, type SpeciesKey } from "../../server/game/EconomyMatchBridge.ts";
+import { SpectatorDataPipeline } from "../../server/game/SpectatorDataPipeline.ts";
+import { DiscordBot } from "../../server/game/DiscordBot.ts";
 
 // ─── Test Operatives ────────────────────────────────────────────────────────
 
@@ -81,27 +83,27 @@ describe("Full Match Simulation", () => {
       );
 
       const initialState = matchFlow.getState();
-      expect(initialState.status).toBe("LOBBY");
-      expect(initialState.roomId).toBe("sim_match_001");
-      expect(initialState.players.size).toBe(0);
-      expect(initialState.worlds).toHaveLength(5);
+      assert.strictEqual(initialState.status, "LOBBY");
+      assert.strictEqual(initialState.roomId, "sim_match_001");
+      assert.strictEqual(initialState.players.size, 0);
+      assert.strictEqual(initialState.worlds.length, 5);
 
       // ── Phase 2: Join All Operatives ──
       for (const op of TEST_OPERATIVES) {
         const joined = matchFlow.joinPlayer(op);
-        expect(joined).toBe(true);
+        assert.strictEqual(joined, true);
       }
-      expect(matchFlow.getState().players.size).toBe(10);
+      assert.strictEqual(matchFlow.getState().players.size, 10);
 
       // Verify all species represented
       const speciesInMatch = new Set(
         Array.from(matchFlow.getState().players.values()).map(p => p.species)
       );
-      expect(speciesInMatch.size).toBe(6);
+      assert.strictEqual(speciesInMatch.size, 6);
 
       // ── Phase 3: Start Countdown ──
       matchFlow.startCountdown();
-      expect(matchFlow.getState().status).toBe("COUNTDOWN");
+      assert.strictEqual(matchFlow.getState().status, "COUNTDOWN");
 
       // ── Phase 4: Simulate Kills ──
       // Kill chain: op_hur_01 eliminates 5 others
@@ -115,20 +117,20 @@ describe("Full Match Simulation", () => {
       // Verify victims are downed
       for (const victimId of victims) {
         const victim = matchFlow.getState().players.get(victimId);
-        expect(victim?.isDowned).toBe(true);
+        assert.strictEqual(victim?.isDowned, true);
       }
 
       // Killer should have 5 kills
       const killerPlayer = matchFlow.getState().players.get(killer);
-      expect(killerPlayer?.kills).toBe(5);
+      assert.strictEqual(killerPlayer?.kills, 5);
 
       // ── Phase 5: Test Revive ──
       // Revive op_kha_02
       const revived = matchFlow.revivePlayer("op_kha_02", "op_kha_01");
-      expect(revived).toBe(true);
+      assert.strictEqual(revived, true);
       const revivedPlayer = matchFlow.getState().players.get("op_kha_02");
-      expect(revivedPlayer?.isDowned).toBe(false);
-      expect(revivedPlayer?.health).toBe(30);
+      assert.strictEqual(revivedPlayer?.isDowned, false);
+      assert.strictEqual(revivedPlayer?.health, 30);
 
       // ── Phase 6: Simulate More Kills ──
       // op_ven_01 eliminates op_hur_02 and op_ven_02
@@ -141,25 +143,25 @@ describe("Full Match Simulation", () => {
       // ── Phase 7: End Match (Huran wins) ──
       matchFlow.endMatch("op_hur_01");
       const finalState = matchFlow.getState();
-      expect(finalState.status).toBe("FINISHED");
-      expect(finalState.winnerId).toBe("op_hur_01");
-      expect(finalState.matchEndTime).toBeGreaterThan(0);
+      assert.strictEqual(finalState.status, "FINISHED");
+      assert.strictEqual(finalState.winnerId, "op_hur_01");
+      assert.ok(finalState.matchEndTime > 0);
 
       // ── Phase 8: Verify Economy ──
       const economySummary = economyBridge.getMatchSummary("sim_match_001");
-      expect(economySummary).not.toBeNull();
-      expect(economySummary!.totalKrcMinted).toBeGreaterThan(0);
-      expect(economySummary!.killRewards).toBeGreaterThan(0);
-      expect(economySummary!.players.size).toBeGreaterThan(0);
+      assert.notStrictEqual(economySummary, null);
+      assert.ok(economySummary!.totalKrcMinted > 0);
+      assert.ok(economySummary!.killRewards > 0);
+      assert.ok(economySummary!.players.size > 0);
 
       // ── Phase 9: Verify Event Log ──
       const eventLog = matchFlow.getEventLog();
-      expect(eventLog.length).toBeGreaterThan(0);
+      assert.ok(eventLog.length > 0);
 
       const eventTypes = new Set(eventLog.map(e => e.type));
-      expect(eventTypes).toContain("PLAYER_JOIN");
-      expect(eventTypes).toContain("PLAYER_DOWNED");
-      expect(eventTypes).toContain("MATCH_END");
+      assert.ok(eventTypes.has("PLAYER_JOIN"));
+      assert.ok(eventTypes.has("PLAYER_DOWNED"));
+      assert.ok(eventTypes.has("MATCH_END"));
 
       // ── Phase 10: Cleanup ──
       matchFlow.destroy();
@@ -182,7 +184,6 @@ describe("Full Match Simulation", () => {
       });
 
       // Test kill rewards for each species
-      const speciesRewards: Record<string, number> = {};
       for (const species of Object.keys(SPECIES_CONFIG) as SpeciesKey[]) {
         const victimId = `victim_${species}`;
         matchFlow.joinPlayer({
@@ -195,8 +196,8 @@ describe("Full Match Simulation", () => {
 
       // Verify economy tracked all kills
       const summary = economyBridge.getMatchSummary("econ_test");
-      expect(summary).not.toBeNull();
-      expect(summary!.killRewards).toBeGreaterThan(0);
+      assert.notStrictEqual(summary, null);
+      assert.ok(summary!.killRewards > 0);
 
       matchFlow.destroy();
     });
@@ -218,10 +219,10 @@ describe("Full Match Simulation", () => {
         timestamp: Date.now(), worldId: "cigkv", phase: 1,
       });
 
-      expect(waterKill.krcAmount).toBeGreaterThan(dryKill.krcAmount);
+      assert.ok(waterKill.krcAmount > dryKill.krcAmount);
       // Water kill should be ~1.3× dry kill
       const ratio = waterKill.krcAmount / dryKill.krcAmount;
-      expect(ratio).toBeCloseTo(1.3, 0);
+      assert.ok(Math.abs(ratio - 1.3) < .5, `ratio ${ratio} ≈ 1.3`);
     });
   });
 
@@ -230,7 +231,7 @@ describe("Full Match Simulation", () => {
   describe("multi-world pipeline", () => {
     it("should have correct world pipeline order", () => {
       const worldIds = DEFAULT_WORLD_PIPELINE.map(w => w.worldId);
-      expect(worldIds).toEqual(["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
+      assert.deepStrictEqual(worldIds, ["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
     });
 
     it("should track world transition costs", () => {
@@ -245,8 +246,8 @@ describe("Full Match Simulation", () => {
       bridge.recordReward("world_trans_test", transition);
 
       const summary = bridge.getMatchSummary("world_trans_test");
-      expect(summary!.transitionCosts).toBe(50_000);
-      expect(summary!.totalKrcBurned).toBe(50_000);
+      assert.strictEqual(summary!.transitionCosts, 50_000);
+      assert.strictEqual(summary!.totalKrcBurned, 50_000);
 
       bridge.destroyMatchEconomy("world_trans_test");
     });
@@ -273,27 +274,27 @@ describe("Full Match Simulation", () => {
       // Step 1: Shield damage (30 dmg, shield: 50→20)
       matchFlow.processKill("attacker", "target", 30, "Pistol");
       const afterShield = matchFlow.getState().players.get("target");
-      expect(afterShield?.shield).toBe(20);
-      expect(afterShield?.health).toBe(100);
-      expect(afterShield?.isDowned).toBe(false);
+      assert.strictEqual(afterShield?.shield, 20);
+      assert.strictEqual(afterShield?.health, 100);
+      assert.strictEqual(afterShield?.isDowned, false);
 
       // Step 2: Mixed shield + health damage (40 dmg, shield: 20→0, health: 100→80)
       matchFlow.processKill("attacker", "target", 40, "SMG");
       const afterMixed = matchFlow.getState().players.get("target");
-      expect(afterMixed?.shield).toBe(0);
-      expect(afterMixed?.health).toBe(80);
-      expect(afterMixed?.isDowned).toBe(false);
+      assert.strictEqual(afterMixed?.shield, 0);
+      assert.strictEqual(afterMixed?.health, 80);
+      assert.strictEqual(afterMixed?.isDowned, false);
 
       // Step 3: Health-only damage (50 dmg, health: 80→30)
       matchFlow.processKill("attacker", "target", 50, "Sniper");
       const afterHealth = matchFlow.getState().players.get("target");
-      expect(afterHealth?.health).toBe(30);
-      expect(afterHealth?.isDowned).toBe(false);
+      assert.strictEqual(afterHealth?.health, 30);
+      assert.strictEqual(afterHealth?.isDowned, false);
 
       // Step 4: Lethal damage (100 dmg, health: 30→0 → downed)
       matchFlow.processKill("attacker", "target", 100, "AssaultRifle");
       const afterLethal = matchFlow.getState().players.get("target");
-      expect(afterLethal?.isDowned).toBe(true);
+      assert.strictEqual(afterLethal?.isDowned, true);
 
       matchFlow.destroy();
     });
@@ -303,7 +304,7 @@ describe("Full Match Simulation", () => {
 
   describe("spectator pipeline", () => {
     it("should have correct configuration", () => {
-      expect(SpectatorDataPipeline).toBeDefined();
+      assert.notStrictEqual(SpectatorDataPipeline, undefined);
       // Import check — config is validated in spectator-data-pipeline.test.ts
     });
   });
@@ -313,9 +314,9 @@ describe("Full Match Simulation", () => {
   describe("discord bot", () => {
     it("should initialize in webhook-only mode", () => {
       const bot = new DiscordBot({ webhookUrl: "https://test.example/hook", botToken: "" });
-      expect(bot.isOperational()).toBe(true);
+      assert.strictEqual(bot.isOperational(), true);
       const stats = bot.getStats();
-      expect(stats.isConnected).toBe(false); // No gateway
+      assert.strictEqual(stats.isConnected, false); // No gateway
     });
   });
 
@@ -353,13 +354,13 @@ describe("Full Match Simulation", () => {
       // End match
       matchFlow.endMatch("op_hur_01");
       const finalState = matchFlow.getState();
-      expect(finalState.status).toBe("FINISHED");
-      expect(finalState.winnerId).toBe("op_hur_01");
+      assert.strictEqual(finalState.status, "FINISHED");
+      assert.strictEqual(finalState.winnerId, "op_hur_01");
 
       // Verify economy summary
       const summary = economyBridge.getMatchSummary("stress_test");
-      expect(summary!.totalKrcMinted).toBeGreaterThan(0);
-      expect(summary!.killRewards).toBeGreaterThan(0);
+      assert.ok(summary!.totalKrcMinted > 0);
+      assert.ok(summary!.killRewards > 0);
 
       matchFlow.destroy();
     });

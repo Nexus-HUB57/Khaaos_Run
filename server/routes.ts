@@ -265,7 +265,13 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     res.json(await storage.getBankAccount(getUserId(req)));
   });
 
-  app.post(api.bank.deposit.path, requireAuth, (_req, res) => {
+  app.post(api.bank.deposit.path, requireAuth, (req, res) => {
+    // Idempotência uniforme em TODA mutação /api/bank/* (auditoria Fase 2):
+    // o depósito está congelado (PAYMENTS_NOT_CONFIGURED), mas a chave já é
+    // validada AGORA para que a reabertura dos pagamentos herde a proteção
+    // estrutural (nenhuma rota de banco mutável sem Idempotency-Key).
+    const key = readIdempotencyKey(req, res);
+    if (!key) return;
     res.status(503).json({
       code: "PAYMENTS_NOT_CONFIGURED",
       message: "Depósitos estão temporariamente indisponíveis. Nenhum KRC foi creditado.",
@@ -634,6 +640,8 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     try {
       const input = parseMutationBody(req, res, loanPreviewInput);
       if (!input) return;
+      // M2: preview usa o MESMO contrato canônico da cobrança (computeLoanTerms
+      // via EconomyEngine.computeLoan) — gate loan-parity: preview === débito.
       res.json(computeLoan(input.principal, input.days));
     } catch {
       res.status(400).json({ message: "Invalid loan params" });

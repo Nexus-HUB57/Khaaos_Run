@@ -8,9 +8,11 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO } from './sim3
 import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
-import { createCharacterLOD, buildOperativeProxy } from './lod3d.js';
+import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
+import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
+import { loadAudioMix, saveAudioMix } from './audiomix.js'; // Fase 19 — mixagem KR_AUDIO_*
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
@@ -19,6 +21,9 @@ import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
+import { SurvivalFX } from './survivalfx3d.js';
+import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
+import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -39,6 +44,8 @@ export class Game3D {
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
     this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode, officers: this.officersMode });
     this.audio = new GameAudio();
+    // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
+    this.audio.setMix(loadAudioMix());
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -59,6 +66,7 @@ export class Game3D {
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
     this.wallMeshes = new Map();      // id → mesh
+    this.wallPositions = new Map();   // Fase 21 — id → última posição conhecida (decal de glooDown)
     this.parachutes = new Map();      // actorId → { chute, group }
     this.shake = 0;                   // tremor de câmera (explosões)
     // Fase 5 — espectador + agachamento
@@ -67,6 +75,7 @@ export class Game3D {
     this.placement = null;
     // Fase 10 — reação de impacto: atorId → { angle, power, age }
     this.hitFX = new Map();
+    this.deathFX = new Map();   // Fase 12 — queda direcional por ator (ângulo/power capturados no fim)
 
     this.initRenderer();
     this.initWorld();
@@ -87,9 +96,37 @@ export class Game3D {
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
     this.initContentSelectors();
     this.initSpectatorUI();
+    this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
+  // Painel único (jogador + espectador): 4 sliders → audio.setMix ao vivo +
+  // saveAudioMix imediato. Headless-safe: tudo atrás da existência do DOM.
+  initAudioMixer() {
+    const btn = document.querySelector('#audioBtn');
+    const panel = document.querySelector('#audioMixer');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+      this.audio?.ui?.();
+    });
+    for (const input of panel.querySelectorAll('input[type="range"][data-channel]')) {
+      const ch = input.dataset.channel;
+      const out = panel.querySelector(`[data-out="${ch}"]`);
+      const sync = () => {
+        input.value = String(Math.round((this.audio?.mix?.[ch] ?? 1) * 100));
+        if (out) out.textContent = `${input.value}%`;
+      };
+      sync();
+      input.addEventListener('input', () => {
+        const mix = this.audio?.setMix({ [ch]: Number(input.value) / 100 });
+        if (mix) saveAudioMix(mix);
+        if (out) out.textContent = `${input.value}%`;
+      });
+    }
   }
 
   // ---------- infra (protegidos: reusados pelo OnlineGame3D) ----------
@@ -123,13 +160,24 @@ export class Game3D {
     this.sun = sun;
     this.ringWall = createRingWall();
     scene.add(this.ringWall);
-    this.effects = new Effects(scene);
+    this.effects = new Effects(scene, {
+      // Fase 18 — partículas de combate no pool compartilhado da cena
+      // (1 draw call p/ TODO o FX: marcos + sobrevivências + combate).
+      particles: scene.userData.particles ?? null,
+      rng: new SeededRng(`${this.seed}:effects`),
+    });
     // fonte da luz segue o jogador (sombras estáveis)
     this.sun.target = new THREE.Object3D();
     scene.add(this.sun.target);
     // Fase 7 — props ganham modelos GLTF REAIS quando os assets carregam
     // (fallback procedural permanece se o fetch falhar)
     applyGltfProps(scene);
+    // Fase 17 — FX das sobrevivências do mundo (tsunami/lava/gravidade/ácido):
+    // consome os eventos da sim/servidor e materializa a regra de dano por altura.
+    this.survivalFX = new SurvivalFX(scene, this.scenario, { particles: scene.userData.particles ?? null });
+    // Fase 20 — decals de morte direcional com LOD (marcas de sangue orientadas
+    // longe do atirador; pool com orçamento por tier de qualidade)
+    this.deathDecals = new DeathDecalSystem(scene, { tier: this.quality });
   }
 
   initEntities() {
@@ -154,6 +202,7 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : b.id }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
@@ -380,13 +429,16 @@ export class Game3D {
     this.startTrainIntro();
   }
 
-  // Fase 11 — cinemática do trem do ZU (offline e online; skippable)
-  startTrainIntro() {
+  // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
+  // Fase 12 — startAt (s) = entrada sincronizada pelo relógio do servidor no
+  // modo online (todos os remotos veem o MESMO frame do trem).
+  startTrainIntro(startAt = 0) {
     try {
       const p = this.sim.player ?? { x: 0, z: 118 };
       this.trainIntro = new TrainIntro({
         scene: this.scene,
         spawn: { x: p.x ?? 0, z: p.z ?? 118 },
+        startAt,
         onDone: () => { this.trainIntro = null; },
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
@@ -419,6 +471,7 @@ export class Game3D {
     document.body.classList.remove('spectating');
     this.hud.hideSpectator();
     if (this.firstPersonRig) this.firstPersonRig.visible = this.viewMode === 'fps';
+    this.audio.stopAllSurvival?.(); // Fase 18 — camadas de hazard morrem com a partida
     this.audio.stinger(win);
     this.hud.setMatchStatus(win ? 'SOBREVIVENTE' : 'ELIMINADO');
     this.hud.showEnd(win, stats);
@@ -430,6 +483,16 @@ export class Game3D {
     document.querySelector('#specPrev')?.addEventListener('click', () => this.spectateCycle(-1));
     document.querySelector('#specNext')?.addEventListener('click', () => this.spectateCycle(1));
     document.querySelector('#specLeave')?.addEventListener('click', () => this.leaveSpectate());
+    // Fase 13 — replay da ata da Corte na UI do eliminado: reabre a ata do caso
+    // próprio (busca online via mine=1) a partir da barra de espectador.
+    document.querySelector('#specAta')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#endAtaBtn')?.addEventListener('click', () => this.openMyCourtAta?.());
+    document.querySelector('#ataReplayBtn')?.addEventListener('click', () => this.hud.replayCourtAta());
+    document.querySelector('#ataCloseBtn')?.addEventListener('click', () => this.hud.hideCourtAta());
+    // clique no card adianta a encenação (skip)
+    document.querySelector('#ataTimeline')?.addEventListener('click', () => {
+      (this.hud.ataNodes ?? []).forEach((n) => n.classList.add('shown'));
+    });
   }
 
   // alvos vivos que o espectador pode acompanhar (bots/remotos; offline e online)
@@ -451,6 +514,9 @@ export class Game3D {
     this.hud.feed('CIGKV', `Você foi eliminado${this.placement ? ` — posição #${this.placement}` : ''}. Transmitindo o restante da partida.`, 'bad');
     this.spectateCycle(1);
     this.hud.showSpectator({ name: this.spectateTarget?.name ?? '—', placement: this.placement });
+    // Fase 13 — o eliminado passa a ver o replay da ata do SEU caso na Corte:
+    // a busca é async (HTTP mine=1) e o caso pode demorar um tick para abrir.
+    this.onEliminated?.(e);
   }
 
   spectateCycle(dir = 1) {
@@ -552,6 +618,7 @@ export class Game3D {
     for (const w of walls) {
       if (!w.active) { continue; }
       activeW.add(w.id);
+      this.wallPositions.set(w.id, { x: w.x, z: w.z }); // Fase 21 — cache p/ cacos no glooDown
       let mesh = this.wallMeshes.get(w.id);
       if (!mesh) {
         mesh = createGlooMesh();
@@ -615,11 +682,29 @@ export class Game3D {
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
     pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
-    if (!p.alive && !pg.userData.deadPose) {
-      pg.rotation.x = -Math.PI / 2.2; pg.position.y = .35;
+    if (!p.alive) {
+      // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
+      let dfx = this.deathFX.get('player');
+      if (!dfx) {
+        const hf = this.hitFX.get('player');
+        dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: 3 };
+        this.deathFX.set('player', dfx);
+        // Fase 20 — decal de morte: poça/riscos orientados longe do atirador
+        this.deathDecals?.spawn({ x: p.x, y: p.y, z: p.z, angle: dfx.angle, yaw: p.yaw, power: dfx.power, seed: dfx.seed });
+      }
+      dfx.age += dt;
+      const df = deathFall(dfx);
+      pg.rotation.order = 'YXZ';          // yaw primeiro; queda em x/z locais ao modelo
+      pg.rotation.x = df.rotX;
+      pg.rotation.z = df.rotZ;
+      pg.position.y = .35;
       pg.userData.deadPose = true;
     }
-    if (p.alive) pg.userData.deadPose = false, pg.rotation.x = 0;
+    if (p.alive) {
+      pg.userData.deadPose = false;
+      this.deathFX.delete('player');
+      pg.rotation.x = 0; pg.rotation.z = 0;
+    }
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
     const airborne = !!p.dropPhase;
@@ -629,6 +714,7 @@ export class Game3D {
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
+      death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
     });
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -654,6 +740,9 @@ export class Game3D {
     // bots
     const seen = new Set();
     const mySquad = s.player?.squad ?? null;
+    // Fase 13 — direção da câmera UMA vez por frame (frustum de todos os atores)
+    if (!this._camDir) this._camDir = new THREE.Vector3();
+    this.camera.getWorldDirection(this._camDir);
     for (const b of s.bots) {
       seen.add(b.id);
       let entry = this.botOps.get(b.id);
@@ -671,13 +760,14 @@ export class Game3D {
         const op = createCharacterLOD(
           createOperative({ ...palette, variant: b.officer ? 'OCE_OFFICER' : (catalog ? b.op : b.id) }),
           buildOperativeProxy(palette),
+          buildOperativeSilhouette(palette),
           { tier: this.quality }
         );
         this.scene.add(op.group);
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
@@ -690,30 +780,56 @@ export class Game3D {
       }
       const g = entry.op.group;
       // Fase 10 — LOD por distância à câmera (corpos no chão também culam)
+      // Fase 13 — LOD por FRUSTUM: fora do cone de visão por ~0,3 s a distância
+      // efetiva é penalizada (downgrade acelerado sem pop) e a ANIMAÇÃO congela;
+      // atores próximos (dist < limiar full do tier) nunca são penalizados —
+      // a sombra deles precisa existir quando a câmera vira.
       const cam = this.camera.position;
-      entry.op.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z));
-      // morto FINAL (sem DBNO ou já finalizado): pose de corpo no chão
+      entry.frustum ??= createFrustumGate({ fovY: this.camera.fov, aspect: this.camera.aspect, minDist: entry.op.th.full });
+      const fg = entry.frustum.update(Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z), cam, this._camDir, b);
+      entry.op.update(fg.effectiveDist);
+      entry.frozen = !fg.inside;
+      // morto FINAL (sem DBNO ou já finalizado): queda DIRECIONAL (Fase 12)
       if (!b.alive && !b.knocked) {
-        if (!g.userData.deadVisible) {
+        let dfx = this.deathFX.get(b.id);
+        if (!dfx) {
+          const hf = this.hitFX.get(b.id);
+          dfx = { angle: hf ? hf.angle : 0, power: hf ? hf.power : .7, age: 0, seed: (b.id.charCodeAt(4) || 7) % 97 };
+          this.deathFX.set(b.id, dfx);
           g.visible = true;
-          g.rotation.x = -Math.PI / 2.2; g.position.y = b.y + .35;
-          g.userData.deadVisible = true;
+          g.rotation.order = 'YXZ';
           entry.name.visible = false;
+          // Fase 20 — decal de morte: poça/riscos orientados longe do atirador
+          this.deathDecals?.spawn({ x: b.x, y: b.y, z: b.z, angle: dfx.angle, yaw: b.yaw, power: dfx.power, seed: dfx.seed });
         }
+        dfx.age += dt;
+        const df = deathFall(dfx);
+        g.rotation.x = df.rotX;
+        g.rotation.z = df.rotZ;
+        g.position.y = b.y + .35;
+        g.userData.deadVisible = true;
+        // agonia aditiva nos membros (se o nível ativo do LOD tem parts)
+        // Fase 13 — congelada fora do frustum (rotação da raiz continua: barata)
+        const dparts = entry.op.activeParts();
+        if (dparts && !entry.frozen) animateOperative(dparts, { t: this.animT + (b.id.charCodeAt(4) || 7), dead: true, death: dfx });
         continue;
       }
       g.userData.deadVisible = false;
+      this.deathFX.delete(b.id);
       g.visible = true;
-      g.rotation.x = 0;
+      g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
       g.rotation.y = b.yaw + Math.PI;
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
+      // Fase 12 — no nível silhueta activeParts() → null (nada a animar)
+      // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
+      // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
       // Fase 4 — pose de queda para bots/remotos
-      if (b.dropPhase && !b.knocked) {
+      if (b.dropPhase && !b.knocked && parts && !entry.frozen) {
         const flap = Math.sin(this.animT * 5 + b.id.charCodeAt(4)) * .5;
         parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
         parts.armR.shoulder.rotation.z = -1.1 - flap * .3;
@@ -737,7 +853,15 @@ export class Game3D {
     this.ringWall.position.set(r.x, 23, r.z);
     this.ringWall.scale.set(r.radius, 1, r.radius);
     const t = performance.now() / 1000;
-    for (const u of this.ringWall.userData.uniforms) u.time.value = t;
+    for (const u of this.ringWall.userData.uniforms) {
+      u.time.value = t;
+      // FIX "mundo vermelho": parede acompanha o fog REAL da cena (applyNightness
+      // muda cor do fog por pulso — sem isto a parede ignorava a névoa a 800 m).
+      if (this.scene.fog) {
+        u.fogColor.value.copy(this.scene.fog.color);
+        u.fogDensity.value = this.scene.fog.density ?? 0.0035;
+      }
+    }
   }
 
   // Fase 8 — céu dinâmico: cada pulso do Ring aprofunda a noite (interpolação suave)
@@ -917,12 +1041,15 @@ export class Game3D {
         case 'kill':
           this.hud.killfeed('VOCÊ', e.target, e.head, true);
           this.hud.feed('ABATE', `${e.target} neutralizado.${e.finish ? ' (finalização)' : ''} +${e.xp} XP / +${e.krc} KRC.`, 'good');
+          this.audio?.killConfirm?.(e.head); // Fase 18 — confirmação sonora de abate
           break;
         case 'knock':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
           break;
         case 'botKnocked':
           this.hud.feed('ABATE', `${e.target} nocauteado — finalize ou aguarde o sangramento. +${e.xp} XP.`, 'good');
+          this.audio?.knockTick?.(); // Fase 18 — tick de nocaute
           break;
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
@@ -944,6 +1071,10 @@ export class Game3D {
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
+          // Fase 12 — remotos entram na partida AQUI (modal ZU fecha, trem
+          // sincronizado pelo startedAt do servidor). O iniciador local já
+          // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
+          this.onMatchStartEvent?.(e);
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1021,7 +1152,65 @@ export class Game3D {
         case 'patente': // Fase 11 — patente do perfil confirmada pelo servidor
           this.hud.feed('POJ', `Patente confirmada no nametag: ${e.patente}.`, 'good');
           break;
+        case 'court_verdict': { // Fase 12 — veredito da Corte Marcial ao vivo
+          // Fase 13 — cache p/ ata do eliminado: enriquece o replay com o ΔKRC
+          // entregue ao vivo mesmo quando o docket do servidor ainda não o tem.
+          (this.courtVerdictEvents ??= {})[e.caseId] = e;
+          const rotulo = { afastamento: 'AFASTAMENTO DESONROSO', reducao_patente: 'REDUÇÃO DE PATENTE',
+            honras_de_guerra: 'HONRAS DE GUERRA', absolvicao: 'ABSOLVIÇÃO' }[e.veredito] ?? String(e.veredito ?? '').toUpperCase();
+          const krcTxt = e.krcApplied
+            ? `${e.krcDelta >= 0 ? '+' : ''}${e.krcDelta} KRC${e.krcBalance != null ? ` (saldo ${e.krcBalance})` : ''}`
+            : 'sem efeito em KRC';
+          this.hud.feed('CORTE MARCIAL', `Caso ${e.caseId}: ${rotulo} — registro ${e.registro ?? '—'}, ${krcTxt}.`, e.krcDelta >= 0 ? 'good' : 'bad');
+          if (e.patente) this.hud.feed('POJ', `Registro militar atualizado: patente ${e.patente}.`, 'warn');
+          this.audio?.ui?.();
+          break;
+        }
         case 'empty': this.hud.feed('ARSENAL', 'Pente vazio — recarregue [R].', 'bad'); break;
+        // ---------- Fase 17/18 — sobrevivências do mundo (FX + áudio imersivo) ----------
+        case 'tsunamiStart':
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .22);
+          this.audio?.survival?.('tsunami', true);
+          this.audio?.hazardStinger?.('tsunami');
+          this.hud.feed('SOBREVIVÊNCIA', `TSUNAMI: nível do mar subindo até ${Math.round(e.submergeBelowY ?? 90)}m — busque terreno ALTO (${Math.round(e.durationSeconds ?? 40)}s).`, 'bad');
+          break;
+        case 'tsunamiEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('tsunami', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
+          break;
+        case 'eruptionStart':
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .3);
+          this.audio?.survival?.('lava', true);
+          this.audio?.hazardStinger?.('lava');
+          this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          break;
+        case 'eruptionEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('lava', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
+          break;
+        case 'gravityAnomalyStart':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('gravity', true);
+          this.audio?.hazardStinger?.('gravity');
+          this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
+          break;
+        case 'gravityAnomalyEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('gravity', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
+          break;
+        case 'acidRain':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('acid', true, { duration: 2.2 }); // hiss curto por pulso
+          if (!this._acidWarned || performance.now() - this._acidWarned > 30000) {
+            this._acidWarned = performance.now();
+            this.hud.feed('SOBREVIVÊNCIA', 'Chuva ácida no setor — procure cobertura.', 'warn');
+          }
+          break;
         // ---------- Fase 4 — infiltração aérea + arremessáveis ----------
         case 'airdrop':
           this.hud.feed('ZU', `Infiltração aérea confirmada. Altitude ${Math.round(e.altitude)}m — paraquedas abre a 45m.`, 'warn');
@@ -1040,14 +1229,40 @@ export class Game3D {
           this.effects.explosion(new THREE.Vector3(e.x, e.y, e.z));
           this.audio.explosion(dist);
           this.shake = Math.max(this.shake, Math.max(0, .3 - dist * .004));
+          // Fase 21 — marca de explosão no chão (mesma infra de decals):
+          // explosão alta deixa marca mais fraca (blast dissipa no ar).
+          const yBlast = Number.isFinite(e.y) ? e.y : 0;
+          const scorchPower = Math.max(.55, Math.min(1, 1 - yBlast / 9));
+          this.deathDecals?.spawn({
+            kind: 'scorch', x: e.x, z: e.z, power: scorchPower,
+            seed: Math.floor(Math.abs(e.x * 73.13 + e.z * 179.71) * 100) % 100000,
+          });
           break;
         }
-        case 'gloo':
+        case 'gloo': {
           if (e.owner !== 'player') this.audio.gloo();
+          // Fase 21 — geada na base onde a parede assentou (dono tanto faz:
+          // a marca é do mundo, não do jogador)
+          this.deathDecals?.spawn({
+            kind: 'gloo', x: e.x, z: e.z, yaw: e.rot ?? 0, angle: Math.PI / 2,
+            power: .62,
+            seed: Math.floor(Math.abs(e.x * 131.7 + e.z * 57.3) * 100) % 100000,
+          });
           break;
-        case 'glooDown':
+        }
+        case 'glooDown': {
           this.hud.feed('ARSENAL', e.destroyed ? 'Gloo Wall destruída.' : 'Gloo Wall dissolvida.');
+          // Fase 21 — cacos de gelo onde a parede estava (cache de posições;
+          // o evento não traz x/z). Só quando DESTRUÍDA: dissolver não raspa o chão.
+          const wp = this.wallPositions.get(e.id);
+          if (wp && e.destroyed) {
+            this.deathDecals?.spawn({
+              kind: 'gloo', x: wp.x, z: wp.z, power: .95,
+              seed: Math.floor(Math.abs(wp.x * 211.3 + wp.z * 97.9) * 100) % 100000,
+            });
+          }
           break;
+        }
         case 'victory': this.#endMatch(true, e); break;
         case 'matchEnd': this.#endMatch(false, { kills: p.kills, xp: p.xp, krc: p.krc, ...e }); break;
         case 'eliminated': this.enterSpectate(e); break;
@@ -1154,8 +1369,14 @@ export class Game3D {
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
+    // Fase 17 — FX das sobrevivências (nível do mar/lava, domos, drizzle)
+    this.survivalFX?.update(dt, this.animT);
     this.updateCamera(dt);
     this.effects.update(dt);
+    this.deathDecals?.update(dt, this.camera.position); // Fase 20 — fade + LOD dos decals pela câmera
     this.updateDropFX(dt);
     // beacon pulse
     const bl = .5 + Math.sin(performance.now() / 300) * .5;
@@ -1176,8 +1397,14 @@ export class Game3D {
 const seed = decodeURIComponent(location.hash.slice(1)) || 'CIGKV-3D-01';
 const query = new URLSearchParams(location.search);
 const online = query.get('online') === '1';
+const spectateRoom = query.get('spectate'); // Fase 13/14 — espectador remoto (pipeline /ws/spectator)
 const scenarioId = query.get('scenario') || 'CIGKV';
-if (online) {
+if (query.has('spectate')) {
+  // modo espectador: transmissão atrasada do servidor, sem jogador local
+  // (import dinâmico evita ciclo ESM — mesmo padrão do online3d).
+  // Fase 14 — presença do parâmetro basta: ?spectate= vazio cai na sala default.
+  import('./spectator3d.js').then(({ bootstrapSpectator }) => bootstrapSpectator({ roomId: spectateRoom || 'default', camera: query.get('cam') }));
+} else if (online) {
   // modo online: NetClient3D + OnlineGame3D (import dinâmico evita ciclo ESM)
   import('./online3d.js').then(({ bootstrapOnline }) => bootstrapOnline());
 } else {

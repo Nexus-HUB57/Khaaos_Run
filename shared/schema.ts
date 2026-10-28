@@ -569,3 +569,35 @@ export const tournaments = pgTable("tournaments", {
 
 export type DiscordLink = typeof discordLinks.$inferSelect;
 export type Tournament = typeof tournaments.$inferSelect;
+
+/**
+ * Fase 16 — livro de reclamações 2PC dos payouts de fim de partida.
+ * PREPARE reserva o prêmio (treasury.match_rewards → payout.in_transit),
+ * COMMIT credita a wallet do jogador, ABORT devolve à treasury. A chave de
+ * idempotência é determinística (payout.<roomId>.<userId>) — retries e
+ * concorrência convergem sem pagar duas vezes. Valor/identidade são
+ * imutáveis após o prepare (trigger match_payout_identity_immutable).
+ */
+export const matchPayoutClaims = pgTable("match_payout_claims", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  roomId: text("room_id").notNull(),
+  userId: text("user_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  krcAmount: numeric("krc_amount").notNull(),
+  status: text("status").notNull(),
+  prepareOperationId: uuid("prepare_operation_id").notNull(),
+  resolveOperationId: uuid("resolve_operation_id"),
+  reason: text("reason"),
+  preparedAt: timestamp("prepared_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+}, (table) => ({
+  roomUserUnique: uniqueIndex("match_payout_room_user_unique").on(table.roomId, table.userId),
+  userKeyUnique: uniqueIndex("match_payout_user_key_unique").on(table.userId, table.idempotencyKey),
+  statusPreparedIdx: index("match_payout_status_prepared_idx").on(table.status, table.preparedAt),
+  statusValid: check("match_payout_status_valid", sql`${table.status} IN ('PREPARED', 'COMMITTED', 'ABORTED')`),
+  amountPositive: check("match_payout_amount_positive", sql`${table.krcAmount} > 0`),
+  keyFormat: check("match_payout_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
+  reasonBounded: check("match_payout_reason_bounded", sql`${table.reason} IS NULL OR length(${table.reason}) <= 256`),
+}));
+
+export type MatchPayoutClaim = typeof matchPayoutClaims.$inferSelect;

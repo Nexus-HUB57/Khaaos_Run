@@ -145,6 +145,105 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
 // variant (Fase 7): string do operativo/bot — deriva acessórios determinísticos.
 // Fase 9: anatomia curva — mesmos pivôs (quadril .84, ombros 1.48, cabeça 1.68),
 // mesma API de parts; nenhuma dependência externa de rig.
+// ---------- Fase 12 — blendshapes faciais ----------
+// O rosto é textura pintada em calota esférica + mandíbula geométrica: cada
+// "blendshape" é um PAR (variante de textura, pose da mandíbula). O rig troca
+// o map quando o peso cruza .5 (crossfade real exigiria shader dedicado) e
+// blendA a mandíbula continuamente — barato, determinístico e sem estado GPU.
+export const FACIAL_EXPRESSIONS = ['neutral', 'blink', 'pain', 'shout', 'death', 'knocked'];
+export const FACE_JAW = { neutral: 0, blink: 0, pain: .32, shout: .72, death: .26, knocked: .12 };
+
+export function createFaceRig(face, jaw, { skin, eye, hair } = {}) {
+  const mats = new Map();                    // expressão → material clonado c/ map
+  const baseMat = face.material;
+  const matFor = (name) => {
+    if (!mats.has(name)) {
+      const m = baseMat.clone();
+      m.map = faceTexture(skin, eye, hair, name);
+      mats.set(name, m);
+    }
+    return mats.get(name);
+  };
+  const JAW0 = { y: jaw.position.y, z: jaw.position.z, sy: jaw.scale.y };
+  const rig = {
+    face, jaw,
+    expression: 'neutral',
+    weight: 0,
+    set(name, w = 1) {
+      if (!FACIAL_EXPRESSIONS.includes(name)) return false;
+      const weight = Math.max(0, Math.min(1, w));
+      const target = weight >= .5 ? name : 'neutral';
+      if (rig.expression !== target) face.material = matFor(target);
+      rig.expression = target;
+      rig.weight = weight;
+      const base = FACE_JAW[name] ?? 0;
+      jaw.position.y = JAW0.y - base * .028 * weight;   // mandíbula desce
+      jaw.scale.y = JAW0.sy + base * .38 * weight;      // boca abre (volume)
+      jaw.position.z = JAW0.z + base * .012 * weight;   // projeta p/ frente
+      return true;
+    },
+    reset() { rig.set('neutral', 0); jaw.position.y = JAW0.y; jaw.scale.y = JAW0.sy; jaw.position.z = JAW0.z; },
+  };
+  return rig;
+}
+
+// ---------- Fase 12 — morte direcional (ragdoll fake por torque) ----------
+// Queda ANALÍTICA (sem física): impulso de torque no sentido OPOSTO ao tiro,
+// oscilação amortecida sub-crítica (pêndulo) e assentamento em θmax. Puro
+// (zero THREE) para testes determinísticos; rotação aplicada na RAIZ do LOD
+// (válido nos 3 níveis). angle = direção DO atirador (0 = frente, +π/2 = lado
+// +x, π = costas), power 0..1, seed = assimetria determinística do actor.
+export const DEATH_FALL = { impulse: .09, settleT: 1.15, lambda: 2.6, omega: 6 };
+
+export function deathFallMax(power = 1) {
+  return 1.25 + .45 * Math.max(0, Math.min(1, power));
+}
+
+export function deathFall({ angle = 0, power = 1, age = 0, seed = 0 } = {}) {
+  const a = Math.max(0, Number.isFinite(age) ? age : 0);
+  const p = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 1));
+  const thMax = deathFallMax(p);
+  let th;
+  if (a < DEATH_FALL.impulse) {
+    const k = a / DEATH_FALL.impulse;
+    th = thMax * .5 * k * k;                                  // aceleração do torque
+  } else if (a < DEATH_FALL.settleT) {
+    const dt = a - DEATH_FALL.impulse;
+    const drop = thMax * .5 * Math.exp(-DEATH_FALL.lambda * dt) * Math.cos(DEATH_FALL.omega * dt);
+    th = thMax - drop;                                        // contínuo em .5·thMax
+    if (th > thMax * 1.12) th = thMax * 1.12;                 // quique limitado no chão
+    if (th < 0) th = 0;
+    if (a > DEATH_FALL.settleT * .8) {                        // assentamento suave
+      const k2 = (a - DEATH_FALL.settleT * .8) / (DEATH_FALL.settleT * .2);
+      const s = k2 * k2 * (3 - 2 * k2);
+      th += (thMax - th) * s;
+    }
+  } else {
+    th = thMax;                                               // assentado
+  }
+  const flail = a < DEATH_FALL.settleT
+    ? Math.min(1, a / DEATH_FALL.impulse) * (1 - Math.max(0, (a - DEATH_FALL.impulse) / (DEATH_FALL.settleT - DEATH_FALL.impulse)))
+    : 0;
+  const h = Math.sin(seed * 127.1 + 311.7) * 43758.5453;      // hash determinístico
+  const asym = h - Math.floor(h);                             // 0..1
+  const back = Math.cos(angle), side = Math.sin(angle);
+  return {
+    th,
+    settled: a >= DEATH_FALL.settleT,
+    flail,
+    rotX: th * back,   // tiro da frente (angle 0) → cai de costas
+    rotZ: th * side,   // tiro do lado +x (angle +π/2) → tomba p/ −x, longe do atirador
+    joints: {
+      armL: flail * (.85 + .4 * asym),
+      armR: flail * (.85 + .4 * (1 - asym)),
+      elbow: flail * .7,
+      legL: flail * .5 * (.6 + .5 * asym),
+      legR: flail * .5 * (1.1 - .5 * asym),
+      head: flail * .45 * side,
+    },
+  };
+}
+
 export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], secondary = null, trim = TRIM_ACCENT, eyes = null, hair = '#171717', helmet = true, variant = '' } = {}) {
   const g = new THREE.Group();
   const camo = camoMaterial(hashIdx(vest, 4), { repeat: 1.4 }); // camuflagem coerente com a cor do colete (compartilhada/memoizada)
@@ -174,12 +273,15 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   shadow.renderOrder = 1;
   g.add(shadow);
 
-  // ---- quadril fixo: pelve arredondada + cinto tático + coldre ----
+  // ---- quadril fixo: pelve arredondada + glúteos + cinto tático + coldre ----
   const pelvis = ball(.2, secM, 0, .84, 0, 10, 8, 1.15, .6, .82);   // elipse = quadril humano
   const belt = box(.46, .07, .31, gearM, 0, .94, 0);
   const buckle = box(.08, .06, .04, metalM, 0, .94, -.155);
   const holster = box(.1, .18, .08, gearM, .19, .82, -.06);
-  g.add(pelvis, belt, buckle, holster);
+  // Fase 16 (P1) — glúteos: quebra a reta pelve→coxa (silhueta humana de costas)
+  const gluteL = ball(.09, secM, -.105, .82, .08, 8, 6, 1, .82, .9);
+  const gluteR = ball(.09, secM, .105, .82, .08, 8, 6, 1, .82, .9);
+  g.add(pelvis, belt, buckle, holster, gluteL, gluteR);
 
   // ---- TRONCO (grupo — bob de corrida move tudo acima) ----
   // V-taper: peitoral cônico mais largo que o abdômen, seção elíptica
@@ -191,6 +293,12 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const abdomen = cyl(.225, .2, .18, camo, 0, -.15, 0, 12);
   abdomen.scale.z = .6;
   torso.add(chest, abdomen);
+  // Fase 16 (P1) — cintura escapular: clavículas + trapézio amarram pescoço
+  // e ombros (antes o tronco "nascia" direto nos deltoides — visual manequim)
+  const clavL = ball(.065, camo, -.18, .24, 0, 8, 6, 1.15, .8, .9);
+  const clavR = ball(.065, camo, .18, .24, 0, 8, 6, 1.15, .8, .9);
+  const traps = ball(.085, camo, 0, .3, .025, 8, 6, 1.3, .75, .9);
+  torso.add(clavL, clavR, traps);
   const vestMesh = box(.5, .42, .33, vestM, 0, .06, .01);           // plate carrier rígido sobre o peitoral
   torso.add(vestMesh);
   // pouches frontais de carregador (3) + porta-radio
@@ -230,6 +338,8 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   );
   face.position.set(0, .012, 0);
   head.add(face);
+  // Fase 12 — rig de blendshapes faciais (expressões + mandíbula articulada)
+  const faceRig = createFaceRig(face, jaw, { skin, eye, hair });
   // franja/cabelo sob o capacete (nuca + laterais) — volume orgânico
   if (!helmet) {
     const hairBack = ball(.122, hairM, 0, .02, .035, 12, 10, .95, 1.0, 1.0);
@@ -252,26 +362,31 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   }
   torso.add(head);
 
-  // ---- pernas (Fase 9): coxa/canela em cápsula + joelho esférico ----
+  // ---- pernas (Fase 9/16): coxa/canela em cápsula + joelho esférico + panturrilha
+  // + PIVÔ DO TORNOZELO (o pé rola calcanhar→ponta na passada — fim do pé de manequim) ----
   const mkLeg = (side) => {
     const hip = new THREE.Group(); hip.position.set(side * .13, .84, 0);
     const upper = capsule(.082, .26, camo, 0, -.21, 0);
+    const calf = ball(.055, camo, 0, -.12, .048, 8, 6, .95, 1.25, .95); // panturrilha
     const cargo = box(.05, .16, .12, secM, side * .1, -.2, 0);
     const knee = new THREE.Group(); knee.position.set(0, -.42, 0);
     const kneeCap = ball(.07, gearM, 0, -.01, -.005, 10, 8);       // joelheira orgânica
     const lower = capsule(.066, .24, camo, 0, -.19, 0);
     const pad = box(.15, .1, .17, gearM, 0, -.06, -.005);
-    const boot = box(.17, .12, .28, bootM, 0, -.43, .05);
-    const toe = ball(.085, bootM, 0, -.44, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
-    const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.5, .05);
-    knee.add(kneeCap, lower, pad, boot, toe, sole); hip.add(upper, cargo, knee);
+    const foot = new THREE.Group(); foot.position.set(0, -.31, .01);
+    const boot = box(.17, .12, .28, bootM, 0, -.12, .05);
+    const toe = ball(.085, bootM, 0, -.13, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
+    const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.19, .05);
+    foot.add(boot, toe, sole);
+    knee.add(kneeCap, lower, pad, foot); hip.add(upper, calf, cargo, knee);
     g.add(hip);
-    return { hip, knee };
+    return { hip, knee, foot };
   };
   // ---- braços (Fase 9): deltoides no ombro + cápsulas + cotovelo esférico ----
   const mkArm = (side) => {
     const shoulder = new THREE.Group(); shoulder.position.set(side * .31, .24, 0); // local ao tronco (mundo 1.46)
     const deltoid = ball(.09, camo, 0, .01, 0, 10, 8, 1.1, .95, 1); // ombro curvo
+    const biceps = ball(.05, camo, 0, -.09, -.015, 8, 6, .95, 1.2, .95); // Fase 16: volume do bíceps
     const upper = capsule(.062, .2, camo, 0, -.16, 0);
     const pad = box(.15, .09, .16, gearM, 0, -.25, 0);
     const stripe = box(.13, .05, .14, trimM, 0, -.05, 0);
@@ -281,7 +396,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const glove = box(.12, .12, .13, gearM, 0, -.31, 0);
     const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
     const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
-    elbow.add(elbowCap, lower, cuff, glove, knuckles); shoulder.add(deltoid, upper, pad, stripe, elbow);
+    elbow.add(elbowCap, lower, cuff, glove, knuckles); shoulder.add(deltoid, biceps, upper, pad, stripe, elbow);
     return { shoulder, elbow };
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
@@ -291,7 +406,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
   buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
 
-  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow } };
+  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow, face: faceRig } };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
@@ -304,7 +419,11 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // Fase 10: `hit` = reação de impacto direcional { angle, power, age } — flinch
 // ADITIVO sobre a pose base (não a substitui): ângulo em espaço do personagem
 // (0 = frente, +π/2 = lado +x, π = costas), power 0..1 e age em segundos.
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null } = {}) {
+// Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
+// (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
+// (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+  let hitEnv = 0;                                            // acopla rosto à dor
   // sombra de contato: some com altitude (paraquedas) e no corpo morto
   if (parts.shadow) {
     const fade = dead ? 0 : Math.max(0, .8 - air * .1);
@@ -317,6 +436,18 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
+    if (parts.face) parts.face.set('death', 1);
+    // Fase 12 — agonia: membros abrem pelo envelope do fall (assimétrico)
+    if (death && death.power > 0) {
+      const j = deathFall(death).joints;
+      parts.armL.shoulder.rotation.z = Math.min(1.5, parts.armL.shoulder.rotation.z + j.armL);
+      parts.armR.shoulder.rotation.z = Math.max(-1.5, parts.armR.shoulder.rotation.z - j.armR);
+      parts.armL.elbow.rotation.x -= j.elbow * .8;
+      parts.armR.elbow.rotation.x -= j.elbow * .8;
+      parts.legL.hip.rotation.x = Math.min(1.2, parts.legL.hip.rotation.x + j.legL);
+      parts.legR.hip.rotation.x = Math.max(-1.2, parts.legR.hip.rotation.x - j.legR);
+      parts.head.rotation.y += j.head;
+    }
     return;
   }
   if (knocked) {
@@ -332,6 +463,8 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legR.hip.rotation.x = .85 - crawl * .18;
     parts.legL.knee.rotation.x = -.55;
     parts.legR.knee.rotation.x = -.5;
+    // Fase 16: pés arrastam com a ponta flexionada (não congela no último passo)
+    if (parts.legL.foot) { parts.legL.foot.rotation.x = .3 + crawl * .12; parts.legR.foot.rotation.x = .3 - crawl * .12; }
     parts.armR.shoulder.rotation.x = -1.15 - crawl * .3;
     parts.armL.shoulder.rotation.x = -1.15 + crawl * .3;
     parts.armR.elbow.rotation.x = -.35;
@@ -339,42 +472,66 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.head.rotation.x = -.6;
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
+    if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
     return;
   }
   const idle = 1 - Math.min(1, speedNorm);
   const breathe = Math.sin(t * 2.1);                       // respiração
-  // ---- passada: frequência base + segunda harmônica (menos metronômico) ----
-  const swing = Math.sin(t * 9) * .62 * speedNorm + Math.sin(t * 9 + 1.9) * .05 * speedNorm;
-  const swing2 = Math.cos(t * 9) * .5 * speedNorm;
+  // ---- Fase 16 (P1) — passada HUMANA: cadência escala com a velocidade
+  // (andar cadenciado, sprint rápido), joelho flexiona NA fase de balanço,
+  // pelve gira contra o tronco, tornozelos rolam calcanhar→ponta e o corpo
+  // inclina PARA DENTRO do sprint. Frequência base preservada em repouso. ----
+  const W = 8.6 + 2.2 * speedNorm;                          // rad/s da passada
+  const swing = Math.sin(t * W) * .62 * speedNorm + Math.sin(t * W + 1.9) * .05 * speedNorm;
+  const swing2 = Math.cos(t * W) * .5 * speedNorm;
   if (crouch) {
     parts.legL.hip.rotation.x = 1.15 + swing * .15;
     parts.legR.hip.rotation.x = 1.15 - swing * .15;
     parts.legL.knee.rotation.x = -1.45;
     parts.legR.knee.rotation.x = -1.45;
+    // agachamento apoia nos antepés (calcanhares levemente erguidos)
+    if (parts.legL.foot) { parts.legL.foot.rotation.x = .2; parts.legR.foot.rotation.x = .2; }
   } else {
     parts.legL.hip.rotation.x = swing;
     parts.legR.hip.rotation.x = -swing;
-    parts.legL.knee.rotation.x = Math.max(0, swing2) * .8;
-    parts.legR.knee.rotation.x = Math.max(0, -swing2) * .8;
+    // Fase 16: flexão do joelho mais profunda no sprint (fase de balanço)
+    const kneeAmp = .72 + .2 * speedNorm;
+    parts.legL.knee.rotation.x = Math.max(0, swing2) * kneeAmp;
+    parts.legR.knee.rotation.x = Math.max(0, -swing2) * kneeAmp;
     // Fase 9: leve rotação lateral do quadril na passada (transferência de peso)
-    parts.legL.hip.rotation.z = Math.sin(t * 9) * .035 * speedNorm;
-    parts.legR.hip.rotation.z = Math.sin(t * 9) * .035 * speedNorm;
+    parts.legL.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
+    parts.legR.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
+    // Fase 16: pelve gira CONTRA o tronco (anatomia real: torção transversal —
+    // quando o tórax roda +sway, a pelve roda em contrafase)
+    parts.legL.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
+    parts.legR.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
+    // Fase 16: rolagem do tornozelo — +x = ponta pra cima (calcanhar toca
+    // primeiro quando a perna alcança à frente), -x = impulso da ponta atrás
+    if (parts.legL.foot) {
+      const sL = Math.sin(t * W), sR = -sL;
+      parts.legL.foot.rotation.x = (Math.max(0, sL) * .25 - Math.max(0, -sL) * .45) * speedNorm;
+      parts.legR.foot.rotation.x = (Math.max(0, sR) * .25 - Math.max(0, -sR) * .45) * speedNorm;
+      parts.legL.foot.rotation.z = Math.sin(t * .7) * .03 * idle;   // peso no idle
+      parts.legR.foot.rotation.z = -Math.sin(t * .7) * .03 * idle;
+    }
   }
   const aim = -Math.PI / 2 + pitch;
   // braços seguram a arma — swing macro proibido; micro-oscilação do passo
-  const armStep = Math.cos(t * 9) * .045 * speedNorm;
+  const armStep = Math.cos(t * W) * .045 * speedNorm;
   parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
   parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
   parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6;
   parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6;
   // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
-  const sway = Math.sin(t * 9) * .07 * speedNorm;
+  const sway = Math.sin(t * W) * .07 * speedNorm;
   parts.torso.rotation.y = sway;
-  parts.torso.rotation.x = speedNorm * .1 + breathe * .014 * idle;
-  parts.torso.rotation.z = Math.sin(t * 9 + .4) * .05 * speedNorm   // roll de passada
+  // Fase 16: inclinação PARA DENTRO do sprint (aceleração sobre o quadril)
+  parts.torso.rotation.x = speedNorm * .1 + speedNorm * speedNorm * .09 + breathe * .014 * idle;
+  parts.torso.rotation.z = Math.sin(t * W + .4) * .05 * speedNorm   // roll de passada
     + Math.sin(t * .7) * .028 * idle;                                // transferência de peso parado
   parts.torso.position.x = Math.sin(t * .7) * .02 * idle;            // quadril desloca no idle
-  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * 9)) * .05 * speedNorm;
+  // Fase 16: dupla pancada por ciclo (um bounce POR apoie) — amp cresce com a velocidade
+  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * W)) * (.045 + .02 * speedNorm) * speedNorm;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
   // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
@@ -389,6 +546,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     const ATTACK = .06, TAU = .17;
     const age = Math.max(0, hit.age ?? 0);
     const env = (age < ATTACK ? age / ATTACK : Math.exp(-(age - ATTACK) / TAU)) * Math.min(1, hit.power);
+    hitEnv = env;
     if (env > .001) {
       const side = Math.sin(hit.angle ?? 0);   // + = impacto no lado +x do modelo
       const front = Math.cos(hit.angle ?? 0);  // + = impacto na frente (-z)
@@ -402,6 +560,15 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
       parts.armL.shoulder.rotation.z += side * env * .12;
       parts.armR.elbow.rotation.x += front * env * .18;   // antebraços recuam
       parts.armL.elbow.rotation.x += front * env * .18;
+    }
+  }
+  // ---- Fase 12 — blendshapes faciais: dor do impacto > piscar automático ----
+  const face = parts.face;
+  if (face) {
+    if (hitEnv > .12) face.set('pain', Math.min(1, hitEnv * 1.25));
+    else {
+      const bp = t % 3.6;                       // ciclo dessincronizado (t já tem offset por ator)
+      if (bp < .11) face.set('blink', 1); else face.set('neutral', 0);
     }
   }
 }

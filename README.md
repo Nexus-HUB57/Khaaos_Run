@@ -53,13 +53,13 @@
 | **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado com 5 serviços e 1 rede; build/execução operacional pendentes |
 | **Anti-Cheat** | 🟡 Validações implementadas | Movement validation e 3-strike; binário/SDK EAC e build UE5 pendentes |
 | **Economia (KRC)** | 🟡 Código de jogo | AtomicLedger e Compliance versionados; runtime com ledger idempotente e recompensas de partida; não habilitar valor real sem auditoria e aceite |
-| **Mundos W1-W4** | 🟡 Regras/dados implementados | Lógica e dados versionados; pipeline de mundos engine-less validado (`generate_worlds.py`); cook `.umap` requer UE Editor |
+| **Mundos W1-W4** | 🟡 Regras/dados + intake visual | Lógica e dados versionados; pacotes source `.obj`/`.gltf`/`.umap.json`/DataTables/SVG gerados para CIGKV + W1-W4; cook `.umap` requer UE Editor |
 | **Load Testing** | 🟡 Perfis implementados | 4 profiles (100–2000 bots), 3 ramp strategies; execução e relatório de aceite pendentes |
 | **Beta → Go Live** | 🟡 Código/documentação | BetaCampaign e StreamingIntegration versionados; go-live depende dos gates restantes |
 | **Infraestrutura (IaC)** | 🟡 Configurado | Terraform/monitoramento versionados; deploy, failover e evidência multi-região pendentes |
 | **Launch Readiness** | 🟡 Checklist versionado | Rate limiting, DDoS e checklist implementados; PASS operacional ainda precisa ser demonstrado |
 | **Build UE5 (compilação)** | 🟡 Preflight operacional; build real pendente de engine | Preflight UE5.8 em toda PR (verde); caminhos prontos: container `ghcr.io/epicgames/unreal-engine` (gate no secret `UE_CONTAINER_PAT`) ou runner self-hosted (`scripts/build/bootstrap_ue58_runner.sh`) |
-| **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | Geometria `.obj`/`.gltf`, `.umap.json`, DataTables `.csv` e especificações Niagara gerados engine-less; `.umap`/meshes finais exigem cook no UE Editor |
+| **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | `scripts/build/generate_world_asset_packages.py` gera intake determinístico para os cinco mundos; `.uasset`/`.umap` finais exigem import/cook no UE Editor |
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
 | **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
@@ -849,20 +849,30 @@ Os workflows em `.github/workflows/` são acionados por push/PR conforme filtros
 
 **Limitações do gate atual:** `npm run test:coverage` gera cobertura localmente, mas ainda não é executado nem publicado como artefato pelo CI. O passo ESLint do workflow principal usa `|| true`, portanto o typecheck é bloqueante, mas o lint não é. Os workflows de compilação UE5 exigem runner self-hosted/UE5.8 ou infraestrutura equivalente; sua existência não comprova build executado.
 
+### Auditoria UE5 e intake visual — 2026-10-27
+
+- `node scripts/verify_ue5_build_readiness.mjs`: **0 violações** de `KHAAOSRUN_API` após corrigir 15 headers que usavam `KHAOSRUN_API`.
+- `python3 scripts/build/generate_world_asset_packages.py`: **5/5 pacotes source** gerados em `Unreal/KhaaosRun/Content/Maps/{CIGKV,Barburhen,Priadus,Ckesalth,Arukheea}`.
+- Cada pacote contém OBJ, glTF, contrato `.umap.json`, `MapPoints.csv`, `WorldConfig.csv` e SVG top-down. Esses arquivos são intake auditável; não são substitutos de `.uasset`/`.umap` cozidos.
+- Os módulos de personagem já possuem anatomia procedural, materiais PBR/pele, blendshapes faciais, mãos articuladas, LOD, reação de impacto, corrida, crouch, slide, DBNO e morte direcional; a geração procedural de texturas agora usa PRNG estável para manter a aparência consistente entre reloads/clientes.
+- `npm run test:game` e `npm run verify:all` devem ser executados após `npm ci --prefix game-runtime`; o ambiente sem UnrealEditor não comprova compilação UBT nem import final.
+
 Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
 
 ---
 
-## Snapshot de Auditoria do Desenvolvimento — 2026-10-26
+## Snapshot de Auditoria do Desenvolvimento — 2026-10-27
 
 Este snapshot é uma fotografia do checkout e do GitHub, não uma promessa de produção:
 
 | Evidência | Resultado | Interpretação |
 |-----------|-----------|---------------|
 | `npm run check` | ✅ PASS | TypeScript sem erros no checkout auditado |
-| `npm run test:official` | ✅ 220 pass · 1 skip · 0 fail | Suíte oficial passa; o skip depende de PostgreSQL externo |
-| `npm run verify:all` | ✅ 7/7 gates na execução registrada em 2026-10-24 | Inclui app, UE5 logic, runtime e stress; não substitui build UE5 real |
-| `npm run test:coverage` | ✅ local | 27,46% lines · 68,45% branches · 48,58% functions; não é gate de CI ainda |
+| `npm run test:official` | ✅ 337 pass · 2 skip · 0 fail | Suíte oficial passa; os skips dependem de PostgreSQL/serviços externos |
+| `npm run verify:all` | ✅ 7/7 gates | Inclui instalação do runtime pelo lockfile, app, UE5 logic, runtime build e coverage; não substitui build UE5 real |
+| Personagens/movimento | ✅ 52 testes focados | Anatomia procedural, PBR/pele, blendshapes, mãos articuladas, LOD, corrida, crouch, slide, DBNO, impacto e morte direcional |
+| UE5 macro preflight | ✅ 0 violações | 15 headers corrigidos de `KHAOSRUN_API` para `KHAAOSRUN_API` |
+| Pacotes visuais | ✅ 5/5 intake packages | OBJ/glTF/umap-contract/DataTables/SVG gerados; import/cook final ainda depende de UE5.8 |
 | GitHub | 🟡 97 PRs mesclados · 4 abertos | PRs #102, #111, #112 e #113 permanecem fora da base `main` até merge |
 
 Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102), observabilidade distribuída (#111), preflight/build UE5.8 (#112) e staging com PostgreSQL/Redis (#113). O README deliberadamente não promove essas entregas a “operacionais” antes da mesclagem e da evidência de execução.
@@ -895,7 +905,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 ## Limitações Conhecidas e Notas de Engenharia
 
 - **Build UE5 não compilado**: Todo o C++ está implementado mas não foi compilado — requer UE5.8 Editor + Linux SDK (50 GB+).
-- **Sem mapas 3D / assets**: Não existem mapas jogáveis, ambientes 3D, ou assets visuais ainda.
+- **Sem assets cozidos no Unreal**: Os cinco mundos agora têm pacotes source de intake e contratos visuais versionados; mapas jogáveis, `.uasset`/`.umap`, materiais Niagara finais e cook ainda exigem UE5.8 Editor/runner.
 - **EAC sem aceite operacional**: Há integração e validações versionadas, mas o binário/SDK da Epic e a execução em servidor compilado ainda são necessários.
 - **Economia sem aceite para valor real**: Há ledger e regras versionados, mas não habilitar valor real até auditoria imutável, teste de atomicidade, compliance review e aceite operacional.
 - **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).

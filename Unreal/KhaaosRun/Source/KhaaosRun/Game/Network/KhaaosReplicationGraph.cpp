@@ -336,10 +336,13 @@ void UKhaaosReplicationGraph::ConfigureForWorld(EWorldSequence World)
 
 FKhaaosClassReplicationInfo UKhaaosReplicationGraph::GetClassReplicationInfo(UClass* InClass) const
 {
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
-    {
-        return *Info;
-    }
+	    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
+	    {
+	        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
+	        {
+	            return *Info;
+	        }
+	    }
 
     // Default: spatially relevant, 30Hz
     return FKhaaosClassReplicationInfo(30.0f, false, true, false, 1.0f);
@@ -459,27 +462,12 @@ bool UKhaaosReplicationGraph::IsAlwaysRelevantClass(UClass* InClass) const
         return false;
     }
 
-    // Check the class replication info cache
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
+    // Exact-class false must not mask an always-relevant superclass.
+    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
     {
-        return Info->bAlwaysRelevant;
-    }
-
-    // Check inheritance for always-relevant base classes
-    static TSet<UClass*> AlwaysRelevantClasses;
-    if (AlwaysRelevantClasses.Num() == 0)
-    {
-        AlwaysRelevantClasses.Add(APlayerState::StaticClass());
-        AlwaysRelevantClasses.Add(APlayerController::StaticClass());
-        AlwaysRelevantClasses.Add(AGameStateBase::StaticClass());
-        AlwaysRelevantClasses.Add(AGameModeBase::StaticClass());
-    }
-
-    for (UClass* CheckClass : AlwaysRelevantClasses)
-    {
-        if (InClass->IsChildOf(CheckClass))
+        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
         {
-            return true;
+            return Info->bAlwaysRelevant;
         }
     }
 
@@ -493,10 +481,12 @@ bool UKhaaosReplicationGraph::IsDynamicClass(UClass* InClass) const
         return false;
     }
 
-    // Check the class replication info cache
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
+    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
     {
-        return Info->bDynamic;
+        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
+        {
+            return Info->bDynamic;
+        }
     }
 
     // By default, assume actors are dynamic if they have mobility

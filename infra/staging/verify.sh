@@ -48,5 +48,21 @@ else
   echo "✅ ${BACKWARDS} saltos de uptime para trás — múltiplas réplicas servindo (LB ativo)"
 fi
 
+echo "== 4. Réplica Redis sincronizada (2 nós reais — topologia do smoke F16) =="
+if docker compose ps --status running 2>/dev/null | grep -q redis-replica; then
+  ROLE=$(docker compose exec -T redis-replica redis-cli INFO replication 2>/dev/null || true)
+  echo "$ROLE" | grep -q "role:slave" || fail "réplica sem role:slave: $ROLE"
+  echo "$ROLE" | grep -q "master_link_status:up" || fail "réplica fora de sincronia com o master: $ROLE"
+  # Probe de replicação REAL: escrita no master visível na réplica.
+  PROBE_KEY="staging:replication-probe:$$"
+  docker compose exec -T redis redis-cli SET "$PROBE_KEY" "$$" >/dev/null
+  sleep 1
+  SEEN=$(docker compose exec -T redis-replica redis-cli GET "$PROBE_KEY" 2>/dev/null || true)
+  [ "$SEEN" = "$$" ] || fail "chave escrita no master não apareceu na réplica (probe=$SEEN)"
+  echo "✅ réplica role:slave sincronizada — probe master→réplica replicada"
+else
+  fail "redis-replica não está em execução — topologia F17 (2 nós Redis reais) ausente do staging"
+fi
+
 echo ""
-echo "✅ Staging verificado: dependências reais, gate de saturação e autoscaler alimentados."
+echo "✅ Staging verificado: dependências reais, gate de saturação, autoscaler alimentados e Redis HA."

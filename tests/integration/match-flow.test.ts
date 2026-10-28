@@ -1,11 +1,13 @@
 /**
  * KHAAOS RUN — Unit Tests: MatchFlow
  * =====================================
+ * Porta node:test da suíte da API "PhD-level" (#125) — runner padrão do repo.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE, type MatchConfig } from "../../../server/game/MatchFlow";
-import { EconomyMatchBridge } from "../../../server/game/EconomyMatchBridge";
+import { describe, it, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE } from "../../server/game/MatchFlow.ts";
+import { EconomyMatchBridge } from "../../server/game/EconomyMatchBridge.ts";
 
 describe("MatchFlow", () => {
   let matchFlow: MatchFlow;
@@ -24,22 +26,20 @@ describe("MatchFlow", () => {
   describe("construction", () => {
     it("should create match in LOBBY state", () => {
       const state = matchFlow.getState();
-      expect(state.status).toBe("LOBBY");
-      expect(state.roomId).toBe("test_match");
+      assert.strictEqual(state.status, "LOBBY");
+      assert.strictEqual(state.roomId, "test_match");
     });
 
     it("should initialize with 0 players", () => {
-      const state = matchFlow.getState();
-      expect(state.players.size).toBe(0);
+      assert.strictEqual(matchFlow.getState().players.size, 0);
     });
 
     it("should initialize with 0 eliminations", () => {
-      const state = matchFlow.getState();
-      expect(state.totalEliminations).toBe(0);
+      assert.strictEqual(matchFlow.getState().totalEliminations, 0);
     });
 
     it("should have 5 worlds in default pipeline", () => {
-      expect(DEFAULT_WORLD_PIPELINE).toHaveLength(5);
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE.length, 5);
     });
   });
 
@@ -48,15 +48,15 @@ describe("MatchFlow", () => {
   describe("DEFAULT_WORLD_PIPELINE", () => {
     it("should have correct world order", () => {
       const ids = DEFAULT_WORLD_PIPELINE.map(w => w.worldId);
-      expect(ids).toEqual(["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
+      assert.deepStrictEqual(ids, ["cigkv", "barburhen", "priadus", "ckesalth", "arukheea"]);
     });
 
     it("should have correct capacities", () => {
-      expect(DEFAULT_WORLD_PIPELINE[0].capacity).toBe(50);   // CIGKV
-      expect(DEFAULT_WORLD_PIPELINE[1].capacity).toBe(100);  // Barburhen
-      expect(DEFAULT_WORLD_PIPELINE[2].capacity).toBe(75);   // Priadus
-      expect(DEFAULT_WORLD_PIPELINE[3].capacity).toBe(60);   // Ckesalth
-      expect(DEFAULT_WORLD_PIPELINE[4].capacity).toBe(80);   // Arukheea
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 50);   // CIGKV
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[1].capacity, 100);  // Barburhen
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 75);   // Priadus
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 60);   // Ckesalth
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 80);   // Arukheea
     });
   });
 
@@ -74,8 +74,8 @@ describe("MatchFlow", () => {
         inWaterZone: false,
         worldId: "cigkv",
       });
-      expect(joined).toBe(true);
-      expect(matchFlow.getState().players.size).toBe(1);
+      assert.strictEqual(joined, true);
+      assert.strictEqual(matchFlow.getState().players.size, 1);
     });
 
     it("should reject duplicate player IDs", () => {
@@ -87,7 +87,7 @@ describe("MatchFlow", () => {
         id: "player_1", displayName: "Alpha", species: "HURAN",
         skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
       });
-      expect(joined).toBe(false);
+      assert.strictEqual(joined, false);
     });
 
     it("should set initial health to 100 and shield to 50", () => {
@@ -96,10 +96,10 @@ describe("MatchFlow", () => {
         skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
       });
       const player = matchFlow.getState().players.get("player_1");
-      expect(player?.health).toBe(100);
-      expect(player?.shield).toBe(50);
-      expect(player?.isDowned).toBe(false);
-      expect(player?.isEliminated).toBe(false);
+      assert.strictEqual(player?.health, 100);
+      assert.strictEqual(player?.shield, 50);
+      assert.strictEqual(player?.isDowned, false);
+      assert.strictEqual(player?.isEliminated, false);
     });
 
     it("should respect max players limit", () => {
@@ -120,7 +120,8 @@ describe("MatchFlow", () => {
         id: "p3", displayName: "C", species: "KHAEL",
         skinRarity: "COMUM", posX: 70, posY: 70, inWaterZone: false, worldId: "cigkv",
       });
-      expect(joined).toBe(false);
+      assert.strictEqual(joined, false);
+      smallMatch.destroy();
     });
   });
 
@@ -133,14 +134,16 @@ describe("MatchFlow", () => {
         skinRarity: "COMUM", posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
       });
       matchFlow.startCountdown();
-      expect(matchFlow.getState().status).toBe("COUNTDOWN");
+      assert.strictEqual(matchFlow.getState().status, "COUNTDOWN");
+      matchFlow.destroy();
     });
 
     it("should not start countdown if not in LOBBY", () => {
       matchFlow.startCountdown();
       matchFlow.startCountdown(); // second call should be no-op
       // Status should remain COUNTDOWN (not error)
-      expect(["COUNTDOWN", "IN_PROGRESS"]).toContain(matchFlow.getState().status);
+      assert.ok(["COUNTDOWN", "IN_PROGRESS"].includes(matchFlow.getState().status));
+      matchFlow.destroy();
     });
   });
 
@@ -157,12 +160,13 @@ describe("MatchFlow", () => {
         skinRarity: "COMUM", posX: 80, posY: 80, inWaterZone: false, worldId: "cigkv",
       });
 
-      // 100 damage: 50 shield + 50 health = downed
-      matchFlow.processKill("killer", "victim", 100, "AssaultRifle");
+      // 150 damage: 50 shield + 100 health = downed
+      matchFlow.processKill("killer", "victim", 150, "AssaultRifle");
 
       const victim = matchFlow.getState().players.get("victim");
-      expect(victim?.isDowned).toBe(true);
-      expect(victim?.shield).toBe(0);
+      assert.strictEqual(victim?.isDowned, true);
+      assert.strictEqual(victim?.shield, 0);
+      assert.strictEqual(victim?.health, 0);
     });
 
     it("should shield absorb damage before health", () => {
@@ -179,9 +183,9 @@ describe("MatchFlow", () => {
       matchFlow.processKill("killer", "victim", 30, "Pistol");
 
       const victim = matchFlow.getState().players.get("victim");
-      expect(victim?.shield).toBe(20); // 50 - 30
-      expect(victim?.health).toBe(100); // untouched
-      expect(victim?.isDowned).toBe(false);
+      assert.strictEqual(victim?.shield, 20); // 50 - 30
+      assert.strictEqual(victim?.health, 100); // untouched
+      assert.strictEqual(victim?.isDowned, false);
     });
   });
 
@@ -203,11 +207,11 @@ describe("MatchFlow", () => {
 
       // Revive
       const revived = matchFlow.revivePlayer("p2", "p1");
-      expect(revived).toBe(true);
+      assert.strictEqual(revived, true);
 
       const player = matchFlow.getState().players.get("p2");
-      expect(player?.isDowned).toBe(false);
-      expect(player?.health).toBe(30);
+      assert.strictEqual(player?.isDowned, false);
+      assert.strictEqual(player?.health, 30);
     });
 
     it("should not revive an already alive player", () => {
@@ -217,7 +221,7 @@ describe("MatchFlow", () => {
       });
 
       const revived = matchFlow.revivePlayer("p1", "p1");
-      expect(revived).toBe(false);
+      assert.strictEqual(revived, false);
     });
   });
 
@@ -231,8 +235,8 @@ describe("MatchFlow", () => {
       });
 
       const log = matchFlow.getEventLog();
-      expect(log.length).toBeGreaterThan(0);
-      expect(log[0].type).toBe("PLAYER_JOIN");
+      assert.ok(log.length > 0);
+      assert.strictEqual(log[0].type, "PLAYER_JOIN");
     });
   });
 

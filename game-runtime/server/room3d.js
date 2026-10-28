@@ -24,8 +24,24 @@ import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativ
 import { officerDeployment, officerCombatParams, shouldWithdraw } from '../src/game3d/officers.js';
 import { SPECIAL_CLASS_OFFICERS } from '../src/game3d/officers.js';
 import { PATENTE_HIERARQUIA } from '../src/game3d/poj.js';
+// Fase 12 — anúncio autoritativo do trem do ZU (duração canônica compartilhada)
+import { TRAIN_INTRO_DURATION_MS } from '../src/shared/clock.js';
 // Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
 const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
+
+// Fase 18 — espelho de hazard p/ a TRANSMISSÃO: evento da sim/servidor →
+// vocabulário WORLD_HAZARD { hazard, phase }. O payload autoritativo
+// (submergeBelowY/lavaBelowY/anchors/gravityScale) segue intacto — o cliente
+// materializa a MESMA regra de dano por altura com o SurvivalFX dele.
+const HAZARD_SPECTATOR_MIRROR = Object.freeze({
+  tsunamiStart: { hazard: 'tsunami', phase: 'start' },
+  tsunamiEnd: { hazard: 'tsunami', phase: 'end' },
+  eruptionStart: { hazard: 'lava', phase: 'start' },
+  eruptionEnd: { hazard: 'lava', phase: 'end' },
+  gravityAnomalyStart: { hazard: 'gravity', phase: 'start' },
+  gravityAnomalyEnd: { hazard: 'gravity', phase: 'end' },
+  acidRain: { hazard: 'acid', phase: 'pulse' },
+});
 
 export const OPERATIVE_IDS = Object.keys(OPERATIVE_ABILITIES);
 export const ABILITY_TICK_RATE = 30; // convenção de ticks no snapshot (igual à sim offline)
@@ -61,9 +77,13 @@ export const INPUT_QUEUE_CAP = 60;     // teto da fila por jogador (~2s de rede 
 export const HISTORY_TICKS = 26;       // buffer de posições p/ rewind (~1,3s @ 20Hz)
 export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
+// M3 — AOI fan-out: raios de interesse com HISTERESE (enter 130m / exit 165m:
+// um ator não pisca dentro-fora na borda do raio) + raio maior p/ projéteis
+// (tracer visível e hit é autoritativo no servidor, não depende da visão).
+export const AOI_ENTER_M = 130, AOI_EXIT_M = 165, AOI_PROJECTILE_M = 180;
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
@@ -78,6 +98,11 @@ export class MatchRoom3D {
     this.officerPlanFn = typeof officerPlanFn === 'function' ? officerPlanFn : null;
     this.officerMeta = null; // { count, article, deploySeconds, elapsed }
     this.officerClaims = new Map(); // Fase 11 — insígnia OCE → client-id humano (1 por insígnia)
+    // M3 — AOI fan-out (opt-in por sala): snapshot do jogador só carrega atores
+    // dentro do raio de interesse (histerese enter/exit evita churn na borda) e
+    // projéteis longe do observador. Bandwidth O(AOI) em vez de O(ring inteiro).
+    this.aoiEnabled = !!aoi;
+    this.aoiState = new Map(); // viewerId → Set(ids incluídos no snapshot anterior)
     this.matchIndex = 0;      // nº da partida nesta sala (salas são single-match hoje)
     this.matchId = null;      // "<roomId>#<matchIndex>" — chave de idempotência das recompensas
     this.matchRewarded = false;
@@ -114,11 +139,18 @@ export class MatchRoom3D {
     this.volcanicTimer = 0;
     this.volcanicRemaining = 0;
     this.volcanicActive = false;
+    this.quantumTimer = 0;
+    this.quantumRemaining = 0;
+    this.quantumActive = false;
     this.state = ROOM_STATES.LOBBY;
     this.started = false;
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.history = [];         // [{tick, at: [{id,x,y,z}]}] — rewind p/ lag compensation
+    // Fase 14 — log de eventos p/ ESPECTADORES (não-destrutivo, ao contrário
+    // das filas por humano): traduzido já no vocabulário do pipeline
+    // (ELIMINATION/RING_PHASE) — o pipeline /ws/spectator mescla no batch.
+    this.spectatorLog = [];
     // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls)
     this.physicsWorld = { colliders: this.world.colliders };
   }
@@ -134,6 +166,28 @@ export class MatchRoom3D {
   }
   #emitAll(type, payload = {}, exceptId = null) {
     for (const id of this.humans.keys()) if (id !== exceptId) this.#emitTo(id, type, payload);
+    // Fase 14 — espelho dos eventos de interesse público para a transmissão
+    // (killfeed já sai com patente/nome real; pulse vira RING_PHASE).
+    if (type === 'killfeed') {
+      this.spectatorLogEvent('ELIMINATION', {
+        killer: payload.killer ?? '—', victim: payload.victim ?? '—',
+        headshot: !!payload.head, knock: !!payload.knock,
+      });
+    } else if (type === 'pulse') {
+      this.spectatorLogEvent('RING_PHASE', { phase: payload.pulse, isShrinking: true });
+    }
+    // Fase 18 — sobrevivências do mundo na TRANSMISSÃO: o espectador vê o
+    // tsunami/lava/anomalia com os MESMOS FX (SurvivalFX), áudio e banner.
+    // Parâmetros autoritativos (submergeBelowY/lavaBelowY/anchors) vão no
+    // payload — o cliente materializa a MESMA regra de dano por altura.
+    const mirror = HAZARD_SPECTATOR_MIRROR[type];
+    if (mirror) this.spectatorLogEvent('WORLD_HAZARD', { hazard: mirror.hazard, phase: mirror.phase, ...payload });
+  }
+  // Fase 14 — evento para a transmissão (público: testes/pipeline externo).
+  // Ring buffer de 24: batches consomem no máx. 20 eventos por lote.
+  spectatorLogEvent(type, data = {}) {
+    this.spectatorLog.push({ type, data, timestamp: Date.now() });
+    if (this.spectatorLog.length > 24) this.spectatorLog.shift();
   }
   drainEvents(humanId) {
     const list = this.events.get(humanId) || [];
@@ -243,7 +297,16 @@ export class MatchRoom3D {
     if (changed) this.#emitTo(id, 'patente', { patente });
     return true;
   }
+  // Fase 12 — evento externo à sala (ex.: court_verdict do POJ) entra pela
+  // MESMA fila dos eventos nativos: viaja no próximo snapshot do alvo, sem
+  // canal novo e sem quebrar o contrato snapshot/events do cliente.
+  emitExternal(humanId, type, payload = {}) {
+    if (!this.humans.has(humanId)) return false;
+    this.#emitTo(humanId, type, payload);
+    return true;
+  }
   removePlayer(id) {
+    this.aoiState.delete(id); // M3 — estado AOI do observador sai junto
     const actor = this.humans.get(id);
     this.humans.delete(id);
     this.events.delete(id);
@@ -337,7 +400,12 @@ export class MatchRoom3D {
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
     }
-    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length });
+    // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
+    // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
+    // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
+    // join decidem tocar ou pular pelo elapsed).
+    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
+    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
     return true;
@@ -408,6 +476,7 @@ export class MatchRoom3D {
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
     if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
     if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
+    if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
 
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
@@ -1086,6 +1155,50 @@ export class MatchRoom3D {
       this.#emitAll('eruptionEnd', {});
     }
   }
+  #stepGravityAnomaly(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.quantumActive) {
+      this.quantumTimer += dt;
+      if (this.quantumTimer >= hazard.intervalSeconds) {
+        this.quantumTimer -= hazard.intervalSeconds;
+        this.quantumRemaining = hazard.durationSeconds;
+        this.quantumActive = true;
+        this.#emitAll('gravityAnomalyStart', {
+          durationSeconds: hazard.durationSeconds,
+          gravityScale: hazard.gravityScale,
+          anchorRadius: hazard.anchorRadius,
+          anchors: hazard.anchors,
+        });
+      }
+    }
+    const actors = this.#actors();
+    for (const actor of actors) actor.gravityScale = this.quantumActive ? hazard.gravityScale : 1;
+    if (!this.quantumActive) return;
+    for (const actor of actors) {
+      if (!actor.alive || hazard.anchors.some((anchor) => Math.hypot(actor.x - anchor.x, actor.z - anchor.z) <= hazard.anchorRadius)) continue;
+      this.#drainQuantumShield(actor, hazard.damagePerSecond * dt);
+    }
+    this.quantumRemaining -= dt;
+    if (this.quantumRemaining <= 0) {
+      this.quantumRemaining = 0;
+      this.quantumActive = false;
+      for (const actor of actors) actor.gravityScale = 1;
+      this.#emitAll('gravityAnomalyEnd', {});
+    }
+  }
+  #drainQuantumShield(actor, amount) {
+    let remaining = amount;
+    const temporary = Math.min(actor.temporaryArmor ?? 0, remaining);
+    actor.temporaryArmor = (actor.temporaryArmor ?? 0) - temporary;
+    remaining -= temporary;
+    const shield = Math.min(actor.armor ?? 0, remaining);
+    actor.armor = Math.max(0, (actor.armor ?? 0) - shield);
+    remaining -= shield;
+    if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
+    if (!actor.isBot) this.#emitTo(actor.id, 'shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
+    if (actor.life <= 0) actor.alive = false;
+  }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
     // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
@@ -1220,25 +1333,87 @@ export class MatchRoom3D {
   }
 
   // ---------- snapshot ----------
+  // M3 — AOI: seleção de atores/projéteis relevantes p/ UM observador, com
+  // histerese (ator já visível só sai em AOI_EXIT_M; novo entra em AOI_ENTER_M).
+  #aoiFilter(forId, self) {
+    const actors = this.#actors();
+    const othersAll = actors.filter((a) => a.id !== forId);
+    if (!this.aoiEnabled || !self) return { others: othersAll, bullets: this.bullets, grenades: this.grenades };
+    const prev = this.aoiState.get(forId) ?? new Set();
+    const next = new Set();
+    const others = [];
+    for (const a of othersAll) {
+      // Mesma regra para vivos e cadáveres: a morte acontece onde o ator já
+      // estava visível (prev) → o corpo entra pela histerese de saída e o
+      // queda direcional (Fase 12) toca inteira antes de cular por distância.
+      const d = dist2d(a.x, a.z, self.x, self.z);
+      const limit = prev.has(a.id) ? AOI_EXIT_M : AOI_ENTER_M;
+      if (d <= limit) { next.add(a.id); others.push(a); }
+    }
+    this.aoiState.set(forId, next);
+    const near = (p) => dist2d(p.x, p.z, self.x, self.z) <= AOI_PROJECTILE_M;
+    return { others, bullets: this.bullets.filter(near), grenades: this.grenades.filter(near) };
+  }
+
   snapshot(forId) {
     const self = this.humans.get(forId) ?? null;
     const actors = this.#actors();
+    // M3 — AOI resolve UMA vez: others/bullets/grenades já filtrados p/ o observador.
+    const aoi = this.#aoiFilter(forId, self);
     return {
-      mode: '3d', roomId: this.id, region: this.region, seed: this.seed,
+      mode: '3d', roomId: this.id, region: this.region, seed: this.seed, scenarioId: this.scenario.id,
       tick: this.tickCount, time: this.time,
       state: this.state, started: this.started,
       over: this.state === ROOM_STATES.FINISHED,
+      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.volcanicActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.volcanicRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring },
       aliveCount: actors.filter((a) => a.alive).length,
       player: self ? this.#selfView(self) : null,
-      others: actors.filter((a) => a.id !== forId).map((a) => this.#otherView(a)),
-      bullets: this.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
-      grenades: this.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
+      others: aoi.others.map((a) => this.#otherView(a)),
+      bullets: aoi.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
+      grenades: aoi.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
       walls: this.walls.filter((w) => w.active).map((w) => ({ id: w.id, x: w.x, z: w.z, rot: w.rot, hp: Math.round(w.hp), owner: w.owner })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
       terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),
+      // Fase 12 — anúncio autoritativo do trem (late join/reconexão sincronizam
+      // ou pulam a cinemática pelo elapsed; null antes do primeiro start).
+      train: this.trainAnnounce ?? null,
       events: forId ? this.drainEvents(forId) : [],
       online: true,
+    };
+  }
+  // Fase 14 — payload da TRANSMISSÃO (pipeline /ws/spectator): contrato do
+  // espectador com NOMES REAIS (displayName) — o standings do HUD mostra o
+  // nome do operative/patente, não o id de conexão. Não-destrutivo: não drena
+  // filas de eventos dos jogadores; usa o spectatorLog espelhado no #emitAll.
+  spectatorView() {
+    const actors = this.#actors();
+    return {
+      type: 'ROOM_TICK',
+      roomId: this.id,
+      timestamp: Date.now(),
+      tick: this.tickCount,
+      state: this.state,
+      players: actors.map((a) => ({
+        id: a.id,
+        displayName: a.name ?? a.id,
+        species: a.operativeId ?? null,
+        posX: a.x, posY: a.z,
+        yaw: a.yaw ?? 0,
+        health: Math.max(0, Math.round(a.life ?? 0)),
+        shield: Math.max(0, Math.round(a.armor ?? 0)),
+        isDowned: !!a.knocked && !!a.alive,
+        isEliminated: !a.alive,
+        kills: a.kills ?? 0,
+      })),
+      ringState: {
+        currentPhase: this.ring.pulse,
+        currentRadius: Math.round(this.ring.radius),
+        ringCenter: [this.ring.x, 0, this.ring.z],
+        isShrinking: this.ring.radius > this.ring.target,
+        nextPhaseIn: Math.max(0, Math.round(PULSE_INTERVAL - this.pulseTimer)),
+      },
+      events: this.spectatorLog.slice(-20).map((e) => ({ ...e })),
     };
   }
   #selfView(a) {

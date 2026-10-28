@@ -8,7 +8,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
-#include "Ring/KhaaosRingManager.h"
+#include "Game/Ring/KhaaosRingManager.h"
 #include "Ring/KhaaosRingVisualComponent.generated.h"
 
 // ─── Structs ──────────────────────────────────────────────────────────────────

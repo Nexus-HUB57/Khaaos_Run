@@ -2,7 +2,7 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/Operatives/KhaaosOpZHEF02.h"
-#include "VFX/KhaaosSpeciesVFXRegistry.h"
+#include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 #include "NiagaraComponent.h"
 
 // Zheers ethnicity: Zherkan elite rad-queen - rad-fortress geneline

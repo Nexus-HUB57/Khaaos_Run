@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu2ChoiceMade, bool, bJumped);
  * - Loot mais pesado (facas + munição + kits)
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API AZu2CigkvImpact : public AActor
+class KHAAOSRUN_API AZu2CigkvImpact : public AActor
 {
 	GENERATED_BODY()
 

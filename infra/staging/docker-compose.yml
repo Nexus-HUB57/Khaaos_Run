@@ -42,6 +42,27 @@ services:
       retries: 12
     restart: unless-stopped
 
+  # 2º nó Redis REAL (F17): réplica de leitura do master — o staging gerenciado
+  # passa a espelhar a topologia validada pelo smoke cross-node (F16): mesh +
+  # gateway WS + payouts 2PC rodam contra master/réplica de verdade, e a
+  # replicação é sonda de aceite do verify.sh (master_link_status:up + probe).
+  # Promoção em desastre: docker compose stop redis && up -d redis-replica
+  # (com --replicaof removido via override) — RPO=0 para o índice distribuído.
+  redis-replica:
+    image: redis:7-alpine
+    command: ["redis-server", "--replicaof", "redis", "6379", "--appendonly", "yes"]
+    volumes:
+      - redisreplicadata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli INFO replication | grep -q master_link_status:up"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   # Migração one-shot: `docker compose run --rm migrate` (deploy.sh faz isso).
   migrate:
     build:
@@ -98,3 +119,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  redisreplicadata:
