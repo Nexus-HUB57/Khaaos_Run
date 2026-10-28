@@ -97,6 +97,24 @@ services:
       MATCH_SEED: ${MATCH_SEED:-CIGKV-staging}
       # Nunca em staging aberto: autenticação dev desligada por padrão.
       KR_DEV_AUTH: "0"
+      # ── M4 — modo distribuído (ownership/fencing/convites via Redis) ──────
+      # KR_DISTRIBUTED=1 liga a camada M3/M4; KR_REDIS_URL é o store de posse.
+      # Identidade da réplica: KR_REPLICA_ID se definido; senão HOSTNAME do
+      # container (estável por container no compose/autoscaler). O endereço
+      # público da réplica (KR_REPLICA_URL) alimenta o redirect cross-réplica:
+      # com `--scale app=N` todas registram o LB (redirect cai em qualquer
+      # réplica; para endereços determinísticos use docker-compose.2replicas.yml).
+      KR_DISTRIBUTED: "1"
+      KR_OWNERSHIP_TTL_MS: ${KR_OWNERSHIP_TTL_MS:-15000}
+      KR_OWNERSHIP_HEARTBEAT_MS: ${KR_OWNERSHIP_HEARTBEAT_MS:-5000}
+      # Endereço público da réplica p/ redirect cross-réplica. Padrão = LB do
+      # staging (a porta deve casar com KR_STAGING_PORT); o deploy.sh preenche
+      # automaticamente se ausente no .env. Override determinístico por réplica
+      # no docker-compose.2replicas.yml (endereços diretos app-a/app-b).
+      KR_REPLICA_URL: ${KR_REPLICA_URL:-http://127.0.0.1:8080}
+      # Usuários de operação/smoke (JSON com passwordHash scrypt:salt:hash).
+      # KR_DEV_AUTH=0 exige login real — o smoke cross-replica loga por réplica.
+      KR_USERS_JSON: ${KR_USERS_JSON:-}
     expose:
       - "8787"
     depends_on:

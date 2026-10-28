@@ -263,6 +263,7 @@ export function createDistributed({
   ownership = null,
   relay = null,
   registry = null,
+  invites = null, // M4 — store de convites compartilhável (testes multi-réplica)
   redisUrl = null,
   ttlMs = 15_000,
   heartbeatMs = 5_000,
@@ -289,9 +290,55 @@ export function createDistributed({
   }
   const own = ownership || new MemoryOwnership();
   const rly = relay || null;
+  // ── M4 — Índice de convites COMPARTILHADO entre réplicas ────────────────────
+  // O código de convite de salas privadas nasce LOCAL à réplica dona; sem um
+  // índice compartilhado, `join_private` numa outra réplica responde
+  // `private_not_found` e o jogador não entra — o cross-replica de fato
+  // dependia de adivinhar o nó certo. O índice mapeia code → {roomId, réplica}
+  // no MESMO store da posse (Redis no staging; Map nos testes determinísticos),
+  // com TTL próprio (convites sobrevivem a heartbeats curtos, mas expiram com
+  // a sala). Escrita APENAS na criação (dono); leitura por qualquer réplica.
+  const inviteTtlMs = Number(process.env.KR_INVITE_TTL_MS || 30 * 60_000);
+  const localInvites = invites || new Map(); // code → { roomId, replicaId, expiresAt } (driver memória)
+  const INVITE_KEY = (code) => `kr:invite:${code}`;
+  const publishInvite = async (code, roomId) => {
+    if (!enabled) return false;
+    const record = { roomId, replicaId: id };
+    try {
+      if (redisClient) await redisClient.set(INVITE_KEY(code), JSON.stringify(record), { PX: inviteTtlMs });
+      else localInvites.set(code, { ...record, expiresAt: now() + inviteTtlMs });
+      metrics.invitesPublished++;
+      return true;
+    } catch { return false; } // fail-open: convite continua válido localmente
+  };
+  const lookupInvite = async (code) => {
+    if (!enabled) return null;
+    metrics.inviteLookups++;
+    try {
+      let found = null;
+      if (redisClient) {
+        const raw = await redisClient.get(INVITE_KEY(code));
+        found = raw ? JSON.parse(raw) : null;
+      } else {
+        const e = localInvites.get(code);
+        if (!e || e.expiresAt <= now()) { if (e) localInvites.delete(code); found = null; }
+        else found = { roomId: e.roomId, replicaId: e.replicaId };
+      }
+      if (found) metrics.inviteHits++;
+      return found;
+    } catch { return null; }
+  };
+  const dropInvite = async (code) => {
+    if (!enabled) return;
+    try {
+      if (redisClient) await redisClient.del(INVITE_KEY(code));
+      else localInvites.delete(code);
+    } catch { /* best-effort: TTL cobre o resíduo */ }
+  };
   const metrics = {
     acquired: 0, renewed: 0, lost: 0, released: 0, fenceViolations: 0,
     redirects: 0, mirrorApplied: 0, mirrorGaps: 0, publishes: 0,
+    invitesPublished: 0, inviteLookups: 0, inviteHits: 0,
   };
   let heartbeatTimer = null;
   let mirrorTimer = null;
@@ -300,6 +347,13 @@ export function createDistributed({
   const frozen = new Set(); // salas congeladas por perda de lease (owner_lost)
 
   async function heartbeat() {
+    // M4 — RENOVAÇÃO do registro de réplicas: sem isto, a entrada expira em
+    // ttlMs*2 (30 s no default) e o redirect cross-réplica começa a falhar
+    // (ownerOf → registry.lookup → null) mesmo com a réplica VIVA. O registro
+    // é renovado no mesmo cadencimento do heartbeat de leases.
+    if (address && registry) {
+      try { await registry.register(id, address, ttlMs * 2); } catch { /* rede oscilou: próxima passada */ }
+    }
     for (const [roomId, fence] of held) {
       try {
         const r = await ownership.acquire(roomId, id, ttlMs);
@@ -414,5 +468,10 @@ export function createDistributed({
       return rly.publish(roomId, type, payload);
     },
     isFrozen(roomId) { return frozen.has(roomId); },
+    // M4 — índice de convites compartilhado (cross-replica join)
+    publishInvite,
+    lookupInvite,
+    dropInvite,
+    inviteTtlMs,
   };
 }
