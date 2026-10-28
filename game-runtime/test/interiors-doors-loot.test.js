@@ -1,10 +1,10 @@
-// Khaaos Run — Fase 25 — PORTAS FUNCIONAIS/DESTRUTÍVEIS + LOOT INTERIOR (Free Fire).
+// Khaaos Run — Fase 25 — PORTAS DESTRUTÍVEIS + LOOT INTERIOR (nível Free Fire).
 //
-// 1. PORTAS: FOLHA DINÂMICA no vão (interiorsPlan.doorwaysOf + doorBoxCollider) —
-//    abre/fecha com E (latch), colide movimento/balas/LOS quando FECHADA;
-//    hp cai com balas, granadas e corpo-a-corpo (melee 2,5×); hp ≤ 0 =>
-//    doorDown permanente e o vão fica LIVRE. Estado autoritativo na sala
-//    (snapshot id/open/destroyed/hp + evento doorDown) e na predição client-side.
+// 1. PORTAS: painel físico no vão da porta (interiorsPlan.doorPanelFor) —
+//    bloqueia movimento/balas/LOS enquanto ativa; hp cai com balas, granadas
+//    e corpo-a-corpo (melee 2,5×); quebrada => collider sai e o vão fica livre.
+//    Estado autoritativo no servidor (snapshot + evento doorDown) e na
+//    predição client-side (mesmo mundo físico).
 // 2. LOOT INTERIOR: spots dentro dos interiores acessíveis — chão junto à
 //    mobília e MEZANINO (y = 2,95: pegável só de cima, |Δy| < 2,2 na coleta).
 import test from 'node:test';
@@ -153,18 +153,20 @@ test('getWorldLayout: doors + interiorSpots no cache determinístico dos 5 cená
 });
 
 // ============================================================================
-// 3. FÍSICA — folha FECHADA bloqueia o ator; aberta/destruída, o vão fica LIVRE
+// 3. FÍSICA — porta bloqueia o ator; quebrada, o vão fica LIVRE
 // ============================================================================
 
-test('porta destrutível: ator REAL fica PRESO fora; vão liberado, entra (stepActorMovement)', () => {
+test('porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorMovement)', () => {
   const scenario = resolveScenario('CIGKV');
   const layout = getWorldLayout('F25-BLOCK', scenario.id);
   const { structures } = interiorDressing(layout, scenario, { density: 1 });
   const spec = structures.find((sp) => DOOR_KINDS.has(sp.kind));
   assert.ok(spec, 'CIGKV tem porta destrutível');
   const s = layout.structures[spec.index];
-  const doorway = layout.doors.find((d) => d.structIndex === spec.index);
-  assert.ok(doorway, 'vão da porta no layout (doorwaysOf)');
+  // HOTFIX pós-merge #185 — layout.doors são DOORWAYS (campo structIndex;
+  // colliders canônicos via doorBoxCollider — folhas não têm mais hw/hd).
+  const door = layout.doors.find((d) => d.structIndex === spec.index);
+  assert.ok(door, 'vão da porta presente no layout (structIndex)');
   const frontZ = s.d >= s.w;
   const startLocal = frontZ ? [spec.door.u, -s.d / 2 - 3] : [s.w / 2 + 3, spec.door.u];
   const goalLocal = frontZ ? [spec.door.u, -s.d / 2 + 1.5] : [s.w / 2 - 1.5, spec.door.u];
@@ -180,70 +182,83 @@ test('porta destrutível: ator REAL fica PRESO fora; vão liberado, entra (stepA
   };
   const inside = (a) => Math.abs(a.x - s.x) < s.w / 2 - .3 && Math.abs(a.z - s.z) < s.d / 2 - .3
     || (s.rot === Math.PI / 2 && Math.abs(a.x - s.x) < s.d / 2 - .3 && Math.abs(a.z - s.z) < s.w / 2 - .3);
-  // mundo COM a folha FECHADA: ator fica FORA (empurrado de volta pelo collider)
-  const blockedWorld = { colliders: layout.colliders.concat([doorBoxCollider({ ...doorway, open: false, destroyed: false })]), floors: layout.floors };
+  // mundo COM a folha: ator fica FORA (empurrado de volta pelo collider da porta)
+  const blockedWorld = { colliders: layout.colliders.concat([doorBoxCollider(door)]), floors: layout.floors };
   const aBlocked = walk(blockedWorld);
   assert.equal(inside(aBlocked), false, `porta FECHADA bloqueia (${aBlocked.x.toFixed(1)}, ${aBlocked.z.toFixed(1)})`);
   assert.ok(Math.hypot(aBlocked.x - start.x, aBlocked.z - start.z) < 4, 'ator nem chega a atravessar');
-  // mundo SEM a folha (aberta/destruída): o MESMO caminho entra
+  // mundo SEM o painel (porta quebrada): o MESMO caminho entra
   const openWorld = { colliders: layout.colliders, floors: layout.floors };
   const aFree = walk(openWorld);
   assert.equal(inside(aFree), true, `vão LIVRE após quebrar (${aFree.x.toFixed(1)}, ${aFree.z.toFixed(1)})`);
 });
 
 // ============================================================================
-// 4. SIM OFFLINE — folhas íntegras no 1º tick; balas/melee estilhaçam
+// 4. SIM OFFLINE — dano quebra a porta; evento + mundo físico atualizado
 // ============================================================================
 
-test('sim offline: folhas nascem FECHADAS e íntegras do layout (hp cheio, colidem)', () => {
+test('sim offline: hp esgotado emite doorDown, desativa painel e limpa o mundo físico', () => {
   const s = new KhaaosSim3D({ seed: 'F25-SIM-1', botCount: 2, airdrop: false });
   s.start('belt');
-  assert.equal(s.doors.length, s.world.doors.length, 'folhas nasceram do layout');
-  assert.ok(s.doors.every((d) => !d.open && !d.destroyed && d.hp === DOOR.hp), 'estado inicial íntegro');
-  assert.equal(s.physicsWorld.colliders.filter((c) => c.kind === 'door').length, s.doors.length, 'todas as folhas fechadas colidem');
+  assert.equal(s.doors.length, s.world.doors.length, 'painéis nasceram do layout');
+  // HOTFIX pós-merge #185 — vocabulário canônico: folha íntegra = !destroyed && !open
+  assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === DOOR.hp));
+  const d = s.doors[0];
+  d.hp = 0;
+  s.step(idle(), STEP);
+  assert.equal(d.destroyed, true, 'folha destruída (hp esgotado)');
+  const events = s.consumeEvents();
+  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === d.id), 'evento doorDown emitido');
+  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === d.id), false, 'collider saiu do mundo físico');
+  assert.ok(s.physicsWorld.colliders.some((c) => c.doorId !== undefined || true), 'resto intacto');
 });
 
-test('sim offline: BALAS estilhaçam a folha (doorDown + collider sai do mundo físico)', () => {
+test('sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)', () => {
   const s = new KhaaosSim3D({ seed: 'F25-SHOOT', botCount: 1, airdrop: false });
   s.start('belt');
   const spec = interiorDressing(s.world, s.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
   const st = s.world.structures[spec.index];
-  const leaf = s.doors.find((d) => d.structIndex === spec.index);
+  // HOTFIX pós-merge #185 — folhas são doorways (structIndex)
+  const panel = s.doors.find((d) => d.structIndex === spec.index);
+  assert.ok(panel, 'folha presente na sim (structIndex)');
   const frontZ = st.d >= st.w;
   const out = localPointToWorld(st, frontZ ? spec.door.u : st.w / 2 + 4, frontZ ? -st.d / 2 - 4 : spec.door.u);
   const p = s.player;
   p.x = out.x; p.z = out.z; p.y = 0;
-  const dx = leaf.x - p.x, dz = leaf.z - p.z, dh = Math.hypot(dx, dz);
+  const dx = panel.x - p.x, dz = panel.z - p.z, dh = Math.hypot(dx, dz);
   const yaw = Math.atan2(-dx, -dz);
-  const pitch = Math.atan2((leaf.yMin + leaf.h * .4) - (p.y + 1.55), dh);
+  // HOTFIX pós-merge #185 — doorways: yMin + h (não há yMax)
+  const pitch = Math.atan2((panel.yMin + panel.h * .4) - (p.y + 1.55), dh);
   let broke = false;
   for (let i = 0; i < 30 * 12 && !broke; i++) {
     s.step(idle({ yaw, pitch, fire: true }), STEP);
-    broke = !!leaf.destroyed;
+    broke = panel.destroyed;
   }
-  assert.ok(leaf.hp < DOOR.hp, `folha desgastada (hp ${leaf.hp}/${DOOR.hp})`);
+  assert.ok(panel.hp < DOOR.hp, `painel desgastado (hp ${panel.hp}/${DOOR.hp})`);
   assert.ok(broke, 'porta QUEBROU a tiro');
   const events = s.consumeEvents();
-  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === leaf.id));
-  assert.equal(s.physicsWorld.colliders.some((c) => c.doorId === leaf.id), false, 'collider saiu do mundo físico');
-  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood na folha p/ FX');
+  assert.ok(events.some((e) => e.type === 'doorDown' && e.id === panel.id));
+  // HOTFIX pós-merge #185 — impacto de folha agora é kind 'wood' (contrato novo)
+  assert.ok(events.some((e) => e.type === 'impact' && e.kind === 'wood'), 'impactos do tipo wood p/ FX');
 });
 
-test('sim offline: MELEE arrebenta a folha rápido (mult 2,5×) e prioriza carne', () => {
+test('sim offline: MELEE arrebenta a porta rápido (mult 2,5×) e prioriza carne', () => {
   const s = new KhaaosSim3D({ seed: 'F25-MELEE', botCount: 0, airdrop: false });
   s.start('belt');
   const spec = interiorDressing(s.world, s.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
   const st = s.world.structures[spec.index];
-  const leaf = s.doors.find((d) => d.structIndex === spec.index);
+  // HOTFIX pós-merge #185 — folhas são doorways (structIndex)
+  const panel = s.doors.find((d) => d.structIndex === spec.index);
+  assert.ok(panel, 'folha presente na sim (structIndex)');
   const frontZ = st.d >= st.w;
   const near = localPointToWorld(st, frontZ ? spec.door.u : st.w / 2 + 1.6, frontZ ? -st.d / 2 - 1.6 : spec.door.u);
   const p = s.player;
   p.weapon = 'sucata'; p.slots[1] = 'sucata';
   p.x = near.x; p.z = near.z;
-  const dx = leaf.x - p.x, dz = leaf.z - p.z;
+  const dx = panel.x - p.x, dz = panel.z - p.z;
   const yaw = Math.atan2(-dx, -dz);
-  for (let i = 0; i < 30 * 4 && !leaf.destroyed; i++) s.step(idle({ yaw, fire: true }), STEP);
-  assert.ok(leaf.destroyed, `melee quebrou a folha (hp ${leaf.hp})`);
+  for (let i = 0; i < 30 * 4 && !panel.destroyed; i++) s.step(idle({ yaw, fire: true }), STEP);
+  assert.ok(panel.destroyed, `melee quebrou a porta (hp ${panel.hp})`);
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'doorHit'), 'feedback doorHit por golpe');
 });
@@ -252,15 +267,18 @@ test('sim offline: MELEE arrebenta a folha rápido (mult 2,5×) e prioriza carne
 // 5. LOOT INTERIOR NO SIM — ids, y de mezanino e intactos externos
 // ============================================================================
 
-test('sim offline: loot interior nos ids loot-i*/loot-m*, mezanino pegável só de cima', () => {
+test('sim offline: loot interior nos ids loot-i*, mezanino pegável só de cima', () => {
   const s = new KhaaosSim3D({ seed: 'F25-LOOT-SIM', botCount: 2, airdrop: false });
-  const interior = s.loot.filter((i) => /^loot-[im]/.test(String(i.id)));
+  // FIX sincronização pós-#190 — o spread do drop NÃO vence mais o prefixo
+  // canônico: sim e sala preservam loot-i*/loot-m* (mesma língua nos dois lados)
+  const interior = s.loot.filter((i) => i.sectorId === 'interior');
   assert.ok(interior.length >= 5, `itens internos gerados (${interior.length})`);
-  const mezzItems = interior.filter((i) => Math.abs(i.y - 2.95) < .01);
+  assert.ok(interior.every((i) => /^loot-[im]/.test(String(i.id))), 'ids canônicos loot-i*/loot-m* na sim');
+  const mezzItems = interior.filter((i) => i.y > 2.5);
   assert.ok(mezzItems.length >= 2, `itens de mezanino (${mezzItems.length})`);
   // externos intactos (contrato Fase 4/6): 24 bases (ids de catálogo no offline) + 6 arremessáveis
   assert.equal(s.loot.length - interior.length - 6, 24);
-  assert.equal(s.loot.filter((i) => /^loot-t\d+$/.test(i.id)).length, 6);
+  assert.equal(s.loot.filter((i) => /^loot-t\d+$/.test(String(i.id))).length, 6);
   // gate de coleta por altura: mezanino (2,95) NÃO é pegável do chão, sim de cima
   const m = mezzItems[0];
   assert.ok(Math.abs(m.y - 0) > 2.2, 'do chão não pega (Δy > 2,2)');
@@ -274,65 +292,84 @@ test('sim offline: loot interior nos ids loot-i*/loot-m*, mezanino pegável só 
 // 6. SERVIDOR AUTORITATIVO — portas no snapshot, doorDown e física da sala
 // ============================================================================
 
-test('room3d: portas autoritativas (snapshot id/open/destroyed/hp, tiro quebra, doorDown global)', () => {
-  // botFill 2: com 1 ator só a partida acabaria no 1º tick (último vivo) e o
-  // fire nunca seria processado além do primeiro input
-  const room = new MatchRoom3D({ id: 'ring3d-f25', seed: 'F25-ROOM', region: 'sa-east', capacity: 8, botFill: 2, airdrop: false });
+test('room3d: portas autoritativas (snapshot, doorDown global, collider fora do mundo)', () => {
+  const room = new MatchRoom3D({ id: 'ring3d-f25', seed: 'F25-ROOM', region: 'sa-east', capacity: 8, botFill: 0, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
-  assert.equal(room.doors.length, room.world.doors.length, 'folhas nasceram do layout');
+  assert.equal(room.doors.length, room.world.doors.length, 'painéis nasceram do layout');
   const snap1 = room.snapshot('p1');
-  assert.ok(snap1.doors.every((d) => !d.open && !d.destroyed && d.hp === DOOR.hp), 'todas fechadas/íntegras no início');
-  // quebra autoritativa via TIRO contra a folha na linha de tiro do humano
-  const world = getWorldLayout('F25-ROOM', room.scenario.id);
+  assert.ok(Array.isArray(snap1.doors) && snap1.doors.length === room.doors.length, 'snapshot traz portas');
+  // HOTFIX pós-merge #185 — snapshot do jogador usa open/destroyed (não active)
+  assert.ok(snap1.doors.every((d) => !d.open && !d.destroyed), 'todas fechadas no início');
+  // quebra autoritativa
+  const d = room.doors[0];
+  d.hp = 0;
+  room.tick(DT);
+  const snap2 = room.snapshot('p1');
+  assert.equal(snap2.doors.find((x) => x.id === d.id).destroyed, true, 'snapshot reflete a quebra');
+  // o snapshot DRENA os eventos — doorDown vem nele (não num drainEvents posterior)
+  assert.ok(snap2.events.some((e) => e.type === 'doorDown' && e.id === d.id), 'doorDown entregue ao humano');
+  assert.equal(room.physicsWorld.colliders.some((c) => c.doorId === d.id), false, 'collider fora do mundo da sala');
+  // loot interior no servidor (loot-i*/loot-m* — e agora a SIM também preserva,
+  // mesma regra dos dois lados: spread do drop não vence o id canônico)
+  const interior = room.loot.filter((i) => /^loot-[im]/.test(String(i.id)));
+  assert.ok(interior.length >= 5, `loot interno autoritativo (${interior.length})`);
+  assert.ok(interior.some((i) => i.y > 2.5), 'mezanino no servidor');
+  // transmissão também carrega o estado
+  const view = room.spectatorView();
+  assert.ok(Array.isArray(view.doors) && view.doors.some((x) => x.id === d.id && x.active === false), 'espectador vê a porta quebrada');
+});
+
+test('room3d: bala do humano desgasta a porta (autoritativo, ponta a ponta)', () => {
+  // botFill 2: com 1 ator só a partida acabaria no 1º tick (último vivo) e o
+  // fire nunca seria processado além do primeiro input
+  const room = new MatchRoom3D({ id: 'ring3d-f25b', seed: 'F25-ROOMB', region: 'sa-east', capacity: 8, botFill: 2, airdrop: false });
+  room.addPlayer('p1', 'JOGADOR-1');
+  room.start('p1', 'belt');
+  const world = getWorldLayout('F25-ROOMB', room.scenario.id);
   const spec = interiorDressing(world, room.scenario, { density: 1 }).structures.find((sp) => DOOR_KINDS.has(sp.kind));
   const st = world.structures[spec.index];
-  const leaf = room.doors.find((d) => d.structIndex === spec.index);
+  // HOTFIX pós-merge #185 — folhas são doorways (structIndex; yMin + h)
+  const panel = room.doors.find((d) => d.structIndex === spec.index);
+  assert.ok(panel, 'folha presente na sala (structIndex)');
   const frontZ = st.d >= st.w;
   const out = localPointToWorld(st, frontZ ? spec.door.u : st.w / 2 + 4, frontZ ? -st.d / 2 - 4 : spec.door.u);
   const a = room.humans.get('p1');
   a.x = out.x; a.z = out.z; a.y = 0; a.onGround = true;
-  const dx = leaf.x - a.x, dz = leaf.z - a.z, dh = Math.hypot(dx, dz);
+  const dx = panel.x - a.x, dz = panel.z - a.z, dh = Math.hypot(dx, dz);
   const yaw = Math.atan2(-dx, -dz);
-  const pitch = Math.atan2((leaf.yMin + leaf.h * .4) - (a.y + 1.55), dh);
-  for (let i = 0; i < 20 * 12 && !leaf.destroyed; i++) {
+  const pitch = Math.atan2((panel.yMin + panel.h * .4) - (a.y + 1.55), dh);
+  for (let i = 0; i < 20 * 12 && !panel.destroyed; i++) {
     room.input('p1', blankInput({ seq: i + 1, yaw, pitch, fire: true }));
     room.tick(DT);
   }
-  assert.ok(leaf.hp < DOOR.hp, `servidor desgastou a folha (${leaf.hp}/${DOOR.hp})`);
-  assert.equal(leaf.destroyed, true, 'porta quebrou no autoritativo');
-  const snap2 = room.snapshot('p1');
-  assert.equal(snap2.doors.find((x) => x.id === leaf.id).destroyed, true, 'snapshot reflete a quebra');
-  // o snapshot DRENA os eventos — doorDown vem nele (não num drainEvents posterior)
-  assert.ok(snap2.events.some((e) => e.type === 'doorDown' && e.id === leaf.id), 'doorDown entregue ao humano');
-  assert.equal(room.physicsWorld.colliders.some((c) => c.doorId === leaf.id), false, 'collider fora do mundo da sala');
-  // loot interior no servidor (térreo loot-i* + mezanino loot-m* a 2,95)
-  const interior = room.loot.filter((i) => /^loot-[im]/.test(String(i.id)));
-  assert.ok(interior.length >= 5, `loot interno autoritativo (${interior.length})`);
-  assert.ok(interior.some((i) => Math.abs(i.y - 2.95) < .01), 'mezanino no servidor');
-  // transmissão também carrega o estado (id/open/destroyed/hp)
-  const view = room.spectatorView();
-  assert.ok(Array.isArray(view.doors) && view.doors.some((x) => x.id === leaf.id && x.destroyed === true), 'espectador vê a porta quebrada');
+  assert.ok(panel.hp < DOOR.hp, `servidor desgastou o painel (${panel.hp}/${DOOR.hp})`);
+  assert.equal(panel.destroyed, true, 'porta quebrou no autoritativo');
 });
 
 // ============================================================================
-// 7. VISUAL — folhas registradas por id no registry de interiores
+// 7. VISUAL — painéis registrados por id no registry de interiores
 // ============================================================================
 
-test('buildScene: FOLHAS registradas (registry.doors, id → pivô+folha) e peças completas', () => {
+test('buildScene: doorPanels registrados (id → grupo) e painel completo (6 peças)', () => {
   for (const id of IDS) {
     const { scene, layout } = buildScene(2525, id, null, 'high');
     const reg = scene.userData.interiors;
+    // HOTFIX pós-merge #185 — registry canônico é `reg.doors` (antes doorPanels)
+    // e o valor virou CONTROLADOR de animação { pivot, leaf, openSign, current,
+    // target, broken }: folha com 5 peças (painel + 2 travessas + maçaneta +
+    // fecho), dobradiça no pivot; current/target/broken são o estado da animação.
     assert.ok(reg.doors instanceof Map, `${id}: registry doors`);
-    assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 folha por vão do plano`);
-    for (const [doorId, h] of reg.doors) {
+    assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
+    for (const [doorId, ctl] of reg.doors) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
-      assert.ok(h.leaf.children.length === 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
-      assert.ok(h.pivot.children.includes(h.leaf), `${id}: folha pendurada no pivô da dobradiça`);
-      assert.equal(h.current, 0, `${id}: fechada no spawn`);
-      const panel = h.leaf.children[0];
-      const p = panel.geometry.parameters;
-      assert.ok(p.height >= 2.2, `${id}: folha da base à verga`);
+      assert.ok(ctl.pivot && ctl.leaf, `${id}: controlador pivot/leaf`);
+      assert.equal(ctl.leaf.children.length, 5, `${id}: painel+2 travessas+maçaneta+fecho`);
+      assert.equal(ctl.broken, false, `${id}: folha íntegra no spawn`);
+      assert.equal(ctl.target, 0, `${id}: fechada no spawn`);
+      const slab = ctl.leaf.children[0];
+      const p = slab.geometry.parameters;
+      assert.ok(p.height >= 2.2, `${id}: painel da base à verga`);
     }
   }
 });

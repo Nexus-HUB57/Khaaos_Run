@@ -315,7 +315,6 @@ export const DOOR_MECH = {
   toggleCooldown: .6, // s entre toggles (anti-thrash de tecla/bot)
   leafGap: .12,       // folha um pouco menor que o vão (não raspa no batente)
   openAngle: 1.92,    // rad (~110°) — abertura para DENTRO do interior
-  meleeMult: 2.5,     // corpo-a-corpo é a entrada silenciosa: pá/cano arrebenta rápido
 };
 
 /**
