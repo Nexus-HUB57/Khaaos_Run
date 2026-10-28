@@ -5,6 +5,10 @@
 import { SeededRng } from '../shared/rng.js';
 import { WEAPONS, rollLoot } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
+// Fase 24 — interiores acessíveis: colliders ocos + floors pisáveis vêm do MESMO
+// plano determinístico da casca visual (interiors3d) — porta que se atravessa é
+// o vão que se vê; janelas deixam balas/LOS passarem
+import { hollowAccess } from './interiorsPlan.js';
 import { resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 // Fase 10 — Oficiais de Classe Especial (7º/9º artigos do POJ): identidade e
@@ -257,6 +261,39 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
 // Extraído do #stepActor para que a predição client-side replique EXATAMENTE a
 // física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
 // Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
+
+// Fase 24 — superfícies pisáveis (degraus, mezaninos). STEP_UP = degrau que o
+// ator sobe andando; STEP_DOWN = desnível que desce "grudado" ao chão (sem
+// virar queda). Mundo SEM floors => supportAt = 0 (comportamento legado).
+export const STEP_UP = 0.55, STEP_DOWN = 0.36;
+export function supportAt(world, x, z, y) {
+  const floors = world.floors;
+  if (!floors) return 0;
+  let sup = 0;
+  for (let i = 0; i < floors.length; i++) {
+    const f = floors[i];
+    if (x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ && f.yMax <= y + STEP_UP && f.yMax > sup) sup = f.yMax;
+  }
+  return sup;
+}
+
+// Altura de POUSO durante uma queda de yFrom → yTo: o maior topo de floor
+// CRUZADO neste tick (anti-tunneling em quedas rápidas — ex.: infiltração
+// aérea) ou o suporte de repouso de onde partiu (quique no mesmo piso).
+function landingHeight(world, x, z, yFrom, yTo) {
+  let best = 0; // chão do mundo
+  const floors = world.floors;
+  if (floors) {
+    for (let i = 0; i < floors.length; i++) {
+      const f = floors[i];
+      if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      const crossed = yFrom >= f.yMax && yTo <= f.yMax;
+      if (crossed && f.yMax > best) best = f.yMax;
+    }
+  }
+  return Math.max(best, supportAt(world, x, z, yFrom));
+}
+
 export function stepActorMovement(a, input, dt, world) {
   // Fase 9 — janela de impacto de pouso (contagem regressiva compartilhada)
   if ((a.landGraceT ?? 0) > 0) a.landGraceT = Math.max(0, a.landGraceT - dt);
@@ -294,6 +331,9 @@ export function stepActorMovement(a, input, dt, world) {
   if (!a.dropPhase) {
     for (const box of world.colliders) {
       if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
+      // Fase 24 — lajes/degraus FINOS abaixo dos pés não empurram: o ator
+      // ESTÁ sobre eles (mezanino/laje); paredes/peitoris finos continuam sólidos
+      if (box.yMax <= a.y + STEP_UP && box.yMax - box.yMin <= 0.6) continue;
       const hit = circlePushAabb(nx, nz, PLAYER_R, box);
       if (hit) { nx = hit.x; nz = hit.z; }
     }
@@ -309,21 +349,34 @@ export function stepActorMovement(a, input, dt, world) {
     const g = phase === 'sky' ? DROP_SKY_GRAVITY : DROP_CHUTE_GRAVITY;
     const cap = phase === 'sky' ? DROP_SKY_MAX_FALL : DROP_CHUTE_MAX_FALL;
     if (a.vy > cap) a.vy = Math.max(cap, a.vy + g * dt); else a.vy = cap;
+    const prevY = a.y;
     a.y += a.vy * dt;
     if (phase === 'sky' && a.y <= DROP_OPEN_Y) { a.dropPhase = 'chute'; a.vy = Math.max(a.vy, DROP_CHUTE_MAX_FALL); }
-    if (a.y <= 0) {
-      a.y = 0; a.vy = 0; a.onGround = true; a.dropPhase = null;
+    // Fase 24 — pouso também em degraus/mezaninos/refúgios (pouso varrido)
+    const supDrop = landingHeight(world, a.x, a.z, prevY, a.y);
+    if (a.y <= supDrop) {
+      a.y = supDrop; a.vy = 0; a.onGround = true; a.dropPhase = null;
       a.landed = true; // consumido pelo dono do step para emitir 'land'
       a.landGraceT = DROP_ENGAGEMENT.landingGraceSeconds; // Fase 9 — impacto de pouso
     }
     return a;
   }
+  // Fase 24 — suporte vertical: sobe degrau grudado, desce degrau grudado e
+  // CAI ao pisar fora do mezanino (a.y > sup além da tolerância)
+  const sup = supportAt(world, a.x, a.z, a.y);
+  if (a.onGround) {
+    if (a.y < sup) a.y = sup;                                   // sobe degrau
+    else if (a.y - sup <= STEP_DOWN) a.y = sup;                 // desce degrau
+    else a.onGround = false;                                     // pisou no vazio
+  }
   // vertical (caído não salta — Fase 7)
   const wantJump = !!input.jump && !a.knocked;
   if (!a.onGround || wantJump) {
     if (a.onGround && wantJump) { a.vy = WORLD.jumpVel; a.onGround = false; }
+    const prevY = a.y;
     a.vy += WORLD.gravity * (a.gravityScale ?? 1) * dt; a.y += a.vy * dt;
-    if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
+    const supLand = landingHeight(world, a.x, a.z, prevY, a.y);
+    if (a.y <= supLand) { a.y = supLand; a.vy = 0; a.onGround = true; }
   }
   return a;
 }
@@ -419,7 +472,19 @@ const layoutCache = new Map();
 export function getWorldLayout(seed, scenarioId = 'CIGKV') {
   const scenario = resolveScenario(scenarioId);
   const key = `${scenario.id}:${String(seed)}`;
-  if (!layoutCache.has(key)) layoutCache.set(key, buildWorldLayout(String(seed), scenario.id));
+  if (!layoutCache.has(key)) {
+    const layout = buildWorldLayout(String(seed), scenario.id);
+    // Fase 24 — COLLIDERS OCOS: estruturas-casca viram paredes com vão de porta
+    // REAL e faixas de janela; degraus/mezaninos viram floors pisáveis. Estruturas
+    // fora do conjunto de cascas preservam o collider sólido bit a bit.
+    // baseColliders guarda os sólidos originais p/ hollowAccess ser idempotente.
+    layout.baseColliders = layout.colliders;
+    const access = hollowAccess(layout, scenario);
+    layout.colliders = access.colliders;
+    layout.floors = access.floors;
+    layout.access = { replaced: access.replaced, windows: access.windows, mezzanines: access.mezzanines };
+    layoutCache.set(key, layout);
+  }
   return layoutCache.get(key);
 }
 
@@ -460,7 +525,7 @@ export class KhaaosSim3D {
     // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls).
     // ALIAS da lista do layout quando não há paredes — mutações externas no layout
     // (ex.: testes que removem colliders) continuam valendo para balas/LOS/movimento.
-    this.physicsWorld = { colliders: this.world.colliders };
+    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
   }
   #syncPhysicsWorld() {
     const active = this.walls.filter(w => w.active).map(glooCollider);

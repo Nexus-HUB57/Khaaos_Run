@@ -1,25 +1,23 @@
-// Khaaos Run — Fase 23: INTERIORES REAIS (shells com porta/mobiliário, nível Free Fire).
+// Khaaos Run — Fase 23/24: INTERIORES REAIS (cascas com porta/janelas, mobília,
+// escada + mezanino pisável — nível Free Fire).
 //
-// Até a Fase 22 os prédios eram caixas sólidas — de fora liam como "blocos
-// mortos". A Fase 23 substitui VISUALMENTE as estruturas-habitação (barraco/
-// quartel, hangar, galpão, depósito, edifício, ruína, quiosque) por CASCAS
-// (paredes com abertura de porta REAL, piso, telhado/laje, luminária) e mobília
-// coerente com o distrito e o mundo. Pela porta aberta vê-se um interior vivo:
-// beliches e armários no quartel, bancadas e alvos no hangar, estantes e
-// paletes no galpão, balcão e banquetas no quiosque, escombros e ferragem na
-// ruína — com acento por cenário (aquecedor gélido, rede de mangue, tambor
-// d'água do deserto, console astral).
+// Fase 23: cascas substituem a caixa sólida das estruturas-habitação — porta
+// REAL, piso, forro e mobília coerente com o distrito e o mundo.
+// Fase 24: as cascas ganham JANELAS com vidro e as estruturas grandes ganham
+// ESCADA + MEZANINO — visual coerente com os colliders ocos/floors gerados por
+// interiorsPlan.hollowAccess em getWorldLayout (MESMA fonte determinística:
+// o vão que o jogador atravessa é o vão desenhado).
 //
-// CONTRATO DE GAMEPLAY (inviolável): os colliders AABB do layout NÃO mudam
-// bit a bit — a porta é visual (o sim continua tratando a estrutura como
-// sólida, exatamente como antes). Zero colisores novos/removidos.
+// CONTRATO DE GAMEPLAY (Fase 24): colliders das estruturas-casca viram PAREDES
+// OCAS (segmentos com vão de porta + faixas de janela onde balas/LOS passam);
+// degraus e mezaninos viram superfícies pisáveis via world.floors.
 //
 // Filosofia do repo (mantida):
-//  - LÓGICA PURA (interiorDressing, sem THREE) + builder visual (buildInteriors
-//    + buildShellHost) com registro em scene.userData.interiors — MESMO
-//    contrato dos worldMarks/districtDressing: { id, counts, animators,
-//    placements, shells, group }, idempotente;
-//  - DETERMINISMO: mesma seed+cenário => mesmos placements (SeededRng);
+//  - LÓGICA PURA em interiorsPlan.js (sem THREE, headless-safe p/ servidor);
+//  - builder visual (buildInteriors + buildShellHost) com registro em
+//    scene.userData.interiors — MESMO contrato dos worldMarks/districtDressing:
+//    { id, counts, animators, placements, shells, group }, idempotente;
+//  - DETERMINISMO: mesma seed+cenário => mesmas placements (SeededRng);
 //  - ZERO assets externos: geometria + materiais 100% procedurais;
 //  - QUALIDADE: densidade da mobília vem do tier (quality3d.interiorFactor);
 //    as cascas são sempre construídas (substituem a caixa sólida).
@@ -29,113 +27,19 @@ import {
   plankMaterial, concreteMaterial, crateTexture, barrelMaterial,
   palletMaterial, sandbagMaterial, signTexture,
 } from './textures3d.js';
+import { ACCENTS, MEZZ, interiorDressing } from './interiorsPlan.js';
 
 // ============================================================================
-// PARTE 1 — placements puros (sem THREE, determinístico)
+// PARTE 1 — plano puro (Fase 24): placements/janelas/escada moram em
+// interiorsPlan.js — MESMA fonte p/ a casca visual e p/ a física (colliders
+// ocos + floors). Reexportado aqui p/ manter os contratos de import.
 // ============================================================================
+export {
+  SHELL_KINDS, WINDOW_KINDS, MEZZ_KINDS, WINDOW_SPEC, WINDOW_SPEC_UPPER, MEZZ,
+  interiorDressing, localPointToWorld, localRectToWorldAabb, hollowAccess,
+} from './interiorsPlan.js';
 
-// tipos de estrutura que viram casca habitável (visual) — as demais continuam caixa
-export const SHELL_KINDS = new Set(['barrack', 'hangar', 'warehouse', 'depot', 'building', 'ruin', 'pavilion']);
-
-// mobília por tipo de estrutura (kit do distrito)
-const KITS = {
-  barrack:  { bunk: 2, locker: 3, weaponsrack: 1, cratestack: 1 },
-  hangar:   { workbench: 2, tirestack: 2, toolcart: 1, targetboard: 2, cratestack: 1 },
-  warehouse:{ shelfrack: 3, palletstack: 2, barrelrow: 1, cratestack: 1 },
-  depot:    { shelfrack: 1, cratestack: 2, barrelrow: 1 },
-  building: { table: 2, shelf: 1, planter: 1, counter: 1, stool: 2 },
-  ruin:     { rubble: 2, rebar: 2, brokenbench: 1, lanternpost: 1 },
-  pavilion: { counter: 1, stool: 2, menuboard: 1, fridge: 1 },
-};
-
-// acento POR CENÁRIO: prop extra + cor do tecido do interior
-const ACCENTS = {
-  CIGKV:     { prop: 'weaponsrack', cloth: '#5d6b4a' },                     // oliva crepuscular
-  Barburhen: { prop: 'heater',         cloth: '#4a6373' },                     // frio gélido
-  Priadus:   { prop: 'hammock',        cloth: '#3f6b52' },                     // umidade de mangue
-  Ckesalth:  { prop: 'waterdrum',      cloth: '#8a6f42' },                     // poeira do deserto
-  Arukheea:  { prop: 'astralconsole',  cloth: '#5a648a' },                     // cinza-astral
-};
-
-// porta maior em galpões/hangares (leitura de hangar de verdade)
-const DOOR_SPEC = {
-  barrack:   { w: 2.6, h: 3.0 },
-  hangar:    { w: 6.0, h: 4.2 },
-  warehouse: { w: 3.2, h: 3.6 },
-  depot:     { w: 2.4, h: 2.8 },
-  building:  { w: 2.2, h: 2.5 },
-  ruin:      { w: 2.6, h: 2.5 },
-  pavilion:  { w: 2.0, h: 2.4 },
-};
-
-// teto de mobília por área útil (evitaEmpilhar em depósitos pequenos)
-const maxItemsFor = (s) => Math.max(2, Math.min(7, Math.floor((s.w * s.d) / 16)));
-
-/**
- * Placements determinísticos dos interiores.
- * @returns {{ scenarioId, structures: Array<{index, kind, door, items}>, counts }}
- *   door: { face: 'front'|'right', w, h, u } — MESMA face da fachada (detail3d:
- *   front = −z local quando d ≥ w, senão right = +x local). u = offset ao longo
- *   da parede. items: coords LOCAIS (u = x, v = z) dentro da pegada.
- */
-export function interiorDressing(layout, scenario, { seed = 'interiors', density = 1 } = {}) {
-  const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
-  const accent = ACCENTS[scenario.id] ?? ACCENTS.CIGKV;
-  const out = [];
-  const counts = {};
-  const bump = (k) => { counts[k] = (counts[k] ?? 0) + 1; };
-
-  layout.structures.forEach((s, index) => {
-    if (!SHELL_KINDS.has(s.kind)) return;
-    const frontZ = s.d >= s.w;                      // MESMA regra do facadeDetails
-    const face = frontZ ? 'front' : 'right';
-    const spec = DOOR_SPEC[s.kind];
-    const wallLen = frontZ ? s.w : s.d;             // comprimento da parede da porta
-    const dw = Math.min(spec.w, wallLen * .5);
-    const du = (rng.next() - .5) * Math.max(0, wallLen - dw - 2.4); // desloca a porta na parede
-    const door = { face, w: +dw.toFixed(2), h: spec.h, u: +du.toFixed(2) };
-
-    // limites internos (folga das paredes)
-    const limU = s.w / 2 - 1.0, limV = s.d / 2 - 1.0;
-    // corredor da porta (nada de mobília bloqueando a leitura da entrada)
-    const inCorridor = (u, v, m = 1.35) => {
-      if (face === 'front') return v < -(s.d / 2 - 2.3) && Math.abs(u - door.u) < dw / 2 + m;
-      return u > (s.w / 2 - 2.3) && Math.abs(v - door.u) < dw / 2 + m;
-    };
-
-    const items = [];
-    const fits = (u, v) => {
-      if (Math.abs(u) > limU || Math.abs(v) > limV) return false;
-      if (inCorridor(u, v)) return false;
-      return !items.some((p) => Math.hypot(p.u - u, p.v - v) < 1.5);
-    };
-
-    const recipe = { ...(KITS[s.kind] ?? {}) };
-    recipe[accent.prop] = (recipe[accent.prop] ?? 0) + 1;   // acento do mundo entra sempre
-    let budget = Math.max(2, Math.round(maxItemsFor(s) * density));
-    for (const [type, count] of Object.entries(recipe)) {
-      if (budget <= 0) break;
-      const n = Math.max(1, Math.min(budget, Math.round(count * Math.max(density, .5))));
-      for (let i = 0; i < n && budget > 0; i++) {
-        let placed = false;
-        for (let t = 0; t < 14 && !placed; t++) {
-          const u = (rng.next() * 2 - 1) * limU;
-          const v = (rng.next() * 2 - 1) * limV;
-          if (!fits(u, v)) continue;
-          items.push({ type, u: +u.toFixed(2), v: +v.toFixed(2), rot: +(rng.next() * Math.PI * 2).toFixed(3), s: +(0.9 + rng.next() * 0.25).toFixed(2) });
-          bump(type);
-          budget--; placed = true;
-        }
-        if (!placed) break;
-      }
-    }
-    out.push({ index, kind: s.kind, door, items });
-  });
-
-  return { scenarioId: scenario.id, structures: out, counts };
-}
-
-// ============================================================================
+// ==========================================================================
 // PARTE 2 — builder visual (THREE): cascas, mobília, luminárias, animators
 // ============================================================================
 
@@ -176,6 +80,11 @@ function sharedMaterials(scenario) {
       color: '#173a4a', emissive: '#2e9bb8', emissiveIntensity: 1.1, roughness: .3,
     }),
     flame: ST('#ffb347', { emissive: '#ff8c1e', ei: 1.3, rough: .5 }),
+    // Fase 24 — vidro das janelas (translúcido, DoubleSide, sem depthWrite)
+    glass: new THREE.MeshStandardMaterial({
+      color: '#9fb8c8', roughness: .08, metalness: .1,
+      transparent: true, opacity: .3, side: THREE.DoubleSide, depthWrite: false,
+    }),
   };
 }
 
@@ -512,6 +421,31 @@ export function buildShellHost(s, spec, m) {
     host.add(mesh);
   };
 
+  // vidro da janela (Fase 24): painel translúcido + batente metálico — MESMA
+  // faixa local dos colliders (windows do spec)
+  const windowGlass = (face, win) => {
+    const cw = win.u1 - win.u0, ch = win.y1 - win.y0;
+    const uc = (win.u0 + win.u1) / 2, yc = (win.y0 + win.y1) / 2;
+    const horizontal = face === 'front' || face === 'back';
+    const piece = (u, y, su, sy, mat, thick, noShadow = false) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? su : thick, sy, horizontal ? thick : su), mat);
+      if (face === 'front') mesh.position.set(u, y, -d / 2 + T / 2);
+      else if (face === 'back') mesh.position.set(u, y, d / 2 - T / 2);
+      else if (face === 'right') mesh.position.set(w / 2 - T / 2, y, u);
+      else mesh.position.set(-w / 2 + T / 2, y, u);
+      if (!noShadow) mesh.castShadow = mesh.receiveShadow = true;
+      host.add(mesh);
+      return mesh;
+    };
+    const ft = .1;
+    piece(uc, win.y0 + .05, cw + ft, .08, m.frame, T + .06);   // peitoril
+    piece(uc, win.y1 - .05, cw + ft, .08, m.frame, T + .06);   // verga
+    piece(win.u0 + .05, yc, .08, ch, m.frame, T + .06);        // montante esq
+    piece(win.u1 - .05, yc, .08, ch, m.frame, T + .06);        // montante dir
+    piece(uc, yc, cw, ch, m.glass, .08, true);                  // vidro
+  };
+
   const faces = ['front', 'back', 'left', 'right'];
   const rngShape = new SeededRng(`shell:${s.kind}:${s.x}:${s.z}`);
   for (const face of faces) {
@@ -553,8 +487,60 @@ export function buildShellHost(s, spec, m) {
         u += segLen;
       }
     } else {
-      addWall(face, 0, len, h);
+      const wins = (spec.windows ?? []).filter((w) => w.face === face).sort((a, b) => a.u0 - b.u0);
+      if (!wins.length) {
+        addWall(face, 0, len, h);
+      } else {
+        // Fase 24 — parede com faixas de janela: MESMA decomposição dos
+        // colliders (peitoril sólido, montantes entre vãos, parapeito acima)
+        const yLo = Math.min(...wins.map((w) => w.y0));
+        const yHi = Math.max(...wins.map((w) => w.y1));
+        addWall(face, 0, len, yLo, 0);                       // peitoril
+        addWall(face, 0, len, h - yHi, yHi);                 // parapeito/verga superior
+        const bandH = yHi - yLo;
+        let cursor = -len / 2;                                // montantes entre vãos
+        for (const w of wins) {
+          if (w.u0 - cursor > .05) addWall(face, (cursor + w.u0) / 2, w.u0 - cursor, bandH, yLo);
+          cursor = Math.max(cursor, w.u1);
+        }
+        if (len / 2 - cursor > .05) addWall(face, (cursor + len / 2) / 2, len / 2 - cursor, bandH, yLo);
+        for (const w of wins) windowGlass(face, w);
+      }
     }
+  }
+
+  // ---- escada + mezanino (Fase 24 — visual dos floors pisáveis) ----
+  if (spec.stairs) {
+    const st = spec.stairs;
+    for (let k = 0; k < st.steps; k++) {
+      const zA = st.z0 + k * st.run;
+      const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(st.x1 - st.x0, st.rise, st.run), m.wallIn);
+      stepMesh.position.set((st.x0 + st.x1) / 2, st.rise * (k + .5), zA + st.run / 2);
+      stepMesh.castShadow = stepMesh.receiveShadow = true;
+      host.add(stepMesh);
+    }
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w - T * 2, .25, st.mezzZ1 - st.mezzZ0), m.floor);
+    slab.position.set(0, st.height - .125, (st.mezzZ0 + st.mezzZ1) / 2);
+    slab.castShadow = slab.receiveShadow = true;
+    host.add(slab);
+    // colunas de apoio na borda frontal da laje
+    for (const px of [-w / 2 + T + .2, w / 2 - T - .2]) {
+      const col = new THREE.Mesh(new THREE.BoxGeometry(.18, st.height - .25, .18), m.steel);
+      col.position.set(px, (st.height - .25) / 2, st.mezzZ0 + .18);
+      col.castShadow = true;
+      host.add(col);
+    }
+    // guarda-corpo (borda frontal, exceto a chegada da escada)
+    const railLen = (w / 2 - T) - st.x1;
+    const railCx = (st.x1 + w / 2 - T) / 2;
+    box(host, railLen, .07, .07, m.steel, railCx, st.height + 1.02, st.mezzZ0);
+    box(host, railLen, .05, .05, m.steel, railCx, st.height + .55, st.mezzZ0);
+    for (let i = 0; i <= 4; i++) {
+      const px = st.x1 + (railLen * i) / 4;
+      box(host, .06, 1.05, .06, m.steel, px, st.height + .52, st.mezzZ0);
+    }
+    // berço lateral da escada
+    box(host, .22, st.height, st.z1 - st.z0, m.woodDark, st.x1 + .11, st.height / 2, (st.z0 + st.z1) / 2);
   }
 
   // ---- postes do quiosque ----

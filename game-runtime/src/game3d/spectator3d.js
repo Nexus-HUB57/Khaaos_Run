@@ -750,7 +750,9 @@ function createSpectatorGame(Game3D) {
       const dressingAnim = this.scene.userData.districtDressing?.animators;
       if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
       // Fase 23 — interiores na TRANSMISSÃO (flicker de lâmpadas/telas)
-      const interiorsAnim = this.scene.userData.interiors?.animators;
+      const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
+    if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
+    const interiorsAnim = this.scene.userData.interiors?.animators;
       if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, this.animT);
       this.survivalFX?.update(dt, this.animT);
       this.updateSpectatorCamera(dt);

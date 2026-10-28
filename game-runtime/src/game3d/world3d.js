@@ -15,6 +15,7 @@ import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
 import { buildInteriors, buildShellHost } from './interiors3d.js'; // Fase 23 — interiores reais
 import { buildTerrain, terrainHeightAt } from './terrain3d.js'; // Fase 23 — relevo do terreno
+import { buildLightShafts } from './lightshafts3d.js'; // Fase 24 — raios de luz pelas janelas
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -731,6 +732,10 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // Fase 6 — fachadas detalhadas por cima das estruturas (depois dos meshes base)
   // Fase 23 — shells recebem o Set p/ pular porta pintada (agora é vão real)
   buildFacades(scene, layout, interiors.shells);
+
+  // Fase 24 — raios de luz pelas janelas (poça no piso, respiração suave;
+  // 2 draw calls, gate por tier via q.lightFactor)
+  buildLightShafts(scene, layout, scenario, interiors, q);
 
   // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
   const bladeTex = grassBladeTexture();

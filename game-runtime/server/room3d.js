@@ -152,7 +152,7 @@ export class MatchRoom3D {
     // (ELIMINATION/RING_PHASE) — o pipeline /ws/spectator mescla no batch.
     this.spectatorLog = [];
     // mundo físico da sala: colliders do layout + dinâmicos (Gloo Walls)
-    this.physicsWorld = { colliders: this.world.colliders };
+    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
   }
   #syncPhysicsWorld() {
     const active = this.walls.filter((w) => w.active).map(glooCollider);
