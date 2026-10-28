@@ -260,7 +260,51 @@ export const economyLedgerEntries = pgTable("economy_ledger_entries", {
   positiveLineNumber: check("economy_ledger_line_number_positive", sql`${table.lineNumber} > 0`),
   validSide: check("economy_ledger_side_valid", sql`${table.side} IN ('DEBIT', 'CREDIT')`),
   positiveAmount: check("economy_ledger_amount_positive", sql`${table.amountKrc} > 0`),
-  validAccount: check("economy_ledger_account_valid", sql`${table.accountCode} IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'equity.opening_balance')`),
+  validAccount: check("economy_ledger_account_valid", sql`${table.accountCode} IN ('wallet.weapons', 'wallet.bonus', 'wallet.fbm', 'external.deposit', 'system.loan_receivable', 'system.loan_interest_income', 'system.item_sales', 'system.item_repairs', 'system.salary_expense', 'system.2pc_escrow', 'equity.opening_balance')`),
+}));
+
+// ─── Economy 2PC (Two-Phase Commit) ─────────────────────────────────────────
+// Escrow registry for atomic KRC transactions driven by the UE5 client
+// (UKhaaosEconomyBridge2PC) or trusted game servers.
+//
+// Lifecycle: PREPARED (funds debited into escrow) → COMMITTED (destination
+// credited) or ABORTED (funds refunded). Rows past expires_at are aborted by
+// the GC loop (default TTL 60s, GC every 15s).
+export const economy2pcTransactions = pgTable("economy_2pc_transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** ID gerado pelo cliente UE5 quando é um UUID canônico; senão só referência. */
+  clientTransactionId: text("client_transaction_id"),
+  /** Canonical actor: web userId or synthetic "ue5-player-<id>". */
+  actorId: text("actor_id").notNull(),
+  /** UE5 numeric player id, when the request came from the game client. */
+  playerId: integer("player_id"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  /** SHA-256 of the prepare payload; replays with a different payload are rejected. */
+  requestHash: text("request_hash").notNull(),
+  amountKrc: numeric("amount_krc").notNull(),
+  description: text("description").notNull().default(""),
+  itemId: text("item_id"),
+  destinationAccount: text("destination_account").notNull().default("system.item_sales"),
+  status: text("status").notNull().default("PREPARED"),
+  coordinatorNodeId: text("coordinator_node_id"),
+  prepareOperationId: uuid("prepare_operation_id"),
+  commitOperationId: uuid("commit_operation_id"),
+  abortOperationId: uuid("abort_operation_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  committedAt: timestamp("committed_at"),
+  abortedAt: timestamp("aborted_at"),
+  abortReason: text("abort_reason"),
+}, (table) => ({
+  actorKeyUnique: uniqueIndex("economy_2pc_actor_key_unique").on(table.actorId, table.idempotencyKey),
+  clientTxUnique: uniqueIndex("economy_2pc_client_tx_unique").on(table.clientTransactionId),
+  statusIdx: index("economy_2pc_status_expires_idx").on(table.status, table.expiresAt),
+  keyFormat: check("economy_2pc_key_format", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9._~-]{16,128}$'`),
+  requestHashSha256: check("economy_2pc_hash_sha256", sql`length(${table.requestHash}) = 64`),
+  validStatus: check("economy_2pc_status_valid", sql`${table.status} IN ('PREPARED', 'COMMITTED', 'ABORTED')`),
+  positiveAmount: check("economy_2pc_amount_positive", sql`${table.amountKrc} > 0`),
+  validDestination: check("economy_2pc_destination_valid", sql`${table.destinationAccount} IN ('system.item_sales', 'system.item_repairs', 'external.deposit')`),
 }));
 
 export const paymentOrders = pgTable("payment_orders", {
@@ -461,6 +505,7 @@ export const insertItemSchema = createInsertSchema(items).omit({ id: true, creat
 export type BankAccount = typeof bankAccounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type EconomyIdempotency = typeof economyIdempotency.$inferSelect;
+export type Economy2PCTransaction = typeof economy2pcTransactions.$inferSelect;
 export type Loan = typeof loans.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type PlayerStats = typeof playerStats.$inferSelect;

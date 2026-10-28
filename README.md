@@ -1044,7 +1044,29 @@ Semana  1   4   8   11  15  23  28
 
 6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
 
-7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header.
+7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header. ✅ **IMPLEMENTADO (P0)** — ver detalhes abaixo.
+
+#### Implementação server-side 2PC (P0 — end-to-end com o cliente UE5)
+
+| Arquivo | Papel |
+|---|---|
+| `shared/schema.ts` | Tabela `economy_2pc_transactions` (escrow): PK uuid, `client_transaction_id` (fallback não-UUID), unique `(actor_id, idempotency_key)`, `request_hash` SHA-256, TTL `expires_at`, CHECKs de status/valor/destino. Conta contábil `system.2pc_escrow` adicionada ao ledger. |
+| `server/game/economy2pcService.ts` | Serviço 2PC: escrow double-entry (`wallet.weapons`→`system.2pc_escrow` linhas 1-2; commit linhas 3-4; abort linhas 5-6 — mesma key, linhas disjuntas), claim idempotente via unique index, `SELECT ... FOR UPDATE` na wallet, TTL 60s (10-300), GC preventivo no prepare + `recoverExpired()` + loop 15s (`startRecoveryLoop`, unref). |
+| `server/routes/economy-2pc.ts` | Rotas `POST /api/economy/2pc/prepare|commit|abort`, `GET /transactions/:id`, `GET /health`. Zod validation com o payload EXATO do UE5 (`transactionId, idempotencyKey, amountKrc:int, playerId:int, itemId, description, coordinatorNodeId, expiryTimestamp`; resposta com `prepared: bool` para `GetBoolField`). Auth: `x-2pc-node-secret` (`ECONOMY_2PC_NODE_SECRET`) > sessão web > modo dev `ue5-player-<playerId>` (recusado com secret configurado). |
+| `server/routes.ts` | `registerEconomy2PCRoutes(app)` + `economy2pcService.startRecoveryLoop()` registrados antes de `registerApiRoutes` (auth própria, sem OIDC). |
+| `migrations/0006_economy-2pc-escrow.sql` | Migration idempotente (IF NOT EXISTS / DROP CONSTRAINT IF EXISTS). |
+| `tests/official/economy-2pc-contract.test.ts` | 25 testes de contrato DB-free: payload UE5 nos schemas zod, GUID FGuid DigitsWithHyphensLower, plano de linhas 1-2/3-4/5-6, TTL bounds, resolve2PCActor (secret/sessão/dev). |
+| `tests/integration/economy-2pc.postgres.test.ts` | 15 testes E2E PostgreSQL: payload UE5 exato, anti double-spend (replay sem duplo débito), 402/404/409 por cenário, commit pós-abort, TTL→ESCROW_EXPIRED com reembolso, GC, invariante ΣDEBIT=ΣCREDIT por operationId. Bootstrap: mini-migrador idempotente de `migrations/*.sql`. |
+
+**Executar:**
+```bash
+# Contrato (sem DB)
+node --import tsx --test tests/official/economy-2pc-contract.test.ts
+
+# E2E (PostgreSQL real; host local + sufixo _test)
+TEST_DATABASE_URL="postgresql://127.0.0.1:5432/khaaos_2pc_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc.postgres.test.ts
+```
 
 ### CI/CD e Pipeline
 

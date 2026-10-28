@@ -43,6 +43,13 @@
       "when": 1792482451436,
       "tag": "0005_stripe_checkout",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793145742915,
+      "tag": "0006_economy-2pc-escrow",
+      "breakpoints": true
     }
   ]
 }
