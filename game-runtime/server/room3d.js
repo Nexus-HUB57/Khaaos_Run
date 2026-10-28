@@ -77,9 +77,13 @@ export const INPUT_QUEUE_CAP = 60;     // teto da fila por jogador (~2s de rede 
 export const HISTORY_TICKS = 26;       // buffer de posições p/ rewind (~1,3s @ 20Hz)
 export const LAG_COMP_MIN_MS = 30, LAG_COMP_MAX_MS = 600;
 export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolação do cliente + meia tick
+// M3 — AOI fan-out: raios de interesse com HISTERESE (enter 130m / exit 165m:
+// um ator não pisca dentro-fora na borda do raio) + raio maior p/ projéteis
+// (tracer visível e hit é autoritativo no servidor, não depende da visão).
+export const AOI_ENTER_M = 130, AOI_EXIT_M = 165, AOI_PROJECTILE_M = 180;
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
@@ -94,6 +98,11 @@ export class MatchRoom3D {
     this.officerPlanFn = typeof officerPlanFn === 'function' ? officerPlanFn : null;
     this.officerMeta = null; // { count, article, deploySeconds, elapsed }
     this.officerClaims = new Map(); // Fase 11 — insígnia OCE → client-id humano (1 por insígnia)
+    // M3 — AOI fan-out (opt-in por sala): snapshot do jogador só carrega atores
+    // dentro do raio de interesse (histerese enter/exit evita churn na borda) e
+    // projéteis longe do observador. Bandwidth O(AOI) em vez de O(ring inteiro).
+    this.aoiEnabled = !!aoi;
+    this.aoiState = new Map(); // viewerId → Set(ids incluídos no snapshot anterior)
     this.matchIndex = 0;      // nº da partida nesta sala (salas são single-match hoje)
     this.matchId = null;      // "<roomId>#<matchIndex>" — chave de idempotência das recompensas
     this.matchRewarded = false;
@@ -297,6 +306,7 @@ export class MatchRoom3D {
     return true;
   }
   removePlayer(id) {
+    this.aoiState.delete(id); // M3 — estado AOI do observador sai junto
     const actor = this.humans.get(id);
     this.humans.delete(id);
     this.events.delete(id);
@@ -1323,9 +1333,33 @@ export class MatchRoom3D {
   }
 
   // ---------- snapshot ----------
+  // M3 — AOI: seleção de atores/projéteis relevantes p/ UM observador, com
+  // histerese (ator já visível só sai em AOI_EXIT_M; novo entra em AOI_ENTER_M).
+  #aoiFilter(forId, self) {
+    const actors = this.#actors();
+    const othersAll = actors.filter((a) => a.id !== forId);
+    if (!this.aoiEnabled || !self) return { others: othersAll, bullets: this.bullets, grenades: this.grenades };
+    const prev = this.aoiState.get(forId) ?? new Set();
+    const next = new Set();
+    const others = [];
+    for (const a of othersAll) {
+      // Mesma regra para vivos e cadáveres: a morte acontece onde o ator já
+      // estava visível (prev) → o corpo entra pela histerese de saída e o
+      // queda direcional (Fase 12) toca inteira antes de cular por distância.
+      const d = dist2d(a.x, a.z, self.x, self.z);
+      const limit = prev.has(a.id) ? AOI_EXIT_M : AOI_ENTER_M;
+      if (d <= limit) { next.add(a.id); others.push(a); }
+    }
+    this.aoiState.set(forId, next);
+    const near = (p) => dist2d(p.x, p.z, self.x, self.z) <= AOI_PROJECTILE_M;
+    return { others, bullets: this.bullets.filter(near), grenades: this.grenades.filter(near) };
+  }
+
   snapshot(forId) {
     const self = this.humans.get(forId) ?? null;
     const actors = this.#actors();
+    // M3 — AOI resolve UMA vez: others/bullets/grenades já filtrados p/ o observador.
+    const aoi = this.#aoiFilter(forId, self);
     return {
       mode: '3d', roomId: this.id, region: this.region, seed: this.seed, scenarioId: this.scenario.id,
       tick: this.tickCount, time: this.time,
@@ -1335,9 +1369,9 @@ export class MatchRoom3D {
       ring: { ...this.ring },
       aliveCount: actors.filter((a) => a.alive).length,
       player: self ? this.#selfView(self) : null,
-      others: actors.filter((a) => a.id !== forId).map((a) => this.#otherView(a)),
-      bullets: this.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
-      grenades: this.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
+      others: aoi.others.map((a) => this.#otherView(a)),
+      bullets: aoi.bullets.map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, owner: b.owner, weapon: b.weapon })),
+      grenades: aoi.grenades.map((g) => ({ id: g.id, x: g.x, y: g.y, z: g.z, vx: g.vx, vy: g.vy, vz: g.vz, owner: g.owner })),
       walls: this.walls.filter((w) => w.active).map((w) => ({ id: w.id, x: w.x, z: w.z, rot: w.rot, hp: Math.round(w.hp), owner: w.owner })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
       terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),

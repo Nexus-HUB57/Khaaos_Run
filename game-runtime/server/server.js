@@ -17,6 +17,8 @@ import { Economy, Ledger, PostgresEconomyStore, complianceReport, EconomyError }
 import { grantMatchRewards } from './rewards.js';
 import { DistributedRateLimiter, RedisRateStore, SharedMemoryRateStore } from './rateLimit.js';
 import { chooseRegion, chooseRoom, normalizeRegion, normalizeMode, makeInviteCode, normalizeInviteCode, findRoomByCode } from './matchmaking.js';
+// M3 — multiplayer distribuído: ownership/fencing de salas entre réplicas + relay de eventos.
+import { createDistributed } from './distributed.js';
 import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
@@ -64,6 +66,7 @@ export function createAuthoritativeServer({
   readyGate,
   obs,
   poj,
+  distributed, // M3 — camada distribuída injetável (testes/staging)
 } = {}) {
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
@@ -119,6 +122,14 @@ export function createAuthoritativeServer({
   // userId (sub do token) e concedemos via ledger idempotente. Falhas são
   // contidas: recompensa nunca derruba o servidor nem o tick.
   const handleMatchEnd = ({ matchId, results }) => {
+    // M3 — fim de partida: publica o ciclo de vida no relay (outras réplicas
+    // espelham p/ métricas/admin) e libera o lease da sala.
+    const endedRoomId = String(matchId || '').split('#')[0];
+    if (endedRoomId) {
+      void Promise.resolve(distributedLayer.publish(endedRoomId, 'match_end', { matchId, players: (results ?? []).length })).catch(() => {});
+      void distributedLayer.release(endedRoomId).catch(() => {});
+      frozenNotified.delete(endedRoomId);
+    }
     const actorById = new Map();
     for (const c of clients.values()) actorById.set(c.id, c.identity);
     void grantMatchRewards({
@@ -155,6 +166,48 @@ export function createAuthoritativeServer({
   const queue = [];
   let nextClient = 1;
   let nextRoom = 1;
+  // M3 — camada distribuída (opt-in): KR_DISTRIBUTED=1 ativa ownership/fencing.
+  // Com Redis (KR_REDIS_URL) os leases vivem no Redis; sem Redis, memória local
+  // (útil p/ testes de duas réplicas no mesmo processo). Sem KR_DISTRIBUTED o
+  // comportamento single-node é EXATAMENTE o de antes (no-op total).
+  const distributedLayer = distributed || createDistributed({
+    enabled: process.env.KR_DISTRIBUTED === '1',
+    address: process.env.KR_REPLICA_URL || null,
+    redisUrl: process.env.KR_REDIS_URL || process.env.REDIS_URL || null,
+    ttlMs: Number(process.env.KR_OWNERSHIP_TTL_MS || 15_000),
+    heartbeatMs: Number(process.env.KR_OWNERSHIP_HEARTBEAT_MS || 5_000),
+  });
+  // M3 — ids de sala GLOBALMENTE únicos quando distribuído: sem o prefixo,
+  // duas réplicas criariam 'ring3d-1' independentes e o registro de posse
+  // não teria a quem pertencer.
+  const roomPrefix = distributedLayer.enabled ? `${distributedLayer.replicaId}-` : '';
+  // M3 — AOI fan-out (opt-in): ativa com a camada distribuída ou KR_AOI=1.
+  const aoiEnabled = distributedLayer.enabled || process.env.KR_AOI === '1';
+  const frozenNotified = new Set();
+  // Falha do driver não derruba o matchmaking: degrada para posse local
+  // (fail-open com sinal em métricas/audit) — continuidade de jogo primeiro;
+  // o epoch garante que o dono NOVO sempre vence no reconcile.
+  const safeAcquire = async (roomId) => {
+    try { return await distributedLayer.acquire(roomId); }
+    catch (error) { audit.record({ actor: 'system', action: 'distributed.acquire_failed', resource: roomId, outcome: 'deny', detail: { error: String(error?.message || error) } }); return { owned: true, fence: 0, degraded: true }; }
+  };
+  const safeGuard = async (roomId) => {
+    try { return await distributedLayer.guard(roomId); }
+    catch { return { ok: true, local: true, degraded: true }; }
+  };
+  // Mutação estrutural sob fence: aplica addPlayer só com posse válida.
+  const guardedJoin = async (room, client) => {
+    const g = await safeGuard(room.id);
+    if (!g.ok) {
+      metrics.fenceRejects = (metrics.fenceRejects ?? 0) + 1;
+      audit.record({ actor: client.identity.username, action: 'distributed.fence_reject', resource: room.id, outcome: 'deny', detail: { reason: g.reason } });
+      send(client.ws, { type: 'redirect', roomId: room.id, reason: g.reason });
+      return false;
+    }
+    room.addPlayer(client.id, client.identity.username);
+    client.roomId = room.id;
+    return true;
+  };
   // Fase 12 — ponte veredito → Ring: o POJ não conhece salas/WS; o servidor
   // entrega o court_verdict ao militar julgado via snapshot da sala dele e
   // atualiza a patente do nametag ao vivo (setPatente emite evento 'patente').
@@ -231,13 +284,16 @@ export function createAuthoritativeServer({
   async function assign(client) {
     let room = chooseRoom(rooms, client.region, roomCapacity, client.mode);
     if (!room) {
+      const roomId = `${roomPrefix}ring3d-${nextRoom++}`;
+      const lease = await safeAcquire(roomId); // M3 — posse ANTES da primeira mutação
       room = client.mode === '3d'
-        ? new MatchRoom3D({ id: `ring3d-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan() })
-        : new MatchRoom({ id: `ring-${nextRoom++}`, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
+        ? new MatchRoom3D({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled })
+        : new MatchRoom({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
+      room.fence = lease.fence ?? 0;
       rooms.set(room.id, room);
+      void distributedLayer.publish(room.id, 'room_open', { region: room.region, mode: room.mode ?? '2d', capacity: room.capacity });
     }
-    room.addPlayer(client.id, client.identity.username);
-    client.roomId = room.id;
+    if (!(await guardedJoin(room, client))) return; // M3 — mutação sob fence; rejeição → redirect
     // Fase 11 — patente do perfil no nametag (KRC → hierarquia canônica).
     // Resolvida ANTES do match_found (nametag correto já no primeiro snapshot);
     // timeout curto: ledger lento não segura o matchmaking, evento patente
@@ -270,7 +326,7 @@ export function createAuthoritativeServer({
       if (req.method === 'GET' && url.pathname === '/healthz') {
         const roomList = [...rooms.values()];
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
-        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, backpressure: metrics.backpressure, regions: regionalLoad(), tls: Boolean(tlsConfig), oidc: Boolean(oidcClient) }));
+        res.end(JSON.stringify({ status: 'ok', uptimeMs: Date.now() - metrics.startedAt, ticks: metrics.ticks, rooms: rooms.size, rooms3d: roomList.filter((r) => r.is3d).length, connections: clients.size, queue: queue.length, backpressure: metrics.backpressure, regions: regionalLoad(), tls: Boolean(tlsConfig), oidc: Boolean(oidcClient), distributed: distributedStatus() }));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/readyz') {
@@ -729,6 +785,19 @@ export function createAuthoritativeServer({
     if (saved && saved.userId === user.sub && saved.expiresAt > Date.now() && rooms.get(saved.roomId)?.players.has(saved.id)) {
       client = { id: saved.id, ws, roomId: saved.roomId, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: normalizeRegion(user.region), resumeToken: resume, connectedAt: Date.now() };
       metrics.reconnects++;
+    } else if (saved && saved.userId === user.sub && saved.expiresAt > Date.now() && !rooms.has(saved.roomId)) {
+      // M3 — a sala da sessão não vive nesta réplica: a sessão NÃO é duplicada
+      // nem realocada às cegas — redireciona ao dono vivo (registry com TTL).
+      // Dono morto/desconhecido → cai no fluxo normal (nova alocação).
+      const redirect = await distributedLayer.redirectFor(saved.roomId).catch(() => null);
+      if (redirect) {
+        metrics.redirects = (metrics.redirects ?? 0) + 1;
+        audit.record({ actor: user.username, action: 'distributed.redirect', resource: saved.roomId, outcome: 'allow', detail: { to: redirect.to || redirect.owner } });
+        send(ws, { type: 'redirect', roomId: saved.roomId, to: redirect.to, owner: redirect.owner });
+        ws.close(4003, 'redirect-owner');
+        return;
+      }
+      client = { id: `client-${nextClient++}`, ws, roomId: null, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: chooseRegion(user.region, {}), resumeToken: crypto.randomBytes(24).toString('base64url'), connectedAt: Date.now() };
     } else {
       client = { id: `client-${nextClient++}`, ws, roomId: null, mode, seq: 0, input: { seq: 0, dx: 0, dy: 0, aimX: 550, aimY: 330, fire: false, interact: false }, input3d: { ...blankInput3D }, violations: new ViolationTracker(), identity: user, region: chooseRegion(user.region, {}), resumeToken: crypto.randomBytes(24).toString('base64url'), connectedAt: Date.now() };
     }
@@ -763,18 +832,21 @@ export function createAuthoritativeServer({
           if (message.type === 'create_private') {
             if (client.mode !== '3d') { send(ws, { type: 'private_error', reason: 'modo_2d_sem_squad' }); return; }
             const rngCrypto = () => crypto.randomBytes(4).readUInt32BE(0) / 0x100000000;
+            const roomId = `${roomPrefix}priv3d-${nextRoom++}`;
+            const lease = await safeAcquire(roomId); // M3 — posse antes da mutação
             const room = new MatchRoom3D({
-              id: `priv3d-${nextRoom++}`,
+              id: roomId,
               seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
               region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
               squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto), onMatchEnd: handleMatchEnd,
-              officerPlanFn: () => pojService.officerPlan(),
+              officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled,
             });
+            room.fence = lease.fence ?? 0;
             rooms.set(room.id, room);
+            void distributedLayer.publish(room.id, 'room_open', { region: room.region, mode: '3d', capacity: room.capacity, private: true });
             const position = queue.indexOf(client);
             if (position >= 0) queue.splice(position, 1);
-            room.addPlayer(client.id, client.identity.username);
-            client.roomId = room.id;
+            if (!(await guardedJoin(room, client))) return; // M3
             audit.record({ actor: client.identity.username, action: 'room.private.create', resource: room.id, outcome: 'allow', detail: { code: room.inviteCode } });
             send(ws, { type: 'private_created', code: room.inviteCode, roomId: room.id, region: room.region, snapshot: room.snapshot(client.id) });
             return;
@@ -785,8 +857,7 @@ export function createAuthoritativeServer({
             if (!room) { send(ws, { type: 'private_not_found', code: normalizeInviteCode(message.code) }); return; }
             const position = queue.indexOf(client);
             if (position >= 0) queue.splice(position, 1);
-            room.addPlayer(client.id, client.identity.username);
-            client.roomId = room.id;
+            if (!(await guardedJoin(room, client))) return; // M3 — mutação sob fence
             audit.record({ actor: client.identity.username, action: 'room.private.join', resource: room.id, outcome: 'allow' });
             send(ws, { type: 'private_joined', code: room.inviteCode, roomId: room.id, region: room.region, snapshot: room.snapshot(client.id) });
             return;
@@ -865,6 +936,17 @@ export function createAuthoritativeServer({
   const timer = setInterval(() => {
     metrics.ticks++;
     for (const room of rooms.values()) {
+      // M3 — fencing: dono que perdeu a posse CONGELA a sala (owner_lost):
+      // para de tickar/mutar e pede reconexão — o dono antigo nunca continua
+      // escrevendo depois do takeover do epoch novo.
+      if (distributedLayer.enabled && distributedLayer.isFrozen(room.id)) {
+        if (!frozenNotified.has(room.id)) {
+          frozenNotified.add(room.id);
+          for (const client of clients.values()) if (client.roomId === room.id) send(client.ws, { type: 'owner_lost', roomId: room.id });
+          audit.record({ actor: 'system', action: 'distributed.owner_lost', resource: room.id, outcome: 'deny' });
+        }
+        continue;
+      }
       room.tick(1 / 20);
       // Fase 14 — transmissão: salas 3D alimentam o pipeline (custo zero sem plateia)
       if (room.mode === '3d') spectatorPipeline.pushRoom(room);
@@ -873,15 +955,26 @@ export function createAuthoritativeServer({
   }, 50);
   const cleanup = setInterval(() => {
     void (async () => {
-      for (const [id, room] of rooms) if (room.players.size === 0 && Date.now() - room.lastActivity > 60000) rooms.delete(id);
+      for (const [id, room] of rooms) if (room.players.size === 0 && Date.now() - room.lastActivity > 60000) { rooms.delete(id); await distributedLayer.release(id); frozenNotified.delete(id); } // M3 — lease liberado junto
       if (typeof durable.cleanupExpired === 'function') await durable.cleanupExpired();
       else for (const session of await durable.listSessions()) if (session.expiresAt < Date.now()) await durable.deleteSession(session.id);
     })().catch(() => {});
   }, 10000);
 
-  const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.()]);
+  // M3 — heartbeat do registro de réplicas + relay espelho entre réplicas.
+  void distributedLayer.start().catch(() => {});
+  const distributedStatus = () => ({
+    enabled: distributedLayer.enabled,
+    replicaId: distributedLayer.replicaId,
+    heldRooms: distributedLayer.held ? distributedLayer.held.size : 0,
+    frozenRooms: distributedLayer.frozen ? distributedLayer.frozen.size : 0,
+    ...(distributedLayer.metrics || {}),
+  });
+
+  const ready = Promise.all([durable.ready?.(), selectedRateStore.ready?.(), distributedLayer.ready?.()]);
   return {
     server, wss, rooms, clients, queue, metrics, auth: identity, store: durable, rateStore: selectedRateStore, ready,
+    distributed: distributedLayer, // M3 — exposto p/ testes/operação
     spectator: spectatorPipeline, // Fase 14 — pipeline da transmissão exposto p/ testes/operação
     economy: economyService,
     tls: tlsConfig, oidc: oidcClient, audit, health: healthMonitor,
@@ -889,6 +982,7 @@ export function createAuthoritativeServer({
     close: async () => {
       clearInterval(timer);
       clearInterval(cleanup);
+      await distributedLayer.stop().catch(() => {}); // M3 — libera leases/registros
       try { server.off('upgrade', routeUpgrade); } catch { /* já removido */ }
       spectatorPipeline.destroy(); // Fase 14 — encerra timers/clients da transmissão
       for (const client of clients.values()) client.ws.close();

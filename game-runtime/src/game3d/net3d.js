@@ -96,6 +96,23 @@ export class NetClient3D {
       }
       if (msg.type === 'snapshot') { this.push(msg.snapshot); return; }
       if (msg.type === 'rejected') { this.onRejected?.(msg); return; }
+      // M3 — multiplayer distribuído: redireção ao dono vivo da sala e
+      // failover quando o dono perde a posse (fencing). Ambos reconectam
+      // imediatamente (retry zerado): o registry manda para o dono novo ou
+      // realoca — a sessão nunca é duplicada.
+      if (msg.type === 'redirect') {
+        if (msg.to) this.url = msg.to; // próxima conexão fala direto com o dono
+        this.onStatus?.('REDIRECIONANDO AO SERVIDOR DA SALA');
+        this.retry = 0;
+        try { this.socket.close(); } catch { /* já fechado */ }
+        return;
+      }
+      if (msg.type === 'owner_lost') {
+        this.onStatus?.('MIGRANDO DE SERVIDOR // FAILOVER');
+        this.retry = 0;
+        try { this.socket.close(); } catch { /* já fechado */ }
+        return;
+      }
       if (msg.type === 'rate_limited') this.onStatus?.('RATE LIMIT // AGUARDE');
       if (msg.type === 'banned') this.onStatus?.('BANIDO PELO ANTI-CHEAT');
     };
