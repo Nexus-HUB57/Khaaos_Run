@@ -18,6 +18,7 @@ import type { Server } from "http";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { storage } from "../storage";
+import { metrics } from "./metrics";
 import {
   ZONE_PHASES,
   PlayerStatus,
@@ -297,6 +298,56 @@ class RoomManager {
       });
       if (process.env.NODE_ENV === "production") process.exitCode = 1;
     });
+
+    // M3 — fencing de ownership: quando o epoch prova que OUTRO nó deteve a
+    // sala no intervalo (gap > 1), o mesh notifica com "fenced" e o dono
+    // local drena a autoridade (mesma UX de ROOM_NODE_LOST, razão auditável).
+    this.mesh.onRoomLost((record, reason) => {
+      if (reason !== "fenced") return;
+      try {
+        this.drainFencedRoom(record.id);
+      } catch (error) {
+        console.warn("[RoomManager] drenagem de sala cercada falhou", {
+          roomId: record.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    // M3 — samplers de gauge lidos no scrape do Prometheus (custo zero fora dele).
+    metrics.gaugeSampler("khaaos_ws_connections", {}, () =>
+      [...this.socketsByUser.values()].reduce((total, set) => total + set.size, 0));
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "LOBBY" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "LOBBY").length);
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "COUNTDOWN" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "COUNTDOWN").length);
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "IN_PROGRESS" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "IN_PROGRESS").length);
+    metrics.gaugeSampler("khaaos_ws_relay_tunnels_active", {}, () => this.gateway.originSessionCount());
+    metrics.gaugeSampler("khaaos_ws_relay_sessions_hosted", {}, () => this.gateway.hostSessionCount());
+  }
+
+  /** M3 — drena a autoridade de uma sala cercada: notifica os jogadores e
+   *  remove a sala local. O cliente trata como ROOM_NODE_LOST (contrato
+   *  existente) com reason=fenced para o telemetry distinguir. */
+  private drainFencedRoom(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    for (const [userId, player] of room.players) {
+      if (userId === room.hostId) continue; // host é notificado no cleanup abaixo
+      try {
+        player.ws?.send(JSON.stringify({
+          type: "error",
+          code: "ROOM_NODE_LOST",
+          reason: "fenced",
+          roomId,
+          message: "A sala mudou de nó dono; entre novamente.",
+        }));
+      } catch {
+        // socket já morto
+      }
+    }
+    this.destroyRoom(roomId, "fenced");
   }
 
   private closeUserSockets(userId: string): void {
@@ -1672,17 +1723,18 @@ class RoomManager {
   private send(ws: WebSocket, msg: ServerMessage) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg));
+      metrics.counter("khaaos_ws_messages_total", { direction: "s2c" });
     }
   }
 
-  private destroyRoom(roomId: string) {
+  private destroyRoom(roomId: string, reason = "destroyed") {
     const room = this.rooms.get(roomId);
     if (!room) return;
     if (room.tickHandle) clearInterval(room.tickHandle);
     if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
     // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
-    void this.mesh.markRoomClosed(roomId, "destroyed").catch(() => undefined);
+    void this.mesh.markRoomClosed(roomId, reason).catch(() => undefined);
     // M1: convites do código morrem com a sala (fire-and-forget).
     if (room.inviteCode) {
       void this.mesh.purgeInvites(room.inviteCode).catch(() => undefined);

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { metrics } from "./metrics";
 
 // ─── Node WS Gateway (proxy cross-node — auditoria Fase 0/2) ─────────────────
 //
@@ -541,8 +542,12 @@ export class NodeWsGateway {
       m: { type: "join", roomId, worldId },
       ...(options?.inviteAuthorized ? { ra: 1 as const } : {}),
     } satisfies RelayEnvelope).then((ok) => {
+      metrics.counter("khaaos_relay_publish_total", { result: ok ? "ok" : "failed" });
       if (!ok) this.failRelay(session, "publish_failed");
-    }).catch(() => this.failRelay(session, "publish_failed"));
+    }).catch(() => {
+      metrics.counter("khaaos_relay_publish_total", { result: "failed" });
+      this.failRelay(session, "publish_failed");
+    });
     return true;
   }
 
@@ -564,8 +569,12 @@ export class NodeWsGateway {
       m: msg,
     } satisfies RelayEnvelope).then((ok) => {
       if (process.env.SMOKE_DEBUG) console.log("[NodeWsGateway] c2s publish ok=", ok, { session: relayed.session, target: relayed.targetNode });
+      metrics.counter("khaaos_relay_publish_total", { result: ok ? "ok" : "failed" });
       if (!ok) this.failRelay(relayed.session, "publish_failed");
-    }).catch(() => this.failRelay(relayed.session, "publish_failed"));
+    }).catch(() => {
+      metrics.counter("khaaos_relay_publish_total", { result: "failed" });
+      this.failRelay(relayed.session, "publish_failed");
+    });
     return true;
   }
 
@@ -579,6 +588,16 @@ export class NodeWsGateway {
   /** Id da sala relayada pelo usuário (ou null). */
   relayedRoomId(userId: string): string | null {
     return this.originByUser.get(userId)?.roomId ?? null;
+  }
+
+  /** M3 — contagem de túneis ativos no papel de ORIGEM (para o /metrics). */
+  originSessionCount(): number {
+    return this.originByUser.size;
+  }
+
+  /** M3 — contagem de sessões relay HOSPEDADAS (nó dono, para o /metrics). */
+  hostSessionCount(): number {
+    return this.hostSessions.size;
   }
 
   private closeRelay(userId: string, reason: string): void {

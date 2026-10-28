@@ -338,6 +338,50 @@ export function createAuthoritativeServer({
         res.end(JSON.stringify({ status, checks: summary.checks, latencyMs: summary.latencyMs, errors: summary.errors, load: { connections: clients.size, queue: queue.length, maxConnections: readyGateConfig?.maxConnections ?? null } }));
         return;
       }
+      // M3 — exposição Prometheus (staging SRE): counters do runtime + gauges
+      // vivos (salas por estado, conexões, fila, backpressure, memória). Sem
+      // dados sensíveis; desligável com KR_METRICS_ENABLED=0.
+      if (req.method === 'GET' && url.pathname === '/metrics' && process.env.KR_METRICS_ENABLED !== '0') {
+        const lines = [];
+        const counter = (name, help, value, labels = '') => {
+          lines.push(`# HELP ${name} ${help}`);
+          lines.push(`# TYPE ${name} counter`);
+          lines.push(`${name}${labels} ${value}`);
+        };
+        const gauge = (name, help, value, labels = '') => {
+          lines.push(`# HELP ${name} ${help}`);
+          lines.push(`# TYPE ${name} gauge`);
+          lines.push(`${name}${labels} ${value}`);
+        };
+        const mem = process.memoryUsage();
+        const roomList = [...rooms.values()];
+        const byState = { LOBBY: 0, IN_PROGRESS: 0, FINISHED: 0 };
+        for (const room of roomList) byState[room.state] = (byState[room.state] || 0) + 1;
+        counter('khaaos_runtime_ws_messages_total', 'Mensagens WS recebidas do cliente', metrics.messages);
+        counter('khaaos_runtime_ws_rejections_total', 'Handshakes WS rejeitados', metrics.rejections);
+        counter('khaaos_runtime_anticheat_violations_total', 'Violações de movement validation', metrics.violations);
+        counter('khaaos_runtime_anticheat_bans_total', 'Bans de 3-strike aplicados', metrics.bans);
+        counter('khaaos_runtime_rate_limited_total', 'Requisições/conexões limitadas', metrics.rateLimited);
+        counter('khaaos_runtime_reconnects_total', 'Reconexões de cliente', metrics.reconnects);
+        counter('khaaos_runtime_auth_failures_total', 'Falhas de autenticação', metrics.authFailures);
+        counter('khaaos_runtime_backpressure_total', 'Conexões fechadas por backpressure', metrics.backpressure);
+        counter('khaaos_runtime_oversized_total', 'Mensagens acima do maxPayload', metrics.oversized);
+        counter('khaaos_runtime_rate_store_failures_total', 'Falhas do rate store (fail-open)', metrics.rateStoreFailures);
+        counter('khaaos_runtime_economy_match_rewards_total', 'Recompensas de partida liquidadas', metrics.economyMatchRewards);
+        gauge('khaaos_runtime_ws_connections', 'Conexões WS ativas', clients.size);
+        gauge('khaaos_runtime_matchmaking_queue', 'Jogadores na fila do matchmaking', queue.length);
+        gauge('khaaos_runtime_rooms', 'Salas vivas por estado', byState.LOBBY, '{state="LOBBY"}');
+        gauge('khaaos_runtime_rooms', 'Salas vivas por estado', byState.IN_PROGRESS, '{state="IN_PROGRESS"}');
+        gauge('khaaos_runtime_rooms', 'Salas vivas por estado', byState.FINISHED, '{state="FINISHED"}');
+        gauge('khaaos_runtime_rooms_3d', 'Salas 3D vivas', roomList.filter((r) => r.is3d).length);
+        gauge('khaaos_runtime_ticks_total', 'Ticks de simulação executados', metrics.ticks);
+        gauge('khaaos_runtime_process_resident_memory_bytes', 'RSS do processo', mem.rss);
+        gauge('khaaos_runtime_process_heap_used_bytes', 'Heap V8 em uso', mem.heapUsed);
+        gauge('khaaos_runtime_process_uptime_seconds', 'Uptime do processo', process.uptime());
+        res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store', ...(traceHeader || {}) });
+        res.end(`${lines.join('\n')}\n`);
+        return;
+      }
       if (req.method === 'POST' && url.pathname === '/auth/login') {
         const ip = req.socket.remoteAddress || 'unknown';
         const allowed = await allowOrOpen(limiter, `login:${ip}`);
