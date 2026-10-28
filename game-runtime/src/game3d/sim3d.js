@@ -473,12 +473,9 @@ export function glooCollider(wall) {
 }
 
 // ---------- Fase 25 — PORTA DESTRUTÍVEL ----------
-// Painel físico no vão da porta (interiorsPlan.doorPanelFor): bloqueia
-// movimento/balas/LOS enquanto ativa; hp cai com balas, granadas e
-// corpo-a-corpo (melee é eficaz — 2,5×). Quebrada => collider sai e o vão
-// fica LIVRE (evento 'doorDown' p/ o visual esconder o painel).
-// HOTFIX: a segunda declaração de DOOR ({ hp: 90, meleeMult: 2.5 }) foi
-// REMOVIDA — identificador único no módulo; números canônicos no topo.
+// AABB do PAINEL legado (formato hw/hd de interiorsPlan.doorPanelFor — ainda
+// usado pelos testes de geometria). O collider DINÂMICO da folha funcional da
+// Fase 25 é interiorsPlan.doorBoxCollider (nasce do vão de doorwaysOf).
 export function doorCollider(door) {
   return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
 }
@@ -508,8 +505,8 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
     const access = hollowAccess(layout, scenario);
     layout.colliders = access.colliders;
     layout.floors = access.floors;
-    // Fase 25 — portas destrutíveis (estado dinâmico nasce daqui) + loot interior
-    layout.doors = access.doors;
+    // Fase 25 — loot interior (térreo + mezanino); as FOLHAS ficam em
+    // layout.doors = doorwaysOf(...) logo abaixo (fonte única dos vãos)
     layout.interiorSpots = access.lootSpots;
     layout.access = { replaced: access.replaced, windows: access.windows, mezzanines: access.mezzanines };
     // Fase 25 — VÃOS DE PORTA em mundo (folha dinâmica fechada/aberta/destruída)
@@ -569,9 +566,11 @@ export class KhaaosSim3D {
     // s.doors e re-sincronizam via syncPhysicsWorld()).
     this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
     // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
   }
-  #syncPhysicsWorld() {
+  // Reconcilia o mundo físico (colliders estáticos + gloo + folhas fechadas).
+  // PÚBLICO de propósito: testes e harness re-sincronizam após mutar o mundo.
+  syncPhysicsWorld() {
     const active = this.walls.filter(w => w.active).map(glooCollider);
     // Fase 25 — folhas FECHADAS colidem (movimento/balas/LOS); abertas/destruídas não
     const leafs = [];
@@ -652,14 +651,16 @@ export class KhaaosSim3D {
           const it = spec.items[0];
           const p = localPointToWorld(s, it.u, it.v);
           const drop = rollLoot(this.rng, 'industrial', 1)[0];
-          items.push({ id: `loot-i${li}`, x: p.x + .45, z: p.z + .45, y: .55, sectorId: 'interior', ...drop, active: true });
+          // ...drop PRIMEIRO: o id canônico loot-i* não pode ser clobberado
+          // pelo id de catálogo da arma (contrato de ids do loot interior)
+          items.push({ ...drop, id: `loot-i${li}`, x: p.x + .45, z: p.z + .45, y: .55, sectorId: 'interior', active: true });
           li++;
         }
         if (spec.stairs) {
           const st = spec.stairs;
           const p = localPointToWorld(s, st.x0 + .75, (st.mezzZ0 + st.mezzZ1) / 2);
           const drop = rollLoot(this.rng, 'armory', 1)[0];
-          items.push({ id: `loot-m${li}`, x: p.x, z: p.z, y: st.height + .55, sectorId: 'interior', ...drop, active: true });
+          items.push({ ...drop, id: `loot-m${li}`, x: p.x, z: p.z, y: st.height + .55, sectorId: 'interior', active: true });
           li++;
         }
       }
@@ -963,22 +964,7 @@ export class KhaaosSim3D {
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
-    if (changed) this.#syncPhysicsWorld();
-    this.#stepDoors();
-  }
-  // Fase 25 — portas: quebra quando hp esgota (collider sai do mundo físico).
-  // HOTFIX pós-merge #185: vocabulário canônico é open/destroyed (o campo
-  // `active` não existe nas folhas — o sweep antigo nunca disparava).
-  #stepDoors() {
-    let changed = false;
-    for (const d of this.doors) {
-      if (d.destroyed) continue;
-      if (d.hp <= 0) {
-        d.destroyed = true; d.open = false; changed = true;
-        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
-      }
-    }
-    if (changed) this.#syncPhysicsWorld();
+    if (changed) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -1003,7 +989,7 @@ export class KhaaosSim3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
-    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.#syncPhysicsWorld(); }
+    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.syncPhysicsWorld(); }
     // Fase 25 — explosão estilhaça folhas no raio (mesma atenuação das gloo)
     for (const d of this.doors) {
       if (d.destroyed) continue;
@@ -1295,14 +1281,19 @@ export class KhaaosSim3D {
     if (!hitFlesh) {
       const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
       for (const d of this.doors) {
-        if (d.open || d.destroyed) continue; // vão livre: nada p/ arrebentar
         const box = doorBoxCollider(d);
-        if (!box) continue;
+        if (!box) continue; // aberta/destruída: não há folha para golpear
         const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
         if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
         const ang = Math.atan2(d.z - a.z, d.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
-        if (diff < 1.25) { this.#damageDoor(d, w.damage * DOOR.meleeMult, a.id); this.emit('doorHit', { id: d.id, x: d.x, z: d.z }); break; }
+        if (diff < 1.25) {
+          // caminho CANÔNICO de dano: #damageDoor flipa destroyed, emite
+          // doorDown e re-sincroniza o mundo físico (hp direto vaza estado)
+          this.#damageDoor(d, w.damage * DOOR.meleeMult, a.id);
+          this.emit('doorHit', { id: d.id, x: d.x, z: d.z });
+          break;
+        }
       }
     }
     this.emit('swing', { owner: a.id });
@@ -1631,7 +1622,7 @@ export class KhaaosSim3D {
     d.open = !d.open;
     d.cooldown = DOOR.toggleCooldown;
     this.emit('doorToggle', { id: d.id, open: d.open, x: d.x, z: d.z, y: d.yMin, owner: ownerId });
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     return true;
   }
   #damageDoor(d, dmg, ownerId) {
@@ -1640,7 +1631,7 @@ export class KhaaosSim3D {
     if (d.hp <= 0) {
       d.destroyed = true; d.open = false;
       this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, owner: ownerId ?? null });
-      this.#syncPhysicsWorld();
+      this.syncPhysicsWorld();
     }
   }
   #pickup(a, item) {
@@ -1741,7 +1732,7 @@ export class KhaaosSim3D {
         if (d) { d.open = !!sd.open; d.destroyed = !!sd.destroyed; d.hp = sd.hp ?? d.hp; d.cooldown = 0; }
       }
     }
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
   exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, operativeId: this.player.operativeId, tickRate: this.tickRate, inputs: this.replay }; }
