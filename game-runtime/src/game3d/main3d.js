@@ -680,9 +680,14 @@ export class Game3D {
     const panels = this.scene.userData.interiors?.doorPanels;
     if (!panels) return;
     for (const d of doors) {
-      const group = panels.get(d.id);
+      // FIX Fase 25/29 — o registry guarda o HANDLE da folha ({ pivot, leaf,
+      // broken... }); o grupo escondível é o PIVÔ (handle.pivot). Sem o ??,
+      // group.visible era undefined e o painel quebrado nunca sumia.
+      const handle = panels.get(d.id);
+      const group = handle?.pivot ?? handle;
       if (!group) continue;
-      const open = d.active === false || (Number.isFinite(d.hp) && d.hp <= 0);
+      // Fase 25/29 — contrato unificado: legado (active/hp) ou novo (destroyed)
+      const open = d.destroyed === true || d.active === false || (Number.isFinite(d.hp) && d.hp <= 0);
       if (open && group.visible) {
         group.visible = false;
         if (!this.doorBrokenFx.has(d.id)) {

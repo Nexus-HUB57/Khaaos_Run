@@ -359,9 +359,17 @@ export function doorwaysOf(layout, dressing) {
     out.push({
       id: `door-${spec.index}`,
       structIndex: spec.index,
+      index: spec.index, // FIX Fase 25/29 — alias de compatibilidade (testes e
+                         // consumidores legados leem .index; canônico é structIndex)
       kind: s.kind,
       x: +c.x.toFixed(3), z: +c.z.toFixed(3),
       yMin: s.yMin,
+      // FIX Fase 25/29 — campos legados que o refactor deixou de emitir:
+      // yMax (mira/pitch de tiro no painel), hw/hd (meia-extensão do vão p/
+      // doorCollider legado e HUD). doorBoxCollider continua canônico.
+      yMax: +(s.yMin + dh).toFixed(3),
+      hw: +(dw / 2).toFixed(3),
+      hd: +(T / 2).toFixed(3),
       w: dw, h: dh,
       nx, nz,
       hx: +hw.x.toFixed(3), hz: +hw.z.toFixed(3),
