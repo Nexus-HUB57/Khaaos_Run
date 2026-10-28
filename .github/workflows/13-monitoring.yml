@@ -62,7 +62,7 @@ jobs:
         run: |
           python3 - <<'EOF'
           import yaml, sys
-          with open('monitoring/prometheus.yml') as f:
+          with open('monitoring/prometheus/prometheus.yml') as f:
               cfg = yaml.safe_load(f)
           jobs = [j['job_name'] for j in cfg.get('scrape_configs', [])]
           assert 'khaaos-economy-api' in jobs, f"job khaaos-economy-api ausente: {jobs}"
