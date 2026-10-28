@@ -61,25 +61,42 @@ const [{ pool }, { Economy2PCService, ECONOMY_2PC_LEDGER_LINES }] = await Promis
 // ─── Bootstrap: mini-migrador idempotente ──────────────────────────────────
 
 async function applyMigrations(): Promise<void> {
-  await pool.query(
-    "CREATE TABLE IF NOT EXISTS _test_migrations_applied (tag text PRIMARY KEY, applied_at timestamptz DEFAULT now())",
-  );
-  const { rows } = await pool.query<{ tag: string }>("SELECT tag FROM _test_migrations_applied");
-  const applied = new Set(rows.map((r) => r.tag));
+  // Advisory lock (client DEDICADO: lock é por sessão — pool.query pode
+  // cair em conexões diferentes): o node --test roda os arquivos de teste
+  // EM PARALELO — sem o lock, duas suítes aplicam 0000_initial_schema ao
+  // mesmo tempo em um DB fresco e a segunda falha com "relation already
+  // exists" (bug latente que só aparece contra PostgreSQL real com DB novo;
+  // PGlite persistido mascarava).
+  const LOCK_KEY = 778811; // khaaos_test_migrations
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock($1)", [LOCK_KEY]);
+    try {
+      await client.query(
+        "CREATE TABLE IF NOT EXISTS _test_migrations_applied (tag text PRIMARY KEY, applied_at timestamptz DEFAULT now())",
+      );
+      const { rows } = await client.query<{ tag: string }>("SELECT tag FROM _test_migrations_applied");
+      const applied = new Set(rows.map((r) => r.tag));
 
-  const migrationsDir = join(process.cwd(), "migrations");
-  const files = readdirSync(migrationsDir)
-    .filter((f) => /^\d{4}_.*\.sql$/.test(f))
-    .sort();
+      const migrationsDir = join(process.cwd(), "migrations");
+      const files = readdirSync(migrationsDir)
+        .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+        .sort();
 
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = readFileSync(join(migrationsDir, file), "utf8");
-    const statements = sql.split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
-    for (const statement of statements) {
-      await pool.query(statement);
+      for (const file of files) {
+        if (applied.has(file)) continue;
+        const sql = readFileSync(join(migrationsDir, file), "utf8");
+        const statements = sql.split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
+        for (const statement of statements) {
+          await client.query(statement);
+        }
+        await client.query("INSERT INTO _test_migrations_applied (tag) VALUES ($1) ON CONFLICT DO NOTHING", [file]);
+      }
+    } finally {
+      await client.query("SELECT pg_advisory_unlock($1)", [LOCK_KEY]);
     }
-    await pool.query("INSERT INTO _test_migrations_applied (tag) VALUES ($1) ON CONFLICT DO NOTHING", [file]);
+  } finally {
+    client.release();
   }
 }
 
