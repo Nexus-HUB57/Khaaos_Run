@@ -347,12 +347,10 @@ export function createDistributed({
   const frozen = new Set(); // salas congeladas por perda de lease (owner_lost)
 
   async function heartbeat() {
-    // M4 — RENOVAÇÃO do registro de réplicas: sem isto, a entrada expira em
-    // ttlMs*2 (30 s no default) e o redirect cross-réplica começa a falhar
-    // (ownerOf → registry.lookup → null) mesmo com a réplica VIVA. O registro
-    // é renovado no mesmo cadencimento do heartbeat de leases — o playbook P3
-    // documenta exatamente esse modo de falha (redirect a dono vivo devolve
-    // null e o cliente cai em alocação nova).
+    // Registro de réplicas também é renovado no heartbeat: sem isso, uma
+    // réplica VIVA sumiria do registry quando TTL (2× lease) vencesse — o
+    // playbook P3 documenta exatamente esse modo de falha (redirect a dono
+    // vivo devolve null e o cliente cai em alocação nova).
     if (address && registry) {
       try { await registry.register(id, address, ttlMs * 2); } catch { /* rede oscilou: próxima passada */ }
     }
