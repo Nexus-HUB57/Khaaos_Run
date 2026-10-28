@@ -29,10 +29,12 @@ export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (
 
 // Fase 25 — portas funcionais/destrutíveis: MESMOS números na sim offline,
 // MatchRoom3D e predição (folha fechada colide; aberta balança sem colidir).
+
 // HOTFIX pós-merge #185: a resolução do conflito deixou DOIS `export const DOOR`
 // no módulo (SyntaxError — main não carregava). Unificação canônica: DOOR_MECH
 // (hp 130 + mech) + meleeMult 2.5 (o meleeMult vive SÓ aqui — contrato de
 // dano corpo-a-corpo na folha, usado pela sim e pelo room3d).
+
 export const DOOR = Object.freeze({ ...DOOR_MECH, meleeMult: 2.5 });
 
 // ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
@@ -473,9 +475,11 @@ export function glooCollider(wall) {
 }
 
 // ---------- Fase 25 — PORTA DESTRUTÍVEL ----------
+
 // AABB do PAINEL legado (formato hw/hd de interiorsPlan.doorPanelFor — ainda
 // usado pelos testes de geometria). O collider DINÂMICO da folha funcional da
 // Fase 25 é interiorsPlan.doorBoxCollider (nasce do vão de doorwaysOf).
+
 export function doorCollider(door) {
   return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
 }
@@ -552,7 +556,7 @@ export class KhaaosSim3D {
     this.bullets = []; this.nextBulletId = 1;
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
     // Fase 25 — folhas de porta (estado autoritativo): todas FECHADAS e íntegras
-    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: DOOR.hp, cooldown: 0 }));
+    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, active: true, hp: DOOR.hp, cooldown: 0 }));
     this.loot = this.#spawnLoot();
     this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
@@ -570,6 +574,8 @@ export class KhaaosSim3D {
   }
   // Reconcilia o mundo físico (colliders estáticos + gloo + folhas fechadas).
   // PÚBLICO de propósito: testes e harness re-sincronizam após mutar o mundo.
+  // (FIX Fase 25/29 — variante privada + alias duplicado unificados num único
+  // método público; chamador interno do gloo usa this.syncPhysicsWorld().)
   syncPhysicsWorld() {
     const active = this.walls.filter(w => w.active).map(glooCollider);
     // Fase 25 — folhas FECHADAS colidem (movimento/balas/LOS); abertas/destruídas não
@@ -825,6 +831,10 @@ export class KhaaosSim3D {
       });
       if (ev) this.#spawnSupplyDrop(ev);
     }
+    // Fase 25 — cooldown de toggle das folhas (anti-thrash de E/bot). FIX
+    // reconcile #192: o decay se perdeu no merge — sem ele a folha só oscila
+    // UMA vez por partida (cooldown fica preso em 0.6 para sempre).
+    for (const d of this.doors) if (d.cooldown > 0) d.cooldown = Math.max(0, d.cooldown - dt);
 
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
@@ -965,22 +975,8 @@ export class KhaaosSim3D {
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
     if (changed) this.syncPhysicsWorld();
-    // Fase 25 — sweep de folhas: hp ≤ 0 por QUALQUER caminho (balas/explosão
-    // via #damageDoor, ou mutação direta em testes/harness) => destroyed +
-    // doorDown + física sincronizada. #damageDoor flipa destroyed na hora,
-    // então este sweep nunca reemite doorDown duplicado.
-    this.#stepDoors();
-  }
-  #stepDoors() {
-    let changed = false;
-    for (const d of this.doors) {
-      if (d.destroyed) continue;
-      if (d.hp <= 0) {
-        d.destroyed = true; d.open = false; changed = true;
-        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
-      }
-    }
-    if (changed) this.syncPhysicsWorld();
+
+
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -1642,10 +1638,10 @@ export class KhaaosSim3D {
     return true;
   }
   #damageDoor(d, dmg, ownerId) {
-    if (d.destroyed) return;
+    if (d.destroyed || d.active === false) return;
     d.hp -= dmg;
     if (d.hp <= 0) {
-      d.destroyed = true; d.open = false;
+      d.destroyed = true; d.open = false; d.active = false;
       this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, owner: ownerId ?? null });
       this.syncPhysicsWorld();
     }
@@ -1727,7 +1723,7 @@ export class KhaaosSim3D {
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),
       grenades: this.grenades.map(g => ({ ...g })), walls: this.walls.map(w => ({ ...w })),
       // Fase 25 — estado das folhas de porta (aberta/fechada/destruída + hp)
-      doors: this.doors.map(d => ({ id: d.id, open: d.open, destroyed: d.destroyed, hp: Math.round(d.hp) })),
+      doors: this.doors.map(d => ({ id: d.id, open: d.open, destroyed: d.destroyed, hp: Math.round(d.hp), active: !d.open && !d.destroyed })),
       terminals: this.terminals.map(t => ({ ...t })), replayLength: this.replay.length };
   }
   applySnapshot(s) {
