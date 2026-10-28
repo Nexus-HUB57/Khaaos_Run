@@ -64,5 +64,33 @@ else
   fail "redis-replica não está em execução — topologia F17 (2 nós Redis reais) ausente do staging"
 fi
 
+# ── M4 — modo distribuído (KR_DISTRIBUTED=1): 2 réplicas de app com camada ───
+# de ownership/fencing ativa, identidades distintas e registro de réplicas no
+# Redis. Detecta o perfil: determinístico (app-a/app-b) ou escala livre (app N).
+echo "== 5. Modo distribuído: 2 réplicas de app + fencing + registro no Redis =="
+DISTRIBUTED_ENABLED=$(grep -c '^KR_DISTRIBUTED=1' .env 2>/dev/null || true)
+COMPOSE_2R="docker compose -f docker-compose.yml -f docker-compose.2replicas.yml"
+if [ "$DISTRIBUTED_ENABLED" != "0" ] || $COMPOSE_2R ps --status running 2>/dev/null | grep -q app-a; then
+  # Endpoints diretos por réplica (modo determinístico) — fallback: LB.
+  HA_A=$(curl -fsS "http://127.0.0.1:${KR_APP_A_PORT:-8081}/healthz" 2>/dev/null || true)
+  HA_B=$(curl -fsS "http://127.0.0.1:${KR_APP_B_PORT:-8082}/healthz" 2>/dev/null || true)
+  if [ -z "$HA_A" ] || [ -z "$HA_B" ]; then
+    fail "MODO 2 réplicas: app-a/app-b não responderam /healthz em 8081/8082"
+  fi
+  echo "$HA_A" | grep -q '"enabled":true' || fail "app-a sem camada distribuída ativa (KR_DISTRIBUTED=1 ausente?)"
+  echo "$HA_B" | grep -q '"enabled":true' || fail "app-b sem camada distribuída ativa (KR_DISTRIBUTED=1 ausente?)"
+  ID_A=$(echo "$HA_A" | grep -o '"replicaId":"[^"]*"' | cut -d'"' -f4)
+  ID_B=$(echo "$HA_B" | grep -o '"replicaId":"[^"]*"' | cut -d'"' -f4)
+  [ -n "$ID_A" ] && [ -n "$ID_B" ] && [ "$ID_A" != "$ID_B" ] || fail "identidades de réplica ausentes/iguais (A=$ID_A B=$ID_B)"
+  # Registro de réplicas no Redis (renovado por heartbeat — bug M4 corrigido).
+  REG_A=$(docker compose exec -T redis redis-cli GET "kr:replica:${ID_A}" 2>/dev/null || true)
+  REG_B=$(docker compose exec -T redis redis-cli GET "kr:replica:${ID_B}" 2>/dev/null || true)
+  [ -n "$REG_A" ] || fail "réplica ${ID_A} ausente do registro kr:replica:* no Redis"
+  [ -n "$REG_B" ] || fail "réplica ${ID_B} ausente do registro kr:replica:* no Redis"
+  echo "✅ modo distribuído ativo: ${ID_A} + ${ID_B} registradas no Redis (redirect cross-réplica pronto)"
+else
+  echo "ℹ️  KR_DISTRIBUTED não ativo no .env — single-node (assert de 2 réplicas pulado)"
+fi
+
 echo ""
 echo "✅ Staging verificado: dependências reais, gate de saturação, autoscaler alimentados e Redis HA."
