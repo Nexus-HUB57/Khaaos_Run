@@ -19,6 +19,8 @@
 #include "Game/Graphics/KhaaosOutlineRenderer.h"
 #include "Game/Graphics/KhaaosMobileGraphicsOptimizer.h"
 #include "Game/Graphics/KhaaosShaderQualityTiers.h"
+#include "Game/Graphics/KhaaosLUTTextureFactory.h"
+#include "Game/Graphics/KhaaosPostProcessLUTMaterial.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
@@ -173,21 +175,41 @@ void UKhaaosGraphicsPipelineManager::InitializePipeline()
         CompleteStage(EKhaaosPipelineStage::QUALITY_CALIBRATION, static_cast<float>(StageElapsed));
     }
 
-    // ── Estágio 4: LUT_COLOR_GRADE (v4 — color grading cinematográfico) ────
+    // ── Estágio 4: LUT_COLOR_GRADE (v5 — LUT procedural + PP material) ────
     {
         const double StageStart = FPlatformTime::Seconds();
+
+        // Inicializar fábrica procedural de LUTs (gera 5 texturas 32³ em ~2ms)
+        UKhaaosLUTTextureFactory* LUTFactory = GEngine->GetEngineSubsystem<UKhaaosLUTTextureFactory>();
+        if (LUTFactory)
+        {
+            UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] LUT Factory procedural inicializado (%d LUTs disponíveis)."),
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::PadraoBattle) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::NoiteNeon) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::NebulosaAlien) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::AmanhecerVenenoso) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::LowEndLeve));
+        }
 
         // Aplicar LUT de color grading para o mood do mundo
         if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
         {
+            // Diretor de LUT legacy (ainda ativo para compatibilidade)
             if (UKhaaosColorGradeLUTDirector* LUTDirector = PlayWorld->GetSubsystem<UKhaaosColorGradeLUTDirector>())
             {
                 const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
                 LUTDirector->ApplyLUTForMood(Mood, 0.5f);
             }
+
+            // Material PostProcess de LUT (v5 — integra factory procedural)
+            if (UKhaaosPostProcessLUTMaterial* LUTMaterial = PlayWorld->GetSubsystem<UKhaaosPostProcessLUTMaterial>())
+            {
+                const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
+                LUTMaterial->ApplyLUTMaterial(Mood, 0.8f);
+            }
         }
 
-        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] LUT de color grade configurado."));
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] LUT de color grade configurado (v5 — procedural + PP material)."));
 
         const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
         CompleteStage(EKhaaosPipelineStage::LUT_COLOR_GRADE, static_cast<float>(StageElapsed));
@@ -356,7 +378,17 @@ void UKhaaosGraphicsPipelineManager::OnQualityChanged()
     // Atualizar métricas
     CachedMetrics = GetPipelineMetrics();
 
-    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Reconfiguração completa (v4 — +ShaderTiers, +Mobile, +Outline)."));
+    // Re-aplicar LUT material (v5 — regenerar se necessário)
+    if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+    {
+        if (UKhaaosPostProcessLUTMaterial* LUTMaterial = PlayWorld->GetSubsystem<UKhaaosPostProcessLUTMaterial>())
+        {
+            const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
+            LUTMaterial->ApplyLUTMaterial(Mood, 0.3f);
+        }
+    }
+
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Reconfiguração completa (v5 — +LUTFactory, +PostProcessLUT, +ShaderTiers, +Mobile, +Outline)."));
 }
 
 // ─── Hot Reload ───────────────────────────────────────────────────────────────
