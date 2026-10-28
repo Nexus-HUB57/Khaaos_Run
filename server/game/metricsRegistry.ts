@@ -12,6 +12,15 @@
 //   khaaos_economy_2pc_escrows{status}            (gauge refrescado no scrape)
 //   khaaos_economy_2pc_oldest_prepared_age_seconds (gauge refrescado no scrape)
 //
+// Métricas macro da economia (refrescadas no scrape via PostgreSQL, mesmas
+// queries do dashboard: KRC supply, ledger double-entry, loans, tx por tipo):
+//   khaaos_economy_krc_circulating
+//   khaaos_economy_krc_earned_total / khaaos_economy_krc_spent_total
+//   khaaos_economy_transactions_total{tx_type}
+//   khaaos_economy_ledger_integrity_check
+//   khaaos_economy_loans_active / _created_total / _defaulted_total
+//   khaaos_economy_health_status
+//
 // Hand-rolled de propósito: zero deps novas, bundle enxuto e saída
 // determinística (labels ordenados) para testes de snapshot.
 
@@ -74,6 +83,17 @@ class CounterMetric {
   inc(labels: Labels = {}, value = 1): void {
     const key = labelKey(this.labelNames, labels);
     this.values.set(key, (this.values.get(key) ?? 0) + value);
+  }
+
+  /**
+   * Define o valor ABSOLUTO do counter a partir de fonte autoritativa
+   * (ex.: total acumulado no banco). Monotônico por natureza da fonte;
+   * usado nos counters macro da economia derivados do ledger.
+   */
+  setAbsolute(labels: Labels, value: number): void {
+    const key = labelKey(this.labelNames, labels);
+    const current = this.values.get(key) ?? 0;
+    if (value >= current) this.values.set(key, value);
   }
 
   render(): string {
@@ -212,14 +232,66 @@ class MetricsRegistry {
     "Idade do escrow PREPARED mais antigo (segundos; -1 = nenhum aberto)",
   );
 
+  // ── Economia macro (dashboard khaaos-economy) ──
+  readonly economyKrcCirculating = new GaugeMetric(
+    "khaaos_economy_krc_circulating",
+    "KRC em circulação (soma dos saldos bank_accounts)",
+  );
+  readonly economyKrcEarnedTotal = new CounterMetric(
+    "khaaos_economy_krc_earned_total",
+    "KRC acumulado creditado em wallets (ledger append-only, CREDIT em wallet.*)",
+  );
+  readonly economyKrcSpentTotal = new CounterMetric(
+    "khaaos_economy_krc_spent_total",
+    "KRC acumulado debitado de wallets (ledger append-only, DEBIT em wallet.*)",
+  );
+  readonly economyTransactions = new CounterMetric(
+    "khaaos_economy_transactions_total",
+    "Transações por tipo (tabela transactions)",
+    ["tx_type"],
+  );
+  readonly economyLedgerIntegrity = new GaugeMetric(
+    "khaaos_economy_ledger_integrity_check",
+    "Invariante double-entry do ledger (1 = toda operação balanceada, 0 = desbalanceada)",
+  );
+  readonly economyLoansActive = new GaugeMetric(
+    "khaaos_economy_loans_active",
+    "Empréstimos ativos (não pagos, dentro do prazo)",
+  );
+  readonly economyLoansCreatedTotal = new CounterMetric(
+    "khaaos_economy_loans_created_total",
+    "Total de empréstimos criados",
+  );
+  readonly economyLoansDefaultedTotal = new CounterMetric(
+    "khaaos_economy_loans_defaulted_total",
+    "Total de empréstimos em default (vencidos não pagos; snapshot do banco)",
+  );
+  readonly economyHealthStatus = new GaugeMetric(
+    "khaaos_economy_health_status",
+    "Saúde da economia (1 = ledger íntegro + queries OK, 0 = degradado)",
+  );
+
   constructor() {
-    this.counters.push(this.economy2pcRequests, this.economy2pcErrors, this.economy2pcGcRecovered);
+    this.counters.push(
+      this.economy2pcRequests,
+      this.economy2pcErrors,
+      this.economy2pcGcRecovered,
+      this.economyKrcEarnedTotal,
+      this.economyKrcSpentTotal,
+      this.economyTransactions,
+      this.economyLoansCreatedTotal,
+      this.economyLoansDefaultedTotal,
+    );
     this.gauges.push(
       this.up,
       this.buildInfo,
       this.uptimeSeconds,
       this.economy2pcEscrows,
       this.economy2pcOldestPreparedAge,
+      this.economyKrcCirculating,
+      this.economyLedgerIntegrity,
+      this.economyLoansActive,
+      this.economyHealthStatus,
     );
     this.histograms.push(this.economy2pcPhaseDuration);
 

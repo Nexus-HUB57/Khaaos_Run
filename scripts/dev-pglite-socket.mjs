@@ -58,7 +58,12 @@ const host = argValue("--host", "127.0.0.1");
 const dataDir = argValue("--data", undefined);
 
 const db = dataDir ? new PGlite(dataDir) : new PGlite();
-const server = new PGliteSocketServer({ db, port, host, maxConnections: 4 });
+const server = new PGliteSocketServer({
+  db,
+  port,
+  host,
+  maxConnections: Number(argValue("--max-connections", "4")),
+});
 
 await server.start();
 const version = (await db.query("SELECT version() AS v")).rows[0]?.v ?? "unknown";

@@ -43,11 +43,63 @@ async function refreshEscrowGauges(): Promise<void> {
   metricsRegistry.economy2pcOldestPreparedAge.set({}, ageSeconds);
 }
 
+/**
+ * Métricas macro da economia (painéis "Economy" do dashboard Grafana).
+ * Todas derivadas do ledger append-only / tabelas canônicas — mesmas
+ * verdades que o reconcile usa. Roda em paralelo e é resiliente: qualquer
+ * falha deixa o gauge em degradado (0/NaN seguro) sem quebrar o scrape.
+ */
+async function refreshEconomyMacroGauges(): Promise<void> {
+  const [krc, flow, txTypes, integrity, loans] = await Promise.all([
+    pool.query<{ circulating: string }>(
+      "SELECT COALESCE(SUM(weapons_balance + bonus_balance + fbm_balance), 0) AS circulating FROM bank_accounts",
+    ),
+    pool.query<{ side: string; total: string }>(
+      "SELECT side, COALESCE(SUM(amount_krc), 0) AS total FROM economy_ledger_entries WHERE account_code LIKE 'wallet.%' GROUP BY side",
+    ),
+    pool.query<{ tx_type: string; total: string }>(
+      "SELECT type AS tx_type, COUNT(*) AS total FROM transactions GROUP BY type",
+    ),
+    // Invariante double-entry: toda operação do ledger soma zero (DEBIT = CREDIT).
+    pool.query<{ unbalanced: string }>(
+      "SELECT COUNT(*) AS unbalanced FROM (SELECT operation_id FROM economy_ledger_entries GROUP BY operation_id HAVING SUM(CASE side WHEN 'DEBIT' THEN amount_krc ELSE -amount_krc END) <> 0) AS unbalanced_ops",
+    ),
+    pool.query<{ active: string; created: string; defaulted: string }>(
+      "SELECT COUNT(*) FILTER (WHERE is_paid = false AND days_remaining > 0) AS active, COUNT(*) AS created, COUNT(*) FILTER (WHERE is_paid = false AND days_remaining <= 0) AS defaulted FROM loans",
+    ),
+  ]);
+
+  metricsRegistry.economyKrcCirculating.set({}, Number(krc.rows[0]?.circulating ?? 0));
+
+  for (const row of flow.rows) {
+    if (row.side === "CREDIT") metricsRegistry.economyKrcEarnedTotal.setAbsolute({}, Number(row.total));
+    if (row.side === "DEBIT") metricsRegistry.economyKrcSpentTotal.setAbsolute({}, Number(row.total));
+  }
+  for (const row of txTypes.rows) {
+    metricsRegistry.economyTransactions.setAbsolute({ tx_type: row.tx_type }, Number(row.total));
+  }
+
+  const unbalanced = Number(integrity.rows[0]?.unbalanced ?? 0);
+  metricsRegistry.economyLedgerIntegrity.set({}, unbalanced === 0 ? 1 : 0);
+
+  metricsRegistry.economyLoansActive.set({}, Number(loans.rows[0]?.active ?? 0));
+  metricsRegistry.economyLoansCreatedTotal.setAbsolute({}, Number(loans.rows[0]?.created ?? 0));
+  metricsRegistry.economyLoansDefaultedTotal.setAbsolute({}, Number(loans.rows[0]?.defaulted ?? 0));
+
+  // Saúde composta: queries OK + ledger íntegro.
+  metricsRegistry.economyHealthStatus.set({}, unbalanced === 0 ? 1 : 0);
+}
+
+async function refreshAllGauges(): Promise<void> {
+  await refreshEscrowGauges();
+  await refreshEconomyMacroGauges();
+}
+
 async function refreshEscrowGaugesCached(): Promise<void> {
   if (Date.now() - lastEscrowRefreshAt < ESCROW_GAUGES_TTL_MS) return;
   lastEscrowRefreshAt = Date.now();
   try {
-    await refreshEscrowGauges();
+    await refreshAllGauges();
   } catch {
     // Banco indisponível: mantém último snapshot (ou série vazia) — o scrape
     // do Prometheus nunca deve falhar por causa dos gauges derivados.
