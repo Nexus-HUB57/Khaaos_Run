@@ -40,6 +40,11 @@ services:
       Scylla__ConnectionString: "Contact Points=scylla;Default Keyspace=unrealcloudddc"
       Scylla__LocalDatacenterName: datacenter1   # DC default do scylla single-node
       Scylla__LocalKeyspaceSuffix: khaaos        # exigido por [Required] no boot
+      # AuthSettings (BaseStartup.cs): com Enabled=false a validação de
+      # schemes não roda — modo staging igual ao default do chart
+      # (auth.enabled: false). Evidência de CI 5ª run: "You must have at
+      # least one scheme when authentication is enabled".
+      Auth__Enabled: "false"
     depends_on:
       - scylla
     restart: unless-stopped
