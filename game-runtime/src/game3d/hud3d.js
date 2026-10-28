@@ -132,7 +132,10 @@ export class HUD {
     $('#reloadHint').classList.toggle('visible', reloading || (!reloading && p.ammoMag === 0));
     $('#reloadHint').textContent = reloading ? 'RECARREGANDO…' : 'SEM MUNIÇÃO — [R]';
     // topo
-    const alive = s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0);
+    // M3 — AOI: com fan-out por área de interesse o array bots NÃO contém todos
+    // os vivos do ring; o snapshot traz aliveCount autoritativo — usa-o quando
+    // existir (online), mantém a contagem local no modo offline.
+    const alive = s.aliveCount ?? (s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0));
     $('#aliveValue').textContent = String(alive).padStart(2, '0');
     const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     $('#matchClock').textContent = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
