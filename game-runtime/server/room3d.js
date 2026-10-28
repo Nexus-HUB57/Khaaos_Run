@@ -14,7 +14,7 @@ import {
   WORLD, PLAYER_R, MATCH_TIME, PULSE_INTERVAL, WEAPONS3D, AMMO_CAP,
   FRAG, GLOO, DROP_START_Y, DBNO, BOT_COMBAT, DOOR,
   getWorldLayout, circlePushAabb, rayAabb, rayCharacter, stepActorMovement,
-  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement, doorCollider,
+  throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
 } from '../src/game3d/sim3d.js';
@@ -127,8 +127,10 @@ export class MatchRoom3D {
     this.bullets = [];
     this.grenades = [];        // Fase 4: granadas FRAG em voo
     this.walls = [];           // Fase 4: Gloo Walls ativas
-    // Fase 25: portas destrutíveis (painéis físicos nos vãos das cascas)
-    this.doors = (this.world.doors ?? []).map((d) => ({ id: d.id, index: d.index, x: d.x, z: d.z, rot: d.rot, kind: d.kind, hw: d.hw, hd: d.hd, yMin: d.yMin, yMax: d.yMax, hp: DOOR.hp, active: true }));
+    // Fase 25: portas destrutíveis — estado autoritativo único na init das
+    // folhas (mais abaixo); HOTFIX pós-merge #185 removeu a init morta que
+    // recriava as folhas com o vocabulário antigo hw/hd/index/active por
+    // cima das doorways (perdia w/h/nx/nz/horizontal — colliders NaN).
     this.nextBulletId = 1;
     this.nextThrowableId = 1;
     this.loot = [];
@@ -818,7 +820,7 @@ export class MatchRoom3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.syncPhysicsWorld();
+    this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe (TypeError no deploy da Gloo)
     // deploy é global (a parede é visível/replicada para todos)
     for (const h of this.humans.values()) {
       if (!h.alive) continue;
@@ -843,20 +845,22 @@ export class MatchRoom3D {
         }
       }
     }
-    if (changed) this.syncPhysicsWorld();
+    if (changed) this.#syncPhysicsWorld();
     this.#stepDoors();
   }
-  // Fase 25 — portas: quebra quando hp esgota (evento GLOBAL: painel é marco fixo)
+  // Fase 25 — portas: quebra quando hp esgota (evento GLOBAL: painel é marco fixo).
+  // HOTFIX pós-merge #185: vocabulário canônico é open/destroyed (o campo
+  // `active` não existe nas folhas — o sweep antigo nunca disparava).
   #stepDoors() {
     let changed = false;
     for (const d of this.doors) {
-      if (!d.active) continue;
+      if (d.destroyed) continue;
       if (d.hp <= 0) {
-        d.active = false; changed = true;
-        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, rot: d.rot });
+        d.destroyed = true; d.open = false; changed = true;
+        this.#emitAll('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, rot: d.rot });
       }
     }
-    if (changed) this.syncPhysicsWorld();
+    if (changed) this.#syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = this.#actors();
@@ -884,14 +888,10 @@ export class MatchRoom3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
-    // Fase 25 — granada desgasta PORTAS no raio
-    for (const d of this.doors) {
-      if (!d.active) continue;
-      const cx = clamp(g.x, d.x - d.hw, d.x + d.hw), cz = clamp(g.z, d.z - d.hd, d.z + d.hd);
-      const cy = clamp(g.y, d.yMin, d.yMax);
-      const dist = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
-      if (dist <= FRAG.radius) { d.hp -= FRAG.damage * (1 - dist / FRAG.radius) * 2; changed = true; }
-    }
+    // Fase 25 — granada desgasta PORTAS no raio: HOTFIX pós-merge #185 — o
+    // hunk antigo (vocabulário hw/hd/active em doorways → NaN) foi REMOVIDO;
+    // a quebra canônica da explosão vive no bloco de baixo (doorBoxCollider +
+    // #damageDoor, mesma atenuação das gloo).
     if (changed) {
       for (const w of this.walls) {
         if (w.active && w.hp <= 0) {
@@ -903,7 +903,7 @@ export class MatchRoom3D {
         }
       }
       this.#stepDoors();
-      this.syncPhysicsWorld();
+      this.#syncPhysicsWorld(); // HOTFIX pós-merge #185: forma pública não existe
     }
     // Fase 25 — explosão estilhaça folhas no raio (mesma atenuação das gloo)
     for (const d of this.doors) {
@@ -1220,16 +1220,22 @@ export class MatchRoom3D {
         }
       }
     }
-    // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real)
+    // Fase 25 — melee arrebenta PORTA (mesma regra da sim offline; ângulo real).
+    // HOTFIX pós-merge #185: o bloco antigo lia `d.active`/`d.hw`/`d.hd` —
+    // campos que não existem nas folhas (doorways) — e o melee NUNCA mais
+    // machucava porta no servidor. AABB canônica via doorBoxCollider + rota
+    // #damageDoor (doorDown global + física sincronizada).
     if (!hitFlesh) {
       const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
       for (const d of this.doors) {
-        if (!d.active) continue;
-        const cx = clamp(a.x, d.x - d.hw, d.x + d.hw), cz = clamp(a.z, d.z - d.hd, d.z + d.hd);
+        if (d.open || d.destroyed) continue; // vão livre: nada p/ arrebentar
+        const box = doorBoxCollider(d);
+        if (!box) continue;
+        const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
         if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
         const ang = Math.atan2(d.z - a.z, d.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
-        if (diff < 1.25) { d.hp -= w.damage * DOOR.meleeMult; this.#emitTo(a.id, 'doorHit', { id: d.id, x: d.x, z: d.z }); break; }
+        if (diff < 1.25) { this.#damageDoor(d, w.damage * DOOR.meleeMult, a.id); this.#emitTo(a.id, 'doorHit', { id: d.id, x: d.x, z: d.z }); break; }
       }
     }
     return true;
@@ -1671,8 +1677,10 @@ export class MatchRoom3D {
         isShrinking: this.ring.radius > this.ring.target,
         nextPhaseIn: Math.max(0, Math.round(PULSE_INTERVAL - this.pulseTimer)),
       },
-      // Fase 25 — estado das portas na TRANSMISSÃO (painel some quando quebrada)
-      doors: this.doors.map((d) => ({ id: d.id, hp: Math.round(d.hp), active: d.active })),
+      // Fase 25 — estado das portas na TRANSMISSÃO (painel some quando quebrada).
+      // HOTFIX pós-merge #185: `active` não existe nas folhas — o espectador
+      // via `active: undefined` (painel quebrado nunca sumia); deriva do estado.
+      doors: this.doors.map((d) => ({ id: d.id, hp: Math.round(d.hp), active: !(d.open || d.destroyed) })),
       // Fase 28 — eventos públicos + DANOs da transmissão intercalados por
       // tempo (o cliente deduplica pela chave type:timestamp).
       events: [...this.spectatorLog.slice(-20), ...this.spectatorDamageLog]
