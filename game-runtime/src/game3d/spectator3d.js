@@ -746,6 +746,9 @@ function createSpectatorGame(Game3D) {
       // espectador via fumaça/marcos congelados e nenhum tsunami/lava).
       const marksAnim = this.scene.userData.worldMarks?.animators;
       if (marksAnim) for (const fn of marksAnim) fn(dt, this.animT);
+      // Fase 22 — cenários vivos na TRANSMISSÃO (mesmo padrão dos marcos)
+      const dressingAnim = this.scene.userData.districtDressing?.animators;
+      if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
       this.survivalFX?.update(dt, this.animT);
       this.updateSpectatorCamera(dt);
       this.effects.update(dt);
