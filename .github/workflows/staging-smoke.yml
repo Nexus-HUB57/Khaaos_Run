@@ -164,7 +164,9 @@ jobs:
             echo "KR_DISTRIBUTED=${KR_DISTRIBUTED}"
             echo "KR_OWNERSHIP_TTL_MS=${KR_OWNERSHIP_TTL_MS}"
             echo "KR_REPLICA_URL=http://127.0.0.1:8080"
-            echo 'KR_USERS_JSON=[{"id":"u-smoke","username":"smoke","role":"player","region":"sa-east","passwordHash":"'"${SMOKE_HASH}"'"}]'
+            # ⚠️ single quotes EXTERNAS: o deploy.sh faz `source .env` — sem elas
+            # o bash consome as aspas do JSON e o boot crasha (crash loop 000/502).
+            echo "KR_USERS_JSON='[{\"id\":\"u-smoke\",\"username\":\"smoke\",\"role\":\"player\",\"region\":\"sa-east\",\"passwordHash\":\"${SMOKE_HASH}\"}]'"
           } >> .env
           grep -c '=' .env
 
