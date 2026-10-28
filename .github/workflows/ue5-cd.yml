@@ -54,6 +54,33 @@ jobs:
     name: Verify app before image delivery
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # coverage:official (test:official + test:eos-flow) e test:postgres exigem
+    # PostgreSQL REAL; game-runtime needs Redis para os testes de runtime.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: khaaos_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test_pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://test:test_pw@localhost:5432/khaaos_test
+      TEST_DATABASE_URL: postgresql://test:test_pw@localhost:5432/khaaos_test
+      NODE_ENV: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,6 +99,9 @@ jobs:
 
       - name: Install game runtime dependencies
         run: npm ci --prefix game-runtime --no-audit --no-fund
+
+      - name: Apply versioned database migrations
+        run: npm run db:migrate
 
       - name: Verify all application and runtime suites
         run: npm run verify:all

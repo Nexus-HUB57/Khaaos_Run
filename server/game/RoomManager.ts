@@ -529,7 +529,9 @@ class RoomManager {
         // join_code (a autorização de convite via túnel vem do hop de relay).
         if (msg.roomId && !requestedRoom) {
           const remote = await this.mesh.getRemoteRoom(msg.roomId).catch(() => null);
-          if (remote && !remote.isPrivate && this.gateway.relaySupported(remote.nodeId)) {
+          // ensureNodeKnown: leitura fresca do registro (mesma proteção da
+          // corrida de boot aplicada ao join por código).
+          if (remote && !remote.isPrivate && (await this.gateway.ensureNodeKnown(remote.nodeId))) {
             if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
           }
         }
@@ -1908,15 +1910,26 @@ class RoomManager {
       // neste nó e as mensagens são roteadas por nodeId ao dono da sala.
       // O join sintético carrega ra=1 (autorização do hop, validada AQUI
       // na origem contra índice + convite do mesh).
-      if (this.gateway.relaySupported(remote.nodeId)) {
+      // Consumo único do convite TAMBÉM no caminho cross-node (M1): sem
+      // isso o mesmo join_code poderia reabrir o túnel (replay).
+      const consumed = await this.mesh.consumeInvite(normalized, userId);
+      if (!consumed) {
+        this.send(ws, INVITE_JOIN_REJECTION);
+        return;
+      }
+      // ensureNodeKnown: leitura FRESCA do registro quando o cache ainda
+      // não conhece o alvo — elimina a corrida de boot (F16: join remoto
+      // chegando antes do primeiro heartbeat de 5 s do gateway).
+      if (await this.gateway.ensureNodeKnown(remote.nodeId)) {
         if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId, { inviteAuthorized: true })) return;
       }
+      const endpoint = await this.gateway.remoteNodeEndpoint(remote.nodeId).catch(() => null);
       this.send(ws, {
         type: "error",
         code: "ROOM_REMOTE_NODE",
         roomId: remote.id,
         nodeId: remote.nodeId,
-        endpoint: process.env.NODE_PUBLIC_URL ?? null,
+        endpoint: endpoint ?? process.env.NODE_PUBLIC_URL ?? null,
         message: "Este lobby está hospedado em outro nó; reconecte no endpoint indicado",
       });
       return;
