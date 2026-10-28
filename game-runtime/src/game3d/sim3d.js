@@ -922,7 +922,12 @@ export class KhaaosSim3D {
       const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
       if (dmg <= 0) continue;
       if (a.id === 'player') this.#hurtPlayer(dmg, g.owner, 'explosion');
-      else this.#damageBot(a, dmg, g.owner, false);
+      else {
+        this.#damageBot(a, dmg, g.owner, false);
+        // Fase 27 — número de dano da explosão (mesma gramática do hit de bala;
+        // o FX/áudio da explosão cobre o impacto — o consumo decide o que mostrar)
+        this.emit('hit', { x: a.x, y: a.y + 1, z: a.z, victim: a.id, head: false, damage: Math.round(dmg), owner: g.owner, kind: 'explosion' });
+      }
     }
     // granada desgasta gloo walls e PORTAS no raio
     let changed = false;
@@ -1199,7 +1204,9 @@ export class KhaaosSim3D {
         const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? 1.75 : 1);
         if (charHit.isPlayer) this.#hurtPlayer(dmg, b.owner, charHit.head ? 'headshot' : 'body');
         else this.#damageBot(charHit.ref, dmg, b.owner, charHit.head);
-        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg) });
+        // Fase 27 — `owner` identifica o atirador (números de dano/hitmarker
+        // só para acertos PRÓPRIOS; bot×bot deixa de vazar no marker).
+        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg), owner: b.owner });
         continue;
       }
       if (hitT < len) {
@@ -1329,7 +1336,8 @@ export class KhaaosSim3D {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
           this.player.xp += head ? 60 : 40; this.player.krc += 5;
-          this.emit('botKnocked', { target: bot.name, head, xp: head ? 60 : 40, krc: 5 });
+          // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
