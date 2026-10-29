@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- Fase 32 — vitrine dev (evidência visual): skins míticas por arma,
+     anexos por raridade (gasto→dourado) e grama com LOD de distância.
+     Serve via `npm run dev` em /scripts/f32-showcase.html — usa os módulos
+     REAIS do jogo (entities3d/attachments3d/vegetation3d). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F32 Showcase</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 2; text-shadow: 0 1px 2px #000; }
+  #hud b { color: #ffb52e; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 32</b><br />
+  fileira 1: skins MÍTICAS evolutivas (estágio 4) por arma · fileira 2: anexos COMUM→MÍTICO (gasto→dourado)<br />
+  chão: grama com LOD de distância (full &lt;28m · sparse 28-58m · oculta ≥58m)
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createWeaponModel } from '../src/game3d/entities3d.js';
+import { buildAttachmentMesh, MYTHIC_SKINS, ATTACHMENT_RARITY_TREATMENTS } from '../src/game3d/attachments3d.js';
+import { buildGrassFieldLOD, tickVegetationWind } from '../src/game3d/vegetation3d.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#101820');
+scene.fog = new THREE.Fog('#101820', 40, 140);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 400);
+
+const sun = new THREE.DirectionalLight('#fff3e0', 2.4);
+sun.position.set(14, 24, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+scene.add(sun, new THREE.AmbientLight('#9fb6c8', .85));
+
+// chão + grama com LOD real (mesma fábrica do jogo)
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: '#44513a', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+const spots = [];
+for (let i = 0; i < 2600; i++) {
+  const x = (Math.sin(i * 12.9898) * 43758.5453) % 1, z = (Math.cos(i * 78.233) * 12345.6789) % 1;
+  spots.push({ x: x * 90, z: z * 90, y: .02, rot: i % 6, s: .8 + (i % 5) * .12, sy: 1, tintJitter: (i % 10) / 10 });
+}
+const grassLOD = buildGrassFieldLOD({
+  spots, seed: 77, tintFamilies: ['#5a6b33', '#7a8443'],
+  chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
+  sway: { strength: .07, freq: 2.1, yScale: 1.1 },
+});
+scene.add(grassLOD.group);
+scene.userData.swayMats = [...grassLOD.mats];
+
+// fileira 1 — armas míticas (estágio 4), uma por skin do catálogo
+const weaponRow = new THREE.Group();
+weaponRow.position.set(-6.4, 1.15, 0);
+scene.add(weaponRow);
+const weaponIds = Object.keys(MYTHIC_SKINS);
+weaponIds.forEach((wid, i) => {
+  const { group } = createWeaponModel(wid, 'MITICA', { mythicStage: 4 });
+  group.scale.setScalar(2.6);
+  group.position.set(i * 3.2, 0, 0);
+  group.rotation.y = -.5;
+  weaponRow.add(group);
+});
+
+// fileira 2 — o MESMO anexo (mira 4x) nas 5 raridades + chip colorido
+const rarityRow = new THREE.Group();
+rarityRow.position.set(-6.4, .55, 2.6);
+scene.add(rarityRow);
+const rarities = Object.keys(ATTACHMENT_RARITY_TREATMENTS);
+rarities.forEach((rar, i) => {
+  const m = buildAttachmentMesh('mira4x', { rarity: rar });
+  m.scale.setScalar(3.4);
+  m.position.set(i * 2.6, 0, 0);
+  m.rotation.set(0, -.45, 0);
+  rarityRow.add(m);
+});
+rarities.forEach((rar, i) => {
+  const s = buildAttachmentMesh('silenciador', { rarity: rar });
+  s.scale.setScalar(3.4);
+  s.position.set(i * 2.6 + 13.2, 0, 0);
+  s.rotation.set(0, -.45, 0);
+  rarityRow.add(s);
+});
+
+const clock = new THREE.Clock();
+function tick() {
+  const t = clock.getElapsedTime();
+  if (!window.__f32?.freeze) {
+    weaponRow.children.forEach((g, i) => { g.rotation.y = -.5 + Math.sin(t * .5 + i) * .55; });
+    rarityRow.children.forEach((g, i) => { g.rotation.y = -.45 + Math.sin(t * .6 + i * .7) * .4; });
+    // câmera orbita o centro — a grama transita full→sparse→hidden no caminho
+    const a = t * .1;
+    camera.position.set(Math.sin(a) * 34, 9 + Math.sin(t * .23) * 2.5, Math.cos(a) * 34);
+    camera.lookAt(0, 1.2, 0);
+    grassLOD.update(camera.position.x, camera.position.z);
+    tickVegetationWind(scene, t);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+// gancho de evidência: posicionamento manual da câmera p/ screenshots
+window.__f32 = {
+  freeze: false,
+  shot(camPos, look = [0, 1.2, 0]) {
+    this.freeze = true;               // congela o tick p/ a captura
+    camera.position.set(...camPos);
+    camera.lookAt(...look);
+    grassLOD.update(camera.position.x, camera.position.z);
+    tickVegetationWind(scene, 2.5);
+    renderer.render(scene, camera);
+  },
+};
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

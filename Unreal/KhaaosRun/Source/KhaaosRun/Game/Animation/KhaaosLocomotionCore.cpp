@@ -320,6 +320,166 @@ namespace KhaaosLoco
         }
     }
 
+    namespace
+    {
+        // Local epsilon (kernel is pure C++ — no UE macros allowed here).
+        constexpr float LocoEpsilon = 1e-4f;
+    }
+
+    // ─── Distance matching & motion warping (Fase 32) ───────────────────
+
+    float PredictStopDistanceCm(float SpeedUu, float BrakingDecel)
+    {
+        if (!(SpeedUu > 0.0f) || !(BrakingDecel > 0.0f))
+        {
+            return 0.0f;
+        }
+        // v^2 / (2a) — constant-deceleration kinematics (cm).
+        return (SpeedUu * SpeedUu) / (2.0f * BrakingDecel);
+    }
+
+    float WarpPhaseForDistance(float BasePhase, float BaseDistanceCm,
+                               float DistanceToTargetCm, float WarpWindowFrac)
+    {
+        if (!(BaseDistanceCm > LocoEpsilon) || !(DistanceToTargetCm > 0.0f))
+        {
+            return ClampFloat(BasePhase, 0.0f, 1.0f);
+        }
+        if (!(WarpWindowFrac > 0.0f))
+        {
+            WarpWindowFrac = 0.0f;
+        }
+        // Stretch/compress the phase so the root covers the real distance.
+        const float Ratio = DistanceToTargetCm / BaseDistanceCm;
+        const float Lo = 1.0f - WarpWindowFrac;
+        const float Hi = 1.0f + WarpWindowFrac;
+        const float Scale = ClampFloat(Ratio, Lo, Hi);
+        const float Warped = BasePhase * Scale;
+        // Clamp to [0,1] after scaling; also keep inside the window band
+        // relative to BasePhase so the warp never rubber-bands backwards.
+        return ClampFloat(Warped, 0.0f, 1.0f);
+    }
+
+    float ChoosePivotFoot(float TurnDeg, bool bPrevLeft,
+                          float PivotFullWeightDeg, float PivotKeepDeg,
+                          bool& bOutLeft)
+    {
+        const float AbsTurn = (TurnDeg >= 0.0f) ? TurnDeg : -TurnDeg;
+        const float FullWeight = (PivotFullWeightDeg > 1.0f) ? PivotFullWeightDeg : 1.0f;
+        const float Keep = (PivotKeepDeg > 0.0f) ? PivotKeepDeg : 0.0f;
+
+        if (AbsTurn >= Keep)
+        {
+            // Turning right (+) crosses over the LEFT foot; turning left (-)
+            // crosses over the RIGHT foot (human cross-over turns).
+            bOutLeft = (TurnDeg > 0.0f);
+        }
+        else
+        {
+            // Hysteresis: small turns keep the previous pivot foot.
+            bOutLeft = bPrevLeft;
+        }
+
+        return ClampFloat(AbsTurn / FullWeight, 0.0f, 1.0f);
+    }
+
+    void UpdateDistanceMatching(const FKhaaosLocomotionConfig& Config,
+                                FKhaaosLocomotionState& State,
+                                const FKhaaosLocomotionInput& Input)
+    {
+        const float Dt = ClampFloat(Input.DeltaTime, 0.0f, 0.25f);
+        const bool bGrounded = !Input.bInAir;
+
+        // Accelerating (or airborne): track the peak speed and cancel any
+        // in-flight match (the phase eases back to 0 — never snaps).
+        if (!bGrounded || Input.RawSpeed > State.PeakStopSpeed + 1.0f)
+        {
+            State.PeakStopSpeed = Input.RawSpeed;
+            State.bStopMatching = false;
+            State.StopMatchPhase = SmoothFloat(State.StopMatchPhase, 0.0f,
+                                               Config.StopMatchSmoothing, Dt);
+        }
+
+        if (!bGrounded)
+        {
+            // In the air the predicted distance is meaningless — relax it.
+            State.StopDistanceCm = SmoothFloat(State.StopDistanceCm, 0.0f,
+                                               Config.StopMatchSmoothing, Dt);
+            return;
+        }
+
+        const float Predicted = PredictStopDistanceCm(Input.RawSpeed, Input.BrakingDecel);
+        State.StopDistanceCm = SmoothFloat(State.StopDistanceCm, Predicted,
+                                           Config.StopMatchSmoothing, Dt);
+
+        const bool bDecelerating = Input.ForwardAccel < -1.0f;
+        if (!State.bStopMatching && bDecelerating &&
+            State.PeakStopSpeed > Config.StopMatchMinSpeed)
+        {
+            // Decel just opened: capture the distance from the peak speed.
+            State.bStopMatching = true;
+            State.StopStartDistanceCm = PredictStopDistanceCm(State.PeakStopSpeed, Input.BrakingDecel);
+        }
+
+        if (State.bStopMatching)
+        {
+            const float Start = (State.StopStartDistanceCm > 1.0f) ? State.StopStartDistanceCm : 1.0f;
+            const float Remaining = PredictStopDistanceCm(Input.RawSpeed, Input.BrakingDecel);
+            const float Target = 1.0f - ClampFloat(Remaining / Start, 0.0f, 1.0f);
+            if (Input.RawSpeed <= Config.StopMatchArriveSpeed)
+            {
+                // Planted: hold the phase closed and clear the peak so the
+                // next acceleration is detected from zero.
+                State.StopMatchPhase = 1.0f;
+                State.bStopMatching = false;
+                State.PeakStopSpeed = 0.0f;
+            }
+            else
+            {
+                State.StopMatchPhase = SmoothFloat(State.StopMatchPhase, Target,
+                                                   Config.StopMatchSmoothing, Dt);
+            }
+        }
+    }
+
+    void UpdateAirPose(const FKhaaosLocomotionConfig& Config,
+                       FKhaaosLocomotionState& State,
+                       const FKhaaosLocomotionInput& Input)
+    {
+        const float Dt = ClampFloat(Input.DeltaTime, 0.0f, 0.25f);
+        float Target = 0.0f;
+        if (Input.bInAir)
+        {
+            const float Sat = (Config.AirPoseVelSaturation > 1.0f) ? Config.AirPoseVelSaturation : 1.0f;
+            // Rising (Vz > 0) → -1 (rising pose); falling (Vz < 0) → +1.
+            Target = ClampFloat(-Input.VerticalSpeed / Sat, -1.0f, 1.0f);
+        }
+        // Grounded: decays to 0 (LandRecovery owns the landing absorb).
+        State.AirPoseBlend = SmoothFloat(State.AirPoseBlend, Target,
+                                         Config.AirPoseSmoothing, Dt);
+        if (!(-1.0f <= State.AirPoseBlend && State.AirPoseBlend <= 1.0f))
+        {
+            State.AirPoseBlend = ClampFloat(State.AirPoseBlend, -1.0f, 1.0f);
+        }
+    }
+
+    void UpdatePivotFoot(const FKhaaosLocomotionConfig& Config,
+                         FKhaaosLocomotionState& State,
+                         const FKhaaosLocomotionInput& Input)
+    {
+        const float Dt = ClampFloat(Input.DeltaTime, 0.0f, 0.25f);
+        bool bLeft = State.bPivotFootLeft;
+        float Weight = 0.0f;
+        if (State.bTurningInPlace && Input.RawSpeed <= Config.StopMatchArriveSpeed)
+        {
+            Weight = ChoosePivotFoot(State.TurnYawOffsetDeg, State.bPivotFootLeft,
+                                     Config.PivotFullWeightDeg, Config.PivotKeepDeg, bLeft);
+        }
+        State.bPivotFootLeft = bLeft;
+        // Eased so the mirrored turn anims never pop when the turn ends.
+        State.PivotWeight = SmoothFloat(State.PivotWeight, Weight, 10.0f, Dt);
+    }
+
     void Step(const FKhaaosLocomotionConfig& Config,
               FKhaaosLocomotionState& State,
               const FKhaaosLocomotionInput& Input)
@@ -346,6 +506,11 @@ namespace KhaaosLoco
         UpdateBreath(Config, State, Input);
         UpdateHeadLook(Config, State, Input);
         UpdateFootIK(Config, State, Input);
+
+        // 3b) Distance matching, air pose & pivot foot (Fase 32).
+        UpdateDistanceMatching(Config, State, Input);
+        UpdateAirPose(Config, State, Input);
+        UpdatePivotFoot(Config, State, Input);
 
         // 4) Network smoothing for simulated proxies.
         State.NetworkSmoothedSpeed = SmoothFloat(State.NetworkSmoothedSpeed,

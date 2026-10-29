@@ -357,24 +357,104 @@ Stage Summary:
 - PRs #210 (duplicata F22/23) e #181 (gráficos UE5 + economy 2PC) mergeadas com reconciliação semântica; main re-verificado
 - Infra UE5.8/EAC pronta para destravar no instante em que os valores humanos chegarem — nenhum outro edit necessário
 
+================================================================================
+Task: Fase 32 — skins míticas evolutivas PARA O ARSENAL (não só AR-47) + variantes de anexos por raridade (visual gasto→dourado) + grama com LOD de distância
+
+Work Log:
+- attachments3d.js: MYTHIC_SKINS — catálogo mítico por arma (AR-47 rosa-caos herdado da F30 + M4 Sentinela de Éter ciano, MP5 Vaga-lume Urbano lima, Barrett Julgamento Orbital violeta, G19 Eco Espectral menta); fit por silhueta (escala/offset do overlay: pistola .55×, sniper 1.6×); mythicSkinFor() PURA; MYTHIC_SKIN vira alias da ar47 (compat F30)
+- attachments3d.js: ATTACHMENT_RARITY_TREATMENTS — 5 acabamentos por raridade (COMUM gasto fosco com risco de desgaste, INCOMUM ciano, RARO violeta, LENDARIO ouro fosco, MITICA ouro polido emissivo) + chip de raridade (rarityChip) por anexo; buildAttachmentMesh(id, {rarity}); applyAttachments(id, rarities) com attachmentRarityFor() aceitando mapa/array/string/null (retrocompatível); materiais memoizados POR TIER (zero leak)
+- entities3d.js: fábricas passam raridades + cor/fit da skin mítica da arma (mythicSkinFor) ao overlay — applyMythicSkin({color, fit})
+- sim3d.js: mítica GENERALIZADA (mythicStage = rarity MITICA && mythicSkinFor(id)) em players/bots/oficiais; attachmentRarities + attachmentBagRarities paralelos em pickup/troca/bolso/caixa de morte; kit de arma MÍTICA nasce dourado (anexos herdam a raridade); anexo avulso rola raridade própria (rollLoot)
+- gear3d.js: deathBoxContents preserva attachmentRarities (matou, herdou TUDO)
+- main3d.js: rig do player/bots com raridades + mythicColor por arma; toast do evento mythic com o NOME da skin; tick do LOD da grama (update da câmera 1×/frame)
+- hud3d.js: badge mítico em TODO o arsenal com cor da aura; faixa de anexos com chip de raridade (borda/brilho na cor do tier + tooltip)
+- vegetation3d.js: grassChunkify (chunks 25m, PURO) + grassChunkTier (full <28m / sparse 28-58m fração .4 / hidden ≥58m) + buildGrassFieldLOD (1 InstancedMesh por chunk, tint por instância, vento por shader, update O(chunks) só troca visible/count); world3d planta via LOD e registra scene.userData.grassLOD
+- Testes: +11 F32 (catálogo mítico, fit/aura por arma, raridade gasto→dourado com chip, attachmentRarityFor, applyAttachments com raridades, sim mítica da M4 evolui, ciclo bolso/troca/caixa preserva raridades, loot com raridade; chunkify/tier/LOD headless + buildScene W1-W4)
+- Evidências: artifacts/f32-*.png (vitrine dev scripts/f32-showcase.html + partida real ?scenario=Arukheea&view=tps com queda/pouso/HUD)
+
+Stage Summary:
+- As 4 armas com sockets (M4/MP5/Barrett/G19) agora têm skin mítica EVOLUTIVA com identidade própria — mesma régua de 4 estágios por abates da AR-47
+- Anexos nascem com RARIDADE visível (gasto→dourado + chip) que sobrevive a troca de arma, bolso e caixa de morte — grind de coleta FF completo
+- Grama com LOD de distância em chunks: densa perto, rarefeita no meio, invisível longe — ~95% dos chunks ocultos na origem (189 → ~10 draw calls de grama)
+- Suite: 824 testes — 811 pass / 0 fail / 13 skipped; vite build OK
+
+================================================================================
+Task: Fase 32 — VALIDAÇÃO END TO END (sessão de verificação, browser real)
+
+Work Log:
+- Suíte completa re-executada: 824 testes — 811 pass / 0 fail / 13 skip; vite build OK (2.35 s)
+- ?scenario=w4&view=tps ao vivo (Arukheea, seed CIGKV-3D-01): boot sem erros de página; modal ZU-01 → "SALTAR NO CAOS" → queda (sky→chute) → pouso; HUD/rádio/ring/minimapa operantes
+- Farol girando CONFIRMADO por medição: Δrotation.z/ΔanimT = 0.38 rad/s (exato = registro do spinner em districts3d.js). Causa-raiz esclarecida para leituras por tempo de parede: headless estrangula rAF (~1 fps) e o loop clampa dt em 0.1 s — por tempo de JOGO a rotação é 1:1 com o canônico. Evidência: f32-validate-w4-tps-farol.png
+- Grama LOD CONFIRMADA ao vivo: 80 chunks; 8 visíveis na origem (2 full + 6 sparse, 26 instâncias) → câmera +200 m: 3 → volta: 8 (só visible/count trocados). Evidência: f32-validate-grama-lod-close.png
+- Vitrine /scripts/f32-showcase.html ao vivo com módulos REAIS: 5 auras míticas (rosa/ciano/lima/violeta/menta) + chips de raridade gasto→dourado. Evidências: f32-validate-showcase-live.png, f32-validate-skins-miticas-close.png, f32-validate-anexos-raridade-close.png, f32-validate-anexos-fileira.png
+- Doc FASE32_SKINS_MITICAS_ANEXOS_RARIDADE_GRAMA_LOD.md: seção "Validação end to end" adicionada com método e números
+
+Stage Summary:
+- Fase 32 VERIFICADA end to end: implementação + testes + build + browser real com evidências — nada pendente na diretiva (skins míticas do arsenal, anexos por raridade, grama com LOD)
+- Nota de instrumentação registrada: distância/custo de render da grama e rotação do farol devem ser medidos por animT (tempo de jogo), não por tempo de parede, em ambientes headless
+
 ---
 Task ID: 15
 Agent: Main
-Task: Fase 32 — economia de sobrevivência dos bots (coleta de loot + cura + frag/gloo) + fix latente weaponId do loot interior (sim)
+Task: Fase 32 — Distance Matching + Motion Warping + Air Pose + Pé-Pivô (kernel de locomoção natural, continuação do anti-robotização M5)
 
 Work Log:
-- GAP DESCOBERTO EMPIRICAMENTE (sonda no código): a F25 fazia a patrulha mirar pontos de loot (34% dos waypoints), MAS a coleta (#interact) só era chamada via input.interact do JOGADOR — bots chegavam ao chão de loot, não pegavam NADA e lutavam com o loadout do spawn até morrer; medkit/frag/gloo do spawn (inventory medkit:1/frag:1/gloo:1) nunca eram usados (#useMedkit/#throwFrag/#deployGloo também eram exclusivos do input do jogador)
+- Estado de entrada: PR #215 (wiring automatizado dos assets NL — script do Editor + §7 da doc) mergeado em f4dfba6; main 22/22 workflows success; bateria local 805 game-runtime + 430/39 official + 49 checks natloco + 312 UHT verde
+- GAP: o Vault existia como estado FÍSICO (EMovementState) mas não havia distance matching, warping, blend de pose aérea nem escolha de pé-pivô — stops derrapavam no idle, saltos tinham pose única congelada, turn-in-place girava sem plantar o pé (última fronteira do "movimento robotizado")
+- KhaaosLocomotionCore (kernel puro, zero deps UE): (1) PredictStopDistanceCm — v²/2a sobre o braking real do CMC; (2) StopMatchPhase 0→1 pela distância restante com captura do pico de velocidade na abertura do freio, arrival abaixo de 10 uu/s (limpa o pico → próxima arrancada detectável), fase sempre suavizada (nunca snappa); (3) WarpPhaseForDistance — remapeia fase pela razão de distância, clampada à janela ±35% (sem rubber-band), NaN-safe; (4) ChoosePivotFoot — giro à direita cruza o pé ESQUERDO (human cross-over), histerese de 12°, peso linear até 55°; (5) AirPoseBlend — −1 subindo / 0 ápice / +1 caindo (sinal corrigido empiricamente no teste), saturação a 700 uu/s, decay a 0 no chão
+- Componente: amostra VerticalSpeed + BrakingDecelerationWalking do CMC; expõe StopDistanceCm/StopMatchPhase/AirPoseBlend/bPivotFootLeft/PivotWeight; registry de warp targets (SetWarpTarget/ClearWarpTargets/GetWarpTarget) com fase do vault distance-matched (0→1 exatamente na marca) e auto-release pós-chegada; tunables WarpBaseDistanceCm=150 / WarpWindowFrac=0.35
+- AnimInstances (Player + Species): novos UPROPERTYs espelhando os 8 outputs (com fallback honesto clamped sem componente — mesmo cálculo v²/2a e sinal correto do air pose)
+- BUGS PESCADOS PELO TESTE NOVO antes do push: sinal do air pose invertido (subida dava +1), PeakStopSpeed obsoleto pós-arrival (phase não resetava na arrancada), warp além da janela (clamp final em [0,1] é o contrato correto — teste ajustado)
+- Testes: tests/ue5/distance_match_test.cpp (38 checks standalone -Wall -Wextra -Werror -pedantic): cinemática 600→180cm/900→405cm quadrática, fase monótona e reset na arrancada, warp identidade/clamp/determinismo, pivô (direita→esquerdo, histerese, peso linear), air pose (saturação ±1, grounded→0, independência 60 vs 120 Hz), fuzz 600 frames sem NaN; registrado no test_ue5_logic.sh
+- Doc: NATURAL_LOCOMOTION.md — camadas 12-15, contrato §4 estendido (8 parâmetros novos), wiring §7.2 linhas 10-13 (distance-matched stop, Blend Poses by AirPoseBlend, turn espelhado por pivô, Motion Warping do vault), validação §7.3 checks 7-8 (parar na marca, vault em 100/150/190 cm)
+
+Stage Summary:
+- O ciclo de movimento humano completo agora é modelado no kernel: arrancada com lean, passada sincronizada, PARADA NA MARCA (distance matching), salto com subida/ápice/queda, pouso com absorção, giro plantando o pé-pivô e vault que cobre a distância real
+- Zero mudança de física/balística/netcode; tudo em cima do kernel determinístico já testado em CI
+- 87 checks standalone de locomoção (49 + 38) pinando o contrato anti-robotização
+
+---
+Task ID: 16
+Agent: Main
+Task: Fase 33 — WART A reparado (contrato de ids do loot na sim = room3d) + fumaça REAL na chaminé do caos + verificação dos itens do menu (FX marcos×mundos e wart B já entregues)
+
+Work Log:
+- Estado de entrada re-verificado contra a concorrência: token OK (HTTP 200), main avançou 12d87e2→f4dfba6→f05cdae durante a rodada (PRs #211-#216 de sessões paralelas); rebase do trabalho feito em cima de f05cdae com 1 conflito textual resolvido em #pickup (intenção deles: raridades de anexos; minha: ref de catálogo — SEMANTICAMENTE ortogonais)
+- VERIFICAÇÃO DO MENU (sem re-entrega): FX dos marcos × mundos (tsunami/lava) JÁ ENTREGUE na Fase 26 — SurvivalFX abastece registry.applyHazard(kind, boost, surfaceY) a cada frame (maré no anel oceânico, erupção da tocha, pilões, beacons), wired em main3d + spectator3d; morte por anomalia bypassa killfeed (wart B) JÁ REPARADA na Fase 30 (Task 13) — #finalizeDeath(a, null, 'quantum') nas 2 trilhas + test/environmental-death.test.js (re-verificado no main atual, linha 1624 do sim3d)
+- WART A (Task 12) REPARADO de verdade: o spread do drop DEPOIS do `id:` vencia o id de instância — 2 drops iguais COLIDIAM no Map do syncLoot (1 mesh p/ 2 instâncias: loot invisível no chão + remoção prematura quando 1 era coletada); e o loot interior (loot-i*/loot-m*, Fase 25/26) mantinha id canônico SEM ref de catálogo → #pickup caía no fallback g19 (arma interior virava pistola!) e inventava chaves de inventário ('loot-i0' no ammo)
+- sim3d #spawnLoot: toInstance único p/ GERAL + INTERIOR + MEZANINO — id canônico loot-N/i/m SEMPRE vence o spread; ref de catálogo migra p/ weaponId/ammoId/resourceId/attachmentId; nome de não-arma composto ('5.56 ×20'); campo cru 'weapon' (stats) NÃO serializa — mesmo contrato do room3d (paridade 1:1 das trilhas, snapshot/ws limpo)
+- sim3d #pickup: consome a REF com fallback `|| item.id` — bundles crus (deathBox/supplyDrop) e loot sintético de testes continuam no MESMO caminho; regra anti-rebaixamento do #grantBundle intata (g19 22 dmg RECUSA mp5 18, ACEITA m4 31 — provado nos 2 sentidos)
+- FUMAÇA REAL (fumaça/fendas do menu): smokecolumn do Barburhen (Industrial + Extração) — a voluta ESTÁTICA (cone 'plume' opacity .3 flutuando) saiu do builder; fumaça agora é REAL via emissor no pool compartilhado da Fase 26 (1 draw call): coluna cinza contínua com deriva térmica + brisa, cresce/clareia ao subir — mesma gramática da fumaça de fogueira/lavapatch; fendas de lava/rifts JÁ tinham partículas desde a F26 (brasas + motos do vazio — re-verificado)
+- Concorrência na rodada: sessões paralelas tomaram o nome "Fase 32" (skins míticas + validação browser + Distance Matching UE) — esta entrega renomeada F33 ANTES do PR; stash de sessão anterior (reparo parcial do wart A achado no worktree) adotado, estendido (interior/mezanino + pickup + fumaça) e commitado
+- Testes: game-runtime/test/loot-instance-contract.test.js (9 NOVOS — ids loot-N únicos em 8 seeds [regressão da colisão do syncLoot], ref certa por kind e campos irmãos vazios, nome composto, pickup de arma por weaponId [nunca g19], munição na chave do catálogo com teto AMMO_CAP, interior/mezanino no mesmo contrato, bundles nas 2 direções do anti-rebaixamento, drop duplicado coletável de forma independente, snapshot serializável sem stats crus) + district-dressing (plume=0 no grupo + pool vivo com partículas de fumaça após tick; Barburhen saiu da lista "sem fontes")
+- Pipeline completo: branch feat/game3d-fase33-loot-instance-contract-fumaca-real → PR #218 → CI 30 checks (25 success/5 skip/0 FAIL) → MERGE (d486429) → main re-verificada pós-merge (26 checks: 21 success/5 skip/0 FAIL)
+
+Stage Summary:
+- O loot da sim offline fala o MESMO idioma do servidor: id de instância canônico, referência de catálogo explícita, snapshot limpo — loot duplicado NÃO desaparece mais do chão e arma interior NÃO vira mais g19
+- A chaminé do caos fuma de verdade (partículas no pool compartilhado, custo ~0 por frame) — a última fumaça estática da arena saiu
+- Menu da rodada FECHADO com verificação honesta: 2 dos 3 itens já estavam entregues por fases anteriores (F26/F30) — re-entrega zero, reparo real no item que faltava
+- Suíte final no main: 840 testes — 827 pass / 0 fail / 13 skip; root official 0 fail; tsc 0; vite build ✓
+
+---
+Task ID: 15
+Agent: Main
+Task: Fase 32 — economia de sobrevivência dos bots (coleta de loot + cura + frag/gloo) [numerada 15 pelo caminho próprio; reconciliada com Task 16/F33 no merge — cronologia do merge prevalece]
+
+Work Log:
+- GAP DESCOBERTO EMPIRICAMENTE (sonda no código): a F25 fazia a patrulha mirar pontos de loot (34% dos waypoints), MAS a coleta (#interact) só era chamada via input.interact do JOGADOR — bots chegavam ao chão de loot, não pegavam NADA e lutavam com o loadout do spawn até morrer; medkit/frag/gloo do spawn nunca eram usados (#useMedkit/#throwFrag/#deployGloo também eram exclusivos do input do jogador)
 - F32 (sim3d.js): BOT_SURVIVAL exportado (sense 9 m, collect 2,6 m = #interact, yBand 2,2 m, lootCd 0,5 s, medkitBelow 45/medkitCd 5 s, frag banda 8-30 m/chance 0,34/cd 9+5 s, glooBelow 60/chance 0,5/cd 14+6 s); #botWantsItem (arma só se UPGRADE de dano — regra do #grantBundle; deathBox/supplyDrop sempre; consumível/frag/gloo com folga de cap; ammo/resource não); #botLootInterest (item vivo mais próximo vale a pena); #botSurvival no step (decrementa cds, coleta por proximidade, cura SEM alvo visível — cura sob fogo continua sendo do jogador —, frag/gloo no engage com rng da seed)
 - Atração em patrol/hunt APENAS (engage/resgate não interrompem): hook no #stepBot entre a escolha de tx/tz e o #doorRoute — loot dentro de cascas usa a MESMA rota de portas da F25
 - room3d.js: espelho 1:1 (mesmos BOT_SURVIVAL/mesmas regras); #botWantsItem da sala limitado ao que o #pickup local replica (weapon/consumable/armor/frag/gloo — sala não tem anexos/gear/deathBox)
-- PARIDADE DE INVENTÁRIO: bots regulares NÃO tinham slots/activeSlot/inventory/weaponAttachments/attachmentBag/attachStats (#pickup lançaria) — #spawnBot ganhou o kit completo (rng order PRESERVADO: consts hoisted na mesma sequência jx,jz,yaw,arma,cooldown); oficiais (#spawnOfficer) também ganharam inventory+slots
-- FIX LATENTE (contrato room3d): loot interior da sim clobberava o id de catálogo (loot-i* SEM weaponId) e a coleta caía no fallback g19 — sim3d #spawnLoot agora preserva weaponId (terreno+mezanino) e #pickup usa weaponId || id, igual à sala
+- PARIDADE DE INVENTÁRIO: bots regulares NÃO tinham slots/activeSlot/inventory/weaponAttachments/attachmentBag/attachStats (#pickup lançaria) — #spawnBot ganhou o kit completo (rng order PRESERVADO: consts hoisted na mesma sequência jx,jz,yaw,arma,cooldown); oficiais (#spawnOfficer) também ganharam inventory+slots; raridades de anexos (F32-skins) preservadas no merge
+- FIX weaponId: o mesmo gap foi corrigido em paralelo pela F33 (Task 16) com o contrato canônico toInstance() — NELE o merge adota a versão da F33 (superconjunto); o #botWantsItem da F32 já lê weaponId || id, compatível com os DOIS contratos
 - Ajuste de teste F27 (damage-numbers): cenário "1 hit nocauteia" precisava zerar o medkit do bot — com a economia nova o bot se CURA no step (comportamento canônico agora); contrato do teste (botKnocked traz victim id) intocado
-- Testes: test/bots-survival-fase32.test.js (12 NOVOS — coleta upgrade/anti-rebaixamento/consumíveis, cura fora de combate + NÃO cura com inimigo à vista, frag na banda útil, gloo de defesa, ENGAGE vence loot, paridade room3d coleta+cura, determinismo do spawn preservado, weaponId interior resolvido no catálogo, BOT_SURVIVAL pinado). Suíte: 830 testes — 817 pass / 0 fail / 13 skip; tsc 0; vite build OK
-- Pipeline: branch feat/game3d-fase32-economia-sobrevivencia → PR → CI → merge → main re-verificada
+- Testes: test/bots-survival-fase32.test.js (12 NOVOS — coleta upgrade/anti-rebaixamento/consumíveis, cura fora de combate + NÃO cura com inimigo à vista, frag na banda útil, gloo de defesa, ENGAGE vence loot, paridade room3d coleta+cura, determinismo do spawn preservado, weaponId interior resolvido no catálogo, BOT_SURVIVAL pinado)
+- ANOMALIA DE CI registrada: o push original NÃO gerou workflow runs no GitHub (degradação do gatilho — 0 runs em 2 pushes + close/reopen + commit vazio, enquanto main/F33 rodavam minutos antes/depois; mergeable stuck "unknown" 25+ min) — julgamento pela suíte local completa, precedente F30
+- RECONCILIAÇÃO com o main (2 merges concorrentes: F32-anim/skins #216 + F33-loot #218): sim3d.js em união semântica (spawn = consts hoisted da F32 + raridades da F32-skins + inventário da F32-economia; loot = toInstance da F33), worklog em união cronológica
+- Pipeline: branch feat/game3d-fase32-economia-sobrevivencia → PR #217 → merge → main re-verificada
 
 Stage Summary:
 - Bots agora VIVEM a economia do jogo como no Free Fire: desviam da patrulha para saquear, trocam para a arma melhor que acharem, curam fora de combate, arremessam frag na banda útil e armam gloo feridos sob fogo — nas duas trilhas, pelo mesmo #pickup/#useMedkit/#throwFrag/#deployGloo do jogador
-- Inventário de bots em paridade com oficiais/jogador (slots/inventory/anexos) — mortes deles agora carregam espólio completo nas caixas (F28 herda de graça)
-- Loot interior da sim resolve a ARMA certa (weaponId — contrato da sala); determinismo por seed intacto
+- Inventário de bots em paridade com oficiais/jogador (slots/inventory/anexos+raridades) — mortes deles agora carregam espólio completo nas caixas (F28 herda de graça)
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
+- Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK

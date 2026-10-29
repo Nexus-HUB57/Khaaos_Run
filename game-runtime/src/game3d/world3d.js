@@ -30,7 +30,7 @@ import { createLootMesh, createTerminalMesh } from './entities3d.js';
 // em cluster, tufos de grama curvados e vento por shader (vegetation3d).
 import {
   treeArchetypeFor, buildTreeField, buildBushField,
-  grassTuftGeometry, patchSway, tickVegetationWind,
+  buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
@@ -785,13 +785,15 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // 2 draw calls, gate por tier via q.lightFactor)
   buildLightShafts(scene, layout, scenario, interiors, q);
 
-  // ---- grama em TUFOS (Fase 31): 3 lâminas curvadas por tufo, plantio em
-  // clumps (moitas) e vento por shader — mata de produção, não carpete plano.
-  // Duas tonalidades por instância quebram a uniformidade (como antes).
+  // ---- grama em TUFOS com LOD de distância (Fase 31/32): 3 lâminas curvadas
+  // por tufo, plantio em clumps (moitas) e vento por shader — mata de
+  // produção. Fase 32: o campo é dividido em CHUNKS de 25m com 3 tiers pela
+  // distância da câmera — full (<28m), sparse (28-58m, fração .4) e hidden
+  // (>=58m, render 0). O plantio gera spots; buildGrassFieldLOD monta tudo.
   const bladeTex = grassBladeTexture();
   const GRASS = Math.max(240, Math.round(2300 * q.grassFactor));
   const seedRng = { s: 12345, next() { this.s = (this.s * 1103515245 + 12345) & 0x7fffffff; return this.s / 0x7fffffff; } };
-  const bladeList = []; // [x, z, rot, tint] — clumps de 6-14 tufos ao redor de um centro
+  const grassSpots = []; // {x,z,y,rot,s,sy,tintJitter} — clumps de 6-14 tufos
   let placed = 0, clumps = 0;
   while (placed < GRASS && clumps++ < GRASS * 2) {
     const cx = (seedRng.next() - .5) * 400, cz = (seedRng.next() - .5) * 400;
@@ -806,44 +808,27 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
         if (x > c.minX - 1 && x < c.maxX + 1 && z > c.minZ - 1 && z < c.maxZ + 1) { ok = false; break; }
       }
       if (!ok) continue;
-      bladeList.push([x, z, seedRng.next() * Math.PI, seedRng.next()]);
+      const rot = seedRng.next() * Math.PI;
+      const vr = seedRng.next();
+      const s = .7 + vr * .75;
+      // Fase 23 — grama acompanha o relevo (só muda além da área jogável)
+      grassSpots.push({
+        x, z, y: .04 + terrainHeightAt(x, z, scenario.id),
+        rot, s, sy: .85 + vr * .4, tintJitter: vr,
+      });
       placed++;
     }
   }
-  const tuftGeo = grassTuftGeometry({ seed: 77 });
   const grassTints = GRASS_TINTS[scenario.id] ?? GRASS_TINTS.CIGKV;
-  const dummy = new THREE.Object3D();
-  const grassTintCol = new THREE.Color();
-  grassTints.forEach((tintBase, half) => {
-    const grassMat = new THREE.MeshStandardMaterial({
-      map: bladeTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color: '#ffffff',
-    });
-    grassMat.map.needsUpdate = true;
+  const grassLOD = buildGrassFieldLOD({
+    spots: grassSpots, seed: 77, texture: bladeTex, tintFamilies: grassTints,
+    chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
     // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
-    patchSway(grassMat, { strength: .07, freq: 2.1, yScale: 1.1 });
-    const cap = Math.ceil(bladeList.length / 2);
-    const grass = new THREE.InstancedMesh(tuftGeo, grassMat, Math.max(1, cap));
-    let gi = 0;
-    for (let i = half; i < bladeList.length; i += 2) {
-      const [x, z, rot, vr] = bladeList[i];
-      const s = .7 + vr * .75;
-      // Fase 23 — grama acompanha o relevo (só muda além da área jogável)
-      dummy.position.set(x, .04 + terrainHeightAt(x, z, scenario.id), z);
-      dummy.rotation.set(0, rot, 0);
-      dummy.scale.set(s, s * (.85 + vr * .4), s);
-      dummy.updateMatrix();
-      grass.setMatrixAt(gi, dummy.matrix);
-      // variação de tint por tufo (mezcla as 2 famílias de cor do mundo)
-      grassTintCol.set(tintBase).offsetHSL((vr - .5) * .015, 0, (vr - .5) * .1);
-      grass.setColorAt(gi, grassTintCol);
-      gi++;
-    }
-    grass.count = gi;
-    if (grass.instanceColor) grass.instanceColor.needsUpdate = true;
-    grass.computeBoundingSphere?.();
-    scene.add(grass);
-    (scene.userData.swayMats ??= []).push(grassMat);
+    sway: { strength: .07, freq: 2.1, yScale: 1.1 },
   });
+  scene.add(grassLOD.group);
+  (scene.userData.swayMats ??= []).push(...grassLOD.mats);
+  scene.userData.grassLOD = grassLOD; // main3d chama update(camX, camZ) 1×/frame
 
   // ---- loot visual ----
   const lootGroup = new THREE.Group();

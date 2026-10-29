@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import {
   ATTACHMENTS, ATTACH_SOCKETS, attachmentStats,
   buildAttachmentMesh, applyAttachments, applyMythicSkin,
+  MYTHIC_SKINS, mythicSkinFor, ATTACHMENT_RARITY_TREATMENTS, attachmentRarityFor,
   mythicStageFromKills, MYTHIC_SKIN, MYTHIC_STAGE_NAMES,
   registerMythic, unregisterMythic, tickMythicWeapons,
 } from '../src/game3d/attachments3d.js';
@@ -355,4 +356,201 @@ test('F30 · sim: abate com a skin MÍTICA evolui o estágio e emite evento', ()
   const stages = events.map((e) => e.stage);
   assert.ok(stages.includes(2) && stages.includes(3) && stages.includes(4), `eventos de evolução: ${stages}`);
   assert.ok(events.every((e) => MYTHIC_STAGE_NAMES.includes(e.name)));
+});
+
+// ==================================================== Fase 32 ============
+// SKINS MÍTICAS POR ARMA + ANEXOS POR RARIDADE (visual gasto→dourado)
+
+test('F32 · catálogo mítico cobre o arsenal com sockets; identidade própria por arma', () => {
+  for (const wid of ['ar47', 'm4', 'mp5', 'barrett', 'g19']) {
+    const def = mythicSkinFor(wid);
+    assert.ok(def, `${wid}: skin mítica ausente`);
+    assert.equal(def.id, 'MITICA');
+    assert.equal(def.stages, 4);
+    assert.ok(/^#[0-9a-f]{6}$/i.test(def.aura), `aura hex: ${def.aura}`);
+    assert.ok(def.fit && def.fit.scale > 0, `${wid}: fit presente`);
+  }
+  // auras únicas — leitura de identidade à distância
+  const auras = Object.values(MYTHIC_SKINS).map((d) => d.aura);
+  assert.equal(new Set(auras).size, auras.length, 'auras devem ser únicas');
+  // armas sem skin mítica
+  assert.equal(mythicSkinFor('sucata'), null);
+  assert.equal(mythicSkinFor('pulse'), null);
+  // alias legado intacto (F30) + fit por silhueta (pistola menor, sniper maior)
+  assert.equal(MYTHIC_SKIN, MYTHIC_SKINS.ar47);
+  assert.equal(MYTHIC_SKINS.ar47.name, 'AR-47 · Fúria Primordial');
+  assert.ok(MYTHIC_SKINS.g19.fit.scale < MYTHIC_SKINS.ar47.fit.scale);
+  assert.ok(MYTHIC_SKINS.barrett.fit.scale > MYTHIC_SKINS.ar47.fit.scale);
+});
+
+test('F32 · overlay mítico respeita o fit por arma e a cor da aura (fábrica → overlay)', () => {
+  for (const [wid, def] of Object.entries(MYTHIC_SKINS)) {
+    const { group } = createWeaponModel(wid, 'MITICA', { mythicStage: 4 });
+    const fx = group.getObjectByName('mythic_fx');
+    assert.ok(fx, `${wid}: overlay mítico ausente`);
+    assert.equal(group.userData.mythicStage, 4);
+    assert.ok(Math.abs(fx.scale.x - def.fit.scale) < 1e-6, `${wid}: fit.scale aplicado`);
+    assert.ok(Math.abs(fx.position.z - def.fit.z) < 1e-6, `${wid}: fit.z aplicado`);
+    const rune = fx.children.find((c) => c.material?.name === 'mythicRune');
+    assert.ok(rune, `${wid}: runa presente`);
+    assert.equal(rune.material.color.getHexString(), def.aura.slice(1).toLowerCase(), `${wid}: aura da skin própria`);
+    unregisterMythic(group);
+  }
+});
+
+test('F32 · anexo por raridade: acabamento gasto→dourado + chip de raridade', () => {
+  const treatments = ATTACHMENT_RARITY_TREATMENTS;
+  assert.equal(Object.keys(treatments).length, 5);
+  // os 4 anexos aceitam as 5 raridades — malha sempre completa com chip
+  for (const id of Object.keys(ATTACHMENTS)) {
+    for (const rarity of Object.keys(treatments)) {
+      const m = buildAttachmentMesh(id, { rarity });
+      assert.equal(m.userData.rarity, rarity);
+      assert.ok(m.getObjectByName('rarityChip'), `${id}/${rarity}: chip ausente`);
+    }
+  }
+  const worn = buildAttachmentMesh('mira4x', { rarity: 'COMUM' });
+  const gold = buildAttachmentMesh('mira4x', { rarity: 'MITICA' });
+  const std = buildAttachmentMesh('mira4x', { rarity: 'INCOMUM' });
+  assert.equal(buildAttachmentMesh('mira4x', { rarity: 'BOGUS' }).userData.rarity, 'INCOMUM');
+  // COMUM GASTO: material fosco/escurecido + risco de desgaste extra
+  const tubeWorn = worn.children[0];
+  assert.ok(tubeWorn.material.roughness > .8, `gasto é fosco (${tubeWorn.material.roughness})`);
+  assert.ok(worn.children.length > std.children.length, 'gasto carrega detalhe de desgaste');
+  // MITICA DOURADA: corpo polido + chip brilhando mais que o do gasto
+  const tubeGold = gold.children[0];
+  assert.ok(tubeGold.material.metalness > .9, `mítica é metal polido (${tubeGold.material.metalness})`);
+  const chipWorn = worn.getObjectByName('rarityChip');
+  const chipGold = gold.getObjectByName('rarityChip');
+  assert.ok(chipGold.material.emissiveIntensity > chipWorn.material.emissiveIntensity, 'chip mítico brilha mais');
+  // escalada de metal por tier (RARO < LENDARIO < MITICA)
+  assert.ok(treatments.RARO.metal < treatments.LENDARIO.metal);
+  assert.ok(treatments.LENDARIO.metal < treatments.MITICA.metal);
+});
+
+test('F32 · attachmentRarityFor resolve mapa/array/string/null (PURO)', () => {
+  assert.equal(attachmentRarityFor(null, 'mira4x'), 'INCOMUM');
+  assert.equal(attachmentRarityFor(undefined, 'mira4x'), 'INCOMUM');
+  assert.equal(attachmentRarityFor('LENDARIO', 'mira4x'), 'LENDARIO');
+  assert.equal(attachmentRarityFor('BOGUS', 'mira4x'), 'INCOMUM');
+  assert.equal(attachmentRarityFor(['RARO', 'MITICA'], 'magestendida', 1), 'MITICA');
+  assert.equal(attachmentRarityFor(['RARO', 'MITICA'], 'magestendida', 9), 'INCOMUM');
+  assert.equal(attachmentRarityFor({ silenciador: 'COMUM' }, 'silenciador'), 'COMUM');
+  assert.equal(attachmentRarityFor({ silenciador: 'COMUM' }, 'mira4x'), 'INCOMUM');
+});
+
+test('F32 · applyAttachments monta raridades (array/mapa) nos sockets; sem raridades = INCOMUM', () => {
+  const g1 = createWeaponModel('m4', null, {}).group;
+  const applied = applyAttachments(g1, ['mira4x', 'silenciador'], ['COMUM', 'MITICA']);
+  assert.equal(applied.length, 2);
+  assert.equal(g1.userData.sockets.optic.children[0].userData.rarity, 'COMUM');
+  assert.equal(g1.userData.sockets.muzzle.children[0].userData.rarity, 'MITICA');
+  const g2 = createWeaponModel('ar47', null, {}).group;
+  applyAttachments(g2, ['gripvertical', 'magestendida'], { gripvertical: 'RARO', magestendida: 'LENDARIO' });
+  assert.equal(g2.userData.sockets.grip.children[0].userData.rarity, 'RARO');
+  assert.equal(g2.userData.sockets.mag.children[0].userData.rarity, 'LENDARIO');
+  const g3 = createWeaponModel('mp5', null, {}).group;
+  applyAttachments(g3, ['mira4x']);
+  assert.equal(g3.userData.sockets.optic.children[0].userData.rarity, 'INCOMUM');
+});
+
+test('F32 · sim: skin MÍTICA da M4 evolui por abate (evento carrega a arma)', () => {
+  const s = new KhaaosSim3D({ seed: 'F32-MIT-M4', botCount: 1, airdrop: false });
+  s.start('belt');
+  const p = s.player, bot = s.bots[0];
+  s.world.colliders.length = 0; s.doors.length = 0;
+  s.physicsWorld.colliders = s.world.colliders;
+  p.weapon = 'm4'; p.weaponSkin = 'MITICA'; p.mythicKills = 0; p.mythicStage = 1;
+  p.ammoMag = 45; p.attachStats = { magBonus: 15, spreadMul: 1, adsZoom: 1, rangeMul: 1, silenced: false };
+  const events = [];
+  for (let k = 1; k <= 2; k++) {
+    bot.x = 0; bot.z = -10; bot.y = 0; bot.alive = true; bot.knocked = false; bot.life = 1;
+    bot.armor = 0;
+    p.x = 0; p.z = 0; p.yaw = 0;
+    let killed = false;
+    for (let i = 0; i < 30 * 6 && !killed; i++) {
+      const yaw = Math.atan2(-(bot.x - p.x), -(bot.z - p.z));
+      const pitch = Math.atan2((bot.y + 1.1) - (p.y + 1.55), Math.hypot(bot.x - p.x, bot.z - p.z));
+      s.step({ ...idle(yaw, pitch), fire: true }, STEP);
+      killed = !bot.alive;
+    }
+    assert.ok(killed, `abate ${k} deveria concluir`);
+    events.push(...s.consumeEvents().filter((e) => e.type === 'mythic'));
+  }
+  assert.equal(p.mythicKills, 2);
+  assert.equal(p.mythicStage, 2, '2 abates = estágio 2 (mesma régua da AR-47)');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].weapon, 'm4', 'evento identifica a arma mítica');
+  assert.equal(events[0].stage, 2);
+});
+
+test('F32 · sim: kit de arma MÍTICA nasce dourado; troca/bolso/caixa preservam raridades', () => {
+  const s = new KhaaosSim3D({ seed: 'F32-RAR', botCount: 0, airdrop: false });
+  s.start('belt');
+  const p = s.player;
+  s.loot.length = 0; // isolamento: só o loot sintético existe no mundo
+  s.loot.push({ id: 'm4', kind: 'weapon', name: 'Fuzil M4', rarity: 'MITICA',
+    attachments: ['mira4x', 'silenciador'], x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.equal(p.weapon, 'm4');
+  assert.equal(p.mythicStage, 1, 'mítica da M4 começa no estágio 1');
+  assert.deepEqual(p.attachmentRarities, ['MITICA', 'MITICA'], 'kit de arma mítica nasce dourado');
+  // troca de slot: g19 é compatível com mira4x/silenciador → o bolso
+  // REINSTALA na hora (comportamento F30 "bolso preenche sockets livres"),
+  // e as raridades viajam em paralelo na reinstalação
+  s.loot.length = 0;
+  s.loot.push({ id: 'g19', kind: 'weapon', name: 'Pistola', rarity: 'COMUM', x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.equal(p.weapon, 'g19');
+  assert.deepEqual(p.weaponAttachments, ['mira4x', 'silenciador'], 'bolso reinstala em arma compatível');
+  assert.deepEqual(p.attachmentRarities, ['MITICA', 'MITICA'], 'raridades preservadas na reinstalação');
+  assert.deepEqual(p.attachmentBag, []);
+  assert.equal(p.mythicStage, 0, 'evolução pertence à instância coletada (g19 não-mítica)');
+  // anexo avulso com raridade própria (loot rolou a tier) — mag da g19 livre
+  s.loot.length = 0;
+  s.loot.push({ id: 'magestendida', kind: 'attachment', name: 'Mag Estendida', rarity: 'RARO', x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.deepEqual(p.weaponAttachments, ['mira4x', 'silenciador', 'magestendida']);
+  assert.deepEqual(p.attachmentRarities, ['MITICA', 'MITICA', 'RARO']);
+  // grip vertical NÃO é compatível com pistola → vai para o BOLSO com tier
+  s.loot.length = 0;
+  s.loot.push({ id: 'gripvertical', kind: 'attachment', name: 'Empunhadura Vertical', rarity: 'LENDARIO', x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.deepEqual(p.weaponAttachments, ['mira4x', 'silenciador', 'magestendida']);
+  assert.deepEqual(p.attachmentBag, ['gripvertical']);
+  assert.deepEqual(p.attachmentBagRarities, ['LENDARIO']);
+  // volta pra M4 (nova coleta): anexos em mão vão ao bolso e o bolso inteiro
+  // reinstala — raridades paralelas preservadas ponta a ponta
+  s.loot.length = 0;
+  s.loot.push({ id: 'm4', kind: 'weapon', name: 'Fuzil M4', rarity: 'COMUM', x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.equal(p.weapon, 'm4');
+  const rarMap = Object.fromEntries(p.weaponAttachments.map((a, i) => [a, p.attachmentRarities[i]]));
+  assert.deepEqual(p.weaponAttachments.sort(), ['gripvertical', 'magestendida', 'mira4x', 'silenciador'].sort(), 'bolso reinstalla tudo na M4');
+  assert.equal(rarMap.mira4x, 'MITICA', 'raridade preservada na reinstalação');
+  assert.equal(rarMap.gripvertical, 'LENDARIO');
+  assert.equal(rarMap.magestendida, 'RARO');
+  assert.deepEqual(p.attachmentBag, [], 'bolso esvazia ao reinstalar');
+  // caixa de morte herda anexos E raridades em paralelo (matou, herdou TUDO)
+  const items = deathBoxContents(s.rng, {
+    weapon: 'ar47', weaponSkin: 'LENDARIO', attachments: ['mira4x', 'silenciador'],
+    attachmentRarities: ['RARO', 'COMUM'], ammoId: '7.62', ammoReserve: 30,
+  });
+  const wb = items.find((i) => i.kind === 'weapon');
+  assert.deepEqual(wb.attachments, ['mira4x', 'silenciador']);
+  assert.deepEqual(wb.attachmentRarities, ['RARO', 'COMUM']);
+});
+
+test('F32 · loot: anexo avulso nasce com raridade válida da tabela central', () => {
+  const rng = new SeededRng('F32-LOOT');
+  let saw = 0;
+  for (let i = 0; i < 60; i++) {
+    for (const d of rollLoot(rng, 'armory', 12)) {
+      if (d.kind === 'attachment') {
+        assert.ok(RARITIES[d.rarity], `raridade válida: ${d.rarity}`);
+        saw++;
+      }
+    }
+  }
+  assert.ok(saw > 0, 'anexos avulsos aparecem no pool com raridade');
 });

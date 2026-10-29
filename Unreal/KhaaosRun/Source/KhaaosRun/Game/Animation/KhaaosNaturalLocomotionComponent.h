@@ -151,6 +151,58 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
     float NetworkSmoothedSpeed = 0.0f;
 
+    // ─── Distance matching / air pose / pivot (Fase 32) ──────────────────
+
+    /** Predicted stopping distance from the current speed (cm). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float StopDistanceCm = 0.0f;
+
+    /** Distance-matched stop phase (0 = decel start, 1 = planted & stopped). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float StopMatchPhase = 0.0f;
+
+    /** Air pose blend: -1 = rising pose, 0 = apex, +1 = falling pose. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float AirPoseBlend = 0.0f;
+
+    /** True when the turn-in-place pivots on the LEFT foot (else right). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    bool bPivotFootLeft = false;
+
+    /** Pivot weight 0..1 for mirrored turn-in-place anims. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float PivotWeight = 0.0f;
+
+    /** True while a vault warp target is registered (Motion Warping). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    bool bHasVaultTarget = false;
+
+    /** Distance-matched vault phase (0..1, reaches 1 at the warp target). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float VaultWarpPhase = 0.0f;
+
+    /** Vault warp scale = distance ratio vs the base clip (clamped by window). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float VaultWarpScale = 1.0f;
+
+    // ─── Motion warp targets (Fase 32) ───────────────────────────────────
+
+    /**
+     * Register a named warp target (Motion Warping). The vault phase/scale
+     * outputs follow the target named VaultWarpTargetName. Safe to call
+     * repeatedly (updates the transform).
+     */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim|Natural")
+    void SetWarpTarget(FName Name, const FTransform& Target);
+
+    /** Clear every registered warp target. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim|Natural")
+    void ClearWarpTargets();
+
+    /** True + transform if a warp target with this name is registered. */
+    UFUNCTION(BlueprintPure, Category = "Khaaos|Anim|Natural")
+    bool GetWarpTarget(FName Name, FTransform& OutTarget) const;
+
     // ─── Footstep sync ───────────────────────────────────────────────────
 
     /** Fires on every procedural foot plant (alternating feet). */
@@ -170,6 +222,18 @@ public:
     /** Beyond this distance (cm) from the local viewer, traces stop. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
     float AnimLODFarDistanceCm = 5000.0f;
+
+    /** Base root distance (cm) of the vault clip used by the warp scale. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    float WarpBaseDistanceCm = 150.0f;
+
+    /** Max warp stretch/compress fraction (0.35 = ±35% of the base clip). */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Natural", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float WarpWindowFrac = 0.35f;
+
+    /** Warp target name followed by the vault phase/scale outputs. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+    FName VaultWarpTargetName = TEXT("Vault");
 
     /** Foot bone sockets for the IK traces. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
@@ -198,8 +262,17 @@ private:
     /** Landing edge detection + landing speed capture. */
     bool DetectLanding(float& OutLandingSpeed);
 
+    /** Advance the vault warp phase toward the registered vault target. */
+    void UpdateVaultWarp();
+
     KhaaosLoco::FKhaaosLocomotionConfig Config;
     KhaaosLoco::FKhaaosLocomotionState Core;
+
+    /** Named motion warp targets (Motion Warping support). */
+    TMap<FName, FTransform> WarpTargets;
+
+    /** Planar distance (cm) from the owner captured when the vault target was registered. */
+    float VaultStartDistanceCm = 0.0f;
 
     /** Cached owner (ACharacter). */
     TWeakObjectPtr<class ACharacter> CachedCharacter;
