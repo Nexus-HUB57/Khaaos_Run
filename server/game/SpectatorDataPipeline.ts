@@ -206,6 +206,154 @@ export function aggregateDirectorReports(reports: (SpectatorDirectorReport | nul
   return out;
 }
 
+// ─── Fase 39 — Calibração POPULACIONAL do diretor (servidor → clientes) ────
+// Port TS canônico do cérebro puro do diretor (src/game3d/directorCalibration.js
+// na trilha JS): mesmas bandas, mesmos limiares, mesmas 6 regras — paridade
+// JS↔TS testada byte a byte (tests/integration/spectator-director-metrics).
+// O SERVIDOR agrega os relatórios de TODAS as conexões vivas e recalibra a
+// afinação GLOBAL; frames DIRECTOR_TUNING difundem o resultado p/ a plateia.
+
+/** Pesos de perigo (Fase 19) — a hierarquia knocked > hazardDamage >
+ *  anchorZone > outsideRing > recentDamage > lowHealth nunca inverte. */
+export const DANGER_WEIGHTS = Object.freeze({
+  knocked: 40,
+  hazardDamage: 35,
+  anchorZone: 30,
+  outsideRing: 20,
+  recentDamage: 15,
+  lowHealth: 10,
+}) as Readonly<Record<DirectorWeightKey, number>>;
+
+export const LOW_HEALTH_THRESHOLD = 30;
+
+/** Margem de re-corte padrão (Fase 19). */
+export const AUTO_RETARGET_MARGIN = 25;
+
+/** Bandas de calibração (Fase 26) — clamp + passo por sinal. */
+export const DIRECTOR_TUNING_LIMITS = Object.freeze({
+  margin: Object.freeze({ min: 10, max: 45, step: 5 }),
+  weights: Object.freeze({
+    knocked: Object.freeze({ min: 30, max: 55, step: 3 }),
+    hazardDamage: Object.freeze({ min: 25, max: 45, step: 3 }),
+    anchorZone: Object.freeze({ min: 20, max: 40, step: 2 }),
+    outsideRing: Object.freeze({ min: 12, max: 30, step: 2 }),
+    recentDamage: Object.freeze({ min: 8, max: 24, step: 2 }),
+    lowHealth: Object.freeze({ min: 5, max: 16, step: 1 }),
+  }),
+}) as Readonly<{
+  margin: Readonly<{ min: number; max: number; step: number }>;
+  weights: Readonly<Record<DirectorWeightKey, Readonly<{ min: number; max: number; step: number }>>>;
+}>;
+
+export const CALIBRATION_THRESHOLDS = Object.freeze({
+  minCutsSample: 8,
+  escalationHigh: 0.45,
+  escalationLow: 0.15,
+  manualPressureHigh: 1.2,
+  fatigueOffDominance: 2,
+  manualPressureLow: 0.6,
+});
+
+export interface DirectorTuning {
+  margin: number;
+  weights: Record<DirectorWeightKey, number>;
+}
+
+const clampInt = (v: unknown, min: number, max: number): number =>
+  Math.min(max, Math.max(min, Math.round(Number.isFinite(v as number) ? (v as number) : min)));
+
+/** Calibra margem/pesos a partir das métricas REAIS (Fase 26 — port TS byte a
+ *  byte do calibrateDirector JS; PURO e determinístico). */
+export function calibrateDirector(
+  metrics: { cuts?: { total?: number; byReason?: Record<string, number> }; manual?: { followSelects?: number; cycles?: number }; toggles?: { on?: number; off?: number } } | null | undefined,
+  current: { margin?: number; weights?: Partial<Record<DirectorWeightKey, number>> } | null | undefined,
+  thresholds: typeof CALIBRATION_THRESHOLDS = CALIBRATION_THRESHOLDS,
+): { margin: number; weights: Record<DirectorWeightKey, number>; actions: string[] } {
+  const L = DIRECTOR_TUNING_LIMITS;
+  const baseWeights: Record<DirectorWeightKey, number> = { ...DANGER_WEIGHTS, ...(current?.weights ?? {}) } as Record<DirectorWeightKey, number>;
+  const out: { margin: number; weights: Record<DirectorWeightKey, number>; actions: string[] } = {
+    margin: clampInt(current?.margin ?? AUTO_RETARGET_MARGIN, L.margin.min, L.margin.max),
+    weights: {} as Record<DirectorWeightKey, number>,
+    actions: [],
+  };
+  for (const k of Object.keys(L.weights) as DirectorWeightKey[]) out.weights[k] = clampInt(baseWeights[k], L.weights[k].min, L.weights[k].max);
+
+  const total = Math.max(0, Math.floor(metrics?.cuts?.total ?? 0));
+  if (total < thresholds.minCutsSample) return out; // amostra insuficiente — nada muda
+
+  const byReason = metrics?.cuts?.byReason ?? {};
+  const escalations = Math.max(0, Math.floor(byReason["hazard-escalation"] ?? 0));
+  const escalationRate = escalations / total;
+  const manualSelects = Math.max(0, Math.floor(metrics?.manual?.followSelects ?? 0));
+  const manualCycles = Math.max(0, Math.floor(metrics?.manual?.cycles ?? 0));
+  const manualTotal = manualSelects + manualCycles;
+  const manualPressure = manualTotal / total;
+  const togglesOn = Math.max(0, Math.floor(metrics?.toggles?.on ?? 0));
+  const togglesOff = Math.max(0, Math.floor(metrics?.toggles?.off ?? 0));
+
+  const bump = (key: DirectorWeightKey, dir: 1 | -1): void => {
+    const band = L.weights[key];
+    const next = clampInt(out.weights[key] + dir * band.step, band.min, band.max);
+    if (next !== out.weights[key]) out.weights[key] = next;
+  };
+  const moveMargin = (dir: 1 | -1, action: string): void => {
+    const next = clampInt(out.margin + dir * L.margin.step, L.margin.min, L.margin.max);
+    if (next !== out.margin) { out.margin = next; out.actions.push(action); }
+  };
+
+  // 2. TWITCHY — diretor troca de alvo demais dentro do mesmo hazard
+  if (escalationRate >= thresholds.escalationHigh) moveMargin(1, "margin-up:twitchy");
+  // 3. DURO DEMAIS — plateia caça drama que o diretor não mostra
+  else if (escalationRate <= thresholds.escalationLow && manualTotal > 0) moveMargin(-1, "margin-down:starved");
+  // 4. PLATEIA ESCRAVA — intervenções manuais dominam os cortes
+  if (manualPressure > thresholds.manualPressureHigh) moveMargin(-1, "margin-down:manual-pressure");
+  // 5. FADIGA — AUTO desligado dominou: menos cortes, só drama forte
+  if (togglesOff >= thresholds.fatigueOffDominance && togglesOff >= togglesOn * thresholds.fatigueOffDominance) {
+    moveMargin(1, "margin-up:fatigue");
+    bump("recentDamage", -1); out.actions.push("weight-down:recentDamage");
+    bump("lowHealth", -1); out.actions.push("weight-down:lowHealth");
+  }
+  // 6. REVERSÃO À MÉDIA — recepção boa: volta um passo p/ o padrão da Fase 19
+  if (
+    escalationRate > thresholds.escalationLow && escalationRate < thresholds.escalationHigh
+    && manualPressure < thresholds.manualPressureLow && togglesOn >= togglesOff
+  ) {
+    const target = AUTO_RETARGET_MARGIN;
+    if (out.margin !== target) {
+      const dir = target > out.margin ? 1 : -1;
+      const next = clampInt(out.margin + dir * L.margin.step, L.margin.min, L.margin.max);
+      const snapped = dir > 0 ? Math.min(next, target) : Math.max(next, target);
+      if (snapped !== out.margin) { out.margin = snapped; out.actions.push("margin-revert:healthy"); }
+    }
+  }
+  return out;
+}
+
+/** Sanitiza o frame DIRECTOR_TUNING (Fase 39) DEFENSIVAMENTE: margem e os 6
+ *  pesos canônicos obrigatórios, bandas clampadas, hierarquia NUNCA invertida.
+ *  PURO; null p/ frames inválidos (cliente ignora — afinação local fica). */
+export function sanitizePopulationTuning(raw: unknown): DirectorTuning | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  if (!Number.isFinite(obj.margin as number)) return null; // contrato: margem obrigatória
+  if (!obj.weights || typeof obj.weights !== "object") return null;
+  const src = obj.weights as Record<string, unknown>;
+  const L = DIRECTOR_TUNING_LIMITS;
+  const margin = clampInt(obj.margin, L.margin.min, L.margin.max);
+  const weights = {} as Record<DirectorWeightKey, number>;
+  let prev = Infinity; // hierarquia: cada peso estritamente ABAIXO do anterior
+  for (const k of Object.keys(L.weights) as DirectorWeightKey[]) {
+    const v = src[k];
+    if (!Number.isFinite(v as number)) return null; // contrato: os 6 sinais presentes
+    const band = L.weights[k];
+    const clamped = Math.min(band.max, Math.max(band.min, Math.round(v as number)));
+    const w = Math.max(band.min, Math.min(clamped, prev - 1));
+    weights[k] = w;
+    prev = w;
+  }
+  return { margin, weights };
+}
+
 // ─── Spectator Data Pipeline Config ─────────────────────────────────────────
 
 export const SpectatorConfig = {
@@ -226,6 +374,11 @@ export const SpectatorConfig = {
 
   /** Max bytes per second per spectator (throttle) */
   maxBytesPerSecond: 65_536, // 64 KB/s
+
+  /** Fase 39 — intervalo da calibração POPULACIONAL do diretor (ms): o
+   *  agregado das métricas reais de todas as conexões recalibra a afinação
+   *  global; mudanças são difundidas em frames DIRECTOR_TUNING. 0 desliga. */
+  calibrationIntervalMs: 15_000,
 };
 
 // ─── Delay Buffer ───────────────────────────────────────────────────────────
@@ -319,6 +472,11 @@ export class SpectatorDataPipeline {
   private peakSpectators: number = 0;
   private roomTotals: Map<string, { packetsSent: number; bytesSent: number }> = new Map();
   private grandTotals: { packetsSent: number; bytesSent: number } = { packetsSent: 0, bytesSent: 0 };
+  // Fase 39 — calibração POPULACIONAL do diretor (afinação GLOBAL difundida)
+  private directorTuning: DirectorTuning | null = null;
+  private directorTuningAt: number = 0;
+  private directorTuningActions: string[] = [];
+  private calibrationTimer: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Attach WebSocket server for spectator connections.
@@ -330,6 +488,7 @@ export class SpectatorDataPipeline {
     // pois o listener do RoomManager é registrado primeiro). Detalhes em
     // wsUpgradeRouter.ts.
     this.wss = new WebSocketServer({ noServer: true });
+    this.startCalibration(); // Fase 39 — heartbeat da calibração populacional
     routeWebSocketUpgrade(httpServer, "/ws/spectator", (req, socket, head) => {
       this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit("connection", ws, req));
     });
@@ -536,6 +695,50 @@ export class SpectatorDataPipeline {
     );
   }
 
+  // ─── Fase 39 — calibração POPULACIONAL (servidor → clientes) ──────────────
+
+  startCalibration(): void {
+    this.stopCalibration();
+    const ms = SpectatorConfig.calibrationIntervalMs;
+    if (!(ms > 0)) return; // 0 desliga (testes)
+    this.calibrationTimer = setInterval(() => this.calibrationTick(), ms);
+    if (this.calibrationTimer?.unref) this.calibrationTimer.unref(); // nunca segura o processo
+  }
+
+  stopCalibration(): void {
+    if (this.calibrationTimer) { clearInterval(this.calibrationTimer); this.calibrationTimer = null; }
+  }
+
+  /** Agrega os relatórios vivos e, quando a afinação global MUDA, difunde
+   *  DIRECTOR_TUNING para TODA a plateia (mesmas regras Fase 26 sobre o
+   *  AGREGADO; tick sem mudança = zero tráfego; decisão PURA). */
+  calibrationTick(): void {
+    if (this.spectators.size === 0) return;
+    const aggregate = this.directorAggregates();
+    if (!aggregate.reporting) return;
+    if (aggregate.cuts.total < CALIBRATION_THRESHOLDS.minCutsSample) return; // amostra insuficiente
+    const base = this.directorTuning ?? { margin: AUTO_RETARGET_MARGIN, weights: { ...DANGER_WEIGHTS } };
+    const tuned = calibrateDirector(aggregate, base);
+    const changed = !this.directorTuning
+      || tuned.margin !== this.directorTuning.margin
+      || JSON.stringify(tuned.weights) !== JSON.stringify(this.directorTuning.weights);
+    if (!changed) return;
+    this.directorTuning = { margin: tuned.margin, weights: tuned.weights };
+    this.directorTuningAt = Date.now();
+    this.directorTuningActions = [...tuned.actions];
+    const frame = JSON.stringify({
+      type: "DIRECTOR_TUNING",
+      tuning: this.directorTuning,
+      source: "population",
+      sampleCuts: aggregate.cuts.total,
+      actions: this.directorTuningActions,
+      calibratedAt: this.directorTuningAt,
+    });
+    for (const client of this.spectators.values()) {
+      try { client.ws.send(frame); } catch { /* socket morrendo */ }
+    }
+  }
+
   getSpectators(roomId: string): SpectatorClient[] {
     const roomSet = this.roomSpectators.get(roomId);
     if (!roomSet) return [];
@@ -567,7 +770,14 @@ export class SpectatorDataPipeline {
         globalMaxSpectators: SpectatorConfig.globalMaxSpectators,
         batchIntervalMs: SpectatorConfig.batchIntervalMs,
       },
-      director: this.directorAggregates(), // Fase 24 — métricas do diretor
+      director: {
+        ...this.directorAggregates(), // Fase 24 — métricas do diretor
+        // Fase 39 — afinação GLOBAL calibrada com as estatísticas REAIS da
+        // população inteira do node (o que TODOS os clientes estão adotando).
+        globalTuning: this.directorTuning,
+        globalTuningAt: this.directorTuningAt || undefined,
+        globalTuningActions: [...this.directorTuningActions],
+      } as SpectatorDirectorAggregate,
       now: Date.now(),
     };
   }
@@ -576,6 +786,7 @@ export class SpectatorDataPipeline {
    * Cleanup all resources.
    */
   destroy(): void {
+    this.stopCalibration(); // Fase 39 — encerra o heartbeat da calibração
     for (const timer of this.batchTimers.values()) clearInterval(timer);
     this.batchTimers.clear();
     this.spectators.clear();

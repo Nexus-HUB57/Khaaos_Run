@@ -13,6 +13,9 @@
 // quando existe espectador na sala (zero custo sem plateia). E expõe
 // metrics() consumido pelo /admin/metrics (Command Monitor).
 import { WebSocketServer } from 'ws';
+// Fase 39 — cérebro PURO do diretor (sem three): calibração com as métricas
+// REAIS agregadas de TODA a plateia + bandas/limiares canônicos.
+import { calibrateDirector, AUTO_RETARGET_MARGIN, DANGER_WEIGHTS, CALIBRATION_THRESHOLDS } from '../src/game3d/directorCalibration.js';
 
 export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_CENTER'];
 
@@ -117,6 +120,11 @@ export const SpectatorConfig = {
   maxEventsPerBatch: 20,
   /** Throttle por espectador (bytes/s) */
   maxBytesPerSecond: 65_536, // 64 KB/s
+  /** Fase 39 — intervalo da calibração POPULACIONAL do diretor (ms). O
+   *  servidor agrega os relatórios de todas as conexões vivas e, quando a
+   *  afinação global muda, difunde DIRECTOR_TUNING p/ toda a plateia.
+   *  0 desliga (testes). */
+  calibrationIntervalMs: 15_000,
 };
 
 class DelayBuffer {
@@ -159,6 +167,13 @@ export class SpectatorPipeline {
     this.peakSpectators = 0;
     this.rejected = 0;             // conexões recusadas por capacidade
     this.counter = 0;
+    // Fase 39 — calibração POPULACIONAL do diretor: o agregado das métricas
+    // REAIS de todas as conexões recalibra margem/pesos no SERVIDOR; o
+    // resultado é a afinação GLOBAL difundida em frames DIRECTOR_TUNING.
+    this.directorTuning = null;      // { margin, weights } | null (nenhuma ainda)
+    this.directorTuningAt = 0;
+    this.directorTuningActions = [];
+    this._calibrationTimer = null;
   }
 
   /**
@@ -179,6 +194,7 @@ export class SpectatorPipeline {
   attach(httpServer, { autoRoute = true } = {}) {
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
     this.wss.on('connection', (ws, req) => this.#onConnection(ws, req));
+    this.#startCalibration(); // Fase 39 — heartbeat da calibração populacional
     if (httpServer && autoRoute) {
       this._httpServer = httpServer;
       this._upgradeListener = (req, socket, head) => {
@@ -344,6 +360,50 @@ export class SpectatorPipeline {
 
   countFor(roomId) { return this.rooms.get(roomId)?.spectators.size ?? 0; }
 
+  // ─── Fase 39 — calibração POPULACIONAL do diretor (servidor → clientes) ────
+
+  #startCalibration() {
+    this.#stopCalibration();
+    const ms = this.config.calibrationIntervalMs;
+    if (!(ms > 0)) return; // 0 desliga (testes)
+    this._calibrationTimer = setInterval(() => this.#calibrationTick(), ms);
+    if (this._calibrationTimer?.unref) this._calibrationTimer.unref(); // nunca segura o processo
+  }
+
+  #stopCalibration() {
+    if (this._calibrationTimer) { clearInterval(this._calibrationTimer); this._calibrationTimer = null; }
+  }
+
+  /** Agrega os relatórios vivos e, quando a afinação global MUDA em relação à
+   *  vigente, difunde DIRECTOR_TUNING para TODA a plateia. Regras da Fase 26
+   *  aplicadas ao AGREGADO (mesma amostra mínima — ruído de 1 espectador não
+   *  dirige o node inteiro); comparação por conteúdo (tick sem mudança = zero
+   *  tráfego). PURO na decisão: calibrateDirector não muta nada. */
+  #calibrationTick() {
+    if (this.spectators.size === 0) return;
+    const aggregate = this.#directorAggregates();
+    if (!aggregate.reporting) return;
+    if (aggregate.cuts.total < CALIBRATION_THRESHOLDS.minCutsSample) return; // amostra insuficiente
+    const base = this.directorTuning ?? { margin: AUTO_RETARGET_MARGIN, weights: { ...DANGER_WEIGHTS } };
+    const tuned = calibrateDirector(aggregate, base);
+    const changed = !this.directorTuning
+      || tuned.margin !== this.directorTuning.margin
+      || JSON.stringify(tuned.weights) !== JSON.stringify(this.directorTuning.weights);
+    if (!changed) return;
+    this.directorTuning = { margin: tuned.margin, weights: tuned.weights };
+    this.directorTuningAt = Date.now();
+    this.directorTuningActions = [...tuned.actions];
+    const frame = JSON.stringify({
+      type: 'DIRECTOR_TUNING',
+      tuning: this.directorTuning,
+      source: 'population',
+      sampleCuts: aggregate.cuts.total,
+      actions: this.directorTuningActions,
+      calibratedAt: this.directorTuningAt,
+    });
+    for (const client of this.spectators.values()) this.#send(client, frame);
+  }
+
   /** Fase 24 — agregado do diretor sobre as conexões vivas (last report wins). */
   #directorAggregates() {
     return aggregateDirectorReports(
@@ -371,12 +431,20 @@ export class SpectatorPipeline {
         globalMaxSpectators: this.config.globalMaxSpectators,
         batchIntervalMs: this.config.batchIntervalMs,
       },
-      director: this.#directorAggregates(), // Fase 24 — métricas do diretor
+      director: {
+        ...this.#directorAggregates(), // Fase 24 — métricas do diretor
+        // Fase 39 — afinação GLOBAL calibrada com as estatísticas REAIS da
+        // população inteira do node (o que TODOS os clientes estão adotando).
+        globalTuning: this.directorTuning,
+        globalTuningAt: this.directorTuningAt || undefined,
+        globalTuningActions: [...this.directorTuningActions],
+      },
       now: Date.now(),
     };
   }
 
   destroy() {
+    this.#stopCalibration(); // Fase 39 — encerra o heartbeat da calibração
     if (this._httpServer && this._upgradeListener) {
       try { this._httpServer.off('upgrade', this._upgradeListener); } catch { /* já removido */ }
     }

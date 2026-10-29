@@ -267,3 +267,49 @@ test('Fase 28: outcome resolvido (timeout) não é sobrescrito por escolha tardi
   assert.deepEqual(intro.outcome, { choice: 'fail', hpCost: 35, stunSeconds: 3.5 }, 'outcome canônico preservado');
   intro.dispose();
 });
+
+// ─── Fase 39 — revisão ZU pós-PR #179: 3 defeitos de cena corrigidos ───────
+
+test('Fase 39: destroços INVISÍVEIS pré-impacto (sem cubos-fantasma no origin)', () => {
+  const intro = mkDerail();
+  // pré-derail: o InstancedMesh nasce com matrizes identidade (grade 1×1 em
+  // (0,0,0)) — o balístico REAL só existe a partir do impacto, então o mesh
+  // inteiro fica invisível até lá (nada de destroço fantasma na perseguição)
+  assert.equal(intro.debrisMesh.visible, false, 'pré-derail: mesh invisível');
+  runFor(intro, 6.0); // t ≈ 6.0 — passou do DERAIL (5.8)
+  assert.equal(intro.debrisMesh.visible, true, 'pós-derail: balística visível');
+  const m = new THREE.Matrix4();
+  intro.debrisMesh.getMatrixAt(0, m);
+  assert.ok(Number.isFinite(m.elements[12]), 'matriz real escrita');
+  intro.dispose();
+});
+
+test('Fase 39: chamas e fumaça têm material ÚNICO por instância (opacity por chama/puff)', () => {
+  const intro = mkDerail();
+  const flameMats = intro.flames.map((f) => f.material);
+  const smokeMats = intro.smokes.map((s) => s.material);
+  assert.equal(new Set(flameMats).size, 6, '6 materiais de chama distintos');
+  assert.equal(new Set(smokeMats).size, 7, '7 materiais de fumaça distintos');
+  // com materiais próprios, as opacidades escritas por #updateDerailFx
+  // DESSINCRONIZAM (antes: material compartilhado = última escrita vencia)
+  runFor(intro, 4.0); // t ≈ 5.0 — pré-impacto (fumaça sem update ainda)
+  runFor(intro, 4.0); // t ≈ 9.0 — pós-impacto (fumaça animada)
+  const ops = intro.smokes.map((s) => s.material.opacity);
+  assert.ok(new Set(ops).size > 1, `opacidades de fumaça dessincronizadas: ${ops.map((o) => o.toFixed(2)).join(',')}`);
+  assert.ok(ops.every((o) => Number.isFinite(o)), 'todas finitas');
+  intro.dispose();
+});
+
+test('Fase 39: orbital segue até o SETTLE (7.4→8.8) e converge no handover', () => {
+  const intro = mkDerail();
+  const cam = new THREE.PerspectiveCamera();
+  runFor(intro, 7.0); // t ≈ 7.0+bullet — dentro do orbital
+  intro.cameraPose(cam, { x: 0, z: 118 });
+  const orbitMid = cam.position.clone();
+  runFor(intro, 2.4); // t ≈ 8.9 — passou do SETTLE (8.8)
+  intro.cameraPose(cam, { x: 0, z: 118 });
+  const handover = cam.position.clone();
+  assert.ok(orbitMid.distanceTo(new THREE.Vector3(intro.wreckHeadX, 2, intro.railZ)) > 10, 'orbital: longe do destroço');
+  assert.ok(handover.distanceTo(new THREE.Vector3(0, 1.6, 118)) < orbitMid.distanceTo(new THREE.Vector3(0, 1.6, 118)), 'handover aproxima do spawn');
+  intro.dispose();
+});

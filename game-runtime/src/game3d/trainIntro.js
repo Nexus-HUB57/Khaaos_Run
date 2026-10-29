@@ -298,6 +298,11 @@ export class TrainIntro {
     const chunkMat = this._mats.metalDark;
     const N = 36;
     this.debrisMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(.55, .4, .55), chunkMat, N);
+    // Fase 39 (revisão ZU pós-PR #179) — o InstancedMesh nasce com MATRIZES
+    // IDENTIDADE (36 cubos em grade no origin) e só recebe balística REAL na
+    // 1ª frame pós-impacto: pré-derail o destroço "fantasma" ficava VISÍVEL
+    // flutuando em (0,0,0) durante toda a perseguição. Invisível até o crash.
+    this.debrisMesh.visible = false;
     this.debris = [];
     for (let i = 0; i < N; i++) {
       const ang = hash01(`${seed}:da${i}`) * Math.PI * 2;
@@ -321,18 +326,22 @@ export class TrainIntro {
   // incêndio do destroço + caixas resgatáveis (posições determinísticas)
   #buildFireAndCrates(seed) {
     const g = this.group;
-    const fireM = new THREE.MeshBasicMaterial({ color: '#ff7a2a', transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
+    // Fase 39 (revisão ZU) — material ÚNICO por chama/puff: #updateDerailFx
+    // escreve opacity POR INSTÂNCIA; com material compartilhado só a última
+    // escrita vencia (chamas piscavam em uníssono, coluna de fumaça sem
+    // gradiente). Clones baratos — dispose() já libera materiais.
+    const fireBase = new THREE.MeshBasicMaterial({ color: '#ff7a2a', transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false });
     this.flames = [];
     for (let i = 0; i < 6; i++) {
-      const flame = new THREE.Mesh(new THREE.PlaneGeometry(1.6 + hash01(`${seed}:f${i}`) * 1.2, 2.4), fireM);
+      const flame = new THREE.Mesh(new THREE.PlaneGeometry(1.6 + hash01(`${seed}:f${i}`) * 1.2, 2.4), fireBase.clone());
       flame.position.set(this.wreckHeadX + (hash01(`${seed}:fx${i}`) - .5) * 22, 1.6, this.railZ + (hash01(`${seed}:fz${i}`) - .5) * 7);
       g.add(flame);
       this.flames.push(flame);
     }
-    const smokeM = new THREE.MeshBasicMaterial({ color: '#15161a', transparent: true, opacity: .5, depthWrite: false });
+    const smokeBase = new THREE.MeshBasicMaterial({ color: '#15161a', transparent: true, opacity: .5, depthWrite: false });
     this.smokes = [];
     for (let i = 0; i < 7; i++) {
-      const puff = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), smokeM);
+      const puff = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), smokeBase.clone());
       puff.position.set(this.wreckHeadX + (hash01(`${seed}:sx${i}`) - .5) * 26, 4 + i * 2.2, this.railZ + (hash01(`${seed}:sz${i}`) - .5) * 6);
       g.add(puff);
       this.smokes.push(puff);
@@ -484,6 +493,8 @@ export class TrainIntro {
   // VFX do derail — tudo função pura de t (mesmos inputs ⇒ mesmo frame)
   #updateDerailFx(t, derailed) {
     const g = this.group;
+    // Fase 39 (revisão ZU) — destroços só EXISTEM a partir do impacto
+    if (derailed && !this.debrisMesh.visible) this.debrisMesh.visible = true;
     // faíscas nos bogies antes do derail
     if (!derailed && t > 1.0) {
       const flick = Math.floor(t * 30);
@@ -539,8 +550,9 @@ export class TrainIntro {
   // Câmera cinematográfica multi-estágio (Fase 26):
   //   0→3.4  perseguição externa (contrato Fase 11 preservado)
   //   3.4→5.8 cabine 1ª pessoa (vibração de alta velocidade)
-  //   5.8→7.4 bullet-time orbital sobre o impacto
-  //   7.4→fim 3ª pessoa converge para o spawn (handover suave)
+  //   5.8→8.8 bullet-time orbital sobre o impacto (o relógio interno volta a
+  //          1× em 7.4, mas o ORBITAL segue até o SETTLE — convergência contínua)
+  //   8.8→fim 3ª pessoa converge para o spawn (handover suave)
   cameraPose(cam, playerPos) {
     const t = this.t;
     if (this.mode === 'derail' && t >= DT_.HANDOVER_CHASE) {
@@ -580,7 +592,7 @@ export class TrainIntro {
     const ease = k * k * (3 - 2 * k);
     const focusX = head - this.dir * 26;
     const camX = focusX - this.dir * (34 - 16 * ease);
-    const camZ = this.railZ + this.dir * (26 - 8 * ease) * (this.spawn.z >= 0 ? 1 : 1);
+    const camZ = this.railZ + this.dir * (26 - 8 * ease); // Fase 39 — sinal constante documentado (spawn.z nunca inverteu o fator)
     const camY = 16 - 5 * ease;
     cam.position.set(camX, camY, camZ);
     cam.lookAt(focusX, 6 - 2 * ease, this.railZ);
