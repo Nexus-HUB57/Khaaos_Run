@@ -412,3 +412,25 @@ Stage Summary:
 - O ciclo de movimento humano completo agora é modelado no kernel: arrancada com lean, passada sincronizada, PARADA NA MARCA (distance matching), salto com subida/ápice/queda, pouso com absorção, giro plantando o pé-pivô e vault que cobre a distância real
 - Zero mudança de física/balística/netcode; tudo em cima do kernel determinístico já testado em CI
 - 87 checks standalone de locomoção (49 + 38) pinando o contrato anti-robotização
+
+---
+Task ID: 16
+Agent: Main
+Task: Fase 33 — WART A reparado (contrato de ids do loot na sim = room3d) + fumaça REAL na chaminé do caos + verificação dos itens do menu (FX marcos×mundos e wart B já entregues)
+
+Work Log:
+- Estado de entrada re-verificado contra a concorrência: token OK (HTTP 200), main avançou 12d87e2→f4dfba6→f05cdae durante a rodada (PRs #211-#216 de sessões paralelas); rebase do trabalho feito em cima de f05cdae com 1 conflito textual resolvido em #pickup (intenção deles: raridades de anexos; minha: ref de catálogo — SEMANTICAMENTE ortogonais)
+- VERIFICAÇÃO DO MENU (sem re-entrega): FX dos marcos × mundos (tsunami/lava) JÁ ENTREGUE na Fase 26 — SurvivalFX abastece registry.applyHazard(kind, boost, surfaceY) a cada frame (maré no anel oceânico, erupção da tocha, pilões, beacons), wired em main3d + spectator3d; morte por anomalia bypassa killfeed (wart B) JÁ REPARADA na Fase 30 (Task 13) — #finalizeDeath(a, null, 'quantum') nas 2 trilhas + test/environmental-death.test.js (re-verificado no main atual, linha 1624 do sim3d)
+- WART A (Task 12) REPARADO de verdade: o spread do drop DEPOIS do `id:` vencia o id de instância — 2 drops iguais COLIDIAM no Map do syncLoot (1 mesh p/ 2 instâncias: loot invisível no chão + remoção prematura quando 1 era coletada); e o loot interior (loot-i*/loot-m*, Fase 25/26) mantinha id canônico SEM ref de catálogo → #pickup caía no fallback g19 (arma interior virava pistola!) e inventava chaves de inventário ('loot-i0' no ammo)
+- sim3d #spawnLoot: toInstance único p/ GERAL + INTERIOR + MEZANINO — id canônico loot-N/i/m SEMPRE vence o spread; ref de catálogo migra p/ weaponId/ammoId/resourceId/attachmentId; nome de não-arma composto ('5.56 ×20'); campo cru 'weapon' (stats) NÃO serializa — mesmo contrato do room3d (paridade 1:1 das trilhas, snapshot/ws limpo)
+- sim3d #pickup: consome a REF com fallback `|| item.id` — bundles crus (deathBox/supplyDrop) e loot sintético de testes continuam no MESMO caminho; regra anti-rebaixamento do #grantBundle intata (g19 22 dmg RECUSA mp5 18, ACEITA m4 31 — provado nos 2 sentidos)
+- FUMAÇA REAL (fumaça/fendas do menu): smokecolumn do Barburhen (Industrial + Extração) — a voluta ESTÁTICA (cone 'plume' opacity .3 flutuando) saiu do builder; fumaça agora é REAL via emissor no pool compartilhado da Fase 26 (1 draw call): coluna cinza contínua com deriva térmica + brisa, cresce/clareia ao subir — mesma gramática da fumaça de fogueira/lavapatch; fendas de lava/rifts JÁ tinham partículas desde a F26 (brasas + motos do vazio — re-verificado)
+- Concorrência na rodada: sessões paralelas tomaram o nome "Fase 32" (skins míticas + validação browser + Distance Matching UE) — esta entrega renomeada F33 ANTES do PR; stash de sessão anterior (reparo parcial do wart A achado no worktree) adotado, estendido (interior/mezanino + pickup + fumaça) e commitado
+- Testes: game-runtime/test/loot-instance-contract.test.js (9 NOVOS — ids loot-N únicos em 8 seeds [regressão da colisão do syncLoot], ref certa por kind e campos irmãos vazios, nome composto, pickup de arma por weaponId [nunca g19], munição na chave do catálogo com teto AMMO_CAP, interior/mezanino no mesmo contrato, bundles nas 2 direções do anti-rebaixamento, drop duplicado coletável de forma independente, snapshot serializável sem stats crus) + district-dressing (plume=0 no grupo + pool vivo com partículas de fumaça após tick; Barburhen saiu da lista "sem fontes")
+- Pipeline completo: branch feat/game3d-fase33-loot-instance-contract-fumaca-real → PR #218 → CI 30 checks (25 success/5 skip/0 FAIL) → MERGE (d486429) → main re-verificada pós-merge (26 checks: 21 success/5 skip/0 FAIL)
+
+Stage Summary:
+- O loot da sim offline fala o MESMO idioma do servidor: id de instância canônico, referência de catálogo explícita, snapshot limpo — loot duplicado NÃO desaparece mais do chão e arma interior NÃO vira mais g19
+- A chaminé do caos fuma de verdade (partículas no pool compartilhado, custo ~0 por frame) — a última fumaça estática da arena saiu
+- Menu da rodada FECHADO com verificação honesta: 2 dos 3 itens já estavam entregues por fases anteriores (F26/F30) — re-entrega zero, reparo real no item que faltava
+- Suíte final no main: 840 testes — 827 pass / 0 fail / 13 skip; root official 0 fail; tsc 0; vite build ✓
