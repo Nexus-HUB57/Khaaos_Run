@@ -238,6 +238,9 @@ test('fase27 sim: botKnocked do jogador traz victim (id) — popup ancora no hit
   const s = groundSim('F27-KNOCK', 1, { squad: true });
   s.start('belt');
   const p = s.player, bot = s.bots[0];
+  // Fase 32 — economia de sobrevivência: sem o kit zerado o bot se CURA no
+  // step (life 1 → 31) e o cenário "qualquer hit nocauteia" deixa de valer.
+  bot.inventory.medkit = 0;
   bot.x = p.x; bot.z = p.z - 2.5; bot.armor = 0; bot.life = 1; // qualquer hit nocauteia
   s.step({ ...idle(0), fire: true }, STEP);
   for (let i = 0; i < 8 && !s.events.some((e) => e.type === 'botKnocked'); i++) s.step(idle(0), STEP);

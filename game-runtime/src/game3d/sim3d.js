@@ -82,6 +82,29 @@ export const GLOO = {
   forward: 2.2,         // distância à frente do jogador
   cap: 2,               // máximo carregado
 };
+
+// Fase 32 — ECONOMIA DE SOBREVIVÊNCIA dos bots: MESMOS números em sim offline,
+// MatchRoom3D e testes. Bots eram 'ocos': a F25 fazia a patrulha mirar pontos
+// de loot, mas a coleta (#interact) era exclusiva do input do jogador — o bot
+// chegava, não pegava NADA e lutava com o loadout do spawn até morrer; os
+// medkit/frag/gloo do spawn nunca eram usados. Agora: coleta por proximidade
+// (mesmo alcance do #interact), cura fora de combate e frag/gloo no engajamento
+// com cadência humana (rng determinístico pela seed).
+export const BOT_SURVIVAL = Object.freeze({
+  sense: 9,          // raio de interesse pelo loot (atração em patrol/hunt)
+  collect: 2.6,      // alcance de coleta (= #interact do jogador)
+  yBand: 2.2,        // banda vertical da coleta (= #interact)
+  lootCd: 0.5,       // respiro entre coletas (não varre a sala num tick)
+  medkitBelow: 45,   // vida que dispara a cura
+  medkitCd: 5,       // respiro pós-cura (evita re-uso imediato)
+  fragMin: 8,        // banda de distância útil do frag (m)
+  fragMax: 30,
+  fragChance: 0.34,  // chance por oportunidade (rng — determinístico pela seed)
+  fragCdMin: 9, fragCdVar: 5, // cadência humana entre frags (s)
+  glooBelow: 60,     // vida que dispara a defesa
+  glooChance: 0.5,
+  glooCdMin: 14, glooCdVar: 6,
+});
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 
@@ -645,15 +668,26 @@ export class KhaaosSim3D {
   #spawnBot(i) {
     const spot = this.world.botSpawns[i % this.world.botSpawns.length];
     const jx = (this.rng.next() - .5) * 10, jz = (this.rng.next() - .5) * 10;
+    // Fase 32 — consts hoisted na MESMA ordem de consumo do rng (jx, jz, yaw,
+    // arma, cooldown): a sequência determinística por seed fica INTACTA.
+    const yaw = this.rng.next() * Math.PI * 2;
+    const weapon = this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']);
+    const cooldown = this.rng.next() * 2;
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
-      x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
+      x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       gear: { vest: 0, helmet: 0, pack: 0 }, // Fase 28
       // Fase 30/32 — paridade de anexos/mítica/raridade entre TODOS os atores
       weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
-      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), weaponSkin: null,
-      cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
+      // Fase 32 (economia de sobrevivência) — paridade de inventário/slots com
+      // oficiais e jogador: bots agora COLETEM loot (#botSurvival → #pickup
+      // exige slots/inventory/anexos). Consts hoisted consomem o rng na MESMA
+      // ordem de antes (jx, jz, yaw, arma, cooldown) — determinismo intacto.
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
+      slots: { 1: weapon }, activeSlot: 1, extracted: 0,
+      stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0, speed: 4.55, weapon, weaponSkin: null,
+      cooldown, reloadT: 0, burst: 0,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
@@ -676,6 +710,10 @@ export class KhaaosSim3D {
       // Fase 30/32 — paridade de anexos/mítica/raridade entre TODOS os atores
       weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
+      // Fase 32 — paridade de inventário/slots (a economia de sobrevivência
+      // coleta/usa consumíveis; #pickup exige slots + inventory)
+      inventory: { metal: 0, wood: 0, components: 0, medkit: 2, fuel: 0, frag: 2, gloo: 2, ammo: { '9MM': 45 } },
+      slots: { 1: def.weapon }, activeSlot: 1, extracted: 0,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
@@ -1219,6 +1257,13 @@ export class KhaaosSim3D {
       tx = b.ai.lx ?? p.x; tz = b.ai.lz ?? p.z;
       if (dist2d(b.x, b.z, tx, tz) < 5) b.ai.state = 'patrol';
     } else { tx = b.ai.waypoint?.x ?? this.ring.x; tz = b.ai.waypoint?.z ?? this.ring.z; }
+    // Fase 32 — loot no chão ATRAI em patrol/hunt (não interrompe engajamento
+    // nem resgate): o item vivo mais próximo vale mais que o waypoint sorteado —
+    // o bot desvia da rota, vai até o chão de loot e coleta (#botSurvival).
+    if (!rescuing && b.ai.state !== 'engage') {
+      const want = this.#botLootInterest(b);
+      if (want) { tx = want.x; tz = want.z; }
+    }
     // Fase 25 — pathing por portas USA O DESTINO BRUTO (antes do clamp do anel:
     // o alvo real pode estar dentro de uma casca cujo centro o clamp projetaria
     // para fora — aí a rota morria e o bot orbitava a borda do anel). Folha
@@ -1240,6 +1285,8 @@ export class KhaaosSim3D {
     const input = { ...DEFAULT_INPUT, dx: 0, dy: inReviveRange ? 0 : -run, yaw: b.yaw, pitch: 0, interact: inReviveRange };
     this.#stepActor(b, input, dt, false); // #tryRevive (via input.interact) canaliza o revive
     if (inReviveRange) return; // canalizando: não atira
+    // Fase 32 — coleta/cura/frag/gloo: economia de sobrevivência no step
+    this.#botSurvival(b, dt, sees, bestD);
     // disparo — erro humano: espalha o ponto alvo em vez do cone de saída
     // Fase 7 — tempo de reação ao adquirir um NOVO alvo antes do 1º tiro
     const w = WEAPONS3D[b.weapon];
@@ -1784,6 +1831,79 @@ export class KhaaosSim3D {
     a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
     this.emit('medkit', { life: a.life });
   }
+  // ---------- Fase 32 — economia de sobrevivência dos bots ----------
+  // Coleta por proximidade, cura fora de combate e utilitários no engajamento.
+  // MESMOS números e ordem nas duas trilhas (sim offline / MatchRoom3D) —
+  // números em BOT_SURVIVAL; o que vale a pena é decisão de #botWantsItem.
+  #botWantsItem(b, it) {
+    switch (it.kind) {
+      case 'weapon': {
+        // Fase 32 — contrato weaponId || id (loot interior preserva catálogo)
+        const cur = WEAPONS3D[b.weapon], nxt = WEAPONS3D[it.weaponId || it.id];
+        return !!nxt && (!cur || nxt.damage > cur.damage); // anti-rebaixamento (regra do #grantBundle)
+      }
+      case 'deathBox': case 'supplyDrop': return true;     // o prêmio — sempre
+      case 'attachment': return (b.attachmentBag?.length ?? 0) < 4;
+      case 'consumable': return (b.inventory.medkit ?? 0) < 5;
+      case 'armor': return b.armor < 100;
+      case 'helmet': return (b.gear.helmet ?? 0) < GEAR_LIMITS.helmet;
+      case 'vest': return (b.gear.vest ?? 0) < GEAR_LIMITS.vest;
+      case 'pack': return (b.gear.pack ?? 0) < GEAR_LIMITS.pack;
+      case 'frag': return (b.inventory.frag ?? 0) < FRAG.cap;
+      case 'gloo': return (b.inventory.gloo ?? 0) < GLOO.cap;
+      default: return false; // ammo (reserva infinita), resource — bots não carregam
+    }
+  }
+  // interesse de LOOT: item ativo mais próximo que VALE a pena, na banda
+  // vertical do #interact. NÃO consome — a coleta acontece por proximidade.
+  #botLootInterest(b) {
+    if ((b.ai.lootCd ?? 0) > 0) return null;
+    let best = null, bestD = BOT_SURVIVAL.sense;
+    for (const it of this.loot) {
+      if (!it.active || !this.#botWantsItem(b, it)) continue;
+      if (Math.abs(it.y - b.y) > BOT_SURVIVAL.yBand) continue;
+      const d = dist2d(it.x, it.z, b.x, b.z);
+      if (d < bestD) { bestD = d; best = it; }
+    }
+    return best ? { x: best.x, z: best.z } : null;
+  }
+  // ações no step: decrementa respiros, coleta por proximidade, cura SEM
+  // inimigo à vista (cura sob fogo é para o jogador), frag/gloo no engage.
+  #botSurvival(b, dt, sees, bestD) {
+    for (const k of ['lootCd', 'medkitCd', 'fragCd', 'glooCd']) {
+      if ((b.ai[k] ?? 0) > 0) b.ai[k] -= dt;
+    }
+    // COLETA por proximidade (mesmo alcance do #interact do jogador)
+    if ((b.ai.lootCd ?? 0) <= 0) {
+      const item = this.loot.find((it) => it.active && dist2d(it.x, it.z, b.x, b.z) < BOT_SURVIVAL.collect
+        && Math.abs(it.y - b.y) < BOT_SURVIVAL.yBand && this.#botWantsItem(b, it));
+      if (item) {
+        item.active = false;
+        this.#pickup(b, item);
+        b.ai.lootCd = BOT_SURVIVAL.lootCd;
+      }
+    }
+    // CURA: ferido e SEM alvo visível
+    if ((b.ai.medkitCd ?? 0) <= 0 && sees === false && b.life > 0 && b.life < BOT_SURVIVAL.medkitBelow
+      && (b.inventory.medkit ?? 0) > 0) {
+      this.#useMedkit(b);
+      b.ai.medkitCd = BOT_SURVIVAL.medkitCd;
+    }
+    // FRAG: alvo visível na banda útil — cadência humana (rng da seed)
+    if (sees && bestD >= BOT_SURVIVAL.fragMin && bestD <= BOT_SURVIVAL.fragMax
+      && (b.inventory.frag ?? 0) > 0 && (b.ai.fragCd ?? 0) <= 0
+      && this.rng.next() < BOT_SURVIVAL.fragChance) {
+      this.#throwFrag(b);
+      b.ai.fragCd = BOT_SURVIVAL.fragCdMin + this.rng.next() * BOT_SURVIVAL.fragCdVar;
+    }
+    // GLOO: defesa quando ferido sob fogo — parede à frente do engajamento
+    if (sees && b.life < BOT_SURVIVAL.glooBelow && (b.inventory.gloo ?? 0) > 0
+      && (b.ai.glooCd ?? 0) <= 0 && this.rng.next() < BOT_SURVIVAL.glooChance) {
+      this.#deployGloo(b);
+      b.ai.glooCd = BOT_SURVIVAL.glooCdMin + this.rng.next() * BOT_SURVIVAL.glooCdVar;
+    }
+  }
+
   // Fase 25 — interação CONTEXTUAL (estilo Free Fire): E escolhe o ALVO MAIS
   // PRÓXIMO entre loot/terminal/porta — colado na folha, a porta domina;
   // latch p/ abrir/fechar por TOQUE (segurar não fica alternando)
