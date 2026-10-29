@@ -816,8 +816,24 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   buildMountains(scene, scenario);
   buildProps(scene, layout, q);
   // Fase 22 — cenários vivos: kits por distrito DENTRO da arena (zero colliders)
+  // F40 — as sombras do dressing entram nas BANDAS DE DISTÂNCIA (buildBandContactShadows,
+  // F39): mesma textura F7, alpha por instância — o disco a 200m era moiré.
+  // Lista acumulada em scene.userData.dressingBandShadows (main3d chama
+  // update() 1×/frame por handle); ancoragem no relevo (terreno + 12mm).
   buildDistrictDressing(scene, layout, scenario, q, {
     contactShadows: (entries) => buildContactShadows(scene, entries),
+    bandContactShadows: (entries) => {
+      const band = buildBandContactShadows(
+        scene,
+        entries.map((e) => ({ ...e, y: terrainHeightAt(e.x, e.z, scenario.id) + .012 })),
+        { opacity: .5, nearDist: 30, farDist: 90 },
+      );
+      if (band) {
+        (scene.userData.dressingBandShadows ??= []).push(band);
+        scene.userData.dressingShadowEntries = (scene.userData.dressingShadowEntries ?? 0) + entries.length;
+      }
+      return band;
+    },
   });
   // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);

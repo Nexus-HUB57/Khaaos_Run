@@ -29,6 +29,7 @@ import { TrainIntro } from './trainIntro.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
+import { TACTICAL_HOTKEY } from './tacticalmap3d.js'; // Fase 40 — hotkey do mapa tático (fonte única)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
 import './styles3d.css';
 
@@ -553,6 +554,8 @@ export class Game3D {
       if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
+      // Fase 40 — mapa tático em tela cheia (toggle; a partida NUNCA pausa)
+      if (k === TACTICAL_HOTKEY && !e.repeat) this.hud?.toggleMap();
       if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
       // Fase 5 — espectador: troca o operativo acompanhado
       if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
@@ -560,7 +563,7 @@ export class Game3D {
       // troca de slot: offline aplica na sim; online agenda no próximo input
       if (k === '1') this.sim.switchSlot(1);
       if (k === '2') this.sim.switchSlot(2);
-      if (k === 'escape' && this.pointerLocked) document.exitPointerLock();
+      if (k === 'escape') { if (this.pointerLocked) document.exitPointerLock(); this.hud?.closeMap(); } // F40 — Esc fecha o mapa
     });
     document.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
   }
@@ -1822,6 +1825,13 @@ export class Game3D {
     // capim). Custo O(scrub) por frame, zero quando o mundo não tem scrub.
     if (this.scene.userData.scrubBandShadows && this.camera?.position) {
       this.scene.userData.scrubBandShadows.update(this.camera.position.x, this.camera.position.z);
+    }
+    // Fase 40 — sombras em banda dos PROPS DOS DISTRITOS (dressing F22):
+    // mesmo alpha por instância, campo por cenário (lista — um handle por
+    // build). Custo O(dressing), zero quando a banda está vazia.
+    const dressingShadows = this.scene.userData.dressingBandShadows;
+    if (dressingShadows?.length && this.camera?.position) {
+      for (const f of dressingShadows) f.update(this.camera.position.x, this.camera.position.z);
     }
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring

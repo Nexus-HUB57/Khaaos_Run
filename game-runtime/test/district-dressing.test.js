@@ -293,3 +293,30 @@ test('F33: smokecolumn do Barburhen — voluta estática REMOVIDA, fumaça REAL 
   for (let i = 0; i < 120; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
   assert.ok(system.activeCount > 0, `fumaça real viva (${system.activeCount} partículas)`);
 });
+
+// ================== Fase 40 — sombras do dressing em BANDAS DE DISTÂNCIA ====
+
+test('F40 · dressing: hook de bandas assume as sombras (e o estático fica retrocompatível)', () => {
+  const layout = getWorldLayout('f40-band', 'CIGKV');
+  const q = { dressingFactor: 1 };
+  // COM hook de banda: SÓ ele é chamado (o estático não roda junto — sem sombra duplicada)
+  const bandCalls = [], staticCalls = [];
+  const s1 = new THREE.Scene();
+  buildDistrictDressing(s1, layout, resolveScenario('CIGKV'), q, {
+    contactShadows: (e) => staticCalls.push(e),
+    bandContactShadows: (e) => bandCalls.push(e),
+  });
+  assert.ok(bandCalls.length === 1 && bandCalls[0].length > 0,
+    `hook de banda chamado 1× com ${bandCalls[0]?.length} entradas`);
+  assert.equal(staticCalls.length, 0, 'F7 estático NÃO roda quando a banda existe');
+  // entradas carregam x/z/rot/size do contrato F22 (y é acrescentado pelo world3d)
+  for (const e of bandCalls[0]) {
+    assert.ok(Number.isFinite(e.x) && Number.isFinite(e.z) && e.size > 0, `entrada válida (${e.x.toFixed(1)},${e.z.toFixed(1)})`);
+  }
+  // SEM hook de banda: cai no F7 estático (retrocompatível — contratual)
+  const s2 = new THREE.Scene();
+  buildDistrictDressing(s2, layout, resolveScenario('CIGKV'), q, {
+    contactShadows: (e) => staticCalls.push(e),
+  });
+  assert.equal(staticCalls.length, 1, 'fallback estático preservado (assinarura F22 intoca)'.replace('assinarura', 'assinatura'));
+});

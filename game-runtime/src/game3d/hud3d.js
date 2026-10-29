@@ -7,6 +7,7 @@ import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
 import { hudAuraFor, shiftAuraHex, weaponIconVars, crosshairVars, killfeedVars, damageVars, seasonIndexFor, minimapTintFor } from './aura3d.js'; // F36-39 — aura sazonal do HUD + ícone + mira + killfeed/dano + minimapa
+import { tacticalProject, tacticalScale, tacticalMarkers } from './tacticalmap3d.js'; // F40 — mapa tático em tela cheia
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -25,6 +26,7 @@ export class HUD {
     // real em touch sem ganho perceptível — achado G4 da revisão GFX/UX)
     this.mmLimiter = new RateLimiter(33);
     this.auraCombat = null; // F39 — vars da temporada p/ killfeed/números (decisão PURA no update)
+    this.mapOpen = false;   // F40 — estado do mapa tático (toggle tecla M / botão)
     this.#bindButtons();
   }
 
@@ -33,6 +35,7 @@ export class HUD {
     $('#rushBtn')?.addEventListener('click', () => { this.uiClick(); this.onEntry('rush'); });
     $('#endBtn')?.addEventListener('click', () => { this.uiClick(); this.onRestart(); });
     $('#replayBtn')?.addEventListener('click', () => this.onReplayExport?.());
+    $('#mapBtn')?.addEventListener('click', () => { this.uiClick(); this.toggleMap(); }); // F40 — mapa tático (touch)
     $('#seedInput').value = this.seed;
     $('#seedInput')?.addEventListener('change', (e) => {
       this.onRestart(e.target.value.trim() || this.seed);
@@ -76,6 +79,112 @@ export class HUD {
     knob.style.transform = `translate(calc(-50% + ${dx * 34}px), calc(-50% + ${dy * 34}px))`;
   }
   uiClick() { this.audio?.ui?.(); }
+
+  // ---------- Fase 40 — mapa tático em tela cheia ----------
+  // Toggle por tecla M (main3d binda o keydown) ou botão MAPA (touch). O jogo
+  // NUNCA pausa: overlay translúcido sobre a partida viva (assinatura
+  // Free Fire). Redesenho a 30 Hz enquanto aberto (mesmo mmLimiter do radar).
+  toggleMap(force) {
+    const el = $('#tacticalMap');
+    if (!el) return false;
+    this.mapOpen = typeof force === 'boolean' ? force : !this.mapOpen;
+    el.classList.toggle('hidden', !this.mapOpen);
+    el.setAttribute('aria-hidden', this.mapOpen ? 'false' : 'true');
+    if (this.mapOpen) this.#drawTacticalMap();
+    return this.mapOpen;
+  }
+
+  closeMap() { if (this.mapOpen) this.toggleMap(false); }
+
+  #drawTacticalMap() {
+    const canvas = $('#tacticalCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;                          // resolução interna 720
+    const s = this.sim, p = s.player;
+    // F40 — MESMO tint sazonal do radar (F39): a estação tinge fundo/grade/
+    // moldura; semáforos funcionais nunca mudam.
+    const tint = minimapTintFor(seasonIndexFor(new Date()));
+    const frame = $('#tacticalFrame');
+    if (frame) {
+      frame.classList.add('seasonal');
+      frame.style.setProperty('--mm-edge', tint.edge);
+      $('#tacticalSub').textContent = `${s.ring?.pulse != null ? `PULSO ${String(s.ring.pulse).padStart(2, '0')} · ` : ''}${tint.id.toUpperCase()} · M PARA FECHAR`;
+    }
+    const scale = tacticalScale(size);
+    const at = (x, z) => tacticalProject(x, z, size);
+    ctx.clearRect(0, 0, size, size);
+    // fundo + grade da estação (10 linhas — leitura de coordenadas)
+    ctx.fillStyle = 'rgba(10,10,16,.88)';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = tint.grid; ctx.lineWidth = 1;
+    for (let g = -200; g <= 200; g += 50) {
+      const a = at(g, -200), b = at(g, 200);
+      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+      const c = at(-200, g), d = at(200, g);
+      ctx.beginPath(); ctx.moveTo(c.px, c.py); ctx.lineTo(d.px, d.py); ctx.stroke();
+    }
+    // véu da estação (antes dos marcadores — semáforos intactos)
+    ctx.fillStyle = tint.overlay;
+    ctx.fillRect(0, 0, size, size);
+    // distritos nomeados (círculo + rótulo — a leitura de SETOR é o ganho do mapa)
+    const markers = tacticalMarkers({
+      player: p, ring: s.ring, terminals: s.terminals,
+      bots: s.bots, loot: s.loot, districts: this.sim.world?.districts ?? [],
+    });
+    ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    for (const m of markers) if (m.kind === 'district') {
+      const c = at(m.x, m.z);
+      ctx.strokeStyle = 'rgba(122,90,158,.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+      ctx.fillStyle = 'rgba(232,227,213,.6)';
+      ctx.fillText(m.label, c.px, c.py - m.r * scale - 6);
+    }
+    // anel alvo (tracejado) + atual — SEMÁFOROS intocados
+    for (const m of markers) if (m.kind === 'ringTarget') {
+      const c = at(m.x, m.z);
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = 'rgba(255,107,44,.75)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for (const m of markers) if (m.kind === 'ring') {
+      const c = at(m.x, m.z);
+      ctx.strokeStyle = 'rgba(200,255,61,.9)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+    }
+    // terminais (verde ativo/cinza inativo — mesmo semáforo do radar)
+    for (const m of markers) if (m.kind === 'terminal') {
+      const c = at(m.x, m.z);
+      ctx.fillStyle = m.active ? '#39ff88' : 'rgba(90,90,90,.5)';
+      ctx.fillRect(c.px - 4, c.py - 4, 8, 8);
+      if (m.active) { ctx.strokeStyle = '#39ff88'; ctx.lineWidth = 1; ctx.strokeRect(c.px - 7, c.py - 7, 14, 14); }
+    }
+    // loot ativo
+    ctx.fillStyle = 'rgba(66,217,222,.8)';
+    for (const m of markers) if (m.kind === 'loot') {
+      const c = at(m.x, m.z);
+      ctx.fillRect(c.px - 1.5, c.py - 1.5, 3, 3);
+    }
+    // contatos revelados (mesmo gate determinístico do radar)
+    ctx.fillStyle = '#ffb52e';
+    for (const m of markers) if (m.kind === 'recon') {
+      const c = at(m.x, m.z);
+      ctx.beginPath(); ctx.arc(c.px, c.py, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    // jogador (seta girada pelo yaw — MESMA gramática do radar)
+    for (const m of markers) if (m.kind === 'player') {
+      const c = at(m.x, m.z);
+      ctx.save();
+      ctx.translate(c.px, c.py);
+      ctx.rotate(-m.yaw + Math.PI);
+      ctx.fillStyle = '#ffd28a';
+      ctx.beginPath();
+      ctx.moveTo(0, -9); ctx.lineTo(6.5, 7.5); ctx.lineTo(0, 3.5); ctx.lineTo(-6.5, 7.5);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
 
   setAbility(operativeId, online = false) {
     this.operativeId = operativeId;
@@ -339,7 +448,12 @@ export class HUD {
     const spreadPx = this.#crosshairSpread(input);
     document.documentElement.style.setProperty('--ch-gap', `${spreadPx}px`);
     // minimapa (Fase 35 — 30 Hz; o mundo 3D é interpolado, ninguém lê 60 Hz de radar)
-    if (this.mmLimiter.ready()) this.#drawMinimap();
+    if (this.mmLimiter.ready()) {
+      this.#drawMinimap();
+      // Fase 40 — mapa tático aberto redesenha no MESMO tick de 30 Hz
+      // (a partida continua viva atrás: anéis/terminais/contatos atualizam)
+      if (this.mapOpen) this.#drawTacticalMap();
+    }
   }
 
   // Fase 35 — telemetria de performance no HUD (FPS médio + escala DRS + tier).

@@ -990,9 +990,10 @@ function oilPoolMaterial() {
  * @param {object} layout — getWorldLayout(seed, scenarioId)
  * @param {object} scenario — resolveScenario(...)
  * @param {object} q — qualityTier(...)
- * @param {{ contactShadows?: (entries: Array) => void }} hooks — reusa a infra da Fase 7
+ * @param {{ contactShadows?: (entries: Array) => void,
+ *          bandContactShadows?: (entries: Array) => void }} hooks — reusa a infra da Fase 7 (F40: + bandas)
  */
-export function buildDistrictDressing(scene, layout, scenario, q, { contactShadows } = {}) {
+export function buildDistrictDressing(scene, layout, scenario, q, { contactShadows, bandContactShadows } = {}) {
   // idempotência: mesma cena não acumula 2× (padrão worldmarks)
   if (scene.userData.districtDressing) return scene.userData.districtDressing;
 
@@ -1146,7 +1147,10 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
     if (g.userData?.waver) floaters.push({ mesh: g.userData.waver, baseY: g.userData.waver.position.y, phase: variantRng.next() * 6.28, speed: .5, waver: true });
   }
 
-  if (shadows.length && contactShadows) contactShadows(shadows);
+  // F40 — as sombras do dressing entram nas BANDAS DE DISTÂNCIA quando o
+  // hook existe (alpha por instância — o disco a 200m era moiré); sem o hook
+  // cai no F7 estático (retrocompatível — assinatura/contrato intocado).
+  if (shadows.length) (bandContactShadows ?? contactShadows)?.(shadows);
   scene.add(dressing);
   animators.push(...emitterAnimators); // Fase 26 — partículas reais do dressing
 

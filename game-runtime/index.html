@@ -29,6 +29,7 @@
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
       <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
       <button id="gfxBtn" class="audio-toggle" type="button" title="Vídeo e performance (KR_GFX_*): qualidade, pós-FX, resolução dinâmica, telemetria, tremor e sensibilidade">⚙ GFX</button>
+      <button id="mapBtn" class="audio-toggle" type="button" title="Mapa tático (M): distritos, anéis do Ring, terminais ZEX e contatos revelados">🗺 MAPA</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
@@ -79,6 +80,26 @@
     <div class="map-corner">
       <div class="minimap-frame"><canvas id="minimap" width="196" height="196"></canvas><span class="compass">N</span></div>
       <div id="killfeed"></div>
+    </div>
+
+    <!-- Fase 40 — mapa tático em tela cheia (tecla M / botão MAPA) -->
+    <div id="tacticalMap" class="hidden" aria-hidden="true">
+      <div class="tactical-frame" id="tacticalFrame">
+        <div class="tactical-head">
+          <b>MAPA TÁTICO</b>
+          <span id="tacticalSub" class="tactical-sub">—</span>
+          <span class="tactical-close">[M] FECHAR</span>
+        </div>
+        <canvas id="tacticalCanvas" width="720" height="720"></canvas>
+        <div class="tactical-legend">
+          <span class="lg lg-ring">ring atual</span>
+          <span class="lg lg-target">próximo pulso</span>
+          <span class="lg lg-terminal">terminal ZEX</span>
+          <span class="lg lg-loot">loot</span>
+          <span class="lg lg-recon">contato revelado</span>
+          <span class="lg lg-player">você</span>
+        </div>
+      </div>
     </div>
 
     <!-- status do jogador (canto inferior esquerdo) -->

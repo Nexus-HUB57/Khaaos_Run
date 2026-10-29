@@ -901,3 +901,38 @@ test('F39 · outros mundos: sem scrub → sem campo de bandas (custo 0)', () => 
     assert.equal(scene.userData.scrubShadowEntries, undefined, `${scenarioId}: sem registro`);
   }
 });
+
+// ================== Fase 40 — sombras do dressing em bandas (buildScene) ====
+
+test('F40 · buildScene W1-W4: props dos distritos com campo de sombras em bandas', () => {
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(`f40-dressing-${scenarioId}`, scenarioId, null, 'high');
+    const fields = scene.userData.dressingBandShadows;
+    assert.ok(Array.isArray(fields) && fields.length === 1,
+      `${scenarioId}: 1 campo de banda do dressing (F22 → F40)`);
+    const handle = fields[0];
+    const total = scene.userData.dressingShadowEntries;
+    assert.equal(handle.entries.length, total,
+      `${scenarioId}: registro do total consistente (${total})`);
+    assert.ok(total > 0, `${scenarioId}: dressing plantou sombras (${total})`);
+    // ancoragem no relevo: y = terreno + 12mm (plano jogável = 0.012)
+    for (const e of handle.entries) {
+      assert.ok(e.y >= .012, `${scenarioId}: lift anti-z-fight (y=${e.y?.toFixed?.(3)})`);
+      assert.ok(e.size > 0, `${scenarioId}: tamanho da sombra plantado`);
+    }
+    // banda canônica do vocabulário F39 (mesma do scrub: 30→90m)
+    assert.equal(handle.nearDist, 30, `${scenarioId}: nearDist canônica 30`);
+    assert.equal(handle.farDist, 90, `${scenarioId}: farDist canônica 90`);
+    // update acende a banda com a câmera NO PÉ de uma sombra (garantido aceso
+    // em qualquer mundo — o dressing de Ckesalth fica longe do centro)
+    const e0 = handle.entries[0];
+    handle.update(e0.x, e0.z);
+    assert.equal(handle.alpha.array[0], 1, `${scenarioId}: câmera no pé → alpha cheio`);
+    assert.ok([...handle.alpha.array].some((a) => a > 0.002), `${scenarioId}: banda ocupada`);
+    assert.equal(handle.mesh.visible, true, `${scenarioId}: campo visível com banda ocupada`);
+    // idempotência: mesma câmera → mesmo estado
+    const before = [...handle.alpha.array];
+    handle.update(e0.x, e0.z);
+    assert.deepEqual([...handle.alpha.array], before, `${scenarioId}: update idempotente`);
+  }
+});
