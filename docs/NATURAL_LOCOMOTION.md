@@ -108,3 +108,51 @@ Fallback: sem o componente, os AnimInstances aplicam single-pole smoothing — n
 | `Game/AI/KhaaosAIController.{h,cpp}` | Assinatura de locomoção + gait wobble dos bots |
 | `scripts/test_ue5_logic.sh` | Teste do kernel registrado |
 | `scripts/validate_uht.py` | Headers novos em `NEW_FILES` |
+| `scripts/ue5/create_natural_locomotion_assets.py` | **Novo** — cria BS/AO com eixos do contrato, idempotente, relatório JSON |
+
+## 7. Wiring dos assets no host licenciado (UE5.8 Editor)
+
+### 7.1 Automatizado — `create_natural_locomotion_assets.py`
+
+Cria os **containers de asset** com eixos exatamente iguais aos parâmetros do
+kernel (idempotente; sem skeleton em `/Game/Characters`, nada é fabricado):
+
+```bash
+# dentro do Editor (File → Execute Python Script) ou cmdline:
+#   UnrealEditor-Cmd.exe KhaaosRun.uproject -run=pythonscript \
+#     -script=<repo>/scripts/ue5/create_natural_locomotion_assets.py [--dry-run]
+```
+
+| Asset criado (por espécie) | Eixo 0 | Eixo 1 | Faixa |
+|---|---|---|---|
+| `BS_NaturalLocomotion` | `SmoothedSpeed` | `SmoothedDirection` (wrap) | 0..1000 cm/s grid 10 · −180..180° grid 15 |
+| `AO_NaturalLean` | `LeanRoll` | `LeanPitch` | ±(lean da espécie +2°) · ±9° |
+
+Faixas de lean por espécie vêm da tabela §3 (headroom +2° absorve o overshoot
+da spring ζ=0.85). Relatório: `Saved/NaturalLocomotionWiring_report.json`.
+
+### 7.2 Manual — nós do AnimGraph (tabela de ligação)
+
+O Python do Editor não expõe criação de nós do AnimGraph; a ligação abaixo é
+feita na UI (ou via `unreal-mcp` no host). Ordem de cima para baixo no grafo:
+
+| # | Parâmetro (Khaaos\|Anim\|Natural) | Nó no AnimGraph | Ligação |
+|---|---|---|---|
+| 1 | `SmoothedSpeed` + `SmoothedDirection` | `BS_NaturalLocomotion` (Sample) | entra nos eixos X/Y do blend space — **substitui** Speed/Direction crus em todas as amostragens |
+| 2 | `LeanRoll` + `LeanPitch` | `AO_NaturalLean` (Aim Offset) dentro de **Layered Blend Per Bone** (spine_01, aditivo, mesh space) | sobreposto à pose base; peso 1 em andamento, fade out com `StopEase` |
+| 3 | `StopEase` | gate das transições start/stop da State Machine (distance matching) | `Blend Poses by StopEase`; transição de Stop só abaixo de ~0.15 |
+| 4 | `StridePhase` | sincronia de notifies de passo + reset do foot IK por planta | footstep L/R já emite `OnFootstepPhase` (áudio/VFX) |
+| 5 | `LandRecovery` | blend da aterrissagem (aprox −1..1) | −1 = absorção (joelhos), →0 estabiliza; ignorar no ar |
+| 6 | `bNaturalTurningInPlace` + `TurnYawOffset` | node de turn-in-place | histerese 70°/25° já no kernel; suprimido em movimento |
+| 7 | `HeadLookYaw` + `HeadLookPitch` | look-at da cabeça (Aim Offset do pescoço/cabeça) | clamps 75°/40° já aplicados no kernel |
+| 8 | `IdleBreath` | **Layered Blend Per Bone** aditivo (spine_02/chest) | −1..1, portadora 0.22 Hz (idle) — nunca em sprint |
+| 9 | `FootIKOffsetLeft/Right` + `FootIKTiltLeft/Right` | `TwoBoneIK` por pé (`foot_l`/`foot_r`) + rotação de pé | offsets em cm, tilt em °; relaxar no ar (`bIsInAir`) |
+
+### 7.3 Validação pós-wiring (host)
+
+1. PIE: acelerar em linha reta → lean roll suave nos strafes, zero salto de parâmetro no `Anim Preview`.
+2. 90° instantâneo parado → turn-in-place com easing de root (sem "giroca").
+3. Queda de altura média → `LandRecovery` absorve e rebota (sem pose travada).
+4. Terreno irregular → pés plantados (offset IK ≤ 35 cm, tilt ≤ 25°).
+5. 3+ avatares parados → respiração fora de fase (noise por personagem).
+6. Bots em esquadrão → velocidades/turn rates dessincronizados (assinatura por nome).
