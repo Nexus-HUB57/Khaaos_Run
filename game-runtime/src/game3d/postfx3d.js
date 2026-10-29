@@ -13,10 +13,12 @@ const GradeShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
-    uGrain: { value: 0.045 },
-    uVignette: { value: 0.36 },
-    uSaturation: { value: 1.07 },
-    uContrast: { value: 1.055 },
+    // Acabamento limpo de beta: o grão continua orgânico, mas não mascara
+    // normal maps, roughness e microdetalhes de fachadas/terreno.
+    uGrain: { value: 0.022 },
+    uVignette: { value: 0.23 },
+    uSaturation: { value: 1.045 },
+    uContrast: { value: 1.035 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -56,10 +58,10 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const size = renderer.getSize(new THREE.Vector2());
-    const bloom = new UnrealBloomPass(size, quality === 'high' ? 0.32 : 0.22, 0.55, 0.82);
+    const bloom = new UnrealBloomPass(size, quality === 'high' ? 0.24 : 0.18, 0.52, 0.88);
     composer.addPass(bloom);
     const grade = new ShaderPass(GradeShader);
-    if (quality !== 'high') grade.uniforms.uGrain.value = 0.03;
+    if (quality !== 'high') grade.uniforms.uGrain.value = 0.016;
     composer.addPass(grade);
     composer.addPass(new OutputPass());
     let elapsed = 0;
