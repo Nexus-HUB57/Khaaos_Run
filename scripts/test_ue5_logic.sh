@@ -48,3 +48,11 @@ BARBURHEN_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/World/Barburhen"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${BARBURHEN_INCLUDE_DIR}" \
     "${BARBURHEN_RULES_TEST_SOURCE}" "${BARBURHEN_RULES_SOURCE}" -o "${TEMP_DIR}/barburhen-rules-test"
 "${TEMP_DIR}/barburhen-rules-test"
+
+# Natural locomotion kernel (anti-robotization). Pure C++20, zero UE deps —
+# compiles directly without stubs (see tests/ue5/natural_locomotion_test.cpp).
+NATLOCO_TEST_SOURCE="${ROOT_DIR}/tests/ue5/natural_locomotion_test.cpp"
+NATLOCO_CORE_SOURCE="${MODULE_INCLUDE_DIR}/Game/Animation/KhaaosLocomotionCore.cpp"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
+    "${NATLOCO_TEST_SOURCE}" "${NATLOCO_CORE_SOURCE}" -o "${TEMP_DIR}/natural-locomotion-test"
+"${TEMP_DIR}/natural-locomotion-test"

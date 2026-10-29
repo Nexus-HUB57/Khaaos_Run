@@ -9,6 +9,7 @@
 
 class AKhaaosCharacter;
 class UKhaaosADSComponent;
+class UKhaaosNaturalLocomotionComponent;
 
 // ─── Equip Slot Enum (for animation blending) ─────────────────────────────────
 
@@ -140,6 +141,72 @@ public:
         /** ADS aim offset interpolation speed. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Anim|Layered")
         float AimOffsetInterpSpeed = 10.0f;
+
+        // ─── Natural Locomotion (anti-robotization outputs) ───────────────────
+
+        /** Smoothed speed from the natural locomotion kernel (use in blend spaces INSTEAD of raw speed). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float SmoothedSpeed = 0.0f;
+
+        /** Smoothed movement direction (deg) — shortest-path wrapped, no parameter jumps. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float SmoothedDirection = 0.0f;
+
+        /** 1 = moving, 0 = fully stopped (eased) — gate for stop/start transitions. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float StopEase = 1.0f;
+
+        /** Body roll lean (deg) — apply additively to the spine root. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float LeanRoll = 0.0f;
+
+        /** Body pitch lean (deg) — apply additively to the spine root. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float LeanPitch = 0.0f;
+
+        /** Procedural stride phase (0..1) — drives gait-synced foot IK/audio. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float StridePhase = 0.0f;
+
+        /** Landing absorption spring (approx -1..1) — blend land recovery anims. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float LandRecovery = 0.0f;
+
+        /** True while an eased turn-in-place root rotation is in progress. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        bool bNaturalTurningInPlace = false;
+
+        /** Pending turn yaw offset (deg) — feeds the turn-in-place anim node. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float TurnYawOffset = 0.0f;
+
+        /** Head look yaw (deg) — apply to head bone via TwoBone/look-at node. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float HeadLookYaw = 0.0f;
+
+        /** Head look pitch (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float HeadLookPitch = 0.0f;
+
+        /** Breathing output (approx -1..1) — idle chest/spine additive layer. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float IdleBreath = 0.0f;
+
+        /** Left foot IK vertical offset (cm). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float FootIKOffsetLeft = 0.0f;
+
+        /** Right foot IK vertical offset (cm). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float FootIKOffsetRight = 0.0f;
+
+        /** Left foot tilt (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float FootIKTiltLeft = 0.0f;
+
+        /** Right foot tilt (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float FootIKTiltRight = 0.0f;
 
 protected:
 

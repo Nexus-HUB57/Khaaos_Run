@@ -3,6 +3,7 @@
 
 #include "Game/Character/KhaaosOperativeActor.h"
 #include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
+#include "Game/Animation/KhaaosNaturalLocomotionComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKhaaosOperative, Log, All);
 
@@ -20,6 +21,19 @@ AKhaaosOperativeActor::AKhaaosOperativeActor()
     // One cosmetic component per operative; visual attachments do not change
     // gameplay collision, stats or the species GAS authority path.
     SkinSystem = CreateDefaultSubobject<UKhaaosSkinSystem>(TEXT("SkinSystem"));
+
+    // Natural locomotion: operatives and bots get the same anti-robotization
+    // treatment as players (lean, stride-synced footsteps, foot IK, breathing).
+    NaturalLocomotion = CreateDefaultSubobject<UKhaaosNaturalLocomotionComponent>(TEXT("NaturalLocomotion"));
+
+    // Human-feel movement envelope for AI-driven operatives as well.
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        MoveComp->MaxAcceleration = 1600.0f;
+        MoveComp->BrakingDecelerationWalking = 1000.0f;
+        MoveComp->GroundFriction = 6.5f;
+        MoveComp->NetworkSmoothingMode = ENetworkSmoothingMode::Exponential;
+    }
 }
 
 void AKhaaosOperativeActor::BeginPlay()
@@ -42,4 +56,10 @@ void AKhaaosOperativeActor::BeginPlay()
 
     // Spawn species VFX via the SpeciesVFXRegistry
     ApplySpeciesTraits();
+
+    // Bind the natural locomotion profile to this operative's species.
+    if (NaturalLocomotion && SpeciesEnum != EKhaaosSpecies::NONE)
+    {
+        NaturalLocomotion->ApplySpeciesProfile(SpeciesEnum);
+    }
 }

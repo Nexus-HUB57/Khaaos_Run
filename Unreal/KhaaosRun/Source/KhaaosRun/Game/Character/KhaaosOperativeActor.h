@@ -9,6 +9,7 @@
 #include "Game/Character/KhaaosSkinSystem.h"
 #include "Game/AbilitySystem/KhaaosCombatPerkComponent.h"
 #include "Game/Inventory/KhaaosInventoryComponent.h"
+#include "Game/Animation/KhaaosNaturalLocomotionComponent.h"
 #include "KhaaosOperativeActor.generated.h"
 
 /**
@@ -131,6 +132,10 @@ public:
     /** Server-authoritative item inventory and loot request endpoint. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|Inventory")
     TObjectPtr<UKhaaosInventoryComponent> Inventory;
+
+    /** Natural locomotion (anti-robotization): lean, stride, foot IK, breathing. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|Animation")
+    TObjectPtr<UKhaaosNaturalLocomotionComponent> NaturalLocomotion;
 
 protected:
     virtual void BeginPlay() override;

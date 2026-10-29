@@ -14,12 +14,12 @@
 UENUM(BlueprintType)
 enum class EKhaaosSpecies : uint8
 {
-	Zheers  UMETA(DisplayName = "ZHEERS"),
-	Onith   UMETA(DisplayName = "ONITH"),
-	Skeetw  UMETA(DisplayName = "SKEETW"),
-	Huran   UMETA(DisplayName = "HURAN"),
-	Venex   UMETA(DisplayName = "VENEX"),
-	Khael   UMETA(DisplayName = "KHAEL")
+        Zheers  UMETA(DisplayName = "ZHEERS"),
+        Onith   UMETA(DisplayName = "ONITH"),
+        Skeetw  UMETA(DisplayName = "SKEETW"),
+        Huran   UMETA(DisplayName = "HURAN"),
+        Venex   UMETA(DisplayName = "VENEX"),
+        Khael   UMETA(DisplayName = "KHAEL")
 };
 
 /**
@@ -29,18 +29,18 @@ enum class EKhaaosSpecies : uint8
 UENUM(BlueprintType)
 enum class EKhaaosMovementState : uint8
 {
-	Idle      UMETA(DisplayName = "IDLE"),
-	Walk      UMETA(DisplayName = "WALK"),
-	Run       UMETA(DisplayName = "RUN"),
-	Sprint    UMETA(DisplayName = "SPRINT"),
-	Crouch    UMETA(DisplayName = "CROUCH"),
-	Slide     UMETA(DisplayName = "SLIDE"),
-	Jump      UMETA(DisplayName = "JUMP"),
-	Fall      UMETA(DisplayName = "FALL"),
-	Swim      UMETA(DisplayName = "SWIM"),
-	Vehicle   UMETA(DisplayName = "VEHICLE"),
-	Downed    UMETA(DisplayName = "DOWNED"),
-	Parachute UMETA(DisplayName = "PARACHUTE")
+        Idle      UMETA(DisplayName = "IDLE"),
+        Walk      UMETA(DisplayName = "WALK"),
+        Run       UMETA(DisplayName = "RUN"),
+        Sprint    UMETA(DisplayName = "SPRINT"),
+        Crouch    UMETA(DisplayName = "CROUCH"),
+        Slide     UMETA(DisplayName = "SLIDE"),
+        Jump      UMETA(DisplayName = "JUMP"),
+        Fall      UMETA(DisplayName = "FALL"),
+        Swim      UMETA(DisplayName = "SWIM"),
+        Vehicle   UMETA(DisplayName = "VEHICLE"),
+        Downed    UMETA(DisplayName = "DOWNED"),
+        Parachute UMETA(DisplayName = "PARACHUTE")
 };
 
 /**
@@ -50,14 +50,14 @@ enum class EKhaaosMovementState : uint8
 UENUM(BlueprintType)
 enum class EKhaaosCombatState : uint8
 {
-	Relaxed     UMETA(DisplayName = "RELAXED"),
-	ADS         UMETA(DisplayName = "ADS"),
-	Firing      UMETA(DisplayName = "FIRING"),
-	Reloading   UMETA(DisplayName = "RELOADING"),
-	Melee       UMETA(DisplayName = "MELEE"),
-	Throwing    UMETA(DisplayName = "THROWING"),
-	Reviving    UMETA(DisplayName = "REVIVING"),
-	Healing     UMETA(DisplayName = "HEALING")
+        Relaxed     UMETA(DisplayName = "RELAXED"),
+        ADS         UMETA(DisplayName = "ADS"),
+        Firing      UMETA(DisplayName = "FIRING"),
+        Reloading   UMETA(DisplayName = "RELOADING"),
+        Melee       UMETA(DisplayName = "MELEE"),
+        Throwing    UMETA(DisplayName = "THROWING"),
+        Reviving    UMETA(DisplayName = "REVIVING"),
+        Healing     UMETA(DisplayName = "HEALING")
 };
 
 /**
@@ -89,104 +89,148 @@ enum class EKhaaosCombatState : uint8
 UCLASS(Abstract, BlueprintType, meta=(BlueprintType))
 class UKhaaosSpeciesAnimInstance : public UAnimInstance
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
 public:
 
-	UKhaaosSpeciesAnimInstance();
+        UKhaaosSpeciesAnimInstance();
 
-	virtual void NativeInitializeAnimation() override;
-	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+        virtual void NativeInitializeAnimation() override;
+        virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
-	// ─── Species Selection ──────────────────────────────────────────────────
+        // ─── Species Selection ──────────────────────────────────────────────────
 
-	/** Set the active species (switches animation set). */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
-	void SetSpecies(EKhaaosSpecies InSpecies);
+        /** Set the active species (switches animation set). */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
+        void SetSpecies(EKhaaosSpecies InSpecies);
 
-	/** Get current species. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Anim")
-	EKhaaosSpecies GetSpecies() const { return Species; }
+        /** Get current species. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Anim")
+        EKhaaosSpecies GetSpecies() const { return Species; }
 
-	// ─── State Updates ──────────────────────────────────────────────────────
+        // ─── State Updates ──────────────────────────────────────────────────────
 
-	/** Update movement state. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
-	void SetMovementState(EKhaaosMovementState State);
+        /** Update movement state. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
+        void SetMovementState(EKhaaosMovementState State);
 
-	/** Update combat state. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
-	void SetCombatState(EKhaaosCombatState State);
+        /** Update combat state. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
+        void SetCombatState(EKhaaosCombatState State);
 
-	/** Set aim pitch for aim offset blending. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
-	void SetAimPitch(float Pitch);
+        /** Set aim pitch for aim offset blending. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
+        void SetAimPitch(float Pitch);
 
-	/** Set aim yaw for turn-in-place. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
-	void SetAimYaw(float Yaw);
+        /** Set aim yaw for turn-in-place. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Anim")
+        void SetAimYaw(float Yaw);
 
-	// ─── Animation Parameters ───────────────────────────────────────────────
+        // ─── Animation Parameters ───────────────────────────────────────────────
 
-	/** Movement speed (for blend tree). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	float MovementSpeed;
+        /** Movement speed (for blend tree). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        float MovementSpeed;
 
-	/** Movement direction (for strafing blend). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	float MovementDirection;
+        /** Movement direction (for strafing blend). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        float MovementDirection;
 
-	/** Aim pitch (-90 to 90). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	float AimPitch;
+        /** Aim pitch (-90 to 90). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        float AimPitch;
 
-	/** Aim yaw (-180 to 180). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	float AimYaw;
+        /** Aim yaw (-180 to 180). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        float AimYaw;
 
-	/** Current species. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	EKhaaosSpecies Species;
+        /** Current species. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        EKhaaosSpecies Species;
 
-	/** Current movement state. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	EKhaaosMovementState MovementState;
+        /** Current movement state. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        EKhaaosMovementState MovementState;
 
-	/** Current combat state. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	EKhaaosCombatState CombatState;
+        /** Current combat state. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        EKhaaosCombatState CombatState;
 
-	/** Is character downed? */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	uint8 bIsDowned : 1;
+        /** Is character downed? */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        uint8 bIsDowned : 1;
 
-	/** Is character in vehicle? */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	uint8 bIsInVehicle : 1;
+        /** Is character in vehicle? */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        uint8 bIsInVehicle : 1;
 
-	/** Is character parachuting? */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
-	uint8 bIsParachuting : 1;
+        /** Is character parachuting? */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim")
+        uint8 bIsParachuting : 1;
 
-	// ─── Species-Specific Parameters ────────────────────────────────────────
+        // ─── Species-Specific Parameters ────────────────────────────────────────
 
-	/** Turn-in-place threshold (degrees before turning). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
-	float TurnInPlaceThreshold;
+        /** Turn-in-place threshold (degrees before turning). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
+        float TurnInPlaceThreshold;
 
-	/** Sprint speed multiplier (species-dependent). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
-	float SprintSpeedMultiplier;
+        /** Sprint speed multiplier (species-dependent). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
+        float SprintSpeedMultiplier;
 
-	/** Melee reach (for animation distance). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
-	float MeleeReach;
+        /** Melee reach (for animation distance). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Species")
+        float MeleeReach;
+
+        // ─── Natural Locomotion (anti-robotization outputs) ─────────────────
+
+        /** Smoothed body roll lean (deg) — additive spine layer. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalLeanRoll = 0.0f;
+
+        /** Smoothed body pitch lean (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalLeanPitch = 0.0f;
+
+        /** Procedural stride phase (0..1) — gait-synced footsteps. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalStridePhase = 0.0f;
+
+        /** Landing absorption spring (approx -1..1). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalLandRecovery = 0.0f;
+
+        /** Breathing output (approx -1..1) — idle life. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalBreath = 0.0f;
+
+        /** Head look yaw (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalHeadLookYaw = 0.0f;
+
+        /** Head look pitch (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalHeadLookPitch = 0.0f;
+
+        /** Foot IK vertical offsets (cm). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalFootIKOffsetL = 0.0f;
+
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalFootIKOffsetR = 0.0f;
+
+        /** Eased turn-in-place state and pending yaw offset (deg). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        bool bNaturalTurningInPlace = false;
+
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float NaturalTurnYawOffset = 0.0f;
 
 private:
 
-	/** Apply species-specific defaults. */
-	void ApplySpeciesProfile(EKhaaosSpecies InSpecies);
+        /** Apply species-specific defaults. */
+        void ApplySpeciesProfile(EKhaaosSpecies InSpecies);
 
-	/** Update movement parameters from owner. */
-	void UpdateMovementParams();
+        /** Update movement parameters from owner. */
+        void UpdateMovementParams();
 };
