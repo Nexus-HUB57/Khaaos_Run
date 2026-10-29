@@ -285,7 +285,7 @@ function place(mesh, face, u, y, s, off) {
 // Fase 22 — exportada para o dressing dos distritos reusar a MESMA infra.
 const CONTACT_SHADOW_SIZES = {
   lamp: 1.7, barrel: 1.05, tire: 1.0, sandbag: 1.7, pallet: 1.8,
-  barrierprop: 2.9, crate: 1.25, cone: 0.62,
+  barrierprop: 2.9, crate: 1.25, cone: 0.62, rubble: 1.15, rubbleSlab: 1.35,
 };
 export function buildContactShadows(scene, entries) {
   if (!entries.length) return;
@@ -312,7 +312,8 @@ export function buildContactShadows(scene, entries) {
 
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
 function buildProps(scene, layout, q) {
-  const props = propPlacements(layout, { density: q.propsFactor });
+  const isBarburhen = layout.scenarioId === 'Barburhen';
+  const props = propPlacements(layout, { density: q.propsFactor * (isBarburhen ? 1.22 : 1) });
   if (!props.length) return;
   // Fase 7 — sombras de contato sob TODOS os props
   buildContactShadows(scene, props.map((p) => ({
@@ -397,6 +398,20 @@ function buildProps(scene, layout, q) {
   inst(new THREE.ConeGeometry(.22, .7, 10), coneM, byType('cone'), (p) => {
     dummy.position.set(p.x, .35 * p.s, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
   }, { type: 'cone' });
+  // Barburhen — detritos de concreto e chapa, instanciados para manter custo baixo.
+  const rubbleM = concreteMaterial(1.4);
+  rubbleM.color = new THREE.Color('#777875');
+  inst(new THREE.DodecahedronGeometry(.42, 0), rubbleM, byType('rubble'), (p) => {
+    dummy.position.set(p.x, .2 * p.s, p.z);
+    dummy.rotation.set(p.rot * .7, p.rot, p.rot * .35);
+    dummy.scale.set(p.s, p.s * (.55 + (p.x * p.x + p.z * p.z) % .35), p.s * .72);
+  }, { type: 'rubble' });
+  const slabM = metalMaterial('#50565a');
+  inst(new THREE.BoxGeometry(.9, .16, .42), slabM, byType('rubbleSlab'), (p) => {
+    dummy.position.set(p.x, .1 * p.s, p.z);
+    dummy.rotation.set((p.rot % .25) - .12, p.rot, (p.rot % .18) - .09);
+    dummy.scale.setScalar(p.s);
+  }, { type: 'rubbleSlab' });
   // tipos com asset GLTF real (aplicados depois por applyGltfProps)
   scene.userData.gltfPropTypes = ['barrel', 'crate', 'cone', 'barrierprop'];
   scene.userData.propInstances = propInstances;
@@ -535,6 +550,33 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   bushes.count = bi;
   scene.add(bushes);
 
+  // Barburhen — vegetação baixa fria, crescendo entre concreto e pátios.
+  // Planos cruzados mantêm silhueta orgânica com duas draw calls instanciadas.
+  if (scenario?.id === 'Barburhen') {
+    const SCRUB = Math.round(150 * q.treeFactor);
+    const scrubGeo = new THREE.PlaneGeometry(.9, 1.35);
+    const scrubTex = grassBladeTexture();
+    const scrubMats = ['#82958a', '#6d8179'].map((color) => new THREE.MeshStandardMaterial({
+      map: scrubTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color,
+    }));
+    const scrubMeshes = scrubMats.map((mat) => new THREE.InstancedMesh(scrubGeo, mat, SCRUB));
+    let si = 0; guard = 0;
+    while (si < SCRUB && guard++ < SCRUB * 14) {
+      const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
+      if (!free(x, z, 1.8) || !districtClear(x, z, 4)) continue;
+      const s = .55 + rng.next() * .8;
+      shadowSpots.push({ x, z, size: 1.05 * s });
+      dummy.position.set(x, .68 * s, z);
+      dummy.scale.set(s, s, s);
+      dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
+      dummy.updateMatrix(); scrubMeshes[0].setMatrixAt(si, dummy.matrix);
+      dummy.rotation.y += Math.PI / 2;
+      dummy.updateMatrix(); scrubMeshes[1].setMatrixAt(si, dummy.matrix);
+      si++;
+    }
+    scrubMeshes.forEach((mesh) => { mesh.count = si; mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); });
+  }
+
   // ---- pedras ----
   const ROCKS = Math.max(6, Math.round(30 * q.rockFactor));
   const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
@@ -597,7 +639,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
 
   // Fase 7 — luz recalibrada: sol menos saturado, fill mais suave (contraste
   // cinematográfico sem lavar as sombras); hemisfério amarra o chão ao céu.
-  const sun = new THREE.DirectionalLight(scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f', 2.35);
+  const isBarburhen = scenario.id === 'Barburhen';
+  const sun = new THREE.DirectionalLight(isBarburhen ? '#f0c7a2' : '#ffc98f', isBarburhen ? 2.05 : 2.35);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
   sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
@@ -608,12 +651,12 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   sun.shadow.bias = -0.0004;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(scenario.id === 'Barburhen' ? '#b9d0df' : '#8f74b4', scenario.id === 'Barburhen' ? '#5c676d' : '#4a3d2e', 1.18);
+  const hemi = new THREE.HemisphereLight(isBarburhen ? '#c5d5dc' : '#8f74b4', isBarburhen ? '#4e5a61' : '#4a3d2e', isBarburhen ? 1.04 : 1.18);
   scene.add(hemi);
-  const fill = new THREE.DirectionalLight('#6a5aa0', 0.72);
+  const fill = new THREE.DirectionalLight(isBarburhen ? '#7898b6' : '#6a5aa0', isBarburhen ? 0.5 : 0.72);
   fill.position.set(140, 80, 180);
   scene.add(fill);
-  const back = new THREE.DirectionalLight('#a8885e', 0.55);
+  const back = new THREE.DirectionalLight(isBarburhen ? '#b98263' : '#a8885e', isBarburhen ? 0.42 : 0.55);
   back.position.set(60, 50, 240);
   scene.add(back);
 
@@ -800,8 +843,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.userData.nightBase = {
     sky: { ...scenario.sky },
     fogColor: scenario.fogColor,
-    sunColor: scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f',
-    sunIntensity: 2.35, hemiIntensity: 1.18, fillIntensity: 0.72, backIntensity: 0.55,
+    sunColor: isBarburhen ? '#f0c7a2' : '#ffc98f',
+    sunIntensity: isBarburhen ? 2.05 : 2.35,
+    hemiIntensity: isBarburhen ? 1.04 : 1.18,
+    fillIntensity: isBarburhen ? 0.5 : 0.72,
+    backIntensity: isBarburhen ? 0.42 : 0.55,
     buildingMat: mats.building ?? null,
     buildingEmissive: 0.55,
   };
