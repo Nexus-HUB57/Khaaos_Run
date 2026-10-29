@@ -111,6 +111,99 @@ Stage Summary:
 - Artifact upload: graphics-benchmark-report with 30-day retention
 
 ---
+Task ID: Graphics v3
+Agent: Main
+Task: Pipeline Gráfica v3 — fechar o gap visual vs Free Fire
+
+Work Log:
+- Diagnóstico: PostProcessManager usava CVars INEXISTENTES na engine (r.ColorGradingLUT, r.VignetteIntensity, r.UnderwaterDistortion, r.BloomIntensity, r.SceneChromaticAberration) — pós-processamento era cosmético, não real
+- Criado KhaaosPostProcessDirector.h/.cpp (WorldSubsystem): FPostProcessSettings REAL em APostProcessVolume unbounded (prioridade 100); assinatura FF = exposição fixa (Min==Max), tonemapper contraste (Slope 0.85/Toe 0.30/Shoulder 0.22), saturação 1.22x + tint quente, bloom threshold 0.85, grain 0, vignette 0.22; 5 moods (PadraoBattle/NoiteNeon/NebulosaAlien/AmanhecerVenenoso/LowEndLeve); overlay tint+vignette por espécie; crossfade via BlendWeight (FTSTicker)
+- Criado KhaaosLightingDirector.h/.cpp (WorldSubsystem): rig programático (DirectionalLight+SkyLight+ExponentialHeightFog+SkyAtmosphere) via SpawnActorDeferred; 4 presets (DiaSolarPadrao 12lux@6100K, TardeDourada, NoiteNeon, NebulosaVioleta); auto-mapping por mundo; CVars r.Shadow.CSM.MaxMobileCascades + r.Shadow.DistanceScale; guardas dedicated server/-NullRHI/commandlet
+- Criado KhaaosCharacterPopComponent.h/.cpp: rim light Fresnel por espécie (MID params RimLightIntensity/RimLightColor), custom depth stencil (1+espécie), point light de ancoragem (pawn local, cast shadows off, preset>Low), SetRimBoost(0-3) hook p/ skills
+- Criado Tests/KhaaosGraphicsV3Spec.cpp: 6 specs de automação (receitas, mapeamento de mundos, presets de luz, rim único por espécie, 7 estágios, WriteRecipeToSettings real)
+- Corrigido KhaaosPostProcessManager.cpp: CVars fake → r.SceneColorFringe.Intensity real + delegação ColorGrading/Vignette ao Director
+- KhaaosMaterialPipeline.h/.cpp: +RimLightIntensity/RimLightColor no perfil por espécie (6 cores de identidade) + aplicação no ApplyMaterialProfile
+- KhaaosGraphicsPipelineManager.h/.cpp: pipeline 5→7 estágios (POST_PROCESS_SETUP, LIGHTING_SETUP) com pre-aquecimento de receita e reaplicação se world existe
+- KhaaosGraphicsPresetSubsystem.cpp: +r.Tonemapper.Sharpen por tier (0.35-0.7), +r.ScreenPercentage 100 baseline, +r.TSR.History.SampleCount (4 High+/2 low)
+- KhaaosCharacter.h/.cpp: +CharacterPopComp (CreateDefaultSubobject) + InitializePop no ApplySpecies (FName→EKhaaosSpecies) + accessor GetCharacterPopComponent()
+- Validado: scripts/validate_uht.py 298/298 PASSED; balanceamento de chaves OK em 15 arquivos
+
+Stage Summary:
+- Pós-processamento REAL (FPostProcessSettings) substitui CVars fake — maior causa do gap visual
+- Rig de iluminação completo por mundo — sol/ambient/névoa/atmosfera estilo FF
+- Personagens com identidade visual por espécie (rim light) — "pop" de gameplay
+- Sharpen + TSR tuning mobile — nitidez característica do FF
+- Integração: 7 estágios no PipelineManager, aplicação automática no OnWorldBeginPlay
+- Próximo passo: compile na GPU runner + validação visual com screenshot em staging
+
+---
+Task ID: Graphics v6 — Assets LUT + PostProcess no Content Browser
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- KhaaosLUTTextureFactory.cpp: patch WITH_EDITORONLY_DATA — pixels espelhados no Source (GetMip(0)) — sem isso assets LUT salvos perderiam pixels ao re-cozinhar
+- Criado KhaaosLUTMaterialBuilderCommandlet.h/.cpp (KhaaosRunEditor): gera programaticamente no Content Browser
+  - 5 texturas LUT persistentes /Game/Graphics/LUTs/T_KhaaosLUT_{PadraoBattle,NoiteNeon,NebulosaAlien,AmanhecerVenenoso,LowEndLeve} — duplicate do transient do factory, CompressionNone, TMGS_NoMipmaps, SRGB=false, LODGroup ColorLookupTable, FSavePackageArgs
+  - Material /Game/Graphics/Materials/M_KhaaosColorGradeLUT — MD_PostProcess (Unlit), BlendableLocation AfterTonemapping, grafo de ~35 nós: SceneTexture(PPI_PostProcessInput0) → ComponentMask → Saturate → UV strip math (U=(floor(B*q)*Size+R*q+0.5)/Size², V=(G*q+0.5)/Size) → TextureSampleParameter2D "LUTTexture" → Lerp LUTBlend → Desat+Lerp AdditionalSaturation → Multiply AdditionalTint → debug split-screen (ScreenPosition+If, esquerda=raw/direita=graded) → EmissiveColor
+  - 6 parâmetros idênticos aos que o runtime (KhaaosPostProcessLUTMaterial) define nos MIDs
+- KhaaosRunEditor.Build.cs: +AssetRegistry, +AssetTools
+- ue5-headless-compile.yml: FIX de label divergente (runs-on [self-hosted,gpu] vs script que registrava [self-hosted,linux,ue5.8,x64] — job nunca rodaria) → unificado em [self-hosted, linux, gpu, ue5.8, x64]; novo step "Generate LUT + PostProcess Material Assets" (-run=KhaaosLUTMaterialBuilder); artifacts incluem Content/Graphics/{LUTs,Materials}
+- setup-gpu-runner.sh: RUNNER_LABELS default alinhado + doc do helper
+- scripts/register-gpu-runner-token.sh (novo): gera RUNNER_REGISTRATION_TOKEN via API GitHub (POST /repos/{repo}/actions/runners/registration-token), usa GH_TOKEN ou PAT do remote; --list, --token-file (perms 600), nunca ecoa o token; token validado HTTP 201 contra Nexus-HUB57/Khaaos_Run
+- package.json: script canônico "test" = guard:tests && test:official (npm test agora é o entrypoint anti-reversão)
+- Testes de contrato: tests/official/lut-material-contract.test.ts (10 specs: domínio/blendable, cadeia do grafo, 6 parâmetros idênticos runtime↔commandlet, path único, 5 LUTs, Source mirror, Build.cs, step CI) + gpu-runner-labels.test.ts (4 specs: labels workflow↔script com deepEqual, essenciais, anti-vazamento de token, encadeamento)
+- Validado: validate_uht.py 298/298 no módulo game; Phase 1 limpa nos novos headers (fases 3-5 falham igual com arquivos antigos do HEAD — limitação pré-existente de paths fixos); npm test = 453 testes, 0 falhas (414 TS + 39 JS, 8 skipped por design)
+
+Stage Summary:
+- Material M_KhaaosColorGradeLUT agora EXISTE: gerado pelo builder em vez de depender de montagem manual no editor; runtime carrega o asset real e só usa ColorGradingLUT nativo como fallback
+- Pipeline de assets LUT reproduzível em CI (headless) e no editor (1 commandlet)
+- GPU runner: labels workflow↔runner consistentes + registro em 1 comando via API (sem Settings UI)
+- Próximo passo: registrar o runner na VM GPU (bash scripts/register-gpu-runner-token.sh com GH_TOKEN) e rodar o workflow ue5-headless-compile para compilar + gerar os assets
+
+---
+Task ID: Economy 2PC Server — PGlite + build limpo
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- economy-server: vitest subia a árvore e carregava o vitest.config.ts da RAIZ (vitest proibido pelo guard e ausente lá) → ERR_MODULE_NOT_FOUND. Criado economy-server/vitest.config.ts local (root ancorado, env DATABASE_URL=pglite:memory)
+- src/db/index.ts: suporte a PGlite (Postgres WASM em-processo) via DATABASE_URL=pglite: — createRequire(cwd) (compatível com build tsc NodeNext→CJS, sem import.meta); prod continua postgres.js/TCP sem carregar PGlite
+- src/db/ddl.ts (novo): DDL espelho de schema.ts (3 tabelas 2PC) aplicado no beforeAll da suíte
+- src/__tests__/2pc.integration.test.ts: beforeAll aplica DDL no PGlite
+- src/routes/2pc.ts: guard de params na rota status/:transactionId (Express 5 types) — consertava erro TS2769 pré-existente que quebrava npm run build
+- Fix de comportamento real: rotas commit/abort retornavam 500 em vez de 404 para transação inexistente quando o banco não estava acessível — agora os 404 são verificados contra Postgres REAL embutido (PGlite)
+- Validado: npm run build = 0 erros tsc; npm test (economy-server) = 6/6; npm test (raiz) = 453 testes 0 falhas
+
+Stage Summary:
+- Suíte 2PC integra contra Postgres real (WASM embutido) — os 404/409/403 não são mais mocks superficiais
+- Build tsc do economy-server volta a funcionar (era quebrado antes do guard de rotas)
+- Config vitest isolada por pacote — monorepo à prova do guard de testes
+
+---
+Task ID: Graphics v7 — Validação visual dos LUTs + correção do runner Linux
+Agent: Main
+Data: 2026-10-29
+
+Work Log:
+- BUG CRÍTICO corrigido no KhaaosRun.uproject: módulo KhaaosRunEditor tinha PlatformAllowList ["Win64","Mac"] — SEM Linux. O runner GPU (Linux) não carregaria NENHUM commandlet do editor (nem o LUTMaterialBuilder): o workflow inteiro de geração de assets estaria morto. Adicionado "Linux" (protegido por contrato no novo teste).
+- Criado KhaaosLUTVisualValidatorCommandlet.h/.cpp (KhaaosRunEditor): validação VISUAL dos LUTs com captura PNG headless (sampling 100% CPU, sem RHI):
+  - Por mood (5): Strip_<Mood>.png (strip cru Size²×Size), Antes_<Mood>.png / Depois_<Mood>.png (padrão de teste 512×256: hue sweep, saturação quente, rampa de cinza, 16 swatches de gameplay) e Comparacao_<Mood>.png (folha de contato antes/separador/depois)
+  - Sampling replica EXATAMENTE a matemática de UV do material M_KhaaosColorGradeLUT: U=(floor(B*q)*Size+R*q+0.5)/Size², V=(G*q+0.5)/Size — o preview prova o que o material vai amostrar
+  - Extração de pixels via Source.GetMip(0) (fallback PlatformData) — sobrevive a -NullRHI e re-cozimento
+  - Carregamento: asset persistente /Game/Graphics/LUTs/T_KhaaosLUT_* primeiro, fallback transient da factory (GenerateLUTForMood)
+  - Relatório lut_visual_report.json com meanDelta255/maxDelta255/pctPixelsChanged por mood (evidência numérica do grading); exit code 0 só se os 5 moods carregarem+salvarem
+- ue5-headless-compile.yml: novo step "Validate LUTs Visually (PNG captures + report)" (-run=KhaaosLUTVisualValidator, roda DEPOIS do builder) + artifact lut-visual-validation-<sha> (Saved/LUTValidation/**, 30 dias, if-no-files-found warn)
+- Teste de contrato tests/official/lut-visual-validation.test.ts (9 specs): herança UCommandlet, 5 assets + fallback, Source-based extraction, paridade sampling×material, 4 capturas PNG via ImageWrapper, chaves do JSON, ordem builder→validador no CI, artifact com retenção, Linux no PlatformAllowList do editor
+- Validado: validate_uht.py 298/298; contratos LUT/runner 22/22; economy-server npm install && npm test = 6/6 (2PC contra PGlite real); npm test raiz = 470 testes 0 falhas (8 skipped por design); bash -n OK em register-gpu-runner-token.sh e setup-gpu-runner.sh; JSON do .uproject e YAML do workflow válidos
+
+Stage Summary:
+- Validação visual dos LUTs agora é AUTOMÁTICA: após a 1ª compilação no runner GPU, as capturas Strip/Antes/Depois/Comparacao por mood saem no artifact do CI para inspeção humana
+- Runner GPU: registro em 1 comando (GH_TOKEN=<PAT> bash scripts/register-gpu-runner-token.sh) — token gerado via API, nunca impresso; --list para conferir no repo settings
+- Correção do .uproject destrava o pipeline de assets no Linux — sem ela nem o builder rodaria no runner
+- Próximo passo: registrar runner na VM GPU, disparar o workflow e conferir as capturas no artifact lut-visual-validation
+
+---
 Task ID: 9
 Agent: Main
 Task: Fase 26 — diretor calibrado por métricas reais (margem/pesos) + partículas reais p/ fumaça/fendas + FX dos marcos × mundos

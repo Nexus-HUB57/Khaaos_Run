@@ -13,7 +13,16 @@
 #include "Game/Graphics/KhaaosSpeciesLODManager.h"
 #include "Game/Graphics/KhaaosDynamicResolution.h"
 #include "Game/Graphics/KhaaosPostProcessManager.h"
+#include "Game/Graphics/KhaaosPostProcessDirector.h"
+#include "Game/Graphics/KhaaosLightingDirector.h"
+#include "Game/Graphics/KhaaosColorGradeLUTDirector.h"
+#include "Game/Graphics/KhaaosOutlineRenderer.h"
+#include "Game/Graphics/KhaaosMobileGraphicsOptimizer.h"
+#include "Game/Graphics/KhaaosShaderQualityTiers.h"
+#include "Game/Graphics/KhaaosLUTTextureFactory.h"
+#include "Game/Graphics/KhaaosPostProcessLUTMaterial.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -22,8 +31,8 @@ void UKhaaosGraphicsPipelineManager::Initialize(FSubsystemCollectionBase& Collec
 {
     Super::Initialize(Collection);
 
-    // Construir array de estágios do pipeline
-    PipelineStages.SetNum(5);
+    // Construir array de estágios do pipeline (v4: 9 estágios — +LUT_COLOR_GRADE, +OUTLINE_SETUP)
+    PipelineStages.SetNum(9);
 
     PipelineStages[0].Stage = EKhaaosPipelineStage::INITIALIZATION;
     PipelineStages[0].EstimatedTimeMs = 5.0f;
@@ -37,15 +46,31 @@ void UKhaaosGraphicsPipelineManager::Initialize(FSubsystemCollectionBase& Collec
     PipelineStages[2].EstimatedTimeMs = 10.0f;
     PipelineStages[2].bCritical = true;
 
-    PipelineStages[3].Stage = EKhaaosPipelineStage::RUNTIME_OPTIMIZATION;
-    PipelineStages[3].EstimatedTimeMs = 3.0f;
+    PipelineStages[3].Stage = EKhaaosPipelineStage::LUT_COLOR_GRADE;
+    PipelineStages[3].EstimatedTimeMs = 6.0f;
     PipelineStages[3].bCritical = false;
 
-    PipelineStages[4].Stage = EKhaaosPipelineStage::HOT_RELOAD;
-    PipelineStages[4].EstimatedTimeMs = 15.0f;
+    PipelineStages[4].Stage = EKhaaosPipelineStage::OUTLINE_SETUP;
+    PipelineStages[4].EstimatedTimeMs = 4.0f;
     PipelineStages[4].bCritical = false;
 
-    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Subsystem inicializado. 5 estágios configurados."));
+    PipelineStages[5].Stage = EKhaaosPipelineStage::POST_PROCESS_SETUP;
+    PipelineStages[5].EstimatedTimeMs = 8.0f;
+    PipelineStages[5].bCritical = false;
+
+    PipelineStages[6].Stage = EKhaaosPipelineStage::LIGHTING_SETUP;
+    PipelineStages[6].EstimatedTimeMs = 12.0f;
+    PipelineStages[6].bCritical = false;
+
+    PipelineStages[7].Stage = EKhaaosPipelineStage::RUNTIME_OPTIMIZATION;
+    PipelineStages[7].EstimatedTimeMs = 3.0f;
+    PipelineStages[7].bCritical = false;
+
+    PipelineStages[8].Stage = EKhaaosPipelineStage::HOT_RELOAD;
+    PipelineStages[8].EstimatedTimeMs = 15.0f;
+    PipelineStages[8].bCritical = false;
+
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Subsystem inicializado. 9 estágios configurados (v4 gráficos — +LUT, +Outline)."));
 }
 
 void UKhaaosGraphicsPipelineManager::Deinitialize(FSubsystemCollectionBase& Collection)
@@ -123,11 +148,145 @@ void UKhaaosGraphicsPipelineManager::InitializePipeline()
             LODSubsystem->DumpLODStats();
         }
 
+        // Aplicar otimizações mobile coordenadas (se plataforma mobile)
+        UKhaaosMobileGraphicsOptimizer* MobileOptimizer = GEngine->GetEngineSubsystem<UKhaaosMobileGraphicsOptimizer>();
+        if (MobileOptimizer && MobileOptimizer->IsMobilePlatform())
+        {
+            const EKhaaosMobileTier Tier = MobileOptimizer->DetectMobileTier();
+            MobileOptimizer->ApplyMobileOptimizations(Tier);
+        }
+
+        // Aplicar tier de shader baseado no preset de qualidade
+        UKhaaosShaderQualityTiers* ShaderTiers = GEngine->GetEngineSubsystem<UKhaaosShaderQualityTiers>();
+        if (ShaderTiers && PresetSubsystem)
+        {
+            const EKhaaosQualityPreset Preset = PresetSubsystem->GetCurrentPreset();
+            const EKhaaosShaderTier Tier =
+                Preset == EKhaaosQualityPreset::Mobile ? EKhaaosShaderTier::Minimal :
+                Preset == EKhaaosQualityPreset::Low    ? EKhaaosShaderTier::Low :
+                Preset == EKhaaosQualityPreset::Medium ? EKhaaosShaderTier::Medium :
+                Preset == EKhaaosQualityPreset::High   ? EKhaaosShaderTier::High :
+                Preset == EKhaaosQualityPreset::Ultra  ? EKhaaosShaderTier::Ultra :
+                EKhaaosShaderTier::Ultra; // PhD = Ultra
+            ShaderTiers->SetShaderTier(Tier);
+        }
+
         const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
         CompleteStage(EKhaaosPipelineStage::QUALITY_CALIBRATION, static_cast<float>(StageElapsed));
     }
 
-    // ── Estágio 4: RUNTIME_OPTIMIZATION ────────────────────────────────────
+    // ── Estágio 4: LUT_COLOR_GRADE (v5 — LUT procedural + PP material) ────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Inicializar fábrica procedural de LUTs (gera 5 texturas 32³ em ~2ms)
+        UKhaaosLUTTextureFactory* LUTFactory = GEngine->GetEngineSubsystem<UKhaaosLUTTextureFactory>();
+        if (LUTFactory)
+        {
+            UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] LUT Factory procedural inicializado (%d LUTs disponíveis)."),
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::PadraoBattle) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::NoiteNeon) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::NebulosaAlien) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::AmanhecerVenenoso) +
+                LUTFactory->HasLUTForMood(EKhaaosWorldMood::LowEndLeve));
+        }
+
+        // Aplicar LUT de color grading para o mood do mundo
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            // Diretor de LUT legacy (ainda ativo para compatibilidade)
+            if (UKhaaosColorGradeLUTDirector* LUTDirector = PlayWorld->GetSubsystem<UKhaaosColorGradeLUTDirector>())
+            {
+                const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
+                LUTDirector->ApplyLUTForMood(Mood, 0.5f);
+            }
+
+            // Material PostProcess de LUT (v5 — integra factory procedural)
+            if (UKhaaosPostProcessLUTMaterial* LUTMaterial = PlayWorld->GetSubsystem<UKhaaosPostProcessLUTMaterial>())
+            {
+                const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
+                LUTMaterial->ApplyLUTMaterial(Mood, 0.8f);
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] LUT de color grade configurado (v5 — procedural + PP material)."));
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::LUT_COLOR_GRADE, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 5: OUTLINE_SETUP (v4 — outline via CustomDepth stencil) ────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Habilitar outlines se a qualidade suporta (não Mobile/Low)
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            if (UKhaaosOutlineRenderer* OutlineRenderer = PlayWorld->GetSubsystem<UKhaaosOutlineRenderer>())
+            {
+                const bool bEnable = OutlineRenderer->IsOutlinesEnabled();
+                OutlineRenderer->EnableOutlines(bEnable);
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Outline renderer configurado."));
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::OUTLINE_SETUP, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 6: POST_PROCESS_SETUP (v4 — look Free Fire + LUT) ──────────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Pre-aquecer a receita do mood padrão (dado puro, sem world)
+        const FKhaaosPostProcessRecipe StandardRecipe =
+            UKhaaosPostProcessDirector::BuildRecipeForMood(EKhaaosWorldMood::PadraoBattle);
+
+        // Se já existe mundo de jogo (re-execução), reaplica o mood agora;
+        // senão o diretor aplica no OnWorldBeginPlay
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            if (UKhaaosPostProcessDirector* PPDirector = PlayWorld->GetSubsystem<UKhaaosPostProcessDirector>())
+            {
+                PPDirector->ApplyMood(
+                    UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName()), 0.5f);
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Receita PP padrão pré-aquecida: Sat=%.2f Bloom=%.2f Sharpen=%.2f"),
+            StandardRecipe.Saturation, StandardRecipe.BloomIntensity, StandardRecipe.Sharpen);
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::POST_PROCESS_SETUP, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 7: LIGHTING_SETUP (v4 — rig de luz programático) ───────────
+    {
+        const double StageStart = FPlatformTime::Seconds();
+
+        // Validar config do preset padrão (dado puro); rig real nasce no BeginPlay
+        const FKhaaosLightingPresetConfig DefaultLighting =
+            UKhaaosLightingDirector::BuildConfigForPreset(EKhaaosLightingPreset::DiaSolarPadrao);
+
+        // Se já existe mundo de jogo, aplica o preset agora
+        if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+        {
+            if (UKhaaosLightingDirector* LightingDirector = PlayWorld->GetSubsystem<UKhaaosLightingDirector>())
+            {
+                LightingDirector->ApplyLightingPreset(
+                    UKhaaosLightingDirector::AutoPresetForWorld(PlayWorld->GetFName()));
+            }
+        }
+
+        UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Config de luz padrão validada: Sol=%.1flux@%.0fK, Fog=%.3f"),
+            DefaultLighting.SunIntensityLux, DefaultLighting.SunTemperature, DefaultLighting.FogDensity);
+
+        const double StageElapsed = (FPlatformTime::Seconds() - StageStart) * 1000.0;
+        CompleteStage(EKhaaosPipelineStage::LIGHTING_SETUP, static_cast<float>(StageElapsed));
+    }
+
+    // ── Estágio 8: RUNTIME_OPTIMIZATION ────────────────────────────────────
     {
         const double StageStart = FPlatformTime::Seconds();
 
@@ -183,10 +342,53 @@ void UKhaaosGraphicsPipelineManager::OnQualityChanged()
         DRSubsystem->SetDRSMode(EKhaaosDRSMode::Adaptive);
     }
 
+    // Re-aplicar tier de shader baseado no novo preset
+    UKhaaosShaderQualityTiers* ShaderTiers = GEngine->GetEngineSubsystem<UKhaaosShaderQualityTiers>();
+    UKhaaosGraphicsPresetSubsystem* PresetSubsystem = GEngine->GetEngineSubsystem<UKhaaosGraphicsPresetSubsystem>();
+    if (ShaderTiers && PresetSubsystem)
+    {
+        const EKhaaosQualityPreset Preset = PresetSubsystem->GetCurrentPreset();
+        const EKhaaosShaderTier Tier =
+            Preset == EKhaaosQualityPreset::Mobile ? EKhaaosShaderTier::Minimal :
+            Preset == EKhaaosQualityPreset::Low    ? EKhaaosShaderTier::Low :
+            Preset == EKhaaosQualityPreset::Medium ? EKhaaosShaderTier::Medium :
+            Preset == EKhaaosQualityPreset::High   ? EKhaaosShaderTier::High :
+            Preset == EKhaaosQualityPreset::Ultra  ? EKhaaosShaderTier::Ultra :
+            EKhaaosShaderTier::Ultra; // PhD = Ultra
+        ShaderTiers->SetShaderTier(Tier);
+    }
+
+    // Re-aplicar otimizações mobile se aplicável
+    UKhaaosMobileGraphicsOptimizer* MobileOptimizer = GEngine->GetEngineSubsystem<UKhaaosMobileGraphicsOptimizer>();
+    if (MobileOptimizer && MobileOptimizer->IsMobilePlatform())
+    {
+        const EKhaaosMobileTier MobileTier = MobileOptimizer->DetectMobileTier();
+        MobileOptimizer->ApplyMobileOptimizations(MobileTier);
+    }
+
+    // Re-aplicar outlines baseado na nova qualidade
+    if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+    {
+        if (UKhaaosOutlineRenderer* OutlineRenderer = PlayWorld->GetSubsystem<UKhaaosOutlineRenderer>())
+        {
+            OutlineRenderer->EnableOutlines(OutlineRenderer->IsOutlinesEnabled());
+        }
+    }
+
     // Atualizar métricas
     CachedMetrics = GetPipelineMetrics();
 
-    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Reconfiguração completa."));
+    // Re-aplicar LUT material (v5 — regenerar se necessário)
+    if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+    {
+        if (UKhaaosPostProcessLUTMaterial* LUTMaterial = PlayWorld->GetSubsystem<UKhaaosPostProcessLUTMaterial>())
+        {
+            const EKhaaosWorldMood Mood = UKhaaosPostProcessDirector::AutoMoodForWorld(PlayWorld->GetFName());
+            LUTMaterial->ApplyLUTMaterial(Mood, 0.3f);
+        }
+    }
+
+    UE_LOG(LogKhaaosRun, Display, TEXT("[GraphicsPipeline] Reconfiguração completa (v5 — +LUTFactory, +PostProcessLUT, +ShaderTiers, +Mobile, +Outline)."));
 }
 
 // ─── Hot Reload ───────────────────────────────────────────────────────────────

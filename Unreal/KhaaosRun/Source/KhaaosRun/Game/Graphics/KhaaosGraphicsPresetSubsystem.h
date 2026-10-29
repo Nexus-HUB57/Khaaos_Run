@@ -14,6 +14,7 @@
 UENUM(BlueprintType)
 enum class EKhaaosQualityPreset : uint8
 {
+    Mobile,     // 720p@30fps — mobile dedicado (Free Fire target)
     Low,        // 720p@30fps — hardware integrado / mobile
     Medium,     // 1080p@60fps — GTX 1060 / RX 580
     High,       // 1440p@60fps — RTX 3060 / RX 6700
@@ -95,6 +96,32 @@ struct FKhaaosGraphicsProfile
     /** Upscaler ativo */
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     EKhaaosUpscalerTech Upscaler = EKhaaosUpscalerTech::TSR;
+
+    // ─── Novos Subsistemas Gráficos (v3.0) ──────────────────────────────────
+
+    /** Post-process stack ativo (0=Minimal, 1=Low, 2=Medium, 3=High, 4=Ultra) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "4"))
+    int32 PostProcessQuality = 2;
+
+    /** VFX quality tier (0=Off, 1=Low, 2=Medium, 3=High, 4=Ultra) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "4"))
+    int32 VFXQuality = 2;
+
+    /** Material stylization quality (0=Minimal, 4=Full) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "4"))
+    int32 StylizedMaterialQuality = 2;
+
+    /** Atmosphere/lighting quality (0=Minimal, 4=Full) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "4"))
+    int32 AtmosphereQuality = 2;
+
+    /** SSR quality (0=Off, 3=High) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0", ClampMax = "3"))
+    int32 SSRQuality = 1;
+
+    /** Se é um preset mobile */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    bool bIsMobilePreset = false;
 };
 
 UCLASS(Config = Game, defaultconfig)
@@ -135,11 +162,17 @@ protected:
     /** Detecta VRAM da GPU via nvidia-smi ou DXGI */
     int32 DetectGPUVRAM() const;
 
+    /** Detecta se está rodando em plataforma mobile */
+    bool DetectMobilePlatform() const;
+
 private:
     EKhaaosQualityPreset CurrentPreset = EKhaaosQualityPreset::Medium;
     FKhaaosGraphicsProfile ActiveProfile;
     FOnPresetChanged PresetChangedEvent;
 
-    /** Presets pré-calculados */
+    /** Presets pré-calculados (6 presets: Mobile, Low, Medium, High, Ultra, PhD) */
     TMap<EKhaaosQualityPreset, FKhaaosGraphicsProfile> CachedPresets;
+
+    /** Se a plataforma detectada é mobile */
+    bool bDetectedMobile = false;
 };

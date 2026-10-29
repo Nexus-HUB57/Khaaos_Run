@@ -17,6 +17,7 @@ class UKhaaosInventoryComponent;
 class UKhaaosWeaponComponent;
 class UKhaaosADSComponent;
 class UKhaaosSpectatorComponent;
+class UKhaaosCharacterPopComponent;
 class UKhaaosSpeciesDataAsset;
 class AKhaaosPlayerController;
 class AKhaaosPlayerState;
@@ -26,8 +27,8 @@ class AKhaaosPlayerState;
 UENUM(BlueprintType)
 enum class ECameraMode : uint8
 {
-	ThirdPerson UMETA(DisplayName = "THIRD_PERSON"),
-	FirstPerson UMETA(DisplayName = "FIRST_PERSON")
+        ThirdPerson UMETA(DisplayName = "THIRD_PERSON"),
+        FirstPerson UMETA(DisplayName = "FIRST_PERSON")
 };
 
 // ─── Movement State Enum ──────────────────────────────────────────────────────
@@ -35,13 +36,13 @@ enum class ECameraMode : uint8
 UENUM(BlueprintType)
 enum class EMovementState : uint8
 {
-	Walk    UMETA(DisplayName = "WALK"),
-	Sprint  UMETA(DisplayName = "SPRINT"),
-	Crouch  UMETA(DisplayName = "CROUCH"),
-	Slide   UMETA(DisplayName = "SLIDE"),
-	Vault   UMETA(DisplayName = "VAULT"),
-	Swim    UMETA(DisplayName = "SWIM"),
-	Climb   UMETA(DisplayName = "CLIMB")
+        Walk    UMETA(DisplayName = "WALK"),
+        Sprint  UMETA(DisplayName = "SPRINT"),
+        Crouch  UMETA(DisplayName = "CROUCH"),
+        Slide   UMETA(DisplayName = "SLIDE"),
+        Vault   UMETA(DisplayName = "VAULT"),
+        Swim    UMETA(DisplayName = "SWIM"),
+        Climb   UMETA(DisplayName = "CLIMB")
 };
 
 // ─── Delegates ────────────────────────────────────────────────────────────────
@@ -82,414 +83,418 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCameraModeChanged, ECameraMode, N
 UCLASS(Abstract, config=Game)
 class AKhaaosCharacter : public ACharacter
 {
-	GENERATED_BODY()
+        GENERATED_BODY()
 
 public:
-	AKhaaosCharacter();
+        AKhaaosCharacter();
 
-	// ─── Component Accessors ────────────────────────────────────────────────
+        // ─── Component Accessors ────────────────────────────────────────────────
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UCameraComponent* GetCameraComponent() const { return CameraComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UCameraComponent* GetCameraComponent() const { return CameraComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	USpringArmComponent* GetSpringArmComponent() const { return SpringArmComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        USpringArmComponent* GetSpringArmComponent() const { return SpringArmComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UChildActorComponent* GetWeaponChildActor() const { return WeaponChildActor; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UChildActorComponent* GetWeaponChildActor() const { return WeaponChildActor; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosWeaponComponent* GetWeaponComponent() const { return WeaponComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosWeaponComponent* GetWeaponComponent() const { return WeaponComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosADSComponent* GetADSComponent() const { return ADSComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosADSComponent* GetADSComponent() const { return ADSComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosSpectatorComponent* GetSpectatorComponent() const { return SpectatorComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosSpectatorComponent* GetSpectatorComponent() const { return SpectatorComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosAbilityComponent* GetAbilityComponent() const { return AbilityComp; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosAbilityComponent* GetAbilityComponent() const { return AbilityComp; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
-	UKhaaosAttributeSet* GetAttributeSet() const { return AttributeSet; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
-	// ─── Lifecycle ──────────────────────────────────────────────────────────
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosCharacterPopComponent* GetCharacterPopComponent() const { return CharacterPopComp; }
 
-	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaSeconds) override;
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+        // ─── Lifecycle ──────────────────────────────────────────────────────────
 
-	virtual void PossessedBy(AController* NewController) override;
-	virtual void OnRep_PlayerState() override;
+        virtual void BeginPlay() override;
+        virtual void Tick(float DeltaSeconds) override;
+        virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	// ─── Input Handlers (routed from AKhaaosPlayerController) ───────────────
+        virtual void PossessedBy(AController* NewController) override;
+        virtual void OnRep_PlayerState() override;
 
-	/** Move forward/backward. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
-	void MoveForward(float Value);
+        // ─── Input Handlers (routed from AKhaaosPlayerController) ───────────────
 
-	/** Move right/left. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
-	void MoveRight(float Value);
+        /** Move forward/backward. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
+        void MoveForward(float Value);
 
-	/** Turn (yaw). */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
-	void Turn(float Value);
+        /** Move right/left. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
+        void MoveRight(float Value);
+
+        /** Turn (yaw). */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
+        void Turn(float Value);
 
 	/** Look up/down (pitch). */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
 	void LookUp(float Value);
 
-	/** Enhanced jump with species modifier. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
-	virtual void Jump() override;
 	virtual void Landed(const FHitResult& Hit) override;
 
-	// ─── Sprint ─────────────────────────────────────────────────────────────
+        /** Enhanced jump with species modifier. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
+        virtual void Jump() override;
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
-	void StartSprint();
+        // ─── Sprint ─────────────────────────────────────────────────────────────
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
-	void StopSprint();
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
+        void StartSprint();
 
-	// ─── Crouch ─────────────────────────────────────────────────────────────
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
+        void StopSprint();
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
-	void StartCrouch();
+        // ─── Crouch ─────────────────────────────────────────────────────────────
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
-	void StopCrouch();
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
+        void StartCrouch();
 
-	// ─── Slide (Free Fire) ─────────────────────────────────────────────────
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
+        void StopCrouch();
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
-	void StartSlide();
+        // ─── Slide (Free Fire) ─────────────────────────────────────────────────
 
-	/** Slide end (called by timer or speed threshold). */
-	void EndSlide();
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Movement")
+        void StartSlide();
 
-	// ─── Camera Toggle ──────────────────────────────────────────────────────
+        /** Slide end (called by timer or speed threshold). */
+        void EndSlide();
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Camera")
-	void ToggleCamera();
+        // ─── Camera Toggle ──────────────────────────────────────────────────────
 
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Camera")
-	void SetCameraMode(ECameraMode NewMode);
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Camera")
+        void ToggleCamera();
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Camera")
-	ECameraMode GetCameraMode() const { return CameraMode; }
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Camera")
+        void SetCameraMode(ECameraMode NewMode);
 
-	// ─── Species Integration ────────────────────────────────────────────────
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Camera")
+        ECameraMode GetCameraMode() const { return CameraMode; }
 
-	/** Apply species data asset: mesh, stats, passive ability. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Species")
-	void ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset);
+	// ─── Species Integration ────────────────────────────────────────────────────────
 	void ApplySpeciesPresentation(FName SpeciesId);
 	void UpdateSpeciesMeshLOD(float MeshLODLevel);
 
+        /** Apply species data asset: mesh, stats, passive ability. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Species")
+        void ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset);
 
-	/** Get currently applied species. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Species")
-	const UKhaaosSpeciesDataAsset* GetSpeciesAsset() const { return AppliedSpeciesAsset; }
+        /** Get currently applied species. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Species")
+        const UKhaaosSpeciesDataAsset* GetSpeciesAsset() const { return AppliedSpeciesAsset; }
 
-	// ─── Damage / Death ─────────────────────────────────────────────────────
+        // ─── Damage / Death ─────────────────────────────────────────────────────
 
-	/**
-	 * Server-authoritative damage application.
-	 * Applies typed species mitigation, then reduces Shield before Health.
-	 * Returns actual damage dealt.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
-	float ApplyDamage(float DamageAmount, AActor* DamageInstigator, const FGameplayTag& DamageType);
+        /**
+         * Server-authoritative damage application.
+         * Applies typed species mitigation, then reduces Shield before Health.
+         * Returns actual damage dealt.
+         */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
+        float ApplyDamage(float DamageAmount, AActor* DamageInstigator, const FGameplayTag& DamageType);
 
-	/** Heal health (server only). */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
-	float Heal(float HealAmount);
+        /** Heal health (server only). */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
+        float Heal(float HealAmount);
 
-	/** Repair shield (server only). */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
-	float RepairShield(float Amount);
+        /** Repair shield (server only). */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
+        float RepairShield(float Amount);
 
-	/** Check if alive. */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
-	bool IsAlive() const { return Health > 0.0f; }
+        /** Check if alive. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
+        bool IsAlive() const { return Health > 0.0f; }
 
-	/** Check if downed (for revive system). */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
-	bool IsDowned() const { return bIsDowned; }
+        /** Check if downed (for revive system). */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
+        bool IsDowned() const { return bIsDowned; }
 
-	/** Handle death: set status, ragdoll, broadcast. */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
-	virtual void Die(AActor* Killer);
+        /** Handle death: set status, ragdoll, broadcast. */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
+        virtual void Die(AActor* Killer);
 
-	// ─── Movement State Queries ─────────────────────────────────────────────
+        // ─── Movement State Queries ─────────────────────────────────────────────
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
-	bool IsSprinting() const { return bIsSprinting; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
+        bool IsSprinting() const { return bIsSprinting; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
-	bool IsCrouching() const { return bIsCrouching; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
+        bool IsCrouching() const { return bIsCrouching; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
-	bool IsSliding() const { return bIsSliding; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
+        bool IsSliding() const { return bIsSliding; }
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
-	EMovementState GetMovementState() const { return MovementState; }
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
+        EMovementState GetMovementState() const { return MovementState; }
 
-	// ─── RepNotify Callbacks ────────────────────────────────────────────────
+        // ─── RepNotify Callbacks ────────────────────────────────────────────────
 
-	UFUNCTION()
-	void OnRep_Health(float OldHealth);
+        UFUNCTION()
+        void OnRep_Health(float OldHealth);
 
-	UFUNCTION()
-	void OnRep_Shield(float OldShield);
+        UFUNCTION()
+        void OnRep_Shield(float OldShield);
 
-	UFUNCTION()
-	void OnRep_Energy(float OldEnergy);
+        UFUNCTION()
+        void OnRep_Energy(float OldEnergy);
 
-	UFUNCTION()
-	void OnRep_Stamina(float OldStamina);
+        UFUNCTION()
+        void OnRep_Stamina(float OldStamina);
 
-	// ─── Server RPCs ────────────────────────────────────────────────────────
+        // ─── Server RPCs ────────────────────────────────────────────────────────
 
-	/** Server: request sprint state change. */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSprint(bool bWantsToSprint);
+        /** Server: request sprint state change. */
+        UFUNCTION(Server, Reliable, WithValidation)
+        void ServerSprint(bool bWantsToSprint);
 
-	/** Server: request crouch state change. */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerCrouch(bool bWantsToCrouch);
+        /** Server: request crouch state change. */
+        UFUNCTION(Server, Reliable, WithValidation)
+        void ServerCrouch(bool bWantsToCrouch);
 
-	/** Server: request slide. */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSlide();
+        /** Server: request slide. */
+        UFUNCTION(Server, Reliable, WithValidation)
+        void ServerSlide();
 
-	// ─── Delegates ──────────────────────────────────────────────────────────
+        // ─── Delegates ──────────────────────────────────────────────────────────
 
-	/** Broadcast when health changes (UI health bar). */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
-	FOnHealthChanged OnHealthChanged;
+        /** Broadcast when health changes (UI health bar). */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
+        FOnHealthChanged OnHealthChanged;
 
-	/** Broadcast when shield changes (UI shield bar). */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
-	FOnShieldChanged OnShieldChanged;
+        /** Broadcast when shield changes (UI shield bar). */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
+        FOnShieldChanged OnShieldChanged;
 
-	/** Broadcast when energy changes (UI energy bar). */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
-	FOnEnergyChanged OnEnergyChanged;
+        /** Broadcast when energy changes (UI energy bar). */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
+        FOnEnergyChanged OnEnergyChanged;
 
-	/** Broadcast when stamina changes (UI stamina bar). */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
-	FOnStaminaChanged OnStaminaChanged;
+        /** Broadcast when stamina changes (UI stamina bar). */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
+        FOnStaminaChanged OnStaminaChanged;
 
-	/** Broadcast on death. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
-	FOnDeath OnDeath;
+        /** Broadcast on death. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
+        FOnDeath OnDeath;
 
-	/** Broadcast when sprint starts. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
-	FOnSprintStart OnSprintStart;
+        /** Broadcast when sprint starts. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
+        FOnSprintStart OnSprintStart;
 
-	/** Broadcast when sprint ends. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
-	FOnSprintEnd OnSprintEnd;
+        /** Broadcast when sprint ends. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
+        FOnSprintEnd OnSprintEnd;
 
-	/** Broadcast when slide starts. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
-	FOnSlideStart OnSlideStart;
+        /** Broadcast when slide starts. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
+        FOnSlideStart OnSlideStart;
 
-	/** Broadcast when slide ends. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
-	FOnSlideEnd OnSlideEnd;
+        /** Broadcast when slide ends. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
+        FOnSlideEnd OnSlideEnd;
 
-	/** Broadcast when camera mode changes. */
-	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Camera")
-	FOnCameraModeChanged OnCameraModeChanged;
+        /** Broadcast when camera mode changes. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Camera")
+        FOnCameraModeChanged OnCameraModeChanged;
 
-	// ─── Configurable Movement Properties ───────────────────────────────────
+        // ─── Configurable Movement Properties ───────────────────────────────────
 
-	/** Walk speed (units/sec). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float WalkSpeed = 600.0f;
+        /** Walk speed (units/sec). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float WalkSpeed = 600.0f;
 
-	/** Sprint speed (units/sec). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float SprintSpeed = 900.0f;
+        /** Sprint speed (units/sec). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float SprintSpeed = 900.0f;
 
-	/** Crouch speed (units/sec). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float CrouchSpeed = 300.0f;
+        /** Crouch speed (units/sec). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float CrouchSpeed = 300.0f;
 
-	/** Slide speed (units/sec) -- Free Fire slide boost. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float SlideSpeed = 1200.0f;
+        /** Slide speed (units/sec) -- Free Fire slide boost. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float SlideSpeed = 1200.0f;
 
-	/** Jump height (units). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float JumpHeight = 600.0f;
+        /** Jump height (units). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float JumpHeight = 600.0f;
 
-	/** Maximum stamina. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
-	float MaxStamina = 100.0f;
+        /** Maximum stamina. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
+        float MaxStamina = 100.0f;
 
-	/** Stamina drain rate per second while sprinting. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
-	float StaminaDrainRate = 10.0f;
+        /** Stamina drain rate per second while sprinting. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
+        float StaminaDrainRate = 10.0f;
 
-	/** Stamina regeneration rate per second. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
-	float StaminaRegenRate = 5.0f;
+        /** Stamina regeneration rate per second. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Stamina")
+        float StaminaRegenRate = 5.0f;
 
-	/** Slide duration in seconds. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	float SlideDuration = 1.5f;
+        /** Slide duration in seconds. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        float SlideDuration = 1.5f;
 
-	/** Camera boom arm length (third person). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	float CameraBoomTargetArmLength = 300.0f;
+        /** Camera boom arm length (third person). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        float CameraBoomTargetArmLength = 300.0f;
 
-	/** Camera boom socket offset Z (third person). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	float CameraBoomSocketOffsetZ = 75.0f;
+        /** Camera boom socket offset Z (third person). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        float CameraBoomSocketOffsetZ = 75.0f;
 
-	/** First person camera FOV. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	float FirstPersonFOV = 90.0f;
+        /** First person camera FOV. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        float FirstPersonFOV = 90.0f;
 
-	/** Third person camera FOV. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	float ThirdPersonFOV = 90.0f;
+        /** Third person camera FOV. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        float ThirdPersonFOV = 90.0f;
 
-	/** Health regeneration per second (out of combat). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
-	float HealthRegenRate = 0.0f;
+        /** Health regeneration per second (out of combat). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
+        float HealthRegenRate = 0.0f;
 
-	/** Shield regeneration per second (out of combat). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
-	float ShieldRegenRate = 0.0f;
+        /** Shield regeneration per second (out of combat). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
+        float ShieldRegenRate = 0.0f;
 
-	/** Energy regeneration per second. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
-	float EnergyRegenRate = 1.0f;
+        /** Energy regeneration per second. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
+        float EnergyRegenRate = 1.0f;
 
-	/** Out-of-combat timer threshold for regen (seconds). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
-	float OutOfCombatThreshold = 5.0f;
+        /** Out-of-combat timer threshold for regen (seconds). */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Character|Regen")
+        float OutOfCombatThreshold = 5.0f;
 
-	// ─── Replicated Attributes ──────────────────────────────────────────────
+        // ─── Replicated Attributes ──────────────────────────────────────────────
 
-	/** Current health. */
-	UPROPERTY(ReplicatedUsing = OnRep_Health, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float Health;
+        /** Current health. */
+        UPROPERTY(ReplicatedUsing = OnRep_Health, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float Health;
 
-	/** Maximum health. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float MaxHealth;
+        /** Maximum health. */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float MaxHealth;
 
-	/** Current shield (absorbs damage before health). */
-	UPROPERTY(ReplicatedUsing = OnRep_Shield, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float Shield;
+        /** Current shield (absorbs damage before health). */
+        UPROPERTY(ReplicatedUsing = OnRep_Shield, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float Shield;
 
-	/** Maximum shield. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float MaxShield;
+        /** Maximum shield. */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float MaxShield;
 
-	/** Current energy (for species abilities). */
-	UPROPERTY(ReplicatedUsing = OnRep_Energy, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float Energy;
+        /** Current energy (for species abilities). */
+        UPROPERTY(ReplicatedUsing = OnRep_Energy, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float Energy;
 
-	/** Maximum energy. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float MaxEnergy;
+        /** Maximum energy. */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float MaxEnergy;
 
-	/** Current stamina (for sprint/slide). */
-	UPROPERTY(ReplicatedUsing = OnRep_Stamina, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
-	float Stamina;
+        /** Current stamina (for sprint/slide). */
+        UPROPERTY(ReplicatedUsing = OnRep_Stamina, BlueprintReadOnly, Category = "Khaaos|Character|Attributes")
+        float Stamina;
 
-	// ─── Replicated Movement Flags ──────────────────────────────────────────
+        // ─── Replicated Movement Flags ──────────────────────────────────────────
 
-	/** Is the character sprinting? */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	uint8 bIsSprinting : 1;
+        /** Is the character sprinting? */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        uint8 bIsSprinting : 1;
 
-	/** Is the character crouching? */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	uint8 bIsCrouching : 1;
+        /** Is the character crouching? */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        uint8 bIsCrouching : 1;
 
-	/** Is the character sliding? */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	uint8 bIsSliding : 1;
+        /** Is the character sliding? */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        uint8 bIsSliding : 1;
 
-	/** Is the character downed (awaiting revive)? */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
-	uint8 bIsDowned : 1;
+        /** Is the character downed (awaiting revive)? */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
+        uint8 bIsDowned : 1;
 
-	/** Is the character dead? */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
-	uint8 bIsDead : 1;
+        /** Is the character dead? */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
+        uint8 bIsDead : 1;
 
-	/** Current camera mode. */
-	UPROPERTY(ReplicatedUsing = OnRep_CameraMode, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	ECameraMode CameraMode;
+        /** Current camera mode. */
+        UPROPERTY(ReplicatedUsing = OnRep_CameraMode, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        ECameraMode CameraMode;
 
-	/** Current movement state. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
-	EMovementState MovementState;
+        /** Current movement state. */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
+        EMovementState MovementState;
 
 protected:
 
-	// ─── Components ─────────────────────────────────────────────────────────
+        // ─── Components ─────────────────────────────────────────────────────────
 
-	/** Camera component for view. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	TObjectPtr<UCameraComponent> CameraComp;
+        /** Camera component for view. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        TObjectPtr<UCameraComponent> CameraComp;
 
-	/** Spring arm for third-person camera boom. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
-	TObjectPtr<USpringArmComponent> SpringArmComp;
+        /** Spring arm for third-person camera boom. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Camera")
+        TObjectPtr<USpringArmComponent> SpringArmComp;
 
-	/** Child actor for currently equipped weapon. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Weapon")
-	TObjectPtr<UChildActorComponent> WeaponChildActor;
+        /** Child actor for currently equipped weapon. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Weapon")
+        TObjectPtr<UChildActorComponent> WeaponChildActor;
 
-	/** GAS ability component. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|GAS")
-	TObjectPtr<UKhaaosAbilityComponent> AbilityComp;
+        /** GAS ability component. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|GAS")
+        TObjectPtr<UKhaaosAbilityComponent> AbilityComp;
 
-	/** AttributeSet for GAS attributes. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|GAS")
-	TObjectPtr<UKhaaosAttributeSet> AttributeSet;
+        /** AttributeSet for GAS attributes. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|GAS")
+        TObjectPtr<UKhaaosAttributeSet> AttributeSet;
 
-	/** Inventory component. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Inventory")
-	TObjectPtr<UKhaaosInventoryComponent> InventoryComp;
+        /** Inventory component. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Inventory")
+        TObjectPtr<UKhaaosInventoryComponent> InventoryComp;
 
-	/** Weapon component (ammo, reload, recoil, fire mode). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Weapon")
-	TObjectPtr<UKhaaosWeaponComponent> WeaponComp;
+        /** Weapon component (ammo, reload, recoil, fire mode). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Weapon")
+        TObjectPtr<UKhaaosWeaponComponent> WeaponComp;
 
-	/** ADS (Aim Down Sights) component. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|ADS")
-	TObjectPtr<UKhaaosADSComponent> ADSComp;
+        /** ADS (Aim Down Sights) component. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|ADS")
+        TObjectPtr<UKhaaosADSComponent> ADSComp;
 
-	/** Spectator component (active after elimination). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Spectator")
-	TObjectPtr<UKhaaosSpectatorComponent> SpectatorComp;
+        /** Spectator component (active after elimination). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Spectator")
+        TObjectPtr<UKhaaosSpectatorComponent> SpectatorComp;
 
-	// ─── Species ────────────────────────────────────────────────────────────
+        /** Character pop component (v3 gráficos — rim light por espécie). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Graphics")
+        TObjectPtr<UKhaaosCharacterPopComponent> CharacterPopComp;
 
-	/** Applied species data asset (drives mesh, stats, passive). */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Species")
-	const UKhaaosSpeciesDataAsset* AppliedSpeciesAsset = nullptr;
+        // ─── Species ────────────────────────────────────────────────────────────
 
-	// ─── Internal State ─────────────────────────────────────────────────────
+        /** Applied species data asset (drives mesh, stats, passive). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Species")
+        const UKhaaosSpeciesDataAsset* AppliedSpeciesAsset = nullptr;
 
-	/** Time remaining in current slide. */
-	float SlideTimeRemaining = 0.0f;
+	// ─── Internal State ─────────────────────────────────────────────────────────────
 	float GlideTimeRemaining = 0.0f;
 	bool bIsGliding = false;
 	float DefaultGravityScale = 1.0f;
@@ -497,40 +502,43 @@ protected:
 	int32 CurrentSpeciesMeshLOD = 0;
 	FName CachedSpeciesId;
 
-	/** Time since last damage taken (for out-of-combat regen). */
-	float TimeSinceLastDamage = 0.0f;
+        /** Time remaining in current slide. */
+        float SlideTimeRemaining = 0.0f;
 
-	/** Cached pointer to owning player controller. */
-	UPROPERTY()
-	TObjectPtr<AKhaaosPlayerController> CachedPC;
+        /** Time since last damage taken (for out-of-combat regen). */
+        float TimeSinceLastDamage = 0.0f;
 
-	/** Cached pointer to player state. */
-	UPROPERTY()
-	TObjectPtr<AKhaaosPlayerState> CachedPS;
+        /** Cached pointer to owning player controller. */
+        UPROPERTY()
+        TObjectPtr<AKhaaosPlayerController> CachedPC;
 
-	/** RepNotify for camera mode. */
-	UFUNCTION()
-	void OnRep_CameraMode();
+        /** Cached pointer to player state. */
+        UPROPERTY()
+        TObjectPtr<AKhaaosPlayerState> CachedPS;
 
-	/** Update character movement speed based on current state. */
-	void UpdateMovementSpeed();
+        /** RepNotify for camera mode. */
+        UFUNCTION()
+        void OnRep_CameraMode();
 
-	/** Tick stamina drain/regen. */
-	void TickStamina(float DeltaSeconds);
+        /** Update character movement speed based on current state. */
+        void UpdateMovementSpeed();
+
+        /** Tick stamina drain/regen. */
+        void TickStamina(float DeltaSeconds);
 
 	/** Tick health/shield/energy regeneration. */
 	void TickRegen(float DeltaSeconds);
-
-	/** Tick slide timeout. */
-	void TickSlide(float DeltaSeconds);
 	void TickGlide(float DeltaSeconds);
 	void TickSpeciesWater(float DeltaSeconds);
 	void TryStartGlide();
 	void EndGlide();
 
-	/** Update replicated movement state enum. */
-	void UpdateMovementState();
+        /** Tick slide timeout. */
+        void TickSlide(float DeltaSeconds);
 
-	/** Server-only: apply damage to health after shield absorption. */
-	float InternalApplyDamage(float DamageAmount, AActor* DamageInstigator);
+        /** Update replicated movement state enum. */
+        void UpdateMovementState();
+
+        /** Server-only: apply damage to health after shield absorption. */
+        float InternalApplyDamage(float DamageAmount, AActor* DamageInstigator);
 };
