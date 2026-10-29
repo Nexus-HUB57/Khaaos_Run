@@ -208,3 +208,67 @@ export function probeMeters(volumes: Volume[], view: ViewId, u: number, v: numbe
     .sort((a, b) => b.depth - a.depth);
   return hits[0]?.volume ?? null;
 }
+
+export type GaitGear = "walk" | "jog" | "sprint";
+
+/** Lei única. A perna é 42,5% da estatura. A cadência cai com a raiz da perna. O passo cresce com a perna. */
+export const GAIT_LAW = {
+  legOfStature: 0.425,
+  refStature: 1.78,
+  g: 9.81,
+  friction: 0.62,
+  hipOfStature: 0.47,
+  gears: {
+    walk: { stepsPerSec: 1.95, stepOfLeg: 0.85 },
+    jog: { stepsPerSec: 3.2, stepOfLeg: 1.2 },
+    sprint: { stepsPerSec: 4.6, stepOfLeg: 1.55 },
+  },
+} as const;
+
+export interface GaitGearRead {
+  speed: number;
+  step: number;
+  cadence: number;
+  stride: number;
+}
+
+export interface Gait {
+  leg: number;
+  vault: number;
+  crouchEye: number;
+  gears: Record<GaitGear, GaitGearRead>;
+  slide: number;
+  slideTime: number;
+}
+
+export function gaitOf(rig: Rig): Gait {
+  const stature = rig.profile.stature;
+  const leg = GAIT_LAW.legOfStature * stature;
+  const refLeg = GAIT_LAW.legOfStature * GAIT_LAW.refStature;
+  const swing = Math.sqrt(refLeg / leg);
+  const gears = {} as Record<GaitGear, GaitGearRead>;
+  for (const name of ["walk", "jog", "sprint"] as const) {
+    const law = GAIT_LAW.gears[name];
+    const step = law.stepOfLeg * leg;
+    const steps = law.stepsPerSec * swing;
+    gears[name] = { speed: steps * step, step, cadence: steps * 60, stride: step * 2 };
+  }
+  const sprint = gears.sprint.speed;
+  return {
+    leg,
+    vault: GAIT_LAW.hipOfStature * stature,
+    crouchEye: GAIT_LAW.hipOfStature * stature + rig.profile.head * 0.5,
+    gears,
+    slide: (sprint * sprint) / (2 * GAIT_LAW.friction * GAIT_LAW.g),
+    slideTime: sprint / (GAIT_LAW.friction * GAIT_LAW.g),
+  };
+}
+
+export function footPhase(step: number, phase: number): { stance: number; swing: number; bob: number } {
+  const turn = ((phase % 1) + 1) % 1;
+  return {
+    stance: -step / 2,
+    swing: -step / 2 + turn * step,
+    bob: Math.sin(turn * Math.PI) * 0.04,
+  };
+}

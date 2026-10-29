@@ -338,6 +338,8 @@ Nove silhuetas, em metros, com a origem no chão. A estatura, o ombro e a cabeç
 | krapulla | 1,78 m | 0,44 m | 0,23 m |
 | uryan | 1,73 m | 0,38 m | 0,22 m |
 
+A perna é 42,5% da estatura. Andar, trote e sprint usam a mesma lei: a cadência cai com a raiz da perna e o passo cresce com ela. Na referência de 1,78 m o sprint fica em 5,40 m/s. O slide parte dessa velocidade com atrito 0,62 para todos. O vault sem salto para no quadril. Origem e marca não mudam o passo.
+
 ---
 
 ## Arquitetura Técnica — Devs Ph.D
