@@ -619,9 +619,9 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
       "targets": [
-        { "expr": "rate(khaaos_2pc_transactions_total{phase=\"prepare\"}[5m])", "legendFormat": "Prepare" },
-        { "expr": "rate(khaaos_2pc_transactions_total{phase=\"commit\"}[5m])", "legendFormat": "Commit" },
-        { "expr": "rate(khaaos_2pc_transactions_total{phase=\"abort\"}[5m])", "legendFormat": "Abort" }
+        { "expr": "rate(khaaos_economy_2pc_requests_total{phase=\"prepare\"}[5m])", "legendFormat": "Prepare" },
+        { "expr": "rate(khaaos_economy_2pc_requests_total{phase=\"commit\"}[5m])", "legendFormat": "Commit" },
+        { "expr": "rate(khaaos_economy_2pc_requests_total{phase=\"abort\"}[5m])", "legendFormat": "Abort" }
       ],
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
@@ -633,9 +633,9 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
       "targets": [
-        { "expr": "histogram_quantile(0.5, rate(khaaos_2pc_transaction_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(khaaos_2pc_transaction_duration_seconds_bucket[5m]))", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, rate(khaaos_2pc_transaction_duration_seconds_bucket[5m]))", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.5, rate(khaaos_economy_2pc_phase_duration_ms_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(khaaos_economy_2pc_phase_duration_ms_bucket[5m]))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, rate(khaaos_economy_2pc_phase_duration_ms_bucket[5m]))", "legendFormat": "p99" }
       ],
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
@@ -647,7 +647,7 @@
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 38 },
       "targets": [
-        { "expr": "khaaos_krc_locked_total", "legendFormat": "Locked KRC" }
+        { "expr": "khaaos_economy_2pc_escrows", "legendFormat": "Locked KRC" }
       ],
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10000 }, { "color": "red", "value": 50000 }] } },
@@ -659,7 +659,7 @@
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 38 },
       "targets": [
-        { "expr": "rate(khaaos_2pc_insufficient_funds_total[5m])", "legendFormat": "Rejections/s" }
+        { "expr": "rate(khaaos_economy_2pc_errors_total[5m])", "legendFormat": "Rejections/s" }
       ],
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.1 }] } },
