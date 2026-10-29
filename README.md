@@ -340,6 +340,8 @@ Nove silhuetas, em metros, com a origem no chão. A estatura, o ombro e a cabeç
 
 A perna é 42,5% da estatura. Andar, trote e sprint usam a mesma lei: a cadência cai com a raiz da perna e o passo cresce com ela. Na referência de 1,78 m o sprint fica em 5,40 m/s. O slide parte dessa velocidade com atrito 0,62 para todos. O vault sem salto para no quadril. Origem e marca não mudam o passo.
 
+A massa da silhueta parte de 76 kg em 1,78 m com ombro de 0,44 m e cresce com a estatura e com o quadrado do ombro. O kit soma 8 kg para todos. Os segmentos fecham nessa massa. O Froude do andar fica em 0,21 e o do sprint em 3,92, iguais nos nove: a marcha é dinamicamente a mesma. Abaixo de 0,50 os pés trocam no chão. Acima disso há fase no ar. A folga do pé no balanço é absoluta, então o corpo mais baixo dobra mais o joelho. Catálogo: [`shared/biomech.ts`](shared/biomech.ts).
+
 ---
 
 ## Arquitetura Técnica — Devs Ph.D
