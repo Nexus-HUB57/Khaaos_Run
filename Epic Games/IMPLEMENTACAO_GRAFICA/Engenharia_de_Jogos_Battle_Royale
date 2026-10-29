@@ -1,0 +1,3431 @@
+NEXUS HUB57  /  DOSSIÊ TÉCNICO
+
+KHAAOS RUN
+
+Da base versionada a um battle royale mobile competitivo
+
+AUDITORIA • ROADMAP • ENGENHARIA DE JOGOS PRODUÇÃO 3D • ALGORITMOS • RAG / LLMs
+
+Referência de produto: Free Fire / GarenaDocumento de decisão e execução — não certificação de paridade
+
+BASE AUDITADA  |  29 de outubro de 2026Commit: 3e67a321e0832df2209fd8e879713dd304b80ffeEscopo principal: Epic Games, com rastreio das integrações no monorepo.
+
+Rigor “Devs Ph.D” significa hipóteses explícitas, evidências rastreáveis, experimentos reproduzíveis e critérios de refutação. Não significa promessa de escala, qualidade gráfica ou prazo sem medição.
+
+Edição 1.0 • Português brasileiro • Limite solicitado: até 77 páginas
+
+
+
+Como usar este dossiê
+
+Este documento combina revisão independente da base pública, arquitetura-alvo e plano de implementação. A leitura executiva começa nos capítulos 1, 4, 30 e 35; os leads técnicos devem percorrer também os contratos de rede, conteúdo e automação. Os scripts são referências novas para implementação por PR, salvo quando identificados como comandos já executados nesta auditoria.
+
+
+
+
+
+
+
+Rótulo
+
+
+
+Significado e limite
+
+
+
+
+
+VERIFICADO
+
+
+
+Arquivo inspecionado ou comando executado nesta revisão; há escopo e evidência definidos.
+
+
+
+
+
+RISCO ESTÁTICO
+
+
+
+Comportamento suspeito por leitura; não equivale a exploração demonstrada nem falha em produção.
+
+
+
+
+
+PROPOSTA
+
+
+
+Arquitetura, orçamento, script ou meta ainda não integrado ao jogo.
+
+
+
+
+
+GATE
+
+
+
+Condição bloqueante de avanço; requer artefato verificável e responsável.
+
+
+
+Premissas de planejamento
+
+Mobile-first em Android, com iOS condicionado a equipe, hardware e assinatura. Runtime web preservado como sandbox e demonstração; Unreal é candidato principal ao produto mobile, condicionado a um spike de viabilidade.
+
+Foco inicial em CIGKV: um mapa, um modo, poucas armas e um conjunto pequeno de personagens. Os outros mundos evoluem após o primeiro slice aprovado.
+
+50 participantes e sessões curtas são alvo inicial de produto inspirado no benchmark público, não medida de capacidade atual nem regra universal de todas as versões do Free Fire.
+
+Economia com valor real permanece desabilitada até avaliações jurídica, financeira, antifraude e de segurança independentes.
+
+Entrega e limites
+
+Não houve push, PR, alteração de assets ou implementação no repositório remoto. Não foi feita compilação com Unreal Engine, cook, teste Android/iOS, sessão EOS/EAC real, pentest ou benchmark GPU. As fontes do repositório estão fixadas no commit acima; documentação externa é viva e precisa ser conferida na versão de engine escolhida.
+
+
+
+Sumário
+
+
+
+1. Parecer executivo e decisão recomendada
+
+2. Método, escopo e resultado reproduzível
+
+3. Arquitetura atual: três fronteiras, um produto
+
+4. Achados priorizados com evidência
+
+5. Integrar o pacote gráfico sem regressão
+
+6. Sistema de desenvolvimento e gates de CI
+
+7. Qualidade-alvo mobile e benchmark honesto
+
+8. Unreal: spike de build e dependências
+
+9. Rede: autoridade, tempo e contratos
+
+10. Algoritmo de crédito temporal para inputs
+
+11. Lag compensation, AOI e escala
+
+12. Combate, habilidades e design sistêmico
+
+13. Economia, progressão e identidade
+
+14. Direção de arte e biblioteca modular
+
+15. Mundos e terreno: do blockout ao mapa final
+
+16. Personagens: topologia, rig e animação
+
+17. Script Blender: validação antes do export
+
+18. LOD, instancing e relevância visual
+
+19. Materiais e memória: orçamento explícito
+
+20. Iluminação, VFX e legibilidade competitiva
+
+21. Three.js: correção cirúrgica de resolução
+
+22. Animação, locomotion e sensação de controle
+
+23. UX mobile, áudio e jornada até jogar
+
+24. QA e performance como experimento
+
+25. Infraestrutura, SRE e custo por partida
+
+26. RAG de engenharia, não de autoridade de jogo
+
+27. Recuperação híbrida e algoritmo de ranking
+
+28. Skills de agentes, LLMs e contratos de tools
+
+29. Avaliação de IA, segurança e governança
+
+30. Roadmap mestre: gates antes de escala
+
+31. Primeiros 90 dias: backlog executável
+
+32. WBS e entregáveis por trilha
+
+33. Equipe, competências e orçamento por cenário
+
+34. Registro de riscos e respostas
+
+35. Matriz de aceite e decisão GO / NO-GO
+
+36. Script de CI: novo gate mobile do runtime
+
+37. Pesquisa aplicada: hipóteses refutáveis
+
+38. SCM, LFS e rastreabilidade de assets
+
+39. Runbook: entrega segura e resposta a incidente
+
+40. Evidências primárias: produto, código e gráficos
+
+41. Evidências primárias: testes e pipeline
+
+42. Fontes técnicas externas e política de uso
+
+
+
+O sumário é um campo do Word. Atualize os campos ao abrir, se necessário; a paginação pode variar entre Microsoft Word e LibreOffice.
+
+
+
+1. Parecer executivo e decisão recomendada
+
+O repositório contém uma base técnica ampla e útil, mas a quantidade de arquivos não demonstra um produto pronto. Foram observados runtime web jogável por arquitetura, serviços de apoio, código Unreal, dados de gameplay e pacotes de entrada 3D. O gargalo central é transformar essa amplitude em uma cadeia reproduzível: fonte → build → conteúdo importado → partida → telemetria → aceite em aparelhos.
+
+O que manter
+
+Simulação autoritativa e separação entre visual e regras no runtime web; funções puras, determinismo e testes já constituem ativos valiosos.
+
+GAS, configurações mobile, configuração de servidor dedicado, manifests de assets e automação versionada na frente Unreal, condicionados à validação real.
+
+Identidade dos mundos e catálogo de espécies como direção autoral, evitando copiar personagens, mapas, UI ou ativos da Garena.
+
+O que interromper
+
+Aplicação cega do patch gráfico antigo: o check falha no commit auditado. Fazer port incremental, com revisão dos contratos atuais.
+
+Uso de workflow/preflight, screenshot ou teste headless como prova de FPS mobile, suporte a 50 jogadores ou aceite de servidor Unreal.
+
+Expansão simultânea dos cinco mundos antes de um slice integrado e medido; monetização real antes de estabilidade e conformidade.
+
+Decisão em duas semanas
+
+Aprovar um spike com engine e plugins fixados, build Editor + Server, mapa de teste importado e um Android de referência. Em paralelo, estabilizar a trilha Three.js sem reescrever suas regras. Se Unreal não atingir o primeiro gate, congelar a migração de conteúdo e comparar alternativas com a mesma cena, input e orçamento. Não manter dois produtos completos por inércia.
+
+Conclusão: a trajetória até qualidade de referência é plausível como programa de produto e operação; paridade não pode ser garantida por este relatório. O roadmap é condicionado a gates, não a slogans de maturidade.
+
+
+
+2. Método, escopo e resultado reproduzível
+
+Foi feito clone público de profundidade 1, identificação de HEAD, inventário de arquivos rastreados, leitura integral estruturada do DOCX existente em Epic Games, leitura dos guias textuais e inspeção dirigida de renderização, rede, build e configurações. O DOCX prévio contém 283 parágrafos de texto, aproximadamente 23,6 mil caracteres, com onze capítulos; seu escopo é um patch Three.js e não uma implementação Unreal.
+
+
+
+
+
+
+
+Verificação nesta revisão
+
+
+
+Resultado
+
+
+
+
+
+Snapshot Git
+
+
+
+3e67a321e0832df2209fd8e879713dd304b80ffe
+
+
+
+
+
+Arquivos rastreados
+
+
+
+2.027; contagem por git ls-files, sem node_modules
+
+
+
+
+
+Fonte Unreal/KhaaosRun/Source
+
+
+
+601 arquivos .cpp/.h; 133.908 linhas nessa extensão/raiz
+
+
+
+
+
+Workflows YAML
+
+
+
+38 em .github/workflows; não são 38 pipelines aprovados
+
+
+
+
+
+Assets finais .uasset / .umap
+
+
+
+0 / 0 no snapshot rastreado
+
+
+
+
+
+npm run check, raiz
+
+
+
+Aprovado: tsc, sem diagnóstico de erro
+
+
+
+
+
+game-runtime: build
+
+
+
+Aprovado; warning de chunk maior que 500 kB
+
+
+
+
+
+game-runtime: npm test
+
+
+
+907 testes reportados: 894 pass, 13 skipped, 0 fail
+
+
+
+
+
+npm run test:ue5:logic
+
+
+
+Aprovado; kernels portáveis e stubs, não build da engine
+
+
+
+Ambiente: Node.js v22.23.4, npm 10.9.9, Linux. Instalações com npm ci --ignore-scripts --no-audit --no-fund. O build Vite levou 3,16 s e a suíte runtime reportou cerca de 86,94 s nesta execução; esses tempos são observações do sandbox, não metas de CI ou aparelhos.
+
+Reprodução mínima
+
+git clone https://github.com/Nexus-HUB57/Khaaos_Run.git
+
+cd Khaaos_Run && git checkout 3e67a321e0832df2209fd8e879713dd304b80ffe
+
+npm ci --ignore-scripts --no-audit --no-fund
+
+npm run check && npm run test:ue5:logic
+
+cd game-runtime
+
+npm ci --ignore-scripts --no-audit --no-fund
+
+npm run build && npm test
+
+Limite: a suíte raiz completa, PostgreSQL/Redis externos, builds nativos completos e sessões gráficas não foram executados nesta revisão. Testes ignorados não contam como sucesso funcional.
+
+
+
+3. Arquitetura atual: três fronteiras, um produto
+
+
+
+A frente web usa Three.js ^0.169.0, Vite ^6.1.0 e servidor Node/WebSocket. A raiz contém React/Express, Drizzle, PostgreSQL e Redis. O projeto Unreal declara EngineAssociation 5.8, módulos Runtime/Editor/EAC, GAS e dependências de Lyra/EOS. Esses elementos coexistem; não se comprovou interoperabilidade de clientes entre os dois servidores de gameplay. [E01–E04]
+
+Arquitetura-alvo proposta
+
+Plano de controle compartilhável: identidade, catálogo, entitlements, histórico e observabilidade por APIs versionadas. Uma transação econômica não depende de resposta síncrona de LLM.
+
+Plano de simulação separado por runtime: cada partida pertence a um servidor autoritativo e a uma versão de regras. A engine controla replicação, colisão e física próprias; não transportar snapshots web diretamente para Unreal sem um contrato explícito.
+
+Plano de conteúdo: fontes DCC e metadados canônicos; exportações independentes para glTF/web e import/cook Unreal. IDs e intenção visual podem ser comuns; binários e materiais finais não são intercambiáveis.
+
+ADR-001: fonte única das regras
+
+Manter schemas versionados para dano, loot, habilidades e progressão; gerar DataTables/JSON a partir de uma fonte definida. Cada runtime executa golden tests com as mesmas entradas e tolerâncias declaradas. Não presumir determinismo bit a bit entre JavaScript, C++ e física Chaos. Um resultado crítico de recompensa deve vir de um servidor da partida com identidade autenticada.
+
+
+
+4. Achados priorizados com evidência
+
+
+
+
+
+
+
+ID / prioridade
+
+
+
+Evidência e consequência
+
+
+
+Ação / dono
+
+
+
+
+
+F01 • P0
+
+
+
+Patch do pacote falha em aplicação direta e reversa no HEAD; manifests usam base antiga.
+
+
+
+Port seletivo + testes / lead web
+
+
+
+
+
+F02 • P0
+
+
+
+Nenhum .uasset/.umap rastreado; mapas e import markers não são cook final.
+
+
+
+Importar slice + cook / tech art
+
+
+
+
+
+F03 • P0
+
+
+
+Plugins LyraExtender/EOSIntegrationKit declarados; não há diretório Plugins no projeto.
+
+
+
+Manifest de provisionamento / build
+
+
+
+
+
+F04 • P0
+
+
+
+NetDriver e módulos de rede exigem validação contra engine fixada; Iris e RepGraph coexistem em fonte.
+
+
+
+Escolher backend e compilar / network
+
+
+
+
+
+F05 • P1
+
+
+
+postfx3d.setSize chama composer.setSize sem sincronizar DPR; DRS altera renderer.
+
+
+
+Regressão de resolução / rendering
+
+
+
+
+
+F06 • P1
+
+
+
+room3d consome até 3 inputs de 1/30 s por tick de 1/20 s.
+
+
+
+Teste de orçamento temporal / network
+
+
+
+
+
+F07 • P1
+
+
+
+RTT alegado pelo cliente entra no rewind, limitado a 600 ms.
+
+
+
+Medir RTT no servidor / security
+
+
+
+
+
+F08 • P1
+
+
+
+ConfigureForWorld multiplica orçamento já armazenado; repetição pode acumular redução.
+
+
+
+Config derivada idempotente / UE
+
+
+
+
+
+F09 • P1
+
+
+
+Clone emitiu 126 alertas de conteúdo não ponteiro em paths com filtro LFS.
+
+
+
+Reparar sem migração destrutiva / SCM
+
+
+
+
+
+F10 • P2
+
+
+
+Bundle principal runtime: 1.045,85 kB minificado; gzip 299,25 kB.
+
+
+
+Split por jornada + medir / web
+
+
+
+F01, F02, F03, F05 e F09 foram observados diretamente em arquivos/comandos. F04 é risco de compatibilidade, não erro de compilação demonstrado. F06/F07/F08 são riscos estáticos de correção e confiança: requerem testes dedicados; não houve exploração em ambiente público. A ausência de plugins versionados não prova que não existam em runners externos. [E05–E14]
+
+Critério de fechamento
+
+Cada achado deve possuir issue, teste que falha antes da correção, responsável, PR, evidência após correção e rollback. Não encerrar um P0 com comentário, arquivo de log histórico ou renomeação de status no README.
+
+
+
+5. Integrar o pacote gráfico sem regressão
+
+O manifest do pacote fixa a base d8f14e26852487784fc23387e8347999ce159104 e o escopo “Three.js; UE5 não modificado”. O SHA-256 do patch foi conferido e coincide: 8e3930ad282087c01f6b50e59705c3bba2495ca89ec183415174cd9f6e6e3bf9. Isso atesta integridade do arquivo, não compatibilidade com o HEAD atual. Os quatro arquivos existentes comparados diferem, e dois paths esperados não existem no runtime: renderpipeline3d.js e graphics-upgrade.test.js. [E05]
+
+Procedimento proposto de port
+
+Criar worktree/branch a partir do commit de trabalho aprovado; guardar diff e status inicial. Não aplicar o patch na main nem copiar main3d.js inteiro por cima do atual.
+
+Ler cada hunk e transformar a intenção em testes: DPR sincronizado, SSR proporcional, descarte idempotente e macrovariação que preserve altura jogável.
+
+Adicionar o helper de resolução e integrar ao createPostFX atual; preservar postFxPlanFor, auto-tier e preferências KR_GFX_SETTINGS_V1. Recriar passes somente em troca real de plano.
+
+Capturar os cinco mundos com câmera/seed fixadas. Fazer teste de troca de mundo e perda/restauração de contexto WebGL. Comparar uso de memória após dez ciclos.
+
+Aprovar em PR pequeno. Manter o pacote histórico como referência imutável; registrar novo manifest e origem, sem falsificar o base_commit antigo.
+
+Checks sem alteração do checkout
+
+git status --short
+
+git apply --check "Epic Games/IMPLEMENTACAO_GRAFICA/graphics-upgrade.patch"
+
+git apply --reverse --check "Epic Games/IMPLEMENTACAO_GRAFICA/graphics-upgrade.patch"
+
+# Ambos falharam no snapshot auditado. Não remover --check
+
+# para tentar forçar a aplicação. Fazer port revisado.
+
+O browser-results.json histórico registra Chromium headless/SwiftShader, cinco cenários sem erros reportados e testes de dimensionamento. Não foi reexecutado aqui e não é benchmark mobile. Da mesma forma, a redução de largura de 1440 para 792 é escala de buffer, não evidência de ganho proporcional de FPS.
+
+Rollback: feature flag para o novo caminho de resolução e revert do PR. Nunca retornar uma cópia antiga de main3d.js que remova evoluções posteriores de gameplay.
+
+
+
+6. Sistema de desenvolvimento e gates de CI
+
+O objetivo do CI não é produzir um selo verde, e sim impedir que uma regressão atravesse um limite de confiança. Separar checks estáticos, testes portáveis, build real, integração com serviços e aceite de dispositivo. Um job não executado por secret ausente deve ser “não executado”, nunca “build aprovado”. [E11]
+
+
+
+
+
+
+
+Gate
+
+
+
+Artefatos mínimos
+
+
+
+Bloqueia
+
+
+
+
+
+G0 • snapshot
+
+
+
+SHA, lockfiles, SBOM, manifest LFS, versões de ferramentas
+
+
+
+Baseline
+
+
+
+
+
+G1 • fonte
+
+
+
+Typecheck, lint, unit/property tests, contratos de dados
+
+
+
+Merge
+
+
+
+
+
+G2 • engine
+
+
+
+UBT Editor/Server sem stubs, log completo, engine/plugin SHAs
+
+
+
+Conteúdo UE
+
+
+
+
+
+G3 • conteúdo
+
+
+
+Validação de assets, import e cook, mapa abrindo sem refs quebradas
+
+
+
+Slice
+
+
+
+
+
+G4 • partida
+
+
+
+Clientes reais + bots; resultado autoritativo, reconexão, recompensa única
+
+
+
+Alpha
+
+
+
+
+
+G5 • dispositivo
+
+
+
+Traces CPU/GPU, térmica, memória, rede e acessibilidade
+
+
+
+Beta
+
+
+
+
+
+G6 • operação
+
+
+
+Soak, restore, segurança, compliance, rollback e on-call
+
+
+
+Release
+
+
+
+Regras de revisão
+
+Branch protection com revisão de dono do subsistema; nunca auto-merge de alteração de economia, autenticação, anti-cheat ou permissões de agentes.
+
+Separar PR de lógica, PR de conteúdo e PR de ajuste de budgets. Medir a mudança sobre a mesma baseline para preservar causalidade.
+
+Runner self-hosted para Unreal é recurso de alta confiança: efêmero quando possível, sem PR não confiável com segredos, e caches isolados por engine/plugin/toolchain.
+
+Executar rotinas destrutivas de migração e LFS somente em clones descartáveis com backup, revisão e janela comunicada.
+
+Definition of Done transversal
+
+Uma tarefa só fica pronta com comportamento demonstrado no alvo, teste de regressão, documentação mínima, fonte/licença dos assets, telemetria, compatibilidade de schema e rollback. Para rede, acrescentar packet-loss e replay; para 3D, perfil e verificação visual; para IA, avaliação e limites de permissão.
+
+
+
+7. Qualidade-alvo mobile e benchmark honesto
+
+A referência Free Fire traduz-se em entrada rápida na partida, leitura tática, movimento responsivo, estabilidade em aparelhos acessíveis, combate justo e operação contínua. O site oficial confirma o produto mobile; a descrição pública da loja do Free Fire MAX apresenta sessões de dez minutos e confronto com 49 outros jogadores. Isso não fornece arquitetura, budgets ou custo da Garena. [R01–R02]
+
+
+
+
+
+
+
+Métrica proposta
+
+
+
+Aparelho mínimo do slice
+
+
+
+Aparelho intermediário
+
+
+
+
+
+Alvo de FPS sustentado
+
+
+
+30
+
+
+
+60
+
+
+
+
+
+Budget nominal de frame
+
+
+
+33,33 ms
+
+
+
+16,67 ms
+
+
+
+
+
+p95 de frame, após aquecimento
+
+
+
+≤ 36 ms
+
+
+
+≤ 20 ms
+
+
+
+
+
+p99 / hitch >100 ms
+
+
+
+≤ 60 ms / <1 por min
+
+
+
+≤ 40 ms / <1 por min
+
+
+
+
+
+Sessão térmica
+
+
+
+30 min, sem OOM
+
+
+
+30 min, sem OOM
+
+
+
+
+
+Crash-free sessions, beta
+
+
+
+≥ 99,5% agregado
+
+
+
+Coorte reportada separadamente
+
+
+
+
+
+
+
+Selecionar ao menos seis SKUs reais: GPUs Adreno e Mali, faixas de RAM de 3/4/6/8 GB, aparelhos com drivers diferentes e iPhone se fizer parte do escopo. “3 GB mínimo” já aparece na configuração Android do projeto; precisa de teste de memória total, não só pool de texturas. Metas acima são hipóteses negociáveis após a primeira campanha. Não oferecer 60 FPS em toda a matriz sem evidência.
+
+
+
+8. Unreal: spike de build e dependências
+
+EngineAssociation=5.8 é uma declaração do projeto, não prova de engine instalada ou suporte de todos os plugins. Fixar versão exata, changelist/commit, toolchain, SDK Android/NDK e licença. LyraGame, ModularGameplayActors, UIExtension, EOSOverlayUI e EOSSDK aparecem em Build.cs; verificar origem, distribuição e nome efetivo na engine escolhida. [E03–E04]
+
+Sequência de implementação
+
+Inventariar plugins nativos e externos em manifest: nome, versão, hash, origem autorizada, plataformas, licença, provisionador e smoke test. Não inventar um módulo ausente para passar o preflight.
+
+Compilar Editor e Server sem as dependências opcionais de EAC ativadas; depois repetir com SDK oficial em runner restrito. Marcar explicitamente qual build é stub e qual é real.
+
+Validar DefaultEngine.ini contra classes e CVars efetivas. O path /Script/IrisEngine.IrisNetDriver precisa existir na versão selecionada; não assumir validade por texto no INI.
+
+Resolver o backend de replicação antes de escalar gameplay. Replication Graph e Iris são alternativas de arquitetura, não uma soma automática de otimizações. [R04–R05]
+
+Comandos de referência — requerem engine provisionada
+
+# Linux: validar caminhos da distribuição instalada
+
+export PROJECT="$PWD/Unreal/KhaaosRun/KhaaosRun.uproject"
+
+"$UE_ROOT/Engine/Build/BatchFiles/Linux/Build.sh" \
+
+  KhaaosRunEditor Linux Development "$PROJECT" -WaitMutex
+
+"$UE_ROOT/Engine/Build/BatchFiles/Linux/Build.sh" \
+
+  KhaaosRunServer Linux Development "$PROJECT" -WaitMutex
+
+# Só após existir mapa final importado:
+
+"$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh" BuildCookRun \
+
+  -project="$PROJECT" -noP4 -build -cook -stage -pak \
+
+  -server -noclient -serverplatform=Linux \
+
+  -serverconfig=Development -map=/Game/Maps/CIGKV_BR
+
+Os comandos são template operacional, não execução comprovada. Ajustar flags e targets ao engine fixado e scripts existentes. Guardar logs UHT/UBT/UAT, mapa, hash de binário e manifest de pacote. Gate: iniciar servidor e conectar dois clientes externos, sem depender do Editor.
+
+
+
+9. Rede: autoridade, tempo e contratos
+
+MatchRoom3D já possui humanos, bots, snapshots, zona, projéteis, recompensas e AOI opcional. Sua capacidade default é 16; mudar capacity para 50 não comprova escala. O tick é chamado a 20 Hz e o input usa 1/30 s. No caminho de fila cheia, três entradas representam 0,1 s de simulação em um tick de 0,05 s; requer teste de teto temporal e investigação da camada de entrada. [E08]
+
+Invariantes de segurança
+
+O tempo simulado por jogador não pode crescer com a taxa de mensagens. Acumular crédito com relógio do servidor, limitar backlog e separar repetição de movimento de eventos one-shot.
+
+Seq identifica ordem e duplicação, não autorização. Verificar ownership de entidade, janela de sequência, cardinalidade, tamanho de payload e taxa de eventos por conexão/conta/IP.
+
+Cadência de tiro, munição, cooldown, dano e loot são validados no servidor. Snapshot contém apenas dados necessários ao cliente; AOI não deve expor adversários ocultos sem necessidade.
+
+Recompensas são emitidas uma vez por matchId, com vínculo autenticado de servidor e jogador. Cliente nunca envia seu saldo ou resultado como verdade.
+
+ADR-002: backend Unreal
+
+Selecionar um backend após spike de dois clientes e stress controlado. Se Iris for adotado, construir filtros/priorizadores e object bridge compatíveis com a versão. Se RepGraph for adotado, habilitar plugin/módulo corretos e rotas espaciais explícitas. Não é suficiente registrar “Iris=true” em um subsystem: comprovar tráfego e política ativos em trace.
+
+Risco adicional de configuração
+
+KhaaosIrisConfig.cpp, ConfigureForWorld, multiplica Pair.Value.MinBandwidthBytesPerSec pelo multiplicador de cada chamada. Repetir uma configuração de 0,5 pode reduzir 1 → 0,5 → 0,25. Tornar a configuração derivada de valores base imutáveis; teste de idempotência: configure(W,N) duas vezes deve produzir o mesmo objeto. Não se afirma falha operacional sem compilar/executar essa frente. [E10]
+
+
+
+10. Algoritmo de crédito temporal para inputs
+
+PROPOSTA NOVA • Referência Python testada isoladamente; adaptar ao servidor JavaScript e ao kernel Unreal. Não integrada ao repositório.
+
+A referência abaixo limita quanto tempo o consumidor pode avançar, independentemente de quantas mensagens estão na fila. Crédito só entra pelo dt do servidor. O limite de catch-up de 100 ms é uma hipótese a ajustar; atrasos longos devem gerar reconciliação, não aceleração irrestrita. Um scheduler de passo fixo deve manter o residual entre ticks.
+
+def input_budget(credit, server_dt, queued, input_dt=1/30):
+
+    """Crédito em segundos; catch-up máximo de 100 ms, clock servidor."""
+
+    if not all(math.isfinite(x) and x >= 0 for x in (credit, server_dt)):
+
+        raise ValueError('clock inválido')
+
+    if not isinstance(queued, int) or queued < 0 or input_dt <= 0:
+
+        raise ValueError('fila inválida')
+
+    credit = min(0.1, credit + min(server_dt, 0.1))
+
+    count = min(queued, int((credit + 1e-12) / input_dt))
+
+    return count, max(0., credit - count * input_dt)
+
+Integração e casos de teste
+
+Antes de drenar a fila, renovar crédito uma vez por tick e jogador; consumir no máximo count inputs. Persistir credit no actor; registrar drops e overflow com motivo.
+
+Se não houver entrada nova, executar um passo fixo autorizado com intenção contínua filtrada; não reaplicar fire/interact/throw como se fossem novos eventos. Não consumir dt completo além do crédito já usado.
+
+Após reconexão, limpar comandos velhos e renegociar sequência/epoch. Não aceitar seq anterior ao último confirmado. Reconciliar posição visual com suavização limitada.
+
+Comparar 30, 60 e 90 mensagens/s pelo mesmo minuto de relógio servidor. Distância, recarga e cooldown devem ser equivalentes dentro da tolerância declarada.
+
+Resultado local da referência
+
+No harness de referência, 1.200 ticks de 50 ms com fila sempre cheia avançaram 60 s de simulação, com tolerância inferior a um input. Foram aprovadas seis verificações combinadas das funções de crédito, RRF, LOD e rewind deste dossiê. Isso valida o exemplo puro; não substitui integração, teste de rede ou garantia contra todos os speedhacks.
+
+Próximo PR: teste no caminho público de receive/input com rate limiting, fila, simulação e reconciliação. A reprodução deve existir somente em laboratório e não contra partidas públicas.
+
+
+
+11. Lag compensation, AOI e escala
+
+O runtime usa histórico de 26 ticks e rewind com RTT reportado pelo próprio cliente, somado ao buffer de interpolação e meia tick, até 600 ms. Há clamp, mas a fonte continua não confiável. Medir RTT via ping/ack do servidor e timestamp monotônico, registrar jitter e definir limite de vantagem de quem atira. A fórmula final depende de como o cliente timestampa seus comandos. [E08]
+
+def bounded_rewind(now, measured_rtt, interp, requested, history_start):
+
+    """Todas as entradas em segundos; RTT medido, não alegado pelo cliente."""
+
+    if not all(math.isfinite(x) for x in (now, measured_rtt, interp, requested, history_start)):
+
+        raise ValueError('tempo inválido')
+
+    allowance = min(.2, max(0., measured_rtt / 2) + min(.1, max(0., interp)))
+
+    return max(history_start, now - allowance, min(now, requested))
+
+A função é referência de clamp de tempo, não implementação completa de hit validation. O servidor precisa de histórico por timestamp, interpolação de hitboxes, estado de portas/cobertura, identificação de teleport e política de colisão ao voltar ao presente. RTT/2 é estimativa simétrica e falha em redes assimétricas; avaliar com traces e fairness, não adotar como dogma.
+
+AOI com histerese e prioridade
+
+room3d declara raios de entrada/saída de 130/165 m e 180 m para projéteis, com aoi=false por default de construtor. Validar como o servidor instancia a sala antes de afirmar que AOI está desligado em todo ambiente. Propor spatial hash: célula por floor(pos/cellSize), coleta de vizinhança, filtro de distância e relevância por esquadrão/visibilidade. [E08]
+
+Dormancy para loot estático; wake por interação. Frequência adaptativa para entidades próximas e ameaças, sem reduzir sinais de combate essenciais.
+
+Sob carga: limitar snapshots e backpressure por cliente. Se socket acumula fila, descartar estado velho substituível; nunca descartar transação de inventário sem protocolo.
+
+50 jogadores reais/bots de rede em 1/5/10 salas; ao menos um teste de círculo final com todos próximos. Bots internos não equivalem a clientes serializando tráfego.
+
+Gate proposto: tick p95 ≤ 80% do intervalo e p99 ≤ intervalo, perda controlada até 3%, RTT de 50/100/200 ms, sem duplicação de eventos e com correções de posição medidas. Bandwidth e custo por partida devem ser reportados por coorte.
+
+
+
+12. Combate, habilidades e design sistêmico
+
+Separar a noção de skill do jogador, habilidade de gameplay e skill de agente de IA. Neste capítulo, habilidade é mecânica jogável: entrada, custo, execução, efeito, cancelamento e replicação. O projeto já possui GAS e famílias de abilities por espécie; expandir somente após provar ciclo completo de concessão, uso, previsão e remoção. [E15]
+
+
+
+
+
+
+
+Contrato de habilidade
+
+
+
+Especificação obrigatória
+
+
+
+
+
+Identidade
+
+
+
+ability_id estável, versão, GameplayTags, classe/família
+
+
+
+
+
+Pré-condições
+
+
+
+estado, cooldown, custo, distância, linha de visão e ownership
+
+
+
+
+
+Execução
+
+
+
+quem prevê, quem confirma, alvo/área e janela de cancelamento
+
+
+
+
+
+Efeito
+
+
+
+dano/status/duração, stacking, imunidade, friendly fire
+
+
+
+
+
+Rede
+
+
+
+prediction key/seq, confirmação, rejeição e correção visual
+
+
+
+
+
+Leitura
+
+
+
+animação, VFX, áudio e contrajogo visível em low
+
+
+
+
+
+Teste
+
+
+
+efeito único, expiração, morte, reconexão, lag e abuso
+
+
+
+Ordem de implementação
+
+Uma arma hitscan e uma projetilística; recarga e troca; uma habilidade ofensiva e uma defensiva; queda/revive apenas após autoridade e animação estarem estáveis.
+
+Data-driven balance com schema e validação. Alterações de tuning associadas à versão da partida; hotfix não pode mudar a simulação pela metade sem contrato.
+
+Testar TTK por distância, dispersão, recoil e armor. Medir distribuição de acertos por dispositivo e método de input; aim assist precisa de limites e política de matchmaking.
+
+Experimento de equilíbrio
+
+Rodar sementes pareadas em bots para detectar regressão mecânica; depois sessões com jogadores estratificados por habilidade. Uma taxa de vitória agregada pode esconder viés de mapa, arma ou pareamento. Estimar intervalos de confiança, separar seleção de personagem de efeito causal e não rebalancear por amostra pequena. A coleta de input exige minimização e consentimento conforme finalidade.
+
+Gate: nenhuma opção cosmética altera hitbox, contraste tático obrigatório, velocidade, dano ou custo de habilidade. A estética nunca substitui justiça competitiva.
+
+
+
+13. Economia, progressão e identidade
+
+O repositório menciona KRC e recompensa de valor real, além de serviços econômicos próprios. Isso aumenta materialmente a responsabilidade jurídica e de segurança. A auditoria atual não certifica ledger, pagamentos, KYC, classificação regulatória ou elegibilidade de menores. Tratar valor real como programa separado e bloqueado até parecer formal. [E01, E16]
+
+Contrato transacional proposto
+
+Resultado final de partida autenticado por serviço de identidade de workloads; matchId e rewardVersion como chave idempotente. Transação local grava ledger e outbox na mesma unidade de commit.
+
+Ledger append-only de dupla entrada para moeda que exija reconciliação; saldo derivado/reconciliável, valores inteiros na menor unidade e proibição de floats monetários.
+
+Entitlements de cosméticos independentes de saldo exibido. Resposta de compra carrega transactionId; cliente reconcilia, não soma localmente em caso de retry.
+
+Reconciliador compara eventos finalizados, ledger e gateway; divergência cria fila de exceções humana. Sem reprocessar cobrança por “retry genérico”.
+
+Dados e LGPD
+
+Inventariar dados pessoais, base legal, retenção, exclusão, acesso e transferência internacional. Logs de gameplay devem usar IDs pseudonimizados; não enviar tokens, pagamentos ou conversas privadas ao índice RAG. Dados antifraude sensíveis exigem política específica de acesso e retenção.
+
+Critérios de aceite
+
+Teste de duplicação de evento, timeout após commit, duas réplicas concorrentes, rollback de deploy e replay de outbox. Conferir conservação contábil e unicidade de recompensa. Separar observação de fraude de punição: score pode sugerir investigação, mas LLM não decide saque, banimento ou acusação de manipulação. Uma feature flag de economia deve permitir suspender novas operações sem corromper histórico ou bloquear suporte.
+
+
+
+14. Direção de arte e biblioteca modular
+
+O salto visual depende mais de hierarquia, proporção, materiais coerentes e iluminação legível do que de efeitos caros. O documento prévio recomenda autoria de assets, mas seu patch não entrega um pipeline de modelagem completo. Criar uma bíblia visual curta e verificável: silhuetas, paleta, roughness, escala humana, padrões de desgaste e distância de leitura. [E05, E17]
+
+
+
+
+
+
+
+Família
+
+
+
+Primeiro kit do slice
+
+
+
+Aceite visual e técnico
+
+
+
+
+
+Arquitetura
+
+
+
+Parede, canto, porta, janela, cobertura e escada
+
+
+
+Grid e pivô; encaixe sem fresta; colisão dedicada
+
+
+
+
+
+Props
+
+
+
+Caixas, barris, barricadas, mobiliário essencial
+
+
+
+Materiais compartilhados; LOD e instancing
+
+
+
+
+
+Terreno
+
+
+
+Solo, rocha, borda e marcas de navegação
+
+
+
+Transição de materiais; sem desvio de colisão
+
+
+
+
+
+Vegetação
+
+
+
+Árvore, arbusto, grama e impostor
+
+
+
+Sem ocultação competitiva exclusiva do high
+
+
+
+
+
+Personagem
+
+
+
+Um rig base e dois visuais autorais
+
+
+
+Silhueta própria, hitbox estável, skinning validado
+
+
+
+
+
+Armas
+
+
+
+Rifle, secundária e pickup
+
+
+
+Sockets, escala, vista TPS/ADS e muzzle alinhados
+
+
+
+Regras de autoria
+
+Metro como unidade DCC; Unreal em centímetros; web no contrato atual de metros. Aplicar transformação no export, testar régua de 1 m e personagem de referência. Nunca corrigir escala de física por ajuste visual ad hoc.
+
+Nomear por tipo e ID: CHR_, WPN_, ENV_, MAT_, TEX_, ANIM_. LOD e colisão são derivados explícitos; manter source .blend, licença e parâmetros de export.
+
+Trabalhar com trim sheets e tileables; hero asset apenas em ponto focal. Um prop deve justificar custo de material, textura e draw call.
+
+Revisão de arte
+
+Comparar turntable neutra, cena com luz padrão e cena do jogo; avaliar em low e distância de combate. Verificar leitura em escala de cinza e deficiências de visão de cores. O art director aprova identidade; tech art aprova budget; gameplay aprova cobertura e visibilidade. Nenhuma dessas aprovações substitui as demais.
+
+
+
+15. Mundos e terreno: do blockout ao mapa final
+
+O inventário encontrou intake em OBJ/glTF, colliders JSON, CSV, SVG e marcadores pending_import, mas nenhum .umap/.uasset final rastreado. Isso permite iniciar autoria/importação; não comprova mapa jogável cooked. O contrato de terrain3d fixa altura zero na área central até Chebyshev 197; relevo periférico é visual. Alterar esse contrato exige física e servidor, não só shader. [E06–E07]
+
+Slice CIGKV em quatro camadas
+
+Layout tático: rotas, linhas de tiro, cobertura, travessia e navegação de bots. Fixar primeiro o blockout com métricas de encontro e duração de deslocamento.
+
+Geometria estrutural: kit modular com colisão simplificada, portas e escadas coerentes. Cada abertura deve coincidir com raycast, linha de visão e projétil.
+
+Materiais e luz: atlas/trim, reflexão e exposição calibradas; ruído visual não pode esconder alvo. A maior parte do mapa não precisa ser hero asset.
+
+Dressing e atmosfera: adicionar props, vegetação e partículas por camada independente, com controles por perfil e medições antes/depois.
+
+
+
+
+
+
+
+Mundo
+
+
+
+Direção proposta
+
+
+
+Risco a controlar
+
+
+
+
+
+CIGKV
+
+
+
+Treino legível, contraste quente/frio moderado
+
+
+
+Cenário de referência não pode ser caso fácil artificial
+
+
+
+
+
+Barburhen
+
+
+
+Frio, neve e chuva ácida localizada
+
+
+
+Branco saturado, transparência e custo de chuva
+
+
+
+
+
+Priadus
+
+
+
+Mangue, água e silhuetas de raízes
+
+
+
+Reflexos, colisão e navegação na água
+
+
+
+
+
+Ckesalth
+
+
+
+Basalto, dunas e emissivos vulcânicos
+
+
+
+Emissivo/bloom mascarando combate
+
+
+
+
+
+Arukheea
+
+
+
+Fragmentos e anomalia astral
+
+
+
+Efeitos confundidos com cobertura física
+
+
+
+Gate por mundo: layout aprovado, mapa cooked, spawn/loot/navmesh validados, câmera de regressão, build low e tráfego de partida. Só iniciar o segundo mundo quando o kit e o pipeline do primeiro puderem ser repetidos por outro artista sem instruções orais.
+
+
+
+16. Personagens: topologia, rig e animação
+
+Personagens precisam de um contrato entre arte, animação, gameplay e rede. Um catálogo JSON ou retrato não prova a existência de malha final com rig. Escolher uma base autoral e validar desde cedo o custo de vários personagens em tela, não apenas o close-up de seleção. Manter hitboxes e silhueta tática consistentes entre cosméticos.
+
+Pipeline de produção proposto
+
+Concept com vistas ortogonais e restrições de equipamento; blockout de proporções em escala. Aprovar leitura a 10/30/60 m antes de escultura de detalhes.
+
+High poly opcional para bake; retopologia manual de ombro, cotovelo, mão, quadril e joelho. Evitar decimation automático como solução para áreas deformáveis.
+
+UVs sem desperdício; densidade por distância e prioridade. Normal/ORM em espaço linear, base color em sRGB. Validar tangentes no export e no import.
+
+Rig comum com nomes e rest pose fixos; limites iniciais de influências por vértice e ossos precisam de orçamento do alvo. Testar skinning em corrida, agachamento, ADS, recarga e queda.
+
+Export glTF para web quando suportado; FBX/Interchange ou caminho validado para Unreal. Teste de round-trip, material, sockets e root motion para cada destino.
+
+Budgets de partida, não marketing
+
+Como hipótese inicial: personagem LOD0 entre 12–25 mil triângulos para gameplay próximo, com três níveis de redução e limite de dois materiais de corpo/equipamento sempre que viável. Essas faixas não são regra do Free Fire nem orçamento final do projeto. Quantidade simultânea, skinning, sombras e overdraw podem exigir redução adicional.
+
+Critério de pronto
+
+Sem penetração grave em poses de teste; pés coerentes com chão; arma presa ao socket; bounds corretos; LOD sem perda de leitura do inimigo; sem mudança de hitbox por roupa. Guardar turntable, wireframe, métricas de triângulos/ossos/materiais e vídeo in-engine. Textura 4K só entra com justificativa de tela e memória.
+
+
+
+17. Script Blender: validação antes do export
+
+PROPOSTA • Exemplo para Blender em background; não executado nesta auditoria, pois não houve sessão DCC. Implementar testes em arquivos de fixture e fixar versão do Blender.
+
+Usar validação automatizada para detectar erro cedo; ela não substitui revisão de topologia, pesos ou direção de arte. O script abaixo recusa seleção vazia e limita a malha avaliada, após modificadores, em vez de contar somente polígonos do source. Rodar em cópia do arquivo e registrar relatório junto ao manifest.
+
+# tools/blender/validate_slice.py
+
+import bpy, json
+
+from pathlib import Path
+
+LIMIT = 25000  # hipótese por mesh, não budget da cena
+
+report = []
+
+deps = bpy.context.evaluated_depsgraph_get()
+
+meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+
+if not meshes:
+
+    raise RuntimeError('Cena sem malhas')
+
+for obj in meshes:
+
+    evaluated = obj.evaluated_get(deps)
+
+    mesh = evaluated.to_mesh()
+
+    try:
+
+        mesh.calc_loop_triangles()
+
+        tris = len(mesh.loop_triangles)
+
+        errors = []
+
+        if tris > LIMIT: errors.append('tri_budget')
+
+        if len(obj.material_slots) > 2: errors.append('materials')
+
+        if not mesh.uv_layers: errors.append('missing_uv')
+
+        if any(abs(s - 1) > 1e-4 for s in obj.scale):
+
+            errors.append('unapplied_scale')
+
+        report.append(dict(name=obj.name, triangles=tris, errors=errors))
+
+    finally:
+
+        evaluated.to_mesh_clear()
+
+Path('asset-report.json').write_text(json.dumps(report, indent=2))
+
+if any(row['errors'] for row in report):
+
+    raise RuntimeError('Asset validation failed; ver relatório')
+
+Executar: blender -b source.blend --python tools/blender/validate_slice.py. Na implementação, acrescentar degenerate faces, valores não finitos, UV fora da política, normais, pesos, pivô e escala herdada de parents. Validar o GLB exportado com glTF-Validator e tratar warnings por allowlist com justificativa. [R07–R09]
+
+
+
+18. LOD, instancing e relevância visual
+
+LOD por distância fixa é frágil quando FOV e resolução variam. A medida inicial mais útil é tamanho projetado na tela. Para raio r, distância d, altura H e FOV vertical θ, o diâmetro aproximado em pixels é rH/[d tan(θ/2)]. A aproximação vale para d suficientemente maior que r; perto da câmera, usar bounds projetados reais.
+
+def lod_pixels(radius_m, distance_m, height_px, fov_rad):
+
+    if radius_m < 0 or distance_m <= 0 or height_px <= 0:
+
+        raise ValueError('geometria inválida')
+
+    if not 0 < fov_rad < math.pi:
+
+        raise ValueError('FOV inválido')
+
+    return radius_m * height_px / (distance_m * math.tan(fov_rad / 2))
+
+Política proposta
+
+Definir limiares por classe e histerese: reduzir ao cruzar 70 px, voltar apenas acima de 85 px, por exemplo. Esses valores são hipóteses; calibrar em replay com câmera rápida e ADS.
+
+LOD reduz triângulos, materiais, animação e sombras de forma coordenada. Um mesh barato ainda pode custar caro por skinning, transparência ou material complexo.
+
+Instanciar objetos com a mesma geometria/material por célula espacial. Um InstancedMesh mundial economiza draws mas prejudica culling; células pequenas demais aumentam chamadas e CPU.
+
+Árvores/grama usam impostores ou cards em distância; evitar que low remova cobertura que high mostra como abrigo. Colisão e capacidade de esconder alvos são regras independentes do dressing.
+
+Experimento de células
+
+Comparar células de 16/32/64 m com a mesma seed e câmera. Medir draw calls, triângulos visíveis, CPU de culling, p95/p99 de frame e mudanças de LOD por minuto. Escolher a menor complexidade que cumpra a matriz de aparelhos, e não a configuração que só vence no desktop.
+
+Propriedade e descarte
+
+Manter registry/refcount de geometria, material e textura compartilhados. Destruir uma célula não pode liberar uma textura ainda usada por outra. Para conteúdo dinâmico, pools por família e teto explícito de instâncias. Em Unreal, testar HISM/HLOD e streaming conforme backend/RHI; não presumir que Nanite resolverá a faixa mobile mínima.
+
+
+
+19. Materiais e memória: orçamento explícito
+
+Antes de elevar a resolução, calcular memória residente e largura de banda. Uma textura RGBA8 2048² sem compressão ocupa 16 MiB; cadeia completa de mipmaps aproxima 21,33 MiB. Em ASTC 6×6, blocos de 16 bytes exigem ceil(W/6)×ceil(H/6)×16: cerca de 1,78 MiB na base e aproximadamente 2,38 MiB com mips. Alinhamento, tail e driver alteram o valor real.
+
+
+
+
+
+
+
+Exemplo 2048²
+
+
+
+Base aproximada (MiB)
+
+
+
+Com mips (MiB)
+
+
+
+
+
+RGBA8
+
+
+
+16,00
+
+
+
+21,33
+
+
+
+
+
+ASTC 6×6
+
+
+
+1,78
+
+
+
+2,38
+
+
+
+
+
+
+
+Aplicação prática
+
+Albedo/base color em sRGB; normal, roughness, metallic e occlusion lineares. Empacotar ORM somente se canais e resolução forem compatíveis; validar convenção entre Blender, Three.js e Unreal.
+
+KTX2/Basis para web requer loader/transcoder e escolha do formato suportado em runtime. Tamanho de download não é memória GPU; testar decompression e upload em celular.
+
+Compartilhar materiais e reduzir variantes de shader. Definir trim sheet e atlas por família sem sacrificar mip bleeding ou resolução de UI.
+
+DefaultDeviceProfiles.ini já propõe pools 256/192/128 MiB e grupos de textura. São budgets de pool, não RSS total. Medir render targets, buffers, áudio, animação, heap e recursos duplicados. Integrar o relatório de assets com máximos por classe e por cena. [E12]
+
+
+
+20. Iluminação, VFX e legibilidade competitiva
+
+O AndroidEngine.ini do projeto desliga GI dinâmica, reflexos avançados, Nanite, VSM e distance fields, com r.Mobile.ShadingPath=0. Isso é coerente com uma hipótese de baseline pré-computada, mas precisa de cook e captura. A documentação Epic distingue forward e deferred com vantagens dependentes do hardware e iluminação; não existe vencedor universal. [E12, R03]
+
+Plano de luz
+
+Uma direção de sol clara, exposição controlada, skylight/ambiente e reflection captures por zona. Bake e lightmaps quando adequados ao fluxo do mapa; checar seams e densidade.
+
+Comparar forward/precomputed com deferred/dinâmico no mesmo aparelho e conteúdo, se houver justificativa de design. Não portar presets desktop para mobile por conveniência.
+
+Separar atmosfera de combate: fog e grade devem preservar contraste do inimigo. Verificar silhueta em sombras, interiores, neve e emissivos.
+
+VFX por evento e budget
+
+Cada efeito define prioridade, duração, área de tela, emissores, partículas máximas, overdraw e fallback. Muzzle flash e hit feedback têm prioridade sobre decoração. Zona e habilidade devem ter contorno/direção legível no perfil low; remover sinal tático não é otimização válida. Prefira pooling e partículas escaláveis; translucência é custo por pixel e camadas, não apenas por contagem.
+
+PSO e hitches
+
+Na frente Unreal, estabelecer processo de captura e validação de caches PSO para cada RHI/alvo efetivamente distribuído. A configuração de stable keys é pré-requisito de parte do fluxo, não cache pronto. Medir primeira execução pós-instalação e pós-update; aquecimento pode deslocar hitch para a tela de entrada e aumentar tempo até jogar. Registrar e decidir explicitamente esse trade-off.
+
+Gate: comparação low/medium em câmera fixa e combate cego. Se um alvo ou telegraph desaparece em low, reprovar mesmo quando FPS melhora. Acessibilidade e justiça são requisitos funcionais.
+
+
+
+21. Three.js: correção cirúrgica de resolução
+
+No snapshot, main3d altera renderer.setPixelRatio durante DRS e chama post.setSize; postfx3d.setSize redimensiona composer sem atualizar seu DPR. EffectComposer mantém razão própria. O pacote antigo já separa esse problema em helper, mas precisa de port para o contrato atual. [E05, E09]
+
+PROPOSTA • Adaptar ao closure de createPostFX existente; sketch de integração, não arquivo substituto completo. Validar com Three.js 0.169.0 e recursos opcionais.
+
+// Dentro do createPostFX; passes guarda TODOS os passes criados.
+
+let previousDpr = null;
+
+function resizePost(w, h) {
+
+  const dpr = renderer.getPixelRatio();
+
+  if (dpr !== previousDpr) {
+
+    composer.setPixelRatio(dpr);
+
+    previousDpr = dpr;
+
+  }
+
+  composer.setSize(w, h);
+
+  const pw = Math.max(1, Math.floor(w * dpr));
+
+  const ph = Math.max(1, Math.floor(h * dpr));
+
+  ssr?.setSize(Math.max(1, Math.floor(pw * .72)),
+
+               Math.max(1, Math.floor(ph * .72)));
+
+  // Se FXAA for incorporado, atualizar inverso da resolução física.
+
+}
+
+let disposed = false;
+
+function disposePost() {
+
+  if (disposed) return;
+
+  disposed = true;
+
+  for (const item of new Set([...passes, composer])) {
+
+    try { item?.dispose?.(); } catch (error) { report(error); }
+
+  }
+
+}
+
+// Retornar setSize: resizePost e dispose: disposePost no contrato atual.
+
+Testes exigidos no port
+
+DPR 1/1,5/1,75; escala DRS 0,55/0,75/1; resize, orientação e SSR opcional. Conferir drawing buffer e render targets reais, não apenas mocks.
+
+Troca de high → medium → low libera passes/targets e preserva render direto no low. Repetição de setSize sem mudança de DPR não deve forçar realocação extra por esse motivo.
+
+Separar tone mapping e conversão de cor: exatamente uma saída final para display; confirmar posição de OutputPass e overlays. Evitar “corrigir” contraste duplicando transforms.
+
+Para comprovar ganho: A/B com mesma câmera, seed e temperatura; relatar GPU time e p95. Menos pixels só aceleram gargalos sensíveis à resolução; não corrigem CPU de simulação ou draw overhead.
+
+
+
+22. Animação, locomotion e sensação de controle
+
+A base possui kernels portáveis de locomotion, distance matching e motion warping; os testes específicos executados passaram, incluindo 49 e 38 checks reportados nesses dois grupos. Isso comprova o núcleo isolado no ambiente de teste, não animação final renderizada, blend graph ou integração com rede. [E13]
+
+Integração em camadas
+
+Locomoção autoritativa define velocidade, aceleração, gravidade e postura. Camada visual escolhe poses com base em estado replicado/predito; não deslocar física pelo pé do personagem.
+
+State machine mínima: idle, move, sprint, crouch, jump/fall, land e ADS. Definir transições e prioridades antes de adicionar gestos e cosméticos.
+
+Aim offset e recoil visual independentes de recoil balístico; recarga deve emitir marcador de gameplay autorizado pelo servidor, não conceder munição porque um notify local tocou.
+
+Foot IK e warping só quando necessários; reduzir update em distância e usar Animation Budget Allocator após perfilar. Manter eventos de gameplay fora de uma animação que pode ser pulada por LOD.
+
+Procedimento de aceite
+
+Câmera TPS e ADS com latência simulada, escadas, portas, bordas e mudança de postura. Medir foot sliding, clipping, atraso input→movimento e input→feedback visual. A captura deve ter build, taxa de refresh, modo de sincronização e método de medição identificados; requestAnimationFrame não mede latência física de ponta a ponta.
+
+Skills da equipe
+
+Animator técnico responsável por rig/blend/retarget; gameplay engineer por autoridade; rendering engineer por custo de skinning; QA por transições e rede. Usar clips de referência autorais/licenciados. Bibliotecas procedurais e IA podem acelerar protótipos, mas necessitam limpeza, contato com chão e revisão de licenças antes de entrar no produto.
+
+
+
+23. UX mobile, áudio e jornada até jogar
+
+Um produto no nível de referência não é só uma cena bonita. Login, seleção de região, matchmaking, download, onboarding, controles e recuperação de erro devem funcionar sob rede e aparelhos reais. Propor um funil instrumentado: abrir → autenticar → carregar conteúdo → entrar em sala → primeiro input → resultado. Cada etapa possui duração e motivo de abandono.
+
+Controles e interface
+
+HUD ancorado por safe area, botões redimensionáveis e layouts canhoto/destro. Testar 16:9 e telas alongadas, notch, DPI e teclado/controle quando suportados.
+
+Customização de sensibilidade/ADS, dead zones e feedback. Não misturar auto aim assist e fairness sem métrica por coorte e política transparente de pareamento.
+
+Telegraphs por forma, som e cor; legendas e contraste; recursos de acessibilidade não podem depender do perfil high.
+
+Áudio tático
+
+Mix por prioridade: passos, disparo e habilidade acima de decoração. Atenuação/oclusão coerentes com portas e cobertura, limite de vozes e orçamento de memória. Áudio espacial não deve revelar inimigo fora de uma regra autorizada. Música adaptativa ocorre fora do caminho crítico e tem fallback local; não chamar geração de áudio em uma partida competitiva.
+
+Qualidade de distribuição
+
+Separar bundle essencial e conteúdo opcional; medir cold start com cache vazio e atualização parcial. O runtime atual gera warning de bundle principal; primeiro investigar rotas e imports, depois testar code splitting por menu/partida/espectador. Fragmentar sem medir pode trocar download inicial por hitch durante combate. [E14]
+
+No mobile nativo, validar pacote, assinatura, permissões, classificação indicativa, crash symbols, download incremental e rollback compatível com políticas das lojas. Definir versão mínima suportada e mensagem clara de atualização; nunca permitir clientes com regras incompatíveis na mesma sala.
+
+
+
+24. QA e performance como experimento
+
+Separar correção funcional, estabilidade, desempenho e qualidade visual. Um teste que usa mocks pode proteger um contrato útil sem provar integração de engine. Nesta revisão, o runtime compilou e os testes passaram com 13 skips; os grupos ignorados devem ser classificados por dependência e ter campanha própria, nunca absorvidos na porcentagem de sucesso.
+
+Protocolo A/B reproduzível
+
+Fixar commit, seed, câmera/replay, versão de engine/browser, preset, resolução, refresh, rede, estado de bateria e temperatura ambiente. Executar baseline e mudança em ordem alternada para reduzir viés térmico.
+
+Aquecer shaders e conteúdo; medir separadamente primeira entrada, cache quente e sessão sustentada. Repetir ao menos cinco passagens exploratórias por aparelho; definir amostra final por variância e efeito mínimo relevante.
+
+Capturar frame time bruto, CPU game/render, GPU quando disponível, draw calls, triangles, memória/allocations, GC, network queue e eventos de hitch. requestAnimationFrame não é tempo GPU puro.
+
+Reportar mediana, p95 e p99 por sessão e coorte; não usar só FPS médio. Comparar sementes pareadas e intervalos de confiança por bootstrap de sessões/blocos, evitando tratar cada frame autocorrelacionado como amostra independente.
+
+Matriz de testes
+
+
+
+
+
+
+
+Camada
+
+
+
+Casos obrigatórios
+
+
+
+
+
+Unit/property
+
+
+
+Loot finito, conservação de saldo, crédito temporal, idempotência, NaN/Infinity
+
+
+
+
+
+Integração
+
+
+
+Login → sala → loot → combate → resultado; DB/Redis reais em ambiente isolado
+
+
+
+
+
+Rede
+
+
+
+Jitter, perda, reorder onde aplicável, reconexão, congestionamento e backpressure
+
+
+
+
+
+Conteúdo
+
+
+
+Referências, colisão, navmesh, LOD, materiais, sockets e bounds
+
+
+
+
+
+Dispositivo
+
+
+
+Cold start, suspensão/retorno, rotação permitida, térmica, OOM e context loss
+
+
+
+
+
+Operação
+
+
+
+Soak, failover de controle, restore, rotação de secret e rollback
+
+
+
+Unreal Insights, Networking Insights, RenderDoc e ferramentas Android/GPU entram conforme plataforma e permissões. Guardar traces junto ao build e ao roteiro; screenshot sem contexto não encerra ticket de performance. [R06]
+
+
+
+25. Infraestrutura, SRE e custo por partida
+
+A infraestrutura versionada inclui Compose, Terraform, alertas e métricas. Presença em Git não comprova deploy, failover ou capacidade multi-região. Começar com uma região próxima da coorte de teste, serviços gerenciados quando reduzirem risco e ambiente de staging semelhante ao release. Não introduzir Kubernetes/Agones antes de uma necessidade mensurável de alocação. [E18]
+
+Plano de execução
+
+Match allocator reserva sessão e emite ticket curto vinculado a jogador/servidor/versão. Servidor aceita ticket uma vez; plano de controle não participa de cada tick.
+
+Processo de partida isolado com limite de CPU/RAM, health/readiness separados e drain antes de deploy. Reinício do processo não significa migração transparente de partida; definir política de abortar, compensar ou recuperar.
+
+PostgreSQL com backup/PITR testado; Redis como cache/coordenação conforme contrato, nunca saldo único sem persistência adequada. Lock distribuído requer fencing/epoch, não só TTL.
+
+Dashboards por build/região: tick p95/p99, backlog, disconnect, RTT, perda, partidas abortadas, crash, erro de transação e custo por sessão.
+
+Modelo de capacidade proposto
+
+Para C jogadores simultâneos, lotação P, ocupação média u e S salas estáveis por instância: instâncias ≈ ceil(C/(P×u×S)). Exemplo hipotético: C=5.000, P=50, u=0,8 e S=4 exigem 32 instâncias, antes de reserva e falha. S só vem de teste no SKU escolhido; não usar esse exemplo como sizing aprovado.
+
+Egress por jogador em kbit/s × duração × participantes é limite inicial de rede; acrescentar cabeçalhos, retransmissões e spectators. Custo por partida completa = infraestrutura atribuída + dados + observabilidade + suporte variável, dividido por partidas concluídas. Medir também custo por jogador-minuto para não mascarar abortos.
+
+SLO e resposta
+
+Propor sucesso de conclusão ≥99% no beta fechado, RPO de controle/economia ≤5 min e RTO ≤60 min, sujeitos a análise de negócio e restore real. Não são garantias existentes. Um orçamento de erro consumido congela features até recuperação; on-call tem runbook e autoridade para suspender monetização.
+
+
+
+26. RAG de engenharia, não de autoridade de jogo
+
+
+
+RAG é camada de assistência para navegar o monorepo, explicar contratos, recuperar decisões e sugerir patches fundamentados. Não é parte do loop competitivo e não decide dano, saldo, vencedor ou banimento. Um bom RAG reduz busca manual; não elimina alucinação nem substitui o compilador.
+
+Corpus e granularidade
+
+Incluir código, schemas, manifests, ADRs, runbooks, resultados de testes e métricas agregadas autorizadas. DOCX entra com texto estruturado e ponteiros por seção; imagens/GLB entram via metadados e relatórios, não como se fossem código.
+
+Chunk por classe/função/section com imports e contexto pai; para prosa, hipótese inicial de 400–800 tokens com sobreposição pequena. Preservar path, linguagem, símbolo, linhas, commit e hash de conteúdo.
+
+Excluir secrets, env reais, tokens, dumps de usuário, dados financeiros pessoais e binários. Aplicar allowlist antes de parsing; redaction é segunda barreira, não única.
+
+Contrato de documento indexado
+
+{"repo":"Khaaos_Run", "commit":"<sha validado>",
+
+ "path":"game-runtime/server/room3d.js", "symbol":"MatchRoom3D.tick",
+
+ "line_start":552, "line_end":604, "content_sha256":"<hash>",
+
+ "tenant":"nexus", "acl":["dev-network"], "kind":"source",
+
+ "engine":"web", "parser_version":"v1", "indexed_at":"<UTC>"}
+
+Os marcadores no JSON são campos de schema demonstrativo, não evidências preenchidas. Em produção, a ingestão deve rejeitar commit/hash ausentes e manter tombstones para remoção de acesso.
+
+
+
+27. Recuperação híbrida e algoritmo de ranking
+
+Nomes de símbolos e paths favorecem busca lexical; perguntas conceituais favorecem embeddings. Combinar BM25 e vetores sob filtros obrigatórios de tenant, ACL, projeto, branch/commit e engine. Reranker opera somente sobre candidatos autorizados; filtrar só depois do top-k pode vazar metadados e destruir recall.
+
+def rrf(rankings, k=60):
+
+    """IDs já filtrados por ACL, projeto, branch e commit."""
+
+    score = defaultdict(float)
+
+    for ranking in rankings:
+
+        for rank, item in enumerate(dict.fromkeys(ranking), 1):
+
+            score[item] += 1 / (k + rank)
+
+    return sorted(score, key=lambda item: (-score[item], item))
+
+Fluxo proposto de consulta
+
+Classificar intenção: localizar símbolo, explicar fluxo, comparar versões, diagnosticar ou propor patch. Não exigir LLM para uma busca exata de path.
+
+Recuperar top-40 lexical e top-40 vetorial, unir por RRF com k=60 inicial; rerankear top-30 e selecionar até oito chunks não redundantes. Parâmetros são ponto de partida de avaliação, não ótimo comprovado.
+
+Expandir dependências diretas quando necessário e sob ACL: função chamadora, contrato de dados, teste relacionado e ADR. Não preencher contexto com documentação histórica de outra engine.
+
+Construir resposta com afirmação → citação por commit/path/linhas. Se faltar prova, declarar incerteza e sugerir verificação; não responder com falsa precisão.
+
+Armazenamento e atualização
+
+PostgreSQL + pgvector pode reduzir operação inicial, mas verificar estratégia lexical adequada para código; OpenSearch/índice BM25 dedicado é alternativa quando necessário. Qdrant é opção vetorial, não substitui sozinho todos os contratos de busca. Escolher com corpus e custo reais, não por popularidade. Indexar incrementos por content hash; mudança de embedding exige nova coleção/versão e teste de migração.
+
+Reprodutibilidade
+
+Registrar query, filtros, IDs recuperados, scores/ranks, prompt hash, modelo/versão, tokens, latência e decisão humana. Logs devem omitir secrets e minimizar texto sensível. Cache segregado por ACL e commit: duas pessoas com permissões diferentes não podem receber o mesmo cache indiscriminado.
+
+
+
+28. Skills de agentes, LLMs e contratos de tools
+
+Uma skill é um procedimento versionado com entradas, ferramentas permitidas, teste e condição de parada. O agente prepara uma proposta auditável; humanos e gates mantêm autoridade. Usar modelos de raciocínio/código por capacidade avaliada, não atribuir rigor científico à marca ou tamanho do modelo.
+
+
+
+
+
+
+
+Skill proposta
+
+
+
+Tools permitidas
+
+
+
+Saída / dono
+
+
+
+
+
+repo_auditor
+
+
+
+git show, parser, busca read-only
+
+
+
+Achados com evidências / tech lead
+
+
+
+
+
+asset_inspector
+
+
+
+Blender headless, glTF validator, hash
+
+
+
+Relatório e métricas / tech art
+
+
+
+
+
+test_author
+
+
+
+Leitura + workspace descartável + runner
+
+
+
+Teste e diff / dono do módulo
+
+
+
+
+
+perf_triager
+
+
+
+Traces agregados, query de métricas
+
+
+
+Hipóteses priorizadas / rendering
+
+
+
+
+
+rag_curator
+
+
+
+Parser, índice restrito, eval runner
+
+
+
+Snapshot/eval / ML engineer
+
+
+
+
+
+release_assistant
+
+
+
+Leitura de gates e manifests
+
+
+
+Checklist, sem deploy / release lead
+
+
+
+Contrato de execução de ferramenta
+
+tool: run_tests
+
+input_schema:
+
+  workspace_id: string
+
+  suite: enum[web_unit, contracts, asset_validate]
+
+  timeout_s: integer  # 1..180, validado pelo executor
+
+permissions: isolated_workspace_no_secrets
+
+network: deny_by_default
+
+output: {exit_code, log_artifact, duration_ms, tested_commit}
+
+limits: {cpu: 2, memory_mb: 2048, output_kb: 512}
+
+approval_required: false
+
+# Deploy, pagamentos, banimento e git push: fora desta tool.
+
+Política de modelos
+
+Classificador/roteador leve para busca; modelo de código para patches pequenos; modelo multimodal para triagem visual quando permitido. Testar alternativas comerciais e self-hosted sob o mesmo conjunto de tarefas. Avaliar qualidade, contexto útil, código compilável, segurança, latência p95 e custo por tarefa aceita. “Open weights” não garante privacidade: revisar servidor, logs e licença.
+
+Prompt de sistema deve exigir separação evidência/hipótese, fontes do commit correto, nenhuma execução destrutiva e parada quando faltam dados. Resposta estruturada exige validação por schema e limite de tamanho. A ferramenta não confia no texto do modelo para conceder permissões.
+
+
+
+29. Avaliação de IA, segurança e governança
+
+RAG e agentes introduzem risco de prompt injection em README, comentários, documentos e resultados de tools. Conteúdo recuperado é dado não confiável, mesmo vindo do próprio repositório. Separar instruções de dados, limitar ações e impedir que um chunk altere políticas ou solicite secrets. Filtros textuais isolados não resolvem o problema. [R10–R12]
+
+Benchmark inicial proposto
+
+Construir 100 perguntas verificadas por humanos: 30 localização de símbolo, 25 fluxo/contrato, 15 diagnóstico com logs, 15 assets/pipeline e 15 perguntas sem resposta ou adversariais. Separar treino de prompts e conjunto holdout; incluir consultas em pt-BR, aliases, typo e nomes de mundos. O número é plano de avaliação, não campanha executada.
+
+
+
+
+
+
+
+Métrica / gate proposto
+
+
+
+Definição
+
+
+
+
+
+Recall@10 ≥ 0,85
+
+
+
+Perguntas respondíveis com chunk relevante entre os dez primeiros
+
+
+
+
+
+Correção de citação ≥ 0,95
+
+
+
+Fonte citada sustenta a afirmação no commit/linhas corretos
+
+
+
+
+
+Abstenção avaliada
+
+
+
+Precisão/recall separados para perguntas irrespondíveis
+
+
+
+
+
+Leakage ACL = 0
+
+
+
+Nenhum conteúdo/metadata proibido no conjunto adversarial
+
+
+
+
+
+Patch aceito
+
+
+
+Passa testes e revisão; separar sintaxe de utilidade
+
+
+
+
+
+Custo e latência
+
+
+
+Custo por tarefa aceita e p50/p95, sob concorrência definida
+
+
+
+Defesa em profundidade
+
+Tenant/ACL no armazenamento e executor; credenciais curtas; sandbox sem acesso a produção; network egress allowlisted; limites de CPU, tempo e filesystem.
+
+Conteúdo malicioso em docs deve gerar resposta segura, não tool call privilegiada. Testar instruções de exfiltração, cross-tenant retrieval, arquivos enormes e encadeamento de ações.
+
+PRs sugeridos por IA exigem diff, testes, origem do contexto e aprovação. Modelos não podem aprovar o próprio patch nem desabilitar checks de segurança.
+
+Risco residual existe mesmo com guardrails. Para release, exigir revisão humana de fluxos críticos e kill switch do agente sem afetar a partida. Monitorar drift, feedback e taxa de retrabalho; desativar o caso de uso que não supera a baseline de busca/manual.
+
+
+
+30. Roadmap mestre: gates antes de escala
+
+Cenário-base proposto: 64 semanas de execução nominal por fases, com trabalho paralelo e reserva que pode levar o programa a 18–24 meses. É uma ordem de grandeza de planejamento para beta/lançamento limitado, não prazo garantido para igualar um produto live de grande escala. A estimativa depende da equipe, baseline UE, volume de conteúdo e resultados dos primeiros gates.
+
+
+
+
+
+
+
+Fase / semanas nominais
+
+
+
+Entrega controlável
+
+
+
+Gate de saída
+
+
+
+
+
+P0 • 2
+
+
+
+Auditoria operacional, baseline, plugins e engine fixados
+
+
+
+G0 e decisão de viabilidade
+
+
+
+
+
+P1 • 6
+
+
+
+Build real, CIGKV mínimo, dois clientes, pipeline de assets
+
+
+
+G2/G3 sem stubs
+
+
+
+
+
+P2 • 12
+
+
+
+Vertical slice polido, 16→32→50 participantes em laboratório
+
+
+
+G4 e primeira matriz G5
+
+
+
+
+
+P3 • 16
+
+
+
+Alpha, kits reutilizáveis, controle/economia em sandbox
+
+
+
+Soak, restore e UX aprovados
+
+
+
+
+
+P4 • 16
+
+
+
+Beta fechado, expansão medida de conteúdo e coortes
+
+
+
+Segurança e SLO por coorte
+
+
+
+
+
+P5 • 12
+
+
+
+Soft launch, live-ops, custo e retenção medidos
+
+
+
+G6 e revisão de investimento
+
+
+
+
+
+
+
+Caminho crítico: provisionamento engine/plugins → build nativo → import/cook → partida integrada → performance de dispositivo → operação. RAG, dashboards e concept art podem avançar em paralelo, mas não desbloqueiam um mapa que não compila. Replanejar após P1 com histórico de throughput e não com porcentagem de arquivos existentes.
+
+
+
+31. Primeiros 90 dias: backlog executável
+
+
+
+
+
+
+
+Janela / ticket
+
+
+
+Dono e dependência
+
+
+
+Aceite verificável
+
+
+
+
+
+Dias 1–7 • KR-001
+
+
+
+Build lead; acesso autorizado à engine
+
+
+
+Manifest de versões, clone limpo, logs de provisionamento
+
+
+
+
+
+Dias 1–10 • KR-002
+
+
+
+SCM + tech art; backup
+
+
+
+Auditoria LFS; política aprovada sem reescrita de main
+
+
+
+
+
+Dias 3–14 • KR-003
+
+
+
+Network lead; fixtures
+
+
+
+Teste de orçamento temporal, RTT e config idempotente
+
+
+
+
+
+Dias 7–21 • KR-004
+
+
+
+Rendering web; KR-001 não bloqueia
+
+
+
+Port DPR/dispose, unit + browser + aparelho
+
+
+
+
+
+Dias 7–28 • KR-005
+
+
+
+UE lead; KR-001
+
+
+
+Editor/Server reais; dependências resolvidas
+
+
+
+
+
+Dias 14–35 • KR-006
+
+
+
+Tech art; KR-005
+
+
+
+Kit CIGKV e mapa importado/cooked
+
+
+
+
+
+Dias 21–42 • KR-007
+
+
+
+Gameplay + network; KR-005/006
+
+
+
+Dois clientes, combate, resultado e reconexão
+
+
+
+
+
+Dias 28–49 • KR-008
+
+
+
+QA/perf; KR-006/007
+
+
+
+Traces em seis aparelhos, gargalos priorizados
+
+
+
+
+
+Dias 35–63 • KR-009
+
+
+
+Art/animation; rig base
+
+
+
+Personagem + rifle com LOD e animação in-engine
+
+
+
+
+
+Dias 42–70 • KR-010
+
+
+
+SRE; KR-007
+
+
+
+Staging, restore, drain e teste de falha
+
+
+
+
+
+Dias 49–77 • KR-011
+
+
+
+Network/QA; KR-008/010
+
+
+
+Escada 16/32/50 e caso círculo final
+
+
+
+
+
+Dias 56–84 • KR-012
+
+
+
+ML engineer; corpus sanitizado
+
+
+
+RAG read-only e benchmark holdout
+
+
+
+
+
+Dias 77–90 • KR-013
+
+
+
+Produto + leads; todos críticos
+
+
+
+Dossiê do slice, GO/NO-GO e novo orçamento
+
+
+
+Cadência e dependências
+
+Sprints de duas semanas, revisão de build semanal e demo quinzenal com build identificado. Limitar WIP a uma mudança de arquitetura por subsistema. Se KR-005 falhar até o dia 28, acionar decisão formal de escopo/engine, não aumentar o time de arte sem mapa de destino. Se 50 participantes falharem, preservar a etapa estável anterior e investigar CPU, rede e conteúdo separadamente.
+
+Cada ticket é desdobrado em PRs menores com owner nominal na ferramenta de gestão. Estimativas de dias são janelas propostas; não significam disponibilidade confirmada nem conclusão já contratada. O backlog termina em decisão informada, não em promessa de lançamento aos 90 dias.
+
+
+
+32. WBS e entregáveis por trilha
+
+Organizar a estrutura de trabalho por artefatos e interfaces. Um sistema transversal não pode ficar sem dono porque cruza equipes. O tech lead coordena contratos, e os responsáveis de disciplina aprovam sua parte da evidência.
+
+
+
+
+
+
+
+Pacote
+
+
+
+Entregáveis concretos
+
+
+
+Dependências
+
+
+
+
+
+ENG-BUILD
+
+
+
+Manifest engine/plugins; builds Editor/Server/Android; cook; símbolos
+
+
+
+Acessos, licenças e runner
+
+
+
+
+
+NET-CORE
+
+
+
+Crédito temporal; snapshots; AOI; tickets; backpressure; load harness
+
+
+
+Build e schema
+
+
+
+
+
+GMP-SLICE
+
+
+
+Movimento, combate, habilidade, loot, zona, eliminação e resultado
+
+
+
+NET-CORE + mapa
+
+
+
+
+
+ART-KIT
+
+
+
+Bíblia, modular kit, material library, LODs e colisões
+
+
+
+Layout e budgets
+
+
+
+
+
+CHR-ANIM
+
+
+
+Rig, malha, skinning, sockets, clips e state machine
+
+
+
+Contrato de gameplay
+
+
+
+
+
+MAP-CIGKV
+
+
+
+Blockout aprovado, dressing, navmesh e cook final
+
+
+
+ART-KIT + GMP
+
+
+
+
+
+DATA-ECON
+
+
+
+Schema canônico, ledger sandbox, outbox e reconciliação
+
+
+
+Identidade e revisão de segurança
+
+
+
+
+
+SRE-OPS
+
+
+
+Staging, secrets, dashboards, backup/restore e on-call
+
+
+
+Build distribuível
+
+
+
+
+
+QA-MATRIX
+
+
+
+Roteiros, fixtures, laboratório, traces e regressão visual
+
+
+
+Versões e devices
+
+
+
+
+
+AI-ASSIST
+
+
+
+Ingestão ACL, índice, skills read-only, eval e logs
+
+
+
+Corpus sanitizado
+
+
+
+Pacote de aceite por entrega
+
+Manifest com commit, toolchain, parâmetros, dono, logs e links para artefatos. Para conteúdo: source, export, licença, relatório, preview e import/cook. Para software: diff, testes, benchmark e rollback. Para operação: teste de incidente e evidência de recuperação. Não aprovar com documentação que descreve um comando sem executá-lo no alvo.
+
+Escopo deliberadamente adiado
+
+Cinco mundos em qualidade final, modos adicionais, torneios monetizados, loja de alto volume, crossplay completo, inferência generativa em partida e migração transparente de servidores. A postergação reduz risco e deve constar no contrato de produto para evitar que vire dívida silenciosa.
+
+
+
+33. Equipe, competências e orçamento por cenário
+
+Uma composição-base de 18 FTE pode distribuir capacidade entre produção/produto, liderança técnica, gameplay/rede, rendering/mobile, backend/SRE, modelagem/ambiente, personagem/animação/tech art, QA e UI/áudio. Papéis combinados exigem revisar throughput; não assumir que uma pessoa domina todas as especialidades por usar ferramentas de IA.
+
+
+
+
+
+
+
+Cenário ilustrativo
+
+
+
+Premissas de pessoal
+
+
+
+Subtotal direto
+
+
+
+
+
+Enxuto
+
+
+
+10 FTE × R$22 mil/mês × 18 meses
+
+
+
+R$3,96 milhões
+
+
+
+
+
+Base
+
+
+
+18 FTE × R$26 mil/mês × 18 meses
+
+
+
+R$8,424 milhões
+
+
+
+
+
+Ampliado
+
+
+
+26 FTE × R$32 mil/mês × 24 meses
+
+
+
+R$19,968 milhões
+
+
+
+
+
+
+
+Os custos mensais por FTE são hipóteses de custo carregado, não tabela salarial pesquisada. Somar cloud, tráfego, laboratório, licenças, terceirização, legal/compliance, suporte e aquisição de usuários. Cenário-base ilustrativo com infraestrutura de R$20–80 mil/mês e ferramentas/laboratório de R$10–30 mil/mês adiciona R$0,54–1,98 milhão em 18 meses, antes de marketing, taxas e contingência.
+
+Reservar contingência inicial de 20–30% do orçamento técnico revisado, sem tratá-la como produtividade. Contratar primeiro build/network/tech art/QA mobile para reduzir bloqueios. Terceirizar assets apenas com brief, licença, source e aceite. Não usar orçamento de desenvolvimento como estimativa de live-ops de milhões de usuários.
+
+
+
+34. Registro de riscos e respostas
+
+
+
+
+
+
+
+Risco / prioridade
+
+
+
+Sinal de disparo
+
+
+
+Resposta / responsável
+
+
+
+
+
+Engine/plugins • crítico
+
+
+
+Editor não compila no runner limpo
+
+
+
+Fixar dependências; spike alternativo / UE lead
+
+
+
+
+
+Conteúdo ausente • crítico
+
+
+
+Cook sem mapa ou refs quebradas
+
+
+
+Priorizar mapa-piloto; bloquear expansão / tech art
+
+
+
+
+
+Tempo/rewind • alto
+
+
+
+Movimento varia por taxa ou hit tardio injusto
+
+
+
+Invariantes, RTT medido, limite por política / network
+
+
+
+
+
+Memória/térmica • alto
+
+
+
+OOM, throttling, hitches sustentados
+
+
+
+LOD/textura/FX e orçamento por cena / rendering
+
+
+
+
+
+Escopo • alto
+
+
+
+Novos mundos antes do slice
+
+
+
+Change control e corte explícito / produto
+
+
+
+
+
+Economia real • crítico
+
+
+
+Pressão de ativação sem auditoria
+
+
+
+Feature flag bloqueada, jurídico/segurança / sponsor
+
+
+
+
+
+SCM/LFS • alto
+
+
+
+Binário não ponteiro, clone diverge
+
+
+
+Backup, normalização controlada / SCM
+
+
+
+
+
+IA e dados • alto
+
+
+
+Fonte sensível ou tool privilegiada
+
+
+
+ACL, isolamento, revogação e logs / security
+
+
+
+
+
+Operação • alto
+
+
+
+Restore falha ou sem on-call
+
+
+
+Treino de incidente e capacidade de rollback / SRE
+
+
+
+
+
+IP/licenças • alto
+
+
+
+Asset sem origem ou imitação direta
+
+
+
+Quarentena e substituição autoral / art + legal
+
+
+
+Gestão do risco
+
+Prioridade combina impacto, probabilidade e custo de descoberta tardia; os rótulos são qualitativos, não estatística calibrada. Review semanal dos cinco maiores riscos. Dono deve registrar exposição residual e prazo; aceite de risco crítico requer decisão de negócio, não apenas comentário do implementador.
+
+Critérios de pausa
+
+P0 sem dono ou sem plano de teste; build crítico não reproduzível; indício de perda de saldo/duplicação; vazamento de credenciais; violação de licença.
+
+Duas campanhas consecutivas sem atingir orçamento mínimo em aparelhos alvo: interromper expansão visual e redesenhar o conteúdo mais caro.
+
+RAG com vazamento de ACL: desligar consultas afetadas, preservar trilha e revogar cache/índices; não “corrigir pelo prompt” e continuar operando.
+
+Risco de experiência permanece: um shooter tecnicamente estável ainda pode não reter jogadores. Usar testes de diversão com coortes pequenas antes de escalar produção e aquisição de usuários.
+
+
+
+35. Matriz de aceite e decisão GO / NO-GO
+
+Comparar somente builds identificados, em condições equivalentes. O dono da métrica fornece evidência; o aprovador pode contestar. Campos não medidos são “pendentes”, não zeros e não PASS. As metas abaixo são propostas e devem ser ratificadas após o spike.
+
+
+
+
+
+
+
+Dimensão
+
+
+
+Gate do slice
+
+
+
+Evidência / aprovador
+
+
+
+
+
+Build
+
+
+
+Editor, Server e Android reproduzíveis
+
+
+
+Logs + artefato; build lead
+
+
+
+
+
+Conteúdo
+
+
+
+CIGKV e personagem/arma finais importados/cooked
+
+
+
+Asset report + inspeção; tech art
+
+
+
+
+
+Partida
+
+
+
+Ciclo completo, resultado único e reconexão
+
+
+
+Vídeo + logs correlacionados; gameplay
+
+
+
+
+
+Rede
+
+
+
+16→32→50, círculo final, sem inflação temporal
+
+
+
+Load report + trace; network
+
+
+
+
+
+Performance
+
+
+
+Metas do cap. 7 por aparelho/coorte
+
+
+
+Capturas CPU/GPU e térmica; QA/perf
+
+
+
+
+
+Estabilidade
+
+
+
+Sem OOM no roteiro; crash-free beta ≥99,5%
+
+
+
+Relatório com amostra e símbolos; QA
+
+
+
+
+
+Economia
+
+
+
+Replay/concorrência sem saldo incorreto
+
+
+
+Invariantes e reconciliação; backend
+
+
+
+
+
+Segurança
+
+
+
+Nenhum crítico/alto aberto para release
+
+
+
+Revisão independente; security
+
+
+
+
+
+Operação
+
+
+
+Restore, drain, rollback e on-call testados
+
+
+
+Exercício datado; SRE
+
+
+
+
+
+IA
+
+
+
+ACL sem leakage no conjunto de teste
+
+
+
+Eval/attack report; ML + security
+
+
+
+Pacote para o comitê
+
+Resumo de uma página, lista de gates, incidentes, custo por partida, risco residual e proposta de próximo investimento. Para GO, todos os gates críticos completos e nenhum P0 aberto; para GO condicionado, somente itens não críticos com prazo e dono. Desempenho do servidor não compensa falha de economia, e visual bonito não compensa crash em aparelho mínimo.
+
+“Nível Free Fire” como critério composto
+
+Usar benchmark de experiência pública e pesquisa com jogadores, sem alegar acesso a dados internos da Garena. Avaliar legibilidade, controle, tempo para entrar, estabilidade, fairness e consistência de live-ops. Paridade de catálogo, comunidade, infraestrutura global e resultado comercial não é garantida nem mensurável por esta auditoria técnica.
+
+
+
+36. Script de CI: novo gate mobile do runtime
+
+PROPOSTA • Workflow adicional de referência. Os arquivos de teste novos citados precisam ser criados; não estão presentes no snapshot auditado.
+
+name: proposed-runtime-quality
+
+on:
+
+  pull_request:
+
+    paths: ['game-runtime/**', '.github/workflows/runtime-quality.yml']
+
+permissions:
+
+  contents: read
+
+jobs:
+
+  runtime:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+
+        with:
+
+          node-version: '22'
+
+          cache: npm
+
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+
+        working-directory: game-runtime
+
+      - run: npm test
+
+        working-directory: game-runtime
+
+      - run: npm run build
+
+        working-directory: game-runtime
+
+      - name: Invariantes novas (criar antes de habilitar)
+
+        run: node --test test/input-time-budget.test.js test/post-resolution.test.js
+
+        working-directory: game-runtime
+
+      - uses: actions/upload-artifact@v4
+
+        if: always()
+
+        with:
+
+          name: runtime-dist
+
+          path: game-runtime/dist
+
+          if-no-files-found: warn
+
+Antes do uso, fixar actions por commit aprovado, gerar relatórios de teste/métricas e definir retention. O exemplo não depende de secrets e não faz deploy. Testes com DB/Redis reais devem ter job isolado; não assumir que npm test substitui todos os ambientes. Aprovação de dispositivo é etapa própria, alimentada por artefato assinado da campanha.
+
+Para Unreal, o gate executa build/cook reais com engine licenciada e logs, não comando de shell que apenas conta arquivos. Sinalizar explicitamente job skipped e dependência de runner; branch protection deve requerer a evidência adequada ao risco da mudança.
+
+
+
+37. Pesquisa aplicada: hipóteses refutáveis
+
+Rigor de desenvolvimento avançado pede desenhar testes que possam provar que uma ideia não serve. Priorizar perguntas de maior impacto antes de pesquisa generativa sofisticada. Para cada experimento, registrar hipótese, variável alterada, controle, amostra, métrica primária, critério de parada e custo.
+
+
+
+
+
+
+
+Hipótese
+
+
+
+Experimento e variável controlada
+
+
+
+Refutação prática
+
+
+
+
+
+DRS reduz GPU-bound
+
+
+
+Mesmo replay, apenas resolução varia; medir GPU e frame p95
+
+
+
+CPU domina ou nitidez cai sem ganho útil
+
+
+
+
+
+Instancing por célula ajuda
+
+
+
+16/32/64 m; mesmo conteúdo e câmera
+
+
+
+Culling/CPU ou draw calls pioram no mínimo
+
+
+
+
+
+Material compartilhado compensa
+
+
+
+Mesma aparência, menos variantes/draws
+
+
+
+Perda visual relevante sem melhora estável
+
+
+
+
+
+AOI preserva fairness
+
+
+
+Mesmo cenário com/sem filtro; captura de eventos
+
+
+
+Ameaça some, hit diverge ou edge churn cresce
+
+
+
+
+
+RAG supera busca simples
+
+
+
+Holdout cego, BM25 vs híbrido vs híbrido+reranker
+
+
+
+Custo sobe sem ganho em tarefa aceita
+
+
+
+
+
+Bots predizem diversão
+
+
+
+Sessões de bot comparadas com coorte humana
+
+
+
+Vitória/fluxo de bots não correlaciona com humanos
+
+
+
+Instrumentação e análise
+
+Modelar throughput por sala, custo por jogador e tempo de frame por subsistema. Evitar confundir correlação com causalidade: jogadores melhores podem selecionar uma arma, e aparelhos mais fortes podem se concentrar em certas regiões. Parear seeds/replays quando possível e estratificar por dispositivo/rede/habilidade.
+
+Limites de pesquisa com IA
+
+ML para detecção de anomalia pode auxiliar triagem após dados rotulados e auditoria de vieses. Não colocar LLM em controle de mira, hit registration ou punição final. Geração 3D assistida serve para concept/blockout; topologia, UVs, skinning, materiais, licença e budget continuam exigindo validação. Um modelo não “sabe” que um GLB cabe na memória porque viu seu preview.
+
+Reprodutibilidade mínima: código do experimento, ambiente, corpus/conteúdo autorizado, seeds, resultados brutos e análise. Não escolher apenas a captura mais bonita ou o melhor frame para defender uma decisão.
+
+
+
+38. SCM, LFS e rastreabilidade de assets
+
+O clone informou 126 arquivos que deveriam ser ponteiros LFS, mas continham conteúdo direto. As regras .gitattributes abrangem OBJ, glTF, imagens, DLL e arquivos compactados. Isso não prova que os bytes estejam corrompidos; sinaliza inconsistência entre política e armazenamento que pode causar diferenças em checkout, CI e distribuição. [E19]
+
+Diagnóstico sem reescrever histórico
+
+git status --short
+
+git lfs version
+
+git lfs env
+
+git lfs ls-files
+
+# Diagnóstico no clone descartável; fsck pode reportar a inconsistência:
+
+git lfs fsck
+
+# Conferir regra efetiva para um exemplo:
+
+git check-attr filter diff merge -- \
+
+  Unreal/KhaaosRun/Content/Barburhen/Barburhen_Map.gltf
+
+# Não executar migrate --everything na main sem plano aprovado.
+
+Plano de correção
+
+Backup de refs e bytes, inventário de tamanho/hashes e acesso ao storage LFS. Classificar source, derivados, executáveis de terceiros e logs; nem todo arquivo deve ficar no mesmo canal.
+
+Escolher entre normalização em novo commit e migração de histórico em janela controlada. A segunda muda SHAs e exige comunicação, atualização de forks/caches e validação de restore.
+
+Aplicar locking em arquivos não mescláveis quando o time crescer; modularizar mapas e assets para reduzir conflitos. Evitar git add . em checkout com discrepâncias conhecidas.
+
+Manifest de proveniência
+
+Cada asset final aponta para source, artista/fornecedor, licença e restrições, hashes, versão de DCC/exporter, unidade/eixos, polígonos, materiais, texturas, LODs, colisão e builds de destino. Derivados são regeneráveis por script ou receita versionada. Armazenar licenças junto ao inventário e bloquear import de origem desconhecida.
+
+Documentos e pacotes históricos são evidência, não fonte canônica de código. A pasta Epic Games deve manter índice com base_commit, estado (proposta/aplicado/obsoleto), PR de integração e relatórios; um DOCX antigo não deve ser confundido com implementação em main.
+
+
+
+39. Runbook: entrega segura e resposta a incidente
+
+Antes do deploy
+
+Validar commit/tag, assinatura, SBOM, changelog, compatibilidade de schema e conteúdo. Confirmar staging aprovado, gates, on-call e plano de comunicação. Fazer migração expand/contract antes de remover campos usados por versões antigas.
+
+Provisionar capacidade de controle; servidor de partida só recebe novas sessões após readiness e warmup. Escalonar rollout por coorte; não derrubar partidas ativas para instalar conteúdo cosmético.
+
+Durante o canário
+
+Comparar conclusão de partida, disconnect, tick p99, crash, tempo até entrar e erros de economia com baseline. Limiares precisam de volume mínimo e janela definida para evitar alarme por amostra pequena. Se houver duplicação de recompensa ou vazamento de dados, interromper imediatamente a operação afetada, independentemente do volume.
+
+Rollback
+
+Ativar kill switch da feature e suspender novas operações de risco. Drenar sessões quando possível, voltar ao artefato compatível e manter acesso de suporte. Não restaurar banco inteiro para reverter um frontend.
+
+Para economia, reconciliação e lançamentos compensatórios auditáveis; nunca apagar transação legítima para “consertar saldo”. Para conteúdo, preservar manifest de versão e invalidar cache com chave nova.
+
+Para agente IA, revogar tool tokens, bloquear índice/cache comprometido e preservar logs minimizados. O jogo deve continuar sem RAG disponível.
+
+Após incidente
+
+Construir timeline UTC, alcance por versão/coorte e causa raiz com fatores contribuintes. Criar teste que reproduz a falha e ações com dono/prazo. Medir tempo de detecção e recuperação, não apenas tempo de servidor no ar. Post-mortem sem culpabilização não elimina responsabilidade técnica nem dever de comunicação.
+
+Primeira reunião de execução
+
+Nomear sponsor, tech lead e donos de build/network/tech art/QA; aprovar KR-001 a KR-003; escolher aparelhos e conta de staging; bloquear economia real; marcar decisão de viabilidade em 14 dias. Esses passos transformam o dossiê em programa de trabalho sem presumir implementação já entregue.
+
+
+
+40. Evidências primárias: produto, código e gráficos
+
+Todas as referências E usam o snapshot fixado. As URLs abaixo são navegáveis no Word. Linhas apontam para trechos inspecionados; contagens globais foram obtidas por inventário, não pela descrição do README. A existência de configuração não implica execução.
+
+E01  |  Status, limites e referência à economia/valor real. As contagens do README não substituem o inventário atual.
+
+README.md
+
+E02  |  Dependências Three.js/Vite, scripts build/test/server. A raiz usa um package.json independente.
+
+game-runtime/package.json
+
+E03  |  EngineAssociation 5.8, módulos, plataformas e plugins declarados.
+
+Unreal/KhaaosRun/KhaaosRun.uproject
+
+E04  |  Dependências de Lyra/EOS/GAS/Iris e módulos Editor; requer compilação contra engine real.
+
+Unreal/KhaaosRun/Source/KhaaosRun/KhaaosRun.Build.cs
+
+E05  |  Base antiga, hashes e escopo Three.js. O patch foi validado por SHA-256, mas falha no apply --check atual.
+
+Epic Games/IMPLEMENTACAO_GRAFICA/manifest.json
+
+E06  |  Manifest de intake; associado aos markers pending_import e inventário sem .uasset/.umap final.
+
+Unreal/KhaaosRun/Content/ASSET_IMPORT_MANIFEST.json
+
+E07  |  Contrato de altura plana na área central; terreno periférico visual não atualiza física.
+
+game-runtime/src/game3d/terrain3d.js#L13-L25
+
+E08  |  Constantes de input, histórico, AOI e capacidade; ver também tick e lagTargetsFor no mesmo arquivo.
+
+game-runtime/server/room3d.js#L80-L117
+
+E09  |  Construção dos passes e setSize sem sincronização explícita de DPR.
+
+game-runtime/src/game3d/postfx3d.js#L64-L120
+
+E10  |  ConfigureForWorld multiplica MinBandwidthBytesPerSec armazenado; risco estático de acumulação.
+
+Unreal/KhaaosRun/Source/KhaaosRun/Game/Network/KhaaosIrisConfig.cpp#L48-L98
+
+
+
+41. Evidências primárias: testes e pipeline
+
+E11  |  Runner self-hosted, condições e targets declarados; não foram consultados runs históricos do GitHub Actions.
+
+.github/workflows/ue5-build.yml
+
+E12  |  Baseline mobile forward e exclusões de recursos desktop; complementar com DefaultDeviceProfiles.ini.
+
+Unreal/KhaaosRun/Config/Android/AndroidEngine.ini
+
+E13  |  Compila regras C++ portáveis e testes com stubs; execução aprovada, sem substituir UBT/UHT.
+
+scripts/test_ue5_logic.sh
+
+E14  |  Aplicação de DRS ao renderer; build atual gera chunk principal de 1.045,85 kB, gzip 299,25 kB.
+
+game-runtime/src/game3d/main3d.js#L242-L251
+
+E15  |  Base de habilidades GAS; existência de código não demonstra execução integrada.
+
+Unreal/KhaaosRun/Source/KhaaosRun/Game/AbilitySystem/KhaaosGameplayAbility.h
+
+E16  |  Serviço econômico separado; revisão atual não equivale a auditoria contábil ou transacional completa.
+
+economy-server/src/routes/2pc.ts
+
+E17  |  Guia textual de evolução de cenário; contexto do diagnóstico e plano de direção visual.
+
+Epic Games/IMPLEMENTACAO_GRAFICA/Engenharia_Visual
+
+E18  |  Infraestrutura de staging versionada; deploy e restore não foram executados nesta revisão.
+
+infra/staging/docker-compose.yml
+
+E19  |  Regras LFS confrontadas com 126 avisos emitidos no clone público.
+
+.gitattributes
+
+Resultado observado de comandos
+
+$ npm run check                 # raiz: exit 0 (tsc)
+
+$ npm run test:ue5:logic        # raiz: exit 0 (C++ portável/stubs)
+
+$ npm run build                # game-runtime: exit 0 + warning chunk
+
+$ npm test                     # game-runtime: exit 0
+
+# tests 907
+
+# pass 894
+
+# fail 0
+
+# skipped 13
+
+# duration_ms 86943.51644
+
+A revisão leu também o DOCX Khaaos_Run_Analise_e_Implementacao_Grafica.docx, APLICAR.txt, browser-results.json, Script_Otimização_3D e demais pontos de integração citados. Os relatórios históricos dentro do repositório não foram tratados como execução nova. A suíte raiz completa e testes de serviços reais não foram rodados.
+
+
+
+42. Fontes técnicas externas e política de uso
+
+Consulta em 29/10/2026. São fontes públicas para fundamentação, não evidência de implementação do Khaaos Run. Recursos e nomes de API devem ser conferidos na versão fixada. Não foram acessados código, documentação interna ou métricas proprietárias da Garena.
+
+R01  |  Garena • Free Fire
+
+Identidade pública e referência mobile; não informa arquitetura interna.
+
+R02  |  Google Play • Free Fire MAX
+
+Descrição pública de sessão de dez minutos e 49 oponentes; não regra de todos os modos/versões.
+
+R03  |  Epic • Mobile Rendering and Shading Modes
+
+Trade-offs forward/deferred e limitações mobile.
+
+R04  |  Epic • Replication Graph
+
+Relevância espacial, dormancy e arquitetura de listas.
+
+R05  |  Epic • Iris Replication System
+
+Sistema opt-in; a página consultada traz advertência Experimental. Conferir versão de distribuição.
+
+R06  |  Epic • Unreal Insights
+
+Profiling de engine e rede; captura depende de instrumentação.
+
+R07  |  Blender Manual • glTF 2.0
+
+Export e limitações de material/skinning; documentação latest é viva.
+
+R08  |  Blender Manual • Decimate
+
+Redução geométrica não substitui retopologia deformável.
+
+R09  |  Khronos • glTF-Validator
+
+Validação estrutural e relatório de assets.
+
+R10  |  OWASP • Prompt Injection Prevention
+
+Dados recuperados não são instruções confiáveis.
+
+R11  |  OWASP • RAG Security
+
+Segurança de ingestão, recuperação e acesso.
+
+R12  |  OWASP • AI Agent Security
+
+Privilégio mínimo, isolamento e aprovação de ações.
+
+
+
+43. Checklist final e fronteira de responsabilidade
+
+O que este documento efetivamente entrega
+
+Diagnóstico ancorado no commit público; resultados novos de typecheck, build e testes do runtime, kernels C++ portáveis e checks de compatibilidade do patch.
+
+Arquitetura-alvo com fronteiras de autoridade; roadmap em seis fases, backlog de 90 dias, WBS, papéis, custos ilustrativos, riscos e gates de release.
+
+Pipeline de modelagem/ambiente/personagem/animação; referências de scripts para Blender, build/cook, resolução Three.js, CI e diagnóstico LFS.
+
+Quatro funções puras de referência: crédito temporal, clamp de rewind, RRF e projeção de LOD. Seis verificações locais aprovadas; integração não executada.
+
+Arquitetura RAG com ACL/proveniência, catálogo de skills/tools, política de LLMs, plano de avaliação e controles de segurança.
+
+O que continua pendente de execução
+
+Compilação/cook Unreal reais; provisionamento de plugins/SDK; assets finais; aparelho Android/iOS; GPU/térmica; 50 clientes de rede; deploy, restore e segurança independente.
+
+Port e testes do patch gráfico; correção dos riscos de tempo/rewind e idempotência de config; normalização LFS com backup e revisão.
+
+Validação econômica/jurídica, licenças, privacidade, testes com jogadores e evidência de retenção/operação. Não há certificação de paridade Free Fire.
+
+Decisão recomendada
+
+Aprovar somente a etapa de redução de incerteza e o primeiro slice, com metas e responsáveis. Investir em conteúdo e expansão conforme a cadeia de evidências se fecha. A prioridade é conseguir repetir uma boa partida em aparelho alvo, com custo e riscos conhecidos; toda expansão deve demonstrar que preserva essa capacidade.
+
+Próximo marco: em 14 dias, apresentar build reproduzível ou NO-GO fundamentado, relatório de dependências, laboratório escolhido e testes de confiança prioritários. Este dossiê é um plano de engenharia revisável; a qualidade final será demonstrada por builds e operação, não pelo número de páginas.
