@@ -8,9 +8,10 @@
 # PRÉ-REQUISITO (único passo manual, feito uma vez):
 #   1. Conta GitHub vinculada à Epic Games (aceitar a EULA da UE e vincular em
 #      https://epicgames.com/account/connected).
-#   2. PAT clássico dessa conta com escopo `read:packages`.
+#   2. PAT clássico dessa conta com escopo `read:packages`, ou o segredo
+#      `UNREAL_ENGINE_LOGIN` com acesso equivalente à imagem Epic no GHCR.
 #   3. Settings → Secrets and variables → Actions:
-#        - Secret  UE_CONTAINER_PAT   = o PAT (obrigatório para este build)
+#        - Secret  UE_CONTAINER_PAT ou UNREAL_ENGINE_LOGIN = credencial do GHCR
 #        - Variable UE_CONTAINER_IMAGE = tag da imagem (opcional; confira as
 #          tags publicadas em github.com/orgs/epicgames/packages — ex.
 #          dev-slim-5.8.0; o default abaixo assume dev-slim-5.8)
@@ -74,7 +75,6 @@ jobs:
             echo "ℹ️ UE_CONTAINER_PAT/UNREAL_ENGINE_LOGIN ausentes — build de engine PULADO (não é falha)."
             echo "   Configure o PAT de conta vinculada à Epic; veja o cabeçalho"
             echo "   deste workflow ou scripts/build/bootstrap_ue58_runner.sh (self-hosted)."
-          fi
           fi
 
   build:
