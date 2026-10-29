@@ -115,6 +115,7 @@ export class MatchFlow {
   private spectatorPipeline: SpectatorDataPipeline | null;
   private discordBot: DiscordBot | null;
   private tickInterval: ReturnType<typeof setInterval> | null = null;
+  private countdownTimer: ReturnType<typeof setTimeout> | null = null;
   private config: Required<MatchConfig>;
   private tickListeners: Array<(state: MatchState) => void> = [];
   private eventLog: Array<{ type: string; data: Record<string, any>; timestamp: number }> = [];
@@ -201,11 +202,26 @@ export class MatchFlow {
    */
   startCountdown(): void {
     if (this.state.status !== "LOBBY") return;
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
     this.state.status = "COUNTDOWN";
     this.logEvent("COUNTDOWN_START", { seconds: this.config.countdownSeconds });
 
     // Auto-transition to IN_PROGRESS after countdown
-    setTimeout(() => this.startMatch(), this.config.countdownSeconds * 1000);
+    this.countdownTimer = setTimeout(() => {
+      this.countdownTimer = null;
+      this.startMatch();
+    }, this.config.countdownSeconds * 1000);
+    this.countdownTimer.unref?.();
+  }
+
+  cancelCountdown(): boolean {
+    if (this.state.status !== "COUNTDOWN") return false;
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
+    this.state.status = "LOBBY";
+    this.state.countdownSeconds = this.config.countdownSeconds;
+    this.logEvent("COUNTDOWN_CANCEL", {});
+    return true;
   }
 
   /**
@@ -213,6 +229,8 @@ export class MatchFlow {
    */
   startMatch(): void {
     if (this.state.status !== "COUNTDOWN") return;
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
 
     this.state.status = "IN_PROGRESS";
     this.state.matchStartTime = Date.now();
@@ -526,6 +544,8 @@ export class MatchFlow {
    */
   endMatch(winnerId: string | null): void {
     if (this.state.status === "FINISHED") return;
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
 
     this.state.status = "FINISHED";
     this.state.matchEndTime = Date.now();
@@ -651,6 +671,8 @@ export class MatchFlow {
    */
   destroy(): void {
     if (this.tickInterval) clearInterval(this.tickInterval);
+    if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    this.countdownTimer = null;
     this.economyBridge.destroyMatchEconomy(this.state.roomId);
     this.tickListeners = [];
     this.eventLog = [];

@@ -1733,6 +1733,7 @@ class RoomManager {
     if (room.tickHandle) clearInterval(room.tickHandle);
     if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
+    void distributedState.releaseRoomOwner(roomId).catch(() => undefined);
     // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
     void this.mesh.markRoomClosed(roomId, reason).catch(() => undefined);
     // M1: convites do código morrem com a sala (fire-and-forget).
@@ -1741,6 +1742,14 @@ class RoomManager {
     }
     // Gateway: sessões relayadas desta sala recebem drop (cliente reentra).
     this.gateway.dropSessionsForRoom(roomId);
+  }
+
+  private rollbackRoomCreation(room: BattleRoom, reason: string): void {
+    for (const userId of room.players.keys()) {
+      if (this.userToRoom.get(userId) === room.id) this.userToRoom.delete(userId);
+    }
+    room.players.clear();
+    this.destroyRoom(room.id, reason);
   }
 
   // ─── Lobby controls ──────────────────────────────────────────────────────
@@ -1840,11 +1849,16 @@ class RoomManager {
     this.rooms.set(id, room);
     if (!(await distributedState.setRoomOwner(id))) {
       this.send(ws, { type: "error", message: "Lobby indisponível; tente novamente" });
-      this.rooms.delete(id);
+      this.rollbackRoomCreation(room, "ownership_failed");
       return;
     }
-    await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
-    await this.joinRoom(userId, displayName, ws, id, worldId, isPrivate);
+    try {
+      await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
+      await this.joinRoom(userId, displayName, ws, id, worldId, isPrivate);
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
   }
 
   /**
@@ -2052,9 +2066,15 @@ class RoomManager {
     };
     this.rooms.set(id, room);
     if (!(await distributedState.setRoomOwner(id))) {
+      this.rollbackRoomCreation(room, "ownership_failed");
       throw new Error("Sala distribuída indisponível");
     }
-    await distributedState.publishControl({ type: "match_created", roomId: id, players: players.map((p) => p.userId) });
+    try {
+      await distributedState.publishControl({ type: "match_created", roomId: id, players: players.map((p) => p.userId) });
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
 
     for (const p of players) {
       // Seat without going through public join (already authenticated)

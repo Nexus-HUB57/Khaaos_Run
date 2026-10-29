@@ -49,6 +49,7 @@ export class DistributedState {
   private readonly localExpirations = new Map<string, number>();
   private readonly localCounters = new Map<string, { count: number; expiresAt: number }>();
   private readonly roomOwnerTokens = new Map<string, string>();
+  private readonly roomOwnerTimers = new Map<string, NodeJS.Timeout>();
   private controlSubscriber: RedisClientType | null = null;
   private readonly controlHandlers = new Set<(event: Record<string, unknown>) => void>();
 
@@ -82,6 +83,9 @@ export class DistributedState {
   }
 
   async close(): Promise<void> {
+    for (const timer of this.roomOwnerTimers.values()) clearTimeout(timer);
+    this.roomOwnerTimers.clear();
+    this.roomOwnerTokens.clear();
     if (this.controlSubscriber) await this.controlSubscriber.quit().catch(() => undefined);
     this.controlSubscriber = null;
     if (this.client) await this.client.close().catch(() => undefined);
@@ -163,12 +167,31 @@ export class DistributedState {
     const token = `${this.nodeId}:${randomUUID()}`;
     if (!this.client) {
       this.roomOwnerTokens.set(roomId, token);
+      this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
       return token;
     }
     const owner = await this.client.set(this.key(`room:${roomId}:owner`), token, { NX: true, PX: ttlMs });
     if (!owner) return null;
     this.roomOwnerTokens.set(roomId, token);
+    this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
     return token;
+  }
+
+  private scheduleRoomOwnerRenewal(roomId: string, token: string, ttlMs: number): void {
+    const previous = this.roomOwnerTimers.get(roomId);
+    if (previous) clearTimeout(previous);
+    const delay = Math.max(250, Math.floor(ttlMs * 2 / 3));
+    const timer = setTimeout(async () => {
+      const renewed = await this.renewRoomOwner(roomId, token, ttlMs).catch(() => false);
+      if (renewed && this.roomOwnerTokens.get(roomId) === token) {
+        this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
+      } else if (this.roomOwnerTokens.get(roomId) === token) {
+        this.roomOwnerTokens.delete(roomId);
+        this.roomOwnerTimers.delete(roomId);
+      }
+    }, delay);
+    timer.unref?.();
+    this.roomOwnerTimers.set(roomId, timer);
   }
 
   async renewRoomOwner(roomId: string, token = this.roomOwnerTokens.get(roomId) ?? null, ttlMs = 30_000): Promise<boolean> {
@@ -177,7 +200,28 @@ export class DistributedState {
     if (!this.client) return this.roomOwnerTokens.get(roomId) === token;
     const key = this.key(`room:${roomId}:owner`);
     const renewed = await this.client.eval(RENEW_LOCK_SCRIPT, { keys: [key], arguments: [token, String(ttlMs)] });
-    return Number(renewed) === 1;
+    const ok = Number(renewed) === 1;
+    if (!ok && this.roomOwnerTokens.get(roomId) === token) {
+      this.roomOwnerTokens.delete(roomId);
+      const timer = this.roomOwnerTimers.get(roomId);
+      if (timer) clearTimeout(timer);
+      this.roomOwnerTimers.delete(roomId);
+    }
+    return ok;
+  }
+
+  async releaseRoomOwner(roomId: string, token = this.roomOwnerTokens.get(roomId) ?? null): Promise<boolean> {
+    const current = this.roomOwnerTokens.get(roomId);
+    if (current === token || !token) {
+      this.roomOwnerTokens.delete(roomId);
+      const timer = this.roomOwnerTimers.get(roomId);
+      if (timer) clearTimeout(timer);
+      this.roomOwnerTimers.delete(roomId);
+    }
+    if (!token || !this.client) return Boolean(current === token);
+    const key = this.key(`room:${roomId}:owner`);
+    const released = await this.client.eval(RELEASE_LOCK_SCRIPT, { keys: [key], arguments: [token] });
+    return Number(released) === 1;
   }
 
   async publishControl(event: Record<string, unknown>): Promise<void> {

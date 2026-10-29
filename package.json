@@ -18,6 +18,7 @@
     "test:marshal-load": "node --import tsx --test tests/performance/marshal-console-load.test.ts",
     "test:coverage": "c8 npm run test:official",
     "test:postgres": "node scripts/run-postgres-tests.mjs",
+    "bench:redis-locks": "node --import tsx scripts/benchmark-redis-locks.mjs",
     "test:eos-flow": "node --import tsx --test tests/integration/eos-economy.integration.test.ts",
     "test:economy": "node --import tsx --test tests/official/economy-money.test.ts tests/official/economy-procgen-e2e.test.js tests/integration/eos-economy.integration.test.ts",
     "test:ue5:logic": "bash scripts/test_ue5_logic.sh",

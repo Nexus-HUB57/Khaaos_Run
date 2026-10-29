@@ -138,6 +138,28 @@ describe("MatchFlow", () => {
       matchFlow.destroy();
     });
 
+    it("should cancel countdown explicitly and restore lobby state", () => {
+      matchFlow.startCountdown();
+      assert.equal(matchFlow.cancelCountdown(), true);
+      assert.equal(matchFlow.getState().status, "LOBBY");
+      assert.equal(matchFlow.cancelCountdown(), false);
+      matchFlow.destroy();
+    });
+
+    it("should not start a destroyed match after its countdown timeout", async () => {
+      const shortMatch = new MatchFlow({ roomId: "destroyed_countdown", countdownSeconds: 0.02 }, economyBridge);
+      let started = false;
+      const originalStartMatch = shortMatch.startMatch.bind(shortMatch);
+      shortMatch.startMatch = () => {
+        started = true;
+        originalStartMatch();
+      };
+      shortMatch.startCountdown();
+      shortMatch.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(started, false);
+    });
+
     it("should not start countdown if not in LOBBY", () => {
       matchFlow.startCountdown();
       matchFlow.startCountdown(); // second call should be no-op
