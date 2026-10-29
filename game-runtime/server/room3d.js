@@ -19,6 +19,7 @@ import {
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
   windowPaneOnSegment, // Fase 31 — vão de vidro consciente (mira no vão + standoff)
+  BOT_SURVIVAL, // Fase 32 — economia de sobrevivência dos bots (mesmos números)
 } from '../src/game3d/sim3d.js';
 // Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
@@ -962,6 +963,70 @@ export class MatchRoom3D {
     if (!a.isBot) this.#emitTo(a.id, 'weaponSwitch', { weapon: a.weapon });
   }
 
+  // ---------- Fase 32 — economia de sobrevivência dos bots (espelho da sim) ----------
+  // MESMOS números (BOT_SURVIVAL) e MESMAS regras da trilha offline — a decisão
+  // de "vale a pena" é #botWantsItem; a coleta usa o #pickup autoritativo local.
+  #botWantsItem(b, it) {
+    // room3d: #pickup local suporta weapon/ammo/consumable/armor/resource/frag/gloo
+    // (sem anexos/gear/deathBox — bots não carregam o que a sala não replica)
+    switch (it.kind) {
+      case 'weapon': {
+        const cur = WEAPONS3D[b.weapon], nxt = WEAPONS3D[it.weaponId || it.id];
+        return !!nxt && (!cur || nxt.damage > cur.damage); // anti-rebaixamento (regra do #pickup)
+      }
+      case 'consumable': return (b.inventory.medkit ?? 0) < 5;
+      case 'armor': return b.armor < 100;
+      case 'frag': return (b.inventory.frag ?? 0) < FRAG.cap;
+      case 'gloo': return (b.inventory.gloo ?? 0) < GLOO.cap;
+      default: return false; // ammo (reserva infinita), resource e demais — bots não carregam
+    }
+  }
+  #botLootInterest(b) {
+    if ((b.ai.lootCd ?? 0) > 0) return null;
+    let best = null, bestD = BOT_SURVIVAL.sense;
+    for (const it of this.loot) {
+      if (!it.active || !this.#botWantsItem(b, it)) continue;
+      if (Math.abs(it.y - b.y) > BOT_SURVIVAL.yBand) continue;
+      const d = dist2d(it.x, it.z, b.x, b.z);
+      if (d < bestD) { bestD = d; best = it; }
+    }
+    return best ? { x: best.x, z: best.z } : null;
+  }
+  #botSurvival(b, dt, sees, bestD) {
+    for (const k of ['lootCd', 'medkitCd', 'fragCd', 'glooCd']) {
+      if ((b.ai[k] ?? 0) > 0) b.ai[k] -= dt;
+    }
+    // COLETA por proximidade (mesmo alcance do #interact do jogador)
+    if ((b.ai.lootCd ?? 0) <= 0) {
+      const item = this.loot.find((it) => it.active && dist2d(it.x, it.z, b.x, b.z) < BOT_SURVIVAL.collect
+        && Math.abs(it.y - b.y) < BOT_SURVIVAL.yBand && this.#botWantsItem(b, it));
+      if (item) {
+        item.active = false;
+        this.#pickup(b, item);
+        b.ai.lootCd = BOT_SURVIVAL.lootCd;
+      }
+    }
+    // CURA: ferido e SEM alvo visível (cura sob fogo é para o jogador)
+    if ((b.ai.medkitCd ?? 0) <= 0 && sees === false && b.life > 0 && b.life < BOT_SURVIVAL.medkitBelow
+      && (b.inventory.medkit ?? 0) > 0) {
+      this.#useMedkit(b);
+      b.ai.medkitCd = BOT_SURVIVAL.medkitCd;
+    }
+    // FRAG: alvo visível na banda útil — cadência humana (rng da seed)
+    if (sees && bestD >= BOT_SURVIVAL.fragMin && bestD <= BOT_SURVIVAL.fragMax
+      && (b.inventory.frag ?? 0) > 0 && (b.ai.fragCd ?? 0) <= 0
+      && this.rng.next() < BOT_SURVIVAL.fragChance) {
+      this.#throwFrag(b);
+      b.ai.fragCd = BOT_SURVIVAL.fragCdMin + this.rng.next() * BOT_SURVIVAL.fragCdVar;
+    }
+    // GLOO: defesa quando ferido sob fogo — parede à frente do engajamento
+    if (sees && b.life < BOT_SURVIVAL.glooBelow && (b.inventory.gloo ?? 0) > 0
+      && (b.ai.glooCd ?? 0) <= 0 && this.rng.next() < BOT_SURVIVAL.glooChance) {
+      this.#deployGloo(b);
+      b.ai.glooCd = BOT_SURVIVAL.glooCdMin + this.rng.next() * BOT_SURVIVAL.glooCdVar;
+    }
+  }
+
   // ---------- IA dos bots (engajar → caçar → patrulhar) ----------
   #stepBot(b, dt) {
     // Fase 8 — atordoado (Pulso de Desarme): bot congelado, sem mover/atirar
@@ -1056,6 +1121,12 @@ export class MatchRoom3D {
       tx = b.ai.lx; tz = b.ai.lz;
       if (dist2d(b.x, b.z, tx, tz) < 5) b.ai.state = 'patrol';
     } else { tx = b.ai.waypoint?.x ?? this.ring.x; tz = b.ai.waypoint?.z ?? this.ring.z; }
+    // Fase 32 — loot no chão ATRAI em patrol/hunt (MESMA regra da sim offline:
+    // não interrompe engajamento — bots online não resgatam, sem cláusula extra)
+    if (b.ai.state !== 'engage') {
+      const want = this.#botLootInterest(b);
+      if (want) { tx = want.x; tz = want.z; }
+    }
     // Fase 25 — pathing por portas (destino BRUTO, antes do clamp do anel);
     // EM ENGAGE direto (pressiona o vão), patrulha/caça com standoff anti-canto
     const route = this.#doorRoute(b, tx, tz, b.ai.state === 'engage');
@@ -1072,6 +1143,9 @@ export class MatchRoom3D {
     b.yaw += Math.atan2(Math.sin(inAngle - b.yaw), Math.cos(inAngle - b.yaw)) * Math.min(1, dt * 6);
     // frente do ator é -Z: para CAMINHAR na direção do yaw o input é dy negativo
     this.#stepActor(b, { dx: 0, dy: -run, yaw: b.yaw, pitch: 0 }, dt);
+    // Fase 32 — coleta/cura/frag/gloo: economia de sobrevivência no step
+    // (paridade 1:1 com a sim offline; alvos ocultos nunca chegam aqui)
+    this.#botSurvival(b, dt, !!target, bestD);
     const w = WEAPONS3D[b.weapon];
     // Fase 7 — tempo de reação ao adquirir um NOVO alvo antes do 1º tiro
     if (target) {

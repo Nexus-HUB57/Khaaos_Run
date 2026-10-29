@@ -356,3 +356,25 @@ Stage Summary:
 - HUD fecha a leitura: mirou no vidro, viu a integridade (45 m) antes de estilhaçar
 - PRs #210 (duplicata F22/23) e #181 (gráficos UE5 + economy 2PC) mergeadas com reconciliação semântica; main re-verificado
 - Infra UE5.8/EAC pronta para destravar no instante em que os valores humanos chegarem — nenhum outro edit necessário
+
+---
+Task ID: 15
+Agent: Main
+Task: Fase 32 — economia de sobrevivência dos bots (coleta de loot + cura + frag/gloo) + fix latente weaponId do loot interior (sim)
+
+Work Log:
+- GAP DESCOBERTO EMPIRICAMENTE (sonda no código): a F25 fazia a patrulha mirar pontos de loot (34% dos waypoints), MAS a coleta (#interact) só era chamada via input.interact do JOGADOR — bots chegavam ao chão de loot, não pegavam NADA e lutavam com o loadout do spawn até morrer; medkit/frag/gloo do spawn (inventory medkit:1/frag:1/gloo:1) nunca eram usados (#useMedkit/#throwFrag/#deployGloo também eram exclusivos do input do jogador)
+- F32 (sim3d.js): BOT_SURVIVAL exportado (sense 9 m, collect 2,6 m = #interact, yBand 2,2 m, lootCd 0,5 s, medkitBelow 45/medkitCd 5 s, frag banda 8-30 m/chance 0,34/cd 9+5 s, glooBelow 60/chance 0,5/cd 14+6 s); #botWantsItem (arma só se UPGRADE de dano — regra do #grantBundle; deathBox/supplyDrop sempre; consumível/frag/gloo com folga de cap; ammo/resource não); #botLootInterest (item vivo mais próximo vale a pena); #botSurvival no step (decrementa cds, coleta por proximidade, cura SEM alvo visível — cura sob fogo continua sendo do jogador —, frag/gloo no engage com rng da seed)
+- Atração em patrol/hunt APENAS (engage/resgate não interrompem): hook no #stepBot entre a escolha de tx/tz e o #doorRoute — loot dentro de cascas usa a MESMA rota de portas da F25
+- room3d.js: espelho 1:1 (mesmos BOT_SURVIVAL/mesmas regras); #botWantsItem da sala limitado ao que o #pickup local replica (weapon/consumable/armor/frag/gloo — sala não tem anexos/gear/deathBox)
+- PARIDADE DE INVENTÁRIO: bots regulares NÃO tinham slots/activeSlot/inventory/weaponAttachments/attachmentBag/attachStats (#pickup lançaria) — #spawnBot ganhou o kit completo (rng order PRESERVADO: consts hoisted na mesma sequência jx,jz,yaw,arma,cooldown); oficiais (#spawnOfficer) também ganharam inventory+slots
+- FIX LATENTE (contrato room3d): loot interior da sim clobberava o id de catálogo (loot-i* SEM weaponId) e a coleta caía no fallback g19 — sim3d #spawnLoot agora preserva weaponId (terreno+mezanino) e #pickup usa weaponId || id, igual à sala
+- Ajuste de teste F27 (damage-numbers): cenário "1 hit nocauteia" precisava zerar o medkit do bot — com a economia nova o bot se CURA no step (comportamento canônico agora); contrato do teste (botKnocked traz victim id) intocado
+- Testes: test/bots-survival-fase32.test.js (12 NOVOS — coleta upgrade/anti-rebaixamento/consumíveis, cura fora de combate + NÃO cura com inimigo à vista, frag na banda útil, gloo de defesa, ENGAGE vence loot, paridade room3d coleta+cura, determinismo do spawn preservado, weaponId interior resolvido no catálogo, BOT_SURVIVAL pinado). Suíte: 830 testes — 817 pass / 0 fail / 13 skip; tsc 0; vite build OK
+- Pipeline: branch feat/game3d-fase32-economia-sobrevivencia → PR → CI → merge → main re-verificada
+
+Stage Summary:
+- Bots agora VIVEM a economia do jogo como no Free Fire: desviam da patrulha para saquear, trocam para a arma melhor que acharem, curam fora de combate, arremessam frag na banda útil e armam gloo feridos sob fogo — nas duas trilhas, pelo mesmo #pickup/#useMedkit/#throwFrag/#deployGloo do jogador
+- Inventário de bots em paridade com oficiais/jogador (slots/inventory/anexos) — mortes deles agora carregam espólio completo nas caixas (F28 herda de graça)
+- Loot interior da sim resolve a ARMA certa (weaponId — contrato da sala); determinismo por seed intacto
+- Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
