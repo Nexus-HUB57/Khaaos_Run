@@ -373,9 +373,9 @@ test('F32 · catálogo mítico cobre o arsenal com sockets; identidade própria 
   // auras únicas — leitura de identidade à distância
   const auras = Object.values(MYTHIC_SKINS).map((d) => d.aura);
   assert.equal(new Set(auras).size, auras.length, 'auras devem ser únicas');
-  // armas sem skin mítica
-  assert.equal(mythicSkinFor('sucata'), null);
-  assert.equal(mythicSkinFor('pulse'), null);
+  // Fase 34 — catálogo cobre TODO o arsenal: sucata/pulse (sem sockets) têm skin
+  assert.ok(mythicSkinFor('sucata'), 'F34: sucata entrou no grind mítico');
+  assert.ok(mythicSkinFor('pulse'), 'F34: pulse entrou no grind mítico');
   // alias legado intacto (F30) + fit por silhueta (pistola menor, sniper maior)
   assert.equal(MYTHIC_SKIN, MYTHIC_SKINS.ar47);
   assert.equal(MYTHIC_SKINS.ar47.name, 'AR-47 · Fúria Primordial');
@@ -553,4 +553,112 @@ test('F32 · loot: anexo avulso nasce com raridade válida da tabela central', (
     }
   }
   assert.ok(saw > 0, 'anexos avulsos aparecem no pool com raridade');
+});
+
+// ======================================================= Fase 34 ==========
+// Arsenal COMPLETO no grind mítico (sucata/pulse sem sockets) + piso do
+// General no rollLoot (pulse nunca abaixo de LENDARIO, mas pode nascer MÍTICO).
+
+test('F34 · catálogo mítico cobre TODO o arsenal — sucata e pulse (sem sockets)', () => {
+  assert.deepEqual(Object.keys(MYTHIC_SKINS).sort(),
+    ['ar47', 'barrett', 'g19', 'm4', 'mp5', 'pulse', 'sucata']);
+  const suc = mythicSkinFor('sucata');
+  assert.equal(suc.name, 'Sucata · Coroa de Ferro-Velho');
+  assert.equal(suc.aura, '#ff8c1a', 'âmbar-ferrugem — forno de ferro-velho');
+  assert.equal(suc.stages, 4, 'mesma régua de 4 estágios');
+  assert.ok(suc.fit.scale > 1, 'lança longa pede overlay maior');
+  const pul = mythicSkinFor('pulse');
+  assert.equal(pul.name, 'Pulse · Prisma Soberano');
+  assert.equal(pul.aura, '#ffe14d', 'ouro-arco — energia do General');
+  assert.equal(pul.stages, 4);
+  // 7 identidades visuais — nenhuma aura repetida
+  const auras = Object.values(MYTHIC_SKINS).map((d) => d.aura);
+  assert.equal(new Set(auras).size, 7, '7 auras únicas no catálogo');
+});
+
+test('F34 · overlay mítico assenta sucata e pulse com fit próprio (estágio 4)', () => {
+  for (const wid of ['sucata', 'pulse']) {
+    const def = mythicSkinFor(wid);
+    const { group } = createWeaponModel(wid, 'MITICA', { mythicStage: 4 });
+    const fx = group.getObjectByName('mythic_fx');
+    assert.ok(fx, `${wid}: overlay mítico ausente`);
+    assert.equal(group.userData.mythicStage, 4);
+    assert.ok(Math.abs(fx.scale.x - def.fit.scale) < 1e-6, `${wid}: fit.scale aplicado`);
+    assert.ok(Math.abs(fx.position.z - def.fit.z) < 1e-6, `${wid}: fit.z aplicado`);
+    const rune = fx.children.find((c) => c.material?.name === 'mythicRune');
+    assert.ok(rune, `${wid}: runa presente`);
+    assert.equal(rune.material.color.getHexString(), def.aura.slice(1).toLowerCase(), `${wid}: aura própria`);
+    const fin = fx.children.find((c) => c.name === 'mythicFin');
+    assert.ok(fin, `${wid}: aleta holográfica do estágio 4`);
+    unregisterMythic(group);
+  }
+});
+
+test('F34 · rollLoot: pulse pode nascer MÍTICO e o piso LENDARIO se mantém', () => {
+  // rng roteirizado: 1º next() escolhe o drop (banda do pulse no armory),
+  // 2º next() rola a raridade — determinístico byte a byte.
+  const scripted = (a, b) => { let i = 0; return { next() { return (i++ === 0 ? a : b); } }; };
+  const mit = rollLoot(scripted(0.64, 0.995), 'armory')[0];
+  assert.equal(mit.id, 'pulse');
+  assert.equal(mit.rarity, 'MITICA', 'MITICA atravessa o piso do General');
+  assert.equal(mit.weapon.damage, Math.round(48 * 1.75), 'multiplicador mítico aplicado');
+  const len = rollLoot(scripted(0.64, 0.5), 'armory')[0];
+  assert.equal(len.id, 'pulse');
+  assert.equal(len.rarity, 'LENDARIO', 'rolagem baixa sobe para LENDARIO (piso)');
+  // 600 rolagens semeadas: pulse só sai LENDARIO ou MITICA — nunca abaixo
+  const rng = new SeededRng('F34-PULSE-FLOOR');
+  let saw = 0;
+  for (let i = 0; i < 600; i++) {
+    for (const drop of rollLoot(rng, 'armory')) {
+      if (drop.id === 'pulse') {
+        saw++;
+        assert.ok(['LENDARIO', 'MITICA'].includes(drop.rarity), `pulse saiu ${drop.rarity}`);
+      }
+    }
+  }
+  assert.ok(saw > 0, 'pulse aparece no pool do armory');
+});
+
+test('F34 · sucata rola a tabela completa (COMUM..MÍTICA, sem piso artificial)', () => {
+  const rng = new SeededRng('F34-SUCATA');
+  const seen = new Set();
+  for (let i = 0; i < 800; i++) {
+    for (const drop of rollLoot(rng, 'park')) {
+      if (drop.id === 'sucata') {
+        seen.add(drop.rarity);
+        assert.ok(drop.rarity in RARITIES, `raridade válida: ${drop.rarity}`);
+      }
+    }
+  }
+  assert.ok(seen.size >= 3, `sucata amostra várias raridades (${[...seen].join(',')})`);
+});
+
+test('F34 · sim: pulse MÍTICO em mãos evolui por abate (Prisma Soberano)', () => {
+  const s = new KhaaosSim3D({ seed: 'F34-MIT-PULSE', botCount: 1, airdrop: false });
+  s.start('belt');
+  const p = s.player, bot = s.bots[0];
+  s.world.colliders.length = 0; s.doors.length = 0;
+  s.physicsWorld.colliders = s.world.colliders;
+  p.weapon = 'pulse'; p.weaponSkin = 'MITICA'; p.mythicKills = 0; p.mythicStage = 1;
+  p.ammoMag = 24; p.attachStats = { magBonus: 0, spreadMul: 1, adsZoom: 1, rangeMul: 1, silenced: false };
+  const events = [];
+  for (let k = 1; k <= 2; k++) {
+    bot.x = 0; bot.z = -10; bot.y = 0; bot.alive = true; bot.knocked = false; bot.life = 1;
+    bot.armor = 0;
+    p.x = 0; p.z = 0; p.yaw = 0;
+    let killed = false;
+    for (let i = 0; i < 30 * 6 && !killed; i++) {
+      const yaw = Math.atan2(-(bot.x - p.x), -(bot.z - p.z));
+      const pitch = Math.atan2((bot.y + 1.1) - (p.y + 1.55), Math.hypot(bot.x - p.x, bot.z - p.z));
+      s.step({ ...idle(yaw, pitch), fire: true }, STEP);
+      killed = !bot.alive;
+    }
+    assert.ok(killed, `abate ${k} deveria concluir`);
+    events.push(...s.consumeEvents().filter((e) => e.type === 'mythic'));
+  }
+  assert.equal(p.mythicKills, 2);
+  assert.equal(p.mythicStage, 2, '2 abates = estágio 2 (mesma régua do arsenal)');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].weapon, 'pulse', 'evento identifica o Prisma Soberano');
+  assert.equal(events[0].stage, 2);
 });

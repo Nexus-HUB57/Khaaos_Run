@@ -62,7 +62,11 @@ export function rollLoot(rng, zone = 'armory', count = 1) {
     if (drop.kind === 'weapon') {
       const weapon = WEAPONS[drop.id];
       // Fase 28 — raridade pré-definida (pool do airdrop) tem precedência
-      const rarity = drop.rarity ?? (drop.id === 'pulse' ? 'LENDARIO' : rollRarity(rng));
+      // Fase 34 — o rifle do GENERAL rola raridade como todo o arsenal: pode
+      // nascer MÍTICO (Prisma Soberano) e NUNCA abaixo de LENDARIO (flavor
+      // do drop exclusivo preservado — o piso antigo era fixo em LENDARIO).
+      let rarity = drop.rarity ?? rollRarity(rng);
+      if (drop.id === 'pulse' && rarity !== 'MITICA') rarity = 'LENDARIO';
       return { ...drop, rarity, name: weapon.name, weapon: { ...weapon, damage: Math.round(weapon.damage * RARITIES[rarity].multiplier) } };
     }
     if (drop.kind === 'attachment') {

@@ -344,15 +344,19 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
 // ------------------------------------------- grama com LOD de distância ----
 // Fase 32 — a grama é o ativo mais CARO do cenário (milhares de tufos com
 // alpha-test e overdraw) e não precisa de detalhe longe. O campo é dividido
-// em CHUNKS (células da grade) e cada chunk assume 1 de 3 tiers pela
+// em CHUNKS (células da grade) e cada chunk assume 1 de 4 tiers pela
 // distância da CÂMERA ao centro do chunk:
-//   full   (< nearDist)  — todos os tufos do chunk;
-//   sparse (< midDist)   — fração sparseKeep dos tufos (ceil), ordem de
-//                          plantio estável — o "desbaste" não tremula ao andar;
-//   hidden (>= midDist)  — chunk invisível (visible=false, custo de render 0).
-// Custo por frame: 1 hipotenusa por chunk (dezenas) + troca de visible/count.
-// Sem reescrita de matrizes, sem duplicação de geometria, e os chunks ocultos
-// não geram draw call (frustum culling + visible=false).
+//   full     (< nearDist)     — todos os tufos do chunk;
+//   sparse   (< midDist)      — fração sparseKeep dos tufos (ceil), ordem de
+//                               plantio estável — o "desbaste" não tremula ao andar;
+//   impostor (< impostorDist) — Fase 34 — 1 só QUAD cruzado por chunk (no
+//                               campo global de impostores): lê como mancha
+//                               de capim no horizonte por ~2 triângulos;
+//   hidden   (>= impostorDist)— chunk invisível (custo de render 0).
+// Custo por frame: 1 hipotenusa por chunk (dezenas) + troca de visible/count
+// (tufos) + empacotamento de matrizes só da FAIXA de impostores visível
+// (poucas células). Sem reescrita de matrizes dos tufos, sem duplicação de
+// geometria; chunks ocultos não geram draw call.
 
 // Divide spots em células da grade (PURO e determinístico — ordenado por
 // chave da célula). Cada chunk carrega o CENTRO médio dos membros, usado no
@@ -377,21 +381,41 @@ export function grassChunkify(spots, { chunkSize = 25 } = {}) {
   return chunks;
 }
 
-// Tier do chunk pela distância (PURO): 'full' | 'sparse' | 'hidden'.
-export function grassChunkTier(dist, { nearDist = 28, midDist = 58 } = {}) {
+// Tier do chunk pela distância (PURO): 'full' | 'sparse' | 'impostor' | 'hidden'.
+// Fase 34 — impostorDist <= midDist desliga a faixa (comportamento F32: hidden
+// já em midDist) — retrocompatível com chamadas antigas.
+export function grassChunkTier(dist, { nearDist = 28, midDist = 58, impostorDist = 110 } = {}) {
   if (dist < nearDist) return 'full';
   if (dist < midDist) return 'sparse';
+  if (impostorDist > midDist && dist < impostorDist) return 'impostor';
   return 'hidden';
 }
 
+// Fase 34 — geometria do impostor: 2 quads cruzados (X) que leem como moita
+// ao longe — silhueta dupla evita o "flipse" de plano único com a câmera.
+// Sem textura (cor chapada por instância), sem alpha-test — custo mínimo.
+export function grassImpostorGeometry({ height = 1.15, width = 3.2 } = {}) {
+  const h = Math.max(.3, height), w = Math.max(.5, width);
+  const a = new THREE.PlaneGeometry(w, h);
+  a.translate(0, h / 2, 0);
+  const b = new THREE.PlaneGeometry(w, h);
+  b.translate(0, h / 2, 0);
+  xform(b, { ry: Math.PI / 2 });
+  return mergeGeoms([a, b]);
+}
+
 // Campo de grama com LOD: 1 InstancedMesh por chunk (tinta por instância,
-// vento por shader nos materiais das famílias de tint). Retorna { group,
-// chunks, mats, update(camX, camZ) } — update só mexe em visible/count e é
+// vento por shader nos materiais das famílias de tint) + Fase 34: UM campo
+// GLOBAL de impostores (1 InstancedMesh, 1 instância por chunk) para a faixa
+// intermediária-distante — update empacota as matrizes dos chunks visíveis
+// nessa faixa (matrizes ESCREVIDAS só ali; os tufos nunca são reescritos).
+// Retorna { group, chunks, mats, impostors, update(camX, camZ) } — update é
 // idempotente (mesma câmera → mesmo estado). Contrato headless: funciona em
 // Node (InstancedMesh sem renderer), update é determinístico.
 export function buildGrassFieldLOD({
   spots = [], seed = 1, texture = null, tintFamilies = ['#5a6b33'], alphaTest = .42,
   chunkSize = 25, nearDist = 28, midDist = 58, sparseKeep = .4, sway = null,
+  impostorDist = 110, impostorHeight = 1.15, impostorWidth = 3.2, impostorOpacity = .55,
 } = {}) {
   const cells = grassChunkify(spots, { chunkSize });
   const group = new THREE.Group();
@@ -412,8 +436,10 @@ export function buildGrassFieldLOD({
   cells.forEach((cell, ci) => {
     const mesh = new THREE.InstancedMesh(geo, mats[ci % mats.length], Math.max(1, cell.indices.length));
     mesh.castShadow = false; mesh.receiveShadow = true;
+    let sy = 0;
     cell.indices.forEach((si, li) => {
       const sp = spots[si];
+      sy += sp.y ?? 0;
       dummy.position.set(sp.x, sp.y ?? 0, sp.z);
       dummy.rotation.set(0, sp.rot ?? 0, 0);
       const s = sp.s ?? 1;
@@ -431,18 +457,64 @@ export function buildGrassFieldLOD({
     mesh.computeBoundingSphere?.();
     mesh.visible = false;                       // update() acende o tier certo
     group.add(mesh);
-    chunks.push({ mesh, fullCount: cell.indices.length, x: cell.x, z: cell.z });
+    // Fase 34 — chunk carrega kx/kz (fase do tint/impostor) e a ALTURA MÉDIA
+    // dos membros (impostor acompanha o relevo sem re-testar o terreno).
+    chunks.push({ kx: cell.kx, kz: cell.kz, mesh, fullCount: cell.indices.length, x: cell.x, z: cell.z, y: sy / cell.indices.length });
   });
+
+  // Fase 34 — campo GLOBAL de impostores: 1 InstancedMesh com capacidade de
+  // 1 instância por chunk; update() empacota na frente as matrizes dos chunks
+  // na faixa impostor (escrita O(faixa), tipicamente dezenas) e define count.
+  // Cor por instância herda a família de tint do chunk — mancha coerente com
+  // o capim próximo; opacidade fixa e sem sombra (leitura de horizonte).
+  const impGeo = grassImpostorGeometry({ height: impostorHeight, width: impostorWidth });
+  const impMat = new THREE.MeshStandardMaterial({
+    color: '#ffffff', roughness: 1, metalness: 0, flatShading: true,
+    transparent: impostorOpacity < 1, opacity: Math.max(.08, Math.min(1, impostorOpacity)),
+    depthWrite: true, side: THREE.DoubleSide,
+  });
+  if (sway) patchSway(impMat, { ...sway, strength: (sway.strength ?? .07) * .5, yScale: .5 });
+  const impostors = new THREE.InstancedMesh(impGeo, impMat, Math.max(1, chunks.length));
+  impostors.name = 'grassImpostors';
+  impostors.castShadow = false; impostors.receiveShadow = true;
+  impostors.count = 0;                          // update() acende a faixa
+  impostors.visible = false;
+  group.add(impostors);
+  const impColor = new THREE.Color();
+  const impDummy = new THREE.Object3D();
+
   return {
-    group, chunks, mats, nearDist, midDist, sparseKeep,
+    group, chunks, mats, impostors, impostorMats: [impMat], nearDist, midDist, sparseKeep, impostorDist,
     update(camX = 0, camZ = 0) {
+      let imp = 0;
+      const hasImpostor = impostorDist > midDist;
       for (const ch of chunks) {
         const d = Math.hypot(ch.x - camX, ch.z - camZ);
-        const tier = grassChunkTier(d, { nearDist, midDist });
+        const tier = grassChunkTier(d, { nearDist, midDist, impostorDist });
         if (tier === 'hidden') { ch.mesh.visible = false; continue; }
+        if (tier === 'impostor') {
+          ch.mesh.visible = false;
+          if (!hasImpostor) continue;
+          // empacota o impostor deste chunk na posição livre
+          impDummy.position.set(ch.x, ch.y ?? 0, ch.z);
+          impDummy.rotation.set(0, (ch.kx * 7 + ch.kz * 13) % 6, 0);
+          impDummy.scale.setScalar(1);
+          impDummy.updateMatrix();
+          impostors.setMatrixAt(imp, impDummy.matrix);
+          // tint médio das famílias (mesma rotação determinística dos tufos);
+          // módulo positivo — kx/kz podem ser NEGATIVOS (chunks a oeste/norte)
+          impColor.copy(tintCols[((ch.kx + ch.kz) % tintCols.length + tintCols.length) % tintCols.length]);
+          impostors.setColorAt(imp, impColor);
+          imp++;
+          continue;
+        }
         ch.mesh.visible = true;
         ch.mesh.count = tier === 'full' ? ch.fullCount : Math.max(1, Math.ceil(ch.fullCount * sparseKeep));
       }
+      impostors.count = imp;
+      impostors.visible = imp > 0;
+      if (impostors.instanceColor) impostors.instanceColor.needsUpdate = true;
+      impostors.computeBoundingSphere?.();
       return this;
     },
   };

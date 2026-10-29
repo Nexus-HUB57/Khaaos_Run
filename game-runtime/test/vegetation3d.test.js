@@ -16,7 +16,7 @@ import {
   TREE_ARCHETYPES, treeArchetypeFor, vegRng,
   mergeGeoms, buildTreeGeometries, buildBushGeometry, grassTuftGeometry,
   patchSway, tickVegetationWind, buildTreeField, buildBushField,
-  grassChunkify, grassChunkTier, buildGrassFieldLOD,
+  grassChunkify, grassChunkTier, buildGrassFieldLOD, grassImpostorGeometry,
 } from '../src/game3d/vegetation3d.js';
 import { buildScene } from '../src/game3d/world3d.js';
 
@@ -231,8 +231,10 @@ test('F32 · grassChunkify: células puras, determinísticas, cobertura exata', 
   assert.ok(Math.abs(c00.x - 1.5) < 1e-9 && Math.abs(c00.z - 1.5) < 1e-9, 'centro = média dos membros');
 });
 
-test('F32 · grassChunkTier: bandas full/sparse/hidden (PURO)', () => {
-  const cfg = { nearDist: 28, midDist: 58 };
+test('F32 · grassChunkTier: bandas full/sparse/hidden (PURO, faixa desligada)', () => {
+  // F34 — o default agora tem 4 bandas (teste F34 cobre); aqui o comportamento
+  // F32 é travado explicitamente (impostorDist <= midDist desliga a faixa).
+  const cfg = { nearDist: 28, midDist: 58, impostorDist: 58 };
   assert.equal(grassChunkTier(0, cfg), 'full');
   assert.equal(grassChunkTier(27.9, cfg), 'full');
   assert.equal(grassChunkTier(28, cfg), 'sparse');
@@ -280,5 +282,91 @@ test('F32 · buildScene: grama nasce em campo LOD com chunks e vento registrado'
     assert.ok(lod.chunks.some((c) => c.mesh.visible && c.mesh.count > 0), `${scenarioId}: update acende chunks próximos`);
     // vento continua registrado (copa + arbusto + 2 famílias de grama)
     assert.ok(scene.userData.swayMats.length >= 4, `${scenarioId}: swayMats (${scene.userData.swayMats.length})`);
+  }
+});
+
+// ======================================================= Fase 34 ==========
+// Grama com faixa de IMPOSTORES: chunks a 58-110m viram 1 quad cruzado cada
+// (mancha de capim no horizonte por ~2 triângulos); além de 110m, render 0.
+
+test('F34 · grassChunkTier: 4 bandas (full/sparse/impostor/hidden) + retrocompat', () => {
+  const cfg = { nearDist: 28, midDist: 58, impostorDist: 110 };
+  assert.equal(grassChunkTier(0, cfg), 'full');
+  assert.equal(grassChunkTier(27.9, cfg), 'full');
+  assert.equal(grassChunkTier(28, cfg), 'sparse');
+  assert.equal(grassChunkTier(57.9, cfg), 'sparse');
+  assert.equal(grassChunkTier(58, cfg), 'impostor');
+  assert.equal(grassChunkTier(109.9, cfg), 'impostor');
+  assert.equal(grassChunkTier(110, cfg), 'hidden');
+  assert.equal(grassChunkTier(400, cfg), 'hidden');
+  // retrocompat F32: impostorDist <= midDist desliga a faixa (hidden em midDist)
+  assert.equal(grassChunkTier(70, { nearDist: 28, midDist: 58, impostorDist: 58 }), 'hidden');
+  // default (sem 3º parâmetro) liga a faixa — mundos ganham o horizonte verde
+  assert.equal(grassChunkTier(70, { nearDist: 28, midDist: 58 }), 'impostor');
+});
+
+test('F34 · grassImpostorGeometry: 2 quads cruzados fundidos (silhueta dupla)', () => {
+  const geo = grassImpostorGeometry({ height: 1.2, width: 3.0 });
+  // PlaneGeometry(w,h) não-indexado = 6 verts; merge de 2 = 12
+  assert.equal(geo.attributes.position.count, 12);
+  assert.ok(geo.attributes.uv, 'uv preservado no merge');
+  const r = geo.boundingSphere.radius;
+  assert.ok(r > 1.5 && r < 2.5, `raio coerente com w3/h1.2 (r=${r.toFixed(2)})`);
+});
+
+test('F34 · buildGrassFieldLOD: faixa impostor empacota 1 quad por chunk (58-110m)', () => {
+  const spots = [];
+  for (let i = 0; i < 400; i++) {
+    spots.push({
+      x: 20 + (i % 20) * 6, z: ((i / 20) | 0) * 2 - 20,
+      y: 0, rot: i, s: 1, sy: 1, tintJitter: .5,
+    });
+  }
+  const lod = buildGrassFieldLOD({
+    spots, seed: 5, tintFamilies: ['#5a6b33', '#7a8443'],
+    chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4, impostorDist: 110,
+  });
+  assert.ok(lod.impostors, 'campo global de impostores existe');
+  assert.equal(lod.impostorMats.length, 1, '1 material de impostor');
+  assert.equal(typeof lod.impostorMats[0].onBeforeCompile, 'function', 'impostor balança (sway injetado)');
+  lod.update(0, 0);
+  const inBand = lod.chunks.filter((c) => { const d = Math.hypot(c.x, c.z); return d >= 58 && d < 110; });
+  const near = lod.chunks.filter((c) => Math.hypot(c.x, c.z) < 58);
+  assert.ok(inBand.length >= 1, `chunks na faixa impostor (${inBand.length})`);
+  for (const c of inBand) assert.equal(c.mesh.visible, false, 'tufo do chunk oculto na faixa impostor');
+  for (const c of near) assert.equal(c.mesh.visible, true, 'tufos próximos seguem full/sparse');
+  assert.equal(lod.impostors.visible, inBand.length > 0);
+  assert.equal(lod.impostors.count, inBand.length, '1 impostor por chunk na faixa');
+  // matriz empacotada aponta para o centro de um chunk da faixa
+  const m = new THREE.Matrix4();
+  lod.impostors.getMatrixAt(0, m);
+  const pos = new THREE.Vector3().setFromMatrixPosition(m);
+  assert.ok(inBand.some((c) => Math.hypot(c.x - pos.x, c.z - pos.z) < 1e-6),
+    'primeiro impostor = centro de um chunk da faixa');
+  // idempotente
+  const snap = [lod.impostors.count, lod.impostors.visible];
+  lod.update(0, 0);
+  assert.deepEqual([lod.impostors.count, lod.impostors.visible], snap, 'update é idempotente');
+  // longe: nada de impostor (faixa não acompanha infinitamente)
+  lod.update(1000, 1000);
+  assert.equal(lod.impostors.count, 0);
+  assert.equal(lod.impostors.visible, false);
+  // retrocompat: impostorDist 0 desliga a faixa
+  const lodOff = buildGrassFieldLOD({ spots, seed: 5, tintFamilies: ['#5a6b33'], chunkSize: 25, nearDist: 28, midDist: 58, impostorDist: 0 });
+  lodOff.update(0, 0);
+  assert.equal(lodOff.impostors.count, 0, 'faixa desligada: zero impostores');
+});
+
+test('F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobre', () => {
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(`f34-${scenarioId}`, scenarioId, null, 'high');
+    const lod = scene.userData.grassLOD;
+    assert.ok(lod?.impostors, `${scenarioId}: campo de impostores ausente`);
+    assert.equal(lod.impostorDist, 110, `${scenarioId}: faixa canônica 110m`);
+    assert.equal(lod.impostors.count, 0, 'update ainda não rodou (main3d é o dono)');
+    lod.update(0, 0);
+    const inBand = lod.chunks.filter((c) => { const d = Math.hypot(c.x, c.z); return d >= 58 && d < 110; });
+    assert.equal(lod.impostors.count, inBand.length, `${scenarioId}: faixa empacotada (${inBand.length})`);
+    assert.ok(scene.userData.swayMats.includes(lod.impostorMats[0]), 'vento do impostor registrado');
   }
 });
