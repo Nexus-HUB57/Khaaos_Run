@@ -93,6 +93,10 @@ export class GameAudio {
       barrett: { dur: .3, freq: 700, peak: .85 },
       pulse: { dur: .18, freq: 2600, peak: .5 },
       sucata: { dur: .1, freq: 900, peak: .3 },
+      // F36 — SG-12: BOOM grave e longo (boca larga); MG-6: rasgo metálico
+      // sustentado (cadência alta, corpo médio)
+      shotgun: { dur: .26, freq: 520, peak: .8 },
+      lmg: { dur: .12, freq: 950, peak: .55 },
     }[weapon] ?? { dur: .12, freq: 1400, peak: .5 };
     // corpo do tiro: burst de ruído filtrado
     const src = this.ctx.createBufferSource();

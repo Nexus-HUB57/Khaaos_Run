@@ -83,3 +83,29 @@ Módulos (todos puros e headless-testáveis):
   persistência `KR_GFX_*` recarregando a página.
 - **Métricas de sucesso**: EMA final ≤ 18.75 ms sob carga 17.5 ms-base;
   ≤ 8 mudanças de escala/10 s; 0 trocas de tier sob carga senoidal.
+
+### 5.1 Extensão F36 — outdoor impostor, arsenal 9/9 e HUD sazonal
+
+- **Headless (CI)**: `test/vegetation3d.test.js` (+4 F36 — bake puro
+  determinístico, disco suave com borda intacta, regressão do tier `hidden`
+  render 0, buildScene com terreno tingido), `test/attachments3d.test.js`
+  (+7 F36 — catálogo 9/9, stats/pools/fábricas, sim de pellets e bots) e
+  `test/aura3d.test.js` (5 — estações, matiz, decisão sazonal).
+- **Browser real (host licenciado)**:
+  1. **Outdoor impostor**: abrir `?scenario=cigkv&view=tps`; em console,
+     `KhaaosReplay3D.game.scene.userData.grassOutdoorBake` deve reportar
+     `{chunks: N, radius: 25, strength: .3}`; elevar a câmera e conferir que
+     o campo lê contínuo até o fog (tufos → manchas → cor do chão).
+  2. **Arsenal 9/9**: coletar SG-12 (park) e MG-6 (industrial); tiro da
+     escopeta espalha 7 marcas de impacto; badge mítico "EV.4" aparece nas
+     duas após abates; killfeed/toast usa o NOME da skin.
+  3. **HUD sazonal**: com skin mítica equipada, `document.body.dataset.aura`
+     = aura da arma e `dataset.aura-season` = estação real do dia; a borda da
+     tela respira na cor da aura (`#auraVignette` opacity por estação);
+     trocar de arma re-pinta sem reload; sem skin mítica nenhuma camada anima.
+  4. **Vitrine**: `/scripts/f36-showcase.html` — fileira 9/9 + rotação
+     automática de arma (vinheta re-pinta a cada 5.2 s).
+- **Métricas de sucesso**: bake medido UMA vez no build (≤ 5 ms em desktop
+  médio); custo por frame do outdoor impostor = **0** (sem draw calls/matrizes
+  além do terreno que já existia); 9 auras únicas sem colisão de matiz pós
+  hueShift de estação.

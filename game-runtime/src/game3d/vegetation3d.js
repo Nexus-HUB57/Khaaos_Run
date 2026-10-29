@@ -404,6 +404,64 @@ export function grassImpostorGeometry({ height = 1.15, width = 3.2 } = {}) {
   return mergeGeoms([a, b]);
 }
 
+// ---------------------------------- F36 — OUTDOOR IMPOSTOR (tier hidden) ----
+// Evolução do tier `hidden` (≥ impostorDist): o chunk continua INVISÍVEL
+// (custo de render 0 — contrato F32/F34 intocado), mas a identidade do capim
+// é COZIDA nas vertex colors do terreno UMA vez no build. O horizonte lê
+// "campo" pela cor do próprio chão: 0 draw calls extras, 0 matrizes por
+// frame, 0 update no loop — o impostor outdoor é literalmente grátis.
+// `grassOutdoorBake` é PURA: 1 contribuição por chunk (centro + família de
+// tint pelo MESMO módulo POSITIVO dos impostores — kx/kz negativos seguros).
+export function grassOutdoorBake(chunks = [], tintFamilies = ['#5a6b33']) {
+  const cols = tintFamilies.map((c) => new THREE.Color(c));
+  return chunks.map((ch) => {
+    const c = cols[((ch.kx + ch.kz) % cols.length + cols.length) % cols.length];
+    return { x: ch.x, z: ch.z, r: c.r, g: c.g, b: c.b };
+  });
+}
+
+// Aplica o bake nas vertex colors do terreno (MUTA o atributo color uma vez):
+// cada contribuição pinta um disco suave de raio `radius` — plateau no centro
+// e queda smoothstep na borda (sem "bola" e sem banda). Fora do raio: byte a
+// byte intacto. Custo ONE-SHOT no build (O(verts do disco) por chunk); sem
+// terreno (headless sem buildScene) é no-op seguro.
+export function applyOutdoorTint(terrainMesh, bake = [], { radius = 25, strength = .3 } = {}) {
+  const geo = terrainMesh?.geometry;
+  const color = geo?.attributes?.color;
+  if (!geo || !color) return null;
+  const R = Math.max(1, radius);
+  const st = Math.max(0, Math.min(1, strength));
+  const pos = geo.attributes.position;
+  let touched = 0;
+  for (const b of bake) {
+    // janela grosseira por chunk antes do teste radial (evita varrer 9k verts
+    // por contribuição — o disco cabe numa bbox de lado 2R)
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vz = pos.getZ(i);
+      const dx = vx - b.x, dz = vz - b.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= R * R) continue;
+      const d = Math.sqrt(d2);
+      // kernel: 1 no núcleo (d < R/3), smoothstep até 0 na borda
+      const k = d < R / 3 ? 1 : 1 - smoothStep(R / 3, R, d);
+      const a = st * k;
+      if (a <= 0) continue;
+      color.setXYZ(i,
+        color.getX(i) + (b.r - color.getX(i)) * a,
+        color.getY(i) + (b.g - color.getY(i)) * a,
+        color.getZ(i) + (b.b - color.getZ(i)) * a);
+      touched++;
+    }
+  }
+  color.needsUpdate = true;
+  return { touched, radius: R, strength: st };
+}
+
+function smoothStep(a, b, v) {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
 // Campo de grama com LOD: 1 InstancedMesh por chunk (tinta por instância,
 // vento por shader nos materiais das famílias de tint) + Fase 34: UM campo
 // GLOBAL de impostores (1 InstancedMesh, 1 instância por chunk) para a faixa

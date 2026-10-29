@@ -119,17 +119,21 @@ for (const [id, w] of Object.entries(WEAPONS)) {
     sniper: { gravity: 0.22, drag: 0.0005, falloffStart: 90, falloffEnd: 300, minDamage: 0.84 },
     energy: { gravity: 0.12, drag: 0.0008, falloffStart: 55, falloffEnd: 190, minDamage: 0.8 },
     melee: { gravity: 0, drag: 0, falloffStart: 0, falloffEnd: 1, minDamage: 1 },
+    // F36 — SG-12: chumbo grosso cai RÁPIDO (piso .3 a ~34m — fora do alcance
+    // útil o pellet quase não morde); MG-6: cano longo sustenta o 7.62.
+    shotgun: { gravity: 1.05, drag: 0.005, falloffStart: 9, falloffEnd: 34, minDamage: 0.3 },
+    lmg: { gravity: 0.5, drag: 0.0018, falloffStart: 32, falloffEnd: 135, minDamage: 0.62 },
   }[w.category] ?? { gravity: 0.8, drag: 0.002, falloffStart: 24, falloffEnd: 100, minDamage: 0.6 };
   WEAPONS3D[id] = {
     ...w,
     range: Math.round(w.range * SCALE.range),
     bulletSpeed: Math.round(w.projectileSpeed * SCALE.bullet) || 0,
-    spread: { melee: 0, sidearm: 0.014, smg: 0.024, rifle: 0.013, sniper: 0.003, energy: 0.007 }[w.category] ?? 0.02,
-    reload: { sidearm: 1.4, smg: 1.9, rifle: 2.1, sniper: 2.8, energy: 2.2, melee: 0 }[w.category] ?? 2,
+    spread: { melee: 0, sidearm: 0.014, smg: 0.024, rifle: 0.013, sniper: 0.003, energy: 0.007, shotgun: 0.05, lmg: 0.019 }[w.category] ?? 0.02,
+    reload: { sidearm: 1.4, smg: 1.9, rifle: 2.1, sniper: 2.8, energy: 2.2, melee: 0, shotgun: 2.6, lmg: 3.6 }[w.category] ?? 2,
     ballistic,
   };
 }
-export const AMMO_CAP = { '9MM': 120, '5.56': 150, '7.62': 120, '.338': 25, CELL: 60 }; // Fase 28: 7.62 (AR-47)
+export const AMMO_CAP = { '9MM': 120, '5.56': 150, '7.62': 120, '.338': 25, CELL: 60, SHELL: 32 }; // F28: 7.62 (AR-47) · F36: SHELL (SG-12)
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
@@ -1324,7 +1328,8 @@ export class KhaaosSim3D {
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
       }, 0.012, w, dmgScale);
       b.burst++;
-      if (b.burst >= (w.category === 'sniper' ? 1 : C.burstMin + Math.floor(this.rng.next() * (C.burstMax - C.burstMin + 1)))) {
+      if (b.burst >= ((w.category === 'sniper' || w.category === 'shotgun') ? 1 : C.burstMin + Math.floor(this.rng.next() * (C.burstMax - C.burstMin + 1)))) {
+        // F36 — shotgun: a SALVA inteira conta como 1 estouro (recarga da bomba)
         b.burst = 0; b.cooldown = C.burstCooldownMin + this.rng.next() * (C.burstCooldownMax - C.burstCooldownMin);
         if (this.rng.next() < C.reloadChance) b.reloadT = w.reload;
       } else b.cooldown = 1 / w.fireRate;
@@ -1423,17 +1428,31 @@ export class KhaaosSim3D {
       const tl = Math.hypot(tx, ty, tz) || 1;
       dx = tx / tl; dy = ty / tl; dz = tz / tl;
     }
-    if (spread > 0) {
-      const r1 = (this.rng.next() - 0.5) * 2 * spread, r2 = (this.rng.next() - 0.5) * 2 * spread;
-      const rx = Math.cos(a.yaw), rz = -Math.sin(a.yaw);
-      dx += rx * r1; dz += rz * r1; dy += r2;
-      const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
+    // F36 — CHUMBO (SG-12): 1 gatilho = `pellets` projéteis, cada um com
+    // dispersão PRÓPRIA (rng determinístico da seed) ao redor da direção-mãe —
+    // cobre jogador E bots (bots somam o cone da categoria ao erro de mira).
+    const pellets = Math.max(1, w.pellets ?? 1);
+    for (let p = 0; p < pellets; p++) {
+      let pdx = dx, pdy = dy, pdz = dz;
+      if (spread > 0) {
+        const r1 = (this.rng.next() - 0.5) * 2 * spread, r2 = (this.rng.next() - 0.5) * 2 * spread;
+        const rx = Math.cos(a.yaw), rz = -Math.sin(a.yaw);
+        pdx += rx * r1; pdz += rz * r1; pdy += r2;
+      }
+      if (pellets > 1) {
+        // cone do chumbo: fração da dispersão da categoria por pellet
+        const cone = (w.spread ?? 0.02) * 0.85;
+        const c1 = (this.rng.next() - 0.5) * 2 * cone, c2 = (this.rng.next() - 0.5) * 2 * cone;
+        const rx = Math.cos(a.yaw), rz = -Math.sin(a.yaw);
+        pdx += rx * c1; pdz += rz * c1; pdy += c2;
+      }
+      const l = Math.hypot(pdx, pdy, pdz); pdx /= l; pdy /= l; pdz /= l;
+      this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: pdx * w.bulletSpeed, vy: pdy * w.bulletSpeed, vz: pdz * w.bulletSpeed,
+        owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
+        gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
+        // Fase 30 — Mira 4x estende o voo útil do projétil (+8%)
+        life: (w.range * (st?.rangeMul ?? 1)) / w.bulletSpeed, weapon: w.id });
     }
-    this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
-      owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
-      gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
-      // Fase 30 — Mira 4x estende o voo útil do projétil (+8%)
-      life: (w.range * (st?.rangeMul ?? 1)) / w.bulletSpeed, weapon: w.id });
   }
   #aimDir(a, tx, ty, tz) {
     let dx = tx - a.x, dy = ty - (a.y + 1.55), dz = tz - a.z;
@@ -1839,8 +1858,11 @@ export class KhaaosSim3D {
     switch (it.kind) {
       case 'weapon': {
         // Fase 32 — contrato weaponId || id (loot interior preserva catálogo)
+        // F36 — dano de REFERÊNCIA com chumbo (SG-12: 13×7 = 91 ponto-cego):
+        // sem o pellet, a escopeta nunca seria "upgrade" para o bot (13 < 22).
         const cur = WEAPONS3D[b.weapon], nxt = WEAPONS3D[it.weaponId || it.id];
-        return !!nxt && (!cur || nxt.damage > cur.damage); // anti-rebaixamento (regra do #grantBundle)
+        const ref = (x) => (x ? x.damage * (x.pellets ?? 1) : 0);
+        return !!nxt && (!cur || ref(nxt) > ref(cur)); // anti-rebaixamento (regra do #grantBundle)
       }
       case 'deathBox': case 'supplyDrop': return true;     // o prêmio — sempre
       case 'attachment': return (b.attachmentBag?.length ?? 0) < 4;

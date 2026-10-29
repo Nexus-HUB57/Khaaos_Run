@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- Fase 36 — vitrine dev (evidência visual): catálogo MÍTICO 9/9 (agora com
+     Shotgun Breach SG-12 e LMG Skeetw MG-6 — armas SEM soquetes), IMPOSTOR
+     OUTDOOR da grama (identidade do capim cozida nas vertex colors do terreno)
+     e o efeito SAZONAL do HUD por aura (vinheta + ritmo por estação).
+     Serve via `npm run dev` em /scripts/f36-showcase.html — usa os módulos
+     REAIS do jogo (entities3d/attachments3d/vegetation3d/aura3d). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F36 Showcase</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 2; text-shadow: 0 1px 2px #000; }
+  #hud b { color: #ffb52e; }
+  canvas { display: block; }
+  /* ---- demo do efeito SAZONAL do HUD (mesmo CSS do jogo, recorte mínimo) ---- */
+  #seasonBadge {
+    position: fixed; right: 18px; top: 14px; z-index: 3; isolation: isolate;
+    font: 700 13px/1 monospace; letter-spacing: 1.5px; color: var(--aura, #ff2d78);
+    text-shadow: 0 0 8px var(--aura, #ff2d78); padding: 6px 10px; border-radius: 4px;
+  }
+  #seasonBadge::before {
+    content: ''; position: absolute; inset: -5px -7px; border-radius: 6px;
+    background: conic-gradient(from 0deg, transparent 0 68%, var(--aura, #ff2d78) 84%, transparent 100%);
+    opacity: .55; filter: blur(.5px); z-index: -1;
+    animation: f36Season calc(3.2s * var(--aura-dur, 1)) linear infinite;
+  }
+  #seasonBadge::after {
+    content: ''; position: absolute; inset: 0; border-radius: 3px;
+    background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.8) 50%, transparent 58%);
+    background-size: 260% 100%; mix-blend-mode: screen; opacity: .6;
+    animation: f36Shimmer calc(2.8s * var(--aura-dur, 1)) ease-in-out infinite;
+  }
+  @keyframes f36Season { to { transform: rotate(360deg); } }
+  @keyframes f36Shimmer { 0% { background-position: 135% 0; } 60%, 100% { background-position: -65% 0; } }
+  #auraVignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    opacity: 0; transition: opacity .9s ease;
+    background: radial-gradient(ellipse 118% 96% at 50% 50%, transparent 62%,
+      color-mix(in srgb, var(--aura-season, #ff2d78) 30%, transparent) 100%);
+    mix-blend-mode: screen;
+  }
+  body[data-aura] #auraVignette { opacity: .5; }
+  body[data-aura-season='primavera'] #auraVignette { opacity: .58; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 36</b><br />
+  fileira: catálogo MÍTICO 9/9 — AR-47 · M4 · MP5 · Barrett · G19 · Sucata · Pulse · <b>Shotgun Breach SG-12</b> · <b>LMG Skeetw MG-6</b><br />
+  chão: IMPOSTOR OUTDOOR — identidade do capim cozida nas vertex colors (custo zero no horizonte)<br />
+  HUD: badge + vinheta SAZONAL por aura (estação real do dia)
+</div>
+<div id="auraVignette" aria-hidden="true"></div>
+<div id="seasonBadge">EV.4 · TEMPORADA</div>
+<script type="module">
+import * as THREE from 'three';
+import { createWeaponModel } from '../src/game3d/entities3d.js';
+import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
+import {
+  buildGrassFieldLOD, tickVegetationWind, grassOutdoorBake, applyOutdoorTint,
+} from '../src/game3d/vegetation3d.js';
+import { hudAuraFor, shiftAuraHex } from '../src/game3d/aura3d.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#101820');
+scene.fog = new THREE.Fog('#101820', 60, 220);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#fff3e0', 2.4);
+sun.position.set(14, 24, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+scene.add(sun, new THREE.AmbientLight('#9fb6c8', .85));
+
+// chão COM O BAKE REAL do impostor outdoor: terreno branco (multiplicador
+// neutro) + discos da família do capim cozidos via applyOutdoorTint — o mesmo
+// caminho do world3d em produção.
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600, 96, 96), new THREE.MeshStandardMaterial({ color: '#8a7f6a', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+const nVerts = ground.geometry.attributes.position.count;
+ground.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nVerts * 3).fill(1), 3));
+ground.material.vertexColors = true;
+ground.name = 'terrain';
+scene.add(ground);
+
+const spots = [];
+for (let i = 0; i < 2600; i++) {
+  const x = (Math.sin(i * 12.9898) * 43758.5453) % 1, z = (Math.cos(i * 78.233) * 12345.6789) % 1;
+  spots.push({ x: x * 90, z: z * 90, y: .02, rot: i % 6, s: .8 + (i % 5) * .12, sy: 1, tintJitter: (i % 10) / 10 });
+}
+const grassLOD = buildGrassFieldLOD({
+  spots, seed: 77, tintFamilies: ['#5a6b33', '#7a8443'],
+  chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
+  impostorDist: 110, impostorOpacity: .55,
+  sway: { strength: .07, freq: 2.1, yScale: 1.1 },
+});
+scene.add(grassLOD.group);
+scene.userData.swayMats = [...grassLOD.mats, ...grassLOD.impostorMats];
+// F36 — O BAKE: identidade do capim no terreno (além da faixa de impostores
+// o chão continua lendo "campo" — custo zero por frame).
+const bake = grassOutdoorBake(grassLOD.chunks, ['#5a6b33', '#7a8443']);
+applyOutdoorTint(ground, bake, { radius: 25, strength: .42 });
+window.__f36bake = { chunks: bake.length };
+
+// fileira única — as 9 armas míticas (estágio 4), centralizada pelo tamanho
+const weaponRow = new THREE.Group();
+scene.add(weaponRow);
+const weaponIds = Object.keys(MYTHIC_SKINS);
+const STEP = 3.2;
+weaponIds.forEach((wid, i) => {
+  const { group } = createWeaponModel(wid, 'MITICA', { mythicStage: 4 });
+  group.scale.setScalar(2.6);
+  group.position.set(i * STEP, 0, 0);
+  group.rotation.y = -.5;
+  weaponRow.add(group);
+});
+const rowW = (weaponIds.length - 1) * STEP;
+weaponRow.position.set(-rowW / 2, 1.15, 0);
+// índices das NOVAS armas (vitrine foca nelas)
+window.__f36idx = { shotgun: weaponIds.indexOf('shotgun'), lmg: weaponIds.indexOf('lmg'), total: weaponIds.length };
+
+// ---- efeito SAZONAL real: badge + vinheta na aura da ARMA focada ----
+const focusIds = ['shotgun', 'lmg', 'ar47', 'pulse'];
+let focusI = 0;
+function applySeason() {
+  const wid = focusIds[focusI % focusIds.length];
+  const def = MYTHIC_SKINS[wid];
+  const aura = hudAuraFor({ weaponId: wid, weaponSkin: 'MITICA', mythicStage: 4 }); // estação real do dia
+  document.body.style.setProperty('--aura', def.aura);
+  document.body.style.setProperty('--aura-season', shiftAuraHex(def.aura, aura.hueShift));
+  document.body.style.setProperty('--aura-dur', String(aura.durMul));
+  document.body.dataset.aura = def.aura;
+  document.body.dataset.auraSeason = aura.season;
+  document.getElementById('seasonBadge').textContent = `${def.name.split('·')[1].trim()} · ${aura.season.toUpperCase()}`;
+  window.__f36season = { weapon: wid, aura: def.aura, season: aura.season, durMul: aura.durMul };
+  focusI++;
+}
+applySeason();
+setInterval(applySeason, 5200); // troca a arma a cada 5.2s — vinheta re-pinta
+
+const clock = new THREE.Clock();
+function tick() {
+  const t = clock.getElapsedTime();
+  if (!window.__f36?.freeze) {
+    weaponRow.children.forEach((g, i) => { g.rotation.y = -.5 + Math.sin(t * .5 + i) * .55; });
+    const a = t * .06;
+    camera.position.set(Math.sin(a) * 30, 8 + Math.sin(t * .23) * 2, Math.cos(a) * 30 + rowW / 3);
+    camera.lookAt(0, 1.1, 0);
+    grassLOD.update(camera.position.x, camera.position.z);
+    tickVegetationWind(scene, t);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+// gancho de evidência: posicionamento manual da câmera p/ screenshots
+window.__f36 = {
+  freeze: false,
+  shot(camPos, look = [0, 1.1, 0]) {
+    this.freeze = true;               // congela o tick p/ a captura
+    camera.position.set(...camPos);
+    camera.lookAt(...look);
+    grassLOD.update(camera.position.x, camera.position.z);
+    tickVegetationWind(scene, 2.5);
+    renderer.render(scene, camera);
+  },
+};
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

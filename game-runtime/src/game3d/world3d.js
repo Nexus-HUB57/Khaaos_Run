@@ -31,6 +31,7 @@ import { createLootMesh, createTerminalMesh } from './entities3d.js';
 import {
   treeArchetypeFor, buildTreeField, buildBushField,
   buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
+  grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
@@ -833,6 +834,15 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.add(grassLOD.group);
   (scene.userData.swayMats ??= []).push(...grassLOD.mats, ...grassLOD.impostorMats); // Fase 34 — impostor balança
   scene.userData.grassLOD = grassLOD; // main3d chama update(camX, camZ) 1×/frame
+
+  // F36 — OUTDOOR IMPOSTOR: além da faixa de impostores (≥110m) o chunk segue
+  // INVISÍVEL (render 0), mas a identidade do capim é cozida nas vertex colors
+  // do terreno UMA vez aqui — o horizonte lê "campo" com custo ZERO por frame
+  // (0 draw calls, 0 matrizes; o chão em si é o impostor).
+  const terrainMesh = scene.getObjectByName('terrain');
+  const outdoorBake = grassOutdoorBake(grassLOD.chunks, grassTints);
+  if (terrainMesh) applyOutdoorTint(terrainMesh, outdoorBake, { radius: 25, strength: .3 });
+  scene.userData.grassOutdoorBake = { chunks: outdoorBake.length, radius: 25, strength: .3 };
 
   // ---- loot visual ----
   const lootGroup = new THREE.Group();

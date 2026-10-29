@@ -822,6 +822,36 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       add(.03, .03, .2, gun2, -.05, .06, -.34);
       muzzleZ = -.66;
       break;
+    case 'shotgun': { // F36 — Breach SG-12 (sem sockets): receiver massivo,
+      // cano grosso, TUBO de munição sob o cano e foregrip de BOMBA deslizante
+      const woodM = M('#4a3626', { rough: .68, metal: .1 });  // madeira escura
+      add(.09, .13, .42, gun, 0, 0, .02);        // receiver
+      add(.055, .055, .5, gun2, 0, .02, -.44);   // cano grosso
+      add(.045, .045, .46, gun2, 0, -.05, -.4);  // tubo do carregador
+      const pump = add(.075, .07, .16, woodM, 0, -.05, -.4); // foregrip da bomba
+      pump.name = 'pumpForegrip';
+      add(.06, .12, .09, woodM, 0, -.03, .26);   // coronha
+      add(.06, .14, .05, woodM, 0, -.06, .34);   // soleira
+      const grip = add(.05, .11, .07, woodM, 0, -.1, .1); grip.rotation.x = .42;
+      add(.014, .03, .014, gun2, 0, .055, -.66); // bead sight (bola de mira)
+      muzzleZ = -.7;
+      break;
+    }
+    case 'lmg': { // F36 — Skeetw MG-6 (sem sockets): cano longo pesado, caixa
+      // de munição lateral, bipé dobrado sob o cano e alça de transporte
+      add(.095, .14, .62, gun, 0, 0, -.08);      // receiver longo
+      add(.045, .045, .55, gun2, 0, .025, -.6);  // cano pesado
+      add(.075, .075, .1, gun2, 0, .025, -.84);  // flash hider largo
+      add(.1, .12, .14, gun2, .07, -.02, .02);   // caixa de munição (lado direito)
+      add(.06, .09, .22, gun2, 0, .11, -.05);    // alça de transporte
+      add(.07, .12, .12, furniture, 0, -.01, .32); // coronha robusta
+      const bipodL = add(.02, .14, .02, gun2, -.05, -.1, -.62); bipodL.rotation.z = .5;
+      const bipodR = add(.02, .14, .02, gun2, .05, -.1, -.62); bipodR.rotation.z = -.5;
+      const grip2 = add(.05, .11, .07, gun2, 0, -.11, .12); grip2.rotation.x = .38;
+      sights(-.66, .1, .13);
+      muzzleZ = -.9;
+      break;
+    }
     default:
       add(.07, .11, .4, gun, 0, 0, -.12);
       sights(-.28, .05);

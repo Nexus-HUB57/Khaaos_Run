@@ -6,6 +6,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
+import { hudAuraFor, shiftAuraHex } from './aura3d.js'; // F36 — aura sazonal do HUD
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -154,13 +155,34 @@ export class HUD {
       const mDef = mythicSkinFor(p.weapon);
       const mythic = !!mDef && p.weaponSkin === MYTHIC_SKIN.id;
       mythicEl.classList.toggle('hidden', !mythic);
-      if (mythic) {
+      // F36 — estado SAZONAL do HUD: quando há skin mítica equipada, o corpo
+      // recebe data-aura + data-aura-season e as variáveis CSS (--aura/
+      // --aura-season/--aura-dur) — a vinheta #auraVignette e o ritmo do
+      // festival seguem a estação. Sem skin mítica: corpo limpo (custo 0,
+      // decisão PURA de aura3d.hudAuraFor — testável headless).
+      const aura = mythic ? hudAuraFor({ weaponId: p.weapon, weaponSkin: p.weaponSkin, mythicStage: p.mythicStage || 1 }) : null;
+      if (mythic && aura) {
         mythicEl.textContent = `EV.${p.mythicStage || 1} · ${MYTHIC_STAGE_NAMES[(p.mythicStage || 1) - 1]}`;
         mythicEl.style.color = mDef.aura; // Fase 32 — badge na cor da aura da skin
-        // Fase 34 — efeito SAZONAL por aura: anel de brilho girando + shimmer
-        // de festival na cor PRÓPRIA da arma (CSS lê --aura; anima só quando
-        // o badge está visível — custo ~0 quando escondido).
+        // Fase 34/36 — efeito SAZONAL por aura: anel de brilho girando +
+        // shimmer de festival na cor PRÓPRIA da arma, RITMO da estação (CSS
+        // lê --aura/--aura-dur; anima só quando o badge está visível).
         mythicEl.style.setProperty('--aura', mDef.aura);
+        mythicEl.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
+        mythicEl.style.setProperty('--aura-dur', String(aura.durMul));
+        const body = document.body;
+        if (body) {
+          body.dataset.aura = mDef.aura;
+          body.dataset.auraSeason = aura.season;
+          body.style.setProperty('--aura', mDef.aura);
+          body.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
+        }
+      } else if (!mythic) {
+        const body = document.body;
+        if (body?.dataset.aura) {
+          delete body.dataset.aura;              // volta ao HUD neutro (custo 0)
+          delete body.dataset.auraSeason;
+        }
       }
     }
     const reloading = p.reloadT > 0;
