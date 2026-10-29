@@ -17,6 +17,7 @@ import {
   mergeGeoms, buildTreeGeometries, buildBushGeometry, grassTuftGeometry,
   patchSway, tickVegetationWind, buildTreeField, buildBushField,
   grassChunkify, grassChunkTier, buildGrassFieldLOD, grassImpostorGeometry,
+  grassImpostorFade,                    // F37 — fade suave da banda de impostores
   grassOutdoorBake, applyOutdoorTint,   // F36 — impostor outdoor (bake no terreno)
 } from '../src/game3d/vegetation3d.js';
 import { buildScene } from '../src/game3d/world3d.js';
@@ -366,8 +367,14 @@ test('F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobr
     assert.equal(lod.impostorDist, 110, `${scenarioId}: faixa canônica 110m`);
     assert.equal(lod.impostors.count, 0, 'update ainda não rodou (main3d é o dono)');
     lod.update(0, 0);
-    const inBand = lod.chunks.filter((c) => { const d = Math.hypot(c.x, c.z); return d >= 58 && d < 110; });
+    // F37 — a faixa empacota chunks com fade > 0 (na BORDA da banda o alpha
+    // ~0 nem empacota — custo 0; o contrato F37 substitui o degrau F34)
+    const inBand = lod.chunks.filter((c) => {
+      const d = Math.hypot(c.x, c.z);
+      return d >= 58 && d < 110 && grassImpostorFade(d, { midDist: 58, impostorDist: 110, fadeZone: 14 }) > 0.002;
+    });
     assert.equal(lod.impostors.count, inBand.length, `${scenarioId}: faixa empacotada (${inBand.length})`);
+    assert.ok(inBand.length > 0, `${scenarioId}: faixa com conteúdo visível`);
     assert.ok(scene.userData.swayMats.includes(lod.impostorMats[0]), 'vento do impostor registrado');
   }
 });
@@ -463,4 +470,141 @@ test('F36 · buildScene W1-W4: bake outdoor registrado e terreno pintado', () =>
     for (let i = 0; i < col.count; i++) if (col.getY(i) > col.getX(i) + .02) greened++;
     assert.ok(greened > 0, `${scenarioId}: ${greened} vértices com identidade de capim`);
   }
+});
+
+// ============================================== Fase 37 — fade + sombras ====
+
+test('F37 · grassImpostorFade: rampa suave nas DUAS bordas da banda (PURO)', () => {
+  const cfg = { midDist: 58, impostorDist: 110, fadeZone: 14 };
+  // fora da banda → 0 (antes da entrada e depois da saída)
+  assert.equal(grassImpostorFade(0, cfg), 0);
+  assert.equal(grassImpostorFade(57.9, cfg), 0);
+  assert.equal(grassImpostorFade(110.1, cfg), 0);
+  assert.equal(grassImpostorFade(400, cfg), 0);
+  // entrada: 0 na borda exata, cresce suave até o plateau
+  assert.equal(grassImpostorFade(58, cfg), 0, 'entrada da banda começa em 0');
+  const a1 = grassImpostorFade(62, cfg), a2 = grassImpostorFade(66, cfg), plateau = grassImpostorFade(84, cfg);
+  assert.ok(a1 > 0 && a1 < 1, `62m: rampa subindo (alpha=${a1.toFixed(3)})`);
+  assert.ok(a2 > a1, `66m > 62m (monotônico: ${a2.toFixed(3)} > ${a1.toFixed(3)})`);
+  assert.equal(plateau, 1, 'meio da banda = plateau pleno (1.0)');
+  // saída: dissolve antes do corte p/ hidden (blend no bake outdoor F36)
+  const b1 = grassImpostorFade(104, cfg), b2 = grassImpostorFade(108, cfg);
+  assert.ok(b1 < 1 && b1 > b2, `saída caindo (104m=${b1.toFixed(3)} > 108m=${b2.toFixed(3)})`);
+  assert.equal(grassImpostorFade(110, cfg), 0, 'borda de saída = 0 (sem pop no horizonte)');
+  // monotonia global nas duas metades (sem degraus)
+  let prev = 0;
+  for (let d = 58; d <= 92; d += 2) { const a = grassImpostorFade(d, cfg); assert.ok(a >= prev - 1e-9, `subida monotônica até plateau @${d}m`); prev = a; }
+  prev = 1;
+  for (let d = 96; d <= 110; d += 2) { const a = grassImpostorFade(d, cfg); assert.ok(a <= prev + 1e-9, `descida monotônica @${d}m`); prev = a; }
+});
+
+test('F37 · grassImpostorFade: zone clamp + banda desligada (retrocompat F32)', () => {
+  // fadeZone gigante: clamp pela metade da banda — as rampas NUNCA se cruzam
+  // (sempre existe plateau; aqui banda 58→110, zone clampado p/ 26)
+  const clamped = { midDist: 58, impostorDist: 110, fadeZone: 500 };
+  assert.equal(grassImpostorFade(84, clamped), 1, 'plateau existe mesmo com zone gigante');
+  assert.ok(grassImpostorFade(60, clamped) > 0, 'rampa de entrada cobre mais com zone maior');
+  // banda desligada (impostorDist <= midDist — comportamento F32): 0 em tudo
+  const off = { midDist: 58, impostorDist: 58 };
+  for (const d of [0, 30, 58, 90, 200]) assert.equal(grassImpostorFade(d, off), 0, `banda off @${d}m`);
+  // micro-banda: zone mínimo .5 garante suavidade mesmo em faixa estreita
+  const tiny = { midDist: 58, impostorDist: 59, fadeZone: 14 };
+  assert.equal(grassImpostorFade(58, tiny), 0);
+  assert.equal(grassImpostorFade(59, tiny), 0);
+  // 58.5 = plateau do ponto único (midpoint); 58.4 está na rampa de entrada
+  assert.ok(grassImpostorFade(58.4, tiny) > 0 && grassImpostorFade(58.4, tiny) < 1, 'micro-banda ainda suave');
+  assert.equal(grassImpostorFade(58.5, tiny), 1, 'midpoint de micro-banda = plateau exato');
+});
+
+test('F37 · buildGrassFieldLOD: alpha por instância segue o fade da banda', () => {
+  // chunks em anel: o chunk a ~70m fica no meio da rampa de entrada;
+  // a 84m plateau; a 106m na rampa de saída
+  const spots = [];
+  for (let i = 0; i < 40; i++) spots.push({ x: (i % 8) * 30, z: Math.floor(i / 8) * 30, y: 0, rot: 0, s: 1, sy: 1 });
+  const lod = buildGrassFieldLOD({ spots, seed: 7, tintFamilies: ['#5a6b33'], impostorFadeZone: 14 });
+  lod.update(0, 0);
+  const attr = lod.impostors.geometry.attributes.instanceAlpha;
+  assert.ok(attr, 'attribute instanceAlpha presente na geometria do impostor');
+  assert.equal(attr.itemSize, 1, 'itemSize 1 (um alpha por instância)');
+  // cada instância empacotada carrega o alpha do SEU chunk (fade × opacidade)
+  let seen = 0;
+  for (const ch of lod.chunks) {
+    const d = Math.hypot(ch.x, ch.z);
+    const tier = grassChunkTier(d, { nearDist: 28, midDist: 58, impostorDist: 110 });
+    if (tier !== 'impostor') continue;
+    const fade = grassImpostorFade(d, { midDist: 58, impostorDist: 110, fadeZone: 14 });
+    if (fade <= 0.002) continue;              // alpha ~0 nem empacota (custo 0)
+    seen++;
+    assert.ok(fade > 0.002, `chunk @${d.toFixed(1)}m empacotado com fade=${fade.toFixed(3)}`);
+  }
+  assert.equal(seen, lod.impostors.count, '1 instância por chunk com fade > 0');
+  // os alphas empacotados (primeiros count slots) batem com os fades dos
+  // chunks NA ORDEM DE EMPACOTAMENTO (ordem do array chunks — kx/kz), leitura
+  // direta do buffer
+  const packed = [];
+  for (const ch of lod.chunks) {
+    const d = Math.hypot(ch.x, ch.z);
+    const fade = grassImpostorFade(d, { midDist: 58, impostorDist: 110, fadeZone: 14 });
+    if (d >= 58 && d < 110 && fade > 0.002) packed.push({ d, fade });
+  }
+  assert.ok(packed.length === lod.impostors.count && packed.length > 0, 'faixa não vazia');
+  for (let i = 0; i < packed.length; i++) {
+    assert.ok(Math.abs(attr.array[i] - packed[i].fade) < 1e-6,
+      `slot ${i}: alpha ${attr.array[i].toFixed(4)} === fade(${packed[i].d.toFixed(1)}m)=${packed[i].fade.toFixed(4)}`);
+  }
+  // idempotência: mesma câmera → mesmos alphas byte a byte
+  const snapshot = Float32Array.from(attr.array);
+  lod.update(0, 0);
+  assert.deepEqual(attr.array, snapshot, 'update idempotente (mesmos alphas)');
+});
+
+test('F37 · sombras de contato: espelho da banda, ancoradas no relevo (ch.y+lift)', () => {
+  const spots = [];
+  for (let i = 0; i < 40; i++) spots.push({ x: (i % 8) * 30, z: Math.floor(i / 8) * 30, y: .04 + (i % 3) * .12, rot: 0, s: 1, sy: 1 });
+  const lod = buildGrassFieldLOD({
+    spots, seed: 3, tintFamilies: ['#5a6b33'],
+    impostorShadow: true, impostorShadowOpacity: .5, impostorShadowRadius: 1.9, impostorShadowLift: .05,
+  });
+  assert.ok(lod.impostorShadows, 'campo de sombras presente');
+  assert.equal(lod.impostorShadows.name, 'grassImpostorShadows');
+  lod.update(0, 0);
+  const sh = lod.impostorShadows;
+  assert.equal(sh.count, lod.impostors.count, '1 sombra por impostor (espelho exato)');
+  assert.equal(sh.visible, lod.impostors.visible && lod.impostors.count > 0, 'visibilidade acoplada à banda');
+  // geometria: disco deitado com gradiente RGBA (centro opaco → borda 0)
+  const geo = sh.geometry;
+  assert.equal(geo.attributes.color.itemSize, 4, 'RGBA por vértice (itemSize 4)');
+  const pos = geo.attributes.position, col = geo.attributes.color;
+  let center = -1, rim = -1;
+  for (let i = 0; i < pos.count; i++) {
+    const r = Math.hypot(pos.getX(i), pos.getZ(i));
+    if (r < .01) center = i;
+    if (r > .99) rim = i;
+  }
+  assert.ok(center >= 0 && rim >= 0, 'disco tem centro e borda');
+  assert.equal(col.getW(center), 1, 'centro: alpha cheio (contato)');
+  assert.equal(col.getW(rim), 0, 'borda: alpha 0 (sem banda dura)');
+  assert.equal(col.getX(center), 0, 'cor preta (sombra de contato, não mancha)');
+  // ancoragem no relevo: cada sombra fica em ch.y + lift, MESMA altura média
+  // dos tufos do chunk (o terreno sob o capim), com raio fixo
+  const mat4 = sh.instanceMatrix;
+  let mirrored = 0;
+  for (let s = 0; s < sh.count; s++) {
+    const x = mat4.array[s * 16 + 12], y = mat4.array[s * 16 + 13], z = mat4.array[s * 16 + 14];
+    const sc = Math.hypot(mat4.array[s * 16], mat4.array[s * 16 + 1]);
+    assert.ok(Math.abs(sc - 1.9) < 1e-5, `sombra ${s}: raio fixo 1.9 (sc=${sc.toFixed(3)})`);
+    const owner = lod.chunks.find((c) => Math.hypot(c.x - x, c.z - z) < 1 && Math.abs(c.y + .05 - y) < 1e-5);
+    assert.ok(owner, `sombra ${s} ancorada em um chunk (x=${x.toFixed(1)} z=${z.toFixed(1)} y=${y.toFixed(3)})`);
+    mirrored++;
+  }
+  assert.equal(mirrored, sh.count, 'todas as sombras ancoradas no relevo dos chunks');
+  // alphas casam com o fade da banda (a sombra nasce/morre COM a mancha)
+  const shAttr = geo.attributes.instanceAlpha;
+  const impAttr = lod.impostors.geometry.attributes.instanceAlpha;
+  for (let s = 0; s < sh.count; s++) assert.equal(shAttr.array[s], impAttr.array[s], `alpha sombra ${s} === alpha impostor`);
+  // OFF switch: sem sombra o campo fica count 0/invisível (custo 0)
+  const lod2 = buildGrassFieldLOD({ spots, seed: 3, tintFamilies: ['#5a6b33'], impostorShadow: false });
+  lod2.update(0, 0);
+  assert.equal(lod2.impostorShadows.count, 0, 'impostorShadow:false → 0 sombras');
+  assert.equal(lod2.impostorShadows.visible, false);
 });

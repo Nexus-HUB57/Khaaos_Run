@@ -826,8 +826,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
     // Fase 34 — faixa de IMPOSTORES entre sparse e hidden: cada chunk a 58-110m
     // vira 1 quad cruzado (mancha de capim no horizonte por ~2 triângulos);
-    // além de 110m render 0. Leitura contínua: tufos → desbaste → mancha → nada.
+    // além de 110m render 0. Fase 37 — FADE SUAVE por instância nas duas
+    // bordas da banda (nasce do desbaste em 58m, dissolve no bake outdoor em
+    // 110m) + SOMBRA DE CONTATO FALSA ancorada no relevo (disco radial na
+    // média dos tufos do chunk, lift anti-z-fight). Leitura contínua:
+    // tufos → desbaste → mancha com sombra → campo eterno até o fog.
     impostorDist: 110, impostorHeight: 1.15, impostorWidth: 3.2, impostorOpacity: .55,
+    impostorFadeZone: 14, impostorShadowOpacity: .5, impostorShadowRadius: 1.9,
     // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
     sway: { strength: .07, freq: 2.1, yScale: 1.1 },
   });

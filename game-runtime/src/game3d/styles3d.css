@@ -230,6 +230,50 @@ body[data-aura-season='primavera'] #auraVignette { opacity: .58; } /* estação 
 @media (prefers-reduced-motion: reduce) {
   .mythic-stage::before, .mythic-stage::after { animation: none; opacity: .35; }
 }
+/* ---------- Fase 37 — ícone da arma no inventário ---------- */
+/* Silhueta por categoria (svg path com data-cat; hud3d acende o ativo via
+   [data-cat] no wrapper). Cor = raridade coletada (--wi). Com skin MÍTICA:
+   MESMO festival sazonal do badge (anel cônico + varredura de brilho), na
+   cor da estação (--aura-season) e no RITMO dela (--aura-dur) — a identidade
+   da skin (--aura) permanece no traço. Zero layout shift (absolute). */
+.weapon-icon {
+  position: relative; isolation: isolate; height: 30px; margin-bottom: 2px;
+  display: flex; align-items: center; justify-content: flex-end;
+  color: var(--wi, #e8e3d5);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--wi, #e8e3d5) 55%, transparent));
+  transition: filter .35s ease, color .35s ease;
+}
+.weapon-icon svg { height: 100%; width: auto; overflow: visible; }
+.weapon-icon svg path { display: none; fill: currentColor; }
+.weapon-icon[data-cat='rifle']   svg path[data-cat='rifle'],
+.weapon-icon[data-cat='sniper']  svg path[data-cat='sniper'],
+.weapon-icon[data-cat='shotgun'] svg path[data-cat='shotgun'],
+.weapon-icon[data-cat='lmg']     svg path[data-cat='lmg'],
+.weapon-icon[data-cat='smg']     svg path[data-cat='smg'],
+.weapon-icon[data-cat='sidearm'] svg path[data-cat='sidearm'],
+.weapon-icon[data-cat='energy']  svg path[data-cat='energy'],
+.weapon-icon[data-cat='melee']   svg path[data-cat='melee'] { display: block; }
+/* festival SAZONAL — só com .mythic (classe acendida pelo hud3d com aura) */
+.weapon-icon.mythic { color: var(--aura, #ff2d78); }
+.weapon-icon.mythic svg { filter: drop-shadow(0 0 5px var(--aura-season, #ff2d78)); }
+.weapon-icon.mythic::before {
+  content: ''; position: absolute; inset: -6px -10px; border-radius: 8px; z-index: -1;
+  background: conic-gradient(from 0deg, transparent 0 72%, var(--aura-season, #ff2d78) 87%, transparent 100%);
+  opacity: .4; filter: blur(.5px); pointer-events: none;
+  animation: mythicSeason calc(3.2s * var(--aura-dur, 1)) linear infinite;
+}
+.weapon-icon.mythic::after {
+  content: ''; position: absolute; inset: 0; border-radius: 4px; pointer-events: none;
+  background: linear-gradient(105deg, transparent 44%, rgba(255,255,255,.75) 50%, transparent 56%);
+  background-size: 260% 100%; mix-blend-mode: screen; opacity: .5;
+  animation: mythicShimmer calc(2.8s * var(--aura-dur, 1)) ease-in-out infinite;
+}
+/* ritmo da ESTAÇÃO (hemisfério sul) — frio contém, primavera acende */
+body[data-aura-season='inverno'] .weapon-icon.mythic::before { opacity: .3; }
+body[data-aura-season='primavera'] .weapon-icon.mythic::before { opacity: .52; }
+@media (prefers-reduced-motion: reduce) {
+  .weapon-icon.mythic::before, .weapon-icon.mythic::after { animation: none; opacity: .3; }
+}
 .ability-chip {
   margin-top: 6px; display: inline-flex; align-items: center; gap: 8px;
   min-width: 174px; text-align: left; background: var(--panel);

@@ -6,7 +6,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
-import { hudAuraFor, shiftAuraHex } from './aura3d.js'; // F36 — aura sazonal do HUD
+import { hudAuraFor, shiftAuraHex, weaponIconVars } from './aura3d.js'; // F36/F37 — aura sazonal do HUD + ícone
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -135,6 +135,15 @@ export class HUD {
     // Fase 30 — a cor segue a SKIN coletada (MÍTICA pinta o painel de rosa-caos)
     const rar = RARITIES[p.weaponSkin ?? w?.rarity] ?? RARITIES[w?.rarity] ?? null;
     $('#weaponName').style.color = rar?.color ?? '#e8e3d5';
+    // Fase 37 — ÍCONE da arma no inventário: silhueta pela CATEGORIA da arma
+    // e cor da raridade coletada (mesma fonte do #weaponName — leitura única
+    // de "o que tenho na mão"). Sem skin mítica o ícone é neutro (custo 0);
+    // com mítica, o festival sazonal entra no bloco do #mythicStage abaixo.
+    const iconEl = $('#weaponIcon');
+    if (iconEl) {
+      iconEl.dataset.cat = w?.category ?? 'sidearm';
+      iconEl.style.setProperty('--wi', rar?.color ?? '#e8e3d5');
+    }
     $('#ammoMag').textContent = p.weapon === 'sucata' ? '∞' : p.ammoMag;
     $('#ammoReserve').textContent = p.weapon === 'sucata' ? '' : `/ ${p.inventory.ammo[w?.ammo] ?? 0}`;
     // Fase 30/32 — faixa de anexos com CHIP de raridade (gasto→dourado) +
@@ -177,11 +186,38 @@ export class HUD {
           body.style.setProperty('--aura', mDef.aura);
           body.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
         }
+        // Fase 37 — o ÍCONE da arma entra no festival: MESMAS variáveis da
+        // temporada (decisão PURA weaponIconVars — fonte única com badge/
+        // vinheta), glow e varredura na cor tingida pela estação. Sem mítica
+        // ou sem hex válido: limpa e volta ao ícone neutro (custo 0).
+        const iconVars = weaponIconVars(aura, mDef.aura);
+        const iconEl2 = $('#weaponIcon');
+        if (iconEl2) {
+          if (iconVars) {
+            iconEl2.classList.add('mythic');
+            iconEl2.style.setProperty('--aura', iconVars.aura);
+            iconEl2.style.setProperty('--aura-season', iconVars.season);
+            iconEl2.style.setProperty('--aura-dur', iconVars.dur);
+          } else {
+            iconEl2.classList.remove('mythic');
+            iconEl2.style.removeProperty('--aura');
+            iconEl2.style.removeProperty('--aura-season');
+            iconEl2.style.removeProperty('--aura-dur');
+          }
+        }
       } else if (!mythic) {
         const body = document.body;
         if (body?.dataset.aura) {
           delete body.dataset.aura;              // volta ao HUD neutro (custo 0)
           delete body.dataset.auraSeason;
+        }
+        // Fase 37 — ícone volta ao neutro junto com o corpo (custo 0)
+        const iconEl3 = $('#weaponIcon');
+        if (iconEl3?.classList.contains('mythic')) {
+          iconEl3.classList.remove('mythic');
+          iconEl3.style.removeProperty('--aura');
+          iconEl3.style.removeProperty('--aura-season');
+          iconEl3.style.removeProperty('--aura-dur');
         }
       }
     }

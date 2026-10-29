@@ -404,6 +404,68 @@ export function grassImpostorGeometry({ height = 1.15, width = 3.2 } = {}) {
   return mergeGeoms([a, b]);
 }
 
+// Fase 37 — FADE SUAVE na entrada/saída da banda de impostores (PURO).
+// A F34 acendia o impostor em degrau (alpha fixo .55 na entrada em midDist e
+// corte seco na saída em impostorDist). Aqui a opacidade POR INSTÂNCIA faz a
+// transição: rampa smoothstep subindo em [midDist, midDist+zone] e descendo
+// em [impostorDist-zone, impostorDist] — a mancha "nasce" do desbaste e
+// "morre" dissolvendo no bake outdoor (F36), sem pop visível em nenhum bordo.
+//   zone = min(fadeZone, (impostorDist - midDist) / 2) — as duas rampas nunca
+//   se sobrepõem (sempre existe plateau no meio da banda).
+// Banda desligada (impostorDist <= midDist, retrocompat F32): 0 em qualquer
+// distância — nenhum impostor nasce.
+export function grassImpostorFade(dist, { midDist = 58, impostorDist = 110, fadeZone = 14 } = {}) {
+  if (!(impostorDist > midDist)) return 0;                    // banda desligada
+  const zone = Math.max(.5, Math.min(fadeZone, (impostorDist - midDist) / 2));
+  if (!(dist >= midDist) || !(dist <= impostorDist)) return 0; // fora da banda
+  const fadeIn = smoothStep(midDist, midDist + zone, dist);
+  const fadeOut = 1 - smoothStep(impostorDist - zone, impostorDist, dist);
+  return fadeIn * fadeOut;                                    // 0..1
+}
+
+// Fase 37 — ALPHA POR INSTÂNCIA via onBeforeCompile (mesmo contrato do
+// patchSway: string de shader, INERTE sem renderer — headless nunca compila).
+// A InstancedMesh ganha um InstancedBufferAttribute 'instanceAlpha' (itemSize
+// 1) e o material multiplica diffuseColor.a por ele no fragmento — transição
+// de opacidade por chunk SEM duplicar materiais nem recompilar por instância.
+export function patchInstanceAlpha(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', ['#include <common>', 'attribute float instanceAlpha;', 'varying float vInstAlpha;'].join('\n'))
+      .replace('#include <begin_vertex>', ['#include <begin_vertex>', 'vInstAlpha = instanceAlpha;'].join('\n'));
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', ['#include <common>', 'varying float vInstAlpha;'].join('\n'))
+      .replace('#include <color_fragment>', ['#include <color_fragment>', 'diffuseColor.a *= vInstAlpha;'].join('\n'));
+    material.userData.instanceAlphaShader = shader;
+  };
+  material.customProgramCacheKey = () => 'inst-alpha';
+  return material;
+}
+
+// Fase 37 — SOMBRAS DE CONTATO FALSAS sob os impostores: disco RADIAL com
+// gradiente de alpha por VÉRTICE (centro escuro → borda transparente, itemSize
+// 4 — three r125+ detecta RGBA). Nada de textura/canvas (contrato headless):
+// o gradiente vive na geometria, o material só multiplica. Deitada no chão
+// (rotação -90° em X), a instância ancora no MESMO relevo dos tufos (ch.y —
+// média das alturas de plantio) com lift fino anti-z-fight.
+export function grassShadowGeometry({ segments = 14 } = {}) {
+  const seg = Math.max(6, segments | 0);
+  const geo = new THREE.CircleGeometry(1, seg);
+  xform(geo, { rx: -Math.PI / 2 });               // deita no plano XZ
+  const pos = geo.attributes.position;
+  const n = pos.count;
+  const colors = new Float32Array(n * 4);          // RGBA por vértice
+  for (let i = 0; i < n; i++) {
+    // centro (0,0) → alpha cheio; borda r=1 → alpha 0 (smoothstep sem banda)
+    const r = Math.hypot(pos.getX(i), pos.getZ(i));
+    const a = 1 - smoothStep(0, 1, r);
+    colors[i * 4] = 0; colors[i * 4 + 1] = 0; colors[i * 4 + 2] = 0;
+    colors[i * 4 + 3] = a;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+  return geo;
+}
+
 // ---------------------------------- F36 — OUTDOOR IMPOSTOR (tier hidden) ----
 // Evolução do tier `hidden` (≥ impostorDist): o chunk continua INVISÍVEL
 // (custo de render 0 — contrato F32/F34 intocado), mas a identidade do capim
@@ -474,6 +536,9 @@ export function buildGrassFieldLOD({
   spots = [], seed = 1, texture = null, tintFamilies = ['#5a6b33'], alphaTest = .42,
   chunkSize = 25, nearDist = 28, midDist = 58, sparseKeep = .4, sway = null,
   impostorDist = 110, impostorHeight = 1.15, impostorWidth = 3.2, impostorOpacity = .55,
+  // Fase 37 — fade de entrada/saída da banda + sombra de contato ancorada
+  impostorFadeZone = 14, impostorShadow = true, impostorShadowOpacity = .5,
+  impostorShadowRadius = 1.9, impostorShadowLift = .05,
 } = {}) {
   const cells = grassChunkify(spots, { chunkSize });
   const group = new THREE.Group();
@@ -524,14 +589,21 @@ export function buildGrassFieldLOD({
   // 1 instância por chunk; update() empacota na frente as matrizes dos chunks
   // na faixa impostor (escrita O(faixa), tipicamente dezenas) e define count.
   // Cor por instância herda a família de tint do chunk — mancha coerente com
-  // o capim próximo; opacidade fixa e sem sombra (leitura de horizonte).
+  // o capim próximo. F37: opacidade POR INSTÂNCIA (fade suave nas duas bordas
+  // da banda) + sombras de contato falsas ancoradas no relevo (abaixo).
   const impGeo = grassImpostorGeometry({ height: impostorHeight, width: impostorWidth });
   const impMat = new THREE.MeshStandardMaterial({
     color: '#ffffff', roughness: 1, metalness: 0, flatShading: true,
-    transparent: impostorOpacity < 1, opacity: Math.max(.08, Math.min(1, impostorOpacity)),
+    transparent: true, opacity: Math.max(.08, Math.min(1, impostorOpacity)),
     depthWrite: true, side: THREE.DoubleSide,
   });
   if (sway) patchSway(impMat, { ...sway, strength: (sway.strength ?? .07) * .5, yScale: .5 });
+  patchInstanceAlpha(impMat);                   // F37 — fade por instância
+  // F37 — alpha por instância (1 slot por chunk; update() escreve o fade da
+  // banda — smoothstep nas duas bordas; slots fora da faixa ficam em 0)
+  const impAlpha = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, chunks.length)), 1);
+  impAlpha.setUsage(THREE.DynamicDrawUsage);
+  impGeo.setAttribute('instanceAlpha', impAlpha);
   const impostors = new THREE.InstancedMesh(impGeo, impMat, Math.max(1, chunks.length));
   impostors.name = 'grassImpostors';
   impostors.castShadow = false; impostors.receiveShadow = true;
@@ -541,8 +613,39 @@ export function buildGrassFieldLOD({
   const impColor = new THREE.Color();
   const impDummy = new THREE.Object3D();
 
+  // F37 — campo de SOMBRAS DE CONTATO: 1 InstancedMesh espelho dos impostores
+  // (1 disco por chunk na banda), mesma varredura de update — a sombra nasce,
+  // acompanha e morre COM a mancha (mesmo alpha por instância). Ancoragem no
+  // relevo: a instância usa o MESMO ch.y dos tufos do chunk (média das alturas
+  // de plantio — o terreno sob o capim) com lift fino anti-z-fight. Material
+  // transparente sem depthWrite (só escurece), polygonOffset empurra contra
+  // o terreno; zero custo quando a banda está vazia.
+  const shMat = new THREE.MeshBasicMaterial({
+    color: '#000000', vertexColors: true, transparent: true,
+    opacity: Math.max(.05, Math.min(1, impostorShadowOpacity)),
+    depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  patchInstanceAlpha(shMat);                    // mesma dança de fade da mancha
+  const shGeo = grassShadowGeometry();
+  const shAlpha = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, chunks.length)), 1);
+  shAlpha.setUsage(THREE.DynamicDrawUsage);
+  shGeo.setAttribute('instanceAlpha', shAlpha);
+  const impostorShadows = new THREE.InstancedMesh(shGeo, shMat, Math.max(1, chunks.length));
+  impostorShadows.name = 'grassImpostorShadows';
+  impostorShadows.castShadow = false; impostorShadows.receiveShadow = false;
+  impostorShadows.renderOrder = 1;              // depois do terreno, antes do impostor
+  impostorShadows.count = 0;
+  impostorShadows.visible = false;
+  group.add(impostorShadows);
+  const shDummy = new THREE.Object3D();
+  const useShadow = !!impostorShadow && impostorDist > midDist;
+
   return {
     group, chunks, mats, impostors, impostorMats: [impMat], nearDist, midDist, sparseKeep, impostorDist,
+    // F37 — fade da banda + sombras de contato (espeixo do campo de impostores)
+    impostorFadeZone, impostorShadows, impostorShadowMats: [shMat],
+    impostorShadowRadius, impostorShadowLift,
     update(camX = 0, camZ = 0) {
       let imp = 0;
       const hasImpostor = impostorDist > midDist;
@@ -553,12 +656,27 @@ export function buildGrassFieldLOD({
         if (tier === 'impostor') {
           ch.mesh.visible = false;
           if (!hasImpostor) continue;
+          // F37 — fade SUAVE: alpha 0 na entrada da banda → nem empacota
+          // (custo de draw 0 enquanto invisível, como o tier hidden)
+          const fade = grassImpostorFade(d, { midDist, impostorDist, fadeZone: impostorFadeZone });
+          if (fade <= 0.002) continue;
           // empacota o impostor deste chunk na posição livre
           impDummy.position.set(ch.x, ch.y ?? 0, ch.z);
           impDummy.rotation.set(0, (ch.kx * 7 + ch.kz * 13) % 6, 0);
           impDummy.scale.setScalar(1);
           impDummy.updateMatrix();
           impostors.setMatrixAt(imp, impDummy.matrix);
+          impAlpha.setX(imp, fade);               // F37 — opacidade por distância
+          // sombra de contato: mesmo ancoramento no relevo (ch.y + lift),
+          // disco de raio fixo cobrindo a base do quad cruzado
+          if (useShadow) {
+            shDummy.position.set(ch.x, (ch.y ?? 0) + impostorShadowLift, ch.z);
+            shDummy.rotation.set(0, 0, 0);        // disco é radial — sem rotação
+            shDummy.scale.setScalar(impostorShadowRadius);
+            shDummy.updateMatrix();
+            impostorShadows.setMatrixAt(imp, shDummy.matrix);
+            shAlpha.setX(imp, fade);              // sombra acompanha o fade
+          }
           // tint médio das famílias (mesma rotação determinística dos tufos);
           // módulo positivo — kx/kz podem ser NEGATIVOS (chunks a oeste/norte)
           impColor.copy(tintCols[((ch.kx + ch.kz) % tintCols.length + tintCols.length) % tintCols.length]);
@@ -573,6 +691,11 @@ export function buildGrassFieldLOD({
       impostors.visible = imp > 0;
       if (impostors.instanceColor) impostors.instanceColor.needsUpdate = true;
       impostors.computeBoundingSphere?.();
+      impostorShadows.count = useShadow ? imp : 0;   // F37 — espelho da banda
+      impostorShadows.visible = useShadow && imp > 0;
+      impAlpha.needsUpdate = true;                   // alphas escritos neste frame
+      shAlpha.needsUpdate = true;
+      impostorShadows.computeBoundingSphere?.();
       return this;
     },
   };

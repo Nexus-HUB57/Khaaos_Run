@@ -87,3 +87,24 @@ export function hudAuraFor({ weaponId = null, weaponSkin = null, mythicStage = 0
 // 15/07 (inverno no hemisfério sul). NÃO usa relógio real nos testes: a data
 // é sempre INJETADA em hudAuraFor; este fallback só existe p/ robustez.
 export const AURA_FALLBACK_DATE = new Date(2026, 6, 15, 12, 0, 0);
+
+// ------------------------------------------------------- ícone da arma ----
+// Fase 37 — o ÍCONE da arma no inventário (painel de arma do HUD) entra no
+// festival sazonal: recebe as MESMAS variáveis da temporada que o badge e a
+// vinheta (fonte única de decisão = hudAuraFor), mapeadas aqui de forma PURA
+// para o contrato CSS do ícone:
+//   --aura        → cor da skin mítica (identidade — nunca substituída);
+//   --aura-season → cor TINGIDA pela estação (glow/varredura do ícone);
+//   --aura-dur    → ritmo das animações (inverno calmo, primavera frenético).
+// Retorna null quando NÃO há aura ativa ou o hex do catálogo é inválido —
+// hud3d então limpa as variáveis (ícone neutro, custo 0).
+export function weaponIconVars(aura = null, mythicHex = null) {
+  if (!aura || !aura.active) return null;
+  if (typeof mythicHex !== 'string' || !/^#[0-9a-f]{6}$/i.test(mythicHex)) return null;
+  return Object.freeze({
+    aura: mythicHex,
+    season: shiftAuraHex(mythicHex, aura.hueShift),
+    dur: String(aura.durMul),
+    shimmerAngle: aura.shimmerAngle,
+  });
+}

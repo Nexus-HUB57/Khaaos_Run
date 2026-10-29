@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   HUD_SEASONS, seasonIndexForMonth, seasonIndexFor, shiftAuraHex, hudAuraFor,
+  weaponIconVars,   // F37 — ícone da arma no inventário (mapeamento puro)
 } from '../src/game3d/aura3d.js';
 import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
 
@@ -93,4 +94,42 @@ test('F36 · hudAuraFor ativa: estação coerente com a data e ritmo da temporad
   // estágio sujo (0/NaN/99) clampa para 1..4
   assert.equal(hudAuraFor({ weaponSkin: 'MITICA', mythicStage: 99 }).stage, 4);
   assert.equal(hudAuraFor({ weaponSkin: 'MITICA', mythicStage: 0 }).stage, 1);
+});
+
+// ================================== Fase 37 — ícone da arma no inventário ====
+
+test('F37 · weaponIconVars: variáveis da temporada mapeadas para o ícone (PURO)', () => {
+  // com aura ativa + hex do catálogo: MESMAS variáveis do badge/vinheta
+  const aura = hudAuraFor({ weaponId: 'shotgun', weaponSkin: 'MITICA', mythicStage: 2, now: new Date(2026, 6, 15) });
+  const v = weaponIconVars(aura, '#ff2d78');
+  assert.ok(v, 'aura mítica ativa → variáveis do ícone');
+  assert.equal(v.aura, '#ff2d78', 'identidade da skin preservada (--aura)');
+  assert.equal(v.season, shiftAuraHex('#ff2d78', aura.hueShift), 'glow TINGIDO pela estação (--aura-season)');
+  assert.equal(v.dur, String(aura.durMul), 'ritmo da temporada (--aura-dur)');
+  assert.equal(v.shimmerAngle, aura.shimmerAngle, 'ângulo do shimmer da estação');
+  // 4 estações: season muda, identidade NUNCA
+  for (const m of [0, 3, 6, 9]) {
+    const a = hudAuraFor({ weaponSkin: 'MITICA', now: new Date(2026, m, 15) });
+    const vv = weaponIconVars(a, '#4d9bff');
+    assert.equal(vv.aura, '#4d9bff', `mês ${m}: identidade intacta`);
+    assert.equal(vv.season, shiftAuraHex('#4d9bff', a.hueShift));
+    assert.ok(/^#[0-9a-f]{6}$/i.test(vv.season), `mês ${m}: season hex canônico`);
+  }
+  // congelado (contrato de objeto compartilhado com o DOM)
+  assert.ok(Object.isFrozen(v), 'retorno congelado');
+});
+
+test('F37 · weaponIconVars: null sem aura ou com hex inválido (ícone neutro, custo 0)', () => {
+  // sem skin mítica → hudAuraFor null → ícone neutro
+  assert.equal(weaponIconVars(null, '#ff2d78'), null, 'sem aura → null');
+  // aura inativa (guard defensivo — hudAuraFor nunca devolve active:false, mas
+  // o contrato do mapper é robusto)
+  assert.equal(weaponIconVars({ active: false }, '#ff2d78'), null, 'aura.inactive → null');
+  // hex inválido/lixo → null (catálogo é a fonte; HUD não inventa cor)
+  const aura = hudAuraFor({ weaponSkin: 'MITICA', now: new Date(2026, 6, 15) });
+  assert.equal(weaponIconVars(aura, null), null, 'hex null → null');
+  assert.equal(weaponIconVars(aura, 'rosa'), null, 'hex lixo → null');
+  assert.equal(weaponIconVars(aura, '#ff2d7'), null, 'hex curto → null');
+  assert.equal(weaponIconVars(aura, '#ff2d788'), null, 'hex longo → null');
+  assert.equal(weaponIconVars(aura, undefined), null, 'hex undefined → null');
 });
