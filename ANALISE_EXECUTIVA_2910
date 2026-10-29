@@ -1,0 +1,839 @@
+ANÁLISE DE REPOSITÓRIO  •  29 OUT 2026
+
+KHAAOS RUN
+
+Resumo executivo técnico end-to-end
+
+Profundidade avançada para liderança de engenharia, arquitetos e desenvolvedores sêniores
+
+Parecer: avançar o vertical slice com gates explícitos; não declarar produção UE5 nem habilitar pagamentos reais com a evidência atual.
+
+A plataforma possui implementação substancial, testes executáveis e mecanismos relevantes de consistência. A próxima alavanca de valor é reduzir divergências entre trilhas e converter código/configuração em evidência operacional reproduzível.
+
+Repositório: Nexus-HUB57/Khaaos_Run
+
+Revisão imutável analisada: ddf8395bf6d47b8c9766540f93627bccc6132f5f
+
+Commit: fix: harden Redis room ownership lifecycleData do commit: 29/10/2026, 11:42:52 UTC
+
+Base: inspeção estática orientada a risco + execução local de typecheck, builds, testes oficiais, testes do runtime e regras C++ portáveis.
+
+Documento analítico independente. Não constitui certificação de segurança, parecer jurídico, auditoria financeira ou validação de produção. Termos “Ph.D” indicam profundidade técnica solicitada, não credencial ou certificação.
+
+
+
+Sumário
+
+
+
+2. Arquitetura, fronteiras e responsabilidades
+
+3. Jornada end-to-end e contratos de domínio
+
+4. Realtime, netcode e consistência distribuída
+
+5. Dados, ledger e protocolo econômico
+
+6. Pagamentos, identidade e limites de confiança
+
+7. Unreal, EOS, EAC e pipeline de conteúdo
+
+8. Verificação executada e interpretação dos testes
+
+9. CI/CD, SRE e capacidade
+
+10. Riscos priorizados e decisões arquiteturais
+
+11. Plano de convergência e gates de aceite
+
+12. Método, limites e reprodução
+
+
+
+Como ler
+
+As seções iniciais condensam a decisão executiva. O núcleo aprofunda jornada, consistência, economia e segurança. As seções finais registram verificações, riscos, gates e fontes rastreáveis.
+
+Convenção de evidência: EXECUTADO = observado nesta sessão; CÓDIGO = inspeção do snapshot; DECLARADO = documentação do projeto; PROPOSTO = recomendação deste relatório.
+
+Não se equipara teste unitário a integração real, build Vite a build Unreal, número de testes a cobertura, nem workflow versionado a implantação bem-sucedida.
+
+
+
+1. Síntese executiva e decisão
+
+Khaaos Run é um projeto de Battle Royale multi-mundo com treinamento CIGKV e progressão por Barburhen, Priadus, Ckesalth e Arukheea. O repositório combina controle web, inventário War’I, economia KRC, simulação multiplayer, runtime 3D em navegador e uma trilha nativa Unreal Engine 5.8. O valor técnico está na integração pretendida entre experiência, autoridade de servidor e persistência; o risco principal está na distância entre abrangência implementada e aceite operacional demonstrado. [S01–S05]
+
+O que está efetivamente demonstrado
+
+EXECUTADO: TypeScript e build da aplicação raiz passaram. A suíte oficial, com configuração explícita de teste, concluiu com 430 aprovados e 8 ignorados na etapa TS/TSX; a etapa JS adicional aprovou 39 testes.
+
+EXECUTADO: runtime independente aprovou 839 testes, com 13 ignorados; seu build Vite passou. As regras C++ portáveis também passaram, sem comprovar compilação Unreal.
+
+CÓDIGO: há ledger correlacionado, idempotência, settlement de partida, tokens WS de uso único, controle de Origin, relay entre nós, leases/epochs e instrumentação de métricas.
+
+Decisão recomendada
+
+Autorizar continuidade como vertical slice e ambiente de homologação controlado. Condicionar abertura pública com integridade econômica a testes PostgreSQL/Redis reais, endurecimento de autenticação 2PC, revisão do ownership distribuído e teste ponta a ponta com clientes reais. Condicionar a trilha UE a UBT, Automation, cook e conectividade de dois clientes. Não há aqui prova de readiness comercial ou de capacidade em escala.
+
+Correção de narrativa comercial
+
+O README menciona prêmio real de US$ 1 milhão, mas a decisão arquitetural de pagamentos delimita KRC como moeda interna, sem resgate, paridade, token ou promessa de prêmio em dinheiro. Essa divergência precisa ser resolvida por produto e revisão jurídica antes de comunicação externa. O relatório adota a contenção mais restritiva: KRC interno e checkout somente sandbox, desligado por padrão. [S01, S10]
+
+Resultados são por etapa e podem se sobrepor. Não representam usuários simultâneos, cobertura percentual ou garantia de ausência de defeitos.
+
+
+
+2. Arquitetura, fronteiras e responsabilidades
+
+
+
+
+
+A aplicação raiz usa React 18, Vite 7, Express 5, WebSocket, PostgreSQL e Drizzle. Seu backend concentra autenticação, rotas, RoomManager, economia e serviços de jogo. O runtime é outro pacote: JavaScript ESM, Three.js, Vite 6 e servidor próprio. Seu README explicita que não é iniciado automaticamente pelo servidor raiz nem pelo Unreal. [S02–S04]
+
+A trilha Unreal declara EngineAssociation 5.8, módulos Runtime/Editor/EAC e plugins como GameplayAbilities, EnhancedInput, Iris e EOSIntegrationKit. Trata-se de fonte e configuração; o build nativo e o conteúdo importado/cozido são gates distintos. O economy-server é ainda um serviço econômico separado, com schema e dependências próprias. [S05, S09]
+
+Implicação arquitetural
+
+Este monorepositório é uma federação de trilhas, não evidência de um sistema único já convergente. Recomenda-se ADR vinculante que declare backend econômico canônico, cliente de referência, modelo de identidade e matriz de compatibilidade de protocolo. Validar configuração de portas, rotas e credenciais de cada implantação antes de reutilizar exemplos de Compose.
+
+Inventário local por git ls-files: 39 arquivos em .github/workflows/*, 303 .cpp e 298 .h/.hpp sob Unreal/. O primeiro total inclui um arquivo sem extensão YAML; não é contagem de workflows executáveis. Contagens históricas do README não descrevem necessariamente esta revisão.
+
+
+
+3. Jornada end-to-end e contratos de domínio
+
+
+
+
+
+
+
+Etapa
+
+
+
+Caminho funcional
+
+
+
+Invariante / critério de aceite
+
+
+
+
+
+Identidade
+
+
+
+OIDC/sessão → token WS → handshake
+
+
+
+Subject assinado determina usuário; negar Origin/token inválidos.
+
+
+
+
+
+Preparação
+
+
+
+Catálogo → War’I/PackBack → equipagem
+
+
+
+Somente itens do proprietário; carga e durabilidade verificadas.
+
+
+
+
+
+Admissão
+
+
+
+Matchmaking → sala pública ou convite
+
+
+
+Mundo/mode corretos; sala privada não entra por ID simples.
+
+
+
+
+
+Partida
+
+
+
+Input → servidor → combate/zona/loot
+
+
+
+Cliente solicita; servidor autoriza, persiste e replica.
+
+
+
+
+
+Retomada
+
+
+
+Reconnect → reancoragem → snapshot
+
+
+
+Uma participação por usuário; socket antigo não encerra o novo.
+
+
+
+
+
+Resultado
+
+
+
+Classificação → payout → ledger → leitura
+
+
+
+Crédito único e recuperação de claim intermediária.
+
+
+
+Estado e efeito lateral não são a mesma coisa
+
+MatchFlow explicita LOBBY → COUNTDOWN → IN_PROGRESS → WORLD_TRANSITION → FINISHED. RoomManager e MatchRoom3D têm responsabilidades próprias; não se deve presumir que toda configuração multi-mundo de MatchFlow esteja ativa na mesma jornada em todos os clientes. Contratos devem afirmar qual orquestrador executa cada modo e quem decide transições, vitória e eliminação. [S06]
+
+Na trilha web, a documentação de War’I descreve coleta reservada antes de persistência, aplicação de efeitos somente após gravação e rollback em falha. Esse é o padrão correto para evitar item fantasma; deve ser exercitado com banco real e falha entre etapas, não só mocks. A retomada autenticada deve recuperar o estado válido, e não criar novo jogador ou reemitir recompensa. [S11]
+
+Contrato recomendado para compatibilidade
+
+Versionar mensagens, unidades, mundo canônico, relógio/seq, ack, erro e semântica de retry. Padronizar a conversão entre identificadores CIGKV/W1… e nomes cigkv/barburhen… onde as trilhas usam representações diferentes. Para cada ação econômica, expor correlação entre usuário, sala, operação, chave de idempotência e lançamento, sem confiar em identidade, preço ou saldo enviados pelo cliente.
+
+
+
+4. Realtime, netcode e consistência distribuída
+
+O runtime 3D roda tick nominal de 20 Hz; o cliente envia inputs a 30 Hz e interpola snapshots. MatchRoom3D processa fila com seq/ack e limite por tick; LocalPredictor reexecuta inputs pendentes após corrigir pela posição autoritativa. Compartilhar stepActorMovement entre simulação, predição e servidor reduz divergência lógica, mas não prova determinismo bit a bit entre plataformas. [S04]
+
+Rewind e custo de replicação
+
+A trilha raiz tem histórico de posições e limite padrão de rewind de 250 ms. O runtime descreve outra composição de RTT, interpolação e meia tick, com clamp próprio. Esses limites devem ser tratados como políticas distintas até uma especificação única. Em competição, atraso informado pelo cliente não deve ampliar ilimitadamente a janela de acerto; validar fairness sob latência assimétrica e perda. [S07]
+
+SpatialGrid usa células e consulta de vizinhança 3×3. A complexidade depende da ocupação e do tamanho da área de interesse; o comentário O(1) não elimina custo de saída nem garante busca correta para qualquer raio. Para queryRadius maior que a vizinhança coberta, revisar alcance de células. Medir bytes/s, ocupação por célula, fan-out e custo p99 de tick antes de extrapolar capacidade. [S07]
+
+Ownership e relay
+
+RoomEventMesh espelha índice de salas e vivacidade no Redis. NodeWsGateway transporta mensagens até o nó dono, sem transferir autoridade ao nó de origem. Heartbeat de sala é nominalmente 10 s, lease 30 s; leases de nó do gateway usam outros parâmetros. Redis Pub/Sub é transporte efêmero: publicação bem-sucedida não equivale a entrega/aplicação durável nem recuperação integral da sala após crash. [S08]
+
+Revisão prioritária de fencing: RENEW_LEASE_SCRIPT renova o mesmo holder, mas o ramo alternativo incrementa epoch e sobrescreve lease mesmo quando há outro holder ainda vivo. É observação estática do primitivo, não exploit reproduzido. Formalizar aquisição sem roubo de lease e rejeição de escrita stale antes de liberar multi-réplica.
+
+Também revisar consumeInvite: leitura e escrita Redis separadas não demonstram consumo único sob concorrência; o TTL é colocado em chave auxiliar, não no hash do convite. Expiração lógica existe, mas limpeza física e exclusão mútua precisam de prova. [S08]
+
+
+
+5. Dados, ledger e protocolo econômico
+
+A camada raiz usa PostgreSQL/Drizzle para contas, inventário, histórico, ledger, escrow e claims de payout. economyMoney faz conversão para unidades mínimas e hash de requisição. O princípio é preservar exatidão monetária, escopo de proprietário e chave de replay em transações SQL; saldo na interface não é autoridade. [S09]
+
+Reserva em duas fases, não atomicidade mágica
+
+economy2pcService move saldo wallet.weapons → system.2pc_escrow em PREPARE. COMMIT move escrow ao destino; ABORT devolve à carteira. As fases usam lançamentos correlacionados, identidade do ator e hash para rejeitar reutilização divergente da chave. TTL padrão é 60 s, limitado pelo servidor. Esse desenho é um workflow persistente de reserva/liquidação: por si só não comprova commit atômico entre bancos independentes ou um coordenador de consenso distribuído. [S09]
+
+EconomyPayoutSettlement usa claims por sala/jogador e chaves determinísticas. O prepare reserva na treasury; o commit credita wallet; recovery conclui claims PREPARED órfãs. A semântica de recovery de prêmio é commit-forward, diferente do reembolso de escrow expirado de compra. Aplicar a política errada ao tipo de operação pode emitir ou retirar KRC incorretamente. [S09]
+
+Invariantes a provar no banco real
+
+Saldo nunca negativo; soma algébrica dos lançamentos de cada operação igual a zero; origem econômica explícita para emissões e recompensas.
+
+Replay idêntico retorna resultado estável; mesma chave com payload diferente falha; corrida concorrente não duplica débito, item nem payout.
+
+Crash entre fases deixa estado auditável e recuperável; reconciliação detecta drift sem corrigir silenciosamente o histórico.
+
+Divergência entre implementações
+
+O economy-server separado possui handlers e tabelas próprios. No prepare inspecionado, consulta saldo, cria registro, atualiza lockedKrc com valor lido e insere ledger em chamadas separadas; não há transação envolvendo o bloco nem autenticação no entrypoint observado. Isso difere materialmente do serviço raiz. Não publicar esse caminho como equivalente seguro; ele deve ser isolado, corrigido ou aposentado com plano de migração. [S09]
+
+O journal Drizzle, e não a ordem lexicográfica dos nomes SQL, determina a sequência aplicada. Há prefixos de arquivos repetidos e arquivos fora do journal; revisar migração canônica e testar banco limpo/upgrade. Não se conclui falha de migração apenas pela nomenclatura.
+
+
+
+6. Pagamentos, identidade e limites de confiança
+
+KRC não é moeda resgatável
+
+A decisão documentada mantém KRC exclusivamente interno e sem paridade fiduciária. A rota de depósito não verificado permanece bloqueada com 503. Stripe foi selecionado para checkout sandbox Brasil, com catálogo resolvido no servidor e feature flag false por padrão. stripeConfig aceita somente chave sk_test_, webhook secret e Origin configurado; Pix depende de elegibilidade e não deve ser anunciado como disponibilidade garantida. [S10]
+
+Fluxo de confiança do checkout
+
+Cliente envia productId e chave de idempotência; servidor resolve preço e benefício. O webhook deve verificar assinatura sobre bytes originais e correlacionar sessão, ordem, SKU, moeda, valor e modo de teste. A documentação descreve inbox com deduplicação de evento e fulfillment síncrono na transação SQL antes do HTTP 200. Redirect do navegador não concede saldo. Falha de banco exige retry sem duplicar crédito; payload divergente para o mesmo event_id requer auditoria. [S10]
+
+Refund, chargeback, catálogo aprovado, suporte, tributação, idade e termos continuam gates antes de qualquer cobrança real. Não habilitar compra aleatória paga nem expansão internacional por inferência de capacidade do provedor. O relatório não executou Stripe ou operações financeiras externas.
+
+Autenticação realtime atual é mais forte que notas antigas
+
+ws-token.ts inclui jti, kid, propósito, expiração nominal de 60 s e consumo único via DistributedState. RoomManager verifica protocolo, Origin e token; o userId vem do subject. Isso supera o roadmap antigo que ainda cita replay/Origin como pendências genéricas. Verificar o comportamento efetivo do snapshot, inclusive logout/revogação, rotação de chaves e degradação de Redis, em vez de repetir status histórico. [S12]
+
+Risco de configuração 2PC: resolve2PCActor permite ator ue5-player-<playerId> sem sessão quando ECONOMY_2PC_NODE_SECRET não está definido. Não foi observado bloqueio por NODE_ENV nessa função. Exigir falha de startup ou rejeição explícita em produção; segredo ausente não pode habilitar modo dev. [S13]
+
+O hardening deve cobrir também rate limit, ownership, CSRF/Origin em rotas mutáveis, backpressure, limites de payload e redaction. Presença de módulos ou testes negativos não equivale a auditoria completa de todas as rotas.
+
+
+
+7. Unreal, EOS, EAC e pipeline de conteúdo
+
+O projeto Unreal cobre sistemas como GAS, vitalidade, anéis, mundos, economia/bridges, hierarquia, locomação e replicação. Fontes C++ e dados de intake são ativos de engenharia relevantes; não bastam para afirmar mapa jogável final, desempenho gráfico, compatibilidade mobile ou anti-cheat operacional. [S05, S14]
+
+Gates nativos independentes
+
+UBT: compilar os targets Editor, Dedicated Server e Client em instalação licenciada compatível, preservando logs e artefatos ligados ao SHA.
+
+Automation: executar suíte identificável na engine, com relatório, exit code e ausência de falhas; testes C++ portáveis são apenas uma camada anterior.
+
+Conteúdo: importar assets, resolver plugins/dependências, cozinhar mapas e empacotar. OBJ/glTF e umap.json não equivalem a .umap/.uasset finais.
+
+Rede: conectar dois clientes reais ao dedicated server, observar replicação, reconnect, expiração de identidade e falha de nó.
+
+Serviços Epic: comprovar credenciais EOS válidas, políticas do portal e EAC oficial provisionado/ativado para a plataforma alvo; stub não satisfaz o gate.
+
+Limite do que foi verificado
+
+npm run test:ue5:logic passou com compilador C++ disponível, cobrindo regras portáveis e stubs selecionados, locomação e distance matching. Não houve UBT, Editor, cook, execução gráfica, Automation na engine, login EOS real nem EAC real. [S14]
+
+docs/M4_UE5_EOS.md descreve contratos como AUTOMATION_OK, TWO_CLIENT_CONNECT_SMOKE_OK e EOS_LIVE_SMOKE_OK; também documenta skip sem licença/segredos. A declaração de cross-replica com p95 RTT 1,0 ms é evidência histórica relatada pelo projeto, não medição reproduzida aqui e não demonstra latência WAN. EOSManager.ts, especificamente, fabrica epicAccountId/token e não valida idToken no método inspecionado: é simulação, não autenticação Epic. [S14]
+
+Integridade de checkout dos assets
+
+A clonagem pública teve sucesso, mas o Git LFS alertou 113 arquivos que deveriam ser pointers e não eram; git status mostrou modificações de assets após checkout. Não houve correção ou reset. Validar .gitattributes, normalização LFS e hashes dos binários antes de concluir reprodutibilidade de distribuição. O achado não prova perda de conteúdo; prova necessidade de revisão do pipeline.
+
+
+
+8. Verificação executada e interpretação dos testes
+
+
+
+
+
+
+
+Etapa
+
+
+
+Resultado observado
+
+
+
+Interpretação
+
+
+
+
+
+TypeScript / raiz
+
+
+
+npm run check: exit 0
+
+
+
+Tipagem aprovada; não valida serviços reais.
+
+
+
+
+
+Build / raiz
+
+
+
+npm run build: exit 0
+
+
+
+Frontend e bundle server gerados.
+
+
+
+
+
+Oficial TS/TSX
+
+
+
+430 aprovados; 8 ignorados
+
+
+
+438 testes reportados com configuração explícita.
+
+
+
+
+
+Oficial JS
+
+
+
+39 aprovados; nenhum ignorado
+
+
+
+Etapa separada após TS; não somar como cobertura.
+
+
+
+
+
+Runtime JS
+
+
+
+839 aprovados; 13 ignorados
+
+
+
+852 reportados; dependências reais condicionais.
+
+
+
+
+
+Runtime build
+
+
+
+exit 0; aviso de chunk grande
+
+
+
+main ≈ 1.029 kB minificado / 294 kB gzip.
+
+
+
+
+
+C++ portável
+
+
+
+npm run test:ue5:logic: exit 0
+
+
+
+Não é build UBT/Automation da engine.
+
+
+
+
+
+
+
+A primeira execução de npm test sem DATABASE_URL falhou ao importar private-room-access.test.ts: 417 aprovados, 1 falha e 8 ignorados. A repetição com NODE_ENV=test e DATABASE_URL apontando para endereço local de teste passou. Nenhum banco foi provisionado: essa URL resolveu inicialização, não demonstrou integração SQL. Testes PostgreSQL condicionados continuaram ignorados. Recomenda-se inicialização lazy ou bootstrap explícito de ambiente para tornar npm test hermético.
+
+Ambiente: Node v22.23.4, npm 10.9.9; dependências instaladas com npm ci --ignore-scripts. Não foram executados verify:all, cobertura instrumentada, suíte autônoma economy-server, serviços externos ou navegador gráfico.
+
+
+
+9. CI/CD, SRE e capacidade
+
+Gates que falham de verdade
+
+A CI canônica configura PostgreSQL/Redis efêmeros e comandos de teste/build. Isso é uma boa base, mas nenhuma execução remota foi consultada nesta análise. Em ci.yml, ESLint termina com || true; no workflow 10-security-scan.yml, npm audit também usa || true. Assim, essas etapas podem reportar verde mesmo com erro. O scan Trivy usa @master, uma referência móvel. Endurecer gates, preservar códigos de saída em pipelines e fixar ações por commit revisado. [S15]
+
+O Render está configurado para staging, sem autoDeploy, com REDIS_REQUIRED=true, checkout false e RUN_DB_MIGRATIONS=false. O healthCheckPath é /healthz.json, gerado por script no build: esse sinal estático não prova readiness de banco/Redis ou disponibilidade da API. Confirmar o caminho efetivo de serving e separar liveness, readiness e checks sintéticos de jornada. O startup só aplica migrações quando explicitamente habilitado. [S16]
+
+SLO publicado não é SLO atingido
+
+docs/SLO.md define disponibilidade HTTP de 99,5% em 30 dias; 99% das requisições abaixo de 500 ms; sucesso do relay de 99,9%; e saturação de pool abaixo de 90%. O orçamento de indisponibilidade de 0,5% em 30 dias equivale a 216 minutos. Esses valores são objetivos documentados, não resultados desta análise. Latência HTTP não deve substituir SLI de input-to-state, tick e frame time. [S17]
+
+Modelo mínimo de capacidade
+
+Custo de simulação depende de jogadores, entidades ativas, colisões e bots. O fan-out de replicação cresce com destinatários, entidades relevantes e frequência; índices espaciais só ajudam se snapshots e eventos realmente respeitarem AOI. Medir tick p50/p95/p99, atraso de event loop, bytes por cliente, backlog WS, GC, pool SQL e saturação Redis sob mistura realista de salas, espectadores e ações econômicas.
+
+Antes de prometer escala: definir hardware, região, taxa de tick, número de salas, duração, perfil de bot e perda/latência. Executar soak e falhas Redis/PG/nó com logs correlacionados; testar restore de backup e estabelecer RPO/RTO aprovados. Contagem de testes, perfis de carga ou Compose não são throughput demonstrado.
+
+
+
+10. Riscos priorizados e decisões arquiteturais
+
+
+
+
+
+
+
+Prioridade
+
+
+
+Achado / impacto
+
+
+
+Ação e aceite proposto
+
+
+
+
+
+P0 · exposição
+
+
+
+2PC raiz admite ator dev sem segredo; serviço econômico separado não mostra autenticação no entrypoint.
+
+
+
+Negar modo dev em produção; autenticar serviço-a-serviço; negativos 401/403 e ownership com PG real.
+
+
+
+
+
+P0 · consistência
+
+
+
+Lease pode sobrescrever outro holder ativo no primitivo inspecionado. Risco de disputa de autoridade.
+
+
+
+Aquisição condicional e fencing em mutações; teste real com pausa, partição, retomada e escrita stale.
+
+
+
+
+
+P1 · concorrência
+
+
+
+consumeInvite Redis faz get + hSet; TTL do hash não está estabelecido pela chave auxiliar.
+
+
+
+Lua/CAS para consumo único; teste de corrida e limpeza de memória após expiração.
+
+
+
+
+
+P1 · divergência
+
+
+
+Três trilhas e múltiplas economias/schemas podem evoluir com semânticas incompatíveis.
+
+
+
+ADR canônico; schema/protocolo versionados; plano de retirada ou isolamento das duplicações.
+
+
+
+
+
+P1 · entrega
+
+
+
+Gates toleram erro, skip nativo pode ficar verde; assets com alerta LFS.
+
+
+
+Separar PASS/SKIP/BLOCKED; scan bloqueante e build/cook reproduzível por SHA.
+
+
+
+
+
+P1 · mercado
+
+
+
+Prêmio real no README diverge da política KRC; live e pós-venda não aceitos.
+
+
+
+Unificar mensagem, aprovar termos e operação; manter checkout sandbox desligado.
+
+
+
+
+
+P2 · UX/custo
+
+
+
+Chunk runtime grande; prova de navegador, acessibilidade e performance mobile ausente.
+
+
+
+Code splitting e budgets; jornada real com desktop/mobile, teclado, leitor de tela e rede degradada.
+
+
+
+P0 significa prioridade de tratamento antes de exposição pública relevante, não prova de exploração ou severidade CVSS atribuída. Findings de segurança e concorrência acima resultam de leitura de código; não foram reproduzidos como ataques nesta sessão.
+
+ADRs que reduzem ambiguidade
+
+Autoridade: qual backend decide sala, inventário, economia e resultado por modo, e qual estado sobrevive a crash.
+
+Consistência: uma única política de acquisition/renewal/fencing, retry e recuperação, incluindo degradação quando Redis não responde.
+
+Produto: cliente de referência e matriz de paridade web/runtime/Unreal; KRC interno e fronteira explícita com pagamentos fiduciários.
+
+
+
+11. Plano de convergência e gates de aceite
+
+Plano proposto por sequência de dependências, sem estimativa de prazo ou equipe: os responsáveis abaixo são papéis sugeridos, não pessoas designadas.
+
+
+
+
+
+
+
+Gate / responsável
+
+
+
+Entrega objetiva
+
+
+
+Evidência exigida para avançar
+
+
+
+
+
+G0 · Arquitetura + Produto
+
+
+
+Fixar backend, identidade, economia e política KRC canônicos.
+
+
+
+ADRs aprovados; rotas/serviços expostos inventariados; mensagem comercial consistente.
+
+
+
+
+
+G1 · Segurança + Backend
+
+
+
+Fechar autenticação 2PC, isolamento econômico e ownership.
+
+
+
+Startup recusa config insegura; testes negativos; saldo/ledger intactos em requests não autorizados.
+
+
+
+
+
+G2 · Dados + Backend
+
+
+
+Validar banco limpo, upgrade, ledger e recuperação.
+
+
+
+Migrações pelo journal; concorrência e replay; reconciliação sem drift; restore em ambiente isolado.
+
+
+
+
+
+G3 · Realtime + SRE
+
+
+
+Provar ownership único e relay sob falhas reais.
+
+
+
+Duas instâncias + Redis/PG; partição/pausa/kill; stale writer rejeitado; métricas e logs por SHA.
+
+
+
+
+
+G4 · QA + Frontend
+
+
+
+Jornada completa com clientes e identidade reais.
+
+
+
+Login → equipar → entrar → lutar → reconnect → resultado → leitura persistida; capturas e traces.
+
+
+
+
+
+G5 · Unreal + DevOps
+
+
+
+Qualificar trilha UE e Epic.
+
+
+
+UBT + Automation + cook/package + dois clientes; EOS/EAC reais; artefatos assinados e rastreáveis.
+
+
+
+
+
+G6 · SRE + Produto
+
+
+
+Autorizar rollout limitado e eventual monetização.
+
+
+
+SLO observado; rollback exercitado; suporte e incidentes; jurídico/fiscal e pós-venda aprovados.
+
+
+
+Pacote mínimo de evidência por release
+
+Guardar commit, lockfiles, inventário de assets/licenças, migrações aplicadas, configuração sem segredos, comandos, exit codes, testes ignorados com motivo, relatórios de carga e IDs de artefatos. Um check verde sem dependência obrigatória disponível deve ser apresentado como BLOCKED/SKIPPED no gate de release, nunca como aceite concluído.
+
+Conclusão executiva
+
+A prioridade não é ampliar a lista de funcionalidades: é convergir autoridade, provar integridade sob falha e produzir uma release reproduzível. A base permite evolução séria; o go-live exige fechar os gates de identidade, dados, distribuição e ambiente nativo.
+
+
+
+12. Método, limites e reprodução
+
+A análise foi realizada sobre clone shallow público, fixado no SHA indicado na capa. gh repo clone não executou por ausência de autenticação do GitHub CLI; a alternativa git clone --depth 1 via HTTPS funcionou. Não foram acessados secrets, banco de produto, contas Stripe/Epic, GitHub Actions remotas ou infraestrutura de produção.
+
+Comandos efetivamente executados
+
+git clone --depth 1 https://github.com/Nexus-HUB57/Khaaos_Run.git /home/user/Khaaos_Run
+
+npm ci --ignore-scripts --no-audit --no-fund
+
+npm run check
+
+npm test
+
+DATABASE_URL=postgres://test:test@127.0.0.1:5432/khaaos_test NODE_ENV=test npm test
+
+npm run build
+
+npm run test:ue5:logic
+
+cd game-runtime
+
+npm ci --ignore-scripts --no-audit --no-fund
+
+npm test
+
+npm run build
+
+Limites de inferência
+
+Inspeção orientada a arquitetura e caminhos críticos não é revisão exaustiva de todas as linhas. Sucesso de teste comprova apenas os cenários exercitados. A URL PostgreSQL usada na repetição foi configuração local de teste, sem servidor ativo provisionado; não substitui TEST_DATABASE_URL e execução real das integrações. Não se obteve percentual de cobertura instrumentada nem se mediu concorrência, latência WAN, FPS, custos ou restore.
+
+Documentos do projeto têm datas e estados diferentes. Priorizou-se o código atual para controles concretos e a execução local para resultados; declarações históricas foram rotuladas. A área de trabalho apresentou alterações de assets induzidas pelo filtro LFS no checkout e arquivos de build locais; nenhuma alteração foi commitada nem enviada ao repositório remoto.
+
+Trilha de verificação local
+
+Logs preservados nesta sessão: khaaos-check.log, khaaos-tests.log, khaaos-tests-configured.log, khaaos-build.log, khaaos-runtime-test.log, khaaos-runtime-build.log e khaaos-cpp.log. Os caminhos são do sandbox efêmero; este DOCX contém os resultados essenciais, não depende da persistência desses logs.
+
+
+
+13. Fontes rastreáveis do snapshot
+
+Cada link aponta para a revisão imutável analisada. Os identificadores Sxx são usados no corpo. Documentação é fonte declarativa; código é fonte de comportamento inspecionado; resultados locais estão registrados na seção de verificação.
+
+[S01] Visão, mundos e status — README.md
+
+[S02] Scripts e dependências da aplicação — package.json
+
+[S03] Inicialização e rotas — server/index.ts
+
+[S03] Registro de APIs e integração dos serviços — server/routes.ts
+
+[S04] Escopo e netcode do runtime independente — game-runtime/README.md
+
+[S04] Sala autoritativa 3D — game-runtime/server/room3d.js
+
+[S04] Predição local — game-runtime/src/game3d/predict3d.js
+
+[S05] Declaração de módulos e engine — Unreal/KhaaosRun/KhaaosRun.uproject
+
+[S06] Máquina de estados e pipeline multi-mundo — server/game/MatchFlow.ts
+
+[S06] Sala, handshake e jornada web — server/game/RoomManager.ts
+
+[S07] Rewind e limites da trilha raiz — server/game/LagCompensation.ts
+
+[S07] Índice espacial e consulta 3×3 — server/game/SpatialGrid.ts
+
+[S08] Leases, convites e fencing (Lua a partir da linha 92; consumo Redis na linha 327) — server/game/RoomEventMesh.ts
+
+[S08] Relay entre nós e sessões virtuais — server/game/NodeWsGateway.ts
+
+[S08] Estado distribuído e consumo único — server/game/DistributedState.ts
+
+[S09] Reserva e liquidação na economia raiz — server/game/economy2pcService.ts
+
+[S09] Payout persistente e recuperação — server/game/EconomyPayoutSettlement.ts
+
+[S09] Exatidão e hash de requisição — server/game/economyMoney.ts
+
+[S09] Serviço separado: entrypoint — economy-server/src/index.ts
+
+[S09] Serviço separado: prepare/commit/abort — economy-server/src/routes/2pc.ts
+
+[S09] Ordem canônica das migrações — migrations/meta/_journal.json
+
+[S09] Modelo de dados raiz — shared/schema.ts
+
+[S10] Decisão KRC e pagamentos — docs/INTERNAL_CURRENCY_AND_PAYMENTS.md
+
+[S10] Gates do checkout sandbox — server/payments/stripeConfig.ts
+
+[S10] Serviço Stripe — server/payments/stripePaymentService.ts
+
+[S11] Roadmap e invariantes de War’I — docs/ROADMAP.md
+
+[S12] Tokens WS, jti e consumo único — server/replit_integrations/auth/ws-token.ts
+
+[S13] Autenticação e ator dev 2PC: resolve2PCActor, linha 71 — server/routes/economy-2pc.ts
+
+[S14] Aceite UE5/EOS declarado e skips — docs/M4_UE5_EOS.md
+
+[S14] EOSManager simulado — server/game/EOSManager.ts
+
+[S14] Testes C++ portáveis executados — scripts/test_ue5_logic.sh
+
+[S15] CI canônica e tolerância a erro do lint — .github/workflows/ci.yml
+
+[S15] Scan com npm audit tolerante a erro — .github/workflows/10-security-scan.yml
+
+[S16] Configuração Render e healthcheck — render.yaml
+
+[S16] Startup e migração opt-in — scripts/start.mjs
+
+[S17] Objetivos e orçamento de erro — docs/SLO.md
