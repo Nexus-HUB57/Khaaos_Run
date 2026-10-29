@@ -1487,7 +1487,11 @@ export class MatchRoom3D {
     // espelha aqui a VIDA perdida com kind 'quantum' (mesmo anel/rate-limit;
     // sem knocked: morte pela anomalia não passa pelo DBNO deste caminho).
     if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', false);
-    if (actor.life <= 0) actor.alive = false;
+    if (actor.life > 0) return;
+    // Fase 30 — morte AMBIENTAL canônica: killfeed/XP/eliminado pelo MESMO
+    // caminho de #finalizeDeath (a anomalia fura blindagem e mata DIRETO, sem
+    // DBNO; 'ANOMALIA' assume o rótulo ambiental ao lado de RING/CIGKV).
+    this.#finalizeDeath(actor, null, 'quantum');
   }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
@@ -1554,12 +1558,12 @@ export class MatchRoom3D {
       }
       this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: kind === 'headshot' });
     } else {
-      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : 'CIGKV', victim: patenteTag(actor), head: false });
+      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV', victim: patenteTag(actor), head: false });
     }
     // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
     if (!actor.isBot) {
       const placement = this.#actors().filter((a) => a.alive).length + 1;
-      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : 'CIGKV') });
+      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV') });
     }
   }
 
