@@ -16,6 +16,7 @@ import {
   TREE_ARCHETYPES, treeArchetypeFor, vegRng,
   mergeGeoms, buildTreeGeometries, buildBushGeometry, grassTuftGeometry,
   patchSway, tickVegetationWind, buildTreeField, buildBushField,
+  grassChunkify, grassChunkTier, buildGrassFieldLOD,
 } from '../src/game3d/vegetation3d.js';
 import { buildScene } from '../src/game3d/world3d.js';
 
@@ -209,4 +210,75 @@ test('F31 · W4 Arukheea: FAROL GIRANDO — beam no registry de spinners (view=t
   // mesmíssima fórmula do districts3d (axis 'z', speed .38, fase 0 no teste)
   const expect = t2 * .38;
   assert.ok(Math.abs(expect - t1 * .38) > .5, 'rotação evolui com o tempo (farol varre o mar)');
+});
+
+// ==================================================== Fase 32 ============
+// GRAMA COM LOD DE DISTÂNCIA (chunks full/sparse/hidden)
+
+test('F32 · grassChunkify: células puras, determinísticas, cobertura exata', () => {
+  const spots = [
+    { x: 1, z: 1 }, { x: 2, z: 2 },        // célula 0:0
+    { x: -30, z: 10 },                     // célula -2:0 (chunkSize 25)
+    { x: 100, z: 100 },                    // célula 4:4
+  ];
+  const chunks = grassChunkify(spots, { chunkSize: 25 });
+  assert.equal(chunks.length, 3);
+  const all = chunks.flatMap((c) => c.indices).sort((a, b) => a - b);
+  assert.deepEqual(all, [0, 1, 2, 3], 'cada spot em exatamente 1 chunk');
+  const again = grassChunkify(spots, { chunkSize: 25 });
+  assert.deepEqual(again, chunks, 'determinístico (ordem estável por célula)');
+  const c00 = chunks.find((c) => c.kx === 0 && c.kz === 0);
+  assert.ok(Math.abs(c00.x - 1.5) < 1e-9 && Math.abs(c00.z - 1.5) < 1e-9, 'centro = média dos membros');
+});
+
+test('F32 · grassChunkTier: bandas full/sparse/hidden (PURO)', () => {
+  const cfg = { nearDist: 28, midDist: 58 };
+  assert.equal(grassChunkTier(0, cfg), 'full');
+  assert.equal(grassChunkTier(27.9, cfg), 'full');
+  assert.equal(grassChunkTier(28, cfg), 'sparse');
+  assert.equal(grassChunkTier(57.9, cfg), 'sparse');
+  assert.equal(grassChunkTier(58, cfg), 'hidden');
+  assert.equal(grassChunkTier(400, cfg), 'hidden');
+});
+
+test('F32 · buildGrassFieldLOD: tiers corretos, update idempotente, oculta longe', () => {
+  const spots = [];
+  for (let i = 0; i < 300; i++) {
+    spots.push({ x: Math.sin(i * 12.9898) * 180, z: Math.cos(i * 78.233) * 180, y: 0, rot: i, s: 1, sy: 1, tintJitter: (i % 7) / 7 });
+  }
+  const lod = buildGrassFieldLOD({ spots, seed: 9, tintFamilies: ['#5a6b33', '#7a8443'], chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4 });
+  assert.ok(lod.chunks.length > 3, `chunks gerados: ${lod.chunks.length}`);
+  assert.equal(lod.mats.length, 2, '1 material por família de tint');
+  const total = lod.chunks.reduce((s, c) => s + c.fullCount, 0);
+  assert.equal(total, spots.length, 'todos os tufos plantados');
+  assert.ok(lod.chunks.every((c) => !c.mesh.visible), 'estado inicial: tudo oculto');
+  lod.update(0, 0);
+  const vis = lod.chunks.filter((c) => c.mesh.visible);
+  assert.ok(vis.length >= 1, 'chunk da origem visível');
+  for (const c of vis) {
+    const d = Math.hypot(c.x, c.z);
+    if (d < 28) assert.equal(c.mesh.count, c.fullCount, 'tier full = count cheio');
+    else if (d < 58) assert.equal(c.mesh.count, Math.max(1, Math.ceil(c.fullCount * .4)), 'tier sparse = fração');
+    else assert.fail(`chunk a ${d.toFixed(1)}m não deveria estar visível`);
+  }
+  const snap = vis.map((c) => [c.mesh.visible, c.mesh.count]);
+  lod.update(0, 0);
+  assert.deepEqual(vis.map((c) => [c.mesh.visible, c.mesh.count]), snap, 'update é idempotente');
+  lod.update(1000, 1000);
+  assert.ok(lod.chunks.every((c) => !c.mesh.visible), 'câmera longe = grama toda oculta');
+});
+
+test('F32 · buildScene: grama nasce em campo LOD com chunks e vento registrado', () => {
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(`f32-${scenarioId}`, scenarioId, null, 'high');
+    const lod = scene.userData.grassLOD;
+    assert.ok(lod, `${scenarioId}: campo de grama LOD ausente`);
+    assert.ok(lod.chunks.length >= 10, `${scenarioId}: chunks (${lod.chunks.length})`);
+    const tufts = lod.chunks.reduce((s, c) => s + c.fullCount, 0);
+    assert.ok(tufts >= 240, `${scenarioId}: tufos plantados (${tufts})`);
+    lod.update(0, 0);
+    assert.ok(lod.chunks.some((c) => c.mesh.visible && c.mesh.count > 0), `${scenarioId}: update acende chunks próximos`);
+    // vento continua registrado (copa + arbusto + 2 famílias de grama)
+    assert.ok(scene.userData.swayMats.length >= 4, `${scenarioId}: swayMats (${scene.userData.swayMats.length})`);
+  }
 });

@@ -22,8 +22,8 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './officers.js';
 // Fase 28 — Arsenal & Equipamento FF: níveis de gear, caixa de morte e airdrop
 import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
-// Fase 30 — Anexos da AR-47 (4 sockets produtivos) + skin mítica evolutiva
-import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS } from './attachments3d.js';
+// Fase 30/31/32 — anexos generalizados, skins míticas por arma e raridade dos anexos
+import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS, mythicSkinFor, attachmentRarityFor } from './attachments3d.js';
 import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
@@ -635,7 +635,8 @@ export class KhaaosSim3D {
       abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
       // Fase 30 — anexos da arma em mão + bolso (máx 4) + evolução mítica
-      weaponAttachments: [], attachmentBag: [],
+      // Fase 32 — raridade por anexo (gasto→dourado) viaja em paralelo
+      weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
@@ -648,6 +649,9 @@ export class KhaaosSim3D {
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       gear: { vest: 0, helmet: 0, pack: 0 }, // Fase 28
+      // Fase 30/32 — paridade de anexos/mítica/raridade entre TODOS os atores
+      weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
+      mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), weaponSkin: null,
       cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
@@ -669,8 +673,8 @@ export class KhaaosSim3D {
       weapon: def.weapon, weaponSkin: null, operativeId: def.operativeId, officer: true,
       officerCallsign: def.callsign, combat: officerCombatParams(BOT_COMBAT),
       cooldown: this.rng.next() * 1.2, reloadT: 0, burst: 0,
-      // Fase 30 — paridade de anexos/mítica entre TODOS os atores
-      weaponAttachments: [], attachmentBag: [],
+      // Fase 30/32 — paridade de anexos/mítica/raridade entre TODOS os atores
+      weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
@@ -1708,6 +1712,7 @@ export class KhaaosSim3D {
   #dropDeathBox(a) {
     const bundle = deathBoxContents(this.rng, {
       weapon: a.weapon, weaponSkin: a.weaponSkin, attachments: a.weaponAttachments ?? [],
+      attachmentRarities: a.attachmentRarities ?? [],
       ammoId: WEAPONS3D[a.weapon]?.ammo ?? '9MM',
       ammoReserve: a.id === 'player' ? (a.inventory.ammo[WEAPONS3D[a.weapon]?.ammo] || 0) : 40,
       medkit: a.inventory?.medkit ?? 0, frag: a.inventory?.frag ?? 0, gloo: a.inventory?.gloo ?? 0,
@@ -1816,17 +1821,28 @@ export class KhaaosSim3D {
   #pickup(a, item) {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
-      // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde)
+      // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde);
+      // Fase 32 — a raridade de cada anexo viaja em paralelo (gasto→dourado)
       if (a.weaponAttachments?.length) {
-        for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+        for (let i = 0; i < a.weaponAttachments.length; i++) {
+          if (a.attachmentBag.length < 4) {
+            a.attachmentBag.push(a.weaponAttachments[i]);
+            (a.attachmentBagRarities ??= []).push(a.attachmentRarities?.[i] ?? 'INCOMUM');
+          }
+        }
       }
       a.slots[a.activeSlot] = id; a.weapon = id;
       a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
-      // Fase 30/31 — anexos de série acompanham QUALQUER arma com sockets;
-      // mítico (skin evolutiva) continua exclusivo da AR-47
+      // Fase 30/31 — anexos de série acompanham QUALQUER arma com sockets.
+      // Fase 32 — cada anexo de série HERDA a raridade da arma (kit de arma
+      // MÍTICA nasce dourado); caixa de morte preserva as raridades originais.
       a.weaponAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
+      a.attachmentRarities = (Array.isArray(item.attachmentRarities) && item.attachmentRarities.length === a.weaponAttachments.length)
+        ? [...item.attachmentRarities]
+        : a.weaponAttachments.map(() => item.rarity ?? 'INCOMUM');
       a.mythicKills = 0;
-      a.mythicStage = item.rarity === 'MITICA' && id === 'ar47' ? 1 : 0;
+      // Fase 32 — skin mítica evolutiva em TODO o arsenal com sockets
+      a.mythicStage = item.rarity === 'MITICA' && mythicSkinFor(id) ? 1 : 0;
       this.#installBagAttachments(a);    // bolso preenche sockets livres
       this.#recalcAttachStats(a);
       a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
@@ -1838,10 +1854,14 @@ export class KhaaosSim3D {
       // (qualquer arma com sockets e compatível) ou vai para o bolso (máx 4)
       const att = ATTACHMENTS[item.id] ? item.id : null;   // id = id do catálogo
       const sockCap = weaponSockets(a.weapon).length;
+      // Fase 32 — anexo avulso nasce com raridade própria (loot rolou a tier)
+      const attRarity = attachmentRarityFor(item.rarity ?? null);
       if (att && sockCap > 0 && this.#weaponTakes(a, att) && !a.weaponAttachments.includes(att) && a.weaponAttachments.length < sockCap) {
         a.weaponAttachments.push(att);
+        (a.attachmentRarities ??= []).push(attRarity);
       } else if (att && a.attachmentBag.length < 4) {
         a.attachmentBag.push(att);
+        (a.attachmentBagRarities ??= []).push(attRarity);
       }
       this.#installBagAttachments(a);
       this.#recalcAttachStats(a);
@@ -1901,10 +1921,17 @@ export class KhaaosSim3D {
     a.activeSlot = slot; a.weapon = a.slots[slot];
     a.weaponSkin = null; // skin pertence à arma coletada, não ao slot
     // Fase 30 — anexos da arma guardada voltam ao BOLSO (re-instalam na volta);
-    // evolução mítica pertence à instância coletada (reinicia)
+    // Fase 32 — raridades viajam em paralelo; evolução mítica pertence à
+    // instância coletada (reinicia)
     if (a.weaponAttachments?.length) {
-      for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+      for (let i = 0; i < a.weaponAttachments.length; i++) {
+        if (a.attachmentBag.length < 4) {
+          a.attachmentBag.push(a.weaponAttachments[i]);
+          (a.attachmentBagRarities ??= []).push(a.attachmentRarities?.[i] ?? 'INCOMUM');
+        }
+      }
       a.weaponAttachments = [];
+      a.attachmentRarities = [];
     }
     a.mythicKills = 0; a.mythicStage = 0;
     this.#installBagAttachments(a);
@@ -1934,19 +1961,27 @@ export class KhaaosSim3D {
     const sockCap = weaponSockets(a.weapon).length;
     if (!sockCap || !a.attachmentBag?.length) return;
     for (const att of [...a.attachmentBag]) {
-      if (!ATTACHMENTS[att]) { a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1); continue; }
+      const bi = a.attachmentBag.indexOf(att);
+      if (!ATTACHMENTS[att]) {
+        a.attachmentBag.splice(bi, 1);
+        a.attachmentBagRarities?.splice(bi, 1);
+        continue;
+      }
       if (a.weaponAttachments.length >= sockCap || a.weaponAttachments.includes(att) || !this.#weaponTakes(a, att)) continue;
       a.weaponAttachments.push(att);
-      a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1);
+      (a.attachmentRarities ??= []).push(a.attachmentBagRarities?.[bi] ?? 'INCOMUM');
+      a.attachmentBag.splice(bi, 1);
+      a.attachmentBagRarities?.splice(bi, 1);
     }
   }
   // Deriva os stats de combate do anexo (PURO via attachmentStats).
   #recalcAttachStats(a) {
     a.attachStats = attachmentStats(weaponSockets(a.weapon).length ? a.weaponAttachments : [], a.weapon);
   }
-  // Fase 30 — evolução da skin mítica por abate (4 estágios FF)
+  // Fase 30/32 — evolução da skin mítica por abate (4 estágios FF) — em
+  // TODO o arsenal com skin mítica (AR-47, M4, MP5, Barrett, G19)
   #creditMythic(a) {
-    if (a.weaponSkin !== 'MITICA' || a.weapon !== 'ar47') return;
+    if (a.weaponSkin !== 'MITICA' || !mythicSkinFor(a.weapon)) return;
     a.mythicKills = (a.mythicKills ?? 0) + 1;
     const stage = mythicStageFromKills(a.mythicKills);
     if (stage !== a.mythicStage) {

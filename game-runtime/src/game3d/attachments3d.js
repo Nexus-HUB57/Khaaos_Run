@@ -1,13 +1,17 @@
-// Khaaos Run — Fase 30 — ANEXOS DA AR-47 (4 sockets) + SKIN MÍTICA EVOLUTIVA.
+// Khaaos Run — Fase 30/31/32 — ANEXOS (4 sockets) + SKINS MÍTICAS EVOLUTIVAS.
 //
-// Diretiva de arte (mensagem 23 + follow-up): a AR-47 nasce com 4 sockets reais
-// (muzzle/optic/mag/grip — Fase 28). Esta fase os torna PRODUTIVOS:
-//   • ANEXOS VISUAIS — Mira 4x (optic), Silenciador (muzzle), Mag Estendida
-//     (mag) e Empunhadura Vertical (grip): cada anexo tem malha procedural
-//     própria montada na âncora do socket + efeito de gameplay real (puro);
-//   • SKIN MÍTICA EVOLUTIVA — "AR-47 · Fúria Primordial": raridade MÍTICA que
-//     EVOLUI por abates (4 estágios FF): runas emissivas → núcleo de energia →
-//     aleta holográfica + aura. Estágio derivado de kills (função PURA).
+// Diretiva de arte (mensagem 23 + follow-ups): a AR-47 nasceu com 4 sockets
+// reais (muzzle/optic/mag/grip — Fase 28); a Fase 31 generalizou os sockets
+// para M4/MP5/G19/Barrett. A Fase 32 fecha o ciclo end-to-end:
+//   • SKINS MÍTICAS PARA O ARSENAL — MYTHIC_SKINS: cada arma com sockets tem
+//     identidade mítica PRÓPRIA (nome, cor de aura e encaixe do overlay).
+//     Evolução idêntica à da AR-47: 4 estágios por abates (função PURA);
+//   • ANEXOS POR RARIDADE — variantes visuais GASTO→DOURADO: o MESMO anexo
+//     nasce COMUM (metal riscado, fosco), INCOMUM (padrão), RARO (acento
+//     violeta), LENDÁRIO (ouro fosco) ou MÍTICO (ouro polido + emissivo) —
+//     chip de raridade legível à distância, material por raridade (memo);
+//   • FIT POR ARMA — o overlay mítico escala/desloca por arma (pistola .55×,
+//     sniper 1.6×) sem tocar as fábricas de armas.
 //
 // Contrato headless (idêntico ao gear3d): fábricas usam apenas THREE
 // (Group/Mesh — sem document/canvas), lógica é PURA e determinística, e os
@@ -61,11 +65,51 @@ export function attachmentStats(attachments = [], weaponId = null) {
 }
 
 // ---------------------------------------------------------------- evolução ----
-export const MYTHIC_SKIN = Object.freeze({
-  id: 'MITICA', weapon: 'ar47', stages: 4,
-  name: 'AR-47 · Fúria Primordial',
-  aura: '#ff2d78',
+// Fase 32 — CATÁLOGO MÍTICO POR ARMA: toda arma com sockets tem skin
+// evolutiva própria (mesma régua de estágios; identidade visual distinta).
+//   fit — encaixe do overlay no corpo da arma (escala/offset local): pistola
+//   é ~1/3 do fuzil, sniper ~1.6×. O overlay é genérico (spine/runas); o fit
+//   o assenta em cada silhueta sem tocar as fábricas de armas.
+export const MYTHIC_SKINS = Object.freeze({
+  ar47: Object.freeze({
+    id: 'MITICA', weapon: 'ar47', stages: 4,
+    name: 'AR-47 · Fúria Primordial',
+    aura: '#ff2d78',                              // rosa-caos (assinatura F30)
+    fit: Object.freeze({ scale: 1, y: 0, z: 0 }),
+  }),
+  m4: Object.freeze({
+    id: 'MITICA', weapon: 'm4', stages: 4,
+    name: 'M4 · Sentinela de Éter',
+    aura: '#35e1ff',                              // ciano-éter (linha fria)
+    fit: Object.freeze({ scale: 1.22, y: 0, z: -.05 }),
+  }),
+  mp5: Object.freeze({
+    id: 'MITICA', weapon: 'mp5', stages: 4,
+    name: 'MP5 · Vaga-lume Urbano',
+    aura: '#b6ff3c',                              // lima-tóxica (bioluminescência)
+    fit: Object.freeze({ scale: .88, y: 0, z: -.06 }),
+  }),
+  barrett: Object.freeze({
+    id: 'MITICA', weapon: 'barrett', stages: 4,
+    name: 'Barrett · Julgamento Orbital',
+    aura: '#b47bff',                              // violeta-orbital
+    fit: Object.freeze({ scale: 1.6, y: .02, z: -.1 }),
+  }),
+  g19: Object.freeze({
+    id: 'MITICA', weapon: 'g19', stages: 4,
+    name: 'G19 · Eco Espectral',
+    aura: '#8ef7e0',                              // menta-espectral
+    fit: Object.freeze({ scale: .55, y: 0, z: -.02 }),
+  }),
 });
+
+// Alias legado (Fase 30) — a AR-47 continua sendo a referência canônica.
+export const MYTHIC_SKIN = MYTHIC_SKINS.ar47;
+
+// Resolução PURA: skin mítica da arma (null se não tiver — sucata/pulse).
+export function mythicSkinFor(weaponId = null) {
+  return MYTHIC_SKINS[weaponId] ?? null;
+}
 
 export const MYTHIC_STAGE_NAMES = Object.freeze([
   'Forja Bruta', 'Marca do Caos', 'Despertar Primordial', 'Fúria Primordial',
@@ -81,7 +125,38 @@ export function mythicStageFromKills(kills = 0) {
   return 1;
 }
 
-// --------------------------------------------------------- materiais ----
+// ---------------------------------------------- raridade dos anexos ----
+// Fase 32 — TRATAMENTO DE MATERIAL POR RARIDADE (visual gasto→dourado).
+// O MESMO anexo é forjado em 5 acabamentos; leitura à distância pelo CHIP
+// emissivo (cor = tabela central RARITIES) + corpo/acentos:
+//   COMUM    — metal GASTO: fosco, escurecido, com arranhões claros;
+//   INCOMUM  — padrão de fábrica (tabela da F30) + chip ciano;
+//   RARO     — corpo padrão + acentos violeta emissivos;
+//   LENDARIO — banho de ouro FOSCO nos acentos;
+//   MITICA   — ouro POLIDO + emissivo dourado (vitrine de end-game).
+export const ATTACHMENT_RARITY_TREATMENTS = Object.freeze({
+  COMUM: Object.freeze({ body: '#33363a', rough: .9, metal: .3, accent: null, chip: '#b7c2c7', glow: 0, worn: true }),
+  INCOMUM: Object.freeze({ body: '#1c1f24', rough: .55, metal: .7, accent: '#42d9de', chip: '#42d9de', glow: .8, worn: false }),
+  RARO: Object.freeze({ body: '#1c1f24', rough: .5, metal: .74, accent: '#a875ff', chip: '#a875ff', glow: 1.1, worn: false }),
+  LENDARIO: Object.freeze({ body: '#3d3423', rough: .38, metal: .88, accent: '#ffb52e', chip: '#ffb52e', glow: 1.3, worn: false }),
+  MITICA: Object.freeze({ body: '#c9a23f', rough: .16, metal: .95, accent: '#ffd75e', chip: '#ffd75e', glow: 1.8, worn: false }),
+});
+
+// Resolução da raridade de um anexo: mapa {id:rarity}, array paralelo,
+// string única ou null (padrão INCOMUM — retrocompatível com F30/31). PURA.
+export function attachmentRarityFor(rarities, attachId = null, index = 0) {
+  if (typeof rarities === 'string') return ATTACHMENT_RARITY_TREATMENTS[rarities] ? rarities : 'INCOMUM';
+  if (Array.isArray(rarities)) {
+    const r = rarities[index] ?? rarities[attachId];
+    return ATTACHMENT_RARITY_TREATMENTS[r] ? r : 'INCOMUM';
+  }
+  if (rarities && typeof rarities === 'object') {
+    const r = rarities[attachId];
+    return ATTACHMENT_RARITY_TREATMENTS[r] ? r : 'INCOMUM';
+  }
+  return 'INCOMUM';
+}
+
 const M = (color, o = {}) => new THREE.MeshStandardMaterial({
   color, roughness: o.rough ?? .55, metalness: o.metal ?? .6, ...o.extra,
 });
@@ -103,15 +178,22 @@ function glowMat(color, intensity = 1.4) {
 // ------------------------------------------------- malhas dos anexos ----
 // Cada fábrica retorna um Group com pivô NA ÂNCORA do socket (origem local =
 // ponto de montagem). Z- = frente da arma (mesma convenção das fábricas F28).
-export function buildAttachmentMesh(attachId) {
+export function buildAttachmentMesh(attachId, { rarity = 'INCOMUM' } = {}) {
   const def = ATTACHMENTS[attachId];
   const g = new THREE.Group();
   g.name = `attach_${def?.id ?? attachId}`;
   if (!def) return g;
 
-  const gunMetal = memo('att.metal', () => M('#1c1f24', { rough: .4, metal: .82 }));
-  const gunDark = memo('att.dark', () => M('#101215', { rough: .5, metal: .7 }));
-  const polymer = memo('att.poly', () => M('#26292e', { rough: .78, metal: .12 }));
+  // Fase 32 — acabamento por raridade (memo com chave de raridade: zero
+  // vazamento de material entre tiers; acentos/chip são da cor do tier).
+  const tier = ATTACHMENT_RARITY_TREATMENTS[rarity] ? rarity : 'INCOMUM';
+  const treat = ATTACHMENT_RARITY_TREATMENTS[tier];
+  g.userData.rarity = tier;
+  const gunMetal = memo(`att.metal:${tier}`, () => M(treat.body, { rough: treat.rough, metal: treat.metal }));
+  const gunDark = memo(`att.dark:${tier}`, () => M('#101215', { rough: Math.min(.92, treat.rough + .12), metal: treat.metal * .82 }));
+  const polymer = memo(`att.poly:${tier}`, () => M('#26292e', { rough: Math.max(.6, treat.rough + .2), metal: .12 }));
+  const accentM = treat.accent ? glowMat(treat.accent, treat.glow) : gunMetal;
+  const chipM = memo(`att.chip:${tier}`, () => glowMat(treat.chip, treat.glow + .5));
 
   if (attachId === 'mira4x') {
     // tubo da luneta + objetiva azul emissiva + montagem em rail
@@ -122,19 +204,21 @@ export function buildAttachmentMesh(attachId) {
     const lensM = glowMat('#3b82f6', 1.1); lensM.roughness = .15;
     const lens = cyl(.026, .026, .012, lensM, 0, .045, -.085, 10);
     lens.rotation.x = Math.PI / 2; lens.name = 'opticLens';
-    const mount = box(.03, .05, .07, gunDark, 0, .005, .02);
+    const mount = box(.03, .05, .07, treat.accent ? accentM : gunDark, 0, .005, .02);
     g.add(tube, ocular, lens, mount);
+    if (treat.worn) g.add(box(.021, .006, .05, wearMat(), .02, .052, -.01)); // risco no tubo
   } else if (attachId === 'silenciador') {
     // supressor cilíndrico com anéis de dissipação
     const body = cyl(.042, .042, .19, gunDark, 0, .015, -.095, 12);
     body.rotation.x = Math.PI / 2; body.name = 'suppressor';
-    const ring1 = cyl(.048, .048, .02, gunMetal, 0, .015, -.035, 12);
+    const ring1 = cyl(.048, .048, .02, accentM, 0, .015, -.035, 12);
     ring1.rotation.x = Math.PI / 2;
-    const ring2 = cyl(.048, .048, .02, gunMetal, 0, .015, -.09, 12);
+    const ring2 = cyl(.048, .048, .02, accentM, 0, .015, -.09, 12);
     ring2.rotation.x = Math.PI / 2;
     const tip = cyl(.03, .03, .015, gunMetal, 0, .015, -.19, 10);
     tip.rotation.x = Math.PI / 2;
     g.add(body, ring1, ring2, tip);
+    if (treat.worn) g.add(box(.05, .005, .045, wearMat(), 0, .043, -.05));  // risco no corpo
   } else if (attachId === 'magestendida') {
     // pente alongado levemente curvado (2 segmentos) + base reforçada
     const upper = box(.055, .16, .088, gunDark, 0, -.06, -.004);
@@ -143,32 +227,53 @@ export function buildAttachmentMesh(attachId) {
     lower.rotation.x = .22;
     const base = box(.06, .035, .09, polymer, 0, -.248, -.038);
     base.rotation.x = .22;
-    const band = box(.058, .02, .09, glowMat('#c8ff3d', .5), 0, -.13, -.012);
+    const band = box(.058, .02, .09, accentM, 0, -.13, -.012);
     band.rotation.x = .16; band.name = 'magBand';
     g.add(upper, lower, base, band);
+    if (treat.worn) g.add(box(.056, .005, .05, wearMat(), 0, -.09, .042));  // risco no pente
   } else if (attachId === 'gripvertical') {
     // foregrip vertical com sulcos de dedos
     const stem = box(.045, .11, .05, polymer, 0, -.055, 0);
     stem.rotation.x = -.12;
-    const root = box(.07, .03, .07, gunDark, 0, .005, .006);
+    const root = box(.07, .03, .07, treat.accent ? accentM : gunDark, 0, .005, .006);
     const groove = box(.048, .02, .052, gunDark, 0, -.03, .004);
     const groove2 = box(.046, .02, .05, gunDark, 0, -.06, .008);
     const groove3 = box(.044, .02, .048, gunDark, 0, -.09, .012);
     g.add(stem, root, groove, groove2, groove3);
+    if (treat.worn) g.add(box(.046, .005, .05, wearMat(), 0, -.045, .026)); // risco no grip
   }
+
+  // CHIP DE RARIDADE — leitura de tier à distância (cor = tabela central)
+  const chipPos = {
+    mira4x: [0, .085, .02], silenciador: [0, .06, -.095],
+    magestendida: [0, -.06, .046], gripvertical: [0, .025, .006],
+  }[attachId] ?? [0, 0, 0];
+  const chip = box(.018, .018, .018, chipM, chipPos[0], chipPos[1], chipPos[2]);
+  chip.name = 'rarityChip';
+  g.add(chip);
+
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
   return g;
 }
 
-// Monta os anexos nas âncoras do socket da AR-47 (idempotente: limpa anexos
-// antigos por socket antes de montar — re-aplicar não duplica). Não-AR-47 ou
-// socket inexistente é simplesmente ignorado (contrato compat: ['ar47']).
-export function applyAttachments(weaponGroup, attachments = []) {
+// material de desgaste (arranhões claros do tier COMUM) — memo
+function wearMat() {
+  return memo('att.wear', () => M('#8b9096', { rough: .95, metal: .15 }));
+}
+
+// Monta os anexos nas âncoras do socket da arma (idempotente: limpa anexos
+// antigos por socket antes de montar — re-aplicar não duplica). Arma sem
+// âncoras ou socket inexistente é simplesmente ignorado. Fase 32: `rarities`
+// (mapa {id:rarity} | array paralelo | string | null) escolhe o acabamento
+// de cada anexo (gasto→dourado).
+export function applyAttachments(weaponGroup, attachments = [], rarities = null) {
   const sockets = weaponGroup?.userData?.sockets;
   if (!sockets) return [];
   const applied = [];
   const seen = new Set();
+  let idx = -1;
   for (const id of attachments) {
+    idx++;
     const def = ATTACHMENTS[id];
     if (!def || seen.has(def.socket)) continue;         // um anexo por socket
     seen.add(def.socket);
@@ -179,7 +284,7 @@ export function applyAttachments(weaponGroup, attachments = []) {
       anchor.remove(child);
       child.traverse?.((o) => { o.geometry?.dispose?.(); });
     }
-    const mesh = buildAttachmentMesh(id);
+    const mesh = buildAttachmentMesh(id, { rarity: attachmentRarityFor(rarities, id, idx) });
     anchor.add(mesh);
     applied.push(mesh);
   }
@@ -200,7 +305,7 @@ export function applyAttachments(weaponGroup, attachments = []) {
 // estágio. Estágio 1: faixa sutil no receiver; 2: runas laterais + ventes;
 // 3: núcleo de energia exposto + bordas incandescentes; 4: aleta holográfica
 // + faixa de aura (main3d pulsa userData.mythicPulse). Determinístico.
-export function applyMythicSkin(weaponGroup, stage = 1, { color = MYTHIC_SKIN.aura } = {}) {
+export function applyMythicSkin(weaponGroup, stage = 1, { color = MYTHIC_SKIN.aura, fit = null } = {}) {
   if (!weaponGroup || stage < 1) return null;
   const old = weaponGroup.getObjectByName('mythic_fx');
   if (old) {
@@ -213,6 +318,11 @@ export function applyMythicSkin(weaponGroup, stage = 1, { color = MYTHIC_SKIN.au
   weaponGroup.userData.mythicStage = stage;
 
   const g = new THREE.Group();
+  // Fase 32 — encaixe do overlay na silhueta da arma (escala/offset do fit)
+  if (fit && typeof fit === 'object') {
+    g.scale.setScalar(Math.max(.1, fit.scale ?? 1));
+    g.position.set(0, fit.y ?? 0, fit.z ?? 0);
+  }
   g.name = 'mythic_fx';
   const runeM = glowMat(color, 1.2 + stage * .35);
   runeM.name = 'mythicRune';

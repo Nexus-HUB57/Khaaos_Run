@@ -66,8 +66,10 @@ export function rollLoot(rng, zone = 'armory', count = 1) {
       return { ...drop, rarity, name: weapon.name, weapon: { ...weapon, damage: Math.round(weapon.damage * RARITIES[rarity].multiplier) } };
     }
     if (drop.kind === 'attachment') {
-      // Fase 30 — anexo avulso: nome resolvido do catálogo leve (mesh no 3d)
-      return { ...drop, name: ATTACHMENT_NAMES[drop.id] ?? drop.id };
+      // Fase 30 — anexo avulso: nome resolvido do catálogo leve (mesh no 3d).
+      // Fase 32 — anexo nasce COM RARIDADE própria (variantes visuais gasto→
+      // dourado no 3d): a rolagem usa a MESMA tabela de raridades das armas.
+      return { ...drop, name: ATTACHMENT_NAMES[drop.id] ?? drop.id, rarity: rollRarity(rng) };
     }
     return drop;
   });

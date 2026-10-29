@@ -1,4 +1,4 @@
-// Khaaos Run — Fase 31 — VEGETAÇÃO DE PRODUÇÃO (árvores, arbustos, grama).
+// Khaaos Run — Fase 31/32 — VEGETAÇÃO DE PRODUÇÃO + GRAMA COM LOD (árvores, arbustos, grama).
 //
 // Diretiva: "árvores realistas e arbustos, gramas — todas as modelagens 3D
 // nível Devs PhD". Este módulo substitui a vegetação genérica da Fase 4
@@ -339,4 +339,111 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
   if (bushes.instanceColor) bushes.instanceColor.needsUpdate = true;
   bushes.computeBoundingSphere?.();
   return bushes;
+}
+
+// ------------------------------------------- grama com LOD de distância ----
+// Fase 32 — a grama é o ativo mais CARO do cenário (milhares de tufos com
+// alpha-test e overdraw) e não precisa de detalhe longe. O campo é dividido
+// em CHUNKS (células da grade) e cada chunk assume 1 de 3 tiers pela
+// distância da CÂMERA ao centro do chunk:
+//   full   (< nearDist)  — todos os tufos do chunk;
+//   sparse (< midDist)   — fração sparseKeep dos tufos (ceil), ordem de
+//                          plantio estável — o "desbaste" não tremula ao andar;
+//   hidden (>= midDist)  — chunk invisível (visible=false, custo de render 0).
+// Custo por frame: 1 hipotenusa por chunk (dezenas) + troca de visible/count.
+// Sem reescrita de matrizes, sem duplicação de geometria, e os chunks ocultos
+// não geram draw call (frustum culling + visible=false).
+
+// Divide spots em células da grade (PURO e determinístico — ordenado por
+// chave da célula). Cada chunk carrega o CENTRO médio dos membros, usado no
+// teste de distância do LOD.
+export function grassChunkify(spots, { chunkSize = 25 } = {}) {
+  const cs = Math.max(4, chunkSize);
+  const map = new Map();
+  spots.forEach((sp, i) => {
+    const kx = Math.floor(sp.x / cs), kz = Math.floor(sp.z / cs);
+    const key = `${kx}:${kz}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(i);
+  });
+  const chunks = [];
+  for (const [key, indices] of map) {
+    const [kx, kz] = key.split(':').map(Number);
+    let sx = 0, sz = 0;
+    for (const i of indices) { sx += spots[i].x; sz += spots[i].z; }
+    chunks.push({ kx, kz, x: sx / indices.length, z: sz / indices.length, indices });
+  }
+  chunks.sort((a, b) => (a.kx - b.kx) || (a.kz - b.kz));
+  return chunks;
+}
+
+// Tier do chunk pela distância (PURO): 'full' | 'sparse' | 'hidden'.
+export function grassChunkTier(dist, { nearDist = 28, midDist = 58 } = {}) {
+  if (dist < nearDist) return 'full';
+  if (dist < midDist) return 'sparse';
+  return 'hidden';
+}
+
+// Campo de grama com LOD: 1 InstancedMesh por chunk (tinta por instância,
+// vento por shader nos materiais das famílias de tint). Retorna { group,
+// chunks, mats, update(camX, camZ) } — update só mexe em visible/count e é
+// idempotente (mesma câmera → mesmo estado). Contrato headless: funciona em
+// Node (InstancedMesh sem renderer), update é determinístico.
+export function buildGrassFieldLOD({
+  spots = [], seed = 1, texture = null, tintFamilies = ['#5a6b33'], alphaTest = .42,
+  chunkSize = 25, nearDist = 28, midDist = 58, sparseKeep = .4, sway = null,
+} = {}) {
+  const cells = grassChunkify(spots, { chunkSize });
+  const group = new THREE.Group();
+  group.name = 'grassLOD';
+  const tintCols = tintFamilies.map((c) => new THREE.Color(c));
+  const geo = grassTuftGeometry({ seed });
+  const mats = tintFamilies.map(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      map: texture ? texture.clone() : null, alphaTest, side: THREE.DoubleSide, roughness: 1, color: '#ffffff',
+    });
+    if (mat.map) mat.map.needsUpdate = true;
+    if (sway) patchSway(mat, sway);
+    return mat;
+  });
+  const dummy = new THREE.Object3D();
+  const col = new THREE.Color();
+  const chunks = [];
+  cells.forEach((cell, ci) => {
+    const mesh = new THREE.InstancedMesh(geo, mats[ci % mats.length], Math.max(1, cell.indices.length));
+    mesh.castShadow = false; mesh.receiveShadow = true;
+    cell.indices.forEach((si, li) => {
+      const sp = spots[si];
+      dummy.position.set(sp.x, sp.y ?? 0, sp.z);
+      dummy.rotation.set(0, sp.rot ?? 0, 0);
+      const s = sp.s ?? 1;
+      dummy.scale.set(s, s * (sp.sy ?? 1), s);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(li, dummy.matrix);
+      // variação de tint por tufo (mezcla as famílias de cor do mundo)
+      col.copy(tintCols[(si + ci) % tintCols.length]);
+      const j = sp.tintJitter ?? .5;
+      col.offsetHSL((j - .5) * .015, 0, (j - .5) * .1);
+      mesh.setColorAt(li, col);
+    });
+    mesh.count = cell.indices.length;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere?.();
+    mesh.visible = false;                       // update() acende o tier certo
+    group.add(mesh);
+    chunks.push({ mesh, fullCount: cell.indices.length, x: cell.x, z: cell.z });
+  });
+  return {
+    group, chunks, mats, nearDist, midDist, sparseKeep,
+    update(camX = 0, camZ = 0) {
+      for (const ch of chunks) {
+        const d = Math.hypot(ch.x - camX, ch.z - camZ);
+        const tier = grassChunkTier(d, { nearDist, midDist });
+        if (tier === 'hidden') { ch.mesh.visible = false; continue; }
+        ch.mesh.visible = true;
+        ch.mesh.count = tier === 'full' ? ch.fullCount : Math.max(1, Math.ceil(ch.fullCount * sparseKeep));
+      }
+      return this;
+    },
+  };
 }
