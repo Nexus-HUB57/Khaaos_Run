@@ -13,25 +13,27 @@
 // (Group/Mesh — sem document/canvas), lógica é PURA e determinística, e os
 // meshes podem ser inspecionados em Node (nomes, filhos, userData).
 import * as THREE from 'three';
-import { RARITIES } from '../shared/weapons.js';
+import { RARITIES, ATTACHMENT_COMPAT } from '../shared/weapons.js';
 
 // ---------------------------------------------------------------- catálogo ----
-// socket ∈ {muzzle,optic,mag,grip} — os 4 nomes estáveis criados na Fase 28.
+// socket ∈ {muzzle,optic,mag,grip} — âncoras reais criadas nas fábricas de
+// armas (entities3d). Fase 31: a compatibilidade vive em ATTACHMENT_COMPAT
+// (shared/weapons.js) — fonte única consumida por HUD, loot e sim.
 export const ATTACHMENTS = Object.freeze({
   mira4x: Object.freeze({
-    id: 'mira4x', name: 'Mira 4x', short: '4X', socket: 'optic', compatible: ['ar47'],
+    id: 'mira4x', name: 'Mira 4x', short: '4X', socket: 'optic', compatible: ATTACHMENT_COMPAT.mira4x,
     description: 'Luneta de aumento 4x — ADS aproxima 22% e alcance +8%.',
   }),
   silenciador: Object.freeze({
-    id: 'silenciador', name: 'Silenciador', short: 'SIL', socket: 'muzzle', compatible: ['ar47'],
-    description: 'Supressor de boca — sem clarão e ruído abafado (-65%).',
+    id: 'silenciador', name: 'Silenciador', short: 'SIL', socket: 'muzzle', compatible: ATTACHMENT_COMPAT.silenciador,
+    description: 'Supressor de boca — sem clarão e thump abafado dedicado.',
   }),
   magestendida: Object.freeze({
-    id: 'magestendida', name: 'Mag Estendida', short: 'MAG', socket: 'mag', compatible: ['ar47'],
-    description: 'Carregador alongado — +15 balas de 7.62 (40 → 55).',
+    id: 'magestendida', name: 'Mag Estendida', short: 'MAG', socket: 'mag', compatible: ATTACHMENT_COMPAT.magestendida,
+    description: 'Carregador alongado — +balas conforme a classe da arma.',
   }),
   gripvertical: Object.freeze({
-    id: 'gripvertical', name: 'Empunhadura Vertical', short: 'GRP', socket: 'grip', compatible: ['ar47'],
+    id: 'gripvertical', name: 'Empunhadura Vertical', short: 'GRP', socket: 'grip', compatible: ATTACHMENT_COMPAT.gripvertical,
     description: 'Foregrip vertical — dispersão -20% (cadência livre).',
   }),
 });
@@ -40,15 +42,17 @@ export const ATTACH_SOCKETS = Object.freeze(['muzzle', 'optic', 'mag', 'grip']);
 
 // ---------------------------------------------------------------- stats ----
 // Efeito de gameplay PURO — a sim usa isto para derivar o estado do ator.
-// magBonus  → capacidade do pente (sim #pickup/#reload)
+// magBonus  → capacidade do pente (sim #pickup/#reload) — escalado pela
+//             CLASSE da arma (pistola +8, SMG +12, fuzil/sniper +15)
 // spreadMul → multiplicador de dispersão (sim #fire)
 // adsZoom   → multiplicador de FOV em ADS (main3d)
 // rangeMul  → alcance de voo do projétil (sim #spawnBullet)
-// silenced  → shot event sem clarão + áudio abafado (main3d)
-export function attachmentStats(attachments = []) {
+// silenced  → shot event sem clarão + áudio thump abafado (main3d/audio3d)
+export function attachmentStats(attachments = [], weaponId = null) {
   const has = (id) => attachments.includes(id);
+  const magBonusBase = weaponId === 'g19' ? 8 : (weaponId === 'mp5' ? 12 : 15);
   return Object.freeze({
-    magBonus: has('magestendida') ? 15 : 0,
+    magBonus: has('magestendida') ? magBonusBase : 0,
     spreadMul: has('gripvertical') ? 0.8 : 1,
     adsZoom: has('mira4x') ? 0.78 : 1,          // 42° → ~33° em ADS
     rangeMul: has('mira4x') ? 1.08 : 1,

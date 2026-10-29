@@ -114,6 +114,49 @@ export class GameAudio {
     osc.start(t); osc.stop(t + .1);
   }
 
+  // Fase 31 — tiro SILENCIADO (Silenciador no socket muzzle): "thump" abafado
+  // dedicado — nada do crack/estalo do shot(). Camadas:
+  //   1) thump grave (sine 120→48 Hz, decay curto) — o "pum" do supressor;
+  //   2) sopro de gás (ruído lowpass 480→95 Hz) — sem conteúdo de agudos;
+  //   3) ciclo da ação (2 cliques highpass curtos) — realismo mecânico.
+  // Alcance audível curto (supressor): ~55 m vs 120 m do tiro cru.
+  shotSilenced(weapon = 'm4', distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.05, (1 - distance / 55)) * .62;
+    // 1) thump grave — assinatura do supressor
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(130, t);
+    osc.frequency.exponentialRampToValueAtTime(46, t + .1);
+    const og = this.ctx.createGain();
+    this.#env(og, t, .002, .11, .5 * vol);
+    osc.connect(og); og.connect(this.#bus('sfx'));
+    osc.start(t); osc.stop(t + .18);
+    // 2) sopro de gás abafado (lowpass agressivo — zero crack)
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.16);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.Q.value = .5;
+    lp.frequency.setValueAtTime(480, t);
+    lp.frequency.exponentialRampToValueAtTime(95, t + .12);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .003, .1, .42 * vol);
+    src.connect(lp); lp.connect(g); g.connect(this.#bus('sfx'));
+    src.start(t); src.stop(t + .3);
+    // 3) ação mecânica (bolt) — dois cliques curtos e secos
+    [0.055, 0.095].forEach((off, i) => {
+      const cl = this.ctx.createBufferSource();
+      cl.buffer = this.#noiseBuffer(.03);
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 1800;
+      const cg = this.ctx.createGain();
+      this.#env(cg, t + off, .001, .022, (.16 - i * .05) * vol);
+      cl.connect(hp); hp.connect(cg); cg.connect(this.#bus('sfx'));
+      cl.start(t + off); cl.stop(t + off + .08);
+    });
+  }
+
   hit(head = false) {
     if (!this.ctx || !this.enabled) return;
     const t = this.ctx.currentTime;

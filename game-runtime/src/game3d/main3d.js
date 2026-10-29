@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, doorHpFor } from './sim3d.js';
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
-import { buildScene, createRingWall, applyGltfProps, applyNightness } from './world3d.js';
+import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
@@ -1176,11 +1176,14 @@ export class Game3D {
       switch (e.type) {
         case 'shot': {
           const dist = e.owner === 'player' ? 0 : Math.hypot(e.x - p.x, e.z - p.z);
-          // Fase 30 — Silenciador: sem clarão de boca e áudio abafado (-65%)
-          if (!e.silenced) this.effects.muzzleFlash(new THREE.Vector3(e.x, e.y, e.z));
-          else this.audio.shot(e.weapon, dist + 55);
-          if (!e.silenced) this.audio.shot(e.weapon, dist);
-          if (e.owner === 'player') this.camKick = Math.min(0.03, this.camKick + 0.011);
+          // Fase 31 — Silenciador: sem clarão de boca + áudio "thump" abafado
+          // DEDICADO (antes: hack de distância reusando shot() cru)
+          if (e.silenced) this.audio.shotSilenced(e.weapon, dist);
+          else {
+            this.effects.muzzleFlash(new THREE.Vector3(e.x, e.y, e.z));
+            this.audio.shot(e.weapon, dist);
+          }
+          if (e.owner === 'player') this.camKick = Math.min(0.03, this.camKick + (e.silenced ? 0.007 : 0.011));
           break;
         }
         case 'hit': {
@@ -1644,6 +1647,7 @@ export class Game3D {
     this.syncEntities(dt);
     this.applyGearVisuals(); // Fase 28 — espelha gear da sim na silhueta (com cachê)
     tickMythicWeapons(this.animT); // Fase 30 — pulso emissivo das armas míticas
+    tickVegetationWind(this.scene, this.animT); // Fase 31 — vento nas copas/grama
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas

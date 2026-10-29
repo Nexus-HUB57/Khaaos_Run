@@ -657,7 +657,24 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
 // furniture com a cor da raridade, adiciona brilho emissivo e uma gema no
 // receiver — cada nível é reconhecível à distância, como no FreeFire.
 // opts (Fase 30): { attachments: ['mira4x',...], mythicStage: 0-4 } — anexos
-// montados nos 4 sockets da AR-47 e overlay evolutivo da skin mítica.
+// montados nos sockets da AR-47 e overlay evolutivo da skin mítica.
+// Fase 31: sockets GENERALIZADOS — m4/mp5/g19/barrett também criam âncoras
+// (WEAPON_SOCKETS em shared/weapons.js é a fonte dos nomes por arma).
+
+// Cria grupos-âncora por socket nas posições específicas da arma. Cada âncora
+// recebe anexos montados por applyAttachments (attachments3d).
+function addSockets(g, table = {}) {
+  if (!Object.keys(table).length) return;
+  g.userData.sockets = {};
+  for (const [name, pos] of Object.entries(table)) {
+    const s = new THREE.Group();
+    s.name = `socket_${name}`;
+    s.position.set(...pos);
+    g.add(s);
+    g.userData.sockets[name] = s;
+  }
+}
+
 export function createWeaponModel(id, skin = null, opts = {}) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
@@ -682,7 +699,7 @@ export function createWeaponModel(id, skin = null, opts = {}) {
   let muzzleZ = -.55;
 
   switch (id) {
-    case 'g19': // pistola
+    case 'g19': // pistola — Fase 31: sockets muzzle/optic/mag
       add(.07, .12, .3, gun, 0, 0, -.1);
       add(.06, .16, .09, gun2, 0, -.1, .04);
       add(.02, .03, .2, gun2, .04, .062, -.12); // serrilhas do slide
@@ -690,8 +707,13 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       add(.05, .05, .05, gun2, 0, -.16, .04);   // base do carregador
       sights(-.24, .03, .075);
       muzzleZ = -.28;
+      addSockets(g, {
+        muzzle: [0, .015, -.3],
+        optic: [0, .085, -.05],
+        mag: [0, -.13, .04],
+      });
       break;
-    case 'mp5': // submetrahadora
+    case 'mp5': // submetrahadora — Fase 31: 4 sockets
       add(.08, .11, .5, gun, 0, 0, -.12);
       add(.05, .2, .07, gun2, 0, -.13, -.02);
       add(.06, .09, .2, gun2, 0, -.02, .28);
@@ -700,8 +722,14 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       mag(0, -.12, -.02, .05);
       sights(-.34, .06);
       muzzleZ = -.4;
+      addSockets(g, {
+        muzzle: [0, .015, -.44],
+        optic: [0, .085, -.12],
+        mag: [0, -.055, -.02],
+        grip: [0, -.055, -.26],
+      });
       break;
-    case 'm4': // fuzil
+    case 'm4': // fuzil — Fase 31: 4 sockets
       add(.075, .1, .72, gun, 0, 0, -.18);
       add(.05, .16, .08, gun2, 0, -.12, .06);
       add(.055, .07, .3, gun2, 0, .085, -.2);   // carry handle
@@ -712,6 +740,12 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       add(.06, .08, .2, furniture, 0, -.02, .42); // coronha
       sights(-.5, .0);
       muzzleZ = -.56;
+      addSockets(g, {
+        muzzle: [0, .015, -.6],
+        optic: [0, .135, -.18],                 // sobre o carry handle
+        mag: [0, -.075, .06],
+        grip: [0, -.06, -.3],
+      });
       break;
     case 'ar47': { // Fase 28 — AR-47 (7.62) com 4 SOCKETS reais p/ anexos
       const woodM = M('#6e4a2a', { rough: .62, metal: .08 }); // madeira envelhecida
@@ -750,7 +784,7 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       }
       break;
     }
-    case 'barrett': // sniper .338
+    case 'barrett': // sniper .338 — Fase 31: sockets muzzle/mag/grip (luneta de série)
       add(.09, .12, 1.05, gun, 0, 0, -.28);
       add(.06, .18, .09, gun2, 0, -.13, .12);
       add(.07, .09, .34, gun2, 0, .1, -.3);     // luneta
@@ -762,6 +796,11 @@ export function createWeaponModel(id, skin = null, opts = {}) {
       add(.02, .16, .02, gun2, .06, -.1, -.5);
       sights(-.44, .12, .135);
       muzzleZ = -.88;
+      addSockets(g, {
+        muzzle: [0, .002, -.86],
+        mag: [0, -.1, .14],
+        grip: [0, -.09, -.44],
+      });
       break;
     case 'pulse': { // rifle de energia
       add(.1, .12, .8, gun2, 0, 0, -.2);
@@ -794,7 +833,7 @@ export function createWeaponModel(id, skin = null, opts = {}) {
     const gem = add(.03, .024, .06, skinGlow, .045, .055, -.08);
     gem.name = 'rarityGem';
   }
-  // Fase 30 — anexos nos 4 sockets (no-op fora da AR-47: só ela tem âncoras)
+  // Fase 30/31 — anexos nos sockets (no-op em armas sem âncoras: sucata/pulse)
   if (Array.isArray(opts.attachments) && opts.attachments.length) {
     applyAttachments(g, opts.attachments);
     g.userData.attachmentIds = [...opts.attachments];
