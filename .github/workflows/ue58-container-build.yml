@@ -54,6 +54,7 @@ jobs:
       has_pat: ${{ steps.check.outputs.has_pat }}
     steps:
       - name: Check Epic container credential
+        id: check
         env:
           UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
           UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
