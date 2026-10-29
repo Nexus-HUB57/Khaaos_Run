@@ -24,6 +24,7 @@ import { createDependencyHealth, summarize } from './health.js';
 import { regionLoads, recommend, SCALE_DEFAULTS } from './autoscale.js';
 import { createObservability, traceHttpHandler, formatTraceparent } from './obs.js';
 import { createPojService, PojError } from './poj.js';
+import { collectUe58Status, setRepoSecrets, createRunnerRegistrationToken, triggerInfraSmoke } from './ue58unblock.js'; // Fase 39 — desbloqueio UE5.8/EAC pelo /admin
 // Fase 14 — pipeline de espectador no game node (/ws/spectator + métricas /admin)
 import { SpectatorPipeline } from './spectator.js';
 // Fase 10 — patente do perfil (liderança): progressão canônica compartilhada
@@ -69,7 +70,16 @@ export function createAuthoritativeServer({
   poj,
   distributed, // M3 — camada distribuída injetável (testes/staging)
   eos, // M4 — ponte EOS nativa injetável (testes: config de teste explícita)
+  ue58, // Fase 39 — desbloqueio UE5.8/EAC injetável (testes: fetchImpl/repo/token stubs)
 } = {}) {
+  // Fase 39 — config do desbloqueio UE5.8/EAC: token de env (nunca no código),
+  // fetchImpl injetável p/ testes, probe de filesystem ancorado no ROOT.
+  const ue58Cfg = {
+    repo: ue58?.repo ?? 'Nexus-HUB57/Khaaos_Run',
+    token: ue58?.token ?? process.env.GH_UNBLOCK_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? '',
+    fetchImpl: ue58?.fetchImpl ?? globalThis.fetch,
+    rootDir: ue58?.rootDir ?? ROOT,
+  };
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
     ? { cert: fs.readFileSync(process.env.KR_TLS_CERT), key: fs.readFileSync(process.env.KR_TLS_KEY) }
@@ -848,6 +858,66 @@ export function createAuthoritativeServer({
         if (!guardHttp(req, res, 'admin:metrics')) return;
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end(JSON.stringify({ regions: regionalLoad(), thresholds: SCALE_DEFAULTS, now: Date.now() }));
+        return;
+      }
+      // ---------- Fase 39 — DESBLOQUEIO UE5.8/EAC (5 bloqueadores) ----------
+      if (url.pathname === '/admin/ue58' && req.method === 'GET') {
+        if (!guardHttp(req, res, 'admin:metrics')) return;
+        try {
+          const status = await collectUe58Status(ue58Cfg);
+          audit.record({ actor: 'admin', action: 'ue58.status', resource: 'repo', outcome: 'allow', detail: { api: status.api, blockers: status.blockers.length } });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(status));
+        } catch (error) {
+          res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_status_failed', detail: String(error?.message ?? error) }));
+        }
+        return;
+      }
+      if (url.pathname === '/admin/ue58/secrets' && req.method === 'POST') {
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        const body = await jsonBody(req);
+        try {
+          const result = await setRepoSecrets({ ...ue58Cfg, secrets: body.secrets });
+          audit.record({ actor: admin.username, action: 'ue58.secrets.set', resource: 'repo', outcome: result.failed.length ? 'partial' : 'allow', detail: { set: result.set, failed: result.failed.map((f) => f.name) } });
+          res.writeHead(result.failed.length ? 207 : 200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result)); // valores NUNCA ecoam
+        } catch (error) {
+          audit.record({ actor: admin.username, action: 'ue58.secrets.set', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
+          res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_secrets_rejected', detail: String(error?.message ?? error) }));
+        }
+        return;
+      }
+      if (url.pathname === '/admin/ue58/runner-token' && req.method === 'POST') {
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        try {
+          const result = await createRunnerRegistrationToken(ue58Cfg);
+          audit.record({ actor: admin.username, action: 'ue58.runner_token', resource: 'repo', outcome: 'allow', detail: { expiresAt: result.expiresAt } });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result)); // token de registro (1 h) — ponto da ação
+        } catch (error) {
+          audit.record({ actor: admin.username, action: 'ue58.runner_token', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
+          res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_runner_token_failed', detail: String(error?.message ?? error) }));
+        }
+        return;
+      }
+      if (url.pathname === '/admin/ue58/smoke' && req.method === 'POST') {
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        try {
+          const result = await triggerInfraSmoke(ue58Cfg);
+          audit.record({ actor: admin.username, action: 'ue58.smoke', resource: 'repo', outcome: 'allow', detail: { lastRun: result.lastRun?.id ?? null } });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          audit.record({ actor: admin.username, action: 'ue58.smoke', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
+          res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_smoke_failed', detail: String(error?.message ?? error) }));
+        }
         return;
       }
       if (url.pathname.startsWith('/admin/')) {
