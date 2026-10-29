@@ -21,6 +21,7 @@
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
 - [Figuras de alistamento](#figuras-de-alistamento)
 - [Classe Especial](#classe-especial)
+- [Geometria dos corpos](#geometria-dos-corpos)
 - [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
 - [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
 - [CI/CD e Automação](#cicd-e-automação)
@@ -320,6 +321,22 @@ Os três agentes do console não entram na tabela de alistamento. O render segue
 | henricks | Henricks Hunterheads III | Marechal | Luso-brasileira | Cicatriz na sobrancelha | `client/public/agents/henricks.jpg` |
 | krapulla | King Krapulla | Centralizador | Sul-asiática | Tinta abstrata no pescoço | `client/public/agents/krapulla.jpg` |
 | uryan | Uryan Horks | Embaixadora | Andina | Queimadura na garganta | `client/public/agents/uryan.jpg` |
+
+## Geometria dos corpos
+
+Nove silhuetas, em metros, com a origem no chão. A estatura, o ombro e a cabeça desenham dezessete volumes. Só a cabeça classifica headshot. Tronco e membro usam o dano da arma. Origem, sexo e marca não somam XP. Catálogo: [`shared/body-geometry.ts`](shared/body-geometry.ts).
+
+| Id | Estatura | Ombro | Cabeça |
+|----|----------|-------|--------|
+| kane | 1,88 m | 0,48 m | 0,24 m |
+| puri | 1,68 m | 0,38 m | 0,22 m |
+| voss | 1,82 m | 0,46 m | 0,23 m |
+| okada | 1,62 m | 0,36 m | 0,21 m |
+| hald | 1,90 m | 0,47 m | 0,24 m |
+| okonkwo | 1,76 m | 0,40 m | 0,22 m |
+| henricks | 1,84 m | 0,50 m | 0,24 m |
+| krapulla | 1,78 m | 0,44 m | 0,23 m |
+| uryan | 1,73 m | 0,38 m | 0,22 m |
 
 ---
 
