@@ -202,7 +202,8 @@ test('sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo 
   s.start('belt');
   assert.equal(s.doors.length, s.world.doors.length, 'folhas nasceram do layout');
   // HOTFIX pós-merge #185 — vocabulário canônico: folha íntegra = !destroyed && !open
-  assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === DOOR.hp));
+  // Fase 26 — HP por MATERIAL: depot/hangar nascem METÁLICOS (500); demais 200
+  assert.ok(s.doors.every((d) => !d.destroyed && !d.open && d.hp === doorHpFor(d.kind)));
   // HOTFIX pós-reconcile #194/#196 — a destruição é EXCLUSIVAMENTE via
   // #damageDoor (hp mutado direto vaza estado — o sweep foi removido):
   // cruzamos o limiar com UM golpe canônico em folha pré-desgastada.
@@ -377,7 +378,7 @@ test('buildScene: doorPanels registrados (id → grupo) e painel completo (6 pe�
     assert.equal(reg.doors.size, layout.doors.length, `${id}: 1 painel por porta do plano`);
     for (const [doorId, h] of reg.doors) {
       assert.ok(doorId.startsWith('door-'), `${id}: id canônico`);
-      const h = ctl; // controlador de animação { pivot, leaf, openSign, current, target, broken }
+      // h: controlador de animação { pivot, leaf, openSign, current, target, broken }
       assert.ok(h.leaf.children.length === 5, `${id}: painel+2 travessas+diagonal+maçaneta`);
       assert.ok(h.pivot.children.includes(h.leaf), `${id}: folha pendurada no pivô da dobradiça`);
       assert.equal(h.current, 0, `${id}: fechada no spawn`);
