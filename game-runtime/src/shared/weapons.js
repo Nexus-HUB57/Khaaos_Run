@@ -8,20 +8,39 @@ export const RARITIES = {
 };
 
 // Fase 30 — catálogo leve dos anexos no lado shared (a malha vive no 3d).
-// A AR-47 é a única arma com sockets na Fase 28 — compat espelha isso.
+// Fase 31 — o sistema de sockets GENERALIZA: qualquer arma com `sockets`
+// aceita anexos compatíveis (M4/MP5/G19/Barrett além da AR-47). A tabela de
+// compatibilidade vive aqui (fonte única — HUD, loot e o 3d leem a mesma).
 export const ATTACHMENT_IDS = Object.freeze(['mira4x', 'silenciador', 'magestendida', 'gripvertical']);
 export const ATTACHMENT_NAMES = Object.freeze({
   mira4x: 'Mira 4x', silenciador: 'Silenciador',
   magestendida: 'Mag Estendida', gripvertical: 'Empunhadura Vertical',
 });
+export const ATTACHMENT_COMPAT = Object.freeze({
+  mira4x: Object.freeze(['ar47', 'm4', 'mp5', 'g19']),           // barrett tem luneta de série
+  silenciador: Object.freeze(['ar47', 'm4', 'mp5', 'g19', 'barrett']),
+  magestendida: Object.freeze(['ar47', 'm4', 'mp5', 'g19', 'barrett']),
+  gripvertical: Object.freeze(['ar47', 'm4', 'mp5', 'barrett']), // pistola não tem rail inferior
+});
+// Sockets disponíveis por arma (espelha as âncoras visuais em entities3d).
+export const WEAPON_SOCKETS = Object.freeze({
+  ar47: Object.freeze(['muzzle', 'optic', 'mag', 'grip']),
+  m4: Object.freeze(['muzzle', 'optic', 'mag', 'grip']),
+  mp5: Object.freeze(['muzzle', 'optic', 'mag', 'grip']),
+  g19: Object.freeze(['muzzle', 'optic', 'mag']),
+  barrett: Object.freeze(['muzzle', 'mag', 'grip']),
+});
+export function weaponSockets(id) {
+  return WEAPON_SOCKETS[id] ?? [];
+}
 
 export const WEAPONS = {
   sucata: { id: 'sucata', name: 'Lança de Sucata', category: 'melee', rarity: 'COMUM', damage: 24, fireRate: 1.1, range: 48, projectileSpeed: 0, magazine: 1, ammo: 'none', weight: 30 },
-  g19: { id: 'g19', name: 'Pistola 9MM', category: 'sidearm', rarity: 'COMUM', damage: 22, fireRate: 4.8, range: 300, projectileSpeed: 570, magazine: 15, ammo: '9MM', weight: 28 },
-  m4: { id: 'm4', name: 'Fuzil de Assalto M4', category: 'rifle', rarity: 'INCOMUM', damage: 31, fireRate: 8, range: 410, projectileSpeed: 690, magazine: 30, ammo: '5.56', weight: 18 },
+  g19: { id: 'g19', name: 'Pistola 9MM', category: 'sidearm', rarity: 'COMUM', damage: 22, fireRate: 4.8, range: 300, projectileSpeed: 570, magazine: 15, ammo: '9MM', weight: 28, sockets: ['muzzle', 'optic', 'mag'] },
+  m4: { id: 'm4', name: 'Fuzil de Assalto M4', category: 'rifle', rarity: 'INCOMUM', damage: 31, fireRate: 8, range: 410, projectileSpeed: 690, magazine: 30, ammo: '5.56', weight: 18, sockets: ['muzzle', 'optic', 'mag', 'grip'] },
   ar47: { id: 'ar47', name: 'Fuzil de Assalto AR-47', category: 'rifle', rarity: 'RARO', damage: 36, fireRate: 6.6, range: 395, projectileSpeed: 660, magazine: 40, ammo: '7.62', weight: 12, sockets: ['muzzle', 'optic', 'mag', 'grip'] },
-  mp5: { id: 'mp5', name: 'Submetralhadora MP5', category: 'smg', rarity: 'INCOMUM', damage: 18, fireRate: 12, range: 250, projectileSpeed: 620, magazine: 32, ammo: '9MM', weight: 15 },
-  barrett: { id: 'barrett', name: 'Barrett MRAD MK22', category: 'sniper', rarity: 'RARO', damage: 92, fireRate: .65, range: 780, projectileSpeed: 900, magazine: 5, ammo: '.338', weight: 6 },
+  mp5: { id: 'mp5', name: 'Submetralhadora MP5', category: 'smg', rarity: 'INCOMUM', damage: 18, fireRate: 12, range: 250, projectileSpeed: 620, magazine: 32, ammo: '9MM', weight: 15, sockets: ['muzzle', 'optic', 'mag', 'grip'] },
+  barrett: { id: 'barrett', name: 'Barrett MRAD MK22', category: 'sniper', rarity: 'RARO', damage: 92, fireRate: .65, range: 780, projectileSpeed: 900, magazine: 5, ammo: '.338', weight: 6, sockets: ['muzzle', 'mag', 'grip'] },
   pulse: { id: 'pulse', name: 'Rifle de Pulso General', category: 'energy', rarity: 'LENDARIO', damage: 48, fireRate: 6, range: 530, projectileSpeed: 760, magazine: 24, ammo: 'CELL', weight: 3 },
 };
 
@@ -54,19 +73,40 @@ export function rollLoot(rng, zone = 'armory', count = 1) {
   });
 }
 
-// Fase 30 — anexos de SÉRIE por raridade da arma (PURO, determinístico pelo
-// rng do chamador). LENDÁRIO sai com 1-2 anexos; o airdrop (LENDÁRIO fixo da
-// AR-47) sai COMPLETO — os 4 sockets equipados, assinatura da caixa vermelha.
+// Fase 30/31 — anexos de SÉRIE por raridade da arma (PURO, determinístico
+// pelo rng do chamador). Qualquer arma com sockets pode sair kitted:
+//   MITICA  → completa (todos os sockets compatíveis);
+//   LENDARIO→ 1-2 anexos; RARO → 50% de 1; INCOMUM/COMUM → 25% de 1.
+// A seleção respeita a compatibilidade por arma (ATTACHMENT_COMPAT).
 export function attachmentsForDrop(rng, weaponId, rarity) {
-  if (weaponId !== 'ar47') return undefined;
-  if (rarity === 'MITICA') return ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
-  if (rarity !== 'LENDARIO') return undefined;
-  const all = ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
-  const n = rng.next() < .5 ? 2 : 1;
-  const picked = [];
-  for (let i = 0; i < n; i++) {
-    const idx = Math.floor(rng.next() * all.length) % all.length;
-    if (!picked.includes(all[idx])) picked.push(all[idx]);
+  const sockets = WEAPON_SOCKETS[weaponId];
+  if (!sockets?.length) return undefined;
+  const pool = ATTACHMENT_IDS.filter((id) => ATTACHMENT_COMPAT[id].includes(weaponId));
+  if (!pool.length) return undefined;
+  const pick = () => pool[Math.floor(rng.next() * pool.length) % pool.length];
+  if (rarity === 'MITICA') {
+    // completa = um anexo por socket da arma, na ordem canônica do catálogo
+    const bySocket = { mira4x: 'optic', silenciador: 'muzzle', magestendida: 'mag', gripvertical: 'grip' };
+    const full = [];
+    for (const id of ATTACHMENT_IDS) {
+      if (!pool.includes(id) || !sockets.includes(bySocket[id])) continue;
+      if (!full.includes(id)) full.push(id);
+    }
+    return full.length ? full : undefined;
   }
-  return picked.length ? picked : undefined;
+  if (rarity === 'LENDARIO') {
+    const n = rng.next() < .5 ? 2 : 1;
+    const picked = [];
+    for (let i = 0; i < n; i++) {
+      const id = pick();
+      if (!picked.includes(id)) picked.push(id);
+    }
+    return picked.length ? picked : undefined;
+  }
+  if (rarity === 'RARO') {
+    if (rng.next() < .5) return undefined;
+    return [pick()];
+  }
+  if (rng.next() < .75) return undefined;
+  return [pick()];
 }

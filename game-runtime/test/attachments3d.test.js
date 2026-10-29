@@ -46,15 +46,28 @@ const STEP = 1 / 30;
 const idle = (yaw = 0, pitch = 0) => ({ ...DEFAULT_INPUT, yaw, pitch });
 
 // ---------------------------------------------------------------- 1 ----
-test('F30 · catálogo cobre exatamente os 4 sockets da AR-47', () => {
+test('F30/31 · catálogo cobre os 4 sockets; compat por arma (AR-47, M4, MP5, G19, Barrett)', () => {
   assert.deepEqual(WEAPONS.ar47.sockets, ATTACH_SOCKETS);
   const sockets = Object.values(ATTACHMENTS).map((a) => a.socket).sort();
   assert.deepEqual(sockets, [...ATTACH_SOCKETS].sort());
   assert.equal(Object.keys(ATTACHMENTS).length, 4);
   for (const a of Object.values(ATTACHMENTS)) {
     assert.ok(a.name && a.short, `${a.id}: nome/curto ausentes`);
-    assert.deepEqual(a.compatible, ['ar47'], `${a.id}: compat limitado à AR-47`);
+    assert.ok(a.compatible.includes('ar47'), `${a.id}: AR-47 sempre compatível`);
   }
+  // Fase 31 — sockets generalizados: M4/MP5 idênticos à AR-47; G19 sem grip;
+  // Barrett sem optic (luneta de série) e sem grip na pistola
+  assert.deepEqual(WEAPONS.m4.sockets, ATTACH_SOCKETS);
+  assert.deepEqual(WEAPONS.mp5.sockets, ATTACH_SOCKETS);
+  assert.deepEqual(WEAPONS.g19.sockets, ['muzzle', 'optic', 'mag']);
+  assert.deepEqual(WEAPONS.barrett.sockets, ['muzzle', 'mag', 'grip']);
+  for (const id of Object.keys(ATTACHMENTS)) {
+    for (const w of ATTACHMENTS[id].compatible) {
+      assert.ok(WEAPONS[w]?.sockets?.length, `${id}: arma compatível ${w} sem sockets`);
+    }
+  }
+  assert.ok(!ATTACHMENTS.gripvertical.compatible.includes('g19'), 'pistola não aceita foregrip');
+  assert.ok(!ATTACHMENTS.mira4x.compatible.includes('barrett'), 'barrett já tem luneta de série');
 });
 
 test('F30 · stats derivados (PURO): pente, dispersão, zoom, alcance e silêncio', () => {
@@ -118,9 +131,20 @@ test('F30 · applyAttachments monta nos sockets, é idempotente e um anexo por s
   // duplicata no MESMO socket: segundo é ignorado
   applyAttachments(model.group, ['mira4x', 'gripvertical', 'mira4x']);
   assert.equal(sockets.optic.children.length, 1);
-  // não-AR-47: sem âncoras, no-op seguro
+  // Fase 31 — M4 e MP5 têm âncoras próprias (malhas montam na mesma gramática)
+  const carbine = createWeaponModel('m4', null);
+  const m4Applied = applyAttachments(carbine.group, ['mira4x', 'silenciador', 'gripvertical']);
+  assert.equal(m4Applied.length, 3);
+  assert.equal(carbine.group.userData.sockets.muzzle.children.length, 1, 'silenciador na boca do M4');
+  const smg = createWeaponModel('mp5', null, { attachments: ['magestendida', 'silenciador'] });
+  assert.equal(smg.group.userData.sockets.mag.children.length, 1, 'mag estendida na MP5 de fábrica');
+  // G19: 3 sockets (sem grip) — grip avulso é ignorado, mira monta
   const pistol = createWeaponModel('g19');
-  assert.equal(applyAttachments(pistol.group, ['mira4x']).length, 0);
+  assert.equal(applyAttachments(pistol.group, ['gripvertical']).length, 0, 'sem socket grip na pistola');
+  assert.equal(applyAttachments(pistol.group, ['mira4x']).length, 1);
+  // arma sem sockets (sucata): no-op seguro
+  const melee = createWeaponModel('sucata');
+  assert.equal(applyAttachments(melee.group, ['mira4x']).length, 0);
 });
 
 test('F30 · fábrica da arma recebe anexos + estágio mítico (overlay evolutivo)', () => {
@@ -157,13 +181,30 @@ test('F30 · loot: anexos avulsos nos pools + anexos de série por raridade', ()
   const rolls = rollLoot(rng, 'armory', 60);
   const att = rolls.find((d) => d.kind === 'attachment');
   assert.ok(att && att.name, 'anexo avulso sai do pool com nome resolvido');
-  // anexos de série: lendária sai 1-2, MÍTICA sai completa, outras não
+  // anexos de série: lendária sai 1-2, MÍTICA sai completa, outras não —
+  // Fase 31: generalizou p/ qualquer arma com sockets (compat respeitado)
   const r2 = new SeededRng('f30-drop');
   const len = attachmentsForDrop(r2, 'ar47', 'LENDARIO');
   assert.ok(Array.isArray(len) && len.length >= 1 && len.length <= 2, `lendária: ${len?.length}`);
   assert.deepEqual(attachmentsForDrop(r2, 'ar47', 'MITICA'), ['mira4x', 'silenciador', 'magestendida', 'gripvertical']);
   assert.equal(attachmentsForDrop(r2, 'ar47', 'RARO'), undefined);
-  assert.equal(attachmentsForDrop(r2, 'm4', 'LENDARIO'), undefined);
+  // M4/MP5 saem kitados na lendária — anexos sempre COMPATÍVEIS com a arma
+  const r3 = new SeededRng('f31-drop-m4');
+  const m4Kit = attachmentsForDrop(r3, 'm4', 'LENDARIO');
+  assert.ok(Array.isArray(m4Kit) && m4Kit.length >= 1 && m4Kit.length <= 2, `M4 lendária kitada: ${m4Kit?.length}`);
+  for (const id of m4Kit) assert.ok(ATTACHMENTS[id].compatible.includes('m4'), `${id} incompatível com m4`);
+  const mp5Kit = attachmentsForDrop(new SeededRng('f31-drop-mp5'), 'mp5', 'MITICA');
+  assert.deepEqual([...mp5Kit].sort(), ['gripvertical', 'magestendida', 'mira4x', 'silenciador']);
+  // Barrett nunca recebe mira4x (luneta de série); pistola nunca recebe grip
+  for (let i = 0; i < 20; i++) {
+    const br = attachmentsForDrop(r3, 'barrett', 'LENDARIO') ?? [];
+    assert.ok(!br.includes('mira4x'), 'barrett não sai com mira 4x');
+    const gl = attachmentsForDrop(r3, 'g19', 'LENDARIO') ?? [];
+    assert.ok(!gl.includes('gripvertical'), 'g19 não sai com foregrip');
+  }
+  // arma sem sockets: nunca kitada
+  assert.equal(attachmentsForDrop(r3, 'pulse', 'LENDARIO'), undefined);
+  assert.equal(attachmentsForDrop(r3, 'sucata', 'MITICA'), undefined);
 });
 
 // ---------------------------------------------------------------- 3 ----
@@ -212,7 +253,7 @@ test('F30 · sim: AR-47 de série com anexos produz pente alongado (40 → 55)',
   assert.equal(p.ammoMag, 55, `pente estendido deveria encher 55 (veio ${p.ammoMag})`);
 });
 
-test('F30 · sim: anexo avulso instala na AR-47; troca de slot guarda no bolso', () => {
+test('F30/31 · sim: anexo avulso instala na arma em mão; anexos seguem o jogador', () => {
   const s = new KhaaosSim3D({ seed: 'F30-ATT', botCount: 0, airdrop: false });
   s.start('belt');
   const p = s.player;
@@ -227,18 +268,61 @@ test('F30 · sim: anexo avulso instala na AR-47; troca de slot guarda no bolso',
   s.step({ ...idle(), interact: true }, STEP);
   assert.deepEqual(p.weaponAttachments, ['magestendida'], 'anexo instalado na arma em mão');
   assert.equal(p.attachStats.magBonus, 15);
-  // troca de slot devolve a g19: anexos vão para o BOLSO (nada se perde)
-  p.slots[2] = 'g19';
+  // troca p/ a MP5: anexo COMPATÍVEL segue o jogador e re-instala na SMG
+  // (Fase 31 — anexos universais; magBonus escala pela classe: SMG +12)
+  p.slots[2] = 'mp5';
   p.inventory.ammo['9MM'] = 45;
   assert.equal(s.switchSlot(2), true);
-  assert.deepEqual(p.weaponAttachments, [], 'troca limpa a arma em mão');
-  assert.equal(p.attachStats.magBonus, 0);
-  assert.deepEqual(p.attachmentBag, ['magestendida'], 'anexo guardado no bolso');
+  assert.deepEqual(p.weaponAttachments, ['magestendida'], 'anexo compatível re-instala na MP5');
+  assert.equal(p.attachStats.magBonus, 12, 'pente estendido na SMG: +12');
+  // grip também é compatível com a MP5 — instala no 4º socket
+  s.loot.length = 0;
+  s.loot.push({ id: 'gripvertical', kind: 'attachment', name: 'Empunhadura Vertical', x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.deepEqual(p.weaponAttachments, ['magestendida', 'gripvertical'], 'grip instala na MP5');
+  assert.equal(p.attachStats.spreadMul, .8);
+  // troca p/ a PISTOLA: mag segue (+8), grip INCOMPATÍVEL fica no bolso
+  p.slots[3] = 'g19';
+  assert.equal(s.switchSlot(3), true);
+  assert.equal(p.weapon, 'g19');
+  assert.deepEqual(p.weaponAttachments, ['magestendida'], 'mag estendida serve na pistola');
+  assert.equal(p.attachStats.magBonus, 8, 'pente estendido na pistola: +8');
+  assert.deepEqual(p.attachmentBag, ['gripvertical'], 'grip aguarda um rifle');
+  assert.equal(p.attachStats.spreadMul, 1, 'grip não afeta a pistola');
   // de volta à AR-47: bolso re-instala automaticamente
   assert.equal(s.switchSlot(1), true);
   assert.equal(p.weapon, 'ar47');
-  assert.deepEqual(p.weaponAttachments, ['magestendida'], 'bolso → socket ao voltar para a AR-47');
-  assert.equal(p.attachStats.magBonus, 15);
+  assert.deepEqual([...p.weaponAttachments].sort(), ['gripvertical', 'magestendida'], 'bolso → sockets ao voltar para a AR-47');
+  assert.equal(p.attachStats.spreadMul, .8, 'grip volta a aplicar -20% de dispersão');
+});
+
+test('F31 · sim: M4 de série com mag estendida enche 45; pistola escala +8', () => {
+  const s = new KhaaosSim3D({ seed: 'F31-M4MAG', botCount: 0, airdrop: false });
+  s.start('belt');
+  const p = s.player;
+  s.loot.length = 0;  // isolamento: só o loot sintético existe no mundo
+  s.loot.push({ id: 'm4', kind: 'weapon', name: 'Fuzil de Assalto M4', rarity: 'LENDARIO',
+    attachments: ['magestendida', 'silenciador'], x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.equal(p.weapon, 'm4');
+  assert.deepEqual(p.weaponAttachments, ['magestendida', 'silenciador']);
+  assert.equal(p.attachStats.silenced, true, 'M4 silenciada de série');
+  p.inventory.ammo['5.56'] = 120;
+  p.ammoMag = 0;
+  s.step({ ...idle(), reload: true }, STEP);
+  for (let i = 0; i < 200 && p.reloadT > 0; i++) s.step(idle(), STEP);
+  assert.equal(p.ammoMag, 45, `M4 estendida deveria encher 45 (veio ${p.ammoMag})`);
+  // pistola: +8 (15 → 23)
+  s.loot.length = 0;
+  s.loot.push({ id: 'g19', kind: 'weapon', name: 'Pistola 9MM', rarity: 'LENDARIO',
+    attachments: ['magestendida'], x: p.x + .4, z: p.z, y: .55, active: true });
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.equal(p.weapon, 'g19');
+  p.inventory.ammo['9MM'] = 60;
+  p.ammoMag = 0;
+  s.step({ ...idle(), reload: true }, STEP);
+  for (let i = 0; i < 200 && p.reloadT > 0; i++) s.step(idle(), STEP);
+  assert.equal(p.ammoMag, 23, `pistola estendida deveria encher 23 (veio ${p.ammoMag})`);
 });
 
 test('F30 · sim: abate com a skin MÍTICA evolui o estágio e emite evento', () => {

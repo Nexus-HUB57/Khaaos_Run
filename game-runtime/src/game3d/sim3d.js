@@ -3,7 +3,7 @@
 // O renderizador (main3d/world3d) apenas interpreta o estado — mesmo contrato da
 // simulação 2D (shared/simulation.js), em espaço y-up, unidades em metros.
 import { SeededRng } from '../shared/rng.js';
-import { WEAPONS, rollLoot } from '../shared/weapons.js';
+import { WEAPONS, rollLoot, weaponSockets, ATTACHMENT_COMPAT } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
 // Fase 24 — interiores acessíveis: colliders ocos + floors pisáveis vêm do MESMO
 // plano determinístico da casca visual (interiors3d) — porta que se atravessa é
@@ -1758,15 +1758,16 @@ export class KhaaosSim3D {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
       // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde)
-      if (a.weapon === 'ar47' && a.weaponAttachments?.length) {
+      if (a.weaponAttachments?.length) {
         for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
       }
       a.slots[a.activeSlot] = id; a.weapon = id;
       a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
-      // Fase 30 — anexos de série acompanham a AR-47; mítico reinicia a evolução
+      // Fase 30/31 — anexos de série acompanham QUALQUER arma com sockets;
+      // mítico (skin evolutiva) continua exclusivo da AR-47
       a.weaponAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
       a.mythicKills = 0;
-      a.mythicStage = item.rarity === 'MITICA' ? 1 : 0;
+      a.mythicStage = item.rarity === 'MITICA' && id === 'ar47' ? 1 : 0;
       this.#installBagAttachments(a);    // bolso preenche sockets livres
       this.#recalcAttachStats(a);
       a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
@@ -1774,10 +1775,11 @@ export class KhaaosSim3D {
       a.reloadT = 0;
       this.emit('loot', { item: item.name || id, rarity: item.rarity, kind: 'weapon', attachments: [...a.weaponAttachments] });
     } else if (item.kind === 'attachment') {
-      // Fase 30 — anexo avulso: instala no socket livre da AR-47 em mão ou vai
-      // para o bolso (máx 4) até uma AR-47 ser equipada
+      // Fase 30/31 — anexo avulso: instala no socket livre da arma em mão
+      // (qualquer arma com sockets e compatível) ou vai para o bolso (máx 4)
       const att = ATTACHMENTS[item.id] ? item.id : null;   // id = id do catálogo
-      if (att && a.weapon === 'ar47' && !a.weaponAttachments.includes(att) && a.weaponAttachments.length < 4) {
+      const sockCap = weaponSockets(a.weapon).length;
+      if (att && sockCap > 0 && this.#weaponTakes(a, att) && !a.weaponAttachments.includes(att) && a.weaponAttachments.length < sockCap) {
         a.weaponAttachments.push(att);
       } else if (att && a.attachmentBag.length < 4) {
         a.attachmentBag.push(att);
@@ -1856,22 +1858,32 @@ export class KhaaosSim3D {
     return true;
   }
 
-  // ---------- Fase 30 — anexos: helpers de estado ----------
+  // ---------- Fase 30/31 — anexos: helpers de estado ----------
+  // Arma em mão aceita anexos? (qualquer arma com sockets — AR-47, M4, MP5,
+  // G19, Barrett). O anexo ainda precisa ser COMPATÍVEL com a arma.
+  #weaponTakes(a, attId) {
+    if (!ATTACHMENTS[attId]) return false;
+    const sockets = weaponSockets(a.weapon);
+    if (!sockets.length || !ATTACHMENT_COMPAT[attId]?.includes(a.weapon)) return false;
+    return true;
+  }
   // Capacidade do pente com Mag Estendida (arma sem anexos = tabela base).
-  #magCap(a, w) { return w.magazine + (a.weapon === 'ar47' ? (a.attachStats?.magBonus ?? 0) : 0); }
-  // Move anexos do bolso para sockets livres da AR-47 em mão (um por socket).
+  #magCap(a, w) { return w.magazine + (weaponSockets(a.weapon).length ? (a.attachStats?.magBonus ?? 0) : 0); }
+  // Move anexos do bolso para sockets livres da arma em mão (um por socket,
+  // respeitando compat por arma — Fase 31 generaliza da AR-47 p/ todo o arsenal).
   #installBagAttachments(a) {
-    if (a.weapon !== 'ar47' || !a.attachmentBag?.length) return;
+    const sockCap = weaponSockets(a.weapon).length;
+    if (!sockCap || !a.attachmentBag?.length) return;
     for (const att of [...a.attachmentBag]) {
       if (!ATTACHMENTS[att]) { a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1); continue; }
-      if (a.weaponAttachments.length >= 4 || a.weaponAttachments.includes(att)) continue;
+      if (a.weaponAttachments.length >= sockCap || a.weaponAttachments.includes(att) || !this.#weaponTakes(a, att)) continue;
       a.weaponAttachments.push(att);
       a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1);
     }
   }
   // Deriva os stats de combate do anexo (PURO via attachmentStats).
   #recalcAttachStats(a) {
-    a.attachStats = attachmentStats(a.weapon === 'ar47' ? a.weaponAttachments : []);
+    a.attachStats = attachmentStats(weaponSockets(a.weapon).length ? a.weaponAttachments : [], a.weapon);
   }
   // Fase 30 — evolução da skin mítica por abate (4 estágios FF)
   #creditMythic(a) {

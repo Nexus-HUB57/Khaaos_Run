@@ -26,6 +26,13 @@ import {
   sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
+// Fase 31 — vegetação de produção: árvores por arquétipo de mundo, arbustos
+// em cluster, tufos de grama curvados e vento por shader (vegetation3d).
+import {
+  treeArchetypeFor, buildTreeField, buildBushField,
+  grassTuftGeometry, patchSway, tickVegetationWind,
+} from './vegetation3d.js';
+export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
 // ---------- céu ----------
 function createSky(scenario) {
@@ -485,80 +492,72 @@ function scenarioCanopyTint(scenario, rng) {
   return palette[Math.floor(rng.next() * palette.length) % palette.length];
 }
 
-// ---------- Fase 4 — natureza: árvores, pedras e nuvens ----------
+// ---------- Fase 31 — natureza: árvores/arquétipo, arbustos, pedras, nuvens ----
+// Vegetação de produção (vegetation3d): tronco com raízes e galhos, dossel
+// em blobs deformados, vento por shader e tint por instância. 2 draw calls
+// instanciadas para a floresta inteira (antes: tronco-cilindro + 3 icosaedros).
 function buildNature(scene, layout, rng, q, scenario = null) {
   const free = (x, z, m = 4) => layout.colliders.every(c => x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m);
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
-  // ---- árvores (tronco levemente inclinado + copa com cor por instância) ----
+  // ---- árvores (arquétipo por mundo — identidade W1-W4) ----
   const TREES = Math.max(8, Math.round(52 * q.treeFactor));
   const shadowSpots = []; // Fase 7 — sombras de contato da natureza
-  const trunkGeo = new THREE.CylinderGeometry(.14, .32, 3.4, 6);
-  const canopyGeo = new THREE.IcosahedronGeometry(1.7, 1);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: .95 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }); // tinta por instância
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREES);
-  const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, TREES * 3);
-  trunks.castShadow = canopies.castShadow = true;
-  trunks.receiveShadow = canopies.receiveShadow = true;
-  const dummy = new THREE.Object3D();
-  const tint = new THREE.Color();
-  let ti = 0, ci = 0, guard = 0;
+  const seedBase = `${scenario?.id ?? 'CIGKV'}`.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const archetype = treeArchetypeFor(scenario?.id ?? 'CIGKV');
+  const treeSpots = [];
+  let ti = 0, guard = 0;
   while (ti < TREES && guard++ < 600) {
     const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
     if (!free(x, z) || !districtClear(x, z)) continue;
     const s = .8 + rng.next() * .7;
     shadowSpots.push({ x, z, size: 3.1 * s });
-    dummy.position.set(x, 1.7 * s, z);
-    dummy.scale.setScalar(s);
-    dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12); // inclinação orgânica
-    dummy.updateMatrix();
-    trunks.setMatrixAt(ti, dummy.matrix);
-    tint.setHex(scenario ? scenarioCanopyTint(scenario, rng) : canopyTint(rng));
-    for (let k = 0; k < 3 && ci < TREES * 3; k++) {
-      dummy.position.set(x + (rng.next() - .5) * .9, (3.2 + k * .95) * s, z + (rng.next() - .5) * .9);
-      const cs = s * (1.1 - k * .27);
-      dummy.scale.setScalar(cs);
-      dummy.rotation.set(rng.next() * .3, rng.next() * Math.PI * 2, 0);
-      dummy.updateMatrix();
-      canopies.setMatrixAt(ci, dummy.matrix);
-      canopies.setColorAt(ci, tint);
-      ci++;
-    }
+    treeSpots.push({
+      x, z, s, rot: rng.next() * Math.PI * 2, tilt: (rng.next() - .5) * .1,
+      tint: scenario ? scenarioCanopyTint(scenario, rng) : canopyTint(rng),
+      trunkTint: rng.next() < .5 ? '#6b5433' : '#7a6140',
+    });
     ti++;
   }
-  trunks.count = ti; canopies.count = ci;
-  if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
-  scene.add(trunks, canopies);
+  const field = buildTreeField({ archetype, seed: seedBase + 1, spots: treeSpots });
+  scene.add(field.trunks, field.canopies);
 
-  // ---- arbustos (esferas achatadas escuras rentes ao chão) ----
-  const BUSH = Math.max(6, Math.round(26 * q.bushFactor));
-  const bushGeo = new THREE.IcosahedronGeometry(.7, 1);
-  const bushMat = new THREE.MeshStandardMaterial({ color: '#45542c', roughness: .95, flatShading: true });
-  const bushes = new THREE.InstancedMesh(bushGeo, bushMat, BUSH);
-  bushes.castShadow = bushes.receiveShadow = true;
+  // ---- arbustos (clusters de 5 blobs — Fase 31; tint por instância) ----
+  const BUSH = Math.max(6, Math.round(40 * q.bushFactor));
+  const bushSpots = [];
   let bi = 0; guard = 0;
-  while (bi < BUSH && guard++ < 300) {
+  while (bi < BUSH && guard++ < 400) {
     const x = (rng.next() - .5) * 380, z = (rng.next() - .5) * 380;
     if (!free(x, z, 2.5) || !districtClear(x, z, 3)) continue;
-    dummy.position.set(x, .3, z);
-    dummy.scale.set(.8 + rng.next(), .55 + rng.next() * .4, .8 + rng.next());
-    dummy.rotation.set(0, rng.next() * Math.PI * 2, 0);
-    dummy.updateMatrix();
-    bushes.setMatrixAt(bi++, dummy.matrix);
+    const tintHex = scenario
+      ? '#' + new THREE.Color(scenarioCanopyTint(scenario, rng)).multiplyScalar(.78).getHexString()
+      : '#45542c';
+    bushSpots.push({
+      x, z, s: .75 + rng.next() * .6, rot: rng.next() * Math.PI * 2, tint: tintHex,
+    });
+    bi++;
   }
-  bushes.count = bi;
+  const bushes = buildBushField({ seed: seedBase + 2, spots: bushSpots });
   scene.add(bushes);
+  scene.userData.swayMats = [
+    field.canopies.material, bushes.material,
+  ];
 
   // Barburhen — vegetação baixa fria, crescendo entre concreto e pátios.
-  // Planos cruzados mantêm silhueta orgânica com duas draw calls instanciadas.
+  // Planos cruzados com vento por shader mantêm a silhueta orgânica.
   if (scenario?.id === 'Barburhen') {
     const SCRUB = Math.round(150 * q.treeFactor);
     const scrubGeo = new THREE.PlaneGeometry(.9, 1.35);
     const scrubTex = grassBladeTexture();
-    const scrubMats = ['#82958a', '#6d8179'].map((color) => new THREE.MeshStandardMaterial({
-      map: scrubTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color,
-    }));
+    const scrubMats = ['#82958a', '#6d8179'].map((color) => {
+      const m = new THREE.MeshStandardMaterial({
+        map: scrubTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color,
+      });
+      patchSway(m, { strength: .055, freq: 2.0, yScale: .75 }); // Fase 31 — mato vivo
+      (scene.userData.swayMats ??= []).push(m);
+      return m;
+    });
+    const scrubDummy = new THREE.Object3D();
     const scrubMeshes = scrubMats.map((mat) => new THREE.InstancedMesh(scrubGeo, mat, SCRUB));
     let si = 0; guard = 0;
     while (si < SCRUB && guard++ < SCRUB * 14) {
@@ -566,12 +565,12 @@ function buildNature(scene, layout, rng, q, scenario = null) {
       if (!free(x, z, 1.8) || !districtClear(x, z, 4)) continue;
       const s = .55 + rng.next() * .8;
       shadowSpots.push({ x, z, size: 1.05 * s });
-      dummy.position.set(x, .68 * s, z);
-      dummy.scale.set(s, s, s);
-      dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
-      dummy.updateMatrix(); scrubMeshes[0].setMatrixAt(si, dummy.matrix);
-      dummy.rotation.y += Math.PI / 2;
-      dummy.updateMatrix(); scrubMeshes[1].setMatrixAt(si, dummy.matrix);
+      scrubDummy.position.set(x, .68 * s, z);
+      scrubDummy.scale.set(s, s, s);
+      scrubDummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
+      scrubDummy.updateMatrix(); scrubMeshes[0].setMatrixAt(si, scrubDummy.matrix);
+      scrubDummy.rotation.y += Math.PI / 2;
+      scrubDummy.updateMatrix(); scrubMeshes[1].setMatrixAt(si, scrubDummy.matrix);
       si++;
     }
     scrubMeshes.forEach((mesh) => { mesh.count = si; mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); });
@@ -583,17 +582,18 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   const rockMat = new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .92, flatShading: true });
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, ROCKS);
   rocks.castShadow = rocks.receiveShadow = true;
+  const rockDummy = new THREE.Object3D();
   let ri = 0; guard = 0;
   while (ri < ROCKS && guard++ < 400) {
     const x = (rng.next() - .5) * 390, z = (rng.next() - .5) * 390;
     if (!free(x, z, 3) || !districtClear(x, z, 2)) continue;
     const rs = .5 + rng.next() * .9;
     shadowSpots.push({ x, z, size: 1.5 * rs });
-    dummy.position.set(x, .25 + rng.next() * .2, z);
-    dummy.scale.set(rs, .35 + rng.next() * .5, .5 + rng.next() * .9);
-    dummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
-    dummy.updateMatrix();
-    rocks.setMatrixAt(ri++, dummy.matrix);
+    rockDummy.position.set(x, .25 + rng.next() * .2, z);
+    rockDummy.scale.set(rs, .35 + rng.next() * .5, .5 + rng.next() * .9);
+    rockDummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
+    rockDummy.updateMatrix();
+    rocks.setMatrixAt(ri++, rockDummy.matrix);
   }
   rocks.count = ri;
   scene.add(rocks);
@@ -785,40 +785,64 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // 2 draw calls, gate por tier via q.lightFactor)
   buildLightShafts(scene, layout, scenario, interiors, q);
 
-  // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
+  // ---- grama em TUFOS (Fase 31): 3 lâminas curvadas por tufo, plantio em
+  // clumps (moitas) e vento por shader — mata de produção, não carpete plano.
+  // Duas tonalidades por instância quebram a uniformidade (como antes).
   const bladeTex = grassBladeTexture();
-  const GRASS = Math.max(200, Math.round(1500 * q.grassFactor));
+  const GRASS = Math.max(240, Math.round(2300 * q.grassFactor));
   const seedRng = { s: 12345, next() { this.s = (this.s * 1103515245 + 12345) & 0x7fffffff; return this.s / 0x7fffffff; } };
-  const grassGeo = new THREE.PlaneGeometry(.9, .7);
-  const dummy = new THREE.Object3D();
-  const blades = []; // [x, z, rot]
-  for (let i = 0; i < GRASS * 2; i++) {
-    const x = (seedRng.next() - .5) * 400, z = (seedRng.next() - .5) * 400;
-    let ok = true;
-    for (const c of layout.colliders) {
-      if (x > c.minX - 1 && x < c.maxX + 1 && z > c.minZ - 1 && z < c.maxZ + 1) { ok = false; break; }
+  const bladeList = []; // [x, z, rot, tint] — clumps de 6-14 tufos ao redor de um centro
+  let placed = 0, clumps = 0;
+  while (placed < GRASS && clumps++ < GRASS * 2) {
+    const cx = (seedRng.next() - .5) * 400, cz = (seedRng.next() - .5) * 400;
+    const inField = seedRng.next() < .82;
+    const n = 6 + Math.floor(seedRng.next() * 9);
+    for (let k = 0; k < n && placed < GRASS; k++) {
+      const rad = seedRng.next() * (inField ? 2.6 : 7.5);
+      const a = seedRng.next() * Math.PI * 2;
+      const x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad;
+      let ok = true;
+      for (const c of layout.colliders) {
+        if (x > c.minX - 1 && x < c.maxX + 1 && z > c.minZ - 1 && z < c.maxZ + 1) { ok = false; break; }
+      }
+      if (!ok) continue;
+      bladeList.push([x, z, seedRng.next() * Math.PI, seedRng.next()]);
+      placed++;
     }
-    if (ok) blades.push([x, z, seedRng.next() * Math.PI]);
   }
+  const tuftGeo = grassTuftGeometry({ seed: 77 });
   const grassTints = GRASS_TINTS[scenario.id] ?? GRASS_TINTS.CIGKV;
-  grassTints.forEach((tintCol, half) => {
+  const dummy = new THREE.Object3D();
+  const grassTintCol = new THREE.Color();
+  grassTints.forEach((tintBase, half) => {
     const grassMat = new THREE.MeshStandardMaterial({
-      map: bladeTex.clone(), alphaTest: .45, side: THREE.DoubleSide, roughness: 1, color: tintCol,
+      map: bladeTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color: '#ffffff',
     });
     grassMat.map.needsUpdate = true;
-    const grass = new THREE.InstancedMesh(grassGeo, grassMat, Math.max(1, Math.ceil(blades.length / 2)));
+    // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
+    patchSway(grassMat, { strength: .07, freq: 2.1, yScale: 1.1 });
+    const cap = Math.ceil(bladeList.length / 2);
+    const grass = new THREE.InstancedMesh(tuftGeo, grassMat, Math.max(1, cap));
     let gi = 0;
-    for (let i = half; i < blades.length; i += 2) {
-      const [x, z, rot] = blades[i];
-      // Fase 23 — grama acompanha o relevo (só muda além da área jogável;
-      // dentro do plano segue em y=.32 como sempre)
-      dummy.position.set(x, .32 + terrainHeightAt(x, z, scenario.id), z);
+    for (let i = half; i < bladeList.length; i += 2) {
+      const [x, z, rot, vr] = bladeList[i];
+      const s = .7 + vr * .75;
+      // Fase 23 — grama acompanha o relevo (só muda além da área jogável)
+      dummy.position.set(x, .04 + terrainHeightAt(x, z, scenario.id), z);
       dummy.rotation.set(0, rot, 0);
+      dummy.scale.set(s, s * (.85 + vr * .4), s);
       dummy.updateMatrix();
-      grass.setMatrixAt(gi++, dummy.matrix);
+      grass.setMatrixAt(gi, dummy.matrix);
+      // variação de tint por tufo (mezcla as 2 famílias de cor do mundo)
+      grassTintCol.set(tintBase).offsetHSL((vr - .5) * .015, 0, (vr - .5) * .1);
+      grass.setColorAt(gi, grassTintCol);
+      gi++;
     }
     grass.count = gi;
+    if (grass.instanceColor) grass.instanceColor.needsUpdate = true;
+    grass.computeBoundingSphere?.();
     scene.add(grass);
+    (scene.userData.swayMats ??= []).push(grassMat);
   });
 
   // ---- loot visual ----
