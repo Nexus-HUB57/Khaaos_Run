@@ -59,6 +59,10 @@ Os avatares apresentavam movimento robotizado. Auditoria do pipeline de animaç�
 9. **Envelope de aceleração humano** — `MaxAcceleration=1600`, `BrakingDecelerationWalking=1000`, `GroundFriction=6.5`, `NetworkSmoothingMode=Exponential` (players e operativos).
 10. **Bots individualizados** — assinatura de locomoção determinística por nome (velocidade ±12%, turn rate ±25%, gait wobble senoidal ±3% — velocidade nunca é linha reta constante).
 11. **Secondary motion real de espécie** — `KhaaosAnimationBlendManager` agora implementa spring-damper por bone em cadeia (atenuação progressiva: fim da cauda/ponta da asa deflete mais), dirigido por aceleração local + yaw rate, aplicado em `TG_PostPhysics` sobre a pose avaliada (`SetBoneTransformByName`, component space), constraints duros por config.
+12. **Stops com distance matching** — distância de parada prevista (`v²/2a` sobre o braking do CMC) e fase `StopMatchPhase` 0→1: a animação de stop avança pela DISTÂNCIA restante, não pelo tempo — o avatar para EM cima da marca (sem derrapar com o idle já rodando).
+13. **Pose aérea por velocidade vertical** — `AirPoseBlend` (−1 subindo / 0 ápice / +1 caindo), suavizado criticamente amortecido: o salto tem composição de subida, hang time e queda, em vez de uma pose única congelada.
+14. **Pé-pivô no turn-in-place** — `PivotFootIsLeft` + `PivotWeight`: giro à direita cruza o pé ESQUERDO (e vice-versa), com histerese de 12° (sem flicker) e peso proporcional ao ângulo residual — a rotação vira uma ação humana de plantar o pé.
+15. **Motion Warping de vault** — registry de warp targets (`SetWarpTarget`) + `VaultWarpPhase` (0→1 exatamente na marca) + `VaultWarpScale` (janela ±35% do clip base): o vault cobre a distância REAL até o obstáculo, sem rubber-banding.
 
 ## 3. Perfis por espécie (`ApplySpeciesProfile`)
 
@@ -84,12 +88,17 @@ O AnimBP deve consumir (em vez de velocidade bruta):
 - `HeadLookYaw` / `HeadLookPitch` → look-at da cabeça
 - `IdleBreath` → layer aditiva de respiração (chest/spine)
 - `FootIKOffsetL/R` + `FootIKTiltL/R` → node de foot IK
+- `StopDistanceCm` / `StopMatchPhase` → node de stop com distance matching
+- `AirPoseBlend` → Blend Poses by AirPoseBlend (subida/ápice/queda)
+- `PivotFootIsLeft` + `PivotWeight` → turn-in-place espelhado por pé de pivô
+- `bHasVaultTarget` + `VaultWarpPhase` + `VaultWarpScale` → Motion Warping do vault
 
 Fallback: sem o componente, os AnimInstances aplicam single-pole smoothing — nenhum parâmetro instantâneo chega ao Anim Graph.
 
 ## 5. Testes (CI)
 
 - `tests/ue5/natural_locomotion_test.cpp` — **49 checks standalone** (g++ `-std=c++20 -Wall -Wextra -Werror -pedantic`): convergência, frame-rate independence, wrap shortest-path, clamp de lean, cadência de passadas (walk < sprint, idle = 0 eventos), spring de aterrissagem estável, histerese do turn-in-place, determinismo do noise, estabilidade do foot IK (clamp em cliffs), stop ease, fuzz 60s sem NaN, contrato de `ConsumeFootEvent`.
+- `tests/ue5/distance_match_test.cpp` — **38 checks standalone** (Fase 32): cinemática de parada (600→180 cm, 900→405 cm, quadrática), fase de stop monótona 0→1 e reset na arrancada, warp idêntico na razão 1 e clampado na janela ±35%, NaN-safe, pivô (direita→esquerdo, esquerda→direito, histerese 12°, peso linear), air pose (subida −1 / queda +1 / grounded→0, independência 60 vs 120 Hz), fuzz 600 frames sem NaN.
 - Registrado em `scripts/test_ue5_logic.sh` (roda em toda a CI junto dos world rule tests).
 - `scripts/validate_uht.py` — headers novos registrados em `NEW_FILES` (312/312 checks).
 
@@ -97,9 +106,10 @@ Fallback: sem o componente, os AnimInstances aplicam single-pole smoothing — n
 
 | Arquivo | Papel |
 |---------|-------|
-| `Game/Animation/KhaaosLocomotionCore.{h,cpp}` | **Novo** — kernel matemático puro (zero deps UE) |
+| `Game/Animation/KhaaosLocomotionCore.{h,cpp}` | **Kernel matemático puro** (zero deps UE) — suavização, lean, stride, land, turn, breath, look, foot IK, distance matching, air pose, pivô, warp |
 | `Game/Animation/KhaaosNaturalLocomotionComponent.{h,cpp}` | **Novo** — ponte UE5 (sampling, traces, perfis, eventos) |
-| `tests/ue5/natural_locomotion_test.cpp` | **Novo** — 49 checks standalone |
+| `tests/ue5/natural_locomotion_test.cpp` | **49 checks standalone** do kernel |
+| `tests/ue5/distance_match_test.cpp` | **38 checks standalone** — stop matching / warp / pivô / air pose |
 | `Player/KhaaosCharacter.{h,cpp}` | Componente + envelope de aceleração CMC |
 | `Game/Character/KhaaosOperativeActor.{h,cpp}` | Componente + perfil por espécie (operativos) |
 | `Player/KhaaosPlayerAnimInstance.{h,cpp}` | Consome o kernel (+ fallback smoothing) |
@@ -147,6 +157,10 @@ feita na UI (ou via `unreal-mcp` no host). Ordem de cima para baixo no grafo:
 | 7 | `HeadLookYaw` + `HeadLookPitch` | look-at da cabeça (Aim Offset do pescoço/cabeça) | clamps 75°/40° já aplicados no kernel |
 | 8 | `IdleBreath` | **Layered Blend Per Bone** aditivo (spine_02/chest) | −1..1, portadora 0.22 Hz (idle) — nunca em sprint |
 | 9 | `FootIKOffsetLeft/Right` + `FootIKTiltLeft/Right` | `TwoBoneIK` por pé (`foot_l`/`foot_r`) + rotação de pé | offsets em cm, tilt em °; relaxar no ar (`bIsInAir`) |
+| 10 | `StopDistanceCm` + `StopMatchPhase` | node de stop com **distance matching** (ou `Distance Matching` do LYRA-style) | fase 0→1 pela distância restante; arrival com `StopEase` < 0.15 |
+| 11 | `AirPoseBlend` | **Blend Poses by AirPoseBlend** (3 poses: subir/ápice/cair) | −1 = pose de subida, 0 = ápice, +1 = queda; transições já suavizadas no kernel |
+| 12 | `PivotFootIsLeft` + `PivotWeight` | turn-in-place **espelhado por pivô** (anim L × anim R) | peso 0..1 cruza para a anim pivô correta; histerese já no kernel |
+| 13 | `bHasVaultTarget` + `VaultWarpPhase` + `VaultWarpScale` | **Motion Warping** do vault (target `"Vault"`) | gameplay registra via `SetWarpTarget`; escala clampa em ±35% do clip base |
 
 ### 7.3 Validação pós-wiring (host)
 
@@ -156,3 +170,5 @@ feita na UI (ou via `unreal-mcp` no host). Ordem de cima para baixo no grafo:
 4. Terreno irregular → pés plantados (offset IK ≤ 35 cm, tilt ≤ 25°).
 5. 3+ avatares parados → respiração fora de fase (noise por personagem).
 6. Bots em esquadrão → velocidades/turn rates dessincronizados (assinatura por nome).
+7. Sprint → freio em cima de uma marca → a animação de stop termina COM o avatar plantado na marca (sem derrapar no idle).
+8. Salto → subida/ápice/queda visíveis; vault sobre obstáculo de distâncias diferentes (100/150/190 cm) → o corpo cobre a distância real sem rubber-band.

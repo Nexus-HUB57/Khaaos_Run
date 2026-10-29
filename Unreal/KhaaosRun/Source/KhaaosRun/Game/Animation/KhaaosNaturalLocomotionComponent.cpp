@@ -62,6 +62,7 @@ void UKhaaosNaturalLocomotionComponent::TickComponent(float DeltaTime, enum ELev
     SampleEngineState(DeltaTime, Input);
 
     KhaaosLoco::Step(Config, Core, Input);
+    UpdateVaultWarp();
     PublishOutputs();
 
     // Route procedural foot plants to gameplay (audio/VFX).
@@ -324,6 +325,14 @@ void UKhaaosNaturalLocomotionComponent::SampleEngineState(float DeltaTime, Khaao
     Input.bInAir = MoveComp && MoveComp->IsFalling();
     Input.bJustLanded = DetectLanding(Input.LandingSpeed);
 
+    // ── Vertical velocity (air pose) & braking decel (distance matching) ──
+    Input.VerticalSpeed = static_cast<float>(Velocity.Z);
+    if (MoveComp)
+    {
+        const float Braking = static_cast<float>(MoveComp->BrakingDecelerationWalking);
+        Input.BrakingDecel = (Braking > 1.0f) ? Braking : 1000.0f;
+    }
+
     // ── Residual yaw for turn-in-place ──
     if (const AController* Ctl = Char->GetController())
     {
@@ -367,4 +376,82 @@ void UKhaaosNaturalLocomotionComponent::PublishOutputs()
     FootTiltLeftDeg       = Core.FootLeft.TiltDeg;
     FootTiltRightDeg      = Core.FootRight.TiltDeg;
     NetworkSmoothedSpeed  = Core.NetworkSmoothedSpeed;
+    StopDistanceCm        = Core.StopDistanceCm;
+    StopMatchPhase        = Core.StopMatchPhase;
+    AirPoseBlend          = Core.AirPoseBlend;
+    bPivotFootLeft        = Core.bPivotFootLeft;
+    PivotWeight           = Core.PivotWeight;
+}
+
+// ─── Motion warp targets (Fase 32) ───────────────────────────────────────────
+
+void UKhaaosNaturalLocomotionComponent::SetWarpTarget(FName Name, const FTransform& Target)
+{
+    const ACharacter* Char = CachedCharacter.Get();
+    WarpTargets.Add(Name, Target);
+
+    if (Name == VaultWarpTargetName && Char)
+    {
+        // Capture the planar gap to the obstacle at registration time;
+        // the vault phase then closes this gap 1 → 0 as the character advances.
+        const FVector CharLoc = Char->GetActorLocation();
+        const FVector TargetLoc = Target.GetTranslation();
+        FVector Delta(TargetLoc.X - CharLoc.X, TargetLoc.Y - CharLoc.Y, 0.0f);
+        const float Gap = static_cast<float>(Delta.Size());
+        VaultStartDistanceCm = (Gap > 1.0f) ? Gap : 1.0f;
+        bHasVaultTarget = true;
+        VaultWarpPhase = 0.0f;
+        const float Base = (WarpBaseDistanceCm > 1.0f) ? WarpBaseDistanceCm : 1.0f;
+        const float Window = (WarpWindowFrac > 0.0f) ? WarpWindowFrac : 0.0f;
+        VaultWarpScale = KhaaosLoco::ClampFloat(VaultStartDistanceCm / Base,
+                                                1.0f - Window, 1.0f + Window);
+    }
+}
+
+void UKhaaosNaturalLocomotionComponent::ClearWarpTargets()
+{
+    WarpTargets.Reset();
+    bHasVaultTarget = false;
+    VaultWarpPhase = 0.0f;
+    VaultWarpScale = 1.0f;
+}
+
+bool UKhaaosNaturalLocomotionComponent::GetWarpTarget(FName Name, FTransform& OutTarget) const
+{
+    if (const FTransform* Found = WarpTargets.Find(Name))
+    {
+        OutTarget = *Found;
+        return true;
+    }
+    return false;
+}
+
+void UKhaaosNaturalLocomotionComponent::UpdateVaultWarp()
+{
+    if (!bHasVaultTarget)
+    {
+        return;
+    }
+    const FTransform* Target = WarpTargets.Find(VaultWarpTargetName);
+    const ACharacter* Char = CachedCharacter.Get();
+    if (!Target || !Char)
+    {
+        ClearWarpTargets();
+        return;
+    }
+
+    const FVector CharLoc = Char->GetActorLocation();
+    const FVector TargetLoc = Target->GetTranslation();
+    FVector Delta(TargetLoc.X - CharLoc.X, TargetLoc.Y - CharLoc.Y, 0.0f);
+    const float Remaining = static_cast<float>(Delta.Size());
+
+    // Distance-matched phase: 0 at registration → 1 exactly at the target.
+    const float Start = (VaultStartDistanceCm > 1.0f) ? VaultStartDistanceCm : 1.0f;
+    VaultWarpPhase = 1.0f - KhaaosLoco::ClampFloat(Remaining / Start, 0.0f, 1.0f);
+
+    // Auto-release shortly after arrival so the vault anim can finish.
+    if (VaultWarpPhase >= 0.999f && Remaining < 10.0f)
+    {
+        ClearWarpTargets();
+    }
 }

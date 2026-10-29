@@ -153,6 +153,14 @@ void UKhaaosPlayerAnimInstance::UpdateLocomotion(float DeltaSeconds)
                 FootIKOffsetRight = Natural->FootOffsetRightCm;
                 FootIKTiltLeft = Natural->FootTiltLeftDeg;
                 FootIKTiltRight = Natural->FootTiltRightDeg;
+                StopDistanceCm = Natural->StopDistanceCm;
+                StopMatchPhase = Natural->StopMatchPhase;
+                AirPoseBlend = Natural->AirPoseBlend;
+                PivotFootIsLeft = Natural->bPivotFootLeft;
+                PivotWeight = Natural->PivotWeight;
+                bHasVaultTarget = Natural->bHasVaultTarget;
+                VaultWarpPhase = Natural->VaultWarpPhase;
+                VaultWarpScale = Natural->VaultWarpScale;
         }
         else
         {
@@ -160,6 +168,21 @@ void UKhaaosPlayerAnimInstance::UpdateLocomotion(float DeltaSeconds)
                 // the Anim Graph never receives instantaneous parameter jumps.
                 SmoothedSpeed = FMath::FInterpTo(SmoothedSpeed, Speed, DeltaSeconds, 8.0f);
                 SmoothedDirection = FMath::FInterpTo(SmoothedDirection, Direction, DeltaSeconds, 10.0f);
+
+                // Fase 32 fallbacks: honest clamped raw paths (no component).
+                if (UCharacterMovementComponent* MC = Char->GetCharacterMovement())
+                {
+                        const float Braking = FMath::Max(MC->BrakingDecelerationWalking, 1.0f);
+                        StopDistanceCm = (Speed * Speed) / (2.0f * Braking);
+                        AirPoseBlend = FMath::FInterpTo(AirPoseBlend,
+                                MC->IsFalling()
+                                        ? FMath::Clamp(-Velocity.Z / 700.0f, -1.0f, 1.0f)
+                                        : 0.0f,
+                                DeltaSeconds, 7.0f);
+                }
+                StopMatchPhase = (Speed <= 10.0f)
+                        ? FMath::FInterpTo(StopMatchPhase, 1.0f, DeltaSeconds, 14.0f)
+                        : 0.0f;
         }
 }
 

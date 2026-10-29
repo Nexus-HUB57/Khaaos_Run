@@ -208,6 +208,38 @@ public:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
         float FootIKTiltRight = 0.0f;
 
+        /** Predicted stopping distance (cm) — feeds distance-matched stop nodes. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float StopDistanceCm = 0.0f;
+
+        /** Distance-matched stop phase (0 = decel start, 1 = planted & stopped). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float StopMatchPhase = 0.0f;
+
+        /** Air pose blend (-1 = rising, 0 = apex, +1 = falling). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float AirPoseBlend = 0.0f;
+
+        /** True when the turn-in-place pivots on the LEFT foot (mirror source). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        bool PivotFootIsLeft = false;
+
+        /** Pivot weight 0..1 for mirrored turn-in-place anims. */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float PivotWeight = 0.0f;
+
+        /** True while a vault warp target is registered (Motion Warping gate). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        bool bHasVaultTarget = false;
+
+        /** Distance-matched vault phase (0..1, reaches 1 at the warp target). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float VaultWarpPhase = 0.0f;
+
+        /** Vault warp scale vs the base clip (clamped by the warp window). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Anim|Natural")
+        float VaultWarpScale = 1.0f;
+
 protected:
 
         /** Cached character reference. */

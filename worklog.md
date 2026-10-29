@@ -392,3 +392,23 @@ Work Log:
 Stage Summary:
 - Fase 32 VERIFICADA end to end: implementação + testes + build + browser real com evidências — nada pendente na diretiva (skins míticas do arsenal, anexos por raridade, grama com LOD)
 - Nota de instrumentação registrada: distância/custo de render da grama e rotação do farol devem ser medidos por animT (tempo de jogo), não por tempo de parede, em ambientes headless
+
+---
+Task ID: 15
+Agent: Main
+Task: Fase 32 — Distance Matching + Motion Warping + Air Pose + Pé-Pivô (kernel de locomoção natural, continuação do anti-robotização M5)
+
+Work Log:
+- Estado de entrada: PR #215 (wiring automatizado dos assets NL — script do Editor + §7 da doc) mergeado em f4dfba6; main 22/22 workflows success; bateria local 805 game-runtime + 430/39 official + 49 checks natloco + 312 UHT verde
+- GAP: o Vault existia como estado FÍSICO (EMovementState) mas não havia distance matching, warping, blend de pose aérea nem escolha de pé-pivô — stops derrapavam no idle, saltos tinham pose única congelada, turn-in-place girava sem plantar o pé (última fronteira do "movimento robotizado")
+- KhaaosLocomotionCore (kernel puro, zero deps UE): (1) PredictStopDistanceCm — v²/2a sobre o braking real do CMC; (2) StopMatchPhase 0→1 pela distância restante com captura do pico de velocidade na abertura do freio, arrival abaixo de 10 uu/s (limpa o pico → próxima arrancada detectável), fase sempre suavizada (nunca snappa); (3) WarpPhaseForDistance — remapeia fase pela razão de distância, clampada à janela ±35% (sem rubber-band), NaN-safe; (4) ChoosePivotFoot — giro à direita cruza o pé ESQUERDO (human cross-over), histerese de 12°, peso linear até 55°; (5) AirPoseBlend — −1 subindo / 0 ápice / +1 caindo (sinal corrigido empiricamente no teste), saturação a 700 uu/s, decay a 0 no chão
+- Componente: amostra VerticalSpeed + BrakingDecelerationWalking do CMC; expõe StopDistanceCm/StopMatchPhase/AirPoseBlend/bPivotFootLeft/PivotWeight; registry de warp targets (SetWarpTarget/ClearWarpTargets/GetWarpTarget) com fase do vault distance-matched (0→1 exatamente na marca) e auto-release pós-chegada; tunables WarpBaseDistanceCm=150 / WarpWindowFrac=0.35
+- AnimInstances (Player + Species): novos UPROPERTYs espelhando os 8 outputs (com fallback honesto clamped sem componente — mesmo cálculo v²/2a e sinal correto do air pose)
+- BUGS PESCADOS PELO TESTE NOVO antes do push: sinal do air pose invertido (subida dava +1), PeakStopSpeed obsoleto pós-arrival (phase não resetava na arrancada), warp além da janela (clamp final em [0,1] é o contrato correto — teste ajustado)
+- Testes: tests/ue5/distance_match_test.cpp (38 checks standalone -Wall -Wextra -Werror -pedantic): cinemática 600→180cm/900→405cm quadrática, fase monótona e reset na arrancada, warp identidade/clamp/determinismo, pivô (direita→esquerdo, histerese, peso linear), air pose (saturação ±1, grounded→0, independência 60 vs 120 Hz), fuzz 600 frames sem NaN; registrado no test_ue5_logic.sh
+- Doc: NATURAL_LOCOMOTION.md — camadas 12-15, contrato §4 estendido (8 parâmetros novos), wiring §7.2 linhas 10-13 (distance-matched stop, Blend Poses by AirPoseBlend, turn espelhado por pivô, Motion Warping do vault), validação §7.3 checks 7-8 (parar na marca, vault em 100/150/190 cm)
+
+Stage Summary:
+- O ciclo de movimento humano completo agora é modelado no kernel: arrancada com lean, passada sincronizada, PARADA NA MARCA (distance matching), salto com subida/ápice/queda, pouso com absorção, giro plantando o pé-pivô e vault que cobre a distância real
+- Zero mudança de física/balística/netcode; tudo em cima do kernel determinístico já testado em CI
+- 87 checks standalone de locomoção (49 + 38) pinando o contrato anti-robotização
