@@ -88,8 +88,15 @@ async function checkGitHub() {
       'docs/EOS_PORTAL_CHECKLIST.md Fase B (gh secret set …) — valores SOMENTE via Dev Portal + gh secret');
 
     if (secretNames.has('UE_CONTAINER_PAT')) ready('ue58', 'secret UE_CONTAINER_PAT presente (imagem oficial de contêiner Epic)');
-    else blocker('ue58', 'secret UE_CONTAINER_PAT ausente — workflow ue58-container-build.yml não autentica no repositório privado da Epic',
-      'gh secret set UE_CONTAINER_PAT --repo ' + REPO + '  # PAT de conta vinculada à EpicGames (EULA aceito)');
+    else if (secretNames.has('UNREAL_ENGINE_LOGIN')) {
+      // Fase 31 — o workflow aceita UNREAL_ENGINE_LOGIN como credencial
+      // alternativa; WARN: o valor precisa AUTENTICAR no ghcr (o smoke
+      // ue-infra-smoke valida a cada run — denied = revisar valor/escopo) e a
+      // conta precisa de acesso ao pacote epicgames/unreal-engine (EULA).
+      blocker('ue58', 'só UNREAL_ENGINE_LOGIN presente (fallback aceito pelo ue58-container-build) — MAS o último ue-infra-smoke registrou ghcr "denied": o valor NÃO autentica',
+        'gh secret set UNREAL_ENGINE_LOGIN --repo ' + REPO + '  # "user:token" de conta Epic-vinculada com read:packages — ou preferir: gh secret set UE_CONTAINER_PAT');
+    } else blocker('ue58', 'secret UE_CONTAINER_PAT ausente — workflow ue58-container-build.yml não autentica no repositório privado da Epic',
+      'gh secret set UE_CONTAINER_PAT --repo ' + REPO + '  # PAT de conta vinculada à EpicGames (EULA aceito) — alternativa: UNREAL_ENGINE_LOGIN (ghcr, lido pelo workflow)');
   } catch (e) {
     blocker('github', `falha de rede na API: ${e.message}`, 'verificar conectividade e rodar de novo');
   }

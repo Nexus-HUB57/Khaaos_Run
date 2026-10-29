@@ -55,15 +55,26 @@ jobs:
       - name: Check Epic container credential
         env:
           UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+          UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
         run: |
+          # Fase 31 — UNREAL_ENGINE_LOGIN (ghcr, validado pelo ue-infra-smoke)
+          # serve como credencial ALTERNATIVA: o segredo precisa AUTENTICAR no
+          # ghcr e a conta precisa ter acesso ao pacote epicgames/unreal-engine
+          # (EULA aceito + read:packages) — o mesmo requisito do PAT.
           if [ -n "$UE_CONTAINER_PAT" ]; then
             echo "has_pat=true" >> $GITHUB_OUTPUT
             echo "✅ UE_CONTAINER_PAT configurado — build de engine habilitado"
+          elif [ -n "$UE_LOGIN" ]; then
+            echo "has_pat=true" >> $GITHUB_OUTPUT
+            echo "✅ UNREAL_ENGINE_LOGIN presente — credencial alternativa do container (fallback do UE_CONTAINER_PAT)"
+            echo "   ⚠️ o login ghcr PRECISA autenticar E ter acesso ao pacote epicgames/unreal-engine;"
+            echo "   o ue-infra-smoke valida o login a cada execução (ghcr denied = revisar valor/escopo)."
           else
             echo "has_pat=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ UE_CONTAINER_PAT ausente — build de engine PULADO (não é falha)."
+            echo "ℹ️ UE_CONTAINER_PAT/UNREAL_ENGINE_LOGIN ausentes — build de engine PULADO (não é falha)."
             echo "   Configure o PAT de conta vinculada à Epic; veja o cabeçalho"
             echo "   deste workflow ou scripts/build/bootstrap_ue58_runner.sh (self-hosted)."
+          fi
           fi
 
   build:
@@ -76,7 +87,7 @@ jobs:
       image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.UE_CONTAINER_PAT }}
+        password: ${{ secrets.UE_CONTAINER_PAT || secrets.UNREAL_ENGINE_LOGIN }}
       options: --user root
     steps:
       - uses: actions/checkout@v4
