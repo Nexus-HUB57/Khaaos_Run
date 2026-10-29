@@ -414,13 +414,57 @@ export function grassImpostorGeometry({ height = 1.15, width = 3.2 } = {}) {
 //   se sobrepõem (sempre existe plateau no meio da banda).
 // Banda desligada (impostorDist <= midDist, retrocompat F32): 0 em qualquer
 // distância — nenhum impostor nasce.
-export function grassImpostorFade(dist, { midDist = 58, impostorDist = 110, fadeZone = 14 } = {}) {
+export function grassImpostorFade(dist, { midDist = 58, impostorDist = 110, fadeZone = 14, preRoll = 0 } = {}) {
   if (!(impostorDist > midDist)) return 0;                    // banda desligada
   const zone = Math.max(.5, Math.min(fadeZone, (impostorDist - midDist) / 2));
-  if (!(dist >= midDist) || !(dist <= impostorDist)) return 0; // fora da banda
-  const fadeIn = smoothStep(midDist, midDist + zone, dist);
+  // F38 — pre-roll: a rampa de ENTRADA começa ANTES de midDist (cross-fade
+  // com o desbaste do tier sparse — a mancha cresce sob os tufos que raleiam).
+  // Opt-in (default 0 = contrato F37 intocado) e CAPADO pela própria zone —
+  // o fadeIn nunca alcança o tier full nem invade a rampa de saída.
+  const pre = Math.max(0, Math.min(preRoll ?? 0, zone));
+  const enter = midDist - pre;
+  if (!(dist >= enter) || !(dist <= impostorDist)) return 0; // fora da banda
+  const fadeIn = smoothStep(enter, enter + zone, dist);
   const fadeOut = 1 - smoothStep(impostorDist - zone, impostorDist, dist);
   return fadeIn * fadeOut;                                    // 0..1
+}
+
+// F38 — DESBASTE GRADUAL do tier sparse (PURO): a F32 raleava em DEGRAU
+// (count saltava de fullCount p/ ceil(fullCount×sparseKeep) na entrada e
+// morria seco em midDist). Aqui o count É o fade:
+//   entrada [nearDist, nearDist+entryZone] — fullCount → plateau (smoothstep);
+//   plateau (meio da banda) — MESMO contrato F32: max(1, ceil(n×sparseKeep));
+//   saída [midDist−exitZone, midDist] — plateau → 0 (raléia até sumir).
+// As zonas são capadas a 45% da banda cada (sempre resta plateau ≥ 10%);
+// banda degenerada (midDist ≤ nearDist) vira degrau puro retrocompatível.
+// A ordem de plantio é estável — reduzir count nunca troca QUAIS tufos
+// aparecem (mesmo contrato anti-tremedeira da F32).
+export function grassSparseCount(dist, {
+  fullCount = 0, nearDist = 28, midDist = 58, sparseKeep = .4,
+  entryZone = 10, exitZone = 12,
+} = {}) {
+  const n = Math.max(0, fullCount | 0);
+  if (n === 0) return 0;
+  if (dist < nearDist) return n;                              // tier full
+  if (dist >= midDist) return 0;                              // impostor/hidden
+  const plateau = Math.max(1, Math.ceil(n * Math.max(0, Math.min(1, sparseKeep))));
+  const span = midDist - nearDist;
+  const ez = Math.max(0, Math.min(entryZone ?? 0, span * .45));
+  const xz = Math.max(0, Math.min(exitZone ?? 0, span * .45));
+  const thinIn = smoothStep(nearDist, nearDist + ez, dist);   // 0 → 1 (raleia)
+  const thinOut = 1 - smoothStep(midDist - xz, midDist, dist); // 1 → 0 (morre)
+  const base = n - (n - plateau) * thinIn;                    // full → plateau
+  return Math.round(base * thinOut);                          // plateau → 0
+}
+
+// F38 — entradas de SOMBRA DE CONTATO para os ARBUSTOS (PURO): árvores,
+// pedras e o mato rasteiro de Barburhen já ancoravam no chão via
+// buildContactShadows (F7) — os arbustos em cluster (F31) ficaram fora.
+// 1 entrada por arbusto: disco de tamanho proporcional à escala plantada
+// (diâmetro do cluster ~2.1m × s), sem rotação (disco radial). Determinístico.
+export function bushShadowEntries(bushSpots = [], { sizeFactor = 2.1 } = {}) {
+  const f = Math.max(0, sizeFactor);
+  return bushSpots.map((sp) => ({ x: sp.x, z: sp.z, rot: 0, size: f * (sp.s ?? 1) }));
 }
 
 // Fase 37 — ALPHA POR INSTÂNCIA via onBeforeCompile (mesmo contrato do
@@ -520,6 +564,7 @@ export function applyOutdoorTint(terrainMesh, bake = [], { radius = 25, strength
 }
 
 function smoothStep(a, b, v) {
+  if (!(b > a)) return v >= b ? 1 : 0;   // F38 — banda de largura 0 = degrau (sem NaN)
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
@@ -539,6 +584,8 @@ export function buildGrassFieldLOD({
   // Fase 37 — fade de entrada/saída da banda + sombra de contato ancorada
   impostorFadeZone = 14, impostorShadow = true, impostorShadowOpacity = .5,
   impostorShadowRadius = 1.9, impostorShadowLift = .05,
+  // Fase 38 — desbaste GRADUAL do sparse + cross-fade (pre-roll) do impostor
+  sparseEntryZone = 10, sparseExitZone = 12, impostorPreRoll = 0,
 } = {}) {
   const cells = grassChunkify(spots, { chunkSize });
   const group = new THREE.Group();
@@ -646,46 +693,63 @@ export function buildGrassFieldLOD({
     // F37 — fade da banda + sombras de contato (espeixo do campo de impostores)
     impostorFadeZone, impostorShadows, impostorShadowMats: [shMat],
     impostorShadowRadius, impostorShadowLift,
+    // F38 — desbaste gradual do sparse + pre-roll do cross-fade (inspeção/teste)
+    sparseEntryZone, sparseExitZone, impostorPreRoll,
     update(camX = 0, camZ = 0) {
       let imp = 0;
       const hasImpostor = impostorDist > midDist;
+      // F38 — empacotamento do impostor EXTRAÍDO: o cross-fade acende a mancha
+      // também na SAÍDA do sparse (pre-roll), não só no tier impostor
+      const packImpostor = (ch, fade) => {
+        impDummy.position.set(ch.x, ch.y ?? 0, ch.z);
+        impDummy.rotation.set(0, (ch.kx * 7 + ch.kz * 13) % 6, 0);
+        impDummy.scale.setScalar(1);
+        impDummy.updateMatrix();
+        impostors.setMatrixAt(imp, impDummy.matrix);
+        impAlpha.setX(imp, fade);               // F37/F38 — opacidade por distância
+        // sombra de contato: mesmo ancoramento no relevo (ch.y + lift),
+        // disco de raio fixo cobrindo a base do quad cruzado
+        if (useShadow) {
+          shDummy.position.set(ch.x, (ch.y ?? 0) + impostorShadowLift, ch.z);
+          shDummy.rotation.set(0, 0, 0);        // disco é radial — sem rotação
+          shDummy.scale.setScalar(impostorShadowRadius);
+          shDummy.updateMatrix();
+          impostorShadows.setMatrixAt(imp, shDummy.matrix);
+          shAlpha.setX(imp, fade);              // sombra acompanha o fade
+        }
+        // tint médio das famílias (mesma rotação determinística dos tufos);
+        // módulo positivo — kx/kz podem ser NEGATIVOS (chunks a oeste/norte)
+        impColor.copy(tintCols[((ch.kx + ch.kz) % tintCols.length + tintCols.length) % tintCols.length]);
+        impostors.setColorAt(imp, impColor);
+        imp++;
+      };
       for (const ch of chunks) {
         const d = Math.hypot(ch.x - camX, ch.z - camZ);
         const tier = grassChunkTier(d, { nearDist, midDist, impostorDist });
         if (tier === 'hidden') { ch.mesh.visible = false; continue; }
+        // F37/F38 — fade SUAVE (alpha 0 nas bordas → nem empacota: custo de
+        // draw 0). Com preRoll > 0 a rampa de entrada começa DENTRO do
+        // desbaste sparse — a mancha cresce sob os tufos que raleiam.
+        const fade = hasImpostor
+          ? grassImpostorFade(d, { midDist, impostorDist, fadeZone: impostorFadeZone, preRoll: impostorPreRoll })
+          : 0;
         if (tier === 'impostor') {
           ch.mesh.visible = false;
-          if (!hasImpostor) continue;
-          // F37 — fade SUAVE: alpha 0 na entrada da banda → nem empacota
-          // (custo de draw 0 enquanto invisível, como o tier hidden)
-          const fade = grassImpostorFade(d, { midDist, impostorDist, fadeZone: impostorFadeZone });
-          if (fade <= 0.002) continue;
-          // empacota o impostor deste chunk na posição livre
-          impDummy.position.set(ch.x, ch.y ?? 0, ch.z);
-          impDummy.rotation.set(0, (ch.kx * 7 + ch.kz * 13) % 6, 0);
-          impDummy.scale.setScalar(1);
-          impDummy.updateMatrix();
-          impostors.setMatrixAt(imp, impDummy.matrix);
-          impAlpha.setX(imp, fade);               // F37 — opacidade por distância
-          // sombra de contato: mesmo ancoramento no relevo (ch.y + lift),
-          // disco de raio fixo cobrindo a base do quad cruzado
-          if (useShadow) {
-            shDummy.position.set(ch.x, (ch.y ?? 0) + impostorShadowLift, ch.z);
-            shDummy.rotation.set(0, 0, 0);        // disco é radial — sem rotação
-            shDummy.scale.setScalar(impostorShadowRadius);
-            shDummy.updateMatrix();
-            impostorShadows.setMatrixAt(imp, shDummy.matrix);
-            shAlpha.setX(imp, fade);              // sombra acompanha o fade
-          }
-          // tint médio das famílias (mesma rotação determinística dos tufos);
-          // módulo positivo — kx/kz podem ser NEGATIVOS (chunks a oeste/norte)
-          impColor.copy(tintCols[((ch.kx + ch.kz) % tintCols.length + tintCols.length) % tintCols.length]);
-          impostors.setColorAt(imp, impColor);
-          imp++;
+          if (fade > 0.002) packImpostor(ch, fade);
           continue;
         }
-        ch.mesh.visible = true;
-        ch.mesh.count = tier === 'full' ? ch.fullCount : Math.max(1, Math.ceil(ch.fullCount * sparseKeep));
+        // F38 — full | sparse: desbaste GRADUAL (o count É o fade — entrada
+        // rampa full→plateau, plateau = contrato F32, saída raleia até 0).
+        // count 0 → mesh invisível (custo de draw 0, como o tier hidden).
+        const count = tier === 'full'
+          ? ch.fullCount
+          : grassSparseCount(d, {
+              fullCount: ch.fullCount, nearDist, midDist, sparseKeep,
+              entryZone: sparseEntryZone, exitZone: sparseExitZone,
+            });
+        ch.mesh.visible = count > 0;
+        ch.mesh.count = count;
+        if (fade > 0.002) packImpostor(ch, fade);   // cross-fade na saída do sparse
       }
       impostors.count = imp;
       impostors.visible = imp > 0;

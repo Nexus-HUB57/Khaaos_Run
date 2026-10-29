@@ -6,7 +6,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
-import { hudAuraFor, shiftAuraHex, weaponIconVars } from './aura3d.js'; // F36/F37 — aura sazonal do HUD + ícone
+import { hudAuraFor, shiftAuraHex, weaponIconVars, crosshairVars } from './aura3d.js'; // F36/F37/F38 — aura sazonal do HUD + ícone + mira
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -205,6 +205,26 @@ export class HUD {
             iconEl2.style.removeProperty('--aura-dur');
           }
         }
+        // Fase 38 — a MIRA entra no festival: braços na cor da SKIN
+        // (--ch-aura), ponto + glow na cor da ESTAÇÃO (--ch-season) e anel
+        // cônico no ritmo --ch-dur (CSS do #crosshair.mythic). Elemento de
+        // combate: decisão PURA crosshairVars (mesma fonte do badge/ícone);
+        // sem hex válido → limpa e volta à mira neutra (custo 0).
+        const chVars = crosshairVars(aura, mDef.aura);
+        const chEl = $('#crosshair');
+        if (chEl) {
+          if (chVars) {
+            chEl.classList.add('mythic');
+            chEl.style.setProperty('--ch-aura', chVars.aura);
+            chEl.style.setProperty('--ch-season', chVars.season);
+            chEl.style.setProperty('--ch-dur', chVars.dur);
+          } else {
+            chEl.classList.remove('mythic');
+            chEl.style.removeProperty('--ch-aura');
+            chEl.style.removeProperty('--ch-season');
+            chEl.style.removeProperty('--ch-dur');
+          }
+        }
       } else if (!mythic) {
         const body = document.body;
         if (body?.dataset.aura) {
@@ -218,6 +238,14 @@ export class HUD {
           iconEl3.style.removeProperty('--aura');
           iconEl3.style.removeProperty('--aura-season');
           iconEl3.style.removeProperty('--aura-dur');
+        }
+        // Fase 38 — mira volta ao neutro junto com o corpo (custo 0)
+        const chEl2 = $('#crosshair');
+        if (chEl2?.classList.contains('mythic')) {
+          chEl2.classList.remove('mythic');
+          chEl2.style.removeProperty('--ch-aura');
+          chEl2.style.removeProperty('--ch-season');
+          chEl2.style.removeProperty('--ch-dur');
         }
       }
     }

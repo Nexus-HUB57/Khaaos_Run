@@ -109,6 +109,29 @@ body[data-aura-season='primavera'] #auraVignette { opacity: .58; } /* estação 
 #crosshair .l { width: 9px; height: 2px; transform: translate(calc(-9px - var(--ch-gap)), -1px); }
 #crosshair .r { width: 9px; height: 2px; transform: translate(var(--ch-gap), -1px); }
 #crosshair .dot { width: 2px; height: 2px; transform: translate(-1px,-1px); border-radius: 50%; }
+/* ---------- Fase 38 — mira no festival sazonal por aura ---------- */
+/* Com skin mítica (hud3d acende #crosshair.mythic + body[data-aura]): braços
+   na cor da SKIN (--ch-aura), ponto central + glow na cor TINGIDA pela
+   ESTAÇÃO (--ch-season) e anel cônico girando no RITMO --ch-dur (mesmos
+   keyframes mythicSeason do badge/ícone). Elemento de COMBATE: anel em
+   opacidade baixa e raio acoplado ao spread (--ch-gap) — nunca cobre o alvo;
+   prefers-reduced-motion congela a rotação mantendo a tintura. */
+#crosshair.mythic .ch { background: var(--ch-aura, var(--acid)); box-shadow: 0 0 5px var(--ch-season, rgba(200,255,61,.8)); }
+#crosshair.mythic .dot { background: var(--ch-season, var(--acid)); box-shadow: 0 0 6px var(--ch-season, var(--acid)); }
+#crosshair.mythic::before {
+  content: ''; position: absolute;
+  inset: calc(-1 * var(--ch-gap, 8px) - 8px);   /* anel abraça os braços, segue o spread */
+  border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 70%, var(--ch-season, var(--acid)) 86%, transparent 100%);
+  opacity: .26; filter: blur(.6px);
+  animation: mythicSeason calc(3.6s * var(--ch-dur, 1)) linear infinite;
+}
+/* ritmo da ESTAÇÃO (hemisfério sul) — frio contém, primavera acende */
+body[data-aura-season='inverno'] #crosshair.mythic::before { opacity: .18; }
+body[data-aura-season='primavera'] #crosshair.mythic::before { opacity: .34; }
+@media (prefers-reduced-motion: reduce) {
+  #crosshair.mythic::before { animation: none; opacity: .2; }
+}
 
 /* ---------- hitmarker ---------- */
 #hitmarker { position: fixed; left: 50%; top: 50%; z-index: 16; pointer-events: none; opacity: 0; }

@@ -32,6 +32,7 @@ import {
   treeArchetypeFor, buildTreeField, buildBushField,
   buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
   grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
+  bushShadowEntries,                                   // F38 — sombra de contato dos arbustos
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
@@ -296,7 +297,7 @@ const CONTACT_SHADOW_SIZES = {
   barrierprop: 2.9, crate: 1.25, cone: 0.62, rubble: 1.15, rubbleSlab: 1.35,
 };
 export function buildContactShadows(scene, entries) {
-  if (!entries.length) return;
+  if (!entries.length) return null;
   const tex = contactShadowTexture();
   const mat = new THREE.MeshBasicMaterial({
     map: tex, transparent: true, depthWrite: false, opacity: 1,
@@ -316,6 +317,7 @@ export function buildContactShadows(scene, entries) {
   im.receiveShadow = false;
   im.castShadow = false;
   scene.add(im);
+  return im;   // F38 — retorno p/ o chamador registrar/inspecionar (testes)
 }
 
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
@@ -543,6 +545,13 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   scene.userData.swayMats = [
     field.canopies.material, bushes.material,
   ];
+  // Fase 38 — ARBUSTOS entram no registry de sombras de contato (F7): antes
+  // só árvores/pedras/scrub ancoravam no chão — o cluster de blobs "flutuava"
+  // sobre o solo liso. 1 disco por arbusto (bushShadowEntries, PURO), mesmo
+  // InstancedMesh/estagger das demais sombras de natureza.
+  const bushShadows = bushShadowEntries(bushSpots);
+  shadowSpots.push(...bushShadows);
+  scene.userData.bushShadowSpots = bushShadows;   // inspeção/teste (padrão propPlacements)
 
   // Barburhen — vegetação baixa fria, crescendo entre concreto e pátios.
   // Planos cruzados com vento por shader mantêm a silhueta orgânica.
@@ -599,8 +608,13 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   rocks.count = ri;
   scene.add(rocks);
 
-  // Fase 7 — sombras de contato sob árvores e pedras (ancoragem no chão)
-  if (q.contactShadows && shadowSpots.length) buildContactShadows(scene, shadowSpots);
+  // Fase 7 — sombras de contato sob árvores/pedras/scrub; F38 — + arbustos
+  // (ancoragem no relevo do chão: y=0 na zona plana do jogo, stagger anti-z-fight)
+  if (q.contactShadows && shadowSpots.length) {
+    const natureShadows = buildContactShadows(scene, shadowSpots);
+    scene.userData.natureContactShadows = natureShadows;        // F38 — inspeção/teste
+    scene.userData.natureShadowEntries = shadowSpots.length;    // F38 — registro do total
+  }
 
   // ---- nuvens de crepúsculo ----
   const cloudTex = cloudTexture();
@@ -833,6 +847,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     // tufos → desbaste → mancha com sombra → campo eterno até o fog.
     impostorDist: 110, impostorHeight: 1.15, impostorWidth: 3.2, impostorOpacity: .55,
     impostorFadeZone: 14, impostorShadowOpacity: .5, impostorShadowRadius: 1.9,
+    // Fase 38 — desbaste GRADUAL do sparse (zonas canônicas 10/12) + pre-roll
+    // de 9m do impostor: a mancha nasce DENTRO da saída do desbaste (49→58m)
+    // e chega a ~70% de alpha quando os últimos tufos somem — cross-fade sem
+    // buraco de densidade na fronteira 58m.
+    sparseEntryZone: 10, sparseExitZone: 12, impostorPreRoll: 9,
     // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
     sway: { strength: .07, freq: 2.1, yScale: 1.1 },
   });

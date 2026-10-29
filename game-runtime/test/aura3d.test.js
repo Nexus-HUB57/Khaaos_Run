@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   HUD_SEASONS, seasonIndexForMonth, seasonIndexFor, shiftAuraHex, hudAuraFor,
   weaponIconVars,   // F37 — ícone da arma no inventário (mapeamento puro)
+  crosshairVars,    // F38 — mira/crosshair no festival por aura (mapeamento puro)
 } from '../src/game3d/aura3d.js';
 import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
 
@@ -132,4 +133,35 @@ test('F37 · weaponIconVars: null sem aura ou com hex inválido (ícone neutro, 
   assert.equal(weaponIconVars(aura, '#ff2d7'), null, 'hex curto → null');
   assert.equal(weaponIconVars(aura, '#ff2d788'), null, 'hex longo → null');
   assert.equal(weaponIconVars(aura, undefined), null, 'hex undefined → null');
+});
+
+// ================================================= Fase 38 — mira sazonal ====
+
+test('F38 · crosshairVars: identidade nos braços, estação no ponto/glow, ritmo da temporada', () => {
+  const july = new Date(2026, 6, 15); // inverno (hemisfério sul)
+  const aura = hudAuraFor({ weaponSkin: 'MITICA', now: july });
+  const v = crosshairVars(aura, '#ff2d78');
+  assert.ok(v, 'mítica → variáveis da mira');
+  assert.equal(v.aura, '#ff2d78', 'identidade da skin preservada (--ch-aura)');
+  assert.equal(v.season, shiftAuraHex('#ff2d78', aura.hueShift), 'ponto/glow TINGIDO pela estação (--ch-season)');
+  assert.equal(v.dur, String(aura.durMul), 'ritmo da temporada (--ch-dur)');
+  // 4 estações: season muda, identidade NUNCA (mesma fonte única do badge/ícone)
+  for (const m of [0, 3, 6, 9]) {
+    const a = hudAuraFor({ weaponSkin: 'MITICA', now: new Date(2026, m, 15) });
+    const vv = crosshairVars(a, '#4d9bff');
+    assert.equal(vv.aura, '#4d9bff', `mês ${'primeiro+3m'.length && m}: identidade intacta`);
+    assert.equal(vv.season, shiftAuraHex('#4d9bff', a.hueShift));
+    assert.ok(/^#[0-9a-f]{6}$/i.test(vv.season), `mês ${m}: season hex canônico`);
+  }
+  assert.ok(Object.isFrozen(v), 'retorno congelado (contrato de objeto compartilhado com o DOM)');
+});
+
+test('F38 · crosshairVars: null sem aura/hex inválido (mira neutra, custo 0)', () => {
+  assert.equal(crosshairVars(null, '#ff2d78'), null, 'sem aura → null');
+  assert.equal(crosshairVars({ active: false }, '#ff2d78'), null, 'aura inativa → null');
+  const aura = hudAuraFor({ weaponSkin: 'MITICA', now: new Date(2026, 6, 15) });
+  assert.equal(crosshairVars(aura, null), null, 'hex null → null');
+  assert.equal(crosshairVars(aura, 'rosa'), null, 'hex lixo → null');
+  assert.equal(crosshairVars(aura, '#ff2d7'), null, 'hex curto → null');
+  assert.equal(crosshairVars(aura, undefined), null, 'hex undefined → null');
 });

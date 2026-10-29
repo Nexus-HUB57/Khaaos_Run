@@ -18,6 +18,7 @@ import {
   patchSway, tickVegetationWind, buildTreeField, buildBushField,
   grassChunkify, grassChunkTier, buildGrassFieldLOD, grassImpostorGeometry,
   grassImpostorFade,                    // F37 — fade suave da banda de impostores
+  grassSparseCount, bushShadowEntries,  // F38 — desbaste gradual + sombra dos arbustos
   grassOutdoorBake, applyOutdoorTint,   // F36 — impostor outdoor (bake no terreno)
 } from '../src/game3d/vegetation3d.js';
 import { buildScene } from '../src/game3d/world3d.js';
@@ -262,7 +263,13 @@ test('F32 · buildGrassFieldLOD: tiers corretos, update idempotente, oculta long
   for (const c of vis) {
     const d = Math.hypot(c.x, c.z);
     if (d < 28) assert.equal(c.mesh.count, c.fullCount, 'tier full = count cheio');
-    else if (d < 58) assert.equal(c.mesh.count, Math.max(1, Math.ceil(c.fullCount * .4)), 'tier sparse = fração');
+    else if (d < 58) {
+      // F38 — desbaste GRADUAL: o count segue grassSparseCount (rampa de
+      // entrada full→plateau, plateau = contrato F32, raleia até 0 na saída)
+      const expect = grassSparseCount(d, { fullCount: c.fullCount, nearDist: 28, midDist: 58, sparseKeep: .4 });
+      assert.equal(c.mesh.count, expect, `tier sparse = desbaste gradual @${d.toFixed(1)}m (F38)`);
+      assert.ok(c.mesh.count > 0 && c.mesh.count <= c.fullCount, 'visível implica count no intervalo (0, fullCount]');
+    }
     else assert.fail(`chunk a ${d.toFixed(1)}m não deveria estar visível`);
   }
   const snap = vis.map((c) => [c.mesh.visible, c.mesh.count]);
@@ -367,11 +374,14 @@ test('F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobr
     assert.equal(lod.impostorDist, 110, `${scenarioId}: faixa canônica 110m`);
     assert.equal(lod.impostors.count, 0, 'update ainda não rodou (main3d é o dono)');
     lod.update(0, 0);
-    // F37 — a faixa empacota chunks com fade > 0 (na BORDA da banda o alpha
-    // ~0 nem empacota — custo 0; o contrato F37 substitui o degrau F34)
+    // F37/F38 — a faixa empacota chunks com fade > 0 (na BORDA o alpha ~0 nem
+    // empacota — custo 0). F38 — com pre-roll do cross-fade, a janela de
+    // entrada começa DENTRO do desbaste sparse (58 - impostorPreRoll).
+    const pre = lod.impostorPreRoll ?? 0;
     const inBand = lod.chunks.filter((c) => {
       const d = Math.hypot(c.x, c.z);
-      return d >= 58 && d < 110 && grassImpostorFade(d, { midDist: 58, impostorDist: 110, fadeZone: 14 }) > 0.002;
+      return d >= 58 - pre && d < 110
+        && grassImpostorFade(d, { midDist: 58, impostorDist: 110, fadeZone: 14, preRoll: pre }) > 0.002;
     });
     assert.equal(lod.impostors.count, inBand.length, `${scenarioId}: faixa empacotada (${inBand.length})`);
     assert.ok(inBand.length > 0, `${scenarioId}: faixa com conteúdo visível`);
@@ -607,4 +617,172 @@ test('F37 · sombras de contato: espelho da banda, ancoradas no relevo (ch.y+lif
   lod2.update(0, 0);
   assert.equal(lod2.impostorShadows.count, 0, 'impostorShadow:false → 0 sombras');
   assert.equal(lod2.impostorShadows.visible, false);
+});
+
+// ======================================= Fase 38 — desbaste/sombra/cross-fade ====
+
+test('F38 · grassSparseCount: desbaste gradual (entrada rampa, plateau F32, saída raleia a 0)', () => {
+  const cfg = { fullCount: 40, nearDist: 28, midDist: 58, sparseKeep: .4, entryZone: 10, exitZone: 12 };
+  const plateau = Math.max(1, Math.ceil(40 * .4)); // 16 — contrato F32 intocado no plateau
+  assert.equal(grassSparseCount(20, cfg), 40, 'dentro do full → count cheio');
+  assert.equal(grassSparseCount(28, cfg), 40, 'entrada da banda = fullCount (rampa começa em 0)');
+  const e1 = grassSparseCount(33, cfg), e2 = grassSparseCount(38, cfg);
+  assert.ok(40 > e1 && e1 > e2, `entrada raleia monotônica (33m=${e1} > 38m=${e2})`);
+  assert.equal(grassSparseCount(38.5, cfg), plateau, 'fim da zona de entrada = plateau F32');
+  assert.equal(grassSparseCount(45, cfg), plateau, 'plateau no meio da banda (fração fixa preservada)');
+  const x1 = grassSparseCount(50, cfg), x2 = grassSparseCount(55, cfg);
+  assert.ok(plateau > x1 && x1 > x2, `saída raleia monotônica (50m=${x1} > 55m=${x2})`);
+  assert.equal(grassSparseCount(58, cfg), 0, 'borda de saída = 0 (entrega p/ o impostor sem pop)');
+  assert.equal(grassSparseCount(70, cfg), 0, 'além da banda = 0');
+  // monotonia global não-crescente na banda inteira (sem degraus)
+  let prev = 40;
+  for (let d = 28; d <= 58; d += .5) {
+    const c = grassSparseCount(d, cfg);
+    assert.ok(c <= prev, `não-crescente @${d}m (${c} <= ${prev})`);
+    prev = c;
+  }
+});
+
+test('F38 · grassSparseCount: clamps de zona, banda degenerada e cantos', () => {
+  // zonas gigantes: cap de 45% da banda cada — o plateau SEMPRE existe
+  const big = { fullCount: 20, nearDist: 28, midDist: 58, sparseKeep: .5, entryZone: 999, exitZone: 999 };
+  assert.equal(grassSparseCount(43, big), Math.max(1, Math.ceil(20 * .5)),
+    'plateau no meio da banda mesmo com zonas gigantes');
+  // banda degenerada (midDist <= nearDist): degrau puro retrocompatível
+  const deg = { fullCount: 12, nearDist: 58, midDist: 58 };
+  assert.equal(grassSparseCount(30, deg), 12, 'abaixo de nearDist → full');
+  assert.equal(grassSparseCount(58, deg), 0, 'em midDist → 0');
+  // sparseKeep fora de [0,1] capado; fullCount 0 → 0
+  assert.equal(grassSparseCount(40, { fullCount: 9, sparseKeep: 2 }), 9, 'keep > 1 → plateau = fullCount');
+  assert.equal(grassSparseCount(40, { fullCount: 9, sparseKeep: -1 }), 1, 'keep < 0 → plateau mínimo 1');
+  assert.equal(grassSparseCount(40, { fullCount: 0 }), 0, 'chunk vazio → 0');
+  // zonas zero = degrau F32 puro (fração fixa na entrada, corte seco na saída)
+  const step = { fullCount: 10, nearDist: 28, midDist: 58, entryZone: 0, exitZone: 0 };
+  assert.equal(grassSparseCount(28.1, step), Math.max(1, Math.ceil(10 * .4)), 'zonas 0: degrau direto ao plateau');
+  assert.equal(grassSparseCount(57.9, step), Math.max(1, Math.ceil(10 * .4)), 'zonas 0: plateau até a borda');
+});
+
+test('F38 · grassImpostorFade: pre-roll cruza o desbaste (opt-in; default F37 intocado)', () => {
+  const cfg = { midDist: 58, impostorDist: 110, fadeZone: 14, preRoll: 9 };
+  assert.equal(grassImpostorFade(48.9, cfg), 0, 'antes do pre-roll → 0');
+  assert.equal(grassImpostorFade(49, cfg), 0, 'borda do pre-roll = 0');
+  const mid = grassImpostorFade(53, cfg);
+  assert.ok(mid > 0 && mid < 1, `rampa sobe DENTRO do sparse (53m=${mid.toFixed(3)})`);
+  const at58 = grassImpostorFade(58, cfg);
+  assert.ok(at58 > .5 && at58 < 1, `fronteira 58m: mancha já existe (~70%, ${at58.toFixed(3)})`);
+  assert.ok(grassImpostorFade(62, cfg) > at58, 'continua subindo após midDist');
+  assert.equal(grassImpostorFade(110, cfg), 0, 'saída da banda intocada');
+  // default preRoll 0 = contrato F37 byte a byte
+  const f37 = { midDist: 58, impostorDist: 110, fadeZone: 14 };
+  assert.equal(grassImpostorFade(57.9, f37), 0);
+  assert.equal(grassImpostorFade(58, f37), 0);
+  assert.equal(grassImpostorFade(84, f37), 1);
+  // cap: preRoll nunca invade o tier full nem passa da própria zone
+  const capped = { midDist: 58, impostorDist: 110, fadeZone: 14, preRoll: 999 };
+  assert.equal(grassImpostorFade(43.9, capped), 0, 'cap pela zone: só entra em 44 (58-14)');
+  assert.ok(grassImpostorFade(45, capped) > 0, 'cap respeitado (rampa a partir de 44)');
+  // monotonia global da subida com pre-roll
+  let prev = 0;
+  for (let d = 49; d <= 92; d += 1) {
+    const a = grassImpostorFade(d, cfg);
+    assert.ok(a >= prev - 1e-9, `subida monotônica @${d}m`);
+    prev = a;
+  }
+});
+
+test('F38 · buildGrassFieldLOD: sparse raleia gradual e impostor cruza a fronteira', () => {
+  // chunks determinísticos: 1 spot por célula → centro do chunk = spot exato
+  const mk = (x) => ({ x, z: 0, y: 0, rot: 0, s: 1, sy: 1 });
+  const spots = [
+    ...Array.from({ length: 10 }, (_, i) => mk(10 + i * .01)),   // d=10 → full
+    ...Array.from({ length: 10 }, (_, i) => mk(30 + i * .01)),   // d=30 → entrada do sparse
+    ...Array.from({ length: 10 }, (_, i) => mk(55 + i * .01)),   // d=55 → saída do sparse + cross-fade
+    ...Array.from({ length: 10 }, (_, i) => mk(75 + i * .01)),   // d=75 → impostor plateau
+    ...Array.from({ length: 10 }, (_, i) => mk(105 + i * .01)),  // d=105 → rampa de saída
+    ...Array.from({ length: 10 }, (_, i) => mk(130 + i * .01)),  // d=130 → hidden
+  ];
+  const common = { spots, seed: 5, tintFamilies: ['#5a6b33'], chunkSize: 25, sparseKeep: .4 };
+  const plateau = Math.max(1, Math.ceil(10 * .4)); // 4
+
+  // default (sem preRoll): contrato F37 — NADA empacota abaixo de 58m
+  const lod = buildGrassFieldLOD({ ...common });
+  assert.equal(lod.impostorPreRoll, 0, 'default impostorPreRoll = 0 (F37)');
+  assert.equal(lod.sparseEntryZone, 10, 'default entryZone = 10');
+  assert.equal(lod.sparseExitZone, 12, 'default exitZone = 12');
+  lod.update(0, 0);
+  const byD = (lod, d) => lod.chunks.find((c) => Math.abs(Math.hypot(c.x, c.z) - d) < .2);
+  const full = byD(lod, 10), entry = byD(lod, 30), exit = byD(lod, 55);
+  const impPlateau = byD(lod, 75), impOut = byD(lod, 105), hidden = byD(lod, 130);
+  assert.equal(full.mesh.count, 10, 'full: count cheio');
+  assert.equal(entry.mesh.count, 9, 'entrada do sparse: rampa (thinIn ~.10 → 9 tufos)');
+  assert.equal(exit.mesh.count, 1, 'saída do sparse: raleia até ~1 tufo (thinOut ~.16)');
+  assert.equal(hidden.mesh.visible, false, 'hidden intocado');
+  assert.equal(lod.impostors.count, 2, 'default: só a banda [58,110) empacota (75m e 105m)');
+  assert.equal(impPlateau.mesh.visible, false, 'impostor: tufo do chunk oculto');
+  assert.equal(impOut.mesh.visible, false, 'impostor: tufo do chunk oculto (saída)');
+
+  // com pre-roll (world3d): a mancha cresce DENTRO da saída do sparse
+  const lod2 = buildGrassFieldLOD({ ...common, impostorPreRoll: 9 });
+  lod2.update(0, 0);
+  assert.equal(lod2.impostors.count, 3, 'cross-fade: 55m entra no empacotamento');
+  // alphas na ordem de empacotamento = fades puros lidos do CENTRO REAL do
+  // chunk (média dos membros — não do spot nominal)
+  const attr = lod2.impostors.geometry.attributes.instanceAlpha;
+  const fcfg = { midDist: 58, impostorDist: 110, fadeZone: 14, preRoll: 9 };
+  const dOf = (lod, d) => { const c = lod.chunks.find((cc) => Math.abs(Math.hypot(cc.x, cc.z) - d) < .2); return Math.hypot(c.x, c.z); };
+  const f55 = grassImpostorFade(dOf(lod2, 55), fcfg);
+  const f75 = grassImpostorFade(dOf(lod2, 75), fcfg);
+  const f105 = grassImpostorFade(dOf(lod2, 105), fcfg);
+  assert.ok(Math.abs(attr.array[0] - f55) < 1e-6, `slot 0 = fade(55m)=${f55.toFixed(3)}`);
+  assert.ok(Math.abs(attr.array[1] - f75) < 1e-6, 'slot 1 = fade(75m)');
+  assert.ok(Math.abs(attr.array[2] - f105) < 1e-6, 'slot 2 = fade(105m)');
+  assert.ok(f55 > 0 && f55 < .5 && f75 === 1 && f105 > 0 && f105 < .5, 'fases do cross-fade coerentes');
+  // sombras de contato espelham o cross-fade (1 disco por impostor, mesmo alpha)
+  assert.equal(lod2.impostorShadows.count, 3, 'sombra espelha o impostor no cross-fade');
+  const shAttr = lod2.impostorShadows.geometry.attributes.instanceAlpha;
+  assert.equal(shAttr.array[0], attr.array[0], 'alpha da sombra = alpha da mancha (55m)');
+  // idempotência byte a byte
+  const snap = Float32Array.from(attr.array);
+  lod2.update(0, 0);
+  assert.deepEqual(attr.array, snap, 'update idempotente');
+});
+
+test('F38 · bushShadowEntries: 1 disco por arbusto, tamanho pela escala (PURO)', () => {
+  const spots = [{ x: 5, z: -3, s: 1.2 }, { x: -9, z: 4, s: .8 }, { x: 0, z: 0 }];
+  const entries = bushShadowEntries(spots);
+  assert.equal(entries.length, 3, '1 entrada por arbusto');
+  assert.deepEqual(entries[0], { x: 5, z: -3, rot: 0, size: 2.1 * 1.2 });
+  assert.ok(Math.abs(entries[0].size - 2.52) < 1e-9, 'size = 2.1 × s');
+  assert.deepEqual(entries[1], { x: -9, z: 4, rot: 0, size: 2.1 * .8 });
+  assert.deepEqual(entries[2], { x: 0, z: 0, rot: 0, size: 2.1 }, 's ausente → 1');
+  assert.deepEqual(bushShadowEntries(spots), entries, 'determinístico');
+  assert.deepEqual(bushShadowEntries([]), [], 'vazio → vazio');
+  assert.deepEqual(bushShadowEntries([{ x: 1, z: 1, s: 3 }], { sizeFactor: 0 })[0].size, 0, 'sizeFactor 0 respeitado');
+});
+
+test('F38 · buildScene W1-W4: arbustos com sombra de contato + cross-fade canônico', () => {
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(`f38-${scenarioId}`, scenarioId, null, 'high');
+    const shadows = scene.userData.natureContactShadows;
+    assert.ok(shadows, `${scenarioId}: campo de sombras de natureza ausente`);
+    assert.equal(shadows.count, scene.userData.natureShadowEntries,
+      `${scenarioId}: registro do total consistente (${shadows.count})`);
+    const bushEntries = scene.userData.bushShadowSpots;
+    assert.ok(bushEntries?.length > 0, `${scenarioId}: arbustos registrados p/ sombra (${bushEntries?.length})`);
+    // cada arbusto tem SEU disco no instanceMatrix (posição x|z no chão)
+    const mat4 = shadows.instanceMatrix;
+    const packed = new Set();
+    for (let i = 0; i < shadows.count; i++) {
+      packed.add(`${mat4.array[i * 16 + 12].toFixed(2)}|${mat4.array[i * 16 + 14].toFixed(2)}`);
+    }
+    for (const e of bushEntries) {
+      assert.ok(packed.has(`${e.x.toFixed(2)}|${e.z.toFixed(2)}`),
+        `${scenarioId}: arbusto (${e.x.toFixed(1)},${e.z.toFixed(1)}) ancorado com sombra`);
+    }
+    // campo de grama: zonas do desbaste + pre-roll canônicos
+    const lod = scene.userData.grassLOD;
+    assert.equal(lod.impostorPreRoll, 9, `${scenarioId}: pre-roll do cross-fade = 9`);
+    assert.equal(lod.sparseEntryZone, 10, `${scenarioId}: entryZone canônica = 10`);
+    assert.equal(lod.sparseExitZone, 12, `${scenarioId}: exitZone canônica = 12`);
+  }
 });

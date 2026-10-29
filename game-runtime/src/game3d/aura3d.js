@@ -108,3 +108,17 @@ export function weaponIconVars(aura = null, mythicHex = null) {
     shimmerAngle: aura.shimmerAngle,
   });
 }
+
+// ------------------------------------------------- mira / crosshair ----
+// Fase 38 — a MIRA entra no festival sazonal por aura: elemento de COMBATE,
+// o tratamento é mais contido que o do badge/ícone — os braços (as 4 linhas)
+// carregam a IDENTIDADE da skin (--aura), o ponto central e o GLOW levam a
+// cor TINGIDA pela estação (--aura-season) e um anel cônico girando em volta
+// segue o RITMO da temporada (--aura-dur, opacidade baixa p/ não poluir a
+// pontaria). Fonte única de decisão = hudAuraFor (mesma do badge/vinheta/
+// ícone) — a mira nunca inventa cor fora do catálogo.
+// Retorna null quando NÃO há aura ativa ou hex inválido — hud3d limpa as
+// variáveis e a mira volta ao neutro (--acid), custo 0.
+export function crosshairVars(aura = null, mythicHex = null) {
+  return weaponIconVars(aura, mythicHex);
+}
