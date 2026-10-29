@@ -1,10 +1,10 @@
-# GFX/UX Performance — Laço Adaptativo (Fase 34)
+# GFX/UX Performance — Laço Adaptativo (Fase 35)
 
 Revisão PhD-level da otimização de cenários/gráficos e da experiência do jogador.
 Este documento registra o estado revisado, os achados e a arquitetura do laço
-fechado de performance entregue na Fase 34.
+fechado de performance entregue na Fase 35.
 
-## 1. Estado revisado (antes da Fase 34)
+## 1. Estado revisado (antes da Fase 35)
 
 | Camada | Mecanismo existente | Avaliação |
 |---|---|---|
@@ -15,7 +15,7 @@ fechado de performance entregue na Fase 34.
 | HUD | redraw de minimapa todo frame (60+ Hz) | **G4**: custo real em touch sem ganho perceptível |
 | Settings | apenas query string (`?q=`, `?fx=0`) | **U1/U2/U3**: sem painel in-game; sensibilidade hardcoded; shake sem acessibilidade |
 
-## 2. Arquitetura do laço fechado (Fase 34)
+## 2. Arquitetura do laço fechado (Fase 35)
 
 ```
         ┌──────────────────────────────────────────────────────────┐

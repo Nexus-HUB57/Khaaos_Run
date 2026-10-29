@@ -5,7 +5,7 @@ import { WEAPONS3D, DBNO } from './sim3d.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
-import { RateLimiter } from './perf3d.js'; // Fase 34 — throttle do minimapa (achado G4)
+import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -20,7 +20,7 @@ export class HUD {
     this.lastHeartbeat = 0;
     this.damageFlash = 0;
     this.hitmarkerT = 0;
-    // Fase 34 — minimapa a 30 Hz (canvas 2D full-redraw a 60+ Hz custava
+    // Fase 35 — minimapa a 30 Hz (canvas 2D full-redraw a 60+ Hz custava
     // real em touch sem ganho perceptível — achado G4 da revisão GFX/UX)
     this.mmLimiter = new RateLimiter(33);
     this.#bindButtons();
@@ -226,11 +226,11 @@ export class HUD {
     // crosshair dinâmico — abre com movimento/tiro
     const spreadPx = this.#crosshairSpread(input);
     document.documentElement.style.setProperty('--ch-gap', `${spreadPx}px`);
-    // minimapa (Fase 34 — 30 Hz; o mundo 3D é interpolado, ninguém lê 60 Hz de radar)
+    // minimapa (Fase 35 — 30 Hz; o mundo 3D é interpolado, ninguém lê 60 Hz de radar)
     if (this.mmLimiter.ready()) this.#drawMinimap();
   }
 
-  // Fase 34 — telemetria de performance no HUD (FPS médio + escala DRS + tier).
+  // Fase 35 — telemetria de performance no HUD (FPS médio + escala DRS + tier).
   // Chamada a 2 Hz pelo main3d; elemento escondido por padrão (setting KR_GFX fps).
   setPerf(fps, scale, tier) {
     const el = $('#perfReadout');

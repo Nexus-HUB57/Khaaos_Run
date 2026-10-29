@@ -1,4 +1,4 @@
-// Fase 34 — testes do laço de performance adaptativa (perf3d, módulo PURO).
+// Fase 35 — testes do laço de performance adaptativa (perf3d, módulo PURO).
 // Cobre: EMA de constante de tempo, DRS (convergência, histerese, piso/teto,
 // anti-oscilação num simulador de carga de 600 frames), auto-tier assimétrico
 // (downgrade só no PISO do DRS; upgrade exige folga LONGA no TETO), RateLimiter
