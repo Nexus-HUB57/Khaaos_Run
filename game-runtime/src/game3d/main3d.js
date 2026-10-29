@@ -16,6 +16,8 @@ import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { loadAudioMix, saveAudioMix } from './audiomix.js'; // Fase 19 — mixagem KR_AUDIO_*
+import { FrametimeMonitor, drsDecision, tierDecision, budgetFor, RateLimiter, DRS_MIN, DRS_MAX, postFxPlanFor } from './perf3d.js'; // Fase 34 — DRS + auto-tier
+import { loadGfxSettings, saveGfxSettings, effectiveBaseTier } from './gfxsettings.js'; // Fase 34 — settings KR_GFX_*
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
@@ -46,6 +48,18 @@ export class Game3D {
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
+    // Fase 34 — settings gráficas do jogador (KR_GFX_*): override manual de tier
+    // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
+    this.gfx = loadGfxSettings();
+    this.quality = effectiveBaseTier(this.quality, this.gfx);
+    // Fase 34 — laço de performance: EMA de frametime + estado do DRS/tier
+    this.perfMon = new FrametimeMonitor();
+    this.drsState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: Infinity };
+    this.drsScale = 1;
+    this.tierState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: Infinity };
+    this.applyThrottle = new RateLimiter(150);   // aplicações de escala ≥150 ms
+    this.perfHudThrottle = new RateLimiter(500); // telemetria HUD 2 Hz
+    this.basePixelRatio = 1;
     this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode, officers: this.officersMode });
     this.audio = new GameAudio();
     // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
@@ -102,6 +116,7 @@ export class Game3D {
     this.initContentSelectors();
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
+    this.initGfxPanel(); // Fase 34 — painel de vídeo/performance (KR_GFX_*)
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
@@ -134,11 +149,64 @@ export class Game3D {
     }
   }
 
+  // ---------- Fase 34 — painel de vídeo/performance (KR_GFX_*) ----------
+  // Espelha o painel de áudio: toggle + controles → saveGfxSettings imediato.
+  // Trocas que mexem no pipeline (tier/postfx) reconstroem o composer na hora;
+  // sens/shake/fps/drs são lidos a cada frame/uso — nada a reaplicar.
+  // Headless-safe: tudo atrás da existência do DOM.
+  initGfxPanel() {
+    const btn = document.querySelector('#gfxBtn');
+    const panel = document.querySelector('#gfxPanel');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+      this.audio?.ui?.();
+    });
+    const tierSel = panel.querySelector('[data-gfx="tier"]');
+    const checks = ['postfx', 'drs', 'fps'].map((k) => panel.querySelector(`[data-gfx="${k}"]`));
+    const shake = panel.querySelector('[data-gfx="shake"]');
+    const sens = panel.querySelector('[data-gfx="sens"]');
+    const out = (k) => panel.querySelector(`[data-out="${k}"]`);
+    const sync = () => {
+      if (tierSel) tierSel.value = this.gfx.tier;
+      for (const [i, k] of ['postfx', 'drs', 'fps'].entries()) {
+        const c = checks[i];
+        if (c) c.checked = !!this.gfx[k];
+      }
+      if (shake) shake.value = String(Math.round(this.gfx.shake * 100));
+      if (sens) sens.value = String(Math.round(this.gfx.sens * 100));
+      const so = out('shake'); if (so) so.textContent = `${shake?.value ?? 100}%`;
+      const po = out('sens'); if (po) po.textContent = `${sens?.value ?? 100}%`;
+    };
+    sync();
+    const commit = (partial) => {
+      this.gfx = saveGfxSettings(partial);
+      sync();
+      if ('tier' in partial && this.renderer) {
+        // override manual: cancela degraus do auto-tier e aplica o tier pedido
+        this.tierState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: 0 };
+        this.applyTierRuntime(effectiveBaseTier(this.quality, this.gfx));
+      }
+      if ('postfx' in partial && this.renderer) this.rebuildPost();
+      this.audio?.ui?.();
+    };
+    tierSel?.addEventListener('change', () => commit({ tier: tierSel.value }));
+    for (const [i, k] of ['postfx', 'drs', 'fps'].entries()) {
+      checks[i]?.addEventListener('change', () => commit({ [k]: checks[i].checked }));
+    }
+    shake?.addEventListener('input', () => commit({ shake: Number(shake.value) / 100 }));
+    sens?.addEventListener('input', () => commit({ sens: Number(sens.value) / 100 }));
+  }
+
   // ---------- infra (protegidos: reusados pelo OnlineGame3D) ----------
   initRenderer() {
     this.renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#arena3d'), antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(innerWidth, innerHeight);
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio));
+    // Fase 34 — pixelRatio BASE do tier (cap); a escala DRS multiplicada é
+    // aplicada por applyRenderScale() (inicia em 1.0 = comportamento antigo).
+    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio);
+    this.renderer.setPixelRatio(this.basePixelRatio);
+    this.drsScale = 1;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -152,11 +220,77 @@ export class Game3D {
     });
   }
 
-  // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback render direto)
+  // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback direto).
+  // Fase 34 — o plano vem do TIER real (perf3d.postFxPlanFor): SSR só no high;
+  // a setting KR_GFX postfx desliga o composer inteiro (achado G2 corrigido —
+  // antes o tier médio pagava SSR completo via quality:'high' hardcoded).
   initPost() {
     const fxOff = new URLSearchParams(location.search).get('fx') === '0';
-    if (fxOff || !qualityTier(this.quality).bloom) { this.post = null; return; }
-    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: 'high' });
+    if (fxOff || !this.gfx.postfx || !postFxPlanFor(this.quality)) { this.post = null; return; }
+    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: this.quality });
+  }
+
+  // Fase 34 — reconstrói o composer pós troca de tier/setting (alvo raro:
+  // dwell de 10 s entre tiers; toggle de setting é ação do usuário).
+  rebuildPost() {
+    const old = this.post;
+    this.initPost();
+    if (this.post) this.post.setSize(innerWidth, innerHeight);
+    old?.composer?.dispose?.();
+  }
+
+  // Fase 34 — aplica a escala DRS ao pipeline (throttle 150 ms; muda pixelRatio
+  // e propaga p/ os render targets do composer — a UI DOM fica nítida, só o 3D
+  // é renderizado na escala reduzida).
+  applyRenderScale() {
+    if (!this.renderer) return;
+    const pr = this.basePixelRatio * this.drsScale;
+    if (Math.abs(this.renderer.getPixelRatio() - pr) < 0.01) return;
+    this.renderer.setPixelRatio(pr);
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.post?.setSize(innerWidth, innerHeight);
+  }
+
+  // Fase 34 — troca ESTRUTURAL de tier em runtime: cap de pixelRatio, resolução
+  // do shadow map do sol (dispose do alvo antigo) e plano de pós-FX.
+  applyTierRuntime(tier) {
+    if (!this.renderer) return;
+    this.quality = tier;
+    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(tier).pixelRatio);
+    const q = qualityTier(tier);
+    if (this.sun) {
+      const size = q.shadowMapSize;
+      if (this.sun.shadow.mapSize.width !== size) {
+        this.sun.shadow.mapSize.set(size, size);
+        if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+      }
+    }
+    this.rebuildPost();
+    this.applyRenderScale();
+    this.hud?.feed('Sistemas', `Perfil gráfico: ${tier.toUpperCase()} (adaptativo).`);
+  }
+
+  // Fase 34 — laço de performance por frame: mede dt (custo do frame ANTERIOR),
+  // decide DRS e, se o piso não bastou, degrau de tier. Com gfx.drs off, o
+  // monitor continua (telemetria), mas nenhuma decisão altera o pipeline.
+  updatePerf(dt) {
+    const budget = budgetFor(this.quality);
+    const ema = this.perfMon.push(dt, budget);
+    if (!this.perfMon.warmed) return;
+    if (this.gfx.drs) {
+      const d = drsDecision({ emaMs: ema, budgetMs: budget, scale: this.drsScale, state: this.drsState, dt });
+      this.drsState = d.state;
+      this.drsScale = d.scale;
+      if (d.changed && this.applyThrottle.ready()) this.applyRenderScale();
+    }
+    if (this.gfx.tier === 'auto') {
+      const t = tierDecision({ emaMs: ema, budgetMs: budget, tier: this.quality, drsScale: this.gfx.drs ? this.drsScale : 1, state: this.tierState, dt });
+      this.tierState = t.state;
+      if (t.changed) { this.perfMon.reset(); this.applyTierRuntime(t.tier); }
+    }
+    if (this.gfx.fps && this.perfHudThrottle.ready()) {
+      this.hud?.setPerf(this.perfMon.fps(), this.gfx.drs ? this.drsScale : 1, this.quality);
+    }
   }
 
   initWorld() {
@@ -388,7 +522,9 @@ export class Game3D {
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.pointerLocked) return;
-      const sens = this.input.ads ? .0011 : .0021;
+      // Fase 34 — sensibilidade do jogador (KR_GFX_*, 0.3..2.5×); ADS mantém a
+      // razão antiga (~0.52× do hip fire).
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
       this.input.yaw -= e.movementX * sens;
       this.input.pitch -= e.movementY * sens;
       this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch));
@@ -611,8 +747,10 @@ export class Game3D {
     this.camera.position.lerp(finalPos, Math.min(1, dt * 5));
     this.camera.lookAt(t.x, t.y + 1.35, t.z);
     if (this.shake > 0.001) {
-      this.camera.position.x += (Math.random() - .5) * this.shake;
-      this.camera.position.y += (Math.random() - .5) * this.shake;
+      // Fase 34 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      const amp = this.shake * (this.gfx?.shake ?? 1);
+      this.camera.position.x += (Math.random() - .5) * amp;
+      this.camera.position.y += (Math.random() - .5) * amp;
       this.shake *= Math.exp(-dt * 6.5);
     }
     const targetFov = 62;
@@ -1097,9 +1235,11 @@ export class Game3D {
     this.camera.lookAt(lookTarget);
     // Fase 4 — tremor de explosão (só câmera; mira intacta)
     if (this.shake > 0.001) {
-      this.camera.position.x += (Math.random() - .5) * this.shake;
-      this.camera.position.y += (Math.random() - .5) * this.shake;
-      this.camera.position.z += (Math.random() - .5) * this.shake;
+      // Fase 34 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      const amp = this.shake * (this.gfx?.shake ?? 1);
+      this.camera.position.x += (Math.random() - .5) * amp;
+      this.camera.position.y += (Math.random() - .5) * amp;
+      this.camera.position.z += (Math.random() - .5) * amp;
       this.shake *= Math.exp(-dt * 6.5);
     }
     // FOV dinâmico
@@ -1652,6 +1792,7 @@ export class Game3D {
     requestAnimationFrame(this.loop);
     const dt = Math.min(.1, this.clock.getDelta());
     this.animT += dt;
+    this.updatePerf(dt); // Fase 34 — DRS + auto-tier + telemetria (laço fechado de performance)
 
     // passo fixo da simulação
     if (!this.zuOpen && !this.ended) {

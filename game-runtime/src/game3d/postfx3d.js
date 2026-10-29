@@ -9,6 +9,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { postFxPlanFor } from './perf3d.js'; // Fase 34 — plano por tier (SSR só no high)
 
 const GradeShader = {
   uniforms: {
@@ -58,9 +59,15 @@ const GradeShader = {
     }`,
 };
 
-// Cria a cadeia de pós-processamento; retorna null se indisponível (fallback direto).
+// Cria a cadeia de pós-processamento; retorna null se indisponível (fallback direto)
+// ou quando o PLANO do tier é null (low — Fase 34: render direto, sem composer).
 export function createPostFX(renderer, scene, camera, { quality = 'high' } = {}) {
   try {
+    // Fase 34 — plano por tier (perf3d.postFxPlanFor): intensidade de bloom,
+    // grão do grade e SSR (exclusivo do high) vêm da MESMA fonte de verdade
+    // usada pelo auto-tier em runtime — medium deixou de pagar SSR (achado G2).
+    const plan = postFxPlanFor(quality);
+    if (!plan) return null;
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const size = renderer.getSize(new THREE.Vector2());
@@ -68,7 +75,7 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     // SSR é deliberadamente limitado ao tier alto e renderizado em resolução
     // reduzida: reflexos de asfalto molhado/metal permanecem convincentes sem
     // transformar o Barburhen em um custo de GPU incompatível com touch.
-    if (quality === 'high') {
+    if (plan.ssr) {
       try {
         ssr = new SSRPass({
           renderer, scene, camera,
@@ -86,10 +93,10 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
         ssr = null;
       }
     }
-    const bloom = new UnrealBloomPass(size, quality === 'high' ? 0.24 : 0.18, 0.52, 0.88);
+    const bloom = new UnrealBloomPass(size, plan.bloomStrength, 0.52, 0.88);
     composer.addPass(bloom);
     const grade = new ShaderPass(GradeShader);
-    if (quality !== 'high') grade.uniforms.uGrain.value = 0.016;
+    grade.uniforms.uGrain.value = plan.grain;
     composer.addPass(grade);
     composer.addPass(new OutputPass());
     let elapsed = 0;
