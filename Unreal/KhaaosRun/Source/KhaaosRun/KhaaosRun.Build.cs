@@ -10,6 +10,11 @@ public class KhaaosRun : ModuleRules
         {
                 PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+                // M4 — raiz do módulo no include path: includes "Game/..." (convenção
+                // do projeto) resolvem no UBT inclusive cross-módulo (commandlets do
+                // KhaaosRunEditor/KhaaosRunServer), alinhando build real e preflight.
+                PublicIncludePaths.Add(ModuleDirectory);
+
                 PublicDependencyModuleNames.AddRange(new string[]
                 {
                         "Core",
@@ -36,6 +41,7 @@ public class KhaaosRun : ModuleRules
                         "ModularGameplay",
                         "ModularGameplayActors",
                         "CommonUI",
+                        "UMG",
                         "UIExtension",
                 });
 

@@ -4,7 +4,12 @@
 # =============================================================================
 # Idempotente: pode rodar repetidamente (recria apenas o que mudou).
 # Passos: .env → build → migrações → up → espera /readyz 200 → resumo.
-# Uso: bash deploy.sh [--scale N]
+# Uso: bash deploy.sh [--scale N | --replicas 2]
+#   --scale N      escala o serviço `app` (ids de réplica = HOSTNAME, KR_REPLICA_URL
+#                  = LB para todas — redirect cross-réplica cai em qualquer nó)
+#   --replicas 2   perfil DETERMINÍSTICO (M4): serviços app-a/app-b com ids fixos
+#                  (staging-app-a/b) e endereços públicos diretos (8081/8082) —
+#                  exigido pelo smoke cross-replica ao vivo
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -17,8 +22,28 @@ fi
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 
-SCALE_APP="${2:-}"
-if [ "${1:-}" = "--scale" ] && [ -n "$SCALE_APP" ]; then
+# M4 — o redirect cross-réplica precisa do endereço público da réplica: se o
+# .env não define KR_REPLICA_URL, usa o LB do staging (porta KR_STAGING_PORT).
+if [ -z "${KR_REPLICA_URL:-}" ]; then
+  export KR_REPLICA_URL="http://127.0.0.1:${KR_STAGING_PORT:-8080}"
+  echo "→ KR_REPLICA_URL ausente no .env — usando ${KR_REPLICA_URL}"
+fi
+
+SCALE_APP=""
+REPLICAS_MODE=0
+if [ "${1:-}" = "--scale" ] && [ -n "${2:-}" ]; then
+  SCALE_APP="$2"
+elif [ "${1:-}" = "--replicas" ] && [ "${2:-}" = "2" ]; then
+  REPLICAS_MODE=1
+fi
+
+if [ "$REPLICAS_MODE" = "1" ]; then
+  echo "→ MODO 2 RÉPLICAS (M4): app-a + app-b com KR_DISTRIBUTED=1 e ids determinísticos"
+  docker compose -f docker-compose.yml -f docker-compose.2replicas.yml build app-a app-b
+  docker compose -f docker-compose.yml -f docker-compose.2replicas.yml up -d postgres redis redis-replica
+  docker compose -f docker-compose.yml -f docker-compose.2replicas.yml run --rm migrate
+  docker compose -f docker-compose.yml -f docker-compose.2replicas.yml up -d app-a app-b nginx
+elif [ -n "$SCALE_APP" ]; then
   echo "→ Escalando app para ${SCALE_APP} réplicas"
   docker compose up -d --build postgres redis redis-replica
   docker compose run --rm migrate
@@ -44,6 +69,36 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 
+if [ "$REPLICAS_MODE" = "1" ]; then
+  # M4 — no modo 2 réplicas o LB só fica realmente pronto quando AS DUAS
+  # réplicas escutam (readyz direto em cada porta publicada). Uma única
+  # requisição via LB pode cair na réplica pronta e mascarar a outra (502 no
+  # primeiro round-robin do verify). Espera as DUAS portas diretas.
+  echo "→ Esperando /readyz 200 nas réplicas diretas (8081 + 8082)..."
+  for attempt in $(seq 1 60); do
+    code_a=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${KR_APP_A_PORT:-8081}/readyz" || true)
+    code_b=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${KR_APP_B_PORT:-8082}/readyz" || true)
+    if [ "$code_a" = "200" ] && [ "$code_b" = "200" ]; then
+      echo "✅ app-a e app-b prontas (tentativa ${attempt})"
+      break
+    fi
+    [ "$attempt" = "60" ] && { echo "❌ réplicas diretas não ficaram prontas (a=$code_a b=$code_b)"; exit 1; }
+    sleep 2
+  done
+  # Readyz via LB (prova o upstream estático app-a/app-b).
+  for attempt in $(seq 1 30); do
+    code=$(curl -s -o /tmp/readyz.json -w '%{http_code}' "http://127.0.0.1:${KR_STAGING_PORT:-8080}/readyz" || true)
+    [ "$code" = "200" ] && break
+    [ "$attempt" = "30" ] && { echo "❌ /readyz via LB não ficou 200"; exit 1; }
+    sleep 2
+  done
+  echo "✅ ready 200 via LB (upstream estático)"
+  cat /tmp/readyz.json | head -c 600; echo
+  echo ""
+  echo "→ Gate de saturação ativo: KR_READY_MAX_CONNECTIONS=${KR_READY_MAX_CONNECTIONS:-2000}"
+  exit 0
+fi
+
 echo "→ Esperando /readyz ficar 200 (sondas reais de PG/Redis)..."
 for attempt in $(seq 1 60); do
   code=$(curl -s -o /tmp/readyz.json -w '%{http_code}' "http://127.0.0.1:${KR_STAGING_PORT:-8080}/readyz" || true)
@@ -57,11 +112,19 @@ for attempt in $(seq 1 60); do
   fi
   sleep 2
 done
-echo "❌ /readyz não ficou 200 em 120 s — diagnóstico da stack:"
-echo "--- docker compose ps -a ---"
-docker compose ps -a || true
-echo "--- logs app (tail 80) ---"
-docker compose logs --tail=80 app || true
+
+# Diagnóstico: no modo 2 réplicas os serviços têm nomes próprios (app-a/app-b).
+if [ "$REPLICAS_MODE" = "1" ]; then
+  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.2replicas.yml"
+  echo "❌ /readyz não ficou 200 em 120 s — diagnóstico da stack (modo 2 réplicas):"
+  $COMPOSE ps -a || true
+  echo "--- logs app-a (tail 60) ---"; $COMPOSE logs --tail=60 app-a || true
+  echo "--- logs app-b (tail 60) ---"; $COMPOSE logs --tail=60 app-b || true
+else
+  echo "❌ /readyz não ficou 200 em 120 s — diagnóstico da stack:"
+  docker compose ps -a || true
+  echo "--- logs app (tail 80) ---"; docker compose logs --tail=80 app || true
+fi
 echo "--- logs nginx (tail 30) ---"
 docker compose logs --tail=30 nginx || true
 echo "--- último readyz capturado ---"

@@ -245,7 +245,7 @@ test("Stripe PostgreSQL: checkout idempotente, fulfillment atômico e state mach
         sum(amount_krc) FILTER (WHERE side = 'DEBIT')::text AS debits,
         sum(amount_krc) FILTER (WHERE side = 'CREDIT')::text AS credits
       FROM economy_ledger_entries WHERE user_id = $1 AND idempotency_key = $2
-    `, [successUserId, `stripe-order:${successOrderId}`]);
+    `, [successUserId, `stripe-order-${successOrderId}`]);
     assert.equal(ledger.rows[0]?.count, 2);
     assert.equal(ledger.rows[0]?.debits, "123.45");
     assert.equal(ledger.rows[0]?.credits, "123.45");

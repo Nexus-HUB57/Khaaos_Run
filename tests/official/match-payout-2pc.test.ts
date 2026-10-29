@@ -6,8 +6,17 @@ import { and, eq, sql } from "drizzle-orm";
 import { Pool } from "pg";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+let testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (testDatabaseUrl) {
+  // Isolamento por suíte (war of schemas: node --test roda os arquivos em
+  // paralelo — esta suíte aplica 0002/0003/0004/0007 e DROPa/recria tabelas;
+  // sem banco próprio destrói a união 0008 das suítes 2PC no mesmo banco).
+  const { useSuiteDatabase } = await import("../helpers/suite-database.ts");
+  const suite = await useSuiteDatabase(testDatabaseUrl, "match_payout_2pc");
+  process.env.TEST_DATABASE_URL = suite.databaseUrl;
+  process.env.DATABASE_URL = suite.databaseUrl;
+  testDatabaseUrl = suite.databaseUrl;
+}
 
 const { computeMatchPayouts, settleMatchPayouts, abortMatchPayouts, recoverStaleMatchPayouts,
   payoutIdempotencyKey, ledgerOperationsBalanced, MAX_PAYOUT_KRC } =

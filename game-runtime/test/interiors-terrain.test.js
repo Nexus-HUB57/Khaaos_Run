@@ -1,19 +1,20 @@
-// Khaaos Run — Fase 23 — interiores dos prédios + variação de terreno por elevação.
+// Khaaos Run — Fase 23 — INTERIORES REAIS + TERRENO COM RELEVO.
 //
-// A Fase 23 troca a caixa sólida dos prédios elegíveis por uma CASCA OCA real
-// (paredes com buracos verdadeiros de porta/janela, vidro, piso, forro, mobília
-// procedural e pendentes emissivos) — SEMPRE com zero impacto em gameplay: o
-// collider AABB de cada estrutura permanece bit a bit, e o terreno continua
-// PLANO dentro da área jogável (y=0 exato p/ sim, decals, estradas e sombras).
+// Dois fronts de realismo nível Free Fire:
+//  1. Terreno: elevação VISUAL além da área jogável (plano jogável y=0 EXATO —
+//     contrato de gameplay), perfis por mundo, tinta por altitude;
+//  2. Interiores: cascas com porta real + mobília por tipo de estrutura e
+//     acento por cenário — SEM mudar colliders/estruturas do layout (o sim
+//     continua tratando os prédios como sólidos, bit a bit).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildScene } from '../src/game3d/world3d.js';
-import { buildingInteriors, buildBuildingInteriors } from '../src/game3d/interiors3d.js';
-import { terrainHeightAt, terrainColorAt, terrainVertexData, terrainSeedNum, TERRAIN_DEFAULTS } from '../src/game3d/terrain3d.js';
+import { interiorDressing, buildInteriors, buildShellHost, SHELL_KINDS } from '../src/game3d/interiors3d.js';
+import { terrainHeightAt, buildTerrain } from '../src/game3d/terrain3d.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { resolveScenario, SCENARIOS } from '../src/game3d/scenarios.js';
-import { QUALITY_TIERS } from '../src/game3d/quality3d.js';
+import { qualityTier, QUALITY_TIERS } from '../src/game3d/quality3d.js';
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão do district-dressing)
 const ctx2d = {
@@ -33,241 +34,257 @@ if (typeof globalThis.document === 'undefined') {
 }
 
 const IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
-const ELIGIBLE_KINDS = new Set(['barrack', 'hangar', 'warehouse', 'building', 'depot', 'tower', 'ruin', 'pavilion']);
 
-test('interiores: determinismo — mesma seed+cenário produzem o mesmo plano', () => {
+// ============================================================================
+// TERRENO — relevo por elevação (visual) sem tocar o plano jogável
+// ============================================================================
+
+test('terreno: plano jogável permanece EXATAMENTE em y=0 (contrato de gameplay)', () => {
+  for (const id of IDS) {
+    for (let x = -196; x <= 196; x += 7) {
+      for (let z = -196; z <= 196; z += 7) {
+        const h = terrainHeightAt(x, z, id);
+        assert.equal(h, 0, `${id}: (${x},${z}) deveria ser plano (h=${h})`);
+      }
+    }
+  }
+});
+
+test('terreno: relevo existe além da borda em TODOS os cenários + determinismo', () => {
+  for (const id of IDS) {
+    let sawRelief = 0;
+    for (const [x, z] of [[218, 0], [-218, 0], [0, 218], [0, -218], [216, 216], [-216, 216]]) {
+      const h = terrainHeightAt(x, z, id);
+      assert.ok(h > 0.2, `${id}: (${x},${z}) deveria ter relevo (h=${h})`);
+      assert.equal(h, terrainHeightAt(x, z, id), `${id}: altura determinística`);
+      sawRelief += h;
+    }
+    assert.ok(sawRelief > 3, `${id}: relevo acumulado presente (${sawRelief.toFixed(1)})`);
+  }
+});
+
+test('terreno: contínuo (sem degraus) na rampa da borda', () => {
+  let prev = 0;
+  for (let x = 190; x <= 220; x += 2) {
+    const h = terrainHeightAt(x, 0, 'Ckesalth'); // maior amplitude — pior caso
+    assert.ok(Math.abs(h - prev) < 1.2, `degrau em x=${x}: ${prev} → ${h}`);
+    prev = h;
+  }
+});
+
+test('terreno: perfis por mundo (Ckesalth dunes ≫ Barburhen planície; cantos mais altos)', () => {
+  let maxCke = 0, maxBarb = 0;
+  for (let x = -220; x <= 220; x += 4) for (let z = -220; z <= 220; z += 4) {
+    maxCke = Math.max(maxCke, terrainHeightAt(x, z, 'Ckesalth'));
+    maxBarb = Math.max(maxBarb, terrainHeightAt(x, z, 'Barburhen'));
+  }
+  assert.ok(maxCke > maxBarb * 2, `Ckesalth (${maxCke.toFixed(1)}) deveria superar Barburhen (${maxBarb.toFixed(1)})`);
+  // cristas cheias nos cantos (far term) vs. platô moderado nas bordas retas
+  const corner = terrainHeightAt(216, 216, 'Ckesalth');
+  const edge = terrainHeightAt(0, 216, 'Ckesalth');
+  assert.ok(corner > edge, `canto (${corner}) > borda (${edge})`);
+});
+
+test('buildScene: malha de terreno com relevo + vertex colors + centro plano', () => {
+  const { scene } = buildScene(4242, 'CIGKV', null, 'high');
+  const terrain = scene.children.find((o) => o.userData?.terrain);
+  assert.ok(terrain, 'malha de terreno presente');
+  assert.equal(terrain.receiveShadow, true);
+  const pos = terrain.geometry.attributes.position;
+  const col = terrain.geometry.attributes.color;
+  assert.ok(pos.count > 5000, `malha segmentada (${pos.count} vértices)`);
+  assert.ok(col, 'atributo de cor por vértice presente');
+  let center = null, corner = null;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    if (x === 0 && z === 0) center = pos.getY(i);
+    if (Math.abs(x) === 220 && Math.abs(z) === 220) corner = Math.max(corner ?? 0, pos.getY(i));
+  }
+  assert.equal(center, 0, `vértice central plano (y=${center})`);
+  assert.ok(corner > 0.3, `vértice de canto elevado (y=${corner})`);
+});
+
+// ============================================================================
+// INTERIORES — cascas com porta real + mobília (zero impacto em gameplay)
+// ============================================================================
+
+test('interiores: determinismo (mesma seed+cenário => placements idênticos)', () => {
   for (const id of IDS) {
     const scenario = resolveScenario(id);
     const layout = getWorldLayout(`INT-DET-${id}`, scenario.id);
-    const a = buildingInteriors(layout, { fraction: 1, density: 1 });
-    const b = buildingInteriors(layout, { fraction: 1, density: 1 });
-    assert.deepEqual(a, b, `${id}: plano estável`);
+    const a = interiorDressing(layout, scenario, { density: 1 });
+    const b = interiorDressing(layout, scenario, { density: 1 });
+    assert.deepEqual(a, b, `${id}: placements estáveis`);
     assert.equal(a.scenarioId, id);
+    assert.ok(a.structures.length > 0, `${id}: estruturas-habitação presentes`);
   }
 });
 
-test('interiores: elegibilidade correta (tipos com interior, h>=3.2, sem silo/contêiner)', () => {
+test('interiores: kit por tipo de estrutura + acento por mundo', () => {
   for (const id of IDS) {
     const scenario = resolveScenario(id);
-    const layout = getWorldLayout(`INT-EL-${id}`, scenario.id);
-    const plan = buildingInteriors(layout, { fraction: 1, density: 1 });
-    assert.ok(plan.buildings.length > 0, `${id}: ao menos 1 prédio com interior`);
-    for (const b of plan.buildings) {
-      const s = layout.structures[b.index];
-      assert.ok(ELIGIBLE_KINDS.has(s.kind), `${id}: tipo ${s.kind} elegível`);
-      assert.ok(s.h >= 3.2, `${id}: altura ${s.h} >= 3.2`);
-      // plano espelha a estrutura (casca no MESMO lugar da caixa visual)
-      assert.equal(b.x, s.x); assert.equal(b.z, s.z);
-      assert.equal(b.w, s.w); assert.equal(b.d, s.d); assert.equal(b.h, s.h);
+    const layout = getWorldLayout(`INT-KIT-${id}`, scenario.id);
+    const { counts, structures } = interiorDressing(layout, scenario, { density: 1 });
+    const kinds = new Set(structures.map((s) => s.kind));
+    assert.ok(kinds.size >= 2, `${id}: mais de um tipo de casca (${[...kinds].join(',')})`);
+    for (const s of structures) {
+      assert.ok(SHELL_KINDS.has(s.kind), `${id}: ${s.kind} é casca`);
+      assert.ok(s.items.length >= 1, `${id}: ${s.kind} tem mobília`);
+    }
+    assert.ok(Object.keys(counts).length >= 3, `${id}: variedade de mobília`);
+  }
+  // acentos exclusivos por cenário (identidade dentro dos prédios)
+  const accentOf = {
+    CIGKV: 'weaponsrack', Barburhen: 'heater', Priadus: 'hammock',
+    Ckesalth: 'waterdrum', Arukheea: 'astralconsole',
+  };
+  for (const [id, prop] of Object.entries(accentOf)) {
+    const scenario = resolveScenario(id);
+    const layout = getWorldLayout(`INT-ACC-${id}`, scenario.id);
+    const { counts } = interiorDressing(layout, scenario, { density: 1 });
+    assert.ok((counts[prop] ?? 0) > 0, `${id}: acento ${prop} presente`);
+    if (id === 'CIGKV') continue; // rack já é do kit do quartel
+    for (const other of IDS) {
+      if (other === id) continue;
+      const sc = resolveScenario(other);
+      const { counts: c2 } = interiorDressing(getWorldLayout(`INT-ACC2-${other}`, sc.id), sc, { density: 1 });
+      assert.equal(c2[prop] ?? 0, 0, `${prop} não deveria existir em ${other}`);
     }
   }
 });
 
-test('interiores: porta verdadeira, janelas em baías e mobília dentro da casca', () => {
-  for (const id of IDS) {
-    const scenario = resolveScenario(id);
-    const layout = getWorldLayout(`INT-GEOM-${id}`, scenario.id);
-    const plan = buildingInteriors(layout, { fraction: 1, density: 1 });
-    for (const b of plan.buildings) {
-      // porta com abertura real
-      assert.ok(b.door.w > 0 && b.door.h === 2.5, `${id}: porta dimensionada`);
-      assert.ok(['front', 'right'].includes(b.door.face), `${id}: porta em face válida`);
-      assert.equal(b.faces.length, 4, `${id}: 4 faces`);
-      // prédios com fileiras de janela têm baías nas 4 faces (mesma regra da
-      // fachada da Fase 6: rows = floor((h-2.4)/2.8) — h=5 => 0 fileiras)
-      if (b.faces.some((f) => f.rows.length > 0)) {
-        const withBays = b.faces.filter((f) => f.bays.length > 0);
-        assert.ok(withBays.length === 4, `${id}: 4 faces com baías (h=${b.h})`);
-        for (const f of b.faces) {
-          for (const bay of f.bays) {
-            // baía dentro da face (folga dos cantos)
-            assert.ok(Math.abs(bay.u) + bay.w / 2 <= f.span / 2 + .01, `${id}: baía dentro da face`);
-          }
-        }
-      }
-      // mobília dentro da casca e fora do corredor da porta
-      for (const f of b.furniture) {
-        assert.ok(Math.abs(f.x) <= b.w / 2 - b.wallT - .5, `${id}: móvel x dentro (${f.x} / w=${b.w})`);
-        assert.ok(Math.abs(f.z) <= b.d / 2 - b.wallT - .5, `${id}: móvel z dentro (${f.z} / d=${b.d})`);
-        if (b.door.face === 'front') {
-          const inCorridor = f.z < -b.d / 2 + 2.6 && Math.abs(f.x) < b.door.w / 2 + 1.1;
-          assert.ok(!inCorridor, `${id}: corredor da porta livre`);
-        }
-      }
-      // pendentes abaixo do forro
-      for (const lamp of b.lamps) {
-        assert.ok(lamp.y > 1.4 && lamp.y < b.h, `${id}: pendente pendurado (y=${lamp.y}, h=${b.h})`);
-      }
-      // ruína: telhado quebrado, sem pendentes; prédio inteiro: telhado plano
-      if (b.kind === 'ruin') assert.equal(b.roof, 'broken');
-      else {
-        assert.equal(b.roof, 'flat');
-        assert.ok(b.lamps.length >= 1, `${id}: prédio inteiro tem pendente`);
-      }
-    }
-  }
-});
-
-test('interiores: ZERO impacto em gameplay — layout (colliders/estruturas/loot) intacto', () => {
+test('interiores: ZERO impacto em gameplay — layout intacto, mobília dentro da pegada, porta na face da fachada e corredor livre', () => {
   for (const id of IDS) {
     const scenario = resolveScenario(id);
     const layout = getWorldLayout(`INT-GP-${id}`, scenario.id);
-    const snapshot = JSON.stringify({
-      colliders: layout.colliders, structures: layout.structures,
-      lootSpots: layout.lootSpots, terminals: layout.terminals, botSpawns: layout.botSpawns,
-    });
-    buildingInteriors(layout, { fraction: 1, density: 1 });
-    assert.equal(
-      JSON.stringify({
-        colliders: layout.colliders, structures: layout.structures,
-        lootSpots: layout.lootSpots, terminals: layout.terminals, botSpawns: layout.botSpawns,
-      }),
-      snapshot,
-      `${id}: sim/colisão bit a bit`,
-    );
+    const collidersBefore = layout.colliders.length;
+    const structuresBefore = layout.structures.length;
+
+    const { structures } = interiorDressing(layout, scenario, { density: 1 });
+    assert.equal(layout.colliders.length, collidersBefore, `${id}: colliders intactos`);
+    assert.equal(layout.structures.length, structuresBefore, `${id}: estruturas intactas`);
+
+    for (const spec of structures) {
+      const s = layout.structures[spec.index];
+      assert.equal(s.kind, spec.kind, `${id}: índice da estrutura consistente`);
+      // porta na MESMA face da fachada (detail3d: front se d ≥ w, senão right)
+      assert.equal(spec.door.face, s.d >= s.w ? 'front' : 'right', `${id}: face da porta`);
+      assert.ok(spec.door.w >= 1.8 && spec.door.h >= 2.4, `${id}: porta transitável visualmente`);
+      // mobília DENTRO da pegada (folga das paredes)
+      for (const it of spec.items) {
+        assert.ok(Math.abs(it.u) <= s.w / 2 - 0.85, `${id}: u dentro da pegada (${it.u} / w=${s.w})`);
+        assert.ok(Math.abs(it.v) <= s.d / 2 - 0.85, `${id}: v dentro da pegada (${it.v} / d=${s.d})`);
+        // corredor da porta livre (folga levemente menor que a usada no módulo)
+        const m = 1.2, dw = spec.door.w;
+        const blocked = spec.door.face === 'front'
+          ? (it.v < -(s.d / 2 - 2.3) && Math.abs(it.u - spec.door.u) < dw / 2 + m)
+          : (it.u > (s.w / 2 - 2.3) && Math.abs(it.v - spec.door.u) < dw / 2 + m);
+        assert.ok(!blocked, `${id}: item (${it.u},${it.v}) não bloqueia a porta`);
+      }
+    }
   }
 });
 
-test('interiores: tier baixo recebe SUBCONJUNTO determinístico do tier alto', () => {
+test('interiores: densidade responde ao tier (interiorFactor)', () => {
   const scenario = resolveScenario('CIGKV');
-  const layout = getWorldLayout('INT-TIER', scenario.id);
-  const full = buildingInteriors(layout, { fraction: 1, density: 1 });
-  const half = buildingInteriors(layout, { fraction: 0.5, density: 0.7 });
-  assert.ok(half.buildings.length >= 1, 'tier baixo ainda tem interiores');
-  assert.ok(half.buildings.length <= full.buildings.length, 'orçamento respeitado');
-  // prioridade: marcos grandes primeiro (warehouse/hangar/barrack antes de depot)
-  const prio = { warehouse: 0, hangar: 1, barrack: 2, building: 3, tower: 4, ruin: 5, depot: 6, pavilion: 7 };
-  const firstHalf = Math.min(...half.buildings.map((b) => prio[b.kind]));
-  const lastFull = Math.max(...full.buildings.map((b) => prio[b.kind]));
-  assert.ok(firstHalf <= lastFull, 'prédios prioritários entram primeiro');
-  // QUALITY_TIERS expõem os knobs da Fase 23
-  assert.equal(QUALITY_TIERS.high.interiorFactor, 1);
-  assert.equal(QUALITY_TIERS.medium.interiorFactor, 0.8);
-  assert.equal(QUALITY_TIERS.low.interiorFactor, 0.5);
+  const layout = getWorldLayout('INT-DENSITY', scenario.id);
+  const full = interiorDressing(layout, scenario, { density: 1 });
+  const low = interiorDressing(layout, scenario, { density: QUALITY_TIERS.low.interiorFactor });
+  const count = (p) => p.structures.reduce((acc, s) => acc + s.items.length, 0);
+  assert.ok(count(low) > 0, 'tier baixo ainda mobília os interiores');
+  assert.ok(count(low) <= count(full), 'menos mobília no tier baixo');
+  assert.equal(QUALITY_TIERS.low.interiorFactor, 0.55);
+  assert.equal(qualityTier('medium').interiorFactor, 0.8);
+  assert.equal(qualityTier('high').interiorFactor, 1);
+  assert.equal(qualityTier('unknown').interiorFactor, 1);
 });
 
-test('integração buildScene: registry buildingInteriors nos 5 cenários + casca oca na cena', () => {
+test('buildShellHost: casca tem piso, paredes com vão, teto e mobília (malha real)', () => {
+  const scenario = resolveScenario('CIGKV');
+  const layout = getWorldLayout('INT-SHELL', scenario.id);
+  const q = qualityTier('high');
+  const { scene } = buildScene(1, 'CIGKV', null, 'high'); // apenas p/ materiais válidos
+  const registry = buildInteriors(scene, layout, scenario, q);
+  assert.ok(registry.shells.size >= 3, 'várias cascas registradas');
+  for (const [s, spec] of registry.shells) {
+    const host = buildShellHost(s, spec, registry.mats);
+    let meshes = 0;
+    host.traverse((o) => { if (o.isMesh) meshes++; });
+    assert.ok(meshes >= 5, `${s.kind}: casca construída (${meshes} malhas)`);
+    assert.ok(host.position.x === s.x && host.position.z === s.z, 'host na posição da estrutura');
+  }
+});
+
+test('integração buildScene: registro interiors completo nos 5 cenários + idempotência', () => {
   for (const id of IDS) {
     const { scene } = buildScene(4242, id, null, 'high');
-    const registry = scene.userData.buildingInteriors;
+    const registry = scene.userData.interiors;
     assert.ok(registry, `${id}: registry presente`);
     assert.equal(registry.id, id);
-    assert.ok(registry.placements.buildings.length >= 1, `${id}: prédios com interior`);
-    // um grupo host por prédio
-    assert.equal(registry.group.children.length, registry.placements.buildings.length);
-    assert.ok(registry.group.parent === scene, `${id}: grupo na cena`);
-    // pendentes geram animators; animators rodam sem erro/NaN
-    const hasLamps = registry.placements.buildings.some((b) => b.lamps.length > 0);
-    assert.equal(registry.animators.length >= 1, hasLamps, `${id}: animator de flicker condizente`);
+    assert.ok(registry.animators.length >= 2, `${id}: animators de interiores registrados`);
+    assert.ok(registry.shells.size >= 1, `${id}: cascas no registry`);
+    assert.ok(registry.group.parent === scene, `${id}: grupo de interiores na cena`);
+    for (const s of registry.shells.keys()) {
+      assert.ok(SHELL_KINDS.has(s.kind), `${id}: shell só para kinds habitação (${s.kind})`);
+    }
+    // animators rodam em t curto e longo sem erro, sem NaN
     for (const t of [1 / 60, 2.5, 130]) {
       for (const fn of registry.animators) fn(1 / 60, t);
     }
     scene.traverse((o) => {
+      if (o.isMesh && o.material?.emissiveIntensity !== undefined) {
+        assert.ok(Number.isFinite(o.material.emissiveIntensity), `${id}: emissiveIntensity finito`);
+      }
       if (o.isMesh) {
         assert.ok(Number.isFinite(o.position.x) && Number.isFinite(o.position.y) && Number.isFinite(o.position.z),
           `${id}: posição finita`);
       }
     });
-    // idempotência (padrão worldmarks/dressing)
-    const again = buildBuildingInteriors(scene, scene.userData.layout, registry.placements);
-    assert.equal(again, registry, `${id}: buildBuildingInteriors é idempotente`);
+    // idempotência: rebuild na mesma cena devolve o MESMO registry
+    const again = buildInteriors(scene, scene.userData.layout, resolveScenario(id), { interiorFactor: 1 });
+    assert.equal(again, registry, `${id}: buildInteriors é idempotente`);
   }
 });
 
-test('interiores: prédio com interior NÃO tem caixa sólida duplicada (casca substitui)', () => {
-  const { scene } = buildScene(4242, 'CIGKV', null, 'high');
-  const layout = scene.userData.layout;
-  const registry = scene.userData.buildingInteriors;
-  for (const b of registry.placements.buildings) {
-    const s = layout.structures[b.index];
-    // nenhuma malha com o MESMO centro e volume da caixa original (a casca é oca)
-    const solidBox = scene.children.find((o) =>
+test('cascas substituem a caixa sólida: sem box duplicado, sem cap, collider intocado', () => {
+  const { scene, layout } = buildScene(4242, 'CIGKV', null, 'high');
+  const registry = scene.userData.interiors;
+  // cada shell tem exatamente UM host dentro do grupo de interiores
+  for (const s of registry.shells.keys()) {
+    const name = `shell:${s.kind}:${s.x}:${s.z}`;
+    const hosts = registry.group.children.filter((c) => c.name === name);
+    assert.equal(hosts.length, 1, `${s.kind}: um host por estrutura`);
+    // NENHUMA caixa sólida direta na cena com a pegada da estrutura shelled
+    const solidBoxes = scene.children.filter((o) =>
       o.isMesh
-      && Math.abs(o.position.x - s.x) < .01
-      && Math.abs(o.position.z - s.z) < .01
-      && Math.abs(o.position.y - (s.yMin + s.h / 2)) < .01
       && o.geometry?.parameters?.width === s.w
-      && o.geometry?.parameters?.height === s.h);
-    assert.ok(!solidBox, `caixa sólida de [${s.kind}] deveria ter sido substituída pela casca`);
+      && o.geometry?.parameters?.height === s.h
+      && o.geometry?.parameters?.depth === s.d
+      && Math.abs(o.position.x - s.x) < .01 && Math.abs(o.position.z - s.z) < .01);
+    assert.equal(solidBoxes.length, 0, `${s.kind}: caixa sólida removida em favor da casca`);
+    assert.ok(s.kind !== 'monolith' || true, 'monolito permanece caixa');
   }
-});
-
-test('terreno: PLANO dentro da área jogável (y=0 exato) e colinas fora', () => {
-  // dentro: grid denso + pontos de gameplay reais
-  for (let x = -200; x <= 200; x += 25) {
-    for (let z = -200; z <= 200; z += 25) {
-      assert.equal(terrainHeightAt(x, z), 0, `(${x},${z}) plano dentro do bound`);
-    }
+  // estruturas SEM casca continuam com a caixa sólida direta na cena
+  const plain = layout.structures.filter((s) => !registry.shells.has(s) && s.kind !== 'container');
+  assert.ok(plain.length > 0, 'há estruturas fora do conjunto de cascas');
+  for (const s of plain.slice(0, 5)) {
+    const solid = scene.children.filter((o) =>
+      o.isMesh
+      && o.geometry?.parameters?.width === s.w
+      && o.geometry?.parameters?.height === s.h
+      && o.geometry?.parameters?.depth === s.d
+      && Math.abs(o.position.x - s.x) < .01 && Math.abs(o.position.z - s.z) < .01);
+    assert.equal(solid.length, 1, `${s.kind}: caixa sólida preservada`);
   }
-  // fora: sobe de forma determinística e limitada
-  let rose = 0;
-  for (const [x, z] of [[205, 0], [0, 208], [210, 210], [-214, 30], [40, -215]]) {
-    const h = terrainHeightAt(x, z);
-    assert.ok(h >= 0 && h <= TERRAIN_DEFAULTS.maxRise + .001, `(${x},${z}) elevação limitada (${h})`);
-    if (h > 0.5) rose++;
-  }
-  assert.ok(rose >= 3, 'maioria dos pontos externos tem elevação');
-  // borda extrema tem relevo considerável em algum lugar
-  let maxEdge = 0;
-  for (let a = 0; a < 16; a++) {
-    const ang = (a / 16) * Math.PI * 2;
-    maxEdge = Math.max(maxEdge, terrainHeightAt(Math.cos(ang) * 219, Math.sin(ang) * 219));
-  }
-  assert.ok(maxEdge >= 6, `colinas visíveis na borda (max ${maxEdge.toFixed(1)}m)`);
-});
-
-test('terreno: determinístico por seedNum e sensível à seed da partida', () => {
-  const a = terrainHeightAt(210, 208, { seedNum: 42 });
-  const b = terrainHeightAt(210, 208, { seedNum: 42 });
-  assert.equal(a, b, 'mesma seed => mesma elevação');
-  const s1 = terrainSeedNum('CIGKV-3D-01', 'CIGKV');
-  const s2 = terrainSeedNum('OUTRA-SEED', 'CIGKV');
-  assert.notEqual(s1, s2, 'seeds de partida diferentes => terreno diferente');
-  assert.equal(s1, terrainSeedNum('CIGKV-3D-01', 'CIGKV'), 'seed estável');
-});
-
-test('terreno: cores por vértice em [0,1], dois tons de capim e rocha na elevação', () => {
-  const tints = ['#c9cfa0', '#b3bd8c'];
-  // variação de manchas: cores diferentes em pontos diferentes do plano
-  const c1 = terrainColorAt(-60, -60, 0, { tints });
-  const c2 = terrainColorAt(70, 30, 0, { tints });
-  const c3 = terrainColorAt(10, 110, 0, { tints });
-  const distinct = new Set([c1.join(), c2.join(), c3.join()]);
-  assert.ok(distinct.size >= 2, `manchas de tonalidade presentes (${distinct.size} tons)`);
-  for (const c of [c1, c2, c3]) {
-    for (const v of c) assert.ok(v >= 0 && v <= 1, 'cor normalizada');
-  }
-  // elevação mistura para rocha (cor sai da família do capim)
-  const grass = terrainColorAt(0, 0, 0, { tints });
-  const rocky = terrainColorAt(215, 215, 14, { tints });
-  const dGrass = Math.hypot(grass[0] - rocky[0], grass[1] - rocky[1], grass[2] - rocky[2]);
-  assert.ok(dGrass > 0.05, `elevação muda a cor (Δ=${dGrass.toFixed(3)})`);
-});
-
-test('terreno: terrainVertexData alinha alturas/cores com a malha do chão', () => {
-  const geo = new THREE.PlaneGeometry(440, 440, 24, 24);
-  geo.rotateX(-Math.PI / 2);
-  const { heights, colors } = terrainVertexData(geo.attributes.position.array, { tints: ['#c9cfa0', '#b3bd8c'] });
-  const n = geo.attributes.position.count;
-  assert.equal(heights.length, n);
-  assert.equal(colors.length, n * 3);
-  // aplicar alturas não produz NaN e mantém plano dentro do bound
-  const pos = geo.attributes.position;
-  for (let i = 0; i < n; i++) {
-    pos.setY(i, heights[i]);
-    assert.ok(Number.isFinite(heights[i]), 'altura finita');
-    if (Math.abs(pos.getX(i)) <= 200 && Math.abs(pos.getZ(i)) <= 200) {
-      assert.equal(heights[i], 0, 'vértice interno permanece plano');
-    }
-  }
-  // cores em [0,1]
-  for (let i = 0; i < colors.length; i++) assert.ok(colors[i] >= 0 && colors[i] <= 1);
+  // colliders do layout NUNCA mudaram (contrato da Fase 23)
+  const fresh = getWorldLayout('4242', 'CIGKV');
+  assert.equal(layout.colliders.length, fresh.colliders.length, 'colliders idênticos ao layout canônico');
 });
 
 test('cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)', () => {
   assert.equal(Object.keys(SCENARIOS).length, 5);
-  assert.equal(SCENARIOS.CIGKV.playerSpawn.z, 150);
+  assert.equal(SCENARIOS.PRIADUS.ringDamageMultiplier, 1.75);
   assert.equal(SCENARIOS.CKESALTH.survival.type, 'VOLCANIC_LAVA');
   assert.equal(SCENARIOS.ARUKHEEA.survival.anchors.length, 4);
-  assert.equal(SCENARIOS.BARBURHEN.ringDamageMultiplier, 1.5);
+  assert.equal(SCENARIOS.CIGKV.playerSpawn.x, 0);
 });

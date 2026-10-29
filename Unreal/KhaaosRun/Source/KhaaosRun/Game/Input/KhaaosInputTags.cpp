@@ -41,6 +41,14 @@ void FKhaaosInputTags::InitializeInputTags()
 	InputTags.Tag_Input_ADS            = RequestTag("Input.ADS");
 	InputTags.Tag_Input_Interact       = RequestTag("Input.Interact");
 	InputTags.Tag_Input_Ultimate       = RequestTag("Input.Ultimate");
+	InputTags.Tag_Input_Ability1       = RequestTag("Input.Ability.1");
+	InputTags.Tag_Input_Ability2       = RequestTag("Input.Ability.2");
+	InputTags.Tag_Input_Ability3       = RequestTag("Input.Ability.3");
+	InputTags.Tag_Input_Ability4       = RequestTag("Input.Ability.4");
+	InputTags.Tag_Input_Ability5       = RequestTag("Input.Ability.5");
+	InputTags.Tag_Input_Ability6       = RequestTag("Input.Ability.6");
+	InputTags.Tag_Input_Ability7       = RequestTag("Input.Ability.7");
+	InputTags.Tag_Input_Ability8       = RequestTag("Input.Ability.8");
 	InputTags.Tag_Input_GrapplingHook  = RequestTag("Input.GrapplingHook");
 	InputTags.Tag_Input_Shield         = RequestTag("Input.Shield");
 	InputTags.Tag_Input_Heal           = RequestTag("Input.Heal");

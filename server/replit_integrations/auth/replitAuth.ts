@@ -107,7 +107,32 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = options.oidcConfig ?? await getOidcConfig();
+  // IdP indisponível no boot NÃO pode derrubar a API inteira (staging real:
+  // OIDC externo pode estar fora do ar). Degrada para modo parcial: rotas
+  // públicas (/metrics, /healthz, 2PC com auth própria) seguem de pé; rotas
+  // OIDC respondem 503 até o discovery recuperado por retry em background.
+  let config: client.Configuration | null = null;
+  try {
+    config = options.oidcConfig ?? (await getOidcConfig());
+  } catch (error) {
+    console.warn(
+      "[auth] OIDC discovery indisponível no boot — modo degradado (retry em background):",
+      error instanceof Error ? error.message : String(error),
+    );
+    const retryDiscovery = () => {
+      getOidcConfig()
+        .then((recovered) => {
+          config = recovered;
+          console.log("[auth] OIDC discovery recuperado após retry — autenticação restabelecida");
+        })
+        .catch(() => {
+          const t = setTimeout(retryDiscovery, 60_000);
+          if (typeof t.unref === "function") t.unref();
+        });
+    };
+    const firstRetry = setTimeout(retryDiscovery, 15_000);
+    if (typeof firstRetry.unref === "function") firstRetry.unref();
+  }
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -125,6 +150,10 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
   const ensureStrategy = (req: { hostname: string; protocol: string }) => {
     const origin = getPublicOrigin(req);
     if (!strategyRegistered) {
+      if (!config) {
+        // Modo degradado: IdP ainda sem discovery (retry em background ativo).
+        throw new Error("OIDC discovery unavailable");
+      }
       const strategy = new Strategy(
         {
           name: strategyName,
@@ -146,9 +175,14 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     void distributedState.rateLimit(`auth:login:${req.ip}`, 30, 60_000).then((limit) => {
       if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many authentication attempts" });
     try {
-      ensureStrategy(req);
+      getPublicOrigin(req);
     } catch {
       return res.status(400).json({ message: "Untrusted request host" });
+    }
+    try {
+      ensureStrategy(req);
+    } catch {
+      return res.status(503).json({ message: "Authentication unavailable" });
     }
     passport.authenticate(strategyName, {
       prompt: "login consent",
@@ -161,9 +195,14 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     void distributedState.rateLimit(`auth:callback:${req.ip}`, 30, 60_000).then((limit) => {
       if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many authentication attempts" });
     try {
-      ensureStrategy(req);
+      getPublicOrigin(req);
     } catch {
       return res.status(400).json({ message: "Untrusted request host" });
+    }
+    try {
+      ensureStrategy(req);
+    } catch {
+      return res.status(503).json({ message: "Authentication unavailable" });
     }
     passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
@@ -186,6 +225,11 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     const revoke = userId ? distributedState.revokeUser(userId) : Promise.resolve();
     revoke.then(() => req.logout(() => {
       req.session?.destroy(() => undefined);
+      if (!config) {
+        // Modo degradado: encerra só a sessão local (sem end-session do IdP).
+        res.redirect(origin);
+        return;
+      }
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.REPL_ID!,

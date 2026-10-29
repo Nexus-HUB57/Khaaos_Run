@@ -13,8 +13,16 @@ import { drizzle } from "drizzle-orm/node-postgres";
 //         economy_idempotency, economy_ledger_entries).
 // Execução: exige TEST_DATABASE_URL apontando para banco descartável *_test.
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+let testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (testDatabaseUrl) {
+  // Isolamento por suíte: aplica 0003/0004 manualmente — banco próprio evita
+  // guerra de schema com as suítes paralelas no mesmo TEST_DATABASE_URL.
+  const { useSuiteDatabase } = await import("../helpers/suite-database.ts");
+  const suite = await useSuiteDatabase(testDatabaseUrl, "m2_loan_parity");
+  process.env.TEST_DATABASE_URL = suite.databaseUrl;
+  process.env.DATABASE_URL = suite.databaseUrl;
+  testDatabaseUrl = suite.databaseUrl;
+}
 
 test("M2: preview=débito na matriz de prazos, idempotência concorrente, rollback multi-tabela e reconciliação", { skip: !testDatabaseUrl }, async () => {
   const url = new URL(testDatabaseUrl!);

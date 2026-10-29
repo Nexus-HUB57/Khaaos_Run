@@ -11,7 +11,13 @@ import * as THREE from 'three';
 import {
   camoMaterial, contactShadowTexture, faceTexture, goggleMaterial, skinMaterial,
 } from './textures3d.js';
+import { applyMicroDetail } from './materials3d.js';
 import { RARITIES } from '../shared/weapons.js';
+// Fase 30 — anexos dos 4 sockets da AR-47 + skin mítica evolutiva
+import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic } from './attachments3d.js';
+// Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
+// (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
+import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? .82, metalness: opts.metal ?? .12, ...opts.extra });
 
@@ -73,6 +79,51 @@ function darken(hex, f = .55) {
 // `variant` (id do operativo / nome do bot) deriva, por hash, quais acessórios o
 // modelo carrega — cada operativo tem identidade visual própria e estável.
 function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM }) {
+  // ---- Fase 26 — TALON (Hacker & Urban Runner): identidade FIXA, sem roll —
+  // moicano azul + visor digital emissivo na testa + jaqueta techwear volumosa
+  // de gola alta + tiras soltas (física de mola no animateOperative) + LEDs
+  // holográficos azul/laranja nos braços + traquitana no peito.
+  if (variant === 'OP_MALE_TALON') {
+    const mohawkM = M('#1e40af', { rough: .85 });
+    const mohawkM2 = M('#2563eb', { rough: .8 });
+    // moicano: crista central em 3 segmentos decrescentes (leitura de silhueta)
+    head.add(box(.05, .1, .1, mohawkM, 0, .17, .07));
+    head.add(box(.05, .12, .1, mohawkM2, 0, .19, -.02));
+    head.add(box(.05, .09, .1, mohawkM, 0, .16, -.11));
+    // laterais raspadas (contraste de volume)
+    head.add(box(.02, .07, .2, gearM, -.12, .1, 0));
+    head.add(box(.02, .07, .2, gearM, .12, .1, 0));
+    // visor digital na testa (self-illumination azul-ciano)
+    const visorM = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#22d3ee', emissiveIntensity: 1.5, roughness: .25, metalness: .2 });
+    head.add(box(.19, .05, .025, visorM, 0, .085, -.125));
+    head.add(box(.21, .02, .03, gearM2, 0, .055, -.122)); // moldura inferior
+    // jaqueta volumosa: ombros largos + painéis laterais + gola alta
+    const jacketM = M('#22262f', { rough: .92 });
+    const jacketDarkM = M('#14171d', { rough: .95 });
+    torso.add(box(.52, .14, .38, jacketM, 0, .26, 0));            // gola alta volumosa
+    torso.add(box(.56, .34, .4, jacketM, 0, .02, .015));          // corpo da jaqueta sobre o colete
+    torso.add(box(.08, .3, .34, jacketDarkM, -.3, .02, 0));       // painel lateral E
+    torso.add(box(.08, .3, .34, jacketDarkM, .3, .02, 0));        // painel lateral D
+    torso.add(box(.4, .06, .05, jacketDarkM, 0, .17, -.21));      // dobra do colarinho
+    // LEDs holográficos: azul no braço E, laranja no braço D (assinatura hacking)
+    const ledBlueM = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#22d3ee', emissiveIntensity: 1.35, roughness: .3 });
+    const ledOrangeM = new THREE.MeshStandardMaterial({ color: '#fb923c', emissive: '#f97316', emissiveIntensity: 1.2, roughness: .3 });
+    torso.add(box(.05, .16, .07, ledBlueM, -.35, .06, 0));
+    torso.add(box(.05, .16, .07, ledOrangeM, .35, .06, 0));
+    // traquitana cibernética no peito (gerador do pulso)
+    torso.add(box(.09, .13, .04, gearM2, .14, .14, -.21));
+    torso.add(box(.05, .03, .045, ledBlueM, .14, .16, -.215));
+    // tiras soltas (2) — penduradas do cinto; mola no animateOperative
+    const strapM = M('#101318', { rough: .95 });
+    const straps = [];
+    for (const [sx, phase] of [[-.24, 0], [.24, 1.9]]) {
+      const strap = box(.035, .34, .015, strapM, sx, .62, .17);
+      strap.userData.talonPhase = phase;
+      straps.push(strap);
+      g.add(strap);
+    }
+    return { straps };
+  }
   const seed = variant || vest + skin;
   const roll = (mod, salt = '') => hashIdx(`${seed}:${salt}`, mod);
   const bandColors = ['#8a1f2b', '#1f5a8a', '#3f6a2a', '#6a4a1f', '#22242a'];
@@ -253,6 +304,9 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   // ---- materiais (por instância p/ identidade de equipe; pele memoizada Fase 9) ----
   const skinM = skinMaterial(skin);
   const vestM = M(vest, { rough: .78, metal: .18 });
+  // Fase 26 — micro-detalle de tecido no colete (anti-plástico): normalMap +
+  // roughnessMap procedurais determinísticos pela cor do colete (memo-friendly).
+  applyMicroDetail(vestM, { preset: 'fabric', seed: hashIdx(vest, 9999) + 11 });
   const vestDarkM = M(darken(vest, .55), { rough: .85 });
   const secM = M(sec, { rough: .88 });
   const gearM = M('#1b1d20', { rough: .86, metal: .1 });
@@ -307,12 +361,20 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(cyl(.008, .008, .16, metalM, -.19, .22, -.16, 4)); // antena do radio
   // zipper + fivela central
   torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
-  // mochila tática: corpo + straps + bedroll + faixa de equipe
+  // mochila tática: corpo + straps + bedroll + faixa de equipe (BASE — a
+  // Fase 28 substitui por níveis Nv1-3 quando o ator equipa mochila)
   const pack = box(.38, .42, .17, gearM2, 0, .02, .22);
+  pack.userData.basePack = true;
   torso.add(pack);
-  torso.add(box(.3, .05, .19, vestDarkM, 0, .12, .23));      // tampa
-  torso.add(cyl(.07, .07, .34, secM, 0, .27, .24, 8));        // bedroll no topo
-  torso.add(box(.34, .06, .02, trimM, 0, -.08, .305));        // faixa reflexiva
+  const packLid = box(.3, .05, .19, vestDarkM, 0, .12, .23);
+  packLid.userData.basePack = true;
+  torso.add(packLid);
+  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 8);
+  bedroll.userData.basePack = true;
+  torso.add(bedroll);
+  const teamStripe = box(.34, .06, .02, trimM, 0, -.08, .305);
+  teamStripe.userData.basePack = true;
+  torso.add(teamStripe);
   // costelas laterais do colete
   torso.add(box(.03, .3, .28, vestDarkM, -.265, .06, 0));
   torso.add(box(.03, .3, .28, vestDarkM, .265, .06, 0));
@@ -347,17 +409,22 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     head.add(hairBack);
   }
   // capacete tático OU boina (variedade) — gear rígido, boxes coerentes
+  // (Fase 28: marcados baseHeadGear — o gear Nv2+ os substitui)
   if (helmet) {
     const dome = ball(.145, gearM, 0, .1, .01, 12, 10, 1.05, .85, 1.12); // casco arredondado
     const brim = box(.28, .04, .08, gearM, 0, .1, -.15);
     const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos empilhados
+    dome.userData.baseHeadGear = brim.userData.baseHeadGear = band.userData.baseHeadGear = true;
     head.add(dome, brim, band);
-    head.add(box(.02, .07, .16, gearM2, -.15, .15, .01)); // trilhos laterais
-    head.add(box(.02, .07, .16, gearM2, .15, .15, .01));
-    head.add(box(.05, .05, .05, metalM, .09, .21, .08));   // mount NVG
+    const railL = box(.02, .07, .16, gearM2, -.15, .15, .01); // trilhos laterais
+    const railR = box(.02, .07, .16, gearM2, .15, .15, .01);
+    const nvg = box(.05, .05, .05, metalM, .09, .21, .08);   // mount NVG
+    railL.userData.baseHeadGear = railR.userData.baseHeadGear = nvg.userData.baseHeadGear = true;
+    head.add(railL, railR, nvg);
   } else {
     const cap = box(.28, .1, .28, vestM, 0, .16, .01);
     const brim = box(.24, .03, .12, vestM, 0, .12, -.16);
+    cap.userData.baseHeadGear = brim.userData.baseHeadGear = true;
     head.add(cap, brim);
   }
   torso.add(head);
@@ -404,9 +471,11 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(armR.shoulder, armL.shoulder);
 
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
-  buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
+  const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
 
-  return { group: g, parts: { head, torso, legL, legR, armL, armR, shadow, face: faceRig } };
+  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null };
+  parts.userData = { vestColor: vest }; // Fase 28 — tinge o gear com a cor da equipe
+  return { group: g, parts };
 }
 
 // pose de caminhada/tiro — t é o tempo, speedNorm 0..1, pitch para braços,
@@ -424,6 +493,16 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
 export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
   let hitEnv = 0;                                            // acopla rosto à dor
+  // Fase 26 — Talon: física de mola SIMPLES das tiras da jaqueta (determinística:
+  // fase semeada no userData; amplitude cresce com velocidade e no ar).
+  if (parts.straps) {
+    const amp = .18 + speedNorm * .55 + Math.min(.4, air * .06);
+    for (const s of parts.straps) {
+      const ph = s.userData.talonPhase || 0;
+      s.rotation.x = Math.sin(t * 6.3 + ph) * amp * .5;
+      s.rotation.z = Math.sin(t * 4.1 + ph * 1.7) * amp;
+    }
+  }
   // sombra de contato: some com altitude (paraquedas) e no corpo morto
   if (parts.shadow) {
     const fade = dead ? 0 : Math.max(0, .8 - air * .1);
@@ -574,10 +653,12 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
-// skin (Fase 7): raridade do loot ('COMUM'..'LENDARIO') pinta o furniture com a
-// cor da raridade, adiciona brilho emissivo e uma gema no receiver — cada nível
-// é reconhecível à distância, como no FreeFire.
-export function createWeaponModel(id, skin = null) {
+// skin (Fase 7): raridade do loot ('COMUM'..'LENDARIO'+'MITICA') pinta o
+// furniture com a cor da raridade, adiciona brilho emissivo e uma gema no
+// receiver — cada nível é reconhecível à distância, como no FreeFire.
+// opts (Fase 30): { attachments: ['mira4x',...], mythicStage: 0-4 } — anexos
+// montados nos 4 sockets da AR-47 e overlay evolutivo da skin mítica.
+export function createWeaponModel(id, skin = null, opts = {}) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
   const gun2 = M('#15171a', { rough: .48, metal: .72 });
@@ -632,6 +713,43 @@ export function createWeaponModel(id, skin = null) {
       sights(-.5, .0);
       muzzleZ = -.56;
       break;
+    case 'ar47': { // Fase 28 — AR-47 (7.62) com 4 SOCKETS reais p/ anexos
+      const woodM = M('#6e4a2a', { rough: .62, metal: .08 }); // madeira envelhecida
+      const woodDarkM = M('#54371e', { rough: .66, metal: .06 });
+      // receiver + tampa do gas system (silhueta AK imediata)
+      add(.075, .11, .5, gun, 0, 0, -.05);
+      add(.035, .05, .34, gun2, 0, .075, -.16);       // gas tube sobre o cano
+      add(.06, .09, .26, woodM, 0, -.005, -.38);      // handguard de madeira
+      add(.05, .1, .08, woodDarkM, 0, -.02, -.5);     // escavilho frontal
+      // coronha oca de madeira (esqueleto AK)
+      add(.05, .09, .1, woodM, 0, -.01, .24);
+      add(.05, .16, .06, woodM, 0, -.04, .36);
+      add(.045, .04, .16, woodM, 0, -.08, .3);
+      // pistol grip inclinado
+      const grip = add(.05, .12, .07, woodDarkM, 0, -.11, .12); grip.rotation.x = .38;
+      // mira de ferro em torre (frontal alta — silhueta AK-47)
+      add(.012, .07, .02, gun2, 0, .1, -.52);
+      add(.045, .05, .03, gun2, 0, .095, .14);
+      const barrel = add(.03, .03, .16, gun2, 0, .015, -.6); // cano exposto
+      barrel.name = 'barrel';
+      muzzleZ = -.68;
+      // ---- 4 SOCKETS (Fase 28): âncoras reais p/ anexos; nomes estáveis ----
+      const sockets = {
+        muzzle: { pos: [0, .015, -.74] },             // boca: corta-chamas/silenciador
+        optic: { pos: [0, .11, -.05] },               // trilho lateral: red dot/4x
+        mag: { pos: [0, -.1, -.02] },                 // poço do carregador
+        grip: { pos: [0, -.075, -.3] },               // under-barrel: foregrip/lanterna
+      };
+      g.userData.sockets = {};
+      for (const [name, { pos }] of Object.entries(sockets)) {
+        const s = new THREE.Group();
+        s.name = `socket_${name}`;
+        s.position.set(...pos);
+        g.add(s);
+        g.userData.sockets[name] = s;
+      }
+      break;
+    }
     case 'barrett': // sniper .338
       add(.09, .12, 1.05, gun, 0, 0, -.28);
       add(.06, .18, .09, gun2, 0, -.13, .12);
@@ -676,15 +794,29 @@ export function createWeaponModel(id, skin = null) {
     const gem = add(.03, .024, .06, skinGlow, .045, .055, -.08);
     gem.name = 'rarityGem';
   }
+  // Fase 30 — anexos nos 4 sockets (no-op fora da AR-47: só ela tem âncoras)
+  if (Array.isArray(opts.attachments) && opts.attachments.length) {
+    applyAttachments(g, opts.attachments);
+    g.userData.attachmentIds = [...opts.attachments];
+  }
+  // Fase 30 — overlay evolutivo da skin MÍTICA (0 = sem overlay)
+  const mythicStage = Math.max(0, Math.min(4, opts.mythicStage | 0));
+  if (mythicStage >= 1) {
+    applyMythicSkin(g, mythicStage);
+    registerMythic(g);
+  }
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
   return { group: g, muzzle };
 }
 
 // orienta braços/arma no corpo — retorna o anchor da arma (na mão direita)
-export function attachWeapon(opParts, operativeGroup, weaponId, skin = null) {
+export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opts = {}) {
   const old = operativeGroup.userData.weaponRig;
-  if (old) { operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); }); }
-  const model = createWeaponModel(weaponId, skin);
+  if (old) {
+    unregisterMythic(old.group);   // Fase 30 — arma removida sai do pulso mítico
+    operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); });
+  }
+  const model = createWeaponModel(weaponId, skin, opts);
   model.group.position.set(.3, 1.4, -.25);
   operativeGroup.add(model.group);
   operativeGroup.userData.weaponRig = model;
@@ -814,7 +946,40 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
 // ---------- loot no chão (Fase 6: pad hexagonal de raridade) ----------
 export function createLootMesh(item) {
   const g = new THREE.Group();
-  const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e' };
+  // ---- Fase 28 — tipos com FÁBRICA DEDICADA (assinatura Free Fire) ----
+  if (item.kind === 'deathBox') {
+    const db = createDeathBox({ seed: item.seed ?? 1, accent: item.accent ?? '#ffb52e', name: item.victimName ?? '' });
+    db.position.y = 0;                 // fábrica já assenta no chão
+    return db;
+  }
+  if (item.kind === 'supplyDrop') {
+    const sd = createSupplyDrop({ seed: item.seed ?? 1 });
+    sd.position.y = 0;
+    return sd;
+  }
+  if (item.kind === 'helmet' || item.kind === 'vest' || item.kind === 'pack') {
+    const gearColors = { vest: '#42d9de', helmet: '#a875ff', pack: '#7dd87d' };
+    const color = gearColors[item.kind] ?? '#b7c2c7';
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(.42, .48, .05, 6),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: .5, roughness: .5, transparent: true, opacity: .55 })
+    );
+    pad.position.y = .025;
+    g.add(pad);
+    const lv = Math.max(1, Math.min(4, item.level || 1));
+    const gearMesh = buildGearMesh(item.kind, lv);
+    gearMesh.position.y = .05;
+    gearMesh.scale.setScalar(1.15);
+    g.add(gearMesh);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.03, .05, 2.0, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35, depthWrite: false })
+    );
+    beam.position.y = 1.0;
+    g.add(beam);
+    return g;
+  }
+  const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e', MITICA: '#ff2d78' };
   const color = rarityColors[item.rarity] ?? (item.kind === 'consumable' ? '#ff6b2c' : item.kind === 'armor' ? '#42d9de' : '#b7c2c7');
   // pad hexagonal emissivo sob o item
   const pad = new THREE.Mesh(
@@ -840,12 +1005,55 @@ export function createLootMesh(item) {
     g.add(beam);
     return g;
   }
+  // Fase 30 — ANEXO avulso no chão: módulo de rail ciano com selo emissivo
+  // (leitura FF de "peça técnica" — beam mais curto que o de armas)
+  if (item.kind === 'attachment') {
+    const chipM = M('#20262e', { rough: .35, metal: .6, extra: { emissive: '#42d9de', emissiveIntensity: .55 } });
+    const chip = box(.3, .12, .2, chipM, 0, .2, 0);
+    chip.rotation.y = Math.PI / 4;
+    chip.castShadow = true;
+    chip.name = 'attachmentChip';
+    const seal = box(.14, .045, .02, new THREE.MeshStandardMaterial({
+      color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: 1.2, roughness: .4,
+    }), 0, .2, -.145);
+    seal.name = 'attachmentSeal';
+    g.add(chip, seal);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.03, .05, 1.6, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: '#42d9de', transparent: true, opacity: .32, depthWrite: false })
+    );
+    beam.position.y = .8;
+    g.add(beam);
+    return g;
+  }
   const isWeapon = item.kind === 'weapon';
   const size = isWeapon ? .5 : .34;
+  // Fase 26 — caixa de morte (death loot box): cubo chanfrado com fecho
+  // EMISSIVO superior (verde/azul por raridade — leitura de loot raro a distância).
   const box_ = box(size, size, size, M(color, { rough: .5, metal: .5, extra: { emissive: color, emissiveIntensity: .22 } }));
   box_.position.y = size / 2 + .05;
   box_.rotation.y = Math.PI / 4;
   g.add(box_);
+  const clasp = box(size * .34, .05, .08, new THREE.MeshStandardMaterial({
+    color: '#dfe8ec', emissive: color, emissiveIntensity: 1.1, roughness: .3, metalness: .4
+  }), 0, size + .09, 0);
+  g.add(clasp);
+  g.userData.clasp = clasp.material;
+  // Fase 30 — arma com anexos de série: chips cianos na borda do pad
+  // (contagem visual dos sockets equipados, leitura instantânea FF)
+  const atts = Array.isArray(item.attachments) ? item.attachments.length : 0;
+  if (isWeapon && atts > 0) {
+    const chipM = new THREE.MeshStandardMaterial({
+      color: '#42d9de', emissive: '#42d9de', emissiveIntensity: .9, roughness: .4,
+    });
+    for (let i = 0; i < Math.min(4, atts); i++) {
+      const ang = (i / Math.min(4, atts)) * Math.PI * 2 + Math.PI / 4;
+      const chip = box(.09, .045, .09, chipM, Math.cos(ang) * .32, .1, Math.sin(ang) * .32);
+      chip.name = `attachChip${i}`;
+      g.add(chip);
+    }
+    g.userData.attachChips = atts;
+  }
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(.03, .05, 2.2, 6, 1, true),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35, depthWrite: false })
@@ -920,6 +1128,14 @@ export function createGlooMesh() {
   const g = new THREE.Group();
   const panel = new THREE.MeshStandardMaterial({ color: '#9fb8c6', roughness: .4, metalness: .15, emissive: '#2a4a58', emissiveIntensity: .35 });
   const wall = box(GLOO_W, GLOO_H, GLOO_D, panel, 0, GLOO_H / 2, 0);
+  // Fase 26 — rim "Fresnel" barato: casca BackSide aditiva levemente maior —
+  // reforça o VOLUME translúcido do gelo nas bordas sem custo de shader custom.
+  const shell = new THREE.Mesh(
+    new THREE.BoxGeometry(GLOO_W * 1.06, GLOO_H * 1.02, GLOO_D * 1.06),
+    new THREE.MeshBasicMaterial({ color: '#bfe6f2', transparent: true, opacity: .16, blending: THREE.AdditiveBlending, side: THREE.BackSide, depthWrite: false })
+  );
+  shell.position.y = GLOO_H / 2;
+  g.add(shell);
   const seam = M('#5f7684', { metal: .4, rough: .5 });
   for (let i = 1; i <= 3; i++) {
     g.add(box(.06, GLOO_H * .96, GLOO_D * 1.12, seam, -GLOO_W / 2 + (i * GLOO_W) / 4, GLOO_H / 2, 0));

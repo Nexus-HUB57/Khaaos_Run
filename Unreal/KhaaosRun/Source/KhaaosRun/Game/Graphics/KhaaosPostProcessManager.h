@@ -1,258 +1,152 @@
-// Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
-// KhaaosPostProcessManager.h
-// Post-Process Manager subsystem: per-world post-process profiles, Lumen/Nanite settings,
-// and screen-space effects for the 5 Khaaos Run worlds.
+// ==============================================================================
+// KHAAOS RUN - PLATAFORMA BATTLE ROYALE (MUNDO DEVS PH.D)
+// SUBSISTEMA: UKhaaosPostProcessManager
+// PROPÓSITO: Gerenciamento de efeitos de pós-processamento por espécie com
+//            blending suave, prioridade de camera effects, e otimizações de
+//            GPU cost. Cada espécie tem efeitos visuais característicos:
+//            - Huran: underwater distortion, caustics, bioluminescent bloom
+//            - Khael: arcane glow bloom, crystal refraction, rune pulse
+//            - Venex: cyber-hologram scanlines, chrome reflections, EMP flash
+//            - Onith: thermal shimmer, chitin iridescence, predatory vision
+//            - Zheers: spirit trail ghosting, tattoo glow, shadow meld
+//            - Skeetw: feather iridescence, avian motion blur, wind distortion
+// ==============================================================================
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystems/TickableWorldSubsystem.h"
-#include "Engine/PostProcessVolume.h"
+#include "Subsystems/EngineSubsystem.h"
+#include "Game/Character/KhaaosSpeciesGAS.h"
 #include "KhaaosPostProcessManager.generated.h"
 
-/**
- * World profile enum mapping to the 5 Khaaos Run worlds.
- * Each profile drives a unique post-process configuration for visual identity.
- */
 UENUM(BlueprintType)
-enum class EKhaaosWorldProfile : uint8
+enum class EKhaaosPostEffectType : uint8
 {
-	BARBURHEN	UMETA(DisplayName = "Barburhen", ToolTip = "Hot desert - warm orange grading, heat haze"),
-	PRIADUS		UMETA(DisplayName = "Priadus", ToolTip = "Frozen tundra - cool blue grading, frost vignette"),
-	CKESALTH	UMETA(DisplayName = "Ckesalth", ToolTip = "Toxic jungle - green haze, poison particles"),
-	ARUKHEEA	UMETA(DisplayName = "Arukheea", ToolTip = "Crystal caverns - purple/teal, bloom heavy"),
-	CIGKV		UMETA(DisplayName = "CIGKV", ToolTip = "Hub world - neutral balanced, subtle vignette")
+    Bloom,              // Glow/bloom para emissive e bioluminescência
+    ChromaticAberration,// Distorção cromática (Venex implants, Khael crystals)
+    DepthOfField,       // DoF para highlight de personagem
+    Distortion,         // Distorção de tela (Huran underwater, Skeetw wind)
+    MotionBlur,         // Motion blur species-specific
+    ColorGrading,       // LUT/grading por espécie (Onith thermal, Venex cyber)
+    Vignette,           // Vignette para emphasis emocional
+    ScreenFade,         // Fade in/out para transições
+    CustomMaterial      // Post-process material customizado
 };
 
-/**
- * Full post-process profile for a Khaaos world.
- * Contains color grading, screen effects, Lumen/Nanite, fog, and world-specific overrides.
- */
 USTRUCT(BlueprintType)
-struct FKhaaosPostProcessProfile
+struct FKhaaosPostEffectEntry
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-	/** World color tint applied via color grading */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ColorGrading")
-	FLinearColor ColorGradingTint = FLinearColor::White;
+    /** Tipo do efeito */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    EKhaaosPostEffectType EffectType = EKhaaosPostEffectType::Bloom;
 
-	/** Vignette intensity (0 = off, 1 = max) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScreenEffects", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float VignetteIntensity = 0.3f;
+    /** Espécie que ativa este efeito */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    EKhaaosSpecies Species = EKhaaosSpecies::NONE;
 
-	/** Bloom intensity */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScreenEffects", meta = (ClampMin = "0.0"))
-	float BloomIntensity = 0.5f;
+    /** Intensidade do efeito (0.0-1.0) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float Intensity = 1.0f;
 
-	/** Exposure compensation (stops) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScreenEffects")
-	float ExposureCompensation = 0.0f;
+    /** Tempo de fade in em segundos */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float FadeInTime = 0.5f;
 
-	/** Chromatic aberration amount */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScreenEffects", meta = (ClampMin = "0.0"))
-	float ChromaticAberration = 0.0f;
+    /** Tempo de fade out em segundos */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "5.0"))
+    float FadeOutTime = 1.0f;
 
-	/** Depth of field F-stop */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthOfField", meta = (ClampMin = "1.0"))
-	float DepthOfFieldFstop = 2.8f;
+    /** Custo estimado em ms de GPU time */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    float EstimatedGPUTimeMs = 0.5f;
 
-	/** Motion blur amount */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MotionBlur", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float MotionBlurAmount = 0.2f;
+    /** Prioridade (maior = mais importante, não é cortado primeiro) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    int32 Priority = 0;
 
-	/** Ambient occlusion intensity */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AmbientOcclusion", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float AmbientOcclusionIntensity = 0.5f;
-
-	/** Lumen quality level (0=Off, 1=Low, 2=Med, 3=High) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rendering", meta = (ClampMin = "0", ClampMax = "3"))
-	int32 LumenQuality = 2;
-
-	/** Enable Nanite virtualized geometry */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rendering")
-	bool NaniteEnabled = true;
-
-	/** Number of shadow cascades */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shadows", meta = (ClampMin = "1", ClampMax = "10"))
-	int32 ShadowCascades = 4;
-
-	/** Atmospheric fog density */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Fog", meta = (ClampMin = "0.0"))
-	float FogDensity = 0.0f;
-
-	/** Fog color */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Fog")
-	FLinearColor FogColor = FLinearColor::White;
-
-	/** Heat haze intensity - Barburhen specific */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WorldSpecific", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float HeatHazeIntensity = 0.0f;
-
-	/** Frost vignette intensity - Priadus specific */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WorldSpecific", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float FrostVignetteIntensity = 0.0f;
+    /** Se true, efeito é global (não por operative) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    bool bIsGlobal = false;
 };
 
-/**
- * Runtime state of gameplay-driven screen-space effects.
- * These are layered on top of the world post-process profile.
- */
 USTRUCT(BlueprintType)
-struct FKhaaosScreenEffectState
+struct FKhaaosSpeciesPostProfile
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-	/** Red damage vignette intensity (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float DamageVignetteIntensity = 0.0f;
+    /** Espécie */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    EKhaaosSpecies Species = EKhaaosSpecies::NONE;
 
-	/** Low health pulsing overlay (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float LowHealthPulse = 0.0f;
+    /** Efeitos ativos para esta espécie */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    TArray<FKhaaosPostEffectEntry> Effects;
 
-	/** Zone danger warning vignette (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zone", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float ZoneWarningIntensity = 0.0f;
-
-	/** Green heal overlay intensity (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heal", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float HealOverlayIntensity = 0.0f;
-
-	/** White elimination flash (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Elimination", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float EliminationFlash = 0.0f;
-
-	/** Blue shield break flash (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shield", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float ShieldBreakFlash = 0.0f;
-
-	/** Golden kill streak glow (0-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Streak", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float KillStreakGlow = 0.0f;
+    /** Custo total de GPU time estimado */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    float TotalGPUTimeMs = 0.0f;
 };
 
-/**
- * UKhaaosPostProcessManager
- *
- * Tickable world subsystem that manages per-world post-process profiles,
- * Lumen/Nanite rendering settings, and screen-space gameplay effects
- * for the 5 Khaaos Run worlds. Transitions between world profiles are
- * lerped over 2 seconds for smooth visual changes.
- */
-UCLASS(Abstract, BlueprintType, Blueprintable, Config = Game, defaultconfig)
-class UKhaaosPostProcessManager : public UTickableWorldSubsystem
+UCLASS(Config = Game, defaultconfig)
+class KHAAOSRUN_API UKhaaosPostProcessManager : public UEngineSubsystem
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	//~ UTickableWorldSubsystem interface
-	virtual void Initialize(FSubsystemCollectionInitialization& Dependencies) override;
-	virtual void Deinitialize() override;
-	virtual void Tick(float DeltaTime) override;
-	virtual TStatId GetStatId() const override;
-	//~ End UTickableWorldSubsystem interface
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-	/** Transition to a new world post-process profile (lerps over 2 seconds) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|PostProcess")
-	void SetWorldProfile(EKhaaosWorldProfile Profile);
+    /** Ativa efeitos de pós-processamento para uma espécie */
+    void ActivateSpeciesEffects(EKhaaosSpecies Species, float BlendTime = 0.5f);
 
-	/** Get the currently active world profile */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|PostProcess")
-	EKhaaosWorldProfile GetCurrentProfile() const { return CurrentProfile; }
+    /** Desativa efeitos de uma espécie */
+    void DeactivateSpeciesEffects(EKhaaosSpecies Species, float BlendTime = 1.0f);
 
-	/** Get the post-process settings for a given world profile */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|PostProcess")
-	FKhaaosPostProcessProfile GetProfileSettings(EKhaaosWorldProfile Profile) const;
+    /** Ativa um efeito global (não atrelado a espécie) */
+    void ActivateGlobalEffect(EKhaaosPostEffectType EffectType, float Intensity, float Duration = 0.0f);
 
-	/** Flash a red damage vignette at the given intensity (0-1) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerDamageVignette(float Intensity);
+    /** Tick principal — atualiza fades e blending */
+    void UpdatePostProcess(float DeltaTime);
 
-	/** Enable the pulsing low-health overlay */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerLowHealthPulse();
+    /** Obtém o perfil de pós-processamento ativo para uma espécie */
+    const FKhaaosSpeciesPostProfile* GetSpeciesProfile(EKhaaosSpecies Species) const;
 
-	/** Disable the pulsing low-health overlay */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void StopLowHealthPulse();
+    /** Obtém custo total de GPU time dos efeitos ativos */
+    float GetActiveGPUTimeMs() const { return ActiveGPUTimeMs; }
 
-	/** Show the zone danger warning vignette at the given intensity (0-1) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerZoneWarning(float Intensity);
+    /** Otimiza efeitos quando GPU está sobrecarregada — corta efeitos de baixa prioridade */
+    void OptimizeForBudget(float TargetGPUTimeMs);
 
-	/** Show the green heal overlay at the given intensity (0-1) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerHealOverlay(float Intensity);
+    /** Verifica se um efeito está ativo para uma espécie */
+    bool IsEffectActive(EKhaaosSpecies Species, EKhaaosPostEffectType EffectType) const;
 
-	/** Flash white on an elimination kill */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerEliminationFlash();
+    /** Debug: lista efeitos ativos */
+    void DumpActiveEffects() const;
 
-	/** Flash blue on a shield break */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void TriggerShieldBreak();
+protected:
+    /** Constrói perfil de pós-processamento para cada espécie */
+    FKhaaosSpeciesPostProfile BuildSpeciesPostProfile(EKhaaosSpecies Species) const;
 
-	/** Set golden kill streak glow based on kill count (scaled by 0.2, capped at 1.0) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void SetKillStreakGlow(int32 KillCount);
-
-	/** Reset all screen effects to zero */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|ScreenEffects")
-	void ClearAllScreenEffects();
-
-	/** Override Lumen quality level (0=Off, 1=Low, 2=Med, 3=High) */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Rendering")
-	void ForceLumenQuality(int32 Quality);
-
-	/** Toggle Nanite virtualized geometry on/off */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Rendering")
-	void SetNaniteEnabled(bool bEnabled);
+    /** Aplica um efeito ao post process volume */
+    void ApplyEffectToPostProcessVolume(const FKhaaosPostEffectEntry& Effect, float CurrentIntensity);
 
 private:
-	/** Currently active world profile */
-	UPROPERTY(VisibleAnywhere, Category = "Khaaos|State")
-	EKhaaosWorldProfile CurrentProfile = EKhaaosWorldProfile::CIGKV;
+    /** Perfis por espécie */
+    TMap<EKhaaosSpecies, FKhaaosSpeciesPostProfile> SpeciesProfiles;
 
-	/** Target profile during a transition */
-	EKhaaosWorldProfile TargetProfile = EKhaaosWorldProfile::CIGKV;
+    /** Efeitos atualmente ativos com intensidade corrente (para blending) */
+    TMap<FName, float> ActiveEffectIntensities;
 
-	/** Interpolation alpha for profile transitions (0 = current, 1 = target) */
-	float ProfileLerpAlpha = 0.0f;
+    /** Fade timers para efeitos em transição */
+    TMap<FName, float> EffectFadeTimers;
 
-	/** Whether we are currently transitioning between profiles */
-	bool bIsTransitioning = false;
+    /** Efeitos ativos ( Species + Type → entry key ) */
+    TMap<FName, FKhaaosPostEffectEntry> ActiveEffects;
 
-	/** Runtime screen effect state */
-	UPROPERTY(VisibleAnywhere, Category = "Khaaos|State")
-	FKhaaosScreenEffectState ScreenEffects;
+    /** Custo total ativo em ms */
+    float ActiveGPUTimeMs = 0.0f;
 
-	/** Map of world profiles to their post-process settings */
-	UPROPERTY(VisibleAnywhere, Category = "Khaaos|Profiles")
-	TMap<EKhaaosWorldProfile, FKhaaosPostProcessProfile> WorldProfiles;
-
-	/** Reference to the world's post-process volume */
-	UPROPERTY()
-	TObjectPtr<APostProcessVolume> PostProcessVolume;
-
-	/** Whether Lumen quality has been manually overridden */
-	bool bLumenOverridden = false;
-
-	/** Forced Lumen quality level when overridden */
-	int32 ForcedLumenQuality = 2;
-
-	/** Populate WorldProfiles with default settings for all 5 worlds */
-	void InitializeDefaultProfiles();
-
-	/** Apply a profile's settings to the post-process volume */
-	void ApplyProfileToVolume(const FKhaaosPostProcessProfile& Profile);
-
-	/** Interpolate between current and target profiles during transition */
-	void LerpProfiles();
-
-	/** Decay transient screen effects over time */
-	void UpdateScreenEffects(float DeltaTime);
-
-	/** Find an existing post-process volume in the world or create one */
-	void FindOrCreatePostProcessVolume();
+    /** Gera chave única para efeito */
+    static FName MakeEffectKey(EKhaaosSpecies Species, EKhaaosPostEffectType Type);
 };

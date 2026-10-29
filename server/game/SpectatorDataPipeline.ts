@@ -30,6 +30,8 @@ export interface SpectatorClient {
   roomId: string;
   bytesSent: number;
   packetsSent: number;
+  /** Fase 24 — último relatório sanitizado do diretor da transmissão. */
+  director?: SpectatorDirectorReport & { reportedAt: number };
 }
 
 export interface SpectatorGameData {
@@ -76,7 +78,132 @@ export interface SpectatorPipelineMetrics {
   rooms: { roomId: string; spectators: number; packetsSent: number; bytesSent: number; delayBufferSize: number }[];
   totals: { packetsSent: number; bytesSent: number };
   limits: { delayMs: number; maxSpectatorsPerRoom: number; globalMaxSpectators: number; batchIntervalMs: number };
+  /** Fase 24 — agregado do diretor da transmissão (client→server). */
+  director: SpectatorDirectorAggregate;
   now: number;
+}
+
+// ─── Fase 24 — Métricas do diretor (client→server→/admin) ──────────────────
+
+/** Motivos canônicos de corte do diretor automático (Fase 19). */
+export const DIRECTOR_CUT_REASONS = ["hazard-start", "target-lost", "hazard-escalation"] as const;
+/** Hazards canônicos dos mundos (mesma gramática de WORLD_HAZARD_INFO). */
+export const DIRECTOR_HAZARDS = ["tsunami", "lava", "gravity", "acid"] as const;
+
+export type DirectorCutReason = (typeof DIRECTOR_CUT_REASONS)[number];
+export type DirectorHazard = (typeof DIRECTOR_HAZARDS)[number];
+
+/** Relatório do diretor JÁ sanitizado (payload do cliente nunca é confiável).
+ *  Fase 26 — `tuning`: afinação vigente (margem/pesos calibrados no cliente). */
+export interface SpectatorDirectorReport {
+  enabled: boolean;
+  activeHazard: DirectorHazard | null;
+  cuts: { total: number; byReason: Partial<Record<DirectorCutReason, number>>; byHazard: Partial<Record<DirectorHazard, number>> };
+  manual: { followSelects: number; cycles: number };
+  toggles: { on: number; off: number };
+  tuning: DirectorTuningReport;
+}
+
+/** Sinais de perigo canônicos (mesma gramática de DANGER_WEIGHTS do cliente). */
+export const DIRECTOR_WEIGHT_KEYS = ["knocked", "hazardDamage", "anchorZone", "outsideRing", "recentDamage", "lowHealth"] as const;
+export type DirectorWeightKey = (typeof DIRECTOR_WEIGHT_KEYS)[number];
+
+/** Afinação do diretor (margem de re-corte + pesos de perigo) — estado, não
+ *  contador: no agregado vale LAST-REPORT-WINS (a última plateia a falar). */
+export interface DirectorTuningReport {
+  margin: number;
+  weights: Partial<Record<DirectorWeightKey, number>>;
+}
+
+/** Agregado consumido pelo /admin: soma dos relatórios das conexões vivas.
+ *  Fase 26 — `tuning` = último relatório com afinação (estado, não soma). */
+export interface SpectatorDirectorAggregate {
+  reporting: number;
+  enabled: number;
+  cuts: { total: number; byReason: Partial<Record<DirectorCutReason, number>>; byHazard: Partial<Record<DirectorHazard, number>> };
+  manual: { followSelects: number; cycles: number };
+  toggles: { on: number; off: number };
+  tuning: DirectorTuningReport | null;
+}
+
+const DIRECTOR_METRIC_CAP = 1_000_000;
+
+/** Sanitiza o relatório DIRECTOR_METRICS (whitelist de vocabulário + clamp
+ *  numérico) — entrada bruta do WS, disponível a qualquer cliente. */
+export function sanitizeDirectorReport(raw: unknown): SpectatorDirectorReport {
+  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, any>;
+  const cuts = (obj.cuts && typeof obj.cuts === "object" ? obj.cuts : {}) as Record<string, any>;
+  const clamp = (v: unknown): number =>
+    Math.min(DIRECTOR_METRIC_CAP, Math.max(0, Math.floor(Number(v) || 0)));
+  const byKey = (src: unknown, keys: readonly string[]): Record<string, number> => {
+    const out: Record<string, number> = {};
+    if (!src || typeof src !== "object") return out;
+    const rec = src as Record<string, unknown>;
+    for (const k of keys) if (rec[k] != null) out[k] = clamp(rec[k]);
+    return out;
+  };
+  return {
+    enabled: !!obj.enabled,
+    activeHazard: (DIRECTOR_HAZARDS as readonly string[]).includes(obj.activeHazard)
+      ? (obj.activeHazard as DirectorHazard)
+      : null,
+    cuts: {
+      total: clamp(cuts.total),
+      byReason: byKey(cuts.byReason, DIRECTOR_CUT_REASONS),
+      byHazard: byKey(cuts.byHazard, DIRECTOR_HAZARDS),
+    },
+    manual: {
+      followSelects: clamp(obj.manual?.followSelects),
+      cycles: clamp(obj.manual?.cycles),
+    },
+    toggles: {
+      on: clamp(obj.toggles?.on),
+      off: clamp(obj.toggles?.off),
+    },
+    tuning: sanitizeDirectorTuning(obj.tuning), // Fase 26 — whitelist própria
+  };
+}
+
+/** Sanitiza a afinação do diretor (Fase 26): margem inteira clampada + pesos
+ *  só do vocabulário canônico; lixo/hostil vira tuning zerado (nunca lança). */
+function sanitizeDirectorTuning(raw: unknown): DirectorTuningReport {
+  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, any>;
+  const clamp = (v: unknown): number =>
+    Math.min(DIRECTOR_METRIC_CAP, Math.max(0, Math.floor(Number(v) || 0)));
+  const weights: Partial<Record<DirectorWeightKey, number>> = {};
+  const src = obj.weights && typeof obj.weights === "object" ? (obj.weights as Record<string, unknown>) : null;
+  if (src) {
+    for (const k of DIRECTOR_WEIGHT_KEYS) if (src[k] != null) weights[k] = clamp(src[k]);
+  }
+  return { margin: clamp(obj.margin), weights };
+}
+
+/** Soma relatórios JÁ sanitizados — agregado p/ o /admin (Command Monitor).
+ *  `reporting` = quantos espectadores enviaram dado; `enabled` = diretor ON. */
+export function aggregateDirectorReports(reports: (SpectatorDirectorReport | null | undefined)[] | null | undefined): SpectatorDirectorAggregate {
+  const out: SpectatorDirectorAggregate = {
+    reporting: 0,
+    enabled: 0,
+    cuts: { total: 0, byReason: {}, byHazard: {} },
+    manual: { followSelects: 0, cycles: 0 },
+    toggles: { on: 0, off: 0 },
+    tuning: null,
+  };
+  for (const r of reports ?? []) {
+    if (!r) continue;
+    out.reporting++;
+    if (r.enabled) out.enabled++;
+    out.cuts.total += r.cuts?.total ?? 0;
+    for (const [k, v] of Object.entries(r.cuts?.byReason ?? {})) out.cuts.byReason[k as DirectorCutReason] = (out.cuts.byReason[k as DirectorCutReason] ?? 0) + (v ?? 0);
+    for (const [k, v] of Object.entries(r.cuts?.byHazard ?? {})) out.cuts.byHazard[k as DirectorHazard] = (out.cuts.byHazard[k as DirectorHazard] ?? 0) + (v ?? 0);
+    out.manual.followSelects += r.manual?.followSelects ?? 0;
+    out.manual.cycles += r.manual?.cycles ?? 0;
+    out.toggles.on += r.toggles?.on ?? 0;
+    out.toggles.off += r.toggles?.off ?? 0;
+    // Fase 26 — afinação é ESTADO (margem/pesos vigentes): last report wins
+    if (r.tuning) out.tuning = { margin: r.tuning.margin, weights: { ...r.tuning.weights } };
+  }
+  return out;
 }
 
 // ─── Spectator Data Pipeline Config ─────────────────────────────────────────
@@ -257,6 +384,11 @@ export class SpectatorDataPipeline {
           if (msg.type === "SET_CAMERA") {
             client.cameraMode = msg.cameraMode || "RING_CENTER";
             client.followPlayerId = msg.followPlayerId || null;
+          } else if (msg.type === "DIRECTOR_METRICS") {
+            // Fase 24 — relatório do diretor da transmissão (sanitizado;
+            // last report wins por conexão — a desconexão remove a
+            // contribuição do agregado automaticamente).
+            client.director = { ...sanitizeDirectorReport(msg.metrics), reportedAt: Date.now() };
           }
         } catch { /* ignore malformed messages */ }
       });
@@ -397,6 +529,13 @@ export class SpectatorDataPipeline {
     return this.totalSpectators;
   }
 
+  /** Fase 24 — agregado do diretor sobre as conexões vivas (last report wins). */
+  private directorAggregates(): SpectatorDirectorAggregate {
+    return aggregateDirectorReports(
+      [...this.spectators.values()].map((c) => c.director),
+    );
+  }
+
   getSpectators(roomId: string): SpectatorClient[] {
     const roomSet = this.roomSpectators.get(roomId);
     if (!roomSet) return [];
@@ -428,6 +567,7 @@ export class SpectatorDataPipeline {
         globalMaxSpectators: SpectatorConfig.globalMaxSpectators,
         batchIntervalMs: SpectatorConfig.batchIntervalMs,
       },
+      director: this.directorAggregates(), // Fase 24 — métricas do diretor
       now: Date.now(),
     };
   }

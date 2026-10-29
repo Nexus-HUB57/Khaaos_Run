@@ -13,8 +13,9 @@ import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlaceme
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
-import { buildingInteriors, buildBuildingInteriors } from './interiors3d.js'; // Fase 23 — interiores
-import { terrainVertexData, terrainSeedNum } from './terrain3d.js'; // Fase 23b — elevação visual
+import { buildInteriors, buildShellHost } from './interiors3d.js'; // Fase 23 — interiores reais
+import { buildTerrain, terrainHeightAt } from './terrain3d.js'; // Fase 23 — relevo do terreno
+import { buildLightShafts } from './lightshafts3d.js'; // Fase 24 — raios de luz pelas janelas
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -191,6 +192,8 @@ function buildRoads(scene, layout) {
 }
 
 // ---------- Fase 6 — fachadas detalhadas (decoro SEM colliders) ----------
+// Fase 23 — estruturas com casca (interiors3d) têm porta REAL: a porta pintada
+// da fachada é pulada; ruínas (paredes quebradas) também não recebem janelas.
 const KIND_SIGN = { barrack: 'ARMAMENTO', hangar: 'PROVING', warehouse: 'SUPRIMENTOS', building: 'CIVIC', depot: 'MUNIÇÃO', ruin: 'RUÍNA', pavilion: 'QUIOSQUE', tower: 'TORRE' };
 let _winMats = null;
 function windowBandMaterials() {
@@ -204,7 +207,7 @@ function windowBandMaterials() {
   });
   return _winMats;
 }
-function buildFacades(scene, layout, skipWindows = null) {
+function buildFacades(scene, layout, shellSet = null) {
   const concreteDark = concreteMaterial(1.2);
   concreteDark.color = new THREE.Color('#56534e');
   const doorM = new THREE.MeshStandardMaterial({ color: '#2a2c30', roughness: .7, metalness: .3 });
@@ -214,19 +217,15 @@ function buildFacades(scene, layout, skipWindows = null) {
   const frameM = new THREE.MeshStandardMaterial({ color: '#3a3d42', roughness: .6, metalness: .4 });
   const rng = new SeededRng(`${layout.seed}:facades`);
   const facades = new THREE.Group();
-  layout.structures.forEach((s, si) => {
-    let details = facadeDetails(s);
-    if (!details.length) return;
-    // Fase 23 — prédios com casca oca têm buracos VERDADEIROS: sem bandas de
-    // janela/porta pintadas por cima (mantém placa/AC/caixa/tubo do topo)
-    if (skipWindows?.has(si)) {
-      details = details.filter((d) => d.kind !== 'windows' && d.kind !== 'door');
-      if (!details.length) return;
-    }
+  for (const s of layout.structures) {
+    const details = facadeDetails(s);
+    if (!details.length) continue;
+    const shelled = shellSet?.has(s) ?? false;
     const host = new THREE.Group();
     host.position.set(s.x, s.yMin, s.z); // y local 0 = chão; v é altura do chão
     host.rotation.y = s.rot ?? 0;
     for (const d of details) {
+      if (shelled && (d.kind === 'door' || (d.kind === 'windows' && s.kind === 'ruin'))) continue; // Fase 23
       const y = d.v + d.h / 2;
       let m = null;
       if (d.kind === 'door') {
@@ -265,7 +264,7 @@ function buildFacades(scene, layout, skipWindows = null) {
       if (m) host.add(m);
     }
     facades.add(host);
-  });
+  }
   scene.add(facades);
 }
 // posiciona um decore na face indicada (espaço LOCAL da estrutura)
@@ -286,7 +285,7 @@ function place(mesh, face, u, y, s, off) {
 // Fase 22 — exportada para o dressing dos distritos reusar a MESMA infra.
 const CONTACT_SHADOW_SIZES = {
   lamp: 1.7, barrel: 1.05, tire: 1.0, sandbag: 1.7, pallet: 1.8,
-  barrierprop: 2.9, crate: 1.25, cone: 0.62,
+  barrierprop: 2.9, crate: 1.25, cone: 0.62, rubble: 1.15, rubbleSlab: 1.35,
 };
 export function buildContactShadows(scene, entries) {
   if (!entries.length) return;
@@ -313,7 +312,8 @@ export function buildContactShadows(scene, entries) {
 
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
 function buildProps(scene, layout, q) {
-  const props = propPlacements(layout, { density: q.propsFactor });
+  const isBarburhen = layout.scenarioId === 'Barburhen';
+  const props = propPlacements(layout, { density: q.propsFactor * (isBarburhen ? 1.22 : 1) });
   if (!props.length) return;
   // Fase 7 — sombras de contato sob TODOS os props
   buildContactShadows(scene, props.map((p) => ({
@@ -398,6 +398,20 @@ function buildProps(scene, layout, q) {
   inst(new THREE.ConeGeometry(.22, .7, 10), coneM, byType('cone'), (p) => {
     dummy.position.set(p.x, .35 * p.s, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s);
   }, { type: 'cone' });
+  // Barburhen — detritos de concreto e chapa, instanciados para manter custo baixo.
+  const rubbleM = concreteMaterial(1.4);
+  rubbleM.color = new THREE.Color('#777875');
+  inst(new THREE.DodecahedronGeometry(.42, 0), rubbleM, byType('rubble'), (p) => {
+    dummy.position.set(p.x, .2 * p.s, p.z);
+    dummy.rotation.set(p.rot * .7, p.rot, p.rot * .35);
+    dummy.scale.set(p.s, p.s * (.55 + (p.x * p.x + p.z * p.z) % .35), p.s * .72);
+  }, { type: 'rubble' });
+  const slabM = metalMaterial('#50565a');
+  inst(new THREE.BoxGeometry(.9, .16, .42), slabM, byType('rubbleSlab'), (p) => {
+    dummy.position.set(p.x, .1 * p.s, p.z);
+    dummy.rotation.set((p.rot % .25) - .12, p.rot, (p.rot % .18) - .09);
+    dummy.scale.setScalar(p.s);
+  }, { type: 'rubbleSlab' });
   // tipos com asset GLTF real (aplicados depois por applyGltfProps)
   scene.userData.gltfPropTypes = ['barrel', 'crate', 'cone', 'barrierprop'];
   scene.userData.propInstances = propInstances;
@@ -536,6 +550,33 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   bushes.count = bi;
   scene.add(bushes);
 
+  // Barburhen — vegetação baixa fria, crescendo entre concreto e pátios.
+  // Planos cruzados mantêm silhueta orgânica com duas draw calls instanciadas.
+  if (scenario?.id === 'Barburhen') {
+    const SCRUB = Math.round(150 * q.treeFactor);
+    const scrubGeo = new THREE.PlaneGeometry(.9, 1.35);
+    const scrubTex = grassBladeTexture();
+    const scrubMats = ['#82958a', '#6d8179'].map((color) => new THREE.MeshStandardMaterial({
+      map: scrubTex.clone(), alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color,
+    }));
+    const scrubMeshes = scrubMats.map((mat) => new THREE.InstancedMesh(scrubGeo, mat, SCRUB));
+    let si = 0; guard = 0;
+    while (si < SCRUB && guard++ < SCRUB * 14) {
+      const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
+      if (!free(x, z, 1.8) || !districtClear(x, z, 4)) continue;
+      const s = .55 + rng.next() * .8;
+      shadowSpots.push({ x, z, size: 1.05 * s });
+      dummy.position.set(x, .68 * s, z);
+      dummy.scale.set(s, s, s);
+      dummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
+      dummy.updateMatrix(); scrubMeshes[0].setMatrixAt(si, dummy.matrix);
+      dummy.rotation.y += Math.PI / 2;
+      dummy.updateMatrix(); scrubMeshes[1].setMatrixAt(si, dummy.matrix);
+      si++;
+    }
+    scrubMeshes.forEach((mesh) => { mesh.count = si; mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); });
+  }
+
   // ---- pedras ----
   const ROCKS = Math.max(6, Math.round(30 * q.rockFactor));
   const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
@@ -598,7 +639,8 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
 
   // Fase 7 — luz recalibrada: sol menos saturado, fill mais suave (contraste
   // cinematográfico sem lavar as sombras); hemisfério amarra o chão ao céu.
-  const sun = new THREE.DirectionalLight(scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f', 2.35);
+  const isBarburhen = scenario.id === 'Barburhen';
+  const sun = new THREE.DirectionalLight(isBarburhen ? '#f0c7a2' : '#ffc98f', isBarburhen ? 2.05 : 2.35);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
   sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
@@ -609,35 +651,18 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   sun.shadow.bias = -0.0004;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(scenario.id === 'Barburhen' ? '#b9d0df' : '#8f74b4', scenario.id === 'Barburhen' ? '#5c676d' : '#4a3d2e', 1.18);
+  const hemi = new THREE.HemisphereLight(isBarburhen ? '#c5d5dc' : '#8f74b4', isBarburhen ? '#4e5a61' : '#4a3d2e', isBarburhen ? 1.04 : 1.18);
   scene.add(hemi);
-  const fill = new THREE.DirectionalLight('#6a5aa0', 0.72);
+  const fill = new THREE.DirectionalLight(isBarburhen ? '#7898b6' : '#6a5aa0', isBarburhen ? 0.5 : 0.72);
   fill.position.set(140, 80, 180);
   scene.add(fill);
-  const back = new THREE.DirectionalLight('#a8885e', 0.55);
+  const back = new THREE.DirectionalLight(isBarburhen ? '#b98263' : '#a8885e', isBarburhen ? 0.42 : 0.55);
   back.position.set(60, 50, 240);
   scene.add(back);
 
-  // ---- terreno (Fase 23b — elevação visual + cor por vértice) ----
-  // Plano segmentado: y=0 DENTRO da área jogável (gameplay/decals exatos);
-  // colinas determinísticas FORA (bound 200 → borda 220) com mistura de rocha.
-  const groundGeo = new THREE.PlaneGeometry(440, 440, 110, 110);
-  groundGeo.rotateX(-Math.PI / 2);
-  const tSeed = terrainSeedNum(seed, scenario.id);
-  const tData = terrainVertexData(groundGeo.attributes.position.array, {
-    tints: GRASS_TINTS[scenario.id] ?? GRASS_TINTS.CIGKV,
-    seedNum: tSeed,
-  });
-  {
-    const pos = groundGeo.attributes.position;
-    for (let i = 0; i < tData.heights.length; i++) pos.setY(i, tData.heights[i]);
-    groundGeo.setAttribute('color', new THREE.BufferAttribute(tData.colors, 3));
-    groundGeo.computeVertexNormals();
-  }
-  const groundMat = groundMaterial(34, scenario.groundTint);
-  groundMat.vertexColors = true;
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.receiveShadow = true;
+  // ---- terreno (Fase 23: relevo por elevação FORA da área jogável; plano
+  // jogável permanece y=0 exato — entidades/sombras/loot intactos) ----
+  const ground = buildTerrain(scenario);
   scene.add(ground);
 
   // praça central de asfalto
@@ -680,14 +705,6 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   };
   const containerMats = [metalRust, metalBlue, metalGreen, metalGray];
 
-  // Fase 23 — plano de interiores ANTES do loop de estruturas: os prédios
-  // elegíveis trocam a caixa sólida pela casca oca (colliders intactos).
-  const interiorPlan = buildingInteriors(layout, {
-    fraction: q.interiorFactor ?? 1,
-    density: q.interiorDensity ?? 1,
-  });
-  const interiorIdx = new Set(interiorPlan.buildings.map((b) => b.index));
-
   // Fase 6 — envmap coerente com o céu do cenário (antes: RoomEnvironment genérico)
   if (renderer) {
     try {
@@ -717,23 +734,35 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // Fase 16 (P1) — marcos de mundo: identidade visual de cada cenário no horizonte
   buildWorldMarks(scene, layout, scenario);
 
-  layout.structures.forEach((s, si) => {
-    const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
-    const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(s.x, s.yMin + s.h / 2, s.z);
-    mesh.rotation.y = s.rot ?? 0;
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    // Fase 23 — prédio com interior NÃO ganha caixa sólida nem cap (a casca oca
-    // de interiors3d desenha as paredes com buracos + laje própria)
-    if (!interiorIdx.has(si)) {
+  // Fase 23 — interiores reais: cascas com porta/mobília substituem a caixa
+  // sólida das estruturas-habitação (colliders do layout intactos)
+  const interiors = buildInteriors(scene, layout, scenario, q);
+
+  for (const s of layout.structures) {
+    const shellSpec = interiors.shells.get(s);
+    if (shellSpec) {
+      // Fase 23 — casca habitável no lugar da caixa (mesma transform; o sim
+      // continua tratando a estrutura como sólida, exatamente como antes)
+      const host = buildShellHost(s, shellSpec, interiors.mats);
+      interiors.group.add(host);
+      // Fase 25 — folha de porta registrada p/ o animator (abrir/fechar/quebrar)
+      if (host.userData.doorHandle) interiors.doors.set(host.userData.doorHandle.id, host.userData.doorHandle);
+      // Fase 26 — painéis de vidro registrados p/ o visual de estilhaço
+      for (const gp of host.userData.glassPanels ?? []) if (gp.id) interiors.glass.set(gp.id, gp.mesh);
+    } else {
+      const mat = s.kind === 'container' ? containerMats[s.variant % 4] : (mats[s.kind] ?? mats.wall);
+      const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(s.x, s.yMin + s.h / 2, s.z);
+      mesh.rotation.y = s.rot ?? 0;
+      mesh.castShadow = true; mesh.receiveShadow = true;
       scene.add(mesh);
-      if (s.h >= 6 && s.kind !== 'monolith') {
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(s.w * 1.04, .5, s.d * 1.04), mats.wall);
-        cap.position.set(s.x, s.yMin + s.h + .25, s.z);
-        cap.castShadow = true; cap.receiveShadow = true;
-        scene.add(cap);
-      }
+    }
+    if (s.h >= 6 && s.kind !== 'monolith' && !shellSpec) { // Fase 23 — cascas têm teto próprio
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(s.w * 1.04, .5, s.d * 1.04), mats.wall);
+      cap.position.set(s.x, s.yMin + s.h + .25, s.z);
+      cap.castShadow = true; cap.receiveShadow = true;
+      scene.add(cap);
     }
     if (s.h >= 8) {
       const ant = new THREE.Mesh(new THREE.CylinderGeometry(.08, .12, 4.5, 6), mats.silo);
@@ -746,16 +775,15 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       scene.userData.beacons = scene.userData.beacons || [];
       scene.userData.beacons.push(beacon);
     }
-  });
+  }
 
   // Fase 6 — fachadas detalhadas por cima das estruturas (depois dos meshes base)
-  buildFacades(scene, layout, interiorIdx);
+  // Fase 23 — shells recebem o Set p/ pular porta pintada (agora é vão real)
+  buildFacades(scene, layout, interiors.shells);
 
-  // Fase 23 — interiores mobiliados (casca oca + vidro + móveis + pendentes)
-  buildBuildingInteriors(scene, layout, interiorPlan, {
-    contactShadows: (entries) => buildContactShadows(scene, entries),
-    exteriorMaterial: (kind) => mats[kind] ?? mats.wall,
-  });
+  // Fase 24 — raios de luz pelas janelas (poça no piso, respiração suave;
+  // 2 draw calls, gate por tier via q.lightFactor)
+  buildLightShafts(scene, layout, scenario, interiors, q);
 
   // ---- grama instanciada (duas tonalidades p/ quebrar a uniformidade) ----
   const bladeTex = grassBladeTexture();
@@ -782,7 +810,9 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
     let gi = 0;
     for (let i = half; i < blades.length; i += 2) {
       const [x, z, rot] = blades[i];
-      dummy.position.set(x, .32, z);
+      // Fase 23 — grama acompanha o relevo (só muda além da área jogável;
+      // dentro do plano segue em y=.32 como sempre)
+      dummy.position.set(x, .32 + terrainHeightAt(x, z, scenario.id), z);
       dummy.rotation.set(0, rot, 0);
       dummy.updateMatrix();
       grass.setMatrixAt(gi++, dummy.matrix);
@@ -813,8 +843,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.userData.nightBase = {
     sky: { ...scenario.sky },
     fogColor: scenario.fogColor,
-    sunColor: scenario.id === 'Barburhen' ? '#e3edf5' : '#ffc98f',
-    sunIntensity: 2.35, hemiIntensity: 1.18, fillIntensity: 0.72, backIntensity: 0.55,
+    sunColor: isBarburhen ? '#f0c7a2' : '#ffc98f',
+    sunIntensity: isBarburhen ? 2.05 : 2.35,
+    hemiIntensity: isBarburhen ? 1.04 : 1.18,
+    fillIntensity: isBarburhen ? 0.5 : 0.72,
+    backIntensity: isBarburhen ? 0.42 : 0.55,
     buildingMat: mats.building ?? null,
     buildingEmissive: 0.55,
   };

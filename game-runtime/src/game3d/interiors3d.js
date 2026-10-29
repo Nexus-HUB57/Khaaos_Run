@@ -1,611 +1,678 @@
-// Khaaos Run — Fase 23: INTERIORES DOS PRÉDIOS (nível Free Fire).
+// Khaaos Run — Fase 23/24: INTERIORES REAIS (cascas com porta/janelas, mobília,
+// escada + mezanino pisável — nível Free Fire).
 //
-// Até a Fase 22 os prédios eram caixas sólidas com fachadas pintadas (portas
-// e janelas OPAQUES): olhar "dentro" não revelava nada. A Fase 23 troca a caixa
-// sólida dos edifícios elegíveis por uma CASCA OCA real — 4 paredes com buracos
-// VERDADEIROS de porta/janela (segmentos de caixa mesclados em 1 geometria por
-// face), vidro translúcido nas janelas, piso, forro, mobília procedural por
-// tipo (beliches no quartel, racks no galpão, bancadas no hangar, entulho nas
-// ruínas) e pendentes emissivos que piscam à noite. Pela porta aberta e pelo
-// vidro das janelas o jogador VÊ o interior mobiliado — leitura imediata de
-// "prédio de verdade" a nível Free Fire.
+// Fase 23: cascas substituem a caixa sólida das estruturas-habitação — porta
+// REAL, piso, forro e mobília coerente com o distrito e o mundo.
+// Fase 24: as cascas ganham JANELAS com vidro e as estruturas grandes ganham
+// ESCADA + MEZANINO — visual coerente com os colliders ocos/floors gerados por
+// interiorsPlan.hollowAccess em getWorldLayout (MESMA fonte determinística:
+// o vão que o jogador atravessa é o vão desenhado).
 //
-// Filosofia do repo (mantida bit a bit):
-//  - ZERO impacto em gameplay: o collider AABB da estrutura permanece EXATAMENTE
-//    o mesmo (a caixa sólida vira casca oca SÓ no render; sim/colisão intocadas);
-//  - DETERMINISMO: mesma seed+cenário => mesmo plano de interior (SeededRng);
-//  - LÓGICA PURA de plano (buildingInteriors, sem THREE) + builder visual
-//    (buildBuildingInteriors) que registra contagens e ANIMATORS em
-//    scene.userData.buildingInteriors (mesmo contrato dos worldMarks/dressing);
+// CONTRATO DE GAMEPLAY (Fase 24): colliders das estruturas-casca viram PAREDES
+// OCAS (segmentos com vão de porta + faixas de janela onde balas/LOS passam);
+// degraus e mezaninos viram superfícies pisáveis via world.floors.
+//
+// Filosofia do repo (mantida):
+//  - LÓGICA PURA em interiorsPlan.js (sem THREE, headless-safe p/ servidor);
+//  - builder visual (buildInteriors + buildShellHost) com registro em
+//    scene.userData.interiors — MESMO contrato dos worldMarks/districtDressing:
+//    { id, counts, animators, placements, shells, group }, idempotente;
+//  - DETERMINISMO: mesma seed+cenário => mesmas placements (SeededRng);
 //  - ZERO assets externos: geometria + materiais 100% procedurais;
-//  - QUALIDADE: interiorFactor (quantos prédios ganham interior) e
-//    interiorDensity (quantos móveis por prédio) vêm do tier (quality3d).
+//  - QUALIDADE: densidade da mobília vem do tier (quality3d.interiorFactor);
+//    as cascas são sempre construídas (substituem a caixa sólida).
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SeededRng } from '../shared/rng.js';
 import {
-  concreteMaterial, metalMaterial, plankMaterial,
-  crateTexture, barrelMaterial,
+  plankMaterial, concreteMaterial, crateTexture, barrelMaterial,
+  palletMaterial, sandbagMaterial, signTexture,
 } from './textures3d.js';
+import { ACCENTS, MEZZ, DOOR_MECH, interiorDressing, doorMaterialOf } from './interiorsPlan.js';
 
 // ============================================================================
-// PARTE 1 — plano puro de interiores (sem THREE, determinístico)
+// PARTE 1 — plano puro (Fase 24): placements/janelas/escada moram em
+// interiorsPlan.js — MESMA fonte p/ a casca visual e p/ a física (colliders
+// ocos + floors). Reexportado aqui p/ manter os contratos de import.
+// ============================================================================
+export {
+  SHELL_KINDS, WINDOW_KINDS, MEZZ_KINDS, WINDOW_SPEC, WINDOW_SPEC_UPPER, MEZZ,
+  interiorDressing, localPointToWorld, localRectToWorldAabb, hollowAccess,
+} from './interiorsPlan.js';
+
+// ==========================================================================
+// PARTE 2 — builder visual (THREE): cascas, mobília, luminárias, animators
 // ============================================================================
 
-const WALL_T = 0.32;        // espessura das paredes da casca
-const SILL = 2.6;           // peitoril (alinhado com as bandas da Fase 6)
-const WIN_H = 1.3;          // altura da janela (idem fachada)
-const ROW_GAP = 2.8;        // passo vertical entre fileiras (idem fachada)
-const DOOR_H = 2.5;         // altura da porta
-const INSET = 0.72;         // janelas cobrem 72% da face (idem fachada)
+const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
+  color, roughness: o.rough ?? .85, metalness: o.metal ?? .08,
+  ...(o.emissive ? { emissive: o.emissive, emissiveIntensity: o.ei ?? 1 } : {}),
+  ...(o.flat ? { flatShading: true } : {}),
+  ...(o.map ? { map: o.map } : {}),
+  ...(o.side ? { side: o.side } : {}),
+});
 
-// tipos com direito a interior (mesma lista isBuilding de detail3d, menos silo)
-const INTERIOR_KINDS = new Set(['barrack', 'hangar', 'warehouse', 'building', 'depot', 'tower', 'ruin', 'pavilion']);
-const MIN_H = 3.2;
-
-// prioridade de orçamento no tier baixo (marcos grandes primeiro)
-const KIND_PRIORITY = { warehouse: 0, hangar: 1, barrack: 2, building: 3, tower: 4, ruin: 5, depot: 6, pavilion: 7 };
-
-// kits de mobília por tipo (tipo -> lista de receitas; execução determinística)
-//   cada receita: { type, along: 'x'|'z', side: -1|1|0, off [mín,máx], n [mín,máx] }
-const FURNITURE_KITS = {
-  barrack: [
-    { type: 'bunk', along: 'z', side: -1, off: [1.4, 2.0], n: [2, 2] },
-    { type: 'locker', along: 'z', side: 1, off: [1.2, 1.8], n: [2, 3] },
-    { type: 'table', along: 'x', side: 0, off: [0, 1.5], n: [1, 1] },
-  ],
-  hangar: [
-    { type: 'workbench', along: 'x', side: 1, off: [1.4, 2.2], n: [1, 2] },
-    { type: 'cratestack', along: 'x', side: -1, off: [1.6, 2.6], n: [2, 3] },
-    { type: 'barrels', along: 'z', side: 1, off: [1.8, 2.8], n: [1, 2] },
-    { type: 'palletrow', along: 'x', side: 0, off: [2.5, 4.5], n: [1, 1] },
-  ],
-  warehouse: [
-    { type: 'shelf', along: 'z', side: -1, off: [1.6, 2.2], n: [2, 2] },
-    { type: 'shelf', along: 'z', side: 1, off: [1.6, 2.2], n: [2, 2] },
-    { type: 'cratestack', along: 'x', side: 0, off: [0.5, 2.5], n: [1, 2] },
-    { type: 'barrels', along: 'z', side: 1, off: [1.2, 1.8], n: [1, 1] },
-  ],
-  building: [
-    { type: 'table', along: 'z', side: 1, off: [1.4, 2.2], n: [1, 2] },
-    { type: 'locker', along: 'x', side: -1, off: [1.4, 2.0], n: [2, 2] },
-    { type: 'shelf', along: 'x', side: 1, off: [1.5, 2.0], n: [1, 1] },
-  ],
-  depot: [
-    { type: 'cratestack', along: 'x', side: -1, off: [0.9, 1.5], n: [1, 2] },
-    { type: 'barrels', along: 'z', side: 1, off: [0.9, 1.5], n: [1, 1] },
-    { type: 'shelf', along: 'z', side: -1, off: [0.9, 1.4], n: [1, 1] },
-  ],
-  tower: [
-    { type: 'bunk', along: 'x', side: -1, off: [0.8, 1.1], n: [1, 1] },
-    { type: 'table', along: 'x', side: 1, off: [0.8, 1.1], n: [1, 1] },
-  ],
-  pavilion: [
-    { type: 'table', along: 'x', side: 0, off: [0, 0.6], n: [1, 1] },
-    { type: 'palletrow', along: 'x', side: 1, off: [0.8, 1.2], n: [1, 1] },
-  ],
-  ruin: [
-    { type: 'rubble', along: 'x', side: 0, off: [0.5, 2.8], n: [4, 7] },
-    { type: 'cratestack', along: 'z', side: -1, off: [1.0, 1.8], n: [0, 1] },
-  ],
-};
-
-// buckets de material p/ mesclar a mobília em poucos meshes
-const FURNITURE_BUCKET = {
-  bunk: 'wood', locker: 'metal', table: 'wood', shelf: 'metal',
-  cratestack: 'crate', barrels: 'metal', workbench: 'wood',
-  palletrow: 'wood', rubble: 'stone',
-};
-
-/**
- * Plano determinístico de interiores por prédio.
- * @returns {{ scenarioId, buildings: Array<Object>, counts: Object }}
- *  - building: { index, kind, x, z, w, d, h, yMin, rot, wallT,
- *      door: { face, u, w, h },
- *      faces: [{ face, bays: [{ u, w }], rows: [{ v, h }] }],
- *      furniture: [{ type, x, z, rot, s, bucket }],
- *      lamps: [{ x, z, y, phase }],
- *      rubble: [{ x, z, rot, s }],
- *      roof: 'flat'|'broken' }
- *  Coordenadas de móveis/abajures em espaço LOCAL da estrutura (centro 0,0;
- *  rot 0 => frente em -Z, como em facadeDetails).
- */
-export function buildingInteriors(layout, { seed = 'interiors', fraction = 1, density = 1 } = {}) {
-  const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
-  const scenarioId = layout.scenarioId;
-
-  // 1) elegíveis: tipo com interior + altura mínima
-  const eligible = [];
-  layout.structures.forEach((s, index) => {
-    if (INTERIOR_KINDS.has(s.kind) && s.h >= MIN_H) eligible.push({ s, index });
-  });
-  // 2) ordem estável: prioridade de tipo, depois posição (determinismo total)
-  eligible.sort((a, b) =>
-    (KIND_PRIORITY[a.s.kind] - KIND_PRIORITY[b.s.kind])
-    || (a.s.x - b.s.x) || (a.s.z - b.s.z));
-
-  // 3) fração do tier (low/medium/high) — recorta DEPOIS da ordenação
-  const budget = Math.max(1, Math.round(eligible.length * Math.max(0, Math.min(1, fraction))));
-  const chosen = eligible.slice(0, budget);
-
-  const buildings = [];
-  const counts = {};
-  const bump = (k) => { counts[k] = (counts[k] ?? 0) + 1; };
-
-  for (const { s, index } of chosen) {
-    const frontZ = s.d >= s.w; // mesma regra de porta da Fase 6 (detail3d)
-    const doorFace = frontZ ? 'front' : 'right';
-    const doorFaceW = frontZ ? s.w : s.d;
-    const doorW = Math.min(2.2, doorFaceW * .35);
-    const isRuin = s.kind === 'ruin';
-
-    // ---- janelas: baías por face (mesma leitura das bandas da Fase 6) ----
-    const rows = s.h >= 4 ? Math.min(3, Math.floor((s.h - 2.4) / ROW_GAP)) : 0;
-    const rowList = [];
-    for (let r = 0; r < rows; r++) rowList.push({ v: +(SILL + r * ROW_GAP).toFixed(2), h: WIN_H });
-
-    const faceDefs = [
-      { face: 'front', span: s.w },
-      { face: 'back', span: s.w },
-      { face: 'left', span: s.d },
-      { face: 'right', span: s.d },
-    ].map((f) => {
-      const usable = f.span * INSET;
-      const bays = [];
-      if (rows > 0) {
-        const bayW = usable / Math.max(1, Math.round(f.span / 5)); // ~1 baía a cada 5 m
-        const w = +Math.max(1.0, bayW - 0.7).toFixed(2);           // pier ~0.7 m entre baías
-        const n = Math.max(1, Math.round(usable / (w + 0.7)));
-        const step = usable / n;
-        for (let i = 0; i < n; i++) {
-          const u = +(-usable / 2 + step * (i + .5)).toFixed(2);
-          bays.push({ u, w });
-        }
-      }
-      return { face: f.face, span: +f.span.toFixed(2), bays, rows: rowList };
-    });
-
-    // ---- mobília (espaço local, corredor da porta livre) ----
-    const furniture = [];
-    const kit = FURNITURE_KITS[s.kind] ?? [];
-    // corredor da porta permanece livre (front = -Z; right = +X, regra da Fase 6)
-    const blocked = doorFace === 'front'
-      ? (x, z) => (z < -s.d / 2 + 2.6 && Math.abs(x) < doorW / 2 + 1.1)
-      : (x, z) => (x > s.w / 2 - 2.6 && Math.abs(z) < doorW / 2 + 1.1);
-
-    for (const recipe of kit) {
-      const n = Math.max(0, Math.round((recipe.n[0] + rng.next() * (recipe.n[1] - recipe.n[0])) * density));
-      for (let i = 0; i < n; i++) {
-        const half = recipe.along === 'x' ? s.w / 2 : s.d / 2;
-        const along = (rng.next() * 2 - 1) * Math.max(0.4, half - 2.0);
-        const across = recipe.side === 0
-          ? (rng.next() * 2 - 1) * Math.max(0.4, (recipe.along === 'x' ? s.d / 2 : s.w / 2) - 2.2)
-          : recipe.side * ((recipe.along === 'x' ? s.d / 2 : s.w / 2) - (recipe.off[0] + rng.next() * (recipe.off[1] - recipe.off[0])));
-        let x, z;
-        if (recipe.along === 'x') { x = along; z = across; }
-        else { x = across; z = along; }
-        if (blocked(x, z)) continue;
-        // dentro da casca
-        if (Math.abs(x) > s.w / 2 - WALL_T - 0.6 || Math.abs(z) > s.d / 2 - WALL_T - 0.6) continue;
-        const rot = recipe.along === 'x' ? 0 : Math.PI / 2;
-        furniture.push({
-          type: recipe.type, bucket: FURNITURE_BUCKET[recipe.type] ?? 'wood',
-          x: +x.toFixed(2), z: +z.toFixed(2), rot: +(rot + (rng.next() - .5) * .3).toFixed(3),
-          s: +(0.92 + rng.next() * 0.16).toFixed(2),
-        });
-        bump(recipe.type);
-      }
-    }
-
-    // ---- pendentes emissivos (não em ruína) ----
-    const lamps = [];
-    if (!isRuin && s.h >= 3.2) {
-      const nLamps = s.h >= 6 ? 2 : 1;
-      for (let i = 0; i < nLamps; i++) {
-        const lx = nLamps === 1 ? 0 : (i === 0 ? -1 : 1) * Math.min(2.5, s.w * .18);
-        const lz = nLamps === 1 ? 0 : (i === 0 ? -1 : 1) * Math.min(2.5, s.d * .18);
-        lamps.push({ x: +lx.toFixed(2), z: +lz.toFixed(2), y: +(s.h - 1.15).toFixed(2), phase: + (rng.next() * 6.28).toFixed(3) });
-      }
-      bump('lamp');
-    }
-
-    // ---- entulho adicional nas ruínas (já vem do kit; profundidade extra) ----
-    const rubble = isRuin
-      ? furniture.filter((f) => f.type === 'rubble').map((f) => ({ x: f.x, z: f.z, rot: f.rot, s: f.s }))
-      : [];
-    const furnitureOnly = furniture.filter((f) => f.type !== 'rubble');
-
-    buildings.push({
-      index, kind: s.kind,
-      x: s.x, z: s.z, w: s.w, d: s.d, h: s.h, yMin: s.yMin ?? 0, rot: s.rot ?? 0,
-      wallT: WALL_T,
-      door: { face: doorFace, u: 0, w: +doorW.toFixed(2), h: DOOR_H },
-      faces: faceDefs,
-      furniture: furnitureOnly,
-      lamps,
-      rubble,
-      roof: isRuin ? 'broken' : 'flat',
-      ruin: isRuin,
-    });
-    bump('building');
-  }
-
-  return { scenarioId, buildings, counts };
-}
-
-// ============================================================================
-// PARTE 2 — builder visual (THREE) + registry + animators
-// ============================================================================
-
-// ---------- materiais compartilhados por build ----------
-function sharedMaterials() {
-  const crateM = new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: .85 });
+// materiais compartilhados por build (uma cena por chamada)
+function sharedMaterials(scenario) {
+  const accent = ACCENTS[scenario.id] ?? ACCENTS.CIGKV;
   return {
-    plaster: new THREE.MeshStandardMaterial({ color: '#b9b1a2', roughness: .94, side: THREE.DoubleSide }),
-    plasterRuin: new THREE.MeshStandardMaterial({ color: '#8f887b', roughness: .96, side: THREE.DoubleSide }),
-    floorWood: plankMaterial(2),
-    floorConcrete: (() => { const m = concreteMaterial(3); m.color = new THREE.Color('#6a6660'); return m; })(),
-    glass: new THREE.MeshStandardMaterial({
-      color: '#aecbda', transparent: true, opacity: .3, roughness: .15, metalness: .15,
-      side: THREE.DoubleSide, depthWrite: false,
+    wall: concreteMaterial(1.6),
+    wallIn: ST('#6b675f', { rough: .94 }),
+    floor: ST('#57534c', { rough: .95 }),
+    floorWood: plankMaterial(1.4),
+    roof: ST('#4c4842', { rough: .92 }),
+    frame: ST('#35383d', { metal: .4, rough: .6 }),
+    wood: ST('#6e5433', { rough: .9 }),
+    woodDark: ST('#4e3a22', { rough: .92 }),
+    steel: ST('#4c4f55', { metal: .6, rough: .45 }),
+    rust: ST('#7a4a2b', { metal: .4, rough: .72 }),
+    rubber: ST('#1c1d20', { rough: .95 }),
+    crate: ST('#8a7350', { map: crateTexture(), rough: .85 }),
+    barrel: barrelMaterial('#4a5545'),
+    pallet: palletMaterial(),
+    bag: sandbagMaterial(),
+    cloth: ST(accent.cloth, { rough: .95 }),
+    paper: ST('#cfc9b8', { rough: .9 }),
+    plant: ST('#4d6b35', { rough: .95, flat: true }),
+    lamp: new THREE.MeshStandardMaterial({
+      color: '#ffe9b8', emissive: '#ffdf9e', emissiveIntensity: 1.05, roughness: .4,
     }),
-    trim: new THREE.MeshStandardMaterial({ color: '#3a3630', roughness: .8, metalness: .2 }),
-    wood: new THREE.MeshStandardMaterial({ color: '#7a5c38', roughness: .9 }),
-    fabric: new THREE.MeshStandardMaterial({ color: '#7d8a94', roughness: .95 }),
-    metal: metalMaterial('#6a7076'),
-    crate: crateM,
-    barrel: barrelMaterial('#5d5148'),
-    stone: new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .95, flatShading: true }),
-    lampShade: new THREE.MeshStandardMaterial({ color: '#42464c', roughness: .6, metalness: .5, side: THREE.DoubleSide }),
-    lampBulb: new THREE.MeshStandardMaterial({ color: '#ffe9b8', emissive: '#ffd98a', emissiveIntensity: 1.35, roughness: .4 }),
+    screen: new THREE.MeshStandardMaterial({
+      color: '#173a4a', emissive: '#2e9bb8', emissiveIntensity: 1.1, roughness: .3,
+    }),
+    flame: ST('#ffb347', { emissive: '#ff8c1e', ei: 1.3, rough: .5 }),
+    // Fase 24 — vidro das janelas (translúcido, DoubleSide, sem depthWrite)
+    glass: new THREE.MeshStandardMaterial({
+      color: '#9fb8c8', roughness: .08, metalness: .1,
+      transparent: true, opacity: .3, side: THREE.DoubleSide, depthWrite: false,
+    }),
   };
 }
 
-// ---------- mescla de geometrias com translate prévio ----------
-function mergeTranslated(list) {
-  const geos = list.filter(Boolean);
-  if (!geos.length) return null;
-  if (geos.length === 1) return geos[0];
-  const merged = mergeGeometries(geos, false);
-  for (const g of geos) g.dispose();
-  return merged;
+// ---- helper: caixa posicionada (menos verbosidade nos builders) ----
+function box(g, w, h, d, mat, x, y, z, ry = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z); m.rotation.y = ry;
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  return m;
 }
 
-const box = (w, h, d, x, y, z) => {
-  const g = new THREE.BoxGeometry(w, h, d);
-  g.translate(x, y, z);
-  return g;
-};
-const planeXZ = (w, d, x, y, z, rotY = 0) => {
-  const g = new THREE.PlaneGeometry(w, d);
-  if (rotY) g.rotateY(rotY);
-  g.rotateX(-Math.PI / 2);
-  g.translate(x, y, z);
-  return g;
-};
-const planeXY = (w, h, x, y, z, rotY = 0) => {
-  const g = new THREE.PlaneGeometry(w, h);
-  if (rotY) g.rotateY(rotY);
-  g.translate(x, y, z);
-  return g;
+// ---- mobília (cada builder retorna meshes em coords locais, pivô no chão) ----
+const FURN = {
+  bunk(m) {
+    const g = new THREE.Group();
+    box(g, 1.9, .12, .9, m.woodDark, 0, .42, 0);
+    box(g, 1.9, .1, .9, m.woodDark, 0, 1.15, 0);
+    for (const [dx, dz] of [[-.88, -.4], [.88, -.4], [-.88, .4], [.88, .4]]) box(g, .09, 1.25, .09, m.woodDark, dx, .62, dz);
+    const mat = box(g, 1.7, .14, .8, m.cloth, 0, .53, 0);
+    mat.castShadow = false;
+    box(g, .5, .1, .55, m.paper, -.6, .63, 0);
+    return g;
+  },
+  locker(m) {
+    const g = new THREE.Group();
+    box(g, .8, 1.9, .5, m.steel, 0, .95, 0);
+    box(g, .02, 1.5, .4, m.frame, .41, .95, 0);   // fresta da porta
+    box(g, .6, .06, .05, m.frame, 0, 1.5, .26);   // ventilação
+    box(g, .6, .06, .05, m.frame, 0, 1.32, .26);
+    return g;
+  },
+  weaponsrack(m) {
+    const g = new THREE.Group();
+    box(g, 2, 1.5, .12, m.woodDark, 0, .75, 0);
+    box(g, 2, .1, .34, m.wood, 0, .5, .1);
+    for (let i = 0; i < 3; i++) {
+      box(g, .08, .8, .08, m.woodDark, -.6 + i * .6, 1.05, .08);
+      box(g, .07, .5, .05, m.steel, -.6 + i * .6, .85, .12);   // silhueta de fuzil
+    }
+    return g;
+  },
+  cratestack(m) {
+    const g = new THREE.Group();
+    box(g, .9, .9, .9, m.crate, 0, .45, 0);
+    box(g, .7, .7, .7, m.crate, .18, 1.25, .12, .5);
+    box(g, .8, .8, .8, m.crate, -.85, .4, .25, .25);
+    return g;
+  },
+  workbench(m) {
+    const g = new THREE.Group();
+    box(g, 2.2, .12, .9, m.wood, 0, .88, 0);
+    for (const [dx, dz] of [[-1, -.38], [1, -.38], [-1, .38], [1, .38]]) box(g, .1, .85, .1, m.woodDark, dx, .44, dz);
+    box(g, .3, .22, .28, m.steel, -.7, 1.05, 0);              // tornel
+    box(g, .5, .05, .2, m.steel, .4, .97, .1);                // ferramenta
+    return g;
+  },
+  tirestack(m) {
+    const g = new THREE.Group();
+    const geo = new THREE.TorusGeometry(.36, .15, 8, 14);
+    for (let i = 0; i < 3; i++) {
+      const t = new THREE.Mesh(geo, m.rubber);
+      t.position.set(0, .17 + i * .31, 0); t.rotation.x = Math.PI / 2;
+      t.rotation.z = i * .3; t.castShadow = t.receiveShadow = true;
+      g.add(t);
+    }
+    return g;
+  },
+  toolcart(m) {
+    const g = new THREE.Group();
+    box(g, .9, .6, .55, m.steel, 0, .55, 0);
+    box(g, .9, .06, .55, m.rust, 0, .9, 0);
+    for (const [dx, dz] of [[-.38, -.24], [.38, -.24], [-.38, .24], [.38, .24]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, .06, 8), m.rubber);
+      w.position.set(dx, .12, dz); w.rotation.z = Math.PI / 2; w.castShadow = true;
+      g.add(w);
+    }
+    return g;
+  },
+  targetboard(m) {
+    const g = new THREE.Group();
+    box(g, .1, 1.6, .1, m.woodDark, 0, .8, 0);
+    const face = new THREE.Mesh(new THREE.CircleGeometry(.55, 18), ST('#d8d2c0', { rough: .9 }));
+    face.position.set(0, 1.55, .07); g.add(face);
+    const inner = new THREE.Mesh(new THREE.CircleGeometry(.32, 16), ST('#8a3a2a', { rough: .9 }));
+    inner.position.set(0, 1.55, .09); g.add(inner);
+    return g;
+  },
+  shelfrack(m) {
+    const g = new THREE.Group();
+    for (const dx of [-1.05, 1.05]) box(g, .09, 2.1, .5, m.steel, dx, 1.05, 0);
+    for (const y of [.4, 1.05, 1.7]) box(g, 2.1, .07, .5, m.woodDark, 0, y, 0);
+    box(g, .45, .35, .4, m.crate, -.55, .62, 0);
+    box(g, .45, .35, .4, m.bag, .35, 1.29, 0);
+    box(g, .4, .3, .38, m.crate, .5, .62, .02, .3);
+    return g;
+  },
+  palletstack(m) {
+    const g = new THREE.Group();
+    box(g, 1.25, .14, 1.05, m.pallet, 0, .07, 0);
+    box(g, 1.25, .14, 1.05, m.pallet, .06, .25, .04, .12);
+    box(g, 1.1, .5, .9, m.bag, 0, .58, 0);
+    return g;
+  },
+  barrelrow(m) {
+    const g = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(.34, .34, .95, 10);
+    for (const [dx, dz, ry] of [[-.4, 0, 0], [.42, .1, .3], [.05, -.75, 1.2]]) {
+      const b = new THREE.Mesh(geo, m.barrel);
+      b.position.set(dx, .48 * (dz ? .7 : 1), dz);
+      if (dz) { b.rotation.x = Math.PI / 2; b.position.y = .34; }
+      b.rotation.y = ry; b.castShadow = b.receiveShadow = true;
+      g.add(b);
+    }
+    return g;
+  },
+  table(m) {
+    const g = new THREE.Group();
+    box(g, 1.5, .1, .9, m.wood, 0, .76, 0);
+    for (const [dx, dz] of [[-.65, -.36], [.65, -.36], [-.65, .36], [.65, .36]]) box(g, .09, .74, .09, m.woodDark, dx, .37, dz);
+    box(g, .4, .03, .3, m.paper, -.3, .83, .1, .4);   // papéis
+    box(g, .3, .03, .24, m.paper, .35, .83, -.12, 1.1);
+    return g;
+  },
+  shelf(m) {
+    const g = new THREE.Group();
+    for (const dx of [-.55, .55]) box(g, .07, 1.6, .38, m.woodDark, dx, .8, 0);
+    for (const y of [.35, .85, 1.35]) box(g, 1.1, .06, .38, m.wood, 0, y, 0);
+    box(g, .3, .28, .26, m.crate, -.2, .52, 0);
+    box(g, .25, .2, .22, m.paper, .25, .98, 0, .4);
+    return g;
+  },
+  planter(m) {
+    const g = new THREE.Group();
+    box(g, .55, .45, .55, m.rust, 0, .22, 0);
+    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(.3, 1), m.plant);
+    bush.position.y = .62; bush.castShadow = true;
+    g.add(bush);
+    return g;
+  },
+  counter(m) {
+    const g = new THREE.Group();
+    box(g, 2, .9, .6, m.woodDark, 0, .45, 0);
+    box(g, 2.2, .08, .7, m.wood, 0, .94, 0);
+    return g;
+  },
+  stool(m) {
+    const g = new THREE.Group();
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(.24, .24, .08, 10), m.wood);
+    seat.position.y = .62; seat.castShadow = true;
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, .6, 6), m.woodDark);
+    leg.position.y = .3; leg.castShadow = true;
+    g.add(seat, leg);
+    return g;
+  },
+  menuboard(m) {
+    const g = new THREE.Group();
+    box(g, .08, .9, .08, m.woodDark, -.55, .45, 0);
+    box(g, .08, .9, .08, m.woodDark, .55, .45, 0);
+    box(g, 1.3, .8, .06, m.woodDark, 0, 1.05, 0);
+    const menu = new THREE.Mesh(new THREE.PlaneGeometry(1.15, .65),
+      new THREE.MeshBasicMaterial({ map: signTexture('CAFÉ ZEX', '#ffd28a'), toneMapped: false }));
+    menu.position.set(0, 1.05, .045);
+    g.add(menu);
+    return g;
+  },
+  fridge(m) {
+    const g = new THREE.Group();
+    box(g, .65, 1.5, .6, m.steel, 0, .75, 0);
+    box(g, .03, 1.1, .4, m.frame, .33, .85, 0);
+    box(g, .4, .5, .02, ST('#9fd8d2', { rough: .2, metal: .1 }), 0, 1.05, .31);
+    return g;
+  },
+  rubble(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(.22 + (i % 2) * .14, 0), m.wallIn);
+      r.position.set((i - 1.5) * .35, .14 + (i % 2) * .1, ((i % 3) - 1) * .3);
+      r.rotation.set(i, i * 2.1, i * .7);
+      r.castShadow = r.receiveShadow = true;
+      g.add(r);
+    }
+    const slab = box(g, .9, .12, .6, m.wallIn, .1, .32, -.2, .5);
+    slab.rotation.z = .22;
+    return g;
+  },
+  rebar(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, 1.3, 5), m.rust);
+      bar.position.set((i - 1) * .22, .5, 0);
+      bar.rotation.set(.4 + i * .18, 0, (i - 1) * .3);
+      bar.castShadow = true;
+      g.add(bar);
+    }
+    return g;
+  },
+  brokenbench(m) {
+    const g = new THREE.Group();
+    const top = box(g, 1.4, .1, .45, m.wood, 0, .42, 0);
+    top.rotation.z = .16;
+    box(g, .09, .4, .09, m.woodDark, -.6, .2, 0);
+    box(g, .09, .34, .09, m.woodDark, .62, .17, .05);
+    return g;
+  },
+  lanternpost(m) {
+    const g = new THREE.Group();
+    box(g, .09, 1.7, .09, m.woodDark, 0, .85, 0);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(.24, .3, .24), m.lamp);
+    head.position.y = 1.8; g.add(head);
+    g.userData.lamp = head;
+    return g;
+  },
+  heater(m) {
+    const g = new THREE.Group();
+    box(g, .6, 1.1, .5, m.rust, 0, .55, 0);
+    const slit = new THREE.Mesh(new THREE.BoxGeometry(.4, .08, .03), m.flame);
+    slit.position.set(0, .78, .26); g.add(slit);
+    g.userData.lamp = slit;
+    box(g, .18, .5, .18, m.steel, 0, 1.2, 0);   // chaminé
+    return g;
+  },
+  hammock(m) {
+    const g = new THREE.Group();
+    box(g, .09, 1.6, .09, m.woodDark, -1.05, .8, 0);
+    box(g, .09, 1.6, .09, m.woodDark, 1.05, .8, 0);
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.1, .7),
+      ST(m.cloth.color.getStyle(), { rough: .95, side: THREE.DoubleSide }));
+    cloth.position.y = 1.05; cloth.rotation.x = Math.PI / 2 - .28;
+    cloth.castShadow = true;
+    g.add(cloth);
+    return g;
+  },
+  waterdrum(m) {
+    const g = new THREE.Group();
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(.45, .45, .9, 12), m.steel);
+    drum.position.y = .45; drum.castShadow = drum.receiveShadow = true;
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(.46, .46, .06, 12), m.rust);
+    lid.position.y = .92; g.add(drum, lid);
+    return g;
+  },
+  astralconsole(m) {
+    const g = new THREE.Group();
+    box(g, 1.4, .85, .6, m.steel, 0, .42, 0);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(1.1, .6, .06), m.screen);
+    screen.position.set(0, 1.15, -.12); screen.rotation.x = -.28; g.add(screen);
+    g.userData.screen = screen;
+    return g;
+  },
 };
 
 /**
- * Segmentos de UMA face com buracos verdadeiros: retorna as caixas
- * (peitoris/lintel/pilares/peças sob a porta) que preenchem tudo MENOS os
- * buracos de porta + janelas — consumidas pelo merge da parede.
- * Espaço local da face: u ao longo da face (0 no centro), y altura.
+ * Prepara os interiores: placements + materiais + mapa de shells + registry.
+ * NÃO adiciona malhas — as cascas entram via buildShellHost no loop de
+ * estruturas do world3d (substituindo a caixa sólida, collider intacto).
+ * Registry em scene.userData.interiors: { id, counts, animators, placements,
+ * shells (Map estrutura→spec), doorPanels (Map id→grupo do painel — Fase 25),
+ * group, mats }.
  */
-function wallSegmentsForFace(bf, doorOnThisFace, door, h) {
-  const segs = []; // [u0, u1, y0, y1]
-  const half = bf.span / 2;
-  const rows = bf.rows;
+export function buildInteriors(scene, layout, scenario, q) {
+  if (scene.userData.interiors) return scene.userData.interiors;
 
-  // pilares: cantos + entre baías, altura cheia
-  const cuts = [-half];
-  for (const b of bf.bays) { cuts.push(b.u - b.w / 2, b.u + b.w / 2); }
-  cuts.push(half);
-  for (let i = 0; i + 1 < cuts.length; i += 2) {
-    const u0 = cuts[i], u1 = cuts[i + 1];
-    if (u1 - u0 > 0.02) segs.push([u0, u1, 0, h]);
-  }
-
-  // faixas horizontais dentro de cada baía
-  for (const b of bf.bays) {
-    let yPrev = 0;
-    for (const r of rows) {
-      if (r.v - yPrev > 0.02) segs.push([b.u - b.w / 2, b.u + b.w / 2, yPrev, r.v]); // peitoril
-      yPrev = r.v + r.h;
-    }
-    if (h - yPrev > 0.02) segs.push([b.u - b.w / 2, b.u + b.w / 2, yPrev, h]);       // verga
-  }
-
-  // buraco da porta: retira a região da porta do segmento que a contém
-  if (doorOnThisFace) {
-    const out = [];
-    const d0 = door.u - door.w / 2, d1 = door.u + door.w / 2;
-    for (const [u0, u1, y0, y1] of segs) {
-      const overlap = !(u1 <= d0 || u0 >= d1 || y1 <= 0 || y0 >= door.h);
-      if (!overlap) { out.push([u0, u1, y0, y1]); continue; }
-      // fatia à esquerda / direita / acima da porta
-      if (d0 > u0) out.push([u0, Math.min(u1, d0), y0, y1]);
-      if (d1 < u1) out.push([Math.max(u0, d1), u1, y0, y1]);
-      const topY = Math.max(y0, door.h);
-      if (y1 > topY && Math.max(u0, d0) < Math.min(u1, d1)) out.push([Math.max(u0, d0), Math.min(u1, d1), topY, y1]);
-    }
-    return out;
-  }
-  return segs;
-}
-
-// monta a geometria da parede de UMA face no espaço LOCAL do prédio
-function faceWallGeometry(bf, doorOnThisFace, door, h, wallT) {
-  const segs = wallSegmentsForFace(bf, doorOnThisFace, door, h);
-  const boxes = [];
-  const glass = [];
-  const alongX = bf.face === 'front' || bf.face === 'back';
-  for (const [u0, u1, y0, y1] of segs) {
-    const w = u1 - u0, hh = y1 - y0;
-    const cu = (u0 + u1) / 2, cy = (y0 + y1) / 2;
-    if (alongX) {
-      boxes.push(box(w, hh, wallT, cu, cy, bf.face === 'front' ? -bf.span / 2 + wallT / 2 : bf.span / 2 - wallT / 2));
-    } else {
-      const x = bf.face === 'left' ? -bf.span / 2 + wallT / 2 : bf.span / 2 - wallT / 2;
-      boxes.push(box(wallT, hh, w, x, cy, cu));
-    }
-  }
-  // vidro nas janelas (nunca na porta — ela fica ABERTA p/ ver o interior)
-  for (const b of bf.bays) {
-    for (const r of bf.rows) {
-      const g = new THREE.PlaneGeometry(b.w, r.h);
-      const cy = r.v + r.h / 2;
-      if (alongX) {
-        g.rotateY(bf.face === 'front' ? Math.PI : 0);
-        g.translate(b.u, cy, bf.face === 'front' ? -bf.span / 2 + wallT / 2 : bf.span / 2 - wallT / 2);
-      } else {
-        g.rotateY(bf.face === 'left' ? -Math.PI / 2 : Math.PI / 2);
-        g.translate(bf.face === 'left' ? -bf.span / 2 + wallT / 2 : bf.span / 2 - wallT / 2, cy, b.u);
-      }
-      glass.push(g);
-    }
-  }
-  return { wall: mergeTranslated(boxes), glass: mergeTranslated(glass) };
-}
-
-// ---------- builders de mobília (geometrias por bucket, espaço local) ----------
-function furnitureGeometries(item) {
-  const wood = [], metal = [], crate = [], stone = [], fabric = [];
-  const S = item.s;
-  switch (item.type) {
-    case 'bunk': {
-      for (const y of [0.42, 1.24]) {
-        wood.push(box(2.0 * S, .1, .92 * S, item.x, y, item.z));
-        fabric.push(box(1.9 * S, .12, .82 * S, item.x, y + .11, item.z));
-      }
-      for (const [dx, dz] of [[-.94, -.4], [.94, -.4], [-.94, .4], [.94, .4]]) {
-        wood.push(box(.09, 1.7, .09, item.x + dx * S, .85, item.z + dz * S));
-      }
-      break;
-    }
-    case 'locker': {
-      metal.push(box(.62 * S, 1.8 * S, .5 * S, item.x, .9 * S, item.z));
-      break;
-    }
-    case 'table': {
-      wood.push(box(1.5 * S, .08, .85 * S, item.x, .76, item.z));
-      for (const [dx, dz] of [[-.68, -.36], [.68, -.36], [-.68, .36], [.68, .36]]) {
-        wood.push(box(.08, .74, .08, item.x + dx * S, .37, item.z + dz * S));
-      }
-      break;
-    }
-    case 'shelf': {
-      for (const y of [.18, .86, 1.54, 2.2]) {
-        metal.push(box(2.3 * S, .07, .62 * S, item.x, y, item.z));
-      }
-      for (const dz of [-.28, .28]) metal.push(box(.07, 2.25, .07, item.x, 1.12, item.z + dz * S));
-      break;
-    }
-    case 'cratestack': {
-      crate.push(box(.92 * S, .92 * S, .92 * S, item.x, .46 * S, item.z));
-      crate.push(box(.78 * S, .78 * S, .78 * S, item.x + .12 * S, 1.28 * S, item.z + .1 * S));
-      break;
-    }
-    case 'barrels': {
-      metal.push(barrelGeo(item.x - .42 * S, .48 * S, item.z, S));
-      metal.push(barrelGeo(item.x + .42 * S, .48 * S, item.z + .1 * S, S));
-      break;
-    }
-    case 'workbench': {
-      wood.push(box(1.9 * S, .1, .8 * S, item.x, .88, item.z));
-      for (const [dx, dz] of [[-.86, -.32], [.86, -.32], [-.86, .32], [.86, .32]]) {
-        wood.push(box(.1, .86, .1, item.x + dx * S, .43, item.z + dz * S));
-      }
-      metal.push(box(.3 * S, .26 * S, .26 * S, item.x - .6 * S, 1.05, item.z)); // torno
-      break;
-    }
-    case 'palletrow': {
-      wood.push(box(1.3 * S, .13, 1.1 * S, item.x, .12, item.z));
-      wood.push(box(1.3 * S, .13, 1.1 * S, item.x + .25 * S, .38, item.z + .15 * S));
-      break;
-    }
-    case 'rubble': {
-      const g = new THREE.DodecahedronGeometry(.55 * S, 0);
-      g.scale(1 + .4 * Math.abs(Math.sin(item.rot * 3.1)), .38 + .3 * Math.abs(Math.sin(item.rot * 1.7)), .8 + .4 * Math.abs(Math.cos(item.rot * 2.3)));
-      g.rotateY(item.rot);
-      g.translate(item.x, .22 * S, item.z);
-      stone.push(g);
-      const g2 = new THREE.DodecahedronGeometry(.3 * S, 0);
-      g2.translate(item.x + .5 * S, .18 * S, item.z - .4 * S);
-      stone.push(g2);
-      break;
-    }
-  }
-  return { wood, metal, crate, stone, fabric };
-}
-function barrelGeo(x, y, z, s) {
-  const g = new THREE.CylinderGeometry(.34 * s, .34 * s, .95 * s, 10);
-  g.translate(x, y, z);
-  return g;
-}
-
-// pendente emissivo: haste + cúpula + bulbo
-function lampMesh(m, x, z, y, h) {
-  const g = new THREE.Group();
-  const drop = Math.min(1.15, h - 1.6);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, drop, 6), m.trim);
-  rod.position.set(x, y + drop / 2, z);
-  const shade = new THREE.Mesh(new THREE.ConeGeometry(.34, .3, 12, 1, true), m.lampShade);
-  shade.position.set(x, y, z);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 8), m.lampBulb);
-  bulb.position.set(x, y - .12, z);
-  g.add(rod, shade, bulb);
-  g.userData.bulb = bulb;
-  return g;
-}
-
-/**
- * Constrói os interiores na cena. Registrado em scene.userData.buildingInteriors
- * com o MESMO contrato dos worldMarks/dressing: { id, counts, animators, placements }.
- * @param {THREE.Scene} scene
- * @param {object} plan — buildingInteriors(layout, ...)
- * @param {{ contactShadows?: (entries: Array) => void }} hooks
- */
-export function buildBuildingInteriors(scene, layout, plan, { contactShadows, exteriorMaterial } = {}) {
-  if (scene.userData.buildingInteriors) return scene.userData.buildingInteriors;
-
-  const m = sharedMaterials();
+  const placements = interiorDressing(layout, scenario, { density: q.interiorFactor ?? 1 });
+  const mats = sharedMaterials(scenario);
   const group = new THREE.Group();
-  group.name = 'building-interiors';
-  const animators = [];
-  const bulbs = [];
-
-  for (const b of plan.buildings) {
-    const host = new THREE.Group();
-    host.position.set(b.x, b.yMin, b.z);
-    host.rotation.y = b.rot;
-    const exterior = exteriorMaterial?.(b.kind) ?? m.plaster; // identidade da fachada preservada
-
-    // ---- paredes com buracos verdadeiros (1 mesh por face) ----
-    for (const bf of b.faces) {
-      const { wall, glass } = faceWallGeometry(bf, bf.face === b.door.face, b.door, b.h, b.wallT);
-      if (wall) {
-        const wm = new THREE.Mesh(wall, exterior);
-        wm.castShadow = true; wm.receiveShadow = true;
-        host.add(wm);
-      }
-      if (glass && glass.attributes?.position && !b.ruin) {
-        const gm = new THREE.Mesh(glass, m.glass);
-        gm.renderOrder = 3;
-        host.add(gm);
-      } else if (glass) {
-        glass.dispose();
-      }
-    }
-
-    // ---- reboco interno (o lado de dentro das paredes lê como interior) ----
-    {
-      const plaster = b.ruin ? m.plasterRuin : m.plaster;
-      const innerGeos = [
-        planeXY(b.w - b.wallT * 2, b.h - .1, 0, (b.h - .1) / 2, -b.d / 2 + b.wallT + .02, Math.PI),
-        planeXY(b.w - b.wallT * 2, b.h - .1, 0, (b.h - .1) / 2, b.d / 2 - b.wallT - .02, 0),
-        planeXY(b.d - b.wallT * 2, b.h - .1, -b.w / 2 + b.wallT + .02, (b.h - .1) / 2, 0, -Math.PI / 2),
-        planeXY(b.d - b.wallT * 2, b.h - .1, b.w / 2 - b.wallT - .02, (b.h - .1) / 2, 0, Math.PI / 2),
-      ];
-      const inner = new THREE.Mesh(mergeTranslated(innerGeos), plaster);
-      inner.receiveShadow = true;
-      host.add(inner);
-    }
-
-    // ---- batente da porta (moldura) ----
-    const dHalf = b.door.w / 2;
-    const jambGeos = [];
-    if (b.door.face === 'front') {
-      jambGeos.push(
-        box(.14, b.door.h, b.wallT + .08, -dHalf - .07, b.door.h / 2, -b.d / 2 + b.wallT / 2),
-        box(.14, b.door.h, b.wallT + .08, dHalf + .07, b.door.h / 2, -b.d / 2 + b.wallT / 2),
-        box(b.door.w + .42, .16, b.wallT + .08, 0, b.door.h + .08, -b.d / 2 + b.wallT / 2),
-      );
-    } else {
-      jambGeos.push(
-        box(b.wallT + .08, b.door.h, .14, b.w / 2 - b.wallT / 2, b.door.h / 2, -dHalf - .07),
-        box(b.wallT + .08, b.door.h, .14, b.w / 2 - b.wallT / 2, b.door.h / 2, dHalf + .07),
-        box(b.wallT + .08, .16, b.door.w + .42, b.w / 2 - b.wallT / 2, b.door.h + .08, 0),
-      );
-    }
-    const jamb = new THREE.Mesh(mergeTranslated(jambGeos), m.trim);
-    jamb.castShadow = true;
-    host.add(jamb);
-
-    // ---- piso + forro ----
-    const iw = b.w - b.wallT * 2, id = b.d - b.wallT * 2;
-    const floorMat = (b.kind === 'warehouse' || b.kind === 'hangar' || b.kind === 'depot') ? m.floorConcrete : m.floorWood;
-    const floor = new THREE.Mesh(planeXZ(iw, id, 0, .025, 0), floorMat);
-    floor.receiveShadow = true;
-    host.add(floor);
-    if (b.roof === 'flat') {
-      const ceil = new THREE.Mesh(planeXZ(iw, id, 0, b.h - .32, 0), b.ruin ? m.plasterRuin : m.plaster);
-      host.add(ceil);
-      // laje do telhado (substitui o "cap" da caixa sólida)
-      const roof = new THREE.Mesh(box(b.w + .5, .35, b.d + .5, 0, b.h + .17, 0), exteriorMaterial?.('wall') ?? m.plaster);
-      roof.castShadow = true; roof.receiveShadow = true;
-      host.add(roof);
-    } else {
-      // ruína: lajes quebradas tortas
-      const rr = new SeededRng(`${b.index}:roof`);
-      for (let i = 0; i < 3; i++) {
-        const slab = new THREE.Mesh(
-          box(b.w * (.3 + rr.next() * .35), .3, b.d * (.25 + rr.next() * .3), 0, 0, 0),
-          m.plasterRuin,
-        );
-        slab.position.set((rr.next() - .5) * b.w * .5, b.h - .2 - rr.next() * .5, (rr.next() - .5) * b.d * .5);
-        slab.rotation.set((rr.next() - .5) * .24, rr.next() * Math.PI, (rr.next() - .5) * .24);
-        slab.castShadow = slab.receiveShadow = true;
-        host.add(slab);
-      }
-    }
-
-    // ---- mobília mesclada por bucket (≤5 meshes por prédio) ----
-    const buckets = { wood: [], metal: [], crate: [], stone: [], fabric: [] };
-    for (const item of b.furniture) {
-      const geos = furnitureGeometries(item);
-      for (const k of Object.keys(buckets)) buckets[k].push(...geos[k]);
-    }
-    for (const [bucket, list] of Object.entries(buckets)) {
-      const merged = mergeTranslated(list);
-      if (!merged) continue;
-      const mesh = new THREE.Mesh(merged, m[bucket]);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      host.add(mesh);
-    }
-
-    // ---- pendentes + flicker ----
-    for (const lamp of b.lamps) {
-      const lm = lampMesh(m, lamp.x, lamp.z, lamp.y, b.h);
-      host.add(lm);
-      bulbs.push({ mesh: lm.userData.bulb, base: m.lampBulb.emissiveIntensity, phase: lamp.phase });
-    }
-
-    group.add(host);
-  }
-
+  group.name = 'interiors';
   scene.add(group);
 
-  // ---------- animators (stateless, determinísticos por t) ----------
-  if (bulbs.length) {
-    animators.push((dt, t) => {
-      for (const bb of bulbs) {
-        bb.mesh.material.emissiveIntensity = bb.base * (.92 + Math.sin(t * 6.3 + bb.phase) * .05 + Math.sin(t * 2.1 + bb.phase * 3) * .04);
-      }
-    });
-  }
+  const shells = new Map();
+  for (const spec of placements.structures) shells.set(layout.structures[spec.index], spec);
+
+  // ---------- animators (stateless por t, materiais compartilhados) ----------
+  const animators = [];
+  animators.push((dt, t) => { // flicker de lâmpadas/aquecedor (2 harmônicos)
+    mats.lamp.emissiveIntensity = 1.05 * (.9 + Math.sin(t * 7.3) * .06 + Math.sin(t * 2.9) * .04);
+  });
+  animators.push((dt, t) => { // pulso das telas astrais
+    mats.screen.emissiveIntensity = 1.1 * (.82 + Math.sin(t * 1.7) * .18);
+  });
 
   const registry = {
-    id: plan.scenarioId,
-    counts: plan.counts,
+    id: scenario.id,
+    counts: placements.counts,
     animators,
-    placements: plan,
+    placements,
+    shells,
+    // Fase 25 — folhas de porta: doorId → { pivot, leaf, openSign, current, target, broken }
+    // preenchido pelo world3d quando cada buildShellHost entra na cena
+    doors: new Map(),
+    // Fase 26 — painéis de vidro: windowId → mesh (estilhaça some de cena)
+    glass: new Map(),
+    mats,
     group,
   };
-  scene.userData.buildingInteriors = registry;
+  // animator das folhas: persegue o alvo autoritativo (0 fechada / openAngle
+  // aberta); quebrada => recolhe e some (a lascas ficam por conta do FX)
+  animators.push((dt) => {
+    for (const h of registry.doors.values()) {
+      const target = h.broken ? 0 : h.target;
+      // ganho calibrado (DOOR_MECH.openSpeed 8.5): ~0,35 s p/ 95% do curso —
+      // resposta estilo Free Fire (rápida, sem parecer porta de desenho animado)
+      const next = h.current + (target - h.current) * Math.min(1, dt * (DOOR_MECH.openSpeed ?? 8.5));
+      h.current = Math.abs(next - target) < 0.002 ? target : next;
+      h.pivot.rotation.y = h.openSign * h.current;
+      if (h.broken && h.leaf.visible) h.leaf.visible = false;
+    }
+  });
+  scene.userData.interiors = registry;
   return registry;
+}
+
+// WALL_LEN: comprimento da parede por face (para cascas)
+const wallLen = (s, face) => (face === 'front' || face === 'back') ? s.w : s.d;
+
+/**
+ * Constrói a casca de UMA estrutura (piso, paredes com porta real, teto,
+ * luminária e mobília). Host em (s.x, s.yMin, s.z) com rot da estrutura —
+ * MESMA transform da caixa que substitui (fachadas/facades continuam batendo).
+ * @param {object} s estrutura do layout
+ * @param {{ door, items }} spec do interiorDressing
+ * @param {object} m mats de buildInteriors
+ */
+export function buildShellHost(s, spec, m) {
+  const host = new THREE.Group();
+  host.name = `shell:${s.kind}:${s.x}:${s.z}`;
+  host.position.set(s.x, s.yMin, s.z);
+  host.rotation.y = s.rot ?? 0;
+  const { w, d, h } = s;
+  const T = .26;              // espessura das paredes
+  const ruin = s.kind === 'ruin';
+  const pavilion = s.kind === 'pavilion';
+  // Fase 26 — registro dos painéis de vidro desta casca (id → mesh). O id é o
+  // MESMO de interiorsPlan.windowPanelsOf (`win-<estrutura>-<k>` na ordem de
+  // spec.windows) — física e visual nunca divergem.
+  const glassIds = new Map((spec.windows ?? []).map((win, k) => [win, `win-${spec.index}-${k}`]));
+  const glassPanels = [];
+
+  // ---- piso ----
+  box(host, w, .12, d, s.kind === 'building' || pavilion ? m.floorWood : m.floor, 0, .06, 0);
+
+  // ---- paredes (porta na face do spec; ruínas têm alturas quebradas) ----
+  const addWall = (face, segU, segLen, segH, yBase = 0) => {
+    // segU: offset do centro do segmento AO LONGO da parede
+    const len = wallLen(s, face);
+    const half = len / 2 - Math.abs(segU) - segLen / 2;
+    if (half < -.01) return;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(
+      face === 'front' || face === 'back' ? segLen : T,
+      segH,
+      face === 'front' || face === 'back' ? T : segLen,
+    ), ruin ? m.wallIn : m.wall);
+    const y = yBase + segH / 2;
+    if (face === 'front') mesh.position.set(segU, y, -d / 2 + T / 2);
+    if (face === 'back') mesh.position.set(segU, y, d / 2 - T / 2);
+    if (face === 'left') mesh.position.set(-w / 2 + T / 2, y, segU);
+    if (face === 'right') mesh.position.set(w / 2 - T / 2, y, segU);
+    mesh.castShadow = mesh.receiveShadow = true;
+    host.add(mesh);
+  };
+
+  // vidro da janela (Fase 24): painel translúcido + batente metálico — MESMA
+  // faixa local dos colliders (windows do spec)
+  const windowGlass = (face, win) => {
+    const cw = win.u1 - win.u0, ch = win.y1 - win.y0;
+    const uc = (win.u0 + win.u1) / 2, yc = (win.y0 + win.y1) / 2;
+    const horizontal = face === 'front' || face === 'back';
+    const piece = (u, y, su, sy, mat, thick, noShadow = false) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? su : thick, sy, horizontal ? thick : su), mat);
+      if (face === 'front') mesh.position.set(u, y, -d / 2 + T / 2);
+      else if (face === 'back') mesh.position.set(u, y, d / 2 - T / 2);
+      else if (face === 'right') mesh.position.set(w / 2 - T / 2, y, u);
+      else mesh.position.set(-w / 2 + T / 2, y, u);
+      if (!noShadow) mesh.castShadow = mesh.receiveShadow = true;
+      host.add(mesh);
+      return mesh;
+    };
+    const ft = .1;
+    piece(uc, win.y0 + .05, cw + ft, .08, m.frame, T + .06);   // peitoril
+    piece(uc, win.y1 - .05, cw + ft, .08, m.frame, T + .06);   // verga
+    piece(win.u0 + .05, yc, .08, ch, m.frame, T + .06);        // montante esq
+    piece(win.u1 - .05, yc, .08, ch, m.frame, T + .06);        // montante dir
+    const glassMesh = piece(uc, yc, cw, ch, m.glass, .08, true); // vidro (Fase 26)
+    glassMesh.userData.windowId = glassIds.get(win) ?? null;
+    glassPanels.push({ id: glassMesh.userData.windowId, mesh: glassMesh });
+  };
+
+  const faces = ['front', 'back', 'left', 'right'];
+  const rngShape = new SeededRng(`shell:${s.kind}:${s.x}:${s.z}`);
+  for (const face of faces) {
+    if (pavilion) continue;                     // quiosque: só postes + telhado
+    const len = wallLen(s, face);
+    if (face === spec.door.face) {
+      // porta: 2 segmentos + verga
+      const dw = spec.door.w, dh = spec.door.h;
+      const doorC = spec.door.u;
+      const leftW = (len / 2 + doorC) - dw / 2;
+      const rightW = (len / 2 - doorC) - dw / 2;
+      if (leftW > .05) addWall(face, -(len / 2 - leftW / 2), leftW, ruin ? h * (.4 + rngShape.next() * .3) : h);
+      if (rightW > .05) addWall(face, len / 2 - rightW / 2, rightW, ruin ? h * (.35 + rngShape.next() * .3) : h);
+      if (!ruin) addWall(face, doorC, dw, h - dh, dh);   // verga acima da porta
+      else addWall(face, doorC, dw, .5, 0);               // ruína: toco baixo no vão
+      // batente
+      const jamb = (u) => {
+        const j = new THREE.Mesh(new THREE.BoxGeometry(
+          face === 'front' || face === 'back' ? .14 : T + .1, dh + .1,
+          face === 'front' || face === 'back' ? T + .1 : .14), m.frame);
+        if (face === 'front') j.position.set(u, (dh + .1) / 2, -d / 2 + T / 2);
+        if (face === 'back') j.position.set(u, (dh + .1) / 2, d / 2 - T / 2);
+        if (face === 'left') j.position.set(-w / 2 + T / 2, (dh + .1) / 2, u);
+        if (face === 'right') j.position.set(w / 2 - T / 2, (dh + .1) / 2, u);
+        j.castShadow = true;
+        host.add(j);
+      };
+      jamb(doorC - dw / 2 - .07);
+      jamb(doorC + dw / 2 + .07);
+      // ---- Fase 25 — FOLHA da porta (dobradiça + madeira + maçaneta) ----
+      // Fecha o vão visualmente; abre para DENTRO (estilo Free Fire) girando no
+      // pivô do batente. Estado autoritativo vem de sim/room3d via main3d —
+      // MESMO vão de doorwaysOf (física e visual nunca divergem).
+      const leafW = dw - DOOR_MECH.leafGap, leafH = dh - .08;
+      // Fase 25.1 — MATERIAL da folha: hangar = METÁLICA (aço escovado + nervuras);
+      // demais = madeira (tábuas + travessas + diagonal)
+      const metal = doorMaterialOf(s.kind) === 'metal';
+      const matPanel = metal ? m.steel : m.woodDark;
+      const matBrace = metal ? m.rust : m.wood;   // nervuras enferrujadas: leitura industrial
+      const horizontal = face === 'front' || face === 'back';   // vão corre em X local
+      const hingeSide = rngShape.next() < .5 ? -1 : 1;      // lado da dobradiça (determinístico)
+      const hingeU = doorC + hingeSide * dw / 2;
+      const pivot = new THREE.Group();
+      if (face === 'front') pivot.position.set(hingeU, 0, -d / 2 + T / 2);
+      if (face === 'back') pivot.position.set(hingeU, 0, d / 2 - T / 2);
+      if (face === 'left') pivot.position.set(-w / 2 + T / 2, 0, hingeU);
+      if (face === 'right') pivot.position.set(w / 2 - T / 2, 0, hingeU);
+      host.add(pivot);
+      const leaf = new THREE.Group();
+      pivot.add(leaf);
+      // painel de tábuas: offset NO EIXO DO VÃO (X p/ horizontal, Z p/ vertical)
+      const offU = -hingeSide * leafW / 2;
+      const leafThick = .09;
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? leafW : leafThick, leafH, horizontal ? leafThick : leafW), matPanel);
+      panel.position.set(horizontal ? offU : 0, leafH / 2, horizontal ? 0 : offU);
+      panel.castShadow = panel.receiveShadow = true;
+      leaf.add(panel);
+      // travessas horizontais + diagonal (leitura de porta de madeira; no metal
+      // viram NERVURAS de reforço — leitura de folha industrial)
+      const brace = (by) => {
+        const bMesh = new THREE.Mesh(new THREE.BoxGeometry(
+          horizontal ? leafW * .92 : leafThick + .04, .16, horizontal ? leafThick + .04 : leafW * .92), matBrace);
+        bMesh.position.set(horizontal ? offU : 0, by, horizontal ? 0 : offU);
+        bMesh.castShadow = true;
+        leaf.add(bMesh);
+      };
+      brace(leafH * .22);
+      brace(leafH * .78);
+      const diag = new THREE.Mesh(new THREE.BoxGeometry(
+        horizontal ? leafW * .78 : leafThick + .02, .12, horizontal ? leafThick + .02 : leafW * .78), matBrace);
+      diag.position.set(horizontal ? offU : 0, leafH * .5, horizontal ? 0 : offU);
+      diag.rotation.z = horizontal ? .52 : 0;
+      diag.rotation.x = horizontal ? 0 : .52;
+      diag.castShadow = true;
+      leaf.add(diag);
+      // maçaneta (lado oposto à dobradiça, 1,05 m)
+      const handleX = -hingeSide * (leafW - .18);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(.08, .08, .3), m.steel);
+      if (horizontal) handle.position.set(handleX, 1.05, 0);
+      else { handle.position.set(0, 1.05, handleX); handle.rotation.y = Math.PI / 2; }
+      handle.castShadow = true;
+      leaf.add(handle);
+      // sinal de abertura: folha gira PARA DENTRO do interior (−normal)
+      // front/back: interior = ±Z local; left/right: interior = ∓X local
+      const openSign = hingeSide * (face === 'front' || face === 'right' ? 1 : -1);
+      host.userData.doorHandle = {
+        id: `door-${spec.index}`,
+        pivot, leaf, openSign,
+        current: 0, target: 0, broken: false,
+      };
+      continue;
+    }
+    if (ruin) {
+      // paredes quebradas: 2–3 segmentos de alturas variadas
+      let u = -len / 2;
+      while (u < len / 2 - .4) {
+        const segLen = Math.min(len / 2 - u, 1.6 + rngShape.next() * 2.6);
+        const segH = h * (.18 + rngShape.next() * .62);
+        addWall(face, u + segLen / 2, segLen - .18, segH);
+        u += segLen;
+      }
+    } else {
+      const wins = (spec.windows ?? []).filter((w) => w.face === face).sort((a, b) => a.u0 - b.u0);
+      if (!wins.length) {
+        addWall(face, 0, len, h);
+      } else {
+        // Fase 24 — parede com faixas de janela: MESMA decomposição dos
+        // colliders (peitoril sólido, montantes entre vãos, parapeito acima)
+        const yLo = Math.min(...wins.map((w) => w.y0));
+        const yHi = Math.max(...wins.map((w) => w.y1));
+        addWall(face, 0, len, yLo, 0);                       // peitoril
+        addWall(face, 0, len, h - yHi, yHi);                 // parapeito/verga superior
+        const bandH = yHi - yLo;
+        let cursor = -len / 2;                                // montantes entre vãos
+        for (const w of wins) {
+          if (w.u0 - cursor > .05) addWall(face, (cursor + w.u0) / 2, w.u0 - cursor, bandH, yLo);
+          cursor = Math.max(cursor, w.u1);
+        }
+        if (len / 2 - cursor > .05) addWall(face, (cursor + len / 2) / 2, len / 2 - cursor, bandH, yLo);
+        for (const w of wins) windowGlass(face, w);
+      }
+    }
+  }
+
+  // ---- escada + mezanino (Fase 24 — visual dos floors pisáveis) ----
+  if (spec.stairs) {
+    const st = spec.stairs;
+    for (let k = 0; k < st.steps; k++) {
+      const zA = st.z0 + k * st.run;
+      const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(st.x1 - st.x0, st.rise, st.run), m.wallIn);
+      stepMesh.position.set((st.x0 + st.x1) / 2, st.rise * (k + .5), zA + st.run / 2);
+      stepMesh.castShadow = stepMesh.receiveShadow = true;
+      host.add(stepMesh);
+    }
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w - T * 2, .25, st.mezzZ1 - st.mezzZ0), m.floor);
+    slab.position.set(0, st.height - .125, (st.mezzZ0 + st.mezzZ1) / 2);
+    slab.castShadow = slab.receiveShadow = true;
+    host.add(slab);
+    // colunas de apoio na borda frontal da laje
+    for (const px of [-w / 2 + T + .2, w / 2 - T - .2]) {
+      const col = new THREE.Mesh(new THREE.BoxGeometry(.18, st.height - .25, .18), m.steel);
+      col.position.set(px, (st.height - .25) / 2, st.mezzZ0 + .18);
+      col.castShadow = true;
+      host.add(col);
+    }
+    // guarda-corpo (borda frontal, exceto a chegada da escada)
+    const railLen = (w / 2 - T) - st.x1;
+    const railCx = (st.x1 + w / 2 - T) / 2;
+    box(host, railLen, .07, .07, m.steel, railCx, st.height + 1.02, st.mezzZ0);
+    box(host, railLen, .05, .05, m.steel, railCx, st.height + .55, st.mezzZ0);
+    for (let i = 0; i <= 4; i++) {
+      const px = st.x1 + (railLen * i) / 4;
+      box(host, .06, 1.05, .06, m.steel, px, st.height + .52, st.mezzZ0);
+    }
+    // berço lateral da escada
+    box(host, .22, st.height, st.z1 - st.z0, m.woodDark, st.x1 + .11, st.height / 2, (st.z0 + st.z1) / 2);
+  }
+
+  // ---- postes do quiosque ----
+  if (pavilion) {
+    for (const [px, pz] of [[-w / 2 + .3, -d / 2 + .3], [w / 2 - .3, -d / 2 + .3], [-w / 2 + .3, d / 2 - .3], [w / 2 - .3, d / 2 - .3]]) {
+      box(host, .18, h, .18, m.woodDark, px, h / 2, pz);
+    }
+  }
+
+  // ---- teto ----
+  if (pavilion || h < 6) {
+    box(host, w + .5, .24, d + .5, m.roof, 0, h + .12, 0);
+  } else if (ruin) {
+    // laje parcial colapsada
+    const slab = box(host, w * .42, .3, d * .38, m.roof, -w * .18, h * .8, -d * .1, .4);
+    slab.rotation.z = .1; slab.rotation.x = .08;
+  } else {
+    // telhado externo (h ≥ 6): replica o "cap" do world3d (que não é mais
+    // desenhado p/ cascas) + forro interno fechando o teto visto pela porta
+    box(host, w + .34, .5, d + .34, m.roof, 0, h + .25, 0);
+    box(host, w - T * 2, .16, d - T * 2, m.roof, 0, h - .1, 0);
+  }
+
+  // ---- luminária de teto (pavilion: pendente no telhado) ----
+  if (!ruin) {
+    const lampY = pavilion ? h - .3 : h - .5;
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.15, .08, .3), m.lamp);
+    lamp.position.set(0, lampY, 0);
+    host.add(lamp);
+  }
+
+  // ---- mobília ----
+  for (const item of spec.items) {
+    const build = FURN[item.type];
+    if (!build) continue;
+    const g = build(m);
+    g.position.set(item.u, .12, item.v);   // piso tem .12 de espessura
+    g.rotation.y = item.rot;
+    g.scale.setScalar(item.s);
+    host.add(g);
+  }
+
+  // Fase 26 — painéis de vidro registrados no host (world3d alimenta o registry)
+  if (glassPanels.length) host.userData.glassPanels = glassPanels;
+
+  return host;
 }

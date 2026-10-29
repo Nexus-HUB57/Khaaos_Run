@@ -14,6 +14,9 @@ export default defineConfig({
     },
   },
   server: {
+    // O preview cloud usa um subdomínio dinâmico *.manus.computer.
+    // Mantemos a allowlist limitada ao domínio do preview, sem `true`.
+    allowedHosts: ['.manus.computer'],
     proxy: {
       // dev: mesmo princípio do modo online 2D — cliente fala com o servidor
       // autoritativo na mesma origem (/ws com upgrade WebSocket, /auth login).

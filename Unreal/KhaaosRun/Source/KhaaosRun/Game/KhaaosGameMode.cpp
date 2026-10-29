@@ -25,6 +25,9 @@
 #include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/MatchFlow/KhaaosMatchTimeline.h"
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
+#include "AbilitySystemComponent.h"
+#include "Player/KhaaosCharacter.h"
+#include "Game/AbilitySystem/Species/KhaaosAbilityRegistry.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
@@ -365,16 +368,32 @@ void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDa
         SpeciesComp->SetSpecies(SpeciesAsset);
     }
 
-    const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
-    const bool bIsOnith = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase) ||
-        (SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Onith.IsValid() &&
-            SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Onith);
-    KPS->SetSpeciesPassiveAbility(
-        bIsOnith ? UKhaaosAbility_OnithPassive::StaticClass() : nullptr);
+    TSubclassOf<UGameplayAbility> PassiveClass = nullptr;
+    const FName Id = SpeciesAsset->SpeciesID;
+    if (Id.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_OnithPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_ZheersPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_HuranPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_KhaelPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_VenexPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_SkeetwPassive::StaticClass();
+    KPS->SetSpeciesPassiveAbility(PassiveClass);
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s (HP=%d, Energy=%d, Speed=%.1f)"),
-        *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(),
-        SpeciesAsset->BaseHealth, SpeciesAsset->BaseEnergy, SpeciesAsset->BaseSpeed);
+    if (UAbilitySystemComponent* ASC = KPS->GetAbilitySystemComponent())
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UKhaaosAbilityRegistry* Registry = GI->GetSubsystem<UKhaaosAbilityRegistry>())
+            {
+                Registry->GrantAbilitiesForSpecies(ASC, Id, KPS->SpeciesActiveAbilityHandles, KPS);
+            }
+        }
+    }
+    if (AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(Player->GetPawn()))
+    {
+        Character->ApplySpeciesPresentation(Id);
+    }
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s actives=%d"),
+        *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(), KPS->SpeciesActiveAbilityHandles.Num());
 }
 
 TArray<UKhaaosSpeciesDataAsset*> AKhaaosGameMode::GetAvailableSpecies() const
@@ -1148,6 +1167,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
             ElimPS->Kills++;
             VictimPS->EliminatorId = ElimPS->GetUniqueId().ToString();
             ElimPS->GrantCredits(50);
+            if (UAbilitySystemComponent* KillerASC = ElimPS->GetAbilitySystemComponent())
+            {
+                UKhaaosAbility_VenexPassive::TryApplyOverclockOnASC(KillerASC);
+            }
         }
     }
 

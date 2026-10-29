@@ -1,135 +1,129 @@
-// Khaaos Run — Fase 23b: VARIAÇÃO DE TERRENO POR ELEVAÇÃO (visual).
+// Khaaos Run — Fase 23: TERRENO COM RELEVO (elevação visual por cenário).
 //
-// O chão era um plano 440×440 perfeitamente liso e de cor única: de paraquedas
-// a leitura era "grama pintada infinita". Este módulo devolve, de forma PURA e
-// determinística, a elevação e a cor de CADA vértice do terreno:
-//  - DENTRO da área jogável (|x|,|z| <= bound): y = 0 SEMPRE — zero impacto em
-//    gameplay (colliders AABB, entidades, decals, estradas e sombras de contato
-//    vivem no plano y≈0 e continuam exatos);
-//  - FORA da área jogável: colinas suaves (fbm de ruído de valor, 3 oitavas)
-//    sobem em direção à cordilheira de fundo — silhueta de horizonte real;
-//  - COR por vértice: variação de capim em manchas de dois tons (identidade do
-//    cenário), escurecimento em "vales" do ruído e MISTURA PARA ROCHA/seco com
-//    a elevação — leitura de relevo mesmo onde a geometria é plana.
-// Consumidor: world3d (PlaneGeometry segmentada + atributo color + vertexColors).
-import { SeededRng } from '../shared/rng.js';
+// Até a Fase 22 o solo era um PlaneGeometry plano (440×440 em y=0): do alto,
+// durante a queda livre, o mapa lia como "chapa" — Free Fire tem relevo ao
+// redor da área jogável (colinas, escarpas, ilhas). Aqui o terreno ganha
+// elevação VISUAL fora da área jogável, com perfil por mundo:
+//   CIGKV     — colinas secas crepusculares
+//   Barburhen — planícies gélidas baixas com neve nos pontos altos
+//   Priadus   — ilhas de mangue emergindo do anel de água abissal (y=.3)
+//   Ckesalth  — dunas altas + cristas rochosas de basalto
+//   Arukheea  — fragmentos irregulares cinza-astral
+//
+// CONTRATO DE GAMEPLAY (inviolável): dentro da área jogável (chebyshev ≤ 197,
+// o clamp do sim é ±198) a altura é EXATAMENTE 0 — entidades, sombras de
+// contato, loot, dressing e grama continuam ancorados no plano y=0. O relevo
+// só existe além da borda (ramp 197→211, platô moderado no anel dos marcos
+// 205–220 p/ não engoli-los, cristas cheias nos cantos do plano).
+//
+// DETERMINISMO: value-noise 2D com hash de inteiros — mesma entrada => mesma
+// altura, em qualquer máquina, sem estado compartilhado (função PURA).
+import * as THREE from 'three';
+import { groundMaterial } from './textures3d.js';
 
-// ---- hash de valor 2D determinístico (sem estado, sem THREE) ----
-function hash2(x, y, seedNum) {
-  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seedNum | 0, 2246822519)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  h ^= h >>> 16;
-  return (h >>> 0) / 4294967295;
-}
-const smooth = (t) => t * t * (3 - 2 * t);
-
-// ruído de valor suave em grade de `cell` metros
-function valueNoise(x, z, cell, seedNum) {
-  const gx = x / cell, gz = z / cell;
-  const x0 = Math.floor(gx), z0 = Math.floor(gz);
-  const tx = smooth(gx - x0), tz = smooth(gz - z0);
-  const n00 = hash2(x0, z0, seedNum), n10 = hash2(x0 + 1, z0, seedNum);
-  const n01 = hash2(x0, z0 + 1, seedNum), n11 = hash2(x0 + 1, z0 + 1, seedNum);
-  return (n00 * (1 - tx) + n10 * tx) * (1 - tz) + (n01 * (1 - tx) + n11 * tx) * tz;
-}
-
-// fbm 3 oitavas em [0,1]
-function fbm(x, z, seedNum) {
-  return (
-    valueNoise(x, z, 46, seedNum) * .55 +
-    valueNoise(x, z, 19, seedNum + 101) * .3 +
-    valueNoise(x, z, 7.5, seedNum + 202) * .15
-  );
-}
-
-export const TERRAIN_DEFAULTS = Object.freeze({
-  bound: 200,     // área jogável plana (layout.size 400 → anel do Ring em 200)
-  edge: 220,      // borda da malha (PlaneGeometry 440)
-  maxRise: 15,    // elevação máxima nas bordas
-  seedNum: 1337,
-});
-
-/**
- * Elevação VISUAL do terreno em (x, z).
- * Plana dentro da área jogável; colinas fora (fbm determinístico).
- */
-export function terrainHeightAt(x, z, opts = {}) {
-  const { bound, maxRise, seedNum } = { ...TERRAIN_DEFAULTS, ...opts };
-  const over = Math.max(Math.abs(x), Math.abs(z)) - bound; // chebyshev
-  if (over <= 0) return 0;
-  const t = smooth(Math.min(1, over / 22));                 // rampa 0→1 em ~22 m
-  const mask = .35 + .65 * fbm(x * .9, z * .9, seedNum);    // colinas com "vales"
-  return +(t * maxRise * mask * (0.55 + .45 * fbm(x * 2.2, z * 2.2, seedNum + 77))).toFixed(3);
-}
-
-// mix de cores em espaço RGB (entrada/saída [r,g,b] 0..1)
-function mix3(a, b, t) {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-}
-const hexToRgb = (hex) => {
-  const n = parseInt(String(hex).replace('#', ''), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+// ---- perfis por cenário ----
+const FLAT = 197;            // chebyshev: jogo 100% plano até aqui (clamp sim = 198)
+const PROFILES = {
+  CIGKV:     { amp: 4.6, freq: .052, ridge: .30, salt: 0x4b4b01 },
+  Barburhen: { amp: 2.3, freq: .045, ridge: .12, salt: 0x1ba2711 },
+  Priadus:   { amp: 3.4, freq: .060, ridge: .30, salt: 0x2c6d3f2 },
+  Ckesalth:  { amp: 7.4, freq: .050, ridge: .55, salt: 0x3de5a13 },
+  Arukheea:  { amp: 3.9, freq: .075, ridge: .40, salt: 0x4f7b2b4 },
 };
 
-const ROCK_LOW = hexToRgb('#8a7f6d');
-const ROCK_HIGH = hexToRgb('#a89a78');
-const VALLEY = [.82, .82, .78];   // multiplicador de sombra nos "vales" do ruído
+const smooth = (t) => t * t * (3 - 2 * t);
+const smoothstep = (a, b, v) => smooth(Math.max(0, Math.min(1, (v - a) / (b - a))));
+
+// hash de inteiros → [0,1) (estável, sem Math.random)
+function hash2(ix, iz, salt) {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263)) ^ salt;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+// value-noise bilinear suavizado
+function vnoise(x, z, freq, salt) {
+  const fx = x * freq, fz = z * freq;
+  const ix = Math.floor(fx), iz = Math.floor(fz);
+  const tx = smooth(fx - ix), tz = smooth(fz - iz);
+  const a = hash2(ix, iz, salt), b = hash2(ix + 1, iz, salt);
+  const c = hash2(ix, iz + 1, salt), d = hash2(ix + 1, iz + 1, salt);
+  return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
+}
 
 /**
- * Cor do terreno em (x, z) dada a elevação h:
- *  - manchas de dois tons de capim (tints do cenário, padrão Free Fire);
- *  - "vales" do ruído levemente escurecidos (leitura de micro-relevo);
- *  - h > 0 mistura para rocha (baixa) e capim seco (alta).
- * @returns [r, g, b] 0..1
+ * Altura VISUAL do terreno em (x, z). Pura e determinística.
+ * - chebyshev ≤ 197  → 0 (contrato de gameplay: plano jogável intacto)
+ * - 197→211          → rampa suave até ~0.2–0.5× amp (margem do mapa)
+ * - anel dos marcos  → platô moderado (marcos de horizonte permanecem legíveis)
+ * - cantos do plano  → cristas cheias (amp + termo ridged)
+ * @returns {number} altura em metros (≥ 0, 3 casas)
  */
-export function terrainColorAt(x, z, h, { tints = ['#c9cfa0', '#b3bd8c'], seedNum = TERRAIN_DEFAULTS.seedNum } = {}) {
-  const c0 = hexToRgb(tints[0]), c1 = hexToRgb(tints[1] ?? tints[0]);
-  // manchas grandes de dois tons (borda suave, sem xadrez)
-  const patch = valueNoise(x, z, 13, seedNum + 404);
-  const twoTone = smooth(Math.max(0, Math.min(1, (patch - .46) / .1)));
-  let col = mix3(c0, c1, twoTone);
-  // micro-variação (3ª tonalidade sutil, quebra a repetição da textura)
-  const micro = valueNoise(x, z, 4.2, seedNum + 808);
-  col = mix3(col, [col[0] * .9, col[1] * .92, col[2] * .86], (1 - micro) * .35);
-  // vales escurecem (leitura de depressão mesmo no plano)
-  const dip = valueNoise(x, z, 23, seedNum + 909);
-  const dipK = smooth(Math.max(0, Math.min(1, (.34 - dip) / .16))) * .5;
-  col = mix3(col, [col[0] * VALLEY[0], col[1] * VALLEY[1], col[2] * VALLEY[2]], dipK);
-  // elevação: rocha na base das colinas → capim seco no topo
-  if (h > 0) {
-    const k = Math.min(1, h / TERRAIN_DEFAULTS.maxRise);
-    col = mix3(col, ROCK_LOW, Math.min(1, k * 2.2) * .78);
-    col = mix3(col, ROCK_HIGH, Math.max(0, k - .45) * 1.4);
-  }
+export function terrainHeightAt(x, z, scenarioId = 'CIGKV') {
+  const p = PROFILES[scenarioId] ?? PROFILES.CIGKV;
+  const cheb = Math.max(Math.abs(x), Math.abs(z));
+  if (cheb <= FLAT) return 0;
+  const ramp = smoothstep(FLAT, FLAT + 14, cheb);
+  const r = Math.hypot(x, z);
+  const mid = smoothstep(208, 272, r);                 // platô → subida
+  const far = smoothstep(266, 312, r);                 // cristas nos cantos
+  const n  = vnoise(x, z, p.freq, p.salt);
+  const n2 = vnoise(x, z, p.freq * 2.7, p.salt ^ 0x9e37);
+  const ridge = Math.pow(1 - Math.abs(2 * vnoise(x, z, p.freq * .55, p.salt ^ 0x51f7) - 1), 2);
+  const h = p.amp * ramp * ((0.20 + 0.30 * n) + mid * (0.15 * n2 + 0.18 * n) + far * (0.75 + p.ridge * ridge));
+  return +Math.max(0, h).toFixed(3);
+}
+
+// ---- tinta por vértice (variação de solo por altitude, identidade por mundo) ----
+// multiplica o groundTint do cenário: baixo úmido → meio nativo → alto rocha
+// (neve em Barburhen, basalto em Ckesalth, musgo escuro em Priadus, cinza-astral).
+const TINTS = {
+  CIGKV:     { low: [.84, .78, .66], mid: [1, 1, 1],    high: [.52, .46, .40] },
+  Barburhen: { low: [.82, .86, .90], mid: [1, 1, 1],    high: [.96, .98, 1.0] }, // neve
+  Priadus:   { low: [.36, .50, .40], mid: [1, 1, 1],    high: [.48, .55, .50] }, // musgo escuro (W2)
+  Ckesalth:  { low: [.92, .87, .78], mid: [1, 1, 1],    high: [.30, .24, .22] }, // areia acinzentada (W3)
+  Arukheea:  { low: [.92, .89, .82], mid: [1, 1, 1],    high: [.55, .58, .64] }, // areia branca + falésia (W4)
+};
+const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+function terrainTint(h, x, z, scenarioId) {
+  const p = TINTS[scenarioId] ?? TINTS.CIGKV;
+  const amp = (PROFILES[scenarioId] ?? PROFILES.CIGKV).amp;
+  const k = Math.max(0, Math.min(1, h / (amp * .85)));
+  const jitter = (vnoise(x, z, .18, 0x7ea1) - .5) * .12; // quebra bandas retas
+  const base = k < .55 ? mix3(p.low, p.mid, k / .55) : mix3(p.mid, p.high, (k - .55) / .45);
   return [
-    +Math.max(0, Math.min(1, col[0])).toFixed(4),
-    +Math.max(0, Math.min(1, col[1])).toFixed(4),
-    +Math.max(0, Math.min(1, col[2])).toFixed(4),
+    Math.max(0, Math.min(1.15, base[0] + jitter)),
+    Math.max(0, Math.min(1.15, base[1] + jitter)),
+    Math.max(0, Math.min(1.15, base[2] + jitter)),
   ];
 }
 
 /**
- * Dados de vértice completos p/ a malha do chão (posições já em XZ).
- * @param {{ positions: Float32Array, tints: string[] }} p — positions do
- *        PlaneGeometry rotacionado (x,y,z por vértice; y será sobrescrito).
- * @returns {{ heights: Float32Array, colors: Float32Array }}
+ * Malha do terreno com relevo. Substitui o plano plano do buildScene:
+ * mesma textura/tiling (groundMaterial 34×), mas vértices deslocados por
+ * terrainHeightAt + vertex colors por altitude. receiveShadow preservado.
+ * flag userData.terrain p/ inspeção e2e.
  */
-export function terrainVertexData(positions, { tints = ['#c9cfa0', '#b3bd8c'], ...opts } = {}) {
-  const n = positions.length / 3;
-  const heights = new Float32Array(n);
-  const colors = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const x = positions[i * 3], z = positions[i * 3 + 2];
-    const h = terrainHeightAt(x, z, opts);
-    heights[i] = h;
-    const [r, g, b] = terrainColorAt(x, z, h, { tints, seedNum: opts.seedNum });
+export function buildTerrain(scenario, { segments = 96 } = {}) {
+  const geo = new THREE.PlaneGeometry(440, 440, segments, segments);
+  geo.rotateX(-Math.PI / 2); // plano XZ com +y para cima
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = terrainHeightAt(x, z, scenario.id);
+    pos.setY(i, h);
+    const [r, g, b] = terrainTint(h, x, z, scenario.id);
     colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
   }
-  return { heights, colors };
-}
-
-// semente numérica estável a partir do seed textual da partida + cenário
-export function terrainSeedNum(seedText, scenarioId) {
-  const rng = new SeededRng(`${seedText}:${scenarioId}:terrain`);
-  return 1 + Math.floor(rng.next() * 1e9);
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const mat = groundMaterial(34, scenario.groundTint);
+  mat.vertexColors = true;
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.receiveShadow = true;
+  mesh.name = 'terrain';
+  mesh.userData.terrain = true;
+  return mesh;
 }

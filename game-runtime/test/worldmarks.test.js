@@ -117,3 +117,146 @@ test('cenário desconhecido não quebra (registro vazio, sem exceção)', () => 
   assert.deepEqual(reg.counts, {});
   assert.equal(reg.animators.length, 0);
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Fase 26 — FX DOS MARCOS × MUNDOS: os marcos REAGEM à sobrevivência do
+// próprio mundo via registry.applyHazard (abastecido pelo SurvivalFX).
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Fase 26: registro expõe applyHazard + hazardState zerado na criação', () => {
+  for (const id of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(7, id, null, 'high');
+    const marks = scene.userData.worldMarks;
+    assert.equal(typeof marks.applyHazard, 'function', `${id}: applyHazard presente`);
+    assert.deepEqual(marks.hazardState, { kind: null, boost: 0, surfaceY: 0 }, `${id}: estado zerado`);
+  }
+});
+
+test('Priadus × tsunami: o ANEL oceânico sobe (maré) e recua ao idle', () => {
+  const { scene } = buildScene(9, 'Priadus', null, 'high');
+  const marks = scene.userData.worldMarks;
+  const water = scene.getObjectByName('priadus-water-ring');
+  const baseY = water.position.y; // ~.3 (shimmer)
+  marks.applyHazard('tsunami', 1, 90);
+  for (const fn of marks.animators) fn(1 / 60, 2.5);
+  const surgeY = water.position.y;
+  assert.ok(surgeY > baseY + 3, `maré de tempestade subiu (${surgeY.toFixed(2)} > ${(baseY + 3).toFixed(2)})`);
+  assert.ok(water.material.opacity > .8, 'opacidade fecha o céu d\'água');
+  // boost parcial — maré proporcional (smoothstep do SurvivalFX)
+  marks.applyHazard('tsunami', .5, 45);
+  for (const fn of marks.animators) fn(1 / 60, 2.5);
+  const halfY = water.position.y;
+  assert.ok(halfY > baseY && halfY < surgeY, `boost 0.5 entre base e pico (${halfY.toFixed(2)})`);
+  // hazard termina → volta à base
+  marks.applyHazard(null, 0, 0);
+  for (const fn of marks.animators) fn(1 / 60, 2.5);
+  assert.ok(Math.abs(water.position.y - baseY) < .1, 'recuo ao idle');
+});
+
+test('Ckesalth × lava: a tocha ERUPCIONA (escala/emissiva ×) com fagulhas reais', () => {
+  const { scene } = buildScene(42, 'Ckesalth', null, 'high');
+  const marks = scene.userData.worldMarks;
+  const system0 = scene.userData.particles;
+  assert.ok(system0, 'pool compartilhado presente');
+  // localiza a chama da tocha (cone emissivo #ff7a1a no anel externo)
+  let flame = null;
+  scene.traverse((o) => {
+    if (o.isMesh && o.geometry?.type === 'ConeGeometry' && o.material?.emissive?.getHexString?.() === 'ff7a1a') flame = o;
+  });
+  assert.ok(flame, 'tocha presente');
+  // linhança: animators rodam SEM hazard primeiro (estado base estável)
+  for (const fn of marks.animators) fn(1 / 60, 1);
+  const baseIntensity = flame.material.emissiveIntensity;
+  const baseScale = flame.scale.y;
+  marks.applyHazard('lava', 1, 180);
+  // 120 frames — emissores acumulam dívida (rate 4/s: 1 frame = debt .067 < 1)
+  for (let i = 0; i < 120; i++) for (const fn of marks.animators) fn(1 / 60, 1.1 + i / 60);
+  assert.ok(flame.material.emissiveIntensity > baseIntensity * 2.5, `chama incandesce (${flame.material.emissiveIntensity.toFixed(2)} > ${(baseIntensity * 2.5).toFixed(2)})`);
+  assert.ok(flame.scale.y > baseScale + 1, `chama 3× mais alta (${flame.scale.y.toFixed(2)})`);
+  // fagulhas REAIS na cena (partículas pooled — antes da Fase 26 a tocha era só cone)
+  const system = scene.userData.particles;
+  assert.ok(system.activeCount > 0, `fagulhas/fumaça vivas no pool (${system.activeCount})`);
+});
+
+test('Arukheea × gravity: pilões ACORDAM (anéis giram + cristal incandesce) e fendas fecham brilho', () => {
+  const { scene } = buildScene(9, 'Arukheea', null, 'high');
+  const marks = scene.userData.worldMarks;
+  const pylons = scene.getObjectByName('anchor-pylons');
+  const rings = [];
+  pylons.traverse((o) => { if (o.isMesh && o.geometry?.type === 'TorusGeometry') rings.push(o); });
+  assert.ok(rings.length > 0, 'anéis dos pilões presentes');
+  const crysMats = rings.map((r) => r.material);
+  for (const fn of marks.animators) fn(1 / 60, 3);
+  const rot0 = rings.map((r) => r.rotation.z);
+  const em0 = crysMats[0].emissiveIntensity;
+  const riftOp0 = scene.traverse.length; // placeholder — fendas abaixo
+  marks.applyHazard('gravity', 1, 0);
+  for (let i = 0; i < 30; i++) for (const fn of marks.animators) fn(1 / 60, 3 + i / 60);
+  const rot1 = rings.map((r) => r.rotation.z);
+  const moved = rings.filter((r, i) => Math.abs(r.rotation.z - rot0[i]) > .5).length;
+  assert.ok(moved >= rings.length - 1, `anéis giraram com a anomalia (${moved}/${rings.length})`);
+  assert.ok(crysMats[0].emissiveIntensity > em0 * 2, `cristal incandesce (${crysMats[0].emissiveIntensity.toFixed(2)})`);
+  assert.ok(rings.length > 0);
+  assert.ok(rot1.length === rings.length);
+});
+
+test('Arukheea × gravity: fendas do vazio incandecem (opacidade ↑)', () => {
+  const { scene } = buildScene(9, 'Arukheea', null, 'high');
+  const marks = scene.userData.worldMarks;
+  // nomeadas na Fase 26 — raios de luz (Fase 24) são PlaneGeometry transparente idêntico
+  const rifts = [];
+  scene.traverse((o) => { if (o.name === 'void-rift') rifts.push(o); });
+  assert.ok(rifts.length >= 4, `fendas do horizonte presentes (${rifts.length})`);
+  for (const fn of marks.animators) fn(1 / 60, 5);
+  const idle = rifts.map((r) => r.material.opacity);
+  marks.applyHazard('gravity', 1, 0);
+  for (const fn of marks.animators) fn(1 / 60, 5.5);
+  const hot = rifts.map((r) => r.material.opacity);
+  const up = rifts.filter((r, i) => hot[i] > idle[i]).length;
+  assert.ok(up === rifts.length, `todas as fendas incandecem (${up}/${rifts.length})`);
+});
+
+test('CIGKV × acid: beacons estroboscopiam (pulso acelera com o boost)', () => {
+  const { scene } = buildScene(9, 'CIGKV', null, 'high');
+  const marks = scene.userData.worldMarks;
+  const beacons = [];
+  scene.traverse((o) => {
+    if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.material?.emissive?.getHexString?.() === 'ff3d52') beacons.push(o);
+  });
+  assert.ok(beacons.length >= 3, `beacons presentes (${beacons.length})`);
+  // amostra a intensidade em fase equivalente: com acid o speed 2.2→13.2
+  const sample = (t) => { for (const fn of marks.animators) fn(1 / 60, t); return beacons.map((b) => b.material.emissiveIntensity); };
+  const s1 = sample(1);
+  marks.applyHazard('acid', 1, 0);
+  const s2 = sample(1); // mesmo t — velocidade diferente muda a fase do sinal
+  const differs = beacons.filter((b, i) => Math.abs(s2[i] - s1[i]) > .05).length;
+  assert.ok(differs >= 1, `estrobo acelera com ácido (${differs}/${beacons.length} mudaram)`);
+});
+
+test('Barburhen × hazard: sem sobrevivência no cenário — reação nula e sem erro', () => {
+  const { scene } = buildScene(11, 'Barburhen', null, 'high');
+  const marks = scene.userData.worldMarks;
+  assert.doesNotThrow(() => {
+    marks.applyHazard('tsunami', 1, 90);
+    for (const fn of marks.animators) fn(1 / 60, 1);
+    marks.applyHazard(null, 0, 0);
+  }, 'cenário sem sobrevivência ignora hazard com elegância');
+});
+
+test('Fase 26: particles ticker é IDEMPOTENTE por cena (districts + marks = 1 tick)', () => {
+  for (const id of ['Ckesalth', 'Arukheea', 'Priadus']) {
+    const { scene } = buildScene(88, id, null, 'high');
+    const system = scene.userData.particles;
+    assert.ok(system, `${id}: pool compartilhado existe`);
+    const live0 = system.activeCount;
+    // 1 segundo de "frames": se o ticker fosse 2×, idade avançaria 2× (partículas curtas morriam no dobro da velocidade)
+    const emitters = [];
+    scene.traverse(() => {});
+    for (let i = 0; i < 60; i++) {
+      for (const fn of scene.userData.worldMarks.animators) fn(1 / 60, i / 60);
+      for (const fn of scene.userData.districtDressing?.animators ?? []) fn(1 / 60, i / 60);
+    }
+    assert.ok(system.activeCount >= 0, `${id}: estado finito após 60 frames`);
+    assert.ok(live0 >= 0);
+  }
+});

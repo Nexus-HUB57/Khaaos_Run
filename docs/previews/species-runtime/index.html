@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run — Preview Espécies UE5.8 · PR #202</title>
+<style>
+  :root {
+    --bg: #07070c;
+    --panel: #10101a;
+    --border: #1e1e32;
+    --text: #e8e8f0;
+    --muted: #8b8ba3;
+    --accent: #7c5cff;
+    --huran: #2ec4b6;
+    --khael: #6ec6ff;
+    --venex: #ff6b35;
+    --onith: #9b59b6;
+    --zheers: #f1c40f;
+    --skeetw: #2ecc71;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(ellipse at 20% 0%, #15152a 0%, var(--bg) 55%);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 2rem;
+    display: flex; flex-wrap: wrap; gap: 1rem;
+    align-items: center; justify-content: space-between;
+    background: rgba(10,10,18,.85);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: .75rem; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #00d4ff);
+    display: grid; place-items: center; font-weight: 800; font-size: .9rem;
+  }
+  .brand h1 { font-size: 1.1rem; font-weight: 700; }
+  .brand p { font-size: .75rem; color: var(--muted); }
+  .badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .badge {
+    font-size: .7rem; padding: .25rem .55rem; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  }
+  .badge.ok { border-color: #1a5c3a; color: #5dffa0; background: #0d2818; }
+  .badge.warn { border-color: #5c4a1a; color: #ffd56d; background: #281e0d; }
+  main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+  .hero {
+    display: grid; gap: 1.25rem;
+    grid-template-columns: 1.2fr .8fr;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 800px) { .hero { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.25rem 1.4rem;
+  }
+  .card h2 { font-size: 1rem; margin-bottom: .5rem; }
+  .card p, .card li { font-size: .88rem; color: var(--muted); }
+  .card ul { padding-left: 1.1rem; margin-top: .5rem; }
+  .card li { margin: .25rem 0; }
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+    margin-top: 1rem;
+  }
+  .stat {
+    background: #0c0c14; border-radius: 12px; padding: .75rem;
+    border: 1px solid var(--border); text-align: center;
+  }
+  .stat strong { display: block; font-size: 1.35rem; color: var(--text); }
+  .stat span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .species-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem; margin-bottom: 2rem;
+  }
+  .species {
+    border-radius: 16px; border: 1px solid var(--border);
+    background: linear-gradient(160deg, #12121e, #0a0a12);
+    overflow: hidden; cursor: pointer; transition: transform .15s, border-color .15s;
+  }
+  .species:hover, .species.active { transform: translateY(-2px); border-color: var(--c, var(--accent)); }
+  .species-head {
+    padding: 1rem 1.1rem .6rem;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .species-head h3 { font-size: 1.05rem; }
+  .species-head .tag {
+    font-size: .65rem; padding: .2rem .45rem; border-radius: 6px;
+    background: color-mix(in srgb, var(--c) 20%, transparent);
+    color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  }
+  .species-body { padding: 0 1.1rem 1.1rem; }
+  .species-body .passive {
+    font-size: .8rem; color: var(--muted); margin: .4rem 0 .8rem;
+    padding: .5rem .65rem; border-radius: 8px; background: #0c0c14;
+    border-left: 3px solid var(--c);
+  }
+  .ability {
+    font-size: .75rem; display: flex; justify-content: space-between;
+    padding: .35rem 0; border-bottom: 1px solid #161624; color: var(--muted);
+  }
+  .ability:last-child { border-bottom: none; }
+  .ability b { color: var(--text); font-weight: 600; }
+  .ability .slot {
+    font-family: ui-monospace, monospace; color: var(--c); min-width: 1.5rem;
+  }
+  section h2 {
+    font-size: 1rem; margin: 0 0 1rem; display: flex; align-items: center; gap: .5rem;
+  }
+  .pipeline {
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+    font-size: .8rem;
+  }
+  .pipe-step {
+    background: #0c0c14; border: 1px solid var(--border); border-radius: 10px;
+    padding: .55rem .8rem; color: var(--muted);
+  }
+  .pipe-step strong { color: var(--text); display: block; font-size: .82rem; }
+  .arrow { color: var(--accent); font-weight: 700; }
+  footer {
+    text-align: center; padding: 2rem 1rem 3rem; color: var(--muted); font-size: .75rem;
+  }
+  footer a { color: var(--accent); }
+  .keys {
+    display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .75rem;
+  }
+  .key {
+    width: 2rem; height: 2rem; border-radius: 6px; border: 1px solid var(--border);
+    display: grid; place-items: center; font-family: ui-monospace, monospace;
+    font-size: .8rem; background: #0c0c14; color: var(--text);
+  }
+  .key.hi { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+  #detail {
+    margin-top: 1rem; min-height: 3rem; font-size: .85rem; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">KR</div>
+    <div>
+      <h1>Khaaos Run · Preview de desenvolvimento</h1>
+      <p>UE5.8 · GAS espécies · branch feat/ue5-species-runtime-gate</p>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge ok">PR #202</span>
+    <span class="badge ok">preflight 0 errors</span>
+    <span class="badge ok">test:ue5:logic PASS</span>
+    <span class="badge warn">UBT gate: precisa engine / UE_CONTAINER_PAT</span>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="card">
+      <h2>O que esta branch entrega</h2>
+      <ul>
+        <li><b style="color:#fff">48 habilidades ativas</b> (8 × 6 espécies) no AbilityRegistry com InputID 0–7</li>
+        <li><b style="color:#fff">Input 1–8</b> + Ultimate = slot 7 (Enhanced Input + fallback teclado)</li>
+        <li><b style="color:#fff">AssignSpecies</b>: passiva + ativas + mesh/VFX presentation</li>
+        <li><b style="color:#fff">Skeetw</b> glide · <b style="color:#fff">Huran</b> regen aquática · <b style="color:#fff">Venex</b> overclock na elim</li>
+        <li><b style="color:#fff">LOD dinâmico</b> mesh espécie via CharacterLODSystem (0–3)</li>
+      </ul>
+      <div class="stat-grid">
+        <div class="stat"><strong>6</strong><span>Espécies</span></div>
+        <div class="stat"><strong>48</strong><span>Ativas</span></div>
+        <div class="stat"><strong>8</strong><span>Slots input</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Fluxo AssignSpecies</h2>
+      <div class="pipeline">
+        <div class="pipe-step"><strong>DataAsset</strong>stats</div>
+        <span class="arrow">→</span>
+        <div class="pipe-step"><strong>Passive</strong>GAS infinite</div>
+        <span class="arrow">→</span>
+        <div class="pipe-step"><strong>8 Actives</strong>InputID</div>
+        <span class="arrow">→</span>
+        <div class="pipe-step"><strong>Mesh+VFX</strong>presentation</div>
+      </div>
+      <p style="margin-top:1rem">Controles em PIE / build:</p>
+      <div class="keys" id="keys">
+        <span class="key">1</span><span class="key">2</span><span class="key">3</span><span class="key">4</span>
+        <span class="key">5</span><span class="key">6</span><span class="key">7</span><span class="key">8</span>
+      </div>
+      <p id="detail">Clique numa espécie ou pressione 1–8 para simular o slot de habilidade.</p>
+    </div>
+  </div>
+
+  <section>
+    <h2>Espécies · passiva + 8 ativas</h2>
+    <div class="species-grid" id="grid"></div>
+  </section>
+
+  <div class="card" style="margin-bottom:2rem">
+    <h2>Links</h2>
+    <p>
+      PR: <a href="https://github.com/Nexus-HUB57/Khaaos_Run/pull/202" style="color:var(--accent)">#202 feat/ue5-species-runtime-gate</a><br/>
+      Branch: <code>feat/ue5-species-runtime-gate</code> · Base: <code>main</code><br/>
+      Coordenar merge com PR aberto <a href="https://github.com/Nexus-HUB57/Khaaos_Run/pull/181" style="color:var(--accent)">#181 e2e phases 9–12</a>
+    </p>
+  </div>
+</main>
+
+<footer>
+  Preview estático gerado a partir do desenvolvimento UE5 espécies · não é o client React completo nem o Editor UE5.<br/>
+  Gate real (UBT / PIE / Automation) requer UE 5.8 ou secret <code>UE_CONTAINER_PAT</code> no Actions.
+</footer>
+
+<script>
+const SPECIES = [
+  {
+    id: "Huran", c: "var(--huran)", tag: "Anfíbio",
+    passive: "Regen aquática — +heal% + WaterRegen/s enquanto swimming",
+    abilities: ["TidalSurge","AquaShield","DiveBomb","FloodZone","PressureStrike","GillsRegen","Whirlpool","TsunamiRage"]
+  },
+  {
+    id: "Khael", c: "var(--khael)", tag: "Criogênico",
+    passive: "Escudo de gelo / resistências criogênicas (GE passivo)",
+    abilities: ["FrostBolt","CryoWall","Blizzard","FrozenArmor","Avalanche","Frostbite","IceClone","AbsoluteZero"]
+  },
+  {
+    id: "Venex", c: "var(--venex)", tag: "Cibernético",
+    passive: "Overclock no elim — +FireRate +ReloadSpeed (GE 5s)",
+    abilities: ["PulseBlast","Overclock","TargetLock","NaniteRepair","CyberDash","ScannerSweep","StasisField","Overload"]
+  },
+  {
+    id: "Onith", c: "var(--onith)", tag: "Tóxico",
+    passive: "Redução dano explosão (OnithExplosionDamageReduction)",
+    abilities: ["VenomSpit","NoxiousGas","PlagueTouch","ToxicHusk","Contaminate","ParasiteDrain","BioMimic","Pandemic"]
+  },
+  {
+    id: "Zheers", c: "var(--zheers)", tag: "Radiação",
+    passive: "Aura / resistências de radiação (GE passivo)",
+    abilities: ["RadBurst","MutateForm","FissionShot","RadAura","ChernobylCharge","DegenField","HalfLife","Meltdown"]
+  },
+  {
+    id: "Skeetw", c: "var(--skeetw)", tag: "Aviário",
+    passive: "Voo planador — AirSpeedBonus no Jump (glide 3s)",
+    abilities: ["FogCloud","SkyDive","TalonStrike","WindGust","FeatherFlurry","Camouflage","ScoutEye","StormCall"]
+  }
+];
+
+const grid = document.getElementById("grid");
+const detail = document.getElementById("detail");
+const keys = document.querySelectorAll("#keys .key");
+
+function render() {
+  grid.innerHTML = SPECIES.map((s, si) => `
+    <article class="species" style="--c:${s.c}" data-i="${si}">
+      <div class="species-head">
+        <h3>${s.id}</h3>
+        <span class="tag">${s.tag}</span>
+      </div>
+      <div class="species-body">
+        <div class="passive">${s.passive}</div>
+        ${s.abilities.map((a, i) => `
+          <div class="ability"><span class="slot">${i+1}</span><b>${a}</b></div>
+        `).join("")}
+      </div>
+    </article>
+  `).join("");
+  grid.querySelectorAll(".species").forEach(el => {
+    el.addEventListener("click", () => selectSpecies(+el.dataset.i));
+  });
+}
+
+let selected = 0;
+function selectSpecies(i) {
+  selected = i;
+  document.querySelectorAll(".species").forEach((el, idx) => {
+    el.classList.toggle("active", idx === i);
+  });
+  const s = SPECIES[i];
+  detail.innerHTML = `<span style="color:${s.c.replace('var(','')}">●</span> <b style="color:#fff">${s.id}</b> selecionado — slots 1–8 mapeiam as ativas acima. Ultimate = slot 8 (${s.abilities[7]}).`;
+}
+
+function flashKey(n) {
+  keys.forEach((k, i) => k.classList.toggle("hi", i === n));
+  const s = SPECIES[selected];
+  const name = s.abilities[n];
+  detail.innerHTML = `<b style="color:#fff">Input slot ${n+1}</b> → <span style="color:var(--accent)">${s.id}.${name}</span> <span style="opacity:.7">(AbilityLocalInputPressed + TryActivateAbility)</span>`;
+  setTimeout(() => keys.forEach(k => k.classList.remove("hi")), 400);
+}
+
+window.addEventListener("keydown", (e) => {
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 8) flashKey(n - 1);
+});
+
+render();
+selectSpecies(0);
+</script>
+</body>
+</html>

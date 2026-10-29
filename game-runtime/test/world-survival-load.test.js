@@ -78,6 +78,11 @@ test('Priadus tsunami integrates 60 players and remains within the simulation bu
   const room = new MatchRoom3D({ id: 'priadus-load', seed: 'PRIADUS-60P', region: 'sa-east', capacity: 60, botFill: 0, airdrop: false, scenarioId: 'Priadus' });
   for (let i = 0; i < 60; i++) assert.ok(room.addPlayer(`p${i}`, `OPERADOR-${i}`));
   assert.ok(room.start('p0', 'belt'));
+  // Fase 24 — REFÚGIO PISÁVEL: floors são a mecânica de superfícies altas
+  // (mezaninos); uma plataforma em y=95 (> submergeBelowY 90) abriga 12 atores
+  // que CAEM de 120m e pousam (pouso varrido) — o tsunami completa o ciclo
+  // porque a partida não acaba (sobreviventes > 1).
+  room.physicsWorld.floors.push({ minX: -200, maxX: 200, minZ: -200, maxZ: 200, yMax: 95 });
   for (const [index, actor] of [...room.humans.values()].entries()) actor.y = index % 5 === 0 ? 120 : 0;
   room.tsunamiTimer = 179.99;
 
@@ -89,6 +94,10 @@ test('Priadus tsunami integrates 60 players and remains within the simulation bu
 
   assert.ok(events.filter((event) => event.type === 'tsunamiStart').length >= 60);
   assert.ok(events.some((event) => event.type === 'tsunamiEnd'));
+  // refúgio: os 12 que caíram de 120m pousaram em y=95 (acima da submersão)
+  const survivors = [...room.humans.values()].filter((a) => a.alive);
+  assert.ok(survivors.length === 12, `sobreviventes no refúgio: ${survivors.length}`);
+  for (const a of survivors) assert.ok(Math.abs(a.y - 95) < 1e-6, `y do refugiado: ${a.y}`);
   assert.ok([...room.humans.values()].some((actor) => actor.life < 100));
   assert.ok(elapsedMs < 2500, `60 jogadores × 40s simulados excederam 2500ms: ${elapsedMs.toFixed(1)}ms`);
 });

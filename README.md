@@ -63,6 +63,7 @@
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
 | **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 
 ---
@@ -532,6 +533,22 @@ Todos os sistemas abaixo estão implementados em C++20 no diretório `Unreal/Kha
 | **KhaaosDDoSProtection** | — | — | 50/s global, 5/IP, auto-block 30min |
 | **KhaaosMonitorDashboard** | — | — | Server/Game/Security metrics, 5s collection |
 | **KhaaosLaunchChecklist** | — | — | 14 checks de pre-launch no código UE5; execução/aceite dependem do build |
+
+### 16. Player Experience — Graphics & Characters
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosGraphicsPresetSubsystem** | .h + .cpp | 408 | 5 quality presets (Low→PhD), auto GPU VRAM detection, DLSS/FSR/XeSS/TSR upscaler, console command application |
+| **KhaaosDynamicResolution** | .h + .cpp | 291 | GPU-time dynamic resolution scaling, 4 modes (Off/Conservative/Aggressive/Adaptive), 8-frame moving average, hysteresis with separate scale up/down speeds |
+| **KhaaosMaterialOptimizer** | .h + .cpp | 227 | Texture streaming budget (9 groups), batch MID parameter updates, distant material optimization (emissive→0, mip bias, normal disable) |
+| **KhaaosSpeciesLODManager** | .h + .cpp | 340 | Per-species skeletal mesh LOD (5 levels: LOD0-LOD4), distance + screen-size thresholds, morph/emissive/VFX/bone count disable per LOD level |
+| **KhaaosPostProcessManager** | .h + .cpp | 390 | Species-specific post-process effects pipeline, 9 effect types (Bloom/CA/DoF/Distortion/MotionBlur/ColorGrading/Vignette/ScreenFade/Custom), fade blending, GPU budget optimizer |
+| **KhaaosCharacterCustomizer** | .h + .cpp | 280 | Morph targets (5 categories) + color channels (5 channels), 6 species-specific presets (9 morphs each), JSON serialization |
+| **KhaaosAnimationBlendManager** | .h + .cpp | 410 | Physics-driven animation per species, 8 physics parts (Tail/Wings/Crystal/GillPulse/CyberLimb/EarBounce/Membrane/None), spring-damper simulation, gameplay event reactions |
+| **KhaaosAccessorySocketSystem** | .h + .cpp | 283 | Socket-based cosmetic attachment with instanced meshes, draw call optimization, first-person visibility toggle |
+| **KhaaosSkinSystem** | .h + .cpp | — | Skin rarity pipeline (COMUM→MITICO), material/mesh/VFX overrides, cosmetic loadout (8 slots), shop ownership |
+| **KhaaosCosmeticValidator** | .h + .cpp | 340 | Server-side loadout validation, 8 result types, anti-cheat rate limiting (10 failures/300s → flag), species compatibility, battle pass tier checks |
+| **KhaaosGraphicsBenchmarkCommandlet** | .h + .cpp | 320 | Headless CI/CD benchmark (8 suites), validates presets/LOD/post-process/materials/DRS/cosmetics/customizer/animation |
 
 ### Módulos UE5 no Build.cs
 
@@ -1006,6 +1023,104 @@ Semana  1   4   8   11  15  23  28
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
 - [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
+
+---
+
+## Novos Subsistemas — Sessão 2026-10-27
+
+### Otimizações Gráficas (3 novos subsistemas C++20)
+
+1. **KhaaosGraphicsPresetSubsystem** (UEngineSubsystem) — 5 presets de qualidade adaptativos (Low/Medium/High/Ultra/PhD) com auto-detecção de GPU via VRAM, integração DLSS/FSR/XeSS/TSR, e aplicação automática de console commands. Tabela:
+
+   | Preset | Resolução | Target FPS | Shadow | AO    | Lumen | Upscaler |
+   |--------|-----------|------------|--------|-------|-------|----------|
+   | Low    | 720p      | 30         | Low    | Off   | No    | TSR      |
+   | Medium | 1080p     | 60         | Medium | SSAO  | No    | TSR      |
+   | High   | 1440p     | 60         | High   | GTAO  | Yes   | FSR      |
+   | Ultra  | 4K        | 60         | Ultra  | Lumen | Yes   | DLSS     |
+   | PhD    | 4K        | 120        | RT     | Lumen | Yes   | DLSS     |
+
+2. **KhaaosDynamicResolution** (UEngineSubsystem) — Escalação dinâmica de resolução baseada em utilização de GPU com média móvel de 8 frames e histerese. Modos: Off/Conservative (80-100%)/Aggressive (50-100%)/Adaptive. Mantém frame budget <16ms@60fps ou <8.33ms@120fps.
+
+3. **KhaaosMaterialOptimizer** (UEngineSubsystem) — Streaming budget adaptativo de textura (1GB-8GB pool baseado em VRAM), 9 grupos de textura com prioridades, batch updates de MaterialInstanceDynamic para redução de draw calls, e otimização de materiais distantes (mip bias, emissive shutoff, normal map LOD).
+
+### Personalização de Personagens (2 novos subsistemas C++20)
+
+4. **KhaaosCharacterCustomizer** (UActorComponent) — Sistema de morph targets com 7+ morphs comuns (Face_Width, Chin_Prominence, Nose_Size, Brow_Ridge, Body_Muscle, Body_Shoulders, Body_Waist) + 2 morphs species-specific por espécie (ex: Gill_Size/Webbing_Extent para Huran, Crystal_Size/Rune_Glow para Khael, Cyber_Implant/Optic_Lens para Venex, etc.). 5 canais de cor (SkinTone, EyeColor, HairColor, AccentColor, EmissiveColor) com paletas species-specific. Budget de 8 morphs ativos simultâneos. Serialização JSON para EOS Cloud Save.
+
+5. **KhaaosAccessorySocketSystem** (UActorComponent) — Sistema otimizado de attachment de acessórios cosméticos via sockets do skeletal mesh com instancing para redução de draw calls. Suporta 8 slots cosméticos (HEAD, BODY, LEGS, BACK, MELEE, PARACHUTE, EMOTE, BANNER). HideInFirstPerson para câmera FP. Draw call batching por material.
+
+### Economia 2PC (2 novos arquivos C++20 + 1 TypeScript)
+
+6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
+
+7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header. ✅ **IMPLEMENTADO (P0)** — ver detalhes abaixo.
+
+#### Implementação server-side 2PC (P0 — end-to-end com o cliente UE5)
+
+| Arquivo | Papel |
+|---|---|
+| `shared/schema.ts` | Tabela `economy_2pc_transactions` (escrow): PK uuid, `client_transaction_id` (fallback não-UUID), unique `(actor_id, idempotency_key)`, `request_hash` SHA-256, TTL `expires_at`, CHECKs de status/valor/destino. Conta contábil `system.2pc_escrow` adicionada ao ledger. |
+| `server/game/economy2pcService.ts` | Serviço 2PC: escrow double-entry (`wallet.weapons`→`system.2pc_escrow` linhas 1-2; commit linhas 3-4; abort linhas 5-6 — mesma key, linhas disjuntas), claim idempotente via unique index, `SELECT ... FOR UPDATE` na wallet, TTL 60s (10-300), GC preventivo no prepare + `recoverExpired()` + loop 15s (`startRecoveryLoop`, unref). |
+| `server/routes/economy-2pc.ts` | Rotas `POST /api/economy/2pc/prepare|commit|abort`, `GET /transactions/:id`, `GET /health`. Zod validation com o payload EXATO do UE5 (`transactionId, idempotencyKey, amountKrc:int, playerId:int, itemId, description, coordinatorNodeId, expiryTimestamp`; resposta com `prepared: bool` para `GetBoolField`). Auth: `x-2pc-node-secret` (`ECONOMY_2PC_NODE_SECRET`) > sessão web > modo dev `ue5-player-<playerId>` (recusado com secret configurado). |
+| `server/routes.ts` | `registerEconomy2PCRoutes(app)` + `economy2pcService.startRecoveryLoop()` registrados antes de `registerApiRoutes` (auth própria, sem OIDC). |
+| `migrations/0006_economy-2pc-escrow.sql` | Migration idempotente (IF NOT EXISTS / DROP CONSTRAINT IF EXISTS). |
+| `tests/official/economy-2pc-contract.test.ts` | 25 testes de contrato DB-free: payload UE5 nos schemas zod, GUID FGuid DigitsWithHyphensLower, plano de linhas 1-2/3-4/5-6, TTL bounds, resolve2PCActor (secret/sessão/dev). |
+| `tests/integration/economy-2pc.postgres.test.ts` | 15 testes E2E PostgreSQL: payload UE5 exato, anti double-spend (replay sem duplo débito), 402/404/409 por cenário, commit pós-abort, TTL→ESCROW_EXPIRED com reembolso, GC, invariante ΣDEBIT=ΣCREDIT por operationId. Bootstrap: mini-migrador idempotente de `migrations/*.sql`. |
+
+**Executar:**
+```bash
+# Contrato (sem DB)
+node --import tsx --test tests/official/economy-2pc-contract.test.ts
+
+# E2E (PostgreSQL real; host local + sufixo _test)
+TEST_DATABASE_URL="postgresql://127.0.0.1:5432/khaaos_2pc_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc.postgres.test.ts
+
+# Sem docker/psql local? Bridge PGlite (wire-protocol):
+node scripts/dev-pglite-socket.mjs --port 54329 &
+TEST_DATABASE_URL="postgresql://test:test@127.0.0.1:54329/khaaos_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc-observability.test.ts
+```
+
+#### Wire do cliente UE5 + observability (P0 — fase 2)
+
+| Componente | Papel |
+|---|---|
+| `Game/Economy/KhaaosArmorerForge.h/.cpp` | `TryPurchase` roteado pelo **Two-Phase Commit**: `BeginTransaction` + `PreparePhase` (escrow server-side) → bridge auto-commita → `Handle2PCPurchaseCompleted` entrega o item e sincroniza o Bankhaoos local; falha → `Handle2PCPurchaseFailed` (abort já com refund). `bUseTwoPhaseCommit` (default true) mantém fallback local para offline. Guardas: 1 compra em andamento por jogador, `EndPlay` aborta pendências (GC reembolsa órfãos), idempotency key `forge.<item>.<guid32>` (charset server-safe). |
+| `Game/Economy/KhaaosEconomyBridge2PC.cpp` | **Fixes de contrato**: include `Game/Economy/` (path antigo quebrado), HTTP aceita toda faixa 2xx (`prepare` fresh = 201), erro server lido de `code`/`message`, e **`playerId` enviado em TODAS as fases** (commit/abort/recovery) — em modo dev o ator sintético `ue5-player-<playerId>` precisa casar com o escrow, senão 403. |
+| `server/game/metricsRegistry.ts` | Registry Prometheus hand-rolled (zero deps): `khaaos_economy_2pc_requests_total{phase,result}`, `khaaos_economy_2pc_errors_total{phase}`, `khaaos_economy_2pc_phase_duration_ms` (histograma 12 buckets), `khaaos_economy_2pc_gc_recovered_total`, gauges `khaaos_economy_2pc_escrows{status}` e `khaaos_economy_2pc_oldest_prepared_age_seconds`, `khaaos_up`, `khaaos_build_info`, `khaaos_process_uptime_seconds`. |
+| `server/routes/metrics.ts` | `GET /metrics` (text/plain; version=0.0.4 — scrape do job `khaaos-economy-api`) e `GET /healthz` (**postgres/health**: SELECT 1 com latência + saúde do 2PC; 503 se banco fora). Registrados antes de todas as rotas (sem auth). |
+| `server/game/economy2pcService.ts` | Instrumentado: wrappers `prepare/commit/abort` medem duração + resultado (`prepared/committed/aborted/replayed/rejected`), GC conta recuperações. |
+| `infra/grafana/khaaos-economy-dashboard.json` | Painéis 2PC: Prepares/s, Commits/s, Aborts+GC/s, Escrows PREPARED abertos, escrow mais antigo (s), taxa por fase/resultado e latência p95 por fase (`histogram_quantile`). Provisionado em produção via `infra/deploy/docker-compose.production.yml`. |
+| `tests/integration/economy-2pc-observability.test.ts` | 8 testes E2E HTTP (supertest + PostgreSQL real): payload Prometheus canônico, counters incrementam exatamente 1 por fase, abort/rejected refletidos, `/api/economy/2pc/health` com escrows, `/healthz` 200/503 (outage simulado), `/metrics` de pé com banco fora. |
+| CI | `05-test-integration.yml`: YAML corrigido + `npm run check` + PostgreSQL real (service container) rodando E2E + observability. `ue5-headless-compile.yml`: step de UHT pré-compile + `branches` corrigido. `13-monitoring.yml`: valida prometheus.yml, dashboards JSON e métricas 2PC (antes era JSON inválido). |
+
+### CI/CD e Pipeline
+
+8. **.github/workflows/ue5-headless-compile.yml** — GitHub Actions workflow 8 steps: checkout→LFS pull→nvidia-smi→Xorg init→GenerateProjectFiles+Build→KhaaosVFXValidation Commandlet→Log analysis→Artifact upload. Rejeita PRs se [FAIL] detectado nos 48 abilities ou 27 VFX.
+
+9. **scripts/pipeline/parse_acid_rain_volumes.py** — Parser de volumes de chuva ácida do mapa Barburhen W1/C1. Lê .umap.json, extrai ABarburhenAcidRainVolume actors, calcula damage_per_tick (0.01 = -1% Vitality por tick de 10s), exporta CSV para KhaaosDataTables C++.
+
+### Infraestrutura Atualizada
+
+10. **Terraform variables.tf** — Instância default atualizada de `ecs.vgn6i-m4.xlarge` (DEPRECATED) para `ecs.gn6i-c4g1.xlarge` (NVIDIA T4 física, 16GB VRAM, sem licença GRID). Nova variável `gpu_driver_type` (tesla/grid).
+
+11. **gpu_machine_bootstrap.sh v4.0** — Suporte a driver Tesla (gn6i T4 física, sem GRID) e GRID (vgn7i-vws/sgn8ia com licença vWS). Auto-detecção de BusID via lspci, geração automática de xorg.conf.d com BusID correto.
+
+### Dados Cosméticos (3 novos JSON)
+
+12. **emote_catalog.json** — 13 emotes em 5 categorias (EXPRESSAO, ACAO, DANCA, MEDITACAO, INTERACAO) e 5 raridades. 5 species-exclusive (Huran GillFlare, Onith TailWhip, Venex SystemCheck, Skeetw SpreadWings, Zheers Oath).
+
+13. **skin_shop_catalog.json** — 12 itens de loja: 8 skins, 2 gliders, 1 banner, 1 weapon skin. Pricing 800-8000 KRC. Daily deals (24h rotation, 10-30% discount) e Featured items (7d rotation).
+
+14. **battle_pass_season1.json** — Temporada 1 "Estação da Convergência": 100 tiers, Free Track (20 rewards, 2800 KRC total) + Premium Track (20 rewards, 4200 KRC total). Tier 100 Premium: Skeetw Solar Phoenix (MITICO).
+
+### Higienização de Repositório
+
+- Removido diretório `script/` (singular) — conteúdo unificado em `scripts/` (plural)
+- Removido diretório `.aistudio/` (artefatos temporários de IDE)
+- parse_acid_rain_volumes.py validado: 4 volumes exportados para CSV
 
 ---
 

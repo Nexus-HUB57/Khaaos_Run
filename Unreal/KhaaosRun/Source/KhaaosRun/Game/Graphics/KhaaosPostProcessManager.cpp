@@ -1,511 +1,344 @@
-// Khaaos Run - Devs Ph.D | UE5.8 Battle Royale
-// KhaaosPostProcessManager.cpp
+// ==============================================================================
+// KHAAOS RUN - PLATAFORMA BATTLE ROYALE (MUNDO DEVS PH.D)
+// IMPLEMENTAÇÃO: UKhaaosPostProcessManager
+// Species-specific post-process effects com blending e GPU budget.
+// DATA: 2026-10-27
+// ==============================================================================
 
-#include "Game/Graphics/KhaaosPostProcessManager.h"
-#include "Engine/World.h"
-#include "Kismet/GameplayStatics.h"
+#include "KhaaosPostProcessManager.h"
+#include "Engine/Engine.h"
 
-// ============================================================================
-// UTickableWorldSubsystem interface
-// ============================================================================
-
-void UKhaaosPostProcessManager::Initialize(FSubsystemCollectionInitialization& Dependencies)
+void UKhaaosPostProcessManager::Initialize(FSubsystemCollectionBase& Collection)
 {
-	Super::Initialize(Dependencies);
+    Super::Initialize(Collection);
 
-	InitializeDefaultProfiles();
-	FindOrCreatePostProcessVolume();
+    // Construir perfis para todas as 6 espécies
+    SpeciesProfiles.Add(EKhaaosSpecies::HURAN,  BuildSpeciesPostProfile(EKhaaosSpecies::HURAN));
+    SpeciesProfiles.Add(EKhaaosSpecies::KHAEL,  BuildSpeciesPostProfile(EKhaaosSpecies::KHAEL));
+    SpeciesProfiles.Add(EKhaaosSpecies::VENEX,  BuildSpeciesPostProfile(EKhaaosSpecies::VENEX));
+    SpeciesProfiles.Add(EKhaaosSpecies::ONITH,  BuildSpeciesPostProfile(EKhaaosSpecies::ONITH));
+    SpeciesProfiles.Add(EKhaaosSpecies::ZHEERS, BuildSpeciesPostProfile(EKhaaosSpecies::ZHEERS));
+    SpeciesProfiles.Add(EKhaaosSpecies::SKEETW, BuildSpeciesPostProfile(EKhaaosSpecies::SKEETW));
 
-	UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Initialized with %d world profiles"), WorldProfiles.Num());
-
-	// Apply the default profile (CIGKV hub world) immediately
-	if (WorldProfiles.Contains(CurrentProfile))
-	{
-		ApplyProfileToVolume(WorldProfiles[CurrentProfile]);
-	}
+    UE_LOG(LogTemp, Display, TEXT("[PostProcess] Subsystem inicializado. 6 perfis de pós-processamento."));
 }
 
-void UKhaaosPostProcessManager::Deinitialize()
+void UKhaaosPostProcessManager::ActivateSpeciesEffects(EKhaaosSpecies Species, float BlendTime)
 {
-	WorldProfiles.Empty();
-	PostProcessVolume = nullptr;
-	bIsTransitioning = false;
-	ClearAllScreenEffects();
+    const FKhaaosSpeciesPostProfile* Profile = SpeciesProfiles.Find(Species);
+    if (!Profile) return;
 
-	Super::Deinitialize();
+    for (const FKhaaosPostEffectEntry& Effect : Profile->Effects)
+    {
+        const FName Key = MakeEffectKey(Species, Effect.EffectType);
 
-	UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Deinitialized"));
+        ActiveEffects.Add(Key, Effect);
+        ActiveEffectIntensities.Add(Key, 0.0f); // Começa em 0, faz fade in
+        EffectFadeTimers.Add(Key, BlendTime > 0.0f ? BlendTime : Effect.FadeInTime);
+
+        UE_LOG(LogTemp, Verbose, TEXT("[PostProcess] Ativando efeito %s para espécie %s"),
+            *UEnum::GetDisplayValueAsText(Effect.EffectType).ToString(),
+            *UEnum::GetDisplayValueAsText(Species).ToString());
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[PostProcess] Efeitos ativados para %s. Custo estimado: %.2fms"),
+        *UEnum::GetDisplayValueAsText(Species).ToString(), Profile->TotalGPUTimeMs);
 }
 
-void UKhaaosPostProcessManager::Tick(float DeltaTime)
+void UKhaaosPostProcessManager::DeactivateSpeciesEffects(EKhaaosSpecies Species, float BlendTime)
 {
-	Super::Tick(DeltaTime);
+    const FKhaaosSpeciesPostProfile* Profile = SpeciesProfiles.Find(Species);
+    if (!Profile) return;
 
-	if (bIsTransitioning)
-	{
-		// Lerp over 2 seconds
-		ProfileLerpAlpha += DeltaTime / 2.0f;
+    for (const FKhaaosPostEffectEntry& Effect : Profile->Effects)
+    {
+        const FName Key = MakeEffectKey(Species, Effect.EffectType);
 
-		if (ProfileLerpAlpha >= 1.0f)
-		{
-			// Transition complete
-			ProfileLerpAlpha = 1.0f;
-			bIsTransitioning = false;
-			CurrentProfile = TargetProfile;
-
-			if (WorldProfiles.Contains(CurrentProfile))
-			{
-				ApplyProfileToVolume(WorldProfiles[CurrentProfile]);
-			}
-
-			UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Transition complete to profile %d"),
-				static_cast<int32>(CurrentProfile));
-		}
-		else
-		{
-			LerpProfiles();
-		}
-	}
-
-	// Always decay screen effects
-	UpdateScreenEffects(DeltaTime);
+        if (ActiveEffects.Contains(Key))
+        {
+            // Iniciar fade out
+            EffectFadeTimers.Add(Key, -(BlendTime > 0.0f ? BlendTime : Effect.FadeOutTime));
+        }
+    }
 }
 
-TStatId UKhaaosPostProcessManager::GetStatId() const
+void UKhaaosPostProcessManager::ActivateGlobalEffect(EKhaaosPostEffectType EffectType, float Intensity, float Duration)
 {
-	RETURN_STAT_ID(STAT_Tickables);
+    const FName Key = MakeEffectKey(EKhaaosSpecies::NONE, EffectType);
+
+    FKhaaosPostEffectEntry GlobalEffect;
+    GlobalEffect.EffectType = EffectType;
+    GlobalEffect.Species = EKhaaosSpecies::NONE;
+    GlobalEffect.Intensity = Intensity;
+    GlobalEffect.bIsGlobal = true;
+    GlobalEffect.FadeInTime = 0.3f;
+    GlobalEffect.FadeOutTime = 0.5f;
+    GlobalEffect.EstimatedGPUTimeMs = 0.5f;
+    GlobalEffect.Priority = 10; // Alta prioridade para efeitos globais
+
+    ActiveEffects.Add(Key, GlobalEffect);
+    ActiveEffectIntensities.Add(Key, 0.0f);
+    EffectFadeTimers.Add(Key, GlobalEffect.FadeInTime);
+
+    // Se Duration > 0, auto-desativar após Duration segundos
+    if (Duration > 0.0f)
+    {
+        // Timer será tratado no UpdatePostProcess
+        EffectFadeTimers.Add(FName(*Key.ToString() + TEXT("_AutoOff")), Duration);
+    }
 }
 
-// ============================================================================
-// Profile management
-// ============================================================================
-
-void UKhaaosPostProcessManager::SetWorldProfile(EKhaaosWorldProfile Profile)
+void UKhaaosPostProcessManager::UpdatePostProcess(float DeltaTime)
 {
-	if (Profile == CurrentProfile && !bIsTransitioning)
-	{
-		return;
-	}
+    ActiveGPUTimeMs = 0.0f;
 
-	TargetProfile = Profile;
-	bIsTransitioning = true;
-	ProfileLerpAlpha = 0.0f;
+    // Atualizar fading para todos os efeitos ativos
+    TArray<FName> KeysToRemove;
+    for (auto& Pair : ActiveEffectIntensities)
+    {
+        const FName& Key = Pair.Key;
+        float& CurrentIntensity = Pair.Value;
 
-	UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Starting transition from %d to %d"),
-		static_cast<int32>(CurrentProfile), static_cast<int32>(TargetProfile));
+        if (const FKhaaosPostEffectEntry* Effect = ActiveEffects.Find(Key))
+        {
+            if (float* FadeTimer = EffectFadeTimers.Find(Key))
+            {
+                if (*FadeTimer > 0.0f)
+                {
+                    // Fade in
+                    *FadeTimer -= DeltaTime;
+                    const float BlendFactor = 1.0f - FMath::Clamp(*FadeTimer / Effect->FadeInTime, 0.0f, 1.0f);
+                    CurrentIntensity = Effect->Intensity * BlendFactor;
+                }
+                else if (*FadeTimer < 0.0f)
+                {
+                    // Fade out (timer negativo = fading out)
+                    *FadeTimer += DeltaTime;
+                    const float BlendFactor = FMath::Clamp(-(*FadeTimer) / Effect->FadeOutTime, 0.0f, 1.0f);
+                    CurrentIntensity = Effect->Intensity * BlendFactor;
+
+                    if (CurrentIntensity <= 0.01f)
+                    {
+                        KeysToRemove.Add(Key);
+                    }
+                }
+            }
+
+            // Aplicar ao post process volume
+            if (CurrentIntensity > 0.01f)
+            {
+                ApplyEffectToPostProcessVolume(*Effect, CurrentIntensity);
+                ActiveGPUTimeMs += Effect->EstimatedGPUTimeMs * CurrentIntensity;
+            }
+        }
+    }
+
+    // Remover efeitos que completaram fade out
+    for (const FName& Key : KeysToRemove)
+    {
+        ActiveEffects.Remove(Key);
+        ActiveEffectIntensities.Remove(Key);
+        EffectFadeTimers.Remove(Key);
+    }
 }
 
-FKhaaosPostProcessProfile UKhaaosPostProcessManager::GetProfileSettings(EKhaaosWorldProfile Profile) const
+const FKhaaosSpeciesPostProfile* UKhaaosPostProcessManager::GetSpeciesProfile(EKhaaosSpecies Species) const
 {
-	if (const FKhaaosPostProcessProfile* Found = WorldProfiles.Find(Profile))
-	{
-		return *Found;
-	}
-	return FKhaaosPostProcessProfile();
+    return SpeciesProfiles.Find(Species);
 }
 
-// ============================================================================
-// Screen effects - Gameplay triggers
-// ============================================================================
-
-void UKhaaosPostProcessManager::TriggerDamageVignette(float Intensity)
+void UKhaaosPostProcessManager::OptimizeForBudget(float TargetGPUTimeMs)
 {
-	ScreenEffects.DamageVignetteIntensity = FMath::Clamp(Intensity, 0.0f, 1.0f);
+    if (ActiveGPUTimeMs <= TargetGPUTimeMs) return;
+
+    // Coletar efeitos ordenados por prioridade (baixa prioridade cortada primeiro)
+    TArray<TPair<int32, FName>> EffectsByPriority;
+    for (const auto& Pair : ActiveEffects)
+    {
+        EffectsByPriority.Add(TPair<int32, FName>(Pair.Value.Priority, Pair.Key));
+    }
+
+    EffectsByPriority.Sort([](const TPair<int32, FName>& A, const TPair<int32, FName>& B)
+    {
+        return A.Key < B.Key; // Ascending — baixa prioridade primeiro
+    });
+
+    // Cortar efeitos de baixa prioridade até ficar dentro do budget
+    float RemainingCost = ActiveGPUTimeMs;
+    for (const auto& Pair : EffectsByPriority)
+    {
+        if (RemainingCost <= TargetGPUTimeMs) break;
+
+        if (const FKhaaosPostEffectEntry* Effect = ActiveEffects.Find(Pair.Value))
+        {
+            // Reduzir intensidade proporcionalmente
+            const float ReductionNeeded = (RemainingCost - TargetGPUTimeMs) / Effect->EstimatedGPUTimeMs;
+            const float NewIntensity = FMath::Clamp(1.0f - ReductionNeeded, 0.0f, 1.0f);
+
+            if (NewIntensity < 0.1f)
+            {
+                // Desativar completamente
+                EffectFadeTimers.Add(Pair.Value, -(Effect->FadeOutTime));
+            }
+            else
+            {
+                ActiveEffectIntensities.Add(Pair.Value, NewIntensity * Effect->Intensity);
+            }
+
+            RemainingCost -= Effect->EstimatedGPUTimeMs * (1.0f - NewIntensity);
+        }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[PostProcess] Budget otimizado: %.2fms -> target %.2fms"),
+        ActiveGPUTimeMs, TargetGPUTimeMs);
 }
 
-void UKhaaosPostProcessManager::TriggerLowHealthPulse()
+bool UKhaaosPostProcessManager::IsEffectActive(EKhaaosSpecies Species, EKhaaosPostEffectType EffectType) const
 {
-	ScreenEffects.LowHealthPulse = 1.0f;
+    return ActiveEffects.Contains(MakeEffectKey(Species, EffectType));
 }
 
-void UKhaaosPostProcessManager::StopLowHealthPulse()
+void UKhaaosPostProcessManager::DumpActiveEffects() const
 {
-	ScreenEffects.LowHealthPulse = 0.0f;
+    UE_LOG(LogTemp, Display, TEXT("[PostProcess] === Efeitos Ativos (GPU: %.2fms) ==="), ActiveGPUTimeMs);
+    for (const auto& Pair : ActiveEffects)
+    {
+        const FKhaaosPostEffectEntry& Effect = Pair.Value;
+        const float Intensity = ActiveEffectIntensities.FindRef(Pair.Key);
+        UE_LOG(LogTemp, Display, TEXT("  %s | Species=%s | Intensity=%.2f | GPU=%.2fms | Priority=%d"),
+            *UEnum::GetDisplayValueAsText(Effect.EffectType).ToString(),
+            *UEnum::GetDisplayValueAsText(Effect.Species).ToString(),
+            Intensity, Effect.EstimatedGPUTimeMs, Effect.Priority);
+    }
 }
 
-void UKhaaosPostProcessManager::TriggerZoneWarning(float Intensity)
+void UKhaaosPostProcessManager::ApplyEffectToPostProcessVolume(const FKhaaosPostEffectEntry& Effect, float CurrentIntensity)
 {
-	ScreenEffects.ZoneWarningIntensity = FMath::Clamp(Intensity, 0.0f, 1.0f);
+    if (!GEngine) return;
+
+    // Aplicar efeitos via console commands do UE5
+    switch (Effect.EffectType)
+    {
+    case EKhaaosPostEffectType::Bloom:
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.BloomIntensity %.2f"), CurrentIntensity * 2.0f));
+        GEngine->Exec(nullptr, TEXT("r.BloomQuality 3"));
+        break;
+
+    case EKhaaosPostEffectType::ChromaticAberration:
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.SceneChromaticAberration %.3f"), CurrentIntensity * 0.005f));
+        break;
+
+    case EKhaaosPostEffectType::DepthOfField:
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.DepthOfFieldQuality %d"), CurrentIntensity > 0.5f ? 3 : 2));
+        break;
+
+    case EKhaaosPostEffectType::Distortion:
+        // Species-specific: Huran underwater vs Skeetw wind
+        if (Effect.Species == EKhaaosSpecies::HURAN)
+        {
+            GEngine->Exec(nullptr, *FString::Printf(TEXT("r.UnderwaterDistortion %.2f"), CurrentIntensity));
+        }
+        break;
+
+    case EKhaaosPostEffectType::ColorGrading:
+        // LUT selection based on species
+        if (Effect.Species == EKhaaosSpecies::ONITH)
+        {
+            GEngine->Exec(nullptr, TEXT("r.ColorGradingLUT 2")); // Thermal LUT
+        }
+        else if (Effect.Species == EKhaaosSpecies::VENEX)
+        {
+            GEngine->Exec(nullptr, TEXT("r.ColorGradingLUT 3")); // Cyber LUT
+        }
+        break;
+
+    case EKhaaosPostEffectType::MotionBlur:
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.MotionBlurQuality %d"), CurrentIntensity > 0.5f ? 2 : 1));
+        break;
+
+    case EKhaaosPostEffectType::Vignette:
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.VignetteIntensity %.2f"), CurrentIntensity * 0.4f));
+        break;
+
+    default:
+        break;
+    }
 }
 
-void UKhaaosPostProcessManager::TriggerHealOverlay(float Intensity)
+FKhaaosSpeciesPostProfile UKhaaosPostProcessManager::BuildSpeciesPostProfile(EKhaaosSpecies Species) const
 {
-	ScreenEffects.HealOverlayIntensity = FMath::Clamp(Intensity, 0.0f, 1.0f);
+    FKhaaosSpeciesPostProfile Profile;
+    Profile.Species = Species;
+
+    switch (Species)
+    {
+    case EKhaaosSpecies::HURAN:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::Bloom,              Species, 0.8f, 0.3f, 0.8f, 0.8f, 8, false },  // Bioluminescent bloom
+            { EKhaaosPostEffectType::Distortion,         Species, 0.5f, 0.5f, 1.0f, 0.6f, 5, false },  // Underwater caustics
+            { EKhaaosPostEffectType::ColorGrading,       Species, 0.3f, 0.3f, 0.5f, 0.3f, 3, false },  // Aquatic tint
+            { EKhaaosPostEffectType::Vignette,           Species, 0.2f, 0.5f, 0.8f, 0.2f, 2, false },  // Depth pressure
+        };
+        break;
+
+    case EKhaaosSpecies::KHAEL:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::Bloom,              Species, 1.0f, 0.2f, 0.5f, 1.2f, 9, false },  // Arcane glow bloom (intenso)
+            { EKhaaosPostEffectType::ChromaticAberration,Species, 0.4f, 0.3f, 0.6f, 0.4f, 6, false },  // Crystal refraction
+            { EKhaaosPostEffectType::ColorGrading,       Species, 0.3f, 0.3f, 0.5f, 0.3f, 3, false },  // Arcane LUT
+        };
+        break;
+
+    case EKhaaosSpecies::VENEX:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::ChromaticAberration,Species, 0.6f, 0.1f, 0.3f, 0.5f, 7, false },  // Cyber implant glow
+            { EKhaaosPostEffectType::Bloom,              Species, 0.5f, 0.2f, 0.4f, 0.6f, 6, false },  // Chrome reflections
+            { EKhaaosPostEffectType::ColorGrading,       Species, 0.4f, 0.2f, 0.4f, 0.3f, 4, false },  // Cyber LUT
+            { EKhaaosPostEffectType::Vignette,           Species, 0.3f, 0.3f, 0.5f, 0.2f, 2, false },  // HUD vignette
+        };
+        break;
+
+    case EKhaaosSpecies::ONITH:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::ColorGrading,       Species, 0.6f, 0.3f, 0.5f, 0.4f, 7, false },  // Thermal vision tint
+            { EKhaaosPostEffectType::Bloom,              Species, 0.4f, 0.3f, 0.6f, 0.5f, 5, false },  // Chitin iridescence
+            { EKhaaosPostEffectType::Distortion,         Species, 0.2f, 0.5f, 0.8f, 0.3f, 3, false },  // Thermal shimmer
+        };
+        break;
+
+    case EKhaaosSpecies::ZHEERS:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::Bloom,              Species, 0.5f, 0.3f, 0.6f, 0.6f, 6, false },  // Tattoo glow
+            { EKhaaosPostEffectType::Vignette,           Species, 0.4f, 0.5f, 1.0f, 0.2f, 4, false },  // Shadow meld emphasis
+            { EKhaaosPostEffectType::ColorGrading,       Species, 0.3f, 0.3f, 0.5f, 0.3f, 3, false },  // Shadow LUT
+        };
+        break;
+
+    case EKhaaosSpecies::SKEETW:
+        Profile.Effects = {
+            { EKhaaosPostEffectType::Bloom,              Species, 0.7f, 0.2f, 0.5f, 0.8f, 7, false },  // Feather iridescence
+            { EKhaaosPostEffectType::MotionBlur,         Species, 0.5f, 0.3f, 0.6f, 0.4f, 5, false },  // Avian motion blur
+            { EKhaaosPostEffectType::Distortion,         Species, 0.3f, 0.5f, 0.8f, 0.4f, 4, false },  // Wind distortion
+            { EKhaaosPostEffectType::ChromaticAberration,Species, 0.2f, 0.3f, 0.5f, 0.3f, 3, false },  // Iridescence CA
+        };
+        break;
+
+    default:
+        break;
+    }
+
+    // Calcular custo total
+    for (const auto& Effect : Profile.Effects)
+    {
+        Profile.TotalGPUTimeMs += Effect.EstimatedGPUTimeMs;
+    }
+
+    return Profile;
 }
 
-void UKhaaosPostProcessManager::TriggerEliminationFlash()
+FName UKhaaosPostProcessManager::MakeEffectKey(EKhaaosSpecies Species, EKhaaosPostEffectType Type)
 {
-	ScreenEffects.EliminationFlash = 1.0f;
-}
-
-void UKhaaosPostProcessManager::TriggerShieldBreak()
-{
-	ScreenEffects.ShieldBreakFlash = 1.0f;
-}
-
-void UKhaaosPostProcessManager::SetKillStreakGlow(int32 KillCount)
-{
-	ScreenEffects.KillStreakGlow = FMath::Min(KillCount * 0.2f, 1.0f);
-}
-
-void UKhaaosPostProcessManager::ClearAllScreenEffects()
-{
-	ScreenEffects.DamageVignetteIntensity = 0.0f;
-	ScreenEffects.LowHealthPulse = 0.0f;
-	ScreenEffects.ZoneWarningIntensity = 0.0f;
-	ScreenEffects.HealOverlayIntensity = 0.0f;
-	ScreenEffects.EliminationFlash = 0.0f;
-	ScreenEffects.ShieldBreakFlash = 0.0f;
-	ScreenEffects.KillStreakGlow = 0.0f;
-}
-
-// ============================================================================
-// Rendering overrides
-// ============================================================================
-
-void UKhaaosPostProcessManager::ForceLumenQuality(int32 Quality)
-{
-	ForcedLumenQuality = FMath::Clamp(Quality, 0, 3);
-	bLumenOverridden = true;
-
-	UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Lumen quality forced to %d"), ForcedLumenQuality);
-}
-
-void UKhaaosPostProcessManager::SetNaniteEnabled(bool bEnabled)
-{
-	// Nanite enable/disable is typically set via console or project settings.
-	// This method provides a Blueprint-accessible toggle for runtime control.
-	if (UWorld* World = GetWorld())
-	{
-		if (bEnabled)
-		{
-			World->ExecuteConsoleCommand(TEXT("r.Nanite 1"), nullptr);
-		}
-		else
-		{
-			World->ExecuteConsoleCommand(TEXT("r.Nanite 0"), nullptr);
-		}
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Nanite %s"), bEnabled ? TEXT("enabled") : TEXT("disabled"));
-}
-
-// ============================================================================
-// Private helpers
-// ============================================================================
-
-void UKhaaosPostProcessManager::InitializeDefaultProfiles()
-{
-	WorldProfiles.Empty(5);
-
-	// ---- BARBURHEN: Hot desert - warm orange grading, heat haze ----
-	{
-		FKhaaosPostProcessProfile Profile;
-		Profile.ColorGradingTint       = FLinearColor(1.0f, 0.85f, 0.7f);
-		Profile.VignetteIntensity      = 0.4f;
-		Profile.BloomIntensity         = 0.6f;
-		Profile.ExposureCompensation   = 0.2f;
-		Profile.ChromaticAberration    = 0.003f;
-		Profile.DepthOfFieldFstop      = 2.8f;
-		Profile.MotionBlurAmount       = 0.1f;
-		Profile.AmbientOcclusionIntensity = 0.6f;
-		Profile.LumenQuality           = 2;
-		Profile.NaniteEnabled          = true;
-		Profile.ShadowCascades         = 4;
-		Profile.FogDensity             = 0.02f;
-		Profile.FogColor               = FLinearColor::White;
-		Profile.HeatHazeIntensity      = 0.5f;
-		Profile.FrostVignetteIntensity = 0.0f;
-		WorldProfiles.Add(EKhaaosWorldProfile::BARBURHEN, Profile);
-	}
-
-	// ---- PRIADUS: Frozen tundra - cool blue grading, frost vignette ----
-	{
-		FKhaaosPostProcessProfile Profile;
-		Profile.ColorGradingTint       = FLinearColor(0.7f, 0.85f, 1.0f);
-		Profile.VignetteIntensity      = 0.35f;
-		Profile.BloomIntensity         = 0.4f;
-		Profile.ExposureCompensation   = -0.1f;
-		Profile.ChromaticAberration    = 0.001f;
-		Profile.DepthOfFieldFstop      = 2.0f;
-		Profile.MotionBlurAmount       = 0.15f;
-		Profile.AmbientOcclusionIntensity = 0.7f;
-		Profile.LumenQuality           = 3;
-		Profile.NaniteEnabled          = true;
-		Profile.ShadowCascades         = 5;
-		Profile.FogDensity             = 0.01f;
-		Profile.FogColor               = FLinearColor(0.6f, 0.7f, 1.0f); // blue fog
-		Profile.HeatHazeIntensity      = 0.0f;
-		Profile.FrostVignetteIntensity = 0.6f;
-		WorldProfiles.Add(EKhaaosWorldProfile::PRIADUS, Profile);
-	}
-
-	// ---- CKESALTH: Toxic jungle - green haze, poison particles ----
-	{
-		FKhaaosPostProcessProfile Profile;
-		Profile.ColorGradingTint       = FLinearColor(0.7f, 1.0f, 0.7f);
-		Profile.VignetteIntensity      = 0.5f;
-		Profile.BloomIntensity         = 0.3f;
-		Profile.ExposureCompensation   = -0.2f;
-		Profile.ChromaticAberration    = 0.002f;
-		Profile.DepthOfFieldFstop      = 3.5f;
-		Profile.MotionBlurAmount       = 0.1f;
-		Profile.AmbientOcclusionIntensity = 0.5f;
-		Profile.LumenQuality           = 2;
-		Profile.NaniteEnabled          = true;
-		Profile.ShadowCascades         = 4;
-		Profile.FogDensity             = 0.05f;
-		Profile.FogColor               = FLinearColor(0.5f, 1.0f, 0.5f); // green fog
-		Profile.HeatHazeIntensity      = 0.0f;
-		Profile.FrostVignetteIntensity = 0.0f;
-		WorldProfiles.Add(EKhaaosWorldProfile::CKESALTH, Profile);
-	}
-
-	// ---- ARUKHEEA: Crystal caverns - purple/teal, bloom heavy ----
-	{
-		FKhaaosPostProcessProfile Profile;
-		Profile.ColorGradingTint       = FLinearColor(0.8f, 0.7f, 1.0f);
-		Profile.VignetteIntensity      = 0.2f;
-		Profile.BloomIntensity         = 0.8f;
-		Profile.ExposureCompensation   = 0.1f;
-		Profile.ChromaticAberration    = 0.0f;
-		Profile.DepthOfFieldFstop      = 1.8f;
-		Profile.MotionBlurAmount       = 0.05f;
-		Profile.AmbientOcclusionIntensity = 0.3f;
-		Profile.LumenQuality           = 3;
-		Profile.NaniteEnabled          = true;
-		Profile.ShadowCascades         = 5;
-		Profile.FogDensity             = 0.003f;
-		Profile.FogColor               = FLinearColor(0.7f, 0.5f, 1.0f); // purple fog
-		Profile.HeatHazeIntensity      = 0.0f;
-		Profile.FrostVignetteIntensity = 0.0f;
-		WorldProfiles.Add(EKhaaosWorldProfile::ARUKHEEA, Profile);
-	}
-
-	// ---- CIGKV: Hub world - neutral balanced, subtle vignette ----
-	{
-		FKhaaosPostProcessProfile Profile;
-		Profile.ColorGradingTint       = FLinearColor(1.0f, 1.0f, 1.0f);
-		Profile.VignetteIntensity      = 0.15f;
-		Profile.BloomIntensity         = 0.2f;
-		Profile.ExposureCompensation   = 0.0f;
-		Profile.ChromaticAberration    = 0.0f;
-		Profile.DepthOfFieldFstop      = 4.0f;
-		Profile.MotionBlurAmount       = 0.05f;
-		Profile.AmbientOcclusionIntensity = 0.4f;
-		Profile.LumenQuality           = 2;
-		Profile.NaniteEnabled          = true;
-		Profile.ShadowCascades         = 3;
-		Profile.FogDensity             = 0.0f;
-		Profile.FogColor               = FLinearColor::White;
-		Profile.HeatHazeIntensity      = 0.0f;
-		Profile.FrostVignetteIntensity = 0.0f;
-		WorldProfiles.Add(EKhaaosWorldProfile::CIGKV, Profile);
-	}
-}
-
-void UKhaaosPostProcessManager::ApplyProfileToVolume(const FKhaaosPostProcessProfile& Profile)
-{
-	if (!PostProcessVolume)
-	{
-		return;
-	}
-
-	PostProcessVolume->bEnabled = true;
-	PostProcessVolume->bUnbound = true;
-
-	// Color grading tint
-	{
-		FPostProcessVolume::FPostProcessVolumeEntry& Entry = PostProcessVolume->Settings.ColorSaturation;
-		// Note: Full color grading is typically set via Material / Blendable.
-		// Here we set the key post-process overrides on the volume.
-	}
-
-	// Vignette
-	PostProcessVolume->Settings.VignetteIntensity.OverrideValue = Profile.VignetteIntensity;
-	PostProcessVolume->Settings.VignetteIntensity.bOverride = true;
-
-	// Bloom
-	PostProcessVolume->Settings.BloomIntensity.OverrideValue = Profile.BloomIntensity;
-	PostProcessVolume->Settings.BloomIntensity.bOverride = true;
-
-	// Exposure compensation
-	PostProcessVolume->Settings.AutoExposureBias.OverrideValue = Profile.ExposureCompensation;
-	PostProcessVolume->Settings.AutoExposureBias.bOverride = true;
-
-	// Chromatic aberration
-	PostProcessVolume->Settings.SceneFringeIntensity.OverrideValue = Profile.ChromaticAberration;
-	PostProcessVolume->Settings.SceneFringeIntensity.bOverride = true;
-
-	// Depth of field
-	PostProcessVolume->Settings.DepthOfFieldFstop.OverrideValue = Profile.DepthOfFieldFstop;
-	PostProcessVolume->Settings.DepthOfFieldFstop.bOverride = true;
-
-	// Motion blur
-	PostProcessVolume->Settings.MotionBlurAmount.OverrideValue = Profile.MotionBlurAmount;
-	PostProcessVolume->Settings.MotionBlurAmount.bOverride = true;
-
-	// Ambient occlusion (GTAO intensity)
-	PostProcessVolume->Settings.AmbientOcclusionIntensity.OverrideValue = Profile.AmbientOcclusionIntensity;
-	PostProcessVolume->Settings.AmbientOcclusionIntensity.bOverride = true;
-
-	// Lumen quality (applied via console command if overridden, otherwise from profile)
-	if (bLumenOverridden)
-	{
-		if (UWorld* World = GetWorld())
-		{
-			const FString Cmd = FString::Printf(TEXT("r.Lumen.ReflectionQuality %d"), ForcedLumenQuality);
-			World->ExecuteConsoleCommand(*Cmd, nullptr);
-		}
-	}
-	else
-	{
-		if (UWorld* World = GetWorld())
-		{
-			const FString Cmd = FString::Printf(TEXT("r.Lumen.ReflectionQuality %d"), Profile.LumenQuality);
-			World->ExecuteConsoleCommand(*Cmd, nullptr);
-		}
-	}
-
-	// Shadow cascades
-	if (UWorld* World = GetWorld())
-	{
-		const FString ShadowCmd = FString::Printf(TEXT("r.Shadow.CSM.MaxCascades %d"), Profile.ShadowCascades);
-		World->ExecuteConsoleCommand(*ShadowCmd, nullptr);
-	}
-}
-
-void UKhaaosPostProcessManager::LerpProfiles()
-{
-	if (!WorldProfiles.Contains(CurrentProfile) || !WorldProfiles.Contains(TargetProfile))
-	{
-		return;
-	}
-
-	const FKhaaosPostProcessProfile& FromProfile = WorldProfiles[CurrentProfile];
-	const FKhaaosPostProcessProfile& ToProfile   = WorldProfiles[TargetProfile];
-	const float Alpha = ProfileLerpAlpha;
-
-	FKhaaosPostProcessProfile LerpedProfile;
-	LerpedProfile.ColorGradingTint         = FMath::Lerp(FromProfile.ColorGradingTint, ToProfile.ColorGradingTint, Alpha);
-	LerpedProfile.VignetteIntensity        = FMath::Lerp(FromProfile.VignetteIntensity, ToProfile.VignetteIntensity, Alpha);
-	LerpedProfile.BloomIntensity           = FMath::Lerp(FromProfile.BloomIntensity, ToProfile.BloomIntensity, Alpha);
-	LerpedProfile.ExposureCompensation     = FMath::Lerp(FromProfile.ExposureCompensation, ToProfile.ExposureCompensation, Alpha);
-	LerpedProfile.ChromaticAberration      = FMath::Lerp(FromProfile.ChromaticAberration, ToProfile.ChromaticAberration, Alpha);
-	LerpedProfile.DepthOfFieldFstop        = FMath::Lerp(FromProfile.DepthOfFieldFstop, ToProfile.DepthOfFieldFstop, Alpha);
-	LerpedProfile.MotionBlurAmount         = FMath::Lerp(FromProfile.MotionBlurAmount, ToProfile.MotionBlurAmount, Alpha);
-	LerpedProfile.AmbientOcclusionIntensity = FMath::Lerp(FromProfile.AmbientOcclusionIntensity, ToProfile.AmbientOcclusionIntensity, Alpha);
-	// Lumen quality and shadow cascades: snap at 50% lerp
-	LerpedProfile.LumenQuality             = (Alpha >= 0.5f) ? ToProfile.LumenQuality : FromProfile.LumenQuality;
-	LerpedProfile.NaniteEnabled            = (Alpha >= 0.5f) ? ToProfile.NaniteEnabled : FromProfile.NaniteEnabled;
-	LerpedProfile.ShadowCascades           = (Alpha >= 0.5f) ? ToProfile.ShadowCascades : FromProfile.ShadowCascades;
-	LerpedProfile.FogDensity               = FMath::Lerp(FromProfile.FogDensity, ToProfile.FogDensity, Alpha);
-	LerpedProfile.FogColor                 = FMath::Lerp(FromProfile.FogColor, ToProfile.FogColor, Alpha);
-	LerpedProfile.HeatHazeIntensity        = FMath::Lerp(FromProfile.HeatHazeIntensity, ToProfile.HeatHazeIntensity, Alpha);
-	LerpedProfile.FrostVignetteIntensity   = FMath::Lerp(FromProfile.FrostVignetteIntensity, ToProfile.FrostVignetteIntensity, Alpha);
-
-	ApplyProfileToVolume(LerpedProfile);
-}
-
-void UKhaaosPostProcessManager::UpdateScreenEffects(float DeltaTime)
-{
-	// Damage vignette: fast decay (3.0/s)
-	if (ScreenEffects.DamageVignetteIntensity > 0.0f)
-	{
-		ScreenEffects.DamageVignetteIntensity = FMath::Max(0.0f, ScreenEffects.DamageVignetteIntensity - DeltaTime * 3.0f);
-	}
-
-	// Low health pulse: oscillates via sin when active, no decay (must be stopped explicitly)
-	if (ScreenEffects.LowHealthPulse > 0.0f)
-	{
-		// Pulse between 0.3 and 1.0 using sine wave
-		static float PulseTime = 0.0f;
-		PulseTime += DeltaTime * 4.0f; // 4 Hz pulse rate
-		ScreenEffects.LowHealthPulse = 0.65f + 0.35f * FMath::Sin(PulseTime);
-	}
-
-	// Zone warning: slow decay (1.5/s)
-	if (ScreenEffects.ZoneWarningIntensity > 0.0f)
-	{
-		ScreenEffects.ZoneWarningIntensity = FMath::Max(0.0f, ScreenEffects.ZoneWarningIntensity - DeltaTime * 1.5f);
-	}
-
-	// Heal overlay: moderate decay (2.0/s)
-	if (ScreenEffects.HealOverlayIntensity > 0.0f)
-	{
-		ScreenEffects.HealOverlayIntensity = FMath::Max(0.0f, ScreenEffects.HealOverlayIntensity - DeltaTime * 2.0f);
-	}
-
-	// Elimination flash: fast decay (4.0/s)
-	if (ScreenEffects.EliminationFlash > 0.0f)
-	{
-		ScreenEffects.EliminationFlash = FMath::Max(0.0f, ScreenEffects.EliminationFlash - DeltaTime * 4.0f);
-	}
-
-	// Shield break flash: very fast decay (5.0/s)
-	if (ScreenEffects.ShieldBreakFlash > 0.0f)
-	{
-		ScreenEffects.ShieldBreakFlash = FMath::Max(0.0f, ScreenEffects.ShieldBreakFlash - DeltaTime * 5.0f);
-	}
-
-	// Kill streak glow: no decay (persists until explicitly cleared or reset)
-}
-
-void UKhaaosPostProcessManager::FindOrCreatePostProcessVolume()
-{
-	if (!GetWorld())
-	{
-		return;
-	}
-
-	// Search for an existing post-process volume in the world
-	for (TActorIterator<APostProcessVolume> It(GetWorld()); It; ++It)
-	{
-		APostProcessVolume* FoundVolume = *It;
-		if (FoundVolume && FoundVolume->bUnbound)
-		{
-			PostProcessVolume = FoundVolume;
-			UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Found existing unbound PostProcessVolume"));
-			return;
-		}
-	}
-
-	// If no unbound PP volume exists, search for any PP volume
-	for (TActorIterator<APostProcessVolume> It(GetWorld()); It; ++It)
-	{
-		APostProcessVolume* FoundVolume = *It;
-		if (FoundVolume)
-		{
-			PostProcessVolume = FoundVolume;
-			UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Found existing PostProcessVolume (bound)"));
-			return;
-		}
-	}
-
-	// No existing volume found. A PostProcessVolume should be placed in the level via Blueprint.
-	// Runtime spawning is possible but requires a valid transform and world context.
-	UE_LOG(LogTemp, Warning, TEXT("KhaaosPostProcessManager: No PostProcessVolume found in world. "
-		"Place an unbound PostProcessVolume in your level or Blueprint setup for full functionality."));
-
-	// Fallback: spawn one at the origin
-	if (UWorld* World = GetWorld())
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Name = FName(TEXT("KhaaosPostProcessVolume"));
-		SpawnParams.bNoFail = true;
-
-		PostProcessVolume = World->SpawnActor<APostProcessVolume>(
-			APostProcessVolume::StaticClass(),
-			FVector::ZeroVector,
-			FRotator::ZeroRotator,
-			SpawnParams
-		);
-
-		if (PostProcessVolume)
-		{
-			PostProcessVolume->bUnbound = true;
-			PostProcessVolume->bEnabled = true;
-			UE_LOG(LogTemp, Log, TEXT("KhaaosPostProcessManager: Spawned fallback PostProcessVolume"));
-		}
-	}
+    return FName(*FString::Printf(TEXT("PP_%s_%s"),
+        *UEnum::GetDisplayValueAsText(Species).ToString(),
+        *UEnum::GetDisplayValueAsText(Type).ToString()));
 }

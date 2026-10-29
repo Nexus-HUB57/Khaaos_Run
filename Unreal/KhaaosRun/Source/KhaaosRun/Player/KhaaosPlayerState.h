@@ -253,6 +253,7 @@ private:
 
 	FDelegateHandle OutOfHealthDelegateHandle;
 	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
+	TArray<FGameplayAbilitySpecHandle> SpeciesActiveAbilityHandles;
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 

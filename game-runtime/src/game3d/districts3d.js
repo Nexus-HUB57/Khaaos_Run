@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { roadSegments } from './detail3d.js';
 import { frustumPrism } from './prisms3d.js';
+import { Emitter, getSharedParticles, bindParticleTicker } from './particles3d.js';
 import {
   mudMaterial, waterPoolMaterial, snowMaterial, lavaMaterial,
   runeMaterial, riftMaterial, awningMaterial, plankMaterial,
@@ -60,37 +61,45 @@ const KITS = {
     4: {},                                             // Terminal ZEX (praça limpa)
   },
   Barburhen: {
-    0: { stall: 3, billboard: 1 },                     // Setor Urbano
-    1: { machinery: 1, snowpile: 2, snowpatch: 2 },    // Estação Fria
-    2: { machinery: 2, snowpile: 1 },                  // Parque Ferrífero
-    3: { machinery: 1, fanunit: 2 },                   // Usina Industrial
+    // Diretiva (Mundos W1): cidade pós-guerra — entulho, carros queimados,
+    // árvores mortas, crateras e colunas de fumaça sobre a identidade fria
+    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1 },      // Área Urbana em Ruínas
+    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1 }, // Setor Industrial
+    2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1 },     // Parque Abandonado
+    3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1 }, // Zona de Extração
     4: {},
   },
   Priadus: {
-    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1 },  // Bacia Pantanosa
-    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1 },                // Dossel Escuro
-    2: { templestep: 1, statue: 2, brazier: 2 },                        // Templo Antigo
-    3: { labdome: 2, coral: 3, waterpool: 1 },                          // Laboratório Coral
+    // Diretiva (Mundos W2): pântano negro + bosque sobre ruínas tecnológicas,
+    // área de caça com totens e o Templo Antigo dos Duazhs
+    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1, roots: 2, coral: 2 },   // Área Pantanosa
+    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1, labdome: 1, fallenlog: 2, sporesac: 2 }, // O Bosque
+    2: { waterpool: 1, walkway: 1, statue: 2, totem: 2, sporesac: 1, roots: 1 },             // Área de Caça
+    3: { templestep: 1, statue: 2, brazier: 2, fallenlog: 1 },                                // Templo Antigo
     4: {},
   },
   Ckesalth: {
-    0: { tent: 2, campfire: 1, dune: 2, banner: 1 },   // Acampamento Base
-    1: { dune: 2, minecart: 1, lavapatch: 2 },         // Encosta Média
-    2: { refinetower: 1, lavapatch: 2, campfire: 1 },  // Pico de Fumaça
-    3: { banner: 2, dune: 1 },                         // Arena do Cume
+    // Diretiva (Mundos W3): resort murado, vilarejo beduíno, refinaria em chamas
+    // e o cemitério de areia — óleo negro e ossos espalhados
+    0: { dune: 2, banner: 2, palmstump: 2, resortwall: 1, oilpool: 1 },        // Resort Abandonado
+    1: { tent: 2, campfire: 1, banner: 1, bones: 2, palmstump: 1 },            // Vilarejo Beduíno
+    2: { refinetower: 1, oiltank: 2, pipeline: 2, lavapatch: 2, minecart: 1, oilpool: 1 }, // Refinaria de Petróleo
+    3: { dune: 2, bones: 2, palmstump: 1 },                                    // Cemitério de Areia
     4: {},
   },
   Arukheea: {
-    0: { runering: 2, shard: 3 },                      // NEXUS OF KHAAOS
-    1: { crystal: 3, quantumring: 1 },                 // NORTH ASTRAL SPIRE
-    2: { rift: 1, shard: 2, crystal: 1 },              // EAST VOID SANCTUM
-    3: { quantumring: 2, shard: 2 },                   // WEST QUANTUM ARRAY
+    // Diretiva (Mundos W4): ilha dos piratas — bosque de palmeiras, Prisão do
+    // Sol da Noite com farol, cemitério das baleias e marina com naufrágios
+    0: { runering: 2, shard: 3, palmtree: 3 },                                  // Bosque dos Perdidos
+    1: { crystal: 2, quantumring: 1, prisonwall: 2, lighthouse: 1 },            // Prisão do Sol da Noite
+    2: { rift: 1, shard: 2, whaleribs: 2, bones: 2 },                           // Cemitério das Baleias
+    3: { quantumring: 2, shard: 2, shipwreck: 2, palmtree: 2 },                 // Marina Fantasma
     4: {},
   },
 };
 
 // patches de solo por tipo (entram em `patches`, não em `items`)
-const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch']);
+const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool']);
 
 /**
  * Placements determinísticos do dressing por cenário.
@@ -186,6 +195,18 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         tent: { sMin: .9, sMax: 1.2, size: 1.6, gap: 6 },
         walkway: { sMin: .9, sMax: 1.1, size: 2.4, gap: 7 },
         minecart: { sMin: 1, sMax: 1, size: 2.2, gap: 8 },
+        // Fase 31 — grandes marcos da diretiva W1-W4
+        prisonwall: { sMin: 1, sMax: 1.1, size: 2.8, gap: 9 },
+        shipwreck: { sMin: 1, sMax: 1.15, size: 2.8, gap: 9 },
+        whaleribs: { sMin: 1, sMax: 1.1, size: 2.6, gap: 8 },
+        resortwall: { sMin: 1, sMax: 1.1, size: 2.4, gap: 8 },
+        oiltank: { sMin: 1, sMax: 1.1, size: 2.0, gap: 7 },
+        lighthouse: { sMin: 1, sMax: 1, size: 2.0, gap: 12 },
+        burntcar: { sMin: .95, sMax: 1.1, size: 2.0, gap: 7 },
+        fallenlog: { sMin: 1, sMax: 1.2, size: 2.4, gap: 6 },
+        pipeline: { sMin: 1, sMax: 1, size: 2.6, gap: 8 },
+        deadtree: { sMin: .95, sMax: 1.25, size: 1.6, gap: 5 },
+        palmtree: { sMin: 1.05, sMax: 1.4, size: 1.6, gap: 5.5 },
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
       scatter(district, type, n, spec);
     }
@@ -210,6 +231,11 @@ const SHADOW_SIZE = {
   mangrove: 2.9, walkway: 4.6, hut: 3.4, templestep: 4.8, statue: 1.3,
   brazier: 1.0, coral: 1.4, labdome: 3.2, campfire: 1.5, refinetower: 2.8,
   minecart: 2.3, banner: 1.0, crystal: 1.6,
+  // Fase 31 — diretiva dos 4 mundos (destruição/selva/deserto/ilha)
+  rubble: 1.6, burntcar: 2.0, deadtree: 1.8, smokecolumn: 1.2,
+  roots: 1.8, fallenlog: 2.6, sporesac: 1.0, totem: 1.2,
+  palmstump: 1.0, oiltank: 2.0, pipeline: 3.0, bones: 1.8, resortwall: 2.6,
+  palmtree: 1.8, prisonwall: 2.8, lighthouse: 2.2, whaleribs: 3.0, shipwreck: 3.2,
 };
 
 const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
@@ -246,6 +272,21 @@ function sharedMaterials() {
     coralAlt: ST('#7fd4c0', { emissive: '#2e8a72', ei: .5, rough: .7 }),
     fire: ST('#ffb347', { emissive: '#ff8c1e', ei: 1.6, rough: .5 }),
     templeStone: ST('#a8a091', { rough: .94, flat: true }),
+    // Fase 31 — diretiva dos 4 mundos
+    burnt: ST('#26221e', { rough: .95, flat: true }),          // madeira/metal carbonizados
+    ash: ST('#4a4642', { rough: .98, flat: true }),            // cinza de Barburhen
+    bone: ST('#d8d0bc', { rough: .85, flat: true }),           // marfim de osso
+    oil: new THREE.MeshStandardMaterial({
+      color: '#0c0e10', roughness: .16, metalness: .45,        // óleo negro espelhado
+    }),
+    swampRoot: ST('#3a3020', { rough: .96, flat: true }),      // raízes do pântano
+    spore: ST('#8aa04a', { emissive: '#5a7a20', ei: .7, rough: .7, flat: true }), // esporos de Priadus
+    palmTrunk: ST('#6b5433', { rough: .94 }),
+    palmFrond: ST('#3f6b35', { rough: .9, flat: true, side: THREE.DoubleSide }),
+    prisonStone: ST('#5e5a52', { rough: .93, flat: true }),    // pedra da prisão
+    holo: new THREE.MeshBasicMaterial({
+      color: '#ffd28a', transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false,
+    }),                                                        // luz do farol
   };
 }
 
@@ -652,6 +693,250 @@ const BUILDERS = {
     g.userData.waver = plane;
     return g;
   },
+
+  // ---------- Fase 31 — diretiva dos 4 mundos (W1-W4) ----------
+  // W1 BARBURHEN — O Mundo da Destruição: entulho, carro queimado, árvore
+  // morta e coluna de fumaça (cidade que desmorona dia após dia)
+  rubble(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const s = .18 + (i % 3) * .12;
+      const c = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), i % 2 ? m.stone : m.stoneDark);
+      c.position.set(Math.sin(i * 2.4) * .5, s * .6, Math.cos(i * 1.7) * .5);
+      c.rotation.set(i, i * 2, i * .5);
+      c.castShadow = c.receiveShadow = true;
+      g.add(c);
+    }
+    const rebar = new THREE.Mesh(new THREE.BoxGeometry(.04, .7, .04), m.rust);
+    rebar.position.set(.3, .32, -.1); rebar.rotation.z = .4; rebar.castShadow = true;
+    g.add(rebar);
+    return g;
+  },
+  burntcar(m) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, .55, .95), m.burnt);
+    body.position.y = .55; body.castShadow = true;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.0, .42, .85), m.burnt);
+    cabin.position.set(-.1, 1.0, 0); cabin.castShadow = true;
+    g.add(body, cabin);
+    for (const [wx, wz] of [[-.62, .48], [.62, .48], [-.62, -.48], [.62, -.48]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(.26, .26, .16, 10), m.rubber);
+      w.rotation.x = Math.PI / 2; w.position.set(wx, .26, wz); w.castShadow = true;
+      g.add(w);
+    }
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(.5, .06, .5), m.ash);
+    seat.position.set(0, .84, 0); seat.rotation.z = .12;
+    g.add(seat);
+    return g;
+  },
+  deadtree(m) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.09, .16, 2.6, 6), m.burnt);
+    trunk.position.y = 1.3; trunk.castShadow = true;
+    g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(.03, .06, 1.1, 5), m.burnt);
+      br.position.set(Math.sin(i * 2.1) * .35, 1.5 + i * .38, Math.cos(i * 2.1) * .35);
+      br.rotation.z = Math.sin(i * 2.1) * .9; br.rotation.x = Math.cos(i * 2.1) * .9;
+      br.castShadow = true;
+      g.add(br);
+    }
+    return g;
+  },
+  smokecolumn(m) {
+    // fumaça estática do caos: chaminé baixa + voluta (animator deriva)
+    const g = new THREE.Group();
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(.16, .22, 1.0, 8), m.rust);
+    stack.position.y = .5; stack.castShadow = true;
+    const plume = new THREE.Mesh(new THREE.ConeGeometry(.5, 2.2, 7),
+      new THREE.MeshStandardMaterial({ color: '#3a3634', transparent: true, opacity: .3, roughness: 1, depthWrite: false }));
+    plume.position.y = 2.2; plume.name = 'plume';
+    g.add(stack, plume);
+    g.userData.floatMesh = plume;
+    return g;
+  },
+
+  // W2 PRIADUS — A Floresta da Escuridão: raízes expostas, tronco caído,
+  // saco de esporos bioluminescente e totem da caça
+  roots(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const r = new THREE.Mesh(new THREE.CylinderGeometry(.05, .09, 1.3, 5), m.swampRoot);
+      r.position.set(Math.sin(i * 1.6) * .4, .12, Math.cos(i * 1.6) * .4);
+      r.rotation.set(Math.cos(i) * .9, i, Math.sin(i * .7) * .9);
+      r.castShadow = true;
+      g.add(r);
+    }
+    return g;
+  },
+  fallenlog(m) {
+    const g = new THREE.Group();
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(.22, .28, 2.6, 7), m.mangroveTrunk);
+    log.rotation.z = Math.PI / 2; log.rotation.y = .3; log.position.y = .26;
+    log.castShadow = log.receiveShadow = true;
+    const moss = new THREE.Mesh(new THREE.BoxGeometry(1.2, .08, .3), m.mangroveCanopy);
+    moss.position.set(-.3, .48, 0); moss.rotation.y = .3;
+    g.add(log, moss);
+    return g;
+  },
+  sporesac(m) {
+    const g = new THREE.Group();
+    const sac = new THREE.Mesh(new THREE.SphereGeometry(.3, 8, 6), m.spore);
+    sac.position.y = .32; sac.scale.set(1, 1.25, 1); sac.castShadow = true;
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(.05, .08, .2, 5), m.swampRoot);
+    stalk.position.y = .08;
+    g.add(sac, stalk);
+    g.userData.pulse = sac; // pulso bioluminescente no animator
+    return g;
+  },
+  totem(m) {
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.BoxGeometry(.18, 2.2, .18), m.woodDark);
+    post.position.y = 1.1; post.castShadow = true;
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(.26, .2, .22), m.bone);
+    skull.position.y = 2.0; skull.castShadow = true;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(.22, .08, .2), m.rust);
+    band.position.y = 1.4;
+    g.add(post, skull, band);
+    return g;
+  },
+
+  // W3 CKESALTH — O Deserto das Almas Esquecidas: toco de palmeira, tanque
+  // de óleo, oleoduto, ossos no chão e muralha do resort
+  palmstump(m) {
+    const g = new THREE.Group();
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(.2, .26, .5, 8), m.palmTrunk);
+    stump.position.y = .25; stump.castShadow = true;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.24, .04, 5, 10), m.woodDark);
+    ring.rotation.x = Math.PI / 2; ring.position.y = .5;
+    g.add(stump, ring);
+    for (let i = 0; i < 2; i++) {
+      const frond = new THREE.Mesh(new THREE.PlaneGeometry(.7, .16), m.palmFrond);
+      frond.position.set(Math.cos(i * 2.4) * .3, .44, Math.sin(i * 2.4) * .3);
+      frond.rotation.set(-.7, i * 2.4, 0);
+      g.add(frond);
+    }
+    return g;
+  },
+  oiltank(m) {
+    const g = new THREE.Group();
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(.7, .7, 1.1, 12), m.rust);
+    tank.position.y = .55; tank.castShadow = tank.receiveShadow = true;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.74, .74, .1, 12), m.steel);
+    cap.position.y = 1.12; cap.castShadow = true;
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(.16, .5, 6), m.fire);
+    flame.position.set(.3, 1.4, 0); flame.name = 'flame';
+    g.add(tank, cap, flame);
+    g.userData.flame = flame; // tremulação no animator
+    return g;
+  },
+  pipeline(m) {
+    const g = new THREE.Group();
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, 3.2, 8), m.rust);
+    pipe.rotation.z = Math.PI / 2; pipe.rotation.y = .5; pipe.position.y = .42;
+    pipe.castShadow = true;
+    g.add(pipe);
+    for (let i = 0; i < 3; i++) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(.08, .42, .08), m.steel);
+      leg.position.set(Math.cos(i * 2.1) * 1.1, .21, Math.sin(i * 2.1) * 1.1);
+      g.add(leg);
+    }
+    return g;
+  },
+  bones(m) {
+    const g = new THREE.Group();
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(.34, .045, 5, 10, Math.PI), m.bone);
+    rib.position.y = .18; rib.rotation.y = .4; rib.castShadow = true;
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(.3, .22, .26), m.bone);
+    skull.position.set(.65, .11, .2); skull.rotation.y = .8; skull.castShadow = true;
+    const femur = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .8, 6), m.bone);
+    femur.rotation.z = Math.PI / 2; femur.rotation.y = -.6; femur.position.set(-.4, .06, -.25);
+    g.add(rib, skull, femur);
+    return g;
+  },
+  resortwall(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const h = .9 - (i === 2 ? .3 : 0);  // trecho desabado
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(.9, h, .24), m.stone);
+      seg.position.set(i * .92, h / 2, 0);
+      seg.castShadow = seg.receiveShadow = true;
+      g.add(seg);
+    }
+    const palm = new THREE.Mesh(new THREE.CylinderGeometry(.06, .09, 1.4, 6), m.palmTrunk);
+    palm.position.set(-1.0, .7, .3); palm.rotation.z = .18; palm.castShadow = true;
+    g.add(palm);
+    return g;
+  },
+
+  // W4 ARUKHEEA — A Ilha dos Gritos Calados: palmeira, muralha da prisão,
+  // farol, caixas torácicas de baleia e casco de naufrágio
+  palmtree(m) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.07, .12, 2.8, 7), m.palmTrunk);
+    trunk.position.y = 1.4; trunk.rotation.z = .12; trunk.castShadow = true;
+    g.add(trunk);
+    for (let i = 0; i < 5; i++) {
+      const frond = new THREE.Mesh(new THREE.PlaneGeometry(1.3, .3), m.palmFrond);
+      const a = (i / 5) * Math.PI * 2;
+      frond.position.set(Math.cos(a) * .55, 2.75, Math.sin(a) * .55);
+      frond.rotation.set(-.55 - Math.sin(a) * .2, -a + Math.PI / 2, Math.cos(a) * .4);
+      frond.castShadow = true;
+      g.add(frond);
+    }
+    return g;
+  },
+  prisonwall(m) {
+    const g = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.0, .3), m.prisonStone);
+    wall.position.y = 1.0; wall.castShadow = wall.receiveShadow = true;
+    const crenel = new THREE.Mesh(new THREE.BoxGeometry(2.6, .18, .36), m.stoneDark);
+    crenel.position.y = 2.06;
+    const bars = new THREE.Mesh(new THREE.BoxGeometry(.7, .8, .06), m.steel);
+    bars.position.set(.6, .5, .18);   // cela enferrujada embutida
+    g.add(wall, crenel, bars);
+    return g;
+  },
+  lighthouse(m) {
+    const g = new THREE.Group();
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(.42, .58, 3.4, 10), m.stone);
+    tower.position.y = 1.7; tower.castShadow = true;
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(.34, .3, .5, 8), m.holo);
+    lamp.position.y = 3.62; lamp.name = 'lampGlass';
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(.44, .4, 10), m.stoneDark);
+    cap.position.y = 4.05; cap.castShadow = true;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(.16, .5, 7.0, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: '#ffd28a', transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 3.6; beam.rotation.z = .5; beam.name = 'lampBeam';
+    g.add(tower, lamp, cap, beam);
+    g.userData.spinners = [beam];  // farol gira (nunca desliga — diretiva)
+    return g;
+  },
+  whaleribs(m) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(.9 - i * .1, .06, 5, 12, Math.PI), m.bone);
+      rib.position.set(-.9 + i * .6, .5, 0);
+      rib.rotation.y = Math.PI / 2;
+      rib.castShadow = true;
+      g.add(rib);
+    }
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, 2.6, 6), m.bone);
+    spine.rotation.z = Math.PI / 2; spine.position.y = .55;
+    g.add(spine);
+    return g;
+  },
+  shipwreck(m) {
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.8, .8, 1.1), m.woodDark);
+    hull.position.y = .3; hull.rotation.z = -.22; hull.castShadow = hull.receiveShadow = true;
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, 2.0, 6), m.wood);
+    mast.position.set(.5, 1.2, 0); mast.rotation.z = .5; mast.castShadow = true;
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(2.4, .08, .08), m.wood);
+    rail.position.set(-.2, .95, .5); rail.rotation.z = -.22;
+    g.add(hull, mast, rail);
+    return g;
+  },
 };
 
 // materiais de patch por tipo
@@ -663,6 +948,8 @@ function patchMaterial(type, scenario) {
     case 'lavapatch': return lavaMaterial(1);
     case 'runering': return runeMaterial('#59e6ff');
     case 'voidscorch': return voidScorchMaterial();
+    case 'crater': return craterMaterial();     // Fase 31 — cratera de Barburhen
+    case 'oilpool': return oilPoolMaterial();   // Fase 31 — óleo negro de Ckesalth
     default: return mudMaterial(2);
   }
 }
@@ -675,6 +962,27 @@ function voidScorchMaterial() {
     });
   }
   return _voidScorch;
+}
+let _crater = null;
+function craterMaterial() {
+  if (!_crater) {
+    _crater = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#1c150e'), transparent: true, opacity: .7,
+      depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+  }
+  return _crater;
+}
+let _oil = null;
+function oilPoolMaterial() {
+  if (!_oil) {
+    _oil = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#0a0c0e'), roughness: .14, metalness: .5,
+      transparent: true, opacity: .92, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+  }
+  return _oil;
 }
 
 /**
@@ -696,6 +1004,84 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   dressing.name = 'district-dressing';
   const animators = [];
   const shadows = [];
+
+  // ---------- Fase 26 — PARTÍCULAS REAIS no miolo da arena ----------
+  // Fumaça de fogueira + fagulhas, brasas nas fendas de lava, motos do vazio
+  // escapando das fendas e fagulhas da torre de destilação — o mesmo pool
+  // compartilhado dos marcos (1 draw call), com ticker idempotente (districts
+  // roda ANTES de buildWorldMarks em buildScene: quem cria, registra o tick).
+  const particleRng = new SeededRng(`${layout.seed}:${layout.scenarioId}:dressing-particles`);
+  const emitterAnimators = [];
+  const sharedSystem = getSharedParticles(scene);
+  if (sharedSystem) {
+    const emitters = [];
+    const addEmitter = (origin, rate, params) => {
+      if (emitters.length >= 12) return; // teto de orçamento (pior caso ~90 vivos)
+      emitters.push(new Emitter(sharedSystem, { origin, rate, params }));
+    };
+    for (const item of placements.items) {
+      if (item.type === 'campfire') {
+        // fumaça de fogueira: coluna cinza fina com brisa + deriva térmica
+        addEmitter({ x: item.x, y: .9 * item.s, z: item.z }, 2.4, () => ({
+          dx: (particleRng.next() - .5) * .3, dy: 0, dz: (particleRng.next() - .5) * .3,
+          vx: .5 + particleRng.next() * .5, vy: 1.6 + particleRng.next() * 1.1, vz: (particleRng.next() - .5) * .5,
+          size: .8 + particleRng.next() * .7, growth: .9, life: 2.6 + particleRng.next() * 1.6,
+          drag: .4, gravity: -0.5, alpha: .3,
+          color: [.36, .33, .3], endColor: [.55, .53, .5],
+        }));
+        // fagulhas: curtas, quentes, sobem rápido e morrem cedo
+        addEmitter({ x: item.x, y: .55 * item.s, z: item.z }, 1.3, () => ({
+          dx: (particleRng.next() - .5) * .35, dy: 0, dz: (particleRng.next() - .5) * .35,
+          vx: (particleRng.next() - .5) * 1.4, vy: 2.2 + particleRng.next() * 1.8, vz: (particleRng.next() - .5) * 1.4,
+          size: .16 + particleRng.next() * .14, growth: -.03, life: .55 + particleRng.next() * .5,
+          drag: .08, gravity: 3, alpha: .95,
+          color: [1, .72, .22], endColor: [.45, .12, .04],
+        }));
+      } else if (item.type === 'refinetower') {
+        // fagulhas da chama do flare da torre (fino, alto, contínuo)
+        addEmitter({ x: item.x, y: 7.5 * item.s, z: item.z }, 1, () => ({
+          dx: (particleRng.next() - .5) * .2, dy: 0, dz: (particleRng.next() - .5) * .2,
+          vx: (particleRng.next() - .5) * 1.1, vy: 2.4 + particleRng.next() * 1.6, vz: (particleRng.next() - .5) * 1.1,
+          size: .14 + particleRng.next() * .12, growth: -.02, life: .5 + particleRng.next() * .45,
+          drag: .08, gravity: 2.4, alpha: .85,
+          color: [1, .66, .2], endColor: [.4, .1, .03],
+        }));
+      } else if (item.type === 'rift') {
+        // Fase 26 — fenda do vazio DENTRO da arena: motos de vazio à deriva
+        // (mesma linguagem das fendas do horizonte da Fase 17)
+        addEmitter({ x: item.x, y: 1.2 * item.s, z: item.z }, 1.2, () => ({
+          dx: (particleRng.next() - .5) * .8, dy: (particleRng.next() - .5) * 1.8, dz: (particleRng.next() - .5) * .8,
+          vx: (particleRng.next() - .5) * .5, vy: .7 + particleRng.next() * 1, vz: (particleRng.next() - .5) * .5,
+          size: .3 + particleRng.next() * .35, growth: 0, life: 3.2 + particleRng.next() * 2.2,
+          drag: .1, gravity: -0.6, alpha: .72,
+          color: [.61, .91, 1], endColor: [.24, .66, .78],
+        }));
+      }
+    }
+    for (const p of placements.patches) {
+      if (p.type === 'lavapatch') {
+        // Fase 26 — fendas de lava: brasas saltam da crosta + wisp de calor
+        addEmitter({ x: p.x, y: .1, z: p.z }, 1.1, () => ({
+          dx: (particleRng.next() - .5) * p.r * 1.4, dy: 0, dz: (particleRng.next() - .5) * p.r * 1.4,
+          vx: (particleRng.next() - .5) * 1.4, vy: 2.4 + particleRng.next() * 2.2, vz: (particleRng.next() - .5) * 1.4,
+          size: .22 + particleRng.next() * .26, growth: -.03, life: .8 + particleRng.next() * .7,
+          drag: .1, gravity: 2.6, alpha: .88,
+          color: [1, .6, .16], endColor: [.38, .08, .03],
+        }));
+        addEmitter({ x: p.x, y: .25, z: p.z }, .55, () => ({
+          dx: (particleRng.next() - .5) * p.r, dy: 0, dz: (particleRng.next() - .5) * p.r,
+          vx: (particleRng.next() - .5) * .6, vy: 1.1 + particleRng.next() * .9, vz: (particleRng.next() - .5) * .6,
+          size: .9 + particleRng.next() * .8, growth: .8, life: 2.4 + particleRng.next() * 1.4,
+          drag: .45, gravity: -0.4, alpha: .22,
+          color: [.3, .24, .2], endColor: [.46, .42, .38],
+        }));
+      }
+    }
+    emitterAnimators.push(...emitters.map((e) => (dt, t) => e.update(dt, t)));
+    // DONO do tick se districts criou o sistema; se worldmarks/outra cena
+    // já registrou, nada a fazer (nunca 2× — ver bindParticleTicker).
+    bindParticleTicker(scene, sharedSystem, emitterAnimators);
+  }
 
   // ---------- patches de solo ----------
   const patchGeo = new THREE.CircleGeometry(1, 26);
@@ -753,6 +1139,7 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
 
   if (shadows.length && contactShadows) contactShadows(shadows);
   scene.add(dressing);
+  animators.push(...emitterAnimators); // Fase 26 — partículas reais do dressing
 
   // ---------- animators (stateless, determinísticos por t) ----------
   if (floaters.length) {

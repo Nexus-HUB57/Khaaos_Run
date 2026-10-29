@@ -164,3 +164,33 @@ fence — o nó pausado drena a sala ao voltar.
 **Ação imediata (< 15 min)**: seguir `docs/TOKEN_ROTATION_RUNBOOK.md` —
 revogar o token comprometido e emitir substituto com escopo mínimo. Nunca
 "atualizar depois": tokens expostos são varridos por bots em minutos.
+
+## PB-08 — Smoke cross-replica (2 réplicas reais + Redis, KR_DISTRIBUTED=1)
+
+**Quando**: a cada mudança na cadeia multi-réplica (CI `staging-smoke.yml`,
+job `cross-replica-smoke`) e antes de qualquer release que toque
+ownership/fencing/convites.
+
+**Sintomas cobertos**: sala fantasma em réplica errada, redirect para réplica
+morta, split-brain de posse, convite que não atravessa réplicas, perda de
+mensagens do cliente na janela de conexão.
+
+**Procedimento (staging gerenciado)**:
+```bash
+cd infra/staging
+bash deploy.sh --replicas 2                       # app-a/app-b determinísticos
+bash verify.sh                                    # estágio 5: modo distribuído
+node ../../scripts/run-staging-crossreplica-smoke.mjs --mode compose --kill-owner
+```
+
+**Aceite** (linha `F17_CROSSREPLICA_SMOKE_OK`): readiness ×2, identidades
+`staging-app-a/b` distintas, posse `kr:own:*` com fence ≥ 1, convite
+`kr:invite:*` no índice compartilhado, join em B → redirect ao dono →
+`private_joined` em A, métricas `khaaos_runtime_distributed_*` nas duas
+réplicas e, no drill `--kill-owner`, expiração do lease + volta do dono.
+
+**Diagnóstico rápido**: `docs/CROSS_REPLICA_SMOKE.md` §7 (troubleshooting por
+sintoma). Métricas de interesse: `khaaos_runtime_distributed_redirects_total`
+(redirects ao dono), `..._fence_violations_total` (MUTAÇÃO cercada — deve ser 0
+em operação normal), `..._held_rooms`/`..._frozen_rooms` (leases vivos vs.
+salas congeladas por `owner_lost`).
