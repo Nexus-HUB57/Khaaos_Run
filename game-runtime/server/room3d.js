@@ -18,6 +18,7 @@ import {
   throwFragProjectile, stepFragProjectile, explosionDamage, glooCollider, glooDeployPlacement,
   knockActor, reviveTargetFor, stepRevive, assignSquads, botAimError, botDamageScale,
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
+  windowPaneOnSegment, // Fase 31 — vão de vidro consciente (mira no vão + standoff)
 } from '../src/game3d/sim3d.js';
 // Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
@@ -1023,13 +1024,34 @@ export class MatchRoom3D {
       }
     }
     let tx, tz, run = 0.62;
+    // Fase 31 — abertura de JANELA bot↔alvo: `livePane` decide o TIRO; o LATCH
+    // segura a APROXIMAÇÃO até a posição de tiro fixa (MESMA regra da sim
+    // offline) — solta a <2 m, no timeout de 6 s, se o painel sumiu ou o alvo trocou.
+    let paneCross = target ? windowPaneOnSegment(b.x, b.y + 1.6, b.z, target.x, target.y + 1.6, target.z, this.windows) : null;
+    if (paneCross) { b.ai.winLatch = paneCross.pane.id; b.ai.winLatchTarget = target.id; b.ai.winLatchT = 0; }
+    else if (b.ai.winLatch) {
+      b.ai.winLatchT = (b.ai.winLatchT ?? 0) + dt;
+      const lp = this.windows.find((w) => w.id === b.ai.winLatch);
+      if (!lp || b.ai.winLatchT > 6 || (target && target.id !== b.ai.winLatchTarget)) b.ai.winLatch = null;
+      else paneCross = { pane: lp, t: Math.hypot(lp.x - b.x, lp.z - b.z) };
+    }
     if (b.ai.state === 'engage' && target) {
-      const ideal = 16;
-      const away = bestD < ideal ? -1 : 1;
-      b.ai.strafe += dt * 1.7;
-      tx = target.x + Math.cos(b.ai.strafe) * away * 6;
-      tz = target.z + Math.sin(b.ai.strafe) * away * 6;
-      run = 1;
+      // Fase 31 — alvo visível POR UMA JANELA: caminha até a posição de TIRO no
+      // vão e fica PLANTADO (run 0) atirando pelo buraco (MESMA regra offline).
+      if (paneCross) {
+        const pw = paneCross.pane;
+        const side = Math.sign((b.x - pw.x) * pw.nx + (b.z - pw.z) * pw.nz) || 1;
+        tx = pw.x + pw.nx * side * 2.4;
+        tz = pw.z + pw.nz * side * 2.4;
+        run = Math.hypot(pw.x - b.x, pw.z - b.z) > 2.0 ? 1 : 0;
+      } else {
+        const ideal = 16;
+        const away = bestD < ideal ? -1 : 1;
+        b.ai.strafe += dt * 1.7;
+        tx = target.x + Math.cos(b.ai.strafe) * away * 6;
+        tz = target.z + Math.sin(b.ai.strafe) * away * 6;
+        run = 1;
+      }
     } else if (b.ai.state === 'hunt') {
       tx = b.ai.lx; tz = b.ai.lz;
       if (dist2d(b.x, b.z, tx, tz) < 5) b.ai.state = 'patrol';
@@ -1069,10 +1091,16 @@ export class MatchRoom3D {
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
+      // Fase 31 — tiro pela JANELA na altura do olho (MESMA regra da sim offline):
+      // cruza a parede DENTRO da banda do vão — vidro intacto estilhaça (bala
+      // consumida), destruído deixa a bala seguir até o alvo exposto.
+      const throughWindow = !!paneCross;
       this.#spawnBullet(b, {
-        ox: m.x, oy: m.y, oz: m.z,
+        ox: throughWindow ? b.x : m.x,
+        oy: throughWindow ? b.y + 1.6 : m.y,
+        oz: throughWindow ? b.z : m.z,
         tx: target.x + (this.rng.next() - 0.5) * err * 2,
-        ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
+        ty: (throughWindow ? target.y + 1.6 : target.y + 1.2) + (this.rng.next() - 0.5) * err,
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
       }, 0.012, w, dmgScale);
       b.burst = (b.burst ?? 0) + 1;
@@ -1103,8 +1131,10 @@ export class MatchRoom3D {
   }
 
   #hasLos(a, b) {
-    const ox = a.x, oy = a.y + 1.5, oz = a.z;
-    let dx = b.x - ox, dy = (b.y + 1.5) - oy, dz = b.z - oz;
+    // Fase 31 — olho da LOS ACIMA do peitoril (1,6 > sill 1,55) — MESMA regra
+    // da sim offline: de pé enxerga pelo vão da janela; agachado segue escondido.
+    const ox = a.x, oy = a.y + 1.6, oz = a.z;
+    let dx = b.x - ox, dy = (b.y + 1.6) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
     for (const box of this.physicsWorld.colliders) {

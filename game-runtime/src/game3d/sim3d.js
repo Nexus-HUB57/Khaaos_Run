@@ -270,6 +270,28 @@ export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   }
   return tmin;
 }
+
+// ============================================================================
+// Fase 31 — VÃOS DE VIDRO CONSCIENTES (pura/determinística): o painel define a
+// ABERTURA da janela MESMO com o vidro destruído (a fresta segue útil — balas
+// passam); com o vidro íntegro ele é também o alvo balístico (racha/estilhaça).
+// Consumido por sim3d/room3d (#stepBot: mira no vão + standoff de aproximação)
+// e pelo HUD (barra de HP da janela ao mirar — raio da crosshair).
+// ============================================================================
+export function windowPaneOnSegment(ox, oy, oz, tx, ty, tz, windows) {
+  let dx = tx - ox, dy = ty - oy, dz = tz - oz;
+  const len = Math.hypot(dx, dy, dz);
+  if (!(len > 0.01)) return null;
+  dx /= len; dy /= len; dz /= len;
+  let best = null, bestT = Infinity;
+  for (const p of windows ?? []) {
+    const box = windowBoxCollider({ ...p, destroyed: false }); // abertura persiste
+    if (!box) continue;
+    const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
+    if (t !== null && t < bestT) { best = p; bestT = t; }
+  }
+  return best ? { pane: best, t: bestT } : null;
+}
 export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
   // cápsula aproximada: cilindro vertical r=PLAYER_R, y∈[ch.y, ch.y+PLAYER_H]
   // (ch.y é a base do ator; 0 no chão — suporte a salto/lag compensation)
@@ -1138,12 +1160,36 @@ export class KhaaosSim3D {
       const mate = [p, ...this.bots].find((o) => o !== b && o.alive && o.knocked && o.squad === b.squad && dist2d(b.x, b.z, o.x, o.z) < 40);
       if (mate && !(target && bestD < 24)) rescuing = mate;
     }
+    // Fase 31 — abertura de JANELA bot↔alvo: `livePane` (raio ATUAL) decide o
+    // TIRO pelo vão; o LATCH segura a APROXIMAÇÃO até a posição de tiro fixa
+    // (2,4 m do vidro, no eixo do painel) mesmo se o raio oscilar no percurso
+    // (curva de yaw) — solta a <2 m (plantado no vão), no timeout de 6 s sem
+    // raio, se o painel sumiu ou se o alvo trocou.
+    let paneCross = target ? windowPaneOnSegment(b.x, b.y + 1.6, b.z, target.x, target.y + 1.6, target.z, this.windows) : null;
+    if (paneCross) { b.ai.winLatch = paneCross.pane.id; b.ai.winLatchTarget = target.id; b.ai.winLatchT = 0; }
+    else if (b.ai.winLatch) {
+      b.ai.winLatchT = (b.ai.winLatchT ?? 0) + dt;
+      const lp = this.windows.find((w) => w.id === b.ai.winLatch);
+      if (!lp || b.ai.winLatchT > 6 || (target && target.id !== b.ai.winLatchTarget)) b.ai.winLatch = null;
+      else paneCross = { pane: lp, t: Math.hypot(lp.x - b.x, lp.z - b.z) };
+    }
     if (b.ai.state === 'engage' && target) {
-      const ideal = 16;
-      const away = bestD < ideal ? -1 : 1;
-      b.ai.strafe += dt * 1.7;
-      tx = target.x + Math.cos(b.ai.strafe) * away * 6; tz = target.z + Math.sin(b.ai.strafe) * away * 6;
-      run = 1;
+      // Fase 31 — alvo visível POR UMA JANELA: caminha até a posição de TIRO no
+      // vão (2,4 m do vidro, no lado dele) e fica PLANTADO (run 0) atirando pelo
+      // buraco — estilhaça o vidro e pressiona — em vez de orbitar a parede (FF).
+      if (paneCross) {
+        const pw = paneCross.pane;
+        const side = Math.sign((b.x - pw.x) * pw.nx + (b.z - pw.z) * pw.nz) || 1;
+        tx = pw.x + pw.nx * side * 2.4;
+        tz = pw.z + pw.nz * side * 2.4;
+        run = Math.hypot(pw.x - b.x, pw.z - b.z) > 2.0 ? 1 : 0;
+      } else {
+        const ideal = 16;
+        const away = bestD < ideal ? -1 : 1;
+        b.ai.strafe += dt * 1.7;
+        tx = target.x + Math.cos(b.ai.strafe) * away * 6; tz = target.z + Math.sin(b.ai.strafe) * away * 6;
+        run = 1;
+      }
     } else if (rescuing) {
       tx = rescuing.x; tz = rescuing.z; run = 1;
     } else if (b.ai.state === 'hunt') {
@@ -1192,10 +1238,19 @@ export class KhaaosSim3D {
       // FIX Fase 5: origem do cano passada explicitamente (sem ela, dir.tx - undefined
       // = NaN — os projéteis dos bots nasciam NaN e nunca acertavam ninguém)
       const m = this.#muzzle(b);
+      // Fase 31 — tiro pela JANELA: quando a LOS cruza um vão de vidro, o bot
+      // dispara NA ALTURA DO OLHO (raio plano ~1,6 m) — única geometria que
+      // cruza a parede DENTRO da banda do vão (peitoril 1,55 > focinho 1,42):
+      // vidro intacto RACHA/ESTILHAÇA (bala consumida), destruído deixa a bala
+      // seguir até o alvo (zona de cabeça — só a cabeça fica exposta acima do
+      // peitoril). Tiros sem vão seguem no peito (canônico).
+      const throughWindow = !!paneCross;
       this.#spawnBullet(b, {
-        ox: m.x, oy: m.y, oz: m.z,
+        ox: throughWindow ? b.x : m.x,
+        oy: throughWindow ? b.y + 1.6 : m.y,
+        oz: throughWindow ? b.z : m.z,
         tx: target.x + (this.rng.next() - 0.5) * err * 2,
-        ty: target.y + 1.2 + (this.rng.next() - 0.5) * err,
+        ty: (throughWindow ? target.y + 1.6 : target.y + 1.2) + (this.rng.next() - 0.5) * err,
         tz: target.z + (this.rng.next() - 0.5) * err * 2,
       }, 0.012, w, dmgScale);
       b.burst++;
@@ -1207,8 +1262,12 @@ export class KhaaosSim3D {
   }
 
   #hasLos(a, b) {
-    const ox = a.x, oy = a.y + 1.5, oz = a.z;
-    let dx = b.x - ox, dy = (b.y + 1.5) - oy, dz = b.z - oz;
+    // Fase 31 — olho da LOS ACIMA do peitoril (1,6 > sill 1,55): ator DE PÉ
+    // enxerga pelo vão da janela (a F24 cortou a parede e a F26 deixou o vidro
+    // transparente p/ visão, mas o olho a 1,5 ainda batia na parede SOB o vão).
+    // Agachado (y baixo) segue escondido — o peitoril continua sendo cobertura.
+    const ox = a.x, oy = a.y + 1.6, oz = a.z;
+    let dx = b.x - ox, dy = (b.y + 1.6) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
     for (const box of this.physicsWorld.colliders) {

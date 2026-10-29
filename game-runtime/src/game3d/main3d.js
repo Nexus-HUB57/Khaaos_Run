@@ -4,7 +4,7 @@
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, doorHpFor } from './sim3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, doorHpFor, windowPaneOnSegment } from './sim3d.js';
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
@@ -1599,6 +1599,19 @@ export class Game3D {
       }
       if (win && (!door || winD < doorD)) {
         target = { label: 'JANELA', hp: Math.max(0, Math.round(win.hp ?? 0)), max: WINDOW.hp, cls: 'glass' };
+      }
+      // Fase 31 — barra de HP da JANELA AO MIRAR: raio da crosshair (câmera) ×
+      // painéis ÍNTEGROS até 45 m — a barra aparece ONDE A MIRA APONTA (leitura
+      // Free Fire: mirou no vidro, viu a integridade antes de estilhaçar),
+      // espelhando o painel da porta no alcance do E. Sem alvo próximo, o raio
+      // decide; vidro destruído não tem barra (não há mais o que quebrar).
+      if (!target && this.camera) {
+        const dir = this._camDir ?? (this._camDir = new THREE.Vector3());
+        this.camera.getWorldDirection(dir);
+        const o = this.camera.position;
+        const intact = (this.sim.windows ?? []).filter((w) => !w.destroyed);
+        const hit = intact.length ? windowPaneOnSegment(o.x, o.y, o.z, o.x + dir.x * 45, o.y + dir.y * 45, o.z + dir.z * 45, intact) : null;
+        if (hit) target = { label: 'JANELA', hp: Math.max(0, Math.round(hit.pane.hp ?? 0)), max: WINDOW.hp, cls: 'glass' };
       }
     }
     this.hud.prompt(doorText);
