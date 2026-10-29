@@ -13,6 +13,8 @@ import {
   HUD_SEASONS, seasonIndexForMonth, seasonIndexFor, shiftAuraHex, hudAuraFor,
   weaponIconVars,   // F37 — ícone da arma no inventário (mapeamento puro)
   crosshairVars,    // F38 — mira/crosshair no festival por aura (mapeamento puro)
+  killfeedVars, damageVars,           // F39 — killfeed + números de dano no festival
+  MINIMAP_SEASON_TINTS, minimapTintFor, // F39 — tint sazonal do minimapa por estação
 } from '../src/game3d/aura3d.js';
 import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
 
@@ -164,4 +166,71 @@ test('F38 · crosshairVars: null sem aura/hex inválido (mira neutra, custo 0)',
   assert.equal(crosshairVars(aura, 'rosa'), null, 'hex lixo → null');
   assert.equal(crosshairVars(aura, '#ff2d7'), null, 'hex curto → null');
   assert.equal(crosshairVars(aura, undefined), null, 'hex undefined → null');
+});
+
+// =============================== Fase 39 — killfeed/dano/minimapa sazonal ====
+
+test('F39 · killfeedVars/damageVars: mesma fonte única (contrato do mapper puro)', () => {
+  const july = new Date(2026, 6, 15); // inverno (hemisfério sul)
+  const aura = hudAuraFor({ weaponSkin: 'MITICA', now: july });
+  const kf = killfeedVars(aura, '#ff2d78');
+  const dg = damageVars(aura, '#ff2d78');
+  const base = weaponIconVars(aura, '#ff2d78');
+  assert.ok(kf && dg && base, 'mítica → variáveis dos três consumidores');
+  assert.deepEqual({ ...kf }, { ...base }, 'killfeedVars === weaponIconVars (fonte única)');
+  assert.deepEqual({ ...dg }, { ...base }, 'damageVars === weaponIconVars (fonte única)');
+  assert.equal(kf.aura, '#ff2d78', 'identidade da skin preservada');
+  assert.equal(kf.season, shiftAuraHex('#ff2d78', aura.hueShift), 'glow tingido pela estação');
+  assert.equal(kf.dur, String(aura.durMul), 'ritmo da temporada');
+  assert.ok(Object.isFrozen(kf) && Object.isFrozen(dg), 'retornos congelados');
+  // 4 estações: identidade NUNCA muda, season sempre hex canônico
+  for (const m of [0, 3, 6, 9]) {
+    const a = hudAuraFor({ weaponSkin: 'MITICA', now: new Date(2026, m, 15) });
+    const v = killfeedVars(a, '#4d9bff');
+    assert.equal(v.aura, '#4d9bff', `mês ${m}: identidade intacta`);
+    assert.ok(/^#[0-9a-f]{6}$/i.test(v.season), `mês ${m}: season hex canônico`);
+  }
+  // null guards (consumidor neutro, custo 0)
+  assert.equal(killfeedVars(null, '#ff2d78'), null, 'sem aura → null');
+  assert.equal(damageVars(null, '#ff2d78'), null, 'sem aura → null');
+  assert.equal(killfeedVars(aura, 'lixo'), null, 'hex lixo → null');
+  assert.equal(damageVars(aura, '#ff2d7'), null, 'hex curto → null');
+});
+
+test('F39 · MINIMAP_SEASON_TINTS: 4 estações congeladas, ids na ordem do calendário', () => {
+  assert.equal(MINIMAP_SEASON_TINTS.length, 4, '4 estações');
+  assert.deepEqual(MINIMAP_SEASON_TINTS.map((t) => t.id), HUD_SEASONS.map((s) => s.id),
+    'mesma ordem/ids do calendário do festival (verão→outono→inverno→primavera)');
+  for (const tint of MINIMAP_SEASON_TINTS) {
+    assert.ok(Object.isFrozen(tint), `${tint.id}: entrada congelada`);
+    assert.ok(/^rgba\(\d+,\d+,\d+,\.1\d?\)$/.test(tint.overlay.replace(/\s/g, '')),
+      `${tint.id}: véu rgba com alpha ≤ .12 (${tint.overlay})`);
+    assert.ok(/^rgba\(/.test(tint.grid), `${tint.id}: grade rgba`);
+    assert.ok(/^#[0-9a-f]{6}$/i.test(tint.edge), `${tint.id}: borda hex canônica`);
+  }
+  // semáforo funcional intacto: as cores dos marcadores NÃO estão na tabela
+  // (terminal verde/loot ciano/recon âmbar/jogador dourado são semâforos fixos)
+  const table = JSON.stringify(MINIMAP_SEASON_TINTS);
+  assert.ok(!table.includes('#39ff88') && !table.includes('#ffd28a') && !table.includes('#ffb52e'),
+    'tabela de tint NÃO toca os semáforos funcionais do radar');
+});
+
+test('F39 · minimapTintFor: determinístico, clamp módulo e estações distintas', () => {
+  for (let i = 0; i < 4; i++) assert.equal(minimapTintFor(i), MINIMAP_SEASON_TINTS[i], `índice ${i}`);
+  // entrada suja cai no módulo — o radar nunca fica sem estação
+  assert.equal(minimapTintFor(NaN), MINIMAP_SEASON_TINTS[0], 'NaN → verão');
+  assert.equal(minimapTintFor(-1), MINIMAP_SEASON_TINTS[3], '-1 → módulo → primavera');
+  assert.equal(minimapTintFor(4), MINIMAP_SEASON_TINTS[0], '4 → verão');
+  assert.equal(minimapTintFor(7), MINIMAP_SEASON_TINTS[3], '7 → primavera');
+  assert.equal(minimapTintFor(99), MINIMAP_SEASON_TINTS[3], '99 → primavera');
+  // retorno sempre congelado (objeto compartilhado com o DOM)
+  assert.ok(Object.isFrozen(minimapTintFor(2)), 'retorno congelado');
+  // estações visualmente distintas (grade e véu diferem — o tint é perceptível)
+  const grids = new Set(MINIMAP_SEASON_TINTS.map((t) => t.grid));
+  const edges = new Set(MINIMAP_SEASON_TINTS.map((t) => t.edge));
+  assert.equal(grids.size, 4, '4 grades distintas');
+  assert.equal(edges.size, 4, '4 bordas distintas');
+  // integração com o calendário: julho (hemisfério sul) → inverno no radar
+  assert.equal(minimapTintFor(seasonIndexFor(new Date(2026, 6, 15))).id, 'inverno',
+    'julho → tint de inverno no minimapa');
 });

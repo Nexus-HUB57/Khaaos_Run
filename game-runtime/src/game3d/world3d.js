@@ -33,6 +33,7 @@ import {
   buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
   grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
   bushShadowEntries,                                   // F38 — sombra de contato dos arbustos
+  scrubShadowBand, patchInstanceAlpha,                 // F39 — banda de distância da sombra do scrub
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
@@ -320,6 +321,62 @@ export function buildContactShadows(scene, entries) {
   return im;   // F38 — retorno p/ o chamador registrar/inspecionar (testes)
 }
 
+// ---------- F39 — sombras de contato em BANDAS DE DISTÂNCIA (scrub) ----------
+// Os discos do mato rasteiro de Barburhen (F7) eram ESTÁTICOS: opacidade cheia
+// a 200 m virava moiré escuro no horizonte. Aqui o MESMO disco radial ganha
+// alpha POR INSTÂNCIA dirigido por scrubShadowBand (vegetation3d — cheio
+// perto, raleio smoothstep, zero longe): main3d chama update(camX, camZ)
+// 1×/frame (O(scrub), tipicamente 150 hipotenusa + 150 floats — nada).
+// Mesma textura/material do F7 (consistência visual), material transparente
+// sem depthWrite + polygonOffset contra o terreno; y ancora no RELEVO (entry.y
+// com lift embutido — no plano jogável o terreno é 0, na margem acompanha).
+export function buildBandContactShadows(scene, entries, {
+  opacity = .55, nearDist = 30, farDist = 90,
+} = {}) {
+  if (!entries.length) return null;
+  const tex = contactShadowTexture();
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false, opacity: Math.max(.05, Math.min(1, opacity)),
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  patchInstanceAlpha(mat);                       // F39 — alpha por instância (F37)
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const alpha = new THREE.InstancedBufferAttribute(new Float32Array(entries.length), 1);
+  alpha.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('instanceAlpha', alpha);
+  const im = new THREE.InstancedMesh(geo, mat, entries.length);
+  const dummy = new THREE.Object3D();
+  entries.forEach((e, i) => {
+    dummy.position.set(e.x, e.y ?? (0.012 + i * 0.0006), e.z);
+    dummy.rotation.set(-Math.PI / 2, 0, e.rot ?? 0);
+    dummy.scale.setScalar(e.size ?? 1);
+    dummy.updateMatrix();
+    im.setMatrixAt(i, dummy.matrix);
+  });
+  im.renderOrder = 1;
+  im.receiveShadow = false;
+  im.castShadow = false;
+  im.count = entries.length;
+  im.visible = false;                            // update() acende com a banda
+  im.computeBoundingSphere?.();
+  scene.add(im);
+  return {
+    mesh: im, entries, alpha, nearDist, farDist,
+    update(camX = 0, camZ = 0) {
+      let lit = 0;
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const a = scrubShadowBand(Math.hypot(e.x - camX, e.z - camZ), { nearDist, farDist });
+        alpha.setX(i, a);
+        if (a > 0.002) lit++;
+      }
+      alpha.needsUpdate = true;
+      im.visible = lit > 0;                      // banda vazia → 0 draw calls
+      return this;
+    },
+  };
+}
+
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
 function buildProps(scene, layout, q) {
   const isBarburhen = layout.scenarioId === 'Barburhen';
@@ -569,12 +626,21 @@ function buildNature(scene, layout, rng, q, scenario = null) {
     });
     const scrubDummy = new THREE.Object3D();
     const scrubMeshes = scrubMats.map((mat) => new THREE.InstancedMesh(scrubGeo, mat, SCRUB));
+    // F39 — sombras do scrub saem do lote ESTÁTICO (shadowSpots) e ganham o
+    // próprio campo em BANDAS DE DISTÂNCIA: cheio perto, raleio suave, zero
+    // no horizonte (o disco a 200 m era moiré — agora morre antes do fog).
+    const scrubShadowSpots = [];
     let si = 0; guard = 0;
     while (si < SCRUB && guard++ < SCRUB * 14) {
       const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
       if (!free(x, z, 1.8) || !districtClear(x, z, 4)) continue;
       const s = .55 + rng.next() * .8;
-      shadowSpots.push({ x, z, size: 1.05 * s });
+      scrubShadowSpots.push({
+        x, z, rot: 0, size: 1.05 * s,
+        // ancoragem no RELEVO (contrato F37 do capim): lift 12mm embutido —
+        // no plano jogável o terreno é 0; na margem o disco acompanha.
+        y: terrainHeightAt(x, z, scenario.id) + .012,
+      });
       scrubDummy.position.set(x, .68 * s, z);
       scrubDummy.scale.set(s, s, s);
       scrubDummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
@@ -584,6 +650,15 @@ function buildNature(scene, layout, rng, q, scenario = null) {
       si++;
     }
     scrubMeshes.forEach((mesh) => { mesh.count = si; mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); });
+    if (q.contactShadows && scrubShadowSpots.length) {
+      // F39 — banda canônica 30→90m: dentro do full do capim (28m) a âncora
+      // é plena; o raleio termina a 90m, ANTES do fim da banda de impostores
+      // (110m) — a sombra nunca sobrevive à vegetação que ela ancora.
+      scene.userData.scrubBandShadows = buildBandContactShadows(scene, scrubShadowSpots, {
+        opacity: .55, nearDist: 30, farDist: 90,
+      });
+      scene.userData.scrubShadowEntries = scrubShadowSpots.length;   // inspeção/teste
+    }
   }
 
   // ---- pedras ----

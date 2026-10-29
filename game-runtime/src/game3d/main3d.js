@@ -1816,6 +1816,13 @@ export class Game3D {
     if (this.scene.userData.grassLOD && this.camera?.position) {
       this.scene.userData.grassLOD.update(this.camera.position.x, this.camera.position.z);
     }
+    // Fase 39 — sombras de contato do SCRUB de Barburhen em BANDAS DE
+    // DISTÂNCIA: alpha por instância pela distância da câmera (cheio perto,
+    // raleia suave e morre antes do fog — mesmo vocabulário de bandas do
+    // capim). Custo O(scrub) por frame, zero quando o mundo não tem scrub.
+    if (this.scene.userData.scrubBandShadows && this.camera?.position) {
+      this.scene.userData.scrubBandShadows.update(this.camera.position.x, this.camera.position.z);
+    }
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
@@ -1834,6 +1841,10 @@ export class Game3D {
     this.updateCamera(dt);
     this.effects.update(dt);
     this.deathDecals?.update(dt, this.camera.position); // Fase 20 — fade + LOD dos decals pela câmera
+    // F39 — números de dano no festival sazonal: as variáveis da temporada
+    // (hud.auraCombat — decisão PURA de aura3d) entram no pool ANTES do
+    // update; spawn dos eventos do frame seguinte já nasce decorado.
+    this.damageNumbers?.setAuraVars?.(this.hud?.auraCombat ?? null);
     // Fase 27 — números de dano: re-projeta âncoras, sobe e some (determinístico)
     this.damageNumbers?.update(dt, { camera: this.camera, width: innerWidth, height: innerHeight });
     this.updateDropFX(dt);

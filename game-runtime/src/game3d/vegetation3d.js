@@ -467,6 +467,28 @@ export function bushShadowEntries(bushSpots = [], { sizeFactor = 2.1 } = {}) {
   return bushSpots.map((sp) => ({ x: sp.x, z: sp.z, rot: 0, size: f * (sp.s ?? 1) }));
 }
 
+// F39 — BANDA DE DISTÂNCIA da sombra de contato do SCRUB (PURO). Os discos
+// do mato rasteiro (F7, ~1.05m) ancoravam o scrub à custa de RUÍDO longe:
+// discos escuros minúsculos viram moiré/sujeira no horizonte e pagam overdraw
+// sem ganho de leitura. Aqui o alpha POR INSTÂNCIA segue bandas — o mesmo
+// vocabulário do capim (F32/F37/F38):
+//   cheio   (dist ≤ nearDist) — âncora plena (silhueta grudada no chão);
+//   raleio  (nearDist→farDist) — smoothstep descendo até 0 (some ANTES do
+//             fog comer a vegetação — nunca some DEPOIS, sem sombra fantasma);
+//   fora    (dist ≥ farDist) — 0 (nem empacota: alpha 0 não custa draw).
+// Banda degenerada (farDist ≤ nearDist) vira degrau retrocompatível (1|0) —
+// mesmo guard da F38 (largura 0 = degrau, sem NaN). dist suja → 0 (sombra
+// nunca nasce de lixo numérico).
+export function scrubShadowBand(dist, { nearDist = 30, farDist = 90 } = {}) {
+  const near = Math.max(0, nearDist);
+  const far = Math.max(near, farDist);
+  if (!(dist >= 0)) return 0;                     // NaN/negativo → sem sombra
+  if (dist <= near) return 1;                     // cheio (banda degenerada: near=0 → nunca)
+  if (dist >= far) return 0;                      // fora da banda
+  if (!(far > near)) return dist < near ? 1 : 0;  // degrau (far ≤ near)
+  return 1 - smoothStep(near, far, dist);         // raleio suave
+}
+
 // Fase 37 — ALPHA POR INSTÂNCIA via onBeforeCompile (mesmo contrato do
 // patchSway: string de shader, INERTE sem renderer — headless nunca compila).
 // A InstancedMesh ganha um InstancedBufferAttribute 'instanceAlpha' (itemSize

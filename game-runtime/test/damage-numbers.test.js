@@ -25,8 +25,19 @@ const DT = 1 / 20;
 class FakeElement {
   constructor() {
     this.className = ''; this.textContent = '';
-    this.style = {}; this.children = [];
+    // F39 — style com setProperty/removeProperty (vars do festival sazonal)
+    // + classList (classe .mythic acendida pelo pool quando há aura ativa)
+    this.style = {
+      setProperty(k, v) { this[k] = v; },
+      removeProperty(k) { delete this[k]; },
+    };
+    this._cls = new Set();
+    this.children = [];
     this.removed = false; this.parent = null;
+  }
+  get classList() {
+    const s = this._cls;
+    return { add: (c) => s.add(c), remove: (c) => s.delete(c), contains: (c) => s.has(c) };
   }
   appendChild(child) { child.parent = this; this.children.push(child); }
   remove() { this.removed = true; if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); }
@@ -293,4 +304,61 @@ test('fase27 room: hit de bala autoritativa continua com owner (contrato já exi
   assert.ok(hit, 'hit autoritativo entregue');
   assert.equal(hit.owner, 'p1', 'owner do atirador');
   assert.ok(hit.damage > 0);
+});
+
+// ====================== F39 — festival sazonal nos números de dano ==========
+
+test('f39 pool: com aura ativa, body/head ganham .mythic + vars da temporada', () => {
+  withFakeDoc((root) => {
+    const pool = new DamageNumbers3D({ container: root });
+    pool.setAuraVars({ aura: '#ff2d78', season: '#ff5a94', dur: '1.4' });
+    const body = pool.spawn({ x: 1, y: 1, z: -5, damage: 21, victim: 'bot-01' });
+    const head = pool.spawn({ x: 1, y: 1, z: -5, damage: 55, head: true, victim: 'bot-02' });
+    assert.ok(body.el.classList.contains('mythic'), 'corpo: classe .mythic acendida');
+    assert.ok(head.el.classList.contains('mythic'), 'headshot: classe .mythic acendida');
+    assert.equal(body.el.style['--dmg-aura'], '#ff2d78', 'corpo: identidade da skin (--dmg-aura)');
+    assert.equal(body.el.style['--dmg-season'], '#ff5a94', 'corpo: glow da estação (--dmg-season)');
+    assert.equal(head.el.style['--dmg-aura'], '#ff2d78', 'head: identidade injetada (CSS mantém o vermelho)');
+    assert.equal(head.el.style['--dmg-season'], '#ff5a94', 'head: halo da estação injetado');
+    // dicionário de classes preservado (o CSS decide o visual por tier)
+    assert.ok(body.el.className.includes('dmg-body'), 'classe do tier intacta');
+    assert.ok(head.el.className.includes('dmg-head'), 'classe do tier intacta');
+    assert.equal(root.children.length, 2, 'nós no container');
+  });
+});
+
+test('f39 pool: hazard e NOCAUTE NUNCA recebem o festival (semáforo de combate intacto)', () => {
+  withFakeDoc((root) => {
+    const pool = new DamageNumbers3D({ container: root });
+    pool.setAuraVars({ aura: '#ff2d78', season: '#ff5a94', dur: '1' });
+    const hazard = pool.spawn({ x: 1, y: 1, z: -5, damage: 9, hazard: true, kind: 'acid', victim: 'x' });
+    const knock = pool.spawn({ x: 1, y: 1, z: -5, knock: true });
+    assert.ok(!hazard.el.classList.contains('mythic'), 'hazard: identidade por mundo preservada');
+    assert.ok(hazard.el.style['--dmg-aura'] === undefined, 'hazard: nenhuma var injetada');
+    assert.ok(!knock.el.classList.contains('mythic'), 'NOCAUTE dourado: recompensa sem festival');
+    assert.ok(knock.el.style['--dmg-season'] === undefined, 'NOCAUTE: nenhuma var injetada');
+  });
+});
+
+test('f39 pool: sem aura (null/lixo) → números neutros; vars sobrevivem ao clear', () => {
+  withFakeDoc((root) => {
+    const pool = new DamageNumbers3D({ container: root });
+    // sem setAuraVars: spawn neutro (contrato F27 intocado)
+    const neutral = pool.spawn({ x: 1, y: 1, z: -5, damage: 12, victim: 'b' });
+    assert.ok(neutral.el, 'nó criado');
+    assert.ok(!neutral.el.classList.contains('mythic'), 'sem aura → sem .mythic');
+    // setAuraVars com lixo → guard: sem festival (nunca decora com dado podre)
+    pool.setAuraVars(null);
+    pool.setAuraVars({ aura: 123, season: '#ff5a94' });   // aura não-string
+    pool.setAuraVars('rosa');                              // objeto errado
+    const still = pool.spawn({ x: 1, y: 1, z: -5, damage: 12, victim: 'b' });
+    assert.ok(!still.el.classList.contains('mythic'), 'lixo → guard → neutro');
+    // festival ligado de novo e clear(): skin equipada sobrevive ao restart
+    pool.setAuraVars({ aura: '#4d9bff', season: '#7ab5ff', dur: '1' });
+    pool.spawn({ x: 1, y: 1, z: -5, damage: 30, victim: 'c' });
+    pool.clear();
+    const after = pool.spawn({ x: 1, y: 1, z: -5, damage: 30, victim: 'd' });
+    assert.ok(after.el.classList.contains('mythic'), 'clear() não desliga o festival (skin segue equipada)');
+    assert.equal(after.el.style['--dmg-aura'], '#4d9bff');
+  });
 });

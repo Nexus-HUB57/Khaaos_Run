@@ -20,8 +20,9 @@ import {
   grassImpostorFade,                    // F37 — fade suave da banda de impostores
   grassSparseCount, bushShadowEntries,  // F38 — desbaste gradual + sombra dos arbustos
   grassOutdoorBake, applyOutdoorTint,   // F36 — impostor outdoor (bake no terreno)
+  scrubShadowBand,                      // F39 — banda de distância da sombra do scrub
 } from '../src/game3d/vegetation3d.js';
-import { buildScene } from '../src/game3d/world3d.js';
+import { buildScene, buildBandContactShadows } from '../src/game3d/world3d.js';
 
 // ---- shim de canvas 2D (padrão da suíte) — texturas procedurais em Node ----
 const ctx2d = {
@@ -784,5 +785,119 @@ test('F38 · buildScene W1-W4: arbustos com sombra de contato + cross-fade canô
     assert.equal(lod.impostorPreRoll, 9, `${scenarioId}: pre-roll do cross-fade = 9`);
     assert.equal(lod.sparseEntryZone, 10, `${scenarioId}: entryZone canônica = 10`);
     assert.equal(lod.sparseExitZone, 12, `${scenarioId}: exitZone canônica = 12`);
+  }
+});
+
+// ================================ Fase 39 — sombra do scrub em bandas ====
+
+test('F39 · scrubShadowBand: cheio perto, raleio smoothstep, zero no horizonte (PURO)', () => {
+  const cfg = { nearDist: 30, farDist: 90 };
+  assert.equal(scrubShadowBand(0, cfg), 1, 'no pé da câmera → âncora plena');
+  assert.equal(scrubShadowBand(20, cfg), 1, 'dentro do cheio → 1');
+  assert.equal(scrubShadowBand(30, cfg), 1, 'borda do cheio = 1 (rampa começa em 0)');
+  const m1 = scrubShadowBand(50, cfg), m2 = scrubShadowBand(70, cfg);
+  assert.ok(m1 > 0 && m1 < 1, `meio da banda raleia (50m=${m1.toFixed(3)})`);
+  assert.ok(m2 > 0 && m2 < 1, `fim do raleio ainda visível (70m=${m2.toFixed(3)})`);
+  assert.ok(m1 > m2, 'raleio monotônico (50m > 70m)');
+  assert.equal(scrubShadowBand(90, cfg), 0, 'borda de saída = 0 (morre ANTES do fog comer a vegetação)');
+  assert.equal(scrubShadowBand(120, cfg), 0, 'além da banda = 0 (sem sombra fantasma no horizonte)');
+  assert.equal(scrubShadowBand(110, cfg), 0, 'na banda de impostores do capim (110m) a sombra já foi');
+  // monotonia global não-crescente na banda inteira (sem degraus/moire)
+  let prev = 1;
+  for (let d = 0; d <= 120; d += .5) {
+    const a = scrubShadowBand(d, cfg);
+    assert.ok(a <= prev, `não-crescente @${d}m (${a.toFixed(3)} <= ${prev.toFixed(3)})`);
+    prev = a;
+  }
+  // determinismo byte a byte
+  assert.equal(scrubShadowBand(55, cfg), scrubShadowBand(55, cfg), 'mesma dist → mesmo alpha');
+});
+
+test('F39 · scrubShadowBand: banda degenerada, entrada suja e bandas custom', () => {
+  const cfg = { nearDist: 30, farDist: 90 };
+  // farDist <= nearDist → degrau retrocompatível (1|0), sem NaN
+  assert.equal(scrubShadowBand(25, { nearDist: 30, farDist: 20 }), 1, 'degenerada: dentro do near → 1');
+  assert.equal(scrubShadowBand(35, { nearDist: 30, farDist: 20 }), 0, 'degenerada: fora do near → 0');
+  assert.equal(scrubShadowBand(30, { nearDist: 30, farDist: 20 }), 1, 'degenerada: borda exata → 1');
+  // entrada suja: NaN/negativo → 0 (sombra nunca nasce de lixo numérico)
+  assert.equal(scrubShadowBand(NaN, cfg), 0, 'NaN → 0');
+  assert.equal(scrubShadowBand(-5, cfg), 0, 'negativo → 0');
+  // bandas custom respeitadas (parâmetros, não constantes escondidas)
+  const tight = { nearDist: 10, farDist: 30 };
+  assert.equal(scrubShadowBand(8, tight), 1);
+  assert.equal(scrubShadowBand(30, tight), 0);
+  const mid = scrubShadowBand(20, tight);
+  assert.ok(mid > 0 && mid < 1, `banda custom raleia (20m=${mid.toFixed(3)})`);
+});
+
+test('F39 · buildBandContactShadows: campo com alpha por instância dirigido por banda', () => {
+  const scene = new THREE.Scene();
+  const entries = [
+    { x: 0, z: 0, size: 1.05, y: .012 },        // perto da câmera (0,0)
+    { x: 60, z: 0, size: 1.0, y: .012 },        // meio do raleio (60m)
+    { x: 200, z: 0, size: .9, y: .012 },        // horizonte (200m → 0)
+  ];
+  const handle = buildBandContactShadows(scene, entries, { opacity: .55, nearDist: 30, farDist: 90 });
+  assert.ok(handle, 'campo criado com entradas');
+  assert.equal(handle.mesh.parent, scene, 'mesh adicionado à cena');
+  assert.equal(handle.mesh.count, 3, 'capacidade = entradas');
+  assert.equal(handle.mesh.visible, false, 'nasce invisível (update acende a banda)');
+  assert.ok(handle.mesh.material.transparent && !handle.mesh.material.depthWrite,
+    'material transparente sem depthWrite (só escurece)');
+  assert.ok(handle.alpha, 'attribute instanceAlpha presente');
+  // câmera em (0,0): perto=1, 60m no raleio, 200m = 0
+  handle.update(0, 0);
+  assert.equal(handle.alpha.array[0], 1, 'sombra 0: cheia (0m)');
+  const a60 = handle.alpha.array[1];
+  assert.ok(a60 > 0 && a60 < 1, `sombra 1: raleio (60m=${a60.toFixed(3)})`);
+  assert.equal(handle.alpha.array[2], 0, 'sombra 2: horizonte → 0');
+  assert.equal(handle.mesh.visible, true, 'banda com alpha > 0 → visível');
+  // idempotente: mesma câmera → mesmo estado
+  const before = [...handle.alpha.array];
+  handle.update(0, 0);
+  assert.deepEqual([...handle.alpha.array], before, 'update idempotente');
+  // câmera longe de tudo → banda vazia → mesh invisível (0 draw calls)
+  handle.update(500, 500);
+  assert.equal(handle.mesh.visible, false, 'banda vazia → invisível (custo 0)');
+  assert.ok([...handle.alpha.array].every((a) => a === 0), 'todos os alphas zerados');
+  // null guard: sem entradas → null (chamador não registra)
+  assert.equal(buildBandContactShadows(scene, []), null, 'vazio → null');
+});
+
+test('F39 · buildScene Barburhen: scrub com campo de sombras em bandas registrado', () => {
+  const { scene } = buildScene('f39-scrub', 'Barburhen', null, 'high');
+  const handle = scene.userData.scrubBandShadows;
+  assert.ok(handle, 'scrubBandShadows registrado no userData');
+  assert.equal(scene.userData.scrubShadowEntries, handle.entries.length,
+    'registro do total consistente com as entradas');
+  assert.ok(handle.entries.length > 50, `scrub plantado (${handle.entries.length} sombras)`);
+  // cada disco ancorado no relevo (y = terreno + 12mm — plano jogável = 0.012)
+  for (const e of handle.entries) {
+    assert.ok(e.size > 0, `sombra ${e.x.toFixed(1)}: tamanho plantado`);
+    assert.ok(e.y >= .012, `sombra ${e.x.toFixed(1)}: lift anti-z-fight (y=${e.y.toFixed(3)})`);
+  }
+  // update acende a banda com a câmera no spawn (o mb de alpha varia por dist)
+  handle.update(0, 0);
+  const lit = [...handle.alpha.array].filter((a) => a > 0).length;
+  assert.ok(lit > 0, `câmera no centro: ${lit} sombras na banda`);
+  assert.equal(handle.mesh.visible, true, 'campo visível com banda ocupada');
+  // scrub NÃO está mais no lote estático da natureza (evita sombra duplicada)
+  const staticShadows = scene.userData.natureContactShadows;
+  const mat4 = staticShadows.instanceMatrix;
+  const packed = new Set();
+  for (let i = 0; i < staticShadows.count; i++) {
+    packed.add(`${mat4.array[i * 16 + 12].toFixed(2)}|${mat4.array[i * 16 + 14].toFixed(2)}`);
+  }
+  for (const e of handle.entries) {
+    assert.ok(!packed.has(`${e.x.toFixed(2)}|${e.z.toFixed(2)}`),
+      `scrub (${e.x.toFixed(1)},${e.z.toFixed(1)}) saiu do lote estático`);
+  }
+});
+
+test('F39 · outros mundos: sem scrub → sem campo de bandas (custo 0)', () => {
+  for (const scenarioId of ['CIGKV', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const { scene } = buildScene(`f39-noscrub-${scenarioId}`, scenarioId, null, 'high');
+    assert.equal(scene.userData.scrubBandShadows, undefined, `${scenarioId}: sem scrub, sem campo`);
+    assert.equal(scene.userData.scrubShadowEntries, undefined, `${scenarioId}: sem registro`);
   }
 });

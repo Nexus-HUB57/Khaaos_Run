@@ -163,12 +163,34 @@ body[data-aura-season='primavera'] #crosshair.mythic::before { opacity: .34; }
 .dmg-hazard.hz-gravity { color: #9fe8ff; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,255,.65), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-hazard.hz-acid { color: #a8e86a; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,60,.6), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-hazard.hz-ring { color: #ff6b2c; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,107,44,.65), 0 1px 2px rgba(0,0,0,.9); }
+/* F39 — números de dano no festival sazonal (pool acende .mythic só nos
+   tiers NEUTROS dmg-body/dmg-head): corpo na IDENTIDADE da skin (--dmg-aura),
+   halo no glow TINGIDO pela estação (--dmg-season). Gramática intacta:
+   headshot mantém o VERMELHO (ganha só o halo) e hazard/knock nunca recebem
+   a classe — semáforo de combate informa, estação decora. */
+.dmg-num.mythic {
+  color: var(--dmg-aura, #fff);
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px color-mix(in srgb, var(--dmg-season, #fff) 65%, transparent), 0 1px 2px rgba(0,0,0,.9);
+}
+.dmg-num.mythic.dmg-head {
+  color: #ff4d4d;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 12px color-mix(in srgb, var(--dmg-season, #ff3d52) 75%, transparent), 0 1px 3px rgba(0,0,0,.9);
+}
 
 /* ---------- minimapa ---------- */
 .map-corner { position: fixed; top: 64px; right: 14px; z-index: 18; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 .minimap-frame {
   position: relative; border: 1px solid var(--panel-border); border-radius: 4px;
   background: var(--panel); padding: 4px; box-shadow: 0 4px 22px rgba(0,0,0,.5);
+}
+/* F39 — moldura respira com a ESTAÇÃO (hud3d acende .seasonal + --mm-edge
+   a cada draw): borda tingida e halo da temporada. Semâforos do canvas
+   (anéis/terminais/loot/jogador) ficam intactos — a estação tinge, nunca
+   substitui. Transição suave entre estações, custo ~0 (2 propriedades). */
+.minimap-frame.seasonal {
+  border-color: color-mix(in srgb, var(--mm-edge, #c8b46a) 45%, var(--panel-border));
+  box-shadow: 0 4px 22px rgba(0,0,0,.5), 0 0 12px color-mix(in srgb, var(--mm-edge, #c8b46a) 28%, transparent);
+  transition: border-color .4s, box-shadow .4s;
 }
 .minimap-frame canvas { display: block; border-radius: 2px; }
 .compass {
@@ -186,6 +208,18 @@ body[data-aura-season='primavera'] #crosshair.mythic::before { opacity: .34; }
 .kill-entry.mine { border-color: rgba(200,255,61,.5); }
 .kill-entry.mine i { color: var(--acid); }
 @keyframes killin { from { transform: translateX(20px); opacity: 0; } }
+/* F39 — killfeed no festival sazonal: entradas .mine.mythic (hud3d acende
+   só kills do PRÓPRIO jogador com aura ativa). Borda na IDENTIDADE da skin
+   (--kf-aura), ícone ☠/✕/◌ no glow da ESTAÇÃO (--kf-season), ritmo da
+   entrada escalado pela temporada (--kf-dur). kills entre bots: neutras. */
+.kill-entry.mythic { border-color: color-mix(in srgb, var(--kf-aura, #ff2d78) 55%, transparent); }
+.kill-entry.mine.mythic i {
+  color: var(--kf-season, var(--acid));
+  text-shadow: 0 0 6px var(--kf-season, var(--acid));
+  animation: kfSeason calc(2.8s * var(--kf-dur, 1)) ease-in-out infinite;
+}
+@keyframes kfSeason { 50% { filter: brightness(1.35); } }
+@media (prefers-reduced-motion: reduce) { .kill-entry.mine.mythic i { animation: none; } }
 
 /* ---------- vitais ---------- */
 .vitals {

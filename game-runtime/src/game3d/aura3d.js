@@ -122,3 +122,61 @@ export function weaponIconVars(aura = null, mythicHex = null) {
 export function crosshairVars(aura = null, mythicHex = null) {
   return weaponIconVars(aura, mythicHex);
 }
+
+// ---------------------------------------------- killfeed / feed de combate ----
+// Fase 39 — o KILLFEED entra no festival sazonal por aura: as entradas do
+// PRÓPRIO jogador (isPlayerKill) celebram a eliminação na identidade da
+// skin (--kf-aura na borda) com o ícone (☠/✕/◌) no GLOW da estação
+// (--kf-season) e o ritmo de entrada escalado pela temporada (--kf-dur).
+// Kills entre bots permanecem neutras — a aura é a skin EQUIPADA, ela
+// celebra o que o jogador fez, não o que ele assiste. Mesma fonte única
+// de decisão (hudAuraFor + catálogo) — o feed nunca inventa cor.
+// Retorna null quando NÃO há aura ativa ou hex inválido — hud3d não decora
+// a entrada (killfeed neutro, custo 0).
+export function killfeedVars(aura = null, mythicHex = null) {
+  return weaponIconVars(aura, mythicHex);
+}
+
+// --------------------------------------------- números de dano flutuantes ----
+// Fase 39 — os NÚMEROS DE DANO (assinatura Free Fire) entram no festival:
+// corpo do número na IDENTIDADE da skin (--dmg-aura), halo/glow na cor
+// TINGIDA pela estação (--dmg-season). A gramática de leitura rápida fica
+// INTACTA: headshot mantém o VERMELHO (ganha só o halo da estação) e os
+// tiers com identidade própria (hazard por mundo, NOCAUTE dourado) nunca
+// são tingidos — a estação decora, o semáforo de combate informa.
+// Retorna null quando NÃO há aura ativa ou hex inválido — números neutros,
+// custo 0.
+export function damageVars(aura = null, mythicHex = null) {
+  return weaponIconVars(aura, mythicHex);
+}
+
+// ---------------------------------------------- minimapa — tint sazonal ----
+// Fase 39 — o MINIMAPA recebe o tint da ESTAÇÃO DO ANO (calendário, não
+// aura: o radar obedece à temporada global do festival — a mesma estação
+// que tinge a vinheta/mira/ícone). A identidade tática fica INTACTA: os
+// semáforos funcionais (terminal verde/âmbar, loot ciano, recon âmbar,
+// jogador dourado, anéis do Ring) NUNCA mudam de matiz — a estação tinge
+// apenas as camadas decorativas: fundo (véu translúcido), grade e a MOLDURA
+// do painel (borda + halo via --mm-edge no CSS). "A estação tinge, nunca
+// substitui" — mesmo princípio da vinheta F36.
+//   overlay — véu rgba sobre fundo+grade (alpha ≤ .12, leitura preservada);
+//   grid    — cor da grade da estação (antes roxo fixo);
+//   edge    — cor da borda/halo da moldura (.minimap-frame.seasonal).
+export const MINIMAP_SEASON_TINTS = Object.freeze([
+  // verão — sol a pino: véu quente, borda laranja-sol
+  Object.freeze({ id: 'verao', overlay: 'rgba(255,140,60,.10)', grid: 'rgba(170,120,95,.20)', edge: '#ff9a4d' }),
+  // outono — folhagem seca: véu âmbar, borda cobre
+  Object.freeze({ id: 'outono', overlay: 'rgba(196,124,44,.11)', grid: 'rgba(168,118,74,.20)', edge: '#c88a3e' }),
+  // inverno — frio de Barburhen: véu azulado, borda gelo
+  Object.freeze({ id: 'inverno', overlay: 'rgba(120,170,255,.11)', grid: 'rgba(112,142,192,.20)', edge: '#6fa8dc' }),
+  // primavera — renascimento: véu esverdeado, borda broto
+  Object.freeze({ id: 'primavera', overlay: 'rgba(140,230,120,.10)', grid: 'rgba(122,168,120,.20)', edge: '#7ddc6a' }),
+]);
+
+// Tint do minimapa pelo índice da estação (PURO, determinístico). Entrada
+// suja (NaN/negativo/overflow) cai no clamp módulo — o radar nunca fica sem
+// estação; o retorno é SEMPRE uma entrada congelada da tabela canônica.
+export function minimapTintFor(seasonIdx = 0) {
+  const i = ((Number(seasonIdx) | 0) % 4 + 4) % 4;   // NaN → 0 (verão), sujo → módulo
+  return MINIMAP_SEASON_TINTS[i];
+}

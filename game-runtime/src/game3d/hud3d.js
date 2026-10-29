@@ -6,7 +6,7 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
 import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
-import { hudAuraFor, shiftAuraHex, weaponIconVars, crosshairVars } from './aura3d.js'; // F36/F37/F38 — aura sazonal do HUD + ícone + mira
+import { hudAuraFor, shiftAuraHex, weaponIconVars, crosshairVars, killfeedVars, damageVars, seasonIndexFor, minimapTintFor } from './aura3d.js'; // F36-39 — aura sazonal do HUD + ícone + mira + killfeed/dano + minimapa
 
 const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
@@ -24,6 +24,7 @@ export class HUD {
     // Fase 35 — minimapa a 30 Hz (canvas 2D full-redraw a 60+ Hz custava
     // real em touch sem ganho perceptível — achado G4 da revisão GFX/UX)
     this.mmLimiter = new RateLimiter(33);
+    this.auraCombat = null; // F39 — vars da temporada p/ killfeed/números (decisão PURA no update)
     this.#bindButtons();
   }
 
@@ -104,6 +105,17 @@ export class HUD {
     const el = document.createElement('div');
     el.className = `kill-entry ${isPlayerKill ? 'mine' : ''}`;
     el.innerHTML = `<span>${killer}</span><i>${knock ? '◌ NOCAUTE' : head ? '☠ HEADSHOT' : '✕'}</i><span>${victim}</span>`;
+    // F39 — festival sazonal: só as eliminações do PRÓPRIO jogador (a aura é
+    // a skin EQUIPADA — ela celebra a eli do jogador, não o que ele assiste).
+    // Variáveis injetadas no elemento: borda na IDENTIDADE (--kf-aura), ícone
+    // no glow da ESTAÇÃO (--kf-season), ritmo da entrada pela temporada
+    // (--kf-dur). Sem aura/mythic: killfeed neutro (custo 0).
+    if (isPlayerKill && this.auraCombat) {
+      el.classList.add('mythic');
+      el.style.setProperty('--kf-aura', this.auraCombat.aura);
+      el.style.setProperty('--kf-season', this.auraCombat.season);
+      el.style.setProperty('--kf-dur', this.auraCombat.dur);
+    }
     const list = $('#killfeed');
     list.prepend(el);
     while (list.children.length > 4) list.lastChild.remove();
@@ -186,6 +198,15 @@ export class HUD {
           body.style.setProperty('--aura', mDef.aura);
           body.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
         }
+        // F39 — variáveis de COMBATE da temporada (killfeed + números de
+        // dano): decisão PURA killfeedVars/damageVars (mesma fonte do
+        // badge/vinheta/mira/ícone), consumidas por hud.killfeed (entries do
+        // jogador) e pelo pool DamageNumbers3D (main3d repassa 1×/frame).
+        const kfVars = killfeedVars(aura, mDef.aura);
+        const dgVars = damageVars(aura, mDef.aura);
+        this.auraCombat = kfVars && dgVars
+          ? Object.freeze({ aura: kfVars.aura, season: kfVars.season, dur: kfVars.dur })
+          : null;
         // Fase 37 — o ÍCONE da arma entra no festival: MESMAS variáveis da
         // temporada (decisão PURA weaponIconVars — fonte única com badge/
         // vinheta), glow e varredura na cor tingida pela estação. Sem mítica
@@ -231,6 +252,7 @@ export class HUD {
           delete body.dataset.aura;              // volta ao HUD neutro (custo 0)
           delete body.dataset.auraSeason;
         }
+        this.auraCombat = null;                  // F39 — killfeed/números neutros (custo 0)
         // Fase 37 — ícone volta ao neutro junto com o corpo (custo 0)
         const iconEl3 = $('#weaponIcon');
         if (iconEl3?.classList.contains('mythic')) {
@@ -349,15 +371,29 @@ export class HUD {
     ctx.save();
     ctx.translate(size / 2, size / 2);
     const scale = size / 420; // mundo 400m
+    // F39 — TINT SAZONAL POR ESTAÇÃO: o radar obedece ao CALENDÁRIO (mesma
+    // fonte da vinheta — seasonIndexFor). Semáforos funcionais (terminais,
+    // loot, recon, jogador, anéis) NUNCA mudam — a estação tinge só as
+    // camadas decorativas: fundo, grade, véu e a moldura do painel.
+    const tint = minimapTintFor(seasonIndexFor(new Date()));
+    const frame = this.minimap?.parentElement;
+    if (frame) {
+      frame.classList.add('seasonal');
+      frame.style.setProperty('--mm-edge', tint.edge);
+    }
     // fundo
     ctx.fillStyle = 'rgba(10,10,16,.72)';
     ctx.fillRect(-size / 2, -size / 2, size, size);
-    // grid
-    ctx.strokeStyle = 'rgba(122,90,158,.18)'; ctx.lineWidth = 1;
+    // grid — cor da ESTAÇÃO (antes roxo fixo)
+    ctx.strokeStyle = tint.grid; ctx.lineWidth = 1;
     for (let g = -200; g <= 200; g += 50) {
       ctx.beginPath(); ctx.moveTo(g * scale, -size / 2); ctx.lineTo(g * scale, size / 2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-size / 2, g * scale); ctx.lineTo(size / 2, g * scale); ctx.stroke();
     }
+    // véu da estação sobre fundo+grade (ANTES dos marcadores funcionais —
+    // alpha ≤ .12: leitura tática preservada, temporada presente)
+    ctx.fillStyle = tint.overlay;
+    ctx.fillRect(-size / 2, -size / 2, size, size);
     // anel alvo (tracejado) + atual
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = 'rgba(255,107,44,.75)';

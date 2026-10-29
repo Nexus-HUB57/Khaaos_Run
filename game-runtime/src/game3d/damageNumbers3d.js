@@ -94,9 +94,19 @@ export class DamageNumbers3D {
     this.max = Math.max(1, max | 0);
     this.pool = [];        // entradas vivas (ring: mais antigo reciclado no teto)
     this._mem = null;      // último acerto lembrado { x, y, z, age }
+    this._auraVars = null; // F39 — festival sazonal (damageVars de aura3d, via main3d)
   }
 
   get size() { return this.pool.length; }
+
+  /** F39 — recebe as variáveis da temporada (aura3d.damageVars — fonte única
+   * com badge/vinheta/mira/killfeed). null desliga o festival (números neutros).
+   * Guard: só objetos com aura/season string entram — lixo nunca decora. */
+  setAuraVars(vars = null) {
+    this._auraVars = (vars && typeof vars.aura === 'string' && typeof vars.season === 'string')
+      ? vars
+      : null;
+  }
 
   /** Registra um número. `victim` só alimenta o stagger anti-sobreposição.
    * Fase 29 — `hazard` + `kind` escolhem o tier ambiental (cor por hazard). */
@@ -115,6 +125,14 @@ export class DamageNumbers3D {
       text: knock ? tier.text : String(dmg),
       el: this.#makeEl(tier.cls, knock ? tier.text : String(dmg)),
     };
+    // F39 — festival sazonal POR ELEMENTO: só os tiers NEUTROS (corpo branco,
+    // headshot vermelho) recebem a aura — hazard (identidade por mundo) e
+    // NOCAUTE (dourado) mantêm o semáforo de combate intacto.
+    if (entry.el && this._auraVars && (tier.cls === 'dmg-body' || tier.cls === 'dmg-head')) {
+      entry.el.classList.add('mythic');
+      entry.el.style.setProperty('--dmg-aura', this._auraVars.aura);
+      entry.el.style.setProperty('--dmg-season', this._auraVars.season);
+    }
     this.pool.push(entry);
     if (this.pool.length > this.max) this.#release(this.pool.shift());
     return entry;
@@ -155,7 +173,8 @@ export class DamageNumbers3D {
     }
   }
 
-  /** Zera tudo (nova partida / restart) — nós voltam ao pool limpo. */
+  /** Zera tudo (nova partida / restart) — nós voltam ao pool limpo. O festival
+   * sazonal NÃO é limpo aqui: a skin equipada sobrevive ao restart (F39). */
   clear() {
     for (const e of this.pool) this.#release(e);
     this.pool.length = 0;
