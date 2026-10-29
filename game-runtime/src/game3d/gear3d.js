@@ -236,9 +236,13 @@ export function deathBoxContents(rng, actor = {}) {
   const ammoLeft = Math.max(0, Math.round(actor.ammoReserve ?? 0));
   const items = [];
   if (actor.weapon && actor.weapon !== 'sucata') {
-    // Fase 30 — anexos da AR-47 caída herdam com a arma (matou, herdou TUDO)
-    const atts = Array.isArray(actor.attachments) && actor.attachments.length
-      ? { attachments: [...actor.attachments] } : {};
+    // Fase 30 — anexos da arma caída herdam com a arma (matou, herdou TUDO);
+    // Fase 32 — as RARIDADES dos anexos herdam em paralelo (gasto→dourado)
+    const hasAtts = Array.isArray(actor.attachments) && actor.attachments.length;
+    const atts = hasAtts ? { attachments: [...actor.attachments] } : {};
+    if (hasAtts && Array.isArray(actor.attachmentRarities) && actor.attachmentRarities.length === actor.attachments.length) {
+      atts.attachmentRarities = [...actor.attachmentRarities];
+    }
     items.push({ kind: 'weapon', id: actor.weapon, rarity: actor.weaponSkin ?? null, ...atts });
   }
   if (ammoLeft > 0) items.push({ kind: 'ammo', id: ammoId, amount: Math.min(ammoLeft, 60) });

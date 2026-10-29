@@ -357,6 +357,42 @@ Stage Summary:
 - PRs #210 (duplicata F22/23) e #181 (gráficos UE5 + economy 2PC) mergeadas com reconciliação semântica; main re-verificado
 - Infra UE5.8/EAC pronta para destravar no instante em que os valores humanos chegarem — nenhum outro edit necessário
 
+================================================================================
+Task: Fase 32 — skins míticas evolutivas PARA O ARSENAL (não só AR-47) + variantes de anexos por raridade (visual gasto→dourado) + grama com LOD de distância
+
+Work Log:
+- attachments3d.js: MYTHIC_SKINS — catálogo mítico por arma (AR-47 rosa-caos herdado da F30 + M4 Sentinela de Éter ciano, MP5 Vaga-lume Urbano lima, Barrett Julgamento Orbital violeta, G19 Eco Espectral menta); fit por silhueta (escala/offset do overlay: pistola .55×, sniper 1.6×); mythicSkinFor() PURA; MYTHIC_SKIN vira alias da ar47 (compat F30)
+- attachments3d.js: ATTACHMENT_RARITY_TREATMENTS — 5 acabamentos por raridade (COMUM gasto fosco com risco de desgaste, INCOMUM ciano, RARO violeta, LENDARIO ouro fosco, MITICA ouro polido emissivo) + chip de raridade (rarityChip) por anexo; buildAttachmentMesh(id, {rarity}); applyAttachments(id, rarities) com attachmentRarityFor() aceitando mapa/array/string/null (retrocompatível); materiais memoizados POR TIER (zero leak)
+- entities3d.js: fábricas passam raridades + cor/fit da skin mítica da arma (mythicSkinFor) ao overlay — applyMythicSkin({color, fit})
+- sim3d.js: mítica GENERALIZADA (mythicStage = rarity MITICA && mythicSkinFor(id)) em players/bots/oficiais; attachmentRarities + attachmentBagRarities paralelos em pickup/troca/bolso/caixa de morte; kit de arma MÍTICA nasce dourado (anexos herdam a raridade); anexo avulso rola raridade própria (rollLoot)
+- gear3d.js: deathBoxContents preserva attachmentRarities (matou, herdou TUDO)
+- main3d.js: rig do player/bots com raridades + mythicColor por arma; toast do evento mythic com o NOME da skin; tick do LOD da grama (update da câmera 1×/frame)
+- hud3d.js: badge mítico em TODO o arsenal com cor da aura; faixa de anexos com chip de raridade (borda/brilho na cor do tier + tooltip)
+- vegetation3d.js: grassChunkify (chunks 25m, PURO) + grassChunkTier (full <28m / sparse 28-58m fração .4 / hidden ≥58m) + buildGrassFieldLOD (1 InstancedMesh por chunk, tint por instância, vento por shader, update O(chunks) só troca visible/count); world3d planta via LOD e registra scene.userData.grassLOD
+- Testes: +11 F32 (catálogo mítico, fit/aura por arma, raridade gasto→dourado com chip, attachmentRarityFor, applyAttachments com raridades, sim mítica da M4 evolui, ciclo bolso/troca/caixa preserva raridades, loot com raridade; chunkify/tier/LOD headless + buildScene W1-W4)
+- Evidências: artifacts/f32-*.png (vitrine dev scripts/f32-showcase.html + partida real ?scenario=Arukheea&view=tps com queda/pouso/HUD)
+
+Stage Summary:
+- As 4 armas com sockets (M4/MP5/Barrett/G19) agora têm skin mítica EVOLUTIVA com identidade própria — mesma régua de 4 estágios por abates da AR-47
+- Anexos nascem com RARIDADE visível (gasto→dourado + chip) que sobrevive a troca de arma, bolso e caixa de morte — grind de coleta FF completo
+- Grama com LOD de distância em chunks: densa perto, rarefeita no meio, invisível longe — ~95% dos chunks ocultos na origem (189 → ~10 draw calls de grama)
+- Suite: 824 testes — 811 pass / 0 fail / 13 skipped; vite build OK
+
+================================================================================
+Task: Fase 32 — VALIDAÇÃO END TO END (sessão de verificação, browser real)
+
+Work Log:
+- Suíte completa re-executada: 824 testes — 811 pass / 0 fail / 13 skip; vite build OK (2.35 s)
+- ?scenario=w4&view=tps ao vivo (Arukheea, seed CIGKV-3D-01): boot sem erros de página; modal ZU-01 → "SALTAR NO CAOS" → queda (sky→chute) → pouso; HUD/rádio/ring/minimapa operantes
+- Farol girando CONFIRMADO por medição: Δrotation.z/ΔanimT = 0.38 rad/s (exato = registro do spinner em districts3d.js). Causa-raiz esclarecida para leituras por tempo de parede: headless estrangula rAF (~1 fps) e o loop clampa dt em 0.1 s — por tempo de JOGO a rotação é 1:1 com o canônico. Evidência: f32-validate-w4-tps-farol.png
+- Grama LOD CONFIRMADA ao vivo: 80 chunks; 8 visíveis na origem (2 full + 6 sparse, 26 instâncias) → câmera +200 m: 3 → volta: 8 (só visible/count trocados). Evidência: f32-validate-grama-lod-close.png
+- Vitrine /scripts/f32-showcase.html ao vivo com módulos REAIS: 5 auras míticas (rosa/ciano/lima/violeta/menta) + chips de raridade gasto→dourado. Evidências: f32-validate-showcase-live.png, f32-validate-skins-miticas-close.png, f32-validate-anexos-raridade-close.png, f32-validate-anexos-fileira.png
+- Doc FASE32_SKINS_MITICAS_ANEXOS_RARIDADE_GRAMA_LOD.md: seção "Validação end to end" adicionada com método e números
+
+Stage Summary:
+- Fase 32 VERIFICADA end to end: implementação + testes + build + browser real com evidências — nada pendente na diretiva (skins míticas do arsenal, anexos por raridade, grama com LOD)
+- Nota de instrumentação registrada: distância/custo de render da grama e rotação do farol devem ser medidos por animT (tempo de jogo), não por tempo de parede, em ambientes headless
+
 ---
 Task ID: 15
 Agent: Main

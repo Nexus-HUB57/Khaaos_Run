@@ -14,7 +14,7 @@ import {
 import { applyMicroDetail } from './materials3d.js';
 import { RARITIES } from '../shared/weapons.js';
 // Fase 30 — anexos dos 4 sockets da AR-47 + skin mítica evolutiva
-import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic } from './attachments3d.js';
+import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic, mythicSkinFor } from './attachments3d.js';
 // Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
 // (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
 import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
@@ -833,15 +833,21 @@ export function createWeaponModel(id, skin = null, opts = {}) {
     const gem = add(.03, .024, .06, skinGlow, .045, .055, -.08);
     gem.name = 'rarityGem';
   }
-  // Fase 30/31 — anexos nos sockets (no-op em armas sem âncoras: sucata/pulse)
+  // Fase 30/31 — anexos nos sockets (no-op em armas sem âncoras: sucata/pulse).
+  // Fase 32 — raridades por anexo (gasto→dourado) acompanham a instalação.
   if (Array.isArray(opts.attachments) && opts.attachments.length) {
-    applyAttachments(g, opts.attachments);
+    applyAttachments(g, opts.attachments, opts.attachmentRarities ?? null);
     g.userData.attachmentIds = [...opts.attachments];
   }
-  // Fase 30 — overlay evolutivo da skin MÍTICA (0 = sem overlay)
+  // Fase 30/32 — overlay evolutivo da skin MÍTICA (0 = sem overlay): cor da
+  // aura e encaixe (fit) vêm da skin PRÓPRIA da arma (catálogo MYTHIC_SKINS).
   const mythicStage = Math.max(0, Math.min(4, opts.mythicStage | 0));
   if (mythicStage >= 1) {
-    applyMythicSkin(g, mythicStage);
+    const mDef = mythicSkinFor(id);
+    applyMythicSkin(g, mythicStage, {
+      color: opts.mythicColor ?? mDef?.aura,
+      fit: mDef?.fit ?? null,
+    });
     registerMythic(g);
   }
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
