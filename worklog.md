@@ -224,3 +224,21 @@ Stage Summary:
 - Espólio vira mecânica: matou, herdou (caixa de morte com farol + bundle)
 - Airdrop com AR-47 lendário cria pico de rota no meio da partida (determinístico por seed)
 - Zero mudança de física/balística/netcode; custo por frame ~0 (cachê por assinatura)
+
+---
+Task ID: 13
+Agent: Main
+Task: Fase 30 — morte AMBIENTAL canônica (anomalia Khaaos sai pelo #finalizeDeath nas 2 trilhas) + verificação pós-Fase 26 (PR #205)
+
+Work Log:
+- Estado de entrada verificado: PR #205 (Fase 26 — janelas destrutíveis + HUD de HP da porta + metal no depot) JÁ MERGEADA no main (bb001b3); baseline local 780 testes — 767 pass/0 fail/13 skip; _p0view.html já removida; calibração de portas/janelas PINADA por testes (madeira 200 / metal 500 hp, g19 racha o vidro 30hp, melee 1 golpe — doors.test + interiors-windows.test); loot no mezanino + id canônico loot-i* já resolvidos na Fase 25/26
+- WART registrado no worklog (Task 12) REPARADO: morte pela anomalia quântica saía por `actor.alive = false` SECO — sem killfeed, sem caixa de morte (Fase 28), sem XP/KRC e sem 'eliminated' (a vítima humana NUNCA entrava em espectador no offline)
+- sim3d.js #drainQuantumShield: drain letal agora sai pelo MESMO #finalizeDeath das outras mortes — espólio onde caiu, 'eliminated' com colocação, kill/XP/KRC via lastHitBy (mesma regra das mortes por RING/ácido/tsunami), botKill fallback; anomalia mantém a decisão da Fase 29: fura escudo/blindagem e mata DIRETO (sem DBNO) — caído dentro do campo é finalizado
+- room3d.js #drainQuantumShield: mesma rota para #finalizeDeath(actor, null, 'quantum') — paridade 1:1 com a trilha offline; rótulo ambiental 'ANOMALIA' assume lugar ao lado de RING/CIGKV no killfeed E no by do 'eliminated'; espelho de DAMAGE kind 'quantum' da Fase 29 intocado
+- Testes: test/environmental-death.test.js (8 NOVOS — killfeed ANOMALIA, crédito via lastHitBy com kill+xp/krc+kills, vítima humana recebe eliminated by ANOMALIA com colocação, caído finalizado no campo, offline: espólio na posição + botKill, crédito ao jogador, eliminated do player com colocação #2, blindagem absorve/âncora protege — sem morte espúria; eventos FLAT nas duas trilhas { type, ...payload })
+- Pipeline: branch feat/game3d-fase30-morte-ambiental-canonica → PR → CI → merge → main re-verificada
+
+Stage Summary:
+- A anomalia Khaaos agora CONTA A HISTÓRIA da morte: killfeed (ANOMALIA ou último atirador), espólio no campo, XP/KRC creditado e vítima humana entrando em espectador — nas duas trilhas, pelo mesmo funil
+- Zero mudança de balística/netcode/física; contrato de spectador da Fase 29 preservado (número de dano ambiental segue igual)
+- Suite: 788 testes — 775 pass / 0 fail / 13 skipped; tsc 0; vite build OK (versão 0.22.0)

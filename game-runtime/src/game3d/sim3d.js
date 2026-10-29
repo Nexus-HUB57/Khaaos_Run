@@ -1539,7 +1539,12 @@ export class KhaaosSim3D {
     remaining -= shield;
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
-    if (actor.life <= 0) actor.alive = false;
+    if (actor.life > 0) return;
+    // Fase 30 — morte AMBIENTAL canônica: a anomalia fura escudo/blindagem e
+    // mata DIRETO (sem DBNO), mas sai pelo MESMO #finalizeDeath das outras
+    // mortes — espólio onde caiu (Fase 28), killfeed/eliminado com colocação e
+    // atribuição via lastHitBy (paridade 1:1 com a trilha autoritativa).
+    this.#finalizeDeath(actor, null, 'quantum');
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
