@@ -22,6 +22,9 @@ import { getOperativeAbility } from './operativeAbilities.js';
 import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './officers.js';
 // Fase 28 — Arsenal & Equipamento FF: níveis de gear, caixa de morte e airdrop
 import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
+// Fase 30 — Anexos da AR-47 (4 sockets produtivos) + skin mítica evolutiva
+import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS } from './attachments3d.js';
+import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
@@ -609,6 +612,9 @@ export class KhaaosSim3D {
       temporaryArmor: 0,
       abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
+      // Fase 30 — anexos da arma em mão + bolso (máx 4) + evolução mítica
+      weaponAttachments: [], attachmentBag: [],
+      mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
@@ -641,6 +647,9 @@ export class KhaaosSim3D {
       weapon: def.weapon, weaponSkin: null, operativeId: def.operativeId, officer: true,
       officerCallsign: def.callsign, combat: officerCombatParams(BOT_COMBAT),
       cooldown: this.rng.next() * 1.2, reloadT: 0, burst: 0,
+      // Fase 30 — paridade de anexos/mítica entre TODOS os atores
+      weaponAttachments: [], attachmentBag: [],
+      mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
@@ -650,6 +659,9 @@ export class KhaaosSim3D {
     const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
       const drop = rollLoot(this.rng, spot.lootZone ?? zones[i % zones.length], 1)[0];
+      // Fase 30 — AR-47 LENDÁRIA/MÍTICA nasce com anexos de série (determinístico)
+      const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+      if (atts) drop.attachments = atts;
       return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, sectorId: spot.sectorId, ...drop, active: true };
     });
     // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
@@ -671,6 +683,8 @@ export class KhaaosSim3D {
           const it = spec.items[0];
           const p = localPointToWorld(s, it.u, it.v);
           const drop = rollLoot(this.rng, 'industrial', 1)[0];
+          const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+          if (atts) drop.attachments = atts;
           // ...drop PRIMEIRO: o id canônico loot-i* não pode ser clobberado
           // pelo id de catálogo da arma (contrato de ids do loot interior)
           items.push({ ...drop, id: `loot-i${li}`, x: p.x + .45, z: p.z + .45, y: .55, sectorId: 'interior', active: true });
@@ -680,6 +694,8 @@ export class KhaaosSim3D {
           const st = spec.stairs;
           const p = localPointToWorld(s, st.x0 + .75, (st.mezzZ0 + st.mezzZ1) / 2);
           const drop = rollLoot(this.rng, 'armory', 1)[0];
+          const atts2 = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+          if (atts2) drop.attachments = atts2;
           items.push({ ...drop, id: `loot-m${li}`, x: p.x, z: p.z, y: st.height + .55, sectorId: 'interior', active: true });
           li++;
         }
@@ -1254,6 +1270,7 @@ export class KhaaosSim3D {
     if (isPlayer ? a.ammoMag <= 0 : false) { this.emit('empty', { weapon: w.name }); this.#tryReload(a); return false; }
     if (isPlayer) a.ammoMag--;
     a.cooldown = 1 / w.fireRate;
+    const st = a.attachStats ?? attachmentStats([]);   // Fase 30 — anexos
     const m = this.#muzzle(a);
     const cp = Math.cos(a.pitch ?? 0);
     const vdx = -Math.sin(a.yaw) * cp, vdy = Math.sin(a.pitch ?? 0), vdz = -Math.cos(a.yaw) * cp;
@@ -1264,13 +1281,13 @@ export class KhaaosSim3D {
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const accuracy = isPlayer ? (a.abilityAccuracyMultiplier ?? 1) : 1;
     const spread = isPlayer
-      ? (w.spread / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
+      ? (w.spread * st.spreadMul / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
       : 0;
-    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55);
-    this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z });
+    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55, st);
+    this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z, silenced: !!st.silenced });
     return true;
   }
-  #spawnBullet(a, dir, spread, w, dmgScale = 1) {
+  #spawnBullet(a, dir, spread, w, dmgScale = 1, st = null) {
     let { dx, dy, dz, ox, oy, oz } = dir;
     if (dir.tx !== undefined) { // bot: mira a partir do cano no ponto alvo
       let tx = dir.tx - ox, ty = dir.ty - oy, tz = dir.tz - oz;
@@ -1286,7 +1303,8 @@ export class KhaaosSim3D {
     this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
       owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
       gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
-      life: w.range / w.bulletSpeed, weapon: w.id });
+      // Fase 30 — Mira 4x estende o voo útil do projétil (+8%)
+      life: (w.range * (st?.rangeMul ?? 1)) / w.bulletSpeed, weapon: w.id });
   }
   #aimDir(a, tx, ty, tz) {
     let dx = tx - a.x, dy = ty - (a.y + 1.55), dz = tz - a.z;
@@ -1568,6 +1586,7 @@ export class KhaaosSim3D {
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
         this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.#creditMythic(this.player); // Fase 30 — abate evolui a skin mítica
         this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
       } else this.emit('botKill', { target: bot.name });
     }
@@ -1615,6 +1634,7 @@ export class KhaaosSim3D {
       if (killerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
         this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.#creditMythic(this.player); // Fase 30 — finalização também evolui
         this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
       } else this.emit('botKill', { target: a.name, kind });
     }
@@ -1628,7 +1648,8 @@ export class KhaaosSim3D {
   // a partir do evento 'deathBox'. Determinístico pela seed + posição.
   #dropDeathBox(a) {
     const bundle = deathBoxContents(this.rng, {
-      weapon: a.weapon, weaponSkin: a.weaponSkin, ammoId: WEAPONS3D[a.weapon]?.ammo ?? '9MM',
+      weapon: a.weapon, weaponSkin: a.weaponSkin, attachments: a.weaponAttachments ?? [],
+      ammoId: WEAPONS3D[a.weapon]?.ammo ?? '9MM',
       ammoReserve: a.id === 'player' ? (a.inventory.ammo[WEAPONS3D[a.weapon]?.ammo] || 0) : 40,
       medkit: a.inventory?.medkit ?? 0, frag: a.inventory?.frag ?? 0, gloo: a.inventory?.gloo ?? 0,
       gear: a.gear ?? {},
@@ -1662,7 +1683,7 @@ export class KhaaosSim3D {
     const w = WEAPONS3D[a.weapon];
     if (!w || w.ammo === 'none' || a.reloadT > 0) return;
     const reserve = a.id === 'player' ? (a.inventory.ammo[w.ammo] || 0) : 999;
-    if (reserve <= 0 || a.ammoMag >= w.magazine) return;
+    if (reserve <= 0 || a.ammoMag >= this.#magCap(a, w)) return;
     a.reloadT = w.reload;
     if (a.id === 'player') this.emit('reload', { weapon: w.name });
   }
@@ -1670,10 +1691,10 @@ export class KhaaosSim3D {
     const w = WEAPONS3D[a.weapon];
     if (a.id === 'player') {
       const reserve = a.inventory.ammo[w.ammo] || 0;
-      const need = Math.min(w.magazine - a.ammoMag, reserve);
+      const need = Math.min(this.#magCap(a, w) - a.ammoMag, reserve);
       a.ammoMag += need; a.inventory.ammo[w.ammo] = reserve - need;
       this.emit('reloaded', { weapon: w.name, mag: a.ammoMag });
-    } else a.ammoMag = w.magazine;
+    } else a.ammoMag = this.#magCap(a, w);
   }
   #useMedkit(a) {
     if (a.inventory.medkit <= 0 || a.life >= 100) return;
@@ -1736,12 +1757,34 @@ export class KhaaosSim3D {
   #pickup(a, item) {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
+      // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde)
+      if (a.weapon === 'ar47' && a.weaponAttachments?.length) {
+        for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+      }
       a.slots[a.activeSlot] = id; a.weapon = id;
       a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
-      a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
+      // Fase 30 — anexos de série acompanham a AR-47; mítico reinicia a evolução
+      a.weaponAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
+      a.mythicKills = 0;
+      a.mythicStage = item.rarity === 'MITICA' ? 1 : 0;
+      this.#installBagAttachments(a);    // bolso preenche sockets livres
+      this.#recalcAttachStats(a);
+      a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
       if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
       a.reloadT = 0;
-      this.emit('loot', { item: item.name || id, rarity: item.rarity, kind: 'weapon' });
+      this.emit('loot', { item: item.name || id, rarity: item.rarity, kind: 'weapon', attachments: [...a.weaponAttachments] });
+    } else if (item.kind === 'attachment') {
+      // Fase 30 — anexo avulso: instala no socket livre da AR-47 em mão ou vai
+      // para o bolso (máx 4) até uma AR-47 ser equipada
+      const att = ATTACHMENTS[item.id] ? item.id : null;   // id = id do catálogo
+      if (att && a.weapon === 'ar47' && !a.weaponAttachments.includes(att) && a.weaponAttachments.length < 4) {
+        a.weaponAttachments.push(att);
+      } else if (att && a.attachmentBag.length < 4) {
+        a.attachmentBag.push(att);
+      }
+      this.#installBagAttachments(a);
+      this.#recalcAttachStats(a);
+      this.emit('loot', { item: item.name ?? att ?? 'Anexo', kind: 'attachment', installed: a.weaponAttachments.length, pocket: a.attachmentBag.length });
     } else if (item.kind === 'ammo') {
       const cap = AMMO_CAP[item.id] || 100;
       a.inventory.ammo[item.id] = Math.min(cap, (a.inventory.ammo[item.id] || 0) + item.amount);
@@ -1773,6 +1816,9 @@ export class KhaaosSim3D {
     } else if (item.kind === 'supplyDrop') {
       // Fase 28 — caixa de airdrop: AR-47 LENDÁRIO + consumíveis (pool exclusivo)
       const drops = rollLoot(this.rng, 'supplyDrop', 3);
+      // Fase 30 — assinatura do airdrop: a AR-47 vermelha desce COMPLETA
+      // (4 sockets equipados — vitrine dos anexos)
+      for (const d of drops) if (d.kind === 'weapon' && d.id === 'ar47') d.attachments = ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
       this.#grantBundle(a, drops);
       this.emit('loot', { item: 'Suprimentos do Airdrop', kind: 'supplyDrop' });
     } else if (item.kind === 'resource') {
@@ -1793,12 +1839,49 @@ export class KhaaosSim3D {
     if (old && old.ammo !== 'none') a.inventory.ammo[old.ammo] = (a.inventory.ammo[old.ammo] || 0) + a.ammoMag;
     a.activeSlot = slot; a.weapon = a.slots[slot];
     a.weaponSkin = null; // skin pertence à arma coletada, não ao slot
+    // Fase 30 — anexos da arma guardada voltam ao BOLSO (re-instalam na volta);
+    // evolução mítica pertence à instância coletada (reinicia)
+    if (a.weaponAttachments?.length) {
+      for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+      a.weaponAttachments = [];
+    }
+    a.mythicKills = 0; a.mythicStage = 0;
+    this.#installBagAttachments(a);
+    this.#recalcAttachStats(a);
     const w = WEAPONS3D[a.weapon];
-    a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
+    a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
     if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
     a.reloadT = 0;
     this.emit('weaponSwitch', { weapon: a.weapon });
     return true;
+  }
+
+  // ---------- Fase 30 — anexos: helpers de estado ----------
+  // Capacidade do pente com Mag Estendida (arma sem anexos = tabela base).
+  #magCap(a, w) { return w.magazine + (a.weapon === 'ar47' ? (a.attachStats?.magBonus ?? 0) : 0); }
+  // Move anexos do bolso para sockets livres da AR-47 em mão (um por socket).
+  #installBagAttachments(a) {
+    if (a.weapon !== 'ar47' || !a.attachmentBag?.length) return;
+    for (const att of [...a.attachmentBag]) {
+      if (!ATTACHMENTS[att]) { a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1); continue; }
+      if (a.weaponAttachments.length >= 4 || a.weaponAttachments.includes(att)) continue;
+      a.weaponAttachments.push(att);
+      a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1);
+    }
+  }
+  // Deriva os stats de combate do anexo (PURO via attachmentStats).
+  #recalcAttachStats(a) {
+    a.attachStats = attachmentStats(a.weapon === 'ar47' ? a.weaponAttachments : []);
+  }
+  // Fase 30 — evolução da skin mítica por abate (4 estágios FF)
+  #creditMythic(a) {
+    if (a.weaponSkin !== 'MITICA' || a.weapon !== 'ar47') return;
+    a.mythicKills = (a.mythicKills ?? 0) + 1;
+    const stage = mythicStageFromKills(a.mythicKills);
+    if (stage !== a.mythicStage) {
+      a.mythicStage = stage;
+      this.emit('mythic', { stage, name: MYTHIC_STAGE_NAMES[stage - 1], weapon: a.weapon });
+    }
   }
 
   // ---------- snapshot / replay ----------

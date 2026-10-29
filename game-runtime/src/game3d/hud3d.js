@@ -4,6 +4,9 @@ import { RARITIES } from '../shared/weapons.js';
 import { WEAPONS3D, DBNO } from './sim3d.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
+import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES } from './attachments3d.js'; // Fase 30 — anexos + mítica
+
+const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -124,10 +127,24 @@ export class HUD {
     // arma
     const w = WEAPONS3D[p.weapon];
     $('#weaponName').textContent = w?.name ?? '—';
-    const rar = w ? RARITIES[w.rarity] : null;
+    // Fase 30 — a cor segue a SKIN coletada (MÍTICA pinta o painel de rosa-caos)
+    const rar = RARITIES[p.weaponSkin ?? w?.rarity] ?? RARITIES[w?.rarity] ?? null;
     $('#weaponName').style.color = rar?.color ?? '#e8e3d5';
     $('#ammoMag').textContent = p.weapon === 'sucata' ? '∞' : p.ammoMag;
     $('#ammoReserve').textContent = p.weapon === 'sucata' ? '' : `/ ${p.inventory.ammo[w?.ammo] ?? 0}`;
+    // Fase 30 — faixa de anexos (4 sockets da AR-47) + estágio da skin mítica
+    const strip = $('#attachStrip');
+    if (strip) {
+      const atts = p.weaponAttachments ?? [];
+      strip.innerHTML = atts.map((a) => `<i title="${ATTACH_SHORTS[a] ?? a}">${ATTACH_SHORTS[a] ?? '?'}</i>`).join('');
+      strip.classList.toggle('filled', atts.length > 0);
+    }
+    const mythicEl = $('#mythicStage');
+    if (mythicEl) {
+      const mythic = p.weapon === 'ar47' && p.weaponSkin === MYTHIC_SKIN.id;
+      mythicEl.classList.toggle('hidden', !mythic);
+      if (mythic) mythicEl.textContent = `EV.${p.mythicStage || 1} · ${MYTHIC_STAGE_NAMES[(p.mythicStage || 1) - 1]}`;
+    }
     const reloading = p.reloadT > 0;
     $('#reloadHint').classList.toggle('visible', reloading || (!reloading && p.ammoMag === 0));
     $('#reloadHint').textContent = reloading ? 'RECARREGANDO…' : 'SEM MUNIÇÃO — [R]';

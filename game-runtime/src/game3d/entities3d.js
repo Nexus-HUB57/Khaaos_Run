@@ -13,6 +13,11 @@ import {
 } from './textures3d.js';
 import { applyMicroDetail } from './materials3d.js';
 import { RARITIES } from '../shared/weapons.js';
+// Fase 30 — anexos dos 4 sockets da AR-47 + skin mítica evolutiva
+import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic } from './attachments3d.js';
+// Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
+// (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
+import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? .82, metalness: opts.metal ?? .12, ...opts.extra });
 
@@ -648,10 +653,12 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
-// skin (Fase 7): raridade do loot ('COMUM'..'LENDARIO') pinta o furniture com a
-// cor da raridade, adiciona brilho emissivo e uma gema no receiver — cada nível
-// é reconhecível à distância, como no FreeFire.
-export function createWeaponModel(id, skin = null) {
+// skin (Fase 7): raridade do loot ('COMUM'..'LENDARIO'+'MITICA') pinta o
+// furniture com a cor da raridade, adiciona brilho emissivo e uma gema no
+// receiver — cada nível é reconhecível à distância, como no FreeFire.
+// opts (Fase 30): { attachments: ['mira4x',...], mythicStage: 0-4 } — anexos
+// montados nos 4 sockets da AR-47 e overlay evolutivo da skin mítica.
+export function createWeaponModel(id, skin = null, opts = {}) {
   const g = new THREE.Group();
   const gun = M('#23262b', { rough: .38, metal: .8 });
   const gun2 = M('#15171a', { rough: .48, metal: .72 });
@@ -787,15 +794,29 @@ export function createWeaponModel(id, skin = null) {
     const gem = add(.03, .024, .06, skinGlow, .045, .055, -.08);
     gem.name = 'rarityGem';
   }
+  // Fase 30 — anexos nos 4 sockets (no-op fora da AR-47: só ela tem âncoras)
+  if (Array.isArray(opts.attachments) && opts.attachments.length) {
+    applyAttachments(g, opts.attachments);
+    g.userData.attachmentIds = [...opts.attachments];
+  }
+  // Fase 30 — overlay evolutivo da skin MÍTICA (0 = sem overlay)
+  const mythicStage = Math.max(0, Math.min(4, opts.mythicStage | 0));
+  if (mythicStage >= 1) {
+    applyMythicSkin(g, mythicStage);
+    registerMythic(g);
+  }
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
   return { group: g, muzzle };
 }
 
 // orienta braços/arma no corpo — retorna o anchor da arma (na mão direita)
-export function attachWeapon(opParts, operativeGroup, weaponId, skin = null) {
+export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opts = {}) {
   const old = operativeGroup.userData.weaponRig;
-  if (old) { operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); }); }
-  const model = createWeaponModel(weaponId, skin);
+  if (old) {
+    unregisterMythic(old.group);   // Fase 30 — arma removida sai do pulso mítico
+    operativeGroup.remove(old.group); old.group.traverse(o => { o.geometry?.dispose?.(); });
+  }
+  const model = createWeaponModel(weaponId, skin, opts);
   model.group.position.set(.3, 1.4, -.25);
   operativeGroup.add(model.group);
   operativeGroup.userData.weaponRig = model;
@@ -958,7 +979,7 @@ export function createLootMesh(item) {
     g.add(beam);
     return g;
   }
-  const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e' };
+  const rarityColors = { COMUM: '#b7c2c7', INCOMUM: '#42d9de', RARO: '#a875ff', LENDARIO: '#ffb52e', MITICA: '#ff2d78' };
   const color = rarityColors[item.rarity] ?? (item.kind === 'consumable' ? '#ff6b2c' : item.kind === 'armor' ? '#42d9de' : '#b7c2c7');
   // pad hexagonal emissivo sob o item
   const pad = new THREE.Mesh(
@@ -984,6 +1005,27 @@ export function createLootMesh(item) {
     g.add(beam);
     return g;
   }
+  // Fase 30 — ANEXO avulso no chão: módulo de rail ciano com selo emissivo
+  // (leitura FF de "peça técnica" — beam mais curto que o de armas)
+  if (item.kind === 'attachment') {
+    const chipM = M('#20262e', { rough: .35, metal: .6, extra: { emissive: '#42d9de', emissiveIntensity: .55 } });
+    const chip = box(.3, .12, .2, chipM, 0, .2, 0);
+    chip.rotation.y = Math.PI / 4;
+    chip.castShadow = true;
+    chip.name = 'attachmentChip';
+    const seal = box(.14, .045, .02, new THREE.MeshStandardMaterial({
+      color: '#c8ff3d', emissive: '#c8ff3d', emissiveIntensity: 1.2, roughness: .4,
+    }), 0, .2, -.145);
+    seal.name = 'attachmentSeal';
+    g.add(chip, seal);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.03, .05, 1.6, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: '#42d9de', transparent: true, opacity: .32, depthWrite: false })
+    );
+    beam.position.y = .8;
+    g.add(beam);
+    return g;
+  }
   const isWeapon = item.kind === 'weapon';
   const size = isWeapon ? .5 : .34;
   // Fase 26 — caixa de morte (death loot box): cubo chanfrado com fecho
@@ -997,6 +1039,21 @@ export function createLootMesh(item) {
   }), 0, size + .09, 0);
   g.add(clasp);
   g.userData.clasp = clasp.material;
+  // Fase 30 — arma com anexos de série: chips cianos na borda do pad
+  // (contagem visual dos sockets equipados, leitura instantânea FF)
+  const atts = Array.isArray(item.attachments) ? item.attachments.length : 0;
+  if (isWeapon && atts > 0) {
+    const chipM = new THREE.MeshStandardMaterial({
+      color: '#42d9de', emissive: '#42d9de', emissiveIntensity: .9, roughness: .4,
+    });
+    for (let i = 0; i < Math.min(4, atts); i++) {
+      const ang = (i / Math.min(4, atts)) * Math.PI * 2 + Math.PI / 4;
+      const chip = box(.09, .045, .09, chipM, Math.cos(ang) * .32, .1, Math.sin(ang) * .32);
+      chip.name = `attachChip${i}`;
+      g.add(chip);
+    }
+    g.userData.attachChips = atts;
+  }
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(.03, .05, 2.2, 6, 1, true),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35, depthWrite: false })

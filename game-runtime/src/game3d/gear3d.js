@@ -235,7 +235,12 @@ export function deathBoxContents(rng, actor = {}) {
   const ammoId = actor.ammoId ?? '9MM';
   const ammoLeft = Math.max(0, Math.round(actor.ammoReserve ?? 0));
   const items = [];
-  if (actor.weapon && actor.weapon !== 'sucata') items.push({ kind: 'weapon', id: actor.weapon, rarity: actor.weaponSkin ?? null });
+  if (actor.weapon && actor.weapon !== 'sucata') {
+    // Fase 30 — anexos da AR-47 caída herdam com a arma (matou, herdou TUDO)
+    const atts = Array.isArray(actor.attachments) && actor.attachments.length
+      ? { attachments: [...actor.attachments] } : {};
+    items.push({ kind: 'weapon', id: actor.weapon, rarity: actor.weaponSkin ?? null, ...atts });
+  }
   if (ammoLeft > 0) items.push({ kind: 'ammo', id: ammoId, amount: Math.min(ammoLeft, 60) });
   const meds = Math.max(0, Math.min(3, actor.medkit ?? 0));
   for (let i = 0; i < meds; i++) items.push({ kind: 'consumable', id: 'medkit', amount: 1 });

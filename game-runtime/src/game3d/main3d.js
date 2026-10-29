@@ -10,6 +10,7 @@ import { buildScene, createRingWall, applyGltfProps, applyNightness } from './wo
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
+import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN } from './attachments3d.js'; // Fase 30 — anexos + mítica
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
@@ -846,14 +847,19 @@ export class Game3D {
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
     // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
+    // Fase 30 — anexos dos 4 sockets + estágio evolutivo mítico também reconstroem
     const pSkin = p.weaponSkin ?? null;
-    if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon || this.playerWeapon.userData?.skin !== pSkin) {
-      this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon, pSkin);
-      this.playerWeapon.userData = { id: p.weapon, skin: pSkin };
+    const pAtt = (p.weaponAttachments ?? []).join(',');
+    const pStage = p.weapon === 'ar47' && pSkin === MYTHIC_SKIN.id ? Math.max(1, p.mythicStage || 1) : 0;
+    if (!this.playerWeapon || this.playerWeapon.userData?.id !== p.weapon || this.playerWeapon.userData?.skin !== pSkin
+      || this.playerWeapon.userData?.att !== pAtt || this.playerWeapon.userData?.stage !== pStage) {
+      if (this.firstPersonWeapon) unregisterMythic(this.firstPersonWeapon.group);
+      this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, p.weapon, pSkin, { attachments: p.weaponAttachments ?? [], mythicStage: pStage });
+      this.playerWeapon.userData = { id: p.weapon, skin: pSkin, att: pAtt, stage: pStage };
       if (this.viewMode === 'fps' && this.firstPersonWeapon) {
         this.firstPersonRig.remove(this.firstPersonWeapon.group);
         this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
-        this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin);
+        this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin, { attachments: p.weaponAttachments ?? [], mythicStage: pStage });
         this.firstPersonRig.add(this.firstPersonWeapon.group);
         this.firstPersonWeapon.group.position.set(0, -.17, -.72);
         this.firstPersonWeapon.group.rotation.x = -.08;
@@ -962,10 +968,13 @@ export class Game3D {
         parts.legR.hip.rotation.x = .35 - flap * .25;
       }
       // Fase 7 — troca de arma + skin por raridade
+      // Fase 30 — anexos + estágio mítico do snapshot também reconstroem o rig
       const bSkin = b.weaponSkin ?? null;
-      if (entry.weapon !== b.weapon || entry.skin !== bSkin) {
-        attachWeapon(entry.op.parts, g, b.weapon, bSkin);
-        entry.weapon = b.weapon; entry.skin = bSkin;
+      const bAtt = (b.weaponAttachments ?? []).join(',');
+      const bStage = b.weapon === 'ar47' && bSkin === MYTHIC_SKIN.id ? Math.max(1, b.mythicStage || 1) : 0;
+      if (entry.weapon !== b.weapon || entry.skin !== bSkin || entry.att !== bAtt || entry.stage !== bStage) {
+        attachWeapon(entry.op.parts, g, b.weapon, bSkin, { attachments: b.weaponAttachments ?? [], mythicStage: bStage });
+        entry.weapon = b.weapon; entry.skin = bSkin; entry.att = bAtt; entry.stage = bStage;
       }
     }
     // Fase 4 — arremessáveis + paraquedas compartilham o mesmo contrato offline/online
@@ -1035,7 +1044,8 @@ export class Game3D {
       }
       this.camKick *= Math.exp(-dt * 9);
       this.camera.rotation.z += this.camKick * .18;
-      const targetFov = p.ads ? 42 : (p.sliding ? 74 : (p.sprinting ? 72 : 68));
+      const zoom = p.attachStats?.adsZoom ?? 1;   // Fase 30 — Mira 4x aproxima
+      const targetFov = p.ads ? 42 * zoom : (p.sliding ? 74 : (p.sprinting ? 72 : 68));
       this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
       this.camera.updateProjectionMatrix();
       this.sun.position.set(p.x - 160, 160, p.z - 240);
@@ -1086,7 +1096,8 @@ export class Game3D {
       this.shake *= Math.exp(-dt * 6.5);
     }
     // FOV dinâmico
-    const targetFov = p.ads ? 42 : (p.sprinting ? 68 : 62);
+    const zoomTps = p.attachStats?.adsZoom ?? 1;  // Fase 30 — Mira 4x aproxima
+    const targetFov = p.ads ? 42 * zoomTps : (p.sprinting ? 68 : 62);
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 8);
     this.camera.updateProjectionMatrix();
     // sol acompanha (sombras)
@@ -1165,8 +1176,10 @@ export class Game3D {
       switch (e.type) {
         case 'shot': {
           const dist = e.owner === 'player' ? 0 : Math.hypot(e.x - p.x, e.z - p.z);
-          this.effects.muzzleFlash(new THREE.Vector3(e.x, e.y, e.z));
-          this.audio.shot(e.weapon, dist);
+          // Fase 30 — Silenciador: sem clarão de boca e áudio abafado (-65%)
+          if (!e.silenced) this.effects.muzzleFlash(new THREE.Vector3(e.x, e.y, e.z));
+          else this.audio.shot(e.weapon, dist + 55);
+          if (!e.silenced) this.audio.shot(e.weapon, dist);
           if (e.owner === 'player') this.camKick = Math.min(0.03, this.camKick + 0.011);
           break;
         }
@@ -1274,7 +1287,12 @@ export class Game3D {
           break;
         case 'loot':
           this.audio.pickup();
-          this.hud.feed('LOOT', `${e.item} adicionado à Packbag.`);
+          // Fase 30 — anexo avulso tem leitura própria (peça técnica)
+          if (e.kind === 'attachment') {
+            this.hud.feed('ANEXO', `${e.item} — socket livre da AR-47 preenchido (${e.installed ?? 0}/4${e.pocket ? ` · bolso ×${e.pocket}` : ''}).`, 'good');
+          } else {
+            this.hud.feed('LOOT', `${e.item}${e.attachments?.length ? ` · ${e.attachments.length} anexo(s)` : ''} adicionado à Packbag.`);
+          }
           break;
         case 'gear': {
           // Fase 28 — equipamento vira SILHUETA: aplica o nível novo no
@@ -1296,6 +1314,12 @@ export class Game3D {
           break;
         case 'extract':
           this.hud.feed('ZEX', `Extração confirmada. Terminal ${e.count}/3. +250 XP.`, 'good');
+          break;
+        case 'mythic':
+          // Fase 30 — evolução da skin mítica (4 estágios por abate)
+          this.hud.feed('MÍTICA', `Fúria Primordial evoluiu — ESTÁGIO ${e.stage}: ${e.name}.`, 'good');
+          this.audio?.killConfirm?.(true);
+          this.shake = Math.max(this.shake, .05);
           break;
         case 'reload': this.audio.reload(); break;
         case 'reloaded': break;
@@ -1619,6 +1643,7 @@ export class Game3D {
     this.syncDoors(); // Fase 25/26 — folhas de porta + vidro seguem o estado autoritativo
     this.syncEntities(dt);
     this.applyGearVisuals(); // Fase 28 — espelha gear da sim na silhueta (com cachê)
+    tickMythicWeapons(this.animT); // Fase 30 — pulso emissivo das armas míticas
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
