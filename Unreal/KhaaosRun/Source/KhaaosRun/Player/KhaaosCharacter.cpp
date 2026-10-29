@@ -22,6 +22,7 @@
 #include "Game/Combat/KhaaosADSComponent.h"
 #include "Game/Spectator/KhaaosSpectatorComponent.h"
 #include "Game/Data/KhaaosSpeciesDataAsset.h"
+#include "Game/Animation/KhaaosNaturalLocomotionComponent.h"
 #include "Game/Graphics/KhaaosCharacterPopComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Game/Graphics/KhaaosCharacterLODSystem.h"
@@ -80,6 +81,9 @@ AKhaaosCharacter::AKhaaosCharacter()
         // ── Spectator Component ──
         SpectatorComp = CreateDefaultSubobject<UKhaaosSpectatorComponent>(TEXT("SpectatorComp"));
 
+        // ── Natural Locomotion (anti-robotization) ──
+        NaturalLocomotion = CreateDefaultSubobject<UKhaaosNaturalLocomotionComponent>(TEXT("NaturalLocomotion"));
+
         // ── Character Pop (v3 gráficos — rim light estilo Free Fire) ──
         CharacterPopComp = CreateDefaultSubobject<UKhaaosCharacterPopComponent>(TEXT("CharacterPopComp"));
 
@@ -94,6 +98,21 @@ AKhaaosCharacter::AKhaaosCharacter()
                 MoveComp->NavAgentProps.bCanCrouch = true;
                 MoveComp->bOrientRotationToMovement = true;
                 MoveComp->RotationRate.Yaw = 540.0f;
+
+                // ── Human-feel acceleration envelope ──
+                // Default CMC values accelerate/brake almost instantly, which
+                // reads as robotic at third-person. These curves give starts
+                // and stops weight while staying responsive for a BR.
+                MoveComp->MaxAcceleration = 1600.0f;
+                MoveComp->BrakingDecelerationWalking = 1000.0f;
+                MoveComp->GroundFriction = 6.5f;
+                MoveComp->BrakingFrictionFactor = 0.8f;
+
+                // ── Network smoothing ──
+                // Linear (the default) teleports simulated proxies between
+                // corrections; Exponential hides them inside the natural
+                // locomotion spring chain instead.
+                MoveComp->NetworkSmoothingMode = ENetworkSmoothingMode::Exponential;
         }
 
         // ── Default Attribute Values ──
@@ -141,8 +160,8 @@ void AKhaaosCharacter::BeginPlay()
                 UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: AbilityComponent initialized for %s"), *GetName());
         }
 
-	if (UWorld* World = GetWorld()) { if (UKhaaosCharacterLODSystem* LODSys = World->GetSubsystem<UKhaaosCharacterLODSystem>()) { LODSys->RegisterCharacter(this); if (IsLocallyControlled()) LODSys->ForceHighLOD(this, true); } }
-	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: BeginPlay for %s"), *GetName());
+        if (UWorld* World = GetWorld()) { if (UKhaaosCharacterLODSystem* LODSys = World->GetSubsystem<UKhaaosCharacterLODSystem>()) { LODSys->RegisterCharacter(this); if (IsLocallyControlled()) LODSys->ForceHighLOD(this, true); } }
+        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: BeginPlay for %s"), *GetName());
 }
 
 void AKhaaosCharacter::Tick(float DeltaSeconds)
@@ -160,23 +179,23 @@ void AKhaaosCharacter::Tick(float DeltaSeconds)
         // ── Regen (health, shield, energy) ──
         TickRegen(DeltaSeconds);
 
-	// ── Slide timeout ──
-	TickSlide(DeltaSeconds);
-	TickGlide(DeltaSeconds);
-	TickSpeciesWater(DeltaSeconds);
-	UpdateMovementState();
-	if (UWorld* World = GetWorld())
-	{
-		if (UKhaaosCharacterLODSystem* LODSys = World->GetSubsystem<UKhaaosCharacterLODSystem>())
-		{
-			const EKhaaosCharacterLOD L = LODSys->GetCharacterLOD(this);
-			int32 MeshLOD = 0;
-			if (L == EKhaaosCharacterLOD::MEDIUM) MeshLOD = 1;
-			else if (L == EKhaaosCharacterLOD::LOW) MeshLOD = 2;
-			else if (L == EKhaaosCharacterLOD::CULLED) MeshLOD = 3;
-			UpdateSpeciesMeshLOD(static_cast<float>(MeshLOD));
-		}
-	}
+        // ── Slide timeout ──
+        TickSlide(DeltaSeconds);
+        TickGlide(DeltaSeconds);
+        TickSpeciesWater(DeltaSeconds);
+        UpdateMovementState();
+        if (UWorld* World = GetWorld())
+        {
+                if (UKhaaosCharacterLODSystem* LODSys = World->GetSubsystem<UKhaaosCharacterLODSystem>())
+                {
+                        const EKhaaosCharacterLOD L = LODSys->GetCharacterLOD(this);
+                        int32 MeshLOD = 0;
+                        if (L == EKhaaosCharacterLOD::MEDIUM) MeshLOD = 1;
+                        else if (L == EKhaaosCharacterLOD::LOW) MeshLOD = 2;
+                        else if (L == EKhaaosCharacterLOD::CULLED) MeshLOD = 3;
+                        UpdateSpeciesMeshLOD(static_cast<float>(MeshLOD));
+                }
+        }
 }
 
 void AKhaaosCharacter::PossessedBy(AController* NewController)
@@ -258,131 +277,139 @@ void AKhaaosCharacter::LookUp(float Value)
 
 void AKhaaosCharacter::Jump()
 {
-	if (bIsDead || bIsDowned) return;
-	if (bIsSliding) EndSlide();
-	Super::Jump();
-	TryStartGlide();
+        if (bIsDead || bIsDowned) return;
+        if (bIsSliding) EndSlide();
+        Super::Jump();
+        TryStartGlide();
+        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosCharacter: Jump"));
 }
 
 void AKhaaosCharacter::Landed(const FHitResult& Hit)
 {
-	Super::Landed(Hit);
-	EndGlide();
+        Super::Landed(Hit);
+        EndGlide();
+
+        // Feed the natural locomotion land-recovery spring with the real
+        // impact velocity — the knees absorb the landing organically.
+        if (NaturalLocomotion)
+        {
+                NaturalLocomotion->NotifyLanding(FMath::Abs(Hit.ImpactVelocity.Z));
+        }
 }
 
 void AKhaaosCharacter::TryStartGlide()
 {
-	if (bIsDead || bIsGliding) return;
-	CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
-	float AirBonus = (CachedPS && CachedPS->KhaaosAttributeSet) ? CachedPS->KhaaosAttributeSet->GetAirSpeedBonus() : 0.f;
-	if (AirBonus <= 0.f) return;
-	float Dur = 3.f;
-	if (const UKhaaosAbility_SkeetwPassive* Sk = GetDefault<UKhaaosAbility_SkeetwPassive>()) Dur = Sk->GlideDuration;
-	bIsGliding = true; GlideTimeRemaining = Dur;
-	if (UCharacterMovementComponent* M = GetCharacterMovement())
-	{
-		DefaultGravityScale = M->GravityScale; DefaultAirControl = M->AirControl;
-		M->GravityScale = FMath::Max(0.15f, DefaultGravityScale * 0.25f);
-		M->AirControl = FMath::Clamp(DefaultAirControl + AirBonus, 0.f, 1.f);
-	}
+        if (bIsDead || bIsGliding) return;
+        CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
+        float AirBonus = (CachedPS && CachedPS->KhaaosAttributeSet) ? CachedPS->KhaaosAttributeSet->GetAirSpeedBonus() : 0.f;
+        if (AirBonus <= 0.f) return;
+        float Dur = 3.f;
+        if (const UKhaaosAbility_SkeetwPassive* Sk = GetDefault<UKhaaosAbility_SkeetwPassive>()) Dur = Sk->GlideDuration;
+        bIsGliding = true; GlideTimeRemaining = Dur;
+        if (UCharacterMovementComponent* M = GetCharacterMovement())
+        {
+                DefaultGravityScale = M->GravityScale; DefaultAirControl = M->AirControl;
+                M->GravityScale = FMath::Max(0.15f, DefaultGravityScale * 0.25f);
+                M->AirControl = FMath::Clamp(DefaultAirControl + AirBonus, 0.f, 1.f);
+        }
 }
 
 void AKhaaosCharacter::EndGlide()
 {
-	if (!bIsGliding) return;
-	bIsGliding = false; GlideTimeRemaining = 0.f;
-	if (UCharacterMovementComponent* M = GetCharacterMovement())
-	{ M->GravityScale = DefaultGravityScale; M->AirControl = DefaultAirControl; }
+        if (!bIsGliding) return;
+        bIsGliding = false; GlideTimeRemaining = 0.f;
+        if (UCharacterMovementComponent* M = GetCharacterMovement())
+        { M->GravityScale = DefaultGravityScale; M->AirControl = DefaultAirControl; }
 }
 
 void AKhaaosCharacter::TickGlide(float DeltaSeconds)
 {
-	if (!bIsGliding) return;
-	UCharacterMovementComponent* M = GetCharacterMovement();
-	if (!M) { EndGlide(); return; }
-	GlideTimeRemaining -= DeltaSeconds;
-	if (GlideTimeRemaining <= 0.f || M->IsMovingOnGround() || M->IsSwimming()) { EndGlide(); return; }
-	CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
-	const float AirBonus = (CachedPS && CachedPS->KhaaosAttributeSet) ? CachedPS->KhaaosAttributeSet->GetAirSpeedBonus() : 0.f;
-	if (AirBonus > 0.f && M->IsFalling())
-	{
-		M->AddForce(GetActorForwardVector() * (WalkSpeed * AirBonus * 2.f));
-		if (M->Velocity.Z < -400.f) M->Velocity.Z = FMath::Lerp(M->Velocity.Z, -200.f, FMath::Clamp(DeltaSeconds * 4.f, 0.f, 1.f));
-	}
+        if (!bIsGliding) return;
+        UCharacterMovementComponent* M = GetCharacterMovement();
+        if (!M) { EndGlide(); return; }
+        GlideTimeRemaining -= DeltaSeconds;
+        if (GlideTimeRemaining <= 0.f || M->IsMovingOnGround() || M->IsSwimming()) { EndGlide(); return; }
+        CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
+        const float AirBonus = (CachedPS && CachedPS->KhaaosAttributeSet) ? CachedPS->KhaaosAttributeSet->GetAirSpeedBonus() : 0.f;
+        if (AirBonus > 0.f && M->IsFalling())
+        {
+                M->AddForce(GetActorForwardVector() * (WalkSpeed * AirBonus * 2.f));
+                if (M->Velocity.Z < -400.f) M->Velocity.Z = FMath::Lerp(M->Velocity.Z, -200.f, FMath::Clamp(DeltaSeconds * 4.f, 0.f, 1.f));
+        }
 }
 
 void AKhaaosCharacter::TickSpeciesWater(float DeltaSeconds)
 {
-	if (!HasAuthority() || bIsDead) return;
-	UCharacterMovementComponent* M = GetCharacterMovement();
-	if (!M || !M->IsSwimming()) return;
-	CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
-	if (!CachedPS || !CachedPS->KhaaosAttributeSet) return;
-	const float R = CachedPS->KhaaosAttributeSet->GetWaterRegenPerSecond();
-	if (R <= 0.f) return;
-	const float Applied = CachedPS->KhaaosAttributeSet->Heal(R * DeltaSeconds);
-	if (Applied > 0.f) { Health = CachedPS->KhaaosAttributeSet->GetHealth(); OnHealthChanged.Broadcast(Health, Applied); }
+        if (!HasAuthority() || bIsDead) return;
+        UCharacterMovementComponent* M = GetCharacterMovement();
+        if (!M || !M->IsSwimming()) return;
+        CachedPS = CachedPS ? CachedPS : Cast<AKhaaosPlayerState>(GetPlayerState());
+        if (!CachedPS || !CachedPS->KhaaosAttributeSet) return;
+        const float R = CachedPS->KhaaosAttributeSet->GetWaterRegenPerSecond();
+        if (R <= 0.f) return;
+        const float Applied = CachedPS->KhaaosAttributeSet->Heal(R * DeltaSeconds);
+        if (Applied > 0.f) { Health = CachedPS->KhaaosAttributeSet->GetHealth(); OnHealthChanged.Broadcast(Health, Applied); }
 }
 
 void AKhaaosCharacter::ApplySpeciesPresentation(FName SpeciesId)
 {
-	CachedSpeciesId = SpeciesId;
-	UGameInstance* GI = GetGameInstance();
-	if (!GI) return;
-	EKhaaosSpecies Species = EKhaaosSpecies::NONE;
-	if (SpeciesId.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::HURAN;
-	else if (SpeciesId.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::KHAEL;
-	else if (SpeciesId.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::VENEX;
-	else if (SpeciesId.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ONITH;
-	else if (SpeciesId.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ZHEERS;
-	else if (SpeciesId.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::SKEETW;
-	if (Species == EKhaaosSpecies::NONE) return;
-	if (UKhaaosSpeciesMeshRegistry* MeshReg = GI->GetSubsystem<UKhaaosSpeciesMeshRegistry>())
-	{
-		MeshReg->AsyncLoadSpeciesMeshes(Species);
-		CurrentSpeciesMeshLOD = -1;
-		UpdateSpeciesMeshLOD(0.f);
-	}
-	if (UKhaaosSpeciesVFXRegistry* VFXReg = GI->GetSubsystem<UKhaaosSpeciesVFXRegistry>())
-	{
-		FName VfxName = NAME_None;
-		switch (Species) {
-		case EKhaaosSpecies::HURAN: VfxName = FName(TEXT("RegenGlow")); break;
-		case EKhaaosSpecies::KHAEL: VfxName = FName(TEXT("CryoShield")); break;
-		case EKhaaosSpecies::VENEX: VfxName = FName(TEXT("CyberneticGlow")); break;
-		case EKhaaosSpecies::ONITH: VfxName = FName(TEXT("ToxicAura")); break;
-		case EKhaaosSpecies::ZHEERS: VfxName = FName(TEXT("RadGlow")); break;
-		case EKhaaosSpecies::SKEETW: VfxName = FName(TEXT("Bioluminescence")); break;
-		default: break;
-		}
-		if (!VfxName.IsNone() && GetMesh()) VFXReg->SpawnSpeciesVFX(Species, VfxName, GetMesh());
-	}
+        CachedSpeciesId = SpeciesId;
+        UGameInstance* GI = GetGameInstance();
+        if (!GI) return;
+        EKhaaosSpecies Species = EKhaaosSpecies::NONE;
+        if (SpeciesId.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::HURAN;
+        else if (SpeciesId.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::KHAEL;
+        else if (SpeciesId.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::VENEX;
+        else if (SpeciesId.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ONITH;
+        else if (SpeciesId.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ZHEERS;
+        else if (SpeciesId.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::SKEETW;
+        if (Species == EKhaaosSpecies::NONE) return;
+        if (UKhaaosSpeciesMeshRegistry* MeshReg = GI->GetSubsystem<UKhaaosSpeciesMeshRegistry>())
+        {
+                MeshReg->AsyncLoadSpeciesMeshes(Species);
+                CurrentSpeciesMeshLOD = -1;
+                UpdateSpeciesMeshLOD(0.f);
+        }
+        if (UKhaaosSpeciesVFXRegistry* VFXReg = GI->GetSubsystem<UKhaaosSpeciesVFXRegistry>())
+        {
+                FName VfxName = NAME_None;
+                switch (Species) {
+                case EKhaaosSpecies::HURAN: VfxName = FName(TEXT("RegenGlow")); break;
+                case EKhaaosSpecies::KHAEL: VfxName = FName(TEXT("CryoShield")); break;
+                case EKhaaosSpecies::VENEX: VfxName = FName(TEXT("CyberneticGlow")); break;
+                case EKhaaosSpecies::ONITH: VfxName = FName(TEXT("ToxicAura")); break;
+                case EKhaaosSpecies::ZHEERS: VfxName = FName(TEXT("RadGlow")); break;
+                case EKhaaosSpecies::SKEETW: VfxName = FName(TEXT("Bioluminescence")); break;
+                default: break;
+                }
+                if (!VfxName.IsNone() && GetMesh()) VFXReg->SpawnSpeciesVFX(Species, VfxName, GetMesh());
+        }
 }
 
 void AKhaaosCharacter::UpdateSpeciesMeshLOD(float MeshLODLevel)
 {
-	const int32 Desired = FMath::Clamp(FMath::RoundToInt(MeshLODLevel), 0, 3);
-	if (Desired == CurrentSpeciesMeshLOD || CachedSpeciesId.IsNone()) return;
-	UGameInstance* GI = GetGameInstance();
-	if (!GI) return;
-	EKhaaosSpecies Species = EKhaaosSpecies::NONE;
-	if (CachedSpeciesId.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::HURAN;
-	else if (CachedSpeciesId.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::KHAEL;
-	else if (CachedSpeciesId.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::VENEX;
-	else if (CachedSpeciesId.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ONITH;
-	else if (CachedSpeciesId.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ZHEERS;
-	else if (CachedSpeciesId.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::SKEETW;
-	if (Species == EKhaaosSpecies::NONE) return;
-	if (UKhaaosSpeciesMeshRegistry* MeshReg = GI->GetSubsystem<UKhaaosSpeciesMeshRegistry>())
-	{
-		TSoftObjectPtr<USkeletalMesh> Soft = MeshReg->GetSkeletalMeshForLOD(Species, Desired);
-		if (USkeletalMeshComponent* Skel = GetMesh())
-		{
-			USkeletalMesh* Mesh = Soft.Get();
-			if (!Mesh && !Soft.ToSoftObjectPath().IsNull()) Mesh = Soft.LoadSynchronous();
-			if (Mesh) { Skel->SetSkeletalMesh(Mesh); CurrentSpeciesMeshLOD = Desired; }
-		}
-	}
+        const int32 Desired = FMath::Clamp(FMath::RoundToInt(MeshLODLevel), 0, 3);
+        if (Desired == CurrentSpeciesMeshLOD || CachedSpeciesId.IsNone()) return;
+        UGameInstance* GI = GetGameInstance();
+        if (!GI) return;
+        EKhaaosSpecies Species = EKhaaosSpecies::NONE;
+        if (CachedSpeciesId.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::HURAN;
+        else if (CachedSpeciesId.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::KHAEL;
+        else if (CachedSpeciesId.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::VENEX;
+        else if (CachedSpeciesId.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ONITH;
+        else if (CachedSpeciesId.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::ZHEERS;
+        else if (CachedSpeciesId.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) Species = EKhaaosSpecies::SKEETW;
+        if (Species == EKhaaosSpecies::NONE) return;
+        if (UKhaaosSpeciesMeshRegistry* MeshReg = GI->GetSubsystem<UKhaaosSpeciesMeshRegistry>())
+        {
+                TSoftObjectPtr<USkeletalMesh> Soft = MeshReg->GetSkeletalMeshForLOD(Species, Desired);
+                if (USkeletalMeshComponent* Skel = GetMesh())
+                {
+                        USkeletalMesh* Mesh = Soft.Get();
+                        if (!Mesh && !Soft.ToSoftObjectPath().IsNull()) Mesh = Soft.LoadSynchronous();
+                        if (Mesh) { Skel->SetSkeletalMesh(Mesh); CurrentSpeciesMeshLOD = Desired; }
+                }
+        }
 }
 
 
@@ -598,6 +625,23 @@ void AKhaaosCharacter::SetCameraMode(ECameraMode NewMode)
                 NewMode == ECameraMode::FirstPerson ? TEXT("FirstPerson") : TEXT("ThirdPerson"));
 }
 
+// ─── Species helper ─────────────────────────────────────────────────────────────
+
+namespace
+{
+    /** Maps a species display name ("Huran"...) to the GAS species enum. */
+    EKhaaosSpecies SpeciesEnumFromSpeciesID(FName SpeciesId)
+    {
+        if      (SpeciesId.IsEqual(FName(TEXT("Huran")),  ENameCase::IgnoreCase)) return EKhaaosSpecies::HURAN;
+        else if (SpeciesId.IsEqual(FName(TEXT("Khael")),  ENameCase::IgnoreCase)) return EKhaaosSpecies::KHAEL;
+        else if (SpeciesId.IsEqual(FName(TEXT("Venex")),  ENameCase::IgnoreCase)) return EKhaaosSpecies::VENEX;
+        else if (SpeciesId.IsEqual(FName(TEXT("Onith")),  ENameCase::IgnoreCase)) return EKhaaosSpecies::ONITH;
+        else if (SpeciesId.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) return EKhaaosSpecies::ZHEERS;
+        else if (SpeciesId.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) return EKhaaosSpecies::SKEETW;
+        return EKhaaosSpecies::NONE;
+    }
+}
+
 // ─── Species Integration ────────────────────────────────────────────────────────
 
 void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
@@ -632,19 +676,17 @@ void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
         // (server aplica aqui; pawn local standalone re-aplica no BeginPlay se preciso)
         if (CharacterPopComp)
         {
-                const FString SpeciesID = SpeciesAsset->SpeciesID.ToString();
-                EKhaaosSpecies SpeciesEnum = EKhaaosSpecies::NONE;
-                if      (SpeciesID.Equals(TEXT("Huran"),  ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::HURAN;
-                else if (SpeciesID.Equals(TEXT("Khael"),  ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::KHAEL;
-                else if (SpeciesID.Equals(TEXT("Venex"),  ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::VENEX;
-                else if (SpeciesID.Equals(TEXT("Onith"),  ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::ONITH;
-                else if (SpeciesID.Equals(TEXT("Zheers"), ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::ZHEERS;
-                else if (SpeciesID.Equals(TEXT("Skeetw"), ENameCase::IgnoreCase)) SpeciesEnum = EKhaaosSpecies::SKEETW;
-
-                if (SpeciesEnum != EKhaaosSpecies::NONE)
+                const EKhaaosSpecies PopSpecies = SpeciesEnumFromSpeciesID(SpeciesAsset->SpeciesID);
+                if (PopSpecies != EKhaaosSpecies::NONE)
                 {
-                        CharacterPopComp->InitializePop(SpeciesEnum);
+                        CharacterPopComp->InitializePop(PopSpecies);
                 }
+        }
+
+        // ── Natural locomotion: aplica o perfil de locomoção da espécie ──
+        if (NaturalLocomotion)
+        {
+                NaturalLocomotion->ApplySpeciesProfile(SpeciesEnumFromSpeciesID(SpeciesAsset->SpeciesID));
         }
 
         // Species passives are UGameplayAbility specs on PlayerState's GAS ASC,

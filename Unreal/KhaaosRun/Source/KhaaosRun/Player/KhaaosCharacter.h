@@ -19,6 +19,7 @@ class UKhaaosADSComponent;
 class UKhaaosSpectatorComponent;
 class UKhaaosCharacterPopComponent;
 class UKhaaosSpeciesDataAsset;
+class UKhaaosNaturalLocomotionComponent;
 class AKhaaosPlayerController;
 class AKhaaosPlayerState;
 
@@ -111,6 +112,10 @@ public:
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
         UKhaaosSpectatorComponent* GetSpectatorComponent() const { return SpectatorComp; }
 
+        /** Natural locomotion system (anti-robotization bridge for the Anim Graph). */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosNaturalLocomotionComponent* GetNaturalLocomotion() const { return NaturalLocomotion; }
+
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
         UKhaaosAbilityComponent* GetAbilityComponent() const { return AbilityComp; }
 
@@ -143,11 +148,12 @@ public:
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
         void Turn(float Value);
 
-	/** Look up/down (pitch). */
-	UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
-	void LookUp(float Value);
+        /** Look up/down (pitch). */
+        UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
+        void LookUp(float Value);
 
-	virtual void Landed(const FHitResult& Hit) override;
+        /** Landed hook — feeds the natural locomotion land-recovery spring. */
+        virtual void Landed(const FHitResult& Hit) override;
 
         /** Enhanced jump with species modifier. */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
@@ -188,9 +194,9 @@ public:
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Camera")
         ECameraMode GetCameraMode() const { return CameraMode; }
 
-	// ─── Species Integration ────────────────────────────────────────────────────────
-	void ApplySpeciesPresentation(FName SpeciesId);
-	void UpdateSpeciesMeshLOD(float MeshLODLevel);
+        // ─── Species Integration ────────────────────────────────────────────────
+        void ApplySpeciesPresentation(FName SpeciesId);
+        void UpdateSpeciesMeshLOD(float MeshLODLevel);
 
         /** Apply species data asset: mesh, stats, passive ability. */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Species")
@@ -484,6 +490,10 @@ protected:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Spectator")
         TObjectPtr<UKhaaosSpectatorComponent> SpectatorComp;
 
+        /** Natural locomotion component (smoothing, lean, stride, foot IK, breath). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Animation")
+        TObjectPtr<UKhaaosNaturalLocomotionComponent> NaturalLocomotion;
+
         /** Character pop component (v3 gráficos — rim light por espécie). */
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Graphics")
         TObjectPtr<UKhaaosCharacterPopComponent> CharacterPopComp;
@@ -494,13 +504,13 @@ protected:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Species")
         const UKhaaosSpeciesDataAsset* AppliedSpeciesAsset = nullptr;
 
-	// ─── Internal State ─────────────────────────────────────────────────────────────
-	float GlideTimeRemaining = 0.0f;
-	bool bIsGliding = false;
-	float DefaultGravityScale = 1.0f;
-	float DefaultAirControl = 0.35f;
-	int32 CurrentSpeciesMeshLOD = 0;
-	FName CachedSpeciesId;
+        // ─── Internal State ─────────────────────────────────────────────────────
+        float GlideTimeRemaining = 0.0f;
+        bool bIsGliding = false;
+        float DefaultGravityScale = 1.0f;
+        float DefaultAirControl = 0.35f;
+        int32 CurrentSpeciesMeshLOD = 0;
+        FName CachedSpeciesId;
 
         /** Time remaining in current slide. */
         float SlideTimeRemaining = 0.0f;
@@ -526,12 +536,12 @@ protected:
         /** Tick stamina drain/regen. */
         void TickStamina(float DeltaSeconds);
 
-	/** Tick health/shield/energy regeneration. */
-	void TickRegen(float DeltaSeconds);
-	void TickGlide(float DeltaSeconds);
-	void TickSpeciesWater(float DeltaSeconds);
-	void TryStartGlide();
-	void EndGlide();
+        /** Tick health/shield/energy regeneration. */
+        void TickRegen(float DeltaSeconds);
+        void TickGlide(float DeltaSeconds);
+        void TickSpeciesWater(float DeltaSeconds);
+        void TryStartGlide();
+        void EndGlide();
 
         /** Tick slide timeout. */
         void TickSlide(float DeltaSeconds);

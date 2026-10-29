@@ -110,6 +110,27 @@ struct FKhaaosAnimBlendEntry
     float BlendSpeed = 5.0f;
 };
 
+/**
+ * FKhaaosBoneSpringState
+ * Persistent 2-DOF rotational spring state for one bone in a physics chain.
+ * Pitch/Yaw offsets are applied on top of the evaluated animation pose in
+ * component space (post-physics tick), giving tails/wings/crystals the
+ * delayed, springy secondary motion that reads as organic.
+ */
+USTRUCT(BlueprintType)
+struct FKhaaosBoneSpringState
+{
+    GENERATED_BODY()
+
+    /** Current rotational offset (deg): X = pitch, Y = yaw. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    FVector2D OffsetDeg = FVector2D::ZeroVector;
+
+    /** Spring angular velocity (deg/s): X = pitch, Y = yaw. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    FVector2D VelocityDeg = FVector2D::ZeroVector;
+};
+
 UCLASS(ClassGroup = (Khaaos, Character), meta = (BlueprintSpawnableComponent))
 class KHAAOSRUN_API UKhaaosAnimationBlendManager : public UActorComponent
 {
@@ -177,4 +198,25 @@ private:
 
     /** Velocidade do owner para reaction dynamics */
     FVector OwnerVelocity = FVector::ZeroVector;
+
+    /** Velocidade do owner no frame anterior (derivada = aceleração). */
+    FVector PrevOwnerVelocity = FVector::ZeroVector;
+
+    /** Aceleração local do owner (X = forward, Y = lateral, Z = up) em uu/s^2. */
+    FVector OwnerLocalAccel = FVector::ZeroVector;
+
+    /** Taxa de rotação yaw do owner (deg/s) — dirige a reação de cauda/asas a curvas. */
+    float OwnerYawRateDeg = 0.0f;
+
+    /** Yaw do owner no frame anterior (para derivar yaw rate por instância). */
+    float PrevOwnerYawDeg = 0.0f;
+
+    /** Primeira amostra de yaw já capturada? */
+    bool bOwnerYawInitialized = false;
+
+    /** Estado persistente de spring por bone (chave = bone name). */
+    TMap<FName, FKhaaosBoneSpringState> BoneSpringStates;
+
+    /** Calcula aceleração local e yaw rate do owner. */
+    void ComputeOwnerDynamics(float DeltaTime);
 };

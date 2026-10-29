@@ -87,6 +87,9 @@ NEW_FILES = [
     "Game/VFX/KhaaosSpeciesVFXRegistry.h",
     "Game/VFX/KhaaosVFXManager.h",
     "Game/Camera/KhaaosKillCamComponent.h",
+    # Natural locomotion / animation blending (anti-robotization)
+    "Game/Animation/KhaaosNaturalLocomotionComponent.h",
+    "Game/Character/KhaaosAnimationBlendManager.h",
     # Operatives
     "Game/Character/Operatives/KhaaosOpHUR01.h",
     "Game/Character/Operatives/KhaaosOpHUR02.h",

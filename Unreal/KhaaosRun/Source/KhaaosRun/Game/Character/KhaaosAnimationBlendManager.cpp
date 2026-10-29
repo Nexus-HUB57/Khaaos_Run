@@ -10,6 +10,33 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+#include <cmath>
+
+namespace
+{
+    /**
+     * Semi-implicit damped spring step for a scalar rotational DOF.
+     * Sub-stepped for stability on hitch frames. Returns new offset,
+     * writes new velocity. Fully deterministic.
+     */
+    float SpringDof(float Offset, float& Velocity, float Target, float Stiffness, float DampingRatio, float Dt)
+    {
+        const float Critical = 2.0f * std::sqrt(std::fabs(Stiffness));
+        const float Damping = Critical * DampingRatio;
+        float Remaining = FMath::Clamp(Dt, 0.0f, 0.25f);
+        const float MaxStep = 1.0f / 30.0f;
+        while (Remaining > 0.0f)
+        {
+            const float H = (Remaining > MaxStep) ? MaxStep : Remaining;
+            Remaining -= H;
+            const float Accel = -Stiffness * (Offset - Target) - Damping * Velocity;
+            Velocity += Accel * H;
+            Offset += Velocity * H;
+        }
+        return Offset;
+    }
+}
+
 UKhaaosAnimationBlendManager::UKhaaosAnimationBlendManager()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -33,11 +60,14 @@ void UKhaaosAnimationBlendManager::TickComponent(float DeltaTime, enum ELevelTic
 
     if (!bInitialized) return;
 
-    // Cache owner velocity para reaction dynamics
+    // Cache owner velocity e dinâmica (aceleração local + yaw rate) para
+    // as reações de secondary motion — é a dinâmica que torna cauda/asas
+    // orgânicas em vez de ornamentos estáticos.
     if (ACharacter* OwnerChar = Cast<ACharacter>(GetOwner()))
     {
         OwnerVelocity = OwnerChar->GetVelocity();
     }
+    ComputeOwnerDynamics(DeltaTime);
 
     TotalCPUTimeMs = 0.0f;
 
@@ -57,6 +87,47 @@ void UKhaaosAnimationBlendManager::TickComponent(float DeltaTime, enum ELevelTic
     {
         FKhaaosAnimBlendEntry& Blend = Pair.Value;
         // Blending é gerenciado pelo Anim Blueprint via GetBlendWeight
+    }
+}
+
+void UKhaaosAnimationBlendManager::ComputeOwnerDynamics(float DeltaTime)
+{
+    if (DeltaTime <= KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+    if (!OwnerChar)
+    {
+        return;
+    }
+
+    // Aceleração local (derivada da velocidade) — projeta o impulso que
+    // cauda/asas/cristais devem reagir contra.
+    const FVector Accel = (OwnerVelocity - PrevOwnerVelocity) / DeltaTime;
+    PrevOwnerVelocity = OwnerVelocity;
+
+    const FRotator YawRot(0.0f, OwnerChar->GetActorRotation().Yaw, 0.0f);
+    const FVector Forward = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
+    const FVector Right = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
+
+    OwnerLocalAccel.X = static_cast<float>(FVector::DotProduct(Accel, Forward));
+    OwnerLocalAccel.Y = static_cast<float>(FVector::DotProduct(Accel, Right));
+    OwnerLocalAccel.Z = static_cast<float>(Accel.Z);
+
+    // Yaw rate via delta de rotação do actor (estado por instância).
+    const float CurrentYaw = OwnerChar->GetActorRotation().Yaw;
+    if (!bOwnerYawInitialized)
+    {
+        PrevOwnerYawDeg = CurrentYaw;
+        bOwnerYawInitialized = true;
+        OwnerYawRateDeg = 0.0f;
+    }
+    else
+    {
+        OwnerYawRateDeg = FMath::FindDeltaAngleDegrees(PrevOwnerYawDeg, CurrentYaw) / DeltaTime;
+        PrevOwnerYawDeg = CurrentYaw;
     }
 }
 
@@ -302,56 +373,92 @@ TArray<FKhaaosPhysicsAnimConfig> UKhaaosAnimationBlendManager::BuildSpeciesPhysi
 
 void UKhaaosAnimationBlendManager::UpdatePhysicsPart(FKhaaosPhysicsAnimConfig& Config, float DeltaTime)
 {
-    // Spring-damper physics simulation para cada bone na cadeia
-    // Simplificação: atualizar offset de transform baseado em spring dynamics
-    // Em produção, isto usaria UE5 Chaos Physics ou custom physics thread
+    // ── Secondary motion real: spring-damper por bone na cadeia ──
+    // Cada bone reage com atraso progressivo (fim da cadeia deflete mais)
+    // a: aceleração forward/lateral do owner, taxa de curva (yaw rate) e
+    // gravidade relativa para partes pendulares.
 
-    if (ACharacter* OwnerChar = Cast<ACharacter>(GetOwner()))
+    if (!Cast<ACharacter>(GetOwner()))
     {
-        if (USkeletalMeshComponent* MeshComp = OwnerChar->GetMesh())
-        {
-            for (const FName& BoneName : Config.BoneChain)
-            {
-                // Obter transform atual do bone
-                const int32 BoneIdx = MeshComp->GetBoneIndex(BoneName);
-                if (BoneIdx == INDEX_NONE) continue;
+        return;
+    }
 
-                // Calcular spring force baseado em velocity do owner
-                const FVector SpringForce = -Config.Stiffness * OwnerVelocity * DeltaTime;
-                const FVector DampingForce = -Config.Damping * OwnerVelocity;
+    const int32 ChainLen = FMath::Max(Config.BoneChain.Num(), 1);
+    const float Stiffness = FMath::Max(Config.Stiffness, 0.1f);
+    const float DampingRatio = FMath::Clamp(Config.Damping, 0.05f, 1.0f);
 
-                // Cache transform para aplicação
-                FTransform BoneTransform = MeshComp->GetBoneTransform(BoneIdx, MeshComp->GetComponentToWorld());
-                FVector NewLocation = BoneTransform.GetLocation() + (SpringForce + DampingForce) * DeltaTime;
+    // Alvos de deflexão (deg) derivados da dinâmica do owner.
+    // Escalas empíricas: 1000 uu/s^2 de aceleração ≈ 6 graus de reação.
+    const float AccelScale = 6.0f / 1000.0f;
+    const float YawRateScale = 12.0f / 360.0f;
 
-                // Constraint rotation
-                FRotator NewRotation = BoneTransform.GetRotation().Rotator();
-                NewRotation.Pitch = FMath::Clamp(NewRotation.Pitch, -Config.RotationConstraint, Config.RotationConstraint);
-                NewRotation.Yaw = FMath::Clamp(NewRotation.Yaw, -Config.RotationConstraint, Config.RotationConstraint);
+    const float PitchTargetBase = FMath::Clamp(-OwnerLocalAccel.X * AccelScale, -Config.RotationConstraint, Config.RotationConstraint);
+    const float YawTargetBase   = FMath::Clamp(-OwnerLocalAccel.Y * AccelScale - OwnerYawRateDeg * YawRateScale * 10.0f,
+                                               -Config.RotationConstraint, Config.RotationConstraint);
 
-                CachedBoneTransforms.Add(BoneName, FTransform(NewRotation, NewLocation, BoneTransform.GetScale3D()));
-            }
-        }
+    for (int32 i = 0; i < Config.BoneChain.Num(); ++i)
+    {
+        const FName& BoneName = Config.BoneChain[i];
+
+        // Atenuação progressiva: o fim da cadeia (cauda, ponta da asa)
+        // reage com mais amplitude e menos stiffness — como molas em série.
+        const float ChainT = static_cast<float>(i + 1) / static_cast<float>(ChainLen);
+        const float ChainStiffness = Stiffness * FMath::Lerp(1.0f, 0.45f, ChainT);
+        const float Amplitude = FMath::Lerp(0.6f, 1.6f, ChainT);
+
+        const float TargetPitch = PitchTargetBase * Amplitude;
+        const float TargetYaw = YawTargetBase * Amplitude;
+
+        FKhaaosBoneSpringState& S = BoneSpringStates.FindOrAdd(BoneName);
+        S.OffsetDeg.X = SpringDof(S.OffsetDeg.X, S.VelocityDeg.X, TargetPitch, ChainStiffness, DampingRatio, DeltaTime);
+        S.OffsetDeg.Y = SpringDof(S.OffsetDeg.Y, S.VelocityDeg.Y, TargetYaw, ChainStiffness, DampingRatio, DeltaTime);
+
+        // Constraints duros (nunca deforma o rig além do artístico).
+        S.OffsetDeg.X = FMath::Clamp(S.OffsetDeg.X, -Config.RotationConstraint, Config.RotationConstraint);
+        S.OffsetDeg.Y = FMath::Clamp(S.OffsetDeg.Y, -Config.RotationConstraint, Config.RotationConstraint);
     }
 }
 
 void UKhaaosAnimationBlendManager::ApplyPhysicsToBones(const FKhaaosPhysicsAnimConfig& Config)
 {
+    // ── Aplica os offsets de spring sobre a pose avaliada da animação ──
+    // O componente ticka em TG_PostPhysics: a pose do frame já foi
+    // avaliada, então GetBoneTransform devolve a pose final e
+    // SetBoneTransformByName aplica o delta rotacional que será
+    // renderizado neste frame. Nenhum estado de anim é corrompido.
+
     if (ACharacter* OwnerChar = Cast<ACharacter>(GetOwner()))
     {
         if (USkeletalMeshComponent* MeshComp = OwnerChar->GetMesh())
         {
             for (const FName& BoneName : Config.BoneChain)
             {
-                if (const FTransform* Transform = CachedBoneTransforms.Find(BoneName))
+                FKhaaosBoneSpringState* State = BoneSpringStates.Find(BoneName);
+                if (!State)
                 {
-                    const int32 BoneIdx = MeshComp->GetBoneIndex(BoneName);
-                    if (BoneIdx != INDEX_NONE)
-                    {
-                        // Em produção: usar MeshComp->SetBoneTransformByName
-                        // com blend weight para smooth transition
-                    }
+                    continue;
                 }
+                if (FMath::IsNearlyZero(State->OffsetDeg.X, KINDA_SMALL_NUMBER) &&
+                    FMath::IsNearlyZero(State->OffsetDeg.Y, KINDA_SMALL_NUMBER))
+                {
+                    continue; // Pose original sem custo de escrita.
+                }
+
+                const int32 BoneIdx = MeshComp->GetBoneIndex(BoneName);
+                if (BoneIdx == INDEX_NONE)
+                {
+                    continue; // Skeleton variante sem o bone — degrada em silêncio.
+                }
+
+                const FTransform BoneTransform = MeshComp->GetBoneTransform(BoneIdx, EBoneSpaces::ComponentSpace);
+                FRotator Rot = BoneTransform.GetRotation().Rotator();
+                Rot.Pitch += State->OffsetDeg.X;
+                Rot.Yaw += State->OffsetDeg.Y;
+                Rot.Roll = FMath::Clamp(Rot.Roll + State->OffsetDeg.Y * 0.25f, -Config.RotationConstraint, Config.RotationConstraint);
+
+                FTransform NewTransform(BoneTransform);
+                NewTransform.SetRotation(Rot.Quaternion());
+                MeshComp->SetBoneTransformByName(BoneName, NewTransform, EBoneSpaces::ComponentSpace);
             }
         }
     }
