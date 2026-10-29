@@ -377,4 +377,18 @@ Stage Summary:
 - Anexos nascem com RARIDADE visível (gasto→dourado + chip) que sobrevive a troca de arma, bolso e caixa de morte — grind de coleta FF completo
 - Grama com LOD de distância em chunks: densa perto, rarefeita no meio, invisível longe — ~95% dos chunks ocultos na origem (189 → ~10 draw calls de grama)
 - Suite: 824 testes — 811 pass / 0 fail / 13 skipped; vite build OK
->>>>>>> 41fe637 (Fase 32 — skins míticas evolutivas para o arsenal (M4/MP5/Barrett/G19 + AR-47), anexos por raridade (visual gasto→dourado + chip) e grama com LOD de distância)
+
+================================================================================
+Task: Fase 32 — VALIDAÇÃO END TO END (sessão de verificação, browser real)
+
+Work Log:
+- Suíte completa re-executada: 824 testes — 811 pass / 0 fail / 13 skip; vite build OK (2.35 s)
+- ?scenario=w4&view=tps ao vivo (Arukheea, seed CIGKV-3D-01): boot sem erros de página; modal ZU-01 → "SALTAR NO CAOS" → queda (sky→chute) → pouso; HUD/rádio/ring/minimapa operantes
+- Farol girando CONFIRMADO por medição: Δrotation.z/ΔanimT = 0.38 rad/s (exato = registro do spinner em districts3d.js). Causa-raiz esclarecida para leituras por tempo de parede: headless estrangula rAF (~1 fps) e o loop clampa dt em 0.1 s — por tempo de JOGO a rotação é 1:1 com o canônico. Evidência: f32-validate-w4-tps-farol.png
+- Grama LOD CONFIRMADA ao vivo: 80 chunks; 8 visíveis na origem (2 full + 6 sparse, 26 instâncias) → câmera +200 m: 3 → volta: 8 (só visible/count trocados). Evidência: f32-validate-grama-lod-close.png
+- Vitrine /scripts/f32-showcase.html ao vivo com módulos REAIS: 5 auras míticas (rosa/ciano/lima/violeta/menta) + chips de raridade gasto→dourado. Evidências: f32-validate-showcase-live.png, f32-validate-skins-miticas-close.png, f32-validate-anexos-raridade-close.png, f32-validate-anexos-fileira.png
+- Doc FASE32_SKINS_MITICAS_ANEXOS_RARIDADE_GRAMA_LOD.md: seção "Validação end to end" adicionada com método e números
+
+Stage Summary:
+- Fase 32 VERIFICADA end to end: implementação + testes + build + browser real com evidências — nada pendente na diretiva (skins míticas do arsenal, anexos por raridade, grama com LOD)
+- Nota de instrumentação registrada: distância/custo de render da grama e rotação do farol devem ser medidos por animT (tempo de jogo), não por tempo de parede, em ambientes headless

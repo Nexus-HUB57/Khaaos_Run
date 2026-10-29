@@ -131,3 +131,26 @@
   Arukheea (`?scenario=Arukheea&view=tps`): queda, pouso e HUD ao vivo
 - Testes: 824 — 811 pass / 0 fail / 13 skip (21 testes na suíte de anexos, 15 na
   de vegetação); `vite build` OK
+
+### Validação end to end (sessão de verificação, browser real)
+- **Farol girando CONFIRMADO** — leitura ao vivo de `lampBeam` em
+  `?scenario=w4&view=tps`: Δrotation.z / ΔanimT = **0.38 rad/s** (exato, igual ao
+  registro do spinner `districts3d.js`). Nota de instrumentação: em headless o
+  rAF é estrangulado (~1 fps) e o `dt` do loop é clampado em 0.1 s — a rotação
+  por tempo de PAREDE parece lenta, mas por tempo de JOGO (animT) é 1:1 com o
+  canônico. Evidência visual: `f32-validate-w4-tps-farol.png` (torre + feixe
+  cônico translúcido inclinado em rotação, terminal XP e vegetação no quadro).
+- **Grama LOD CONFIRMADA ao vivo** — `scene.userData.grassLOD` com 80 chunks
+  (seed CIGKV-3D-01/ARUKHEEA): 8 chunks visíveis na origem (2 full + 6 sparse,
+  26 instâncias desenhadas); ao deslocar a câmera +200 m → 3 visíveis; ao
+  voltar → 8 de novo (troca só de `visible`/`count`). Close:
+  `f32-validate-grama-lod-close.png` (tufos + árvore F31 + anel no quadro).
+- **Skins míticas + anexos por raridade CONFIRMADOS ao vivo** — vitrine
+  `/scripts/f32-showcase.html` servida pelo dev server com os módulos REAIS do
+  jogo: 5 auras por arma (rosa/ciano/lima/violeta/menta) e fileira de anexos
+  com chips por tier (gasto sem chip → ciano → violeta → ouro fosco → ouro
+  vivo). Evidências: `f32-validate-showcase-live.png`,
+  `f32-validate-skins-miticas-close.png`, `f32-validate-anexos-raridade-close.png`,
+  `f32-validate-anexos-fileira.png`.
+- Suíte re-executada na sessão: **824 testes — 811 pass / 0 fail / 13 skip**;
+  `vite build` OK (2.35 s).
