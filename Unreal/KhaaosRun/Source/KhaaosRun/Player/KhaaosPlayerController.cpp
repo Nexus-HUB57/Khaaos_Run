@@ -16,6 +16,9 @@
 #include "Game/UI/KhaaosHUD.h"
 #include "Game/Input/KhaaosInputConfig.h"
 #include "Game/Input/KhaaosInputTags.h"
+#include "AbilitySystemComponent.h"
+#include "Player/KhaaosPlayerState.h"
+#include "InputCoreTypes.h"
 #include "Game/Spectator/KhaaosSpectatorComponent.h"
 #include "Game/Inventory/KhaaosInventoryComponent.h"
 #include "Game/Data/KhaaosWeaponComponent.h"
@@ -202,6 +205,25 @@ void AKhaaosPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComp->BindAction(IT.Ultimate, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleUltimate);
 	}
+	UInputAction* AbilityActions[8] = { IT.Ability1, IT.Ability2, IT.Ability3, IT.Ability4, IT.Ability5, IT.Ability6, IT.Ability7, IT.Ability8 };
+	using AH = void (AKhaaosPlayerController::*)(const FInputActionValue&);
+	AH AbilityHandlers[8] = {
+		&AKhaaosPlayerController::HandleAbilitySlot0, &AKhaaosPlayerController::HandleAbilitySlot1,
+		&AKhaaosPlayerController::HandleAbilitySlot2, &AKhaaosPlayerController::HandleAbilitySlot3,
+		&AKhaaosPlayerController::HandleAbilitySlot4, &AKhaaosPlayerController::HandleAbilitySlot5,
+		&AKhaaosPlayerController::HandleAbilitySlot6, &AKhaaosPlayerController::HandleAbilitySlot7 };
+	for (int32 i = 0; i < 8; ++i) if (AbilityActions[i]) EnhancedInputComp->BindAction(AbilityActions[i], ETriggerEvent::Started, this, AbilityHandlers[i]);
+	if (InputComponent) {
+		InputComponent->BindKey(EKeys::One, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot0);
+		InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot1);
+		InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot2);
+		InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot3);
+		InputComponent->BindKey(EKeys::Five, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot4);
+		InputComponent->BindKey(EKeys::Six, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot5);
+		InputComponent->BindKey(EKeys::Seven, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot6);
+		InputComponent->BindKey(EKeys::Eight, IE_Pressed, this, &AKhaaosPlayerController::HandleAbilitySlot7);
+	}
+
 	if (IT.Shield)
 	{
 		EnhancedInputComp->BindAction(IT.Shield, ETriggerEvent::Started, this, &AKhaaosPlayerController::HandleUseItem);
@@ -439,20 +461,10 @@ void AKhaaosPlayerController::HandleScoreboardRelease(const FInputActionValue& V
 
 void AKhaaosPlayerController::HandleUltimate(const FInputActionValue& Value)
 {
-	if (!CachedCharacter || CachedCharacter->bIsDead)
-	{
-		return;
-	}
-	// Activate species ultimate via GAS
-	if (UKhaaosAbilityComponent* AbilityComp = CachedCharacter->GetAbilityComponent())
-	{
-		const FKhaaosInputTags& IT = FKhaaosInputTags::Get();
-		if (IT.Tag_Input_Ultimate.IsValid())
-		{
-			AbilityComp->StartAction(CachedCharacter, IT.Tag_Input_Ultimate);
-		}
-	}
+	(void)Value;
+	HandleAbilitySlot(7);
 }
+
 
 void AKhaaosPlayerController::HandleMelee(const FInputActionValue& Value)
 {
@@ -978,3 +990,26 @@ void AKhaaosPlayerController::ClientEndZuEntry_Implementation()
         }
     }
 }
+
+void AKhaaosPlayerController::HandleAbilitySlot(int32 SlotIndex)
+{
+	if (!CachedCharacter || CachedCharacter->bIsDead || SlotIndex < 0 || SlotIndex > 7) return;
+	AKhaaosPlayerState* PS = GetPlayerState<AKhaaosPlayerState>();
+	UAbilitySystemComponent* ASC = PS ? PS->GetAbilitySystemComponent() : nullptr;
+	if (!ASC) return;
+	ASC->AbilityLocalInputPressed(SlotIndex);
+	ASC->AbilityLocalInputReleased(SlotIndex);
+	if (PS->SpeciesActiveAbilityHandles.IsValidIndex(SlotIndex))
+	{
+		const FGameplayAbilitySpecHandle& Handle = PS->SpeciesActiveAbilityHandles[SlotIndex];
+		if (Handle.IsValid()) ASC->TryActivateAbility(Handle);
+	}
+}
+void AKhaaosPlayerController::HandleAbilitySlot0(const FInputActionValue& V) { (void)V; HandleAbilitySlot(0); }
+void AKhaaosPlayerController::HandleAbilitySlot1(const FInputActionValue& V) { (void)V; HandleAbilitySlot(1); }
+void AKhaaosPlayerController::HandleAbilitySlot2(const FInputActionValue& V) { (void)V; HandleAbilitySlot(2); }
+void AKhaaosPlayerController::HandleAbilitySlot3(const FInputActionValue& V) { (void)V; HandleAbilitySlot(3); }
+void AKhaaosPlayerController::HandleAbilitySlot4(const FInputActionValue& V) { (void)V; HandleAbilitySlot(4); }
+void AKhaaosPlayerController::HandleAbilitySlot5(const FInputActionValue& V) { (void)V; HandleAbilitySlot(5); }
+void AKhaaosPlayerController::HandleAbilitySlot6(const FInputActionValue& V) { (void)V; HandleAbilitySlot(6); }
+void AKhaaosPlayerController::HandleAbilitySlot7(const FInputActionValue& V) { (void)V; HandleAbilitySlot(7); }

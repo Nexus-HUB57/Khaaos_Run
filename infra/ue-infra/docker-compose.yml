@@ -30,6 +30,8 @@ services:
     container_name: khaaos-ddc
     ports:
       - "8080:80"   # host 8080 → container 80 (porta default da imagem 1.5.0)
+    volumes:
+      - ddc-data:/mnt/ddc   # blobs do backend FileSystem
     environment:
       # Metadata store — seção "Scylla" do chart (classe ScyllaSettings).
       # ASP.NET: __ no env equivale a aninhamento no appsettings.
@@ -45,6 +47,21 @@ services:
       # (auth.enabled: false). Evidência de CI 5ª run: "You must have at
       # least one scheme when authentication is enabled".
       Auth__Enabled: "false"
+      # JupiterSettings.CurrentSite [Required] (BaseStartup.cs): nome do site,
+      # único por deployment (multi-região). Evidência de CI 6ª run.
+      Jupiter__CurrentSite: khaaos-staging
+      # Blob store: JupiterStartup.CreateS3 lança "No storage implementation
+      # set" sem UnrealCloudDDC:StorageImplementations (evidência 7ª run).
+      # FileSystem para staging (enum: S3/Azure/FileSystem/Memory/Relay/Peer);
+      # FilesystemSettings.RootDir é [Required] (Settings.cs).
+      UnrealCloudDDC__StorageImplementations__0: FileSystem
+      Filesystem__RootDir: /mnt/ddc
+      # S3Settings valida [Required] incondicionalmente no DI (Jupiter.Startup
+      # AddOptions<S3Settings>.ValidateDataAnnotations), mesmo com backend
+      # FileSystem — valores inertes aqui (CreateS3 não é chamado).
+      # Evidência de CI 8ª run.
+      S3__ConnectionString: "unused-filesystem-backend"
+      S3__BucketName: "unused-filesystem-backend"
     depends_on:
       - scylla
     restart: unless-stopped
@@ -77,3 +94,4 @@ services:
 volumes:
   lore-data:
   scylla-data:
+  ddc-data:

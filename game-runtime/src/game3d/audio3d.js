@@ -339,23 +339,26 @@ export class GameAudio {
 
   // ---------- Fase 25 — portas funcionais/destrutíveis ----------
   // dobradiça: ranger de serra (abrir sobe, fechar desce) + estalo do trinco
-  door(open = true, distance = 0) {
+  // Fase 25.1 — material: 'wood' (padrão) range grave; 'metal' (hangar) range
+  // metálico mais agudo com clangor de trinco pesado
+  door(open = true, distance = 0, material = 'wood') {
     if (!this.ctx || !this.enabled) return;
     const t = this.ctx.currentTime;
     const vol = Math.max(.1, .85 - distance / 60);
+    const metal = material === 'metal';
     // ranger: sawtooth com vibrato curto (a folha acelera na dobradiça)
     const creak = this.ctx.createOscillator();
     creak.type = 'sawtooth';
-    if (open) creak.frequency.setValueAtTime(150, t);
-    else creak.frequency.setValueAtTime(310, t);
-    creak.frequency.exponentialRampToValueAtTime(open ? 330 : 145, t + .3);
+    if (open) creak.frequency.setValueAtTime(metal ? 210 : 150, t);
+    else creak.frequency.setValueAtTime(metal ? 380 : 310, t);
+    creak.frequency.exponentialRampToValueAtTime(open ? (metal ? 420 : 330) : (metal ? 200 : 145), t + .3);
     const wob = this.ctx.createOscillator(); wob.frequency.value = 11;
     const wobG = this.ctx.createGain(); wobG.gain.value = 24;
     wob.connect(wobG); wobG.connect(creak.frequency);
     const cg = this.ctx.createGain();
     this.#env(cg, t, .03, .3, .16 * vol);
     const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 2.2;
+    lp.type = 'lowpass'; lp.frequency.value = metal ? 1800 : 1100; lp.Q.value = 2.2;
     creak.connect(lp); lp.connect(cg); cg.connect(this.#bus('sfx'));
     creak.start(t); creak.stop(t + .4); wob.start(t); wob.stop(t + .4);
     // estalo do trinco no fim do curso (fechar: mais seco)
@@ -369,11 +372,53 @@ export class GameAudio {
     latch.start(t + (open ? .3 : .26));
   }
 
-  // madeira ESTILHAÇANDO: trinca grave, rajada de lascas e tábuas no chão
-  doorDown(distance = 0) {
+  // madeira ESTILHAÇANDO (trinca grave + lascas) — Fase 25.1: 'metal' (hangar)
+  // amassa em vez de estilhaçar: clangor metálico + ring de chapa + baque pesado
+  doorDown(distance = 0, material = 'wood') {
     if (!this.ctx || !this.enabled) return;
     const t = this.ctx.currentTime;
     const vol = Math.max(.12, .95 - distance / 70);
+    if (material === 'metal') {
+      // clangor inicial: impacto de chapa (ruído passa-alta + ring de 3 parciais)
+      const bang = this.ctx.createBufferSource();
+      bang.buffer = this.#noiseBuffer(.3);
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 900;
+      const bg = this.ctx.createGain();
+      this.#env(bg, t, .002, .22, .7 * vol);
+      bang.connect(hp); hp.connect(bg); bg.connect(this.#bus('sfx'));
+      bang.start(t);
+      [420, 630, 880].forEach((f, i) => {
+        const ring = this.ctx.createOscillator();
+        ring.type = 'triangle';
+        ring.frequency.value = f * (1 + (i % 2) * .012);
+        const rg = this.ctx.createGain();
+        this.#env(rg, t + .01, .002, .55 - i * .12, .22 * vol);
+        ring.connect(rg); rg.connect(this.#bus('sfx'));
+        ring.start(t + .01); ring.stop(t + .7);
+      });
+      // amassados: 4 golpes metálicos surdos (a folha dobra antes de cair)
+      [0, .09, .17, .28].forEach((off, i) => {
+        const dent = this.ctx.createOscillator();
+        dent.type = 'square';
+        dent.frequency.setValueAtTime(300 - i * 45, t + off);
+        dent.frequency.exponentialRampToValueAtTime(60, t + off + .07);
+        const dg = this.ctx.createGain();
+        this.#env(dg, t + off, .001, .07, .3 * vol);
+        dent.connect(dg); dg.connect(this.#bus('sfx'));
+        dent.start(t + off); dent.stop(t + off + .1);
+      });
+      // baque da chapa no chão (mais grave e longo que a madeira)
+      const thudM = this.ctx.createOscillator();
+      thudM.type = 'sine';
+      thudM.frequency.setValueAtTime(72, t + .18);
+      thudM.frequency.exponentialRampToValueAtTime(28, t + .55);
+      const tgM = this.ctx.createGain();
+      this.#env(tgM, t + .18, .01, .4, .5 * vol);
+      thudM.connect(tgM); tgM.connect(this.#bus('sfx'));
+      thudM.start(t + .18); thudM.stop(t + .6);
+      return;
+    }
     // trinca inicial: corpo de ruído médio-grave caindo (a folha cede)
     const crack = this.ctx.createBufferSource();
     crack.buffer = this.#noiseBuffer(.4);
@@ -416,6 +461,53 @@ export class GameAudio {
     this.#env(tg, t + .12, .006, .3, .5 * vol);
     thud.connect(tg); tg.connect(this.#bus('sfx'));
     thud.start(t + .12); thud.stop(t + .5);
+  }
+
+  // Fase 26 — VIDRO ESTILHAÇANDO: estalo agudo inicial (o painel cede),
+  // cascata de cacos (pings triangle/dessintonizados caindo) + sopro de ruído
+  // passa-alta (o "chhh" das lascas varrendo o chão). Sem baque grave — vidro
+  // não pesa: a assinatura é BRILHANTE e rápida, contrasta com madeira/metal.
+  windowDown(distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const vol = Math.max(.1, .8 - distance / 55);
+    // estalo do painel cedendo: transiente quadrado agudo curtíssimo
+    const snap = this.ctx.createOscillator();
+    snap.type = 'square';
+    snap.frequency.setValueAtTime(1750, t);
+    snap.frequency.exponentialRampToValueAtTime(520, t + .05);
+    const sg = this.ctx.createGain();
+    this.#env(sg, t, .001, .05, .5 * vol);
+    snap.connect(sg); sg.connect(this.#bus('sfx'));
+    snap.start(t); snap.stop(t + .08);
+    // cascata de cacos: 9 pings brilhantes dessintonizados (queda ~0,5 s)
+    for (let i = 0; i < 9; i++) {
+      const off = .02 + Math.random() * .42;
+      const shard = this.ctx.createOscillator();
+      shard.type = 'triangle';
+      shard.frequency.value = 1900 + Math.random() * 2600;
+      const shg = this.ctx.createGain();
+      this.#env(shg, t + off, .001, .07, .13 * vol);
+      shard.connect(shg); shg.connect(this.#bus('sfx'));
+      shard.start(t + off); shard.stop(t + off + .1);
+    }
+    // sopro das lascas no chão: ruído passa-alta com decay rápido
+    const spray = this.ctx.createBufferSource();
+    spray.buffer = this.#noiseBuffer(.45);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 3400;
+    const spg = this.ctx.createGain();
+    this.#env(spg, t + .02, .01, .42, .3 * vol);
+    spray.connect(hp); hp.connect(spg); spg.connect(this.#bus('sfx'));
+    spray.start(t + .02);
+    // ring cristalino residual (a janela "assobia" meio segundo após quebrar)
+    const ring = this.ctx.createOscillator();
+    ring.type = 'sine';
+    ring.frequency.value = 3150;
+    const rg = this.ctx.createGain();
+    this.#env(rg, t + .06, .01, .5, .06 * vol);
+    ring.connect(rg); rg.connect(this.#bus('sfx'));
+    ring.start(t + .06); ring.stop(t + .62);
   }
 
   // ---------- Fase 18 — sobrevivências imersivas + game feel de abate ----------

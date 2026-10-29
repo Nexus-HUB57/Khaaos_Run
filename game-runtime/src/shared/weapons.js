@@ -2,8 +2,18 @@ export const RARITIES = {
   COMUM: { color: '#b7c2c7', weight: 58, multiplier: 1 },
   INCOMUM: { color: '#42d9de', weight: 25, multiplier: 1.12 },
   RARO: { color: '#a875ff', weight: 12, multiplier: 1.28 },
-  LENDARIO: { color: '#ffb52e', weight: 5, multiplier: 1.5 },
+  LENDARIO: { color: '#ffb52e', weight: 4.2, multiplier: 1.5 },
+  // Fase 30 — MÍTICA: skin evolutiva (4 estágios por abates, attachments3d)
+  MITICA: { color: '#ff2d78', weight: 0.8, multiplier: 1.75 },
 };
+
+// Fase 30 — catálogo leve dos anexos no lado shared (a malha vive no 3d).
+// A AR-47 é a única arma com sockets na Fase 28 — compat espelha isso.
+export const ATTACHMENT_IDS = Object.freeze(['mira4x', 'silenciador', 'magestendida', 'gripvertical']);
+export const ATTACHMENT_NAMES = Object.freeze({
+  mira4x: 'Mira 4x', silenciador: 'Silenciador',
+  magestendida: 'Mag Estendida', gripvertical: 'Empunhadura Vertical',
+});
 
 export const WEAPONS = {
   sucata: { id: 'sucata', name: 'Lança de Sucata', category: 'melee', rarity: 'COMUM', damage: 24, fireRate: 1.1, range: 48, projectileSpeed: 0, magazine: 1, ammo: 'none', weight: 30 },
@@ -16,10 +26,10 @@ export const WEAPONS = {
 };
 
 export const LOOT_POOLS = {
-  armory: [{ kind:'weapon', id:'g19', weight:30 }, { kind:'weapon', id:'m4', weight:22 }, { kind:'weapon', id:'mp5', weight:17 }, { kind:'weapon', id:'ar47', weight:9 }, { kind:'weapon', id:'barrett', weight:7 }, { kind:'weapon', id:'pulse', weight:2 }, { kind:'ammo', id:'9MM', amount:30, weight:14 }, { kind:'ammo', id:'7.62', amount:30, weight:7 }, { kind:'helmet', id:'helmet', level:1, weight:6 }, { kind:'vest', id:'vest', level:1, weight:6 }, { kind:'pack', id:'pack', level:1, weight:6 }],
-  industrial: [{ kind:'resource', id:'metal', amount:3, weight:27 }, { kind:'resource', id:'components', amount:2, weight:22 }, { kind:'weapon', id:'m4', weight:15 }, { kind:'weapon', id:'ar47', weight:8 }, { kind:'ammo', id:'5.56', amount:20, weight:14 }, { kind:'ammo', id:'7.62', amount:20, weight:7 }, { kind:'vest', id:'vest', level:2, weight:5 }, { kind:'pack', id:'pack', level:2, weight:5 }, { kind:'resource', id:'fuel', amount:2, weight:12 }],
+  armory: [{ kind:'weapon', id:'g19', weight:30 }, { kind:'weapon', id:'m4', weight:22 }, { kind:'weapon', id:'mp5', weight:17 }, { kind:'weapon', id:'ar47', weight:9 }, { kind:'weapon', id:'barrett', weight:7 }, { kind:'weapon', id:'pulse', weight:2 }, { kind:'ammo', id:'9MM', amount:30, weight:14 }, { kind:'ammo', id:'7.62', amount:30, weight:7 }, { kind:'helmet', id:'helmet', level:1, weight:6 }, { kind:'vest', id:'vest', level:1, weight:6 }, { kind:'pack', id:'pack', level:1, weight:6 }, { kind:'attachment', id:'mira4x', weight:4 }, { kind:'attachment', id:'magestendida', weight:4 }],
+  industrial: [{ kind:'resource', id:'metal', amount:3, weight:27 }, { kind:'resource', id:'components', amount:2, weight:22 }, { kind:'weapon', id:'m4', weight:15 }, { kind:'weapon', id:'ar47', weight:8 }, { kind:'ammo', id:'5.56', amount:20, weight:14 }, { kind:'ammo', id:'7.62', amount:20, weight:7 }, { kind:'vest', id:'vest', level:2, weight:5 }, { kind:'pack', id:'pack', level:2, weight:5 }, { kind:'resource', id:'fuel', amount:2, weight:12 }, { kind:'attachment', id:'silenciador', weight:4 }, { kind:'attachment', id:'gripvertical', weight:4 }],
   park: [{ kind:'resource', id:'wood', amount:4, weight:32 }, { kind:'consumable', id:'medkit', amount:1, weight:23 }, { kind:'resource', id:'components', amount:2, weight:18 }, { kind:'weapon', id:'sucata', weight:18 }, { kind:'helmet', id:'helmet', level:2, weight:5 }, { kind:'pack', id:'pack', level:1, weight:6 }],
-  extraction: [{ kind:'consumable', id:'medkit', amount:1, weight:30 }, { kind:'armor', id:'ceramic', amount:18, weight:30 }, { kind:'ammo', id:'9MM', amount:20, weight:16 }, { kind:'vest', id:'vest', level:3, weight:6 }, { kind:'helmet', id:'helmet', level:3, weight:5 }, { kind:'weapon', id:'barrett', weight:9 }, { kind:'weapon', id:'ar47', weight:8 }],
+  extraction: [{ kind:'consumable', id:'medkit', amount:1, weight:30 }, { kind:'armor', id:'ceramic', amount:18, weight:30 }, { kind:'ammo', id:'9MM', amount:20, weight:16 }, { kind:'vest', id:'vest', level:3, weight:6 }, { kind:'helmet', id:'helmet', level:3, weight:5 }, { kind:'weapon', id:'barrett', weight:9 }, { kind:'weapon', id:'ar47', weight:8 }, { kind:'attachment', id:'mira4x', weight:3 }],
   // Fase 28 — pool exclusivo da caixa de airdrop (AR-47 LENDÁRIO garantido)
   supplyDrop: [{ kind:'weapon', id:'ar47', rarity:'LENDARIO', weight:60 }, { kind:'consumable', id:'medkit', amount:2, weight:22 }, { kind:'armor', id:'ceramic', amount:40, weight:18 }],
 };
@@ -36,6 +46,27 @@ export function rollLoot(rng, zone = 'armory', count = 1) {
       const rarity = drop.rarity ?? (drop.id === 'pulse' ? 'LENDARIO' : rollRarity(rng));
       return { ...drop, rarity, name: weapon.name, weapon: { ...weapon, damage: Math.round(weapon.damage * RARITIES[rarity].multiplier) } };
     }
+    if (drop.kind === 'attachment') {
+      // Fase 30 — anexo avulso: nome resolvido do catálogo leve (mesh no 3d)
+      return { ...drop, name: ATTACHMENT_NAMES[drop.id] ?? drop.id };
+    }
     return drop;
   });
+}
+
+// Fase 30 — anexos de SÉRIE por raridade da arma (PURO, determinístico pelo
+// rng do chamador). LENDÁRIO sai com 1-2 anexos; o airdrop (LENDÁRIO fixo da
+// AR-47) sai COMPLETO — os 4 sockets equipados, assinatura da caixa vermelha.
+export function attachmentsForDrop(rng, weaponId, rarity) {
+  if (weaponId !== 'ar47') return undefined;
+  if (rarity === 'MITICA') return ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
+  if (rarity !== 'LENDARIO') return undefined;
+  const all = ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
+  const n = rng.next() < .5 ? 2 : 1;
+  const picked = [];
+  for (let i = 0; i < n; i++) {
+    const idx = Math.floor(rng.next() * all.length) % all.length;
+    if (!picked.includes(all[idx])) picked.push(all[idx]);
+  }
+  return picked.length ? picked : undefined;
 }

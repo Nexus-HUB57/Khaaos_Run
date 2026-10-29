@@ -15,13 +15,15 @@ test('o seletor usa os operativos canônicos com dados visuais completos', () =>
   }
 });
 
-test('Barburhen resolve o protótipo industrial e mapeia os setores competitivos', () => {
+test('Barburhen resolve o MUNDO DA DESTRUIÇÃO (diretiva W1) e mapeia os setores competitivos', () => {
   const scenario = resolveScenario('barburhen');
   const layout = getWorldLayout('BARBURHEN-TEST', scenario.id);
   assert.equal(scenario.id, 'Barburhen');
   assert.equal(layout.scenarioId, 'Barburhen');
+  // Fase 31 — identidade da diretiva de arte (Mundos W1/C1)
+  assert.equal(scenario.label, 'Barburhen — O Mundo da Destruição');
   assert.deepEqual(layout.sectors.map((sector) => sector.name), [
-    'SETOR URBANO', 'ESTAÇÃO FRIA', 'PARQUE FERRÍFERO', 'USINA INDUSTRIAL', 'TERMINAL ZEX',
+    'ÁREA URBANA EM RUÍNAS', 'SETOR INDUSTRIAL', 'PARQUE ABANDONADO', 'ZONA DE EXTRAÇÃO', 'TERMINAL ZEX',
   ]);
   assert.deepEqual(layout.playerSpawn, { x: 90, z: 150 });
   assert.ok(layout.lootSpots.every((spot) => spot.sectorId && spot.lootZone));

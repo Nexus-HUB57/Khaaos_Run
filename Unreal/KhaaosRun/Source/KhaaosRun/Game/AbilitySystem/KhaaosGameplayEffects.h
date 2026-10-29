@@ -104,6 +104,9 @@ public:
 
         /** Create the persistent Onith passive effect; Reduction is a fraction in [0, 1]. */
         static UGameplayEffect* CreateOnithPassiveEffect(float Reduction);
+        static UGameplayEffect* CreateVenexOverclockEffect(float FireRateBonus, float ReloadSpeedBonus, float DurationSeconds);
+        static UGameplayEffect* CreateSkeetwPassiveEffect(float AirSpeedBonus);
+        static UGameplayEffect* CreateHuranPassiveEffect(float HealBonus, float WaterRegen);
 
         // ─── Instant SafeZone Damage ─────────────────────────────────────────────
 

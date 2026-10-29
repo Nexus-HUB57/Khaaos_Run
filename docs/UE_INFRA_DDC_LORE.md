@@ -25,7 +25,7 @@ foram validadas por HTTP 200 na API de registry do ghcr antes da implementação
 
 | Serviço | Imagem (contrato P1) | Portas | Persistência |
 |---|---|---|---|
-| `unreal-cloud-ddc` | `ghcr.io/epicgames/unreal-cloud-ddc:1.5.0` | host 8080 → container 80 | efêmero (cache; volume opcional) |
+| `unreal-cloud-ddc` | `ghcr.io/epicgames/unreal-cloud-ddc:1.5.0` | host 8080 → container 80 | volume `ddc-data:/mnt/ddc` (backend FileSystem) |
 | `scylla` | `scylladb/scylla:5.2` (perfil CI: `--smp 1 --memory 512M`) | interno (rede compose) | volume `scylla-data` |
 | `loreserver` | `ghcr.io/epicgames/lore/loreserver:0.12` (amd64) | 41337 tcp+udp, 41339 | volume `lore-data:/data` + `local.toml` (stores em `/data/immutable` e `/data/mutable`) |
 
@@ -37,7 +37,23 @@ compose adiciona o serviço `scylla` e os envs `Scylla__ConnectionString`
 (seção `Scylla` do chart, formato ASP.NET `__`), `Scylla__LocalDatacenterName`
 (`datacenter1`, DC default do scylla single-node) e
 `Scylla__LocalKeyspaceSuffix`. Auth do DDC permanece desabilitada
-(`auth.enabled: false` no chart) — modo staging.
+(`Auth__Enabled: "false"`, igual ao default do chart) — modo staging.
+
+**Cadeia de boot do DDC 1.5.0 (9 iterações de CI, todas com fonte primária —
+`Jupiter.Startup.cs`/`BaseStartup.cs`/`Settings.cs` nas árvores UE públicas):**
+
+| # | Exceção no boot | Correção no compose |
+|---|---|---|
+| 1 | `ScyllaSettings` `[Required]`: LocalDatacenterName/LocalKeyspaceSuffix | serviço `scylla` + 2 envs `Scylla__*` |
+| 2 | `Default Keyspace has to be specified` (ScyllaFactory) | `Default Keyspace=` **dentro** da connection string (CassandraConnectionStringBuilder) |
+| 3 | `AuthSettings`: "at least one scheme when authentication is enabled" | `Auth__Enabled: "false"` (early-return no Validate) |
+| 4 | `JupiterSettings.CurrentSite` `[Required]` | `Jupiter__CurrentSite: khaaos-staging` |
+| 5 | `No storage implementation set` (CreateS3) | `UnrealCloudDDC__StorageImplementations__0: FileSystem` + `Filesystem__RootDir` |
+| 6 | `S3Settings` `[Required]` valida incondicionalmente no DI | `S3__*` inertes (CreateS3 não é chamado) |
+
+Run final (evidência no CI): `ddc_liveness` 200 · `ddc_readiness` 200 ·
+`ddc_api_v1` 403 (API viva) · `lore_http` 404 (porta viva) →
+**`UE_INFRA_SMOKE_OK`**.
 
 **Correção do contrato P1 (evidência de CI, 2026-10-28)**: o digest original
 `sha256-042ab40…` é a variante **linux/arm64 (Graviton3/SVE)** — em host

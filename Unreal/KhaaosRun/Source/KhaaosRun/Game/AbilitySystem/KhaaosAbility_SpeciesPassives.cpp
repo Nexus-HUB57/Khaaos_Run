@@ -111,13 +111,14 @@ void UKhaaosAbility_SkeetwPassive::ActivateAbility(const FGameplayAbilitySpecHan
 	const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-
-	// Apply Voo Planador: glide after jump for 3s, +20% air speed
-	// Implementation: Listen for jump events, apply glide physics
-	// with tag Effect.Buff.Glide
-	UE_LOG(LogKhaaosRun, Log, TEXT("Skeetw Passive: Voo Planador activated (3s glide, +20%% air speed)"));
-
-	// Do NOT end ability — passives are persistent
+	if (!ActorInfo || !ActorInfo->AbilitySystemComponent.IsValid()) return;
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	if (!ASC->GetOwnerActor() || !ASC->GetOwnerActor()->HasAuthority()) return;
+	UGameplayEffect* GE = UKhaaosGameplayEffects::CreateSkeetwPassiveEffect(AirSpeedBonus);
+	if (!GE) return;
+	FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext(); Ctx.AddSourceObject(this);
+	FActiveGameplayEffectHandle AH = ASC->ApplyGameplayEffectSpecToSelf(FGameplayEffectSpec(GE, Ctx, 1.f));
+	if (AH.IsValid()) ActiveEffectHandles.Add(AH);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,13 +139,14 @@ void UKhaaosAbility_HuranPassive::ActivateAbility(const FGameplayAbilitySpecHand
 	const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-
-	// Apply Regeneracao Aquatica: 2 HP/s in water, +50% heal effectiveness
-	// Implementation: Check water volume overlap, apply regen GameplayEffect
-	// with tag Effect.Buff.Regen
-	UE_LOG(LogKhaaosRun, Log, TEXT("Huran Passive: Regeneracao Aquatica activated (2 HP/s, +50%% heal)"));
-
-	// Do NOT end ability — passives are persistent
+	if (!ActorInfo || !ActorInfo->AbilitySystemComponent.IsValid()) return;
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	if (!ASC->GetOwnerActor() || !ASC->GetOwnerActor()->HasAuthority()) return;
+	UGameplayEffect* GE = UKhaaosGameplayEffects::CreateHuranPassiveEffect(HealBonusPercent, WaterRegenPerSecond);
+	if (!GE) return;
+	FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext(); Ctx.AddSourceObject(this);
+	FActiveGameplayEffectHandle AH = ASC->ApplyGameplayEffectSpecToSelf(FGameplayEffectSpec(GE, Ctx, 1.f));
+	if (AH.IsValid()) ActiveEffectHandles.Add(AH);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -165,13 +167,29 @@ void UKhaaosAbility_VenexPassive::ActivateAbility(const FGameplayAbilitySpecHand
 	const FGameplayEventData* TriggerEventData)
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+}
 
-	// Apply Overclock Neural: +15% fire rate & reload for 5s after elimination
-	// Implementation: Listen for elimination events, apply temp buff
-	// with tag Effect.Buff.Overclock
-	UE_LOG(LogKhaaosRun, Log, TEXT("Venex Passive: Overclock Neural activated (on elim: +15%% for 5s)"));
+bool UKhaaosAbility_VenexPassive::ApplyOverclockFromElimination(UAbilitySystemComponent* ASC)
+{
+	if (!ASC || !ASC->GetOwnerActor() || !ASC->GetOwnerActor()->HasAuthority()) return false;
+	UGameplayEffect* GE = UKhaaosGameplayEffects::CreateVenexOverclockEffect(OverclockFireRateBonus, OverclockReloadBonus, OverclockDuration);
+	if (!GE) return false;
+	FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext(); Ctx.AddSourceObject(this);
+	return ASC->ApplyGameplayEffectSpecToSelf(FGameplayEffectSpec(GE, Ctx, 1.f)).IsValid();
+}
 
-	// Do NOT end ability — passives are persistent
+bool UKhaaosAbility_VenexPassive::TryApplyOverclockOnASC(UAbilitySystemComponent* ASC)
+{
+	if (!ASC) return false;
+	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+	{
+		if (Spec.IsActive() && Spec.Ability && Spec.Ability->IsA(UKhaaosAbility_VenexPassive::StaticClass()))
+		{
+			if (UKhaaosAbility_VenexPassive* Inst = Cast<UKhaaosAbility_VenexPassive>(Spec.GetPrimaryInstance()))
+				return Inst->ApplyOverclockFromElimination(ASC);
+		}
+	}
+	return GetDefault<UKhaaosAbility_VenexPassive>()->ApplyOverclockFromElimination(ASC);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
