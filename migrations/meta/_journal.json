@@ -64,6 +64,13 @@
       "when": 1793155908273,
       "tag": "0008_economy_ledger_accounts_union",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793240877805,
+      "tag": "0009_concurrency_fencing",
+      "breakpoints": true
     }
   ]
 }

@@ -62,6 +62,12 @@ export interface IStorage {
     roomId: string; userId: string; placement: number; kills: number;
     damageDealt: number; survivedMs: number; ratingBefore: number; ratingAfter: number; xpGained: number;
   }): Promise<MatchResult>;
+  applyMatchRankingAtomic(input: {
+    roomId: string; userId: string; placement: number; kills: number;
+    damageDealt: number; survivedMs: number; fieldAverageRating: number; totalPlayers: number; isWinner: boolean;
+  }, decide: (before: PlayerStats) => { ratingAfter: number; xpGained: number; rankAfter: string }): Promise<{
+    created: boolean; before: PlayerStats; stats: PlayerStats; result: MatchResult;
+  }>;
   getLeaderboard(limit?: number): Promise<PlayerStats[]>;
   getMatchHistory(userId: string, limit?: number): Promise<MatchResult[]>;
   addKill(userId: string): Promise<void>;
@@ -396,20 +402,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async applyZoneDamage(userId: string, damage: number, userName?: string): Promise<PlayerStats> {
-    const stats = await this.getPlayerStats(userId);
-    if (stats.status !== PlayerStatus.VIVO) return stats; // already dead
-    const newHealth = Math.max(0, stats.health - damage);
-    if (newHealth <= 0) {
-      // Death — Event Any Damage => health <= 0 => Disable Movement + Eliminate
-      return await this.eliminatePlayer(userId, "ZONA", userName);
-    }
-    return await this.updatePlayerStats(userId, { health: newHealth });
+    const amount = Math.max(0, Math.floor(damage));
+    return db.transaction(async (tx) => {
+      await tx.insert(playerStats).values({ userId }).onConflictDoNothing({ target: playerStats.userId });
+      const [stats] = await tx.select().from(playerStats).where(eq(playerStats.userId, userId)).for("update");
+      if (!stats) throw new Error("Player stats could not be initialized");
+      if (stats.status !== PlayerStatus.VIVO) return { ...stats, rank: rankFromXp(stats.xp ?? 0) } as PlayerStats;
+      const nextHealth = Math.max(0, stats.health - amount);
+      const [updated] = await tx.update(playerStats).set({
+        health: nextHealth,
+        ...(nextHealth === 0 ? { status: PlayerStatus.ELIMINADO, deaths: stats.deaths + 1 } : {}),
+      }).where(and(eq(playerStats.userId, userId), eq(playerStats.status, PlayerStatus.VIVO))).returning();
+      if (!updated) throw new Error("Zone damage transition lost its player lock");
+      if (nextHealth === 0) {
+        const [session] = await tx.select({ id: zoneSessions.id }).from(zoneSessions)
+          .where(eq(zoneSessions.isActive, true)).orderBy(desc(zoneSessions.createdAt)).limit(1);
+        await tx.insert(eliminations).values({ eliminatedUserId: userId, eliminatedName: userName, cause: "ZONA", sessionId: session?.id });
+      }
+      return { ...updated, rank: rankFromXp(updated.xp ?? 0) } as PlayerStats;
+    });
   }
 
   async healPlayer(userId: string, amount: number): Promise<PlayerStats> {
-    const stats = await this.getPlayerStats(userId);
-    const newHealth = Math.min(stats.maxHealth, stats.health + amount);
-    return await this.updatePlayerStats(userId, { health: newHealth });
+    await this.initializeUser(userId);
+    const [updated] = await db.update(playerStats).set({
+      health: sql`LEAST(${playerStats.maxHealth}, ${playerStats.health} + ${Math.max(0, Math.floor(amount))})`,
+    }).where(eq(playerStats.userId, userId)).returning();
+    if (!updated) throw new Error("Player stats not found");
+    return { ...updated, rank: rankFromXp(updated.xp ?? 0) } as PlayerStats;
   }
 
   // === LOOT (BP_LootBase Server_PickupItem equivalent) ===
@@ -475,7 +495,7 @@ export class DatabaseStorage implements IStorage {
       const heal = loot.stats?.heal;
       if (loot.type === "CURATIVO" && typeof heal === "number" && Number.isFinite(heal) && heal > 0) {
         const [healedStats] = await tx.update(playerStats)
-          .set({ health: Math.min(stats.maxHealth, stats.health + heal) })
+          .set({ health: sql`LEAST(${playerStats.maxHealth}, ${playerStats.health} + ${Math.floor(heal)})` })
           .where(eq(playerStats.userId, userId))
           .returning();
         if (!healedStats) throw new Error("Não foi possível aplicar a cura do loot");
@@ -488,24 +508,23 @@ export class DatabaseStorage implements IStorage {
   // === ELIMINATION (BP_Character Event Any Damage death logic) ===
 
   async eliminatePlayer(userId: string, cause: string, userName?: string, sessionId?: number): Promise<PlayerStats> {
-    const stats = await this.getPlayerStats(userId);
-    // Disable Movement + Set Collision No Collision → status = ELIMINADO
-    const updated = await this.updatePlayerStats(userId, {
-      health: 0,
-      status: PlayerStatus.ELIMINADO,
-      deaths: stats.deaths + 1,
+    return db.transaction(async (tx) => {
+      await tx.insert(playerStats).values({ userId }).onConflictDoNothing({ target: playerStats.userId });
+      const [stats] = await tx.select().from(playerStats).where(eq(playerStats.userId, userId)).for("update");
+      if (!stats) throw new Error("Player stats could not be initialized");
+      if (stats.status !== PlayerStatus.VIVO) return { ...stats, rank: rankFromXp(stats.xp ?? 0) } as PlayerStats;
+      const [updated] = await tx.update(playerStats).set({ health: 0, status: PlayerStatus.ELIMINADO, deaths: stats.deaths + 1 })
+        .where(and(eq(playerStats.userId, userId), eq(playerStats.status, PlayerStatus.VIVO))).returning();
+      if (!updated) throw new Error("Elimination transition lost its player lock");
+      let resolvedSessionId = sessionId;
+      if (resolvedSessionId === undefined) {
+        const [session] = await tx.select({ id: zoneSessions.id }).from(zoneSessions)
+          .where(eq(zoneSessions.isActive, true)).orderBy(desc(zoneSessions.createdAt)).limit(1);
+        resolvedSessionId = session?.id;
+      }
+      await tx.insert(eliminations).values({ eliminatedUserId: userId, eliminatedName: userName, cause, sessionId: resolvedSessionId });
+      return { ...updated, rank: rankFromXp(updated.xp ?? 0) } as PlayerStats;
     });
-
-    // Log elimination
-    const session = await this.getActiveZoneSession();
-    await this.logElimination({
-      eliminatedUserId: userId,
-      eliminatedName: userName,
-      cause,
-      sessionId: sessionId ?? session?.id,
-    });
-
-    return updated;
   }
 
   async respawnPlayer(userId: string): Promise<PlayerStats> {
@@ -532,6 +551,55 @@ export class DatabaseStorage implements IStorage {
   }): Promise<MatchResult> {
     const [row] = await db.insert(matchResults).values(data as any).returning();
     return row;
+  }
+
+  async applyMatchRankingAtomic(input: {
+    roomId: string; userId: string; placement: number; kills: number;
+    damageDealt: number; survivedMs: number; fieldAverageRating: number; totalPlayers: number; isWinner: boolean;
+  }, decide: (before: PlayerStats) => { ratingAfter: number; xpGained: number; rankAfter: string }) {
+    return db.transaction(async (tx) => {
+      await tx.insert(playerStats).values({ userId: input.userId }).onConflictDoNothing({ target: playerStats.userId });
+      const [beforeRow] = await tx.select().from(playerStats)
+        .where(eq(playerStats.userId, input.userId)).for("update");
+      if (!beforeRow) throw new Error("Player stats could not be initialized");
+      const before = { ...beforeRow, rank: rankFromXp(beforeRow.xp ?? 0) } as PlayerStats;
+      const decision = decide(before);
+      const [result] = await tx.insert(matchResults).values({
+        roomId: input.roomId,
+        userId: input.userId,
+        placement: input.placement,
+        kills: input.kills,
+        damageDealt: input.damageDealt,
+        survivedMs: input.survivedMs,
+        ratingBefore: before.rating ?? 1000,
+        ratingAfter: decision.ratingAfter,
+        xpGained: decision.xpGained,
+      }).onConflictDoNothing({ target: [matchResults.roomId, matchResults.userId] }).returning();
+      if (!result) {
+        const [existing] = await tx.select().from(matchResults).where(and(
+          eq(matchResults.roomId, input.roomId), eq(matchResults.userId, input.userId),
+        ));
+        if (!existing) throw new Error("Ranking result conflict could not be read");
+        return { created: false, before, stats: before, result: existing };
+      }
+      const newXp = (before.xp ?? 0) + decision.xpGained;
+      const [statsRow] = await tx.update(playerStats).set({
+        rating: decision.ratingAfter,
+        xp: newXp,
+        rank: decision.rankAfter,
+        matchesPlayed: (before.matchesPlayed ?? 0) + 1,
+        wins: (before.wins ?? 0) + (input.isWinner ? 1 : 0),
+        top5: (before.top5 ?? 0) + (input.placement <= 5 ? 1 : 0),
+        seasonKills: (before.seasonKills ?? 0) + input.kills,
+      }).where(eq(playerStats.userId, input.userId)).returning();
+      if (!statsRow) throw new Error("Player stats could not be updated");
+      return {
+        created: true,
+        before,
+        stats: { ...statsRow, rank: rankFromXp(statsRow.xp ?? 0) } as PlayerStats,
+        result,
+      };
+    });
   }
 
   async getLeaderboard(limit = 50): Promise<(PlayerStats & { displayName?: string })[]> {
@@ -577,8 +645,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addKill(userId: string): Promise<void> {
-    const stats = await this.getPlayerStats(userId);
-    await this.updatePlayerStats(userId, { kills: stats.kills + 1 });
+    await this.initializeUser(userId);
+    await db.update(playerStats).set({
+      kills: sql`${playerStats.kills} + 1`,
+      seasonKills: sql`${playerStats.seasonKills} + 1`,
+    }).where(eq(playerStats.userId, userId));
   }
 
   // ─── Discord Links (DB-backed) ──────────────────────────────────────────

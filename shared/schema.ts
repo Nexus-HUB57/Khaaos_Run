@@ -444,7 +444,9 @@ export const matchResults = pgTable("match_results", {
   ratingAfter: integer("rating_after").notNull(),
   xpGained: integer("xp_gained").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  roomUserUnique: uniqueIndex("match_results_room_user_uq").on(table.roomId, table.userId),
+}));
 
 // Special Class governance audit; isolated from player profiles, banks and match state.
 export const marshalCouncils = pgTable("marshal_councils", {
@@ -459,12 +461,15 @@ export const marshalCouncils = pgTable("marshal_councils", {
   status: varchar("status", { length: 16 }).notNull().default("queued"),
   result: jsonb("result").$type<Record<string, unknown>>(),
   errorCode: varchar("error_code", { length: 64 }),
+  attemptId: uuid("attempt_id"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   actorIdempotency: uniqueIndex("marshal_councils_actor_idempotency_uq").on(table.actorId, table.idempotencyKey),
   actorCreated: index("marshal_councils_actor_created_idx").on(table.actorId, table.createdAt),
   statusUpdated: index("marshal_councils_status_updated_idx").on(table.status, table.updatedAt),
+  statusLease: index("marshal_councils_status_lease_idx").on(table.status, table.leaseExpiresAt),
 }));
 
 export const marshalProposals = pgTable("marshal_proposals", {

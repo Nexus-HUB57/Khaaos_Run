@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { CouncilResult } from "../../../server/game/orchestration";
 import type {
   CreateCouncilOutcome,
@@ -24,7 +25,7 @@ export class MemoryMarshalConsoleRepository implements MarshalConsoleRepository 
         : { kind: "conflict" };
     }
     const saved: PersistedCouncil = {
-      ...record, status: "queued", result: null, errorCode: null, proposalIds: [], updatedAt: record.createdAt,
+      ...record, status: "queued", result: null, errorCode: null, attemptId: null, leaseExpiresAt: null, proposalIds: [], updatedAt: record.createdAt,
     };
     this.councils.set(saved.requestId, saved);
     this.idempotency.set(key, saved.requestId);
@@ -49,6 +50,8 @@ export class MemoryMarshalConsoleRepository implements MarshalConsoleRepository 
     const record = this.councils.get(requestId);
     if (!record || record.status !== "queued") return undefined;
     record.status = "running";
+    record.attemptId = crypto.randomUUID();
+    record.leaseExpiresAt = new Date(Date.now() + 120_000).toISOString();
     record.updatedAt = new Date().toISOString();
     return this.copyCouncil(record);
   }
@@ -62,17 +65,21 @@ export class MemoryMarshalConsoleRepository implements MarshalConsoleRepository 
     for (const record of this.councils.values()) {
       if (record.status === "running" && new Date(record.updatedAt).getTime() < cutoff.getTime()) {
         record.status = "queued";
+        record.attemptId = null;
+        record.leaseExpiresAt = null;
         record.updatedAt = new Date().toISOString();
       }
     }
   }
 
-  async saveCouncilResult(requestId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<void> {
+  async saveCouncilResult(requestId: string, attemptId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<boolean> {
     const record = this.councils.get(requestId);
-    if (!record) throw new Error("missing council");
+    if (!record || record.status !== "running" || record.attemptId !== attemptId || !record.leaseExpiresAt || new Date(record.leaseExpiresAt).getTime() <= Date.now()) return false;
     record.result = result;
     record.status = result.status === "rejected" ? "failed" : "completed";
     record.errorCode = result.status === "rejected" ? result.reasonCodes[0] ?? "COUNCIL_REJECTED" : null;
+    record.attemptId = null;
+    record.leaseExpiresAt = null;
     record.updatedAt = new Date().toISOString();
     for (const proposal of proposals) {
       const stored: PersistedProposal = {
@@ -85,14 +92,18 @@ export class MemoryMarshalConsoleRepository implements MarshalConsoleRepository 
       };
       this.proposals.set(proposal.id, stored);
     }
+    return true;
   }
 
-  async markCouncilFailed(requestId: string, errorCode: string): Promise<void> {
+  async markCouncilFailed(requestId: string, attemptId: string, errorCode: string): Promise<boolean> {
     const record = this.councils.get(requestId);
-    if (!record) return;
+    if (!record || record.status !== "running" || record.attemptId !== attemptId || !record.leaseExpiresAt || new Date(record.leaseExpiresAt).getTime() <= Date.now()) return false;
     record.status = "failed";
     record.errorCode = errorCode;
+    record.attemptId = null;
+    record.leaseExpiresAt = null;
     record.updatedAt = new Date().toISOString();
+    return true;
   }
 
   private copyCouncil(record: PersistedCouncil): PersistedCouncil {

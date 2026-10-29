@@ -119,6 +119,7 @@ interface MeshStore {
   /** M3: sliding-TTL lease ATÔMICO com epoch de fencing por sala. */
   touchLease(roomId: string, nodeId: string, ttlMs: number): Promise<LeaseRenewal>;
   leaseAlive(roomId: string): Promise<boolean>;
+  removeIfLeaseMissing(roomId: string): Promise<boolean>;
   /** Convites ligados a jogador: HASH por código (campo = invitedUserId). */
   putInvite(record: RoomInviteRecord, ttlMs: number): Promise<void>;
   getInvite(code: string, invitedUserId: string): Promise<RoomInviteRecord | null>;
@@ -183,6 +184,13 @@ export class LocalMeshStore implements MeshStore {
   async leaseAlive(roomId: string): Promise<boolean> {
     const lease = localBus.leases.get(roomId);
     return Boolean(lease && lease.expiresAt > Date.now());
+  }
+  async removeIfLeaseMissing(roomId: string): Promise<boolean> {
+    const lease = localBus.leases.get(roomId);
+    if (lease && lease.expiresAt > Date.now()) return false;
+    localBus.records.delete(roomId);
+    localBus.leases.delete(roomId);
+    return true;
   }
   async putInvite(record: RoomInviteRecord, _ttlMs: number): Promise<void> {
     const byUser = localBus.invites.get(record.code) ?? new Map<string, RoomInviteRecord>();
@@ -283,6 +291,19 @@ export class RedisMeshStore implements MeshStore {
   }
   async leaseAlive(roomId: string): Promise<boolean> {
     return (await this.client.exists(this.leaseKey(roomId))) === 1;
+  }
+  async removeIfLeaseMissing(roomId: string): Promise<boolean> {
+    if (typeof this.client.eval !== "function") {
+      if (await this.leaseAlive(roomId)) return false;
+      return (await this.client.hDel(this.indexKey(), roomId)) === 1;
+    }
+    const result = await this.client.eval(`
+      if redis.call('EXISTS', KEYS[1]) == 0 then
+        return redis.call('HDEL', KEYS[2], ARGV[1])
+      end
+      return 0
+    `, { keys: [this.leaseKey(roomId), this.indexKey()], arguments: [roomId] });
+    return Number(result) === 1;
   }
   private inviteKey(code: string): string {
     return `${this.prefix}:invite:${code}`;
@@ -522,9 +543,8 @@ export class RoomEventMesh {
         }
         continue;
       }
-      const alive = await this.store.leaseAlive(record.id);
-      if (!alive) {
-        await this.store.removeRecord(record.id);
+      const removed = await this.store.removeIfLeaseMissing(record.id);
+      if (removed) {
         this.remoteCache.delete(record.id);
         dropped.push(record);
         for (const handler of this.lostHandlers) {

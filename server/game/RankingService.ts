@@ -100,46 +100,29 @@ export async function applyMatchRankings(
   const results: RankingUpdateResult[] = [];
 
   for (const p of participants) {
-    const stats = statsMap.get(p.userId)!;
-    const ratingBefore = stats.rating ?? 1000;
-    const rankBefore = rankFromXp(stats.xp ?? 0);
-
-    const delta = computeRatingDelta(
-      ratingBefore,
-      fieldAvg,
-      p.placement,
-      total,
-      p.isWinner,
-    );
-    const ratingAfter = Math.max(100, ratingBefore + delta);
-
-    const xpGained = xpForPlacement(p.placement, total) + xpForKills(p.kills);
-    const newXp = (stats.xp ?? 0) + xpGained;
-    const rankAfter = rankFromXp(newXp);
-
-    await storage.updatePlayerStats(p.userId, {
-      rating: ratingAfter,
-      xp: newXp,
-      rank: rankAfter,
-      matchesPlayed: (stats.matchesPlayed ?? 0) + 1,
-      wins: (stats.wins ?? 0) + (p.isWinner ? 1 : 0),
-      top5: (stats.top5 ?? 0) + (p.placement <= 5 ? 1 : 0),
-      seasonKills: (stats.seasonKills ?? 0) + p.kills,
-      // Also accumulate lifetime kills already tracked in eliminatePlayer for deaths;
-      // match kills are season + we bump lifetime kills here for winners of fights already done
-    });
-
-    await storage.createMatchResult({
+    const applied = await storage.applyMatchRankingAtomic({
       roomId,
       userId: p.userId,
       placement: p.placement,
       kills: p.kills,
       damageDealt: p.damageDealt ?? 0,
       survivedMs: p.survivedMs ?? 0,
-      ratingBefore,
-      ratingAfter,
-      xpGained,
+      fieldAverageRating: fieldAvg,
+      totalPlayers: total,
+      isWinner: p.isWinner,
+    }, (stats) => {
+      const ratingBefore = stats.rating ?? 1000;
+      const ratingAfter = Math.max(100, ratingBefore + computeRatingDelta(
+        ratingBefore, fieldAvg, p.placement, total, p.isWinner,
+      ));
+      const xpGained = xpForPlacement(p.placement, total) + xpForKills(p.kills);
+      return { ratingAfter, xpGained, rankAfter: rankFromXp((stats.xp ?? 0) + xpGained) };
     });
+    const ratingBefore = applied.before.rating ?? 1000;
+    const ratingAfter = applied.result.ratingAfter;
+    const xpGained = applied.result.xpGained;
+    const rankBefore = rankFromXp(applied.before.xp ?? 0);
+    const rankAfter = rankFromXp(applied.stats.xp ?? ((applied.before.xp ?? 0) + xpGained));
 
     results.push({
       userId: p.userId,
@@ -150,7 +133,7 @@ export async function applyMatchRankings(
       ratingAfter,
       rankBefore,
       rankAfter,
-      promoted: rankBefore !== rankAfter && (RANK_XP_THRESHOLDS[rankAfter] ?? 0) > (RANK_XP_THRESHOLDS[rankBefore] ?? 0),
+      promoted: applied.created && rankBefore !== rankAfter && (RANK_XP_THRESHOLDS[rankAfter] ?? 0) > (RANK_XP_THRESHOLDS[rankBefore] ?? 0),
     });
   }
 

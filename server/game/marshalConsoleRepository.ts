@@ -1,4 +1,5 @@
-import { and, asc, eq, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, or } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { db } from "../db";
 import { marshalCouncils, marshalProposals } from "@shared/schema";
 import type { CouncilResult, ConflictResolution, WorldId } from "./orchestration";
@@ -17,11 +18,13 @@ export interface PersistedCouncil {
   status: PersistedCouncilStatus;
   result: CouncilResult | null;
   errorCode: string | null;
+  attemptId: string | null;
+  leaseExpiresAt: string | null;
   proposalIds: string[];
   createdAt: string;
   updatedAt: string;
 }
-export interface NewPersistedCouncil extends Omit<PersistedCouncil, "status" | "result" | "errorCode" | "proposalIds" | "updatedAt"> {
+export interface NewPersistedCouncil extends Omit<PersistedCouncil, "status" | "result" | "errorCode" | "attemptId" | "leaseExpiresAt" | "proposalIds" | "updatedAt"> {
   status: "queued";
 }
 export interface NewPersistedProposal {
@@ -50,8 +53,8 @@ export interface MarshalConsoleRepository {
   claimQueuedCouncil(requestId: string): Promise<PersistedCouncil | undefined>;
   listQueuedCouncils(limit: number): Promise<string[]>;
   requeueStaleCouncils(cutoff: Date): Promise<void>;
-  saveCouncilResult(requestId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<void>;
-  markCouncilFailed(requestId: string, errorCode: string): Promise<void>;
+  saveCouncilResult(requestId: string, attemptId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<boolean>;
+  markCouncilFailed(requestId: string, attemptId: string, errorCode: string): Promise<boolean>;
 }
 
 function mapCouncil(row: typeof marshalCouncils.$inferSelect, proposalIds: string[] = []): PersistedCouncil {
@@ -67,6 +70,8 @@ function mapCouncil(row: typeof marshalCouncils.$inferSelect, proposalIds: strin
     status: row.status as PersistedCouncilStatus,
     result: row.result as CouncilResult | null,
     errorCode: row.errorCode,
+    attemptId: row.attemptId,
+    leaseExpiresAt: row.leaseExpiresAt?.toISOString() ?? null,
     proposalIds,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -129,7 +134,9 @@ export class PostgresMarshalConsoleRepository implements MarshalConsoleRepositor
   }
 
   async claimQueuedCouncil(requestId: string): Promise<PersistedCouncil | undefined> {
-    const [row] = await this.database.update(marshalCouncils).set({ status: "running", updatedAt: new Date() })
+    const attemptId = randomUUID();
+    const leaseExpiresAt = new Date(Date.now() + 120_000);
+    const [row] = await this.database.update(marshalCouncils).set({ status: "running", attemptId, leaseExpiresAt, updatedAt: new Date() })
       .where(and(eq(marshalCouncils.id, requestId), eq(marshalCouncils.status, "queued"))).returning();
     return row ? mapCouncil(row) : undefined;
   }
@@ -142,12 +149,30 @@ export class PostgresMarshalConsoleRepository implements MarshalConsoleRepositor
   }
 
   async requeueStaleCouncils(cutoff: Date): Promise<void> {
-    await this.database.update(marshalCouncils).set({ status: "queued", errorCode: null, updatedAt: new Date() })
-      .where(and(eq(marshalCouncils.status, "running"), lt(marshalCouncils.updatedAt, cutoff)));
+    await this.database.update(marshalCouncils).set({ status: "queued", attemptId: null, leaseExpiresAt: null, errorCode: null, updatedAt: new Date() })
+      .where(and(
+        eq(marshalCouncils.status, "running"),
+        lt(marshalCouncils.updatedAt, cutoff),
+        or(isNull(marshalCouncils.leaseExpiresAt), lt(marshalCouncils.leaseExpiresAt, new Date())),
+      ));
   }
 
-  async saveCouncilResult(requestId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<void> {
-    await this.database.transaction(async (tx) => {
+  async saveCouncilResult(requestId: string, attemptId: string, result: CouncilResult, proposals: NewPersistedProposal[]): Promise<boolean> {
+    return this.database.transaction(async (tx) => {
+      const [claimed] = await tx.update(marshalCouncils).set({
+        status: result.status === "rejected" ? "failed" : "completed",
+        result: result as unknown as Record<string, unknown>,
+        errorCode: result.status === "rejected" ? result.reasonCodes[0] ?? "COUNCIL_REJECTED" : null,
+        attemptId: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(marshalCouncils.id, requestId),
+        eq(marshalCouncils.status, "running"),
+        eq(marshalCouncils.attemptId, attemptId),
+        gt(marshalCouncils.leaseExpiresAt, new Date()),
+      )).returning({ id: marshalCouncils.id });
+      if (!claimed) return false;
       if (proposals.length) {
         await tx.insert(marshalProposals).values(proposals.map((proposal) => ({
           id: proposal.id,
@@ -157,17 +182,18 @@ export class PostgresMarshalConsoleRepository implements MarshalConsoleRepositor
           governance: proposal.governance as unknown as Record<string, unknown>,
         }))).onConflictDoNothing();
       }
-      await tx.update(marshalCouncils).set({
-        status: result.status === "rejected" ? "failed" : "completed",
-        result: result as unknown as Record<string, unknown>,
-        errorCode: result.status === "rejected" ? result.reasonCodes[0] ?? "COUNCIL_REJECTED" : null,
-        updatedAt: new Date(),
-      }).where(eq(marshalCouncils.id, requestId));
+      return true;
     });
   }
 
-  async markCouncilFailed(requestId: string, errorCode: string): Promise<void> {
-    await this.database.update(marshalCouncils).set({ status: "failed", errorCode, updatedAt: new Date() })
-      .where(eq(marshalCouncils.id, requestId));
+  async markCouncilFailed(requestId: string, attemptId: string, errorCode: string): Promise<boolean> {
+    const updated = await this.database.update(marshalCouncils).set({ status: "failed", errorCode, attemptId: null, leaseExpiresAt: null, updatedAt: new Date() })
+      .where(and(
+        eq(marshalCouncils.id, requestId),
+        eq(marshalCouncils.status, "running"),
+        eq(marshalCouncils.attemptId, attemptId),
+        gt(marshalCouncils.leaseExpiresAt, new Date()),
+      )).returning({ id: marshalCouncils.id });
+    return updated.length > 0;
   }
 }
