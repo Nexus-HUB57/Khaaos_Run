@@ -82,6 +82,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.SubsurfaceColor = FLinearColor(0.2f, 0.6f, 0.8f); // Azul-aquático
         Profile.ORMOverrideRoughness = 0.35f; // Pele semi-lisa
         Profile.ORMOverrideMetallic = 0.0f;   // Não metálico
+        Profile.RimLightIntensity = 0.9f;     // Pop ciano aquático
+        Profile.RimLightColor = FLinearColor(0.22f, 0.89f, 0.94f);
         break;
 
     case EKhaaosSpecies::KHAEL:
@@ -98,6 +100,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.SubsurfaceColor = FLinearColor(0.5f, 0.2f, 0.8f); // Roxo arcano
         Profile.ORMOverrideRoughness = 0.15f; // Cristal muito liso
         Profile.ORMOverrideMetallic = 0.7f;   // Runas metálicas
+        Profile.RimLightIntensity = 1.1f;     // Pop violeta arcano (mais forte do elenco)
+        Profile.RimLightColor = FLinearColor(0.55f, 0.36f, 0.96f);
         break;
 
     case EKhaaosSpecies::VENEX:
@@ -114,6 +118,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.SubsurfaceColor = FLinearColor(0.0f, 0.8f, 1.0f); // Cyan cyber
         Profile.ORMOverrideRoughness = 0.05f; // Chrome ultra-liso
         Profile.ORMOverrideMetallic = 0.9f;   // Altamente metálico
+        Profile.RimLightIntensity = 1.0f;     // Pop magenta cyber
+        Profile.RimLightColor = FLinearColor(1.0f, 0.18f, 0.72f);
         break;
 
     case EKhaaosSpecies::ONITH:
@@ -131,6 +137,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.ORMOverrideRoughness = 0.5f;  // Carapaça semi-rugosa
         Profile.ORMOverrideMetallic = 0.4f;   // Parcialmente metálica
         Profile.ORMOverrideOcclusion = 0.8f;  // Carapaça oclui bastante
+        Profile.RimLightIntensity = 0.8f;     // Pop laranja térmico
+        Profile.RimLightColor = FLinearColor(1.0f, 0.48f, 0.10f);
         break;
 
     case EKhaaosSpecies::ZHEERS:
@@ -147,6 +155,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.SubsurfaceColor = FLinearColor(0.8f, 0.5f, 0.3f); // Pele quente
         Profile.ORMOverrideRoughness = 0.6f;  // Pele orgânica
         Profile.ORMOverrideMetallic = 0.0f;   // Não metálico
+        Profile.RimLightIntensity = 0.7f;     // Pop violeta espiritual
+        Profile.RimLightColor = FLinearColor(0.65f, 0.55f, 0.98f);
         break;
 
     case EKhaaosSpecies::SKEETW:
@@ -163,6 +173,8 @@ FKhaaosSpeciesMaterialProfile UKhaaosMaterialPipeline::BuildSingleSpeciesProfile
         Profile.SubsurfaceColor = FLinearColor(0.6f, 0.8f, 0.4f); // Verde-pena
         Profile.ORMOverrideRoughness = 0.4f;  // Plumas semi-lisas
         Profile.ORMOverrideMetallic = 0.0f;   // Não metálico
+        Profile.RimLightIntensity = 0.6f;     // Pop verde-pena (mais sutil do elenco)
+        Profile.RimLightColor = FLinearColor(0.49f, 1.0f, 0.42f);
         break;
 
     default:
@@ -261,6 +273,10 @@ void UKhaaosMaterialPipeline::ApplyMaterialProfile(USkeletalMeshComponent* MeshC
     {
         MID->SetScalarParameterValue(FName("WetMapStrength"), 0.0f);
     }
+
+    // ── Aplicar parâmetros de Rim Light (character pop estilo Free Fire) ───
+    MID->SetScalarParameterValue(FName("RimLightIntensity"), Profile->RimLightIntensity);
+    MID->SetVectorParameterValue(FName("RimLightColor"), Profile->RimLightColor);
 
     // ── Flag de espécie para material ──────────────────────────────────────
     MID->SetScalarParameterValue(FName("SpeciesID"), static_cast<float>(Species));

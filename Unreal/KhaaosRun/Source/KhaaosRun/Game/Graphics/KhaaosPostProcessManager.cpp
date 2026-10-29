@@ -7,6 +7,7 @@
 
 #include "KhaaosPostProcessManager.h"
 #include "Engine/Engine.h"
+#include "Game/Graphics/KhaaosPostProcessDirector.h"
 
 void UKhaaosPostProcessManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -216,16 +217,20 @@ void UKhaaosPostProcessManager::ApplyEffectToPostProcessVolume(const FKhaaosPost
 {
     if (!GEngine) return;
 
-    // Aplicar efeitos via console commands do UE5
+    // Aplicar efeitos via CVars REAIS do UE5 + delegação ao PostProcessDirector.
+    // Intensidades de grading/bloom/vignette são centralizadas no Director
+    // (FPostProcessSettings) — aqui ficam apenas quality CVars e overlays.
     switch (Effect.EffectType)
     {
     case EKhaaosPostEffectType::Bloom:
-        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.BloomIntensity %.2f"), CurrentIntensity * 2.0f));
+        // Intensidade de bloom vive na receita do Director (FPostProcessSettings);
+        // aqui apenas garantimos a qualidade.
         GEngine->Exec(nullptr, TEXT("r.BloomQuality 3"));
         break;
 
     case EKhaaosPostEffectType::ChromaticAberration:
-        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.SceneChromaticAberration %.3f"), CurrentIntensity * 0.005f));
+        // CVar real do UE5 (range 0-5); antes usava r.SceneChromaticAberration (inexistente)
+        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.SceneColorFringe.Intensity %.3f"), CurrentIntensity * 1.5f));
         break;
 
     case EKhaaosPostEffectType::DepthOfField:
@@ -233,23 +238,17 @@ void UKhaaosPostProcessManager::ApplyEffectToPostProcessVolume(const FKhaaosPost
         break;
 
     case EKhaaosPostEffectType::Distortion:
-        // Species-specific: Huran underwater vs Skeetw wind
-        if (Effect.Species == EKhaaosSpecies::HURAN)
-        {
-            GEngine->Exec(nullptr, *FString::Printf(TEXT("r.UnderwaterDistortion %.2f"), CurrentIntensity));
-        }
+        // Distortion de tela (Huran underwater / Skeetw wind) requer
+        // post-process material de asset — placeholder até o inventário de
+        // materiais PP. Antes escrevia r.UnderwaterDistortion (inexistente).
+        UE_LOG(LogTemp, Verbose, TEXT("[PostProcess] Distortion para %s aguarda PP material asset."),
+            *UEnum::GetDisplayValueAsText(Effect.Species).ToString());
         break;
 
     case EKhaaosPostEffectType::ColorGrading:
-        // LUT selection based on species
-        if (Effect.Species == EKhaaosSpecies::ONITH)
-        {
-            GEngine->Exec(nullptr, TEXT("r.ColorGradingLUT 2")); // Thermal LUT
-        }
-        else if (Effect.Species == EKhaaosSpecies::VENEX)
-        {
-            GEngine->Exec(nullptr, TEXT("r.ColorGradingLUT 3")); // Cyber LUT
-        }
+        // REAL: tint + vignette de espécie via FPostProcessSettings do Director
+        // (antes escrevia r.ColorGradingLUT, que não existe na engine)
+        UKhaaosPostProcessDirector::ApplySpeciesGrade(Effect.Species);
         break;
 
     case EKhaaosPostEffectType::MotionBlur:
@@ -257,7 +256,8 @@ void UKhaaosPostProcessManager::ApplyEffectToPostProcessVolume(const FKhaaosPost
         break;
 
     case EKhaaosPostEffectType::Vignette:
-        GEngine->Exec(nullptr, *FString::Printf(TEXT("r.VignetteIntensity %.2f"), CurrentIntensity * 0.4f));
+        // Vignette de espécie já é aplicada pelo Director no ApplySpeciesGrade
+        // (antes escrevia r.VignetteIntensity, que não existe na engine)
         break;
 
     default:

@@ -223,3 +223,33 @@ export class Emitter {
     return this.emittedTotal;
   }
 }
+
+/**
+ * Sistema de partículas COMPARTILHADO da cena (1 draw call, pool fixo):
+ * create-if-missing em scene.userData.particles — worldmarks, districts e
+ * SurvivalFX dividem o MESMO sistema independentemente da ordem de build
+ * (districts roda ANTES dos marcos em world3d.buildScene).
+ * Capacidade 2048: a Fase 26 soma emissores de distrito (fumaça de fogueira,
+ * brasas de lavapatch, motos de fenda) às colunas de chaminé/espuma/brasas da
+ * Fase 17 — o dobro do pool cobre o pior caso (chuva ácida + tudo aceso).
+ */
+export function getSharedParticles(scene, { capacity = 2048, name = 'world-particles' } = {}) {
+  if (!scene?.userData || scene.userData.particles) return scene.userData.particles ?? null;
+  const system = new ParticleSystem({ capacity, name });
+  scene.add(system.points);
+  scene.userData.particles = system;
+  return system;
+}
+
+/**
+ * Liga o tick do sistema EXATAMENTE UMA vez por cena: o dono da criação
+ * registra o update; consumidores seguintes não duplicam integração (o
+ * update integra idade — rodar 2× aceleraria o tempo das partículas).
+ */
+export function bindParticleTicker(scene, system, animators) {
+  if (!scene?.userData || !system) return false;
+  if (scene.userData.particlesTicker) return false;
+  scene.userData.particlesTicker = system.name;
+  (animators ?? []).unshift((dt, t) => system.update(dt, t));
+  return true;
+}

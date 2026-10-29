@@ -80,9 +80,9 @@ export function terrainHeightAt(x, z, scenarioId = 'CIGKV') {
 const TINTS = {
   CIGKV:     { low: [.84, .78, .66], mid: [1, 1, 1],    high: [.52, .46, .40] },
   Barburhen: { low: [.82, .86, .90], mid: [1, 1, 1],    high: [.96, .98, 1.0] }, // neve
-  Priadus:   { low: [.42, .58, .48], mid: [1, 1, 1],    high: [.55, .62, .58] }, // musgo
-  Ckesalth:  { low: [1, .92, .78],   mid: [1, 1, 1],    high: [.30, .24, .22] }, // basalto
-  Arukheea:  { low: [.78, .80, .92], mid: [1, 1, 1],    high: [.62, .58, .78] }, // astral
+  Priadus:   { low: [.36, .50, .40], mid: [1, 1, 1],    high: [.48, .55, .50] }, // musgo escuro (W2)
+  Ckesalth:  { low: [.92, .87, .78], mid: [1, 1, 1],    high: [.30, .24, .22] }, // areia acinzentada (W3)
+  Arukheea:  { low: [.92, .89, .82], mid: [1, 1, 1],    high: [.55, .58, .64] }, // areia branca + falésia (W4)
 };
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 

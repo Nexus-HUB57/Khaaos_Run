@@ -31,6 +31,9 @@ public class KhaaosRunEditor : ModuleRules
                         "AIModule",
                         "Niagara",
                         "DetailCustomizations",
+                        // KhaaosLUTMaterialBuilderCommandlet: registro e save de assets LUT + material
+                        "AssetRegistry",
+                        "AssetTools",
                 });
 
                 // C++20 matching game module

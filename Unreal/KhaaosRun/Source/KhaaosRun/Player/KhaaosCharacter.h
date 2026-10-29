@@ -17,6 +17,7 @@ class UKhaaosInventoryComponent;
 class UKhaaosWeaponComponent;
 class UKhaaosADSComponent;
 class UKhaaosSpectatorComponent;
+class UKhaaosCharacterPopComponent;
 class UKhaaosSpeciesDataAsset;
 class UKhaaosNaturalLocomotionComponent;
 class AKhaaosPlayerController;
@@ -121,6 +122,9 @@ public:
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
         UKhaaosAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character")
+        UKhaaosCharacterPopComponent* GetCharacterPopComponent() const { return CharacterPopComp; }
+
         // ─── Lifecycle ──────────────────────────────────────────────────────────
 
         virtual void BeginPlay() override;
@@ -147,6 +151,9 @@ public:
         /** Look up/down (pitch). */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
         void LookUp(float Value);
+
+        /** Landed hook — feeds the natural locomotion land-recovery spring. */
+        virtual void Landed(const FHitResult& Hit) override;
 
         /** Enhanced jump with species modifier. */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Input")
@@ -188,6 +195,8 @@ public:
         ECameraMode GetCameraMode() const { return CameraMode; }
 
         // ─── Species Integration ────────────────────────────────────────────────
+        void ApplySpeciesPresentation(FName SpeciesId);
+        void UpdateSpeciesMeshLOD(float MeshLODLevel);
 
         /** Apply species data asset: mesh, stats, passive ability. */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Species")
@@ -485,6 +494,10 @@ protected:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Animation")
         TObjectPtr<UKhaaosNaturalLocomotionComponent> NaturalLocomotion;
 
+        /** Character pop component (v3 gráficos — rim light por espécie). */
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Character|Graphics")
+        TObjectPtr<UKhaaosCharacterPopComponent> CharacterPopComp;
+
         // ─── Species ────────────────────────────────────────────────────────────
 
         /** Applied species data asset (drives mesh, stats, passive). */
@@ -492,6 +505,12 @@ protected:
         const UKhaaosSpeciesDataAsset* AppliedSpeciesAsset = nullptr;
 
         // ─── Internal State ─────────────────────────────────────────────────────
+        float GlideTimeRemaining = 0.0f;
+        bool bIsGliding = false;
+        float DefaultGravityScale = 1.0f;
+        float DefaultAirControl = 0.35f;
+        int32 CurrentSpeciesMeshLOD = 0;
+        FName CachedSpeciesId;
 
         /** Time remaining in current slide. */
         float SlideTimeRemaining = 0.0f;
@@ -519,6 +538,10 @@ protected:
 
         /** Tick health/shield/energy regeneration. */
         void TickRegen(float DeltaSeconds);
+        void TickGlide(float DeltaSeconds);
+        void TickSpeciesWater(float DeltaSeconds);
+        void TryStartGlide();
+        void EndGlide();
 
         /** Tick slide timeout. */
         void TickSlide(float DeltaSeconds);

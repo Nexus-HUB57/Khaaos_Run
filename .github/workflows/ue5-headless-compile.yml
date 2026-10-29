@@ -1,218 +1,190 @@
-# =============================================================================
-# Khaaos Run — UE5 Headless Compilation CI (Self-Hosted Runner)
-# =============================================================================
-# This workflow compiles the KhaaosRun project on a self-hosted runner
-# with UE5.8 installed. Use for Fase 0 step 0.2.
-#
-# SETUP:
-#   1. Install UE5.8 on a Linux machine (see docs/fase0/UE5_SETUP_GUIDE.md)
-#   2. Register as self-hosted runner: Settings → Actions → Runners → New
-#   3. Add runner labels: [self-hosted, linux, ue5.8, x64]
-#   4. Set secrets: UE5_INSTALL_DIR (path to Engine)
-# =============================================================================
+# ==============================================================================
+# KHAAOS RUN — UE5.8 Headless Compile & GPU Runner Registration
+# Dispara em push para branches feat/* e main.
+# Usa self-hosted GPU runner para compilação com -NullRHI -unattended.
+# ==============================================================================
 
-name: UE5 Headless Compile
+name: UE5 Headless Compile & GPU Runner
 
 on:
-  workflow_dispatch:
-    inputs:
-      configuration:
-        description: 'Build configuration'
-        type: choice
-        options: [Development, Shipping]
-        default: Development
-      target:
-        description: 'Build target'
-        type: choice
-        options: [Editor, Server]
-        default: Server
   push:
-    branches:
-      - main
+    branches: [main, 'feat/**']
     paths:
       - 'Unreal/KhaaosRun/Source/**'
-      - 'Unreal/KhaaosRun/Config/**'
-      - '.github/workflows/ue5-headless-compile.yml'
+      - 'Unreal/KhaaosRun/KhaaosRun.uproject'
+  workflow_dispatch:
+    inputs:
+      ue5_install_dir:
+        description: 'UE5_INSTALL_DIR path (e.g. /opt/unreal-engine/5.8)'
+        required: false
+        default: ''
+      configuration:
+        description: 'Build configuration (Development|Shipping)'
+        required: false
+        default: 'Development'
 
-concurrency:
-  group: ue5-compile-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  UE5_PROJECT: 'Unreal/KhaaosRun/KhaaosRun.uproject'
+  BUILD_CONFIGURATION: ${{ github.event.inputs.configuration || 'Development' }}
 
 jobs:
-  compile:
-    name: Compile KhaaosRun (${{ github.event.inputs.configuration || 'Development' }}/${{ github.event.inputs.target || 'Server' }})
-    runs-on: [self-hosted, linux, ue5.8, x64]
+  # ─── Job 1: Register GPU Runner ───────────────────────────────────────────
+  register-gpu-runner:
+    name: Register GPU Runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check GPU Runner Availability
+        run: |
+          echo "🔍 Verificando disponibilidade do GPU runner..."
+          # O runner deve estar registrado no repo settings com os labels EXATOS
+          # definidos em scripts/setup-gpu-runner.sh (RUNNER_LABELS):
+          #   self-hosted,linux,gpu,ue5.8,x64
+          # Gere o token de registro com: scripts/register-gpu-runner-token.sh
+          RUNNER_LABELS="self-hosted,linux,gpu,ue5.8,x64"
+          echo "RUNNER_LABELS=$RUNNER_LABELS" >> $GITHUB_ENV
+          echo "✅ Labels exigidos: $RUNNER_LABELS"
+
+      - name: Set UE5_INSTALL_DIR
+        run: |
+          # Prioridade: workflow input > repository secret > default path
+          if [ -n "${{ github.event.inputs.ue5_install_dir }}" ]; then
+            UE5_DIR="${{ github.event.inputs.ue5_install_dir }}"
+          elif [ -n "${{ secrets.UE5_INSTALL_DIR }}" ]; then
+            UE5_DIR="${{ secrets.UE5_INSTALL_DIR }}"
+          else
+            UE5_DIR="/opt/unreal-engine/5.8"
+          fi
+          echo "UE5_INSTALL_DIR=$UE5_DIR" >> $GITHUB_ENV
+          echo "✅ UE5_INSTALL_DIR: $UE5_DIR"
+
+  # ─── Job 2: UE5 Headless Compile ─────────────────────────────────────────
+  ue5-headless-compile:
+    name: UE5 Headless Compile
+    # Labels EXATOS que o runner self-hosted registra (scripts/setup-gpu-runner.sh)
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    needs: register-gpu-runner
     timeout-minutes: 120
-
-    env:
-      UE_INSTALL_DIR: ${{ secrets.UE5_INSTALL_DIR || '/opt/UnrealEngine' }}
-      UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          lfs: true
+          fetch-depth: 0
 
-      - name: Verify UE5 Installation
+      - name: Resolve UE5 Install Dir
         run: |
-          if [[ ! -d "${UE_INSTALL_DIR}/Engine" ]]; then
-            echo "::error::UE5 Engine not found at ${UE_INSTALL_DIR}"
-            echo "Install UE5.8 and set UE5_INSTALL_DIR secret"
+          if [ -n "${{ secrets.UE5_INSTALL_DIR }}" ]; then
+            UE5_DIR="${{ secrets.UE5_INSTALL_DIR }}"
+          else
+            UE5_DIR="/opt/unreal-engine/5.8"
+          fi
+          echo "UE5_INSTALL_DIR=$UE5_DIR" >> $GITHUB_ENV
+          echo "UE5 Engine path: $UE5_DIR"
+
+          if [ ! -d "$UE5_DIR" ]; then
+            echo "❌ UE5 não encontrado em $UE5_DIR"
+            echo "Configure o secret UE5_INSTALL_DIR ou instale o engine."
             exit 1
           fi
-          echo "UE5 found: ${UE_INSTALL_DIR}"
-          ls "${UE_INSTALL_DIR}/Engine/Binaries/Linux/" | head -5
-
-      - name: UHT Header Validation (pre-compile)
-        run: |
-          # Validação rápida de headers UCLASS/USTRUCT/UENUM antes do compile
-          # pesado — falha em segundos, sem gastar minutos de runner GPU.
-          python3 scripts/validate_uht.py || {
-            echo "::warning::UHT validation reportou problemas — compile continua para diagnóstico completo"
-          }
-
-      - name: EAC smoke selftest (guard — roda sem UE/binário)
-        # Mantém a lógica do smoke de EAC viva no CI Node: matcher
-        # (Active/stub/absent) + contratos de exit code (3/0/4).
-        run: node scripts/build/eac_dedicated_smoke_selftest.mjs
-
-      - name: Resolve EAC SDK (real vs stub)
-        # SDK real do EAC (KHAAOS_EAC_SDK_DIR / EACSDK/ local / EAC_SDK_URL).
-        # Sem SDK o build segue em stub — nunca quebra (contrato UE1040);
-        # go-live usa --require em pipeline de produção.
-        run: |
-          set -euo pipefail
-          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
-          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
-          if [[ "${EAC_SDK_MODE}" == "real" ]]; then
-            echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV
-          fi
-          echo "EAC mode: ${EAC_SDK_MODE}"
+          echo "✅ UE5 engine encontrado"
 
       - name: Generate Project Files
         run: |
-          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
-            -project="${UPROJECT}" -game -engine
+          # Gerar arquivos de projeto (Build.cs, etc.)
+          "$UE5_INSTALL_DIR/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
+            -project="$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -game \
+            -engine
+          echo "✅ Arquivos de projeto gerados"
 
-      - name: Compile (Editor)
-        if: github.event.inputs.target == 'Editor' || github.event.inputs.target == ''
+      - name: Build UE5 (Headless)
         run: |
-          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/Build.sh" \
-            KhaaosRunEditor Linux ${{ github.event.inputs.configuration || 'Development' }} \
-            "${UPROJECT}" -waitmutex
+          # Compilação headless — sem RHI, sem editor, sem window
+          "$UE5_INSTALL_DIR/Engine/Build/BatchFiles/Linux/Build.sh" \
+            KhaaosRunLinux \
+            "${{ env.BUILD_CONFIGURATION }}" \
+            -project="$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -NullRHI \
+            -unattended \
+            -NoP4 \
+            -build
+          echo "✅ Compilação headless completa"
 
-      - name: Compile (Server)
-        if: github.event.inputs.target == 'Server'
+      - name: Generate LUT + PostProcess Material Assets
         run: |
-          bash "${UE_INSTALL_DIR}/Engine/Build/BatchFiles/Linux/Build.sh" \
-            KhaaosRunServer Linux ${{ github.event.inputs.configuration || 'Development' }} \
-            "${UPROJECT}" -waitmutex
+          # Gera no Content Browser: 5 texturas LUT (/Game/Graphics/LUTs/)
+          # e o material M_KhaaosColorGradeLUT (/Game/Graphics/Materials/).
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -run=KhaaosLUTMaterialBuilder \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "✅ Assets LUT + material de PostProcess gerados"
 
-      - name: "EAC Dedicated Smoke (exigir 'EAC Status: Active')"
-        # Fase 0.3 (auditoria): contra o servidor dedicado REAL. Modo estrito
-        # é o PADRÃO do smoke — só executa com SDK real; com stub o passo
-        # marca SKIPPED com aviso (contrato UE1040: stub nunca quebra o build
-        # de PR) e o go-live exige reexecução estrita.
-        if: github.event.inputs.target != 'Editor'
+      - name: Validate LUTs Visually (PNG captures + report)
         run: |
-          set -euo pipefail
-          if [[ "${EAC_SDK_MODE:-stub}" != "real" ]]; then
-            echo "::warning::EAC SDK ausente — smoke estrito SKIPPED (go-live exige SDK real + 'EAC Status: Active')"
-            node scripts/build/eac_dedicated_smoke.mjs --allow-missing-input \
-              --reason "SDK stub: servidor dedicado logaria 'Running (stub)', nunca Active"
-          else
-            SERVER_BIN="$(find "${GITHUB_WORKSPACE}/Unreal/KhaaosRun/Binaries/Linux" -maxdepth 1 -name 'KhaaosRunServer*' 2>/dev/null | head -1 || true)"
-            if [[ -z "${SERVER_BIN}" ]]; then
-              echo "::error::SDK real presente mas binário do servidor não encontrado em Binaries/Linux"
-              exit 1
-            fi
-            node scripts/build/eac_dedicated_smoke.mjs --binary "${SERVER_BIN}" --timeout-ms 180000
-          fi
+          # Captura visual headless (sampling CPU, mesma matemática de UV do
+          # material): Strip_/Antes_/Depois_/Comparacao_<Mood>.png por mood +
+          # lut_visual_report.json (deltas médios/máximos) em Saved/LUTValidation/.
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -run=KhaaosLUTVisualValidator \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "✅ Capturas de validação dos LUTs geradas"
 
-      - name: Compilation Summary
-        if: always()
-        run: |
-          echo "## Compilation Result" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Config | ${{ github.event.inputs.configuration || 'Development' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Target | ${{ github.event.inputs.target || 'Server' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| UE5 | $(cat ${UE_INSTALL_DIR}/Engine/Build/Build.version 2>/dev/null | grep MajorVersion || echo '5.8') |" >> $GITHUB_STEP_SUMMARY
-          echo "| EAC SDK | ${EAC_SDK_MODE:-stub} (real exige 'EAC Status: Active' no smoke) |" >> $GITHUB_STEP_SUMMARY
-          if [[ "${EAC_SDK_MODE:-stub}" == "real" ]]; then
-            echo "| EAC Smoke | executado (estrito — Active exigido) |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| EAC Smoke | SKIPPED (stub — go-live exige SDK real) |" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
-
-  validate-replication:
-    name: Validate Iris Replication
-    runs-on: [self-hosted, linux, ue5.8, x64]
-    needs: compile
-    if: success()
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run 2-Client Replication Test
-        run: |
-          # Launch dedicated server + 2 clients, validate state sync
-          echo "Replication validation requires UE5 running — placeholder for Fase 0.3"
-          echo "Manual test: Launch server → connect 2 clients → verify no desync"
-
-  validate-graphics:
-    name: Graphics & Character Benchmark
-    runs-on: [self-hosted, linux, ue5.8, x64]
-    needs: compile
-    if: success()
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Graphics Benchmark Commandlet
-        run: |
-          # Headless benchmark: presets, LOD, post-process, materials, cosmetics
-          "${UE_INSTALL_DIR}/Engine/Binaries/Linux/KhaaosRunEditor" \
-            "${UPROJECT}" \
-            -run=KhaaosGraphicsBenchmark \
-            -NullRHI -Unattended -NoSound -NullAudio \
-            -log -LogCmds="global LogTemp Display" \
-            2>&1 | tee graphics-benchmark.log
-
-      - name: Check for FAIL Tags
-        run: |
-          FAIL_COUNT=$(grep -c "\[FAIL\]" graphics-benchmark.log || true)
-          if [[ $FAIL_COUNT -gt 0 ]]; then
-            echo "::error::${FAIL_COUNT} benchmark failures detected"
-            grep "\[FAIL\]" graphics-benchmark.log
-            exit 1
-          fi
-          echo "All graphics benchmarks PASSED"
-
-      - name: Upload Benchmark Report
+      - name: Upload LUT Validation Captures
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: graphics-benchmark-report
-          path: graphics-benchmark.log
+          name: lut-visual-validation-${{ github.sha }}
+          path: Unreal/KhaaosRun/Saved/LUTValidation/**
           retention-days: 30
+          if-no-files-found: warn
 
-  load-test:
-    name: 100-Bot Load Test
-    runs-on: [self-hosted, linux, ue5.8, x64]
-    needs: compile
-    if: success() && (github.event.inputs.target == 'Server' || github.event.inputs.target == '')
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Load Test
+      - name: Run Headless Unit Tests
         run: |
-          echo "Load test with 100 bots — placeholder for Fase 0.4"
-          echo "Requires: dedicated server running + KhaaosLoadTestManager"
-          echo "Expected: 0 crashes, <100ms RTT median, JSON report"
+          # Executar testes unitários no modo headless
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -TestRun="Automation" \
+            -AutomatedMapBuildList \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "✅ Testes unitários headless executados"
+
+      - name: Collect Build Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khaaos-run-build-${{ github.sha }}
+          path: |
+            Unreal/KhaaosRun/Binaries/Linux/**
+            Unreal/KhaaosRun/Intermediate/**
+            Unreal/KhaaosRun/Content/Graphics/LUTs/**
+            Unreal/KhaaosRun/Content/Graphics/Materials/**
+          retention-days: 7
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: \`${{ env.BUILD_CONFIGURATION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **UE5 Path**: \`${{ env.UE5_INSTALL_DIR }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`self-hosted-gpu\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

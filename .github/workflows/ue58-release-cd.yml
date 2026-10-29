@@ -93,6 +93,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install game-runtime deps (sim importa gear3d → three desde a #189)
+        run: npm ci --prefix game-runtime
       - name: Run integrated five-world stress proxy
         run: |
           mkdir -p artifacts/performance

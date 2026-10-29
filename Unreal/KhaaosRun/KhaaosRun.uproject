@@ -8,19 +8,19 @@
                         "Name": "KhaaosRun",
                         "Type": "Runtime",
                         "LoadingPhase": "Default",
-                        "PlatformAllowList": [ "Win64", "Linux", "Mac" ]
+                        "PlatformAllowList": [ "Win64", "Linux", "Mac", "Android", "IOS" ]
                 },
                 {
                         "Name": "KhaaosRunEditor",
                         "Type": "Editor",
                         "LoadingPhase": "Default",
-                        "PlatformAllowList": [ "Win64", "Mac" ]
+                        "PlatformAllowList": [ "Win64", "Linux", "Mac" ]
                 },
                 {
                         "Name": "KhaaosEAC",
                         "Type": "Runtime",
                         "LoadingPhase": "Default",
-                        "PlatformAllowList": [ "Win64", "Linux" ]
+                        "PlatformAllowList": [ "Win64", "Linux", "Android", "IOS" ]
                 }
         ],
         "Plugins": [
@@ -41,5 +41,5 @@
                 { "Name": "Metasound", "Enabled": true },
                 { "Name": "EOSIntegrationKit", "Enabled": true }
         ],
-        "TargetPlatforms": [ "Windows", "Linux", "Mac" ]
+        "TargetPlatforms": [ "Windows", "Linux", "Mac", "Android", "IOS" ]
 }

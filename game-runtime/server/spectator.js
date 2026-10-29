@@ -26,7 +26,23 @@ export const SPECTATOR_WS_PATH = '/ws/spectator';
 // vocabulário + clamp numérico antes de qualquer agregação/exibição.
 export const DIRECTOR_CUT_REASONS = ['hazard-start', 'target-lost', 'hazard-escalation'];
 export const DIRECTOR_HAZARDS = ['tsunami', 'lava', 'gravity', 'acid'];
+// Fase 26 — vocabulário canônico dos PESOS de perigo (mesma gramática do
+// DANGER_WEIGHTS do cliente — paridade JS↔TS testada byte a byte).
+export const DIRECTOR_WEIGHT_KEYS = ['knocked', 'hazardDamage', 'anchorZone', 'outsideRing', 'recentDamage', 'lowHealth'];
 const DIRECTOR_METRIC_CAP = 1_000_000;
+
+/** Sanitiza a afinação do diretor (Fase 26): margem inteira clampada + pesos
+ *  só do vocabulário canônico; lixo/hostil vira tuning zerado (nunca lança). */
+export function sanitizeDirectorTuning(raw) {
+  const obj = raw && typeof raw === 'object' ? raw : {};
+  const clamp = (v) => Math.min(DIRECTOR_METRIC_CAP, Math.max(0, Math.floor(Number(v) || 0)));
+  const weights = {};
+  const src = obj.weights && typeof obj.weights === 'object' ? obj.weights : null;
+  if (src) {
+    for (const k of DIRECTOR_WEIGHT_KEYS) if (src[k] != null) weights[k] = clamp(src[k]);
+  }
+  return { margin: clamp(obj.margin), weights };
+}
 
 /** Sanitiza o relatório DIRECTOR_METRICS (campos desconhecidos descartados,
  *  números clampados a [0, 1e6]) — entrada bruta do WS. */
@@ -56,6 +72,7 @@ export function sanitizeDirectorReport(raw) {
       on: clamp(obj.toggles?.on),
       off: clamp(obj.toggles?.off),
     },
+    tuning: sanitizeDirectorTuning(obj.tuning), // Fase 26 — whitelist própria
   };
 }
 
@@ -68,6 +85,7 @@ export function aggregateDirectorReports(reports) {
     cuts: { total: 0, byReason: {}, byHazard: {} },
     manual: { followSelects: 0, cycles: 0 },
     toggles: { on: 0, off: 0 },
+    tuning: null,
   };
   for (const r of reports ?? []) {
     if (!r) continue;
@@ -80,6 +98,8 @@ export function aggregateDirectorReports(reports) {
     out.manual.cycles += r.manual?.cycles ?? 0;
     out.toggles.on += r.toggles?.on ?? 0;
     out.toggles.off += r.toggles?.off ?? 0;
+    // Fase 26 — afinação é ESTADO (margem/pesos vigentes): last report wins
+    if (r.tuning) out.tuning = { margin: r.tuning.margin, weights: { ...r.tuning.weights } };
   }
   return out;
 }

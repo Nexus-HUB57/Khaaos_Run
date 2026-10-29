@@ -22,6 +22,10 @@ enum class EKhaaosPipelineStage : uint8
     INITIALIZATION          UMETA(DisplayName = "Initialization"),
     ASSET_LOADING           UMETA(DisplayName = "Asset Loading"),
     QUALITY_CALIBRATION     UMETA(DisplayName = "Quality Calibration"),
+    LUT_COLOR_GRADE         UMETA(DisplayName = "LUT Color Grade"),
+    OUTLINE_SETUP           UMETA(DisplayName = "Outline Setup"),
+    POST_PROCESS_SETUP      UMETA(DisplayName = "Post Process Setup"),
+    LIGHTING_SETUP          UMETA(DisplayName = "Lighting Setup"),
     RUNTIME_OPTIMIZATION    UMETA(DisplayName = "Runtime Optimization"),
     HOT_RELOAD              UMETA(DisplayName = "Hot Reload")
 };

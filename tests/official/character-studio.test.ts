@@ -89,7 +89,7 @@ test("Character Studio: Diversidade étnica cobre Américas, África, Ásia, Eur
   assert.ok(ethnicities.some((e) => e.includes("Dravidiana")));
 });
 
-test("Character Studio: 16 Arquivos SVG de Avatares gerados e sincronizados (Content/Avatars & client/public/avatars)", async () => {
+test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Content/Avatars & client/public/avatars)", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
 
@@ -100,11 +100,13 @@ test("Character Studio: 16 Arquivos SVG de Avatares gerados e sincronizados (Con
   assert.ok(fs.existsSync(publicCatalogPath), "Public avatar_catalog.json must exist");
 
   const catalog = JSON.parse(fs.readFileSync(contentCatalogPath, "utf8"));
-  assert.equal(catalog.length, 16, "Catalog must list 16 operatives");
+  // Fase 26 — 16 canônicos + TALON (Hacker & Urban Runner) = 17 no catálogo;
+  // 9 masculinos (Talon entra como M-09) e 8 femininos.
+  assert.equal(catalog.length, 17, "Catalog must list 17 operatives");
 
   const males = catalog.filter((c: any) => c.gender === "MASCULINO");
   const females = catalog.filter((c: any) => c.gender === "FEMININO");
-  assert.equal(males.length, 8, "8 masculine avatars in catalog");
+  assert.equal(males.length, 9, "9 masculine avatars in catalog (incl. Talon M-09)");
   assert.equal(females.length, 8, "8 feminine avatars in catalog");
 
   for (const item of catalog) {

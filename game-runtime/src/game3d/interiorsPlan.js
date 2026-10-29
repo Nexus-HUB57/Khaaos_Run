@@ -299,6 +299,210 @@ export function lootSpotsForStructure(layout, s, spec) {
 
 const EPS = 1e-4;
 
+// ============================================================================
+// Fase 25 — PORTAS FUNCIONAIS (pura): abrir/fechar com E, destrutíveis.
+// A Fase 24 deixou o vão da porta LIVRE (dá pra entrar); a Fase 25 coloca uma
+// FOLHA no vão: fechada ela colide (movimento/balas/LOS), aberta ela balança
+// para dentro (só visual — não colide, como no Free Fire) e destruída some
+// para sempre. Estado autoritativo vive em sim3d/room3d; ESTE módulo fornece
+// a GEOMETRIA determinística do vão (fonte única p/ física e visual).
+// ============================================================================
+
+// mecânica da porta — MESMOS números em sim offline, MatchRoom3D e visual
+export const DOOR_MECH = {
+  hp: 200,            // vida da folha DE MADEIRA (pistola ~10 balas; granada no epicentro derruba)
+  interactRange: 2.3, // alcance do E (m, centro do vão → ator)
+  toggleCooldown: .6, // s entre toggles (anti-thrash de tecla/bot)
+  leafGap: .12,       // folha um pouco menor que o vão (não raspa no batente)
+  openAngle: 1.92,    // rad (~110°) — abertura para DENTRO do interior
+  openSpeed: 8.5,     // ganho do animator visual (exponencial) — ~0,35 s p/ 95% do curso
+};
+
+// Fase 25.1/26 — MATERIAL da folha por tipo de estrutura: hangar e DEPOT
+// recebem porta METÁLICA (hp/melee específicos vivem no sim3d.DOOR —
+// convenção do repo); os demais interiores seguem com madeira.
+// Fase 26 (depot): o depósito guarda material sensível — folha metálica de
+// rolete tem a MESMA leitura industrial do hangar e cobra munição de entrada.
+export function doorMaterialOf(kind) { return (kind === 'hangar' || kind === 'depot') ? 'metal' : 'wood'; }
+
+/**
+ * Vãos de porta em COORDENADAS DE MUNDO — um por estrutura-casca. Consumido por:
+ *  - sim3d/room3d: folha DINÂMICA (doorBoxCollider quando fechada) + interação
+ *    contextual (E) + pathing de bots por portas;
+ *  - interiors3d: folha visual com dobradiça (MESMO vão).
+ * Campos: id, structIndex, kind, x/z (centro do vão no plano da parede),
+ * yMin (base), w/h (folha), nx/nz (normal EXTERIOR unitária), hx/hz (dobradiça,
+ * visual), horizontal (vão corre em X local), rot + pegada (fx/fz/fw/fd)
+ * p/ footprintHas (pathing de bots).
+ */
+export function doorwaysOf(layout, dressing) {
+  const out = [];
+  for (const spec of dressing.structures) {
+    const s = layout.structures[spec.index];
+    // quiosque: só 4 postes + telhado — sem parede, sem vão, sem folha
+    if (s.kind === 'pavilion') continue;
+    const { face, w: dw, h: dh, u } = spec.door;
+    const horizontal = face === 'front' || face === 'back';
+    // centro do vão NO MEIO da espessura da parede (espaço local) — folha e
+    // collider centram no mesmo plano (T/2 da face externa para dentro)
+    const plane = face === 'front' ? -s.d / 2 + T / 2 : face === 'back' ? s.d / 2 - T / 2 : face === 'right' ? s.w / 2 - T / 2 : -s.w / 2 + T / 2;
+    const cxl = horizontal ? u : plane;
+    const czl = horizontal ? plane : u;
+    const c = localPointToWorld(s, cxl, czl);
+    // normal EXTERIOR: rotaciona o deslocamento normal (local) p/ mundo
+    const nxl = face === 'right' ? 1 : face === 'left' ? -1 : 0;
+    const nzl = face === 'front' ? -1 : face === 'back' ? 1 : 0;
+    const n = localPointToWorld(s, cxl + nxl, czl + nzl);
+    let nx = n.x - c.x, nz = n.z - c.z;
+    const nl = Math.hypot(nx, nz) || 1; nx = +(nx / nl).toFixed(4); nz = +(nz / nl).toFixed(4);
+    // dobradiça no batente u0 (visual; lado determinístico do vão)
+    const hL = horizontal ? [u - dw / 2, plane] : [plane, u - dw / 2];
+    const hw = localPointToWorld(s, hL[0], hL[1]);
+    out.push({
+      id: `door-${spec.index}`,
+      structIndex: spec.index,
+      index: spec.index, // FIX Fase 25/29 — alias de compatibilidade (testes e
+                         // consumidores legados leem .index; canônico é structIndex)
+      kind: s.kind,
+      x: +c.x.toFixed(3), z: +c.z.toFixed(3),
+      yMin: s.yMin,
+      // FIX Fase 25/29 — campos legados que o refactor deixou de emitir:
+      // yMax (mira/pitch de tiro no painel), hw/hd (meia-extensão do vão p/
+      // doorCollider legado e HUD). doorBoxCollider continua canônico.
+      yMax: +(s.yMin + dh).toFixed(3),
+      hw: +(dw / 2).toFixed(3),
+      hd: +(T / 2).toFixed(3),
+      w: dw, h: dh,
+      nx, nz,
+      hx: +hw.x.toFixed(3), hz: +hw.z.toFixed(3),
+      horizontal,
+      rot: s.rot ?? 0,
+      fx: s.x, fz: s.z, fw: s.w, fd: s.d,   // pegada da estrutura (pathing)
+    });
+  }
+  return out;
+}
+
+// ============================================================================
+// Fase 26 — JANELAS DESTRUTÍVEIS (pura): o vidro vira PAINEL com HP.
+// A Fase 24 deixou a faixa de janela como VÃO aberto (balas/LOS passavam);
+// a Fase 26 coloca VIDRO nela: intacto ele RACHA com bala (para o projétil)
+// e ESTILHAÇA no segundo impacto (a bala então SEGUE com dano cheio) —
+// corpo-a-corpo e granada estilhaçam na hora. LOS NUNCA é bloqueada pelo
+// vidro (transparente — bots enxergam e atiram pelas janelas como antes);
+// o bloqueio é só BALÍSTICO enquanto o vidro está íntegro.
+// Estado autoritativo vive em sim3d/room3d (como as folhas de porta);
+// ESTE módulo fornece a geometria determinística do painel (fonte única).
+// ============================================================================
+
+// mecânica do vidro — MESMOS números em sim offline, MatchRoom3D e visual
+export const WINDOW_MECH = {
+  hp: 30,             // vida do vidro (g19 22 dmg racha; m4/ak estilhaçam no 1º tiro)
+  interactRange: 2.3, // alcance do E (consistente com a porta)
+};
+
+/**
+ * Painéis de VIDRO em COORDENADAS DE MUNDO — um por abertura de spec.windows
+ * (determinístico: id `win-<estrutura>-<k>` na ordem do dressing). MESMO
+ * plano de parede do doorwaysOf (centro da espessura T/2).
+ * Campos: id, structIndex/index, kind, x/z (centro do painel), y0/y1 (banda
+ * vertical MUNDIAL), w/h (vão), nx/nz (normal EXTERIOR), horizontal, rot e
+ * pegada da estrutura (fx/fz/fw/fd) p/ HUD/consultas.
+ */
+export function windowPanelsOf(layout, dressing) {
+  const out = [];
+  for (const spec of dressing.structures) {
+    const s = layout.structures[spec.index];
+    const wins = spec.windows ?? [];
+    if (!wins.length) continue;
+    const yBase = s.yMin ?? 0;
+    wins.forEach((win, k) => {
+      const face = win.face;
+      const horizontal = face === 'front' || face === 'back';
+      // centro do painel NO MEIO da espessura da parede — MESMO plano das folhas
+      const plane = face === 'front' ? -s.d / 2 + T / 2 : face === 'back' ? s.d / 2 - T / 2 : face === 'right' ? s.w / 2 - T / 2 : -s.w / 2 + T / 2;
+      const uc = (win.u0 + win.u1) / 2;
+      const cxl = horizontal ? uc : plane;
+      const czl = horizontal ? plane : uc;
+      const c = localPointToWorld(s, cxl, czl);
+      // normal EXTERIOR (mesma rotação das folhas de porta)
+      const nxl = face === 'right' ? 1 : face === 'left' ? -1 : 0;
+      const nzl = face === 'front' ? -1 : face === 'back' ? 1 : 0;
+      const n = localPointToWorld(s, cxl + nxl, czl + nzl);
+      let nx = n.x - c.x, nz = n.z - c.z;
+      const nl = Math.hypot(nx, nz) || 1; nx = +(nx / nl).toFixed(4); nz = +(nz / nl).toFixed(4);
+      out.push({
+        id: `win-${spec.index}-${k}`,
+        structIndex: spec.index,
+        index: spec.index, // alias de compatibilidade (mesmo contrato das folhas)
+        kind: s.kind,
+        x: +c.x.toFixed(3), z: +c.z.toFixed(3),
+        y0: +(yBase + win.y0).toFixed(3), y1: +(yBase + win.y1).toFixed(3),
+        yMin: +(yBase + win.y0).toFixed(3), yMax: +(yBase + win.y1).toFixed(3),
+        w: +(win.u1 - win.u0).toFixed(3), h: +(win.y1 - win.y0).toFixed(3),
+        nx, nz, horizontal,
+        rot: s.rot ?? 0,
+        fx: s.x, fz: s.z, fw: s.w, fd: s.d,
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * Collider do vidro ÍNTEGRO (AABB de mundo, marcado com windowId p/ dano de
+ * bala/explosão). Destruído => null (balas/LOS/movimento passam livres).
+ * Vidro NUNCA entra no caminho da LOS — os consumidores (sim3d/room3d
+ * #hasLos) pulam colliders kind === 'window' explicitamente.
+ */
+export function windowBoxCollider(win) {
+  if (!win || win.destroyed) return null;
+  const c = Math.abs(Math.cos(win.rot ?? 0)), s = Math.abs(Math.sin(win.rot ?? 0));
+  const ax = win.horizontal ? c : s;
+  const az = win.horizontal ? s : c;
+  const hx = (ax * win.w) / 2 + Math.abs(win.nx) * (T / 2);
+  const hz = (az * win.w) / 2 + Math.abs(win.nz) * (T / 2);
+  return {
+    minX: win.x - hx, maxX: win.x + hx,
+    minZ: win.z - hz, maxZ: win.z + hz,
+    yMin: win.y0, yMax: win.y1,
+    kind: 'window', windowId: win.id,
+  };
+}
+
+/**
+ * Collider da folha FECHADA (AABB de mundo, marcado com doorId p/ dano de
+ * bala/explosão). Aberta/destruída => null (não colide — o movimento atravessa,
+ * balas passam, LOS enxerga). Rotação axis-aligned (0/90°) => AABB exato.
+ */
+export function doorBoxCollider(door) {
+  if (!door || door.open || door.destroyed) return null;
+  const c = Math.abs(Math.cos(door.rot ?? 0)), s = Math.abs(Math.sin(door.rot ?? 0));
+  // extensão do vão no mundo: horizontal corre em X local; senão em Z local.
+  // A ESPESSURA corre na direção da normal (parede) — T/2 para cada lado.
+  const ax = door.horizontal ? c : s;
+  const az = door.horizontal ? s : c;
+  const hx = (ax * door.w) / 2 + Math.abs(door.nx) * (T / 2);
+  const hz = (az * door.w) / 2 + Math.abs(door.nz) * (T / 2);
+  return {
+    minX: door.x - hx, maxX: door.x + hx,
+    minZ: door.z - hz, maxZ: door.z + hz,
+    yMin: door.yMin, yMax: door.yMin + door.h,
+    kind: 'door', doorId: door.id,
+  };
+}
+
+/**
+ * Ponto dentro da PEGADA da estrutura dona da porta (espaço local por inversa
+ * da rotação Y — usada pela IA p/ saber quem está "de dentro" vs "de fora").
+ */
+export function footprintHas(door, x, z, margin = 0) {
+  const dx = x - door.fx, dz = z - door.fz;
+  const c = Math.cos(door.rot ?? 0), s = Math.sin(door.rot ?? 0);
+  const lx = c * dx - s * dz, lz = s * dx + c * dz;
+  return Math.abs(lx) <= door.fw / 2 + margin && Math.abs(lz) <= door.fd / 2 + margin;
+}
+
 /**
  * Decompõe as estruturas-casca em paredes (com vão de porta REAL e faixas de
  * janela), postes de pavilhão, escada/mezanino e guarda-corpo — tudo em AABBs

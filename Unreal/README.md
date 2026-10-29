@@ -105,15 +105,30 @@ O workflow `UE5 CD` valida em PR e constrói a imagem sem publicá-la. Em `main`
 ### Pipeline Gráfica
 | Sistema | Classe | Descrição |
 |---|---|---|
-| Pipeline Manager | `UKhaaosGraphicsPipelineManager` | Orquestrador central: init→asset loading→quality calibration→runtime optimization→hot reload |
+| Pipeline Manager | `UKhaaosGraphicsPipelineManager` | Orquestrador central: 7 estágios (init→asset loading→quality calibration→**post process setup**→**lighting setup**→runtime optimization→hot reload) |
 | Quality Profile Runtime | `UKhaaosQualityProfileRuntime` | Override por-jogador, LOD bias para spectating/killcam, console command integration |
-| Material Pipeline | `UKhaaosMaterialPipeline` | Pipeline de materiais por espécie: 8 passes (BaseColor, Normal, Emissive, ORM, Subsurface, ClearCoat, WetMap, SpeciesTrait), async streaming |
+| Material Pipeline | `UKhaaosMaterialPipeline` | Pipeline de materiais por espécie: 8 passes (BaseColor, Normal, Emissive, ORM, Subsurface, ClearCoat, WetMap, SpeciesTrait) + rim light por espécie, async streaming |
 | LOD System | `UKhaaosCharacterLODSystem` | Distance-based LOD (HIGH 0-30m, MEDIUM 30-60m, LOW 60-100m, CULLED 100m+), animation budget 2ms |
 | Species LOD Manager | `UKhaaosSpeciesLODManager` | LOD por espécie (5 níveis LOD0-LOD4), disable morph/emissive/VFX por nível |
-| Graphics Presets | `UKhaaosGraphicsPresetSubsystem` | 5 presets (Low 720p30→PhD 4K120), auto-detect GPU VRAM, DLSS/FSR/XeSS/TSR |
+| Graphics Presets | `UKhaaosGraphicsPresetSubsystem` | 5 presets (Low 720p30→PhD 4K120), auto-detect GPU VRAM, DLSS/FSR/XeSS/TSR + sharpen tonemapper + TSR samples |
 | Dynamic Resolution | `UKhaaosDynamicResolution` | GPU-time-based DRS (Conservative/Aggressive/Adaptive), 8-frame moving average |
-| Post Process Manager | `UKhaaosPostProcessManager` | Efeitos por espécie (bloom, chromatic aberration, DOF, distortion, color grading), GPU budget optimization |
+| Post Process Manager | `UKhaaosPostProcessManager` | Efeitos por espécie (bloom, chromatic aberration, DOF, motion blur), GPU budget optimization — grading delegado ao Director |
 | Material Optimizer | `UKhaaosMaterialOptimizer` | Streaming budget, batch parameter updates, distant material optimization |
+
+### Pipeline Gráfica v3 — "Look Free Fire" (2026-10-28)
+O objetivo da v3 é fechar o gap visual vs Free Fire: imagem **clara, saturada e estável**, com **personagens que "popam"** do cenário e **profundidade via névoa**.
+
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Post Process Director | `UKhaaosPostProcessDirector` (WorldSubsystem) | Pós-processamento **REAL** via `FPostProcessSettings` em `APostProcessVolume` unbounded (prioridade 100). Assinatura FF: exposição fixa (histograma colapsado Min==Max, sem pop de adaptação), tonemapper de alto contraste (Slope 0.85/Toe 0.30/Shoulder 0.22), saturação 1.22x + tint quente, bloom com threshold 0.85, grain zero, vignette sutil. 5 moods: `PadraoBattle` (FF signature), `NoiteNeon` (Arukheea), `NebulosaAlien` (Ckesalth), `AmanhecerVenenoso` (Barburhen), `LowEndLeve`. Overlay por espécie (tint+vignette) exposto ao PostProcessManager. Crossfade via BlendWeight |
+| Lighting Director | `UKhaaosLightingDirector` (WorldSubsystem) | Rig de luz programático: `ADirectionalLight` (lux/temperatura/cascatas/contact shadows), `ASkyLight` (captura única SLS_CapturedScene), `AExponentialHeightFog` (densidade/inscattering/profundidade), `ASkyAtmosphere`. 4 presets: `DiaSolarPadrao` (12 lux@6100K — FF), `TardeDourada` (Priadus), `NoiteNeon` (Arukheea), `NebulosaVioleta` (Barburhen/Ckesalth). Auto-mapping por nome de mundo. Guardas: dedicated server/-NullRHI/commandlet não spawnam |
+| Character Pop Component | `UKhaaosCharacterPopComponent` (ActorComponent) | "Pop" de personagem estilo FF: **rim light Fresnel por espécie** (Huran ciano 0.9, Khael violeta 1.1, Venex magenta 1.0, Onith laranja 0.8, Zheers violeta-espiritual 0.7, Skeetw verde-pena 0.6) via MID params `RimLightIntensity`/`RimLightColor`, **custom depth stencil** (1+espécie, para outline PP), **point light de ancoragem** (só pawn local, cast shadows off, preset>Low). Hook de gameplay: `SetRimBoost(0-3)` para as 48 skills |
+| Correções de CVars | `KhaaosPostProcessManager` | Removidas CVars **inexistentes** na engine (`r.ColorGradingLUT`, `r.VignetteIntensity`, `r.UnderwaterDistortion`, `r.BloomIntensity`, `r.SceneChromaticAberration`) — substituídas por `r.SceneColorFringe.Intensity` real + delegação ao Director |
+| Testes | `KhaaosGraphicsV3Spec.cpp` | 6 specs: receitas válidas, mapeamento de mundos, presets de luz, rim único por espécie, 7 estágios do pipeline, tradução real de `FPostProcessSettings` |
+
+**Fluxo de inicialização gráfica v3:** `InitializePipeline()` → estágio 4 pré-aquece receita de PP → estágio 5 valida preset de luz → no `OnWorldBeginPlay` os WorldSubsystems criam volume PP + rig de luz e aplicam mood/preset automático do mundo (CIGKV=PadraoBattle/Dia, Arukheea=NoiteNeon, Barburhen=AmanhecerVenenoso/NebulosaVioleta, Ckesalth=NebulosaAlien, Priadus=PadraoBattle/TardeDourada).
+
+**Nota de materiais:** os parâmetros `RimLightIntensity`, `RimLightColor`, `EmissiveIntensity` etc. assumem master materials com esses parâmetros expostos (convenção do pipeline); materiais sem o parâmetro ignoram o set de MID — sem risco de crash.
 
 ### Sistema de Personagens (6 Espécies)
 | Sistema | Classe | Descrição |

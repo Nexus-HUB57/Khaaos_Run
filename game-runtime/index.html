@@ -30,6 +30,8 @@
     <!-- crosshair dinâmico -->
     <div id="crosshair"><i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="ch dot"></i></div>
     <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <!-- Fase 27 — números de dano flutuantes (pool de DOM; preenchido pelo damageNumbers3d) -->
+    <div id="damageNumbers" aria-hidden="true"></div>
     <!-- Fase 5 — barra do espectador -->
     <div id="spectatorBar" class="hidden">
       <span class="spec-label">ESPECTANDO</span>
@@ -91,6 +93,8 @@
       <div id="reloadHint">RECARREGANDO…</div>
       <div class="ammo-row"><b id="ammoMag">15</b><span id="ammoReserve">/ 45</span></div>
       <div class="weapon-name" id="weaponName">PISTOLA 9MM</div>
+      <div id="attachStrip" class="attach-strip" title="Anexos da AR-47"></div>
+      <div id="mythicStage" class="mythic-stage hidden"></div>
       <div class="throwables-row">
         <div class="throw-chip frag" title="Granada FRAG [G]">💣 <span id="fragCount">×1</span><small>G</small></div>
         <div class="throw-chip gloo" title="Gloo Wall [F]">🧊 <span id="glooCount">×1</span><small>F</small></div>
@@ -111,6 +115,12 @@
 
     <!-- prompt de interação -->
     <div id="interactPrompt">[E] Coletar</div>
+
+    <!-- Fase 26 — HP do alvo quebrável (porta metálica/madeira/janela) -->
+    <div id="targetPanel" data-mat="wood">
+      <div class="tp-head"><span id="targetLabel">PORTA</span><b id="targetHp">200/200</b></div>
+      <div class="tp-track"><i id="targetFill"></i></div>
+    </div>
 
     <!-- feed lateral -->
     <div class="feed-panel"><div class="section-label">RÁDIO // LOG AO VIVO</div><div id="feedList"></div></div>

@@ -5,7 +5,7 @@
 # Registra um runner self-hosted Linux x64 com os labels EXATOS que o workflow
 # .github/workflows/ue5-headless-compile.yml exige:
 #
-#     runs-on: [self-hosted, linux, ue5.8, x64]
+#     runs-on: [self-hosted, linux, gpu, ue5.8, x64]
 #
 # Uso rápido (interativo):
 #   bash scripts/setup-gpu-runner.sh
@@ -20,7 +20,9 @@
 # Desinstalar:
 #   bash scripts/setup-gpu-runner.sh --uninstall
 #
-# O token de registro vem de: GitHub → Settings → Actions → Runners →
+# O token de registro pode ser gerado automaticamente via API do GitHub:
+#   bash scripts/register-gpu-runner-token.sh   (usa o PAT do remote ou GH_TOKEN)
+# Ou manualmente: GitHub → Settings → Actions → Runners →
 # "New self-hosted runner" → Linux x64 → copiar o RUNNER_REGISTRATION_TOKEN
 # (validade de 1 hora). NÃO é o mesmo que um PAT.
 #
@@ -33,7 +35,7 @@ REPO_URL="${REPO_URL:-https://github.com/Nexus-HUB57/Khaaos_Run}"
 RUNNER_VERSION="${RUNNER_VERSION:-}"            # vazio = busca a latest da API
 RUNNER_DIR="${RUNNER_DIR:-$HOME/actions-runner}"
 RUNNER_NAME="${RUNNER_NAME:-gpu-runner-$(hostname -s 2>/dev/null || echo 01)}"
-RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,ue5.8,x64}"
+RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,gpu,ue5.8,x64}"   # deve bater com runs-on do ue5-headless-compile.yml
 RUNNER_GROUP="${RUNNER_GROUP:-Default}"
 RUNNER_WORKDIR="${RUNNER_WORKDIR:-$HOME/runner-work}"
 UE5_INSTALL_DIR="${UE5_INSTALL_DIR:-/opt/UnrealEngine}"

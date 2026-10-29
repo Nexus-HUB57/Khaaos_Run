@@ -214,6 +214,11 @@ void UKhaaosAttributeSet::InitFromSchemaDefaults()
         DefenseRating    = 0.0f;
         InitOnithProjectileDamageReduction(0.0f);
         InitOnithExplosionDamageReduction(0.0f);
+	InitAirSpeedBonus(0.0f);
+	InitWaterRegenPerSecond(0.0f);
+	InitHealBonusPercent(0.0f);
+	InitFireRateBonus(0.0f);
+	InitReloadSpeedBonus(0.0f);
         AttackRange      = 15.0f;  // 15% of map
 }
 

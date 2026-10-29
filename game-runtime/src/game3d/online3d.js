@@ -7,7 +7,8 @@
 // bootstrapOnline conecta o NetClient3D e injeta o modo online no Game3D.
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
-import { MATCH_TIME, WORLD, getWorldLayout, glooCollider, doorCollider } from './sim3d.js';
+import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
+import { doorBoxCollider } from './interiorsPlan.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
@@ -35,7 +36,8 @@ export class Sim3DView {
     this.terminals = [];
     this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
     this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
-    this.doors = [];     // Fase 25 — estado das portas (snapshots)
+    this.doors = [];     // Fase 25 — estado das folhas de porta (snapshots)
+    this.windows = [];   // Fase 26 — estado do vidro das janelas (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -74,11 +76,8 @@ export class Sim3DView {
       // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
       this.onWallsChanged?.(this.walls);
     }
-    if (s.doors) {
-      // Fase 25 — portas (posição é estática no layout; hp/ativo vêm do servidor)
-      this.doors = s.doors.map((d) => ({ ...d, active: d.active !== false }));
-      this.onDoorsChanged?.(this.doors);
-    }
+    if (s.doors) this.doors = s.doors; // Fase 25 — folhas seguem o estado da sala
+    if (s.windows) this.windows = s.windows; // Fase 26 — vidro segue o estado da sala
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
@@ -87,6 +86,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }
@@ -326,10 +328,12 @@ export class OnlineGame3D extends Game3D {
     const staticColliders = layout.colliders;
     const gloo = (this.view.walls ?? []).filter((w) => w.active !== false).map(glooCollider);
     const doorState = new Map((this.view.doors ?? []).map((d) => [d.id, d]));
+    // Folha FECHADA/íntegra colide no preditor; aberta/destruída não —
+    // doorBoxCollider já devolve null nesses estados (MESMA geometria da sim/sala)
     const doors = (layout.doors ?? [])
-      .map((d) => ({ ...d, active: doorState.get(d.id)?.active !== false }))
-      .filter((d) => d.active)
-      .map(doorCollider);
+      .map((d) => { const st = doorState.get(d.id); return st ? { ...d, open: !!st.open, destroyed: !!st.destroyed } : d; })
+      .map(doorBoxCollider)
+      .filter(Boolean);
     const dynamic = [...gloo, ...doors];
     this.predictorWorld.colliders = dynamic.length ? staticColliders.concat(dynamic) : staticColliders;
   }

@@ -170,6 +170,9 @@ public:
 	/** Overclock duration in seconds. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Passive|Venex")
 	float OverclockDuration = 5.0f;
+	float OverclockReloadBonus = 0.15f;
+	bool ApplyOverclockFromElimination(class UAbilitySystemComponent* ASC);
+	static bool TryApplyOverclockOnASC(class UAbilitySystemComponent* ASC);
 
 };
 
