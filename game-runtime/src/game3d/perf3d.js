@@ -1,4 +1,4 @@
-// Khaaos Run — Fase 34: performance adaptativa (DRS + auto-tier) — módulo PURO.
+// Khaaos Run — Fase 35: performance adaptativa (DRS + auto-tier) — módulo PURO.
 //
 // Revisão PhD-level da otimização gráfica achou que o tier de qualidade
 // (quality3d) é resolvido UMA vez por sessão: em combate pesado (24 atores +

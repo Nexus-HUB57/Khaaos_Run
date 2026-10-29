@@ -1,4 +1,4 @@
-// Khaaos Run — Fase 34: configurações gráficas do jogador (KR_GFX_*) — PURO.
+// Khaaos Run — Fase 35: configurações gráficas do jogador (KR_GFX_*) — PURO.
 // Mesma disciplina do audiomix (KR_AUDIO_*): localStorage com fallback de
 // memória (headless/testes/modo privado), validação de cada campo e merge
 // parcial (blob versionado KR_GFX_SETTINGS_V1).

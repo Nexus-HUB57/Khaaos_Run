@@ -560,8 +560,11 @@ test('F32 · loot: anexo avulso nasce com raridade válida da tabela central', (
 // General no rollLoot (pulse nunca abaixo de LENDARIO, mas pode nascer MÍTICO).
 
 test('F34 · catálogo mítico cobre TODO o arsenal — sucata e pulse (sem sockets)', () => {
+  // F36: o catálogo cresceu para 9 (shotgun/lmg entraram sem sockets) — este
+  // pin da F34 acompanha o catálogo completo; as identidades sucata/pulse
+  // permanecem as originais.
   assert.deepEqual(Object.keys(MYTHIC_SKINS).sort(),
-    ['ar47', 'barrett', 'g19', 'm4', 'mp5', 'pulse', 'sucata']);
+    ['ar47', 'barrett', 'g19', 'lmg', 'm4', 'mp5', 'pulse', 'shotgun', 'sucata']);
   const suc = mythicSkinFor('sucata');
   assert.equal(suc.name, 'Sucata · Coroa de Ferro-Velho');
   assert.equal(suc.aura, '#ff8c1a', 'âmbar-ferrugem — forno de ferro-velho');
@@ -571,9 +574,9 @@ test('F34 · catálogo mítico cobre TODO o arsenal — sucata e pulse (sem sock
   assert.equal(pul.name, 'Pulse · Prisma Soberano');
   assert.equal(pul.aura, '#ffe14d', 'ouro-arco — energia do General');
   assert.equal(pul.stages, 4);
-  // 7 identidades visuais — nenhuma aura repetida
+  // 9 identidades visuais — nenhuma aura repetida (F36 ampliou o catálogo)
   const auras = Object.values(MYTHIC_SKINS).map((d) => d.aura);
-  assert.equal(new Set(auras).size, 7, '7 auras únicas no catálogo');
+  assert.equal(new Set(auras).size, 9, '9 auras únicas no catálogo');
 });
 
 test('F34 · overlay mítico assenta sucata e pulse com fit próprio (estágio 4)', () => {
@@ -661,4 +664,190 @@ test('F34 · sim: pulse MÍTICO em mãos evolui por abate (Prisma Soberano)', ()
   assert.equal(events.length, 1);
   assert.equal(events[0].weapon, 'pulse', 'evento identifica o Prisma Soberano');
   assert.equal(events[0].stage, 2);
+});
+
+// ======================================= F36 — SHOTGUN/LMG (sem soquetes) ===
+
+test('F36 · catálogo mítico 9/9 — escopeta e LMG com auras ÚNICAS', () => {
+  assert.deepEqual(Object.keys(MYTHIC_SKINS).sort(),
+    ['ar47', 'barrett', 'g19', 'lmg', 'm4', 'mp5', 'pulse', 'shotgun', 'sucata']);
+  const sg = mythicSkinFor('shotgun');
+  assert.equal(sg.name, 'Shotgun · Brasa do Breach');
+  assert.equal(sg.aura, '#ff5333', 'vermelho-brasa — carga de arrombamento');
+  assert.equal(sg.stages, 4);
+  assert.ok(sg.fit.scale > 1, 'arma longa pede overlay maior');
+  const lmg = mythicSkinFor('lmg');
+  assert.equal(lmg.name, 'LMG · Tempestade de Chumbo');
+  assert.equal(lmg.aura, '#4d9bff', 'azul-tempestade — rajada sustentada');
+  assert.equal(lmg.stages, 4);
+  // 9 identidades visuais — nenhuma aura repetida (cores a 1e-9 via Color)
+  const hexes = Object.values(MYTHIC_SKINS).map((d) => d.aura.toLowerCase());
+  assert.equal(new Set(hexes).size, 9, '9 auras únicas no catálogo');
+  assert.ok(mythicSkinFor('desconhecida') === null, 'arma fora do catálogo → null');
+});
+
+test('F36 · SG-12 e MG-6 no catálogo: SEM sockets, stats canônicos', async () => {
+  const sg = WEAPONS.shotgun, lmg = WEAPONS.lmg;
+  assert.equal(sg.name, 'Shotgun Breach SG-12');
+  assert.equal(sg.category, 'shotgun');
+  assert.equal(sg.pellets, 7, '1 gatilho = 7 chumbos');
+  assert.equal(sg.ammo, 'SHELL');
+  assert.ok(!sg.sockets, 'escopeta NÃO tem sockets');
+  assert.equal(lmg.name, 'LMG Skeetw MG-6');
+  assert.equal(lmg.category, 'lmg');
+  assert.equal(lmg.magazine, 80, 'cinto de 80');
+  assert.equal(lmg.ammo, '7.62', 'LMG reaproveita o 7.62 do arsenal');
+  assert.ok(!lmg.sockets, 'LMG NÃO tem sockets');
+  // sem sockets → anexos NUNCA nascem para elas (contrato attachmentsForDrop)
+  const rng = new SeededRng('F36-NOSOCKET');
+  for (let i = 0; i < 50; i++) {
+    assert.equal(attachmentsForDrop(rng, 'shotgun', 'MITICA'), undefined, 'MITICA sem sockets → undefined');
+    assert.equal(attachmentsForDrop(rng, 'lmg', 'LENDARIO'), undefined, 'LENDARIO sem sockets → undefined');
+  }
+  // WEAPONS3D deriva as métricas 3D das NOVAS categorias
+  const { WEAPONS3D } = await import('../src/game3d/sim3d.js');
+  assert.ok(WEAPONS3D.shotgun.ballistic.minDamage < .4, 'chumbo perde mordida longe');
+  assert.ok(WEAPONS3D.shotgun.reload > 2, 'recarga da bomba é lenta');
+  assert.ok(WEAPONS3D.lmg.reload > WEAPONS3D.m4.reload, 'troca de cinto demora mais que pente');
+  assert.equal(WEAPONS3D.lmg.bulletSpeed > 0, true);
+});
+
+test('F36 · pools de loot: shotgun no park, LMG no industrial, SHELL abastece', () => {
+  const ids = (pool) => pool.map((d) => d.id);
+  assert.ok(ids(LOOT_POOLS.park).includes('shotgun'), 'escopeta é arma de início de partida');
+  assert.ok(ids(LOOT_POOLS.industrial).includes('lmg'), 'MG-6 mora na zona industrial');
+  assert.ok(ids(LOOT_POOLS.park).includes('SHELL') && ids(LOOT_POOLS.industrial).includes('SHELL'), 'cartucho SHELL nas 2 zonas');
+  // rolagem real: 800 no park rende shotgun + SHELL; 800 no industrial rende lmg
+  const rng = new SeededRng('F36-POOLS');
+  let sg = 0, sh = 0, mg = 0;
+  for (let i = 0; i < 800; i++) {
+    for (const d of rollLoot(rng, 'park')) { if (d.id === 'shotgun') sg++; if (d.id === 'SHELL') sh++; }
+    for (const d of rollLoot(rng, 'industrial')) if (d.id === 'lmg') mg++;
+  }
+  assert.ok(sg > 0 && sh > 0, `park rola shotgun (${sg}) e SHELL (${sh})`);
+  assert.ok(mg > 0, `industrial rola lmg (${mg})`);
+  // drop de shotgun resolve nome/stats pela raridade como o arsenal
+  const rng2 = new SeededRng('F36-DROP');
+  for (let i = 0; i < 400; i++) {
+    for (const d of rollLoot(rng2, 'park')) {
+      if (d.id === 'shotgun') {
+        assert.equal(d.name, 'Shotgun Breach SG-12');
+        assert.equal(d.weapon.damage, Math.round(13 * RARITIES[d.rarity].multiplier), 'multiplicador de raridade aplica');
+        i = 999; break;
+      }
+    }
+  }
+});
+
+test('F36 · fábricas 3D: SG-12 com bomba de madeira, MG-6 com caixa/bipé — sem âncoras de anexo', () => {
+  for (const [wid, marker, marker2] of [['shotgun', 'pumpForegrip', null], ['lmg', null, null]]) {
+    const { group, muzzle } = createWeaponModel(wid, 'MITICA', { mythicStage: 4 });
+    assert.ok(muzzle, `${wid}: Object3D muzzle presente`);
+    assert.ok(!group.userData.sockets || Object.keys(group.userData.sockets).length === 0, `${wid}: sem sockets`);
+    const fx = group.getObjectByName('mythic_fx');
+    assert.ok(fx, `${wid}: overlay mítico aplica (fit da skin)`);
+    assert.equal(group.userData.mythicStage, 4);
+    if (marker) assert.ok(group.getObjectByName(marker), `${wid}: ${marker} presente`);
+    unregisterMythic(group);
+  }
+  // MG-6: caixa de munição + bipé existem na silhueta (2 meshes com escala específica)
+  const { group: g6 } = createWeaponModel('lmg');
+  const meshes = [];
+  g6.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  assert.ok(meshes.length >= 9, `MG-6: silhueta completa (${meshes.length} meshes)`);
+});
+
+test('F36 · sim: SG-12 dispara 7 projéteis com cone próprio (jogador e bot)', () => {
+  const s = new KhaaosSim3D({ seed: 'F36-PELLETS', botCount: 1, airdrop: false });
+  s.start('belt');
+  const p = s.player;
+  s.world.colliders.length = 0; s.doors.length = 0;
+  p.weapon = 'shotgun';
+  p.ammoMag = WEAPONS.shotgun.magazine;
+  p.cooldown = 0; p.reloadT = 0;
+  const idle = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: true, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false };
+  s.step({ ...idle, fire: false }, 1 / 60);          // acomoda
+  p.cooldown = 0; p.reloadT = 0;
+  s.step({ ...idle }, 1 / 60);                        // 1 gatilho
+  const shot = s.bullets.filter((b) => b.weapon === 'shotgun');
+  assert.equal(shot.length, 7, `1 gatilho = 7 chumbos (${shot.length})`);
+  // cone: direções NÃO idênticas (cada pellet tem jitter próprio)
+  const dirs = new Set(shot.map((b) => `${b.vx.toFixed(4)}:${b.vz.toFixed(4)}`));
+  assert.ok(dirs.size > 1, 'chumbos espalham (cone determinístico)');
+  // determinismo: mesma seed → mesmas 7 direções
+  const s2 = new KhaaosSim3D({ seed: 'F36-PELLETS', botCount: 1, airdrop: false });
+  s2.start('belt');
+  const p2 = s2.player;
+  s2.world.colliders.length = 0; s2.doors.length = 0;
+  p2.weapon = 'shotgun'; p2.ammoMag = 6; p2.cooldown = 0; p2.reloadT = 0;
+  s2.step({ ...idle, fire: false }, 1 / 60);
+  p2.cooldown = 0; p2.reloadT = 0;
+  s2.step({ ...idle }, 1 / 60);
+  const dirs2 = s2.bullets.filter((b) => b.weapon === 'shotgun').map((b) => `${b.vx.toFixed(4)}:${b.vz.toFixed(4)}`);
+  assert.deepEqual([...dirs].sort(), dirs2.sort(), 'mesma seed → mesmo chumbo');
+});
+
+test('F36 · sim: SHELL entra no teto de munição e a recarga da escopeta consome reserva', async () => {
+  const { AMMO_CAP } = await import('../src/game3d/sim3d.js');
+  assert.equal(AMMO_CAP.SHELL, 32, 'teto do cartucho SHELL');
+  const s = new KhaaosSim3D({ seed: 'F36-SHELL', botCount: 1, airdrop: false });
+  s.start('belt');
+  const p = s.player;
+  s.world.colliders.length = 0; s.doors.length = 0;
+  p.weapon = 'shotgun';
+  p.ammoMag = 0;
+  p.inventory.ammo.SHELL = 12;
+  p.cooldown = 0; p.reloadT = 0;
+  const idle = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: true, medkit: false, throw: false, gloo: false, ability: false };
+  s.step({ ...idle }, 1 / 60);
+  assert.ok(p.reloadT > 0, 'recarga iniciada');
+  const cap = WEAPONS.shotgun.magazine;
+  s.step({ ...idle }, 3); // conclui a recarga (2.6s)
+  assert.equal(p.ammoMag, cap, `pente cheio (${p.ammoMag})`);
+  assert.equal(p.inventory.ammo.SHELL, 12 - cap, 'reserva consumida');
+});
+
+test('F36 · bot: SG-12 é upgrade legítimo (dano de referência × pellets) nas DUAS trilhas', () => {
+  // regra #botWantsItem: ref = damage × (pellets ?? 1) — escopeta 13×7=91
+  // vence g19 (22) e m4 (31); LMG 26 vence g19 mas perde para m4 (anti-rebaixamento)
+  const s = new KhaaosSim3D({ seed: 'F36-WANTS', botCount: 2, airdrop: false });
+  s.start('belt');
+  const bot = s.bots[0];
+  bot.weapon = 'g19';
+  // coleta real: dropa shotgun ao lado do bot e roda o step de sobrevivência
+  s.loot.push({ id: 'loot-sg', kind: 'weapon', weaponId: 'shotgun', x: bot.x + 1, y: bot.y, z: bot.z + 1, active: true, rarity: 'COMUM' });
+  bot.ai.lootCd = 0;
+  s.world.colliders.length = 0;
+  for (let i = 0; i < 30; i++) s.step({ seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false }, 1 / 60);
+  assert.equal(bot.weapon, 'shotgun', `bot coletou a escopeta (tem ${bot.weapon})`);
+  // anti-rebaixamento preservado: bot com m4 RECUSA shotgun? NÃO — 91 > 31
+  // aceita; o que ele RECUSA é trocar shotgun por g19
+  const bot2 = s.bots[1];
+  bot2.weapon = 'shotgun';
+  s.loot.push({ id: 'loot-g19', kind: 'weapon', weaponId: 'g19', x: bot2.x + 1, y: bot2.y, z: bot2.z + 1, active: true, rarity: 'COMUM' });
+  bot2.ai.lootCd = 0;
+  for (let i = 0; i < 30; i++) s.step({ seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false }, 1 / 60);
+  assert.equal(bot2.weapon, 'shotgun', 'bot NÃO rebaixa shotgun para g19');
+});
+
+test('F36 · sim: bot com SG-12 dispara a salva completa (7 chumbos por gatilho)', () => {
+  const s = new KhaaosSim3D({ seed: 'F36-BOT-SG', botCount: 1, airdrop: false });
+  s.start('belt');
+  const bot = s.bots[0];
+  s.world.colliders.length = 0; s.doors.length = 0;
+  bot.weapon = 'shotgun';
+  bot.x = s.player.x + 30; bot.z = s.player.z; // LOS livre + voo ≥ 7 frames (30m a 218m/s)
+  bot.ammoMag = 6; bot.cooldown = 0; bot.reloadT = 0; bot.burst = 0;
+  const idle = { seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false };
+  // engajamento real: o bot adquire o alvo (reactT) e abre fogo — pico de
+  // chumbos vivos do bot num mesmo frame = tamanho da salva
+  let maxPellets = 0, fired = false;
+  for (let i = 0; i < 240 && !fired; i++) {
+    s.step({ ...idle }, 1 / 60);
+    const n = s.bullets.filter((b) => b.weapon === 'shotgun' && b.owner === bot.id).length;
+    if (n > 0) fired = true;
+    maxPellets = Math.max(maxPellets, n);
+  }
+  assert.ok(fired, 'bot engajou e disparou a escopeta');
+  assert.equal(maxPellets, 7, `salva completa tem 7 chumbos vivos (pico ${maxPellets})`);
 });

@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { postFxPlanFor } from './perf3d.js'; // Fase 34 — plano por tier (SSR só no high)
+import { postFxPlanFor } from './perf3d.js'; // Fase 35 — plano por tier (SSR só no high)
 
 const GradeShader = {
   uniforms: {
@@ -60,10 +60,10 @@ const GradeShader = {
 };
 
 // Cria a cadeia de pós-processamento; retorna null se indisponível (fallback direto)
-// ou quando o PLANO do tier é null (low — Fase 34: render direto, sem composer).
+// ou quando o PLANO do tier é null (low — Fase 35: render direto, sem composer).
 export function createPostFX(renderer, scene, camera, { quality = 'high' } = {}) {
   try {
-    // Fase 34 — plano por tier (perf3d.postFxPlanFor): intensidade de bloom,
+    // Fase 35 — plano por tier (perf3d.postFxPlanFor): intensidade de bloom,
     // grão do grade e SSR (exclusivo do high) vêm da MESMA fonte de verdade
     // usada pelo auto-tier em runtime — medium deixou de pagar SSR (achado G2).
     const plan = postFxPlanFor(quality);

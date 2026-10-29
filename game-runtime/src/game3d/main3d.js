@@ -16,8 +16,8 @@ import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { loadAudioMix, saveAudioMix } from './audiomix.js'; // Fase 19 — mixagem KR_AUDIO_*
-import { FrametimeMonitor, drsDecision, tierDecision, budgetFor, RateLimiter, DRS_MIN, DRS_MAX, postFxPlanFor } from './perf3d.js'; // Fase 34 — DRS + auto-tier
-import { loadGfxSettings, saveGfxSettings, effectiveBaseTier } from './gfxsettings.js'; // Fase 34 — settings KR_GFX_*
+import { FrametimeMonitor, drsDecision, tierDecision, budgetFor, RateLimiter, DRS_MIN, DRS_MAX, postFxPlanFor } from './perf3d.js'; // Fase 35 — DRS + auto-tier
+import { loadGfxSettings, saveGfxSettings, effectiveBaseTier } from './gfxsettings.js'; // Fase 35 — settings KR_GFX_*
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
@@ -48,11 +48,11 @@ export class Game3D {
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
-    // Fase 34 — settings gráficas do jogador (KR_GFX_*): override manual de tier
+    // Fase 35 — settings gráficas do jogador (KR_GFX_*): override manual de tier
     // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
     this.gfx = loadGfxSettings();
     this.quality = effectiveBaseTier(this.quality, this.gfx);
-    // Fase 34 — laço de performance: EMA de frametime + estado do DRS/tier
+    // Fase 35 — laço de performance: EMA de frametime + estado do DRS/tier
     this.perfMon = new FrametimeMonitor();
     this.drsState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: Infinity };
     this.drsScale = 1;
@@ -116,7 +116,7 @@ export class Game3D {
     this.initContentSelectors();
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
-    this.initGfxPanel(); // Fase 34 — painel de vídeo/performance (KR_GFX_*)
+    this.initGfxPanel(); // Fase 35 — painel de vídeo/performance (KR_GFX_*)
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
@@ -149,7 +149,7 @@ export class Game3D {
     }
   }
 
-  // ---------- Fase 34 — painel de vídeo/performance (KR_GFX_*) ----------
+  // ---------- Fase 35 — painel de vídeo/performance (KR_GFX_*) ----------
   // Espelha o painel de áudio: toggle + controles → saveGfxSettings imediato.
   // Trocas que mexem no pipeline (tier/postfx) reconstroem o composer na hora;
   // sens/shake/fps/drs são lidos a cada frame/uso — nada a reaplicar.
@@ -202,7 +202,7 @@ export class Game3D {
   initRenderer() {
     this.renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#arena3d'), antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(innerWidth, innerHeight);
-    // Fase 34 — pixelRatio BASE do tier (cap); a escala DRS multiplicada é
+    // Fase 35 — pixelRatio BASE do tier (cap); a escala DRS multiplicada é
     // aplicada por applyRenderScale() (inicia em 1.0 = comportamento antigo).
     this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio);
     this.renderer.setPixelRatio(this.basePixelRatio);
@@ -221,7 +221,7 @@ export class Game3D {
   }
 
   // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback direto).
-  // Fase 34 — o plano vem do TIER real (perf3d.postFxPlanFor): SSR só no high;
+  // Fase 35 — o plano vem do TIER real (perf3d.postFxPlanFor): SSR só no high;
   // a setting KR_GFX postfx desliga o composer inteiro (achado G2 corrigido —
   // antes o tier médio pagava SSR completo via quality:'high' hardcoded).
   initPost() {
@@ -230,7 +230,7 @@ export class Game3D {
     this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: this.quality });
   }
 
-  // Fase 34 — reconstrói o composer pós troca de tier/setting (alvo raro:
+  // Fase 35 — reconstrói o composer pós troca de tier/setting (alvo raro:
   // dwell de 10 s entre tiers; toggle de setting é ação do usuário).
   rebuildPost() {
     const old = this.post;
@@ -239,7 +239,7 @@ export class Game3D {
     old?.composer?.dispose?.();
   }
 
-  // Fase 34 — aplica a escala DRS ao pipeline (throttle 150 ms; muda pixelRatio
+  // Fase 35 — aplica a escala DRS ao pipeline (throttle 150 ms; muda pixelRatio
   // e propaga p/ os render targets do composer — a UI DOM fica nítida, só o 3D
   // é renderizado na escala reduzida).
   applyRenderScale() {
@@ -251,7 +251,7 @@ export class Game3D {
     this.post?.setSize(innerWidth, innerHeight);
   }
 
-  // Fase 34 — troca ESTRUTURAL de tier em runtime: cap de pixelRatio, resolução
+  // Fase 35 — troca ESTRUTURAL de tier em runtime: cap de pixelRatio, resolução
   // do shadow map do sol (dispose do alvo antigo) e plano de pós-FX.
   applyTierRuntime(tier) {
     if (!this.renderer) return;
@@ -270,7 +270,7 @@ export class Game3D {
     this.hud?.feed('Sistemas', `Perfil gráfico: ${tier.toUpperCase()} (adaptativo).`);
   }
 
-  // Fase 34 — laço de performance por frame: mede dt (custo do frame ANTERIOR),
+  // Fase 35 — laço de performance por frame: mede dt (custo do frame ANTERIOR),
   // decide DRS e, se o piso não bastou, degrau de tier. Com gfx.drs off, o
   // monitor continua (telemetria), mas nenhuma decisão altera o pipeline.
   updatePerf(dt) {
@@ -522,7 +522,7 @@ export class Game3D {
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.pointerLocked) return;
-      // Fase 34 — sensibilidade do jogador (KR_GFX_*, 0.3..2.5×); ADS mantém a
+      // Fase 35 — sensibilidade do jogador (KR_GFX_*, 0.3..2.5×); ADS mantém a
       // razão antiga (~0.52× do hip fire).
       const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
       this.input.yaw -= e.movementX * sens;
@@ -747,7 +747,7 @@ export class Game3D {
     this.camera.position.lerp(finalPos, Math.min(1, dt * 5));
     this.camera.lookAt(t.x, t.y + 1.35, t.z);
     if (this.shake > 0.001) {
-      // Fase 34 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      // Fase 35 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
       const amp = this.shake * (this.gfx?.shake ?? 1);
       this.camera.position.x += (Math.random() - .5) * amp;
       this.camera.position.y += (Math.random() - .5) * amp;
@@ -1235,7 +1235,7 @@ export class Game3D {
     this.camera.lookAt(lookTarget);
     // Fase 4 — tremor de explosão (só câmera; mira intacta)
     if (this.shake > 0.001) {
-      // Fase 34 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      // Fase 35 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
       const amp = this.shake * (this.gfx?.shake ?? 1);
       this.camera.position.x += (Math.random() - .5) * amp;
       this.camera.position.y += (Math.random() - .5) * amp;
@@ -1792,7 +1792,7 @@ export class Game3D {
     requestAnimationFrame(this.loop);
     const dt = Math.min(.1, this.clock.getDelta());
     this.animT += dt;
-    this.updatePerf(dt); // Fase 34 — DRS + auto-tier + telemetria (laço fechado de performance)
+    this.updatePerf(dt); // Fase 35 — DRS + auto-tier + telemetria (laço fechado de performance)
 
     // passo fixo da simulação
     if (!this.zuOpen && !this.ended) {

@@ -1,4 +1,4 @@
-// Fase 34 — testes das settings gráficas do jogador (gfxsettings, módulo PURO).
+// Fase 35 — testes das settings gráficas do jogador (gfxsettings, módulo PURO).
 // Cobre: defaults, sanitização (campos inválidos descartados, números clampados),
 // round-trip de persistência (blob versionado KR_GFX_SETTINGS_V1), merge parcial,
 // blob corrompido → defaults, storage de memória p/ headless e o override de tier

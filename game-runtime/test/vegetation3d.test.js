@@ -17,6 +17,7 @@ import {
   mergeGeoms, buildTreeGeometries, buildBushGeometry, grassTuftGeometry,
   patchSway, tickVegetationWind, buildTreeField, buildBushField,
   grassChunkify, grassChunkTier, buildGrassFieldLOD, grassImpostorGeometry,
+  grassOutdoorBake, applyOutdoorTint,   // F36 — impostor outdoor (bake no terreno)
 } from '../src/game3d/vegetation3d.js';
 import { buildScene } from '../src/game3d/world3d.js';
 
@@ -368,5 +369,98 @@ test('F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobr
     const inBand = lod.chunks.filter((c) => { const d = Math.hypot(c.x, c.z); return d >= 58 && d < 110; });
     assert.equal(lod.impostors.count, inBand.length, `${scenarioId}: faixa empacotada (${inBand.length})`);
     assert.ok(scene.userData.swayMats.includes(lod.impostorMats[0]), 'vento do impostor registrado');
+  }
+});
+
+// ================================================== F36 — OUTDOOR IMPOSTOR ===
+
+test('F36 · grassOutdoorBake: 1 contribuição por chunk, família por módulo POSITIVO', () => {
+  const fams = ['#c9cfa0', '#b3bd8c'];
+  const chunks = [
+    { kx: 1, kz: 2, x: 37.5, z: 62.5 },
+    { kx: -3, kz: -1, x: -62.5, z: -12.5 },   // kx/kz NEGATIVOS (oeste/norte)
+    { kx: 0, kz: 0, x: 12.5, z: 12.5 },
+  ];
+  const bake = grassOutdoorBake(chunks, fams);
+  assert.equal(bake.length, 3, '1 contribuição por chunk');
+  // módulo positivo: ((kx+kz) % 2 + 2) % 2 — chunk 1: 3%2=1; chunk -4: ((-4%2)+2)%2=0
+  const c0 = new THREE.Color(fams[1]), c1 = new THREE.Color(fams[0]), c2 = new THREE.Color(fams[0]);
+  assert.ok(Math.abs(bake[0].r - c0.r) < 1e-9 && Math.abs(bake[0].g - c0.g) < 1e-9, 'chunk (1,2) → família 1');
+  assert.ok(Math.abs(bake[1].r - c1.r) < 1e-9, 'chunk (-3,-1) → família 0 (módulo positivo)');
+  assert.ok(Math.abs(bake[2].r - c2.r) < 1e-9, 'chunk (0,0) → família 0');
+  assert.equal(bake[0].x, 37.5, 'centro do chunk preservado');
+  // determinismo byte a byte
+  const bake2 = grassOutdoorBake(chunks, fams);
+  assert.deepEqual(bake, bake2, 'mesma entrada → mesma saída');
+});
+
+test('F36 · applyOutdoorTint: disco suave no centro, borda intacta, kernel monotônico', () => {
+  // terreno 1 plano 10×10 com vertex colors brancos
+  const geo = new THREE.PlaneGeometry(10, 10, 10, 10);
+  geo.rotateX(-Math.PI / 2);
+  const N = geo.attributes.position.count;
+  const colors = new Float32Array(N * 3).fill(1);
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true }));
+  const grass = new THREE.Color('#66cc66');
+  const res = applyOutdoorTint(mesh, [{ x: 0, z: 0, r: grass.r, g: grass.g, b: grass.b }], { radius: 4, strength: .6 });
+  assert.ok(res, 'retorna relatório');
+  assert.ok(res.touched > 0, 'pintou vértices');
+  const col = geo.attributes.color;
+  const centerDelta = 1 - col.getY(0); // vertice (0,0)? PlaneGeometry 10x10 começa no canto; usa amostra radial
+  // amostra: vértice mais próximo do centro e um na borda (|x|>4.5)
+  let centerIdx = -1, edgeIdx = -1;
+  for (let i = 0; i < N; i++) {
+    const x = geo.attributes.position.getX(i), z = geo.attributes.position.getZ(i);
+    if (Math.abs(x) < .6 && Math.abs(z) < .6) centerIdx = i;
+    if (Math.abs(x) > 4.5 && Math.abs(z) < .6) edgeIdx = i;
+  }
+  assert.ok(centerIdx >= 0 && edgeIdx >= 0, 'amostras existem');
+  // NOTA: THREE.Color converte hex sRGB→linear (ColorManagement) — o delta
+  // linear 0.8→0.603 é o mesmo pipeline das instance colors dos tufos.
+  assert.ok(col.getY(centerIdx) > .5 && col.getY(centerIdx) < .8, `centro tingido (g=${col.getY(centerIdx).toFixed(3)})`);
+  assert.equal(col.getY(edgeIdx), 1, 'borda byte a byte intacta');
+  // monotonia: kernel cai com a distância (dois vértices em 1m e 3m do centro)
+  const near = col.getY([...Array(N).keys()].find((i) => Math.abs(geo.attributes.position.getX(i) - 1) < .3 && Math.abs(geo.attributes.position.getZ(i)) < .3));
+  const far = col.getY([...Array(N).keys()].find((i) => Math.abs(geo.attributes.position.getX(i) - 3) < .3 && Math.abs(geo.attributes.position.getZ(i)) < .3));
+  assert.ok(near < far, `kernel monotônico (near=${near.toFixed(3)} < far=${far.toFixed(3)})`);
+  // sem terreno (headless sem attribute color) → no-op
+  assert.equal(applyOutdoorTint(new THREE.Mesh(new THREE.PlaneGeometry()), []), null, 'no color attr → null');
+  assert.equal(applyOutdoorTint(null, []), null, 'sem mesh → null');
+});
+
+test('F36 · tier hidden NÃO mudou de contrato: render 0 além do impostor (regressão)', () => {
+  // o outdoor impostor é BAKE no terreno — o update por frame continua
+  // idêntico: chunks ≥ impostorDist não geram mesh, matriz ou draw call
+  const spots = [];
+  for (let i = 0; i < 60; i++) spots.push({ x: (i % 10) * 30, z: Math.floor(i / 10) * 30, y: 0, rot: 0, s: 1, sy: 1 });
+  const lod = buildGrassFieldLOD({ spots, seed: 9, tintFamilies: ['#5a6b33'] });
+  lod.update(0, 0);
+  const hiddenCount = lod.chunks.filter((c) => Math.hypot(c.x, c.z) >= 110).length;
+  assert.ok(hiddenCount > 0, 'cenário tem chunks no tier hidden');
+  for (const c of lod.chunks) {
+    if (Math.hypot(c.x, c.z) >= 110) assert.equal(c.mesh.visible, false, 'hidden: mesh invisível (custo 0)');
+  }
+  assert.equal(grassChunkTier(150), 'hidden', '150m → hidden (contrato F32/F34)');
+  assert.equal(grassChunkTier(90), 'impostor', '90m → impostor (faixa F34)');
+});
+
+test('F36 · buildScene W1-W4: bake outdoor registrado e terreno pintado', () => {
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Arukheea']) {
+    const { scene } = buildScene(`f36-${scenarioId}`, scenarioId, null, 'high');
+    const meta = scene.userData.grassOutdoorBake;
+    assert.ok(meta, `${scenarioId}: registro do bake ausente`);
+    const lod = scene.userData.grassLOD;
+    assert.equal(meta.chunks, lod.chunks.length, `${scenarioId}: 1 contribuição por chunk`);
+    assert.equal(meta.radius, 25, 'raio canônico = chunkSize');
+    const terrain = scene.getObjectByName('terrain');
+    assert.ok(terrain, 'terreno presente');
+    const col = terrain.geometry.attributes.color;
+    assert.ok(col, 'terreno tem vertex colors');
+    // o terreno mudou da tint pura de altitude: existe vértice com canal G > R
+    // (verde do capim) que a tint de altitude (tons terrosos/cinza) não produzia
+    let greened = 0;
+    for (let i = 0; i < col.count; i++) if (col.getY(i) > col.getX(i) + .02) greened++;
+    assert.ok(greened > 0, `${scenarioId}: ${greened} vértices com identidade de capim`);
   }
 });

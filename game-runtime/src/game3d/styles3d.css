@@ -38,6 +38,26 @@ kbd {
   transition: opacity .12s;
 }
 
+/* F36 — VINHETA SAZONAL da aura: a borda da tela respira na cor da skin
+   mítica equipada (--aura-season setada pelo hud3d no body; a estação entra
+   pelo data-aura-season). Custo ~0: 1 camada fixa, mix-blend screen, sem
+   layout extra; INATIVA (opacity 0, sem animação) sem skin mítica. */
+#auraVignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  opacity: 0; transition: opacity .9s ease;
+  background:
+    radial-gradient(ellipse 118% 96% at 50% 50%, transparent 62%,
+      color-mix(in srgb, var(--aura-season, #ff2d78) 30%, transparent) 100%);
+  mix-blend-mode: screen;
+}
+body[data-aura] #auraVignette { opacity: .5; }
+body[data-aura-season='inverno'] #auraVignette { opacity: .36; }   /* frio contém o festival */
+body[data-aura-season='primavera'] #auraVignette { opacity: .58; } /* estação frenética */
+@media (prefers-reduced-motion: reduce) {
+  #auraVignette { transition: none; }
+  body[data-aura] #auraVignette { opacity: .3; }  /* presença estática, sem pulso */
+}
+
 /* ---------- topbar ---------- */
 .topbar3d {
   position: fixed; top: 0; left: 0; right: 0; z-index: 20;
@@ -195,13 +215,15 @@ kbd {
   content: ''; position: absolute; inset: -5px -7px; border-radius: 6px;
   background: conic-gradient(from 0deg, transparent 0 68%, var(--aura, #ff2d78) 84%, transparent 100%);
   opacity: .55; filter: blur(.5px); pointer-events: none; z-index: -1;
-  animation: mythicSeason 3.2s linear infinite;
+  /* F36 — ritmo da ESTAÇÃO: duração escala por --aura-dur (inverno 1.4×
+     mais calmo, primavera 0.84× frenética) */
+  animation: mythicSeason calc(3.2s * var(--aura-dur, 1)) linear infinite;
 }
 .mythic-stage::after {
   content: ''; position: absolute; inset: 0; border-radius: 3px; overflow: hidden;
   background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.8) 50%, transparent 58%);
   background-size: 260% 100%; mix-blend-mode: screen; opacity: .6; pointer-events: none;
-  animation: mythicShimmer 2.8s ease-in-out infinite;
+  animation: mythicShimmer calc(2.8s * var(--aura-dur, 1)) ease-in-out infinite;
 }
 @keyframes mythicSeason { to { transform: rotate(360deg); } }
 @keyframes mythicShimmer { 0% { background-position: 135% 0; } 60%, 100% { background-position: -65% 0; } }
@@ -728,7 +750,7 @@ body.spectating #hitmarker { display: none !important; }
 .audio-mixer input[type='range'] { width: 100%; height: 14px; accent-color: #c8ff3d; cursor: pointer; }
 .audio-mixer b { font-size: 9px; color: var(--acid); text-align: right; font-variant-numeric: tabular-nums; }
 .audio-mixer-hint { font-size: 8px; letter-spacing: .08em; color: var(--muted); }
-/* Fase 34 — painel de vídeo/performance (mesma linguagem do mixer de áudio,
+/* Fase 35 — painel de vídeo/performance (mesma linguagem do mixer de áudio,
 // aberto AO LADO dele para permitir comparar mix e vídeo simultaneamente) */
 #gfxPanel.audio-mixer { left: 252px; bottom: 178px; }
 .audio-mixer select {
@@ -737,7 +759,7 @@ body.spectating #hitmarker { display: none !important; }
   font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; padding: 2px 4px; cursor: pointer;
 }
 .audio-mixer input[type='checkbox'] { accent-color: #c8ff3d; cursor: pointer; }
-/* Fase 34 — telemetria de performance (FPS · RES · tier), setting KR_GFX fps */
+/* Fase 35 — telemetria de performance (FPS · RES · tier), setting KR_GFX fps */
 .perf-readout {
   position: fixed; right: 14px; bottom: 12px; z-index: 26; padding: 3px 8px;
   font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;

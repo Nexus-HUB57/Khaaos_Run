@@ -971,8 +971,11 @@ export class MatchRoom3D {
     // (sem anexos/gear/deathBox — bots não carregam o que a sala não replica)
     switch (it.kind) {
       case 'weapon': {
+        // F36 — dano de REFERÊNCIA com chumbo (paridade 1:1 com a sim offline):
+        // SG-12 13×7 = 91 ponto-cego — a escopeta é upgrade legítimo p/ o bot.
         const cur = WEAPONS3D[b.weapon], nxt = WEAPONS3D[it.weaponId || it.id];
-        return !!nxt && (!cur || nxt.damage > cur.damage); // anti-rebaixamento (regra do #pickup)
+        const ref = (x) => (x ? x.damage * (x.pellets ?? 1) : 0);
+        return !!nxt && (!cur || ref(nxt) > ref(cur)); // anti-rebaixamento (regra do #pickup)
       }
       case 'consumable': return (b.inventory.medkit ?? 0) < 5;
       case 'armor': return b.armor < 100;

@@ -115,13 +115,29 @@ export const MYTHIC_SKINS = Object.freeze({
     aura: '#ffe14d',                              // ouro-arco (energia do General)
     fit: Object.freeze({ scale: 1.25, y: .01, z: -.04 }),
   }),
+  // F36 — o lineup SEM sockets fica COMPLETO (9/9 armas do arsenal): a
+  // escopeta de arrombamento e a metralhadora de sustentação entram no grind
+  // mítico com identidade própria — brasa do breach e tempestade de chumbo.
+  shotgun: Object.freeze({
+    id: 'MITICA', weapon: 'shotgun', stages: 4,
+    name: 'Shotgun · Brasa do Breach',
+    aura: '#ff5333',                              // vermelho-brasa (carga de arrombamento)
+    fit: Object.freeze({ scale: 1.15, y: 0, z: -.08 }),
+  }),
+  lmg: Object.freeze({
+    id: 'MITICA', weapon: 'lmg', stages: 4,
+    name: 'LMG · Tempestade de Chumbo',
+    aura: '#4d9bff',                              // azul-tempestade (rajada sustentada)
+    fit: Object.freeze({ scale: 1.3, y: .02, z: -.1 }),
+  }),
 });
 
 // Alias legado (Fase 30) — a AR-47 continua sendo a referência canônica.
 export const MYTHIC_SKIN = MYTHIC_SKINS.ar47;
 
-// Resolução PURA: skin mítica da arma (null se não tiver — Fase 34: catálogo
-// cobre TODO o arsenal: ar47/m4/mp5/barrett/g19 + sucata/pulse sem sockets).
+// Resolução PURA: skin mítica da arma (null se não tiver — Fase 36: catálogo
+// cobre TODO o arsenal: ar47/m4/mp5/barrett/g19 com sockets + sucata/pulse/
+// shotgun/lmg sem sockets — 9 identidades, 9 auras únicas).
 export function mythicSkinFor(weaponId = null) {
   return MYTHIC_SKINS[weaponId] ?? null;
 }

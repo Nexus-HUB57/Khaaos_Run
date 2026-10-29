@@ -459,10 +459,30 @@ Stage Summary:
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
 
+================================================================================
+Task: Fase 34 — faixa de IMPOSTORES da grama (58-110m) + arsenal MÍTICO completo (sucata/pulse) + badge sazonal por aura no HUD
+
+Work Log:
+- Sync: worktree local foi reciclado para estado antigo (2035a66/F26) — reset duro para origin/main 8bc4f6e preservou TODO o histórico (F32/F33 paralelas intactas)
+- vegetation3d.js: grassChunkTier 4 bandas (full <28 / sparse 28-58 / impostor 58-110 / hidden >=110) com retrocompat (impostorDist <= midDist desliga); grassImpostorGeometry (2 quads cruzados, 12 verts); buildGrassFieldLOD ganha campo GLOBAL de impostores (1 InstancedMesh, capacidade = chunks) — update empacota matrizes SÓ da faixa (O(faixa)) com tint por módulo POSITIVO (kx/kz negativos) e altura média do chunk (relevo); chunk carrega kx/kz/y; impostor balança (patchSway .5x) e impostorMats vai para swayMats
+- world3d.js: buildGrassFieldLOD com impostorDist 110/opacity .55 explícitos; swayMats inclui impostor
+- attachments3d.js: MYTHIC_SKINS + sucata 'Coroa de Ferro-Velho' (#ff8c1a âmbar-ferrugem, fit 1.35) + pulse 'Prisma Soberano' (#ffe14d ouro-arco, fit 1.25) — 7 auras únicas, catálogo cobre TODO o arsenal; comentário da mythicSkinFor atualizado
+- shared/weapons.js: rollLoot — pulse rola raridade como o arsenal com PISO LENDARIO (flavor do General preservado; MÍTICA atravessa o piso, 1.75x = 84 dano)
+- hud3d.js + styles3d.css: badge mítico recebe --aura por arma; efeito SAZONAL (anel cônico girando 3.2s + shimmer 2.8s em screen blend) via pseudo-elementos, anima só visível, prefers-reduced-motion respeitado
+- Testes: +9 F34 (attachments: catálogo 7 auras/fit sucata+pulse/overlay estágio 4/rollLoot piso+MITICA roteirizado determinístico/sucata tabela completa/sim pulse mítico evolui; vegetation: 4 bandas+retrocompat, geometria impostor, faixa empacota matrizes verificadas+idempotente, buildScene W1-W4 com vento) — suíte 861: 848 pass / 0 fail / 13 skip; vite build OK
+- Evidências ao vivo (?scenario=w4&view=tps): impostores seguindo a câmera (12→17→9), matrizes = centros de chunk; f34-pulse-mitico-tps.png (Prisma Soberano + badge ouro com shimmer); f34-grama-impostor-horizonte.png
+- Doc: docs/FASE34_IMPOSTOR_GRAMA_ARSENAL_MITICO_BADGE_SAZONAL.md (3 seções)
+
+Stage Summary:
+- Horizonte ganhou INFORMAÇÃO: capim distante lê como capim (manchas verdes 58-110m por ~2 triângulos/chunk) — leitura contínua tufos→desbaste→mancha→nada
+- Grind mítico em 7/7 armas do arsenal: até a lança de início e o rifle do General têm dream skin com régua idêntica de 4 estágios
+- Badge mítico virou festival por aura — identidade visual da skin no HUD, custo ~0 (CSS, reduzido p/ motion-sensible)
+- Suite: 861 testes — 848 pass / 0 fail / 13 skip; vite build OK
+
 ---
-Task ID: 17
+Task ID: 18
 Agent: Main
-Task: Fase 34 — Revisão PhD-level de otimização de cenários/gráficos + experiência do jogador: laço adaptativo de performance (DRS + auto-tier) no cliente 3D web, settings KR_GFX_*, telemetria de FPS
+Task: Fase 35 — Revisão PhD-level de otimização de cenários/gráficos + experiência do jogador: laço adaptativo de performance (DRS + auto-tier) no cliente 3D web, settings KR_GFX_*, telemetria de FPS
 
 Work Log:
 - REVISÃO SISTEMÁTICA (5 módulos gráficos + HUD + bootstrap): quality3d resolvia o tier UMA vez por sessão (nenhuma reação a carga runtime — combate com 24 atores + SSR + partículas + grama colapsava o frametime sem contra-medida); lod3d (histerese + frustum gate), grass LOD chunks (F32) e contact shadows instanciadas avaliados como sólidos (referência de design, intocados)
@@ -481,3 +501,25 @@ Stage Summary:
 - Tier MEDIUM deixou de pagar SSR (G2) — maior ganho de custo por linha trocada
 - Jogador ganhou controle completo (painel GFX persistido KR_GFX_*) + acessibilidade (movimento reduzido, sensibilidade) + telemetria
 - Suíte game-runtime: 875 testes — 862 pass / 0 fail / 13 skip (23 novos); determinismo da sim intocado (rng/nomeada não tocados)
+
+
+---
+Task ID: 19
+Agent: Main
+Task: Fase 36 — tier hidden da grama vira IMPOSTOR OUTDOOR (bake no terreno, custo zero no horizonte) + arsenal 9/9 (Shotgun Breach SG-12 / LMG Skeetw MG-6, sem soquetes, com skins míticas) + efeito SAZONAL no HUD por aura + validação browser real (protocolo gfx-ux-perf §5) + revalidação do P0 M4
+
+Work Log:
+- OUTDOOR IMPOSTOR (vegetation3d): grassOutdoorBake PURA (1 contribuição/chunk, família por módulo POSITIVO — kx/kz negativos seguros) + applyOutdoorTint (disco suave nas vertex colors do terreno: plateau d<R/3, smoothstep até 0 na borda, fora do raio byte a byte intacto, no-op sem color attr) — o tier hidden SEGUE render 0 (contrato F32/F34 intocado); a identidade do capim é cozida UMA vez no build (world3d: radius 25, strength .3, registro em scene.userData.grassOutdoorBake); 4 bandas leem contínuas: tufos → desbaste → manchas de impostor → cor do chão até o fog
+- ARSENAL 9/9 (shared/weapons + sim3d + entities3d + audio3d + attachments3d): shotgun 'Shotgun Breach SG-12' (13×7 pellets, SHELL teto 32, park+SHELL) e lmg 'LMG Skeetw MG-6' (26 dano, cinto 80 no 7.62, industrial) — SEM sockets (attachmentsForDrop undefined, ATTACHMENT_COMPAT intocado); WEAPONS3D ganha categorias shotgun/lmg (spread/reload/ballistic — chumbo perde mordida a 34m, LMG sustenta a 135m); #spawnBullet dispara `pellets` projéteis com cone próprio por pellet (jogador E bots, rng determinístico); #botWantsItem (sim3d + room3d PARIDADE) usa dano de REFERÊNCIA damage×(pellets??1) — SG-12 91 vence g19/m4, bots coletam e não rebaixam; salva = 1 burst (regra sniper); fábricas 3D (bomba de madeira/tubo/bead; caixa lateral/bipé/alça) + perfis de áudio (boom 520Hz / rasgo 950Hz); MYTHIC_SKINS 9 auras ÚNICAS: 'Shotgun · Brasa do Breach' #ff5333 (fit 1.15) e 'LMG · Tempestade de Chumbo' #4d9bff (fit 1.3)
+- HUD SAZONAL (aura3d.js NOVO + hud3d + styles3d + index.html): módulo PURO headless — HUD_SEASONS (hemisfério sul; hueShift 0/+8/−12/+16°, durMul 1/1.18/1.4/.84, shimmer 105/121/75/137°), seasonIndexForMonth à prova de entrada suja (Date podre → guard determinístico 15/07), shiftAuraHex (regex #rrggbb antes do THREE.Color; desloca matiz sem tocar s/l; estação TINGE, nunca substitui), hudAuraFor (null sem mítico = HUD neutro custo 0; produção usa data REAL — testes injetam); hud3d seta badge (--aura/--aura-season/--aura-dur) + body (data-aura/data-aura-season) e LIMPA sem mítico; #auraVignette NOVO (radial-gradient color-mix 30% da aura-season, mix-blend screen, opacity por estação: inverno .36 / primavera .58 / base .5); badge escala animações por calc(3.2s × var(--aura-dur)); prefers-reduced-motion congela tudo
+- TESTES +16 F36 (vegetation +4: bake puro/determinismo, disco suave/borda intacta/kernel monotônico/no-op, regressão tier hidden render 0, buildScene bake registrado + terreno tingido; attachments +7: catálogo 9/9 auras únicas, stats sem sockets + attachmentsForDrop undefined 100 rolagens, pools shotgun/SHELL/lmg amostrados 800+, fábricas sem âncoras, sim 7 projéteis determinísticos byte a byte, SHELL teto + recarga consome reserva, bot coleta por referência ×pellets e não rebaixa, salva completa do bot a 30m; aura3d +5: 12 meses mapeados, robustez NaN/overflow, shiftAuraHex idempotente/sem colisão com catálogo, hudAuraFor neutro/agnóstico/ativa por estação/clamp): suíte game-runtime 901 — 888 pass / 0 fail / 13 skip; root 430+39 pass / 0 fail; tsc 0; vite build OK (2.72 s)
+- BROWSER REAL (protocolo gfx-ux-perf §5.1): bake vivo medido por eval (chunks:80, radius:25, strength:.3; 194 vértices verdes; delta RGB campo vs fora: azul −13% relativo = deslocamento verde-amarelo da família); HUD sazonal VIVO (body[data-aura=#ff5333], data-aura-season=primavera — estação REAL do dia 29/out no hemisfério sul, vinheta .58); persistência KR_GFX_SETTINGS_V1 round-trip OK; vitrine scripts/f36-showcase.html (módulos REAIS: 9 armas, bake real, rotação sazonal 5.2s); evidências: f36-shotgun-lmg-miticas.png, f36-catalogo-mitico-9.png, f36-outdoor-bake-horizonte.png, f36-grama-outdoor-horizonte.png
+- P0 M4 REVALIDADO (status inalterado — ações externas pendentes do usuário): EULA probe autenticado 404 (binding GitHub↔Epic não feito); secrets EOS_* 0/9 (existem UE5_INSTALL_DIR/UNREAL_ENGINE_LOGIN); runners 0 com UE58_ENABLED=true (risco latente de fila); vars UE58_ENABLED=true, UE5_ROOT=/opt/UnrealEngine
+- DOCS: docs/FASE36_OUTDOOR_IMPOSTOR_ARSENAL_SHOTGUN_LMG_HUD_SAZONAL.md (3 seções + evidências) + gfx-ux-perf.md §5.1 (protocolo de verificação F36)
+
+Stage Summary:
+- O horizonte NUNCA mais lê "terreno nu": além dos 110m o chão carrega a identidade do capim por custo ZERO por frame (bake one-shot no load, ~194 vértices) — leitura contínua completa tufos→desbaste→mancha→campo eterno
+- Arsenal mítico FECHA EM 9/9: a escopeta de início de partida (park) e a metralhadora de sustentação (industrial) entram no grind com auras próprias — e os bots VIVEM as duas (coleta por referência ×pellets, salva completa, sem rebaixamento) nas duas trilhas
+- O HUD carrega a TEMPORADA: badge + vinheta de borda respiram na aura da skin equipada, ritmo pela estação real do dia (hemisfério sul) — custo ~0 (CSS + decisão pura), acessibilidade preservada
+- P0 M4 segue aguardando as ações externas do usuário (EULA 404 → aceitar e vincular; 0 secrets EOS_* → Fase A/B do portal; 0 runners → bootstrap no host licenciado)
+- Suíte: game-runtime 901 — 888 pass / 0 fail / 13 skip; root 469 pass / 0 fail; tsc 0; vite build OK
