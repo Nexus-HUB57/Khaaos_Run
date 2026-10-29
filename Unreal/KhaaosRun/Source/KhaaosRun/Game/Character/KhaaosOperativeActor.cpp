@@ -2,6 +2,8 @@
 // Copyright Nexus-HUB57. All Rights Reserved.
 
 #include "Game/Character/KhaaosOperativeActor.h"
+#include "AbilitySystemComponent.h"
+#include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/VFX/KhaaosSpeciesVFXRegistry.h"
 #include "Game/Animation/KhaaosNaturalLocomotionComponent.h"
 
@@ -12,9 +14,19 @@ AKhaaosOperativeActor::AKhaaosOperativeActor()
     PrimaryActorTick.bCanEverTick = true;
     bReplicates = true;
     SetReplicateMovement(true);
+    NetUpdateFrequency = 30.0f;
+    MinNetUpdateFrequency = 10.0f;
+    NetPriority = 3.0f;
 
-    // Create the Species GAS component (subobject owned by this actor)
+    AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+    AbilitySystemComponent->SetIsReplicated(true);
+    AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
+    CombatAttributes = CreateDefaultSubobject<UKhaaosAttributeSet>(TEXT("CombatAttributes"));
+    AbilitySystemComponent->AddAttributeSetSubobject(CombatAttributes);
+
+    // Create the species manager and bind it to actor-owned GAS subobjects.
     SpeciesGAS = CreateDefaultSubobject<UKhaaosSpeciesGAS>(TEXT("SpeciesGAS"));
+    SpeciesGAS->SetAbilitySystemReferences(AbilitySystemComponent, CombatAttributes);
     CombatPerks = CreateDefaultSubobject<UKhaaosCombatPerkComponent>(TEXT("CombatPerks"));
     Inventory = CreateDefaultSubobject<UKhaaosInventoryComponent>(TEXT("Inventory"));
 
@@ -36,23 +48,36 @@ AKhaaosOperativeActor::AKhaaosOperativeActor()
     }
 }
 
-void AKhaaosOperativeActor::BeginPlay()
+UAbilitySystemComponent* AKhaaosOperativeActor::GetAbilitySystemComponent() const
 {
-    Super::BeginPlay();
+    return AbilitySystemComponent;
+}
 
-    // Initialize GAS attributes, then apply species traits via GameplayEffects
+void AKhaaosOperativeActor::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+    if (AbilitySystemComponent)
+    {
+        AbilitySystemComponent->InitAbilityActorInfo(this, this);
+    }
+
+    // Establish the baseline before replicated perk components apply their loadout.
     if (SpeciesGAS)
     {
         SpeciesGAS->InitializeAttributesForOperative(SpeciesEnum, BaseHealth, BaseEnergy, BaseSpeed);
-
         if (SpeciesEnum != EKhaaosSpecies::NONE)
         {
-            int32 EffectCount = SpeciesGAS->ApplySpeciesTraits(SpeciesEnum);
+            const int32 EffectCount = SpeciesGAS->ApplySpeciesTraits(SpeciesEnum);
             UE_LOG(LogKhaaosOperative, Log,
-                TEXT("BeginPlay: Applied %d trait effects for species %d on %s"),
+                TEXT("PostInitializeComponents: Applied %d trait effects for species %d on %s"),
                 EffectCount, static_cast<int32>(SpeciesEnum), *GetName());
         }
     }
+}
+
+void AKhaaosOperativeActor::BeginPlay()
+{
+    Super::BeginPlay();
 
     // Spawn species VFX via the SpeciesVFXRegistry
     ApplySpeciesTraits();

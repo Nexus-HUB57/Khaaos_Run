@@ -210,13 +210,19 @@ void AKhaaosArukheeaLevel::SpawnPulsoKhaaosDrop()
 {
     if (!MapData || CurrentZonePhase >= ZonePhases.Num()) return;
     FVector Drop = MapData->GetRandomPointInZone(ZonePhases[CurrentZonePhase].ZoneCenter, ZonePhases[CurrentZonePhase].ZoneRadius);
-    if (AKhaaosLootPickup* L = SpawnLootAt(Drop, FRotator::ZeroRotator)) { L->SetRarity(EItemRarity::Legendary); ActiveLootPickups.Add(L); }
+    AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+    AKhaaosLootPickup* Loot = GameMode
+        ? GameMode->SpawnCatalogLoot(GameMode->SelectLootByRarity(EKhaaosRarity::Lendario),
+            Drop, FRotator::ZeroRotator)
+        : nullptr;
+    if (Loot) ActiveLootPickups.Add(Loot);
 }
 
 AKhaaosLootPickup* AKhaaosArukheeaLevel::SpawnLootAt(const FVector& Location, const FRotator& Rotation)
 {
-    FActorSpawnParameters SP; SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    return GetWorld()->SpawnActor<AKhaaosLootPickup>(AKhaaosLootPickup::StaticClass(), Location, Rotation, SP);
+	AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+	if (!GameMode) return nullptr;
+	return GameMode->SpawnCatalogLoot(GameMode->SelectWeightedRandomLoot(), Location, Rotation);
 }
 
 void AKhaaosArukheeaLevel::UpdateZEXActivation()

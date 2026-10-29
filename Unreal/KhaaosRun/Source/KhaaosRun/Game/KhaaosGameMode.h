@@ -217,6 +217,10 @@ public:
 
     // ─── Loot Distribution (DataAsset-Driven) ────────────────────────────────
 
+    /** Concrete pickup class assigned by the active GameMode Blueprint. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Loot")
+    TSubclassOf<AKhaaosLootPickup> LootPickupClass;
+
     /** Spawn loot across the map using WorldConfigDataAsset loot points.
      *  Uses weighted random selection based on RarityWeight and RarityMultiplier. */
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
@@ -229,6 +233,17 @@ public:
     /** Select a random loot item using weighted rarity distribution. */
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")
     UKhaaosLootItemDataAsset* SelectWeightedRandomLoot() const;
+
+    /** Select a catalog item of an exact rarity, weighted within that tier. */
+    UKhaaosLootItemDataAsset* SelectLootByRarity(EKhaaosRarity Rarity) const;
+
+    /** Server-authoritative spawn path shared by world loot and airdrops. */
+    AKhaaosLootPickup* SpawnCatalogLoot(
+        const UKhaaosLootItemDataAsset* Item,
+        const FVector& Location,
+        const FRotator& Rotation,
+        int32 StackCount = 1,
+        TSubclassOf<AKhaaosLootPickup> PickupClassOverride = nullptr);
 
     // ─── World Transition ────────────────────────────────────────────────────
 
@@ -400,6 +415,8 @@ protected:
     /** Loaded loot item assets. */
     UPROPERTY()
     TArray<UKhaaosLootItemDataAsset*> LoadedLootItemAssets;
+
+    bool bMissingLootPickupClassWarningLogged = false;
 
     /** Loaded world config assets. */
     UPROPERTY()

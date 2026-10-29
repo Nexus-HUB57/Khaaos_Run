@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AbilitySystemInterface.h"
 #include "GameFramework/Character.h"
 #include "Game/Character/KhaaosSpeciesGAS.h"
 #include "Game/Character/KhaaosSkinSystem.h"
@@ -25,13 +26,18 @@
  *   Zheers — Radiation resistance (+10%)
  *   Skeetw — Fog stealth (visibility penalty in fog)
  */
+class UAbilitySystemComponent;
+class UKhaaosAttributeSet;
+
 UCLASS(Abstract, BlueprintType, ClassGroup = (Khaaos, Operatives), meta = (DisplayName = "KhaaosOperativeActor"))
-class AKhaaosOperativeActor : public ACharacter
+class AKhaaosOperativeActor : public ACharacter, public IAbilitySystemInterface
 {
     GENERATED_BODY()
 
 public:
     AKhaaosOperativeActor();
+
+    virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
     // ─── Identity ─────────────────────────────────────────────────────────
 
@@ -117,6 +123,14 @@ public:
 
     // ─── GAS Component ────────────────────────────────────────────────────
 
+    /** Replicated GAS owner; kept as an actor subobject for UE network registration. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|GAS")
+    TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
+
+    /** Combat attributes replicated by the operative ASC. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|GAS")
+    TObjectPtr<UKhaaosAttributeSet> CombatAttributes;
+
     /** Species Gameplay Ability System component. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Operative|GAS")
     TObjectPtr<UKhaaosSpeciesGAS> SpeciesGAS;
@@ -138,6 +152,7 @@ public:
     TObjectPtr<UKhaaosNaturalLocomotionComponent> NaturalLocomotion;
 
 protected:
+    virtual void PostInitializeComponents() override;
     virtual void BeginPlay() override;
 
     /** Apply species-specific traits via GAS. Called from BeginPlay after ASC init. */

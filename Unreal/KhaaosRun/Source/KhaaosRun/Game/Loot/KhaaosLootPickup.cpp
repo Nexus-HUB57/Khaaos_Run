@@ -7,6 +7,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
 #include "Game/Inventory/KhaaosInventoryComponent.h"
+#include "Game/Data/KhaaosLootItemDataAsset.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,54 @@ void AKhaaosLootPickup::ConfigureInventoryItem(FName ItemID, int32 StackCount, E
 	SetNetDormancy(DORM_DormantAll);
 }
 
+bool AKhaaosLootPickup::ConfigureFromCatalog(const UKhaaosLootItemDataAsset* Definition, int32 StackCount)
+{
+	if (!HasAuthority() || !Definition || Definition->ItemID.IsNone() ||
+		Definition->StackMax <= 0 || StackCount <= 0 || StackCount > Definition->StackMax)
+	{
+		return false;
+	}
+
+	FlushNetDormancy();
+	ItemId = GetUniqueID();
+	InventoryItemID = Definition->ItemID;
+	InventoryStackCount = StackCount;
+	ItemName = Definition->DisplayName.IsEmpty()
+		? Definition->ItemID.ToString()
+		: Definition->DisplayName.ToString();
+
+	switch (Definition->LootType)
+	{
+	case EKhaaosLootType::Curativo: ItemType = EItemType::Curativo; break;
+	case EKhaaosLootType::Defesa:   ItemType = EItemType::Defesa; break;
+	case EKhaaosLootType::Utilidade: ItemType = EItemType::Utilidade; break;
+	case EKhaaosLootType::Recurso:  ItemType = EItemType::Recurso; break;
+	default:                       ItemType = EItemType::Recurso; break;
+	}
+
+	switch (Definition->Rarity)
+	{
+	case EKhaaosRarity::Comum:    Rarity = ELootRarity::Comum; break;
+	case EKhaaosRarity::Raro:     Rarity = ELootRarity::Raro; break;
+	case EKhaaosRarity::Epico:    Rarity = ELootRarity::Epico; break;
+	case EKhaaosRarity::Lendario: Rarity = ELootRarity::Lendario; break;
+	case EKhaaosRarity::Mitico:   Rarity = ELootRarity::Mitico; break;
+	default:                      Rarity = ELootRarity::Comum; break;
+	}
+
+	ItemStats = FLootStats();
+	ItemStats.Heal = static_cast<float>(Definition->HealAmount);
+	ItemStats.Defense = static_cast<float>(Definition->DefenseAmount);
+	MapPosition = FVector2D(GetActorLocation().X, GetActorLocation().Y);
+	bIsActive = true;
+	PickedUpBy = TEXT("");
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
+	return true;
+}
+
 bool AKhaaosLootPickup::TryPickup(const FString& PlayerId, float PlayerPosX, float PlayerPosY, float PickupRange)
 {
         if (GetLocalRole() != ROLE_Authority)
@@ -161,19 +210,21 @@ void AKhaaosLootPickup::ResetPickup()
 
 void AKhaaosLootPickup::InitFromPreset(int32 InItemId, const FString& InName, EItemType InType, ELootRarity InRarity, float InPosX, float InPosY, const FLootStats& InStats)
 {
-		if (!HasAuthority()) return;
-		FlushNetDormancy();
-        ItemId      = InItemId;
-        ItemName    = InName;
-        ItemType    = InType;
-        Rarity      = InRarity;
-        MapPosition = FVector2D(InPosX, InPosY);
-        ItemStats   = InStats;
+	if (!HasAuthority()) return;
+	FlushNetDormancy();
+	ItemId = InItemId;
+	ItemName = InName;
+	InventoryItemID = FName(*InName);
+	InventoryStackCount = 1;
+	ItemType = InType;
+	Rarity = InRarity;
+	MapPosition = FVector2D(InPosX, InPosY);
+	ItemStats = InStats;
 
-        bIsActive   = true;
-        PickedUpBy  = TEXT("");
-		ForceNetUpdate();
-		SetNetDormancy(DORM_DormantAll);
+	bIsActive = true;
+	PickedUpBy = TEXT("");
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosLootPickup::InitFromPreset - Item %d: %s at (%.1f, %.1f)"),
                 InItemId, *InName, InPosX, InPosY);

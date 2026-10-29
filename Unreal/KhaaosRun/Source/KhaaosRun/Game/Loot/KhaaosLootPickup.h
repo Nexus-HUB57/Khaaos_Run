@@ -6,6 +6,7 @@
 #include "KhaaosLootPickup.generated.h"
 
 class UKhaaosInventoryComponent;
+class UKhaaosLootItemDataAsset;
 
 // ─── Enums ported from schema.ts ──────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ public:
 	/** Server-only transaction: add to inventory first, then atomically consume this pickup. */
 	bool TryPickupIntoInventory(UKhaaosInventoryComponent* Inventory);
 	void ConfigureInventoryItem(FName ItemID, int32 StackCount, EItemType InType);
+	bool ConfigureFromCatalog(const UKhaaosLootItemDataAsset* Definition, int32 StackCount);
 
 	/** Reset this pickup for a new match. */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Loot")

@@ -205,15 +205,18 @@ void AKhaaosBarburhenLevel::SpawnPhaseLoot()
 
     for (const FVector& Point : SpawnPoints)
     {
-        AKhaaosLootPickup* Loot = SpawnLootAt(Point, FRotator::ZeroRotator);
+        const bool bWinterRarityBonus = SeasonConfig.Season == EBarburhenSeason::Inverno &&
+            FMath::FRand() < SeasonConfig.InvernoLootBonus;
+        AKhaaosGameMode* GameMode = bWinterRarityBonus && GetWorld()
+            ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>()
+            : nullptr;
+        AKhaaosLootPickup* Loot = GameMode
+            ? GameMode->SpawnCatalogLoot(GameMode->SelectLootByRarity(EKhaaosRarity::Raro),
+                Point, FRotator::ZeroRotator)
+            : nullptr;
+        if (!Loot) Loot = SpawnLootAt(Point, FRotator::ZeroRotator);
         if (Loot)
         {
-            // Inverno: upgrade rarity (shift toward rare+)
-            if (SeasonConfig.Season == EBarburhenSeason::Inverno && FMath::FRand() < SeasonConfig.InvernoLootBonus)
-            {
-                // Upgrade to at least Rare
-                Loot->SetRarity(EItemRarity::Rare);
-            }
             ActiveLootPickups.Add(Loot);
         }
     }
@@ -233,10 +236,13 @@ void AKhaaosBarburhenLevel::SpawnPulsoKhaaosDrop()
         ZonePhases[CurrentZonePhase].ZoneCenter,
         ZonePhases[CurrentZonePhase].ZoneRadius);
 
-    AKhaaosLootPickup* Loot = SpawnLootAt(DropLocation, FRotator::ZeroRotator);
+    AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+    AKhaaosLootPickup* Loot = GameMode
+        ? GameMode->SpawnCatalogLoot(GameMode->SelectLootByRarity(EKhaaosRarity::Lendario),
+            DropLocation, FRotator::ZeroRotator)
+        : nullptr;
     if (Loot)
     {
-        Loot->SetRarity(EItemRarity::Legendary);
         ActiveLootPickups.Add(Loot);
         UE_LOG(LogTemp, Log, TEXT("[Barburhen] Pulso Khaaos: Legendary drop at (%s)"), *DropLocation.ToString());
     }
@@ -244,13 +250,9 @@ void AKhaaosBarburhenLevel::SpawnPulsoKhaaosDrop()
 
 AKhaaosLootPickup* AKhaaosBarburhenLevel::SpawnLootAt(const FVector& Location, const FRotator& Rotation)
 {
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    AKhaaosLootPickup* Loot = GetWorld()->SpawnActor<AKhaaosLootPickup>(
-        AKhaaosLootPickup::StaticClass(), Location, Rotation, SpawnParams);
-
-    return Loot;
+	AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+	if (!GameMode) return nullptr;
+	return GameMode->SpawnCatalogLoot(GameMode->SelectWeightedRandomLoot(), Location, Rotation);
 }
 
 // ─── ZEX Management ──────────────────────────────────────────────────────────

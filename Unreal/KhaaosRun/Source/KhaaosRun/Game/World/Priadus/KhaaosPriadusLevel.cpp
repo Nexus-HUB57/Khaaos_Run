@@ -217,9 +217,13 @@ void AKhaaosPriadusLevel::SpawnPulsoKhaaosDrop()
     if (!MapData || CurrentZonePhase >= ZonePhases.Num()) return;
     FVector DropLocation = MapData->GetRandomPointInZone(
         ZonePhases[CurrentZonePhase].ZoneCenter, ZonePhases[CurrentZonePhase].ZoneRadius);
-    if (AKhaaosLootPickup* Loot = SpawnLootAt(DropLocation, FRotator::ZeroRotator))
+    AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+    AKhaaosLootPickup* Loot = GameMode
+        ? GameMode->SpawnCatalogLoot(GameMode->SelectLootByRarity(EKhaaosRarity::Lendario),
+            DropLocation, FRotator::ZeroRotator)
+        : nullptr;
+    if (Loot)
     {
-        Loot->SetRarity(EItemRarity::Legendary);
         ActiveLootPickups.Add(Loot);
         UE_LOG(LogTemp, Log, TEXT("[Priadus] Pulso Khaaos: Legendary drop at (%s)"), *DropLocation.ToString());
     }
@@ -227,9 +231,9 @@ void AKhaaosPriadusLevel::SpawnPulsoKhaaosDrop()
 
 AKhaaosLootPickup* AKhaaosPriadusLevel::SpawnLootAt(const FVector& Location, const FRotator& Rotation)
 {
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    return GetWorld()->SpawnActor<AKhaaosLootPickup>(AKhaaosLootPickup::StaticClass(), Location, Rotation, SpawnParams);
+	AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+	if (!GameMode) return nullptr;
+	return GameMode->SpawnCatalogLoot(GameMode->SelectWeightedRandomLoot(), Location, Rotation);
 }
 
 // ─── ZEX ─────────────────────────────────────────────────────────────────────

@@ -22,12 +22,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogKhaaosSpeciesGAS, Log, All);
 UKhaaosSpeciesGAS::UKhaaosSpeciesGAS()
 {
         PrimaryComponentTick.bCanEverTick = false;
+}
 
-        AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
-        AbilitySystemComponent->SetIsReplicated(true);
-        AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
-        AttributeSet = CreateDefaultSubobject<UKhaaosAttributeSet>(TEXT("KhaaosAttributeSet"));
-        AbilitySystemComponent->AddAttributeSetSubobject(CastChecked<UKhaaosAttributeSet>(AttributeSet));
+void UKhaaosSpeciesGAS::SetAbilitySystemReferences(UAbilitySystemComponent* InASC, UAttributeSet* InAttributeSet)
+{
+	AbilitySystemComponent = InASC;
+	AttributeSet = InAttributeSet;
 }
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -38,7 +38,6 @@ void UKhaaosSpeciesGAS::BeginPlay()
 
         if (AbilitySystemComponent)
         {
-                AbilitySystemComponent->InitAbilityActorInfo(GetOwner(), GetOwner());
                 UE_LOG(LogKhaaosSpeciesGAS, Log, TEXT("SpeciesGAS initialized for %s"), *GetNameSafe(GetOwner()));
         }
 }
@@ -53,9 +52,9 @@ void UKhaaosSpeciesGAS::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 int32 UKhaaosSpeciesGAS::ApplySpeciesTraits(EKhaaosSpecies SpeciesID)
 {
-        if (!AbilitySystemComponent)
+        if (!AbilitySystemComponent || !GetOwner() || !GetOwner()->HasAuthority())
         {
-                UE_LOG(LogKhaaosSpeciesGAS, Error, TEXT("ApplySpeciesTraits: AbilitySystemComponent is null for %s"), *GetNameSafe(GetOwner()));
+                UE_LOG(LogKhaaosSpeciesGAS, Warning, TEXT("ApplySpeciesTraits: requires an authoritative owner and valid ASC (%s)"), *GetNameSafe(GetOwner()));
                 return 0;
         }
 

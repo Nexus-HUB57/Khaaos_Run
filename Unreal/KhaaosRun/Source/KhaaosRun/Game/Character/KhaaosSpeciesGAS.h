@@ -96,6 +96,9 @@ public:
 	/** Get the ability system component. */
 	UAbilitySystemComponent* GetAbilitySystemComponent() const { return AbilitySystemComponent; }
 
+	/** Bind actor-owned GAS subobjects so UE registers them on the replicated actor. */
+	void SetAbilitySystemReferences(UAbilitySystemComponent* InASC, UAttributeSet* InAttributeSet);
+
 	// ─── Species Trait Application ─────────────────────────────────────────
 
 	/**

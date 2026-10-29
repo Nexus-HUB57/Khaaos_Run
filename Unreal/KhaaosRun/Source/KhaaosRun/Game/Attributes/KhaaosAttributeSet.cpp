@@ -72,11 +72,11 @@ float UKhaaosAttributeSet::ApplyDamageOfType(
 
         // Reduce damage by defense rating (diminishing returns)
         float EffectiveDamage = DamageAmount;
-        if (DefenseRating > 0.0f)
+        if (GetDefenseRating() > 0.0f)
         {
                 // Defense formula: effectiveDamage = damage * (1 - defense / (defense + 100))
                 // This gives diminishing returns — 50 defense = 33% reduction, 100 = 50%, 200 = 66%
-                float ReductionFactor = DefenseRating / (DefenseRating + 100.0f);
+                float ReductionFactor = GetDefenseRating() / (GetDefenseRating() + 100.0f);
                 EffectiveDamage = DamageAmount * (1.0f - ReductionFactor);
         }
 
@@ -89,12 +89,6 @@ float UKhaaosAttributeSet::ApplyDamageOfType(
         SetHealth(FMath::Clamp(OldHealth - HealthDamage, 0.0f, GetMaxHealth()));
 
         const float ActualDamage = (OldShield - GetShield()) + (OldHealth - GetHealth());
-        if (!FMath::IsNearlyEqual(OldShield, GetShield()))
-        {
-                OnAttributeChanged.Broadcast(this, TEXT("Shield"), GetShield());
-        }
-        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
-
         if (GetHealth() <= 0.0f && !bOutOfHealthAlreadyBroadcast)
         {
                 UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
@@ -107,7 +101,7 @@ float UKhaaosAttributeSet::ApplyDamageOfType(
         }
 
         UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAttributeSet::ApplyDamage - %.2f raw → %.2f effective (defense=%.1f)"),
-                DamageAmount, ActualDamage, DefenseRating);
+                DamageAmount, ActualDamage, GetDefenseRating());
 
         return ActualDamage;
 }
@@ -131,7 +125,6 @@ float UKhaaosAttributeSet::Heal(float HealAmount)
         {
                 bOutOfHealthAlreadyBroadcast = false;
         }
-        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
         return ActualHeal;
 }
 
@@ -159,14 +152,14 @@ bool UKhaaosAttributeSet::ConsumeEnergy(float Amount)
                 return true;
         }
 
-        if (Energy < Amount)
+        if (GetEnergy() < Amount)
         {
                 UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosAttributeSet::ConsumeEnergy - Not enough energy (%.2f/%.2f)"),
-                        Energy, Amount);
+                        GetEnergy(), Amount);
                 return false;
         }
 
-        SetEnergy(Energy - Amount);
+        SetEnergy(GetEnergy() - Amount);
         return true;
 }
 
@@ -181,7 +174,7 @@ void UKhaaosAttributeSet::RegenerateEnergy(float Amount)
                 return;
         }
 
-        SetEnergy(FMath::Clamp(Energy + Amount, 0.0f, MaxEnergy));
+        SetEnergy(FMath::Clamp(GetEnergy() + Amount, 0.0f, GetMaxEnergy()));
 }
 
 bool UKhaaosAttributeSet::IsAlive() const
@@ -206,12 +199,12 @@ void UKhaaosAttributeSet::InitFromSchemaDefaults()
         InitMaxHealth(DefaultMaxHealth);
         InitShield(0.0f);
         InitMaxShield(0.0f);
-        Energy           = DefaultMaxEnergy;
-        MaxEnergy        = DefaultMaxEnergy;
+        InitEnergy(DefaultMaxEnergy);
+        InitMaxEnergy(DefaultMaxEnergy);
         Credits          = DefaultCredits;
         Speed            = DefaultSpeed;
         DamageMultiplier = 1.0f;
-        DefenseRating    = 0.0f;
+        InitDefenseRating(0.0f);
         InitOnithProjectileDamageReduction(0.0f);
         InitOnithExplosionDamageReduction(0.0f);
 	InitAirSpeedBonus(0.0f);
@@ -232,39 +225,71 @@ void UKhaaosAttributeSet::InitializeCombatProfile(
         InitHealth(FMath::Clamp(InHealth, 0.0f, SafeMaxHealth));
         InitMaxShield(SafeMaxShield);
         InitShield(FMath::Clamp(InShield, 0.0f, SafeMaxShield));
-        MaxEnergy = FMath::Max(InMaxEnergy, 0.0f);
-        SetEnergy(FMath::Clamp(InEnergy, 0.0f, MaxEnergy));
+        const float SafeMaxEnergy = FMath::Max(InMaxEnergy, 0.0f);
+        InitMaxEnergy(SafeMaxEnergy);
+        InitEnergy(FMath::Clamp(InEnergy, 0.0f, SafeMaxEnergy));
         Speed = FMath::Max(InSpeed, 0.0f);
 }
 
 // ─── GAS Attribute callbacks and replication ────────────────────────────────────
+
+void UKhaaosAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
+{
+	Super::PreAttributeChange(Attribute, NewValue);
+	if (Attribute == GetHealthAttribute()) NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxHealth());
+	else if (Attribute == GetMaxHealthAttribute()) NewValue = FMath::Max(NewValue, 1.0f);
+	else if (Attribute == GetShieldAttribute()) NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxShield());
+	else if (Attribute == GetMaxShieldAttribute()) NewValue = FMath::Max(NewValue, 0.0f);
+	else if (Attribute == GetEnergyAttribute()) NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxEnergy());
+	else if (Attribute == GetMaxEnergyAttribute()) NewValue = FMath::Max(NewValue, 0.0f);
+	else if (Attribute == GetDefenseRatingAttribute()) NewValue = FMath::Max(NewValue, 0.0f);
+}
+
+void UKhaaosAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
+{
+	Super::PostAttributeChange(Attribute, OldValue, NewValue);
+	if (FMath::IsNearlyEqual(OldValue, NewValue)) return;
+	if (Attribute == GetMaxHealthAttribute())
+	{
+		if (GetHealth() > NewValue) SetHealth(NewValue);
+		OnAttributeChanged.Broadcast(this, TEXT("MaxHealth"), NewValue);
+	}
+	else if (Attribute == GetMaxShieldAttribute())
+	{
+		if (GetShield() > NewValue) SetShield(NewValue);
+		OnAttributeChanged.Broadcast(this, TEXT("MaxShield"), NewValue);
+	}
+	else if (Attribute == GetHealthAttribute())
+	{
+		if (NewValue > 0.0f) bOutOfHealthAlreadyBroadcast = false;
+		OnAttributeChanged.Broadcast(this, TEXT("Health"), NewValue);
+	}
+	else if (Attribute == GetShieldAttribute())
+	{
+		OnAttributeChanged.Broadcast(this, TEXT("Shield"), NewValue);
+	}
+	else if (Attribute == GetMaxEnergyAttribute())
+	{
+		if (GetEnergy() > NewValue) SetEnergy(NewValue);
+		OnAttributeChanged.Broadcast(this, TEXT("MaxEnergy"), NewValue);
+	}
+	else if (Attribute == GetEnergyAttribute())
+	{
+		OnAttributeChanged.Broadcast(this, TEXT("Energy"), NewValue);
+	}
+	else if (Attribute == GetDefenseRatingAttribute())
+	{
+		OnAttributeChanged.Broadcast(this, TEXT("DefenseRating"), NewValue);
+	}
+}
 
 void UKhaaosAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
         Super::PostGameplayEffectExecute(Data);
 
         const FGameplayAttribute& ModifiedAttribute = Data.EvaluatedData.Attribute;
-        if (ModifiedAttribute == GetMaxHealthAttribute())
+        if (ModifiedAttribute == GetMaxHealthAttribute() || ModifiedAttribute == GetMaxShieldAttribute() || ModifiedAttribute == GetShieldAttribute())
         {
-                SetMaxHealth(FMath::Max(GetMaxHealth(), 1.0f));
-                SetHealth(FMath::Clamp(GetHealth(), 0.0f, GetMaxHealth()));
-                OnAttributeChanged.Broadcast(this, TEXT("MaxHealth"), GetMaxHealth());
-                OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
-                return;
-        }
-
-        if (ModifiedAttribute == GetMaxShieldAttribute())
-        {
-                SetMaxShield(FMath::Max(GetMaxShield(), 0.0f));
-                SetShield(FMath::Clamp(GetShield(), 0.0f, GetMaxShield()));
-                OnAttributeChanged.Broadcast(this, TEXT("MaxShield"), GetMaxShield());
-                OnAttributeChanged.Broadcast(this, TEXT("Shield"), GetShield());
-                return;
-        }
-        if (ModifiedAttribute == GetShieldAttribute())
-        {
-                SetShield(FMath::Clamp(GetShield(), 0.0f, GetMaxShield()));
-                OnAttributeChanged.Broadcast(this, TEXT("Shield"), GetShield());
                 return;
         }
 
@@ -273,16 +298,12 @@ void UKhaaosAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCall
                 return;
         }
 
-        SetHealth(FMath::Clamp(GetHealth(), 0.0f, GetMaxHealth()));
-        OnAttributeChanged.Broadcast(this, TEXT("Health"), GetHealth());
-
         if (GetHealth() > 0.0f)
         {
                 bOutOfHealthAlreadyBroadcast = false;
                 return;
         }
 
-        SetHealth(0.0f);
         UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
         AActor* OwnerActor = ASC ? ASC->GetOwnerActor() : nullptr;
         if (!OwnerActor || !OwnerActor->HasAuthority() || bOutOfHealthAlreadyBroadcast)
@@ -322,6 +343,24 @@ void UKhaaosAttributeSet::OnRep_MaxShield(const FGameplayAttributeData& OldMaxSh
         OnAttributeChanged.Broadcast(this, TEXT("MaxShield"), GetMaxShield());
 }
 
+void UKhaaosAttributeSet::OnRep_Energy(const FGameplayAttributeData& OldEnergy)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, Energy, OldEnergy);
+	OnAttributeChanged.Broadcast(this, TEXT("Energy"), GetEnergy());
+}
+
+void UKhaaosAttributeSet::OnRep_MaxEnergy(const FGameplayAttributeData& OldMaxEnergy)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, MaxEnergy, OldMaxEnergy);
+	OnAttributeChanged.Broadcast(this, TEXT("MaxEnergy"), GetMaxEnergy());
+}
+
+void UKhaaosAttributeSet::OnRep_DefenseRating(const FGameplayAttributeData& OldDefenseRating)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, DefenseRating, OldDefenseRating);
+	OnAttributeChanged.Broadcast(this, TEXT("DefenseRating"), GetDefenseRating());
+}
+
 void UKhaaosAttributeSet::OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, OldReduction);
@@ -341,17 +380,9 @@ void UKhaaosAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, Shield, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxShield, COND_None, REPNOTIFY_Always);
-        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_None, REPNOTIFY_Always);
-        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_None, REPNOTIFY_Always);
-}
-
-void UKhaaosAttributeSet::SetEnergy(float NewEnergy)
-{
-        float OldEnergy = Energy;
-        Energy = NewEnergy;
-
-        if (!FMath::IsNearlyEqual(OldEnergy, Energy))
-        {
-                OnAttributeChanged.Broadcast(this, TEXT("Energy"), Energy);
-        }
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, Energy, COND_OwnerOnly, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, MaxEnergy, COND_OwnerOnly, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, DefenseRating, COND_OwnerOnly, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithProjectileDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
+        DOREPLIFETIME_CONDITION_NOTIFY(UKhaaosAttributeSet, OnithExplosionDamageReduction, COND_OwnerOnly, REPNOTIFY_Always);
 }

@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/GameModeBase.h"
+#include "Game/Character/KhaaosOperativeActor.h"
 
 // ─── Log Category ──────────────────────────────────────────────────────────────
 
@@ -383,6 +384,10 @@ void UKhaaosReplicationGraph::InitClassReplicationInfo()
     ClassReplicationInfoMap.Add(AGameModeBase::StaticClass(),
         FKhaaosClassReplicationInfo(10.0f, true, false, false, 8.0f));
 
+    // Operatives stay spatially relevant but receive combat-grade update priority.
+    ClassReplicationInfoMap.Add(AKhaaosOperativeActor::StaticClass(),
+        FKhaaosClassReplicationInfo(PlayerReplicationFrequency, false, true, true, 10.0f));
+
     // ─── Dynamic Spatially-Relevant Classes ──────────────────────────────
 
     // Weapon — dynamic, high priority
@@ -505,12 +510,8 @@ float UKhaaosReplicationGraph::CalculateActorPriority(AActor* Actor, const FVect
     const float Distance = FVector::Dist(Actor->GetActorLocation(), ViewerLocation);
     const float DistanceFactor = 1.0f / (Distance + 1.0f); // +1 to avoid division by zero
 
-    // Class-based priority weight
-    float ClassWeight = 1.0f;
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(Actor->GetClass()))
-    {
-        ClassWeight = Info->PriorityWeight;
-    }
+    // Resolve the nearest configured ancestor so operative subclasses inherit combat priority.
+    const float ClassWeight = GetClassReplicationInfo(Actor->GetClass()).PriorityWeight;
 
     // Always-relevant actors get maximum priority
     if (IsAlwaysRelevantClass(Actor->GetClass()))
