@@ -153,6 +153,10 @@ export class HUD {
       if (mythic) {
         mythicEl.textContent = `EV.${p.mythicStage || 1} · ${MYTHIC_STAGE_NAMES[(p.mythicStage || 1) - 1]}`;
         mythicEl.style.color = mDef.aura; // Fase 32 — badge na cor da aura da skin
+        // Fase 34 — efeito SAZONAL por aura: anel de brilho girando + shimmer
+        // de festival na cor PRÓPRIA da arma (CSS lê --aura; anima só quando
+        // o badge está visível — custo ~0 quando escondido).
+        mythicEl.style.setProperty('--aura', mDef.aura);
       }
     }
     const reloading = p.reloadT > 0;
