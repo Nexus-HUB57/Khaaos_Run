@@ -298,6 +298,11 @@ export class Game3D {
     const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer, this.quality); // cenário + envmap PBR (renderer)
     this.scene = scene;
     this.sun = sun;
+    // F41 — exposição ACES POR CENÁRIO: o perfil de luz (world3d.lightingProfile)
+    // traz a exposição do mood de cada mundo (noite gélida 1.12 … deserto 1.30);
+    // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
+    const lpExposure = scene.userData?.lighting?.exposure;
+    if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
     this.ringWall = createRingWall();
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {

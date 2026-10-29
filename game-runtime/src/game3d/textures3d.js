@@ -1,5 +1,6 @@
 // Khaaos Run — Texturas procedurais (canvas) para materiais PBR sem assets externos.
 import * as THREE from 'three';
+import { buildMicroDetailMaps } from './materials3d.js'; // F41 — relevo de poros na pele
 
 // PRNG estável: a aparência procedural não pode mudar a cada reload ou entre
 // clientes. O estado é privado ao módulo e não participa da simulação/gameplay.
@@ -28,7 +29,9 @@ function tex(c, { repeat = 1, srgb = true } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat, repeat);
-  t.anisotropy = 4;
+  // F41 — anisotropia 8: chão/asfalto/fachadas em ângulo raso (TPS a correr)
+  // ficam nítidos até o horizonte; custo de GPU desprezível vs o ganho de leitura.
+  t.anisotropy = 8;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -65,7 +68,7 @@ function normalMapFromCanvas(srcCanvas, { strength = 1.6 } = {}) {
   octx.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(out);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
+  t.anisotropy = 8; // F41 — normal maps acompanham a nitidez do color map
   return t;
 }
 
@@ -345,12 +348,20 @@ export function skinMaterial(skin = '#d9a06b') {
     }
     const rough = new THREE.CanvasTexture(c);
     rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
-    return new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       color: skin,
       roughness: .58, roughnessMap: rough,
       metalness: 0,
       emissive: new THREE.Color(skin), emissiveIntensity: .038, // pseudo-SSS
     });
+    // F41 — relevo de POROS: normalMap do preset 'skin' (micro-detalle F26) dá
+    // profundidade 3D real aos poros sob luz rasante — headless é no-op seguro.
+    const pores = buildMicroDetailMaps('skin', 7);
+    if (!pores.headless) {
+      mat.normalMap = pores.normalMap;
+      mat.normalScale = new THREE.Vector2(.6, .6);
+    }
+    return mat;
   });
 }
 

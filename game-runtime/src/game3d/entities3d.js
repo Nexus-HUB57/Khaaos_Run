@@ -7,17 +7,37 @@
 // em malha curva, membros em cápsula com juntas esféricas (silhueta suave em
 // movimento), torso cônico V-taper com deltoides, sombra de contato e pele com
 // poros/pseudo-SSS. Mesma assinatura de createOperative/animateOperative.
+// F41: realismo FÍSICO — vestuário inteiro com micro-detalle PBR (mapas
+// compartilhados), jugular no capacete, dedos+polegar na luva 3ª pessoa,
+// cadarço/colarinho na bota, estabilização vestibular do olhar (cabeça
+// contra-move bounce/sway), ombros contra-rolam a passada e micro-balço ADS.
 import * as THREE from 'three';
 import {
   camoMaterial, contactShadowTexture, faceTexture, goggleMaterial, skinMaterial,
 } from './textures3d.js';
-import { applyMicroDetail } from './materials3d.js';
+import { applyMicroDetail, buildMicroDetailMaps } from './materials3d.js';
 import { RARITIES } from '../shared/weapons.js';
 // Fase 30 — anexos dos 4 sockets da AR-47 + skin mítica evolutiva
 import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic, mythicSkinFor } from './attachments3d.js';
 // Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
 // (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
 import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
+
+// F41 — mapas de micro-detalle COMPARTILHADOS por preset (normal/roughness são
+// reutilizáveis entre materiais e atores: o material modula pelo scalar próprio).
+const _micro = new Map();
+function sharedMicroDetail(material, preset, seed) {
+  const key = `${preset}:${seed}`;
+  let maps = _micro.get(key);
+  if (!maps) { maps = buildMicroDetailMaps(preset, seed); _micro.set(key, maps); }
+  if (!maps.headless) {
+    material.roughnessMap = maps.roughnessMap;
+    material.normalMap = maps.normalMap;
+    material.normalScale = new THREE.Vector2(1, 1);
+    material.needsUpdate = true;
+  }
+  return material;
+}
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? .82, metalness: opts.metal ?? .12, ...opts.extra });
 
@@ -315,6 +335,15 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const metalM = M('#4a4e55', { rough: .4, metal: .7 });
   const trimM = new THREE.MeshStandardMaterial({ color: trim, emissive: trim, emissiveIntensity: .55, roughness: .5 });
   const hairM = M(hair, { rough: .95 });
+  // F41 — vestuário INTEIRO com relevo PBR (fim do plástico liso nos acessórios):
+  // couro/plástico do gear, tecido do secundário, couro da bota, metal do coldre
+  // e trama do cabelo — mapas compartilhados (6 texturas no total, não 6×24).
+  sharedMicroDetail(secM, 'fabric', 59);
+  sharedMicroDetail(gearM, 'plastic', 41);
+  sharedMicroDetail(gearM2, 'plastic', 43);
+  sharedMicroDetail(bootM, 'plastic', 47);
+  sharedMicroDetail(metalM, 'metal', 53);
+  sharedMicroDetail(hairM, 'fabric', 61);
 
   // ---- sombra de contato (Fase 9): ancora o ator no chão; fade controlado
   // por animateOperative via `air` (infiltração aérea) ----
@@ -416,6 +445,12 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos empilhados
     dome.userData.baseHeadGear = brim.userData.baseHeadGear = band.userData.baseHeadGear = true;
     head.add(dome, brim, band);
+    // F41 — jugular: tira sob o queixo amarra o casco (acessório lê como capacete
+    // REAL em close TPS, não como bolha flutuante)
+    const strapL = box(.016, .13, .02, gearM2, -.118, -.045, .04);
+    const strapR = box(.016, .13, .02, gearM2, .118, -.045, .04);
+    strapL.userData.baseHeadGear = strapR.userData.baseHeadGear = true;
+    head.add(strapL, strapR);
     const railL = box(.02, .07, .16, gearM2, -.15, .15, .01); // trilhos laterais
     const railR = box(.02, .07, .16, gearM2, .15, .15, .01);
     const nvg = box(.05, .05, .05, metalM, .09, .21, .08);   // mount NVG
@@ -444,7 +479,11 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const boot = box(.17, .12, .28, bootM, 0, -.12, .05);
     const toe = ball(.085, bootM, 0, -.13, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
     const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.19, .05);
-    foot.add(boot, toe, sole);
+    // F41 — cadarço de combate no peito do pé + colarinho do cano (bota lê como
+    // calçado REAL em close, não como tijolo preto)
+    const laces = box(.13, .018, .022, gearM2, 0, -.075, -.078);
+    const collar = cyl(.082, .088, .05, gearM2, 0, -.045, .03, 8);
+    foot.add(boot, toe, sole, laces, collar);
     knee.add(kneeCap, lower, pad, foot); hip.add(upper, calf, cargo, knee);
     g.add(hip);
     return { hip, knee, foot };
@@ -463,7 +502,13 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const glove = box(.12, .12, .13, gearM, 0, -.31, 0);
     const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
     const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
-    elbow.add(elbowCap, lower, cuff, glove, knuckles); shoulder.add(deltoid, biceps, upper, pad, stripe, elbow);
+    // F41 — dedos enrolando o grip + polegar oposto: a mão em 3ª pessoa lê como
+    // PUNHO FECHADO na arma (antes: bloco único — incompatível c/ o padrão FF)
+    const fingers = box(.105, .05, .07, gearM, 0, -.335, -.058);
+    fingers.rotation.x = .55;
+    const thumb = ball(.024, gearM2, -side * .052, -.298, -.045, 6, 5, 1, .9, 1.15);
+    elbow.add(elbowCap, lower, cuff, glove, knuckles, fingers, thumb);
+    shoulder.add(deltoid, biceps, upper, pad, stripe, elbow);
     return { shoulder, elbow };
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
@@ -599,8 +644,20 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   const armStep = Math.cos(t * W) * .045 * speedNorm;
   parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
   parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
-  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6;
-  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6;
+  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + breathe * .012;
+  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6 + breathe * .012;
+  // F41 — ergonomia de tiro: os OMBROS contra-rolam o tronco (mãos niveladas no
+  // plano do horizonte enquanto a passada rola o tórax) e, em ADS, micro-balço
+  // de respiração do atirador (2 eixos, frequências dessintonizadas — sem loop).
+  const roll = Math.sin(t * W + .4) * .05 * speedNorm;
+  parts.armR.shoulder.rotation.z = -roll * .35;
+  parts.armL.shoulder.rotation.z = -roll * .35;
+  if (ads) {
+    parts.armR.shoulder.rotation.z += Math.sin(t * 1.7) * .012;
+    parts.armR.shoulder.rotation.x += Math.sin(t * 2.3) * .008;
+    parts.armL.shoulder.rotation.z += Math.sin(t * 1.9) * .012;
+    parts.armL.shoulder.rotation.x += Math.sin(t * 2.6) * .008;
+  }
   // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
   const sway = Math.sin(t * W) * .07 * speedNorm;
   parts.torso.rotation.y = sway;
@@ -610,13 +667,21 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     + Math.sin(t * .7) * .028 * idle;                                // transferência de peso parado
   parts.torso.position.x = Math.sin(t * .7) * .02 * idle;            // quadril desloca no idle
   // Fase 16: dupla pancada por ciclo (um bounce POR apoie) — amp cresce com a velocidade
-  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * W)) * (.045 + .02 * speedNorm) * speedNorm;
+  // F41 — bounce extraído: a estabilização de olhar da cabeça consome o MESMO
+  // sinal (determinístico, sem duplicar a fórmula).
+  const bounce = Math.abs(Math.sin(t * W)) * (.045 + .02 * speedNorm) * speedNorm;
+  parts.torso.position.y = crouch ? .88 : 1.22 + bounce;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
   // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
   parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
   parts.head.rotation.z = -parts.torso.rotation.z * .5;
+  // F41 — estabilização VESTIBULAR do olhar: a cabeça contra-move o bounce
+  // vertical (30% do sinal do tronco) e o sway lateral — a linha de mira fica
+  // nivelada enquanto o corpo sobe/desce/rola (ergonomia humana de mirar).
+  parts.head.position.y = .46 - (crouch ? 0 : bounce * .3);
+  parts.head.position.x = -sway * .3;
   // ---- Fase 10 — reação de impacto: flinch direcional aditivo ----
   // Envelope: ataque rápido (~2 frames) + decaimento exponencial τ .17 s —
   // o corpo dobra PARA LONGE da bala, afunda e os braços abrem em sobressalto,

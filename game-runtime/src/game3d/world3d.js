@@ -37,6 +37,66 @@ import {
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
 
+// ---------- F41 — PERFIS DE LUZ POR CENÁRIO (reconfiguração de parâmetros) ----------
+// Antes: TODOS os cenários não-Barburhen recebiam a MESMA régua de luz quente
+// (ternário inline) — céu de deserto iluminado igual a céu de noite gélida.
+// Agora cada cenário tem um perfil físico-motivado: temperatura do sol, balanço
+// hemisférico, fills frios/quentes, exposição ACES e intensidade do IBL — e o
+// nightBase (skyPhase) captura o perfil automaticamente, então o anoitecer
+// continua interpolando a partir do ponto de partida do próprio mundo.
+// shadowNormalBias entra no lugar do "bias negativo puro": mata acne nas
+// cápsulas curvas dos personagens sem peter-panning nas bases.
+const BASELINE_CIGKV = Object.freeze({ // crepúsculo violeta (baseline histórica preservada)
+  sunColor: '#ffc98f', sunIntensity: 2.35,
+  hemiSky: '#8f74b4', hemiGround: '#4a3d2e', hemiIntensity: 1.18,
+  fillColor: '#6a5aa0', fillIntensity: 0.72,
+  backColor: '#a8885e', backIntensity: 0.55,
+  exposure: 1.24, envIntensity: .45,
+  shadowBias: -0.00028, shadowNormalBias: .018,
+});
+export const LIGHTING_PROFILES = Object.freeze({
+  CIGKV: BASELINE_CIGKV,     // baseline violeta — id canônico do mundo-patria
+  default: BASELINE_CIGKV,   // desconhecidos herdam a baseline (mesmo objeto)
+  Barburhen: Object.freeze({ // golden hour urbano — valores F7 recalibrados preservados
+    sunColor: '#f0c7a2', sunIntensity: 2.05,
+    hemiSky: '#c5d5dc', hemiGround: '#4e5a61', hemiIntensity: 1.04,
+    fillColor: '#7898b6', fillIntensity: 0.5,
+    backColor: '#b98263', backIntensity: 0.42,
+    exposure: 1.18, envIntensity: .5,
+    shadowBias: -0.00022, shadowNormalBias: .022,
+  }),
+  Priadus: Object.freeze({ // noite gélida — sol frio e baixo, sombras azuladas
+    sunColor: '#b8c4e8', sunIntensity: 2.1,
+    hemiSky: '#7a8ab8', hemiGround: '#2c3138', hemiIntensity: 1.05,
+    fillColor: '#4a5a88', fillIntensity: 0.6,
+    backColor: '#8a7a5e', backIntensity: 0.45,
+    exposure: 1.12, envIntensity: .42,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+  Ckesalth: Object.freeze({ // terra de brasa — sol laranja duro, quente nas sombras
+    sunColor: '#ffb27a', sunIntensity: 2.45,
+    hemiSky: '#a06a58', hemiGround: '#4a3228', hemiIntensity: 1.12,
+    fillColor: '#8a5a68', fillIntensity: 0.62,
+    backColor: '#c88a4a', backIntensity: 0.5,
+    exposure: 1.28, envIntensity: .5,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+  Arukheea: Object.freeze({ // pôr do sol de deserto — sol alto e quente, rebatida de areia
+    sunColor: '#ffd9a0', sunIntensity: 2.55,
+    hemiSky: '#d8b894', hemiGround: '#6a4a30', hemiIntensity: 1.15,
+    fillColor: '#e8a86a', fillIntensity: 0.68,
+    backColor: '#b8785a', backIntensity: 0.5,
+    exposure: 1.3, envIntensity: .52,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+});
+
+// Perfil puro e determinístico: cenário conhecido → perfil próprio;
+// desconhecido/alias futuro → baseline violeta (nunca explode).
+export function lightingProfile(scenarioId = '') {
+  return LIGHTING_PROFILES[scenarioId] ?? LIGHTING_PROFILES.default;
+}
+
 // ---------- céu ----------
 function createSky(scenario) {
   const geo = new THREE.SphereGeometry(900, 32, 20);
@@ -727,10 +787,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
 
   scene.add(createSky(scenario));
 
-  // Fase 7 — luz recalibrada: sol menos saturado, fill mais suave (contraste
-  // cinematográfico sem lavar as sombras); hemisfério amarra o chão ao céu.
-  const isBarburhen = scenario.id === 'Barburhen';
-  const sun = new THREE.DirectionalLight(isBarburhen ? '#f0c7a2' : '#ffc98f', isBarburhen ? 2.05 : 2.35);
+  // F41 — perfil de luz POR CENÁRIO (lightingProfile): sol/hemisfério/fills
+  // calibrados pelo mood de cada mundo; os valores F7 de Barburhen e a baseline
+  // CIGKV ficam preservados nos respectivos perfis. Exposição e IBL vão no
+  // userData p/ o main3d (ACES) e o nightBase capturar.
+  const lp = lightingProfile(scenario.id);
+  scene.userData.lighting = lp;
+  const sun = new THREE.DirectionalLight(lp.sunColor, lp.sunIntensity);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
   sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
@@ -738,15 +801,18 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const S = 150;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
-  sun.shadow.bias = -0.0004;
+  // F41 — normalBias mata acne nas cápsulas curvas dos personagens; o bias
+  // negativo cai pela metade (peter-panning menor nas bases dos props).
+  sun.shadow.bias = lp.shadowBias;
+  sun.shadow.normalBias = lp.shadowNormalBias;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(isBarburhen ? '#c5d5dc' : '#8f74b4', isBarburhen ? '#4e5a61' : '#4a3d2e', isBarburhen ? 1.04 : 1.18);
+  const hemi = new THREE.HemisphereLight(lp.hemiSky, lp.hemiGround, lp.hemiIntensity);
   scene.add(hemi);
-  const fill = new THREE.DirectionalLight(isBarburhen ? '#7898b6' : '#6a5aa0', isBarburhen ? 0.5 : 0.72);
+  const fill = new THREE.DirectionalLight(lp.fillColor, lp.fillIntensity);
   fill.position.set(140, 80, 180);
   scene.add(fill);
-  const back = new THREE.DirectionalLight(isBarburhen ? '#b98263' : '#a8885e', isBarburhen ? 0.42 : 0.55);
+  const back = new THREE.DirectionalLight(lp.backColor, lp.backIntensity);
   back.position.set(60, 50, 240);
   scene.add(back);
 
@@ -806,7 +872,7 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       envGround.rotation.x = -Math.PI / 2; envGround.position.y = -4;
       envScene.add(envGround);
       scene.environment = pmrem.fromScene(envScene, .04).texture;
-      scene.environmentIntensity = .45;
+      scene.environmentIntensity = lp.envIntensity; // F41 — IBL por cenário (antes .45 fixo)
       pmrem.dispose();
     } catch { /* fallback: materiais seguem sem envmap */ }
   }
@@ -981,11 +1047,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.userData.nightBase = {
     sky: { ...scenario.sky },
     fogColor: scenario.fogColor,
-    sunColor: isBarburhen ? '#f0c7a2' : '#ffc98f',
-    sunIntensity: isBarburhen ? 2.05 : 2.35,
-    hemiIntensity: isBarburhen ? 1.04 : 1.18,
-    fillIntensity: isBarburhen ? 0.5 : 0.72,
-    backIntensity: isBarburhen ? 0.42 : 0.55,
+    // F41 — anoitecer captura o PERFIL do cenário como base (antes: ternário
+    // fixo — todo mundo não-Barburhen escurecia a partir da mesma régua quente)
+    sunColor: lp.sunColor,
+    sunIntensity: lp.sunIntensity,
+    hemiIntensity: lp.hemiIntensity,
+    fillIntensity: lp.fillIntensity,
+    backIntensity: lp.backIntensity,
     buildingMat: mats.building ?? null,
     buildingEmissive: 0.55,
   };
