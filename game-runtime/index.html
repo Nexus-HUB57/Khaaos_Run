@@ -24,6 +24,7 @@
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
       <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
+      <button id="gfxBtn" class="audio-toggle" type="button" title="Vídeo e performance (KR_GFX_*): qualidade, pós-FX, resolução dinâmica, telemetria, tremor e sensibilidade">⚙ GFX</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
@@ -274,6 +275,26 @@
       <label><span>INTERFACE</span><input type="range" min="0" max="100" step="1" data-channel="ui" aria-label="Volume da interface e avisos" /><b data-out="ui">100%</b></label>
       <small class="audio-mixer-hint">salvo automaticamente (KR_AUDIO_*)</small>
     </div>
+
+    <div id="gfxPanel" class="audio-mixer hidden">
+      <div class="section-label">VÍDEO // PERFORMANCE</div>
+      <label><span>QUALIDADE</span>
+        <select id="gfxTier" data-gfx="tier" aria-label="Perfil gráfico">
+          <option value="auto">AUTO · ADAPTATIVO</option>
+          <option value="low">BAIXO</option>
+          <option value="medium">MÉDIO</option>
+          <option value="high">ALTO</option>
+        </select>
+      </label>
+      <label><span>PÓS-FX</span><input type="checkbox" data-gfx="postfx" aria-label="Pós-processamento (bloom + grade)" /></label>
+      <label><span>RES. DINÂMICA</span><input type="checkbox" data-gfx="drs" aria-label="Resolução dinâmica (DRS)" /></label>
+      <label><span>TELEMETRIA FPS</span><input type="checkbox" data-gfx="fps" aria-label="Mostrar FPS e escala de resolução" /></label>
+      <label><span>TREMOR CÂM.</span><input type="range" min="0" max="100" step="5" data-gfx="shake" aria-label="Intensidade do tremor de câmera (0 reduz movimento)" /><b data-out="shake">100%</b></label>
+      <label><span>SENSIBILIDADE</span><input type="range" min="30" max="250" step="5" data-gfx="sens" aria-label="Sensibilidade do mouse" /><b data-out="sens">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_GFX_*)</small>
+    </div>
+
+    <div id="perfReadout" class="perf-readout hidden" role="status"></div>
 
     <script type="module" src="/src/game3d/main3d.js"></script>
   </body>

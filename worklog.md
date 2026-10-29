@@ -458,3 +458,26 @@ Stage Summary:
 - Inventário de bots em paridade com oficiais/jogador (slots/inventory/anexos+raridades) — mortes deles agora carregam espólio completo nas caixas (F28 herda de graça)
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
+
+---
+Task ID: 17
+Agent: Main
+Task: Fase 34 — Revisão PhD-level de otimização de cenários/gráficos + experiência do jogador: laço adaptativo de performance (DRS + auto-tier) no cliente 3D web, settings KR_GFX_*, telemetria de FPS
+
+Work Log:
+- REVISÃO SISTEMÁTICA (5 módulos gráficos + HUD + bootstrap): quality3d resolvia o tier UMA vez por sessão (nenhuma reação a carga runtime — combate com 24 atores + SSR + partículas + grama colapsava o frametime sem contra-medida); lod3d (histerese + frustum gate), grass LOD chunks (F32) e contact shadows instanciadas avaliados como sólidos (referência de design, intocados)
+- ACHADO G2 (bug de custo): initPost() passava quality:'high' HARDCODED ao createPostFX — o tier MEDIUM pagava SSR completo (SSRPass a 72% da resolução) que é exclusivo do high; corrigido via postFxPlanFor(tier) — ÚNICA fonte de verdade do plano de pós-FX (low=null composer, medium=bloom+grade sem SSR, high=completo)
+- perf3d.js (PURO, headless): FrametimeMonitor com EMA de constante de TEMPO (α=1−exp(−dt/τ), τ=0.5s — estável igual a 30 e 144 Hz; warmup 30 amostras; descarta dt>0.5s de aba em background); drsDecision (escala 0.55..1.0, descida −12% após hold 0.6s de overload >budget×1.12, subida +5% após folga sustentada 2.5s <budget×0.82, dwells assimétricos 0.9s/2.5s); tierDecision (downgrade high→medium→low SÓ com DRS no PISO e EMA>budget×1.35 por 6s; upgrade exige 20s de folga <budget×0.65 NO TETO; dwell 10s entre trocas — anti ping-pong); RateLimiter; budgetFor (15ms high/medium, 22ms low)
+- gfxsettings.js (PURO, padrão KR_AUDIO_*): blob versionado KR_GFX_SETTINGS_V1 {tier auto|low|medium|high, postfx, drs, fps, shake 0..1, sens 0.3..2.5} — sanitização (inválido→default, números clampados), fallback de memória headless, merge parcial
+- main3d.js (wiring): updatePerf(dt) no topo do loop; applyRenderScale (pixelRatio base×escala, throttle 150ms, propaga p/ render targets do composer); applyTierRuntime (cap de pixelRatio + shadow map do sol com dispose do alvo antigo + rebuild do composer); sens do mouse × gfx.sens (ADS mantém razão ~0.52×); shake × gfx.shake nos 2 pontos de aplicação; initGfxPanel (padrão initAudioMixer, headless-safe) com commit que cancela auto-tier e aplica override na hora
+- hud3d.js: minimapa a 30 Hz via RateLimiter (G4 — canvas 2D full-redraw a 60+ Hz custava real em touch sem ganho perceptível); setPerf(fps, escala, tier) → #perfReadout a 2 Hz
+- index.html/styles3d.css: botão ⚙ GFX ao lado do ♪ MIX, painel VÍDEO//PERFORMANCE (QUALIDADE/PÓS-FX/RES. DINÂMICA/TELEMETRIA/TREMOR/SENSIBILIDADE, aria-labels) ao lado do mixer de áudio, #perfReadout fixo canto inferior direito
+- EXPERIÊNCIA DO JOGADOR fechada: U1 painel gráfico in-game (antes só ?q= na URL); U2 sensibilidade ajustável (era hardcoded .0021/.0011); U3 movimento reduzido (tremor 0 — acessibilidade); telemetria FPS·RES·tier para diagnóstico
+- PARIDADE UE5: mesma filosofia do UKhaaosDynamicResolution (Game/Graphics — speeds assimétricos up 0.1 / down 0.5, budget 16.67ms) agora no cliente web Three.js; docs/gfx-ux-perf.md registra a tabela de parâmetros com justificativas + protocolo de verificação browser-real
+- Testes: test/perf3d.test.js (14 — EMA converge/descarta hitches/warmup, DRS hold+piso/teto, simulador de carga 600 frames: converge ≤8 mudanças sob carga 17.5ms, carga leve inerte, stall 96ms inerte com pico EMA <limiar, recuperação ao teto, tier: não desce fora do piso/desce no piso/upgrade anti senoidal/upgrade 20s folga, budgetFor, RateLimiter, postFxPlanFor SSR exclusivo high) + test/gfxsettings.test.js (7 — defaults imutáveis, round-trip, sanitização clamp, blob corrompido, storage quebrado, effectiveBaseTier override)
+
+Stage Summary:
+- Cliente 3D web agora TEM laço fechado de performance: mediu (EMA τ=0.5s) → decidiu (DRS histerese assimétrica) → aplicou (pixelRatio/sombras/pós-FX) → subiu de escala estrutural (tier) só quando o DRS esgotou — sem oscilação provada por simulador
+- Tier MEDIUM deixou de pagar SSR (G2) — maior ganho de custo por linha trocada
+- Jogador ganhou controle completo (painel GFX persistido KR_GFX_*) + acessibilidade (movimento reduzido, sensibilidade) + telemetria
+- Suíte game-runtime: 875 testes — 862 pass / 0 fail / 13 skip (23 novos); determinismo da sim intocado (rng/nomeada não tocados)
