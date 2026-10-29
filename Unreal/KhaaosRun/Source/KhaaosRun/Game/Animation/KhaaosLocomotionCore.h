@@ -150,6 +150,26 @@ namespace KhaaosLoco
         // ── Stop ease ──
         /** Ease time to reach full-stop visual state (s). */
         float StopEaseTime = 0.22f;
+
+        // ── Distance matching (stop) ──
+        /** Predicted-stop speed floor: above this a decel opens a stop match (uu/s). */
+        float StopMatchMinSpeed = 60.0f;
+        /** Stop fully matched below this speed (uu/s). */
+        float StopMatchArriveSpeed = 10.0f;
+        /** Critically damped rate for the stop-match phase (anim-safe, no pops). */
+        float StopMatchSmoothing = 14.0f;
+
+        // ── Air pose blending ──
+        /** Critically damped rate for the air pose blend. */
+        float AirPoseSmoothing = 7.0f;
+        /** |vertical speed| (uu/s) that saturates the blend at ±1. */
+        float AirPoseVelSaturation = 700.0f;
+
+        // ── Pivot foot (turn-in-place) ──
+        /** |turn| (deg) at which the pivot weight reaches 1. */
+        float PivotFullWeightDeg = 55.0f;
+        /** |turn| (deg) below which the previous pivot foot is kept (hysteresis). */
+        float PivotKeepDeg = 12.0f;
     };
 
     // ─── Per-foot spring state ────────────────────────────────────────────
@@ -221,6 +241,22 @@ namespace KhaaosLoco
         FKhaaosFootState FootLeft;
         FKhaaosFootState FootRight;
 
+        // ── Distance matching (stop) ──
+        /** Predicted stopping distance from the current speed (cm). */
+        float StopDistanceCm = 0.0f;
+        /** Distance-matched stop phase (0 = decel start, 1 = planted & stopped). */
+        float StopMatchPhase = 0.0f;
+
+        // ── Air pose ──
+        /** Air pose blend: -1 = rising pose, 0 = apex, +1 = falling pose. */
+        float AirPoseBlend = 0.0f;
+
+        // ── Pivot foot (turn-in-place) ──
+        /** True when the turn-in-place pivots on the LEFT foot (else right). */
+        bool bPivotFootLeft = false;
+        /** Pivot weight 0..1 (eased by |turn|, zero outside turn-in-place). */
+        float PivotWeight = 0.0f;
+
         // ── Network smoothing ──
         float NetworkSmoothedSpeed = 0.0f;
 
@@ -229,6 +265,13 @@ namespace KhaaosLoco
         int32_t StrideStepIndex = 0;
         float LeanRollVelocity = 0.0f;
         float LeanPitchVelocity = 0.0f;
+
+        /** Peak speed observed while grounded (captures decel start for stop matching). */
+        float PeakStopSpeed = 0.0f;
+        /** Predicted distance captured when the current decel opened (cm). */
+        float StopStartDistanceCm = 0.0f;
+        /** True while the current deceleration is being distance-matched. */
+        bool bStopMatching = false;
     };
 
     // ─── Per-frame input ──────────────────────────────────────────────────
@@ -270,6 +313,10 @@ namespace KhaaosLoco
         bool bSimulatedProxy = false;
         /** Absolute time in seconds (for breathing noise). */
         float TimeSeconds = 0.0f;
+        /** Vertical velocity (uu/s, + = rising) — drives air pose blending. */
+        float VerticalSpeed = 0.0f;
+        /** Horizontal braking deceleration the CMC applies while stopping (uu/s^2). */
+        float BrakingDecel = 1000.0f;
     };
 
     // ─── Math primitives ──────────────────────────────────────────────────
@@ -312,6 +359,39 @@ namespace KhaaosLoco
      * Clamp helper (avoids pulling <algorithm> into hot headers).
      */
     float ClampFloat(float Value, float Min, float Max);
+
+    // ─── Distance matching & motion warping (Fase 32) ───────────────────
+
+    /**
+     * Predict the planar stopping distance (cm) from the current speed
+     * under constant braking deceleration: v^2 / (2a), floored at 0.
+     * Deterministic, frame-rate independent — pure kinematics.
+     */
+    float PredictStopDistanceCm(float SpeedUu, float BrakingDecel);
+
+    /**
+     * Motion warping: remap a normalized phase (0..1) of an animation whose
+     * root covers BaseDistanceCm so the root actually travels
+     * DistanceToTargetCm. The returned phase is BasePhase scaled by the
+     * distance ratio and clamped to (1 ± WarpWindowFrac) of BasePhase —
+     * the warp never exceeds the window (no rubber-banding).
+     * Deterministic; NaN-safe for degenerate distances.
+     */
+    float WarpPhaseForDistance(float BasePhase, float BaseDistanceCm,
+                               float DistanceToTargetCm, float WarpWindowFrac);
+
+    /**
+     * Deterministic pivot-foot choice for turn-in-place.
+     * Turning right (+deg) pivots the LEFT foot; turning left (-deg)
+     * pivots the RIGHT foot — matches human cross-over turns.
+     * |TurnDeg| below PivotKeepDeg keeps the previous foot (hysteresis,
+     * no flicker at the decision boundary). Weight ramps linearly with
+     * |TurnDeg| up to PivotFullWeightDeg (clamped 0..1).
+     * Returns the pivot weight and writes bOutLeft.
+     */
+    float ChoosePivotFoot(float TurnDeg, bool bPrevLeft,
+                          float PivotFullWeightDeg, float PivotKeepDeg,
+                          bool& bOutLeft);
 
     // ─── Main update ──────────────────────────────────────────────────────
 

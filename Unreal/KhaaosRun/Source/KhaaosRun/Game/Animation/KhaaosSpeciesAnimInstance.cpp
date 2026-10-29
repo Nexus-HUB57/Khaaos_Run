@@ -206,10 +206,33 @@ void UKhaaosSpeciesAnimInstance::UpdateMovementParams()
                 NaturalFootIKOffsetR = Natural->FootOffsetRightCm;
                 bNaturalTurningInPlace = Natural->bTurningInPlace;
                 NaturalTurnYawOffset = Natural->TurnYawOffsetDeg;
+                NaturalStopDistanceCm = Natural->StopDistanceCm;
+                NaturalStopMatchPhase = Natural->StopMatchPhase;
+                NaturalAirPoseBlend = Natural->AirPoseBlend;
+                NaturalPivotFootIsLeft = Natural->bPivotFootLeft;
+                NaturalPivotWeight = Natural->PivotWeight;
+                bNaturalHasVaultTarget = Natural->bHasVaultTarget;
+                NaturalVaultWarpPhase = Natural->VaultWarpPhase;
+                NaturalVaultWarpScale = Natural->VaultWarpScale;
         }
         else
         {
                 MovementSpeed = FMath::FInterpTo(MovementSpeed, RawSpeed, DeltaSeconds, 8.0f);
                 MovementDirection = FMath::FInterpTo(MovementDirection, RawDirection, DeltaSeconds, 10.0f);
+
+                // Fase 32 fallbacks: honest clamped raw paths (no component).
+                if (const UCharacterMovementComponent* MC = Character->GetCharacterMovement())
+                {
+                        const float Braking = FMath::Max(MC->BrakingDecelerationWalking, 1.0f);
+                        NaturalStopDistanceCm = (RawSpeed * RawSpeed) / (2.0f * Braking);
+                        NaturalAirPoseBlend = FMath::FInterpTo(NaturalAirPoseBlend,
+                                MC->IsFalling()
+                                        ? FMath::Clamp(-Character->GetVelocity().Z / 700.0f, -1.0f, 1.0f)
+                                        : 0.0f,
+                                DeltaSeconds, 7.0f);
+                }
+                NaturalStopMatchPhase = (RawSpeed <= 10.0f)
+                        ? FMath::FInterpTo(NaturalStopMatchPhase, 1.0f, DeltaSeconds, 14.0f)
+                        : 0.0f;
         }
 }

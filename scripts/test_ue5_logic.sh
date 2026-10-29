@@ -56,3 +56,10 @@ NATLOCO_CORE_SOURCE="${MODULE_INCLUDE_DIR}/Game/Animation/KhaaosLocomotionCore.c
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
     "${NATLOCO_TEST_SOURCE}" "${NATLOCO_CORE_SOURCE}" -o "${TEMP_DIR}/natural-locomotion-test"
 "${TEMP_DIR}/natural-locomotion-test"
+
+# Distance matching & motion warping (Fase 32). Same pure kernel — pins the
+# stop-match / warp / pivot-foot / air-pose contract added on top of it.
+DISTMATCH_TEST_SOURCE="${ROOT_DIR}/tests/ue5/distance_match_test.cpp"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
+    "${DISTMATCH_TEST_SOURCE}" "${NATLOCO_CORE_SOURCE}" -o "${TEMP_DIR}/distance-match-test"
+"${TEMP_DIR}/distance-match-test"
