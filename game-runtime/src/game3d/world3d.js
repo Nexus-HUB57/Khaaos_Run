@@ -823,11 +823,15 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const grassLOD = buildGrassFieldLOD({
     spots: grassSpots, seed: 77, texture: bladeTex, tintFamilies: grassTints,
     chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
+    // Fase 34 — faixa de IMPOSTORES entre sparse e hidden: cada chunk a 58-110m
+    // vira 1 quad cruzado (mancha de capim no horizonte por ~2 triângulos);
+    // além de 110m render 0. Leitura contínua: tufos → desbaste → mancha → nada.
+    impostorDist: 110, impostorHeight: 1.15, impostorWidth: 3.2, impostorOpacity: .55,
     // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
     sway: { strength: .07, freq: 2.1, yScale: 1.1 },
   });
   scene.add(grassLOD.group);
-  (scene.userData.swayMats ??= []).push(...grassLOD.mats);
+  (scene.userData.swayMats ??= []).push(...grassLOD.mats, ...grassLOD.impostorMats); // Fase 34 — impostor balança
   scene.userData.grassLOD = grassLOD; // main3d chama update(camX, camZ) 1×/frame
 
   // ---- loot visual ----

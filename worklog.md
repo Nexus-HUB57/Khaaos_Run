@@ -459,10 +459,30 @@ Stage Summary:
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
 
+================================================================================
+Task: Fase 34 — faixa de IMPOSTORES da grama (58-110m) + arsenal MÍTICO completo (sucata/pulse) + badge sazonal por aura no HUD
+
+Work Log:
+- Sync: worktree local foi reciclado para estado antigo (2035a66/F26) — reset duro para origin/main 8bc4f6e preservou TODO o histórico (F32/F33 paralelas intactas)
+- vegetation3d.js: grassChunkTier 4 bandas (full <28 / sparse 28-58 / impostor 58-110 / hidden >=110) com retrocompat (impostorDist <= midDist desliga); grassImpostorGeometry (2 quads cruzados, 12 verts); buildGrassFieldLOD ganha campo GLOBAL de impostores (1 InstancedMesh, capacidade = chunks) — update empacota matrizes SÓ da faixa (O(faixa)) com tint por módulo POSITIVO (kx/kz negativos) e altura média do chunk (relevo); chunk carrega kx/kz/y; impostor balança (patchSway .5x) e impostorMats vai para swayMats
+- world3d.js: buildGrassFieldLOD com impostorDist 110/opacity .55 explícitos; swayMats inclui impostor
+- attachments3d.js: MYTHIC_SKINS + sucata 'Coroa de Ferro-Velho' (#ff8c1a âmbar-ferrugem, fit 1.35) + pulse 'Prisma Soberano' (#ffe14d ouro-arco, fit 1.25) — 7 auras únicas, catálogo cobre TODO o arsenal; comentário da mythicSkinFor atualizado
+- shared/weapons.js: rollLoot — pulse rola raridade como o arsenal com PISO LENDARIO (flavor do General preservado; MÍTICA atravessa o piso, 1.75x = 84 dano)
+- hud3d.js + styles3d.css: badge mítico recebe --aura por arma; efeito SAZONAL (anel cônico girando 3.2s + shimmer 2.8s em screen blend) via pseudo-elementos, anima só visível, prefers-reduced-motion respeitado
+- Testes: +9 F34 (attachments: catálogo 7 auras/fit sucata+pulse/overlay estágio 4/rollLoot piso+MITICA roteirizado determinístico/sucata tabela completa/sim pulse mítico evolui; vegetation: 4 bandas+retrocompat, geometria impostor, faixa empacota matrizes verificadas+idempotente, buildScene W1-W4 com vento) — suíte 861: 848 pass / 0 fail / 13 skip; vite build OK
+- Evidências ao vivo (?scenario=w4&view=tps): impostores seguindo a câmera (12→17→9), matrizes = centros de chunk; f34-pulse-mitico-tps.png (Prisma Soberano + badge ouro com shimmer); f34-grama-impostor-horizonte.png
+- Doc: docs/FASE34_IMPOSTOR_GRAMA_ARSENAL_MITICO_BADGE_SAZONAL.md (3 seções)
+
+Stage Summary:
+- Horizonte ganhou INFORMAÇÃO: capim distante lê como capim (manchas verdes 58-110m por ~2 triângulos/chunk) — leitura contínua tufos→desbaste→mancha→nada
+- Grind mítico em 7/7 armas do arsenal: até a lança de início e o rifle do General têm dream skin com régua idêntica de 4 estágios
+- Badge mítico virou festival por aura — identidade visual da skin no HUD, custo ~0 (CSS, reduzido p/ motion-sensible)
+- Suite: 861 testes — 848 pass / 0 fail / 13 skip; vite build OK
+
 ---
-Task ID: 17
+Task ID: 18
 Agent: Main
-Task: Fase 34 — Revisão PhD-level de otimização de cenários/gráficos + experiência do jogador: laço adaptativo de performance (DRS + auto-tier) no cliente 3D web, settings KR_GFX_*, telemetria de FPS
+Task: Fase 35 — Revisão PhD-level de otimização de cenários/gráficos + experiência do jogador: laço adaptativo de performance (DRS + auto-tier) no cliente 3D web, settings KR_GFX_*, telemetria de FPS
 
 Work Log:
 - REVISÃO SISTEMÁTICA (5 módulos gráficos + HUD + bootstrap): quality3d resolvia o tier UMA vez por sessão (nenhuma reação a carga runtime — combate com 24 atores + SSR + partículas + grama colapsava o frametime sem contra-medida); lod3d (histerese + frustum gate), grass LOD chunks (F32) e contact shadows instanciadas avaliados como sólidos (referência de design, intocados)
@@ -481,3 +501,4 @@ Stage Summary:
 - Tier MEDIUM deixou de pagar SSR (G2) — maior ganho de custo por linha trocada
 - Jogador ganhou controle completo (painel GFX persistido KR_GFX_*) + acessibilidade (movimento reduzido, sensibilidade) + telemetria
 - Suíte game-runtime: 875 testes — 862 pass / 0 fail / 13 skip (23 novos); determinismo da sim intocado (rng/nomeada não tocados)
+

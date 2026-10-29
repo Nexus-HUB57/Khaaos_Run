@@ -101,12 +101,27 @@ export const MYTHIC_SKINS = Object.freeze({
     aura: '#8ef7e0',                              // menta-espectral
     fit: Object.freeze({ scale: .55, y: 0, z: -.02 }),
   }),
+  // Fase 34 — o arsenal SEM sockets entra no grind mítico (mesma régua de 4
+  // estágios; fit assenta o overlay na silhueta própria).
+  sucata: Object.freeze({
+    id: 'MITICA', weapon: 'sucata', stages: 4,
+    name: 'Sucata · Coroa de Ferro-Velho',
+    aura: '#ff8c1a',                              // âmbar-ferrugem (forno de ferro-velho)
+    fit: Object.freeze({ scale: 1.35, y: .01, z: -.12 }),
+  }),
+  pulse: Object.freeze({
+    id: 'MITICA', weapon: 'pulse', stages: 4,
+    name: 'Pulse · Prisma Soberano',
+    aura: '#ffe14d',                              // ouro-arco (energia do General)
+    fit: Object.freeze({ scale: 1.25, y: .01, z: -.04 }),
+  }),
 });
 
 // Alias legado (Fase 30) — a AR-47 continua sendo a referência canônica.
 export const MYTHIC_SKIN = MYTHIC_SKINS.ar47;
 
-// Resolução PURA: skin mítica da arma (null se não tiver — sucata/pulse).
+// Resolução PURA: skin mítica da arma (null se não tiver — Fase 34: catálogo
+// cobre TODO o arsenal: ar47/m4/mp5/barrett/g19 + sucata/pulse sem sockets).
 export function mythicSkinFor(weaponId = null) {
   return MYTHIC_SKINS[weaponId] ?? null;
 }
