@@ -19,6 +19,91 @@ export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_
 /** Path canônico do endpoint WS da transmissão (roteamento de upgrade). */
 export const SPECTATOR_WS_PATH = '/ws/spectator';
 
+// ─── Fase 24 — métricas do DIRETOR (client→server→/admin) ───────────────────
+// O cliente reporta o que o diretor FEZ na transmissão (cortes por motivo/
+// hazard, reservas manuais da navegação, liga/desliga) em frames
+// DIRECTOR_METRICS. O payload do cliente NUNCA é confiável: whitelist de
+// vocabulário + clamp numérico antes de qualquer agregação/exibição.
+export const DIRECTOR_CUT_REASONS = ['hazard-start', 'target-lost', 'hazard-escalation'];
+export const DIRECTOR_HAZARDS = ['tsunami', 'lava', 'gravity', 'acid'];
+// Fase 26 — vocabulário canônico dos PESOS de perigo (mesma gramática do
+// DANGER_WEIGHTS do cliente — paridade JS↔TS testada byte a byte).
+export const DIRECTOR_WEIGHT_KEYS = ['knocked', 'hazardDamage', 'anchorZone', 'outsideRing', 'recentDamage', 'lowHealth'];
+const DIRECTOR_METRIC_CAP = 1_000_000;
+
+/** Sanitiza a afinação do diretor (Fase 26): margem inteira clampada + pesos
+ *  só do vocabulário canônico; lixo/hostil vira tuning zerado (nunca lança). */
+export function sanitizeDirectorTuning(raw) {
+  const obj = raw && typeof raw === 'object' ? raw : {};
+  const clamp = (v) => Math.min(DIRECTOR_METRIC_CAP, Math.max(0, Math.floor(Number(v) || 0)));
+  const weights = {};
+  const src = obj.weights && typeof obj.weights === 'object' ? obj.weights : null;
+  if (src) {
+    for (const k of DIRECTOR_WEIGHT_KEYS) if (src[k] != null) weights[k] = clamp(src[k]);
+  }
+  return { margin: clamp(obj.margin), weights };
+}
+
+/** Sanitiza o relatório DIRECTOR_METRICS (campos desconhecidos descartados,
+ *  números clampados a [0, 1e6]) — entrada bruta do WS. */
+export function sanitizeDirectorReport(raw) {
+  const clamp = (v) => Math.min(DIRECTOR_METRIC_CAP, Math.max(0, Math.floor(Number(v) || 0)));
+  const byKey = (src, keys) => {
+    const out = {};
+    if (!src || typeof src !== 'object') return out;
+    for (const k of keys) if (src[k] != null) out[k] = clamp(src[k]);
+    return out;
+  };
+  const obj = raw && typeof raw === 'object' ? raw : {};
+  const cuts = obj.cuts && typeof obj.cuts === 'object' ? obj.cuts : {};
+  return {
+    enabled: !!obj.enabled,
+    activeHazard: DIRECTOR_HAZARDS.includes(obj.activeHazard) ? obj.activeHazard : null,
+    cuts: {
+      total: clamp(cuts.total),
+      byReason: byKey(cuts.byReason, DIRECTOR_CUT_REASONS),
+      byHazard: byKey(cuts.byHazard, DIRECTOR_HAZARDS),
+    },
+    manual: {
+      followSelects: clamp(obj.manual?.followSelects),
+      cycles: clamp(obj.manual?.cycles),
+    },
+    toggles: {
+      on: clamp(obj.toggles?.on),
+      off: clamp(obj.toggles?.off),
+    },
+    tuning: sanitizeDirectorTuning(obj.tuning), // Fase 26 — whitelist própria
+  };
+}
+
+/** Soma relatórios JÁ sanitizados — agregado consumido pelo /admin (Command
+ *  Monitor). `reporting` = quantos espectadores enviaram dado; `enabled` =
+ *  quantos com o diretor ligado. */
+export function aggregateDirectorReports(reports) {
+  const out = {
+    reporting: 0, enabled: 0,
+    cuts: { total: 0, byReason: {}, byHazard: {} },
+    manual: { followSelects: 0, cycles: 0 },
+    toggles: { on: 0, off: 0 },
+    tuning: null,
+  };
+  for (const r of reports ?? []) {
+    if (!r) continue;
+    out.reporting++;
+    if (r.enabled) out.enabled++;
+    out.cuts.total += r.cuts?.total ?? 0;
+    for (const k of Object.keys(r.cuts?.byReason ?? {})) out.cuts.byReason[k] = (out.cuts.byReason[k] ?? 0) + r.cuts.byReason[k];
+    for (const k of Object.keys(r.cuts?.byHazard ?? {})) out.cuts.byHazard[k] = (out.cuts.byHazard[k] ?? 0) + r.cuts.byHazard[k];
+    out.manual.followSelects += r.manual?.followSelects ?? 0;
+    out.manual.cycles += r.manual?.cycles ?? 0;
+    out.toggles.on += r.toggles?.on ?? 0;
+    out.toggles.off += r.toggles?.off ?? 0;
+    // Fase 26 — afinação é ESTADO (margem/pesos vigentes): last report wins
+    if (r.tuning) out.tuning = { margin: r.tuning.margin, weights: { ...r.tuning.weights } };
+  }
+  return out;
+}
+
 export const SpectatorConfig = {
   /** Atraso anti-ghosting (ms) antes do espectador receber o estado */
   delayMs: 10_000,
@@ -159,6 +244,12 @@ export class SpectatorPipeline {
         if (msg?.type === 'SET_CAMERA') {
           if (SPECTATOR_CAMERAS.includes(msg.cameraMode)) client.cameraMode = msg.cameraMode;
           client.followPlayerId = typeof msg.followPlayerId === 'string' ? msg.followPlayerId : null;
+        } else if (msg?.type === 'DIRECTOR_METRICS') {
+          // Fase 24 — relatório do diretor da transmissão (sanitizado; cliente
+          // não-confiável). Último relatório por conexão — a desconexão remove
+          // a contribuição do agregado automaticamente.
+          client.director = sanitizeDirectorReport(msg.metrics);
+          client.director.reportedAt = Date.now();
         }
       } catch { /* mensagem inválida nunca derruba o espectador */ }
     });
@@ -253,6 +344,13 @@ export class SpectatorPipeline {
 
   countFor(roomId) { return this.rooms.get(roomId)?.spectators.size ?? 0; }
 
+  /** Fase 24 — agregado do diretor sobre as conexões vivas (last report wins). */
+  #directorAggregates() {
+    return aggregateDirectorReports(
+      [...this.spectators.values()].map((c) => c.director).filter(Boolean),
+    );
+  }
+
   /** Métricas do pipeline — consumidas pelo /admin/metrics (Command Monitor). */
   metrics() {
     return {
@@ -273,6 +371,7 @@ export class SpectatorPipeline {
         globalMaxSpectators: this.config.globalMaxSpectators,
         batchIntervalMs: this.config.batchIntervalMs,
       },
+      director: this.#directorAggregates(), // Fase 24 — métricas do diretor
       now: Date.now(),
     };
   }

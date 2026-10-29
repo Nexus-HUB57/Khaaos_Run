@@ -1,0 +1,232 @@
+# =============================================================================
+# Khaaos Run — M4 Acceptance: UE5.8 real (UBT + Automation + 2 clientes) e EOS
+# real (credenciais reais, sem placeholders).
+# =============================================================================
+# Aceite do M4 (docs/ROADMAP.md):
+#   1. "Em runner UE5.8 licenciado, compilar Editor e Dedicated Server por
+#      UnrealBuildTool, executar Automation Tests, empacotar e conectar dois
+#      clientes" → job ue58-licensed (container oficial da Epic — mesmo caminho
+#      do ue58-container-build.yml; sem UE_CONTAINER_PAT o job é PULADO com
+#      resumo explicativo, nunca falha por falta de engine);
+#   2. "Configurar EOS Dev/Staging com credenciais reais protegidas e validar
+#      login, sessões/matchmaking, reconnect e encerramento; manter mock apenas
+#      como teste unitário" → job eos-contract: gate de placeholders +
+#      eos-live-smoke contra api.epicgames.dev REAL (skip limpo sem secrets,
+#      estrito com go-live=true).
+#
+# Contratos (grep): EOS_LIVE_SMOKE_OK | EOS_LIVE_SMOKE_SKIPPED |
+#                   AUTOMATION_OK | TWO_CLIENT_CONNECT_SMOKE_OK
+# =============================================================================
+
+name: M4 — UE5.8/EOS Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      golive:
+        description: 'Modo go-live: exige credenciais reais (falha se ausentes)'
+        type: boolean
+        default: false
+      package:
+        description: 'Empacotar (BuildCookRun) além de compilar — mais lento'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/**'
+      - 'Unreal/KhaaosRun/Config/DefaultEOS.ini'
+      - 'scripts/eos/**'
+      - 'scripts/ue5/**'
+      - '.github/workflows/m4-ue5-eos-acceptance.yml'
+
+concurrency:
+  group: m4-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Job 1: contrato EOS com credenciais REAIS (endpoint api.epicgames.dev) ──
+  eos-contract:
+    name: EOS real — placeholders gate + client_credentials live
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Injeção de credenciais (quando os secrets EOS_* existem)
+        env:
+          EOS_PRODUCT_ID: ${{ secrets.EOS_PRODUCT_ID }}
+          EOS_SANDBOX_ID: ${{ secrets.EOS_SANDBOX_ID }}
+          EOS_DEPLOYMENT_ID: ${{ secrets.EOS_DEPLOYMENT_ID }}
+          EOS_CLIENT_ID: ${{ secrets.EOS_CLIENT_ID }}
+          EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
+        run: |
+          if [ -n "${EOS_CLIENT_ID}" ] && [ -n "${EOS_CLIENT_SECRET}" ]; then
+            bash scripts/eos/inject_eos_credentials.sh
+            echo "EOS_CREDS=real" >> "$GITHUB_ENV"
+          else
+            echo "ℹ️ secrets EOS_* ausentes — placeholders permanecem (mock unitário cobre; go-live exige reais)"
+            echo "EOS_CREDS=missing" >> "$GITHUB_ENV"
+          fi
+
+      - name: EOS live smoke (endpoint REAL — client_credentials)
+        env:
+          EOS_CLIENT_ID: ${{ secrets.EOS_CLIENT_ID }}
+          EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
+          EOS_DEPLOYMENT_ID: ${{ secrets.EOS_DEPLOYMENT_ID }}
+        run: |
+          set -o pipefail
+          if [ "${{ github.event.inputs.golive || 'false' }}" = "true" ]; then
+            node scripts/eos/eos-live-smoke.mjs --strict --full 2>&1 | tee /tmp/eos-live.log
+          else
+            node scripts/eos/eos-live-smoke.mjs --full 2>&1 | tee /tmp/eos-live.log
+          fi
+          grep -qE "^EOS_LIVE_SMOKE_OK$|^EOS_LIVE_SMOKE_SKIPPED$" /tmp/eos-live.log || {
+            echo "❌ contrato EOS live ausente"; exit 1;
+          }
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "## M4 — EOS real"
+            echo ""
+            if grep -q "^EOS_LIVE_SMOKE_OK$" /tmp/eos-live.log 2>/dev/null; then
+              echo "**EOS_LIVE_SMOKE_OK** — credenciais reais validadas contra api.epicgames.dev (client_credentials)."
+            elif grep -q "^EOS_LIVE_SMOKE_SKIPPED$" /tmp/eos-live.log 2>/dev/null; then
+              echo "**EOS_LIVE_SMOKE_SKIPPED** — secrets EOS_* ausentes; configure-os para validação real."
+            else
+              echo "**FALHA** — ver etapas acima."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─── Job 2: UE5.8 licenciado — UBT + Automation + dois clientes (+ package) ──
+  ue58-gate:
+    name: Engine licenciada gate (UE_CONTAINER_PAT)
+    runs-on: ubuntu-latest
+    outputs:
+      has_pat: ${{ steps.check.outputs.has_pat }}
+    steps:
+      - name: Check Epic container credential
+        env:
+          UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+        run: |
+          if [ -n "$UE_CONTAINER_PAT" ]; then
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+            echo "✅ UE_CONTAINER_PAT configurado — trilha UE5.8 real habilitada"
+          else
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha;"
+            echo "   a estrutura C++ é validada no ue5-preflight e a compilação exige o binário licenciado)."
+          fi
+
+  ue58-licensed:
+    name: UE5.8 real — UBT Server/Editor/Client + Automation + 2 clientes
+    needs: ue58-gate
+    if: needs.ue58-gate.outputs.has_pat == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.UE_CONTAINER_PAT }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Resolve EAC SDK (real vs stub)
+        run: |
+          set -euo pipefail
+          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
+          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
+          [[ "${EAC_SDK_MODE}" == "real" ]] && echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV || true
+
+      - name: UBT — Dedicated Server / Editor / Client (Linux Development)
+        env:
+          UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+        run: |
+          set -euo pipefail
+          UBT="/home/ue4/UnrealEngine/Engine/Build/BatchFiles/Build.sh"
+          if [ ! -f "$UBT" ]; then
+            UBT="$(find / -maxdepth 6 -path '*/Engine/Build/BatchFiles/Build.sh' 2>/dev/null | head -1)"
+          fi
+          [ -n "$UBT" ] || { echo "::error::Build.sh da engine não encontrado na imagem — ajuste UE_CONTAINER_IMAGE"; exit 1; }
+          for target in KhaaosRunServer KhaaosRunEditor KhaaosRun; do
+            echo "── UBT ${target} ──"
+            bash "$UBT" "${target}" Linux Development -project="$UPROJECT" -waitmutex
+          done
+
+      - name: Automation Tests (suite Khaaos, headless)
+        run: |
+          set -euo pipefail
+          EDITOR_BIN="$(find Unreal/KhaaosRun/Binaries/Linux -maxdepth 1 -name 'KhaaosRunEditor*' 2>/dev/null | head -1)"
+          if [ -z "$EDITOR_BIN" ]; then
+            # Fallback: caminho da engine no container (layout varia por imagem).
+            EDITOR_BIN="$(find / -maxdepth 8 -name 'UnrealEditor' -path '*Binaries/Linux*' 2>/dev/null | head -1)"
+          fi
+          [ -n "$EDITOR_BIN" ] || { echo "::error::editor não encontrado"; exit 1; }
+          "$EDITOR_BIN" "${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject" \
+            -ExecCmds="Automation RunTests Khaaos -TestExit=Exit" \
+            -unattended -nopause -nosplash -nullrhi -stdout -ForceLogFlush \
+            -ReportOutputPath="${{ github.workspace }}/AutomationReport" -ReportExportFormat XML \
+            2>&1 | tee /tmp/automation.log
+          grep -q "Result={Succeeded}" /tmp/automation.log || { echo "❌ nenhum teste concluiu com sucesso"; exit 1; }
+          if grep -q "Result={Failed}" /tmp/automation.log; then
+            echo "❌ Automation com falhas:"; grep "Result={Failed}" /tmp/automation.log | head -20; exit 1
+          fi
+          echo "AUTOMATION_OK" | tee /tmp/automation-contract.txt
+
+      - name: Dois clientes conectam ao servidor dedicado REAL
+        run: |
+          set -o pipefail
+          SERVER_BIN="$(find Unreal/KhaaosRun/Binaries/Linux -maxdepth 1 -name 'KhaaosRunServer*' | head -1)"
+          CLIENT_BIN="$(find Unreal/KhaaosRun/Binaries/Linux -maxdepth 1 -name 'KhaaosRun' -not -name 'KhaaosRunServer*' -not -name 'KhaaosRunEditor*' | head -1)"
+          node scripts/ue5/two_client_connect_smoke.mjs \
+            --server-bin "$SERVER_BIN" --client-bin "$CLIENT_BIN" \
+            --expect-clients 2 --timeout-ms 120000 2>&1 | tee /tmp/two-client.log
+          grep -q "^TWO_CLIENT_CONNECT_SMOKE_OK$" /tmp/two-client.log || { echo "❌ contrato two-client ausente"; exit 1; }
+
+      - name: Empacotar (opcional — input package=true)
+        if: github.event.inputs.package == 'true'
+        run: |
+          set -euo pipefail
+          UAT="$(find / -maxdepth 6 -path '*/Engine/Build/BatchFiles/RunUAT.sh' 2>/dev/null | head -1)"
+          [ -n "$UAT" ] || { echo "::error::RunUAT.sh não encontrado na imagem"; exit 1; }
+          bash "$UAT" BuildCookRun -project="${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject" \
+            -noP4 -platform=Linux -clientconfig=Development -serverconfig=Development \
+            -cook -allmaps -build -stage -pak -archive \
+            -archivedirectory="${{ github.workspace }}/Package"
+          echo "PACKAGE_OK"
+
+      - name: Upload dos artefatos (binários + relatórios)
+        uses: actions/upload-artifact@v4
+        with:
+          name: m4-ue58-evidence-${{ github.sha }}
+          path: |
+            Unreal/KhaaosRun/Binaries/Linux/*
+            AutomationReport/**
+            /tmp/automation.log
+            /tmp/two-client.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "## M4 — UE5.8 real"
+            echo ""
+            if [ "${{ needs.ue58-gate.outputs.has_pat }}" != "true" ]; then
+              echo "**SKIPPED** — configure o secret UE_CONTAINER_PAT (conta GitHub vinculada à Epic) para habilitar a trilha licenciada."
+            else
+              grep -q "AUTOMATION_OK" /tmp/automation-contract.txt 2>/dev/null && echo "**AUTOMATION_OK** — suite Khaaos executada com exit 0" || echo "Automation: ver etapas"
+              grep -q "^TWO_CLIENT_CONNECT_SMOKE_OK$" /tmp/two-client.log 2>/dev/null && echo "**TWO_CLIENT_CONNECT_SMOKE_OK** — dois clientes reais conectaram ao servidor dedicado" || echo "Two-client: ver etapas"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

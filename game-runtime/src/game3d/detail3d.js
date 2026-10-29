@@ -188,6 +188,31 @@ export function propPlacements(layout, { seed = 'props', density = 1 } = {}) {
       push(type, off[0], off[1], rng.next() * Math.PI, .9 + rng.next() * .3);
     }
   }
+
+  // Barburhen — escombros de manutenção e ruína industrial.
+  // São apenas dressing visual: ficam fora dos colliders e usam a mesma seed
+  // do mapa para que o setor permaneça reproduzível entre sessões/replays.
+  if (layout.scenarioId === 'Barburhen') {
+    for (const s of layout.structures) {
+      if (s.h < 2 || s.kind === 'monolith' || s.kind === 'crate') continue;
+      const count = Math.round((s.h >= 6 ? 5 : 3) * density);
+      for (let i = 0; i < count; i++) {
+        const side = rng.int(0, 3);
+        const along = (rng.next() - .5) * .78;
+        const edge = side === 0 ? [s.x + s.w / 2 + 1.8, s.z + along * s.d]
+          : side === 1 ? [s.x - s.w / 2 - 1.8, s.z + along * s.d]
+            : side === 2 ? [s.x + along * s.w, s.z + s.d / 2 + 1.8]
+              : [s.x + along * s.w, s.z - s.d / 2 - 1.8];
+        push(rng.next() < .72 ? 'rubble' : 'rubbleSlab', edge[0] + (rng.next() - .5) * .8,
+          edge[1] + (rng.next() - .5) * .8, rng.next() * Math.PI * 2, .55 + rng.next() * .85);
+      }
+    }
+    // Pequenos montes soltos quebram áreas vazias entre vias e pátios.
+    for (let i = 0; i < Math.round(24 * density); i++) {
+      const x = (rng.next() - .5) * 380, z = (rng.next() - .5) * 380;
+      push('rubble', x, z, rng.next() * Math.PI * 2, .45 + rng.next() * .65);
+    }
+  }
   return out;
 }
 

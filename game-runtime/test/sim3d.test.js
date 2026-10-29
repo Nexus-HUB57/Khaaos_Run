@@ -37,7 +37,10 @@ test('disparo consome munição, aplica cooldown e mata bot com dano suficiente'
   const p = s.player;
   const bot = s.bots[0];
   // linha de tiro unitária: remove estruturas para validar balística de forma determinística
+  // Fase 25 — o mundo físico é COMPOSTO (layout + folhas dinâmicas): limpa os dois
   s.world.colliders.length = 0;
+  s.doors.length = 0;
+  s.physicsWorld.colliders = s.world.colliders;
   p.x = 0; p.z = 0; p.yaw = 0;
   bot.x = 0; bot.z = -12; bot.y = 0;
   const mag0 = p.ammoMag;
@@ -60,7 +63,10 @@ test('headshot multiplica dano e rende XP bônus', () => {
   s.start('belt');
   const p = s.player, bot = s.bots[0];
   // linha de tiro unitária: remove estruturas para validar balística de forma determinística
+  // Fase 25 — o mundo físico é COMPOSTO (layout + folhas dinâmicas): limpa os dois
   s.world.colliders.length = 0;
+  s.doors.length = 0;
+  s.physicsWorld.colliders = s.world.colliders;
   p.x = 0; p.z = 0; p.yaw = 0;
   bot.x = 0; bot.z = -8; bot.y = 0;
   // Barrett headshot: 92 * 1.75 = 161 — atravessa o soak de armadura e elimina

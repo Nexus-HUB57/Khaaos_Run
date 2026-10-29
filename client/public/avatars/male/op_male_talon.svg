@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGlow-OP_MALE_TALON" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#050508" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skinGrad-OP_MALE_TALON" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d99a5b"/>
+      <stop offset="100%" stop-color="#a86c33"/>
+    </linearGradient>
+    <linearGradient id="jacketGrad-OP_MALE_TALON" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a2f3a"/>
+      <stop offset="100%" stop-color="#12151c"/>
+    </linearGradient>
+    <linearGradient id="visorGrad-OP_MALE_TALON" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="55%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bgGlow-OP_MALE_TALON)"/>
+  <!-- grade holográfica de fundo (assinatura hacker) -->
+  <g stroke="#38BDF8" stroke-opacity="0.12" stroke-width="1">
+    <path d="M0 128 H512 M0 256 H512 M0 384 H512 M128 0 V512 M256 0 V512 M384 0 V512"/>
+  </g>
+
+  <!-- torso: jaqueta techwear volumosa -->
+  <path d="M156 512 L166 356 Q170 318 208 306 L304 306 Q342 318 346 356 L356 512 Z" fill="url(#jacketGrad-OP_MALE_TALON)"/>
+  <path d="M176 340 L336 340" stroke="#0EA5E9" stroke-opacity="0.55" stroke-width="4"/>
+  <path d="M182 372 L330 372" stroke="#38BDF8" stroke-opacity="0.3" stroke-width="3"/>
+  <!-- gola alta volumosa -->
+  <path d="M206 312 L212 268 Q256 252 300 268 L306 312 Q256 330 206 312 Z" fill="#1a1e26"/>
+  <!-- tiras soltas (velocidade) -->
+  <path d="M188 344 Q176 420 190 496" stroke="#0e1116" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M324 344 Q338 428 320 500" stroke="#0e1116" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <!-- LED de braço: azul à esquerda, laranja à direita -->
+  <rect x="170" y="368" width="10" height="52" rx="4" fill="#38BDF8" opacity="0.95"/>
+  <rect x="332" y="368" width="10" height="52" rx="4" fill="#FB923C" opacity="0.95"/>
+
+  <!-- cabeça -->
+  <ellipse cx="256" cy="216" rx="62" ry="70" fill="url(#skinGrad-OP_MALE_TALON)"/>
+  <!-- moicano azul estilizado -->
+  <path d="M236 152 Q256 138 276 152 L280 108 Q256 92 232 108 Z" fill="#1e40af"/>
+  <path d="M244 118 L246 84 Q256 78 266 84 L268 118 Q256 112 244 118 Z" fill="#2563eb"/>
+  <!-- laterais raspadas -->
+  <path d="M194 208 Q198 168 226 152 L228 176 Q210 190 206 214 Z" fill="#0f1218"/>
+  <path d="M318 208 Q314 168 286 152 L284 176 Q302 190 306 214 Z" fill="#0f1218"/>
+  <!-- visor digital na testa -->
+  <rect x="204" y="182" width="104" height="26" rx="8" fill="url(#visorGrad-OP_MALE_TALON)" opacity="0.92"/>
+  <rect x="212" y="188" width="30" height="6" rx="3" fill="#082f49" opacity="0.75"/>
+  <rect x="248" y="188" width="16" height="6" rx="3" fill="#082f49" opacity="0.55"/>
+  <rect x="270" y="188" width="30" height="6" rx="3" fill="#082f49" opacity="0.75"/>
+  <!-- olhos + boca -->
+  <ellipse cx="232" cy="228" rx="8" ry="5" fill="#22d3ee"/>
+  <ellipse cx="280" cy="228" rx="8" ry="5" fill="#22d3ee"/>
+  <path d="M240 258 Q256 266 272 258" stroke="#7c4a1e" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- bracelete hacker (skill) -->
+  <rect x="168" y="452" width="34" height="18" rx="6" fill="#1f2937"/>
+  <circle cx="185" cy="461" r="5" fill="#22d3ee"/>
+  <rect x="310" y="452" width="34" height="18" rx="6" fill="#1f2937"/>
+  <circle cx="327" cy="461" r="5" fill="#FB923C"/>
+
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">TALON</text>
+  <!-- pulso de varredura decorativo -->
+  <circle cx="256" cy="216" r="180" fill="none" stroke="#FB923C" stroke-opacity="0.22" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="210" fill="none" stroke="#38BDF8" stroke-opacity="0.14" stroke-width="2"/>
+</svg>

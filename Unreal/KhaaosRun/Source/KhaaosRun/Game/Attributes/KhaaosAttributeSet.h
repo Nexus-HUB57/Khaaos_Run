@@ -105,6 +105,16 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithExplosionDamageReduction, Category = "Khaaos|Attributes|Species")
 	FGameplayAttributeData OnithExplosionDamageReduction;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, OnithExplosionDamageReduction)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData AirSpeedBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, AirSpeedBonus)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData WaterRegenPerSecond;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, WaterRegenPerSecond)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData HealBonusPercent;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, HealBonusPercent)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData FireRateBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, FireRateBonus)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData ReloadSpeedBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, ReloadSpeedBonus)
 
 	/** Attack range in map percentage. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))

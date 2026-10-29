@@ -1,0 +1,176 @@
+# =============================================================================
+# Khaaos Run — Cross-Replica Smoke (KR_DISTRIBUTED=1) — staging com 2 réplicas
+# reais + Redis REAL, rodando ao vivo em cada mudança da cadeia distribuída.
+# =============================================================================
+# Dois níveis de prova:
+#
+#   Job 1 (processos): 2 réplicas reais do servidor autoritativo (processos SO
+#   separados, spawn mode) + Redis 7 REAL (service container). Prova
+#   ownership/fencing no Redis, redirect ao dono vivo, resume sem duplicar,
+#   relay espelhado entre réplicas, failover por SIGKILL e SLO smoke12.
+#
+#   Job 2 (staging compose): a stack completa de staging
+#   (infra/staging/docker-compose.cross-replica.yml — PostgreSQL 16, Redis 7,
+#   2 réplicas em containers, migrações reais) com o MESMO smoke em modo
+#   attach — o "deploy staging" executado de ponta a ponta.
+#
+# Contrato de aceite (grep): CROSS_REPLICA_SMOKE_OK
+# Regressões em server/distributed.js, server/store.js (sessões compartilhadas)
+# ou na stack de staging falham AQUI antes do merge.
+# =============================================================================
+
+name: "16 — Cross-Replica Smoke (KR_DISTRIBUTED)"
+
+on:
+  pull_request:
+    paths:
+      - 'game-runtime/server/**'
+      - 'game-runtime/scripts/smoke-cross-replica.mjs'
+      - 'game-runtime/scripts/loadgen.mjs'
+      - 'game-runtime/scripts/make-loadgen-users.mjs'
+      - 'infra/staging/**'
+      - 'game-runtime/Dockerfile'
+      - '.github/workflows/cross-replica-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'game-runtime/server/**'
+      - 'game-runtime/scripts/smoke-cross-replica.mjs'
+      - 'game-runtime/scripts/loadgen.mjs'
+      - 'game-runtime/scripts/make-loadgen-users.mjs'
+      - 'infra/staging/**'
+      - 'game-runtime/Dockerfile'
+      - '.github/workflows/cross-replica-smoke.yml'
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 11 * * 1" # drift semanal: segunda-feira 11:00 UTC
+
+concurrency:
+  group: cross-replica-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  processos:
+    name: 2 réplicas reais (processos) + Redis real — ownership/redirect/failover/SLO
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Dependências (game-runtime)
+        working-directory: game-runtime
+        run: npm ci
+
+      - name: Smoke cross-replica AO VIVO (spawn mode — 2 processos + Redis real)
+        working-directory: game-runtime
+        env:
+          SMOKE_REDIS_URL: redis://127.0.0.1:6379
+        run: |
+          set -o pipefail
+          node scripts/smoke-cross-replica.mjs --redis-url redis://127.0.0.1:6379 2>&1 | tee /tmp/xreplica-processos.log
+          grep -q "^CROSS_REPLICA_SMOKE_OK$" /tmp/xreplica-processos.log || {
+            echo "❌ contrato CROSS_REPLICA_SMOKE_OK ausente"; exit 1;
+          }
+
+      - name: Resumo do contrato
+        if: always()
+        run: |
+          {
+            echo "## Cross-Replica Smoke (processos) — resultado"
+            echo '```'
+            grep -E "^\[xreplica\]" /tmp/xreplica-processos.log 2>/dev/null | tail -25 || echo "(log indisponível)"
+            echo '```'
+            grep -q "^CROSS_REPLICA_SMOKE_OK$" /tmp/xreplica-processos.log 2>/dev/null \
+              && echo "**CROSS_REPLICA_SMOKE_OK** — 2 réplicas reais + Redis real: ownership/fencing, redirect, resume, relay, failover e SLO provados." \
+              || echo "**FALHA** — ver etapas acima."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log do smoke (artifact)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xreplica-processos-log
+          path: /tmp/xreplica-processos.log
+          retention-days: 7
+
+  staging-compose:
+    name: Staging compose real (PG 16 + Redis 7 + 2 réplicas) — smoke attach
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KR_XREP_REDIS_PORT: "6399"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Dependências (game-runtime — hash de usuários do smoke)
+        working-directory: game-runtime
+        run: npm ci
+
+      - name: Verify cross-replica contra o staging vivo (deploy + smoke attach)
+        working-directory: infra/staging
+        run: |
+          set -o pipefail
+          bash verify-cross-replica.sh 2>&1 | tee /tmp/xreplica-staging.log
+          grep -q "^CROSS_REPLICA_SMOKE_OK$" /tmp/xreplica-staging.log || {
+            echo "❌ contrato CROSS_REPLICA_SMOKE_OK ausente no staging compose"; exit 1;
+          }
+
+      - name: Evidência no Redis real (chaves de ownership/registry/relay)
+        if: always()
+        working-directory: infra/staging
+        run: |
+          docker compose -f docker-compose.cross-replica.yml exec -T redis redis-cli --scan --pattern 'kr:*' | head -30 || true
+
+      - name: Resumo do contrato
+        if: always()
+        run: |
+          {
+            echo "## Cross-Replica Smoke (staging compose) — resultado"
+            echo '```'
+            grep -E "^\[xreplica\]" /tmp/xreplica-staging.log 2>/dev/null | tail -25 || echo "(log indisponível)"
+            echo '```'
+            grep -q "^CROSS_REPLICA_SMOKE_OK$" /tmp/xreplica-staging.log 2>/dev/null \
+              && echo "**CROSS_REPLICA_SMOKE_OK** — staging real (PG+Redis+2 réplicas): cadeia distribuída provada de ponta a ponta." \
+              || echo "**FALHA** — ver etapas acima."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Logs das réplicas (artifact)
+        if: failure()
+        working-directory: infra/staging
+        run: |
+          docker compose -f docker-compose.cross-replica.yml logs app-a app-b redis > /tmp/xreplica-containers.log 2>&1 || true
+
+      - name: Upload dos logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xreplica-staging-logs
+          path: /tmp/xreplica-*.log
+          retention-days: 7
+
+      - name: Teardown
+        if: always()
+        working-directory: infra/staging
+        run: docker compose -f docker-compose.cross-replica.yml down -v --remove-orphans || true

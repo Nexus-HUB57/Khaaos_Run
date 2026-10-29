@@ -665,3 +665,331 @@ export function labelSprite(text, color = '#e8e3d5') {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+// ============================================================================
+// Fase 22 — CENÁRIOS VIVOS: materiais por mundo (nível Free Fire).
+// Lama de mangue, água de poça com ripple, neve, lava sob crosta rachada,
+// runa astral, fenda do vazio, toldo listrado, tábuas de passarela e areia
+// de duna. Tudo procedural (canvas) — zero assets externos, padrão do repo.
+// ============================================================================
+
+// cache próprio p/ materiais de cenário (mesma estratégia do memo() interno)
+const _dressMemo = new Map();
+function dressMemo(key, build) {
+  if (!_dressMemo.has(key)) _dressMemo.set(key, build());
+  return _dressMemo.get(key);
+}
+
+// ---- lama de mangue (Priadus) — solo úmido escuro com poças rasas ----
+function mudCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#3d3628'; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 700; i++) {
+    const r = random();
+    x.fillStyle = r < .45 ? `rgba(48,42,30,${.25 + random() * .35})`
+      : r < .8 ? `rgba(58,54,38,${.2 + random() * .3})`
+        : `rgba(34,44,36,${.15 + random() * .25})`; // musgo úmido
+    x.beginPath(); x.arc(random() * 256, random() * 256, 2 + random() * 14, 0, 7); x.fill();
+  }
+  // brilho de umidade (manchas claras frias)
+  for (let i = 0; i < 40; i++) {
+    x.fillStyle = `rgba(120,130,120,${.04 + random() * .07})`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, 8 + random() * 20, 0, 7); x.fill();
+  }
+  noise(x, 256, 0.08);
+  return c;
+}
+export function mudMaterial(repeat = 3) {
+  return dressMemo(`mud${repeat}`, () => pbr(mudCanvas(), { repeat, rough: .55, strength: 1.4, extra: { color: new THREE.Color('#cdd4c8') } }));
+}
+
+// ---- água de poça (Priadus) — translúcida com relevo de ondulação ----
+function rippleCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#808080'; x.fillRect(0, 0, 256, 256);
+  // interferência de 4 fontes senoidais → cristas suaves (vira normal map)
+  const img = x.getImageData(0, 0, 256, 256), d = img.data;
+  for (let y = 0; y < 256; y++) {
+    for (let px = 0; px < 256; px++) {
+      const h =
+        Math.sin(px * 0.11 + y * 0.04) * .5 +
+        Math.sin(y * 0.09 - px * 0.05) * .5 +
+        Math.sin((px + y) * 0.06) * .35 +
+        Math.sin(Math.hypot(px - 128, y - 64) * 0.09) * .3;
+      const v = 128 + h * 44;
+      const o = (y * 256 + px) * 4;
+      d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255;
+    }
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+}
+export function waterPoolMaterial(tint = '#2e6b63') {
+  return dressMemo(`water${tint}`, () => {
+    const normal = normalMapFromCanvas(rippleCanvas(), { strength: 1.1 });
+    normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
+    normal.repeat.set(2, 2);
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(tint), transparent: true, opacity: .8,
+      roughness: .12, metalness: .08, normalMap: normal,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+  });
+}
+
+// ---- neve (Barburhen) — branca azulada com flocos e relevo suave ----
+function snowCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#dfe8ee'; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 420; i++) {
+    x.fillStyle = `rgba(${214 + random() * 40},${224 + random() * 30},${236 + random() * 18},${.2 + random() * .4})`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, 1 + random() * 9, 0, 7); x.fill();
+  }
+  // sombras azuladas de acumulação
+  for (let i = 0; i < 26; i++) {
+    x.fillStyle = `rgba(150,175,200,${.05 + random() * .09})`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, 10 + random() * 26, 0, 7); x.fill();
+  }
+  noise(x, 256, 0.05);
+  return c;
+}
+export function snowMaterial(repeat = 2) {
+  return dressMemo(`snow${repeat}`, () => pbr(snowCanvas(), { repeat, rough: .75, strength: 1.1 }));
+}
+
+// ---- lava sob crosta rachada (Ckesalth) — emissiveMap nas fissuras ----
+function lavaCanvas() {
+  const [c, x] = canvas(256);
+  // crosta basáltica escura
+  x.fillStyle = '#241d1a'; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 500; i++) {
+    x.fillStyle = `rgba(${34 + random() * 26},${28 + random() * 20},${24 + random() * 16},${.3 + random() * .3})`;
+    x.beginPath(); x.arc(random() * 256, random() * 256, 2 + random() * 12, 0, 7); x.fill();
+  }
+  return c;
+}
+function lavaEmissiveCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#000000'; x.fillRect(0, 0, 256, 256);
+  // fissuras ramificadas laranja→amarelo no centro dos traços
+  x.lineCap = 'round';
+  for (let i = 0; i < 16; i++) {
+    let px = random() * 256, py = random() * 256;
+    let ang = random() * Math.PI * 2;
+    for (let s = 0; s < 7; s++) {
+      const nx = px + Math.cos(ang) * (12 + random() * 22);
+      const ny = py + Math.sin(ang) * (12 + random() * 22);
+      const g = x.createLinearGradient(px, py, nx, ny);
+      g.addColorStop(0, 'rgba(255,96,16,.95)');
+      g.addColorStop(1, 'rgba(255,196,48,.9)');
+      x.strokeStyle = g; x.lineWidth = 1.2 + random() * 2.4;
+      x.beginPath(); x.moveTo(px, py); x.lineTo(nx, ny); x.stroke();
+      px = nx; py = ny; ang += (random() - .5) * 1.4;
+    }
+  }
+  // brilho difuso sob as fissuras (glow quente atravessando a crosta)
+  for (let i = 0; i < 22; i++) {
+    const gx = random() * 256, gy = random() * 256, r = 8 + random() * 26;
+    const g = x.createRadialGradient(gx, gy, 1, gx, gy, r);
+    g.addColorStop(0, `rgba(255,120,30,${.12 + random() * .2})`);
+    g.addColorStop(1, 'rgba(255,80,10,0)');
+    x.fillStyle = g;
+    x.beginPath(); x.arc(gx, gy, r, 0, 7); x.fill();
+  }
+  noise(x, 256, 0.05);
+  return c;
+}
+export function lavaMaterial(repeat = 1) {
+  return dressMemo(`lava${repeat}`, () => {
+    const em = tex(lavaEmissiveCanvas(), { repeat, srgb: true });
+    return new THREE.MeshStandardMaterial({
+      map: tex(lavaCanvas(), { repeat }), emissiveMap: em,
+      emissive: new THREE.Color('#ff7a1e'), emissiveIntensity: 1.6,
+      roughness: .9, metalness: .05,
+    });
+  });
+}
+
+// ---- runa astral (Arukheea) — anel de glifos emissivos com alpha ----
+export function runeMaterial(color = '#59e6ff') {
+  return dressMemo(`rune${color}`, () => {
+    const [c, x] = canvas(256);
+    x.clearRect(0, 0, 256, 256);
+    x.strokeStyle = color; x.lineWidth = 5;
+    x.beginPath(); x.arc(128, 128, 108, 0, 7); x.stroke();
+    x.lineWidth = 2.5;
+    x.beginPath(); x.arc(128, 128, 84, 0, 7); x.stroke();
+    // glifos (triângulos rotacionados no cálculo — sem ctx.rotate, mantém o
+    // stub de canvas das suítes antigas compatível)
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const gx = 128 + Math.cos(a) * 96, gy = 128 + Math.sin(a) * 96;
+      const p = (da, r) => [gx + Math.cos(a + da) * r, gy + Math.sin(a + da) * r];
+      const [x1, y1] = p(-Math.PI / 2, 9), [x2, y2] = p(Math.PI * .83, 8), [x3, y3] = p(Math.PI * .17, 8);
+      x.lineWidth = 3;
+      x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.lineTo(x3, y3); x.closePath(); x.stroke();
+    }
+    // nós radiais
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      x.fillStyle = color;
+      x.beginPath(); x.arc(128 + Math.cos(a) * 108, 128 + Math.sin(a) * 108, 4.5, 0, 7); x.fill();
+    }
+    const t = tex(c, { srgb: true });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return new THREE.MeshBasicMaterial({
+      map: t, transparent: true, depthWrite: false,
+      color: new THREE.Color(color), toneMapped: false,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+  });
+}
+
+// ---- fenda do vazio (Arukheea) — plano vertical emissivo com alpha radial ----
+export function riftMaterial() {
+  return dressMemo('rift', () => {
+    const [c, x] = canvas(128);
+    x.clearRect(0, 0, 128, 128);
+    const g = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+    g.addColorStop(0, 'rgba(226,190,255,.95)');
+    g.addColorStop(.35, 'rgba(150,90,235,.75)');
+    g.addColorStop(.7, 'rgba(80,40,150,.3)');
+    g.addColorStop(1, 'rgba(40,20,80,0)');
+    x.fillStyle = g;
+    // fenda vertical: elipse alta e estreita (sem save/scale — stub-friendly)
+    x.beginPath(); x.ellipse(64, 64, 23, 60, 0, 0, 7); x.fill();
+    const t = tex(c, { srgb: true });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return new THREE.MeshBasicMaterial({
+      map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+  });
+}
+
+// ---- toldo listrado (bancas de feira Barburhen) ----
+export function awningMaterial(base = '#b8452e') {
+  return dressMemo(`awning${base}`, () => {
+    const [c, x] = canvas(128);
+    x.fillStyle = base; x.fillRect(0, 0, 128, 128);
+    x.fillStyle = 'rgba(240,236,224,.92)';
+    for (let i = 0; i < 128; i += 32) x.fillRect(i, 0, 16, 128);
+    noise(x, 128, 0.06);
+    return pbr(c, { repeat: 1, rough: .8, strength: .8 });
+  });
+}
+
+// ---- tábuas de madeira (passarelas de palafita) ----
+function plankCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#7a5c38'; x.fillRect(0, 0, 256, 256);
+  // tábuas horizontais com veios
+  for (let y = 0; y < 256; y += 42) {
+    const shade = 0.85 + random() * 0.3;
+    x.fillStyle = `rgb(${(122 * shade) | 0},${(92 * shade) | 0},${(56 * shade) | 0})`;
+    x.fillRect(0, y, 256, 38);
+    x.fillStyle = 'rgba(30,20,10,.55)';
+    x.fillRect(0, y + 38, 256, 4); // junta escura
+    // veios
+    x.strokeStyle = 'rgba(60,42,22,.4)'; x.lineWidth = 1;
+    for (let v = 0; v < 4; v++) {
+      const vy = y + 6 + random() * 28;
+      x.beginPath(); x.moveTo(0, vy);
+      x.quadraticCurveTo(128, vy + (random() - .5) * 6, 256, vy);
+      x.stroke();
+    }
+    // pregos
+    x.fillStyle = 'rgba(40,40,44,.8)';
+    x.fillRect(10 + random() * 20, y + 16, 3, 3);
+    x.fillRect(220 + random() * 20, y + 16, 3, 3);
+  }
+  noise(x, 256, 0.09);
+  return c;
+}
+export function plankMaterial(repeat = 1) {
+  return dressMemo(`plank${repeat}`, () => pbr(plankCanvas(), { repeat, rough: .92, strength: 1.8 }));
+}
+
+// ---- areia de duna (Ckesalth) — ondulações vento-sopradas ----
+function duneCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#c9a56a'; x.fillRect(0, 0, 256, 256);
+  // cristas de vento (curvas claras + sombra fria abaixo)
+  for (let i = 0; i < 30; i++) {
+    const cy = random() * 256;
+    x.strokeStyle = 'rgba(232,206,152,.5)'; x.lineWidth = 2 + random() * 3;
+    x.beginPath(); x.moveTo(0, cy);
+    x.quadraticCurveTo(128, cy + (random() - .5) * 34, 256, cy + (random() - .5) * 18);
+    x.stroke();
+    x.strokeStyle = 'rgba(140,110,66,.35)'; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(0, cy + 5);
+    x.quadraticCurveTo(128, cy + 5 + (random() - .5) * 34, 256, cy + (random() - .5) * 18);
+    x.stroke();
+  }
+  // grãos
+  for (let i = 0; i < 700; i++) {
+    x.fillStyle = `rgba(${170 + random() * 60},${140 + random() * 50},${90 + random() * 40},.25)`;
+    x.fillRect(random() * 256, random() * 256, 1, 1);
+  }
+  noise(x, 256, 0.07);
+  return c;
+}
+export function duneMaterial(repeat = 2) {
+  return dressMemo(`dune${repeat}`, () => pbr(duneCanvas(), { repeat, rough: .96, strength: 1.2 }));
+}
+
+// ---- bandeira de tecido (mastros do cume / acampamento) ----
+export function bannerMaterial(bg = '#8a2a22', glyph = '#e8d9a8') {
+  return dressMemo(`banner${bg}${glyph}`, () => {
+    const [c, x] = canvas(128);
+    x.fillStyle = bg; x.fillRect(0, 0, 128, 128);
+    // borda gasta
+    x.strokeStyle = 'rgba(20,12,8,.5)'; x.lineWidth = 6;
+    x.strokeRect(3, 3, 122, 122);
+    // glifo central (runa do mundo)
+    x.strokeStyle = glyph; x.lineWidth = 7; x.lineCap = 'round';
+    x.beginPath();
+    x.moveTo(64, 26); x.lineTo(40, 64); x.lineTo(64, 102); x.lineTo(88, 64); x.closePath();
+    x.moveTo(64, 26); x.lineTo(64, 102);
+    x.stroke();
+    noise(x, 128, 0.08);
+    return new THREE.MeshStandardMaterial({ map: tex(c, { srgb: true }), roughness: .85, side: THREE.DoubleSide });
+  });
+}
+
+// ============================================================================
+// Fase 24 — RAIOS DE LUZ pelas janelas (light shafts)
+// ============================================================================
+
+// Gradiente vertical: opaco no topo (boca da janela) → transparente na base.
+// Mapeado com v=0 no topo do raio e v=1 no chão (UV do quad no lightshafts3d).
+export function lightShaftTexture() {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 128);
+  g.addColorStop(0, 'rgba(255,242,206,.5)');
+  g.addColorStop(.45, 'rgba(255,236,192,.2)');
+  g.addColorStop(1, 'rgba(255,232,180,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 8, 128);
+  const t = tex(c, { repeat: 1 });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+
+// Mancha de luz no piso: disco radial com falloff suave (poça do raio).
+export function lightPoolTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,240,204,.42)');
+  g.addColorStop(.55, 'rgba(255,236,196,.16)');
+  g.addColorStop(1, 'rgba(255,232,180,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 128, 128);
+  const t = tex(c, { repeat: 1 });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}

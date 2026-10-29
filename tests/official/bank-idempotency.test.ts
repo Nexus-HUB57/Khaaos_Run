@@ -6,8 +6,16 @@ import { after, test } from "node:test";
 import express from "express";
 
 process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+let testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (testDatabaseUrl) {
+  // Isolamento por suíte (schema manual re-aplicado a cada run — banco próprio
+  // evita guerra com as suítes que rodam em paralelo no mesmo TEST_DATABASE_URL).
+  const { useSuiteDatabase } = await import("../helpers/suite-database.ts");
+  const suite = await useSuiteDatabase(testDatabaseUrl, "bank_idempotency");
+  process.env.TEST_DATABASE_URL = suite.databaseUrl;
+  process.env.DATABASE_URL = suite.databaseUrl;
+  testDatabaseUrl = suite.databaseUrl;
+}
 
 const [{ registerApiRoutes }, { storage }] = await Promise.all([
   import("../../server/routes.ts"),
@@ -147,6 +155,10 @@ test(
       `);
       await pool.query(await readFile(new URL("../../migrations/0002_economy_idempotency.sql", import.meta.url), "utf8"));
       await pool.query(await readFile(new URL("../../migrations/0003_economy_invariants.sql", import.meta.url), "utf8"));
+      // Banco ISOLADO por suíte: nada de outra suíte popula o schema — a
+      // transferência grava no ledger (0004), que antes existia só porque as
+      // suítes vizinhas o criavam no banco compartilhado (débito técnico herado).
+      await pool.query(await readFile(new URL("../../migrations/0004_correlated_append_only_ledger.sql", import.meta.url), "utf8"));
       await pool.query(
         "INSERT INTO bank_accounts (user_id, weapons_balance) VALUES ($1, 100) ON CONFLICT (user_id) DO UPDATE SET weapons_balance = 100",
         [userId],

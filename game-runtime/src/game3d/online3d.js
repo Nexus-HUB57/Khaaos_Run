@@ -8,6 +8,7 @@
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
 import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
+import { doorBoxCollider } from './interiorsPlan.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
@@ -35,6 +36,8 @@ export class Sim3DView {
     this.terminals = [];
     this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
     this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
+    this.doors = [];     // Fase 25 — estado das folhas de porta (snapshots)
+    this.windows = [];   // Fase 26 — estado do vidro das janelas (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -73,6 +76,8 @@ export class Sim3DView {
       // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
       this.onWallsChanged?.(this.walls);
     }
+    if (s.doors) this.doors = s.doors; // Fase 25 — folhas seguem o estado da sala
+    if (s.windows) this.windows = s.windows; // Fase 26 — vidro segue o estado da sala
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
@@ -81,6 +86,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }
@@ -110,7 +118,7 @@ export class OnlineGame3D extends Game3D {
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
     // Fase 4 — preditor enxerga Gloo Walls (colliders dinâmicos) sem mutar o layout cacheado
-    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders, floors: getWorldLayout(this.seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -118,8 +126,12 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
-    this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
+    // Fase 25 — preditor enxerga as PORTAS: colliders do plano determinístico
+    // joined ao estado do snapshot (só id/hp/ativo viajam — o vão é estático)
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
     const scenarioSelect = document.querySelector('#scenarioSelect');
     if (scenarioSelect) {
@@ -309,6 +321,23 @@ export class OnlineGame3D extends Game3D {
     } catch { node.textContent = '—'; }
   }
 
+  // Fase 25 — colliders do preditor = estáticos + gloo ativas + portas ativas
+  #rebuildPredictorColliders() {
+    if (!this.predictorWorld) return;
+    const layout = getWorldLayout(this.seed);
+    const staticColliders = layout.colliders;
+    const gloo = (this.view.walls ?? []).filter((w) => w.active !== false).map(glooCollider);
+    const doorState = new Map((this.view.doors ?? []).map((d) => [d.id, d]));
+    // Folha FECHADA/íntegra colide no preditor; aberta/destruída não —
+    // doorBoxCollider já devolve null nesses estados (MESMA geometria da sim/sala)
+    const doors = (layout.doors ?? [])
+      .map((d) => { const st = doorState.get(d.id); return st ? { ...d, open: !!st.open, destroyed: !!st.destroyed } : d; })
+      .map(doorBoxCollider)
+      .filter(Boolean);
+    const dynamic = [...gloo, ...doors];
+    this.predictorWorld.colliders = dynamic.length ? staticColliders.concat(dynamic) : staticColliders;
+  }
+
   // world rebuild quando a seed do servidor difere da local (uma vez, pré-partida)
   _applyWorldSeed(seed) {
     this.seed = seed;
@@ -318,7 +347,7 @@ export class OnlineGame3D extends Game3D {
     this.initCamera(); // initCamera → initPost (composer acompanha nova cena/câmera)
     // preditor acompanha o novo layout (mesma seed autoritativa) + mundo físico próprio
     this.predictor = new LocalPredictor({ world: getWorldLayout(seed) });
-    this.predictorWorld = { colliders: getWorldLayout(seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(seed).colliders, floors: getWorldLayout(seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -326,7 +355,10 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.feed('CIGKV', `Sincronizado com a seed da sala: ${seed}.`, 'good');
   }
 
@@ -437,12 +469,21 @@ export class OnlineGame3D extends Game3D {
     }
 
     this.syncLoot();
+    this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
     this.syncEntities(dt);
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)
     // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
     const marksAnim = this.scene.userData.worldMarks?.animators;
     if (marksAnim) for (const fn of marksAnim) fn(dt, performance.now() / 1000);
+    // Fase 22 — cenários vivos no modo online
+    const dressingAnim = this.scene.userData.districtDressing?.animators;
+    if (dressingAnim) for (const fn of dressingAnim) fn(dt, performance.now() / 1000);
+    // Fase 23 — interiores no modo online (flicker de lâmpadas/telas)
+    const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
+    if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
+    const interiorsAnim = this.scene.userData.interiors?.animators;
+    if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);

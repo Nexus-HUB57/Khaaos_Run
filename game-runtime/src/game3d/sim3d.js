@@ -5,16 +5,50 @@
 import { SeededRng } from '../shared/rng.js';
 import { WEAPONS, rollLoot } from '../shared/weapons.js';
 import { buildWorldLayout } from './layout3d.js';
+// Fase 24 — interiores acessíveis: colliders ocos + floors pisáveis vêm do MESMO
+// plano determinístico da casca visual (interiors3d) — porta que se atravessa é
+// o vão que se vê; janelas deixam balas/LOS passarem
+// Fase 25 — portas FUNCIONAIS: folha dinâmica no vão (abre/fecha com E,
+// destrutível por balas/explosão) + pathing de bots por portas + loot interior
+import {
+  hollowAccess, doorwaysOf, doorBoxCollider, footprintHas,
+  localPointToWorld, MEZZ, DOOR_MECH, doorMaterialOf,
+  windowPanelsOf, windowBoxCollider, WINDOW_MECH,
+} from './interiorsPlan.js';
 import { resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 // Fase 10 — Oficiais de Classe Especial (7º/9º artigos do POJ): identidade e
 // combate de elite compartilhados com a MatchRoom3D (mesma tabela canônica)
 import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './officers.js';
+// Fase 28 — Arsenal & Equipamento FF: níveis de gear, caixa de morte e airdrop
+import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
+// Fase 30 — Anexos da AR-47 (4 sockets produtivos) + skin mítica evolutiva
+import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS } from './attachments3d.js';
+import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
 export const PLAYER_R = 0.45, PLAYER_H = 1.8, HEAD_Y = 1.5;
 export const MATCH_TIME = 600, PULSE_INTERVAL = 45;
 export const BOT_SIGHT_3D = 85; // alcance de visão da IA (m) — sim offline (igual ao da sala online)
+
+// Fase 25 — portas funcionais/destrutíveis: MESMOS números na sim offline,
+// MatchRoom3D e predição (folha fechada colide; aberta balança sem colidir).
+// CALIBRAÇÃO 25.1 (gameplay real): madeira hp 200 — g19 (22 dmg) ~10 balas,
+// m4 (31) ~7 balas, sucata 72/hit = 3 golpes (melee é a entrada silenciosa).
+// METAL (hangar): hp 500 e melee relativamente menos eficaz — a folha metálica
+// range e amassa, mas cobra munição (g19 ~23 balas).
+export const DOOR = Object.freeze({ ...DOOR_MECH, meleeMult: 3.0, hpMetal: 500, meleeMultMetal: 2.0 });
+
+// hp/mult da folha pelo MATERIAL (hangar/depot = metal, resto = madeira) — fonte
+// única usada por sim offline, MatchRoom3D e testes
+export function doorHpFor(kind) { return doorMaterialOf(kind) === 'metal' ? DOOR.hpMetal : DOOR.hp; }
+export function doorMeleeMultFor(kind) { return doorMaterialOf(kind) === 'metal' ? DOOR.meleeMultMetal : DOOR.meleeMult; }
+
+// Fase 26 — janelas destrutíveis (vidro): MESMOS números na sim offline,
+// MatchRoom3D e visual. Intacto: bala RACHA (para no vidro); a quebra libera
+// a passagem (a bala que estilhaça SEGUE com dano cheio). Melee sempre
+// estilhaça no 1º golpe (72×4 ≫ 30) e granada no raio idem porta (×2).
+export const WINDOW = Object.freeze({ ...WINDOW_MECH, meleeMult: 4.0 });
 
 // ---- Fase 4 — Infiltração Aérea (assinatura BR/FreeFire) ----
 // A partida começa com os operativos caindo do céu: queda livre (SKY) até a
@@ -72,7 +106,7 @@ for (const [id, w] of Object.entries(WEAPONS)) {
     ballistic,
   };
 }
-export const AMMO_CAP = { '9MM': 120, '5.56': 150, '.338': 25, CELL: 60 };
+export const AMMO_CAP = { '9MM': 120, '5.56': 150, '7.62': 120, '.338': 25, CELL: 60 }; // Fase 28: 7.62 (AR-47)
 
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
@@ -257,6 +291,39 @@ export function rayCharacter(ox, oy, oz, dx, dy, dz, ch, maxT) {
 // Extraído do #stepActor para que a predição client-side replique EXATAMENTE a
 // física da MatchRoom3D: mesma velocidade, colisão AABB e integração vertical.
 // Aplica APENAS cinemática — combate/timers ficam na responsabilidade de quem chama.
+
+// Fase 24 — superfícies pisáveis (degraus, mezaninos). STEP_UP = degrau que o
+// ator sobe andando; STEP_DOWN = desnível que desce "grudado" ao chão (sem
+// virar queda). Mundo SEM floors => supportAt = 0 (comportamento legado).
+export const STEP_UP = 0.55, STEP_DOWN = 0.36;
+export function supportAt(world, x, z, y) {
+  const floors = world.floors;
+  if (!floors) return 0;
+  let sup = 0;
+  for (let i = 0; i < floors.length; i++) {
+    const f = floors[i];
+    if (x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ && f.yMax <= y + STEP_UP && f.yMax > sup) sup = f.yMax;
+  }
+  return sup;
+}
+
+// Altura de POUSO durante uma queda de yFrom → yTo: o maior topo de floor
+// CRUZADO neste tick (anti-tunneling em quedas rápidas — ex.: infiltração
+// aérea) ou o suporte de repouso de onde partiu (quique no mesmo piso).
+function landingHeight(world, x, z, yFrom, yTo) {
+  let best = 0; // chão do mundo
+  const floors = world.floors;
+  if (floors) {
+    for (let i = 0; i < floors.length; i++) {
+      const f = floors[i];
+      if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      const crossed = yFrom >= f.yMax && yTo <= f.yMax;
+      if (crossed && f.yMax > best) best = f.yMax;
+    }
+  }
+  return Math.max(best, supportAt(world, x, z, yFrom));
+}
+
 export function stepActorMovement(a, input, dt, world) {
   // Fase 9 — janela de impacto de pouso (contagem regressiva compartilhada)
   if ((a.landGraceT ?? 0) > 0) a.landGraceT = Math.max(0, a.landGraceT - dt);
@@ -294,6 +361,9 @@ export function stepActorMovement(a, input, dt, world) {
   if (!a.dropPhase) {
     for (const box of world.colliders) {
       if (box.yMin > a.y + 0.4 && box.yMin > 1.2) continue; // estruturas aéreas não bloqueiam no chão
+      // Fase 24 — lajes/degraus FINOS abaixo dos pés não empurram: o ator
+      // ESTÁ sobre eles (mezanino/laje); paredes/peitoris finos continuam sólidos
+      if (box.yMax <= a.y + STEP_UP && box.yMax - box.yMin <= 0.6) continue;
       const hit = circlePushAabb(nx, nz, PLAYER_R, box);
       if (hit) { nx = hit.x; nz = hit.z; }
     }
@@ -309,21 +379,34 @@ export function stepActorMovement(a, input, dt, world) {
     const g = phase === 'sky' ? DROP_SKY_GRAVITY : DROP_CHUTE_GRAVITY;
     const cap = phase === 'sky' ? DROP_SKY_MAX_FALL : DROP_CHUTE_MAX_FALL;
     if (a.vy > cap) a.vy = Math.max(cap, a.vy + g * dt); else a.vy = cap;
+    const prevY = a.y;
     a.y += a.vy * dt;
     if (phase === 'sky' && a.y <= DROP_OPEN_Y) { a.dropPhase = 'chute'; a.vy = Math.max(a.vy, DROP_CHUTE_MAX_FALL); }
-    if (a.y <= 0) {
-      a.y = 0; a.vy = 0; a.onGround = true; a.dropPhase = null;
+    // Fase 24 — pouso também em degraus/mezaninos/refúgios (pouso varrido)
+    const supDrop = landingHeight(world, a.x, a.z, prevY, a.y);
+    if (a.y <= supDrop) {
+      a.y = supDrop; a.vy = 0; a.onGround = true; a.dropPhase = null;
       a.landed = true; // consumido pelo dono do step para emitir 'land'
       a.landGraceT = DROP_ENGAGEMENT.landingGraceSeconds; // Fase 9 — impacto de pouso
     }
     return a;
   }
+  // Fase 24 — suporte vertical: sobe degrau grudado, desce degrau grudado e
+  // CAI ao pisar fora do mezanino (a.y > sup além da tolerância)
+  const sup = supportAt(world, a.x, a.z, a.y);
+  if (a.onGround) {
+    if (a.y < sup) a.y = sup;                                   // sobe degrau
+    else if (a.y - sup <= STEP_DOWN) a.y = sup;                 // desce degrau
+    else a.onGround = false;                                     // pisou no vazio
+  }
   // vertical (caído não salta — Fase 7)
   const wantJump = !!input.jump && !a.knocked;
   if (!a.onGround || wantJump) {
     if (a.onGround && wantJump) { a.vy = WORLD.jumpVel; a.onGround = false; }
+    const prevY = a.y;
     a.vy += WORLD.gravity * (a.gravityScale ?? 1) * dt; a.y += a.vy * dt;
-    if (a.y <= 0) { a.y = 0; a.vy = 0; a.onGround = true; }
+    const supLand = landingHeight(world, a.x, a.z, prevY, a.y);
+    if (a.y <= supLand) { a.y = supLand; a.vy = 0; a.onGround = true; }
   }
   return a;
 }
@@ -404,6 +487,14 @@ export function glooCollider(wall) {
   return { minX: wall.x - w / 2, maxX: wall.x + w / 2, minZ: wall.z - d / 2, maxZ: wall.z + d / 2, yMin: 0, yMax: GLOO.h, kind: 'gloo', wallId: wall.id };
 }
 
+// ---------- Fase 25 — PORTA DESTRUTÍVEL ----------
+// AABB do PAINEL legado (formato hw/hd de interiorsPlan.doorPanelFor — ainda
+// usado pelos testes de geometria). O collider DINÂMICO da folha funcional da
+// Fase 25 é interiorsPlan.doorBoxCollider (nasce do vão de doorwaysOf).
+export function doorCollider(door) {
+  return { minX: door.x - door.hw, maxX: door.x + door.hw, minZ: door.z - door.hd, maxZ: door.z + door.hd, yMin: door.yMin, yMax: door.yMax, kind: 'door', doorId: door.id };
+}
+
 // Posição/rotação de deploy: à frente do ator, alinhada à direção de visão (0/90°).
 export function glooDeployPlacement(a) {
   const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
@@ -419,13 +510,35 @@ const layoutCache = new Map();
 export function getWorldLayout(seed, scenarioId = 'CIGKV') {
   const scenario = resolveScenario(scenarioId);
   const key = `${scenario.id}:${String(seed)}`;
-  if (!layoutCache.has(key)) layoutCache.set(key, buildWorldLayout(String(seed), scenario.id));
+  if (!layoutCache.has(key)) {
+    const layout = buildWorldLayout(String(seed), scenario.id);
+    // Fase 24 — COLLIDERS OCOS: estruturas-casca viram paredes com vão de porta
+    // REAL e faixas de janela; degraus/mezaninos viram floors pisáveis. Estruturas
+    // fora do conjunto de cascas preservam o collider sólido bit a bit.
+    // baseColliders guarda os sólidos originais p/ hollowAccess ser idempotente.
+    layout.baseColliders = layout.colliders;
+    const access = hollowAccess(layout, scenario);
+    layout.colliders = access.colliders;
+    layout.floors = access.floors;
+    // Fase 25 — loot interior (térreo + mezanino); as FOLHAS ficam em
+    // layout.doors = doorwaysOf(...) logo abaixo (fonte única dos vãos)
+    layout.interiorSpots = access.lootSpots;
+    layout.access = { replaced: access.replaced, windows: access.windows, mezzanines: access.mezzanines };
+    // Fase 25 — VÃOS DE PORTA em mundo (folha dinâmica fechada/aberta/destruída)
+    // + plano de interiores anexado (loot interior/mezanino e pathing da IA)
+    layout.dressing = access.dressing;
+    layout.doors = doorwaysOf(layout, access.dressing);
+    // Fase 26 — PAINÉIS DE VIDRO das janelas (mesma fonte do vão visual)
+    layout.windows = windowPanelsOf(layout, access.dressing);
+    layoutCache.set(key, layout);
+  }
   return layoutCache.get(key);
 }
 
 export class KhaaosSim3D {
   constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
     this.seed = String(seed);
+    this.seedHash = [...this.seed].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0; // Fase 28 — hash numérico p/ agendadores
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
@@ -455,27 +568,53 @@ export class KhaaosSim3D {
     }
     this.bullets = []; this.nextBulletId = 1;
     this.grenades = []; this.walls = []; this.nextThrowableId = 1; // Fase 4
+    // Fase 25 — folhas de porta (estado autoritativo): todas FECHADAS e íntegras
+    this.doors = (this.world.doors ?? []).map((d) => ({ ...d, open: false, destroyed: false, hp: doorHpFor(d.kind), cooldown: 0 }));
+    // Fase 26 — painéis de vidro (estado autoritativo): todos ÍNTEGROS
+    this.windows = (this.world.windows ?? []).map((w) => ({ ...w, hp: WINDOW.hp, destroyed: false }));
     this.loot = this.#spawnLoot();
+    this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
     this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
-    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls).
-    // ALIAS da lista do layout quando não há paredes — mutações externas no layout
-    // (ex.: testes que removem colliders) continuam valendo para balas/LOS/movimento.
-    this.physicsWorld = { colliders: this.world.colliders };
+    // Fase 28 — airdrop de suprimento: agendado por seed a ~38% da partida
+    this.supplyDropState = { scheduledTick: null, done: false };
+    this.supplyDropItem = null; // item de loot da caixa após o pouso
+    // mundo físico da sim: colliders do layout + dinâmicos (Gloo Walls + portas).
+    // ALIAS da lista do layout quando não há dinâmicos — mutações externas no
+    // layout (ex.: testes que removem colliders) continuam valendo para
+    // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
+    // s.doors e re-sincronizam via syncPhysicsWorld()).
+    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
+    this.syncPhysicsWorld();
   }
-  #syncPhysicsWorld() {
+  // Reconcilia o mundo físico (colliders estáticos + gloo + folhas fechadas).
+  // PÚBLICO de propósito: testes e harness re-sincronizam após mutar o mundo.
+  syncPhysicsWorld() {
     const active = this.walls.filter(w => w.active).map(glooCollider);
-    this.physicsWorld.colliders = active.length ? this.world.colliders.concat(active) : this.world.colliders;
+    // Fase 25 — folhas FECHADAS colidem (movimento/balas/LOS); abertas/destruídas não
+    const leafs = [];
+    for (const d of this.doors) { if (!d.open && !d.destroyed) { const box = doorBoxCollider(d); if (box) leafs.push(box); } }
+    // Fase 26 — VIDRO ÍNTEGRO colide BALISTICAMENTE (movimento/balas); a LOS
+    // ignora colliders kind 'window' (#hasLos) — vidro é transparente p/ visão.
+    const panes = [];
+    for (const w of this.windows) { if (!w.destroyed) { const box = windowBoxCollider(w); if (box) panes.push(box); } }
+    const dyn = active.length || leafs.length || panes.length ? active.concat(leafs, panes) : [];
+    this.physicsWorld.colliders = dyn.length ? this.world.colliders.concat(dyn) : this.world.colliders;
   }
 
   // ---------- spawn ----------
   #spawnPlayer() {
     return { id: 'player', name: 'ZHEERS-07', x: this.world.playerSpawn.x, y: 0, z: this.world.playerSpawn.z, vy: 0, yaw: 0, pitch: 0,
       life: 100, armor: 35, xp: 0, krc: 250, kills: 0, speed: 5.2, weapon: 'g19', weaponSkin: null,
+      gear: { vest: 0, helmet: 0, pack: 0 }, // Fase 28 — níveis visíveis de capacete/colete/mochila
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       operativeId: 'OP_MALE_VANGUARD',
       temporaryArmor: 0,
       abilityState: { cooldownTicks: 0, activeTicks: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
       cooldown: 0, reloadT: 0, ammoMag: WEAPONS3D.g19.magazine,
+      // Fase 30 — anexos da arma em mão + bolso (máx 4) + evolução mítica
+      weaponAttachments: [], attachmentBag: [],
+      mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
       slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
@@ -486,6 +625,7 @@ export class KhaaosSim3D {
     return { id: `bot-${String(i + 1).padStart(2, '0')}`, name: `ZHEERS-${String(i + 1).padStart(2, '0')}`,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: 20, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      gear: { vest: 0, helmet: 0, pack: 0 }, // Fase 28
       stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0,      speed: 4.55, weapon: this.rng.pick(['g19', 'mp5', 'm4', 'm4', 'g19']), weaponSkin: null,
       cooldown: this.rng.next() * 2, reloadT: 0, burst: 0,
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
@@ -502,10 +642,14 @@ export class KhaaosSim3D {
     return { id: `oce-${String(i + 1).padStart(2, '0')}`, name: def.name,
       x: spot.x + jx, y: 0, z: spot.z + jz, vy: 0, yaw: this.rng.next() * Math.PI * 2, pitch: 0,
       life: 100, armor: def.armor, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      gear: { vest: 2, helmet: 1, pack: 1 }, // Fase 28 — oficiais chegam equipados
       stamina: 100, crouching: false, sliding: false, slideT: 0, revealedTicks: 0, speed: def.speed,
       weapon: def.weapon, weaponSkin: null, operativeId: def.operativeId, officer: true,
       officerCallsign: def.callsign, combat: officerCombatParams(BOT_COMBAT),
       cooldown: this.rng.next() * 1.2, reloadT: 0, burst: 0,
+      // Fase 30 — paridade de anexos/mítica entre TODOS os atores
+      weaponAttachments: [], attachmentBag: [],
+      mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       knocked: false, knockT: 0, reviveProgress: 0, downedCount: 0, lastReviveTick: -1, squad: null,
       dropPhase: null, dropTarget: null,
       ai: { state: 'patrol', lx: 0, lz: 0, think: 0, lostT: 0, strafe: this.rng.next() * 6.28, waypoint: null, reactT: 0, reactTargetId: null } };
@@ -515,6 +659,9 @@ export class KhaaosSim3D {
     const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
       const drop = rollLoot(this.rng, spot.lootZone ?? zones[i % zones.length], 1)[0];
+      // Fase 30 — AR-47 LENDÁRIA/MÍTICA nasce com anexos de série (determinístico)
+      const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+      if (atts) drop.attachments = atts;
       return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, sectorId: spot.sectorId, ...drop, active: true };
     });
     // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
@@ -524,7 +671,42 @@ export class KhaaosSim3D {
       items.push({ id: `loot-t${i}`, x: spot.x + ((i % 2) - .5) * 1.6, z: spot.z + ((i % 3) - 1) * 1.4,
         y: 0.55, kind: bonus[i], name: bonus[i] === 'frag' ? 'Granada FRAG' : 'Gloo Wall', active: true });
     }
+    // Fase 25 — loot DENTRO dos interiores (motivo p/ invadir casas): 1 item
+    // ancorado na mobília do térreo + 1 NO MEZANINO quando há escada (y=2,95 —
+    // pegável só de CIMA: |y ator − y item| < 2,2 exclui quem está no chão)
+    const dressing = this.world.dressing;
+    if (dressing) {
+      let li = 0;
+      for (const spec of dressing.structures) {
+        const s = this.world.structures[spec.index];
+        if (spec.items.length) {
+          const it = spec.items[0];
+          const p = localPointToWorld(s, it.u, it.v);
+          const drop = rollLoot(this.rng, 'industrial', 1)[0];
+          const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+          if (atts) drop.attachments = atts;
+          // ...drop PRIMEIRO: o id canônico loot-i* não pode ser clobberado
+          // pelo id de catálogo da arma (contrato de ids do loot interior)
+          items.push({ ...drop, id: `loot-i${li}`, x: p.x + .45, z: p.z + .45, y: .55, sectorId: 'interior', active: true });
+          li++;
+        }
+        if (spec.stairs) {
+          const st = spec.stairs;
+          const p = localPointToWorld(s, st.x0 + .75, (st.mezzZ0 + st.mezzZ1) / 2);
+          const drop = rollLoot(this.rng, 'armory', 1)[0];
+          const atts2 = attachmentsForDrop(this.rng, drop.id, drop.rarity);
+          if (atts2) drop.attachments = atts2;
+          items.push({ ...drop, id: `loot-m${li}`, x: p.x, z: p.z, y: st.height + .55, sectorId: 'interior', active: true });
+          li++;
+        }
+      }
+    }
     return items;
+  }
+  #interiorLootCount(items) {
+    let n = 0;
+    for (const it of items) if (String(it.id).startsWith('loot-i')) n++;
+    return n;
   }
 
   // ---------- protocolo ----------
@@ -601,6 +783,15 @@ export class KhaaosSim3D {
       for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
       state.targetIds = targets.map((bot) => bot.id);
       details.targets = targets.length;
+    } else if (ability.effect === 'fieldScan') {
+      // Fase 26 — Invasão de Campo (Talon): o pulso ATRAVESSA cobertura — sem
+      // checagem de LOS (paredes/construções/Gloo não protegem da varredura).
+      // revealedTicks alimenta minimapa (hud3d) e silhueta laranja 3D (main3d).
+      const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
+      for (const bot of targets) bot.revealedTicks = Math.ceil(params.revealSeconds * this.tickRate);
+      state.targetIds = targets.map((bot) => bot.id);
+      details.targets = targets.length;
+      details.radius = params.radius;
     } else if (ability.effect === 'stun') {
       const targets = this.bots.filter((bot) => bot.alive && dist2d(p.x, p.z, bot.x, bot.z) <= params.radius);
       for (const bot of targets) bot.ai.stunTicks = Math.ceil(params.stunSeconds * this.tickRate);
@@ -662,6 +853,15 @@ export class KhaaosSim3D {
     if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
     if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
 
+    // --- Fase 28 — airdrop de suprimento (caixa blindada com AR-47 LENDÁRIO) ---
+    if (!this.supplyDropItem) {
+      const ev = supplyDropEvent(this.supplyDropState, {
+        tick: this.tick, tickRate: this.tickRate, durationS: MATCH_TIME,
+        ringX: this.ring.x, ringZ: this.ring.z, ringR: this.ring.radius, seed: this.seedHash,
+      });
+      if (ev) this.#spawnSupplyDrop(ev);
+    }
+
     // --- jogador ---
     if (p.alive) this.#stepActor(p, input, dt, true);
     // --- bots ---
@@ -714,6 +914,11 @@ export class KhaaosSim3D {
       const active = a.abilityState.activeTicks > 0;
       a.abilitySpeedMultiplier = active && (ability.effect === 'speed' || ability.effect === 'dash')
         ? ability.parameters.speedMultiplier : 1;
+      // Fase 26 — Talon: salto/escala (vault) +15% enquanto o pulso está ativo
+      // (aplica só no ar — a.y > 0.05 — para não virar buff de corrida plano).
+      if (active && ability.effect === 'fieldScan' && a.y > 0.05) {
+        a.abilitySpeedMultiplier = Math.max(a.abilitySpeedMultiplier, ability.parameters.vaultSpeedMultiplier);
+      }
       a.abilityDistanceBudget = active && ability.effect === 'dash' ? a.abilityState.distanceRemaining : undefined;
       a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
     }
@@ -734,7 +939,7 @@ export class KhaaosSim3D {
       if (!airborne) {
         if (input.reload) this.#tryReload(a);
         if (input.medkit) this.#useMedkit(a);
-        if (input.interact) this.#interact(a);
+        if (input.interact) this.#interact(a); else a.interactLatch = false; // Fase 25 — soltou E: rearma
         if (input.throw) this.#throwFrag(a);
         if (input.gloo) this.#deployGloo(a);
         if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
@@ -775,7 +980,7 @@ export class KhaaosSim3D {
     a.inventory.gloo--;
     const wall = { id: this.nextThrowableId++, x: place.x, z: place.z, rot: place.rot, hp: GLOO.hp, age: 0, active: true, owner: a.id };
     this.walls.push(wall);
-    this.#syncPhysicsWorld();
+    this.syncPhysicsWorld();
     this.emit('gloo', { owner: a.id, id: wall.id, x: wall.x, z: wall.z, rot: wall.rot });
   }
   #stepThrowables(dt) {
@@ -795,7 +1000,20 @@ export class KhaaosSim3D {
       w.age += dt;
       if (w.hp <= 0 || w.age >= GLOO.duration) { w.active = false; changed = true; this.emit('glooDown', { id: w.id, destroyed: w.hp <= 0 }); }
     }
-    if (changed) this.#syncPhysicsWorld();
+    if (changed) this.syncPhysicsWorld();
+    // Fase 25 — varredura defensiva das folhas: hp esgotado (por qualquer via —
+    // dano direto, snapshot aplicado, hazard futuro) => destruída + doorDown +
+    // collider fora do mundo. Idempotente com #damageDoor (que já materializa
+    // a quebra no caminho de bala/melee/explosão).
+    let leafChanged = false;
+    for (const d of this.doors) {
+      if (d.destroyed || d.active === false) continue;
+      if (d.hp <= 0) {
+        d.destroyed = true; d.open = false; d.active = false; leafChanged = true;
+        this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin });
+      }
+    }
+    if (leafChanged) this.syncPhysicsWorld();
   }
   #detonate(g) {
     const actors = [this.player, ...this.bots].filter(a => a.alive);
@@ -803,9 +1021,14 @@ export class KhaaosSim3D {
       const dmg = explosionDamage(g.x, g.y, g.z, a, this.physicsWorld.colliders);
       if (dmg <= 0) continue;
       if (a.id === 'player') this.#hurtPlayer(dmg, g.owner, 'explosion');
-      else this.#damageBot(a, dmg, g.owner, false);
+      else {
+        this.#damageBot(a, dmg, g.owner, false);
+        // Fase 27 — número de dano da explosão (mesma gramática do hit de bala;
+        // o FX/áudio da explosão cobre o impacto — o consumo decide o que mostrar)
+        this.emit('hit', { x: a.x, y: a.y + 1, z: a.z, victim: a.id, head: false, damage: Math.round(dmg), owner: g.owner, kind: 'explosion' });
+      }
     }
-    // granada desgasta gloo walls no raio
+    // granada desgasta gloo walls e PORTAS no raio
     let changed = false;
     for (const w of this.walls) {
       if (!w.active) continue;
@@ -815,7 +1038,27 @@ export class KhaaosSim3D {
       const d = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
       if (d <= FRAG.radius) { w.hp -= FRAG.damage * (1 - d / FRAG.radius) * 2; changed = true; }
     }
-    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.#syncPhysicsWorld(); }
+    if (changed) { for (const w of this.walls) if (w.active && w.hp <= 0) { w.active = false; this.emit('glooDown', { id: w.id, destroyed: true }); } this.syncPhysicsWorld(); }
+    // Fase 25 — explosão estilhaça folhas no raio (mesma atenuação das gloo)
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      const box = doorBoxCollider(d);
+      if (!box) continue;
+      const cx = clamp(g.x, box.minX, box.maxX), cz = clamp(g.z, box.minZ, box.maxZ);
+      const cy = clamp(g.y, box.yMin, box.yMax);
+      const dd = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (dd <= FRAG.radius) this.#damageDoor(d, FRAG.damage * (1 - dd / FRAG.radius) * 2, g.owner);
+    }
+    // Fase 26 — explosão ESTILHAÇA o vidro no raio (mesma atenuação da porta ×2)
+    for (const pane of this.windows) {
+      if (pane.destroyed) continue;
+      const box = windowBoxCollider(pane);
+      if (!box) continue;
+      const cx = clamp(g.x, box.minX, box.maxX), cz = clamp(g.z, box.minZ, box.maxZ);
+      const cy = clamp(g.y, box.yMin, box.yMax);
+      const dd = Math.hypot(g.x - cx, g.y - cy, g.z - cz);
+      if (dd <= FRAG.radius) this.#damageWindow(pane, FRAG.damage * (1 - dd / FRAG.radius) * 2, g.owner);
+    }
     this.emit('explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
   }
 
@@ -867,9 +1110,25 @@ export class KhaaosSim3D {
     }
     if (b.ai.think <= 0) {
       b.ai.think = 0.4 + this.rng.next() * 0.5;
-      if (b.ai.state !== 'engage' && (!b.ai.waypoint || dist2d(b.x, b.z, b.ai.waypoint.x, b.ai.waypoint.z) < 6)) {
-        const ang = this.rng.next() * Math.PI * 2, rr = this.rng.next() * this.ring.radius * 0.85;
-        b.ai.waypoint = { x: clamp(this.ring.x + Math.cos(ang) * rr, -190, 190), z: clamp(this.ring.z + Math.sin(ang) * rr, -190, 190) };
+      if (b.ai.state !== 'engage' && (!b.ai.waypoint || (dist2d(b.x, b.z, b.ai.waypoint.x, b.ai.waypoint.z) < 6 && !this.#doorSeparated(b, b.ai.waypoint)))) {
+        // Fase 25 — patrulha INVADE interiores: 1/3 dos novos waypoints miram
+        // pontos de loot dentro das cascas (bots entram por portas de verdade).
+        // Enquanto o waypoint estiver do OUTRO LADO de uma casca (#doorSeparated),
+        // não re-sorteia: o bot ainda deve abrir a porta e cruzar. Spot fora do
+        // anel útil (0,92·R) é descartado — o clamp projetaria o alvo pra fora.
+        const spots = this.interiorLootSpots;
+        let picked = false;
+        if (spots.length && this.rng.next() < 0.34) {
+          const sp = spots[(this.rng.next() * spots.length) | 0];
+          if (dist2d(sp.x, sp.z, this.ring.x, this.ring.z) <= this.ring.radius * 0.92) {
+            b.ai.waypoint = { x: sp.x, z: sp.z };
+            picked = true;
+          }
+        }
+        if (!picked) {
+          const ang = this.rng.next() * Math.PI * 2, rr = this.rng.next() * this.ring.radius * 0.85;
+          b.ai.waypoint = { x: clamp(this.ring.x + Math.cos(ang) * rr, -190, 190), z: clamp(this.ring.z + Math.sin(ang) * rr, -190, 190) };
+        }
       }
     }
     let tx, tz, run = 0.62;
@@ -891,8 +1150,16 @@ export class KhaaosSim3D {
       tx = b.ai.lx ?? p.x; tz = b.ai.lz ?? p.z;
       if (dist2d(b.x, b.z, tx, tz) < 5) b.ai.state = 'patrol';
     } else { tx = b.ai.waypoint?.x ?? this.ring.x; tz = b.ai.waypoint?.z ?? this.ring.z; }
-    // permanece dentro do anel
-    if (dist2d(tx, tz, this.ring.x, this.ring.z) > this.ring.radius * 0.92) {
+    // Fase 25 — pathing por portas USA O DESTINO BRUTO (antes do clamp do anel:
+    // o alvo real pode estar dentro de uma casca cujo centro o clamp projetaria
+    // para fora — aí a rota morria e o bot orbitava a borda do anel). Folha
+    // fechada no caminho é ABERTA pela IA (com cooldown). EM ENGAGE a rota é
+    // DIRETA (pressiona o vão); patrulha/caça usam standoff anti-canto.
+    const route = this.#doorRoute(b, tx, tz, b.ai.state === 'engage');
+    if (route) {
+      tx = route.x; tz = route.z;
+      if (!route.door.open && dist2d(b.x, b.z, route.door.x, route.door.z) < 2.0) this.#toggleDoor(route.door, b.id);
+    } else if (dist2d(tx, tz, this.ring.x, this.ring.z) > this.ring.radius * 0.92) {
       const ang = Math.atan2(tz - this.ring.z, tx - this.ring.x);
       tx = this.ring.x + Math.cos(ang) * this.ring.radius * 0.85; tz = this.ring.z + Math.sin(ang) * this.ring.radius * 0.85;
     }
@@ -946,9 +1213,47 @@ export class KhaaosSim3D {
     dx /= len; dy /= len; dz /= len;
     for (const box of this.physicsWorld.colliders) {
       if (box.noBlock) continue;
+      // Fase 26 — vidro é TRANSPARENTE p/ visão (bots enxergam por janelas
+      // como na Fase 24); o bloqueio do vidro é só balístico (#stepBullets).
+      if (box.kind === 'window') continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
     return true;
+  }
+
+  // Fase 25 — waypoint "do outro lado" de uma casca? (supressão de re-sorteio
+  // enquanto a travessia pela porta não aconteceu)
+  #doorSeparated(b, wp) {
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      if (footprintHas(d, b.x, b.z, -0.2) !== footprintHas(d, wp.x, wp.z, 0.4)) return true;
+    }
+    return false;
+  }
+
+  // Fase 25 — rota por porta em DUAS fases: longe da porta, mira o STANDOFF
+  // (ponto 2,6m do vão, no lado do bot — corredor perpendicular à parede, evita
+  // raspar nos cantos da casca); perto, mira o CRUZAMENTO (0,6m do vão no lado
+  // do destino — o bot atravessa andando para o alvo). Histerese de 0,2m na
+  // pegada evita oscilar na borda; porta mais próxima do bot vence.
+  #doorRoute(b, tx, tz, direct = false) {
+    const APPROACH = 2.6, CROSS = 0.6;
+    let best = null, bestD = Infinity;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      const inB = footprintHas(d, b.x, b.z, -0.2);
+      const inT = footprintHas(d, tx, tz, 0.4);
+      if (inB === inT) continue;
+      const dd = dist2d(b.x, b.z, d.x, d.z);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    if (!best) return null;
+    const sideB = footprintHas(best, b.x, b.z, -0.2) ? -1 : 1;  // −1: bot dentro
+    if (!direct && bestD > APPROACH) {
+      return { door: best, x: best.x + best.nx * APPROACH * sideB, z: best.z + best.nz * APPROACH * sideB };
+    }
+    const toward = footprintHas(best, tx, tz, 0.4) ? -1 : 1;    // destino dentro => cruza pra dentro
+    return { door: best, x: best.x + best.nx * CROSS * toward, z: best.z + best.nz * CROSS * toward };
   }
 
   // ---------- combate ----------
@@ -965,6 +1270,7 @@ export class KhaaosSim3D {
     if (isPlayer ? a.ammoMag <= 0 : false) { this.emit('empty', { weapon: w.name }); this.#tryReload(a); return false; }
     if (isPlayer) a.ammoMag--;
     a.cooldown = 1 / w.fireRate;
+    const st = a.attachStats ?? attachmentStats([]);   // Fase 30 — anexos
     const m = this.#muzzle(a);
     const cp = Math.cos(a.pitch ?? 0);
     const vdx = -Math.sin(a.yaw) * cp, vdy = Math.sin(a.pitch ?? 0), vdz = -Math.cos(a.yaw) * cp;
@@ -975,13 +1281,13 @@ export class KhaaosSim3D {
     const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
     const accuracy = isPlayer ? (a.abilityAccuracyMultiplier ?? 1) : 1;
     const spread = isPlayer
-      ? (w.spread / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
+      ? (w.spread * st.spreadMul / accuracy) * (a.ads ? 0.35 : 1) * (a.sprinting ? 1.8 : 1) * (a.moving ? 1.35 : 1) * (a.crouching ? 0.72 : 1)
       : 0;
-    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55);
-    this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z });
+    this.#spawnBullet(a, { dx, dy, dz, ox: m.x, oy: m.y, oz: m.z }, spread, w, isPlayer ? 1 : 0.55, st);
+    this.emit('shot', { owner: a.id, weapon: a.weapon, x: m.x, y: m.y, z: m.z, silenced: !!st.silenced });
     return true;
   }
-  #spawnBullet(a, dir, spread, w, dmgScale = 1) {
+  #spawnBullet(a, dir, spread, w, dmgScale = 1, st = null) {
     let { dx, dy, dz, ox, oy, oz } = dir;
     if (dir.tx !== undefined) { // bot: mira a partir do cano no ponto alvo
       let tx = dir.tx - ox, ty = dir.ty - oy, tz = dir.tz - oz;
@@ -997,7 +1303,8 @@ export class KhaaosSim3D {
     this.bullets.push({ id: this.nextBulletId++, x: ox, y: oy, z: oz, vx: dx * w.bulletSpeed, vy: dy * w.bulletSpeed, vz: dz * w.bulletSpeed,
       owner: a.id, damage: w.damage * dmgScale, baseDamage: w.damage * dmgScale, distance: 0,
       gravity: (w.ballistic?.gravity ?? 0) * 9.81, drag: w.ballistic?.drag ?? 0,
-      life: w.range / w.bulletSpeed, weapon: w.id });
+      // Fase 30 — Mira 4x estende o voo útil do projétil (+8%)
+      life: (w.range * (st?.rangeMul ?? 1)) / w.bulletSpeed, weapon: w.id });
   }
   #aimDir(a, tx, ty, tz) {
     let dx = tx - a.x, dy = ty - (a.y + 1.55), dz = tz - a.z;
@@ -1007,13 +1314,73 @@ export class KhaaosSim3D {
     if (a.cooldown > 0) return false;
     a.cooldown = 1 / w.fireRate;
     const reach = 2.4;
+    let hitFlesh = false;
     for (const b of this.bots) {
       if (!b.alive) continue;
       if (dist2d(a.x, a.z, b.x, b.z) < reach && Math.abs(a.y - b.y) < 2) {
         const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
         const ang = Math.atan2(b.z - a.z, b.x - a.x);
         const diff = Math.abs(Math.atan2(Math.sin(ang - facing), Math.cos(ang - facing)));
-        if (diff < 1.2) { this.#damageBot(b, w.damage, a.id, false); this.emit('melee', { target: b.id }); break; }
+        if (diff < 1.2) {
+          this.#damageBot(b, w.damage, a.id, false);
+          // Fase 28 — evento 'melee' com o CONTRATO do número de dano: o
+          // atacante vê o número flutuante na mesma gramática do hit de bala.
+          this.emit('melee', {
+            target: b.id, x: b.x, y: (b.y ?? 0) + 1, z: b.z,
+            victim: b.id, owner: a.id,
+            damage: Math.max(1, Math.round(w.damage)), head: false,
+          });
+          hitFlesh = true; break;
+        }
+      }
+    }
+    // Fase 25 — melee arrebenta PORTA (a pá/cano é a ferramenta clássica de
+    // entrada silenciosa: sem o estrondo de tiro nem o custo de granada).
+    // Ângulo de frente REAL (atan2(fz, fx)) — não usa a convenção trocada do
+    // ramo de bots acima (paridade legada preservada lá).
+    // HOTFIX pós-merge #185: o bloco antigo lia `d.active`/`d.hw`/`d.hd` —
+    // campos que não existem nas folhas (doorways) — e o melee NUNCA mais
+    // machucava porta. AABB canônica via doorBoxCollider + rota #damageDoor
+    // (doorDown + física sincronizada no mesmo caminho das balas/explosão).
+    if (!hitFlesh) {
+      const forwardAng = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const d of this.doors) {
+        const box = doorBoxCollider(d);
+        if (!box) continue; // aberta/destruída: não há folha para golpear
+        const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach || Math.abs(a.y - d.yMin) > 2.2) continue;
+        const ang = Math.atan2(d.z - a.z, d.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng), Math.cos(ang - forwardAng)));
+        if (diff < 1.25) {
+          // caminho CANÔNICO de dano: #damageDoor flipa destroyed, emite
+          // doorDown e re-sincroniza o mundo físico (hp direto vaza estado)
+          this.#damageDoor(d, w.damage * doorMeleeMultFor(d.kind), a.id);
+          this.emit('doorHit', { id: d.id, x: d.x, z: d.z });
+          break;
+        }
+      }
+    }
+    // Fase 26 — melee ESTILHAÇA vidro no 1º golpe (a coturnada/cano na janela
+    // é a entrada silenciosa clássica). Mesma gramática da porta: facing real
+    // + alcance no AABB do painel íntegro + caminho canônico #damageWindow.
+    if (!hitFlesh) {
+      const forwardAng2 = Math.atan2(-Math.cos(a.yaw), -Math.sin(a.yaw));
+      for (const pane of this.windows) {
+        const box = windowBoxCollider(pane);
+        if (!box) continue; // já estilhaçado
+        const cx = clamp(a.x, box.minX, box.maxX), cz = clamp(a.z, box.minZ, box.maxZ);
+        if (Math.hypot(a.x - cx, a.z - cz) > reach) continue;
+        // banda vertical: ator alcança o vidro (pés no chão, braço até ~2,2 m)
+        if (box.yMin > a.y + 2.2 || box.yMax < a.y + .4) continue;
+        const ang = Math.atan2(pane.z - a.z, pane.x - a.x);
+        const diff = Math.abs(Math.atan2(Math.sin(ang - forwardAng2), Math.cos(ang - forwardAng2)));
+        if (diff < 1.25) {
+          // caminho CANÔNICO de dano: #damageWindow flipa destroyed, emite
+          // windowDown e re-sincroniza o mundo físico (mult 4× estilhaça no 1º)
+          this.#damageWindow(pane, w.damage * WINDOW.meleeMult, a.id);
+          this.emit('windowHit', { id: pane.id, x: pane.x, z: pane.z, y: pane.y0 });
+          break;
+        }
       }
     }
     this.emit('swing', { owner: a.id });
@@ -1057,17 +1424,38 @@ export class KhaaosSim3D {
         const dmg = (b.baseDamage ?? b.damage) * falloff * (charHit.head ? 1.75 : 1);
         if (charHit.isPlayer) this.#hurtPlayer(dmg, b.owner, charHit.head ? 'headshot' : 'body');
         else this.#damageBot(charHit.ref, dmg, b.owner, charHit.head);
-        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg) });
+        // Fase 27 — `owner` identifica o atirador (números de dano/hitmarker
+        // só para acertos PRÓPRIOS; bot×bot deixa de vazar no marker).
+        this.emit('hit', { x: ox + dx * charT, y: oy + dy * charT, z: oz + dz * charT, victim: charHit.ref.id, head: charHit.head, damage: Math.round(dmg), owner: b.owner });
         continue;
       }
       if (hitT < len) {
+        // Fase 26 — vidro ANTES do consumo da bala: íntegro, a bala PARA nele
+        // (racha); ao estilhaçar, a MESMA bala SEGUE com dano cheio (life não
+        // é zerada) — vidro não segura projétil, estilo Free Fire.
+        if (hitBox?.windowId) {
+          const pane = this.windows.find(w => w.id === hitBox.windowId);
+          if (pane && !pane.destroyed) {
+            this.#damageWindow(pane, b.damage, b.owner);
+            this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: 'glass' });
+            if (!pane.destroyed) b.life = 0;   // rachou: bala consumida no vidro
+            continue;                           // estilhaçou: bala segue em voo
+          }
+        }
         b.life = 0;
         // Fase 4 — balas desgastam Gloo Walls (cobertura destrutível)
         if (hitBox?.wallId) {
           const w = this.walls.find(wl => wl.id === hitBox.wallId && wl.active);
           if (w) w.hp -= b.damage;
         }
-        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: hitBox?.wallId ? 'gloo' : 'wall' });
+        // Fase 25 — balas desgastam a FOLHA da porta (madeira estilhaça;
+        // metal amassa — kind do impacto diferencia o FX: lascas vs faíscas)
+        let impactKind = hitBox?.wallId ? 'gloo' : 'wall';
+        if (hitBox?.doorId) {
+          const d = this.doors.find(dd => dd.id === hitBox.doorId);
+          if (d) { this.#damageDoor(d, b.damage, b.owner); impactKind = doorMaterialOf(d.kind) === 'metal' ? 'metal' : 'wood'; }
+        }
+        this.emit('impact', { x: ox + dx * hitT, y: oy + dy * hitT, z: oz + dz * hitT, kind: impactKind });
       }
     }
     this.bullets = this.bullets.filter(b => b.life > 0);
@@ -1169,7 +1557,12 @@ export class KhaaosSim3D {
     remaining -= shield;
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
-    if (actor.life <= 0) actor.alive = false;
+    if (actor.life > 0) return;
+    // Fase 30 — morte AMBIENTAL canônica: a anomalia fura escudo/blindagem e
+    // mata DIRETO (sem DBNO), mas sai pelo MESMO #finalizeDeath das outras
+    // mortes — espólio onde caiu (Fase 28), killfeed/eliminado com colocação e
+    // atribuição via lastHitBy (paridade 1:1 com a trilha autoritativa).
+    this.#finalizeDeath(actor, null, 'quantum');
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
@@ -1182,15 +1575,18 @@ export class KhaaosSim3D {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
           this.player.xp += head ? 60 : 40; this.player.krc += 5;
-          this.emit('botKnocked', { target: bot.name, head, xp: head ? 60 : 40, krc: 5 });
+          // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
       bot.alive = false;
       bot.knocked = false;
+      this.#dropDeathBox(bot); // Fase 28 — onde o operativo cai, o espólio fica
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
         this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.#creditMythic(this.player); // Fase 30 — abate evolui a skin mítica
         this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
       } else this.emit('botKill', { target: bot.name });
     }
@@ -1219,6 +1615,7 @@ export class KhaaosSim3D {
         return;
       }
       p.life = 0; p.alive = false; p.knocked = false;
+      this.#dropDeathBox(p); // Fase 28
       // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
       const placement = [this.player, ...this.bots].filter((a) => a.alive).length + 1;
       this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
@@ -1228,6 +1625,7 @@ export class KhaaosSim3D {
   #finalizeDeath(a, ownerId, kind) {
     a.alive = false;
     a.knocked = false;
+    this.#dropDeathBox(a); // Fase 28 — espólios na posição da morte
     if (a.id === 'player') {
       const placement = [this.player, ...this.bots].filter((x) => x.alive).length + 1;
       this.emit('eliminated', { kills: a.kills, by: a.lastHitBy ?? null, placement });
@@ -1236,8 +1634,47 @@ export class KhaaosSim3D {
       if (killerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
         this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.#creditMythic(this.player); // Fase 30 — finalização também evolui
         this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
       } else this.emit('botKill', { target: a.name, kind });
+    }
+  }
+
+  // ---------- Fase 28 — caixa de morte + airdrop de suprimento ----------
+  // Onde um operativo morre, fica a CAIXA DE MORTE: um item de loot em
+  // 'this.loot' (contrato existente de #interact/#pickup — zero código novo
+  // de coleta) cujo bundle carrega a arma do caído + munição + consumíveis
+  // + o gear em níveis. O visual (farol de time) é renderizado pelo main3d
+  // a partir do evento 'deathBox'. Determinístico pela seed + posição.
+  #dropDeathBox(a) {
+    const bundle = deathBoxContents(this.rng, {
+      weapon: a.weapon, weaponSkin: a.weaponSkin, attachments: a.weaponAttachments ?? [],
+      ammoId: WEAPONS3D[a.weapon]?.ammo ?? '9MM',
+      ammoReserve: a.id === 'player' ? (a.inventory.ammo[WEAPONS3D[a.weapon]?.ammo] || 0) : 40,
+      medkit: a.inventory?.medkit ?? 0, frag: a.inventory?.frag ?? 0, gloo: a.inventory?.gloo ?? 0,
+      gear: a.gear ?? {},
+    });
+    const id = `deathbox-${this.loot.length}`;
+    this.loot.push({ id, kind: 'deathBox', x: a.x, y: 0.35, z: a.z, active: true,
+      bundle, victimName: a.name, accent: a.id === 'player' ? '#ffb52e' : '#ff4633',
+      seed: (this.seedHash ^ Math.round(a.x * 131.7 + a.z * 57.31)) >>> 0 });
+    this.emit('deathBox', { id, x: a.x, y: 0.35, z: a.z, victim: a.name, accent: a.id === 'player' ? '#ffb52e' : '#ff4633', seed: (this.seedHash ^ Math.round(a.x * 131.7 + a.z * 57.31)) >>> 0 });
+  }
+  #spawnSupplyDrop(ev) {
+    // caixa blindada desce no raio do ring; vira item de loot no pouso
+    const id = `supplydrop-${this.loot.length}`;
+    this.supplyDropItem = { id, kind: 'supplyDrop', x: ev.x, y: 0.35, z: ev.z, active: true, landedT: 0 };
+    this.loot.push(this.supplyDropItem);
+    this.emit('supplyDrop', { ...ev, y: 0.35 });
+  }
+  #grantBundle(a, bundle) {
+    // aplica cada drop pelo MESMO caminho de #pickup (arma só troca se for
+    // upgrade de dano — herança sem rebaixar o loadout do sobrevivente)
+    for (const drop of bundle) {
+      if (drop.kind === 'weapon') {
+        const cur = WEAPONS3D[a.weapon], nxt = WEAPONS3D[drop.id];
+        if (nxt && (!cur || nxt.damage > cur.damage)) this.#pickup(a, { ...drop, name: nxt.name });
+      } else this.#pickup(a, drop);
     }
   }
 
@@ -1246,7 +1683,7 @@ export class KhaaosSim3D {
     const w = WEAPONS3D[a.weapon];
     if (!w || w.ammo === 'none' || a.reloadT > 0) return;
     const reserve = a.id === 'player' ? (a.inventory.ammo[w.ammo] || 0) : 999;
-    if (reserve <= 0 || a.ammoMag >= w.magazine) return;
+    if (reserve <= 0 || a.ammoMag >= this.#magCap(a, w)) return;
     a.reloadT = w.reload;
     if (a.id === 'player') this.emit('reload', { weapon: w.name });
   }
@@ -1254,31 +1691,100 @@ export class KhaaosSim3D {
     const w = WEAPONS3D[a.weapon];
     if (a.id === 'player') {
       const reserve = a.inventory.ammo[w.ammo] || 0;
-      const need = Math.min(w.magazine - a.ammoMag, reserve);
+      const need = Math.min(this.#magCap(a, w) - a.ammoMag, reserve);
       a.ammoMag += need; a.inventory.ammo[w.ammo] = reserve - need;
       this.emit('reloaded', { weapon: w.name, mag: a.ammoMag });
-    } else a.ammoMag = w.magazine;
+    } else a.ammoMag = this.#magCap(a, w);
   }
   #useMedkit(a) {
     if (a.inventory.medkit <= 0 || a.life >= 100) return;
     a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
     this.emit('medkit', { life: a.life });
   }
+  // Fase 25 — interação CONTEXTUAL (estilo Free Fire): E escolhe o ALVO MAIS
+  // PRÓXIMO entre loot/terminal/porta — colado na folha, a porta domina;
+  // latch p/ abrir/fechar por TOQUE (segurar não fica alternando)
   #interact(a) {
     const item = this.loot.find(i => i.active && dist2d(i.x, i.z, a.x, a.z) < 2.6 && Math.abs(i.y - a.y) < 2.2);
-    if (item) { item.active = false; this.#pickup(a, item); return; }
+    const itemD = item ? dist2d(item.x, item.z, a.x, a.z) : Infinity;
     const t = this.terminals.find(t => t.active && dist2d(t.x, t.z, a.x, a.z) < 3.4);
+    const tD = t ? dist2d(t.x, t.z, a.x, a.z) : Infinity;
+    let door = null, doorD = Infinity;
+    for (const d of this.doors) {
+      if (d.destroyed) continue;
+      const dd = dist2d(d.x, d.z, a.x, a.z);
+      if (dd < DOOR.interactRange && dd < doorD && Math.abs(a.y - d.yMin) < 3.2) { door = d; doorD = dd; }
+    }
+    if (door && doorD <= itemD && doorD <= tD) {
+      if (a.interactLatch) return;            // E seguro: um toggle por toque
+      a.interactLatch = true;
+      this.#toggleDoor(door, a.id);
+      return;
+    }
+    if (item && itemD <= tD) { item.active = false; this.#pickup(a, item); return; }
     if (t) { t.active = false; a.extracted++; a.xp += 250; this.emit('extract', { count: a.extracted, x: t.x, z: t.z }); }
+  }
+
+  // Fase 25 — toggle autoritativo da folha (jogador E ou IA de bot)
+  #toggleDoor(d, ownerId) {
+    if (d.destroyed || (d.cooldown ?? 0) > 0) return false;
+    d.open = !d.open;
+    d.cooldown = DOOR.toggleCooldown;
+    this.emit('doorToggle', { id: d.id, open: d.open, x: d.x, z: d.z, y: d.yMin, kind: d.kind, owner: ownerId });
+    this.syncPhysicsWorld();
+    return true;
+  }
+  #damageDoor(d, dmg, ownerId) {
+    if (d.destroyed) return;
+    d.hp -= dmg;
+    if (d.hp <= 0) {
+      d.destroyed = true; d.open = false;
+      this.emit('doorDown', { id: d.id, x: d.x, z: d.z, y: d.yMin, kind: d.kind, owner: ownerId ?? null });
+      this.syncPhysicsWorld();
+    }
+  }
+  // Fase 26 — destruição do painel de vidro (caminho canônico: flipa
+  // destroyed, emite windowDown e re-sincroniza o mundo físico)
+  #damageWindow(w, dmg, ownerId) {
+    if (w.destroyed) return;
+    w.hp -= dmg;
+    if (w.hp <= 0) {
+      w.destroyed = true;
+      this.emit('windowDown', { id: w.id, x: w.x, z: w.z, y: w.y0, kind: w.kind, owner: ownerId ?? null });
+      this.syncPhysicsWorld();
+    }
   }
   #pickup(a, item) {
     if (item.kind === 'weapon') {
       const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
+      // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde)
+      if (a.weapon === 'ar47' && a.weaponAttachments?.length) {
+        for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+      }
       a.slots[a.activeSlot] = id; a.weapon = id;
       a.weaponSkin = item.rarity ?? null; // Fase 7 — skin por raridade do loot
-      a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
+      // Fase 30 — anexos de série acompanham a AR-47; mítico reinicia a evolução
+      a.weaponAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
+      a.mythicKills = 0;
+      a.mythicStage = item.rarity === 'MITICA' ? 1 : 0;
+      this.#installBagAttachments(a);    // bolso preenche sockets livres
+      this.#recalcAttachStats(a);
+      a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
       if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
       a.reloadT = 0;
-      this.emit('loot', { item: item.name || id, rarity: item.rarity, kind: 'weapon' });
+      this.emit('loot', { item: item.name || id, rarity: item.rarity, kind: 'weapon', attachments: [...a.weaponAttachments] });
+    } else if (item.kind === 'attachment') {
+      // Fase 30 — anexo avulso: instala no socket livre da AR-47 em mão ou vai
+      // para o bolso (máx 4) até uma AR-47 ser equipada
+      const att = ATTACHMENTS[item.id] ? item.id : null;   // id = id do catálogo
+      if (att && a.weapon === 'ar47' && !a.weaponAttachments.includes(att) && a.weaponAttachments.length < 4) {
+        a.weaponAttachments.push(att);
+      } else if (att && a.attachmentBag.length < 4) {
+        a.attachmentBag.push(att);
+      }
+      this.#installBagAttachments(a);
+      this.#recalcAttachStats(a);
+      this.emit('loot', { item: item.name ?? att ?? 'Anexo', kind: 'attachment', installed: a.weaponAttachments.length, pocket: a.attachmentBag.length });
     } else if (item.kind === 'ammo') {
       const cap = AMMO_CAP[item.id] || 100;
       a.inventory.ammo[item.id] = Math.min(cap, (a.inventory.ammo[item.id] || 0) + item.amount);
@@ -1288,7 +1794,33 @@ export class KhaaosSim3D {
       this.emit('loot', { item: 'Kit Médico', kind: 'consumable' });
     } else if (item.kind === 'armor') {
       a.armor = Math.min(100, a.armor + (item.amount || 18));
+      // Fase 28 — placa cerâmica também reflete na silhueta do colete
+      const lv = gearFromArmor(a.armor);
+      if (lv > (a.gear.vest ?? 0)) { a.gear.vest = lv; this.emit('gear', { kind: 'vest', level: lv, name: GEAR_NAMES.vest[lv] }); }
       this.emit('loot', { item: 'Placa Cerâmica', kind: 'armor' });
+    } else if (item.kind === 'helmet' || item.kind === 'vest' || item.kind === 'pack') {
+      // Fase 28 — equipamento por NÍVEL (capacete 1-3 / colete 1-4 / mochila 1-3):
+      // sobe o nível (nunca desce), concede bônus de armor e vira silhueta.
+      const lv = Math.max(1, Math.min(GEAR_LIMITS[item.kind], item.level || 1));
+      const prev = a.gear[item.kind] ?? 0;
+      a.gear[item.kind] = Math.max(prev, lv);
+      const bonus = GEAR_ARMOR_BONUS[item.kind]?.[a.gear[item.kind]] ?? 0;
+      const gained = Math.max(0, bonus - (GEAR_ARMOR_BONUS[item.kind]?.[prev] ?? 0));
+      if (gained > 0) a.armor = Math.min(100, a.armor + gained);
+      this.emit('gear', { kind: item.kind, level: a.gear[item.kind], name: GEAR_NAMES[item.kind][a.gear[item.kind]] });
+      this.emit('loot', { item: GEAR_NAMES[item.kind][a.gear[item.kind]], kind: item.kind });
+    } else if (item.kind === 'deathBox') {
+      // Fase 28 — caixa de morte: herda o arsenal do caído (bundle).
+      this.#grantBundle(a, item.bundle ?? []);
+      this.emit('loot', { item: `Espólios de ${item.victimName ?? 'operativo'}`, kind: 'deathBox' });
+    } else if (item.kind === 'supplyDrop') {
+      // Fase 28 — caixa de airdrop: AR-47 LENDÁRIO + consumíveis (pool exclusivo)
+      const drops = rollLoot(this.rng, 'supplyDrop', 3);
+      // Fase 30 — assinatura do airdrop: a AR-47 vermelha desce COMPLETA
+      // (4 sockets equipados — vitrine dos anexos)
+      for (const d of drops) if (d.kind === 'weapon' && d.id === 'ar47') d.attachments = ['mira4x', 'silenciador', 'magestendida', 'gripvertical'];
+      this.#grantBundle(a, drops);
+      this.emit('loot', { item: 'Suprimentos do Airdrop', kind: 'supplyDrop' });
     } else if (item.kind === 'resource') {
       a.inventory[item.id] = (a.inventory[item.id] || 0) + (item.amount || 1);
       this.emit('loot', { item: item.id, kind: 'resource' });
@@ -1307,12 +1839,49 @@ export class KhaaosSim3D {
     if (old && old.ammo !== 'none') a.inventory.ammo[old.ammo] = (a.inventory.ammo[old.ammo] || 0) + a.ammoMag;
     a.activeSlot = slot; a.weapon = a.slots[slot];
     a.weaponSkin = null; // skin pertence à arma coletada, não ao slot
+    // Fase 30 — anexos da arma guardada voltam ao BOLSO (re-instalam na volta);
+    // evolução mítica pertence à instância coletada (reinicia)
+    if (a.weaponAttachments?.length) {
+      for (const att of a.weaponAttachments) if (a.attachmentBag.length < 4) a.attachmentBag.push(att);
+      a.weaponAttachments = [];
+    }
+    a.mythicKills = 0; a.mythicStage = 0;
+    this.#installBagAttachments(a);
+    this.#recalcAttachStats(a);
     const w = WEAPONS3D[a.weapon];
-    a.ammoMag = Math.min(w.magazine, a.inventory.ammo[w.ammo] || 0);
+    a.ammoMag = Math.min(this.#magCap(a, w), a.inventory.ammo[w.ammo] || 0);
     if (a.inventory.ammo[w.ammo] > 0) a.inventory.ammo[w.ammo] -= a.ammoMag;
     a.reloadT = 0;
     this.emit('weaponSwitch', { weapon: a.weapon });
     return true;
+  }
+
+  // ---------- Fase 30 — anexos: helpers de estado ----------
+  // Capacidade do pente com Mag Estendida (arma sem anexos = tabela base).
+  #magCap(a, w) { return w.magazine + (a.weapon === 'ar47' ? (a.attachStats?.magBonus ?? 0) : 0); }
+  // Move anexos do bolso para sockets livres da AR-47 em mão (um por socket).
+  #installBagAttachments(a) {
+    if (a.weapon !== 'ar47' || !a.attachmentBag?.length) return;
+    for (const att of [...a.attachmentBag]) {
+      if (!ATTACHMENTS[att]) { a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1); continue; }
+      if (a.weaponAttachments.length >= 4 || a.weaponAttachments.includes(att)) continue;
+      a.weaponAttachments.push(att);
+      a.attachmentBag.splice(a.attachmentBag.indexOf(att), 1);
+    }
+  }
+  // Deriva os stats de combate do anexo (PURO via attachmentStats).
+  #recalcAttachStats(a) {
+    a.attachStats = attachmentStats(a.weapon === 'ar47' ? a.weaponAttachments : []);
+  }
+  // Fase 30 — evolução da skin mítica por abate (4 estágios FF)
+  #creditMythic(a) {
+    if (a.weaponSkin !== 'MITICA' || a.weapon !== 'ar47') return;
+    a.mythicKills = (a.mythicKills ?? 0) + 1;
+    const stage = mythicStageFromKills(a.mythicKills);
+    if (stage !== a.mythicStage) {
+      a.mythicStage = stage;
+      this.emit('mythic', { stage, name: MYTHIC_STAGE_NAMES[stage - 1], weapon: a.weapon });
+    }
   }
 
   // ---------- snapshot / replay ----------
@@ -1323,6 +1892,10 @@ export class KhaaosSim3D {
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),
       grenades: this.grenades.map(g => ({ ...g })), walls: this.walls.map(w => ({ ...w })),
+      // Fase 25 — estado das folhas de porta (aberta/fechada/destruída + hp)
+      doors: this.doors.map(d => ({ id: d.id, open: d.open, destroyed: d.destroyed, hp: Math.round(d.hp) })),
+      // Fase 26 — estado do vidro (hp + quebrado) p/ HUD e visual
+      windows: this.windows.map(w => ({ id: w.id, destroyed: w.destroyed, hp: Math.round(w.hp) })),
       terminals: this.terminals.map(t => ({ ...t })), replayLength: this.replay.length };
   }
   applySnapshot(s) {
@@ -1336,7 +1909,21 @@ export class KhaaosSim3D {
     this.loot = (s.loot ?? this.loot).map(i => ({ ...i }));
     this.grenades = (s.grenades ?? this.grenades).map(g => ({ ...g }));
     this.walls = (s.walls ?? this.walls).map(w => ({ ...w }));
-    this.#syncPhysicsWorld();
+    // Fase 25 — estado das folhas de porta (idempotente p/ snapshots antigos)
+    if (s.doors) {
+      for (const sd of s.doors) {
+        const d = this.doors.find(x => x.id === sd.id);
+        if (d) { d.open = !!sd.open; d.destroyed = !!sd.destroyed; d.hp = sd.hp ?? d.hp; d.cooldown = 0; }
+      }
+    }
+    // Fase 26 — estado do vidro (idempotente p/ snapshots antigos)
+    if (s.windows) {
+      for (const sw of s.windows) {
+        const w = this.windows.find(x => x.id === sw.id);
+        if (w) { w.destroyed = !!sw.destroyed; w.hp = sw.hp ?? w.hp; }
+      }
+    }
+    this.syncPhysicsWorld();
     this.terminals = (s.terminals ?? this.terminals).map(t => ({ ...t }));
   }
   exportReplay() { return { version: 3, mode: '3d', seed: this.seed, scenarioId: this.scenario.id, operativeId: this.player.operativeId, tickRate: this.tickRate, inputs: this.replay }; }

@@ -106,6 +106,51 @@ export class Effects {
         }));
         return;
       }
+      // Fase 25 — madeira (folha de porta levando bala): lascas marrons + serragem
+      if (kind === 'wood') {
+        burst(9, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 5.2, vy: rnd() * 3.6 + .7, vz: (rnd() - .5) * 5.2,
+          size: .06 + rnd() * .07, growth: -.015, life: .26 + rnd() * .26, drag: .05, gravity: 12, alpha: .9,
+          color: [.48, .33, .17], endColor: [.3, .2, .1],
+        }));
+        burst(2, () => ({
+          x: pos.x, y: pos.y + .05, z: pos.z, vx: (rnd() - .5) * .8, vy: .5 + rnd() * .6, vz: (rnd() - .5) * .8,
+          size: .24 + rnd() * .18, growth: 1, life: .45 + rnd() * .2, drag: .4, gravity: -0.5, alpha: .28,
+          color: [.52, .42, .3], endColor: [.36, .3, .22],
+        }));
+        return;
+      }
+      // Fase 25.1 — METAL (folha do hangar levando bala): faíscas quentes +
+      // fragmentos cinza de chapa (diferente da lascas marrons da madeira)
+      if (kind === 'metal') {
+        burst(12, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 7, vy: rnd() * 4.6 + 1, vz: (rnd() - .5) * 7,
+          size: .04 + rnd() * .05, growth: -.02, life: .18 + rnd() * .22, drag: .05, gravity: 10, alpha: .95,
+          color: [1, .85, .45], endColor: [.9, .4, .08],
+        }));
+        burst(3, () => ({
+          x: pos.x, y: pos.y + .04, z: pos.z, vx: (rnd() - .5) * 3.4, vy: rnd() * 2.4 + .6, vz: (rnd() - .5) * 3.4,
+          size: .07 + rnd() * .08, growth: -.02, life: .3 + rnd() * .2, drag: .1, gravity: 11, alpha: .85,
+          color: [.52, .55, .58], endColor: [.3, .32, .34],
+        }));
+        return;
+      }
+      // Fase 26 — VIDRO (janela rachando/estilhaçando): cacos ciano-brancos
+      // brilhantes e rápidos + lascas grandes caindo devagar (leitura de vidro,
+      // não de poeira — contraste com madeira/metal)
+      if (kind === 'glass') {
+        burst(10, () => ({
+          x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.2, vy: rnd() * 4.2 + .8, vz: (rnd() - .5) * 6.2,
+          size: .03 + rnd() * .05, growth: -.012, life: .2 + rnd() * .24, drag: .04, gravity: 13, alpha: .96,
+          color: [.82, .94, .98], endColor: [.42, .66, .78],
+        }));
+        burst(4, () => ({
+          x: pos.x, y: pos.y + .03, z: pos.z, vx: (rnd() - .5) * 2.6, vy: rnd() * 1.6 + .2, vz: (rnd() - .5) * 2.6,
+          size: .09 + rnd() * .1, growth: -.01, life: .42 + rnd() * .26, drag: .06, gravity: 12, alpha: .8,
+          color: [.7, .88, .95], endColor: [.3, .5, .62],
+        }));
+        return;
+      }
       // wall / gloo: faíscas quentes + poeira de rasgo
       burst(10, () => ({
         x: pos.x, y: pos.y, z: pos.z, vx: (rnd() - .5) * 6.4, vy: rnd() * 4.4 + .8, vz: (rnd() - .5) * 6.4,
@@ -271,10 +316,11 @@ export class Effects {
       damageReduction: '#9fb6c9', temporaryArmor: '#9fb6c9', recon: '#4d7dff',
       stun: '#b04dff', concealment: '#8f7dff', ringRead: '#ff9a4d',
       ringForecast: '#ff9a4d', terminalScan: '#59ffb0', ringResistance: '#7dffc9',
+      fieldScan: '#fb923c', // Fase 26 — assinatura laranja da Invasão de Campo
     }[effect] ?? '#ffd9a0';
   }
 
-  abilityAura(pos, effect = 'speed') {
+  abilityAura(pos, effect = 'speed', radius = 18) {
     const color = this.#abilityColor(effect);
     // anel de solo que expande e some (0.55 s)
     const ring = new THREE.Mesh(
@@ -285,6 +331,21 @@ export class Effects {
     ring.position.set(pos.x, Math.max(0.06, pos.y - 0.8), pos.z);
     this.scene.add(ring);
     this.abilityAuras.push({ mesh: ring, life: .55, max: .55, kind: 'ring', color: new THREE.Color(color) });
+    // Fase 26 — Invasão de Campo (Talon): PULSO DE VARREDURA em escala real —
+    // anel de raio ~params.radius que cresce do caster até o limite (0.9 s),
+    // legível até 35 m (spec de skill ativa do BR).
+    if (effect === 'fieldScan') {
+      const R = Math.max(10, Math.min(28, radius));
+      const scan = new THREE.Mesh(
+        new THREE.RingGeometry(R * .82, R, 48),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      scan.rotation.x = -Math.PI / 2;
+      scan.position.set(pos.x, Math.max(.08, pos.y - .8), pos.z);
+      scan.scale.setScalar(.04);
+      this.scene.add(scan);
+      this.abilityAuras.push({ mesh: scan, life: .9, max: .9, kind: 'scan', color: new THREE.Color(color) });
+    }
     // coluna de partículas ascendentes no caster
     for (let i = 0; i < 14; i++) {
       const p = this.#getParticle(this.spriteTex);
@@ -326,9 +387,9 @@ export class Effects {
       if (a.life > 0) {
         a.life -= dt;
         const k = 1 - Math.max(0, a.life) / a.max;
-        const s = .8 + k * 3.4; // anel expande ~4x
+        const s = a.kind === 'scan' ? .04 + (1 - Math.pow(1 - k, 3)) * .96 : .8 + k * 3.4; // scan cresce até o raio real
         a.mesh.scale.set(s, s, 1);
-        a.mesh.material.opacity = Math.max(0, a.life / a.max) * .85;
+        a.mesh.material.opacity = Math.max(0, a.life / a.max) * (a.kind === 'scan' ? .55 : .85);
         if (a.life <= 0) { a.mesh.visible = false; this.scene.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose(); }
       }
     }

@@ -121,6 +121,10 @@ public:
      */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|AbilityRegistry")
     TArray<FName> GetRegisteredSpecies() const;
+    void RegisterBuiltinSpeciesAbilities();
+    int32 GrantAbilitiesForSpecies(class UAbilitySystemComponent* ASC, FName SpeciesName,
+        TArray<FGameplayAbilitySpecHandle>& OutGrantedHandles, UObject* SourceObject = nullptr);
+    static void ClearGrantedAbilities(class UAbilitySystemComponent* ASC, TArray<FGameplayAbilitySpecHandle>& GrantedHandles);
 
 private:
 

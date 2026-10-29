@@ -312,3 +312,56 @@ test('M3: paridade Redis — ownership/relay com as mesmas semânticas do driver
     await client.quit();
   }
 });
+
+// ─── 7) Relay mirror entre réplicas (regressão do espelho global) ────────────
+// O publish escreve no stream POR SALA e no stream GLOBAL '__global__'; o
+// mirrorLoop de cada réplica consome o global. Sem isso o relay entre réplicas
+// é inerte (mirrorApplied eternamente 0) — bug provado ao vivo pelo smoke
+// cross-replica (2 processos + Redis real) e pinado aqui de forma determinística.
+test('M3: relay mirror — room_open da réplica A chega ao espelho da réplica B (mirrorApplied > 0)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-m3-mirror-'));
+  const file = path.join(dir, 'shared.json');
+  const auth = makeAuth();
+  const sharedOwn = new MemoryOwnership();
+  const sharedReg = new MemoryReplicaRegistry();
+  const sharedRelay = new MemoryRelay({ maxlen: 512, ttlMs: 60_000 });
+  const mk = (replicaId, address) => createAuthoritativeServer({
+    port: 0, auth,
+    store: new DurableJsonStore(file), rateStore: new SharedMemoryRateStore(), adminToken: 'legacy',
+    distributed: createDistributed({
+      enabled: true, replicaId, address, ownership: sharedOwn, registry: sharedReg,
+      relay: sharedRelay, ttlMs: 15_000, heartbeatMs: 200, mirrorMs: 50,
+    }),
+  });
+  const repA = mk('m3-mirror-a', 'ws://127.0.0.1:1');
+  const repB = mk('m3-mirror-b', 'ws://127.0.0.1:2');
+  await Promise.all([
+    new Promise((r) => repA.server.listen(0, r)),
+    new Promise((r) => repB.server.listen(0, r)),
+  ]);
+  try {
+    await repA.distributed.start();
+    await repB.distributed.start();
+    const token = auth.login('dist', 'pass').token;
+    const ws = new WebSocket(`ws://127.0.0.1:${repA.server.address().port}/ws?token=${token}&mode=3d`);
+    const found = await expectMessage(ws, 'match_found');
+    ws.close();
+
+    // O mirror da réplica B (mirrorMs 50ms) consome o stream global publicado
+    // pela réplica A — em segundos, mirrorApplied > 0 em B.
+    const deadline = Date.now() + 3_000;
+    let mirrorB = 0;
+    while (Date.now() < deadline) {
+      mirrorB = repB.distributed.metrics.mirrorApplied;
+      if (mirrorB > 0) break;
+      await wait(60);
+    }
+    assert.ok(mirrorB > 0, `espelho da réplica B aplicou eventos do relay (mirrorApplied=${mirrorB})`);
+    assert.ok(repB.distributed.metrics.fenceViolations === 0, 'sem violações de fence no caminho feliz');
+    assert.equal(repA.rooms.has(found.roomId), true, 'sala continua no dono A');
+  } finally {
+    await repA.close();
+    await repB.close();
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* tmp */ }
+  }
+});
