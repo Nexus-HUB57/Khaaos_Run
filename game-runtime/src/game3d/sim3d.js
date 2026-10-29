@@ -682,13 +682,31 @@ export class KhaaosSim3D {
   }
   #spawnLoot() {
     const zones = ['armory', 'industrial', 'park', 'extraction'];
+    // WART reparado (registrado no Task 12) — id canônico loot-N em TODA a sim:
+    // o spread do drop NÃO vence mais o id da instância (o `...drop` depois do
+    // `id:` deixava o prefixo loot-* MORTO — o id vira o de catálogo, colidindo
+    // no syncLoot quando 2 drops iguais nascem). Mesmo contrato serializável do
+    // room3d: a referência de catálogo migra p/ weaponId/ammoId/resourceId/
+    // attachmentId e o nome de não-arma é composto ('5.56 ×20').
+    const toInstance = (drop, id, x, z, y, sectorId) => {
+      const { id: dropId, weapon, ...rest } = drop;
+      return {
+        id, x, z, y, sectorId, ...rest,
+        name: drop.kind === 'weapon' ? drop.name : `${dropId}${drop.amount ? ` ×${drop.amount}` : ''}`.toUpperCase(),
+        weaponId: drop.kind === 'weapon' ? dropId : undefined,
+        ammoId: drop.kind === 'ammo' ? dropId : undefined,
+        resourceId: drop.kind === 'resource' ? dropId : undefined,
+        attachmentId: drop.kind === 'attachment' ? dropId : undefined,
+        active: true,
+      };
+    };
     const items = Array.from({ length: 24 }, (_, i) => {
       const spot = this.world.lootSpots[i % this.world.lootSpots.length];
       const drop = rollLoot(this.rng, spot.lootZone ?? zones[i % zones.length], 1)[0];
       // Fase 30 — AR-47 LENDÁRIA/MÍTICA nasce com anexos de série (determinístico)
       const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
       if (atts) drop.attachments = atts;
-      return { id: `loot-${i}`, x: spot.x, z: spot.z, y: 0.55, sectorId: spot.sectorId, ...drop, active: true };
+      return toInstance(drop, `loot-${i}`, spot.x, spot.z, 0.55, spot.sectorId);
     });
     // Fase 4 — arremessáveis táticos espalhados deterministamente (FRAG/GLOO)
     const bonus = ['frag', 'gloo', 'frag', 'frag', 'gloo', 'frag'];
@@ -711,9 +729,10 @@ export class KhaaosSim3D {
           const drop = rollLoot(this.rng, 'industrial', 1)[0];
           const atts = attachmentsForDrop(this.rng, drop.id, drop.rarity);
           if (atts) drop.attachments = atts;
-          // ...drop PRIMEIRO: o id canônico loot-i* não pode ser clobberado
-          // pelo id de catálogo da arma (contrato de ids do loot interior)
-          items.push({ ...drop, id: `loot-i${li}`, x: p.x + .45, z: p.z + .45, y: .55, sectorId: 'interior', active: true });
+          // F33 — MESMO contrato do loot geral: id canônico loot-i* + referência
+          // de catálogo em weaponId/ammoId/resourceId/attachmentId (o spread
+          // cru deixava o #pickup caindo no fallback g19 p/ armas interiores)
+          items.push(toInstance(drop, `loot-i${li}`, p.x + .45, p.z + .45, .55, 'interior'));
           li++;
         }
         if (spec.stairs) {
@@ -722,7 +741,7 @@ export class KhaaosSim3D {
           const drop = rollLoot(this.rng, 'armory', 1)[0];
           const atts2 = attachmentsForDrop(this.rng, drop.id, drop.rarity);
           if (atts2) drop.attachments = atts2;
-          items.push({ ...drop, id: `loot-m${li}`, x: p.x, z: p.z, y: st.height + .55, sectorId: 'interior', active: true });
+          items.push(toInstance(drop, `loot-m${li}`, p.x, p.z, st.height + .55, 'interior'));
           li++;
         }
       }
@@ -1819,8 +1838,15 @@ export class KhaaosSim3D {
     }
   }
   #pickup(a, item) {
+    // F33 — contrato de ids: a INSTÂNCIA carrega id canônico loot-*; a
+    // referência de catálogo vive em weaponId/ammoId/resourceId/attachmentId.
+    // O fallback `|| item.id` mantém bundles crus (deathBox/supplyDrop) e loot
+    // sintético de testes (id = catálogo) funcionando pelo MESMO caminho.
     if (item.kind === 'weapon') {
-      const id = item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
+      const id = item.weaponId || item.id, w = WEAPONS3D[id] || WEAPONS3D.g19;
+      // F33 — contrato de ids: a INSTÂNCIA carrega id canônico loot-*; a
+      // referência de catálogo vive em weaponId (fallback || item.id mantém
+      // bundles crus e loot sintético de testes no MESMO caminho).
       // Fase 30 — anexos da arma TROCADA vão para o bolso (nada se perde);
       // Fase 32 — a raridade de cada anexo viaja em paralelo (gasto→dourado)
       if (a.weaponAttachments?.length) {
@@ -1852,7 +1878,7 @@ export class KhaaosSim3D {
     } else if (item.kind === 'attachment') {
       // Fase 30/31 — anexo avulso: instala no socket livre da arma em mão
       // (qualquer arma com sockets e compatível) ou vai para o bolso (máx 4)
-      const att = ATTACHMENTS[item.id] ? item.id : null;   // id = id do catálogo
+      const att = ATTACHMENTS[item.attachmentId || item.id] ? (item.attachmentId || item.id) : null;   // ref = id do catálogo
       const sockCap = weaponSockets(a.weapon).length;
       // Fase 32 — anexo avulso nasce com raridade própria (loot rolou a tier)
       const attRarity = attachmentRarityFor(item.rarity ?? null);
@@ -1867,9 +1893,10 @@ export class KhaaosSim3D {
       this.#recalcAttachStats(a);
       this.emit('loot', { item: item.name ?? att ?? 'Anexo', kind: 'attachment', installed: a.weaponAttachments.length, pocket: a.attachmentBag.length });
     } else if (item.kind === 'ammo') {
-      const cap = AMMO_CAP[item.id] || 100;
-      a.inventory.ammo[item.id] = Math.min(cap, (a.inventory.ammo[item.id] || 0) + item.amount);
-      this.emit('loot', { item: `${item.amount}× ${item.id}`, kind: 'ammo' });
+      const ammoId = item.ammoId || item.id;
+      const cap = AMMO_CAP[ammoId] || 100;
+      a.inventory.ammo[ammoId] = Math.min(cap, (a.inventory.ammo[ammoId] || 0) + item.amount);
+      this.emit('loot', { item: `${item.amount}× ${ammoId}`, kind: 'ammo' });
     } else if (item.kind === 'consumable') {
       a.inventory.medkit = Math.min(5, (a.inventory.medkit || 0) + 1);
       this.emit('loot', { item: 'Kit Médico', kind: 'consumable' });
@@ -1903,8 +1930,9 @@ export class KhaaosSim3D {
       this.#grantBundle(a, drops);
       this.emit('loot', { item: 'Suprimentos do Airdrop', kind: 'supplyDrop' });
     } else if (item.kind === 'resource') {
-      a.inventory[item.id] = (a.inventory[item.id] || 0) + (item.amount || 1);
-      this.emit('loot', { item: item.id, kind: 'resource' });
+      const resId = item.resourceId || item.id;
+      a.inventory[resId] = (a.inventory[resId] || 0) + (item.amount || 1);
+      this.emit('loot', { item: resId, kind: 'resource' });
     } else if (item.kind === 'frag') {
       a.inventory.frag = Math.min(FRAG.cap, (a.inventory.frag || 0) + 1);
       this.emit('loot', { item: 'Granada FRAG', kind: 'frag' });

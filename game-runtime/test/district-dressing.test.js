@@ -259,8 +259,9 @@ test('Fase 26: fenda do vazio no EAST VOID SANCTUM deriva motos (Arukheea)', () 
   assert.ok(system.activeCount > 0, `motos do vazio vivas (${system.activeCount})`);
 });
 
-test('Fase 26: CENÁRIOS SEM fontes de partículas ficam com o pool ocioso e integram', () => {
-  for (const id of ['CIGKV', 'Barburhen', 'Priadus']) {
+test('Fase 26/32: CENÁRIOS SEM fontes de distrito ficam com o pool ocioso e integram', () => {
+  // Barburhen saiu da lista na F33: as colunas de fumaça viraram emissor REAL
+  for (const id of ['CIGKV', 'Priadus']) {
     const { scene } = buildScene(21, id, null, 'high');
     const system = scene.userData.particles;
     assert.ok(system, `${id}: pool existe (marcos criam/reutilizam)`);
@@ -268,7 +269,27 @@ test('Fase 26: CENÁRIOS SEM fontes de partículas ficam com o pool ocioso e int
       for (const fn of scene.userData.districtDressing?.animators ?? []) fn(1 / 60, i / 60);
       for (const fn of scene.userData.worldMarks?.animators ?? []) fn(1 / 60, i / 60);
     }
-    // CIGKV/Barburhen/Priadus: sem emissor de distrito — pool ocioso ou só marcos
+    // CIGKV/Priadus: sem emissor de distrito — pool ocioso ou só marcos
     assert.ok(Number.isFinite(system.activeCount), `${id}: estado finito`);
   }
+});
+
+test('F33: smokecolumn do Barburhen — voluta estática REMOVIDA, fumaça REAL no pool', () => {
+  const scenario = resolveScenario('Barburhen');
+  const layout = getWorldLayout(`DRESS-F33-SMOKE-Barburhen`, scenario.id);
+  const placements = districtDressing(layout, scenario, { density: 1 });
+  assert.ok((placements.counts.smokecolumn ?? 0) >= 1, 'Barburhen coloca smokecolumn (Industrial/Extração)');
+
+  const { scene } = buildScene(21, 'Barburhen', null, 'high');
+  const dressing = scene.userData.districtDressing;
+  assert.ok((dressing.counts.smokecolumn ?? 0) >= 1, 'dressing construído com as colunas');
+  // F33 — a voluta ESTÁTICA (cone 'plume' flutuante) saiu do builder
+  let plumes = 0;
+  dressing.group.traverse((o) => { if (o.name === 'plume') plumes++; });
+  assert.equal(plumes, 0, 'cone estático de fumaça não existe mais');
+  // F33 — emissor REAL: pool vivo com partículas de fumaça após o tick
+  const system = scene.userData.particles;
+  assert.ok(system, 'pool compartilhado existe');
+  for (let i = 0; i < 120; i++) for (const fn of dressing.animators) fn(1 / 60, i / 60);
+  assert.ok(system.activeCount > 0, `fumaça real viva (${system.activeCount} partículas)`);
 });

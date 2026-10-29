@@ -744,15 +744,13 @@ const BUILDERS = {
     return g;
   },
   smokecolumn(m) {
-    // fumaça estática do caos: chaminé baixa + voluta (animator deriva)
+    // F33 — chaminé do caos: a voluta ESTÁTICA (cone opacity .3) saiu — a
+    // fumaça agora é REAL (emissor no pool compartilhado de partículas,
+    // registrado no loop de dressing abaixo). A chaminé fica como fonte.
     const g = new THREE.Group();
     const stack = new THREE.Mesh(new THREE.CylinderGeometry(.16, .22, 1.0, 8), m.rust);
     stack.position.y = .5; stack.castShadow = true;
-    const plume = new THREE.Mesh(new THREE.ConeGeometry(.5, 2.2, 7),
-      new THREE.MeshStandardMaterial({ color: '#3a3634', transparent: true, opacity: .3, roughness: 1, depthWrite: false }));
-    plume.position.y = 2.2; plume.name = 'plume';
-    g.add(stack, plume);
-    g.userData.floatMesh = plume;
+    g.add(stack);
     return g;
   },
 
@@ -1055,6 +1053,17 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
           size: .3 + particleRng.next() * .35, growth: 0, life: 3.2 + particleRng.next() * 2.2,
           drag: .1, gravity: -0.6, alpha: .72,
           color: [.61, .91, 1], endColor: [.24, .66, .78],
+        }));
+      } else if (item.type === 'smokecolumn') {
+        // F33 — FUMAÇA REAL na chaminé do caos (a voluta estática saiu do
+        // builder): coluna cinza contínua, deriva térmica + brisa, cresce e
+        // clareia ao subir — mesma gramática da fumaça de fogueira/lavapatch.
+        addEmitter({ x: item.x, y: 1.05 * item.s, z: item.z }, 2.8, () => ({
+          dx: (particleRng.next() - .5) * .18, dy: 0, dz: (particleRng.next() - .5) * .18,
+          vx: .4 + particleRng.next() * .4, vy: 1.2 + particleRng.next() * .9, vz: (particleRng.next() - .5) * .3,
+          size: .5 + particleRng.next() * .45, growth: .75, life: 2.8 + particleRng.next() * 1.8,
+          drag: .4, gravity: -0.45, alpha: .32,
+          color: [.23, .21, .2], endColor: [.5, .48, .46],
         }));
       }
     }
