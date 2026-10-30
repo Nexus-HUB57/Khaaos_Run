@@ -1594,7 +1594,13 @@ class RoomManager {
   // ─── Serialization & Broadcast ───────────────────────────────────────────
 
   private serializePlayers(room: BattleRoom, viewerUserId?: string): SerializedPlayer[] {
-    return [...room.players.values()].map((p) => ({
+    const viewer = viewerUserId ? room.players.get(viewerUserId) : undefined;
+    const visiblePlayers = [...room.players.values()].filter((player) => {
+      if (room.status !== "IN_PROGRESS" || !viewer) return true;
+      if (player.userId === viewer.userId) return true;
+      return Math.hypot(player.posX - viewer.posX, player.posY - viewer.posY) <= 28;
+    });
+    return visiblePlayers.map((p) => ({
       userId: p.userId,
       displayName: p.displayName,
       posX: p.posX,
@@ -1655,6 +1661,12 @@ class RoomManager {
   private broadcastRoomState(room: BattleRoom) {
     for (const recipient of room.players.values()) {
       if (!recipient.ws || recipient.ws.readyState !== WebSocket.OPEN) continue;
+      const visibleLoot = room.status === "IN_PROGRESS"
+        ? room.loot.filter((loot) => {
+          if (loot.isPickedUp) return false;
+          return Math.hypot(loot.posX - recipient.posX, loot.posY - recipient.posY) <= 28;
+        })
+        : room.loot.filter((loot) => !loot.isPickedUp);
       const payload: ServerMessage = {
         type: "room_state",
         room: {
@@ -1665,7 +1677,7 @@ class RoomManager {
           playerCount: room.players.size,
           players: this.serializePlayers(room, recipient.userId),
           zone: this.computeZoneStatus(room),
-          loot: room.loot.filter((l) => !l.isPickedUp),
+          loot: visibleLoot,
           countdownSeconds: room.status === "COUNTDOWN" ? room.countdownSeconds : undefined,
           winnerId: room.winnerId,
           hostId: room.hostId,
