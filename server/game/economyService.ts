@@ -3,7 +3,18 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { bankAccounts, economyIdempotency, economyLedgerEntries, items, loans, playerStats, transactions } from "@shared/schema";
 import { getArmorerProduct, type ArmorerCatalogId } from "@shared/armorer-catalog";
-import { calculateLoanInterestMinorUnits, fromMinorUnits, hashEconomicRequest, isValidIdempotencyKey, toMinorUnits } from "./economyMoney";
+import {
+  calculateLoanInterestMinorUnits,
+  computeLoanTerms,
+  fromMinorUnits,
+  hashEconomicRequest,
+  isValidIdempotencyKey,
+  LOAN_DAYS_MAX,
+  LOAN_DAYS_MIN,
+  LOAN_PRINCIPAL_MAX_KRC,
+  LOAN_PRINCIPAL_MIN_KRC,
+  toMinorUnits,
+} from "./economyMoney";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ResponseBody = Record<string, unknown>;

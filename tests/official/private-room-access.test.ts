@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-process.env.DATABASE_URL ??= "postgres://test:test@127.0.0.1:5432/khaaos_test";
+if (!process.env.DATABASE_URL?.trim()) process.env.DATABASE_URL = "postgres://test:test@127.0.0.1:5432/khaaos_test";
 process.env.WS_TOKEN_SECRET ??= "official-private-room-test-key-32-bytes";
 
 const { roomManager } = await import("../../server/game/RoomManager.ts");
@@ -104,10 +104,10 @@ test("a valid invite code reaches the authorized private-room join path", async 
 // ─── Roadmap M1 — convite ligado a jogador/sala ──────────────────────────────
 
 import type { RoomInviteRecord } from "../../server/game/RoomEventMesh.ts";
-import {
+const {
   INVITE_HOST_WINDOW_LIMIT,
   INVITE_ROOM_PENDING_LIMIT,
-} from "../../server/game/RoomManager.ts";
+} = await import("../../server/game/RoomManager.ts");
 
 const mesh = (roomManager as any).mesh;
 
