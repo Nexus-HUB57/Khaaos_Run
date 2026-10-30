@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ARMORER_CATALOG } from "../../shared/armorer-catalog";
 
 type MockInventoryItem = {
   id: number;
@@ -65,26 +66,30 @@ async function mockPlayerApis(page: Page) {
     if (pathname === "/api/items/purchase" && request.method() === "POST") {
       const input = request.postDataJSON() as { catalogId?: string };
       purchaseRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
-      if (input.catalogId !== "granada-de-fragmentacao") {
+      const product = ARMORER_CATALOG.find((candidate) => candidate.id === input.catalogId);
+      if (!product) {
         status = 400;
-        body = { message: "Produto de fixture inesperado." };
+        body = { message: "Produto de fixture desconhecido." };
       } else {
         const purchasedItem: MockInventoryItem = {
-          id: 201,
+          id: 200 + purchaseRequests.length,
           userId: playerId,
-          name: "Granada de Fragmentação",
-          type: "UTILIDADE",
-          rarity: "RARO",
-          durability: "100",
-          maxDurability: "100",
+          name: product.name,
+          type: product.type,
+          rarity: product.rarity,
+          durability: String(product.maxDurability),
+          maxDurability: String(product.maxDurability),
           isEquipped: false,
-          stats: { damage: 30, radius: 5 },
+          stats: { ...product.stats },
           imageUrl: null,
           createdAt: fixedTimestamp,
         };
         inventory.push(purchasedItem);
         status = 201;
-        body = { ...purchasedItem, operationId: "00000000-0000-4000-8000-000000000021" };
+        body = {
+          ...purchasedItem,
+          operationId: `00000000-0000-4000-8000-${String(purchaseRequests.length).padStart(12, "0")}`,
+        };
       }
     } else if (pathname === "/api/items" && request.method() === "GET") {
       body = inventory;
@@ -214,42 +219,54 @@ test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", a
   await expect(page.getByTestId("card-item-101")).not.toBeVisible();
 });
 
-test("compra na Forja sincroniza preço, raridade, stats e PackBack no War’I", async ({ page }) => {
+test("todos os produtos da Forja sincronizam identidade e atributos com o War’I e a PackBack", async ({ page }) => {
+  test.setTimeout(60_000);
   const { purchaseRequests, equipRequests } = await mockPlayerApis(page);
   await mockBattleSocket(page, false);
   await page.goto("/market");
 
-  const grenadeOffer = page.getByTestId("card-market-item-6");
-  await expect(grenadeOffer).toContainText("600 KRC");
-  await expect(grenadeOffer).toContainText("RARO");
-  await expect(grenadeOffer).toContainText("UTILIDADE");
-  await expect(grenadeOffer).toContainText("Dano 30 em raio 5");
-  await page.getByTestId("button-buy-6").click();
-  await expect(page.getByText("AQUISIÇÃO CONFIRMADA")).toBeVisible();
-  await expect.poll(() => purchaseRequests).toHaveLength(1);
-  expect(purchaseRequests[0].catalogId).toBe("granada-de-fragmentacao");
-  expect(purchaseRequests[0].idempotencyKey).toBeTruthy();
+  for (const [index, product] of ARMORER_CATALOG.entries()) {
+    const offer = page.getByTestId(`card-market-item-${index}`);
+    await expect(offer).toContainText(product.name);
+    await expect(offer).toContainText(`${product.priceKrc} KRC`);
+    await expect(offer).toContainText(product.rarity);
+    await expect(offer).toContainText(product.type);
+    await expect(offer).toContainText(product.description);
+    const buyButton = page.getByTestId(`button-buy-${index}`);
+    await buyButton.click();
+    await expect.poll(() => purchaseRequests.length).toBe(index + 1);
+    await expect(buyButton).toBeEnabled();
+    expect(purchaseRequests[index].catalogId).toBe(product.id);
+    expect(purchaseRequests[index].idempotencyKey).toBeTruthy();
+  }
 
   await page.goto("/inventory");
   await expect(page.getByRole("heading", { name: "WAR’I" })).toBeVisible();
-  const purchasedCard = page.getByTestId("card-item-201");
-  await expect(purchasedCard).toBeVisible();
-  await purchasedCard.click();
-  const details = page.getByRole("dialog");
-  await expect(details).toContainText("Granada de Fragmentação");
-  await expect(details).toContainText("RARO | BAG / UTILIDADE | DUR: 100/100");
-  await expect(details.getByText("DAMAGE")).toBeVisible();
-  await expect(details.getByText("RADIUS")).toBeVisible();
-  await expect(details.getByText("30", { exact: true })).toBeVisible();
-  await expect(details.getByText("5", { exact: true })).toBeVisible();
+  for (const [index, product] of ARMORER_CATALOG.entries()) {
+    const itemId = 201 + index;
+    const itemCard = page.getByTestId(`card-item-${itemId}`);
+    await expect(itemCard).toBeVisible();
+    await itemCard.click();
+    const details = page.getByRole("dialog");
+    const category = product.type === "ARMA" ? "ARMAMENTO" : product.type === "DEFESA" ? "DEFESA" : "BAG";
+    await expect(details).toContainText(product.name);
+    await expect(details).toContainText(`${product.rarity} | ${category} / ${product.type} | DUR: ${product.maxDurability}/${product.maxDurability}`);
+    for (const [stat, value] of Object.entries(product.stats)) {
+      await expect(details.getByText(stat.toUpperCase())).toBeVisible();
+      await expect(details.getByText(String(value), { exact: true })).toBeVisible();
+    }
 
-  const equipButton = page.getByTestId("button-packback-201");
-  await equipButton.click();
-  await expect(equipButton).toContainText("NA PACKBACK — REMOVER");
-  await expect.poll(() => equipRequests).toHaveLength(1);
-  expect(equipRequests[0]).toEqual({ itemId: 201, isEquipped: true });
-  await page.getByRole("button", { name: "FECHAR" }).click();
-  await expect(purchasedCard).toContainText("PACKBACK");
+    if (product.id === "granada-de-fragmentacao") {
+      const equipButton = page.getByTestId(`button-packback-${itemId}`);
+      await equipButton.click();
+      await expect(equipButton).toContainText("NA PACKBACK — REMOVER");
+      await expect.poll(() => equipRequests.length).toBe(1);
+      expect(equipRequests[0]).toEqual({ itemId, isEquipped: true });
+    }
+
+    await page.getByRole("button", { name: "FECHAR" }).click();
+    if (product.id === "granada-de-fragmentacao") await expect(itemCard).toContainText("PACKBACK");
+  }
 });
 
 test("Zona exibe a PackBack no celular, evita toque duplicado e confirma durabilidade", async ({ page }) => {
