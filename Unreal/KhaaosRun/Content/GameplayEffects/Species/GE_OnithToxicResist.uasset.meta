@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_OnithToxicResist",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "ToxicDamageTaken",
+  "magnitude": 0.85,
+  "tag": "Effect.Buff.ToxicResist",
+  "description": "15% toxic damage reduction for Onith species",
+  "generated_by": "wire_all_4_tasks.py"
+}

@@ -2,7 +2,7 @@
 
 #include "Game/EOS/KhaaosEOSCloudSave.h"
 #include "Game/EOS/KhaaosEOSManager.h"
-#include "Game/Save/KhaaosSaveGame.h"
+#include "Save/KhaaosSaveGame.h"
 #include "KhaaosRun.h"
 
 #include "Engine/World.h"

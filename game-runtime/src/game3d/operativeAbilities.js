@@ -1,6 +1,27 @@
 // Khaaos Run — habilidades ativas locais dos 16 operativos canônicos.
 // Todos os efeitos são resolvidos pela simulação determinística; o modo online não os ativa.
 export const OPERATIVE_ABILITIES = Object.freeze({
+  // Fase 11 — Oficiais de Classe Especial JOGÁVEIS: habilidades canônicas da
+  // insígnia, mapeadas nos efeitos autoritativos existentes (dash/baluarte/recon)
+  // — nenhum efeito novo, mesmo caminho de validação dos 16 operativos.
+  OCE_01: Object.freeze({
+    operativeId: 'OCE_01', name: 'Carga do Marechal', effect: 'dash',
+    cooldownSeconds: 55, durationSeconds: 2,
+    parameters: Object.freeze({ speedMultiplier: 1.7, maxDistance: 9 }),
+    description: 'Arranque de insígnia da Classe Especial: avança até 9 metros em 2 segundos, parando em colisões.',
+  }),
+  OCE_02: Object.freeze({
+    operativeId: 'OCE_02', name: 'Baluarte da Classe Especial', effect: 'damageReduction',
+    cooldownSeconds: 55, durationSeconds: 6,
+    parameters: Object.freeze({ damageReduction: 0.25 }),
+    description: 'Disciplina de blindagem: reduz em 25% o dano direto recebido por 6 segundos.',
+  }),
+  OCE_03: Object.freeze({
+    operativeId: 'OCE_03', name: 'Varredura da Insígnia', effect: 'recon',
+    cooldownSeconds: 60, durationSeconds: 3,
+    parameters: Object.freeze({ radius: 34, revealSeconds: 3 }),
+    description: 'Varredura de comando: marca no minimapa inimigos vivos num raio de 34 metros por 3 segundos.',
+  }),
   OP_MALE_VANGUARD: Object.freeze({
     operativeId: 'OP_MALE_VANGUARD', name: 'Ruptura de Viela', effect: 'dash',
     cooldownSeconds: 55, durationSeconds: 2,
@@ -96,6 +117,26 @@ export const OPERATIVE_ABILITIES = Object.freeze({
     cooldownSeconds: 60, durationSeconds: 4,
     parameters: Object.freeze({ damageReduction: 0.25 }),
     description: 'Reduz em 25% o dano direto recebido por 4 segundos, sem conceder invulnerabilidade.',
+  }),
+  // Fase 26 — TALON (Hacker & Urban Runner · Agilidade e Informação).
+  // "Invasão de Campo": pulso de varredura digital que REVELA rivais ATRÁS de
+  // cobertura (paredes, construções e Paredes de Gel — sem checagem de LOS, é
+  // essa a assinatura da skill) com silhueta laranja para Talon e aliados, e
+  // acelera salto/escala (vault) em 15% enquanto ativo. Progressão Lv1→Lv6
+  // é META-DE-DADOS (UI/progressão): a sim resolve os parâmetros-base canônicos.
+  OP_MALE_TALON: Object.freeze({
+    operativeId: 'OP_MALE_TALON', name: 'Invasão de Campo', effect: 'fieldScan',
+    cooldownSeconds: 65, durationSeconds: 6,
+    parameters: Object.freeze({ radius: 20, revealSeconds: 4, vaultSpeedMultiplier: 1.15 }),
+    description: 'Pulso de varredura em raio de 20 m por 6 s: rivais atrás de cobertura ganham silhueta laranja por 4 s; salto/escala 15% mais rápidos enquanto ativo.',
+    levelProgression: Object.freeze([
+      Object.freeze({ level: 1, radius: 15, durationSeconds: 4, cooldownSeconds: 80 }),
+      Object.freeze({ level: 2, radius: 17, durationSeconds: 4.6, cooldownSeconds: 74 }),
+      Object.freeze({ level: 3, radius: 19, durationSeconds: 5.2, cooldownSeconds: 68 }),
+      Object.freeze({ level: 4, radius: 21, durationSeconds: 5.8, cooldownSeconds: 63 }),
+      Object.freeze({ level: 5, radius: 23, durationSeconds: 6.4, cooldownSeconds: 59 }),
+      Object.freeze({ level: 6, radius: 25, durationSeconds: 7, cooldownSeconds: 55 }),
+    ]),
   }),
 });
 

@@ -1,0 +1,50 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Species_Skeetw_VooPlanador",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.290534+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Infinite",
+    "duration_magnitude": -1.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.GlideDuration",
+        "modifier_op": "Additive",
+        "magnitude": 5.0,
+        "channel": "Primary"
+      },
+      {
+        "attribute": "Attribute.FallSpeedMultiplier",
+        "modifier_op": "Multiplicative",
+        "magnitude": 0.3,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Buff.Glide",
+      "Ability.Passive.Species.Skeetw.VooPlanador"
+    ],
+    "required_tags": [
+      "Species.Skeetw"
+    ],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Species/GE_Species_Skeetw_VooPlanador",
+    "package_name": "/Game/GameplayEffects/Species/GE_Species_Skeetw_VooPlanador",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "81a30024f6c940e3"
+}

@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_HealOverTime",
+  "type": "HealOverTime",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": 50.0,
+  "tag": "Effect.Buff.HealOverTime",
+  "description": "Heal over time (50 HP, 3s, 0.5s tick)",
+  "generated_by": "wire_all_4_tasks.py"
+}

@@ -6,6 +6,8 @@
 #include "Components/SphereComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/World.h"
+#include "Game/Inventory/KhaaosInventoryComponent.h"
+#include "Game/Data/KhaaosLootItemDataAsset.h"
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,8 @@ AKhaaosLootPickup::AKhaaosLootPickup()
         // ── Default loot state ──
         ItemId      = 0;
         ItemName    = TEXT("");
+        InventoryItemID = NAME_None;
+        InventoryStackCount = 1;
         Rarity      = ELootRarity::Comum;
         ItemType    = EItemType::Recurso;
         bIsActive   = true;
@@ -29,28 +33,119 @@ AKhaaosLootPickup::AKhaaosLootPickup()
         // ── Collision ──
         PickupCollision = CreateDefaultSubobject<USphereComponent>(TEXT("PickupCollision"));
         RootComponent = PickupCollision;
-        PickupCollision->SetSphereRadius(DefaultPickupRange);
+        PickupCollision->SetSphereRadius(WorldPickupRangeCm);
         PickupCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
         PickupCollision->SetCollisionResponseToAllChannels(ECR_Ignore);
         PickupCollision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 
         bReplicates = true;
         bOnlyRelevantToPlayers = true;
+		bAlwaysRelevant = false;
+		SetNetCullDistanceSquared(FMath::Square(3000.0f));
+		NetUpdateFrequency = 3.0f;
+		MinNetUpdateFrequency = 1.0f;
+		NetDormancy = DORM_DormantAll;
 }
 
 // ─── RepNotify ──────────────────────────────────────────────────────────────────
 
 void AKhaaosLootPickup::OnRep_IsActive()
 {
-        // Client-side visual: hide/show pickup mesh
-        if (!bIsActive)
-        {
-                SetActorHiddenInGame(true);
-                SetActorEnableCollision(false);
-        }
+        SetActorHiddenInGame(!bIsActive);
+        SetActorEnableCollision(bIsActive);
 }
 
 // ─── Server Methods ─────────────────────────────────────────────────────────────
+
+bool AKhaaosLootPickup::TryPickupIntoInventory(UKhaaosInventoryComponent* Inventory)
+{
+	if (!HasAuthority() || !bIsActive || !Inventory || InventoryItemID.IsNone() || InventoryStackCount <= 0)
+	{
+		return false;
+	}
+	AActor* PlayerActor = Inventory->GetOwner();
+	if (!PlayerActor || !PlayerActor->HasAuthority() ||
+		FVector::DistSquared(GetActorLocation(), PlayerActor->GetActorLocation()) > FMath::Square(WorldPickupRangeCm))
+	{
+		return false;
+	}
+
+	if (!Inventory->AddItem(InventoryItemID, InventoryStackCount))
+	{
+		return false;
+	}
+	FlushNetDormancy();
+	bIsActive = false;
+	PickedUpBy = PlayerActor->GetName();
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	OnLootPickedUp.Broadcast(this, PickedUpBy);
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
+	return true;
+}
+
+void AKhaaosLootPickup::ConfigureInventoryItem(FName ItemID, int32 StackCount, EItemType InType)
+{
+	if (!HasAuthority() || ItemID.IsNone() || StackCount <= 0) return;
+	FlushNetDormancy();
+	InventoryItemID = ItemID;
+	ItemId = GetUniqueID();
+	InventoryStackCount = StackCount;
+	ItemName = ItemID.ToString();
+	ItemType = InType;
+	ItemStats.Ammo = StackCount;
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
+}
+
+bool AKhaaosLootPickup::ConfigureFromCatalog(const UKhaaosLootItemDataAsset* Definition, int32 StackCount)
+{
+	if (!HasAuthority() || !Definition || Definition->ItemID.IsNone() ||
+		Definition->StackMax <= 0 || StackCount <= 0 || StackCount > Definition->StackMax)
+	{
+		return false;
+	}
+
+	FlushNetDormancy();
+	ItemId = GetUniqueID();
+	InventoryItemID = Definition->ItemID;
+	InventoryStackCount = StackCount;
+	ItemName = Definition->DisplayName.IsEmpty()
+		? Definition->ItemID.ToString()
+		: Definition->DisplayName.ToString();
+
+	switch (Definition->LootType)
+	{
+	case EKhaaosLootType::Curativo: ItemType = EItemType::Curativo; break;
+	case EKhaaosLootType::Defesa:   ItemType = EItemType::Defesa; break;
+	case EKhaaosLootType::Utilidade: ItemType = EItemType::Utilidade; break;
+	case EKhaaosLootType::Recurso:  ItemType = EItemType::Recurso; break;
+	default:                       ItemType = EItemType::Recurso; break;
+	}
+
+	switch (Definition->Rarity)
+	{
+	case EKhaaosRarity::Comum:    Rarity = ELootRarity::Comum; break;
+	case EKhaaosRarity::Raro:     Rarity = ELootRarity::Raro; break;
+	case EKhaaosRarity::Epico:    Rarity = ELootRarity::Epico; break;
+	case EKhaaosRarity::Lendario: Rarity = ELootRarity::Lendario; break;
+	case EKhaaosRarity::Mitico:   Rarity = ELootRarity::Mitico; break;
+	default:                      Rarity = ELootRarity::Comum; break;
+	}
+
+	ItemStats = FLootStats();
+	ItemStats.Heal = static_cast<float>(Definition->HealAmount);
+	ItemStats.Defense = static_cast<float>(Definition->DefenseAmount);
+	MapPosition = FVector2D(GetActorLocation().X, GetActorLocation().Y);
+	bIsActive = true;
+	PickedUpBy = TEXT("");
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
+	return true;
+}
 
 bool AKhaaosLootPickup::TryPickup(const FString& PlayerId, float PlayerPosX, float PlayerPosY, float PickupRange)
 {
@@ -79,6 +174,7 @@ bool AKhaaosLootPickup::TryPickup(const FString& PlayerId, float PlayerPosX, flo
         }
 
         // Deactivate and record picker
+        FlushNetDormancy();
         bIsActive = false;
         PickedUpBy = PlayerId;
 
@@ -87,6 +183,8 @@ bool AKhaaosLootPickup::TryPickup(const FString& PlayerId, float PlayerPosX, flo
 
         // Client RPC for effects
         ClientOnPickedUp(PlayerId);
+		ForceNetUpdate();
+		SetNetDormancy(DORM_DormantAll);
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosLootPickup::TryPickup - Item %d picked up by %s"), ItemId, *PlayerId);
 
@@ -100,24 +198,33 @@ void AKhaaosLootPickup::ResetPickup()
                 return;
         }
 
+        FlushNetDormancy();
         bIsActive = true;
         PickedUpBy = TEXT("");
 
         SetActorHiddenInGame(false);
         SetActorEnableCollision(true);
+		ForceNetUpdate();
+		SetNetDormancy(DORM_DormantAll);
 }
 
 void AKhaaosLootPickup::InitFromPreset(int32 InItemId, const FString& InName, EItemType InType, ELootRarity InRarity, float InPosX, float InPosY, const FLootStats& InStats)
 {
-        ItemId      = InItemId;
-        ItemName    = InName;
-        ItemType    = InType;
-        Rarity      = InRarity;
-        MapPosition = FVector2D(InPosX, InPosY);
-        ItemStats   = InStats;
+	if (!HasAuthority()) return;
+	FlushNetDormancy();
+	ItemId = InItemId;
+	ItemName = InName;
+	InventoryItemID = FName(*InName);
+	InventoryStackCount = 1;
+	ItemType = InType;
+	Rarity = InRarity;
+	MapPosition = FVector2D(InPosX, InPosY);
+	ItemStats = InStats;
 
-        bIsActive   = true;
-        PickedUpBy  = TEXT("");
+	bIsActive = true;
+	PickedUpBy = TEXT("");
+	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosLootPickup::InitFromPreset - Item %d: %s at (%.1f, %.1f)"),
                 InItemId, *InName, InPosX, InPosY);
@@ -130,8 +237,10 @@ bool AKhaaosLootPickup::SetRarity(ELootRarity InRarity)
                 return false;
         }
 
+        FlushNetDormancy();
         Rarity = InRarity;
         ForceNetUpdate();
+		SetNetDormancy(DORM_DormantAll);
         return true;
 }
 
@@ -151,6 +260,8 @@ void AKhaaosLootPickup::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
         DOREPLIFETIME(AKhaaosLootPickup, ItemId);
         DOREPLIFETIME(AKhaaosLootPickup, ItemName);
+        DOREPLIFETIME(AKhaaosLootPickup, InventoryItemID);
+        DOREPLIFETIME(AKhaaosLootPickup, InventoryStackCount);
         DOREPLIFETIME(AKhaaosLootPickup, Rarity);
         DOREPLIFETIME(AKhaaosLootPickup, ItemType);
         DOREPLIFETIME(AKhaaosLootPickup, ItemStats);

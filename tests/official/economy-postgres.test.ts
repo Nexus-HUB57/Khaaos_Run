@@ -8,8 +8,16 @@ import { createEconomyAuditReport } from "../../server/game/economyAudit";
 import { pruneEconomyIdempotencyClaims } from "../../server/game/economyRetention";
 import { ARMORER_CATALOG } from "../../shared/armorer-catalog";
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+let testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (testDatabaseUrl) {
+  // Isolamento por suíte: node --test roda arquivos em paralelo e esta suíte
+  // DROPa ledger/tabelas — sem banco próprio destrói as suítes vizinhas.
+  const { useSuiteDatabase } = await import("../helpers/suite-database.ts");
+  const suite = await useSuiteDatabase(testDatabaseUrl, "economy_postgres");
+  process.env.TEST_DATABASE_URL = suite.databaseUrl;
+  process.env.DATABASE_URL = suite.databaseUrl;
+  testDatabaseUrl = suite.databaseUrl;
+}
 
 test("economia PostgreSQL: concorrência, replay idempotente e rollback integral", { skip: !testDatabaseUrl }, async () => {
   const url = new URL(testDatabaseUrl!);

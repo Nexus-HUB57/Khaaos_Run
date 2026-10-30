@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/GameModeBase.h"
+#include "Game/Character/KhaaosOperativeActor.h"
 
 // ─── Log Category ──────────────────────────────────────────────────────────────
 
@@ -336,10 +337,13 @@ void UKhaaosReplicationGraph::ConfigureForWorld(EWorldSequence World)
 
 FKhaaosClassReplicationInfo UKhaaosReplicationGraph::GetClassReplicationInfo(UClass* InClass) const
 {
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
-    {
-        return *Info;
-    }
+	    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
+	    {
+	        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
+	        {
+	            return *Info;
+	        }
+	    }
 
     // Default: spatially relevant, 30Hz
     return FKhaaosClassReplicationInfo(30.0f, false, true, false, 1.0f);
@@ -379,6 +383,10 @@ void UKhaaosReplicationGraph::InitClassReplicationInfo()
     // GameMode — always relevant (server-only but registered for completeness)
     ClassReplicationInfoMap.Add(AGameModeBase::StaticClass(),
         FKhaaosClassReplicationInfo(10.0f, true, false, false, 8.0f));
+
+    // Operatives stay spatially relevant but receive combat-grade update priority.
+    ClassReplicationInfoMap.Add(AKhaaosOperativeActor::StaticClass(),
+        FKhaaosClassReplicationInfo(PlayerReplicationFrequency, false, true, true, 10.0f));
 
     // ─── Dynamic Spatially-Relevant Classes ──────────────────────────────
 
@@ -459,27 +467,12 @@ bool UKhaaosReplicationGraph::IsAlwaysRelevantClass(UClass* InClass) const
         return false;
     }
 
-    // Check the class replication info cache
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
+    // Exact-class false must not mask an always-relevant superclass.
+    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
     {
-        return Info->bAlwaysRelevant;
-    }
-
-    // Check inheritance for always-relevant base classes
-    static TSet<UClass*> AlwaysRelevantClasses;
-    if (AlwaysRelevantClasses.Num() == 0)
-    {
-        AlwaysRelevantClasses.Add(APlayerState::StaticClass());
-        AlwaysRelevantClasses.Add(APlayerController::StaticClass());
-        AlwaysRelevantClasses.Add(AGameStateBase::StaticClass());
-        AlwaysRelevantClasses.Add(AGameModeBase::StaticClass());
-    }
-
-    for (UClass* CheckClass : AlwaysRelevantClasses)
-    {
-        if (InClass->IsChildOf(CheckClass))
+        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
         {
-            return true;
+            return Info->bAlwaysRelevant;
         }
     }
 
@@ -493,10 +486,12 @@ bool UKhaaosReplicationGraph::IsDynamicClass(UClass* InClass) const
         return false;
     }
 
-    // Check the class replication info cache
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(InClass))
+    for (UClass* CheckClass = InClass; CheckClass; CheckClass = CheckClass->GetSuperClass())
     {
-        return Info->bDynamic;
+        if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(CheckClass))
+        {
+            return Info->bDynamic;
+        }
     }
 
     // By default, assume actors are dynamic if they have mobility
@@ -515,12 +510,8 @@ float UKhaaosReplicationGraph::CalculateActorPriority(AActor* Actor, const FVect
     const float Distance = FVector::Dist(Actor->GetActorLocation(), ViewerLocation);
     const float DistanceFactor = 1.0f / (Distance + 1.0f); // +1 to avoid division by zero
 
-    // Class-based priority weight
-    float ClassWeight = 1.0f;
-    if (const FKhaaosClassReplicationInfo* Info = ClassReplicationInfoMap.Find(Actor->GetClass()))
-    {
-        ClassWeight = Info->PriorityWeight;
-    }
+    // Resolve the nearest configured ancestor so operative subclasses inherit combat priority.
+    const float ClassWeight = GetClassReplicationInfo(Actor->GetClass()).PriorityWeight;
 
     // Always-relevant actors get maximum priority
     if (IsAlwaysRelevantClass(Actor->GetClass()))

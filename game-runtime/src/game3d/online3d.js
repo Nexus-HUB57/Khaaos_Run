@@ -8,8 +8,13 @@
 import { Game3D } from './main3d.js';
 import { NetClient3D } from './net3d.js';
 import { MATCH_TIME, WORLD, getWorldLayout, glooCollider } from './sim3d.js';
+import { doorBoxCollider } from './interiorsPlan.js';
 import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
+import { officerCatalogEntries } from './officers.js';
+import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
+import { spectateHref } from './spectator3d.js'; // Fase 14 — botão ASSISTIR (transmissão)
+import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
 
@@ -23,6 +28,7 @@ export class Sim3DView {
     this.over = false;
     this.started = false;
     this.aliveCount = 1;
+    this.squad = false; // Fase 7 — ativado quando o snapshot traz squads (salas privadas)
     this.ring = { ...OFFLINE_RING };
     this.player = this.#placeholderPlayer();
     this.bots = [];
@@ -30,6 +36,8 @@ export class Sim3DView {
     this.terminals = [];
     this.grenades = [];  // Fase 4 — granadas autoritativas (snapshots)
     this.walls = [];     // Fase 4 — Gloo Walls ativas (snapshots)
+    this.doors = [];     // Fase 25 — estado das folhas de porta (snapshots)
+    this.windows = [];   // Fase 26 — estado do vidro das janelas (snapshots)
     this.pendingEvents = [];
     this.myId = null;
     this.onSwitchSlot = null; // injetado pelo OnlineGame3D
@@ -43,6 +51,7 @@ export class Sim3DView {
       inventory: { ammo: { '9MM': 45 }, medkit: 1, frag: 1, gloo: 1 },
       slots: { 1: 'g19' },
       alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      stamina: 100, crouching: false, sliding: false, slideT: 0,
       dropPhase: null,
     };
   }
@@ -55,6 +64,7 @@ export class Sim3DView {
     this.over = s.over ?? this.over;
     this.started = s.started ?? this.started;
     this.aliveCount = s.aliveCount ?? this.aliveCount;
+    this.squad = !!(s.player?.squad || (s.others ?? []).some((o) => o.squad)); // Fase 7
     if (s.ring) this.ring = { ...s.ring };
     if (s.player) this.player = s.player;
     if (s.others) this.bots = s.others;
@@ -66,6 +76,8 @@ export class Sim3DView {
       // Fase 4 — o preditor local respeita as paredes ativas (mesmo mundo físico)
       this.onWallsChanged?.(this.walls);
     }
+    if (s.doors) this.doors = s.doors; // Fase 25 — folhas seguem o estado da sala
+    if (s.windows) this.windows = s.windows; // Fase 26 — vidro segue o estado da sala
   }
 
   // eventos do servidor → formas consumidas pelo handleEvents do modo offline
@@ -74,6 +86,9 @@ export class Sim3DView {
     switch (evt.type) {
       case 'shot': this.pendingEvents.push({ ...evt, owner: own(evt.owner) }); break;
       case 'hit': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
+      // Fase 28 — número de dano corpo-a-corpo: mesmas localizações do 'hit'
+      // (owner/victim viram 'player' quando são a conexão local).
+      case 'melee': this.pendingEvents.push({ ...evt, victim: own(evt.victim), owner: own(evt.owner) }); break;
       default: this.pendingEvents.push({ ...evt });
     }
   }
@@ -96,11 +111,14 @@ export class OnlineGame3D extends Game3D {
     this.view.onSwitchSlot = (slot) => { this.pendingSlot = slot; };
     this.sim = this.view;
     this.hud.sim = this.view;
+    // Fase 13 — replay da ata da Corte na UI do eliminado: o hook dispara a
+    // busca do caso próprio (mine=1) quando a eliminação é confirmada.
+    this.onEliminated = () => this.#fetchMyCourtAta();
     // predição client-side (Fase 3): mundo local idêntico ao da sala (seed sincronizada)
     this.inputSeq = 0;
     this.predictor = new LocalPredictor({ world: getWorldLayout(this.seed) });
     // Fase 4 — preditor enxerga Gloo Walls (colliders dinâmicos) sem mutar o layout cacheado
-    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(this.seed).colliders, floors: getWorldLayout(this.seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -108,8 +126,12 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
-    this.hud.onReplayExport = () => this.hud.feed('CONSOLE', 'Exportação de replay disponível apenas no modo offline.');
+    // Fase 25 — preditor enxerga as PORTAS: colliders do plano determinístico
+    // joined ao estado do snapshot (só id/hp/ativo viajam — o vão é estático)
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.onEntry = (entry) => this.#startMatchOnline(entry);
     const scenarioSelect = document.querySelector('#scenarioSelect');
     if (scenarioSelect) {
@@ -117,13 +139,26 @@ export class OnlineGame3D extends Game3D {
       scenarioSelect.title = 'O cenário online é escolhido pela sala autoritativa.';
     }
     const operativeSelect = document.querySelector('#operativeSelect');
-    if (operativeSelect) operativeSelect.disabled = true;
+    if (operativeSelect) operativeSelect.disabled = false; // Fase 8 — identidade sincroniza online
     const selectionStatus = document.querySelector('#contentSelectionStatus');
-    if (selectionStatus) selectionStatus.textContent = 'ONLINE: o servidor define o mundo; o operativo/paleta ainda não sincroniza entre jogadores.';
+    if (selectionStatus) selectionStatus.textContent = 'ONLINE: o operativo sincroniza com a sala; a habilidade é autoritativa (Q).';
+    // Fase 8 — troca de operativo no LOBBY declara a identidade ao servidor.
+    // Fase 11 — a lista também contém as insígnias OCE (o servidor valida contra
+    // o plano do POJ — recusa chega como evento operative_error no feed).
+    operativeSelect?.addEventListener('change', () => {
+      const officer = officerCatalogEntries().find((entry) => entry.id === operativeSelect.value);
+      const operative = officer ?? operativeCatalog.find((entry) => entry.id === operativeSelect.value);
+      if (operative) { this.selectedOperative = operative; this.net?.setOperative(operative.id); }
+    });
     const seedInput = document.querySelector('#seedInput');
     if (seedInput) { seedInput.disabled = true; seedInput.value = 'SERVIDOR'; }
 
-    net.onStatus = (status) => this.hud.setMatchStatus(status);
+    net.onStatus = (status) => {
+      this.hud.setMatchStatus(status);
+      // Fase 8 — login da plataforma embutido no modal ZU quando a sessão não existe
+      const loginBox = document.querySelector('#loginBox');
+      if (loginBox) loginBox.classList.toggle('hidden', status !== 'LOGIN NECESSÁRIO');
+    };
     net.onSnapshot = (snapshot) => {
       // primeira amostra define a seed do mundo (o servidor escolhe a sala)
       if (snapshot.seed && snapshot.seed !== this.seed) this.pendingWorldSeed = snapshot.seed;
@@ -131,11 +166,176 @@ export class OnlineGame3D extends Game3D {
     };
     net.onEvent = (evt) => this.view.queueEvent(evt, net.myId);
     net.onRejected = (msg) => this.hud.feed('ANTI-CHEAT', `Input rejeitado: ${msg.violations?.join(', ')}`, 'bad');
+    // Fase 8 — declara o operativo inicial assim que o NetClient3D estiver pronto
+    net.setOperative(this.selectedOperative.id);
+    // ---------- Fase 7 — salas privadas com código de convite ----------
+    const privateBox = document.querySelector('#privateRoomBox');
+    if (privateBox) privateBox.classList.remove('hidden');
+    const squadToggleBox = document.querySelector('#squadToggleBox');
+    if (squadToggleBox) squadToggleBox.classList.add('hidden'); // squad offline não se aplica ao online
+    document.querySelector('#createPrivateBtn')?.addEventListener('click', () => {
+      net.createPrivate();
+      this.hud.feed('SQUAD', 'Criando sala privada squad (DBNO)...', 'warn');
+    });
+    document.querySelector('#joinPrivateBtn')?.addEventListener('click', () => {
+      const input = document.querySelector('#inviteCode');
+      const code = input?.value?.trim();
+      if (!code) { this.hud.feed('SQUAD', 'Digite o código de convite (6 caracteres).', 'bad'); return; }
+      net.joinPrivate(code);
+    });
+    // Fase 14 — botão ASSISTIR: abre a transmissão da sala (?spectate=SALA).
+    // Sem código, cai na sala default do pipeline (partidas abertas/matchmaking).
+    document.querySelector('#spectateBtn')?.addEventListener('click', () => {
+      const code = document.querySelector('#inviteCode')?.value?.trim() ?? '';
+      window.location.href = spectateHref(code);
+    });
+    net.onPrivateCreated = (code) => {
+      this.hud.feed('SQUAD', `Sala privada criada! Código: ${code} — compartilhe com o esquadrão.`, 'good');
+      this.hud.setMatchStatus(`SALA PRIVADA // ${code}`);
+      const input = document.querySelector('#inviteCode');
+      if (input) input.value = code;
+      this.audio?.ui?.();
+    };
+    net.onPrivateJoined = (code) => {
+      this.hud.feed('SQUAD', `Entrou na sala privada ${code}. Esquadrão pronto — aperte CINTO para iniciar.`, 'good');
+      this.hud.setMatchStatus(`SALA PRIVADA // ${code}`);
+      this.audio?.ui?.();
+    };
+    net.onPrivateError = (message) => this.hud.feed('SQUAD', message, 'bad');
+    // ---------- Fase 9 — painel POJ no modal ZU (Protocolo de Ordem de Jogo) ----------
+    this.refreshPojStrip();
+    this.pojTimer = setInterval(() => this.refreshPojStrip(), 15000);
+    // ---------- Fase 8 — login da plataforma embutido no modal ZU ----------
+    const loginBox = document.querySelector('#loginBox');
+    if (loginBox && !localStorage.getItem('kr_token')) loginBox.classList.remove('hidden');
+    document.querySelector('#loginBtn')?.addEventListener('click', async () => {
+      const user = document.querySelector('#loginUser')?.value?.trim();
+      const pass = document.querySelector('#loginPass')?.value ?? '';
+      if (!user || !pass) { this.hud.feed('LOGIN', 'Informe operativo e senha do QG-War\u2019I.', 'bad'); return; }
+      try {
+        this.hud.feed('LOGIN', 'Autenticando no QG-War\u2019I...', 'warn');
+        await NetClient3D.login(user, pass);
+        net.token = localStorage.getItem('kr_token');
+        loginBox?.classList.add('hidden');
+        this.hud.feed('LOGIN', `Sessão confirmada, ${user}. Conectando ao matchmaking 3D...`, 'good');
+        net.dispose();
+        net.connect();
+      } catch {
+        this.hud.feed('LOGIN', 'Credenciais recusadas pelo QG. Verifique usuário/senha.', 'bad');
+      }
+    });
     this.pingTimer = setInterval(() => {
       if (!this.zuOpen) this.hud.setMatchStatus(`ONLINE // PING ${net.rtt ?? '—'}ms // ${this.view.aliveCount} VIVOS`);
     }, 3000);
     net.connect();
     this.hud.feed('CIGKV', 'Modo online: sala autoritativa. Escolha a entrada ZU.', 'good');
+  }
+
+  // ---------- Fase 13 — ata da Corte do próprio eliminado ----------
+  // GET /poj/court-martial/cases?mine=1 (autenticado) retorna apenas os casos
+  // do jogador — a ata é privacidade pessoal, não docket público. Enriquece
+  // com o court_verdict ao vivo (ΔKRC) quando o docket ainda não o carrega.
+  async #fetchMyCourtAta({ silent = false } = {}) {
+    try {
+      // pequena folga: o caso é aberto no servidor no mesmo fluxo da queda,
+      // mas o report partida→POJ pode chegar um instante depois do evento.
+      await new Promise((r) => setTimeout(r, silent ? 0 : 900));
+      const token = localStorage.getItem('kr_token');
+      const res = await fetch('/poj/court-martial/cases?mine=1', {
+        cache: 'no-store',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return null;
+      const docket = await res.json();
+      const cases = Array.isArray(docket.cases) ? docket.cases : [];
+      if (!cases.length) {
+        if (!silent) this.hud.feed('CORTE MARCIAL', 'Nenhum caso aberto em seu nome — eliminação sem Corte.', 'warn');
+        return null;
+      }
+      const latest = cases[cases.length - 1];
+      this.myCourtCase = latest;
+      this.hud.setCourtAtaAvailable(true);
+      if (!silent) this.hud.showCourtAta(latest, { krcEvent: this.courtVerdictEvents?.[latest.id] });
+      return latest;
+    } catch {
+      if (!silent) this.hud.feed('CORTE MARCIAL', 'Ata indisponível agora — reabra pelo botão ATA do espectador.', 'bad');
+      return null;
+    }
+  }
+
+  async openMyCourtAta() {
+    if (this.myCourtCase) {
+      this.hud.setCourtAtaAvailable(true);
+      this.hud.showCourtAta(this.myCourtCase, { krcEvent: this.courtVerdictEvents?.[this.myCourtCase.id] });
+      return;
+    }
+    await this.#fetchMyCourtAta({ silent: false });
+  }
+
+  // ---------- Fase 9 — painel POJ: estado do Protocolo de Ordem de Jogo ----------
+  async refreshPojStrip() {
+    const strip = document.querySelector('#pojStrip');
+    if (!strip) return;
+    try {
+      const res = await fetch('/poj/state', { cache: 'no-store' });
+      if (!res.ok) return;
+      const s = await res.json();
+      const set = (id, text, cls = '') => {
+        const node = document.querySelector('#' + id);
+        if (!node) return;
+        node.textContent = text;
+        node.className = cls;
+      };
+      const fases = {
+        alistamento: 'ALISTAMENTO', contagem_regressiva: 'CONTAGEM 24H', guerra: 'GUERRA',
+        julgamento: 'JULGAMENTO', encerrado: 'ENCERRADO',
+      };
+      set('pojFase', fases[s.phase] ?? String(s.phase ?? '—').toUpperCase(), s.phase === 'guerra' ? 'poj-live' : s.phase === 'contagem_regressiva' ? 'poj-warn' : '');
+      set('pojInscritos', (s.registrations ?? 0).toLocaleString('pt-BR'));
+      set('pojCigkv', s.cigkvOpen ? 'ABERTO' : (s.phase === 'alistamento' ? 'FECHADO' : 'ENCERRADO'), s.cigkvOpen ? 'poj-live' : '');
+      set('pojMundo', s.world ?? '—');
+      set('pojDia', s.day ? `${s.day}/7` : '—');
+      set('pojVivos', (s.phase === 'guerra' || s.phase === 'julgamento') ? String(s.survivorsCount ?? 0) : '—', s.phase === 'guerra' ? 'poj-live' : '');
+      // Fase 10 — patente do perfil (progressão KRC via /profile)
+      await this.refreshProfileChip();
+    } catch { /* servidor sem /poj — painel permanece neutro */ }
+  }
+
+  // Fase 10 — chip PATENTE: progressão KRC do perfil autenticado (1º critério
+  // de desempate do 11º artigo). Sem sessão → chip neutro.
+  async refreshProfileChip() {
+    const node = document.querySelector('#pojPatente');
+    if (!node) return;
+    try {
+      const token = localStorage.getItem('kr_token');
+      const res = await fetch('/profile', {
+        cache: 'no-store',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) { node.textContent = '—'; return; }
+      const p = await res.json();
+      const pct = Math.round((p.progress ?? 0) * 100);
+      node.textContent = p.nextPatente
+        ? `${p.patente} · ${pct}% p/ ${p.nextPatente}`
+        : `${p.patente} · TOPO`;
+    } catch { node.textContent = '—'; }
+  }
+
+  // Fase 25 — colliders do preditor = estáticos + gloo ativas + portas ativas
+  #rebuildPredictorColliders() {
+    if (!this.predictorWorld) return;
+    const layout = getWorldLayout(this.seed);
+    const staticColliders = layout.colliders;
+    const gloo = (this.view.walls ?? []).filter((w) => w.active !== false).map(glooCollider);
+    const doorState = new Map((this.view.doors ?? []).map((d) => [d.id, d]));
+    // Folha FECHADA/íntegra colide no preditor; aberta/destruída não —
+    // doorBoxCollider já devolve null nesses estados (MESMA geometria da sim/sala)
+    const doors = (layout.doors ?? [])
+      .map((d) => { const st = doorState.get(d.id); return st ? { ...d, open: !!st.open, destroyed: !!st.destroyed } : d; })
+      .map(doorBoxCollider)
+      .filter(Boolean);
+    const dynamic = [...gloo, ...doors];
+    this.predictorWorld.colliders = dynamic.length ? staticColliders.concat(dynamic) : staticColliders;
   }
 
   // world rebuild quando a seed do servidor difere da local (uma vez, pré-partida)
@@ -147,7 +347,7 @@ export class OnlineGame3D extends Game3D {
     this.initCamera(); // initCamera → initPost (composer acompanha nova cena/câmera)
     // preditor acompanha o novo layout (mesma seed autoritativa) + mundo físico próprio
     this.predictor = new LocalPredictor({ world: getWorldLayout(seed) });
-    this.predictorWorld = { colliders: getWorldLayout(seed).colliders };
+    this.predictorWorld = { colliders: getWorldLayout(seed).colliders, floors: getWorldLayout(seed).floors };
     this.predictor.world = this.predictorWorld;
     this.view.onWallsChanged = (walls) => {
       const staticColliders = getWorldLayout(this.seed).colliders;
@@ -155,12 +355,16 @@ export class OnlineGame3D extends Game3D {
       this.predictorWorld.colliders = active.length
         ? staticColliders.concat(active.map(glooCollider))
         : staticColliders;
+      this.#rebuildPredictorColliders(); // Fase 25 — re-junta as portas ativas
     };
+    this.view.onDoorsChanged = () => this.#rebuildPredictorColliders();
+    this.#rebuildPredictorColliders();
     this.hud.feed('CIGKV', `Sincronizado com a seed da sala: ${seed}.`, 'good');
   }
 
   #startMatchOnline(entry) {
     this.audio.init(); this.audio.resume();
+    this.net.setOperative(this.selectedOperative.id); // Fase 8 — reforça a identidade antes de iniciar
     this.net.start(entry);
     this.zuOpen = false;
     this.hud.hideZu();
@@ -170,6 +374,41 @@ export class OnlineGame3D extends Game3D {
     const weapon = this.sim.player?.weapon ?? 'g19';
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
     this.playerWeapon.userData = { id: weapon };
+    // Fase 12 — o trem NÃO começa no clique: todos (iniciador e remotos) esperam
+    // o anúncio AUTORITATIVO da sala (matchStart.train) e sincronizam pelo
+    // relógio do servidor — o mesmo frame do trem em todas as telas.
+  }
+
+  // Fase 12 — matchStart autoritativo chegou (evento dentro do snapshot).
+  // Remoto: fecha o modal ZU, arma a câmara e sincroniza o trem do ZU.
+  onMatchStartEvent(e) {
+    if (this.zuOpen) {
+      try {
+        this.zuOpen = false;
+        this.hud.hideZu();
+        this.hud.setMatchStatus('MATCH ONLINE // RING');
+        this.audio.init(); this.audio.resume();
+        if (!this.isTouch()) this.renderer.domElement.requestPointerLock?.();
+        const weapon = this.sim.player?.weapon ?? 'g19';
+        this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, weapon);
+        this.playerWeapon.userData = { id: weapon };
+      } catch { /* entrada do remoto é best-effort — partida nunca quebra */ }
+    }
+    this.syncTrainWithServer(e?.train ?? null);
+  }
+
+  // Trem do ZU sincronizado: elapsed = relógio do servidor − train.startedAt.
+  // Todos os remotos reconstruem o MESMO frame da cinemática; quem chega atraso
+  // (rede lenta, aba em background) entra no fim da timeline ou pula direto.
+  syncTrainWithServer(train) {
+    if (!train || this.trainIntro) return;
+    const key = `${train.startedAt}`;
+    if (this._trainSyncedFor === key) return; // um trem por partida (anúncio único)
+    this._trainSyncedFor = key;
+    const duration = Number(train.durationMs) || TRAIN_INTRO_DURATION_MS;
+    const elapsed = this.net?.serverElapsed?.(train.startedAt);
+    if (!Number.isFinite(elapsed) || elapsed > duration + TRAIN_INTRO_GRACE_MS || elapsed < -500) return;
+    this.startTrainIntro(Math.max(0, elapsed) / 1000);
   }
 
   loop() {
@@ -200,6 +439,7 @@ export class OnlineGame3D extends Game3D {
           z: pos?.z ?? serverPlayer.z,
           moving: this.predictor?.actor.moving ?? serverPlayer.moving,
           sprinting: this.predictor?.actor.sprinting ?? serverPlayer.sprinting,
+          crouching: this.predictor?.actor.crouching ?? serverPlayer.crouching,
           onGround: this.predictor?.actor.onGround ?? serverPlayer.onGround,
         };
       }
@@ -211,6 +451,11 @@ export class OnlineGame3D extends Game3D {
     }
     this.predictor?.update(dt);
 
+    // Fase 12 — eventos do servidor são consumidos SEMPRE (mesmo com o modal ZU
+    // aberto): o matchStart autoritativo é o que FECHA o modal do remoto e
+    // sincroniza o trem. O envio de input continua gated no modal (abaixo).
+    if (!this.ended) this.handleEvents();
+
     // envio de input a 30Hz (enquanto a partida estiver ativa) + predição local
     if (!this.zuOpen && !this.ended) {
       this.netAccumulator = (this.netAccumulator ?? 0) + dt;
@@ -221,12 +466,24 @@ export class OnlineGame3D extends Game3D {
         this.predictor?.onInput(input);
         this.netAccumulator -= 1 / 30;
       }
-      this.handleEvents();
     }
 
     this.syncLoot();
+    this.syncDoors(); // Fase 25 — painéis das portas destrutíveis
     this.syncEntities(dt);
     this.updateRing();
+    this.updateSkyPhase(dt); // Fase 8 — céu dinâmico (pulsos autoritativos do servidor)
+    // Fase 16 (P1) — marcos de mundo: deriva dos fragmentos, fumaça, fendas
+    const marksAnim = this.scene.userData.worldMarks?.animators;
+    if (marksAnim) for (const fn of marksAnim) fn(dt, performance.now() / 1000);
+    // Fase 22 — cenários vivos no modo online
+    const dressingAnim = this.scene.userData.districtDressing?.animators;
+    if (dressingAnim) for (const fn of dressingAnim) fn(dt, performance.now() / 1000);
+    // Fase 23 — interiores no modo online (flicker de lâmpadas/telas)
+    const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
+    if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);
+    const interiorsAnim = this.scene.userData.interiors?.animators;
+    if (interiorsAnim) for (const fn of interiorsAnim) fn(dt, performance.now() / 1000);
     this.updateCamera(dt);
     this.effects.update(dt);
     this.updateDropFX(dt);
@@ -243,10 +500,25 @@ export class OnlineGame3D extends Game3D {
 }
 
 // ---------- bootstrap ----------
+// FIX "ZU não aplicado no preview": em produção o cliente NÃO é servido pelo
+// servidor autoritativo — o preview da plataforma expõe apenas o :3000 (Next).
+// As APIs HTTP são encaminhadas por rewrites do Next; o UPGRADE de WebSocket,
+// porém, não é proxyável pelo Next. O roteador de borda da plataforma encami-
+// nha WS quando a requisição carrega ?XTransformPort=<porta> (padrão do
+// Caddyfile da plataforma). Em host não-local, o WS anexa o query e passa a
+// alcançar o servidor autoritativo — snapshots, trem do ZU e matchmaking.
+export function onlineServerUrl() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const local = ['localhost', '127.0.0.1', '0.0.0.0', ''].includes(location.hostname);
+  const tp = new URLSearchParams(location.search).get('XTransformPort');
+  const edge = tp || (!local ? '8787' : ''); // explícito > preview (borda) > local
+  // SEM barra final: NetClient3D concatena `${url}/ws?token=…` e o roteador de
+  // borda casa `query XTransformPort=*` em qualquer posição do query.
+  return `${proto}://${location.host}${edge ? `?XTransformPort=${edge}` : ''}`;
+}
+
 export function bootstrapOnline() {
-  const net = new NetClient3D({
-    url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`,
-  });
+  const net = new NetClient3D({ url: onlineServerUrl() });
   const game = new OnlineGame3D('CIGKV-3D-01', net);
   window.KhaaosOnline3D = { game, net };
   return game;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LOAN_DAYS_MAX, LOAN_DAYS_MIN, LOAN_PRINCIPAL_MAX_KRC, LOAN_PRINCIPAL_MIN_KRC } from "@shared/money";
 
 export const emptyMutationInput = z.object({}).strict();
 
@@ -15,9 +16,12 @@ export const zoneHealInput = z.object({
   amount: z.number().finite().int().min(1).max(100),
 }).strict();
 
+// M2: domínio do preview UNIFICADO com a cobrança (requestLoan):
+// principal inteiro 100..10000 KRC e prazo 1..30 dias — mesmos limites
+// de LOAN_PRINCIPAL_MIN/MAX e LOAN_DAYS_MIN/MAX em shared/money.
 export const loanPreviewInput = z.object({
-  principal: z.number().finite().min(1).max(1_000_000),
-  days: z.number().finite().int().min(1).max(365),
+  principal: z.number().finite().int().min(Number(LOAN_PRINCIPAL_MIN_KRC)).max(Number(LOAN_PRINCIPAL_MAX_KRC)),
+  days: z.number().finite().int().min(LOAN_DAYS_MIN).max(LOAN_DAYS_MAX),
 }).strict();
 
 const seedInput = z.union([

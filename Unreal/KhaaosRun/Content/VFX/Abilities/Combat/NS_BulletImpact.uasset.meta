@@ -1,0 +1,7 @@
+{
+  "asset_class": "NiagaraSystem",
+  "name": "NS_BulletImpact",
+  "primary_color": "#CCCCCC",
+  "category": "Ability",
+  "generated_by": "wire_all_4_tasks.py"
+}

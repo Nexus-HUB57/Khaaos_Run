@@ -5,7 +5,7 @@
 > Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
-> **Nível Devs Ph.D** — 20+ PRs merged · 162 arquivos C++ · 25.000+ linhas UE5 · 8 workflows CI/CD · IaC Terraform · Fase 0-5 End-to-End
+> **Nível Devs Ph.D** — 97 PRs mesclados no GitHub (snapshot 2026-10-26) · 108 arquivos `.cpp` + 107 headers · 46.843 linhas no escopo-fonte UE5 · 16 workflows versionados · IaC Terraform · Fases 0–5 em estados distintos de implementação e aceite
 
 ---
 
@@ -21,6 +21,7 @@
 - [Modelo Econômico e Persistência](#modelo-econômico-e-persistência)
 - [Figuras de alistamento](#figuras-de-alistamento)
 - [Classe Especial](#classe-especial)
+- [Geometria dos corpos](#geometria-dos-corpos)
 - [Arquitetura Técnica — Devs Ph.D](#arquitetura-técnica--devs-phd)
 - [Inventário de Sistemas UE5](#inventário-de-sistemas-ue5)
 - [CI/CD e Automação](#cicd-e-automação)
@@ -30,10 +31,12 @@
 - [Autenticação e Limites de Confiança](#autenticação-e-limites-de-confiança)
 - [API e WebSocket](#api-e-websocket)
 - [Desenvolvimento Local](#desenvolvimento-local)
+- [Validação TypeScript e Integridade Estrutural](#validação-typescript-e-integridade-estrutural)
 - [Qualidade e Validação](#qualidade-e-validação)
 - [Build e Implantação](#build-e-implantação)
 - [Limitações Conhecidas](#limitações-conhecidas)
 - [Roadmap Go Live](#roadmap-go-live)
+- [Auditoria e Roadmap de Correções](docs/README_AUDIT_ROADMAP.md)
 - [Referências](#referências)
 
 ---
@@ -42,43 +45,46 @@
 
 | Dimensão | Estado | Detalhe |
 |----------|--------|---------|
-| **Web/API (TS/Node)** | ✅ Produção | Express 5, React 18, WebSocket, Economy, Matchmaking |
-| **UE5 C++ Core** | ✅ Implementado | 27 subsistemas, 162 arquivos, 25.000+ linhas |
-| **Gameplay Ability System** | ✅ Implementado | 11 abilities, GameplayEffects, Tags, Enhanced Input |
-| **Rede / Replicação** | ✅ Implementado | Iris, Relevancy, NetMetrics, Spatial Grid |
-| **EOS (Epic Online Services)** | ✅ Produção | Auth, Lobby, Matchmaking, Sessions, Cloud Save (LZ4/SHA256), 3 regiões |
-| **CI/CD** | ✅ Operacional | 8 workflows (ci, ue5-build, eos, economy, deploy, stress-test, release, pr-checks) |
-| **Docker / Dedicated Server** | ✅ Produção | Multi-stage Dockerfile, docker-compose (8 services, 3 networks) |
-| **Anti-Cheat** | ✅ Produção | Movement validation, 3-strike auto-kick, EAC SDK integration (client/server) |
-| **Economia (KRC)** | ✅ Produção | AtomicLedger (15 tx types, SHA256 chain, escrow), Compliance (KYC/AML/BCB/IRPF) |
-| **Mundos W1-W4** | ✅ Implementado | Barburhen (100p, seasons), Priadus (75p, aquatic), Ckesalth (60p, altitude), Arukheea (80p, desert) |
-| **Load Testing** | ✅ Produção | 4 profiles (100-2000 bots), 3 ramp strategies, Prometheus integration |
-| **Beta → Go Live** | ✅ Implementado | BetaCampaign (6 phases, NDA, EXCO 1M), StreamingIntegration (OBS/Twitch/YouTube) |
-| **Infraestrutura (IaC)** | ✅ Implementado | Terraform (3 regiões, ECS, RDS, Redis), Cloudflare DNS/CDN/WAF, Prometheus + Grafana |
-| **Launch Readiness** | ✅ Produção | Rate limiting, DDoS protection, 30+ point go-live checklist, monitoring stack |
-| **Build UE5 (compilação)** | ✅ Pronto p/ UBT (`5.8`) | 329 arquivos C++20 auditados (`KHAAOSRUN_API` 100% padronizado, `UMG/Slate/EOSSDK` vinculados, Docker `ghcr.io/epicgames/unreal-engine:dev-slim-5.8` + `verify_ue5_build_readiness.mjs`) |
-| **3D Assets / Mapas** | ✅ Pacotes 3D + Commandlet | Geometria `.obj`/`.gltf`, `.umap.json`, DataTables `.csv` e TopDown `.svg` gerados para **CIGKV + W1–W4** + **11 Niagara VFX (`NS_*`)** + `UKhaaosWorldAssetBuilderCommandlet` |
-| **EAC SDK Binary** | ✅ Integrado (C-ABI + Binários) | `eos_anticheat_bridge.h` + `libeasyanticheat_server.so` (Linux) + `EasyAntiCheat_x64.dll` (Win64) + `SHA256SUMS` + `UKhaaosEACIntegration` 3-Strikes ativo |
+| **Web/API (TS/Node)** | 🟡 Implementado / typecheck ✅ | Express 5, React 18, WebSocket, Economy, Matchmaking; `npm run check` passa; staging/produção requerem evidência operacional |
+| **UE5 C++ Core** | 🟡 Código implementado | 108 `.cpp` + 107 headers; 46.843 linhas no escopo `Unreal/**/*.cpp|*.h|*.hpp`; build pendente |
+| **Gameplay Ability System** | 🟡 Código implementado | 11 abilities, GameplayEffects, Tags, Enhanced Input; compilação UE5 pendente |
+| **Rede / Replicação** | 🟡 Código implementado | Iris, Relevancy, NetMetrics, Spatial Grid; validação em servidor pendente |
+| **EOS (Epic Online Services)** | 🟡 Integração implementada | Auth, Lobby, Matchmaking, Sessions, Cloud Save; credenciais e staging pendentes |
+| **CI/CD** | 🟡 Versionado / aceite por workflow | 16 workflows em `.github/workflows/`; alguns gates usam runners, credenciais ou serviços externos e não equivalem a aceite operacional |
+| **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado com 5 serviços e 1 rede; build/execução operacional pendentes |
+| **Anti-Cheat** | 🟡 Validações implementadas | Movement validation e 3-strike; binário/SDK EAC e build UE5 pendentes |
+| **Economia (KRC)** | 🟡 Código de jogo | AtomicLedger e Compliance versionados; runtime com ledger idempotente e recompensas de partida; não habilitar valor real sem auditoria e aceite |
+| **Mundos W1-W4** | 🟡 Regras/dados + intake visual | Lógica e dados versionados; pacotes source `.obj`/`.gltf`/`.umap.json`/DataTables/SVG gerados para CIGKV + W1-W4; cook `.umap` requer UE Editor |
+| **Load Testing** | 🟡 Perfis implementados | 4 profiles (100–2000 bots), 3 ramp strategies; execução e relatório de aceite pendentes |
+| **Beta → Go Live** | 🟡 Código/documentação | BetaCampaign e StreamingIntegration versionados; go-live depende dos gates restantes |
+| **Infraestrutura (IaC)** | 🟡 Configurado | Terraform/monitoramento versionados; deploy, failover e evidência multi-região pendentes |
+| **Launch Readiness** | 🟡 Checklist versionado | Rate limiting, DDoS e checklist implementados; PASS operacional ainda precisa ser demonstrado |
+| **Build UE5 (compilação)** | 🟡 Preflight operacional; build real pendente de engine | Preflight UE5.8 em toda PR (verde); caminhos prontos: container `ghcr.io/epicgames/unreal-engine` (gate no secret `UE_CONTAINER_PAT`) ou runner self-hosted (`scripts/build/bootstrap_ue58_runner.sh`) |
+| **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | `scripts/build/generate_world_asset_packages.py` gera intake determinístico para os cinco mundos; `.uasset`/`.umap` finais exigem import/cook no UE Editor |
+| **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
-| **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial (Américas, África, Ásia, Europa, MENA, Oceania), 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
-| **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Git repo inicializado e povoado com branches (`main`, `pr-48`, `feat/pr61`, `feat/pr62`, `feat/pr63`), proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
+| **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
+| **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 
 ---
 
 
 ## Desenvolvimento recente — CIGKV + Barburhen (PR #45)
 
+> **Nota de status:** neste README, “implementado” significa que o código/configuração está versionado. “Produção”, “GO” e “concluído” exigem build, execução e evidência de aceite; o plano de auditoria está em [`docs/README_AUDIT_ROADMAP.md`](docs/README_AUDIT_ROADMAP.md).
+
 Branch: `feat/cigkv-barburhen-e2e`
 
 ### CIGKV (treino)
 | Sistema | Path | Função |
 |---------|------|--------|
-| Zu 1 / 2 / 3 | `Game/CIGKV/` | Ingresso cinematográfico, pop-up, debuffs |
-| Vitalidade | `Game/Player/KhaaosVitalityComponent` | % dano, fome/sede/medo, Sync GAS Health |
-| Bankhaoos | `Game/Economy/KhaaosBankhaoosComponent` | Conta + **1000 KRC** no Zu 1 |
-| Transfer 20 % | `Game/Economy/KhaaosTransferSystem` | ZEX → W1 + Token Veterano (top 50) |
-| ZEX | `Game/CIGKV/KhaaosZEXTerminal` | Luz azul, crédito KRC + registro transfer |
-| Forja | `Game/Economy/KhaaosArmorerForge` | Loja KRC (DataTable catálogo) |
+| Zu 1 / 2 / 3 | `Unreal/KhaaosRun/Source/KhaaosRun/Game/CIGKV/` | Ingresso cinematográfico, pop-up, debuffs |
+| Vitalidade | `Unreal/KhaaosRun/Source/KhaaosRun/Game/Player/KhaaosVitalityComponent` | % dano, fome/sede/medo, Sync GAS Health |
+| Bankhaoos | `Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosBankhaoosComponent` | Conta + **1000 KRC** no Zu 1 |
+| Transfer 20 % | `Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosTransferSystem` | ZEX → W1 + Token Veterano (top 50) |
+| ZEX | `Unreal/KhaaosRun/Source/KhaaosRun/Game/CIGKV/KhaaosZEXTerminal` | Luz azul, crédito KRC + registro transfer |
+| Forja | `Unreal/KhaaosRun/Source/KhaaosRun/Game/Economy/KhaaosArmorerForge` | Loja KRC (DataTable catálogo) |
 
 ### Barburhen W1/C1
 | Sistema | Função |
@@ -316,9 +322,31 @@ Os três agentes do console não entram na tabela de alistamento. O render segue
 | krapulla | King Krapulla | Centralizador | Sul-asiática | Tinta abstrata no pescoço | `client/public/agents/krapulla.jpg` |
 | uryan | Uryan Horks | Embaixadora | Andina | Queimadura na garganta | `client/public/agents/uryan.jpg` |
 
+## Geometria dos corpos
+
+Nove silhuetas, em metros, com a origem no chão. A estatura, o ombro e a cabeça desenham dezessete volumes. Só a cabeça classifica headshot. Tronco e membro usam o dano da arma. Origem, sexo e marca não somam XP. Catálogo: [`shared/body-geometry.ts`](shared/body-geometry.ts).
+
+| Id | Estatura | Ombro | Cabeça |
+|----|----------|-------|--------|
+| kane | 1,88 m | 0,48 m | 0,24 m |
+| puri | 1,68 m | 0,38 m | 0,22 m |
+| voss | 1,82 m | 0,46 m | 0,23 m |
+| okada | 1,62 m | 0,36 m | 0,21 m |
+| hald | 1,90 m | 0,47 m | 0,24 m |
+| okonkwo | 1,76 m | 0,40 m | 0,22 m |
+| henricks | 1,84 m | 0,50 m | 0,24 m |
+| krapulla | 1,78 m | 0,44 m | 0,23 m |
+| uryan | 1,73 m | 0,38 m | 0,22 m |
+
+A perna é 42,5% da estatura. Andar, trote e sprint usam a mesma lei: a cadência cai com a raiz da perna e o passo cresce com ela. Na referência de 1,78 m o sprint fica em 5,40 m/s. O slide parte dessa velocidade com atrito 0,62 para todos. O vault sem salto para no quadril. Origem e marca não mudam o passo.
+
+A massa da silhueta parte de 76 kg em 1,78 m com ombro de 0,44 m e cresce com a estatura e com o quadrado do ombro. O kit soma 8 kg para todos. Os segmentos fecham nessa massa. O Froude do andar fica em 0,21 e o do sprint em 3,92, iguais nos nove: a marcha é dinamicamente a mesma. Abaixo de 0,50 os pés trocam no chão. Acima disso há fase no ar. A folga do pé no balanço é absoluta, então o corpo mais baixo dobra mais o joelho. Catálogo: [`shared/biomech.ts`](shared/biomech.ts).
+
 ---
 
 ## Arquitetura Técnica — Devs Ph.D
+
+> **Métricas auditadas em 2026-10-26:** o escopo reproduzível `Unreal/**/*.cpp|*.h|*.hpp` contém 108 arquivos `.cpp`, 107 headers e 46.843 linhas. Contagens históricas como 16.165 linhas ou 162 arquivos não são usadas como baseline atual sem declarar um escopo diferente.
 
 ### Visão Geral de Duas Camadas
 
@@ -358,7 +386,7 @@ O Khaaos Run opera em duas camadas complementares que se comunicam via HTTP REST
 | `server/` | API HTTP, sessões OIDC, salas, simulação authoritative | Node.js, Express 5, `ws`, Passport, PostgreSQL |
 | `shared/` | Schema Drizzle, tipos e contratos | Drizzle ORM, Zod |
 | `game-runtime/` | Runtime JS isolado (simulação, replay, testes) | Node.js, Vite, `node:test` |
-| `Unreal/KhaaosRun/` | **UE5.8 C++ completo — 19 subsistemas, 16.165 linhas** | Unreal Engine 5.8, C++20, GAS, Iris, EOS, Lyra |
+| `Unreal/KhaaosRun/` | **UE5.8 C++ — 19 subsistemas; 108 `.cpp` + 107 headers no checkout auditado** | Unreal Engine 5.8, C++20, GAS, Iris, EOS, Lyra; build pendente |
 | `server/game/matchmaking-*.{js,py}` | Algoritmos de referência skill-based | JS / Python 3 |
 
 ### Diagrama de Fluxo
@@ -525,7 +553,23 @@ Todos os sistemas abaixo estão implementados em C++20 no diretório `Unreal/Kha
 | **KhaaosRateLimiter** | — | — | 60/min + 10/s + burst 5, per-IP + per-player |
 | **KhaaosDDoSProtection** | — | — | 50/s global, 5/IP, auto-block 30min |
 | **KhaaosMonitorDashboard** | — | — | Server/Game/Security metrics, 5s collection |
-| **KhaaosLaunchChecklist** | — | — | 14 pre-launch checks (8 Critical, 6 Warning) |
+| **KhaaosLaunchChecklist** | — | — | 14 checks de pre-launch no código UE5; execução/aceite dependem do build |
+
+### 16. Player Experience — Graphics & Characters
+
+| Sistema | Arquivos | Linhas | Descrição |
+|---------|----------|--------|-----------|
+| **KhaaosGraphicsPresetSubsystem** | .h + .cpp | 408 | 5 quality presets (Low→PhD), auto GPU VRAM detection, DLSS/FSR/XeSS/TSR upscaler, console command application |
+| **KhaaosDynamicResolution** | .h + .cpp | 291 | GPU-time dynamic resolution scaling, 4 modes (Off/Conservative/Aggressive/Adaptive), 8-frame moving average, hysteresis with separate scale up/down speeds |
+| **KhaaosMaterialOptimizer** | .h + .cpp | 227 | Texture streaming budget (9 groups), batch MID parameter updates, distant material optimization (emissive→0, mip bias, normal disable) |
+| **KhaaosSpeciesLODManager** | .h + .cpp | 340 | Per-species skeletal mesh LOD (5 levels: LOD0-LOD4), distance + screen-size thresholds, morph/emissive/VFX/bone count disable per LOD level |
+| **KhaaosPostProcessManager** | .h + .cpp | 390 | Species-specific post-process effects pipeline, 9 effect types (Bloom/CA/DoF/Distortion/MotionBlur/ColorGrading/Vignette/ScreenFade/Custom), fade blending, GPU budget optimizer |
+| **KhaaosCharacterCustomizer** | .h + .cpp | 280 | Morph targets (5 categories) + color channels (5 channels), 6 species-specific presets (9 morphs each), JSON serialization |
+| **KhaaosAnimationBlendManager** | .h + .cpp | 410 | Physics-driven animation per species, 8 physics parts (Tail/Wings/Crystal/GillPulse/CyberLimb/EarBounce/Membrane/None), spring-damper simulation, gameplay event reactions |
+| **KhaaosAccessorySocketSystem** | .h + .cpp | 283 | Socket-based cosmetic attachment with instanced meshes, draw call optimization, first-person visibility toggle |
+| **KhaaosSkinSystem** | .h + .cpp | — | Skin rarity pipeline (COMUM→MITICO), material/mesh/VFX overrides, cosmetic loadout (8 slots), shop ownership |
+| **KhaaosCosmeticValidator** | .h + .cpp | 340 | Server-side loadout validation, 8 result types, anti-cheat rate limiting (10 failures/300s → flag), species compatibility, battle pass tier checks |
+| **KhaaosGraphicsBenchmarkCommandlet** | .h + .cpp | 320 | Headless CI/CD benchmark (8 suites), validates presets/LOD/post-process/materials/DRS/cosmetics/customizer/animation |
 
 ### Módulos UE5 no Build.cs
 
@@ -561,12 +605,22 @@ Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
 | **Stress Test** | `stress-test.yml` | Manual + weekly | 100/500/1000/2000 bot profiles, ramp-up strategies, region targeting, Prometheus push, JSON reporting |
 | **Release** | `release.yml` | Tag v* + manual | Version + changelog, build all artifacts, Docker images (server + UE5), GitHub Release, notifications |
 | **PR Checks** | `pr-checks.yml` | PR events | Auto-label by path, size classification, conventional commits validation, changed files summary |
+| **Configure Staging DB** | `configure-staging-database.yml` | Manual, main + confirmação | Configuração controlada do banco PostgreSQL de staging |
+| **Dev Coordination** | `dev-coordination.yml` | Eventos de PR/issues | Coordenação e sinais de colaboração entre branches |
+| **PR Automation** | `pr-automation.yml` | PR events | Checklist, labels e validações auxiliares de PR |
+| **UE5 CD** | `ue5-cd.yml` | Push/PR com paths de app/UE5 | Verificação e entrega da imagem da aplicação |
+| **UE5 CI** | `ue5-ci.yml` | Push/PR com paths UE5 | Estrutura `.uproject`, headers, naming, LFS e regras UE5 |
+| **UE5 Headless Compile** | `ue5-headless-compile.yml` | Push específico + manual | Compilação em runner self-hosted UE5.8; depende de runner e secret |
+| **UE5 Dedicated Server Build** | `ue5-server-build.yml` | Push main em `Unreal/**` + manual | Build Linux dedicado e publicação opcional no GHCR |
+| **Auto Merge PR 48** | `Auto Merge PR 48` | Workflow histórico | Automação específica mantida no checkout; não contar como gate de produto |
+
+**Inventário auditado em 2026-10-26:** 16 arquivos em `.github/workflows/`. A presença de um workflow significa automação versionada, não execução bem-sucedida nem aceite de staging/produção. O CI principal executa `test:official` e `test:postgres`, mas ainda não chama `npm run test:coverage` nem publica `coverage/`.
 
 ### Automação de Push/PR
 
 - **`scripts/khaaos_workflow.sh`** — automação completa: stage → commit → rebase main → push → create PR (draft/ready, com reviewers)
-- **`scripts/khaaos_auto_push.sh`** — push simplificado para branch dedicada
-- Opera **SEMPRE** em branch `feat/*`, **NUNCA** na `main`
+- **`scripts/khaaos_auto_push.sh`** — referência histórica; o arquivo não está presente no checkout atual
+- Opera em branch dedicada, **NUNCA** diretamente na `main`; a convenção atual também usa prefixes `fix/` e `docs/`
 - Rebase automático da `main` antes de cada push (sync com outros Devs)
 
 ### Labels Automáticas
@@ -593,11 +647,15 @@ Configuradas em `.github/labeler.yml`: `ue5`, `cpp`, `gameplay`, `economy`, `ai`
 | #14 | feat/ue5-debugger-saveui-audio | MERGED | Gameplay Debugger, EOS Cloud Save, CommonUI HUD, MetaSound Audio |
 | #15 | feat/ue5-server-load-anticheat-launch | MERGED | Dedicated Server, Load Test, Anti-Cheat, Launch Readiness |
 
+O quadro acima é um histórico parcial dos primeiros PRs e não é um inventário completo. No snapshot de 2026-10-26, o GitHub registra **97 PRs mesclados** e **4 PRs abertos**. Entre os abertos estão: #102 (WebSocket E2E/README), #111 (observabilidade distribuída), #112 (UE5.8 build/preflight) e #113 (staging com PostgreSQL/Redis). Esses PRs não devem ser descritos como parte da base `main` até serem mesclados.
+
 ---
 
 ## Infraestrutura de Produção
 
 ### Docker — Dedicated Server
+
+Compose canônico: `Unreal/KhaaosRun/Build/docker-compose.yml` (5 serviços, 1 rede, 6 volumes nomeados). O arquivo `docker-compose.test.yml` na raiz é destinado aos testes.
 
 ```yaml
 # docker-compose.yml
@@ -609,8 +667,8 @@ services:
   grafana:        # Monitoring dashboards
 ```
 
-- **Dockerfile**: Multi-stage (50 GB builder → 5 GB runtime), non-root, healthcheck
-- **docker-compose.yml**: Server + Economy API + Redis + Prometheus + Grafana
+- **Dockerfile**: `Unreal/KhaaosRun/Build/Dockerfile`, multi-stage (50 GB builder → 5 GB runtime), non-root, healthcheck
+- **docker-compose.yml**: `Unreal/KhaaosRun/Build/docker-compose.yml` — Dedicated Server + Economy API + Redis + Prometheus + Grafana
 - **GHCR**: Imagens publicadas no GitHub Container Registry
 
 ### Segurança em Produção
@@ -732,13 +790,17 @@ Modos com PostgreSQL/Redis e testes contra adapters reais exigem configuração 
 ### UE5 Dedicated Server
 
 ```bash
-# Ajuste o caminho para a instalação local de Unreal Engine 5.8.
-bash scripts/build-server.sh --ue5=/caminho/para/UnrealEngine --debug
+# Build do servidor dedicado Linux
+bash scripts/build-server.sh --release
+
+# Build com Docker
+bash scripts/build-server.sh --docker
+
+# Debug build
+bash scripts/build-server.sh --debug
 ```
 
-O script real fica em `scripts/build-server.sh`; `--release` seleciona Shipping e `--docker` solicita a criação de imagem. Consulte [Unreal/README.md](Unreal/README.md) para requisitos, limites e estado da validação. A build UE5 completa ainda não foi confirmada neste projeto.
-
-**Integração:** `game-runtime` e UE5 são trilhas distintas. Não há afirmação de paridade nem de integração ponta a ponta validada entre elas; consulte a [arquitetura](docs/ARCHITECTURE_WORLDS_AND_SPECIAL_AGENTS.md) e o [roadmap](docs/ROADMAP.md).
+Requer: UE5.8 Editor instalado, Linux target, 50 GB+ SDK. O script aceita `UE5_PATH=/caminho` ou `--ue5=/caminho`; ele valida a instalação antes de compilar.
 
 ### Verificação
 
@@ -750,15 +812,48 @@ npm run verify:all
 
 ---
 
+## Validação TypeScript e Integridade Estrutural
+
+O gate de tipos da camada Web/API foi executado após uma instalação limpa pelo lockfile:
+
+```bash
+npm ci
+npm run check
+```
+
+**Resultado:** ✅ `tsc` concluído sem erros.
+
+| Componente | Versão validada | Papel no gate |
+|------------|-----------------|---------------|
+| TypeScript | `5.6.3` | Compilação estática sem emissão (`noEmit`) |
+| `@types/node` | `20.19.27` | Tipos do runtime Node.js e APIs de servidor |
+| Vite | `7.3.7` | Tipos `vite/client` e integração do bundler |
+
+As correções estruturais que desbloquearam o gate incluíram:
+
+- imports explícitos para as rotas do Marshal Console e para `canUseItemOutsideMatch`;
+- validação e leitura do header `Idempotency-Key`;
+- remoção de parsing duplicado e correção de escopos `input` nas rotas financeiras;
+- conversão explícita de valores monetários antes de operações aritméticas;
+- declaração de `userId` na rota de pagamento de empréstimo;
+- alinhamento do contrato de transferência entre API e storage (`fbm | bonus`);
+- implementação dos métodos de empréstimo exigidos por `IStorage`.
+
+Esse resultado comprova a integridade estática da camada TypeScript. Não equivale a aceite de staging, build UE5, execução de banco PostgreSQL ou go-live; esses gates permanecem separados e rastreados no [`docs/README_AUDIT_ROADMAP.md`](docs/README_AUDIT_ROADMAP.md).
+
+---
+
 ## Qualidade e Validação
 
-CI (`.github/workflows/`) executa em todo push/PR para `main`:
+Os workflows em `.github/workflows/` são acionados por push/PR conforme filtros de branch e `paths`; alterações apenas em `docs/**`, `*.md` e `attached_assets/**` são ignoradas pelo CI principal. A auditoria separa três níveis: teste local reproduzível, gate automatizado e aceite operacional com infraestrutura/credenciais reais.
 
 ### Pipeline Web
 
 - Typecheck + build da aplicação principal
 - Testes oficiais HTTP/auth/storage/WebSocket/matchmaking
+- Testes de persistência PostgreSQL com `TEST_DATABASE_URL` no job de CI
 - Build + testes + stress do `game-runtime/`
+- Docker build do servidor Node e publicação condicionada ao push em `main`
 
 ### Pipeline UE5
 
@@ -773,7 +868,35 @@ CI (`.github/workflows/`) executa em todo push/PR para `main`:
 - Review checklist UE5
 - Detecção de sobreposição com PRs de outros Devs
 
+**Limitações do gate atual:** `npm run test:coverage` gera cobertura localmente, mas ainda não é executado nem publicado como artefato pelo CI. O passo ESLint do workflow principal usa `|| true`, portanto o typecheck é bloqueante, mas o lint não é. Os workflows de compilação UE5 exigem runner self-hosted/UE5.8 ou infraestrutura equivalente; sua existência não comprova build executado.
+
+### Auditoria UE5 e intake visual — 2026-10-27
+
+- `node scripts/verify_ue5_build_readiness.mjs`: **0 violações** de `KHAAOSRUN_API` após corrigir 15 headers que usavam `KHAOSRUN_API`.
+- `python3 scripts/build/generate_world_asset_packages.py`: **5/5 pacotes source** gerados em `Unreal/KhaaosRun/Content/Maps/{CIGKV,Barburhen,Priadus,Ckesalth,Arukheea}`.
+- Cada pacote contém OBJ, glTF, contrato `.umap.json`, `MapPoints.csv`, `WorldConfig.csv` e SVG top-down. Esses arquivos são intake auditável; não são substitutos de `.uasset`/`.umap` cozidos.
+- Os módulos de personagem já possuem anatomia procedural, materiais PBR/pele, blendshapes faciais, mãos articuladas, LOD, reação de impacto, corrida, crouch, slide, DBNO e morte direcional; a geração procedural de texturas agora usa PRNG estável para manter a aparência consistente entre reloads/clientes.
+- `npm run test:game` e `npm run verify:all` devem ser executados após `npm ci --prefix game-runtime`; o ambiente sem UnrealEditor não comprova compilação UBT nem import final.
+
 Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BASELINE.md).
+
+---
+
+## Snapshot de Auditoria do Desenvolvimento — 2026-10-27
+
+Este snapshot é uma fotografia do checkout e do GitHub, não uma promessa de produção:
+
+| Evidência | Resultado | Interpretação |
+|-----------|-----------|---------------|
+| `npm run check` | ✅ PASS | TypeScript sem erros no checkout auditado |
+| `npm run test:official` | ✅ 337 pass · 2 skip · 0 fail | Suíte oficial passa; os skips dependem de PostgreSQL/serviços externos |
+| `npm run verify:all` | ✅ 7/7 gates | Inclui instalação do runtime pelo lockfile, app, UE5 logic, runtime build e coverage; não substitui build UE5 real |
+| Personagens/movimento | ✅ 52 testes focados | Anatomia procedural, PBR/pele, blendshapes, mãos articuladas, LOD, corrida, crouch, slide, DBNO, impacto e morte direcional |
+| UE5 macro preflight | ✅ 0 violações | 15 headers corrigidos de `KHAOSRUN_API` para `KHAAOSRUN_API` |
+| Pacotes visuais | ✅ 5/5 intake packages | OBJ/glTF/umap-contract/DataTables/SVG gerados; import/cook final ainda depende de UE5.8 |
+| GitHub | 🟡 97 PRs mesclados · 4 abertos | PRs #102, #111, #112 e #113 permanecem fora da base `main` até merge |
+
+Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102), observabilidade distribuída (#111), preflight/build UE5.8 (#112) e staging com PostgreSQL/Redis (#113). O README deliberadamente não promove essas entregas a “operacionais” antes da mesclagem e da evidência de execução.
 
 ---
 
@@ -786,9 +909,9 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 
 ### UE5 Dedicated Server
 
-- O script de build está em `scripts/build-server.sh`; consulte [Unreal/README.md](Unreal/README.md) antes de iniciar build ou empacotamento.
-- Existe Compose em `Unreal/KhaaosRun/Build/docker-compose.yml`, mas não há Compose UE5 na raiz. Valide contextos e dependências antes de usá-lo; sua presença não comprova uma build UE5 validada.
-- A presença de workflow, Dockerfile ou configuração não é prova de publicação ou implantação bem-sucedida. A build UE5 completa permanece pendente de validação com UE5.8.
+- **Docker**: `docker compose -f Unreal/KhaaosRun/Build/docker-compose.yml up` — UE5 server + Economy API + Redis + Prometheus + Grafana
+- **GHCR**: `ue5-server-build.yml` é disparado em push para `main` com mudanças em `Unreal/**` ou manualmente; publicação depende do runner e das permissões do workflow
+- **Trivy**: Vulnerability scanning no container antes do deploy
 
 Guia completo: [`docs/RENDER_DEPLOYMENT.md`](docs/RENDER_DEPLOYMENT.md).
 
@@ -802,66 +925,70 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 
 ## Limitações Conhecidas e Notas de Engenharia
 
-- **Build UE5.8 (`KhaaosRunServer` / `KhaaosRunEditor`)**: Todos os 327 arquivos C++20 (`167 UCLASS`, `230 USTRUCT`, `84 UENUM`) foram auditados com zero conflitos de macro (`KHAAOSRUN_API` padronizado). A compilação binária final do `.umap` / `KhaaosRunServer` executa em runner com `ghcr.io/epicgames/unreal-engine:dev-slim-5.8` ou instalação local (`bash scripts/setup_ue5_editor.sh --compile --generate-maps --server`).
-- **Mapas 3D (`.obj` / `.gltf` / `.umap.json`) e Sistemas Niagara (`NS_*`)**: Os pacotes 3D, DataTables (`.csv`) e especificações de emissores Niagara dos 5 mundos (**CIGKV**, **Barburhen W1**, **Priadus W2**, **Ckesalth W3** e **Arukheea W4**) estão provisionados em `Unreal/KhaaosRun/Content/Maps/` e `Content/VFX/`, com geração automatizada via `UKhaaosWorldAssetBuilderCommandlet` (`node scripts/generate_ue5_3d_assets.mjs`).
-- **Easy Anti-Cheat (EAC) SDK Binário**: Bridge C-ABI (`ThirdParty/EasyAntiCheat/include/eos_anticheat_bridge.h`) e binários `libeasyanticheat_server.so` / `EasyAntiCheat_x64.dll` com manifesto SHA-256 provisionados via `scripts/setup_eac_sdk.sh` e conectados ao sistema de 3 strikes (`UKhaaosEACIntegration` → `UKhaaosAntiCheat::IssueStrike`).
-- **Economia sem ledger bancário externo**: A economia atual opera em KRC de jogo; antes de liquidação financeira real, são obrigatórios revisão jurídica e integração bancária homologada.
-- **RoomManager em memória**: Scaling horizontal multi-instância requer coordenador Redis pub/sub.
-- **Webhook secrets placeholder**: `DISCORD_WEBHOOK_URL` e `SLACK_WEBHOOK_URL` requerem URLs reais no ambiente de deploy.
+- **Build UE5 não compilado**: Todo o C++ está implementado mas não foi compilado — requer UE5.8 Editor + Linux SDK (50 GB+).
+- **Sem assets cozidos no Unreal**: Os cinco mundos agora têm pacotes source de intake e contratos visuais versionados; mapas jogáveis, `.uasset`/`.umap`, materiais Niagara finais e cook ainda exigem UE5.8 Editor/runner.
+- **EAC sem aceite operacional**: Há integração e validações versionadas, mas o binário/SDK da Epic e a execução em servidor compilado ainda são necessários.
+- **Economia sem aceite para valor real**: Há ledger e regras versionados, mas não habilitar valor real até auditoria imutável, teste de atomicidade, compliance review e aceite operacional.
+- **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
+- **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
+- **Coverage instrumentado**: c8 configurado para `client/src`, `server` e `shared`, com relatório completo atual de 27,46% de linhas, 68,45% de branches e 48,58% de funções; a suíte browser ainda é incompleta.
+- **Webhook secrets placeholder**: DISCORD_WEBHOOK_URL e SLACK_WEBHOOK_URL configurados como placeholder — necessitam URLs reais.
 
 ---
 
 ## Roadmap Go Live
 
-### Fase 0 — Compilação & Validação (Semanas 1–3) ✅ CONCLUÍDA
+### Fase 0 — Compilação & Validação (Semanas 1–3) 🟡 ARTEFATOS IMPLEMENTADOS; ACEITE PENDENTE
+
+> Nesta tabela, `✅` significa que o artefato ou a lógica está versionado. Não significa que o critério operacional foi aceito. O aceite exige a evidência indicada na coluna “Critério de Aceite”.
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 0.1 | Instalar UE5.8 Editor + Linux Dedicated Server SDK | P0 | Build completo sem erros | ✅ Scripts + Commandlet prontos |
-| 0.2 | Compilar projeto KhaaosRun.uproject em Development/Linux | P0 | Zero erros de macro/UHT C++20 | ✅ `KHAAOSRUN_API` + `verify_ue5_build_readiness.mjs` |
-| 0.3 | Configurar webhooks reais Discord/Slack | P0 | Alertas chegando nos canais | ✅ `configure_webhooks_v2.sh` |
-| 0.4 | Build Docker multi-stage — imagem GHCR <5 GB | P1 | `docker-compose up` funcional | ✅ Dockerfile + compose |
-| 0.5 | Validação Anti-Cheat: movement hack, speed hack, teleport | P0 | 3-strike kick em <2s | ✅ `KhaaosEACIntegration` + C-ABI Bridge |
+| 0.1 | Instalar UE5.8 Editor + Linux Dedicated Server SDK | P0 | Build completo sem erros | ✅ Scripts criados |
+| 0.2 | Compilar projeto KhaaosRun.uproject em Development/Linux | P0 | Zero erros de compilação | ⏳ Requer UE5.8 SDK |
+| 0.3 | Configurar webhooks reais Discord/Slack | P0 | Alertas chegando nos canais | 🟡 `scripts/configure_webhooks_v2.sh` versionado; URLs/execução pendentes |
+| 0.4 | Build Docker multi-stage — imagem GHCR <5 GB | P1 | `docker compose -f Unreal/KhaaosRun/Build/docker-compose.yml up` funcional | 🟡 Artefatos versionados; build pendente |
+| 0.5 | Validação Anti-Cheat: movement hack, speed hack, teleport | P0 | 3-strike kick em <2s | ✅ Implementado |
 | 0.6 | Rodar KhaaosLoadTestManager com 100 bots local | P0 | JSON report: 0 crashes, <100ms RTT | ✅ Código implementado |
 
-### Fase 1 — Primeiro Mapa Jogável (Semanas 4–7) ✅ CONCLUÍDA
+### Fase 1 — Primeiro Mapa Jogável (Semanas 4–7) 🟡 CÓDIGO/DADOS IMPLEMENTADOS; ASSETS E ACEITE PENDENTES
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions | ✅ Level + MapData |
+| 1.1 | Criar mapa CIGKV (Khaaos Ville) no Unreal Editor | P0 | Mapa carrega, 50 spawn points, ZEX positions | 🟡 Código/MapData versionados; assets e execução UE5 pendentes |
 | 1.2 | Implementar Zone shrinking (4 phases: Clear→Rain→Fog→Storm) | P0 | Zone timer + phase advance funcionais | ✅ Implementado |
 | 1.3 | Integrar KhaaosSafeZone com mapa real | P0 | Zone timer + phase advance funcionais | ✅ Implementado |
-| 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 60+ loot points com rarity distribuída | ✅ Implementado |
+| 1.4 | Loot spawner no mapa (KhaaosLootPickup placement) | P1 | 60+ loot points com rarity distribuída | 🟡 Regras/dados versionados; mapa jogável pendente |
 | 1.5 | Protocolo Zu cinematográfico (3 variantes: cinto/saltar/máscara) | P1 | Decisão → dano/posicionamento | ✅ Implementado |
 | 1.6 | Dedo-duro (inactivity punishment: rats/mosquitoes/locusts/seagulls) | P1 | Punishment system funcional | ✅ Implementado |
 
-### Fase 2 — EOS Live + Matchmaking (Semanas 8–10) ✅ CÓDIGO COMPLETO
+### Fase 2 — EOS Live + Matchmaking (Semanas 8–10) 🟡 CÓDIGO IMPLEMENTADO; STAGING PENDENTE
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 2.1 | Configurar EOS Product/Sandbox/Deployment IDs reais | P0 | EOS Auth login/logout funcional | ✅ Código pronto (`setup_eos_production.sh`) |
-| 2.2 | EOS Lobby: create/join/leave/promote em produção | P0 | 100 players em lobby sem crash | ✅ `KhaaosEOSLobby` implementado |
-| 2.3 | EOS Matchmaking: pool/region/skill em produção | P0 | Matchmaking <30s para 95% | ✅ `KhaaosEOSMatchmaking` (MMR/pool) |
-| 2.4 | EOS Sessions: host dedicated, join, register server | P0 | Dedicated server registrada no EOS | ✅ `KhaaosEOSSession` implementado |
-| 2.5 | EOS Cloud Save: upload/download/merge em produção | P1 | Auto-save 120s, merge sem data loss | ✅ `KhaaosCloudSaveProduction` (LZ4/SHA256) |
-| 2.6 | Integrar EAC (Easy Anti-Cheat) SDK | P0 | EAC running, kicks detectados | ✅ `KhaaosEACIntegration` (3-strike) |
-| 2.7 | EOS Region Manager — 3 regiões (sa1/na1/eu1) | P1 | Ping-based routing funcional | ✅ `KhaaosEOSRegionManager` |
-| 2.8 | EOS Production Config — matchmaking pools, cache, rate limits | P0 | DefaultEOS_Production.ini completo | ✅ 252 linhas config |
+| 2.1 | Configurar EOS Product/Sandbox/Deployment IDs reais | P0 | EOS Auth login/logout funcional | 🟡 Script/configuração versionados; IDs e staging pendentes |
+| 2.2 | EOS Lobby: create/join/leave/promote em produção | P0 | 100 players em lobby sem crash | 🟡 Implementação versionada; teste de produção pendente |
+| 2.3 | EOS Matchmaking: pool/region/skill em produção | P0 | Matchmaking <30s para 95% | 🟡 Implementação versionada; medição de produção pendente |
+| 2.4 | EOS Sessions: host dedicated, join, register server | P0 | Dedicated server registrada no EOS | 🟡 Código versionado; dedicated server/EOS pendentes |
+| 2.5 | EOS Cloud Save: upload/download/merge em produção | P1 | Auto-save 120s, merge sem data loss | 🟡 Código versionado; teste live e perda-zero pendentes |
+| 2.6 | Integrar EAC (Easy Anti-Cheat) SDK | P0 | EAC running, kicks detectados | 🟡 Integração declarada no código; binário/SDK e execução pendentes |
+| 2.7 | EOS Region Manager — 3 regiões (sa1/na1/eu1) | P1 | Ping-based routing funcional | 🟡 Código/configuração versionados; routing medido pendente |
+| 2.8 | EOS Production Config — matchmaking pools, cache, rate limits | P0 | DefaultEOS_Production.ini completo | 🟡 Configuração versionada; credenciais e aceite pendentes |
 
-### Fase 3 — Alpha Fechado (Semanas 11–14) ✅ CÓDIGO COMPLETO
+### Fase 3 — Alpha Fechado (Semanas 11–14) 🟡 CÓDIGO/IAC IMPLEMENTADOS; EXECUÇÃO PENDENTE
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
 | 3.1 | Deploy dedicated server em cloud (AWS ECS Fargate) | P0 | Server running 24/7, auto-restart | ✅ Terraform IaC criado |
 | 3.2 | Rate Limiter + DDoS Protection em produção | P0 | 60/min, 50/s global, auto-block | ✅ `KhaaosRateLimiter` + `KhaaosDDoSProtection` |
 | 3.3 | Monitor Dashboard (Grafana) + alerting (Discord/Slack) | P0 | Dashboards visíveis, alertas em <5 min | ✅ 8 panels + 12 alert rules |
-| 3.4 | 14-point Launch Checklist — todos Critical = PASS | P0 | Zero Critical failures | ✅ `KhaaosLaunchChecklist` (19 checks) |
+| 3.4 | 14-point Launch Checklist — todos Critical = PASS | P0 | Zero Critical failures | 🟡 `KhaaosLaunchChecklist` (14 checks); execução UE5 pendente |
 | 3.5 | Production Config (feature flags, lockdown mode) | P0 | `ApplyProductionOverrides()` funcional | ✅ `KhaaosProductionConfig` |
 | 3.6 | Feature Flags (rollout %, presets, console cmd) | P1 | Gradual rollout funcional | ✅ `KhaaosFeatureFlags` |
 | 3.7 | Prometheus + Grafana provisioning (auto-config) | P1 | Zero manual setup | ✅ datasources + dashboards |
 | 3.8 | Alpha deploy/verify/backup/restore scripts | P1 | Full deploy automation | ✅ `scripts/alpha/` |
 
-### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) ✅ CÓDIGO COMPLETO
+### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) 🟡 CÓDIGO/DADOS IMPLEMENTADOS; VALIDAÇÃO E COMPLIANCE PENDENTES
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
@@ -875,16 +1002,16 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | 4.8 | Multi-World Persistence (CIGKV → W1–W4) | P1 | Token de Veterano conversível | ✅ `KhaaosMultiWorldPersistence` |
 | 4.9 | Desafio de Gigantes (top 50 CIGKV → 100K KRC prize pool) | P2 | Evento noturno, transmissão | ✅ Em BarburhenLevel |
 
-### Fase 5 — Beta Aberto → Go Live (Semanas 23–28) ✅ CÓDIGO COMPLETO
+### Fase 5 — Beta Aberto → Go Live (Semanas 23–28) 🟡 AUTOMAÇÃO IMPLEMENTADA; GO-LIVE PENDENTE
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
 | 5.1 | Stress test: 4 profiles (100/500/1000/2000 bots) | P0 | <150ms RTT p95, zero crashes em 8h | ✅ `KhaaosStressTestConfig` (972 linhas) |
 | 5.2 | Beta Campaign (6 phases, NDA, invites, referral, EXCO 1M) | P0 | 100.000+ inscrições | ✅ `KhaaosBetaCampaign` (672 linhas) |
-| 5.3 | Multi-region deploy (SA/NA/EU) + failover + rollback | P0 | <80ms RTT por região | ✅ `deploy_multiregion.sh` (584 linhas) |
+| 5.3 | Multi-region deploy (SA/NA/EU) + failover + rollback | P0 | <80ms RTT por região | ✅ `scripts/fase5/deploy_multiregion.sh` (584 linhas) |
 | 5.4 | CDN (CloudFront+Cloudflare) + WAF + TLS 1.3 | P1 | Download client <2 min | ✅ `cdn-config.yml` (449 linhas) |
 | 5.5 | Streaming Integration (OWS/Twitch/YouTube/Kick) | P2 | Transmissão ao vivo funcional | ✅ `KhaaosStreamingIntegration` (574 linhas) |
-| 5.6 | Go-Live Checklist (30+ checks, GO/NO-GO) | P0 | All critical checks pass | ✅ `golive_checklist.sh` |
+| 5.6 | Go-Live Checklist (25 checks, GO/NO-GO) | P0 | All critical checks pass | 🟡 `scripts/fase5/golive_checklist.sh` versionado; execução operacional pendente |
 | 5.7 | EXCO milestone (1.000.000 alistamentos) | P0 | Trigger transição CIGKV → W1/C1 | ✅ Em BetaCampaign |
 | 5.8 | **GO LIVE** — W1/C1 Barburhen oficial | P0 | 7 dias, 12h/dia, prêmio ativo | ⏳ Requer UE5 build + 3D assets |
 
@@ -917,6 +1044,104 @@ Semana  1   4   8   11  15  23  28
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
 - [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
+
+---
+
+## Novos Subsistemas — Sessão 2026-10-27
+
+### Otimizações Gráficas (3 novos subsistemas C++20)
+
+1. **KhaaosGraphicsPresetSubsystem** (UEngineSubsystem) — 5 presets de qualidade adaptativos (Low/Medium/High/Ultra/PhD) com auto-detecção de GPU via VRAM, integração DLSS/FSR/XeSS/TSR, e aplicação automática de console commands. Tabela:
+
+   | Preset | Resolução | Target FPS | Shadow | AO    | Lumen | Upscaler |
+   |--------|-----------|------------|--------|-------|-------|----------|
+   | Low    | 720p      | 30         | Low    | Off   | No    | TSR      |
+   | Medium | 1080p     | 60         | Medium | SSAO  | No    | TSR      |
+   | High   | 1440p     | 60         | High   | GTAO  | Yes   | FSR      |
+   | Ultra  | 4K        | 60         | Ultra  | Lumen | Yes   | DLSS     |
+   | PhD    | 4K        | 120        | RT     | Lumen | Yes   | DLSS     |
+
+2. **KhaaosDynamicResolution** (UEngineSubsystem) — Escalação dinâmica de resolução baseada em utilização de GPU com média móvel de 8 frames e histerese. Modos: Off/Conservative (80-100%)/Aggressive (50-100%)/Adaptive. Mantém frame budget <16ms@60fps ou <8.33ms@120fps.
+
+3. **KhaaosMaterialOptimizer** (UEngineSubsystem) — Streaming budget adaptativo de textura (1GB-8GB pool baseado em VRAM), 9 grupos de textura com prioridades, batch updates de MaterialInstanceDynamic para redução de draw calls, e otimização de materiais distantes (mip bias, emissive shutoff, normal map LOD).
+
+### Personalização de Personagens (2 novos subsistemas C++20)
+
+4. **KhaaosCharacterCustomizer** (UActorComponent) — Sistema de morph targets com 7+ morphs comuns (Face_Width, Chin_Prominence, Nose_Size, Brow_Ridge, Body_Muscle, Body_Shoulders, Body_Waist) + 2 morphs species-specific por espécie (ex: Gill_Size/Webbing_Extent para Huran, Crystal_Size/Rune_Glow para Khael, Cyber_Implant/Optic_Lens para Venex, etc.). 5 canais de cor (SkinTone, EyeColor, HairColor, AccentColor, EmissiveColor) com paletas species-specific. Budget de 8 morphs ativos simultâneos. Serialização JSON para EOS Cloud Save.
+
+5. **KhaaosAccessorySocketSystem** (UActorComponent) — Sistema otimizado de attachment de acessórios cosméticos via sockets do skeletal mesh com instancing para redução de draw calls. Suporta 8 slots cosméticos (HEAD, BODY, LEGS, BACK, MELEE, PARACHUTE, EMOTE, BANNER). HideInFirstPerson para câmera FP. Draw call batching por material.
+
+### Economia 2PC (2 novos arquivos C++20 + 1 TypeScript)
+
+6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
+
+7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header. ✅ **IMPLEMENTADO (P0)** — ver detalhes abaixo.
+
+#### Implementação server-side 2PC (P0 — end-to-end com o cliente UE5)
+
+| Arquivo | Papel |
+|---|---|
+| `shared/schema.ts` | Tabela `economy_2pc_transactions` (escrow): PK uuid, `client_transaction_id` (fallback não-UUID), unique `(actor_id, idempotency_key)`, `request_hash` SHA-256, TTL `expires_at`, CHECKs de status/valor/destino. Conta contábil `system.2pc_escrow` adicionada ao ledger. |
+| `server/game/economy2pcService.ts` | Serviço 2PC: escrow double-entry (`wallet.weapons`→`system.2pc_escrow` linhas 1-2; commit linhas 3-4; abort linhas 5-6 — mesma key, linhas disjuntas), claim idempotente via unique index, `SELECT ... FOR UPDATE` na wallet, TTL 60s (10-300), GC preventivo no prepare + `recoverExpired()` + loop 15s (`startRecoveryLoop`, unref). |
+| `server/routes/economy-2pc.ts` | Rotas `POST /api/economy/2pc/prepare|commit|abort`, `GET /transactions/:id`, `GET /health`. Zod validation com o payload EXATO do UE5 (`transactionId, idempotencyKey, amountKrc:int, playerId:int, itemId, description, coordinatorNodeId, expiryTimestamp`; resposta com `prepared: bool` para `GetBoolField`). Auth: `x-2pc-node-secret` (`ECONOMY_2PC_NODE_SECRET`) > sessão web > modo dev `ue5-player-<playerId>` (recusado com secret configurado). |
+| `server/routes.ts` | `registerEconomy2PCRoutes(app)` + `economy2pcService.startRecoveryLoop()` registrados antes de `registerApiRoutes` (auth própria, sem OIDC). |
+| `migrations/0006_economy-2pc-escrow.sql` | Migration idempotente (IF NOT EXISTS / DROP CONSTRAINT IF EXISTS). |
+| `tests/official/economy-2pc-contract.test.ts` | 25 testes de contrato DB-free: payload UE5 nos schemas zod, GUID FGuid DigitsWithHyphensLower, plano de linhas 1-2/3-4/5-6, TTL bounds, resolve2PCActor (secret/sessão/dev). |
+| `tests/integration/economy-2pc.postgres.test.ts` | 15 testes E2E PostgreSQL: payload UE5 exato, anti double-spend (replay sem duplo débito), 402/404/409 por cenário, commit pós-abort, TTL→ESCROW_EXPIRED com reembolso, GC, invariante ΣDEBIT=ΣCREDIT por operationId. Bootstrap: mini-migrador idempotente de `migrations/*.sql`. |
+
+**Executar:**
+```bash
+# Contrato (sem DB)
+node --import tsx --test tests/official/economy-2pc-contract.test.ts
+
+# E2E (PostgreSQL real; host local + sufixo _test)
+TEST_DATABASE_URL="postgresql://127.0.0.1:5432/khaaos_2pc_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc.postgres.test.ts
+
+# Sem docker/psql local? Bridge PGlite (wire-protocol):
+node scripts/dev-pglite-socket.mjs --port 54329 &
+TEST_DATABASE_URL="postgresql://test:test@127.0.0.1:54329/khaaos_test?max=1" \
+  node --import tsx --test tests/integration/economy-2pc-observability.test.ts
+```
+
+#### Wire do cliente UE5 + observability (P0 — fase 2)
+
+| Componente | Papel |
+|---|---|
+| `Game/Economy/KhaaosArmorerForge.h/.cpp` | `TryPurchase` roteado pelo **Two-Phase Commit**: `BeginTransaction` + `PreparePhase` (escrow server-side) → bridge auto-commita → `Handle2PCPurchaseCompleted` entrega o item e sincroniza o Bankhaoos local; falha → `Handle2PCPurchaseFailed` (abort já com refund). `bUseTwoPhaseCommit` (default true) mantém fallback local para offline. Guardas: 1 compra em andamento por jogador, `EndPlay` aborta pendências (GC reembolsa órfãos), idempotency key `forge.<item>.<guid32>` (charset server-safe). |
+| `Game/Economy/KhaaosEconomyBridge2PC.cpp` | **Fixes de contrato**: include `Game/Economy/` (path antigo quebrado), HTTP aceita toda faixa 2xx (`prepare` fresh = 201), erro server lido de `code`/`message`, e **`playerId` enviado em TODAS as fases** (commit/abort/recovery) — em modo dev o ator sintético `ue5-player-<playerId>` precisa casar com o escrow, senão 403. |
+| `server/game/metricsRegistry.ts` | Registry Prometheus hand-rolled (zero deps): `khaaos_economy_2pc_requests_total{phase,result}`, `khaaos_economy_2pc_errors_total{phase}`, `khaaos_economy_2pc_phase_duration_ms` (histograma 12 buckets), `khaaos_economy_2pc_gc_recovered_total`, gauges `khaaos_economy_2pc_escrows{status}` e `khaaos_economy_2pc_oldest_prepared_age_seconds`, `khaaos_up`, `khaaos_build_info`, `khaaos_process_uptime_seconds`. |
+| `server/routes/metrics.ts` | `GET /metrics` (text/plain; version=0.0.4 — scrape do job `khaaos-economy-api`) e `GET /healthz` (**postgres/health**: SELECT 1 com latência + saúde do 2PC; 503 se banco fora). Registrados antes de todas as rotas (sem auth). |
+| `server/game/economy2pcService.ts` | Instrumentado: wrappers `prepare/commit/abort` medem duração + resultado (`prepared/committed/aborted/replayed/rejected`), GC conta recuperações. |
+| `infra/grafana/khaaos-economy-dashboard.json` | Painéis 2PC: Prepares/s, Commits/s, Aborts+GC/s, Escrows PREPARED abertos, escrow mais antigo (s), taxa por fase/resultado e latência p95 por fase (`histogram_quantile`). Provisionado em produção via `infra/deploy/docker-compose.production.yml`. |
+| `tests/integration/economy-2pc-observability.test.ts` | 8 testes E2E HTTP (supertest + PostgreSQL real): payload Prometheus canônico, counters incrementam exatamente 1 por fase, abort/rejected refletidos, `/api/economy/2pc/health` com escrows, `/healthz` 200/503 (outage simulado), `/metrics` de pé com banco fora. |
+| CI | `05-test-integration.yml`: YAML corrigido + `npm run check` + PostgreSQL real (service container) rodando E2E + observability. `ue5-headless-compile.yml`: step de UHT pré-compile + `branches` corrigido. `13-monitoring.yml`: valida prometheus.yml, dashboards JSON e métricas 2PC (antes era JSON inválido). |
+
+### CI/CD e Pipeline
+
+8. **.github/workflows/ue5-headless-compile.yml** — GitHub Actions workflow 8 steps: checkout→LFS pull→nvidia-smi→Xorg init→GenerateProjectFiles+Build→KhaaosVFXValidation Commandlet→Log analysis→Artifact upload. Rejeita PRs se [FAIL] detectado nos 48 abilities ou 27 VFX.
+
+9. **scripts/pipeline/parse_acid_rain_volumes.py** — Parser de volumes de chuva ácida do mapa Barburhen W1/C1. Lê .umap.json, extrai ABarburhenAcidRainVolume actors, calcula damage_per_tick (0.01 = -1% Vitality por tick de 10s), exporta CSV para KhaaosDataTables C++.
+
+### Infraestrutura Atualizada
+
+10. **Terraform variables.tf** — Instância default atualizada de `ecs.vgn6i-m4.xlarge` (DEPRECATED) para `ecs.gn6i-c4g1.xlarge` (NVIDIA T4 física, 16GB VRAM, sem licença GRID). Nova variável `gpu_driver_type` (tesla/grid).
+
+11. **gpu_machine_bootstrap.sh v4.0** — Suporte a driver Tesla (gn6i T4 física, sem GRID) e GRID (vgn7i-vws/sgn8ia com licença vWS). Auto-detecção de BusID via lspci, geração automática de xorg.conf.d com BusID correto.
+
+### Dados Cosméticos (3 novos JSON)
+
+12. **emote_catalog.json** — 13 emotes em 5 categorias (EXPRESSAO, ACAO, DANCA, MEDITACAO, INTERACAO) e 5 raridades. 5 species-exclusive (Huran GillFlare, Onith TailWhip, Venex SystemCheck, Skeetw SpreadWings, Zheers Oath).
+
+13. **skin_shop_catalog.json** — 12 itens de loja: 8 skins, 2 gliders, 1 banner, 1 weapon skin. Pricing 800-8000 KRC. Daily deals (24h rotation, 10-30% discount) e Featured items (7d rotation).
+
+14. **battle_pass_season1.json** — Temporada 1 "Estação da Convergência": 100 tiers, Free Track (20 rewards, 2800 KRC total) + Premium Track (20 rewards, 4200 KRC total). Tier 100 Premium: Skeetw Solar Phoenix (MITICO).
+
+### Higienização de Repositório
+
+- Removido diretório `script/` (singular) — conteúdo unificado em `scripts/` (plural)
+- Removido diretório `.aistudio/` (artefatos temporários de IDE)
+- parse_acid_rain_volumes.py validado: 4 volumes exportados para CSV
 
 ---
 

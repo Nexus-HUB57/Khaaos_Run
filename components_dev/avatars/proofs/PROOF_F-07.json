@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F007",
+  "operative_id": "F-07",
+  "codename": "KHL-04",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Khael",
+    "name": "Khael",
+    "type": "mystic",
+    "skeleton": "SK_Gwen",
+    "passive": "Energia Khaael - custo de habilidade -20%",
+    "base_stats": {
+      "health": 70,
+      "energy": 150,
+      "speed": 0.95
+    },
+    "physical": {
+      "height_cm": 178,
+      "weight_kg": 65
+    },
+    "abbr": "KHL"
+  },
+  "world": {
+    "id": "W3",
+    "name": "Ckesalth",
+    "capacity": 60
+  },
+  "rank": "ONITH",
+  "specialization": "Diplomacia e Espionagem",
+  "ethnicity": {
+    "label": "Libanesa",
+    "heritage": "Lebanese/Beiruti (paterno) + Syrian/Phoenician (materno)",
+    "region": "Beirute, Libano / Levante Mediterraneo",
+    "cultural_fusion": "Arte da diplomacia fenicia combinada com espionagem Khael. Nome Soraya (estrela/persa) + Haddad (ferreiro/deus do trovado sirio)."
+  },
+  "phenotype": {
+    "skin_tone": "Oliva-toned (#D4A76A) com subtom mediterraneo quente",
+    "hair": "Castanho escuro, grosso, ondulado, em tactical bun, fios de energia Khael entrelacados (pulsam violeta sutil)",
+    "eyes": "Olhos grandes e expressivos, castanho com flecks ambar, subcor Khael violeta undertone - glow sutil na iris",
+    "facial_structure": "Rosto classico levantino - olhos amendoados, nariz proeminente, labios cheios, maxilar elegante",
+    "body_type": "Athletic e statuesque - 171 cm, 59 kg. Frame Khael elegante, proporces classicas",
+    "distinctive_silhouette": "Postura de diplomat-spy - ereta, composed, movimentos controlados e precisos. Energy patterns em volta do corpo = aura de autoridade calma."
+  },
+  "cultural_markers": {
+    "tattoos": "Calligraphia arabe no antebrao direito - juramento Khaaos em script arabe (3 linhas, tradio fenicia de oath-binding), Phoenician ship (gale) no tornozelo",
+    "scars": "Cicatriz de faca no ombro esquerdo (diplomatic incident - 8 cm, clean line), marcas de corda nos pulsos (captura e escape)",
+    "ornaments": "Brinco de ouro libanes (hoop com crescent), anel de signet fenicio (carta de Tiro) na mao esquerda",
+    "clothing_style": "Elegant mystic combat suit com draped elements mediterraneos - Phoenician purple (#6A0DAD) accents, flowing sleeves, structured core, visual de spy-mystic elegante"
+  },
+  "species_traits": {
+    "visible_modification": "Energy patterns Khael se manifestam como GEOMETRIC PHOENICIAN MOTIFS - hexagramas, meanders, wave patterns (Phoenician art influence on power expression)",
+    "passive_manifestation": "Energia Khaael mais controlada e refined - patterns sao always geometric/precise (vs organicos de KAYAEN, sigils de LYRA, halo de AMARA). Custo -20% = sustained subtle power.",
+    "combat_style_id": "Estilo spy-mystic - manipulation, deception, controlled bursts, charm offensive. Energy geometry = readable ally signals, confusing enemy patterns. Unico ONITH feminino - comando tatico."
+  },
+  "distinguishing_summary": "Unica Libanesa/Fenicia; energy Khael como GEOMETRIC PHOENICIAN (difere de Nahuatl de LYRA, nature de KAYAEN, halo de AMARA); calligraphia arabe no antebrao; Phoenician purple accents; brinco crescent; visual spy-mystic elegante; unico ONITH feminino",
+  "generated_at": "2026-10-22T13:30:29.512303+00:00",
+  "ref_code": "KHL-04",
+  "operative_ref": "OP_KHL_F_04",
+  "avatar_ref": "AVT_KHL_F_04",
+  "legacy_codename": "SORAYA HADDAD",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298527+00:00"
+}

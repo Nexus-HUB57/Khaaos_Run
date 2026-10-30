@@ -1,0 +1,44 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Species_Zheers_Adaptabilidade",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.290143+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Infinite",
+    "duration_magnitude": -1.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Adaptabilidade",
+        "modifier_op": "Additive",
+        "magnitude": 1.0,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Buff.Adaptabilidade",
+      "Ability.Passive.Species.Zheers.Adaptabilidade"
+    ],
+    "required_tags": [
+      "Species.Zheers"
+    ],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade",
+    "package_name": "/Game/GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "de80d6a2fa1842fd"
+}

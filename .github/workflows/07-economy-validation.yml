@@ -39,3 +39,5 @@ jobs:
       - run: npm run test:economy
       - name: Validate transactional economy against PostgreSQL
         run: node --import tsx --test tests/official/economy-postgres.test.ts
+      - name: Validate bank Idempotency-Key replay/409 against PostgreSQL (auditoria Fase 2)
+        run: node --import tsx --test tests/official/bank-idempotency.test.ts

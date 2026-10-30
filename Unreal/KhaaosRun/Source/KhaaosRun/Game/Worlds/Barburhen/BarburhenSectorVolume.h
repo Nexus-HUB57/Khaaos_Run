@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerExitSector, APawn*, Player
  * Use 4 actors no level (um por EBarburhenSector) para minimapa, áudio e regras locais.
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API ABarburhenSectorVolume : public AActor
+class KHAAOSRUN_API ABarburhenSectorVolume : public AActor
 {
 	GENERATED_BODY()
 

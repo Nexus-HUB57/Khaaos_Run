@@ -139,10 +139,9 @@ export class MatchmakingService {
 
   dequeue(userId: string) {
     const entry = this.queue.get(userId);
-    if (!entry) return;
     this.queue.delete(userId);
     void distributedState.removeQueueEntry(userId);
-    if (entry.ws) {
+    if (entry?.ws) {
       this.send(entry.ws, { type: "queue_left" });
     }
   }
@@ -192,6 +191,12 @@ export class MatchmakingService {
     if (!lock) return;
     try {
       const remoteEntries = await distributedState.getQueueEntries();
+      const remoteIds = new Set(remoteEntries.map((entry) => entry.userId));
+      // Imported entries have no local socket. Remove only those that vanished
+      // from Redis; local entries may still be between enqueue and HSET.
+      for (const [userId, local] of this.queue) {
+        if (!local.ws && !remoteIds.has(userId)) this.queue.delete(userId);
+      }
       for (const remote of remoteEntries) {
         const existing = this.queue.get(remote.userId);
         if (!existing) {
@@ -300,6 +305,16 @@ export class MatchmakingService {
         // Re-queue on failure
         for (const m of matched) {
           this.queue.set(m.userId, m);
+          void distributedState.restoreQueueEntryIfAbsent({
+            userId: m.userId,
+            displayName: m.displayName,
+            rating: m.rating,
+            mode: m.mode,
+            worldId: m.worldId,
+            enqueuedAt: m.enqueuedAt,
+            currentDelta: m.currentDelta,
+            nodeId: distributedState.nodeId,
+          });
         }
       });
     }

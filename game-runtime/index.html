@@ -13,6 +13,10 @@
     <!-- vignette de dano -->
     <div id="damageVignette"></div>
 
+    <!-- F36 — vinheta SAZONAL da aura: borda da tela tinge com a cor da skin
+         mítica equipada (var --aura-season), ritmo por estação (body[data-aura]) -->
+    <div id="auraVignette" aria-hidden="true"></div>
+
     <!-- barra superior -->
     <header class="topbar3d">
       <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small id="scenarioName">CIGKV // KHAOOS VILLE</small></div></div>
@@ -23,17 +27,79 @@
         <span class="pulse-chip" id="pulseValue">PULSO 00</span>
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
+      <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
+      <button id="gfxBtn" class="audio-toggle" type="button" title="Vídeo e performance (KR_GFX_*): qualidade, pós-FX, resolução dinâmica, telemetria, tremor e sensibilidade">⚙ GFX</button>
+      <button id="mapBtn" class="audio-toggle" type="button" title="Mapa tático (M): distritos, anéis do Ring, terminais ZEX e contatos revelados">🗺 MAPA</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
     <!-- crosshair dinâmico -->
     <div id="crosshair"><i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="ch dot"></i></div>
     <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <!-- Fase 27 — números de dano flutuantes (pool de DOM; preenchido pelo damageNumbers3d) -->
+    <div id="damageNumbers" aria-hidden="true"></div>
+    <!-- Fase 5 — barra do espectador -->
+    <div id="spectatorBar" class="hidden">
+      <span class="spec-label">ESPECTANDO</span>
+      <b id="specName">—</b>
+      <span id="specPlacement" class="spec-chip"></span>
+      <span class="spec-hint">←/→</span>
+      <button id="specPrev" class="spec-btn" title="Operativo anterior">‹</button>
+      <button id="specNext" class="spec-btn" title="Próximo operativo">›</button>
+      <button id="specAta" class="spec-btn" title="Reproduzir ata da Corte Marcial">ATA</button>
+      <button id="specLeave" class="spec-btn leave" title="Encerrar transmissão">✕</button>
+    </div>
+
+    <!-- Fase 13 — HUD do espectador remoto (pipeline /ws/spectator: feed atrasado 10 s, batches 5 Hz) -->
+    <div id="spectatorHud" class="hidden">
+      <div class="spec-top">
+        <span class="spec-live"><i></i>LIVE</span>
+        <b id="specStatus">CONECTANDO…</b>
+        <span id="specDelay" class="spec-chip" title="Atraso anti-ghosting do pipeline">ATRASO —</span>
+        <span id="specAlive" class="spec-chip">◇ 00 VIVOS</span>
+      </div>
+      <div id="specRing" class="spec-ring" title="Estado autoritativo do Ring (atrasado)">RING F1 · 800m · ESTÁVEL · 00:00</div>
+      <div id="specHazard" class="spec-hazard hidden" title="Sobrevivência ativa no mundo (FX/áudio em sincronia com a partida)"></div>
+      <div class="spec-standings-label">RANKING DA SALA · TOP 8 · CLIQUE P/ SEGUIR</div>
+      <div id="specStandings" class="spec-standings"></div>
+      <div class="spec-cams">
+        <button class="spec-btn" data-cam="FREECAM" title="Órbita livre ao redor do ring">LIVRE</button>
+        <button class="spec-btn" data-cam="FOLLOW_PLAYER" title="Seguir operativo">SEGUIR</button>
+        <button class="spec-btn" data-cam="OVERHEAD" title="Câmera aérea">AÉREA</button>
+        <button class="spec-btn" data-cam="RING_CENTER" title="Centro do ring girando">CENTRO</button>
+        <button class="spec-btn" id="specAuto" title="Fase 19 — diretor automático: corta para o alvo mais ameaçado (hazard ativo, nocaute, fora do ring, dano recente)">AUTO</button>
+        <span class="spec-hint">ALVO</span>
+        <button class="spec-btn" id="specFollowPrev" title="Operativo anterior">‹</button>
+        <button class="spec-btn" id="specFollowNext" title="Próximo operativo">›</button>
+        <button class="spec-btn leave" id="specDisconnect" title="Encerrar transmissão">✕</button>
+      </div>
+    </div>
+    <div id="specFeed" class="hidden"></div>
 
     <!-- minimapa + killfeed -->
     <div class="map-corner">
       <div class="minimap-frame"><canvas id="minimap" width="196" height="196"></canvas><span class="compass">N</span></div>
       <div id="killfeed"></div>
+    </div>
+
+    <!-- Fase 40 — mapa tático em tela cheia (tecla M / botão MAPA) -->
+    <div id="tacticalMap" class="hidden" aria-hidden="true">
+      <div class="tactical-frame" id="tacticalFrame">
+        <div class="tactical-head">
+          <b>MAPA TÁTICO</b>
+          <span id="tacticalSub" class="tactical-sub">—</span>
+          <span class="tactical-close">[M] FECHAR</span>
+        </div>
+        <canvas id="tacticalCanvas" width="720" height="720"></canvas>
+        <div class="tactical-legend">
+          <span class="lg lg-ring">ring atual</span>
+          <span class="lg lg-target">próximo pulso</span>
+          <span class="lg lg-terminal">terminal ZEX</span>
+          <span class="lg lg-loot">loot</span>
+          <span class="lg lg-recon">contato revelado</span>
+          <span class="lg lg-player">você</span>
+        </div>
+      </div>
     </div>
 
     <!-- status do jogador (canto inferior esquerdo) -->
@@ -51,8 +117,26 @@
     <!-- arma e munição (canto inferior direito) -->
     <div class="weapon-panel">
       <div id="reloadHint">RECARREGANDO…</div>
+      <!-- Fase 37 — ícone da arma no inventário: silhueta por categoria
+           (rifle/sniper/shotgun/lmg/smg/sidearm/energy/melee) e, com skin
+           mítica equipada, FESTIVAL SAZONAL por aura (--aura/--aura-season/
+           --aura-dur decididos por aura3d.weaponIconVars via hud3d). -->
+      <div id="weaponIcon" class="weapon-icon" data-cat="sidearm" aria-hidden="true">
+        <svg viewBox="0 0 64 28" xmlns="http://www.w3.org/2000/svg">
+          <path data-cat="rifle"    d="M2 13h6l2-3h22v-2h5v2h18l7 2-7 2H38v3l-4 1v3h-5v-4l-6-1H10l-3 3H2z"/>
+          <path data-cat="sniper"   d="M1 14h8l2-2h24v-3h6v3h20l3 2-3 2H40v4l-5 2v2h-5v-3l-8-1H12l-2 3H1zM33 6h10v3H33z"/>
+          <path data-cat="shotgun"  d="M2 12h8l3-3h14v-2h6v2h27l2 2-2 2H33v3h14l8 1-8 1H33l-5 3h-6l2-3H11l-3 2H2z"/>
+          <path data-cat="lmg"      d="M3 11h7V8h8v3h40l3 2-3 2H30v4l-4 1v3h-5v-4l-5-1H12l-2 3H3zM18 19h9v5h-9z"/>
+          <path data-cat="smg"      d="M4 12h6l2-3h14v-2h5v2h20l4 2-4 2H32v4l-4 1v3h-5v-4l-5-1H10l-2 3H4zM28 19h6v4h-6z"/>
+          <path data-cat="sidearm"  d="M8 5h30l6 3-2 3H24l-1 4 6 1-1 7-9-1-3-10-8-1z"/>
+          <path data-cat="energy"   d="M2 13h6l2-3h20v-2h6v2h16l8 2-8 2H38v3l-4 1v3h-5v-4l-5-1H10l-3 3H2zM23 4h4l-1 5h-4zM23 18h4l-1 5h-4z"/>
+          <path data-cat="melee"    d="M6 22c8-2 16-8 24-16l4-4 6 4-4 4c-8 8-14 16-16 24l-6 1c1-6 0-10-3-11z"/>
+        </svg>
+      </div>
       <div class="ammo-row"><b id="ammoMag">15</b><span id="ammoReserve">/ 45</span></div>
       <div class="weapon-name" id="weaponName">PISTOLA 9MM</div>
+      <div id="attachStrip" class="attach-strip" title="Anexos da AR-47"></div>
+      <div id="mythicStage" class="mythic-stage hidden"></div>
       <div class="throwables-row">
         <div class="throw-chip frag" title="Granada FRAG [G]">💣 <span id="fragCount">×1</span><small>G</small></div>
         <div class="throw-chip gloo" title="Gloo Wall [F]">🧊 <span id="glooCount">×1</span><small>F</small></div>
@@ -73,6 +157,12 @@
 
     <!-- prompt de interação -->
     <div id="interactPrompt">[E] Coletar</div>
+
+    <!-- Fase 26 — HP do alvo quebrável (porta metálica/madeira/janela) -->
+    <div id="targetPanel" data-mat="wood">
+      <div class="tp-head"><span id="targetLabel">PORTA</span><b id="targetHp">200/200</b></div>
+      <div class="tp-track"><i id="targetFill"></i></div>
+    </div>
 
     <!-- feed lateral -->
     <div class="feed-panel"><div class="section-label">RÁDIO // LOG AO VIVO</div><div id="feedList"></div></div>
@@ -105,6 +195,7 @@
         <button class="tbtn small" data-key="medkit">✚</button>
         <button class="tbtn small" data-key="throw">💣</button>
         <button class="tbtn small" data-key="gloo">🧊</button>
+        <button class="tbtn small" data-key="crouch">⤓</button>
         <button class="tbtn" data-key="ads">◎</button>
         <button class="tbtn fire" data-key="fire">🔥</button>
       </div>
@@ -118,6 +209,15 @@
       <div class="modal-card">
         <span class="eyebrow">PROTOCOLO DE ENTRADA // ZU-01</span>
         <h2>PROTOCOLO DE INSERÇÃO</h2>
+        <div id="pojStrip" class="poj-strip" title="Protocolo de Ordem de Jogo — regramento da Guerra do Khaaos">
+          <span class="poj-chip"><small>FASE</small><strong id="pojFase">—</strong></span>
+          <span class="poj-chip"><small>INSCRITOS</small><strong id="pojInscritos">—</strong></span>
+          <span class="poj-chip"><small>CIGKV</small><strong id="pojCigkv">—</strong></span>
+          <span class="poj-chip"><small>MUNDO</small><strong id="pojMundo">—</strong></span>
+          <span class="poj-chip"><small>DIA</small><strong id="pojDia">—</strong></span>
+          <span class="poj-chip"><small>SOBREVIVENTES</small><strong id="pojVivos">—</strong></span>
+          <span class="poj-chip poj-chip-rank" title="Patente do perfil — progressão KRC (1º critério de desempate do 11º artigo)"><small>PATENTE</small><strong id="pojPatente">—</strong></span>
+        </div>
         <p>Escolha o teatro de operações, selecione seu operativo e defina como entrar no ring. A arena CIGKV permanece como treino; Barburhen abre um protótipo local do Setor Industrial.</p>
         <div class="content-selection">
           <label for="scenarioSelect">TEATRO DE OPERAÇÕES</label>
@@ -138,11 +238,46 @@
           </div>
           <small id="contentSelectionStatus" class="content-selection-status" aria-live="polite"></small>
         </div>
+        <div class="squad-row">
+          <label id="squadToggleBox" class="squad-toggle" for="squadToggle">
+            <input type="checkbox" id="squadToggle" />
+            <span>MODO SQUAD · DBNO <small>aliados revivem · ring de esquadrões</small></span>
+          </label>
+          <div id="loginBox" class="private-room hidden">
+            <label for="loginUser">CONEXÃO // QG-WAR'I (LOGIN)</label>
+            <div class="private-actions">
+              <input id="loginUser" maxlength="24" placeholder="OPERATIVO" autocomplete="username" />
+              <input id="loginPass" type="password" maxlength="64" placeholder="SENHA" autocomplete="current-password" />
+              <button id="loginBtn" class="ghost-btn" type="button">ENTRAR</button>
+            </div>
+            <small class="login-hint">Autentica na plataforma e sincroniza o operativo no ring online.</small>
+          </div>
+          <div id="privateRoomBox" class="private-room hidden">
+            <label for="inviteCode">SALA PRIVADA · SQUAD (DBNO)</label>
+            <div class="private-actions">
+              <input id="inviteCode" maxlength="6" placeholder="CÓDIGO" autocomplete="off" />
+              <button id="createPrivateBtn" class="ghost-btn" type="button">CRIAR SALA</button>
+              <button id="joinPrivateBtn" class="ghost-btn" type="button">ENTRAR</button>
+              <button id="spectateBtn" class="ghost-btn spectate" type="button" title="Abrir a transmissão da sala no pipeline /ws/spectator (atraso 10 s)">ASSISTIR</button>
+            </div>
+          </div>
+        </div>
         <div class="modal-actions">
           <button id="beltBtn" class="primary-btn">APERTAR CINTO <small>+60 de armadura · mobilidade padrão</small></button>
           <button id="rushBtn" class="danger-btn">SALTAR NO CAOS <small>+18 de armadura · velocidade ampliada</small></button>
         </div>
       </div>
+    </div>
+
+    <!-- overlay de nocaute (DBNO) -->
+    <div id="knockOverlay" class="hidden">
+      <div class="knock-title">NOCAUTEADO</div>
+      <div class="knock-bar"><div id="knockFill"></div></div>
+      <div id="reviveWrap" class="revive-wrap hidden">
+        <div class="revive-label">REVIVENDO…</div>
+        <div class="revive-bar"><div id="reviveFill"></div></div>
+      </div>
+      <div class="knock-hint">Aliados podem reviver — segure <kbd>E</kbd> perto de um companheiro caído para revivê-lo</div>
     </div>
 
     <!-- modal fim -->
@@ -154,9 +289,53 @@
         <div class="modal-actions">
           <button id="endBtn" class="primary-btn">NOVA INSERÇÃO</button>
           <button id="replayBtn" class="ghost-btn">EXPORTAR REPLAY</button>
+          <button id="endAtaBtn" class="ghost-btn hidden">REPRODUZIR ATA DA CORTE</button>
         </div>
       </div>
     </div>
+
+    <div id="courtAtaModal" class="modal hidden">
+      <div class="modal-card ata-card">
+        <span class="eyebrow">CORTE MARCIAL · ATA OFICIAL DO PROCESSO</span>
+        <h2 id="ataTitle">ATA DO CASO —</h2>
+        <p class="ata-sub">Reprodução encenada do processo militar — clique para adiantar.</p>
+        <div id="ataTimeline" class="ata-timeline"></div>
+        <div class="modal-actions">
+          <button id="ataReplayBtn" class="ghost-btn">REPRODUZIR NOVAMENTE</button>
+          <button id="ataCloseBtn" class="primary-btn">FECHAR ATA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 19 — mixagem de volume (KR_AUDIO_*): 4 canais, persistência imediata -->
+    <div id="audioMixer" class="audio-mixer hidden">
+      <div class="section-label">MIXAGEM // ÁUDIO</div>
+      <label><span>GERAL</span><input type="range" min="0" max="100" step="1" data-channel="master" aria-label="Volume geral" /><b data-out="master">50%</b></label>
+      <label><span>EFEITOS</span><input type="range" min="0" max="100" step="1" data-channel="sfx" aria-label="Volume dos efeitos" /><b data-out="sfx">100%</b></label>
+      <label><span>MUNDO</span><input type="range" min="0" max="100" step="1" data-channel="world" aria-label="Volume do mundo (ambiente + sobrevivências)" /><b data-out="world">100%</b></label>
+      <label><span>INTERFACE</span><input type="range" min="0" max="100" step="1" data-channel="ui" aria-label="Volume da interface e avisos" /><b data-out="ui">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_AUDIO_*)</small>
+    </div>
+
+    <div id="gfxPanel" class="audio-mixer hidden">
+      <div class="section-label">VÍDEO // PERFORMANCE</div>
+      <label><span>QUALIDADE</span>
+        <select id="gfxTier" data-gfx="tier" aria-label="Perfil gráfico">
+          <option value="auto">AUTO · ADAPTATIVO</option>
+          <option value="low">BAIXO</option>
+          <option value="medium">MÉDIO</option>
+          <option value="high">ALTO</option>
+        </select>
+      </label>
+      <label><span>PÓS-FX</span><input type="checkbox" data-gfx="postfx" aria-label="Pós-processamento (bloom + grade)" /></label>
+      <label><span>RES. DINÂMICA</span><input type="checkbox" data-gfx="drs" aria-label="Resolução dinâmica (DRS)" /></label>
+      <label><span>TELEMETRIA FPS</span><input type="checkbox" data-gfx="fps" aria-label="Mostrar FPS e escala de resolução" /></label>
+      <label><span>TREMOR CÂM.</span><input type="range" min="0" max="100" step="5" data-gfx="shake" aria-label="Intensidade do tremor de câmera (0 reduz movimento)" /><b data-out="shake">100%</b></label>
+      <label><span>SENSIBILIDADE</span><input type="range" min="30" max="250" step="5" data-gfx="sens" aria-label="Sensibilidade do mouse" /><b data-out="sens">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_GFX_*)</small>
+    </div>
+
+    <div id="perfReadout" class="perf-readout hidden" role="status"></div>
 
     <script type="module" src="/src/game3d/main3d.js"></script>
   </body>

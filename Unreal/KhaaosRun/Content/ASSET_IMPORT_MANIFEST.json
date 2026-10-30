@@ -1,0 +1,866 @@
+{
+  "manifest_version": "2.0.0",
+  "project": "Khaaos_Run",
+  "engine_version": "5.8",
+  "generated_at": "2026-10-26T23:35:11.353206+00:00",
+  "generator": "import_all_assets.py",
+  "total_assets": 61,
+  "asset_type_counts": {
+    "GameplayEffect": 29,
+    "NiagaraSystem": 27,
+    "DataTable": 5
+  },
+  "import_order_description": [
+    "Phase 1: DataTables (no dependencies)",
+    "Phase 2: GameplayEffects (may reference tags from DataTables)",
+    "Phase 3: NiagaraSystems (may reference species assets and GEs)"
+  ],
+  "assets": [
+    {
+      "asset_name": "GE_Buff_Canalizacao",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_Canalizacao.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Canalizacao",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 0,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Canalizacao",
+        "Ability.Passive.Species.Khael.CanalizacaoMistica"
+      ],
+      "checksum": "b765bf3bd62415a4"
+    },
+    {
+      "asset_name": "GE_Buff_DamageReduction",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_DamageReduction.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_DamageReduction",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 1,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.DamageReduction"
+      ],
+      "checksum": "05a510dba27c435b"
+    },
+    {
+      "asset_name": "GE_Buff_HealOverTime",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_HealOverTime.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_HealOverTime",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 2,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.HealOverTime"
+      ],
+      "checksum": "c1922070f044a2ae"
+    },
+    {
+      "asset_name": "GE_Buff_Overclock",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_Overclock.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Overclock",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 3,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Overclock",
+        "Ability.Passive.Species.Venex.OverclockNeural"
+      ],
+      "checksum": "726e3fa71bec5ea0"
+    },
+    {
+      "asset_name": "GE_Buff_Regen",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_Regen.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Regen",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 4,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Regen",
+        "Ability.Passive.Species.Huran.RegeneracaoAquatica"
+      ],
+      "checksum": "7efeb414eba4dc68"
+    },
+    {
+      "asset_name": "GE_Buff_Shielded",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_Shielded.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Shielded",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 5,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Shielded"
+      ],
+      "checksum": "9608682664d6bf2d"
+    },
+    {
+      "asset_name": "GE_Buff_SpeedBoost",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Buff/GE_Buff_SpeedBoost.uasset.json",
+      "package_name": "/Game/GameplayEffects/Buff/GE_Buff_SpeedBoost",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 6,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.SpeedBoost"
+      ],
+      "checksum": "b66491075ca9c844"
+    },
+    {
+      "asset_name": "GE_Damage_Bullet",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Combat/GE_Damage_Bullet.uasset.json",
+      "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Bullet",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 7,
+      "dependencies": [],
+      "tags": [
+        "Effect.Damage.Bullet"
+      ],
+      "checksum": "172a22efa9ef6046"
+    },
+    {
+      "asset_name": "GE_Damage_Explosion",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Combat/GE_Damage_Explosion.uasset.json",
+      "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Explosion",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 8,
+      "dependencies": [],
+      "tags": [
+        "Effect.Damage.Explosion"
+      ],
+      "checksum": "9f2569c50c9a13b2"
+    },
+    {
+      "asset_name": "GE_Damage_Melee",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Combat/GE_Damage_Melee.uasset.json",
+      "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Melee",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 9,
+      "dependencies": [],
+      "tags": [
+        "Effect.Damage.Melee"
+      ],
+      "checksum": "4dc5dc8e14e4fb64"
+    },
+    {
+      "asset_name": "GE_Damage_Zone",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Combat/GE_Damage_Zone.uasset.json",
+      "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Zone",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 10,
+      "dependencies": [],
+      "tags": [
+        "Effect.Damage.Zone"
+      ],
+      "checksum": "0f225e7d3b9f0c44"
+    },
+    {
+      "asset_name": "GE_Cooldown_GrapplingHook",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cooldown/GE_Cooldown_GrapplingHook.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cooldown/GE_Cooldown_GrapplingHook",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 11,
+      "dependencies": [],
+      "tags": [
+        "Cooldown.GrapplingHook"
+      ],
+      "checksum": "76bd99e0359abe4f"
+    },
+    {
+      "asset_name": "GE_Cooldown_Heal",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cooldown/GE_Cooldown_Heal.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cooldown/GE_Cooldown_Heal",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 12,
+      "dependencies": [],
+      "tags": [
+        "Cooldown.Heal"
+      ],
+      "checksum": "03feae173bb0cd71"
+    },
+    {
+      "asset_name": "GE_Cooldown_Shield",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cooldown/GE_Cooldown_Shield.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cooldown/GE_Cooldown_Shield",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 13,
+      "dependencies": [],
+      "tags": [
+        "Cooldown.Shield"
+      ],
+      "checksum": "0a1d03f30cad1206"
+    },
+    {
+      "asset_name": "GE_Cooldown_Sprint",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cooldown/GE_Cooldown_Sprint.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cooldown/GE_Cooldown_Sprint",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 14,
+      "dependencies": [],
+      "tags": [
+        "Cooldown.Sprint"
+      ],
+      "checksum": "2a7eae302714c2b2"
+    },
+    {
+      "asset_name": "GE_Cooldown_Ultimate",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cooldown/GE_Cooldown_Ultimate.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cooldown/GE_Cooldown_Ultimate",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 15,
+      "dependencies": [],
+      "tags": [
+        "Cooldown.Ultimate"
+      ],
+      "checksum": "e8cad2d7abb64087"
+    },
+    {
+      "asset_name": "GE_Cost_Credits",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cost/GE_Cost_Credits.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cost/GE_Cost_Credits",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 16,
+      "dependencies": [],
+      "tags": [],
+      "checksum": "6d3c567bfd3a26b4"
+    },
+    {
+      "asset_name": "GE_Cost_Energy",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cost/GE_Cost_Energy.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cost/GE_Cost_Energy",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 17,
+      "dependencies": [],
+      "tags": [],
+      "checksum": "46ec95f82cc67bfd"
+    },
+    {
+      "asset_name": "GE_Cost_Health",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Cost/GE_Cost_Health.uasset.json",
+      "package_name": "/Game/GameplayEffects/Cost/GE_Cost_Health",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 18,
+      "dependencies": [],
+      "tags": [],
+      "checksum": "7878dc6b820349c0"
+    },
+    {
+      "asset_name": "GE_Debuff_Burning",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Burning.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Burning",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 19,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Burning"
+      ],
+      "checksum": "d234e424fb08e166"
+    },
+    {
+      "asset_name": "GE_Debuff_Disarmed",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Disarmed.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Disarmed",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 20,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Disarmed"
+      ],
+      "checksum": "5e36fafef1dd35a1"
+    },
+    {
+      "asset_name": "GE_Debuff_Frozen",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Frozen.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Frozen",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 21,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Frozen"
+      ],
+      "checksum": "00f5e1f90b763151"
+    },
+    {
+      "asset_name": "GE_Debuff_Poisoned",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Poisoned.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Poisoned",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 22,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Poisoned"
+      ],
+      "checksum": "e5e5ae087cbbbe12"
+    },
+    {
+      "asset_name": "GE_Debuff_Silenced",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Silenced.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Silenced",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 23,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Silenced"
+      ],
+      "checksum": "d858c649ae7be9b3"
+    },
+    {
+      "asset_name": "GE_Debuff_Slowed",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Debuff/GE_Debuff_Slowed.uasset.json",
+      "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Slowed",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 24,
+      "dependencies": [],
+      "tags": [
+        "Effect.Debuff.Slowed"
+      ],
+      "checksum": "ae97aabd8645046e"
+    },
+    {
+      "asset_name": "GE_Species_Huran_RegenAquatica",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Species/GE_Species_Huran_RegenAquatica.uasset.json",
+      "package_name": "/Game/GameplayEffects/Species/GE_Species_Huran_RegenAquatica",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 25,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Regen",
+        "Ability.Passive.Species.Huran.RegeneracaoAquatica"
+      ],
+      "checksum": "f0b23805202d5be2"
+    },
+    {
+      "asset_name": "GE_Species_Onith_PeleEscamosa",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Species/GE_Species_Onith_PeleEscamosa.uasset.json",
+      "package_name": "/Game/GameplayEffects/Species/GE_Species_Onith_PeleEscamosa",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 26,
+      "dependencies": [],
+      "tags": [
+        "Species.Onith",
+        "Ability.Passive.Species.Onith.PeleEscamosa"
+      ],
+      "checksum": "c46b8f3335b44f81"
+    },
+    {
+      "asset_name": "GE_Species_Skeetw_VooPlanador",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Species/GE_Species_Skeetw_VooPlanador.uasset.json",
+      "package_name": "/Game/GameplayEffects/Species/GE_Species_Skeetw_VooPlanador",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 27,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Glide",
+        "Ability.Passive.Species.Skeetw.VooPlanador"
+      ],
+      "checksum": "81a30024f6c940e3"
+    },
+    {
+      "asset_name": "GE_Species_Zheers_Adaptabilidade",
+      "asset_type": "GameplayEffect",
+      "path": "GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade.uasset.json",
+      "package_name": "/Game/GameplayEffects/Species/GE_Species_Zheers_Adaptabilidade",
+      "import_script": "scripts/import_ge_to_ue5.py",
+      "import_order": 28,
+      "dependencies": [],
+      "tags": [
+        "Effect.Buff.Adaptabilidade",
+        "Ability.Passive.Species.Zheers.Adaptabilidade"
+      ],
+      "checksum": "de80d6a2fa1842fd"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Concrete",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/Impact/VFX_BulletImpact_Concrete.uasset.json",
+      "package_name": "/Game/VFX/Combat/Impact/VFX_BulletImpact_Concrete",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 29,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "50727d3647c526d6"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Dirt",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/Impact/VFX_BulletImpact_Dirt.uasset.json",
+      "package_name": "/Game/VFX/Combat/Impact/VFX_BulletImpact_Dirt",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 30,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "cbf668f21788d3ca"
+    },
+    {
+      "asset_name": "VFX_BulletImpact_Metal",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/Impact/VFX_BulletImpact_Metal.uasset.json",
+      "package_name": "/Game/VFX/Combat/Impact/VFX_BulletImpact_Metal",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 31,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "ae995a99ca943d87"
+    },
+    {
+      "asset_name": "VFX_Loot_Pickup",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/Loot/VFX_Loot_Pickup.uasset.json",
+      "package_name": "/Game/VFX/Combat/Loot/VFX_Loot_Pickup",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 32,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "effc3bb51ae78a64"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Assault",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault.uasset.json",
+      "package_name": "/Game/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Assault",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 33,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "13259e1cbd3cf247"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Shotgun",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Shotgun.uasset.json",
+      "package_name": "/Game/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Shotgun",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 34,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "bd48e8080a307c0f"
+    },
+    {
+      "asset_name": "VFX_MuzzleFlash_Sniper",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper.uasset.json",
+      "package_name": "/Game/VFX/Combat/MuzzleFlash/VFX_MuzzleFlash_Sniper",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 35,
+      "dependencies": [],
+      "tags": [
+        "VFX.Combat"
+      ],
+      "checksum": "ea92d491bb3d28ea"
+    },
+    {
+      "asset_name": "VFX_Huran_Bubble",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Huran/VFX_Huran_Bubble.uasset.json",
+      "package_name": "/Game/VFX/Species/Huran/VFX_Huran_Bubble",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 36,
+      "dependencies": [
+        "Species.Huran"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Huran"
+      ],
+      "checksum": "1bc5e62358a10532"
+    },
+    {
+      "asset_name": "VFX_Huran_Ripple",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Huran/VFX_Huran_Ripple.uasset.json",
+      "package_name": "/Game/VFX/Species/Huran/VFX_Huran_Ripple",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 37,
+      "dependencies": [
+        "Species.Huran"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Huran"
+      ],
+      "checksum": "0876b9b8b60e60de"
+    },
+    {
+      "asset_name": "VFX_Huran_Splash",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Huran/VFX_Huran_Splash.uasset.json",
+      "package_name": "/Game/VFX/Species/Huran/VFX_Huran_Splash",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 38,
+      "dependencies": [
+        "Species.Huran"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Huran"
+      ],
+      "checksum": "75a920db30801fa4"
+    },
+    {
+      "asset_name": "VFX_Khael_Crystal",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Khael/VFX_Khael_Crystal.uasset.json",
+      "package_name": "/Game/VFX/Species/Khael/VFX_Khael_Crystal",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 39,
+      "dependencies": [
+        "Species.Khael"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Khael"
+      ],
+      "checksum": "997dd7a8bca58215"
+    },
+    {
+      "asset_name": "VFX_Khael_Frost",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Khael/VFX_Khael_Frost.uasset.json",
+      "package_name": "/Game/VFX/Species/Khael/VFX_Khael_Frost",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 40,
+      "dependencies": [
+        "Species.Khael"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Khael"
+      ],
+      "checksum": "5acd1ff18a1b6723"
+    },
+    {
+      "asset_name": "VFX_Khael_Shatter",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Khael/VFX_Khael_Shatter.uasset.json",
+      "package_name": "/Game/VFX/Species/Khael/VFX_Khael_Shatter",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 41,
+      "dependencies": [
+        "Species.Khael"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Khael"
+      ],
+      "checksum": "9f63517fd55a4cb1"
+    },
+    {
+      "asset_name": "VFX_Onith_Bubble",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Onith/VFX_Onith_Bubble.uasset.json",
+      "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Bubble",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 42,
+      "dependencies": [
+        "Species.Onith"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Onith"
+      ],
+      "checksum": "1da21eec1b379ee3"
+    },
+    {
+      "asset_name": "VFX_Onith_Drip",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Onith/VFX_Onith_Drip.uasset.json",
+      "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Drip",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 43,
+      "dependencies": [
+        "Species.Onith"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Onith"
+      ],
+      "checksum": "436f1848df41649a"
+    },
+    {
+      "asset_name": "VFX_Onith_Smoke",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Onith/VFX_Onith_Smoke.uasset.json",
+      "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Smoke",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 44,
+      "dependencies": [
+        "Species.Onith"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Onith"
+      ],
+      "checksum": "6d9e695e7028cff1"
+    },
+    {
+      "asset_name": "VFX_Skeetw_Feather",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Skeetw/VFX_Skeetw_Feather.uasset.json",
+      "package_name": "/Game/VFX/Species/Skeetw/VFX_Skeetw_Feather",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 45,
+      "dependencies": [
+        "Species.Skeetw"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Skeetw"
+      ],
+      "checksum": "3b8af4ad663a9b6f"
+    },
+    {
+      "asset_name": "VFX_Skeetw_Mist",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Skeetw/VFX_Skeetw_Mist.uasset.json",
+      "package_name": "/Game/VFX/Species/Skeetw/VFX_Skeetw_Mist",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 46,
+      "dependencies": [
+        "Species.Skeetw"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Skeetw"
+      ],
+      "checksum": "0cb4c2cb59441b9e"
+    },
+    {
+      "asset_name": "VFX_Venex_Circuit",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Venex/VFX_Venex_Circuit.uasset.json",
+      "package_name": "/Game/VFX/Species/Venex/VFX_Venex_Circuit",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 47,
+      "dependencies": [
+        "Species.Venex"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Venex"
+      ],
+      "checksum": "bfab4f3be65b23b8"
+    },
+    {
+      "asset_name": "VFX_Venex_Grid",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Venex/VFX_Venex_Grid.uasset.json",
+      "package_name": "/Game/VFX/Species/Venex/VFX_Venex_Grid",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 48,
+      "dependencies": [
+        "Species.Venex"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Venex"
+      ],
+      "checksum": "22d5c9a791a1ebf4"
+    },
+    {
+      "asset_name": "VFX_Venex_Pulse",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Venex/VFX_Venex_Pulse.uasset.json",
+      "package_name": "/Game/VFX/Species/Venex/VFX_Venex_Pulse",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 49,
+      "dependencies": [
+        "Species.Venex"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Venex"
+      ],
+      "checksum": "c9382920aa8f7a9d"
+    },
+    {
+      "asset_name": "VFX_Zheers_Glow",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Zheers/VFX_Zheers_Glow.uasset.json",
+      "package_name": "/Game/VFX/Species/Zheers/VFX_Zheers_Glow",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 50,
+      "dependencies": [
+        "Species.Zheers"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Zheers"
+      ],
+      "checksum": "408304a9b6e9397a"
+    },
+    {
+      "asset_name": "VFX_Zheers_Mutation",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Zheers/VFX_Zheers_Mutation.uasset.json",
+      "package_name": "/Game/VFX/Species/Zheers/VFX_Zheers_Mutation",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 51,
+      "dependencies": [
+        "Species.Zheers"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Zheers"
+      ],
+      "checksum": "44209f3bb949dd55"
+    },
+    {
+      "asset_name": "VFX_Zheers_RadiationPulse",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Species/Zheers/VFX_Zheers_RadiationPulse.uasset.json",
+      "package_name": "/Game/VFX/Species/Zheers/VFX_Zheers_RadiationPulse",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 52,
+      "dependencies": [
+        "Species.Zheers"
+      ],
+      "tags": [
+        "VFX.Species",
+        "Species.Zheers"
+      ],
+      "checksum": "b9a5186cdd2e2124"
+    },
+    {
+      "asset_name": "VFX_Zone_Fog",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Zone/Environment/VFX_Zone_Fog.uasset.json",
+      "package_name": "/Game/VFX/Zone/Environment/VFX_Zone_Fog",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 53,
+      "dependencies": [],
+      "tags": [
+        "VFX.Zone"
+      ],
+      "checksum": "de9330abd6c41195"
+    },
+    {
+      "asset_name": "VFX_Zone_Rain",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Zone/Environment/VFX_Zone_Rain.uasset.json",
+      "package_name": "/Game/VFX/Zone/Environment/VFX_Zone_Rain",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 54,
+      "dependencies": [],
+      "tags": [
+        "VFX.Zone"
+      ],
+      "checksum": "fc6a64dc50efaa71"
+    },
+    {
+      "asset_name": "VFX_Zone_Storm",
+      "asset_type": "NiagaraSystem",
+      "path": "VFX/Zone/Environment/VFX_Zone_Storm.uasset.json",
+      "package_name": "/Game/VFX/Zone/Environment/VFX_Zone_Storm",
+      "import_script": "scripts/import_vfx_to_ue5.py",
+      "import_order": 55,
+      "dependencies": [],
+      "tags": [
+        "VFX.Zone"
+      ],
+      "checksum": "bb7799965e1e2dec"
+    },
+    {
+      "asset_name": "DT_GameplayEffects",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_GameplayEffects.csv",
+      "package_name": "/Game/DataTables/DT_GameplayEffects",
+      "import_script": "UE5_CSV_Import",
+      "import_order": 56,
+      "dependencies": [],
+      "tags": [
+        "DataTable"
+      ],
+      "checksum": "1b94e7afbe61f788"
+    },
+    {
+      "asset_name": "DT_LootTables",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_LootTables.csv",
+      "package_name": "/Game/DataTables/DT_LootTables",
+      "import_script": "UE5_CSV_Import",
+      "import_order": 57,
+      "dependencies": [],
+      "tags": [
+        "DataTable"
+      ],
+      "checksum": "37d3716264a3c581"
+    },
+    {
+      "asset_name": "DT_SpeciesAbilities",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_SpeciesAbilities.csv",
+      "package_name": "/Game/DataTables/DT_SpeciesAbilities",
+      "import_script": "UE5_CSV_Import",
+      "import_order": 58,
+      "dependencies": [],
+      "tags": [
+        "DataTable"
+      ],
+      "checksum": "ec9507e2c8bfac61"
+    },
+    {
+      "asset_name": "DT_VFXSystems",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_VFXSystems.csv",
+      "package_name": "/Game/DataTables/DT_VFXSystems",
+      "import_script": "UE5_CSV_Import",
+      "import_order": 59,
+      "dependencies": [],
+      "tags": [
+        "DataTable"
+      ],
+      "checksum": "fe3a5edd67885a32"
+    },
+    {
+      "asset_name": "DT_WeaponBalance",
+      "asset_type": "DataTable",
+      "path": "DataTables/DT_WeaponBalance.csv",
+      "package_name": "/Game/DataTables/DT_WeaponBalance",
+      "import_script": "UE5_CSV_Import",
+      "import_order": 60,
+      "dependencies": [],
+      "tags": [
+        "DataTable"
+      ],
+      "checksum": "63ba199abe13d5c3"
+    }
+  ],
+  "ue5_batch_import_command": "# Run in UE5 Editor Python console:\nimport sys\nsys.path.insert(0, '<repo_root>/scripts')\nimport import_ge_to_ue5\nimport import_vfx_to_ue5\nimport_ge_to_ue5.import_all_gameplay_effects('<content_dir>/GameplayEffects')\nimport_vfx_to_ue5.import_all_vfx_systems('<content_dir>/VFX')\n# DataTables: Import via UE5 Content Browser CSV import\n"
+}

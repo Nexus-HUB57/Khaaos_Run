@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Game/AbilitySystem/KhaaosGameplayAbility.h"
+#include "NiagaraSystem.h"
 #include "KhaaosAbility_Defense.generated.h"
 
 /**
@@ -53,6 +54,16 @@ public:
         /** Energy cost to activate shield. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shield")
         float ShieldEnergyCost;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Shield barrier Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shield|VFX")
+        TSoftObjectPtr<UNiagaraSystem> ShieldBarrierVFX;
+
+        /** Shield break Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shield|VFX")
+        TSoftObjectPtr<UNiagaraSystem> ShieldBreakVFX;
 
         // ─── Replicated State ─────────────────────────────────────────────────
 
@@ -165,6 +176,12 @@ public:
         /** Energy cost to activate heal. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Heal")
         float HealEnergyCost;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Heal particle Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Heal|VFX")
+        TSoftObjectPtr<UNiagaraSystem> HealParticleVFX;
 
         // ─── Replicated State ─────────────────────────────────────────────────
 

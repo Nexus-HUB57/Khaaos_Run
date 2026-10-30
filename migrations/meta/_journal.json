@@ -43,6 +43,34 @@
       "when": 1792482451436,
       "tag": "0005_stripe_checkout",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792482451437,
+      "tag": "0007_match_payout_2pc",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793145742915,
+      "tag": "0006_economy-2pc-escrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793155908273,
+      "tag": "0008_economy_ledger_accounts_union",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793240877805,
+      "tag": "0009_concurrency_fencing",
+      "breakpoints": true
     }
   ]
 }

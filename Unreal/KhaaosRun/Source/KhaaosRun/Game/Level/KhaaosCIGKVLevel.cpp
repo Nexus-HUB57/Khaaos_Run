@@ -241,33 +241,21 @@ void AKhaaosCIGKVLevel::SpawnPulsoKhaaosDrop()
 AKhaaosLootPickup* AKhaaosCIGKVLevel::SpawnLootAt(
     const FVector& Location, const FRotator& Rotation, ELootRarity Rarity)
 {
-    UClass* PickupClass = LootPickupClass.Get();
-    if (!PickupClass || PickupClass->HasAnyClassFlags(CLASS_Abstract))
+    AKhaaosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AKhaaosGameMode>() : nullptr;
+    if (!GameMode) return nullptr;
+
+    EKhaaosRarity CatalogRarity = EKhaaosRarity::Comum;
+    switch (Rarity)
     {
-        if (!bMissingLootPickupClassWarningLogged)
-        {
-            UE_LOG(LogTemp, Error, TEXT("[CIGKV] Assign a concrete LootPickupClass on the level actor before spawning loot"));
-            bMissingLootPickupClassWarningLogged = true;
-        }
-        return nullptr;
+    case ELootRarity::Raro:     CatalogRarity = EKhaaosRarity::Raro; break;
+    case ELootRarity::Epico:    CatalogRarity = EKhaaosRarity::Epico; break;
+    case ELootRarity::Lendario: CatalogRarity = EKhaaosRarity::Lendario; break;
+    case ELootRarity::Mitico:   CatalogRarity = EKhaaosRarity::Mitico; break;
+    default:                   CatalogRarity = EKhaaosRarity::Comum; break;
     }
 
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return nullptr;
-    }
-
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    AKhaaosLootPickup* Loot = World->SpawnActor<AKhaaosLootPickup>(PickupClass, Location, Rotation, SpawnParams);
-    if (Loot)
-    {
-        Loot->SetRarity(Rarity);
-    }
-
-    return Loot;
+    return GameMode->SpawnCatalogLoot(
+        GameMode->SelectLootByRarity(CatalogRarity), Location, Rotation, 1, LootPickupClass);
 }
 
 // ─── ZEX Management ──────────────────────────────────────────────────────────

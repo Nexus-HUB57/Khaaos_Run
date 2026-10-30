@@ -2,9 +2,11 @@ name: 05 — Integration Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   integration:
@@ -35,6 +37,29 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - run: npm ci
-      - run: npm run db:migrate
-      - run: npm run test:postgres
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Migrate (PostgreSQL real)
+        run: npm run db:migrate
+
+      - name: Integration tests (PostgreSQL real)
+        run: npm run test:postgres
+
+      - name: Economy 2PC E2E — protocolo do UE5 (escrow/commit/abort)
+        run: node --import tsx --test tests/integration/economy-2pc.postgres.test.ts
+
+      - name: Economy 2PC Observability — /metrics + /healthz (postgres/health)
+        run: node --import tsx --test tests/integration/economy-2pc-observability.test.ts
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore

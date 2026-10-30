@@ -96,11 +96,11 @@ public:
 	float Speed;
 
 	/** Current energy (for abilities). */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Attributes")
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Khaaos|Attributes")
 	float Energy;
 
 	/** Maximum energy. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Attributes")
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Khaaos|Attributes")
 	float MaxEnergy;
 
 	// ─── Player Status ─────────────────────────────────────────────────────
@@ -253,6 +253,7 @@ private:
 
 	FDelegateHandle OutOfHealthDelegateHandle;
 	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
+	TArray<FGameplayAbilitySpecHandle> SpeciesActiveAbilityHandles;
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 

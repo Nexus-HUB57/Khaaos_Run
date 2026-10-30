@@ -1,0 +1,41 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Damage_Explosion",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.288978+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Instant",
+    "duration_magnitude": 0.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Health",
+        "modifier_op": "Additive",
+        "magnitude": -60.0,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Damage.Explosion"
+    ],
+    "required_tags": [],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": true,
+    "radial_radius": 500.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Combat/GE_Damage_Explosion",
+    "package_name": "/Game/GameplayEffects/Combat/GE_Damage_Explosion",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "9f2569c50c9a13b2"
+}

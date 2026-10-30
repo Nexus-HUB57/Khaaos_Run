@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Game/AbilitySystem/KhaaosGameplayAbility.h"
+#include "NiagaraSystem.h"
 #include "KhaaosAbility_Combat.generated.h"
 
 // ─── Forward Declarations ─────────────────────────────────────────────────────
@@ -53,6 +54,16 @@ public:
         /** Energy cost per shot. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shoot")
         float ShootEnergyCost;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Muzzle flash Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shoot|VFX")
+        TSoftObjectPtr<UNiagaraSystem> MuzzleFlashVFX;
+
+        /** Bullet impact Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Shoot|VFX")
+        TSoftObjectPtr<UNiagaraSystem> ImpactVFX;
 
         // ─── Server RPC ────────────────────────────────────────────────────────
 
@@ -173,6 +184,12 @@ public:
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Melee")
         float MeleeEnergyCost;
 
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Melee swing Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Melee|VFX")
+        TSoftObjectPtr<UNiagaraSystem> MeleeSwingVFX;
+
         // ─── Server RPC ────────────────────────────────────────────────────────
 
         /** Server: Perform melee trace and apply damage + knockback. */
@@ -272,6 +289,12 @@ public:
         /** Energy cost for ultimate. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Ultimate")
         float UltimateEnergyCost;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Ultimate explosion Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Ultimate|VFX")
+        TSoftObjectPtr<UNiagaraSystem> UltimateExplosionVFX;
 
         // ─── Server RPC ────────────────────────────────────────────────────────
 

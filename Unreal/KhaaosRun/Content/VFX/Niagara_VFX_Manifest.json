@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "project": "KhaaosRun",
+  "engine": "5.8",
+  "niagara_systems": [
+    {
+      "name": "NS_HuranRegenGlow",
+      "path": "VFX/Species/Huran/NS_HuranRegenGlow",
+      "color": "#00FF66",
+      "category": "Species"
+    },
+    {
+      "name": "NS_HuranWaterDash",
+      "path": "VFX/Species/Huran/NS_HuranWaterDash",
+      "color": "#00FF66",
+      "category": "Species"
+    },
+    {
+      "name": "NS_HuranAmphibianEyes",
+      "path": "VFX/Species/Huran/NS_HuranAmphibianEyes",
+      "color": "#CCFF00",
+      "category": "Species"
+    },
+    {
+      "name": "NS_KhaelCryoShield",
+      "path": "VFX/Species/Khael/NS_KhaelCryoShield",
+      "color": "#00CCFF",
+      "category": "Species"
+    },
+    {
+      "name": "NS_KhaelFrostBreath",
+      "path": "VFX/Species/Khael/NS_KhaelFrostBreath",
+      "color": "#00CCFF",
+      "category": "Species"
+    },
+    {
+      "name": "NS_KhaelEnergyResonance",
+      "path": "VFX/Species/Khael/NS_KhaelEnergyResonance",
+      "color": "#9900FF",
+      "category": "Species"
+    },
+    {
+      "name": "NS_VenexCyberneticGlow",
+      "path": "VFX/Species/Venex/NS_VenexCyberneticGlow",
+      "color": "#FF6600",
+      "category": "Species"
+    },
+    {
+      "name": "NS_VenexShieldPulse",
+      "path": "VFX/Species/Venex/NS_VenexShieldPulse",
+      "color": "#FF6600",
+      "category": "Species"
+    },
+    {
+      "name": "NS_VenexSpeedTrail",
+      "path": "VFX/Species/Venex/NS_VenexSpeedTrail",
+      "color": "#FF6600",
+      "category": "Species"
+    },
+    {
+      "name": "NS_OnithToxicAura",
+      "path": "VFX/Species/Onith/NS_OnithToxicAura",
+      "color": "#AA00FF",
+      "category": "Species"
+    },
+    {
+      "name": "NS_OnithScaleShimmer",
+      "path": "VFX/Species/Onith/NS_OnithScaleShimmer",
+      "color": "#AA00FF",
+      "category": "Species"
+    },
+    {
+      "name": "NS_OnithHissVFX",
+      "path": "VFX/Species/Onith/NS_OnithHissVFX",
+      "color": "#330066",
+      "category": "Species"
+    },
+    {
+      "name": "NS_ZheersRadGlow",
+      "path": "VFX/Species/Zheers/NS_ZheersRadGlow",
+      "color": "#FFFF00",
+      "category": "Species"
+    },
+    {
+      "name": "NS_ZheersMutationPulse",
+      "path": "VFX/Species/Zheers/NS_ZheersMutationPulse",
+      "color": "#FF4400",
+      "category": "Species"
+    },
+    {
+      "name": "NS_ZheersRadResistAura",
+      "path": "VFX/Species/Zheers/NS_ZheersRadResistAura",
+      "color": "#FFFF00",
+      "category": "Species"
+    },
+    {
+      "name": "NS_SkeetwBioluminescence",
+      "path": "VFX/Species/Skeetw/NS_SkeetwBioluminescence",
+      "color": "#00FFAA",
+      "category": "Species"
+    },
+    {
+      "name": "NS_SkeetwFogStealthVFX",
+      "path": "VFX/Species/Skeetw/NS_SkeetwFogStealthVFX",
+      "color": "#888888",
+      "category": "Species"
+    },
+    {
+      "name": "NS_SkeetwAvianTrail",
+      "path": "VFX/Species/Skeetw/NS_SkeetwAvianTrail",
+      "color": "#00FFAA",
+      "category": "Species"
+    },
+    {
+      "name": "NS_MuzzleFlash",
+      "path": "VFX/Abilities/Combat/NS_MuzzleFlash",
+      "color": "#FFAA00",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_BulletImpact",
+      "path": "VFX/Abilities/Combat/NS_BulletImpact",
+      "color": "#CCCCCC",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_MeleeSwing",
+      "path": "VFX/Abilities/Combat/NS_MeleeSwing",
+      "color": "#FFFFFF",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_UltimateExplosion",
+      "path": "VFX/Abilities/Combat/NS_UltimateExplosion",
+      "color": "#FF4400",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_ShieldBarrier",
+      "path": "VFX/Abilities/Defense/NS_ShieldBarrier",
+      "color": "#00CCFF",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_ShieldBreak",
+      "path": "VFX/Abilities/Defense/NS_ShieldBreak",
+      "color": "#00CCFF",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_HealParticle",
+      "path": "VFX/Abilities/Defense/NS_HealParticle",
+      "color": "#00FF66",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_SprintTrail",
+      "path": "VFX/Abilities/Movement/NS_SprintTrail",
+      "color": "#FFFFFF",
+      "category": "Ability"
+    },
+    {
+      "name": "NS_GrappleRope",
+      "path": "VFX/Abilities/Movement/NS_GrappleRope",
+      "color": "#AAAAAA",
+      "category": "Ability"
+    }
+  ]
+}

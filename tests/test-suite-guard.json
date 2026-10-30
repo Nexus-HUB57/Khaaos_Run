@@ -1,0 +1,27 @@
+{
+  "$comment": "Guarda anti-reversão de suítes (lição do ciclo PR #127→#132): merges concorrentes já REVERTERAM a remoção do vitest, restauraram suítes mortas sob runner errado (@game/* aliases) e deletaram arquivos de teste silenciosamente. Este manifesto é o contrato mínimo — qualquer violação quebra o CI antes dos testes rodarem.",
+  "mustExist": [
+    "tests/integration/discord-bot.test.ts",
+    "tests/integration/economy-match-bridge.test.ts",
+    "tests/integration/full-match-simulation.test.ts",
+    "tests/integration/match-flow.test.ts",
+    "tests/integration/ring-system.integration.test.ts",
+    "tests/integration/spectator-data-pipeline.test.ts",
+    "game-runtime/test/character-lod.test.js",
+    "game-runtime/test/character-lod2-silhouette.test.js",
+    "game-runtime/test/character-realism.test.js",
+    "game-runtime/test/character-hit-reaction.test.js",
+    "game-runtime/test/facial-blendshapes.test.js",
+    "game-runtime/test/death-reactions.test.js",
+    "game-runtime/test/firstperson-hands.test.js"
+  ],
+  "minFiles": {
+    "tests/integration": 11,
+    "tests/official": 48,
+    "game-runtime/test": 50
+  },
+  "forbiddenImports": ["vitest", "@vue/test-utils"],
+  "forbiddenAliasPrefix": "@game/",
+  "forbiddenDeps": ["vitest"],
+  "depManifests": ["package.json", "game-runtime/package.json"]
+}

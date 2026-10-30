@@ -1,0 +1,41 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Debuff_Poisoned",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.287855+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "HasDuration",
+    "duration_magnitude": 8.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Health",
+        "modifier_op": "Additive",
+        "magnitude": -2.0,
+        "channel": "Periodic"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Debuff.Poisoned"
+    ],
+    "required_tags": [],
+    "stacking_type": "StackByDuration",
+    "stack_limit_count": 10
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 1.0,
+    "execute_periodic_on_apply": true,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Debuff/GE_Debuff_Poisoned",
+    "package_name": "/Game/GameplayEffects/Debuff/GE_Debuff_Poisoned",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "e5e5ae087cbbbe12"
+}

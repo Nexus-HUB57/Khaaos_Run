@@ -1,0 +1,117 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Onith_Drip",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.336387+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Onith venom drip - dripping poison from surfaces/character",
+    "category": "Species",
+    "subcategory": "Onith",
+    "species": "Onith",
+    "emitters": [
+      {
+        "emitter_name": "Emitter_VenomDrip",
+        "spawn_rate": 20.0,
+        "lifetime": 2.0,
+        "initial_size": 3.0,
+        "initial_color": {
+          "r": 0.4,
+          "g": 0.85,
+          "b": 0.05,
+          "a": 0.8
+        },
+        "initial_velocity": 60.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_SplatPool",
+        "spawn_rate": 5.0,
+        "lifetime": 8.0,
+        "initial_size": 25.0,
+        "initial_color": {
+          "r": 0.25,
+          "g": 0.75,
+          "b": 0.0,
+          "a": 0.3
+        },
+        "initial_velocity": 0.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "GravityForce",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Venom_Drip",
+      "sort_order": 1
+    },
+    "gpu_simulation_settings": {
+      "capacity": 128,
+      "spawn_rate": 20.0,
+      "bounds_scale": 1.0
+    },
+    "pool_config": {
+      "max_pool_size": 16,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 2
+  },
+  "species_vfx_config": {
+    "description": "Toxic particles - reptile species",
+    "primary_color": [
+      0.2,
+      0.8,
+      0.1,
+      1.0
+    ],
+    "secondary_color": [
+      0.5,
+      0.1,
+      0.8,
+      0.85
+    ],
+    "emitter_types": [
+      "Smoke",
+      "Bubble",
+      "Drip"
+    ],
+    "particle_count_range": [
+      40,
+      250
+    ],
+    "lifetime_range": [
+      1.0,
+      5.0
+    ],
+    "size_range": [
+      10.0,
+      50.0
+    ],
+    "velocity_range": [
+      20.0,
+      80.0
+    ],
+    "gpu_sim_settings": {
+      "capacity": 768,
+      "spawn_rate": 50.0,
+      "bounds_scale": 2.0,
+      "random_seed": 13
+    }
+  },
+  "ue5_import_metadata": {
+    "content_path": "VFX/Species/Onith/VFX_Onith_Drip",
+    "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Drip",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "436f1848df41649a"
+}

@@ -1,0 +1,154 @@
+{
+  "visual_version": "2.0.0",
+  "ring_aesthetic": "FreeFire Live Action - Electric Energy",
+  "description": "Visual reference para renderizacao dos rings no UE5. Estilo FreeFire: bordas eletricas pulsantes, particulas de energia, gradientes de cor por zona.",
+  "ring_material": {
+    "safe_border": {
+      "material": "M_Ring_Safe",
+      "base_color": "#00FF88",
+      "emissive": "#00FF88",
+      "emissive_intensity": 2.0,
+      "opacity": 0.6,
+      "particle_system": "NS_Ring_Safe_Particles",
+      "particle_color": "#00FF88",
+      "particle_count": 500,
+      "sound": "SFX_Ring_Safe_Hum"
+    },
+    "shrinking_border": {
+      "material": "M_Ring_Shrinking",
+      "base_color": "#FFD700",
+      "emissive": "#FFD700",
+      "emissive_intensity": 4.0,
+      "opacity": 0.8,
+      "particle_system": "NS_Ring_Shrink_Electric",
+      "particle_color": "#FFD700",
+      "particle_count": 2000,
+      "electric_arc_count": 50,
+      "sound": "SFX_Ring_Shrink_Electric"
+    },
+    "danger_zone": {
+      "material": "M_Ring_Danger",
+      "base_color": "#FF4444",
+      "emissive": "#FF2200",
+      "emissive_intensity": 3.0,
+      "opacity": 0.3,
+      "post_process": "PP_Ring_Danger_Overlay",
+      "damage_vignette": true,
+      "sound": "SFX_Ring_Danger_Drone"
+    },
+    "deadly_zone": {
+      "material": "M_Ring_Deadly",
+      "base_color": "#FF0000",
+      "emissive": "#FF0000",
+      "emissive_intensity": 8.0,
+      "opacity": 0.5,
+      "post_process": "PP_Ring_Deadly_Storm",
+      "screen_shake": true,
+      "electrical_storm": true,
+      "sound": "SFX_Ring_Deadly_Storm"
+    }
+  },
+  "minimap_display": {
+    "safe_zone_color": "#00FF8844",
+    "ring_border_color": "#FFD700FF",
+    "danger_color": "#FF444488",
+    "ring_center_marker": "M_MiniMap_RingCenter",
+    "next_ring_preview": true,
+    "preview_color": "#FFFFFF44"
+  },
+  "hud_elements": {
+    "ring_timer": {
+      "position": "top_center",
+      "format": "RING FECHANDO: {time}",
+      "warning_threshold_s": 30,
+      "warning_color": "#FF4444",
+      "safe_color": "#FFD700"
+    },
+    "zone_indicator": {
+      "position": "bottom_center",
+      "in_safe": {
+        "text": "ZONA SEGURA",
+        "color": "#00FF88"
+      },
+      "in_danger": {
+        "text": "ZONA DE PERIGO! -{dmg}/s",
+        "color": "#FF4444"
+      },
+      "in_water": {
+        "text": "ZONA AQUATICA",
+        "color": "#00CED1"
+      }
+    }
+  },
+  "water_zone_visuals": {
+    "description": "Visual para water zones dentro do ring - Huran operatives veem diferentemente",
+    "water_border": {
+      "material": "M_WaterZone_Border",
+      "base_color": "#00CED1",
+      "emissive": "#00CED1",
+      "emissive_intensity": 1.5,
+      "opacity": 0.4,
+      "wave_animation": true,
+      "sound": "SFX_Water_Zone_Ambient"
+    },
+    "huran_water_vision": {
+      "description": "Visao Huran subaquatica - ring boundary visivel underwater",
+      "material": "M_Huran_Water_Ring",
+      "ring_color_underwater": "#00FF88",
+      "bioluminescence_glow": "#00CED1",
+      "thermal_overlay": true
+    }
+  },
+  "airdrop_visuals": {
+    "standard": {
+      "plane_vfx": "VFX_Airdrop_Plane",
+      "crate_vfx": "VFX_Airdrop_Crate",
+      "crate_material": "M_Airdrop_Crate",
+      "flare_vfx": "VFX_Airdrop_Flare",
+      "balloon_vfx": "VFX_Airdrop_Balloon"
+    },
+    "water_drop": {
+      "submarine_vfx": "VFX_Airdrop_Sub",
+      "crate_vfx": "VFX_Airdrop_WaterCrate",
+      "crate_material": "M_Airdrop_WaterCrate",
+      "bubble_trail": "VFX_Airdrop_Bubbles"
+    }
+  },
+  "spectator_ui": {
+    "spectator_hud": {
+      "ring_status_panel": true,
+      "player_count_in_ring": true,
+      "player_count_outside": true,
+      "next_ring_countdown": true,
+      "airdrop_indicator": true
+    },
+    "picture_in_picture": {
+      "enabled": true,
+      "pip_ring_view": true,
+      "pip_player_follow": true,
+      "pip_size": "25%",
+      "pip_position": "bottom_right"
+    }
+  },
+  "zone_hazard_visuals": {
+    "toxic_fog": {
+      "material": "M_Zone_ToxicFog",
+      "color": "#AAFF0044",
+      "particle_system": "NS_ToxicFog_Particles",
+      "post_process": "PP_ToxicFog_Overlay"
+    },
+    "radiation": {
+      "material": "M_Zone_Radiation",
+      "color": "#FFAA0044",
+      "geiger_sound": "SFX_Geiger_Click",
+      "post_process": "PP_Radiation_Overlay"
+    },
+    "cryo_storm": {
+      "material": "M_Zone_CryoStorm",
+      "color": "#88CCFF44",
+      "particle_system": "NS_CryoStorm_Particles",
+      "post_process": "PP_Cryo_Overlay",
+      "screen_frost_effect": true
+    }
+  }
+}

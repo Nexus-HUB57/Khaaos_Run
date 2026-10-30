@@ -4,12 +4,13 @@
 // interpolação (buffer de 3 snapshots) para o renderizador. Reconexão com backoff
 // + resume token próprio do modo 3D.
 import { NetworkClient } from '../network/client.js';
+import { estimateClockOffset, serverElapsedMs } from '../shared/clock.js';
 
 const RESUME_KEY = 'kr_resume_3d';
 const BUFFER_SIZE = 3;
 
 export class NetClient3D {
-  constructor({ url = '', onStatus, onSnapshot, onEvent, onRejected } = {}) {
+  constructor({ url = '', onStatus, onSnapshot, onEvent, onRejected, onPrivateCreated, onPrivateJoined, onPrivateError } = {}) {
     this.url = url;
     this.token = localStorage.getItem('kr_token');
     this.resume = localStorage.getItem(RESUME_KEY);
@@ -17,6 +18,9 @@ export class NetClient3D {
     this.onSnapshot = onSnapshot;
     this.onEvent = onEvent;
     this.onRejected = onRejected;
+    this.onPrivateCreated = onPrivateCreated;
+    this.onPrivateJoined = onPrivateJoined;
+    this.onPrivateError = onPrivateError;
     this.socket = null;
     this.buffer = [];          // [{ snapshot, receivedAt }]
     this.pending = [];         // inputs não confirmados (predição client-side)
@@ -26,6 +30,7 @@ export class NetClient3D {
     this.rtt = null;
     this.pingTimer = null;
     this.connectedAt = null;
+    this.clockOffset = null; // Fase 12 — offset local→servidor (estimado no pong)
   }
 
   static login = (username, password, baseUrl = '') => NetworkClient.login(baseUrl, username, password);
@@ -50,17 +55,64 @@ export class NetClient3D {
     this.socket.onerror = () => this.onStatus?.('FALHA DE REDE');
     this.socket.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'pong') { this.rtt = Math.round(performance.now() - msg.t); return; }
+      if (msg.type === 'pong') {
+        this.rtt = Math.round(performance.now() - msg.t);
+        // Fase 12 — sincronia de relógio: o servidor data o pong com `now` e
+        // ecoa o `te` (epoch local no envio). offset ≈ now − te − rtt/2.
+        this.clockOffset = estimateClockOffset({ serverNow: msg.now, clientSentAt: msg.te, rtt: this.rtt })
+          ?? this.clockOffset;
+        return;
+      }
       if (msg.type === 'auth_required') { this.onStatus?.('LOGIN NECESSÁRIO'); return; }
       if (msg.type === 'match_found' || msg.type === 'resumed') {
         this.myId = msg.id ?? this.myId;
         if (msg.resumeToken) { this.resume = msg.resumeToken; localStorage.setItem(RESUME_KEY, this.resume); }
         this.onStatus?.(`${msg.type === 'resumed' ? 'SESSÃO RETOMADA' : 'MATCHMAKING'} // ${msg.region || ''} // RING 3D`);
         if (msg.snapshot) this.push(msg.snapshot);
+        // Fase 8 — declara o operativo escolhido assim que entra numa sala (LOBBY)
+        this.#sendOperative();
+        return;
+      }
+      // Fase 7 — salas privadas com código de convite
+      if (msg.type === 'private_created') {
+        this.myId = msg.id ?? this.myId;
+        this.onStatus?.(`SALA PRIVADA CRIADA // CÓDIGO ${msg.code}`);
+        if (msg.snapshot) this.push(msg.snapshot);
+        this.#sendOperative();
+        this.onPrivateCreated?.(msg.code);
+        return;
+      }
+      if (msg.type === 'private_joined') {
+        this.myId = msg.id ?? this.myId;
+        this.onStatus?.(`SALA PRIVADA // CÓDIGO ${msg.code}`);
+        if (msg.snapshot) this.push(msg.snapshot);
+        this.#sendOperative();
+        this.onPrivateJoined?.(msg.code);
+        return;
+      }
+      if (msg.type === 'private_not_found' || msg.type === 'private_error') {
+        this.onPrivateError?.(msg.type === 'private_not_found' ? 'Código não encontrado ou sala cheia/iniciada.' : 'Salas privadas disponíveis apenas no modo 3D.');
         return;
       }
       if (msg.type === 'snapshot') { this.push(msg.snapshot); return; }
       if (msg.type === 'rejected') { this.onRejected?.(msg); return; }
+      // M3 — multiplayer distribuído: redireção ao dono vivo da sala e
+      // failover quando o dono perde a posse (fencing). Ambos reconectam
+      // imediatamente (retry zerado): o registry manda para o dono novo ou
+      // realoca — a sessão nunca é duplicada.
+      if (msg.type === 'redirect') {
+        if (msg.to) this.url = msg.to; // próxima conexão fala direto com o dono
+        this.onStatus?.('REDIRECIONANDO AO SERVIDOR DA SALA');
+        this.retry = 0;
+        try { this.socket.close(); } catch { /* já fechado */ }
+        return;
+      }
+      if (msg.type === 'owner_lost') {
+        this.onStatus?.('MIGRANDO DE SERVIDOR // FAILOVER');
+        this.retry = 0;
+        try { this.socket.close(); } catch { /* já fechado */ }
+        return;
+      }
       if (msg.type === 'rate_limited') this.onStatus?.('RATE LIMIT // AGUARDE');
       if (msg.type === 'banned') this.onStatus?.('BANIDO PELO ANTI-CHEAT');
     };
@@ -68,7 +120,17 @@ export class NetClient3D {
 
   #ping() {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({ type: 'ping', t: performance.now() }));
+    // t (perf clock) mede o RTT; te (epoch) é a âncora da sincronia de relógio
+    this.socket.send(JSON.stringify({ type: 'ping', t: performance.now(), te: Date.now() }));
+  }
+
+  // Fase 12 — "agora" no relógio do SERVIDOR (epoch) e tempo decorrido desde
+  // um marco server-side (ex.: train.startedAt). Sem offset → fallback: epoch
+  // local direto (determinístico; pings a cada 2s mantêm o offset fresco).
+  serverNow() { return Date.now() + (this.clockOffset ?? 0); }
+  serverElapsed(serverAt) {
+    if (!Number.isFinite(serverAt)) return null;
+    return serverElapsedMs(serverAt, this.clockOffset) ?? (Date.now() - serverAt);
   }
 
   push(snapshot) {
@@ -142,6 +204,26 @@ export class NetClient3D {
   start(entry) {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify({ type: 'start', entry }));
+  }
+
+  // Fase 7 — sala privada: cria sala squad e devolve código de convite
+  createPrivate() {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'create_private' }));
+  }
+  joinPrivate(code) {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'join_private', code }));
+  }
+
+  // Fase 8 — identidade do operativo: guarda e envia em LOBBY (id validado no servidor)
+  setOperative(operativeId) {
+    this.operativeId = operativeId;
+    this.#sendOperative();
+  }
+  #sendOperative() {
+    if (!this.operativeId || this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'set_operative', operativeId: this.operativeId }));
   }
 
   dispose() {

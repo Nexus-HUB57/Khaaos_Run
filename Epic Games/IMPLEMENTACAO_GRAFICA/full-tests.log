@@ -1,0 +1,5403 @@
+
+> khaaos-run@0.22.0 test
+> node --test test/*.test.js
+
+TAP version 13
+# Subtest: F30/31 · catálogo cobre os 4 sockets; compat por arma (AR-47, M4, MP5, G19, Barrett)
+ok 1 - F30/31 · catálogo cobre os 4 sockets; compat por arma (AR-47, M4, MP5, G19, Barrett)
+  ---
+  duration_ms: 1.864723
+  type: 'test'
+  ...
+# Subtest: F30 · stats derivados (PURO): pente, dispersão, zoom, alcance e silêncio
+ok 2 - F30 · stats derivados (PURO): pente, dispersão, zoom, alcance e silêncio
+  ---
+  duration_ms: 0.323274
+  type: 'test'
+  ...
+# Subtest: F30 · raridade MÍTICA + estágios evolutivos (0/2/4/6 abates)
+ok 3 - F30 · raridade MÍTICA + estágios evolutivos (0/2/4/6 abates)
+  ---
+  duration_ms: 0.15078
+  type: 'test'
+  ...
+# Subtest: F30 · cada anexo tem malha procedural própria com pivô no socket
+ok 4 - F30 · cada anexo tem malha procedural própria com pivô no socket
+  ---
+  duration_ms: 6.382381
+  type: 'test'
+  ...
+# Subtest: F30 · applyAttachments monta nos sockets, é idempotente e um anexo por socket
+ok 5 - F30 · applyAttachments monta nos sockets, é idempotente e um anexo por socket
+  ---
+  duration_ms: 33.45084
+  type: 'test'
+  ...
+# Subtest: F30 · fábrica da arma recebe anexos + estágio mítico (overlay evolutivo)
+ok 6 - F30 · fábrica da arma recebe anexos + estágio mítico (overlay evolutivo)
+  ---
+  duration_ms: 4.383104
+  type: 'test'
+  ...
+# Subtest: F30 · loot: anexos avulsos nos pools + anexos de série por raridade
+ok 7 - F30 · loot: anexos avulsos nos pools + anexos de série por raridade
+  ---
+  duration_ms: 1.042156
+  type: 'test'
+  ...
+# Subtest: F30 · loot no chão: anexo tem módulo próprio; arma com anexos mostra chips
+ok 8 - F30 · loot no chão: anexo tem módulo próprio; arma com anexos mostra chips
+  ---
+  duration_ms: 1.191523
+  type: 'test'
+  ...
+# Subtest: F30 · caixa de morte herda a AR-47 com os anexos (matou, herdou TUDO)
+ok 9 - F30 · caixa de morte herda a AR-47 com os anexos (matou, herdou TUDO)
+  ---
+  duration_ms: 0.669214
+  type: 'test'
+  ...
+# Subtest: F30 · sim: AR-47 de série com anexos produz pente alongado (40 → 55)
+ok 10 - F30 · sim: AR-47 de série com anexos produz pente alongado (40 → 55)
+  ---
+  duration_ms: 22.367516
+  type: 'test'
+  ...
+# Subtest: F30/31 · sim: anexo avulso instala na arma em mão; anexos seguem o jogador
+ok 11 - F30/31 · sim: anexo avulso instala na arma em mão; anexos seguem o jogador
+  ---
+  duration_ms: 4.489046
+  type: 'test'
+  ...
+# Subtest: F31 · sim: M4 de série com mag estendida enche 45; pistola escala +8
+ok 12 - F31 · sim: M4 de série com mag estendida enche 45; pistola escala +8
+  ---
+  duration_ms: 13.566888
+  type: 'test'
+  ...
+# Subtest: F30 · sim: abate com a skin MÍTICA evolui o estágio e emite evento
+ok 13 - F30 · sim: abate com a skin MÍTICA evolui o estágio e emite evento
+  ---
+  duration_ms: 16.479489
+  type: 'test'
+  ...
+# Subtest: F32 · catálogo mítico cobre o arsenal com sockets; identidade própria por arma
+ok 14 - F32 · catálogo mítico cobre o arsenal com sockets; identidade própria por arma
+  ---
+  duration_ms: 0.358959
+  type: 'test'
+  ...
+# Subtest: F32 · overlay mítico respeita o fit por arma e a cor da aura (fábrica → overlay)
+ok 15 - F32 · overlay mítico respeita o fit por arma e a cor da aura (fábrica → overlay)
+  ---
+  duration_ms: 5.010968
+  type: 'test'
+  ...
+# Subtest: F32 · anexo por raridade: acabamento gasto→dourado + chip de raridade
+ok 16 - F32 · anexo por raridade: acabamento gasto→dourado + chip de raridade
+  ---
+  duration_ms: 3.105898
+  type: 'test'
+  ...
+# Subtest: F32 · attachmentRarityFor resolve mapa/array/string/null (PURO)
+ok 17 - F32 · attachmentRarityFor resolve mapa/array/string/null (PURO)
+  ---
+  duration_ms: 0.14435
+  type: 'test'
+  ...
+# Subtest: F32 · applyAttachments monta raridades (array/mapa) nos sockets; sem raridades = INCOMUM
+ok 18 - F32 · applyAttachments monta raridades (array/mapa) nos sockets; sem raridades = INCOMUM
+  ---
+  duration_ms: 1.207749
+  type: 'test'
+  ...
+# Subtest: F32 · sim: skin MÍTICA da M4 evolui por abate (evento carrega a arma)
+ok 19 - F32 · sim: skin MÍTICA da M4 evolui por abate (evento carrega a arma)
+  ---
+  duration_ms: 6.944982
+  type: 'test'
+  ...
+# Subtest: F32 · sim: kit de arma MÍTICA nasce dourado; troca/bolso/caixa preservam raridades
+ok 20 - F32 · sim: kit de arma MÍTICA nasce dourado; troca/bolso/caixa preservam raridades
+  ---
+  duration_ms: 5.221975
+  type: 'test'
+  ...
+# Subtest: F32 · loot: anexo avulso nasce com raridade válida da tabela central
+ok 21 - F32 · loot: anexo avulso nasce com raridade válida da tabela central
+  ---
+  duration_ms: 3.283217
+  type: 'test'
+  ...
+# Subtest: F34 · catálogo mítico cobre TODO o arsenal — sucata e pulse (sem sockets)
+ok 22 - F34 · catálogo mítico cobre TODO o arsenal — sucata e pulse (sem sockets)
+  ---
+  duration_ms: 0.193297
+  type: 'test'
+  ...
+# Subtest: F34 · overlay mítico assenta sucata e pulse com fit próprio (estágio 4)
+ok 23 - F34 · overlay mítico assenta sucata e pulse com fit próprio (estágio 4)
+  ---
+  duration_ms: 1.474307
+  type: 'test'
+  ...
+# Subtest: F34 · rollLoot: pulse pode nascer MÍTICO e o piso LENDARIO se mantém
+ok 24 - F34 · rollLoot: pulse pode nascer MÍTICO e o piso LENDARIO se mantém
+  ---
+  duration_ms: 2.342013
+  type: 'test'
+  ...
+# Subtest: F34 · sucata rola a tabela completa (COMUM..MÍTICA, sem piso artificial)
+ok 25 - F34 · sucata rola a tabela completa (COMUM..MÍTICA, sem piso artificial)
+  ---
+  duration_ms: 1.298374
+  type: 'test'
+  ...
+# Subtest: F34 · sim: pulse MÍTICO em mãos evolui por abate (Prisma Soberano)
+ok 26 - F34 · sim: pulse MÍTICO em mãos evolui por abate (Prisma Soberano)
+  ---
+  duration_ms: 7.422688
+  type: 'test'
+  ...
+# Subtest: contrato headless: mix default + setMix parcial normalizado (sem ctx)
+ok 27 - contrato headless: mix default + setMix parcial normalizado (sem ctx)
+  ---
+  duration_ms: 1.475604
+  type: 'test'
+  ...
+# Subtest: contrato headless: setMix antes do init é aplicado aos ganhos no init
+ok 28 - contrato headless: setMix antes do init é aplicado aos ganhos no init
+  ---
+  duration_ms: 0.572744
+  type: 'test'
+  ...
+# Subtest: contrato headless: nós injetados recebem os ganhos ao vivo (master + buses)
+ok 29 - contrato headless: nós injetados recebem os ganhos ao vivo (master + buses)
+  ---
+  duration_ms: 0.192653
+  type: 'test'
+  ...
+# Subtest: init com FakeAudioContext: master ganha mix.master e buses nascem por canal
+ok 30 - init com FakeAudioContext: master ganha mix.master e buses nascem por canal
+  ---
+  duration_ms: 4.24601
+  type: 'test'
+  ...
+# Subtest: famílias roteadas nos barramentos CERTOS (assinatura de conexão por família)
+ok 31 - famílias roteadas nos barramentos CERTOS (assinatura de conexão por família)
+  ---
+  duration_ms: 8.997064
+  type: 'test'
+  ...
+# Subtest: mixagem não quebra o contrato Fase 18 (survivalLayers segue registrado)
+ok 32 - mixagem não quebra o contrato Fase 18 (survivalLayers segue registrado)
+  ---
+  duration_ms: 0.226872
+  type: 'test'
+  ...
+# Subtest: contrato: 4 canais canônicos + chaves KR_AUDIO_* + defaults congelados
+ok 33 - contrato: 4 canais canônicos + chaves KR_AUDIO_* + defaults congelados
+  ---
+  duration_ms: 1.666607
+  type: 'test'
+  ...
+# Subtest: clampVolume: intervalo 0..1, inválidos caem no fallback
+ok 34 - clampVolume: intervalo 0..1, inválidos caem no fallback
+  ---
+  duration_ms: 0.273051
+  type: 'test'
+  ...
+# Subtest: normalizeAudioMix: merge parcial, desconhecidos fora, base customizável
+ok 35 - normalizeAudioMix: merge parcial, desconhecidos fora, base customizável
+  ---
+  duration_ms: 1.04685
+  type: 'test'
+  ...
+# Subtest: loadAudioMix: valores persistidos, ausentes → default, inválidos → default
+ok 36 - loadAudioMix: valores persistidos, ausentes → default, inválidos → default
+  ---
+  duration_ms: 0.335694
+  type: 'test'
+  ...
+# Subtest: saveAudioMix → loadAudioMix: roundtrip fiel (persistência)
+ok 37 - saveAudioMix → loadAudioMix: roundtrip fiel (persistência)
+  ---
+  duration_ms: 0.254152
+  type: 'test'
+  ...
+# Subtest: saveAudioMix: storage que lança (modo privado) nunca quebra
+ok 38 - saveAudioMix: storage que lança (modo privado) nunca quebra
+  ---
+  duration_ms: 0.318734
+  type: 'test'
+  ...
+# Subtest: memoryStorage: isolamento entre instâncias (testes paralelos seguros)
+ok 39 - memoryStorage: isolamento entre instâncias (testes paralelos seguros)
+  ---
+  duration_ms: 0.168999
+  type: 'test'
+  ...
+# Subtest: node headless (sem localStorage): loadAudioMix() cai na memória → defaults
+ok 40 - node headless (sem localStorage): loadAudioMix() cai na memória → defaults
+  ---
+  duration_ms: 0.151713
+  type: 'test'
+  ...
+# Subtest: first-world weapon profiles expose deterministic ballistic envelopes
+ok 41 - first-world weapon profiles expose deterministic ballistic envelopes
+  ---
+  duration_ms: 0.806021
+  type: 'test'
+  ...
+# Subtest: sniper has the flattest trajectory and longest damage envelope
+ok 42 - sniper has the flattest trajectory and longest damage envelope
+  ---
+  duration_ms: 0.176883
+  type: 'test'
+  ...
+# Subtest: Barburhen applies corrosive rain every ten seconds without consuming armor
+ok 43 - Barburhen applies corrosive rain every ten seconds without consuming armor
+  ---
+  duration_ms: 39.584108
+  type: 'test'
+  ...
+# Subtest: CIGKV does not emit Barburhen acid-rain events
+ok 44 - CIGKV does not emit Barburhen acid-rain events
+  ---
+  duration_ms: 28.299076
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot em patrol COLETA arma melhor (upgrade de dano)
+ok 45 - fase32 sim: bot em patrol COLETA arma melhor (upgrade de dano)
+  ---
+  duration_ms: 20.362761
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot NÃO rebaixa a arma (item pior segue no chão)
+ok 46 - fase32 sim: bot NÃO rebaixa a arma (item pior segue no chão)
+  ---
+  duration_ms: 23.480919
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot coleta consumível e frag (inventário sobe pelos mesmos caminhos)
+ok 47 - fase32 sim: bot coleta consumível e frag (inventário sobe pelos mesmos caminhos)
+  ---
+  duration_ms: 10.951515
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot ferido se CURA fora de combate (mesmo \#useMedkit do jogador)
+ok 48 - fase32 sim: bot ferido se CURA fora de combate (mesmo \#useMedkit do jogador)
+  ---
+  duration_ms: 2.821292
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot ferido COM inimigo à vista NÃO cura (cura sob fogo é do jogador)
+ok 49 - fase32 sim: bot ferido COM inimigo à vista NÃO cura (cura sob fogo é do jogador)
+  ---
+  duration_ms: 52.280511
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot em engage joga FRAG na banda útil (cadência humana)
+ok 50 - fase32 sim: bot em engage joga FRAG na banda útil (cadência humana)
+  ---
+  duration_ms: 3.610348
+  type: 'test'
+  ...
+# Subtest: fase32 sim: bot ferido em engage arma GLOO (defesa — parede à frente)
+ok 51 - fase32 sim: bot ferido em engage arma GLOO (defesa — parede à frente)
+  ---
+  duration_ms: 2.363769
+  type: 'test'
+  ...
+# Subtest: fase32 sim: ENGAGE vence loot — bot em combate não busca item (sense 9 m)
+ok 52 - fase32 sim: ENGAGE vence loot — bot em combate não busca item (sense 9 m)
+  ---
+  duration_ms: 20.825628
+  type: 'test'
+  ...
+# Subtest: fase32 room3d: MESMA economia — bot coleta arma melhor e se cura fora de combate
+ok 53 - fase32 room3d: MESMA economia — bot coleta arma melhor e se cura fora de combate
+  ---
+  duration_ms: 6.537974
+  type: 'test'
+  ...
+# Subtest: fase32 sim: determinismo do spawn PRESERVADO (rng order intacto com inventário novo)
+ok 54 - fase32 sim: determinismo do spawn PRESERVADO (rng order intacto com inventário novo)
+  ---
+  duration_ms: 3.211519
+  type: 'test'
+  ...
+# Subtest: fase32 sim: loot interior PRESERVA o id de catálogo em weaponId (contrato room3d)
+ok 55 - fase32 sim: loot interior PRESERVA o id de catálogo em weaponId (contrato room3d)
+  ---
+  duration_ms: 2.198531
+  type: 'test'
+  ...
+# Subtest: fase32: BOT_SURVIVAL pinado (mesmos números nas duas trilhas)
+ok 56 - fase32: BOT_SURVIVAL pinado (mesmos números nas duas trilhas)
+  ---
+  duration_ms: 0.111439
+  type: 'test'
+  ...
+# Subtest: sem hit = pose intocada: hit:null e ausência do parâmetro são equivalentes
+ok 57 - sem hit = pose intocada: hit:null e ausência do parâmetro são equivalentes
+  ---
+  duration_ms: 67.394847
+  type: 'test'
+  ...
+# Subtest: direcionalidade: frente empurra o tronco p/ trás, costas p/ frente
+ok 58 - direcionalidade: frente empurra o tronco p/ trás, costas p/ frente
+  ---
+  duration_ms: 31.801199
+  type: 'test'
+  ...
+# Subtest: direcionalidade lateral: +x e -x torcem tronco/cabeça em sinais opostos
+ok 59 - direcionalidade lateral: +x e -x torcem tronco/cabeça em sinais opostos
+  ---
+  duration_ms: 12.068779
+  type: 'test'
+  ...
+# Subtest: envelope: pico no ataque (~2 frames) e decaimento exponencial depois
+ok 60 - envelope: pico no ataque (~2 frames) e decaimento exponencial depois
+  ---
+  duration_ms: 36.138327
+  type: 'test'
+  ...
+# Subtest: poses especiais ignoram o flinch (knocked rasteja, morto decai igual)
+ok 61 - poses especiais ignoram o flinch (knocked rasteja, morto decai igual)
+  ---
+  duration_ms: 16.905258
+  type: 'test'
+  ...
+# Subtest: regime de arma preservado: flinch não arranca os braços da pose de tiro
+ok 62 - regime de arma preservado: flinch não arranca os braços da pose de tiro
+  ---
+  duration_ms: 8.153491
+  type: 'test'
+  ...
+# Subtest: juntas finitas com flinch extremo e ângulos arbitrários
+ok 63 - juntas finitas com flinch extremo e ângulos arbitrários
+  ---
+  duration_ms: 3.883795
+  type: 'test'
+  ...
+# Subtest: determinismo: mesmo hit → mesma pose (sem Math.random)
+ok 64 - determinismo: mesmo hit → mesma pose (sem Math.random)
+  ---
+  duration_ms: 9.173495
+  type: 'test'
+  ...
+# THREE.Color: Invalid hex color \#1080d12
+# THREE.Color: Invalid hex color \#1191e23
+# THREE.Color: Invalid hex color \#12a2f34
+# Subtest: decisão: full perto, proxy médio, hidden longe (limiares do tier high)
+ok 65 - decisão: full perto, proxy médio, hidden longe (limiares do tier high)
+  ---
+  duration_ms: 0.867589
+  type: 'test'
+  ...
+# Subtest: histerese: oscilar na fronteira NÃO alterna o nível a cada frame
+ok 66 - histerese: oscilar na fronteira NÃO alterna o nível a cada frame
+  ---
+  duration_ms: 0.194036
+  type: 'test'
+  ...
+# Subtest: tiers: mobile simplifica mais perto e culla antes (low < medium < high)
+ok 67 - tiers: mobile simplifica mais perto e culla antes (low < medium < high)
+  ---
+  duration_ms: 0.361238
+  type: 'test'
+  ...
+# Subtest: proxy: mesma API de parts e MESMOS pivôs do modelo detalhado
+ok 68 - proxy: mesma API de parts e MESMOS pivôs do modelo detalhado
+  ---
+  duration_ms: 5.161283
+  type: 'test'
+  ...
+# Subtest: orçamento do proxy: ≤ 900 tris e ≥ 8× mais leve que o detalhado
+ok 69 - orçamento do proxy: ≤ 900 tris e ≥ 8× mais leve que o detalhado
+  ---
+  duration_ms: 45.328143
+  type: 'test'
+  ...
+# Subtest: wrapper: update() alterna visibilidade e activeParts() segue o nível
+ok 70 - wrapper: update() alterna visibilidade e activeParts() segue o nível
+  ---
+  duration_ms: 13.374773
+  type: 'test'
+  ...
+# Subtest: equivalência de animação: proxy responde aos mesmos ângulos do detalhado
+ok 71 - equivalência de animação: proxy responde aos mesmos ângulos do detalhado
+  ---
+  duration_ms: 12.754301
+  type: 'test'
+  ...
+# Subtest: proxy anima todas as poses especiais sem NaN (crouch/DBNO/morte/sombra)
+ok 72 - proxy anima todas as poses especiais sem NaN (crouch/DBNO/morte/sombra)
+  ---
+  duration_ms: 0.707647
+  type: 'test'
+  ...
+# Subtest: flinch no proxy: animateOperative com hit funciona nos dois níveis
+ok 73 - flinch no proxy: animateOperative com hit funciona nos dois níveis
+  ---
+  duration_ms: 5.893058
+  type: 'test'
+  ...
+# Subtest: 16 variantes: proxies com paletas distintas constroem dentro do orçamento
+ok 74 - 16 variantes: proxies com paletas distintas constroem dentro do orçamento
+  ---
+  duration_ms: 6.940702
+  type: 'test'
+  ...
+# Subtest: limiares sil por tier: 65/80/95 m e ordem full < sil < cull
+ok 75 - limiares sil por tier: 65/80/95 m e ordem full < sil < cull
+  ---
+  duration_ms: 0.950743
+  type: 'test'
+  ...
+# Subtest: decisão: full → proxy → silhouette → hidden (tier high)
+ok 76 - decisão: full → proxy → silhouette → hidden (tier high)
+  ---
+  duration_ms: 0.223538
+  type: 'test'
+  ...
+# Subtest: histerese da silhueta: fronteira em 95 m não vibra a cada frame
+ok 77 - histerese da silhueta: fronteira em 95 m não vibra a cada frame
+  ---
+  duration_ms: 0.131036
+  type: 'test'
+  ...
+# Subtest: orçamento da silhueta: ≤ 3 meshes, ≤ 200 tris, 1 material de volume
+ok 78 - orçamento da silhueta: ≤ 3 meshes, ≤ 200 tris, 1 material de volume
+  ---
+  duration_ms: 3.249599
+  type: 'test'
+  ...
+# Subtest: wrapper 3 níveis: visibilidade por nível e activeParts() null na silhueta
+ok 79 - wrapper 3 níveis: visibilidade por nível e activeParts() null na silhueta
+  ---
+  duration_ms: 52.967077
+  type: 'test'
+  ...
+# Subtest: wrapper legado (2 níveis): createCharacterLOD(detail, proxy, { tier }) segue sem silhueta
+ok 80 - wrapper legado (2 níveis): createCharacterLOD(detail, proxy, { tier }) segue sem silhueta
+  ---
+  duration_ms: 22.741808
+  type: 'test'
+  ...
+# Subtest: arma anexada à raiz permanece visível no nível silhueta
+ok 81 - arma anexada à raiz permanece visível no nível silhueta
+  ---
+  duration_ms: 11.392784
+  type: 'test'
+  ...
+# Subtest: rotação de morte na RAIZ alcança a silhueta (ragdoll fake por torque)
+ok 82 - rotação de morte na RAIZ alcança a silhueta (ragdoll fake por torque)
+  ---
+  duration_ms: 6.351421
+  type: 'test'
+  ...
+# Subtest: anatomia curva: crânio/membros não são mais caixas — esferas, cápsulas e rosto em calota
+ok 83 - anatomia curva: crânio/membros não são mais caixas — esferas, cápsulas e rosto em calota
+  ---
+  duration_ms: 49.003438
+  type: 'test'
+  ...
+# Subtest: API preservada: parts e pivôs idênticos à Fase 7 (armas/câmera não quebram)
+ok 84 - API preservada: parts e pivôs idênticos à Fase 7 (armas/câmera não quebram)
+  ---
+  duration_ms: 13.730162
+  type: 'test'
+  ...
+# Subtest: orçamento de polígonos: personagem inteiro ≤ 6500 tris (24 atores fluidos)
+ok 85 - orçamento de polígonos: personagem inteiro ≤ 6500 tris (24 atores fluidos)
+  ---
+  duration_ms: 24.660588
+  type: 'test'
+  ...
+# Subtest: geometrias compartilhadas entre instâncias; materiais de equipe NÃO vazam
+ok 86 - geometrias compartilhadas entre instâncias; materiais de equipe NÃO vazam
+  ---
+  duration_ms: 35.355386
+  type: 'test'
+  ...
+# Subtest: determinismo: mesmo variant → árvore de cena idêntica (acessórios estáveis)
+ok 87 - determinismo: mesmo variant → árvore de cena idêntica (acessórios estáveis)
+  ---
+  duration_ms: 9.264889
+  type: 'test'
+  ...
+# Subtest: continuidade: animação a 30 Hz sem saltos de junta (fim do movimento robótico-teleporte)
+ok 88 - continuidade: animação a 30 Hz sem saltos de junta (fim do movimento robótico-teleporte)
+  ---
+  duration_ms: 9.795316
+  type: 'test'
+  ...
+# Subtest: movimento secundário: roll de passada, transferência de peso e micro-olhar
+ok 89 - movimento secundário: roll de passada, transferência de peso e micro-olhar
+  ---
+  duration_ms: 7.879449
+  type: 'test'
+  ...
+# Subtest: braços sob regime de arma: oscilação micro na corrida (sem swing macro)
+ok 90 - braços sob regime de arma: oscilação micro na corrida (sem swing macro)
+  ---
+  duration_ms: 4.179108
+  type: 'test'
+  ...
+# Subtest: sombra de contato: opaca no chão, esvanece com altitude e morre com o corpo
+ok 91 - sombra de contato: opaca no chão, esvanece com altitude e morre com o corpo
+  ---
+  duration_ms: 4.730524
+  type: 'test'
+  ...
+# Subtest: poses especiais preservadas: crouch, rastejo DBNO e morte sem NaN
+ok 92 - poses especiais preservadas: crouch, rastejo DBNO e morte sem NaN
+  ---
+  duration_ms: 6.218949
+  type: 'test'
+  ...
+# Subtest: pele realista: poros no roughnessMap + pseudo-SSS, memoizada por tom
+ok 93 - pele realista: poros no roughnessMap + pseudo-SSS, memoizada por tom
+  ---
+  duration_ms: 0.841445
+  type: 'test'
+  ...
+# Subtest: variedade de operativos: 16 variantes constroem sem erro e com estruturas válidas
+ok 94 - variedade de operativos: 16 variantes constroem sem erro e com estruturas válidas
+  ---
+  duration_ms: 62.272236
+  type: 'test'
+  ...
+# Subtest: pivô do tornozelo existe e os pés rolam calcanhar→ponta em contrafase
+ok 95 - pivô do tornozelo existe e os pés rolam calcanhar→ponta em contrafase
+  ---
+  duration_ms: 6.470532
+  type: 'test'
+  ...
+# Subtest: cadência escala com a velocidade (andar ≠ sprint no relógio da passada)
+ok 96 - cadência escala com a velocidade (andar ≠ sprint no relógio da passada)
+  ---
+  duration_ms: 4.251214
+  type: 'test'
+  ...
+# Subtest: inércia de sprint: tronco inclina para dentro proporcional à velocidade
+ok 97 - inércia de sprint: tronco inclina para dentro proporcional à velocidade
+  ---
+  duration_ms: 5.756244
+  type: 'test'
+  ...
+# Subtest: pelve gira contra o tronco (transferência de peso real, não torso de placa)
+ok 98 - pelve gira contra o tronco (transferência de peso real, não torso de placa)
+  ---
+  duration_ms: 4.488194
+  type: 'test'
+  ...
+# Subtest: impact wall: 10 faíscas + 2 puffs de poeira no pool (12 partículas)
+ok 99 - impact wall: 10 faíscas + 2 puffs de poeira no pool (12 partículas)
+  ---
+  duration_ms: 5.437872
+  type: 'test'
+  ...
+# Subtest: impact ground: poeira marrom (7 chips + 2 puffs), sem faísca quente
+ok 100 - impact ground: poeira marrom (7 chips + 2 puffs), sem faísca quente
+  ---
+  duration_ms: 1.548235
+  type: 'test'
+  ...
+# Subtest: hitFlesh: sangue com vermelho dominante sobre verde/azul
+ok 101 - hitFlesh: sangue com vermelho dominante sobre verde/azul
+  ---
+  duration_ms: 1.835797
+  type: 'test'
+  ...
+# Subtest: explosion: 26 partículas no pool (10 fumaça + 16 faíscas) + fireball sprite na cena
+ok 102 - explosion: 26 partículas no pool (10 fumaça + 16 faíscas) + fireball sprite na cena
+  ---
+  duration_ms: 2.080923
+  type: 'test'
+  ...
+# Subtest: glooPuff: 8 cristais azul-gelo (b > r) no pool
+ok 103 - glooPuff: 8 cristais azul-gelo (b > r) no pool
+  ---
+  duration_ms: 1.36386
+  type: 'test'
+  ...
+# Subtest: muzzleFlash: 3 partículas no pool (1 fumaça + 2 faíscas) + luz acesa
+ok 104 - muzzleFlash: 3 partículas no pool (1 fumaça + 2 faíscas) + luz acesa
+  ---
+  duration_ms: 1.726511
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma seed → snapshot byte a byte após update
+ok 105 - determinismo: mesma seed → snapshot byte a byte após update
+  ---
+  duration_ms: 5.887093
+  type: 'test'
+  ...
+# Subtest: fallback legado: sem pool os sprites continuam na cena e o pool não existe
+ok 106 - fallback legado: sem pool os sprites continuam na cena e o pool não existe
+  ---
+  duration_ms: 2.680782
+  type: 'test'
+  ...
+# Subtest: reciclagem: burst acima da capacidade não explode (ring buffer)
+ok 107 - reciclagem: burst acima da capacidade não explode (ring buffer)
+  ---
+  duration_ms: 2.750829
+  type: 'test'
+  ...
+# Subtest: update do pool mata as partículas de combate no fim da vida (sem vazamento)
+ok 108 - update do pool mata as partículas de combate no fim da vida (sem vazamento)
+  ---
+  duration_ms: 1.786574
+  type: 'test'
+  ...
+# Subtest: compatibilidade: caminho legado dos testes antigos (sem deps) não quebra
+ok 109 - compatibilidade: caminho legado dos testes antigos (sem deps) não quebra
+  ---
+  duration_ms: 1.970974
+  type: 'test'
+  ...
+# Subtest: ata pendente: 5 passos, veredito/registro aguardando e KRC a definir
+ok 110 - ata pendente: 5 passos, veredito/registro aguardando e KRC a definir
+  ---
+  duration_ms: 1.091527
+  type: 'test'
+  ...
+# Subtest: ata julgada: 6 passos com veredito, juiz, nota, registro, XP e KRC
+ok 111 - ata julgada: 6 passos com veredito, juiz, nota, registro, XP e KRC
+  ---
+  duration_ms: 0.315714
+  type: 'test'
+  ...
+# Subtest: rótulos canônicos: motivo, veredito e registro
+ok 112 - rótulos canônicos: motivo, veredito e registro
+  ---
+  duration_ms: 0.122593
+  type: 'test'
+  ...
+# Subtest: rotuloKrc cobre as 6 variantes do efeito econômico
+ok 113 - rotuloKrc cobre as 6 variantes do efeito econômico
+  ---
+  duration_ms: 0.202307
+  type: 'test'
+  ...
+# Subtest: ata aceita extra do evento ao vivo quando o caso não tem krc gravado
+ok 114 - ata aceita extra do evento ao vivo quando o caso não tem krc gravado
+  ---
+  duration_ms: 0.12792
+  type: 'test'
+  ...
+# Subtest: buildAtaSteps rejeita entrada inválida sem lançar
+ok 115 - buildAtaSteps rejeita entrada inválida sem lançar
+  ---
+  duration_ms: 0.49842
+  type: 'test'
+  ...
+# Subtest: courtCases mine: devolve SOMENTE os casos do próprio militar (contagens escopadas)
+ok 116 - courtCases mine: devolve SOMENTE os casos do próprio militar (contagens escopadas)
+  ---
+  duration_ms: 1.223352
+  type: 'test'
+  ...
+# Subtest: courtCases mine após veredito: julgados escopados e krc visível na ata
+ok 117 - courtCases mine após veredito: julgados escopados e krc visível na ata
+  ---
+  duration_ms: 0.514498
+  type: 'test'
+  ...
+# Subtest: fumaça do motor: guerra não mudou de fase por conta da Corte
+ok 118 - fumaça do motor: guerra não mudou de fase por conta da Corte
+  ---
+  duration_ms: 0.456452
+  type: 'test'
+  ...
+# Subtest: KRC_POR_VEREDITO: tabela canônica dos 4 vereditos
+ok 119 - KRC_POR_VEREDITO: tabela canônica dos 4 vereditos
+  ---
+  duration_ms: 2.579289
+  type: 'test'
+  ...
+# Subtest: honras_de_guerra credita +200 KRC reais com idempotência court:caso:veredito
+ok 120 - honras_de_guerra credita +200 KRC reais com idempotência court:caso:veredito
+  ---
+  duration_ms: 1.831771
+  type: 'test'
+  ...
+# Subtest: afastamento aplica multa cheia (250) quando há saldo; reducao_patente multa 100 e degrada patente
+ok 121 - afastamento aplica multa cheia (250) quando há saldo; reducao_patente multa 100 e degrada patente
+  ---
+  duration_ms: 0.777472
+  type: 'test'
+  ...
+# Subtest: multa com saldo zero é presa (applied:false, skipped zero_balance) — sem saldo negativo
+ok 122 - multa com saldo zero é presa (applied:false, skipped zero_balance) — sem saldo negativo
+  ---
+  duration_ms: 0.307236
+  type: 'test'
+  ...
+# Subtest: veredito repetido falha (caso_julgado) e NÃO duplica lançamento no ledger
+ok 123 - veredito repetido falha (caso_julgado) e NÃO duplica lançamento no ledger
+  ---
+  duration_ms: 0.756902
+  type: 'test'
+  ...
+# Subtest: notifier recebe court_verdict com krc/patente; ledger intacto (dupla entrada)
+ok 124 - notifier recebe court_verdict com krc/patente; ledger intacto (dupla entrada)
+  ---
+  duration_ms: 0.571046
+  type: 'test'
+  ...
+# Subtest: serviço sem economia aplica veredito puro (krc none) — retrocompatível
+ok 125 - serviço sem economia aplica veredito puro (krc none) — retrocompatível
+  ---
+  duration_ms: 0.23837
+  type: 'test'
+  ...
+# Subtest: room3d: start anuncia o trem (matchStart.train) e o snapshot carrega o anúncio
+ok 126 - room3d: start anuncia o trem (matchStart.train) e o snapshot carrega o anúncio
+  ---
+  duration_ms: 13.400393
+  type: 'test'
+  ...
+# Subtest: room3d: emitExternal entrega evento externo (court_verdict) ao alvo no snapshot
+ok 127 - room3d: emitExternal entrega evento externo (court_verdict) ao alvo no snapshot
+  ---
+  duration_ms: 7.227011
+  type: 'test'
+  ...
+# Subtest: clock: offset do pong e elapsed do trem (matemática pura da sincronia)
+ok 128 - clock: offset do pong e elapsed do trem (matemática pura da sincronia)
+  ---
+  duration_ms: 0.423587
+  type: 'test'
+  ...
+# [bc4] ws open on 37753
+# [bc4] first msg on 37753 = queued
+# [bc4] ws open on 35235
+# [bc4] first msg on 35235 = queued
+# Subtest: cross-replica: convite criado em A é resolvido em B via redirect e a autoridade nunca se duplica
+ok 129 - cross-replica: convite criado em A é resolvido em B via redirect e a autoridade nunca se duplica
+  ---
+  duration_ms: 356.581183
+  type: 'test'
+  ...
+# Subtest: cross-replica: registro de réplicas é RENOVADO pelo heartbeat (redirect sobrevive além do ttlMs*2)
+ok 130 - cross-replica: registro de réplicas é RENOVADO pelo heartbeat (redirect sobrevive além do ttlMs*2)
+  ---
+  duration_ms: 1677.727908
+  type: 'test'
+  ...
+# [bc4] ws open on 42887
+# [bc4] first msg on 42887 = queued
+# Subtest: cross-replica: convite de sala morta responde private_not_found (sem redirect para sala fantasma)
+ok 131 - cross-replica: convite de sala morta responde private_not_found (sem redirect para sala fantasma)
+  ---
+  duration_ms: 281.310945
+  type: 'test'
+  ...
+# Subtest: fase27 projeção: ponto à frente da câmera cai no centro; atrás e fora da tela são invisíveis
+ok 132 - fase27 projeção: ponto à frente da câmera cai no centro; atrás e fora da tela são invisíveis
+  ---
+  duration_ms: 2.025941
+  type: 'test'
+  ...
+# Subtest: fase27 tiers: body branco, head maior/vermelho e knock vira popup NOCAUTE
+ok 133 - fase27 tiers: body branco, head maior/vermelho e knock vira popup NOCAUTE
+  ---
+  duration_ms: 0.253351
+  type: 'test'
+  ...
+# Subtest: fase27 hash de stagger: determinístico, apenas 3 valores e cobertura anti-sobreposição
+ok 134 - fase27 hash de stagger: determinístico, apenas 3 valores e cobertura anti-sobreposição
+  ---
+  duration_ms: 0.184511
+  type: 'test'
+  ...
+# Subtest: fase27 pool: spawn body/head/knock cria nó com classe, texto e display oculto
+ok 135 - fase27 pool: spawn body/head/knock cria nó com classe, texto e display oculto
+  ---
+  duration_ms: 0.645473
+  type: 'test'
+  ...
+# Subtest: fase27 pool: dano zero é ignorado; ring buffer recicla o mais antigo no teto
+ok 136 - fase27 pool: dano zero é ignorado; ring buffer recicla o mais antigo no teto
+  ---
+  duration_ms: 0.340024
+  type: 'test'
+  ...
+# Subtest: fase27 update: sobe com easing, segura opacidade e fade no fim; expira e recicla
+ok 137 - fase27 update: sobe com easing, segura opacidade e fade no fim; expira e recicla
+  ---
+  duration_ms: 0.626067
+  type: 'test'
+  ...
+# Subtest: fase27 popup de nocaute: só dentro da janela da memória e memória limpa ao expirar
+ok 138 - fase27 popup de nocaute: só dentro da janela da memória e memória limpa ao expirar
+  ---
+  duration_ms: 0.512961
+  type: 'test'
+  ...
+# Subtest: fase27 headless-safe: sem document o pool é no-op de DOM e nunca explode
+ok 139 - fase27 headless-safe: sem document o pool é no-op de DOM e nunca explode
+  ---
+  duration_ms: 0.298351
+  type: 'test'
+  ...
+# Subtest: fase27 sim: hit de bala do JOGADOR traz owner=player, dano inteiro e head booleano
+ok 140 - fase27 sim: hit de bala do JOGADOR traz owner=player, dano inteiro e head booleano
+  ---
+  duration_ms: 17.85308
+  type: 'test'
+  ...
+# Subtest: fase27 sim: granada do jogador emite hit kind explosion com owner (número de explosão)
+ok 141 - fase27 sim: granada do jogador emite hit kind explosion com owner (número de explosão)
+  ---
+  duration_ms: 37.63386
+  type: 'test'
+  ...
+# Subtest: fase27 sim: botKnocked do jogador traz victim (id) — popup ancora no hit letal
+ok 142 - fase27 sim: botKnocked do jogador traz victim (id) — popup ancora no hit letal
+  ---
+  duration_ms: 3.918048
+  type: 'test'
+  ...
+# Subtest: fase27 room: explosão entrega hit kind explosion SÓ ao dono da granada
+ok 143 - fase27 room: explosão entrega hit kind explosion SÓ ao dono da granada
+  ---
+  duration_ms: 12.319065
+  type: 'test'
+  ...
+# Subtest: fase27 room: hit de bala autoritativa continua com owner (contrato já existente intacto)
+ok 144 - fase27 room: hit de bala autoritativa continua com owner (contrato já existente intacto)
+  ---
+  duration_ms: 4.405099
+  type: 'test'
+  ...
+# Subtest: queda mundial: atirador à FRENTE (angle 0) → corpo cai p/ −z; de TRÁS (π) → +z
+ok 145 - queda mundial: atirador à FRENTE (angle 0) → corpo cai p/ −z; de TRÁS (π) → +z
+  ---
+  duration_ms: 0.963713
+  type: 'test'
+  ...
+# Subtest: queda lateral: tiro do lado +x do modelo → cai p/ +x mundial (longe do atirador)
+ok 146 - queda lateral: tiro do lado +x do modelo → cai p/ +x mundial (longe do atirador)
+  ---
+  duration_ms: 0.257037
+  type: 'test'
+  ...
+# Subtest: yaw gira a direção da queda: angle 0 com yaw π/2 → queda p/ −x mundial
+ok 147 - yaw gira a direção da queda: angle 0 com yaw π/2 → queda p/ −x mundial
+  ---
+  duration_ms: 0.117053
+  type: 'test'
+  ...
+# Subtest: direção de queda é unitária p/ qualquer combinação angle+yaw
+ok 148 - direção de queda é unitária p/ qualquer combinação angle+yaw
+  ---
+  duration_ms: 0.239362
+  type: 'test'
+  ...
+# Subtest: decalYawWorld alinha o +z do decal com a queda (φ = atan2(dx, dz))
+ok 149 - decalYawWorld alinha o +z do decal com a queda (φ = atan2(dx, dz))
+  ---
+  duration_ms: 0.234367
+  type: 'test'
+  ...
+# Subtest: plano determinístico: mesmo seed ⇒ plano idêntico; seed diferente ⇒ plano diferente
+ok 150 - plano determinístico: mesmo seed ⇒ plano idêntico; seed diferente ⇒ plano diferente
+  ---
+  duration_ms: 1.139174
+  type: 'test'
+  ...
+# Subtest: plano: power satura em 1, zera riscos em <0.25 e não produz NaN
+ok 151 - plano: power satura em 1, zera riscos em <0.25 e não produz NaN
+  ---
+  duration_ms: 0.514637
+  type: 'test'
+  ...
+# Subtest: cor do sangue: variação sutil dentro da faixa vermelho-escuro
+ok 152 - cor do sangue: variação sutil dentro da faixa vermelho-escuro
+  ---
+  duration_ms: 0.229206
+  type: 'test'
+  ...
+# Subtest: LOD do decal: full → simple → hidden pela distância
+ok 153 - LOD do decal: full → simple → hidden pela distância
+  ---
+  duration_ms: 0.288191
+  type: 'test'
+  ...
+# Subtest: LOD do decal: histerese impede vibração na fronteira
+ok 154 - LOD do decal: histerese impede vibração na fronteira
+  ---
+  duration_ms: 0.331519
+  type: 'test'
+  ...
+# Subtest: geometria: partição do drawRange (poça 36 verts | full = poça + riscos + gotículas)
+ok 155 - geometria: partição do drawRange (poça 36 verts | full = poça + riscos + gotículas)
+  ---
+  duration_ms: 0.793929
+  type: 'test'
+  ...
+# Subtest: geometria: planar (y=0), dentro do raio de segurança e poça alongada na queda
+ok 156 - geometria: planar (y=0), dentro do raio de segurança e poça alongada na queda
+  ---
+  duration_ms: 0.349752
+  type: 'test'
+  ...
+# Subtest: pool em ring buffer: capacidade fixa, spawn acima recicla o decal MAIS ANTIGO
+ok 157 - pool em ring buffer: capacidade fixa, spawn acima recicla o decal MAIS ANTIGO
+  ---
+  duration_ms: 2.244729
+  type: 'test'
+  ...
+# Subtest: mundo: decal nasce na posição do ator, acima da sombra, orientado pela queda
+ok 158 - mundo: decal nasce na posição do ator, acima da sombra, orientado pela queda
+  ---
+  duration_ms: 0.675565
+  type: 'test'
+  ...
+# Subtest: LOD ao vivo: câmera perto = full, longe = simple, além do cull = hidden (e reaparece)
+ok 159 - LOD ao vivo: câmera perto = full, longe = simple, além do cull = hidden (e reaparece)
+  ---
+  duration_ms: 0.655744
+  type: 'test'
+  ...
+# Subtest: fade de vida: soak-in 8%, hold, fade-out nos 15% finais, morte no fim
+ok 160 - fade de vida: soak-in 8%, hold, fade-out nos 15% finais, morte no fim
+  ---
+  duration_ms: 0.499693
+  type: 'test'
+  ...
+# Subtest: update(0) não envelhece (LOD sem avanço de idade) e fade nunca produz NaN
+ok 161 - update(0) não envelhece (LOD sem avanço de idade) e fade nunca produz NaN
+  ---
+  duration_ms: 0.296231
+  type: 'test'
+  ...
+# Subtest: clear() esvazia; dispose() devolve a cena ao estado original
+ok 162 - clear() esvazia; dispose() devolve a cena ao estado original
+  ---
+  duration_ms: 0.53934
+  type: 'test'
+  ...
+# Subtest: tiers: low simplifica mais perto, culla antes e retém menos decals
+ok 163 - tiers: low simplifica mais perto, culla antes e retém menos decals
+  ---
+  duration_ms: 1.300593
+  type: 'test'
+  ...
+# Subtest: direção: tiro da frente → cai de COSTAS; tiro de trás → cai p/ frente
+ok 164 - direção: tiro da frente → cai de COSTAS; tiro de trás → cai p/ frente
+  ---
+  duration_ms: 1.052018
+  type: 'test'
+  ...
+# Subtest: direção lateral: tiro do lado +x tomba p/ −x (longe do atirador)
+ok 165 - direção lateral: tiro do lado +x tomba p/ −x (longe do atirador)
+  ---
+  duration_ms: 0.205783
+  type: 'test'
+  ...
+# Subtest: power escala θmax e o th assentado; clamp de power fora de faixa
+ok 166 - power escala θmax e o th assentado; clamp de power fora de faixa
+  ---
+  duration_ms: 0.157807
+  type: 'test'
+  ...
+# Subtest: envelope: cresce no impulso, contínuo na fronteira, sem NaN no sweep
+ok 167 - envelope: cresce no impulso, contínuo na fronteira, sem NaN no sweep
+  ---
+  duration_ms: 0.801312
+  type: 'test'
+  ...
+# Subtest: assentamento: após settleT o corpo para (th fixo, flail 0, settled)
+ok 168 - assentamento: após settleT o corpo para (th fixo, flail 0, settled)
+  ---
+  duration_ms: 0.240466
+  type: 'test'
+  ...
+# Subtest: agonia: flail sobe no impulso e decai; membros abrem assimetricamente
+ok 169 - agonia: flail sobe no impulso e decai; membros abrem assimetricamente
+  ---
+  duration_ms: 0.663011
+  type: 'test'
+  ...
+# Subtest: inputs hostis não produzem NaN (age/power/seed estranhos)
+ok 170 - inputs hostis não produzem NaN (age/power/seed estranhos)
+  ---
+  duration_ms: 0.308746
+  type: 'test'
+  ...
+# Subtest: animateOperative: agonia aditiva sobre a pose morta base (e clamp)
+ok 171 - animateOperative: agonia aditiva sobre a pose morta base (e clamp)
+  ---
+  duration_ms: 83.23037
+  type: 'test'
+  ...
+# Subtest: retrocompatibilidade: dead sem death → comportamento Fase 10 intacto
+ok 172 - retrocompatibilidade: dead sem death → comportamento Fase 10 intacto
+  ---
+  duration_ms: 8.425458
+  type: 'test'
+  ...
+# Subtest: face no ragdoll: morto com agonia mantém rosto de morte (imune a hit)
+ok 173 - face no ragdoll: morto com agonia mantém rosto de morte (imune a hit)
+  ---
+  duration_ms: 4.567315
+  type: 'test'
+  ...
+# Subtest: calibrateDirector — puro
+    # Subtest: amostra insuficiente (< minCutsSample) → nada muda
+    ok 1 - amostra insuficiente (< minCutsSample) → nada muda
+      ---
+      duration_ms: 1.595159
+      type: 'test'
+      ...
+    # Subtest: twitchy — escalada ≥45% dos cortes → margem SOBE um passo
+    ok 2 - twitchy — escalada ≥45% dos cortes → margem SOBE um passo
+      ---
+      duration_ms: 0.24054
+      type: 'test'
+      ...
+    # Subtest: faminto — escalada rara COM navegação manual → margem DESCE
+    ok 3 - faminto — escalada rara COM navegação manual → margem DESCE
+      ---
+      duration_ms: 0.184127
+      type: 'test'
+      ...
+    # Subtest: plateia escrava — manual > 1.2× cortes → margem desce de novo
+    ok 4 - plateia escrava — manual > 1.2× cortes → margem desce de novo
+      ---
+      duration_ms: 0.188637
+      type: 'test'
+      ...
+    # Subtest: fadiga — AUTO off ≥ 2× on → margem sobe + pesos menores descem
+    ok 5 - fadiga — AUTO off ≥ 2× on → margem sobe + pesos menores descem
+      ---
+      duration_ms: 0.243273
+      type: 'test'
+      ...
+    # Subtest: recepção boa — reversão à média (um passo por calibração)
+    ok 6 - recepção boa — reversão à média (um passo por calibração)
+      ---
+      duration_ms: 0.245416
+      type: 'test'
+      ...
+    # Subtest: reversão nunca ultrapassa o padrão da Fase 19
+    ok 7 - reversão nunca ultrapassa o padrão da Fase 19
+      ---
+      duration_ms: 0.128988
+      type: 'test'
+      ...
+    # Subtest: clamps: margem presa em [10, 45] após muitas iterações twitchy
+    ok 8 - clamps: margem presa em [10, 45] após muitas iterações twitchy
+      ---
+      duration_ms: 0.284032
+      type: 'test'
+      ...
+    # Subtest: bandas de pesos: recentDamage/lowHealth presos nos mínimos após fadiga contínua
+    ok 9 - bandas de pesos: recentDamage/lowHealth presos nos mínimos após fadiga contínua
+      ---
+      duration_ms: 0.319731
+      type: 'test'
+      ...
+    # Subtest: hierarquia em TODOS os vértices das bandas (nocaute > … > vida baixa)
+    ok 10 - hierarquia em TODOS os vértices das bandas (nocaute > … > vida baixa)
+      ---
+      duration_ms: 0.485181
+      type: 'test'
+      ...
+    # Subtest: determinismo + pureza: mesmo input → mesmo output, sem mutar argumentos
+    ok 11 - determinismo + pureza: mesmo input → mesmo output, sem mutar argumentos
+      ---
+      duration_ms: 0.206262
+      type: 'test'
+      ...
+    # Subtest: pesos calibrados alimentam o dangerScore (ctx.weights)
+    ok 12 - pesos calibrados alimentam o dangerScore (ctx.weights)
+      ---
+      duration_ms: 0.458954
+      type: 'test'
+      ...
+    1..12
+ok 174 - calibrateDirector — puro
+  ---
+  duration_ms: 5.791832
+  type: 'suite'
+  ...
+# Subtest: SpectatorRemote — afinação calibrada no heartbeat
+    # Subtest: getMetrics() expõe tuning; margem default = Fase 19
+    ok 1 - getMetrics() expõe tuning; margem default = Fase 19
+      ---
+      duration_ms: 0.916736
+      type: 'test'
+      ...
+    # Subtest: heartbeat recalibra: transmissão twitchy → margem sobe no ar
+    ok 2 - heartbeat recalibra: transmissão twitchy → margem sobe no ar
+      ---
+      duration_ms: 62.539227
+      type: 'test'
+      ...
+    1..2
+ok 175 - SpectatorRemote — afinação calibrada no heartbeat
+  ---
+  duration_ms: 63.768489
+  type: 'suite'
+  ...
+# Subtest: M3: duas réplicas disputam a sala — owner único, epoch monotônico e fencing antigo rejeitado
+ok 176 - M3: duas réplicas disputam a sala — owner único, epoch monotônico e fencing antigo rejeitado
+  ---
+  duration_ms: 82.605373
+  type: 'test'
+  ...
+# Subtest: M3: reconnect em réplica sem a sala → redirect ao dono; no dono a sessão retoma sem duplicar
+ok 177 - M3: reconnect em réplica sem a sala → redirect ao dono; no dono a sessão retoma sem duplicar
+  ---
+  duration_ms: 756.80775
+  type: 'test'
+  ...
+# Subtest: M3: relay entre réplicas — ordem monotônica, dedup, replay limitado (MAXLEN) e TTL
+ok 178 - M3: relay entre réplicas — ordem monotônica, dedup, replay limitado (MAXLEN) e TTL
+  ---
+  duration_ms: 81.304228
+  type: 'test'
+  ...
+# Subtest: M3: /readyz responde 503 not_ready quando a dependência necessária está indisponível
+ok 179 - M3: /readyz responde 503 not_ready quando a dependência necessária está indisponível
+  ---
+  duration_ms: 60.414382
+  type: 'test'
+  ...
+# Subtest: M3: AOI — snapshot por observador recorta por distância com histerese e mantém aliveCount global
+ok 180 - M3: AOI — snapshot por observador recorta por distância com histerese e mantém aliveCount global
+  ---
+  duration_ms: 7.957472
+  type: 'test'
+  ...
+# Subtest: M3: paridade Redis — ownership/relay com as mesmas semânticas do driver de memória
+ok 181 - M3: paridade Redis — ownership/relay com as mesmas semânticas do driver de memória # SKIP opt-in infra: REDIS_URL ausente
+  ---
+  duration_ms: 0.099043
+  type: 'test'
+  ...
+# Subtest: M3: relay mirror — room_open da réplica A chega ao espelho da réplica B (mirrorApplied > 0)
+ok 182 - M3: relay mirror — room_open da réplica A chega ao espelho da réplica B (mirrorApplied > 0)
+  ---
+  duration_ms: 153.426095
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma seed+cenário produzem placements idênticos
+ok 183 - determinismo: mesma seed+cenário produzem placements idênticos
+  ---
+  duration_ms: 66.159503
+  type: 'test'
+  ...
+# Subtest: identidade por mundo: cada cenário materializa o kit dos seus distritos
+ok 184 - identidade por mundo: cada cenário materializa o kit dos seus distritos
+  ---
+  duration_ms: 19.38641
+  type: 'test'
+  ...
+# Subtest: exclusividade cruzada: nenhum tipo assinatura vaza para outro cenário
+ok 185 - exclusividade cruzada: nenhum tipo assinatura vaza para outro cenário
+  ---
+  duration_ms: 18.88059
+  type: 'test'
+  ...
+# Subtest: zero impacto em gameplay: bounds, praça, colliders, loot e estradas respeitados
+ok 186 - zero impacto em gameplay: bounds, praça, colliders, loot e estradas respeitados
+  ---
+  duration_ms: 35.30525
+  type: 'test'
+  ...
+# Subtest: integração buildScene: registro districtDressing completo nos 5 cenários
+ok 187 - integração buildScene: registro districtDressing completo nos 5 cenários
+  ---
+  duration_ms: 2211.699363
+  type: 'test'
+  ...
+# Subtest: densidade responde ao tier: density menor produz kit igual ou menor
+ok 188 - densidade responde ao tier: density menor produz kit igual ou menor
+  ---
+  duration_ms: 8.332333
+  type: 'test'
+  ...
+# Subtest: patches de solo usam materiais do mundo (lava emissiva, água translúcida, runa alpha)
+ok 189 - patches de solo usam materiais do mundo (lava emissiva, água translúcida, runa alpha)
+  ---
+  duration_ms: 1092.452687
+  type: 'test'
+  ...
+# Subtest: cenários preservados: SCENARIOS intactos pela Fase 22 (contrato de gameplay)
+ok 190 - cenários preservados: SCENARIOS intactos pela Fase 22 (contrato de gameplay)
+  ---
+  duration_ms: 0.161556
+  type: 'test'
+  ...
+# Subtest: Fase 26: fogueiras do Ckesalth soltam fumaça + fagulhas REAIS
+ok 191 - Fase 26: fogueiras do Ckesalth soltam fumaça + fagulhas REAIS
+  ---
+  duration_ms: 328.152233
+  type: 'test'
+  ...
+# Subtest: Fase 26: lavapatches (fendas de lava) cospem brasas — Encosta Média/Pico
+ok 192 - Fase 26: lavapatches (fendas de lava) cospem brasas — Encosta Média/Pico
+  ---
+  duration_ms: 322.120618
+  type: 'test'
+  ...
+# Subtest: Fase 26: fenda do vazio no EAST VOID SANCTUM deriva motos (Arukheea)
+ok 193 - Fase 26: fenda do vazio no EAST VOID SANCTUM deriva motos (Arukheea)
+  ---
+  duration_ms: 359.038025
+  type: 'test'
+  ...
+# Subtest: Fase 26/32: CENÁRIOS SEM fontes de distrito ficam com o pool ocioso e integram
+ok 194 - Fase 26/32: CENÁRIOS SEM fontes de distrito ficam com o pool ocioso e integram
+  ---
+  duration_ms: 727.38881
+  type: 'test'
+  ...
+# Subtest: F33: smokecolumn do Barburhen — voluta estática REMOVIDA, fumaça REAL no pool
+ok 195 - F33: smokecolumn do Barburhen — voluta estática REMOVIDA, fumaça REAL no pool
+  ---
+  duration_ms: 365.040299
+  type: 'test'
+  ...
+# Subtest: doorwaysOf: determinístico, SEM pavilhão e com todos os tipos restantes
+ok 196 - doorwaysOf: determinístico, SEM pavilhão e com todos os tipos restantes
+  ---
+  duration_ms: 23.975814
+  type: 'test'
+  ...
+# Subtest: doorwaysOf: vão casa com o collider do casco (mesmo retângulo local→mundo)
+ok 197 - doorwaysOf: vão casa com o collider do casco (mesmo retângulo local→mundo)
+  ---
+  duration_ms: 2.116005
+  type: 'test'
+  ...
+# Subtest: doorBoxCollider: fechada tem ESPESSURA de parede; aberta/destruída => null
+ok 198 - doorBoxCollider: fechada tem ESPESSURA de parede; aberta/destruída => null
+  ---
+  duration_ms: 0.174475
+  type: 'test'
+  ...
+# Subtest: footprintHas: centro dentro, fora fora, margem funciona com rot 90°
+ok 199 - footprintHas: centro dentro, fora fora, margem funciona com rot 90°
+  ---
+  duration_ms: 0.204908
+  type: 'test'
+  ...
+# Subtest: porta FECHADA colide desde o 1º tick; E abre (latch) e o vão libera passagem
+ok 200 - porta FECHADA colide desde o 1º tick; E abre (latch) e o vão libera passagem
+  ---
+  duration_ms: 14.396676
+  type: 'test'
+  ...
+# Subtest: folha fechada BLOQUEIA o jogador no vão; aberta deixa ATRAVESSAR
+ok 201 - folha fechada BLOQUEIA o jogador no vão; aberta deixa ATRAVESSAR
+  ---
+  duration_ms: 96.155629
+  type: 'test'
+  ...
+# Subtest: balas estilhaçam a folha de MADEIRA: hp cai, impact wood, doorDown e fim do collider
+ok 202 - balas estilhaçam a folha de MADEIRA: hp cai, impact wood, doorDown e fim do collider
+  ---
+  duration_ms: 2.997149
+  type: 'test'
+  ...
+# Subtest: granada no epicentro estilhaça a folha (explosão desgasta portas)
+ok 203 - granada no epicentro estilhaça a folha (explosão desgasta portas)
+  ---
+  duration_ms: 6.448127
+  type: 'test'
+  ...
+# Subtest: BOT abre a porta fechada sozinho e INVADE o interior (patrulha p/ waypoint interno)
+ok 204 - BOT abre a porta fechada sozinho e INVADE o interior (patrulha p/ waypoint interno)
+  ---
+  duration_ms: 9.865642
+  type: 'test'
+  ...
+# Subtest: ENGAGE: bot enxerga pelo vão aberto, entra e pressiona o alvo; folha FECHADA esconde
+ok 205 - ENGAGE: bot enxerga pelo vão aberto, entra e pressiona o alvo; folha FECHADA esconde
+  ---
+  duration_ms: 2.646936
+  type: 'test'
+  ...
+# Subtest: loot INTERIOR: térreo na mobília + MEZANINO em y≈2,95 (pegável só de cima)
+ok 206 - loot INTERIOR: térreo na mobília + MEZANINO em y≈2,95 (pegável só de cima)
+  ---
+  duration_ms: 7.10199
+  type: 'test'
+  ...
+# Subtest: snapshot: estado das folhas sobrevive ao round-trip (applySnapshot resincroniza física)
+ok 207 - snapshot: estado das folhas sobrevive ao round-trip (applySnapshot resincroniza física)
+  ---
+  duration_ms: 3.013344
+  type: 'test'
+  ...
+# Subtest: DOOR: constantes compartilhadas (sim offline e sala usam os MESMOS números)
+ok 208 - DOOR: constantes compartilhadas (sim offline e sala usam os MESMOS números)
+  ---
+  duration_ms: 0.086527
+  type: 'test'
+  ...
+# Subtest: doorMaterialOf: hangar/depot = METAL; barrack/warehouse/building = madeira
+ok 209 - doorMaterialOf: hangar/depot = METAL; barrack/warehouse/building = madeira
+  ---
+  duration_ms: 0.11314
+  type: 'test'
+  ...
+# Subtest: hp por material no sim: hangar/depot = hpMetal (500), madeira = hp (200)
+ok 210 - hp por material no sim: hangar/depot = hpMetal (500), madeira = hp (200)
+  ---
+  duration_ms: 1.904151
+  type: 'test'
+  ...
+# Subtest: balas AMASSAM a folha de METAL: impact metal, hp cai mas NÃO estilhaça fácil
+ok 211 - balas AMASSAM a folha de METAL: impact metal, hp cai mas NÃO estilhaça fácil
+  ---
+  duration_ms: 1.98227
+  type: 'test'
+  ...
+# Subtest: doorDown da madeira carrega kind no payload (áudio escolhe o material)
+ok 212 - doorDown da madeira carrega kind no payload (áudio escolhe o material)
+  ---
+  duration_ms: 1.94103
+  type: 'test'
+  ...
+# Subtest: MatchRoom3D: folhas iniciam fechadas e sólidas; E do humano abre com doorToggle global
+ok 213 - MatchRoom3D: folhas iniciam fechadas e sólidas; E do humano abre com doorToggle global
+  ---
+  duration_ms: 6.444671
+  type: 'test'
+  ...
+# Subtest: MatchRoom3D: sala tem loot INTERIOR e spots de invasão da IA
+ok 214 - MatchRoom3D: sala tem loot INTERIOR e spots de invasão da IA
+  ---
+  duration_ms: 1.753908
+  type: 'test'
+  ...
+# Subtest: MatchRoom3D: bot abre folha fechada e cruza o vão (mesma IA da sim offline)
+ok 215 - MatchRoom3D: bot abre folha fechada e cruza o vão (mesma IA da sim offline)
+  ---
+  duration_ms: 9.600421
+  type: 'test'
+  ...
+# Subtest: GameAudio: door()/doorDown() sem ctx não lançam (contrato headless)
+ok 216 - GameAudio: door()/doorDown() sem ctx não lançam (contrato headless)
+  ---
+  duration_ms: 0.548495
+  type: 'test'
+  ...
+# Subtest: buildShellHost: folhas registradas == vãos do layout; animator converge; quebra esconde
+ok 217 - buildShellHost: folhas registradas == vãos do layout; animator converge; quebra esconde
+  ---
+  duration_ms: 577.553108
+  type: 'test'
+  ...
+# Subtest: fase9 drop: botCanEngage protege queda livre e chute alto
+ok 218 - fase9 drop: botCanEngage protege queda livre e chute alto
+  ---
+  duration_ms: 1.02013
+  type: 'test'
+  ...
+# Subtest: fase9 drop: botTargetModifiers aplica erro/dano reduzidos no ar e no pouso
+ok 219 - fase9 drop: botTargetModifiers aplica erro/dano reduzidos no ar e no pouso
+  ---
+  duration_ms: 0.758967
+  type: 'test'
+  ...
+# Subtest: fase9 drop: bot NÃO atira em jogador em queda livre (sky intocável)
+ok 220 - fase9 drop: bot NÃO atira em jogador em queda livre (sky intocável)
+  ---
+  duration_ms: 37.686485
+  type: 'test'
+  ...
+# Subtest: fase9 drop: bot NÃO atira em jogador de paraquedas acima do teto de engajamento
+ok 221 - fase9 drop: bot NÃO atira em jogador de paraquedas acima do teto de engajamento
+  ---
+  duration_ms: 18.421633
+  type: 'test'
+  ...
+# Subtest: fase9 drop: chute baixo é engajado com dano teto-reduzido (nunca letal de longe)
+ok 222 - fase9 drop: chute baixo é engajado com dano teto-reduzido (nunca letal de longe)
+  ---
+  duration_ms: 9.264312
+  type: 'test'
+  ...
+# Subtest: fase9 drop: aterrissagem abre janela de graça (landGraceT) que decai até zero
+ok 223 - fase9 drop: aterrissagem abre janela de graça (landGraceT) que decai até zero
+  ---
+  duration_ms: 14.343772
+  type: 'test'
+  ...
+# Subtest: fase9 drop: dano recebido dentro da janela de pouso é reduzido
+ok 224 - fase9 drop: dano recebido dentro da janela de pouso é reduzido
+  ---
+  duration_ms: 5.029552
+  type: 'test'
+  ...
+# Subtest: fase9 fx: evento ability offline carrega posição do caster e isSelf
+ok 225 - fase9 fx: evento ability offline carrega posição do caster e isSelf
+  ---
+  duration_ms: 2.855508
+  type: 'test'
+  ...
+# Subtest: fase9 fx: evento ability online alcança humano próximo com posição e isSelf=false
+ok 226 - fase9 fx: evento ability online alcança humano próximo com posição e isSelf=false
+  ---
+  duration_ms: 4.919908
+  type: 'test'
+  ...
+# Subtest: fase9 fx: paridade offline/online — habilidade bloqueada no ar e caído
+ok 227 - fase9 fx: paridade offline/online — habilidade bloqueada no ar e caído
+  ---
+  duration_ms: 2.207897
+  type: 'test'
+  ...
+# Subtest: fase9 room: bot online não dispara contra humano em queda livre
+ok 228 - fase9 room: bot online não dispara contra humano em queda livre
+  ---
+  duration_ms: 11.694246
+  type: 'test'
+  ...
+# Subtest: fase9 room: bot online engaja chute baixo com modificadores da tabela compartilhada
+ok 229 - fase9 room: bot online engaja chute baixo com modificadores da tabela compartilhada
+  ---
+  duration_ms: 5.826815
+  type: 'test'
+  ...
+# Subtest: ledger: dupla entrada, saldo derivado e histórico por conta
+ok 230 - ledger: dupla entrada, saldo derivado e histórico por conta
+  ---
+  duration_ms: 1.220623
+  type: 'test'
+  ...
+# Subtest: ledger: idempotência por chave — retry não duplica prêmio
+ok 231 - ledger: idempotência por chave — retry não duplica prêmio
+  ---
+  duration_ms: 0.523657
+  type: 'test'
+  ...
+# Subtest: economia: grant com teto diário, spend sem saldo negativo e moeda única KRC
+ok 232 - economia: grant com teto diário, spend sem saldo negativo e moeda única KRC
+  ---
+  duration_ms: 0.546279
+  type: 'test'
+  ...
+# Subtest: compliance: valor real bloqueado por construção e odds publicadas obrigatórias
+ok 233 - compliance: valor real bloqueado por construção e odds publicadas obrigatórias
+  ---
+  duration_ms: 1.002497
+  type: 'test'
+  ...
+# Subtest: economia HTTP: saldo/histórico próprios via token, grant só para admin e compliance para admin
+ok 234 - economia HTTP: saldo/histórico próprios via token, grant só para admin e compliance para admin
+  ---
+  duration_ms: 228.056671
+  type: 'test'
+  ...
+# Subtest: PostgreSQL: ledger persistido com idempotência e saldo no servidor real
+ok 235 - PostgreSQL: ledger persistido com idempotência e saldo no servidor real # SKIP
+  ---
+  duration_ms: 0.150734
+  type: 'test'
+  ...
+# Subtest: room3d: drain letal sai pelo finalizeDeath — killfeed ANOMALIA, sem DBNO
+ok 236 - room3d: drain letal sai pelo finalizeDeath — killfeed ANOMALIA, sem DBNO
+  ---
+  duration_ms: 16.65714
+  type: 'test'
+  ...
+# Subtest: room3d: crédito via lastHitBy — último atirador leva o kill da anomalia
+ok 237 - room3d: crédito via lastHitBy — último atirador leva o kill da anomalia
+  ---
+  duration_ms: 4.184662
+  type: 'test'
+  ...
+# Subtest: room3d: vítima HUMANA da anomalia recebe eliminated com by ANOMALIA
+ok 238 - room3d: vítima HUMANA da anomalia recebe eliminated com by ANOMALIA
+  ---
+  duration_ms: 3.711148
+  type: 'test'
+  ...
+# Subtest: room3d: caído (DBNO) dentro do campo é FINALIZADO pela anomalia
+ok 239 - room3d: caído (DBNO) dentro do campo é FINALIZADO pela anomalia
+  ---
+  duration_ms: 2.406353
+  type: 'test'
+  ...
+# Subtest: sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)
+ok 240 - sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)
+  ---
+  duration_ms: 6.722923
+  type: 'test'
+  ...
+# Subtest: sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador
+ok 241 - sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador
+  ---
+  duration_ms: 3.864639
+  type: 'test'
+  ...
+# Subtest: sim offline: PLAYER morto pela anomalia — eliminated com colocação + espólio
+ok 242 - sim offline: PLAYER morto pela anomalia — eliminated com colocação + espólio
+  ---
+  duration_ms: 4.885927
+  type: 'test'
+  ...
+# Subtest: sim offline: blindagem absorve e âncora protege — SEM morte espúria
+ok 243 - sim offline: blindagem absorve e âncora protege — SEM morte espúria
+  ---
+  duration_ms: 6.518427
+  type: 'test'
+  ...
+# Subtest: eos bridge: sem credenciais responde unconfigured, lista ausentes e rejeita operações (sem mock)
+ok 244 - eos bridge: sem credenciais responde unconfigured, lista ausentes e rejeita operações (sem mock)
+  ---
+  duration_ms: 1.965298
+  type: 'test'
+  ...
+# Subtest: eos bridge: anchoring por ownership (fencing) — sala não possuída é rejeitada
+ok 245 - eos bridge: anchoring por ownership (fencing) — sala não possuída é rejeitada
+  ---
+  duration_ms: 0.370722
+  type: 'test'
+  ...
+# Subtest: eos bridge HTTP: register→201, heartbeat→200, end→200, desconhecida→404, player→403
+ok 246 - eos bridge HTTP: register→201, heartbeat→200, end→200, desconhecida→404, player→403
+  ---
+  duration_ms: 250.795444
+  type: 'test'
+  ...
+# Subtest: eos bridge HTTP: runtime SEM credenciais rejeita registro com 503/EOS_UNCONFIGURED (nunca finge)
+ok 247 - eos bridge HTTP: runtime SEM credenciais rejeita registro com 503/EOS_UNCONFIGURED (nunca finge)
+  ---
+  duration_ms: 166.209195
+  type: 'test'
+  ...
+# Subtest: kind default é blood — decalPlan preserva a Fase 20 bit a bit (regressão zero)
+ok 248 - kind default é blood — decalPlan preserva a Fase 20 bit a bit (regressão zero)
+  ---
+  duration_ms: 1.92724
+  type: 'test'
+  ...
+# Subtest: scorch: determinístico por seed; radiais (ângulos espalhados) e sem offset direcional
+ok 249 - scorch: determinístico por seed; radiais (ângulos espalhados) e sem offset direcional
+  ---
+  duration_ms: 0.529753
+  type: 'test'
+  ...
+# Subtest: scorch: power escala o disco e satura nos extremos (clamp/NaN)
+ok 250 - scorch: power escala o disco e satura nos extremos (clamp/NaN)
+  ---
+  duration_ms: 0.540919
+  type: 'test'
+  ...
+# Subtest: gloo: determinístico, power escala, cristais finos e brilhos de gelo
+ok 251 - gloo: determinístico, power escala, cristais finos e brilhos de gelo
+  ---
+  duration_ms: 0.299441
+  type: 'test'
+  ...
+# Subtest: decalColor: scorch é carvão (mais escuro que sangue), gloo é azul-gelo, blood preservado
+ok 252 - decalColor: scorch é carvão (mais escuro que sangue), gloo é azul-gelo, blood preservado
+  ---
+  duration_ms: 0.288249
+  type: 'test'
+  ...
+# Subtest: buildDecalGeometry: partição do drawRange preservada p/ todas as famílias
+ok 253 - buildDecalGeometry: partição do drawRange preservada p/ todas as famílias
+  ---
+  duration_ms: 1.032987
+  type: 'test'
+  ...
+# Subtest: buildDecalGeometry: quad de raio com ângulo `a` casa com a matemática sin/cos
+ok 254 - buildDecalGeometry: quad de raio com ângulo `a` casa com a matemática sin/cos
+  ---
+  duration_ms: 0.321422
+  type: 'test'
+  ...
+# Subtest: buildDecalGeometry: sangue com a=0 gera os MESMOS vértices da receita da Fase 20
+ok 255 - buildDecalGeometry: sangue com a=0 gera os MESMOS vértices da receita da Fase 20
+  ---
+  duration_ms: 0.282275
+  type: 'test'
+  ...
+# Subtest: sistema: spawn de 3 famílias no MESMO pool — snapshot carrega o kind
+ok 256 - sistema: spawn de 3 famílias no MESMO pool — snapshot carrega o kind
+  ---
+  duration_ms: 2.292105
+  type: 'test'
+  ...
+# Subtest: sistema: cor do material segue a família (scorch escuro, gloo gelo)
+ok 257 - sistema: cor do material segue a família (scorch escuro, gloo gelo)
+  ---
+  duration_ms: 1.130211
+  type: 'test'
+  ...
+# Subtest: sistema: ring buffer RECICLA entre famílias (orçamento constante p/ tudo)
+ok 258 - sistema: ring buffer RECICLA entre famílias (orçamento constante p/ tudo)
+  ---
+  duration_ms: 1.44055
+  type: 'test'
+  ...
+# Subtest: sistema: LOD e fade de vida funcionam por decal independente da família
+ok 259 - sistema: LOD e fade de vida funcionam por decal independente da família
+  ---
+  duration_ms: 0.955987
+  type: 'test'
+  ...
+# Subtest: sistema: camadas anti z-fight e orientação mundial mantidas p/ novas famílias
+ok 260 - sistema: camadas anti z-fight e orientação mundial mantidas p/ novas famílias
+  ---
+  duration_ms: 1.016319
+  type: 'test'
+  ...
+# Subtest: tiers e decisão de LOD intocados (contrato da Fase 20)
+ok 261 - tiers e decisão de LOD intocados (contrato da Fase 20)
+  ---
+  duration_ms: 0.125793
+  type: 'test'
+  ...
+# Subtest: catálogo: 6 expressões canônicas com pose de mandíbula definida
+ok 262 - catálogo: 6 expressões canônicas com pose de mandíbula definida
+  ---
+  duration_ms: 1.34817
+  type: 'test'
+  ...
+# Subtest: faceTexture: variantes por expressão são texturas distintas e memoizadas
+ok 263 - faceTexture: variantes por expressão são texturas distintas e memoizadas
+  ---
+  duration_ms: 1.07677
+  type: 'test'
+  ...
+# Subtest: createOperative: parts.face é um rig funcional com neutral inicial
+ok 264 - createOperative: parts.face é um rig funcional com neutral inicial
+  ---
+  duration_ms: 47.309748
+  type: 'test'
+  ...
+# Subtest: pesos: clamp 0..1, inválida → false, <.5 volta ao neutral no map
+ok 265 - pesos: clamp 0..1, inválida → false, <.5 volta ao neutral no map
+  ---
+  duration_ms: 15.55852
+  type: 'test'
+  ...
+# Subtest: mandíbula: desce e abre por expressão, dentro de limites anatômicos
+ok 266 - mandíbula: desce e abre por expressão, dentro de limites anatômicos
+  ---
+  duration_ms: 12.306808
+  type: 'test'
+  ...
+# Subtest: acoplamento hit → dor: envelope do impacto pinta o rosto e decai p/ piscar
+ok 267 - acoplamento hit → dor: envelope do impacto pinta o rosto e decai p/ piscar
+  ---
+  duration_ms: 5.823626
+  type: 'test'
+  ...
+# Subtest: piscar automático: determinístico no ciclo de 3.6 s e dessincronizado por ator
+ok 268 - piscar automático: determinístico no ciclo de 3.6 s e dessincronizado por ator
+  ---
+  duration_ms: 9.377214
+  type: 'test'
+  ...
+# Subtest: morte e DBNO: rosto próprio, hit não sobrepõe (poses especiais imunes)
+ok 269 - morte e DBNO: rosto próprio, hit não sobrepõe (poses especiais imunes)
+  ---
+  duration_ms: 8.58723
+  type: 'test'
+  ...
+# Subtest: retrocompatibilidade: parts sem rig facial não quebram animateOperative
+ok 270 - retrocompatibilidade: parts sem rig facial não quebram animateOperative
+  ---
+  duration_ms: 4.767247
+  type: 'test'
+  ...
+# Subtest: createFaceRig standalone: API mínima funciona fora do createOperative
+ok 271 - createFaceRig standalone: API mínima funciona fora do createOperative
+  ---
+  duration_ms: 0.526016
+  type: 'test'
+  ...
+# Subtest: fault injection: leitura de sessão quebrada vira entrada fail-fresh, não erro
+ok 272 - fault injection: leitura de sessão quebrada vira entrada fail-fresh, não erro
+  ---
+  duration_ms: 120.396267
+  type: 'test'
+  ...
+# Subtest: fault injection: rate store fora é fail-open — partida continua e degradação fica em metrics
+ok 273 - fault injection: rate store fora é fail-open — partida continua e degradação fica em metrics
+  ---
+  duration_ms: 192.265793
+  type: 'test'
+  ...
+# Subtest: fault injection: audit store quebrado não derruba login nem guarda 500
+ok 274 - fault injection: audit store quebrado não derruba login nem guarda 500
+  ---
+  duration_ms: 175.915302
+  type: 'test'
+  ...
+# Subtest: anatomia da mão: 4 dedos + polegar por mão, cada dedo com 2 falanges
+ok 275 - anatomia da mão: 4 dedos + polegar por mão, cada dedo com 2 falanges
+  ---
+  duration_ms: 5.917844
+  type: 'test'
+  ...
+# Subtest: cadeia cinemática: curl do nó distal herda do proximal (junta em árvore)
+ok 276 - cadeia cinemática: curl do nó distal herda do proximal (junta em árvore)
+  ---
+  duration_ms: 2.700569
+  type: 'test'
+  ...
+# Subtest: geometria compartilhada: 8 dedos usam as MESMAS cápsulas (cache)
+ok 277 - geometria compartilhada: 8 dedos usam as MESMAS cápsulas (cache)
+  ---
+  duration_ms: 3.264146
+  type: 'test'
+  ...
+# Subtest: orçamento: rig FP com dedos ≤ 3400 tris (um único ator em close)
+ok 278 - orçamento: rig FP com dedos ≤ 3400 tris (um único ator em close)
+  ---
+  duration_ms: 1.022407
+  type: 'test'
+  ...
+# Subtest: pose de grip: curl enrola base e distal, com distal dobrando mais
+ok 279 - pose de grip: curl enrola base e distal, com distal dobrando mais
+  ---
+  duration_ms: 0.958191
+  type: 'test'
+  ...
+# Subtest: gatilho: índice direito estendido em repouso e flexiona ao atirar
+ok 280 - gatilho: índice direito estendido em repouso e flexiona ao atirar
+  ---
+  duration_ms: 1.133638
+  type: 'test'
+  ...
+# Subtest: micro-vida: breathe varia a pose e o pose é determinístico
+ok 281 - micro-vida: breathe varia a pose e o pose é determinístico
+  ---
+  duration_ms: 2.672193
+  type: 'test'
+  ...
+# Subtest: clamp: curl extremo não gera rotações absurdas nem NaN
+ok 282 - clamp: curl extremo não gera rotações absurdas nem NaN
+  ---
+  duration_ms: 0.819725
+  type: 'test'
+  ...
+# Subtest: API preservada: userData.arms continua exposto; 2 rigs não compartilham material de pele
+ok 283 - API preservada: userData.arms continua exposto; 2 rigs não compartilham material de pele
+  ---
+  duration_ms: 1.968066
+  type: 'test'
+  ...
+# Subtest: recolor com escopo: manga/colete tintable; pele, luva e dedos NUNCA
+ok 284 - recolor com escopo: manga/colete tintable; pele, luva e dedos NUNCA
+  ---
+  duration_ms: 1.485589
+  type: 'test'
+  ...
+# THREE.Object3D.add: object not an instance of THREE.Object3D. { visible: true }
+# THREE.Object3D.add: object not an instance of THREE.Object3D. { visible: false }
+# Subtest: frustumContains: à frente dentro, atrás fora, bordas com margem de raio
+ok 285 - frustumContains: à frente dentro, atrás fora, bordas com margem de raio
+  ---
+  duration_ms: 0.749475
+  type: 'test'
+  ...
+# Subtest: margem conservadora: ator na borda EXATA do FOV continua inside (meio visível não recorta)
+ok 286 - margem conservadora: ator na borda EXATA do FOV continua inside (meio visível não recorta)
+  ---
+  duration_ms: 0.258956
+  type: 'test'
+  ...
+# Subtest: gate: penalidade só após framesOut frames consecutivos FORA
+ok 287 - gate: penalidade só após framesOut frames consecutivos FORA
+  ---
+  duration_ms: 0.316756
+  type: 'test'
+  ...
+# Subtest: gate: atores próximos (dist < minDist) NUNCA são penalizados — sombra sobrevive à virada
+ok 288 - gate: atores próximos (dist < minDist) NUNCA são penalizados — sombra sobrevive à virada
+  ---
+  duration_ms: 0.181144
+  type: 'test'
+  ...
+# Subtest: integração com a cadeia: penalidade do frustum derruba o nível do LOD sem tocar a histerese
+ok 289 - integração com a cadeia: penalidade do frustum derruba o nível do LOD sem tocar a histerese
+  ---
+  duration_ms: 0.201773
+  type: 'test'
+  ...
+# Subtest: wrapper: LOD com gate congela nível abaixo quando fora de tela e volta com histerese
+ok 290 - wrapper: LOD com gate congela nível abaixo quando fora de tela e volta com histerese
+  ---
+  duration_ms: 1.282332
+  type: 'test'
+  ...
+# Subtest: F28 · AR-47 no catálogo com 4 sockets e munição 7.62
+ok 291 - F28 · AR-47 no catálogo com 4 sockets e munição 7.62
+  ---
+  duration_ms: 1.437699
+  type: 'test'
+  ...
+# Subtest: F28 · modelo da AR-47 expõe 4 âncoras de socket nomeadas
+ok 292 - F28 · modelo da AR-47 expõe 4 âncoras de socket nomeadas
+  ---
+  duration_ms: 3.631907
+  type: 'test'
+  ...
+# Subtest: F28 · pools de loot incluem gear e AR-47; raridade pré-definida respeitada
+ok 293 - F28 · pools de loot incluem gear e AR-47; raridade pré-definida respeitada
+  ---
+  duration_ms: 0.875959
+  type: 'test'
+  ...
+# Subtest: F28 · gearFromArmor mapeia armor → nível do colete
+ok 294 - F28 · gearFromArmor mapeia armor → nível do colete
+  ---
+  duration_ms: 0.178899
+  type: 'test'
+  ...
+# Subtest: F28 · nomes e bônus de gear por nível
+ok 295 - F28 · nomes e bônus de gear por nível
+  ---
+  duration_ms: 0.162875
+  type: 'test'
+  ...
+# Subtest: F28 · malhas de gear crescem por nível (substituição não regride)
+ok 296 - F28 · malhas de gear crescem por nível (substituição não regride)
+  ---
+  duration_ms: 5.716748
+  type: 'test'
+  ...
+# Subtest: F28 · applyOperativeGear é idempotente e substitui head-gear/mochila base
+ok 297 - F28 · applyOperativeGear é idempotente e substitui head-gear/mochila base
+  ---
+  duration_ms: 48.035481
+  type: 'test'
+  ...
+# Subtest: F28 · caixa de morte: farol, tampa entreaberta e gemas
+ok 298 - F28 · caixa de morte: farol, tampa entreaberta e gemas
+  ---
+  duration_ms: 1.395405
+  type: 'test'
+  ...
+# Subtest: F28 · conteúdo da caixa de morte é determinístico e herda o arsenal
+ok 299 - F28 · conteúdo da caixa de morte é determinístico e herda o arsenal
+  ---
+  duration_ms: 0.732398
+  type: 'test'
+  ...
+# Subtest: F28 · airdrop: agendador determinístico dispara uma única vez
+ok 300 - F28 · airdrop: agendador determinístico dispara uma única vez
+  ---
+  duration_ms: 0.595177
+  type: 'test'
+  ...
+# Subtest: F28 · caixa de airdrop: paraquedas, sinalizador e blindagem
+ok 301 - F28 · caixa de airdrop: paraquedas, sinalizador e blindagem
+  ---
+  duration_ms: 1.286714
+  type: 'test'
+  ...
+# Subtest: F28 · sim: pickup de gear sobe nível, concede armor e emite "gear"
+ok 302 - F28 · sim: pickup de gear sobe nível, concede armor e emite "gear"
+  ---
+  duration_ms: 20.330252
+  type: 'test'
+  ...
+# Subtest: F28 · sim: morte final de bot gera caixa de morte coletável com bundle
+ok 303 - F28 · sim: morte final de bot gera caixa de morte coletável com bundle
+  ---
+  duration_ms: 5.858536
+  type: 'test'
+  ...
+# Subtest: F28 · sim: airdrop de suprimento nasce UMA vez e o loot é coletável
+ok 304 - F28 · sim: airdrop de suprimento nasce UMA vez e o loot é coletável
+  ---
+  duration_ms: 244.37879
+  type: 'test'
+  ...
+# Subtest: F28 · sim: placa cerâmica reflete no nível do colete (paridade visual)
+ok 305 - F28 · sim: placa cerâmica reflete no nível do colete (paridade visual)
+  ---
+  duration_ms: 2.378975
+  type: 'test'
+  ...
+# Subtest: F28 · sim: seedHash determinístico (agendadores por partida)
+ok 306 - F28 · sim: seedHash determinístico (agendadores por partida)
+  ---
+  duration_ms: 4.506677
+  type: 'test'
+  ...
+# Subtest: [gfx] defaults completos e imutáveis
+ok 307 - [gfx] defaults completos e imutáveis
+  ---
+  duration_ms: 1.216988
+  type: 'test'
+  ...
+# Subtest: [gfx] storage vazio → defaults
+ok 308 - [gfx] storage vazio → defaults
+  ---
+  duration_ms: 0.965517
+  type: 'test'
+  ...
+# Subtest: [gfx] round-trip: save parcial → load devolve merge sanitizado
+ok 309 - [gfx] round-trip: save parcial → load devolve merge sanitizado
+  ---
+  duration_ms: 0.326939
+  type: 'test'
+  ...
+# Subtest: [gfx] sanitização: tier inválido descartado; números clampados ao domínio
+ok 310 - [gfx] sanitização: tier inválido descartado; números clampados ao domínio
+  ---
+  duration_ms: 0.161569
+  type: 'test'
+  ...
+# Subtest: [gfx] blob corrompido no storage → defaults (nunca lança)
+ok 311 - [gfx] blob corrompido no storage → defaults (nunca lança)
+  ---
+  duration_ms: 0.221243
+  type: 'test'
+  ...
+# Subtest: [gfx] storage sem setItem (modo privado) não quebra o save
+ok 312 - [gfx] storage sem setItem (modo privado) não quebra o save
+  ---
+  duration_ms: 0.205379
+  type: 'test'
+  ...
+# Subtest: [gfx] effectiveBaseTier: override manual vence; auto preserva o auto-detect
+ok 313 - [gfx] effectiveBaseTier: override manual vence; auto preserva o auto-detect
+  ---
+  duration_ms: 0.163108
+  type: 'test'
+  ...
+# Subtest: buffers: DPR nativo, DRS fracionário e SSR proporcional
+ok 314 - buffers: DPR nativo, DRS fracionário e SSR proporcional
+  ---
+  duration_ms: 1.369085
+  type: 'test'
+  ...
+# Subtest: DRS sincroniza composer, SSR e inverso da resolução FXAA
+ok 315 - DRS sincroniza composer, SSR e inverso da resolução FXAA
+  ---
+  duration_ms: 0.38465
+  type: 'test'
+  ...
+# Subtest: resolução não realoca DPR se inalterado; passes opcionais
+ok 316 - resolução não realoca DPR se inalterado; passes opcionais
+  ---
+  duration_ms: 0.140914
+  type: 'test'
+  ...
+# Subtest: descarte libera cada passe e composer mesmo com erro intermediário
+ok 317 - descarte libera cada passe e composer mesmo com erro intermediário
+  ---
+  duration_ms: 0.167583
+  type: 'test'
+  ...
+# Subtest: macrovariação: cinco mundos, determinismo e componentes limitados
+ok 318 - macrovariação: cinco mundos, determinismo e componentes limitados
+  ---
+  duration_ms: 1.50968
+  type: 'test'
+  ...
+# Subtest: [khaaos-e2e] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+ok 319 - [khaaos-e2e] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+  ---
+  duration_ms: 23.617014
+  type: 'test'
+  ...
+# Subtest: [khaaos-e2e] props não nascem dentro de colliders nem sobre loot
+ok 320 - [khaaos-e2e] props não nascem dentro de colliders nem sobre loot
+  ---
+  duration_ms: 16.755358
+  type: 'test'
+  ...
+# Subtest: [khaaos-e2e] fachadas dentro dos limites da estrutura
+ok 321 - [khaaos-e2e] fachadas dentro dos limites da estrutura
+  ---
+  duration_ms: 1.026431
+  type: 'test'
+  ...
+# Subtest: [fase6-graphics] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+ok 322 - [fase6-graphics] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+  ---
+  duration_ms: 5.277459
+  type: 'test'
+  ...
+# Subtest: [fase6-graphics] props não nascem dentro de colliders nem sobre loot
+ok 323 - [fase6-graphics] props não nascem dentro de colliders nem sobre loot
+  ---
+  duration_ms: 6.4474
+  type: 'test'
+  ...
+# Subtest: [fase6-graphics] fachadas dentro dos limites da estrutura
+ok 324 - [fase6-graphics] fachadas dentro dos limites da estrutura
+  ---
+  duration_ms: 0.395432
+  type: 'test'
+  ...
+# Subtest: [det-9381] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+ok 325 - [det-9381] estradas ligam a praça aos 4 distritos sem atravessar estruturas
+  ---
+  duration_ms: 5.456152
+  type: 'test'
+  ...
+# Subtest: [det-9381] props não nascem dentro de colliders nem sobre loot
+ok 326 - [det-9381] props não nascem dentro de colliders nem sobre loot
+  ---
+  duration_ms: 5.000573
+  type: 'test'
+  ...
+# Subtest: [det-9381] fachadas dentro dos limites da estrutura
+ok 327 - [det-9381] fachadas dentro dos limites da estrutura
+  ---
+  duration_ms: 0.574915
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma seed => mesmas estradas/props/fachadas
+ok 328 - determinismo: mesma seed => mesmas estradas/props/fachadas
+  ---
+  duration_ms: 10.596393
+  type: 'test'
+  ...
+# Subtest: canopyTint retorna paleta fechada e variada
+ok 329 - canopyTint retorna paleta fechada e variada
+  ---
+  duration_ms: 0.291083
+  type: 'test'
+  ...
+# Subtest: health: sonda mede latência real, marca falha e usa cache por TTL
+ok 330 - health: sonda mede latência real, marca falha e usa cache por TTL
+  ---
+  duration_ms: 6.170822
+  type: 'test'
+  ...
+# Subtest: health: dependência que não responde vira not_ok por probe_timeout
+ok 331 - health: dependência que não responde vira not_ok por probe_timeout
+  ---
+  duration_ms: 81.215776
+  type: 'test'
+  ...
+# Subtest: health: monitor padrão conecta sessionStore/rateStore/auditStore
+ok 332 - health: monitor padrão conecta sessionStore/rateStore/auditStore
+  ---
+  duration_ms: 1.561041
+  type: 'test'
+  ...
+# Subtest: autoscale: carga por região, fila e recomendação determinística
+ok 333 - autoscale: carga por região, fila e recomendação determinística
+  ---
+  duration_ms: 0.40367
+  type: 'test'
+  ...
+# Subtest: healthz/readyz/ping/regions: ponta a ponta com gate de saturação
+ok 334 - healthz/readyz/ping/regions: ponta a ponta com gate de saturação
+  ---
+  duration_ms: 142.170947
+  type: 'test'
+  ...
+# Subtest: auth: senha, token assinado e RBAC
+ok 335 - auth: senha, token assinado e RBAC
+  ---
+  duration_ms: 128.364338
+  type: 'test'
+  ...
+# Subtest: persistência: sessão sobrevive à recriação do store
+ok 336 - persistência: sessão sobrevive à recriação do store
+  ---
+  duration_ms: 1.217072
+  type: 'test'
+  ...
+# Subtest: rate limit: duas instâncias compartilham contador atômico
+ok 337 - rate limit: duas instâncias compartilham contador atômico
+  ---
+  duration_ms: 0.290658
+  type: 'test'
+  ...
+# Subtest: matchmaking: escolhe região e sala compatível
+ok 338 - matchmaking: escolhe região e sala compatível
+  ---
+  duration_ms: 0.290722
+  type: 'test'
+  ...
+# Subtest: healthz e readyz: liveness e readiness sem autenticação
+ok 339 - healthz e readyz: liveness e readiness sem autenticação
+  ---
+  duration_ms: 38.025692
+  type: 'test'
+  ...
+# Subtest: integração: login HTTP, RBAC admin, websocket autenticado e reconexão
+ok 340 - integração: login HTTP, RBAC admin, websocket autenticado e reconexão
+  ---
+  duration_ms: 208.31176
+  type: 'test'
+  ...
+# Subtest: horizontal: duas réplicas compartilham rate limit por identidade
+ok 341 - horizontal: duas réplicas compartilham rate limit por identidade
+  ---
+  duration_ms: 183.786795
+  type: 'test'
+  ...
+# Subtest: hollowAccess: determinismo total (mesma seed => mesmos colliders/floors)
+ok 342 - hollowAccess: determinismo total (mesma seed => mesmos colliders/floors)
+  ---
+  duration_ms: 44.904406
+  type: 'test'
+  ...
+# Subtest: hollowAccess: TODOS os cenários têm portas reais, janelas e mezaninos
+ok 343 - hollowAccess: TODOS os cenários têm portas reais, janelas e mezaninos
+  ---
+  duration_ms: 13.913557
+  type: 'test'
+  ...
+# Subtest: hollowAccess: estruturas SEM casca preservam o collider sólido bit a bit
+ok 344 - hollowAccess: estruturas SEM casca preservam o collider sólido bit a bit
+  ---
+  duration_ms: 11.539788
+  type: 'test'
+  ...
+# Subtest: porta REAL: vão de porta sem collider no eixo de passagem (raio laser atravessa)
+ok 345 - porta REAL: vão de porta sem collider no eixo de passagem (raio laser atravessa)
+  ---
+  duration_ms: 5.533015
+  type: 'test'
+  ...
+# Subtest: janela: peitoril abaixo e verga acima bloqueiam; a FAIXA deixa balas passarem
+ok 346 - janela: peitoril abaixo e verga acima bloqueiam; a FAIXA deixa balas passarem
+  ---
+  duration_ms: 1.941742
+  type: 'test'
+  ...
+# Subtest: supportAt: mundo SEM floors legado (0) e com floors retorna o maior topo elegível
+ok 347 - supportAt: mundo SEM floors legado (0) e com floors retorna o maior topo elegível
+  ---
+  duration_ms: 0.315179
+  type: 'test'
+  ...
+# Subtest: escada + mezanino: ator SOBE os degraus e anda no mezanino (stepActorMovement)
+ok 348 - escada + mezanino: ator SOBE os degraus e anda no mezanino (stepActorMovement)
+  ---
+  duration_ms: 17.409307
+  type: 'test'
+  ...
+# Subtest: pouso VARRIDO: queda de 40m pousa NO mezanino (anti-tunneling) e no chão fora dele
+ok 349 - pouso VARRIDO: queda de 40m pousa NO mezanino (anti-tunneling) e no chão fora dele
+  ---
+  duration_ms: 7.368157
+  type: 'test'
+  ...
+# Subtest: paredes ocAs: ator ATRAVESSA o vão da porta e fica DENTRO do prédio
+ok 350 - paredes ocAs: ator ATRAVESSA o vão da porta e fica DENTRO do prédio
+  ---
+  duration_ms: 8.624698
+  type: 'test'
+  ...
+# Subtest: getWorldLayout: floors + access metadata presentes nos 5 cenários (cache determinístico)
+ok 351 - getWorldLayout: floors + access metadata presentes nos 5 cenários (cache determinístico)
+  ---
+  duration_ms: 9.316763
+  type: 'test'
+  ...
+# Subtest: QUALIDADE: lightFactor por tier (low .4 / medium .8 / high 1)
+ok 352 - QUALIDADE: lightFactor por tier (low .4 / medium .8 / high 1)
+  ---
+  duration_ms: 0.196116
+  type: 'test'
+  ...
+# Subtest: buildShellHost: cascas têm VIDRO nas janelas e escada/mezanino visuais
+ok 353 - buildShellHost: cascas têm VIDRO nas janelas e escada/mezanino visuais
+  ---
+  duration_ms: 591.615131
+  type: 'test'
+  ...
+# Subtest: buildLightShafts: registro, quads de raio + poças, animator finito, idempotência
+ok 354 - buildLightShafts: registro, quads de raio + poças, animator finito, idempotência
+  ---
+  duration_ms: 2061.527829
+  type: 'test'
+  ...
+# Subtest: lightFactor: tier baixo gera MENOS raios que o high (gate determinístico)
+ok 355 - lightFactor: tier baixo gera MENOS raios que o high (gate determinístico)
+  ---
+  duration_ms: 663.564664
+  type: 'test'
+  ...
+# Subtest: integração buildScene: nada quebrou nos 5 cenários (posições finitas, colliders ocOs na cena)
+ok 356 - integração buildScene: nada quebrou nos 5 cenários (posições finitas, colliders ocOs na cena)
+  ---
+  duration_ms: 1771.927808
+  type: 'test'
+  ...
+# Subtest: cenários preservados: SCENARIOS intactos pela Fase 24 (contrato de gameplay)
+ok 357 - cenários preservados: SCENARIOS intactos pela Fase 24 (contrato de gameplay)
+  ---
+  duration_ms: 0.165885
+  type: 'test'
+  ...
+# Subtest: portas: determinismo total e cobertura nos 5 cenários (ruína/pavilhão sem painel)
+ok 358 - portas: determinismo total e cobertura nos 5 cenários (ruína/pavilhão sem painel)
+  ---
+  duration_ms: 35.342157
+  type: 'test'
+  ...
+# Subtest: painel DENTRO do vão: AABB casa com a abertura da casca (nada de porta fantasma)
+ok 359 - painel DENTRO do vão: AABB casa com a abertura da casca (nada de porta fantasma)
+  ---
+  duration_ms: 4.548602
+  type: 'test'
+  ...
+# Subtest: loot interior: determinismo, mezanino em 2,95, chão em 0,55 e FORA de colliders
+ok 360 - loot interior: determinismo, mezanino em 2,95, chão em 0,55 e FORA de colliders
+  ---
+  duration_ms: 20.188991
+  type: 'test'
+  ...
+# Subtest: getWorldLayout: doors + interiorSpots no cache determinístico dos 5 cenários
+ok 361 - getWorldLayout: doors + interiorSpots no cache determinístico dos 5 cenários
+  ---
+  duration_ms: 10.275589
+  type: 'test'
+  ...
+# Subtest: porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorMovement)
+ok 362 - porta destrutível: ator REAL fica PRESO fora; quebrada, entra (stepActorMovement)
+  ---
+  duration_ms: 17.396332
+  type: 'test'
+  ...
+# Subtest: sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo físico
+ok 363 - sim offline: hp esgotado emite doorDown, destrói a folha e limpa o mundo físico
+  ---
+  duration_ms: 6.077345
+  type: 'test'
+  ...
+# Subtest: sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)
+ok 364 - sim offline: BALAS desgastam o painel (linha de tiro real contra a porta)
+  ---
+  duration_ms: 18.236119
+  type: 'test'
+  ...
+# Subtest: sim offline: MELEE arrebenta a folha de MADEIRA rápido (mult 3,0×) e prioriza carne
+ok 365 - sim offline: MELEE arrebenta a folha de MADEIRA rápido (mult 3,0×) e prioriza carne
+  ---
+  duration_ms: 12.795673
+  type: 'test'
+  ...
+# Subtest: sim offline: loot interior nos ids loot-i*, mezanino pegável só de cima
+ok 366 - sim offline: loot interior nos ids loot-i*, mezanino pegável só de cima
+  ---
+  duration_ms: 2.932791
+  type: 'test'
+  ...
+# Subtest: room3d: portas autoritativas (snapshot, doorDown global, collider fora do mundo)
+ok 367 - room3d: portas autoritativas (snapshot, doorDown global, collider fora do mundo)
+  ---
+  duration_ms: 6.00301
+  type: 'test'
+  ...
+# Subtest: room3d: bala do humano desgasta a porta (autoritativo, ponta a ponta)
+ok 368 - room3d: bala do humano desgasta a porta (autoritativo, ponta a ponta)
+  ---
+  duration_ms: 49.502601
+  type: 'test'
+  ...
+# Subtest: buildScene: doorPanels registrados (id → grupo) e painel completo (6 peças)
+ok 369 - buildScene: doorPanels registrados (id → grupo) e painel completo (6 peças)
+  ---
+  duration_ms: 2235.381124
+  type: 'test'
+  ...
+# Subtest: cenários preservados: SCENARIOS intactos pela Fase 25 (contrato de gameplay)
+ok 370 - cenários preservados: SCENARIOS intactos pela Fase 25 (contrato de gameplay)
+  ---
+  duration_ms: 0.170157
+  type: 'test'
+  ...
+# Subtest: terreno: plano jogável permanece EXATAMENTE em y=0 (contrato de gameplay)
+ok 371 - terreno: plano jogável permanece EXATAMENTE em y=0 (contrato de gameplay)
+  ---
+  duration_ms: 6.445917
+  type: 'test'
+  ...
+# Subtest: terreno: relevo existe além da borda em TODOS os cenários + determinismo
+ok 372 - terreno: relevo existe além da borda em TODOS os cenários + determinismo
+  ---
+  duration_ms: 0.69507
+  type: 'test'
+  ...
+# Subtest: terreno: contínuo (sem degraus) na rampa da borda
+ok 373 - terreno: contínuo (sem degraus) na rampa da borda
+  ---
+  duration_ms: 0.172364
+  type: 'test'
+  ...
+# Subtest: terreno: perfis por mundo (Ckesalth dunes ≫ Barburhen planície; cantos mais altos)
+ok 374 - terreno: perfis por mundo (Ckesalth dunes ≫ Barburhen planície; cantos mais altos)
+  ---
+  duration_ms: 8.807701
+  type: 'test'
+  ...
+# Subtest: buildScene: malha de terreno com relevo + vertex colors + centro plano
+ok 375 - buildScene: malha de terreno com relevo + vertex colors + centro plano
+  ---
+  duration_ms: 528.993499
+  type: 'test'
+  ...
+# Subtest: interiores: determinismo (mesma seed+cenário => placements idênticos)
+ok 376 - interiores: determinismo (mesma seed+cenário => placements idênticos)
+  ---
+  duration_ms: 17.003911
+  type: 'test'
+  ...
+# Subtest: interiores: kit por tipo de estrutura + acento por mundo
+ok 377 - interiores: kit por tipo de estrutura + acento por mundo
+  ---
+  duration_ms: 29.952045
+  type: 'test'
+  ...
+# Subtest: interiores: ZERO impacto em gameplay — layout intacto, mobília dentro da pegada, porta na face da fachada e corredor livre
+ok 378 - interiores: ZERO impacto em gameplay — layout intacto, mobília dentro da pegada, porta na face da fachada e corredor livre
+  ---
+  duration_ms: 9.772469
+  type: 'test'
+  ...
+# Subtest: interiores: densidade responde ao tier (interiorFactor)
+ok 379 - interiores: densidade responde ao tier (interiorFactor)
+  ---
+  duration_ms: 1.998836
+  type: 'test'
+  ...
+# Subtest: buildShellHost: casca tem piso, paredes com vão, teto e mobília (malha real)
+ok 380 - buildShellHost: casca tem piso, paredes com vão, teto e mobília (malha real)
+  ---
+  duration_ms: 443.057378
+  type: 'test'
+  ...
+# Subtest: integração buildScene: registro interiors completo nos 5 cenários + idempotência
+ok 381 - integração buildScene: registro interiors completo nos 5 cenários + idempotência
+  ---
+  duration_ms: 1830.201914
+  type: 'test'
+  ...
+# Subtest: cascas substituem a caixa sólida: sem box duplicado, sem cap, collider intocado
+ok 382 - cascas substituem a caixa sólida: sem box duplicado, sem cap, collider intocado
+  ---
+  duration_ms: 288.541346
+  type: 'test'
+  ...
+# Subtest: cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)
+ok 383 - cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)
+  ---
+  duration_ms: 0.127349
+  type: 'test'
+  ...
+# Subtest: windowPanelsOf: determinístico, ids únicos e 1:1 com as aberturas do dressing
+ok 384 - windowPanelsOf: determinístico, ids únicos e 1:1 com as aberturas do dressing
+  ---
+  duration_ms: 26.716387
+  type: 'test'
+  ...
+# Subtest: windowBoxCollider: íntegro AABB no plano da parede; destruído => null
+ok 385 - windowBoxCollider: íntegro AABB no plano da parede; destruído => null
+  ---
+  duration_ms: 3.096728
+  type: 'test'
+  ...
+# Subtest: sim offline: bala RACHA o vidro íntegro (para no painel, hp cai, sem windowDown)
+ok 386 - sim offline: bala RACHA o vidro íntegro (para no painel, hp cai, sem windowDown)
+  ---
+  duration_ms: 6.388733
+  type: 'test'
+  ...
+# Subtest: sim offline: a bala que ESTILHAÇA SEGUE (vidro não segura projétil) + windowDown
+ok 387 - sim offline: a bala que ESTILHAÇA SEGUE (vidro não segura projétil) + windowDown
+  ---
+  duration_ms: 4.373324
+  type: 'test'
+  ...
+# Subtest: sim offline: EXPLOSÃO estilhaça o vidro no raio (mesma regra da porta)
+ok 388 - sim offline: EXPLOSÃO estilhaça o vidro no raio (mesma regra da porta)
+  ---
+  duration_ms: 2.972215
+  type: 'test'
+  ...
+# Subtest: sim offline: MELEE estilhaça o vidro no 1º golpe (mult 4,0× do WINDOW)
+ok 389 - sim offline: MELEE estilhaça o vidro no 1º golpe (mult 4,0× do WINDOW)
+  ---
+  duration_ms: 3.277522
+  type: 'test'
+  ...
+# Subtest: LOS: colliders de vidro existem na física e NUNCA bloqueiam visão (skip kind window)
+ok 390 - LOS: colliders de vidro existem na física e NUNCA bloqueiam visão (skip kind window)
+  ---
+  duration_ms: 2.5093
+  type: 'test'
+  ...
+# Subtest: depot: porta METÁLICA (hp 500) — mesmo tratamento do hangar
+ok 391 - depot: porta METÁLICA (hp 500) — mesmo tratamento do hangar
+  ---
+  duration_ms: 4.277905
+  type: 'test'
+  ...
+# Subtest: snapshot/applySnapshot: estado do vidro round-trips (idempotente p/ snapshots antigos)
+ok 392 - snapshot/applySnapshot: estado do vidro round-trips (idempotente p/ snapshots antigos)
+  ---
+  duration_ms: 3.431451
+  type: 'test'
+  ...
+# Subtest: MatchRoom3D: vidro autoritativo — bala do humano racha, snapshot carrega e windowDown sai GLOBAL
+ok 393 - MatchRoom3D: vidro autoritativo — bala do humano racha, snapshot carrega e windowDown sai GLOBAL
+  ---
+  duration_ms: 7.492018
+  type: 'test'
+  ...
+# Subtest: HUD: alvo quebrável expõe hp/max coerente (porta metal/madeira e janela)
+ok 394 - HUD: alvo quebrável expõe hp/max coerente (porta metal/madeira e janela)
+  ---
+  duration_ms: 2.511545
+  type: 'test'
+  ...
+# Subtest: VISUAL: cascas registram os painéis de vidro com o MESMO id do plano puro
+ok 395 - VISUAL: cascas registram os painéis de vidro com o MESMO id do plano puro
+  ---
+  duration_ms: 526.705325
+  type: 'test'
+  ...
+# Subtest: F33 · loot geral: TODA instância nasce com id canônico loot-N ÚNICO (8 seeds)
+ok 396 - F33 · loot geral: TODA instância nasce com id canônico loot-N ÚNICO (8 seeds)
+  ---
+  duration_ms: 30.923688
+  type: 'test'
+  ...
+# Subtest: F33 · contrato: referência de catálogo migra p/ weaponId/ammoId/resourceId/attachmentId (nunca no id)
+ok 397 - F33 · contrato: referência de catálogo migra p/ weaponId/ammoId/resourceId/attachmentId (nunca no id)
+  ---
+  duration_ms: 4.228461
+  type: 'test'
+  ...
+# Subtest: F33 · nome: arma preserva o nome do catálogo; não-armas compostos tipo "5.56 ×20"
+ok 398 - F33 · nome: arma preserva o nome do catálogo; não-armas compostos tipo "5.56 ×20"
+  ---
+  duration_ms: 2.256463
+  type: 'test'
+  ...
+# Subtest: F33 · pickup de INSTÂNCIA: arma vem pelo weaponId (nunca fallback g19)
+ok 399 - F33 · pickup de INSTÂNCIA: arma vem pelo weaponId (nunca fallback g19)
+  ---
+  duration_ms: 4.639326
+  type: 'test'
+  ...
+# Subtest: F33 · pickup de munição por instância: inventário na chave do catálogo + teto AMMO_CAP
+ok 400 - F33 · pickup de munição por instância: inventário na chave do catálogo + teto AMMO_CAP
+  ---
+  duration_ms: 3.202843
+  type: 'test'
+  ...
+# Subtest: F33 · loot INTERIOR/MEZANINO: mesmo contrato — arma interior NÃO vira g19
+ok 401 - F33 · loot INTERIOR/MEZANINO: mesmo contrato — arma interior NÃO vira g19
+  ---
+  duration_ms: 2.473092
+  type: 'test'
+  ...
+# Subtest: F33 · bundles crus (deathBox/supplyDrop) seguem pegáveis pelo fallback || item.id
+ok 402 - F33 · bundles crus (deathBox/supplyDrop) seguem pegáveis pelo fallback || item.id
+  ---
+  duration_ms: 3.126297
+  type: 'test'
+  ...
+# Subtest: F33 · drop DUPLICADO: 2 instâncias do mesmo drop mantêm ids distintos (fim da colisão do syncLoot)
+ok 403 - F33 · drop DUPLICADO: 2 instâncias do mesmo drop mantêm ids distintos (fim da colisão do syncLoot)
+  ---
+  duration_ms: 2.243208
+  type: 'test'
+  ...
+# Subtest: F33 · paridade room3d × sim: snapshot serializável — sem campos de função/stats crus
+ok 404 - F33 · paridade room3d × sim: snapshot serializável — sem campos de função/stats crus
+  ---
+  duration_ms: 2.130735
+  type: 'test'
+  ...
+# Subtest: seededRng é determinístico byte a byte (mesma semente ⇒ mesma sequência)
+ok 405 - seededRng é determinístico byte a byte (mesma semente ⇒ mesma sequência)
+  ---
+  duration_ms: 1.388934
+  type: 'test'
+  ...
+# Subtest: presets carregam parâmetros canônicos (tecido trama, metal escovado)
+ok 406 - presets carregam parâmetros canônicos (tecido trama, metal escovado)
+  ---
+  duration_ms: 0.17632
+  type: 'test'
+  ...
+# Subtest: microDetailParams: determinístico por semente com jitter controlado
+ok 407 - microDetailParams: determinístico por semente com jitter controlado
+  ---
+  duration_ms: 0.282354
+  type: 'test'
+  ...
+# Subtest: headless: buildMicroDetailMaps não depende de canvas (Node) e é puro
+ok 408 - headless: buildMicroDetailMaps não depende de canvas (Node) e é puro
+  ---
+  duration_ms: 0.351468
+  type: 'test'
+  ...
+# Subtest: applyMicroDetail é no-op seguro em Node e não altera geometria/cores
+ok 409 - applyMicroDetail é no-op seguro em Node e não altera geometria/cores
+  ---
+  duration_ms: 0.830634
+  type: 'test'
+  ...
+# Subtest: stamina drains on sprint and recovers while tactical crouched
+ok 410 - stamina drains on sprint and recovers while tactical crouched
+  ---
+  duration_ms: 1.381731
+  type: 'test'
+  ...
+# Subtest: sprint+crouch starts a bounded slide with lower camera pose state
+ok 411 - sprint+crouch starts a bounded slide with lower camera pose state
+  ---
+  duration_ms: 0.328084
+  type: 'test'
+  ...
+# Subtest: multi-instância: réplica simultânea aceita jogador e sessão persistida é visível no arquivo compartilhado
+ok 412 - multi-instância: réplica simultânea aceita jogador e sessão persistida é visível no arquivo compartilhado
+  ---
+  duration_ms: 196.388848
+  type: 'test'
+  ...
+# Subtest: reinício: sessão sobrevive ao encerramento do processo e reconnect pós-restart é aceito sem erro
+ok 413 - reinício: sessão sobrevive ao encerramento do processo e reconnect pós-restart é aceito sem erro
+  ---
+  duration_ms: 197.676864
+  type: 'test'
+  ...
+# Subtest: obs: traceparent W3C — parse, format e validação de entrada inválida
+ok 414 - obs: traceparent W3C — parse, format e validação de entrada inválida
+  ---
+  duration_ms: 1.313539
+  type: 'test'
+  ...
+# Subtest: obs: spans com duração, filtros de consulta e ring buffer com teto
+ok 415 - obs: spans com duração, filtros de consulta e ring buffer com teto
+  ---
+  duration_ms: 16.981818
+  type: 'test'
+  ...
+# Subtest: obs: ponta a ponta — trace propagation, /admin/traces e /admin/logs com RBAC
+ok 416 - obs: ponta a ponta — trace propagation, /admin/traces e /admin/logs com RBAC
+  ---
+  duration_ms: 275.899204
+  type: 'test'
+  ...
+# Subtest: obs: middleware isola falha do handler — 500 estruturado sem derrubar o processo
+ok 417 - obs: middleware isola falha do handler — 500 estruturado sem derrubar o processo
+  ---
+  duration_ms: 10.996948
+  type: 'test'
+  ...
+# Subtest: obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (opt-in)
+ok 418 - obs: exporter Redis Stream agrega spans/logs de múltiplas instâncias (opt-in) # SKIP KR_REDIS_TEST_URL ausente
+  ---
+  duration_ms: 0.138916
+  type: 'test'
+  ...
+# Subtest: fail-closed: sem plano de oficiais, a insígnia OCE é recusada com operative_error
+ok 419 - fail-closed: sem plano de oficiais, a insígnia OCE é recusada com operative_error
+  ---
+  duration_ms: 11.534636
+  type: 'test'
+  ...
+# Subtest: fora da janela do 7º/9º artigo: recusa com motivo do plano
+ok 420 - fora da janela do 7º/9º artigo: recusa com motivo do plano
+  ---
+  duration_ms: 0.383455
+  type: 'test'
+  ...
+# Subtest: dentro da janela: humano reivindica a insígnia e assume a carga canônica do OCE
+ok 421 - dentro da janela: humano reivindica a insígnia e assume a carga canônica do OCE
+  ---
+  duration_ms: 0.350809
+  type: 'test'
+  ...
+# Subtest: insígnia é ÚNICA por partida: segundo humano não toma a mesma insígnia
+ok 422 - insígnia é ÚNICA por partida: segundo humano não toma a mesma insígnia
+  ---
+  duration_ms: 0.422239
+  type: 'test'
+  ...
+# Subtest: trocar para operativo regular libera a insígnia OCE
+ok 423 - trocar para operativo regular libera a insígnia OCE
+  ---
+  duration_ms: 0.305577
+  type: 'test'
+  ...
+# Subtest: trocar entre OCEs libera apenas a insígnia anterior
+ok 424 - trocar entre OCEs libera apenas a insígnia anterior
+  ---
+  duration_ms: 0.326468
+  type: 'test'
+  ...
+# Subtest: patente no snapshot: humana via setPatente, bot por tier, own view e others
+ok 425 - patente no snapshot: humana via setPatente, bot por tier, own view e others
+  ---
+  duration_ms: 2.877717
+  type: 'test'
+  ...
+# Subtest: humano-OCE aparece dourado no snapshot (officer + callsign) com patente
+ok 426 - humano-OCE aparece dourado no snapshot (officer + callsign) com patente
+  ---
+  duration_ms: 0.96142
+  type: 'test'
+  ...
+# Subtest: fase10 officers: catálogo canônico tem exatamente 3 oficiais identificados
+ok 427 - fase10 officers: catálogo canônico tem exatamente 3 oficiais identificados
+  ---
+  duration_ms: 0.946588
+  type: 'test'
+  ...
+# Subtest: fase10 officers: officerDeployment traduz o plano do POJ em spawns determinísticos
+ok 428 - fase10 officers: officerDeployment traduz o plano do POJ em spawns determinísticos
+  ---
+  duration_ms: 0.741769
+  type: 'test'
+  ...
+# Subtest: fase10 officers: combate de elite deriva de BOT_COMBAT — reação curta, erro menor, dano contido
+ok 429 - fase10 officers: combate de elite deriva de BOT_COMBAT — reação curta, erro menor, dano contido
+  ---
+  duration_ms: 0.179157
+  type: 'test'
+  ...
+# Subtest: fase10 officers: shouldWithdraw e feed
+ok 430 - fase10 officers: shouldWithdraw e feed
+  ---
+  duration_ms: 0.227785
+  type: 'test'
+  ...
+# Subtest: fase10 room: plano autorizado implanta 3 oficiais acima do botFill com flag no snapshot
+ok 431 - fase10 room: plano autorizado implanta 3 oficiais acima do botFill com flag no snapshot
+  ---
+  duration_ms: 14.153602
+  type: 'test'
+  ...
+# Subtest: fase10 room: sem plano (ou negado) nenhuma sala ganha oficiais — default é zero
+ok 432 - fase10 room: sem plano (ou negado) nenhuma sala ganha oficiais — default é zero
+  ---
+  duration_ms: 6.026972
+  type: 'test'
+  ...
+# Subtest: fase10 room: oficiais se RETIRAM ao fim da duração autorizada — sem crédito de kill
+ok 433 - fase10 room: oficiais se RETIRAM ao fim da duração autorizada — sem crédito de kill
+  ---
+  duration_ms: 29.77287
+  type: 'test'
+  ...
+# Subtest: fase10 room: oficiais caídos em combate são removidos na retirada junto com vivos
+ok 434 - fase10 room: oficiais caídos em combate são removidos na retirada junto com vivos
+  ---
+  duration_ms: 12.875791
+  type: 'test'
+  ...
+# Subtest: fase10 room: oficiais respeitam a proteção de paraquedistas (mesma curva Fase 9)
+ok 435 - fase10 room: oficiais respeitam a proteção de paraquedistas (mesma curva Fase 9)
+  ---
+  duration_ms: 5.253255
+  type: 'test'
+  ...
+# Subtest: fase10 sim offline: ?officers=1 implanta 3 oficiais com combate de elite e retirada
+ok 436 - fase10 sim offline: ?officers=1 implanta 3 oficiais com combate de elite e retirada
+  ---
+  duration_ms: 23.531078
+  type: 'test'
+  ...
+# Subtest: fase10 sim offline: default SEM oficiais — zero mudança de comportamento canônico
+ok 437 - fase10 sim offline: default SEM oficiais — zero mudança de comportamento canônico
+  ---
+  duration_ms: 2.910677
+  type: 'test'
+  ...
+# Subtest: fase8 identidade: setOperative valida catálogo e só muda em LOBBY
+ok 438 - fase8 identidade: setOperative valida catálogo e só muda em LOBBY
+  ---
+  duration_ms: 13.03595
+  type: 'test'
+  ...
+# Subtest: fase8 identidade: addPlayer aceita operativo e snapshot carrega self+others
+ok 439 - fase8 identidade: addPlayer aceita operativo e snapshot carrega self+others
+  ---
+  duration_ms: 4.782273
+  type: 'test'
+  ...
+# Subtest: fase8 identidade: addPlayer rejeita catálogo inválido e cai no VANGUARD
+ok 440 - fase8 identidade: addPlayer rejeita catálogo inválido e cai no VANGUARD
+  ---
+  duration_ms: 2.468228
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: heal (Coágulo de Campo) cura com teto e entra em cooldown
+ok 441 - fase8 habilidade: heal (Coágulo de Campo) cura com teto e entra em cooldown
+  ---
+  duration_ms: 7.551226
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: heal respeita vida cheia (abilityUnavailable, sem custo)
+ok 442 - fase8 habilidade: heal respeita vida cheia (abilityUnavailable, sem custo)
+  ---
+  duration_ms: 2.981623
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: cooldownTicks no snapshot segue a convenção 30Hz
+ok 443 - fase8 habilidade: cooldownTicks no snapshot segue a convenção 30Hz
+  ---
+  duration_ms: 2.446065
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: dash (Ruptura de Viela) limita o deslocamento ao orçamento
+ok 444 - fase8 habilidade: dash (Ruptura de Viela) limita o deslocamento ao orçamento
+  ---
+  duration_ms: 21.225868
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: speed (Investida Quebramar) amplia o deslocamento ~1.45x
+ok 445 - fase8 habilidade: speed (Investida Quebramar) amplia o deslocamento ~1.45x
+  ---
+  duration_ms: 36.954586
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: precision ativa o multiplicador de precisão no ator
+ok 446 - fase8 habilidade: precision ativa o multiplicador de precisão no ator
+  ---
+  duration_ms: 1.996218
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: damageReduction reduz o dano direto recebido em 25%
+ok 447 - fase8 habilidade: damageReduction reduz o dano direto recebido em 25%
+  ---
+  duration_ms: 6.036861
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: temporaryArmor absorve dano e expira zerando
+ok 448 - fase8 habilidade: temporaryArmor absorve dano e expira zerando
+  ---
+  duration_ms: 29.129416
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: recon marca bots no raio e o snapshot revela para o minimapa
+ok 449 - fase8 habilidade: recon marca bots no raio e o snapshot revela para o minimapa
+  ---
+  duration_ms: 26.338943
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: stun congela o bot (sem mover/atirar) durante a duração
+ok 450 - fase8 habilidade: stun congela o bot (sem mover/atirar) durante a duração
+  ---
+  duration_ms: 7.39786
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: concealment impede que a IA adquira o alvo ocultado
+ok 451 - fase8 habilidade: concealment impede que a IA adquira o alvo ocultado
+  ---
+  duration_ms: 4.025958
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: ringResistance reduz o dano do Ring em 40%
+ok 452 - fase8 habilidade: ringResistance reduz o dano do Ring em 40%
+  ---
+  duration_ms: 6.594935
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: bloqueada caído, no ar e antes do start
+ok 453 - fase8 habilidade: bloqueada caído, no ar e antes do start
+  ---
+  duration_ms: 1.380174
+  type: 'test'
+  ...
+# Subtest: fase8 habilidade: evento chega a humanos próximos com isSelf=false
+ok 454 - fase8 habilidade: evento chega a humanos próximos com isSelf=false
+  ---
+  duration_ms: 2.099336
+  type: 'test'
+  ...
+# Subtest: fase8 anticheat: validateInput3D aceita ability booleano e rejeita tipos estranhos
+ok 455 - fase8 anticheat: validateInput3D aceita ability booleano e rejeita tipos estranhos
+  ---
+  duration_ms: 0.787759
+  type: 'test'
+  ...
+# Subtest: fase8 trafego: determinístico, nas vias, sem colisões e com espaçamento
+ok 456 - fase8 trafego: determinístico, nas vias, sem colisões e com espaçamento
+  ---
+  duration_ms: 11.983728
+  type: 'test'
+  ...
+# Subtest: fase8 ceu: nightness cresce com os pulsos e satura em 1
+ok 457 - fase8 ceu: nightness cresce com os pulsos e satura em 1
+  ---
+  duration_ms: 0.133773
+  type: 'test'
+  ...
+# Subtest: fase8 ceu: nightSceneState interpola base→noite (t=0 e t=1)
+ok 458 - fase8 ceu: nightSceneState interpola base→noite (t=0 e t=1)
+  ---
+  duration_ms: 0.325762
+  type: 'test'
+  ...
+# Subtest: fase8 ceu: mixHex e lerp utilitários
+ok 459 - fase8 ceu: mixHex e lerp utilitários
+  ---
+  duration_ms: 0.081381
+  type: 'test'
+  ...
+# Subtest: fase8 snapshot: pulso do ring disponível p/ o cliente dirigir a noite
+ok 460 - fase8 snapshot: pulso do ring disponível p/ o cliente dirigir a noite
+  ---
+  duration_ms: 0.684314
+  type: 'test'
+  ...
+# Subtest: existe uma habilidade definida e identificável para cada operativo canônico
+ok 461 - existe uma habilidade definida e identificável para cada operativo canônico
+  ---
+  duration_ms: 1.571664
+  type: 'test'
+  ...
+# Subtest: cada um dos 16 operativos ativa sua habilidade correspondente no simulador
+ok 462 - cada um dos 16 operativos ativa sua habilidade correspondente no simulador
+  ---
+  duration_ms: 52.760692
+  type: 'test'
+  ...
+# Subtest: ativação é one-shot lógica, registrada no replay e respeita cooldown por ticks
+ok 463 - ativação é one-shot lógica, registrada no replay e respeita cooldown por ticks
+  ---
+  duration_ms: 1.95431
+  type: 'test'
+  ...
+# Subtest: Coágulo de Campo cura até o máximo e não consome cooldown com vida cheia
+ok 464 - Coágulo de Campo cura até o máximo e não consome cooldown com vida cheia
+  ---
+  duration_ms: 4.495549
+  type: 'test'
+  ...
+# Subtest: habilidade de reconhecimento marca somente bots vivos dentro do raio
+ok 465 - habilidade de reconhecimento marca somente bots vivos dentro do raio
+  ---
+  duration_ms: 4.85051
+  type: 'test'
+  ...
+# Subtest: redução de dano, resistência ao Ring e blindagem temporária têm escopos separados
+ok 466 - redução de dano, resistência ao Ring e blindagem temporária têm escopos separados
+  ---
+  duration_ms: 9.751988
+  type: 'test'
+  ...
+# Subtest: pulso de desarme paralisa sem dano e o scan marca o terminal ZEX mais próximo
+ok 467 - pulso de desarme paralisa sem dano e o scan marca o terminal ZEX mais próximo
+  ---
+  duration_ms: 4.188225
+  type: 'test'
+  ...
+# Subtest: impulso de Khael nunca ultrapassa 8 metros, mesmo com corrida
+ok 468 - impulso de Khael nunca ultrapassa 8 metros, mesmo com corrida
+  ---
+  duration_ms: 5.864691
+  type: 'test'
+  ...
+# Subtest: pool: capacity fixa — spawn acima da capacidade recicla o slot mais antigo
+ok 469 - pool: capacity fixa — spawn acima da capacidade recicla o slot mais antigo
+  ---
+  duration_ms: 2.169205
+  type: 'test'
+  ...
+# Subtest: vida e morte: partícula morre por life e nunca rasteriza (size 0, y -9999)
+ok 470 - vida e morte: partícula morre por life e nunca rasteriza (size 0, y -9999)
+  ---
+  duration_ms: 0.427595
+  type: 'test'
+  ...
+# Subtest: envelope alpha: fade-in até 12% da vida, fade-out até zero no fim
+ok 471 - envelope alpha: fade-in até 12% da vida, fade-out até zero no fim
+  ---
+  duration_ms: 0.60582
+  type: 'test'
+  ...
+# Subtest: integração: gravidade puxa vy, drag amortece vx, crescimento aumenta size
+ok 472 - integração: gravidade puxa vy, drag amortece vx, crescimento aumenta size
+  ---
+  duration_ms: 0.19127
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma sequência de spawn+dt → estado idêntico
+ok 473 - determinismo: mesma sequência de spawn+dt → estado idêntico
+  ---
+  duration_ms: 0.689451
+  type: 'test'
+  ...
+# Subtest: cor lerp: endColor interpola pela idade da partícula
+ok 474 - cor lerp: endColor interpola pela idade da partícula
+  ---
+  duration_ms: 0.317957
+  type: 'test'
+  ...
+# Subtest: Emitter: rate acumula dívida — floor por frame, resto carrega
+ok 475 - Emitter: rate acumula dívida — floor por frame, resto carrega
+  ---
+  duration_ms: 0.394608
+  type: 'test'
+  ...
+# Subtest: Emitter: origin função, burst manual, disabled não emite
+ok 476 - Emitter: origin função, burst manual, disabled não emite
+  ---
+  duration_ms: 0.263149
+  type: 'test'
+  ...
+# Subtest: stress: 60s de simulação sem NaN e com budget respeitado
+ok 477 - stress: 60s de simulação sem NaN e com budget respeitado
+  ---
+  duration_ms: 14.031543
+  type: 'test'
+  ...
+# Subtest: dispose: geometria e material descartados sem erro
+ok 478 - dispose: geometria e material descartados sem erro
+  ---
+  duration_ms: 0.49881
+  type: 'test'
+  ...
+# Subtest: [perf] EMA converge para o frametime real (constante de tempo, não de frames)
+ok 479 - [perf] EMA converge para o frametime real (constante de tempo, não de frames)
+  ---
+  duration_ms: 2.08468
+  type: 'test'
+  ...
+# Subtest: [perf] EMA descarta hitches de aba (dt > 0.5 s) sem contaminar a média
+ok 480 - [perf] EMA descarta hitches de aba (dt > 0.5 s) sem contaminar a média
+  ---
+  duration_ms: 0.206683
+  type: 'test'
+  ...
+# Subtest: [perf] warmup: 30 amostras válidas antes de decidir
+ok 481 - [perf] warmup: 30 amostras válidas antes de decidir
+  ---
+  duration_ms: 0.143523
+  type: 'test'
+  ...
+# Subtest: [perf] DRS: não reage antes da sustentação (0.6 s de overload)
+ok 482 - [perf] DRS: não reage antes da sustentação (0.6 s de overload)
+  ---
+  duration_ms: 0.425546
+  type: 'test'
+  ...
+# Subtest: [perf] DRS: piso 0.55 e teto 1.0 nunca são ultrapassados
+ok 483 - [perf] DRS: piso 0.55 e teto 1.0 nunca são ultrapassados
+  ---
+  duration_ms: 1.449598
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: carga sustentada converge SEM oscilar (≤8 mudanças em 600 frames)
+ok 484 - [perf] DRS simulador: carga sustentada converge SEM oscilar (≤8 mudanças em 600 frames)
+  ---
+  duration_ms: 0.722296
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: carga leve mantém escala máxima (zero mudanças)
+ok 485 - [perf] DRS simulador: carga leve mantém escala máxima (zero mudanças)
+  ---
+  duration_ms: 0.840634
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: stall único de ~96 ms não cruza o limiar (escala intocada)
+ok 486 - [perf] DRS simulador: stall único de ~96 ms não cruza o limiar (escala intocada)
+  ---
+  duration_ms: 0.575048
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: recuperação sobe de volta ao teto quando a carga cessa
+ok 487 - [perf] DRS simulador: recuperação sobe de volta ao teto quando a carga cessa
+  ---
+  duration_ms: 3.006031
+  type: 'test'
+  ...
+# Subtest: [perf] tier: NÃO desce com DRS fora do piso (a alternativa estrutural é o último recurso)
+ok 488 - [perf] tier: NÃO desce com DRS fora do piso (a alternativa estrutural é o último recurso)
+  ---
+  duration_ms: 1.434895
+  type: 'test'
+  ...
+# Subtest: [perf] tier: desce high→medium com overload sustentado NO PISO do DRS
+ok 489 - [perf] tier: desce high→medium com overload sustentado NO PISO do DRS
+  ---
+  duration_ms: 0.42187
+  type: 'test'
+  ...
+# Subtest: [perf] tier: upgrade exige folga LONGA no teto (anti ping-pong em carga senoidal)
+ok 490 - [perf] tier: upgrade exige folga LONGA no teto (anti ping-pong em carga senoidal)
+  ---
+  duration_ms: 2.221737
+  type: 'test'
+  ...
+# Subtest: [perf] tier: upgrade medium→high após 20 s de folga no teto
+ok 491 - [perf] tier: upgrade medium→high após 20 s de folga no teto
+  ---
+  duration_ms: 0.716264
+  type: 'test'
+  ...
+# Subtest: [perf] budgetFor: high/medium 15 ms, low 22 ms; tier desconhecido cai no high
+ok 492 - [perf] budgetFor: high/medium 15 ms, low 22 ms; tier desconhecido cai no high
+  ---
+  duration_ms: 0.108314
+  type: 'test'
+  ...
+# Subtest: [perf] RateLimiter: intervalo mínimo respeitado (~30 passes/s a 33 ms)
+ok 493 - [perf] RateLimiter: intervalo mínimo respeitado (~30 passes/s a 33 ms)
+  ---
+  duration_ms: 0.228153
+  type: 'test'
+  ...
+# Subtest: [perf] postFxPlanFor: SSR exclusivo do high; low não tem composer
+ok 494 - [perf] postFxPlanFor: SSR exclusivo do high; low não tem composer
+  ---
+  duration_ms: 0.367444
+  type: 'test'
+  ...
+# Subtest: fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em tempo finito
+ok 495 - fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em tempo finito
+  ---
+  duration_ms: 164.098583
+  type: 'test'
+  ...
+# Subtest: fase4 sim: controle de deriva direciona a queda (input afeta o destino)
+ok 496 - fase4 sim: controle de deriva direciona a queda (input afeta o destino)
+  ---
+  duration_ms: 14.093512
+  type: 'test'
+  ...
+# Subtest: fase4 sim: granada consome inventário, detona no pavio e mata bot no epicentro
+ok 497 - fase4 sim: granada consome inventário, detona no pavio e mata bot no epicentro
+  ---
+  duration_ms: 9.917774
+  type: 'test'
+  ...
+# Subtest: fase4 sim: granada sem estoque não lança
+ok 498 - fase4 sim: granada sem estoque não lança
+  ---
+  duration_ms: 2.471529
+  type: 'test'
+  ...
+# Subtest: fase4 unit: explosionDamage — dano cheio no epicentro, decai e atenua atrás de parede
+ok 499 - fase4 unit: explosionDamage — dano cheio no epicentro, decai e atenua atrás de parede
+  ---
+  duration_ms: 0.447317
+  type: 'test'
+  ...
+# Subtest: fase4 sim: gloo deploy bloqueia movimento e balas; expira após a duração
+ok 500 - fase4 sim: gloo deploy bloqueia movimento e balas; expira após a duração
+  ---
+  duration_ms: 78.611518
+  type: 'test'
+  ...
+# Subtest: fase4 sim: gloo não empilha dentro de estrutura e loot frag/gloo é coletável
+ok 501 - fase4 sim: gloo não empilha dentro de estrutura e loot frag/gloo é coletável
+  ---
+  duration_ms: 3.499842
+  type: 'test'
+  ...
+# Subtest: fase4 room: airdrop autoritativo — atores caem, aterrissam e recebem land
+ok 502 - fase4 room: airdrop autoritativo — atores caem, aterrissam e recebem land
+  ---
+  duration_ms: 53.901267
+  type: 'test'
+  ...
+# Subtest: fase4 room: throw/gloo autoritativos — snapshot replica grenades/walls
+ok 503 - fase4 room: throw/gloo autoritativos — snapshot replica grenades/walls
+  ---
+  duration_ms: 22.676855
+  type: 'test'
+  ...
+# Subtest: fase4 room: anticheat rejeita throw/gloo não-booleanos e granada respeita estoque
+ok 504 - fase4 room: anticheat rejeita throw/gloo não-booleanos e granada respeita estoque
+  ---
+  duration_ms: 9.695544
+  type: 'test'
+  ...
+# Subtest: fase4 predict: predição replica a queda do servidor e reconcilia no ack
+ok 505 - fase4 predict: predição replica a queda do servidor e reconcilia no ack
+  ---
+  duration_ms: 8.443136
+  type: 'test'
+  ...
+# Subtest: fase4 predict: input de throw/gloo não perturba a física prevista
+ok 506 - fase4 predict: input de throw/gloo não perturba a física prevista
+  ---
+  duration_ms: 6.103054
+  type: 'test'
+  ...
+# Subtest: fase5 sim: agachar reduz a velocidade à metade e aparece no estado do ator
+ok 507 - fase5 sim: agachar reduz a velocidade à metade e aparece no estado do ator
+  ---
+  duration_ms: 27.379478
+  type: 'test'
+  ...
+# Subtest: fase5 sim: sprint é cancelado pelo agachamento (agachar tem prioridade)
+ok 508 - fase5 sim: sprint é cancelado pelo agachamento (agachar tem prioridade)
+  ---
+  duration_ms: 4.613347
+  type: 'test'
+  ...
+# Subtest: fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)
+ok 509 - fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)
+  ---
+  duration_ms: 6.153006
+  type: 'test'
+  ...
+# Subtest: fase5 sim: bots engajam uns aos outros quando são os alvos mais próximos
+ok 510 - fase5 sim: bots engajam uns aos outros quando são os alvos mais próximos
+  ---
+  duration_ms: 143.395428
+  type: 'test'
+  ...
+# Subtest: fase5 sim: com spectate a partida continua após a eliminação e termina com matchEnd
+ok 511 - fase5 sim: com spectate a partida continua após a eliminação e termina com matchEnd
+  ---
+  duration_ms: 140.272459
+  type: 'test'
+  ...
+# Subtest: fase5 sim: sem spectate (legado) a eliminação encerra a partida imediatamente
+ok 512 - fase5 sim: sem spectate (legado) a eliminação encerra a partida imediatamente
+  ---
+  duration_ms: 2.665405
+  type: 'test'
+  ...
+# Subtest: fase5 room: input agachado move mais devagar e replica crouching nos snapshots
+ok 513 - fase5 room: input agachado move mais devagar e replica crouching nos snapshots
+  ---
+  duration_ms: 10.094844
+  type: 'test'
+  ...
+# Subtest: fase5 room: bots replicam crouching=false e aceitam input crouch booleano no anti-cheat
+ok 514 - fase5 room: bots replicam crouching=false e aceitam input crouch booleano no anti-cheat
+  ---
+  duration_ms: 1.054093
+  type: 'test'
+  ...
+# Subtest: fase5 room: humano eliminado permanece na sala e a partida segue até o último vivo
+ok 515 - fase5 room: humano eliminado permanece na sala e a partida segue até o último vivo
+  ---
+  duration_ms: 4.782648
+  type: 'test'
+  ...
+# Subtest: fase5 room: sala vazia (todos desconectaram) encerra para liberar recursos
+ok 516 - fase5 room: sala vazia (todos desconectaram) encerra para liberar recursos
+  ---
+  duration_ms: 1.089554
+  type: 'test'
+  ...
+# Subtest: corte marcial gera caso pendente com evidência e derruba o militar (vida única)
+ok 517 - corte marcial gera caso pendente com evidência e derruba o militar (vida única)
+  ---
+  duration_ms: 2.693349
+  type: 'test'
+  ...
+# Subtest: veredito afastamento: patente no registro reduzida a Recruta
+ok 518 - veredito afastamento: patente no registro reduzida a Recruta
+  ---
+  duration_ms: 0.401058
+  type: 'test'
+  ...
+# Subtest: veredito reducao_patente: degrada um degrau na hierarquia
+ok 519 - veredito reducao_patente: degrada um degrau na hierarquia
+  ---
+  duration_ms: 0.343794
+  type: 'test'
+  ...
+# Subtest: veredito honras_de_guerra: +200 XP memorial e registro honrado
+ok 520 - veredito honras_de_guerra: +200 XP memorial e registro honrado
+  ---
+  duration_ms: 0.216342
+  type: 'test'
+  ...
+# Subtest: veredito absolvicao: +100 XP de reparação e registro limpo
+ok 521 - veredito absolvicao: +100 XP de reparação e registro limpo
+  ---
+  duration_ms: 0.34607
+  type: 'test'
+  ...
+# Subtest: vereditos inválidos: caso inexistente, caso julgado e veredito desconhecido
+ok 522 - vereditos inválidos: caso inexistente, caso julgado e veredito desconhecido
+  ---
+  duration_ms: 0.816833
+  type: 'test'
+  ...
+# Subtest: 8º artigo: 4ª evasão no dia 7 de Arukheea cria caso automaticamente
+ok 523 - 8º artigo: 4ª evasão no dia 7 de Arukheea cria caso automaticamente
+  ---
+  duration_ms: 1.554555
+  type: 'test'
+  ...
+# Subtest: snapshot carrega resumo da Corte (pendentes/julgados)
+ok 524 - snapshot carrega resumo da Corte (pendentes/julgados)
+  ---
+  duration_ms: 1.017496
+  type: 'test'
+  ...
+# Subtest: fase10 poj: closeIncursion canônico avalia ausentes (artigos 8º/10º preservados)
+ok 525 - fase10 poj: closeIncursion canônico avalia ausentes (artigos 8º/10º preservados)
+  ---
+  duration_ms: 2.796364
+  type: 'test'
+  ...
+# Subtest: fase10 poj: closeIncursion({ evaluateAbsentees:false }) NÃO marca evasão — via da ponte
+ok 526 - fase10 poj: closeIncursion({ evaluateAbsentees:false }) NÃO marca evasão — via da ponte
+  ---
+  duration_ms: 0.714004
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: reportMatchResult fora de GUERRA não faz nada (e é idempotente)
+ok 527 - fase10 poj-link: reportMatchResult fora de GUERRA não faz nada (e é idempotente)
+  ---
+  duration_ms: 0.571784
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: fim de partida 3D → attend + eliminate + carreira automáticos
+ok 528 - fase10 poj-link: fim de partida 3D → attend + eliminate + carreira automáticos
+  ---
+  duration_ms: 0.469387
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: idempotência por matchId — callback repetido não consome vida
+ok 529 - fase10 poj-link: idempotência por matchId — callback repetido não consome vida
+  ---
+  duration_ms: 0.322036
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: reatendimento de caído cai em failures com código sem_reingresso
+ok 530 - fase10 poj-link: reatendimento de caído cai em failures com código sem_reingresso
+  ---
+  duration_ms: 0.491278
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: a ponte NÃO aciona a Corte Marcial por desobediência (10º) — só incursões canônicas
+ok 531 - fase10 poj-link: a ponte NÃO aciona a Corte Marcial por desobediência (10º) — só incursões canônicas
+  ---
+  duration_ms: 1.387245
+  type: 'test'
+  ...
+# Subtest: fase10 poj-link: officerPlan expõe o plano canônico sem snapshot completo
+ok 532 - fase10 poj-link: officerPlan expõe o plano canônico sem snapshot completo
+  ---
+  duration_ms: 0.270229
+  type: 'test'
+  ...
+# Subtest: poj 1º: alistamento aberto registra jogadores com patente canônica
+ok 533 - poj 1º: alistamento aberto registra jogadores com patente canônica
+  ---
+  duration_ms: 1.642378
+  type: 'test'
+  ...
+# Subtest: poj 1º: patente fora da hierarquia cai como Recruta
+ok 534 - poj 1º: patente fora da hierarquia cai como Recruta
+  ---
+  duration_ms: 0.355935
+  type: 'test'
+  ...
+# Subtest: poj 2º: 50% das inscrições abrem o CIGKV
+ok 535 - poj 2º: 50% das inscrições abrem o CIGKV
+  ---
+  duration_ms: 0.237941
+  type: 'test'
+  ...
+# Subtest: poj 3º: 1.000.000ª inscrição encerra alistamento e arma contagem de 24 h
+ok 536 - poj 3º: 1.000.000ª inscrição encerra alistamento e arma contagem de 24 h
+  ---
+  duration_ms: 0.815806
+  type: 'test'
+  ...
+# Subtest: poj 3º: contagem canônica é de 24 h (86400 s)
+ok 537 - poj 3º: contagem canônica é de 24 h (86400 s)
+  ---
+  duration_ms: 0.115877
+  type: 'test'
+  ...
+# Subtest: poj preceito: morte consome a única chance e bloqueia reingresso
+ok 538 - poj preceito: morte consome a única chance e bloqueia reingresso
+  ---
+  duration_ms: 0.438625
+  type: 'test'
+  ...
+# Subtest: poj convocação: todos os sobreviventes ativos são convocados
+ok 539 - poj convocação: todos os sobreviventes ativos são convocados
+  ---
+  duration_ms: 1.777755
+  type: 'test'
+  ...
+# Subtest: poj incursões só existem em guerra
+ok 540 - poj incursões só existem em guerra
+  ---
+  duration_ms: 0.221039
+  type: 'test'
+  ...
+# Subtest: poj preceito anti-covardia: sobrevivente sem incursão no mundo é julgado
+ok 541 - poj preceito anti-covardia: sobrevivente sem incursão no mundo é julgado
+  ---
+  duration_ms: 1.468419
+  type: 'test'
+  ...
+# Subtest: poj 7º: >10% dos inscritos → 3 oficiais por no mínimo 3 min por Ring
+ok 542 - poj 7º: >10% dos inscritos → 3 oficiais por no mínimo 3 min por Ring
+  ---
+  duration_ms: 3.973897
+  type: 'test'
+  ...
+# Subtest: poj 9º: rule9Minutes aplica as faixas canônicas
+ok 543 - poj 9º: rule9Minutes aplica as faixas canônicas
+  ---
+  duration_ms: 0.205406
+  type: 'test'
+  ...
+# Subtest: poj 9º: plano de entrada na janela das últimas 6 h do 7º dia
+ok 544 - poj 9º: plano de entrada na janela das últimas 6 h do 7º dia
+  ---
+  duration_ms: 2.512839
+  type: 'test'
+  ...
+# Subtest: poj 8º: evitar combates mais de 3 vezes → desclassificado e julgado
+ok 545 - poj 8º: evitar combates mais de 3 vezes → desclassificado e julgado
+  ---
+  duration_ms: 1.304444
+  type: 'test'
+  ...
+# Subtest: poj 10º: na última hora a desobediência desclassifica na hora
+ok 546 - poj 10º: na última hora a desobediência desclassifica na hora
+  ---
+  duration_ms: 1.534956
+  type: 'test'
+  ...
+# Subtest: poj 11º: patente decide quando é diferente
+ok 547 - poj 11º: patente decide quando é diferente
+  ---
+  duration_ms: 0.803816
+  type: 'test'
+  ...
+# Subtest: poj 11º: incursões, kills e XP na ordem canônica
+ok 548 - poj 11º: incursões, kills e XP na ordem canônica
+  ---
+  duration_ms: 0.194988
+  type: 'test'
+  ...
+# Subtest: poj 11º: empate total → Decisão do Marechal (determinística por seed)
+ok 549 - poj 11º: empate total → Decisão do Marechal (determinística por seed)
+  ---
+  duration_ms: 4.052532
+  type: 'test'
+  ...
+# Subtest: poj 11º: um único sobrevivente é campeão direto
+ok 550 - poj 11º: um único sobrevivente é campeão direto
+  ---
+  duration_ms: 1.05236
+  type: 'test'
+  ...
+# Subtest: poj integração: guerra de 4 mundos com baixas, covardia e campeão
+ok 551 - poj integração: guerra de 4 mundos com baixas, covardia e campeão
+  ---
+  duration_ms: 0.410768
+  type: 'test'
+  ...
+# Subtest: poj 4º–6º: sequência canônica dos mundos e 7 dias cada
+ok 552 - poj 4º–6º: sequência canônica dos mundos e 7 dias cada
+  ---
+  duration_ms: 0.34316
+  type: 'test'
+  ...
+# Subtest: poj API: operações inválidas rejeitam com códigos estáveis
+ok 553 - poj API: operações inválidas rejeitam com códigos estáveis
+  ---
+  duration_ms: 0.325281
+  type: 'test'
+  ...
+# Subtest: poj hierarquia: peso da patente é monotônico
+ok 554 - poj hierarquia: peso da patente é monotônico
+  ---
+  duration_ms: 0.086116
+  type: 'test'
+  ...
+# Subtest: poj http: estado público, alistamento autenticado e comandos sob RBAC
+ok 555 - poj http: estado público, alistamento autenticado e comandos sob RBAC
+  ---
+  duration_ms: 283.333254
+  type: 'test'
+  ...
+# Subtest: predict3d: stepActorMovement move para frente (-Z com yaw 0) na velocidade do ator
+ok 556 - predict3d: stepActorMovement move para frente (-Z com yaw 0) na velocidade do ator
+  ---
+  duration_ms: 11.193732
+  type: 'test'
+  ...
+# Subtest: predict3d: stepActorMovement colide com collider e respeita limite do mundo
+ok 557 - predict3d: stepActorMovement colide com collider e respeita limite do mundo
+  ---
+  duration_ms: 4.68875
+  type: 'test'
+  ...
+# Subtest: predict3d: salto integra gravidade e retorna ao chão
+ok 558 - predict3d: salto integra gravidade e retorna ao chão
+  ---
+  duration_ms: 3.713695
+  type: 'test'
+  ...
+# Subtest: predict3d: primeira reconciliação sincroniza com o spawn do servidor
+ok 559 - predict3d: primeira reconciliação sincroniza com o spawn do servidor
+  ---
+  duration_ms: 2.586143
+  type: 'test'
+  ...
+# Subtest: predict3d: previsão replica o servidor com inputs idênticos (erro zero)
+ok 560 - predict3d: previsão replica o servidor com inputs idênticos (erro zero)
+  ---
+  duration_ms: 6.650859
+  type: 'test'
+  ...
+# Subtest: predict3d: reconcile replays pendentes a partir do estado autoritativo
+ok 561 - predict3d: reconcile replays pendentes a partir do estado autoritativo
+  ---
+  duration_ms: 2.091177
+  type: 'test'
+  ...
+# Subtest: predict3d: offset visual absorve o erro e decai até zero
+ok 562 - predict3d: offset visual absorve o erro e decai até zero
+  ---
+  duration_ms: 2.590949
+  type: 'test'
+  ...
+# Subtest: predict3d: teleport acima do limite faz snap seco e limpa histórico
+ok 563 - predict3d: teleport acima do limite faz snap seco e limpa histórico
+  ---
+  duration_ms: 2.284988
+  type: 'test'
+  ...
+# Subtest: predict3d: jogador morto segue o servidor e não prevê
+ok 564 - predict3d: jogador morto segue o servidor e não prevê
+  ---
+  duration_ms: 1.780086
+  type: 'test'
+  ...
+# Subtest: Priadus tsunami starts on schedule and damages submerged operators
+ok 565 - Priadus tsunami starts on schedule and damages submerged operators
+  ---
+  duration_ms: 15.012572
+  type: 'test'
+  ...
+# Subtest: Priadus high platforms counter the active tsunami
+ok 566 - Priadus high platforms counter the active tsunami
+  ---
+  duration_ms: 4.714923
+  type: 'test'
+  ...
+# Subtest: fase10 rank: hierarquia da progressão casa 1:1 com a canônica do POJ
+ok 567 - fase10 rank: hierarquia da progressão casa 1:1 com a canônica do POJ
+  ---
+  duration_ms: 2.002623
+  type: 'test'
+  ...
+# Subtest: fase10 rank: limiares determinísticos — patente correta por valor acumulado
+ok 568 - fase10 rank: limiares determinísticos — patente correta por valor acumulado
+  ---
+  duration_ms: 0.323989
+  type: 'test'
+  ...
+# Subtest: fase10 rank: valores inválidos pesam como Recruta (nunca explodem)
+ok 569 - fase10 rank: valores inválidos pesam como Recruta (nunca explodem)
+  ---
+  duration_ms: 0.202788
+  type: 'test'
+  ...
+# Subtest: fase10 rank: rankProgress devolve degrau seguinte, falta de XP e fração
+ok 570 - fase10 rank: rankProgress devolve degrau seguinte, falta de XP e fração
+  ---
+  duration_ms: 0.276398
+  type: 'test'
+  ...
+# Subtest: RBAC: matriz por papel cobre room:*, admin:metrics e audit:read; player nunca vê recursos admin
+ok 571 - RBAC: matriz por papel cobre room:*, admin:metrics e audit:read; player nunca vê recursos admin
+  ---
+  duration_ms: 1.619312
+  type: 'test'
+  ...
+# Subtest: RBAC: permissões room:* são restritas ao recurso próprio (sala da identidade)
+ok 572 - RBAC: permissões room:* são restritas ao recurso próprio (sala da identidade)
+  ---
+  duration_ms: 0.169924
+  type: 'test'
+  ...
+# Subtest: AuditLog: ids monotônicos, ring capacity e filtros de consulta
+ok 573 - AuditLog: ids monotônicos, ring capacity e filtros de consulta
+  ---
+  duration_ms: 0.420086
+  type: 'test'
+  ...
+# Subtest: RBAC HTTP: player 403 em métricas, moderator lê sem clients e não rotaciona chaves, admin legacy tudo
+ok 574 - RBAC HTTP: player 403 em métricas, moderator lê sem clients e não rotaciona chaves, admin legacy tudo
+  ---
+  duration_ms: 218.149873
+  type: 'test'
+  ...
+# Subtest: RBAC HTTP: /admin/audit respeita filtros actor/action/outcome e sinceId
+ok 575 - RBAC HTTP: /admin/audit respeita filtros actor/action/outcome e sinceId
+  ---
+  duration_ms: 89.821501
+  type: 'test'
+  ...
+# Subtest: RBAC WS: spectator não inicia partida (forbidden + auditoria); player inicia (room.start auditado)
+ok 576 - RBAC WS: spectator não inicia partida (forbidden + auditoria); player inicia (room.start auditado)
+  ---
+  duration_ms: 401.386701
+  type: 'test'
+  ...
+# Subtest: PostgreSQL: auditoria persiste no servidor real com filtros e paginação por id
+ok 577 - PostgreSQL: auditoria persiste no servidor real com filtros e paginação por id # SKIP
+  ---
+  duration_ms: 0.176189
+  type: 'test'
+  ...
+# Subtest: PostgreSQL: sessão é persistida, lida e expirada no servidor real
+ok 578 - PostgreSQL: sessão é persistida, lida e expirada no servidor real # SKIP
+  ---
+  duration_ms: 0.713449
+  type: 'test'
+  ...
+# Subtest: Redis: contador é atômico e expira no servidor real
+ok 579 - Redis: contador é atômico e expira no servidor real # SKIP
+  ---
+  duration_ms: 0.119932
+  type: 'test'
+  ...
+# Subtest: PG falha de dependência: store em dependência inacessível rejeita readiness em tempo limitado
+ok 580 - PG falha de dependência: store em dependência inacessível rejeita readiness em tempo limitado # SKIP
+  ---
+  duration_ms: 0.677321
+  type: 'test'
+  ...
+# Subtest: PG timeout: host non-routable respeita connectionTimeoutMillis e rejeita sem travar o processo
+ok 581 - PG timeout: host non-routable respeita connectionTimeoutMillis e rejeita sem travar o processo # SKIP
+  ---
+  duration_ms: 0.148217
+  type: 'test'
+  ...
+# Subtest: PG recuperação: conexões mortas no servidor (pg_terminate_backend) são repostas pelo pool
+ok 582 - PG recuperação: conexões mortas no servidor (pg_terminate_backend) são repostas pelo pool # SKIP
+  ---
+  duration_ms: 0.077475
+  type: 'test'
+  ...
+# Subtest: PG expiração: sessão vencida fica invisível e cleanupExpired() a remove do banco
+ok 583 - PG expiração: sessão vencida fica invisível e cleanupExpired() a remove do banco # SKIP
+  ---
+  duration_ms: 0.076534
+  type: 'test'
+  ...
+# Subtest: Redis falha de dependência: store em dependência inacessível rejeita readiness
+ok 584 - Redis falha de dependência: store em dependência inacessível rejeita readiness # SKIP
+  ---
+  duration_ms: 0.090531
+  type: 'test'
+  ...
+# Subtest: Redis timeout: host non-routable rejeita em tempo limitado (connectTimeout + reconnectStrategy off)
+ok 585 - Redis timeout: host non-routable rejeita em tempo limitado (connectTimeout + reconnectStrategy off) # SKIP
+  ---
+  duration_ms: 0.079516
+  type: 'test'
+  ...
+# Subtest: Redis recuperação: CLIENT KILL derruba as conexões e o cliente repõe sem perder atomicidade
+ok 586 - Redis recuperação: CLIENT KILL derruba as conexões e o cliente repõe sem perder atomicidade # SKIP
+  ---
+  duration_ms: 0.067464
+  type: 'test'
+  ...
+# Subtest: rewards: fórmula pura — colocação entre humanos, bônus de vencedor e teto por partida
+ok 587 - rewards: fórmula pura — colocação entre humanos, bônus de vencedor e teto por partida
+  ---
+  duration_ms: 1.419452
+  type: 'test'
+  ...
+# Subtest: rewards: idempotência por partida — replay do mesmo matchId não concede duas vezes
+ok 588 - rewards: idempotência por partida — replay do mesmo matchId não concede duas vezes
+  ---
+  duration_ms: 2.168241
+  type: 'test'
+  ...
+# Subtest: rewards: fim de partida real da MatchRoom3D dispara callback único e concede saldo
+ok 589 - rewards: fim de partida real da MatchRoom3D dispara callback único e concede saldo
+  ---
+  duration_ms: 15.677734
+  type: 'test'
+  ...
+# Subtest: rewards: jogador sem identidade resolvida é skipado — nunca inventa userId
+ok 590 - rewards: jogador sem identidade resolvida é skipado — nunca inventa userId
+  ---
+  duration_ms: 0.301241
+  type: 'test'
+  ...
+# Subtest: rewards: KR_REWARDS_ENABLED=false desliga concessão com evento de auditoria
+ok 591 - rewards: KR_REWARDS_ENABLED=false desliga concessão com evento de auditoria
+  ---
+  duration_ms: 0.26962
+  type: 'test'
+  ...
+# Subtest: rewards: falha de grant é contida (failed) e não derruba o resumo
+ok 592 - rewards: falha de grant é contida (failed) e não derruba o resumo
+  ---
+  duration_ms: 0.250323
+  type: 'test'
+  ...
+# Subtest: room3d: lobby → start preenche bots, aplica entrada e emite matchStart
+ok 593 - room3d: lobby → start preenche bots, aplica entrada e emite matchStart
+  ---
+  duration_ms: 13.945938
+  type: 'test'
+  ...
+# Subtest: room3d: start exige entrada válida e sala em lobby
+ok 594 - room3d: start exige entrada válida e sala em lobby
+  ---
+  duration_ms: 0.677284
+  type: 'test'
+  ...
+# Subtest: room3d: movimento com input do humano (frente = -Z com yaw 0)
+ok 595 - room3d: movimento com input do humano (frente = -Z com yaw 0)
+  ---
+  duration_ms: 20.039812
+  type: 'test'
+  ...
+# Subtest: room3d: colisão mantém ator dentro do mundo e fora de colliders
+ok 596 - room3d: colisão mantém ator dentro do mundo e fora de colliders
+  ---
+  duration_ms: 7.756076
+  type: 'test'
+  ...
+# Subtest: room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos
+ok 597 - room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos
+  ---
+  duration_ms: 5.304367
+  type: 'test'
+  ...
+# Subtest: room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando alto
+ok 598 - room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando alto
+  ---
+  duration_ms: 2.62928
+  type: 'test'
+  ...
+# Subtest: room3d: zona pulsa, encolhe e causa dano fora do anel
+ok 599 - room3d: zona pulsa, encolhe e causa dano fora do anel
+  ---
+  duration_ms: 4.907473
+  type: 'test'
+  ...
+# Subtest: room3d: coleta de loot e extração em terminal ZEX
+ok 600 - room3d: coleta de loot e extração em terminal ZEX
+  ---
+  duration_ms: 1.316437
+  type: 'test'
+  ...
+# Subtest: room3d: recarga conserva munição de reserva
+ok 601 - room3d: recarga conserva munição de reserva
+  ---
+  duration_ms: 7.357576
+  type: 'test'
+  ...
+# Subtest: room3d: bots se movem, engajam e atiram em humanos
+ok 602 - room3d: bots se movem, engajam e atiram em humanos
+  ---
+  duration_ms: 138.444902
+  type: 'test'
+  ...
+# Subtest: room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos drenados uma vez
+ok 603 - room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos drenados uma vez
+  ---
+  duration_ms: 0.940599
+  type: 'test'
+  ...
+# Subtest: room3d: remoção de jogador emite killfeed e limpa eventos
+ok 604 - room3d: remoção de jogador emite killfeed e limpa eventos
+  ---
+  duration_ms: 0.431469
+  type: 'test'
+  ...
+# Subtest: room3d: vitória por tempo e encerramento da sala
+ok 605 - room3d: vitória por tempo e encerramento da sala
+  ---
+  duration_ms: 1.232483
+  type: 'test'
+  ...
+# Subtest: room3d: partida termina quando só resta um ator vivo
+ok 606 - room3d: partida termina quando só resta um ator vivo
+  ---
+  duration_ms: 0.411737
+  type: 'test'
+  ...
+# Subtest: anticheat 3D: input válido passa
+ok 607 - anticheat 3D: input válido passa
+  ---
+  duration_ms: 0.879056
+  type: 'test'
+  ...
+# Subtest: anticheat 3D: replay de sequência rejeitado
+ok 608 - anticheat 3D: replay de sequência rejeitado
+  ---
+  duration_ms: 0.115304
+  type: 'test'
+  ...
+# Subtest: anticheat 3D: vetor de movimento acima de 1.01 rejeitado
+ok 609 - anticheat 3D: vetor de movimento acima de 1.01 rejeitado
+  ---
+  duration_ms: 0.098988
+  type: 'test'
+  ...
+# Subtest: anticheat 3D: pitch além do limite e yaw com rotação impossível rejeitados
+ok 610 - anticheat 3D: pitch além do limite e yaw com rotação impossível rejeitados
+  ---
+  duration_ms: 0.193331
+  type: 'test'
+  ...
+# Subtest: anticheat 3D: campos não-booleanos e slot inválido rejeitados
+ok 611 - anticheat 3D: campos não-booleanos e slot inválido rejeitados
+  ---
+  duration_ms: 0.131799
+  type: 'test'
+  ...
+# Subtest: matchmaking: chooseRoom só agrupa clientes do mesmo modo
+ok 612 - matchmaking: chooseRoom só agrupa clientes do mesmo modo
+  ---
+  duration_ms: 2.956805
+  type: 'test'
+  ...
+# Subtest: room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (predição)
+ok 613 - room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (predição)
+  ---
+  duration_ms: 1.085115
+  type: 'test'
+  ...
+# Subtest: room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorados
+ok 614 - room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorados
+  ---
+  duration_ms: 0.694121
+  type: 'test'
+  ...
+# Subtest: room3d: rtt reportado no input é armazenado com clamp
+ok 615 - room3d: rtt reportado no input é armazenado com clamp
+  ---
+  duration_ms: 1.12893
+  type: 'test'
+  ...
+# Subtest: room3d: lag compensation acerta alvo na posição rebobinada que o atirador via
+ok 616 - room3d: lag compensation acerta alvo na posição rebobinada que o atirador via
+  ---
+  duration_ms: 3.567134
+  type: 'test'
+  ...
+# Subtest: room3d: lag compensation NÃO acerta posição presente quando alvo já saiu do rewind
+ok 617 - room3d: lag compensation NÃO acerta posição presente quando alvo já saiu do rewind
+  ---
+  duration_ms: 6.861783
+  type: 'test'
+  ...
+# Subtest: o seletor usa os operativos canônicos com dados visuais completos
+ok 618 - o seletor usa os operativos canônicos com dados visuais completos
+  ---
+  duration_ms: 1.226258
+  type: 'test'
+  ...
+# Subtest: Barburhen resolve o MUNDO DA DESTRUIÇÃO (diretiva W1) e mapeia os setores competitivos
+ok 619 - Barburhen resolve o MUNDO DA DESTRUIÇÃO (diretiva W1) e mapeia os setores competitivos
+  ---
+  duration_ms: 11.740847
+  type: 'test'
+  ...
+# Subtest: Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
+ok 620 - Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
+  ---
+  duration_ms: 10.714389
+  type: 'test'
+  ...
+# Subtest: CIGKV continua sendo o cenário padrão e mantém o ponto de inserção anterior
+ok 621 - CIGKV continua sendo o cenário padrão e mantém o ponto de inserção anterior
+  ---
+  duration_ms: 5.063532
+  type: 'test'
+  ...
+# Subtest: os quatro Mundos competitivos possuem previews locais selecionáveis e aliases operacionais
+ok 622 - os quatro Mundos competitivos possuem previews locais selecionáveis e aliases operacionais
+  ---
+  duration_ms: 8.96557
+  type: 'test'
+  ...
+# Subtest: rotação: token antigo valida em grace, novo token usa nova kid e drop invalida o antigo
+ok 623 - rotação: token antigo valida em grace, novo token usa nova kid e drop invalida o antigo
+  ---
+  duration_ms: 128.233934
+  type: 'test'
+  ...
+# Subtest: verifyToken: kid desconhecido no header é rejeitado sem fallback (anti cross-key)
+ok 624 - verifyToken: kid desconhecido no header é rejeitado sem fallback (anti cross-key)
+  ---
+  duration_ms: 0.351546
+  type: 'test'
+  ...
+# Subtest: revogação: logout invalida o jti, outros tokens seguem válidos e purge remove vencidos
+ok 625 - revogação: logout invalida o jti, outros tokens seguem válidos e purge remove vencidos
+  ---
+  duration_ms: 149.236388
+  type: 'test'
+  ...
+# Subtest: revogação via HTTP: /auth/logout revoga e o WebSocket passa a recusar o token
+ok 626 - revogação via HTTP: /auth/logout revoga e o WebSocket passa a recusar o token
+  ---
+  duration_ms: 135.49942
+  type: 'test'
+  ...
+# Subtest: admin de chaves: player não autorizado; legacy token rotaciona; lista nunca vaza secrets
+ok 627 - admin de chaves: player não autorizado; legacy token rotaciona; lista nunca vaza secrets
+  ---
+  duration_ms: 94.607554
+  type: 'test'
+  ...
+# Subtest: TLS: servidor atende HTTPS com certificado configurado e healthz expõe tls=true
+ok 628 - TLS: servidor atende HTTPS com certificado configurado e healthz expõe tls=true
+  ---
+  duration_ms: 293.106268
+  type: 'test'
+  ...
+# Subtest: verifyIdToken: rejeita assinatura alheia, iss/aud/exp/nonce divergentes e algs não-RS256
+ok 629 - verifyIdToken: rejeita assinatura alheia, iss/aud/exp/nonce divergentes e algs não-RS256
+  ---
+  duration_ms: 122.848233
+  type: 'test'
+  ...
+# Subtest: SSO/OIDC: fluxo authorization code completo (discovery+JWKS+exchange), state single-use e cookie
+ok 630 - SSO/OIDC: fluxo authorization code completo (discovery+JWKS+exchange), state single-use e cookie
+  ---
+  duration_ms: 128.631524
+  type: 'test'
+  ...
+# Subtest: server 3D end-to-end: login → matchmaking → partida → snapshots → anticheat
+ok 631 - server 3D end-to-end: login → matchmaking → partida → snapshots → anticheat
+  ---
+  duration_ms: 690.291286
+  type: 'test'
+  ...
+# Subtest: mesma seed produz mundo, loot e spawns idênticos
+ok 632 - mesma seed produz mundo, loot e spawns idênticos
+  ---
+  duration_ms: 14.387477
+  type: 'test'
+  ...
+# Subtest: movimento respeita yaw e colisão com estruturas
+ok 633 - movimento respeita yaw e colisão com estruturas
+  ---
+  duration_ms: 14.904825
+  type: 'test'
+  ...
+# Subtest: disparo consome munição, aplica cooldown e mata bot com dano suficiente
+ok 634 - disparo consome munição, aplica cooldown e mata bot com dano suficiente
+  ---
+  duration_ms: 39.489763
+  type: 'test'
+  ...
+# Subtest: headshot multiplica dano e rende XP bônus
+ok 635 - headshot multiplica dano e rende XP bônus
+  ---
+  duration_ms: 3.374831
+  type: 'test'
+  ...
+# Subtest: zona encolhe em pulsos e causa dano fora do anel
+ok 636 - zona encolhe em pulsos e causa dano fora do anel
+  ---
+  duration_ms: 130.258188
+  type: 'test'
+  ...
+# Subtest: loot: coleta altera estado (arma, kit, armadura ou recurso)
+ok 637 - loot: coleta altera estado (arma, kit, armadura ou recurso)
+  ---
+  duration_ms: 3.147439
+  type: 'test'
+  ...
+# Subtest: recarga respeita reserva e capacidade do pente
+ok 638 - recarga respeita reserva e capacidade do pente
+  ---
+  duration_ms: 5.922237
+  type: 'test'
+  ...
+# Subtest: match completa: vitória por tempo ou eliminação por dano
+ok 639 - match completa: vitória por tempo ou eliminação por dano
+  ---
+  duration_ms: 12.174403
+  type: 'test'
+  ...
+# Subtest: replay 3D reproduz estado final idêntico
+ok 640 - replay 3D reproduz estado final idêntico
+  ---
+  duration_ms: 181.003875
+  type: 'test'
+  ...
+# Subtest: snapshot/applySnapshot roundtrip preserva estado
+ok 641 - snapshot/applySnapshot roundtrip preserva estado
+  ---
+  duration_ms: 12.169632
+  type: 'test'
+  ...
+# Subtest: armas 3D derivam do catálogo compartilhado
+ok 642 - armas 3D derivam do catálogo compartilhado
+  ---
+  duration_ms: 0.169877
+  type: 'test'
+  ...
+# Subtest: mesma seed reproduz a sequência de RNG
+ok 643 - mesma seed reproduz a sequência de RNG
+  ---
+  duration_ms: 1.315165
+  type: 'test'
+  ...
+# Subtest: seed fixa reproduz loot inicial
+ok 644 - seed fixa reproduz loot inicial
+  ---
+  duration_ms: 0.978998
+  type: 'test'
+  ...
+# Subtest: loot avançado respeita raridade e catálogo
+ok 645 - loot avançado respeita raridade e catálogo
+  ---
+  duration_ms: 0.576946
+  type: 'test'
+  ...
+# Subtest: replay contém inputs e pode ser reconstruído
+ok 646 - replay contém inputs e pode ser reconstruído
+  ---
+  duration_ms: 2.549812
+  type: 'test'
+  ...
+# Subtest: anti-cheat rejeita vetor impossível e sequência repetida
+ok 647 - anti-cheat rejeita vetor impossível e sequência repetida
+  ---
+  duration_ms: 0.293757
+  type: 'test'
+  ...
+# Subtest: sala mantém estados válidos e snapshots monotônicos
+ok 648 - sala mantém estados válidos e snapshots monotônicos
+  ---
+  duration_ms: 0.67734
+  type: 'test'
+  ...
+# [soak M3] latências publicadas: RTT p50=2.3ms p95=3.2ms p99=3.2ms (n=24) · gapSnapshot p50=0.1ms p95=49.3ms (n=815)
+# [soak M3] RSS: 111.7 → 120.3 MB (Δ 8.6 MB, 2500ms, 21 conexões)
+# Subtest: soak: 12 jogadores com churn contínuo por 2500 ms — snapshots não param e nada fica órfão
+ok 649 - soak: 12 jogadores com churn contínuo por 2500 ms — snapshots não param e nada fica órfão
+  ---
+  duration_ms: 3535.262383
+  type: 'test'
+  ...
+# Subtest: dangerScore: componentes isolados somam os pesos canônicos
+ok 650 - dangerScore: componentes isolados somam os pesos canônicos
+  ---
+  duration_ms: 1.094337
+  type: 'test'
+  ...
+# Subtest: dangerScore: dano recente vale MAIS com hazard ativo (o mundo mordendo)
+ok 651 - dangerScore: dano recente vale MAIS com hazard ativo (o mundo mordendo)
+  ---
+  duration_ms: 0.272594
+  type: 'test'
+  ...
+# Subtest: dangerScore: anomalia Khaaos é PERIGO GEOMÉTRICO (anchors do payload autoritativo)
+ok 652 - dangerScore: anomalia Khaaos é PERIGO GEOMÉTRICO (anchors do payload autoritativo)
+  ---
+  duration_ms: 0.203043
+  type: 'test'
+  ...
+# Subtest: dangerScore: fora do ring (ringCenter/currentRadius autoritativos)
+ok 653 - dangerScore: fora do ring (ringCenter/currentRadius autoritativos)
+  ---
+  duration_ms: 0.492597
+  type: 'test'
+  ...
+# Subtest: dangerScore: composto — nocauteado + dano + vida baixa + fora do ring
+ok 654 - dangerScore: composto — nocauteado + dano + vida baixa + fora do ring
+  ---
+  duration_ms: 0.212032
+  type: 'test'
+  ...
+# Subtest: prioritizeByHazard: score desc, eliminados fora, desempate determinístico
+ok 655 - prioritizeByHazard: score desc, eliminados fora, desempate determinístico
+  ---
+  duration_ms: 7.44831
+  type: 'test'
+  ...
+# Subtest: pickHazardTarget: null em lista vazia/só eliminados — nunca quebra
+ok 656 - pickHazardTarget: null em lista vazia/só eliminados — nunca quebra
+  ---
+  duration_ms: 0.16776
+  type: 'test'
+  ...
+# Subtest: snapshotHealth: id → health (String), ignora entradas inválidas
+ok 657 - snapshotHealth: id → health (String), ignora entradas inválidas
+  ---
+  duration_ms: 0.203344
+  type: 'test'
+  ...
+# Subtest: remote: diretor LIGADO por padrão e hazard start corta para o alvo mais ameaçado
+ok 658 - remote: diretor LIGADO por padrão e hazard start corta para o alvo mais ameaçado
+  ---
+  duration_ms: 1.697079
+  type: 'test'
+  ...
+# Subtest: remote: corta para o MAIS AMEAÇADO, não o primeiro da lista (geometria + dano)
+ok 659 - remote: corta para o MAIS AMEAÇADO, não o primeiro da lista (geometria + dano)
+  ---
+  duration_ms: 0.580709
+  type: 'test'
+  ...
+# Subtest: remote: ESCALADA dentro do mesmo hazard — dano sob tsunami (gap ≥ margem) re-corta
+ok 660 - remote: ESCALADA dentro do mesmo hazard — dano sob tsunami (gap ≥ margem) re-corta
+  ---
+  duration_ms: 0.772964
+  type: 'test'
+  ...
+# Subtest: remote: estabilidade — mesmo hazard contínuo NÃO gera corte a cada batch
+ok 661 - remote: estabilidade — mesmo hazard contínuo NÃO gera corte a cada batch
+  ---
+  duration_ms: 0.387709
+  type: 'test'
+  ...
+# Subtest: remote: navegação MANUAL reserva o hazard — diretor não disputa até o próximo
+ok 662 - remote: navegação MANUAL reserva o hazard — diretor não disputa até o próximo
+  ---
+  duration_ms: 0.557966
+  type: 'test'
+  ...
+# Subtest: remote: alvo seguido MORREU → corte para o próximo mais ameaçado (target-lost)
+ok 663 - remote: alvo seguido MORREU → corte para o próximo mais ameaçado (target-lost)
+  ---
+  duration_ms: 0.39776
+  type: 'test'
+  ...
+# Subtest: remote: ácido (pulse) NÃO grava hazard persistente — sem cortes espúrios
+ok 664 - remote: ácido (pulse) NÃO grava hazard persistente — sem cortes espúrios
+  ---
+  duration_ms: 0.156995
+  type: 'test'
+  ...
+# Subtest: remote: hazard desconhecido nunca dirige a câmera
+ok 665 - remote: hazard desconhecido nunca dirige a câmera
+  ---
+  duration_ms: 0.176241
+  type: 'test'
+  ...
+# Subtest: remote: setAutoFollow(false) desliga; ligar de novo corta IMEDIATAMENTE
+ok 666 - remote: setAutoFollow(false) desliga; ligar de novo corta IMEDIATAMENTE
+  ---
+  duration_ms: 0.327246
+  type: 'test'
+  ...
+# Subtest: remote: cycleFollow preserva contrato (ordem do ranking, só vivos)
+ok 667 - remote: cycleFollow preserva contrato (ordem do ranking, só vivos)
+  ---
+  duration_ms: 0.212899
+  type: 'test'
+  ...
+# Subtest: specDamageSpawn: número só no FOLLOW envolvendo o seguido (causou ou sofreu)
+ok 668 - specDamageSpawn: número só no FOLLOW envolvendo o seguido (causou ou sofreu)
+  ---
+  duration_ms: 0.972722
+  type: 'test'
+  ...
+# Subtest: specDamageSpawn: sanitiza hostilidade (lixo numérico/ids nunca quebram)
+ok 669 - specDamageSpawn: sanitiza hostilidade (lixo numérico/ids nunca quebram)
+  ---
+  duration_ms: 0.703243
+  type: 'test'
+  ...
+# Subtest: SpectatorView: DAMAGE entra na fila própria e consumeDamage drena (hazards intactos)
+ok 670 - SpectatorView: DAMAGE entra na fila própria e consumeDamage drena (hazards intactos)
+  ---
+  duration_ms: 0.437581
+  type: 'test'
+  ...
+# Subtest: room3d: dano do ring vira evento DAMAGE no spectatorView com rate-limit por vítima
+ok 671 - room3d: dano do ring vira evento DAMAGE no spectatorView com rate-limit por vítima
+  ---
+  duration_ms: 21.559928
+  type: 'test'
+  ...
+# Subtest: room3d: melee autoritativo entrega o contrato do número ao ATACANTE e DAMAGE à transmissão
+ok 672 - room3d: melee autoritativo entrega o contrato do número ao ATACANTE e DAMAGE à transmissão
+  ---
+  duration_ms: 4.461752
+  type: 'test'
+  ...
+# Subtest: room3d: anel do DAMAGE tem teto 10 e timestamps estritamente crescentes
+ok 673 - room3d: anel do DAMAGE tem teto 10 e timestamps estritamente crescentes
+  ---
+  duration_ms: 22.399236
+  type: 'test'
+  ...
+# Subtest: specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard false
+ok 674 - specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard false
+  ---
+  duration_ms: 0.456099
+  type: 'test'
+  ...
+# Subtest: damageTier: hazard ganha tier próprio com cor por kind (paleta do banner)
+ok 675 - damageTier: hazard ganha tier próprio com cor por kind (paleta do banner)
+  ---
+  duration_ms: 0.265979
+  type: 'test'
+  ...
+# Subtest: pool: spawn de hazard rende nó dmg-hazard com a classe do kind e o dano como texto
+ok 676 - pool: spawn de hazard rende nó dmg-hazard com a classe do kind e o dano como texto
+  ---
+  duration_ms: 0.784753
+  type: 'test'
+  ...
+# Subtest: room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind quantum
+ok 677 - room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind quantum
+  ---
+  duration_ms: 4.147269
+  type: 'test'
+  ...
+# Subtest: room3d: drain com blindagem NÃO vira número — só vida perdida é informação
+ok 678 - room3d: drain com blindagem NÃO vira número — só vida perdida é informação
+  ---
+  duration_ms: 3.186234
+  type: 'test'
+  ...
+# Subtest: room3d: TSUNAMI vira DAMAGE kind tsunami e atravessa o pipeline até o número do FOLLOW
+ok 679 - room3d: TSUNAMI vira DAMAGE kind tsunami e atravessa o pipeline até o número do FOLLOW
+  ---
+  duration_ms: 3.730523
+  type: 'test'
+  ...
+# Subtest: sim offline: melee do jogador emite evento com owner/victim/damage/posição
+ok 680 - sim offline: melee do jogador emite evento com owner/victim/damage/posição
+  ---
+  duration_ms: 6.698196
+  type: 'test'
+  ...
+# Subtest: sanitizeDirectorReport
+    # Subtest: whitelist: campos válidos passam, desconhecidos são DESCARTADOS
+    ok 1 - whitelist: campos válidos passam, desconhecidos são DESCARTADOS
+      ---
+      duration_ms: 1.460129
+      type: 'test'
+      ...
+    # Subtest: clamp: negativo vira 0, não-numérico vira 0, teto 1e6, fracionado floor
+    ok 2 - clamp: negativo vira 0, não-numérico vira 0, teto 1e6, fracionado floor
+      ---
+      duration_ms: 0.24765
+      type: 'test'
+      ...
+    # Subtest: lixo total: null/número/string → relatório zerado, sem throw
+    ok 3 - lixo total: null/número/string → relatório zerado, sem throw
+      ---
+      duration_ms: 0.301281
+      type: 'test'
+      ...
+    # Subtest: vocabulário canônico compartilhado com o cliente (Fase 19/18)
+    ok 4 - vocabulário canônico compartilhado com o cliente (Fase 19/18)
+      ---
+      duration_ms: 0.167988
+      type: 'test'
+      ...
+    1..4
+ok 681 - sanitizeDirectorReport
+  ---
+  duration_ms: 3.047966
+  type: 'suite'
+  ...
+# Subtest: aggregateDirectorReports
+    # Subtest: soma relatórios sanitizados de múltiplos espectadores
+    ok 1 - soma relatórios sanitizados de múltiplos espectadores
+      ---
+      duration_ms: 0.353336
+      type: 'test'
+      ...
+    # Subtest: vazio/nulo → agregado zerado sem throw
+    ok 2 - vazio/nulo → agregado zerado sem throw
+      ---
+      duration_ms: 0.119837
+      type: 'test'
+      ...
+    1..2
+ok 682 - aggregateDirectorReports
+  ---
+  duration_ms: 0.653209
+  type: 'suite'
+  ...
+# Subtest: SpectatorRemote — métricas do diretor
+    # Subtest: welcome dispara relatório inicial e o diretor reporta cada corte
+    ok 1 - welcome dispara relatório inicial e o diretor reporta cada corte
+      ---
+      duration_ms: 1.382409
+      type: 'test'
+      ...
+    # Subtest: escalada e target-lost são contadas POR MOTIVO e POR HAZARD
+    ok 2 - escalada e target-lost são contadas POR MOTIVO e POR HAZARD
+      ---
+      duration_ms: 6.959378
+      type: 'test'
+      ...
+    # Subtest: intervenções manuais: clique no standings e prev/next contam separados
+    ok 3 - intervenções manuais: clique no standings e prev/next contam separados
+      ---
+      duration_ms: 0.697272
+      type: 'test'
+      ...
+    # Subtest: liga/desliga (botão AUTO) conta em toggles
+    ok 4 - liga/desliga (botão AUTO) conta em toggles
+      ---
+      duration_ms: 0.483254
+      type: 'test'
+      ...
+    # Subtest: heartbeat: frames periódicos enquanto LIVE; 0 desliga; dispose/close param
+    ok 5 - heartbeat: frames periódicos enquanto LIVE; 0 desliga; dispose/close param
+      ---
+      duration_ms: 151.83913
+      type: 'test'
+      ...
+    1..5
+ok 683 - SpectatorRemote — métricas do diretor
+  ---
+  duration_ms: 162.022689
+  type: 'suite'
+  ...
+# Subtest: SpectatorPipeline — DIRECTOR_METRICS end to end
+    # Subtest: welcome mantém contrato (sanidade da Fase 14) e metrics() traz director zerado
+    ok 1 - welcome mantém contrato (sanidade da Fase 14) e metrics() traz director zerado
+      ---
+      duration_ms: 14.518366
+      type: 'test'
+      ...
+    # Subtest: DIRECTOR_METRICS válido soma no agregado; desconexão remove a contribuição
+    ok 2 - DIRECTOR_METRICS válido soma no agregado; desconexão remove a contribuição
+      ---
+      duration_ms: 189.212988
+      type: 'test'
+      ...
+    # Subtest: payload hostil não derruba o espectador nem polui o agregado
+    ok 3 - payload hostil não derruba o espectador nem polui o agregado
+      ---
+      duration_ms: 54.928754
+      type: 'test'
+      ...
+    1..3
+ok 684 - SpectatorPipeline — DIRECTOR_METRICS end to end
+  ---
+  duration_ms: 258.980343
+  type: 'suite'
+  ...
+# Subtest: followPlayer: segue um jogador ESPECÍFICO vivo (frame SET_CAMERA com o id)
+ok 685 - followPlayer: segue um jogador ESPECÍFICO vivo (frame SET_CAMERA com o id)
+  ---
+  duration_ms: 9.243318
+  type: 'test'
+  ...
+# Subtest: followPlayer: id desconhecido → null, NENHUM frame, nenhuma reserva de diretor
+ok 686 - followPlayer: id desconhecido → null, NENHUM frame, nenhuma reserva de diretor
+  ---
+  duration_ms: 0.289266
+  type: 'test'
+  ...
+# Subtest: followPlayer: eliminado NÃO é seguível (só vivos)
+ok 687 - followPlayer: eliminado NÃO é seguível (só vivos)
+  ---
+  duration_ms: 0.178041
+  type: 'test'
+  ...
+# Subtest: followPlayer: RESERVA MANUAL — diretor não disputa o hazard corrente (igual prev/next)
+ok 688 - followPlayer: RESERVA MANUAL — diretor não disputa o hazard corrente (igual prev/next)
+  ---
+  duration_ms: 1.033545
+  type: 'test'
+  ...
+# Subtest: followPlayer: clicar no alvo JÁ seguido re-reserva (mantém o hold manual)
+ok 689 - followPlayer: clicar no alvo JÁ seguido re-reserva (mantém o hold manual)
+  ---
+  duration_ms: 0.31557
+  type: 'test'
+  ...
+# Subtest: followPlayer e cycleFollow compartilham a MESMA semântica de reserva
+ok 690 - followPlayer e cycleFollow compartilham a MESMA semântica de reserva
+  ---
+  duration_ms: 0.526819
+  type: 'test'
+  ...
+# Subtest: spectatorViewModel: followId exportado p/ o highlight (string, default null)
+ok 691 - spectatorViewModel: followId exportado p/ o highlight (string, default null)
+  ---
+  duration_ms: 0.463004
+  type: 'test'
+  ...
+# Subtest: HUD: linhas vivas ganham clickable, eliminadas não; alvo corrente ganha is-follow
+ok 692 - HUD: linhas vivas ganham clickable, eliminadas não; alvo corrente ganha is-follow
+  ---
+  duration_ms: 0.672946
+  type: 'test'
+  ...
+# Subtest: HUD: clique na linha chama onFollowSelect com o id; linha eliminada não tem listener
+ok 693 - HUD: clique na linha chama onFollowSelect com o id; linha eliminada não tem listener
+  ---
+  duration_ms: 0.554157
+  type: 'test'
+  ...
+# Subtest: HUD: sem onFollowSelect update não explode e nenhuma linha ganha listener
+ok 694 - HUD: sem onFollowSelect update não explode e nenhuma linha ganha listener
+  ---
+  duration_ms: 0.459186
+  type: 'test'
+  ...
+# Subtest: HUD: headless-safe continua valendo (sem document não explode) — Fase 21 não regrediu
+ok 695 - HUD: headless-safe continua valendo (sem document não explode) — Fase 21 não regrediu
+  ---
+  duration_ms: 0.234372
+  type: 'test'
+  ...
+# Subtest: room3d: tsunami autoritativo (Priadus) vira WORLD_HAZARD no spectatorLog
+ok 696 - room3d: tsunami autoritativo (Priadus) vira WORLD_HAZARD no spectatorLog
+  ---
+  duration_ms: 169.615621
+  type: 'test'
+  ...
+# Subtest: room3d: acidRain (Barburhen — chuva ácida do mundo) vira WORLD_HAZARD pulse na transmissão
+ok 697 - room3d: acidRain (Barburhen — chuva ácida do mundo) vira WORLD_HAZARD pulse na transmissão
+  ---
+  duration_ms: 14.984562
+  type: 'test'
+  ...
+# Subtest: room3d: mirror não vaza eventos privados (killfeed/pulse mantêm contrato da Fase 14)
+ok 698 - room3d: mirror não vaza eventos privados (killfeed/pulse mantêm contrato da Fase 14)
+  ---
+  duration_ms: 4.529538
+  type: 'test'
+  ...
+# Subtest: worldHazardFeedLine: start/end/pulse com a MESMA gramática dos avisos do jogador
+ok 699 - worldHazardFeedLine: start/end/pulse com a MESMA gramática dos avisos do jogador
+  ---
+  duration_ms: 0.375977
+  type: 'test'
+  ...
+# Subtest: worldHazardFeedLine: hazard desconhecido → null (nunca quebra o feed)
+ok 700 - worldHazardFeedLine: hazard desconhecido → null (nunca quebra o feed)
+  ---
+  duration_ms: 0.256361
+  type: 'test'
+  ...
+# Subtest: eventToFeed: tipos da Fase 14 preservados junto ao WORLD_HAZARD
+ok 701 - eventToFeed: tipos da Fase 14 preservados junto ao WORLD_HAZARD
+  ---
+  duration_ms: 0.109153
+  type: 'test'
+  ...
+# Subtest: SpectatorView.ingestEvent: WORLD_HAZARD tsunami start → tsunamiStart com parâmetros autoritativos
+ok 702 - SpectatorView.ingestEvent: WORLD_HAZARD tsunami start → tsunamiStart com parâmetros autoritativos
+  ---
+  duration_ms: 0.944119
+  type: 'test'
+  ...
+# Subtest: SpectatorView.ingestEvent: tsunami end → tsunamiEnd + banner limpo
+ok 703 - SpectatorView.ingestEvent: tsunami end → tsunamiEnd + banner limpo
+  ---
+  duration_ms: 0.161259
+  type: 'test'
+  ...
+# Subtest: SpectatorView.ingestEvent: lava/gravity/acid no contrato da sim
+ok 704 - SpectatorView.ingestEvent: lava/gravity/acid no contrato da sim
+  ---
+  duration_ms: 0.432569
+  type: 'test'
+  ...
+# Subtest: SpectatorView.ingestEvent: evento não-hazard e payload inválido são ignorados com elegância
+ok 705 - SpectatorView.ingestEvent: evento não-hazard e payload inválido são ignorados com elegância
+  ---
+  duration_ms: 0.364565
+  type: 'test'
+  ...
+# Subtest: SpectatorRemote: onEvent recebe cada evento NOVO (dedupe mantido, onFeed preservado)
+ok 706 - SpectatorRemote: onEvent recebe cada evento NOVO (dedupe mantido, onFeed preservado)
+  ---
+  duration_ms: 0.824877
+  type: 'test'
+  ...
+# Subtest: spectatorViewModel: hazard ativo vira { label, hint, kind } p/ o banner
+ok 707 - spectatorViewModel: hazard ativo vira { label, hint, kind } p/ o banner
+  ---
+  duration_ms: 0.291289
+  type: 'test'
+  ...
+# Subtest: SpectatorHUD.update: banner headless-safe (root null nunca quebra)
+ok 708 - SpectatorHUD.update: banner headless-safe (root null nunca quebra)
+  ---
+  duration_ms: 0.278342
+  type: 'test'
+  ...
+# Subtest: computeStandings: vivos primeiro, abates desc, vida desc, tiebreak por id (determinístico)
+ok 709 - computeStandings: vivos primeiro, abates desc, vida desc, tiebreak por id (determinístico)
+  ---
+  duration_ms: 7.729599
+  type: 'test'
+  ...
+# Subtest: formatCountdown + ringSummary: fase 1-based, raio, estado e contagem MM:SS
+ok 710 - formatCountdown + ringSummary: fase 1-based, raio, estado e contagem MM:SS
+  ---
+  duration_ms: 0.313064
+  type: 'test'
+  ...
+# Subtest: eventToFeed: os 5 tipos do pipeline viram linhas; tipo desconhecido → null
+ok 711 - eventToFeed: os 5 tipos do pipeline viram linhas; tipo desconhecido → null
+  ---
+  duration_ms: 0.20647
+  type: 'test'
+  ...
+# Subtest: remote: welcome define delayMs/status, batch alimenta last+feed, dedupe e JSON inválido ignorado
+ok 712 - remote: welcome define delayMs/status, batch alimenta last+feed, dedupe e JSON inválido ignorado
+  ---
+  duration_ms: 0.949358
+  type: 'test'
+  ...
+# Subtest: remote: SET_CAMERA sai pelo socket, cycleFollow gira só entre VIVOS
+ok 713 - remote: SET_CAMERA sai pelo socket, cycleFollow gira só entre VIVOS
+  ---
+  duration_ms: 0.469873
+  type: 'test'
+  ...
+# Subtest: view: batch atrasado vira contrato da sim (bots, knock, ring, vivos) e step é no-op
+ok 714 - view: batch atrasado vira contrato da sim (bots, knock, ring, vivos) e step é no-op
+  ---
+  duration_ms: 0.455103
+  type: 'test'
+  ...
+# Subtest: câmeras: 4 modos produzem poses distintas e FOLLOW usa o alvo
+ok 715 - câmeras: 4 modos produzem poses distintas e FOLLOW usa o alvo
+  ---
+  duration_ms: 0.496046
+  type: 'test'
+  ...
+# Subtest: view model: top 8, vivos, followName e atraso em segundos
+ok 716 - view model: top 8, vivos, followName e atraso em segundos
+  ---
+  duration_ms: 0.453452
+  type: 'test'
+  ...
+# Subtest: SpectatorHUD: headless-safe (sem document não explode) e update devolve a VM
+ok 717 - SpectatorHUD: headless-safe (sem document não explode) e update devolve a VM
+  ---
+  duration_ms: 0.53821
+  type: 'test'
+  ...
+# Subtest: spectateHref: código da sala na URL ?spectate=; vazio cai na sala default
+ok 718 - spectateHref: código da sala na URL ?spectate=; vazio cai na sala default
+  ---
+  duration_ms: 0.399747
+  type: 'test'
+  ...
+# Subtest: displayName do pipeline vence: standings do HUD e bots da view mostram o NOME REAL
+ok 719 - displayName do pipeline vence: standings do HUD e bots da view mostram o NOME REAL
+  ---
+  duration_ms: 0.294723
+  type: 'test'
+  ...
+# Subtest: eventToFeed: eventos do MatchFlow traduzidos chegam com nomes reais
+ok 720 - eventToFeed: eventos do MatchFlow traduzidos chegam com nomes reais
+  ---
+  duration_ms: 0.109434
+  type: 'test'
+  ...
+# Subtest: config canônica compartilhada com a trilha TS
+ok 721 - config canônica compartilhada com a trilha TS
+  ---
+  duration_ms: 1.15586
+  type: 'test'
+  ...
+# Subtest: e2e WS: welcome, delay buffer por sala, SET_CAMERA e lixo não derrubam o espectador
+ok 722 - e2e WS: welcome, delay buffer por sala, SET_CAMERA e lixo não derrubam o espectador
+  ---
+  duration_ms: 51.133143
+  type: 'test'
+  ...
+# Subtest: fan-out real: batch chega no cliente com throttle/metrics contabilizados
+ok 723 - fan-out real: batch chega no cliente com throttle/metrics contabilizados
+  ---
+  duration_ms: 235.43934
+  type: 'test'
+  ...
+# Subtest: room3d.spectatorView: nomes reais, ring no contrato e eventos espelhados (não-destrutivo)
+ok 724 - room3d.spectatorView: nomes reais, ring no contrato e eventos espelhados (não-destrutivo)
+  ---
+  duration_ms: 12.519298
+  type: 'test'
+  ...
+# Subtest: integração createAuthoritativeServer: /admin/metrics expõe o bloco spectators
+ok 725 - integração createAuthoritativeServer: /admin/metrics expõe o bloco spectators
+  ---
+  duration_ms: 19.7989
+  type: 'test'
+  ...
+# Subtest: capacidade: acima do teto da sala a conexão é recusada com 1013; outra sala segue
+ok 726 - capacidade: acima do teto da sala a conexão é recusada com 1013; outra sala segue
+  ---
+  duration_ms: 10.81079
+  type: 'test'
+  ...
+# Subtest: fase7 dbno: assignSquads agrupa por ordem em grupos de 4
+ok 727 - fase7 dbno: assignSquads agrupa por ordem em grupos de 4
+  ---
+  duration_ms: 1.229457
+  type: 'test'
+  ...
+# Subtest: fase7 dbno: knockActor define sangramento com decay por nocaute extra
+ok 728 - fase7 dbno: knockActor define sangramento com decay por nocaute extra
+  ---
+  duration_ms: 0.373312
+  type: 'test'
+  ...
+# Subtest: fase7 dbno: reviveTargetFor exige mesmo squad, caído e no alcance
+ok 729 - fase7 dbno: reviveTargetFor exige mesmo squad, caído e no alcance
+  ---
+  duration_ms: 0.213892
+  type: 'test'
+  ...
+# Subtest: fase7 dbno: stepRevive conclui com vida parcial e limpa o estado
+ok 730 - fase7 dbno: stepRevive conclui com vida parcial e limpa o estado
+  ---
+  duration_ms: 0.25675
+  type: 'test'
+  ...
+# Subtest: fase7 bots: erro de mira cresce com a distância e tem teto
+ok 731 - fase7 bots: erro de mira cresce com a distância e tem teto
+  ---
+  duration_ms: 0.159551
+  type: 'test'
+  ...
+# Subtest: fase7 bots: dano por distância decai de 0.55 até 0.34
+ok 732 - fase7 bots: dano por distância decai de 0.55 até 0.34
+  ---
+  duration_ms: 0.132188
+  type: 'test'
+  ...
+# Subtest: fase7 bots: tempo de reação impede tiro no tick de aquisição do alvo
+ok 733 - fase7 bots: tempo de reação impede tiro no tick de aquisição do alvo
+  ---
+  duration_ms: 16.09821
+  type: 'test'
+  ...
+# Subtest: fase7 sim: squads determinísticos com jogador liderando o sq-1
+ok 734 - fase7 sim: squads determinísticos com jogador liderando o sq-1
+  ---
+  duration_ms: 4.118891
+  type: 'test'
+  ...
+# Subtest: fase7 sim: dano letal nocauteia em vez de eliminar (squad ativo)
+ok 735 - fase7 sim: dano letal nocauteia em vez de eliminar (squad ativo)
+  ---
+  duration_ms: 6.718241
+  type: 'test'
+  ...
+# Subtest: fase7 sim: sem squad o dano letal elimina direto (comportamento legado)
+ok 736 - fase7 sim: sem squad o dano letal elimina direto (comportamento legado)
+  ---
+  duration_ms: 4.691068
+  type: 'test'
+  ...
+# Subtest: fase7 sim: sangramento até o fim elimina com placement
+ok 737 - fase7 sim: sangramento até o fim elimina com placement
+  ---
+  duration_ms: 6.17762
+  type: 'test'
+  ...
+# Subtest: fase7 sim: aliado bot resgata e revive o jogador caído
+ok 738 - fase7 sim: aliado bot resgata e revive o jogador caído
+  ---
+  duration_ms: 72.649804
+  type: 'test'
+  ...
+# Subtest: fase7 sim: caído rasteja devagar e não atira/coleta
+ok 739 - fase7 sim: caído rasteja devagar e não atira/coleta
+  ---
+  duration_ms: 16.929884
+  type: 'test'
+  ...
+# Subtest: fase7 sim: dano em caído é letal (finalização)
+ok 740 - fase7 sim: dano em caído é letal (finalização)
+  ---
+  duration_ms: 2.799779
+  type: 'test'
+  ...
+# Subtest: fase7 room: sala squad agrupa humanos por ordem e bots em sqE
+ok 741 - fase7 room: sala squad agrupa humanos por ordem e bots em sqE
+  ---
+  duration_ms: 3.431661
+  type: 'test'
+  ...
+# Subtest: fase7 room: humano nocauteado recebe knocked e killfeed com marcador
+ok 742 - fase7 room: humano nocauteado recebe knocked e killfeed com marcador
+  ---
+  duration_ms: 3.420982
+  type: 'test'
+  ...
+# Subtest: fase7 room: revive por input interagir canaliza e restaura vida
+ok 743 - fase7 room: revive por input interagir canaliza e restaura vida
+  ---
+  duration_ms: 21.9305
+  type: 'test'
+  ...
+# Subtest: fase7 room: snapshot carrega knocked/squad/weaponSkin e skin é aplicada no loot
+ok 744 - fase7 room: snapshot carrega knocked/squad/weaponSkin e skin é aplicada no loot
+  ---
+  duration_ms: 2.908329
+  type: 'test'
+  ...
+# Subtest: fase7 room: caído não atira mesmo com input fire
+ok 745 - fase7 room: caído não atira mesmo com input fire
+  ---
+  duration_ms: 6.341467
+  type: 'test'
+  ...
+# Subtest: fase7 privadas: makeInviteCode gera 6 caracteres sem ambíguos
+ok 746 - fase7 privadas: makeInviteCode gera 6 caracteres sem ambíguos
+  ---
+  duration_ms: 0.392718
+  type: 'test'
+  ...
+# Subtest: fase7 privadas: normalizeInviteCode limpa e uppercases
+ok 747 - fase7 privadas: normalizeInviteCode limpa e uppercases
+  ---
+  duration_ms: 0.133381
+  type: 'test'
+  ...
+# Subtest: fase7 privadas: findRoomByCode só aceita privada 3D aberta com vaga
+ok 748 - fase7 privadas: findRoomByCode só aceita privada 3D aberta com vaga
+  ---
+  duration_ms: 0.231542
+  type: 'test'
+  ...
+# Subtest: fase7 privadas: matchmaking público nunca seleciona sala que exige convite
+ok 749 - fase7 privadas: matchmaking público nunca seleciona sala que exige convite
+  ---
+  duration_ms: 0.164856
+  type: 'test'
+  ...
+# Subtest: fase7 room: sala privada guarda código e metadados
+ok 750 - fase7 room: sala privada guarda código e metadados
+  ---
+  duration_ms: 3.828118
+  type: 'test'
+  ...
+# Subtest: fase7 quality: query tem precedência; touch/RAM baixa caem para low
+ok 751 - fase7 quality: query tem precedência; touch/RAM baixa caem para low
+  ---
+  duration_ms: 0.180164
+  type: 'test'
+  ...
+# Subtest: fase7 quality: tiers consistentes (low mais leve que high)
+ok 752 - fase7 quality: tiers consistentes (low mais leve que high)
+  ---
+  duration_ms: 0.410034
+  type: 'test'
+  ...
+# Subtest: staging autoscaler: banda saudável mantém réplicas e escala por carga/fila
+ok 753 - staging autoscaler: banda saudável mantém réplicas e escala por carga/fila
+  ---
+  duration_ms: 1.507575
+  type: 'test'
+  ...
+# Subtest: staging autoscaler: cooldown evita flapping e capacidade escala com réplicas
+ok 754 - staging autoscaler: cooldown evita flapping e capacidade escala com réplicas
+  ---
+  duration_ms: 0.293602
+  type: 'test'
+  ...
+# Subtest: staging autoscaler: scaleCompose respeita dry-run e monta argumentos corretos
+ok 755 - staging autoscaler: scaleCompose respeita dry-run e monta argumentos corretos
+  ---
+  duration_ms: 0.949254
+  type: 'test'
+  ...
+# Subtest: stress: múltiplos jogadores autenticados por região recebem snapshots
+ok 756 - stress: múltiplos jogadores autenticados por região recebem snapshots
+  ---
+  duration_ms: 286.856702
+  type: 'test'
+  ...
+# Subtest: survival: liga camada por hazard e registra kind/intensity no contrato
+ok 757 - survival: liga camada por hazard e registra kind/intensity no contrato
+  ---
+  duration_ms: 1.539014
+  type: 'test'
+  ...
+# Subtest: survival: intensity default 1 e startedAt preenchido
+ok 758 - survival: intensity default 1 e startedAt preenchido
+  ---
+  duration_ms: 0.292868
+  type: 'test'
+  ...
+# Subtest: survival: off remove a camada e ignora teardown sem nós
+ok 759 - survival: off remove a camada e ignora teardown sem nós
+  ---
+  duration_ms: 0.209002
+  type: 'test'
+  ...
+# Subtest: survival: duration não agenda timer headless (ctx null)
+ok 760 - survival: duration não agenda timer headless (ctx null)
+  ---
+  duration_ms: 21.17014
+  type: 'test'
+  ...
+# Subtest: stopAllSurvival: mata TODAS as camadas de uma vez
+ok 761 - stopAllSurvival: mata TODAS as camadas de uma vez
+  ---
+  duration_ms: 0.407428
+  type: 'test'
+  ...
+# Subtest: stopAllSurvival sem camadas é no-op
+ok 762 - stopAllSurvival sem camadas é no-op
+  ---
+  duration_ms: 0.118345
+  type: 'test'
+  ...
+# Subtest: stingers e confirmações são no-op seguros sem AudioContext
+ok 763 - stingers e confirmações são no-op seguros sem AudioContext
+  ---
+  duration_ms: 0.334608
+  type: 'test'
+  ...
+# Subtest: hazards distintos coexistem como camadas independentes
+ok 764 - hazards distintos coexistem como camadas independentes
+  ---
+  duration_ms: 0.191333
+  type: 'test'
+  ...
+# Subtest: enabled=false mantém o contrato de estado (mesma gramática do legado)
+ok 765 - enabled=false mantém o contrato de estado (mesma gramática do legado)
+  ---
+  duration_ms: 0.338911
+  type: 'test'
+  ...
+# Subtest: tsunami: superfície sobe até submergeBelowY (smoothstep) e sustenta
+ok 766 - tsunami: superfície sobe até submergeBelowY (smoothstep) e sustenta
+  ---
+  duration_ms: 4.593299
+  type: 'test'
+  ...
+# Subtest: tsunami: tsunamiEnd recua a superfície até invisível e volta a idle
+ok 767 - tsunami: tsunamiEnd recua a superfície até invisível e volta a idle
+  ---
+  duration_ms: 1.918622
+  type: 'test'
+  ...
+# Subtest: tsunami: espuma real — partículas emitidas durante a elevação
+ok 768 - tsunami: espuma real — partículas emitidas durante a elevação
+  ---
+  duration_ms: 4.468061
+  type: 'test'
+  ...
+# Subtest: erupção: lava sobe até lavaBelowY (180 m) e emite brasas + fumaça
+ok 769 - erupção: lava sobe até lavaBelowY (180 m) e emite brasas + fumaça
+  ---
+  duration_ms: 7.832709
+  type: 'test'
+  ...
+# Subtest: idempotência: tsunamiStart duplicado NÃO duplica a superfície
+ok 770 - idempotência: tsunamiStart duplicado NÃO duplica a superfície
+  ---
+  duration_ms: 0.528884
+  type: 'test'
+  ...
+# Subtest: anomalia KHAOS: domos nos anchors oficiais, pulso e encerramento
+ok 771 - anomalia KHAOS: domos nos anchors oficiais, pulso e encerramento
+  ---
+  duration_ms: 2.29266
+  type: 'test'
+  ...
+# Subtest: acidRain: drizzle por evento, decai sozinho
+ok 772 - acidRain: drizzle por evento, decai sozinho
+  ---
+  duration_ms: 1.209909
+  type: 'test'
+  ...
+# Subtest: evento desconhecido é ignorado sem erro e sem estado
+ok 773 - evento desconhecido é ignorado sem erro e sem estado
+  ---
+  duration_ms: 0.24785
+  type: 'test'
+  ...
+# Subtest: mudança de hazard: tsunami ativo → erupção assume a MESMA superfície
+ok 774 - mudança de hazard: tsunami ativo → erupção assume a MESMA superfície
+  ---
+  duration_ms: 0.717937
+  type: 'test'
+  ...
+# Subtest: dispose: grupo removido da cena sem erro duplo
+ok 775 - dispose: grupo removido da cena sem erro duplo
+  ---
+  duration_ms: 0.806868
+  type: 'test'
+  ...
+# Subtest: 5 mundos: marcos + partículas + SurvivalFX integram sem erro nem NaN
+ok 776 - 5 mundos: marcos + partículas + SurvivalFX integram sem erro nem NaN
+  ---
+  duration_ms: 2231.433803
+  type: 'test'
+  ...
+# Subtest: Fase 26: tsunami abastece os marcos — boost 0→1 na subida, 1 na sustentação, 0 no recuo
+ok 777 - Fase 26: tsunami abastece os marcos — boost 0→1 na subida, 1 na sustentação, 0 no recuo
+  ---
+  duration_ms: 3.78138
+  type: 'test'
+  ...
+# Subtest: Fase 26: lava e gravidade abastecem os marcos com o MESMO contrato
+ok 778 - Fase 26: lava e gravidade abastecem os marcos com o MESMO contrato
+  ---
+  duration_ms: 0.770427
+  type: 'test'
+  ...
+# Subtest: Fase 26: SEM landmarks (deps ausente) nada quebra — headless/testes antigos
+ok 779 - Fase 26: SEM landmarks (deps ausente) nada quebra — headless/testes antigos
+  ---
+  duration_ms: 0.482099
+  type: 'test'
+  ...
+# Subtest: Talon está no catálogo canônico com identidade de Agilidade e Informação
+ok 780 - Talon está no catálogo canônico com identidade de Agilidade e Informação
+  ---
+  duration_ms: 0.7939
+  type: 'test'
+  ...
+# Subtest: "Invasão de Campo" registrada com parâmetros canônicos e progressão Lv1→Lv6
+ok 781 - "Invasão de Campo" registrada com parâmetros canônicos e progressão Lv1→Lv6
+  ---
+  duration_ms: 0.682867
+  type: 'test'
+  ...
+# Subtest: fieldScan revela rivais ATRÁS de cobertura (sem LOS) dentro do raio
+ok 782 - fieldScan revela rivais ATRÁS de cobertura (sem LOS) dentro do raio
+  ---
+  duration_ms: 17.46936
+  type: 'test'
+  ...
+# Subtest: vault +15%: multiplicador ativo apenas no ar enquanto o pulso vive
+ok 783 - vault +15%: multiplicador ativo apenas no ar enquanto o pulso vive
+  ---
+  duration_ms: 21.571563
+  type: 'test'
+  ...
+# Subtest: Talon tem identidade 3D fixa: moicano, visor emissivo, tiras com mola
+ok 784 - Talon tem identidade 3D fixa: moicano, visor emissivo, tiras com mola
+  ---
+  duration_ms: 63.232623
+  type: 'test'
+  ...
+# Subtest: perfis: degraus de silhueta real (capô < teto, teto > greenhouse, rodas no chão)
+ok 785 - perfis: degraus de silhueta real (capô < teto, teto > greenhouse, rodas no chão)
+  ---
+  duration_ms: 0.829371
+  type: 'test'
+  ...
+# Subtest: prisma frustrado: 12 triângulos, normais finitas, topo recuado (pilar inclinado)
+ok 786 - prisma frustrado: 12 triângulos, normais finitas, topo recuado (pilar inclinado)
+  ---
+  duration_ms: 0.985685
+  type: 'test'
+  ...
+# Subtest: buildTrafficVehicles: instancing completo — rodas cilíndricas, luzes, vidro, pintura
+ok 787 - buildTrafficVehicles: instancing completo — rodas cilíndricas, luzes, vidro, pintura
+  ---
+  duration_ms: 7.201905
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma placements → mesma cena (sem Math.random)
+ok 788 - determinismo: mesma placements → mesma cena (sem Math.random)
+  ---
+  duration_ms: 5.581509
+  type: 'test'
+  ...
+# Subtest: trem avança de forma determinística (headX linear no tempo)
+ok 789 - trem avança de forma determinística (headX linear no tempo)
+  ---
+  duration_ms: 16.021911
+  type: 'test'
+  ...
+# Subtest: direção do trem aponta para o spawn (entra pela borda contrária)
+ok 790 - direção do trem aponta para o spawn (entra pela borda contrária)
+  ---
+  duration_ms: 20.359897
+  type: 'test'
+  ...
+# Subtest: update conclui no fim da timeline e chama onDone UMA vez
+ok 791 - update conclui no fim da timeline e chama onDone UMA vez
+  ---
+  duration_ms: 10.904178
+  type: 'test'
+  ...
+# Subtest: skip encerra imediatamente (uma chamada), mesmo com timeline incompleta
+ok 792 - skip encerra imediatamente (uma chamada), mesmo com timeline incompleta
+  ---
+  duration_ms: 12.322965
+  type: 'test'
+  ...
+# Subtest: cameraPose posiciona a câmera perto do trilho e converge com o tempo
+ok 793 - cameraPose posiciona a câmera perto do trilho e converge com o tempo
+  ---
+  duration_ms: 8.431243
+  type: 'test'
+  ...
+# Subtest: startAt sincronizado: remoto entra no meio da timeline e conclui no mesmo instante global
+ok 794 - startAt sincronizado: remoto entra no meio da timeline e conclui no mesmo instante global
+  ---
+  duration_ms: 20.442786
+  type: 'test'
+  ...
+# Subtest: startAt ignora valores inválidos/negativos (fallback determinístico em 0)
+ok 795 - startAt ignora valores inválidos/negativos (fallback determinístico em 0)
+  ---
+  duration_ms: 13.837347
+  type: 'test'
+  ...
+# Subtest: via permanente: lastro, dormentes instanciados e 2 trilhos (fim da placa flutuante)
+ok 796 - via permanente: lastro, dormentes instanciados e 2 trilhos (fim da placa flutuante)
+  ---
+  duration_ms: 11.087029
+  type: 'test'
+  ...
+# Subtest: locomotiva com anatomia ferroviária: bogies, rodas cilíndricas, nariz, cabine e farol
+ok 797 - locomotiva com anatomia ferroviária: bogies, rodas cilíndricas, nariz, cabine e farol
+  ---
+  duration_ms: 4.448193
+  type: 'test'
+  ...
+# Subtest: veículos do trem seguem a cabeça com offsets preservados (fila sincronizada)
+ok 798 - veículos do trem seguem a cabeça com offsets preservados (fila sincronizada)
+  ---
+  duration_ms: 3.257654
+  type: 'test'
+  ...
+# Subtest: ue58 preflight: projeto real valida sem engine — associação 5.8, 3 targets, includes resolvem
+ok 799 - ue58 preflight: projeto real valida sem engine — associação 5.8, 3 targets, includes resolvem
+  ---
+  duration_ms: 134.814269
+  type: 'test'
+  ...
+# Subtest: ue58 preflight: flags estrutura quebrada — uproject inválido e include órfão
+ok 800 - ue58 preflight: flags estrutura quebrada — uproject inválido e include órfão
+  ---
+  duration_ms: 3.150824
+  type: 'test'
+  ...
+# Subtest: ue58 worlds: preflight segue verde com KhaaosEAC e pipeline de mundos — só warnings
+ok 801 - ue58 worlds: preflight segue verde com KhaaosEAC e pipeline de mundos — só warnings
+  ---
+  duration_ms: 138.439164
+  type: 'test'
+  ...
+# Subtest: ue58 worlds: config aponta GameDefaultMap/ServerDefaultMap para os mapas gerados
+ok 802 - ue58 worlds: config aponta GameDefaultMap/ServerDefaultMap para os mapas gerados
+  ---
+  duration_ms: 0.278613
+  type: 'test'
+  ...
+# Subtest: ue58 worlds: generate_worlds.py cumpre o contrato (funções, marcador JSON, layout determinístico)
+ok 803 - ue58 worlds: generate_worlds.py cumpre o contrato (funções, marcador JSON, layout determinístico)
+  ---
+  duration_ms: 0.33322
+  type: 'test'
+  ...
+# Subtest: ue58 worlds/eac: módulo KhaaosEAC compila em stub e nunca quebra o build
+ok 804 - ue58 worlds/eac: módulo KhaaosEAC compila em stub e nunca quebra o build
+  ---
+  duration_ms: 0.217209
+  type: 'test'
+  ...
+# Subtest: ue58 worlds/eac: contrato enforced — KhaaosEAC sem detecção condicional é erro fatal (UE1041)
+ok 805 - ue58 worlds/eac: contrato enforced — KhaaosEAC sem detecção condicional é erro fatal (UE1041)
+  ---
+  duration_ms: 1.549221
+  type: 'test'
+  ...
+# Subtest: F31 · 5 arquétipos de árvore mapeiam os 4 mundos + CIGKV
+ok 806 - F31 · 5 arquétipos de árvore mapeiam os 4 mundos + CIGKV
+  ---
+  duration_ms: 1.447121
+  type: 'test'
+  ...
+# Subtest: F31 · árvore: tronco+raízes+galhos fundidos em 1 geometria; dossel orgânico
+ok 807 - F31 · árvore: tronco+raízes+galhos fundidos em 1 geometria; dossel orgânico
+  ---
+  duration_ms: 49.824797
+  type: 'test'
+  ...
+# Subtest: F31 · determinismo byte a byte (mesma seed → mesmos vértices)
+ok 808 - F31 · determinismo byte a byte (mesma seed → mesmos vértices)
+  ---
+  duration_ms: 16.004256
+  type: 'test'
+  ...
+# Subtest: F31 · arbusto em cluster e tufo de grama curvado (não mais primitivas cruas)
+ok 809 - F31 · arbusto em cluster e tufo de grama curvado (não mais primitivas cruas)
+  ---
+  duration_ms: 1.310794
+  type: 'test'
+  ...
+# Subtest: F31 · vegRng é determinístico e mergeGeoms preserva contagens
+ok 810 - F31 · vegRng é determinístico e mergeGeoms preserva contagens
+  ---
+  duration_ms: 1.099257
+  type: 'test'
+  ...
+# Subtest: F31 · patchSway injeta uniforms + sway no vertex shader (headless)
+ok 811 - F31 · patchSway injeta uniforms + sway no vertex shader (headless)
+  ---
+  duration_ms: 0.69444
+  type: 'test'
+  ...
+# Subtest: F31 · tickVegetationWind: atualiza o tempo e é inerte sem registro
+ok 812 - F31 · tickVegetationWind: atualiza o tempo e é inerte sem registro
+  ---
+  duration_ms: 0.351687
+  type: 'test'
+  ...
+# Subtest: F31 · buildTreeField: par de InstancedMesh fiel aos spots, com tint e vento
+ok 813 - F31 · buildTreeField: par de InstancedMesh fiel aos spots, com tint e vento
+  ---
+  duration_ms: 3.641225
+  type: 'test'
+  ...
+# Subtest: F31 · buildBushField: 1 InstancedMesh, tint e vento no arbusto
+ok 814 - F31 · buildBushField: 1 InstancedMesh, tint e vento no arbusto
+  ---
+  duration_ms: 1.203955
+  type: 'test'
+  ...
+# Subtest: F31 · cena W1-W4: vegetação de produção presente + sway registrado
+ok 815 - F31 · cena W1-W4: vegetação de produção presente + sway registrado
+  ---
+  duration_ms: 2147.662213
+  type: 'test'
+  ...
+# Subtest: F31 · W4 Arukheea: FAROL GIRANDO — beam no registry de spinners (view=tps)
+ok 816 - F31 · W4 Arukheea: FAROL GIRANDO — beam no registry de spinners (view=tps)
+  ---
+  duration_ms: 329.730854
+  type: 'test'
+  ...
+# Subtest: F32 · grassChunkify: células puras, determinísticas, cobertura exata
+ok 817 - F32 · grassChunkify: células puras, determinísticas, cobertura exata
+  ---
+  duration_ms: 0.34577
+  type: 'test'
+  ...
+# Subtest: F32 · grassChunkTier: bandas full/sparse/hidden (PURO, faixa desligada)
+ok 818 - F32 · grassChunkTier: bandas full/sparse/hidden (PURO, faixa desligada)
+  ---
+  duration_ms: 0.143884
+  type: 'test'
+  ...
+# Subtest: F32 · buildGrassFieldLOD: tiers corretos, update idempotente, oculta longe
+ok 819 - F32 · buildGrassFieldLOD: tiers corretos, update idempotente, oculta longe
+  ---
+  duration_ms: 2.880217
+  type: 'test'
+  ...
+# Subtest: F32 · buildScene: grama nasce em campo LOD com chunks e vento registrado
+ok 820 - F32 · buildScene: grama nasce em campo LOD com chunks e vento registrado
+  ---
+  duration_ms: 1726.108382
+  type: 'test'
+  ...
+# Subtest: F34 · grassChunkTier: 4 bandas (full/sparse/impostor/hidden) + retrocompat
+ok 821 - F34 · grassChunkTier: 4 bandas (full/sparse/impostor/hidden) + retrocompat
+  ---
+  duration_ms: 0.211994
+  type: 'test'
+  ...
+# Subtest: F34 · grassImpostorGeometry: 2 quads cruzados fundidos (silhueta dupla)
+ok 822 - F34 · grassImpostorGeometry: 2 quads cruzados fundidos (silhueta dupla)
+  ---
+  duration_ms: 0.156571
+  type: 'test'
+  ...
+# Subtest: F34 · buildGrassFieldLOD: faixa impostor empacota 1 quad por chunk (58-110m)
+ok 823 - F34 · buildGrassFieldLOD: faixa impostor empacota 1 quad por chunk (58-110m)
+  ---
+  duration_ms: 2.984536
+  type: 'test'
+  ...
+# Subtest: F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobre
+ok 824 - F34 · buildScene W1-W4: impostores registrados, faixa acende e vento cobre
+  ---
+  duration_ms: 1699.336952
+  type: 'test'
+  ...
+# Subtest: windowPaneOnSegment: raio no OLHO (1,6) cruza o vão; raio BAIXO (1,0) não cruza
+ok 825 - windowPaneOnSegment: raio no OLHO (1,6) cruza o vão; raio BAIXO (1,0) não cruza
+  ---
+  duration_ms: 13.696541
+  type: 'test'
+  ...
+# Subtest: windowPaneOnSegment: a ABERTURA persiste com o vidro destruído (fresta útil)
+ok 826 - windowPaneOnSegment: a ABERTURA persiste com o vidro destruído (fresta útil)
+  ---
+  duration_ms: 3.035539
+  type: 'test'
+  ...
+# Subtest: sim: bot VER o alvo por janela (LOS eye 1,6) e engaja pelo vão
+ok 827 - sim: bot VER o alvo por janela (LOS eye 1,6) e engaja pelo vão
+  ---
+  duration_ms: 7.596682
+  type: 'test'
+  ...
+# Subtest: sim: bot PLANTA no vão, ESTILHAÇA o vidro (windowHit → windowDown) e FERE o alvo
+ok 828 - sim: bot PLANTA no vão, ESTILHAÇA o vidro (windowHit → windowDown) e FERE o alvo
+  ---
+  duration_ms: 90.236076
+  type: 'test'
+  ...
+# Subtest: room3d: MESMA leitura — bot estilhaça o vidro e fere pelo vão (autoritativo)
+ok 829 - room3d: MESMA leitura — bot estilhaça o vidro e fere pelo vão (autoritativo)
+  ---
+  duration_ms: 93.265785
+  type: 'test'
+  ...
+# Subtest: regressão: o peitoril NÃO virou passagem — jogador NÃO atravessa a janela
+ok 830 - regressão: o peitoril NÃO virou passagem — jogador NÃO atravessa a janela
+  ---
+  duration_ms: 17.429758
+  type: 'test'
+  ...
+# Subtest: Ckesalth eruption damages low terrain and preserves high exploration routes
+ok 831 - Ckesalth eruption damages low terrain and preserves high exploration routes
+  ---
+  duration_ms: 18.930779
+  type: 'test'
+  ...
+# Subtest: Arukheea anomaly drains exposed shields while quantum anchors protect explorers
+ok 832 - Arukheea anomaly drains exposed shields while quantum anchors protect explorers
+  ---
+  duration_ms: 8.865153
+  type: 'test'
+  ...
+# Subtest: Arukheea authoritative room replicates anomaly events and anchor protection
+ok 833 - Arukheea authoritative room replicates anomaly events and anchor protection
+  ---
+  duration_ms: 5.814048
+  type: 'test'
+  ...
+# Subtest: Priadus tsunami integrates 60 players and remains within the simulation budget
+ok 834 - Priadus tsunami integrates 60 players and remains within the simulation budget
+  ---
+  duration_ms: 290.242514
+  type: 'test'
+  ...
+# Subtest: identidade por mundo: cada cenário materializa seus marcos assinatura
+ok 835 - identidade por mundo: cada cenário materializa seus marcos assinatura
+  ---
+  duration_ms: 2212.764069
+  type: 'test'
+  ...
+# Subtest: Priadus: a água é um ANEL no horizonte — a arena permanece seca
+ok 836 - Priadus: a água é um ANEL no horizonte — a arena permanece seca
+  ---
+  duration_ms: 342.984186
+  type: 'test'
+  ...
+# Subtest: Arukheea: pilões nos ANCHORS da gravidade (mesmas posições da sim)
+ok 837 - Arukheea: pilões nos ANCHORS da gravidade (mesmas posições da sim)
+  ---
+  duration_ms: 294.521656
+  type: 'test'
+  ...
+# Subtest: marcos FORA da área jogável (anel ≥190 m) — zero impacto em gameplay
+ok 838 - marcos FORA da área jogável (anel ≥190 m) — zero impacto em gameplay
+  ---
+  duration_ms: 1626.308921
+  type: 'test'
+  ...
+# Subtest: determinismo: mesma seed → mesmas contagens e posições de marcos
+ok 839 - determinismo: mesma seed → mesmas contagens e posições de marcos
+  ---
+  duration_ms: 8.17986
+  type: 'test'
+  ...
+# Subtest: cenário desconhecido não quebra (registro vazio, sem exceção)
+ok 840 - cenário desconhecido não quebra (registro vazio, sem exceção)
+  ---
+  duration_ms: 0.172821
+  type: 'test'
+  ...
+# Subtest: Fase 26: registro expõe applyHazard + hazardState zerado na criação
+ok 841 - Fase 26: registro expõe applyHazard + hazardState zerado na criação
+  ---
+  duration_ms: 1627.053395
+  type: 'test'
+  ...
+# Subtest: Priadus × tsunami: o ANEL oceânico sobe (maré) e recua ao idle
+ok 842 - Priadus × tsunami: o ANEL oceânico sobe (maré) e recua ao idle
+  ---
+  duration_ms: 320.77971
+  type: 'test'
+  ...
+# Subtest: Ckesalth × lava: a tocha ERUPCIONA (escala/emissiva ×) com fagulhas reais
+ok 843 - Ckesalth × lava: a tocha ERUPCIONA (escala/emissiva ×) com fagulhas reais
+  ---
+  duration_ms: 315.603276
+  type: 'test'
+  ...
+# Subtest: Arukheea × gravity: pilões ACORDAM (anéis giram + cristal incandesce) e fendas fecham brilho
+ok 844 - Arukheea × gravity: pilões ACORDAM (anéis giram + cristal incandesce) e fendas fecham brilho
+  ---
+  duration_ms: 379.739307
+  type: 'test'
+  ...
+# Subtest: Arukheea × gravity: fendas do vazio incandecem (opacidade ↑)
+ok 845 - Arukheea × gravity: fendas do vazio incandecem (opacidade ↑)
+  ---
+  duration_ms: 341.351598
+  type: 'test'
+  ...
+# Subtest: CIGKV × acid: beacons estroboscopiam (pulso acelera com o boost)
+ok 846 - CIGKV × acid: beacons estroboscopiam (pulso acelera com o boost)
+  ---
+  duration_ms: 303.01086
+  type: 'test'
+  ...
+# Subtest: Barburhen × hazard: sem sobrevivência no cenário — reação nula e sem erro
+ok 847 - Barburhen × hazard: sem sobrevivência no cenário — reação nula e sem erro
+  ---
+  duration_ms: 325.514049
+  type: 'test'
+  ...
+# Subtest: Fase 26: particles ticker é IDEMPOTENTE por cena (districts + marks = 1 tick)
+ok 848 - Fase 26: particles ticker é IDEMPOTENTE por cena (districts + marks = 1 tick)
+  ---
+  duration_ms: 1004.269584
+  type: 'test'
+  ...
+# Subtest: regressão RSV1: upgrade de /ws recebe 101 e NUNCA bytes de 400 no mesmo socket
+ok 849 - regressão RSV1: upgrade de /ws recebe 101 e NUNCA bytes de 400 no mesmo socket
+  ---
+  duration_ms: 161.449211
+  type: 'test'
+  ...
+# Subtest: coexistência: jogador (/ws) e espectador (/ws/spectator) no MESMO http server
+ok 850 - coexistência: jogador (/ws) e espectador (/ws/spectator) no MESMO http server
+  ---
+  duration_ms: 103.557057
+  type: 'test'
+  ...
+# Subtest: path desconhecido: socket destruído sem 101 (roteador não vaza handshake)
+ok 851 - path desconhecido: socket destruído sem 101 (roteador não vaza handshake)
+  ---
+  duration_ms: 2.891204
+  type: 'test'
+  ...
+# Subtest: attach autoRoute: socket de path alheio fica INTOCADO (sem 400 espúrio) e o path próprio funciona
+ok 852 - attach autoRoute: socket de path alheio fica INTOCADO (sem 400 espúrio) e o path próprio funciona
+  ---
+  duration_ms: 154.238701
+  type: 'test'
+  ...
+# Subtest: modo derail: QTE abre na janela canônica e decide por teclado/botão
+ok 853 - modo derail: QTE abre na janela canônica e decide por teclado/botão
+  ---
+  duration_ms: 59.521314
+  type: 'test'
+  ...
+# Subtest: modo derail: timeout sem decisão = falha com custo de vida e atordoamento
+ok 854 - modo derail: timeout sem decisão = falha com custo de vida e atordoamento
+  ---
+  duration_ms: 36.04584
+  type: 'test'
+  ...
+# Subtest: modo derail: escolha "saltar" — custo de vida, zero atordoamento
+ok 855 - modo derail: escolha "saltar" — custo de vida, zero atordoamento
+  ---
+  duration_ms: 25.57577
+  type: 'test'
+  ...
+# Subtest: modo derail: skip antes do QTE termina sem consequência (outcome null)
+ok 856 - modo derail: skip antes do QTE termina sem consequência (outcome null)
+  ---
+  duration_ms: 8.511081
+  type: 'test'
+  ...
+# Subtest: desastre determinístico: mesmo spawn → mesmo frame do trem e dos destroços
+ok 857 - desastre determinístico: mesmo spawn → mesmo frame do trem e dos destroços
+  ---
+  duration_ms: 25.429928
+  type: 'test'
+  ...
+# Subtest: headX trava no impacto (clamp na direção do movimento), linear antes dele
+ok 858 - headX trava no impacto (clamp na direção do movimento), linear antes dele
+  ---
+  duration_ms: 24.811593
+  type: 'test'
+  ...
+# Subtest: câmera multi-estágio: perseguição → cabine 1ª pessoa → orbital → handover
+ok 859 - câmera multi-estágio: perseguição → cabine 1ª pessoa → orbital → handover
+  ---
+  duration_ms: 9.752982
+  type: 'test'
+  ...
+# Subtest: caixas resgatáveis: 6 posições determinísticas com loot nas formas do \#pickup
+ok 860 - caixas resgatáveis: 6 posições determinísticas com loot nas formas do \#pickup
+  ---
+  duration_ms: 27.173183
+  type: 'test'
+  ...
+# Subtest: destruição no palco: destroços instanciados + pilares que cedem + incêndio
+ok 861 - destruição no palco: destroços instanciados + pilares que cedem + incêndio
+  ---
+  duration_ms: 15.95895
+  type: 'test'
+  ...
+# Subtest: áudio do derail: rumble na cabine, crash no impacto, tinnitus pós-bullet-time
+ok 862 - áudio do derail: rumble na cabine, crash no impacto, tinnitus pós-bullet-time
+  ---
+  duration_ms: 13.12641
+  type: 'test'
+  ...
+# Subtest: modo online intocado: default é pass — timeline 3.4 s e outcome null
+ok 863 - modo online intocado: default é pass — timeline 3.4 s e outcome null
+  ---
+  duration_ms: 3.18439
+  type: 'test'
+  ...
+# Subtest: Fase 28: consumesKey — teclas da decisão consumidas SOMENTE na janela ativa
+ok 864 - Fase 28: consumesKey — teclas da decisão consumidas SOMENTE na janela ativa
+  ---
+  duration_ms: 8.773723
+  type: 'test'
+  ...
+# Subtest: Fase 28: tecla fora da decisão NÃO pula o QTE (contrato: timeout = falha)
+ok 865 - Fase 28: tecla fora da decisão NÃO pula o QTE (contrato: timeout = falha)
+  ---
+  duration_ms: 9.282793
+  type: 'test'
+  ...
+# Subtest: Fase 28: tecla da decisão DURANTE o QTE escolhe (sem pular) — teclado 1/2/c/e
+ok 866 - Fase 28: tecla da decisão DURANTE o QTE escolhe (sem pular) — teclado 1/2/c/e
+  ---
+  duration_ms: 3.512873
+  type: 'test'
+  ...
+# Subtest: Fase 28: outcome resolvido (timeout) não é sobrescrito por escolha tardia
+ok 867 - Fase 28: outcome resolvido (timeout) não é sobrescrito por escolha tardia
+  ---
+  duration_ms: 11.898663
+  type: 'test'
+  ...
+1..867
+# tests 889
+# suites 6
+# pass 876
+# fail 0
+# cancelled 0
+# skipped 13
+# todo 0
+# duration_ms 82925.296962

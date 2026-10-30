@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_FreezeDebuff",
+  "type": "Debuff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Override",
+  "attribute": "MoveSpeed",
+  "magnitude": 0.0,
+  "tag": "Effect.Debuff.Frozen",
+  "description": "Freeze debuff (immobile, 2s)",
+  "generated_by": "wire_all_4_tasks.py"
+}

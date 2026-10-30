@@ -1,0 +1,8 @@
+# Khaaos Run source intake mesh — CIGKV
+o SM_CIGKV_WorldBlockout
+v -5000.000 -5000.000 0.000
+v 5000.000 -5000.000 0.000
+v 5000.000 5000.000 0.000
+v -5000.000 5000.000 0.000
+f 1 2 3
+f 1 3 4

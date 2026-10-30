@@ -1,0 +1,177 @@
+Auditoria Desenvolvimento do War'I e Packback 
+Lite
+Auditoria do desenvolvimento War’I / PackBack
+Auditoria realizada no HEAD 187bc9f, sem alterações no código. O working tree permanece limpo.
+Conclusão executiva
+O War’I e o PackBack estão implementados como um vertical slice web funcional e predominantemente autoritativo no servidor:
+Inventário persistido por usuário.
+Equipar/remover itens pela API.
+Congelamento do loadout no countdown.
+Capacidade e peso durante a partida.
+Cura, granada e reconhecimento via WebSocket.
+Durabilidade com decremento server-side.
+Loot com rollback em falha de persistência.
+Reconexão autenticada preservando o snapshot do PackBack.
+Testes unitários, integração e E2E relevantes.
+Entretanto, ainda não considero o sistema pronto para operação distribuída ou produção multiplayer devido a lacunas de salas privadas, ownership multi-réplica, AOI, persistência do loot procedural e abandono de jogadores desconectados.
+1. War’I
+O que está implementado
+Categorias ARMAMENTO, DEFESA e BAG em shared/war-i.ts.
+Classificação de ações:
+HEAL
+GRENADE
+RECON
+Inventário isolado por userId.
+Equipagem validada por ownership.
+Bloqueio de alteração do loadout durante COUNTDOWN e IN_PROGRESS.
+Combate server-side com:
+dano;
+alcance;
+fire-rate;
+lag compensation;
+eliminação;
+ranking.
+Loot procedural determinístico e validação de proximidade.
+UI de inventário com filtros, busca, durabilidade e revisão do PackBack.
+Reconexão autenticada com reenvio do estado da partida.
+Achados críticos do War’I
+Alta — Salas privadas podem ser acessadas sem convite
+RoomManager aceita join com roomId, mas não verifica adequadamente isPrivate nem inviteCode.
+Também há risco de exposição porque a listagem de salas não filtra corretamente salas privadas.
+Impacto: qualquer cliente que conheça ou descubra o ID da sala pode tentar ingressar.
+Recomendação: exigir código/ticket vinculado ao jogador para salas privadas e retornar 403 ou 404 sem revelar a existência da sala.
+Alta — Ownership de sala Redis não está efetivamente aplicado
+Existe infraestrutura de setRoomOwner e renovação de lease, mas não há evidência de:
+renovação contínua do lease;
+fencing token;
+interrupção do tick ao perder ownership;
+bloqueio efetivo de processamento por réplica.
+Impacto: duas réplicas podem considerar-se donas da mesma sala e processar combate, loot ou ações duplicadas.
+Recomendação: implementar lease renovável, fencing monotônico e testes com duas instâncias concorrentes.
+Alta — AOI está implementado, mas não é usado no broadcast principal
+Existe lógica de pushInterest, porém o fluxo normal ainda transmite o estado global da sala aos jogadores.
+Impacto: jogadores podem receber posições e loot fora de sua área de interesse.
+Recomendação: usar AOI no broadcast de room_state, zone_tick, loot e eventos de combate. Criar testes com jogadores distantes.
+Alta — Jogadores desconectados não expiram
+onDisconnect apenas marca o jogador como desconectado. Não existe reaper baseado em lastSeenAt.
+Além disso, a condição de vitória considera jogadores vivos mesmo quando desconectados.
+Impacto: um jogador desconectado pode permanecer indefinidamente na sala, ocupar capacidade e afetar a vitória.
+Recomendação: definir grace period, reaper e política explícita de abandono, espectador ou eliminação.
+Média — Runtime 3D e War’I web são implementações separadas
+O game-runtime possui protocolo, inventário, loot e estado próprios, sem integração direta com o War’I persistido da aplicação web.
+Impacto: há risco de divergência entre regras de peso, inventário, durabilidade, autenticação e ranking.
+Recomendação: escolher uma implementação canônica ou versionar explicitamente os dois protocolos e criar testes de paridade.
+Média — Falta serialização de comandos por jogador
+Mensagens WebSocket podem executar callbacks assíncronos concorrentes para o mesmo usuário.
+Impacto: corridas entre join, leave, resume e fechamento de socket podem substituir ou corromper estado.
+Recomendação: adicionar fila/mutex por userId e reservar a transição de estado antes de operações assíncronas.
+2. PackBack
+O que está implementado
+Capacidade base: 50.
+Capacidade máxima: 150.
+Pesos padrão por categoria:
+arma: 25;
+defesa: 20;
+curativo: 5;
+utilidade: 10;
+recurso: 5.
+Peso explícito limitado entre 1 e 100.
+Bônus de capacidade apenas para utilidades equipadas, válidas e duráveis.
+Snapshot do loadout no início da partida.
+Ações autoritativas de cura, granada e reconhecimento.
+Lock por sala/jogador contra uso simultâneo.
+Durabilidade persistida via operação SQL condicional.
+Validação de que o item fazia parte do PackBack inicial.
+Pickup com reserva de peso, persistência e rollback.
+Privacidade de carryCapacity, carriedWeight e bônus de velocidade no snapshot individual.
+Achados críticos do PackBack
+Alta — Loot procedural da partida não é persistido como loot de partida
+O loot do match é criado apenas em memória pelo RoomManager. No pickup, o sistema cria um novo item no inventário, mas não registra um claim durável do loot procedural em loot_items.
+Impacto:
+restart da instância pode perder o loot;
+recuperação da partida não é possível;
+duas réplicas podem criar itens duplicados;
+não há replay ou auditoria completa do pickup.
+Recomendação: associar loot a matchId/roomId e usar claim atômico persistente, ou documentar formalmente o loot como efêmero e registrar eventos duráveis de coleta.
+Alta — Estado de capacidade e peso é apenas memória da sala
+carryCapacity e carriedWeight vivem em RoomPlayer.
+Impacto: restart, failover ou migração de ownership não consegue reconstruir a carga carregada.
+Recomendação: persistir eventos de pickup, snapshot de inventário da partida ou estado versionado de carga, definindo o comportamento em eliminação, extração e reconnect.
+Média — Não existem slots nem limite semântico de loadout
+O código limita a capacidade máxima, mas não impõe:
+quantidade máxima de slots;
+peso máximo inicial do loadout;
+compatibilidade de tipos;
+regras de stacking;
+limite de itens equipados.
+A documentação de character studio menciona mochila de cinco slots, mas essa regra não aparece implementada no servidor.
+Recomendação: criar um contrato canônico de slots e validar equipagem no servidor, não apenas aceitar isEquipped: boolean.
+Média — Alteração de loadout não possui revisão/lock otimista
+setItemEquipped executa um UPDATE simples. O início da partida lê os itens equipados em paralelo.
+Embora a API bloqueie mudanças durante countdown, não há uma revisão atômica do loadout.
+Recomendação: criar loadoutRevision, congelar a revisão no início do countdown e rejeitar atualizações obsoletas.
+Média — Semântica de loot diverge conforme o caminho
+Durante o match:
+curativo coletado cura imediatamente;
+arma coletada altera o dano;
+defesa coletada aumenta vida;
+o item é criado no inventário, mas não fica equipado.
+Fora da partida, a rota HTTP tem regras diferentes, especialmente para cura.
+Impacto: o mesmo item possui comportamento diferente dependendo do caminho usado.
+Recomendação: centralizar as regras em um serviço de domínio com contexto explícito: inventário, partida, extração e persistência.
+Média — Bug potencial na durabilidade parcial
+consumeItemDurability usa:
+ts
+GREATEST(0, durability - amount)
+com condição apenas durability > 0.
+Assim, um item com durabilidade 5 pode consumir 10, chegar a 0 e ainda permitir a ação completa.
+Recomendação: exigir durability >= amount no WHERE, ou rejeitar explicitamente durabilidade insuficiente:
+ts
+.where(and(
+  eq(items.id, id),
+  eq(items.userId, userId),
+  gte(items.durability, String(amount)),
+))
+Esse caso deve receber teste específico.
+Média — Uso fora da partida pode consumir durabilidade antes de falha no efeito
+A rota de uso legado consome durabilidade e depois chama healPlayer. Se a segunda operação falhar, a durabilidade pode permanecer reduzida.
+Recomendação: executar consumo e aplicação do efeito na mesma transação, ou implementar compensação segura.
+Média — Pickup WebSocket depende de estado em memória
+O fluxo atual faz reserva local, espera createItem e reverte em caso de erro. Isso funciona bem em uma única instância, mas não é um claim persistente compartilhado.
+Recomendação: adicionar claim condicional persistente e teste concorrente com dois jogadores tentando coletar o mesmo loot.
+Cobertura encontrada
+Os testes existentes cobrem bastante do vertical slice:
+war-i.test.ts
+war-i-ui-contract.test.ts
+packback-actions.test.ts
+packback-loadout.test.ts
+packback-match.test.ts
+packback-use.test.ts
+wari-websocket-e2e.test.ts
+testes de ownership e storage PostgreSQL
+Na execução reportada pela auditoria paralela:
+15 testes focados de War’I/PackBack: 15 passaram, 0 falharam.
+Runtime 3D: 155 passaram, 0 falharam, 12 foram ignorados por dependências reais não disponíveis.
+Lacunas de teste
+Ainda faltam testes para:
+ingresso sem convite em sala privada;
+filtragem de salas privadas na listagem;
+concorrência de dois pickups WebSocket;
+fencing e perda de ownership entre réplicas;
+reconstrução de carga após restart;
+reaper de jogador desconectado;
+limite de slots;
+peso inicial do loadout;
+durabilidade menor que o custo;
+rollback de cura após falha de persistência;
+renderização real da UI com browser e acessibilidade.
+Prioridade recomendada
+Corrigir durabilidade parcial e tornar uso de item transacional.
+Fechar salas privadas e filtragem de listagem.
+Implementar claim persistente/idempotente do loot procedural.
+Definir slots, peso inicial e regras canônicas do PackBack.
+Implementar fencing/lease real para ownership de salas.
+Adicionar reaper para jogadores desconectados.
+Aplicar AOI no broadcast efetivo.
+Depois disso, validar multi-réplica e staging com dois clientes reais.
+Veredito: War’I/PackBack estão funcionais como vertical slice local e single-instance, com boa cobertura de contratos e fluxo WebSocket. Ainda precisam de endurecimento de integridade, persistência e distribuição antes de serem classificados como multiplayer de produção.

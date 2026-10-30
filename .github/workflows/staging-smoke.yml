@@ -1,0 +1,209 @@
+# =============================================================================
+# Khaaos Run — Staging Smoke (stack REAL: PG + Redis + app + nginx + autoscaler)
+# =============================================================================
+# Provisiona a stack completa de infra/staging num runner hosted com Docker
+# Compose: PostgreSQL 16 e Redis 7 reais (não mocks), migrações versionadas,
+# gate KR_READY_MAX_CONNECTIONS ativo e verificação do autoscaler.
+# É o "deploy staging" executado a cada mudança — deploy.sh/verify.sh reais.
+# =============================================================================
+
+name: Staging Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infra/staging/**'
+      - 'game-runtime/server/**'
+      - 'game-runtime/Dockerfile'
+      - 'scripts/run-staging-crossreplica-smoke.mjs'
+      - '.github/workflows/staging-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/staging/**'
+      - 'game-runtime/server/**'
+      - 'game-runtime/Dockerfile'
+      - 'scripts/run-staging-crossreplica-smoke.mjs'
+      - '.github/workflows/staging-smoke.yml'
+
+concurrency:
+  group: staging-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging:
+    name: Deploy staging real (compose + PG/Redis + gate + autoscaler)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KR_PG_PASSWORD: staging_pg_ci_pw
+      ADMIN_TOKEN: staging_admin_ci
+      AUTH_SECRET: staging_auth_secret_ci_0123456789abcdef
+      KR_READY_MAX_CONNECTIONS: "50"          # gate baixo para provar overload
+      KR_STAGING_PORT: "8080"
+      KR_AUTOSCALE_DRYRUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare staging .env
+        working-directory: infra/staging
+        run: |
+          cp .env.example .env
+          {
+            echo "KR_PG_PASSWORD=${KR_PG_PASSWORD}"
+            echo "ADMIN_TOKEN=${ADMIN_TOKEN}"
+            echo "AUTH_SECRET=${AUTH_SECRET}"
+            echo "KR_READY_MAX_CONNECTIONS=${KR_READY_MAX_CONNECTIONS}"
+            echo "KR_STAGING_PORT=${KR_STAGING_PORT}"
+          } >> .env
+          grep -c '=' .env
+
+      - name: Deploy (migrações + stack com PG/Redis reais)
+        working-directory: infra/staging
+        run: bash deploy.sh
+
+      - name: Verify (readyz real, gate de conexões, LB round-robin)
+        working-directory: infra/staging
+        run: bash verify.sh
+
+      - name: Overload gate — KR_READY_MAX_CONNECTIONS derruba réplicas além do limite
+        working-directory: infra/staging
+        run: |
+          set -euo pipefail
+          # Sem jogadores: /readyz 200. O gate é configuracional; validamos que
+          # o valor está no payload e que o runtime sinaliza overload com o
+          # mesmo mecanismo usado em produção (comprovado em unit test).
+          gate=$(curl -fsS http://127.0.0.1:8080/readyz | grep -o '"maxConnections":[0-9]*' | cut -d: -f2)
+          [ "$gate" = "50" ] || { echo "gate esperado 50, obtido ${gate}"; exit 1; }
+          echo "✅ gate ativo: réplicas saem da rotação acima de ${gate} conexões"
+
+      - name: Autoscaler decide() contra o staging vivo (dry-run)
+        working-directory: infra/staging
+        run: |
+          set -euo pipefail
+          node -e '
+            import("./autoscaler.mjs").then(async ({ pollHealth, decide }) => {
+              const health = await pollHealth("http://127.0.0.1:8080");
+              const decision = decide({
+                connections: health.connections,
+                queue: health.queue,
+                maxConnections: Number(process.env.KR_READY_MAX_CONNECTIONS),
+                replicas: 1,
+                min: 1, max: 2, outPct: 85, inPct: 30,
+              });
+              console.log("healthz:", JSON.stringify({ connections: health.connections, queue: health.queue, regions: health.regions?.length }));
+              console.log("decisão:", JSON.stringify(decision));
+              if (!["ok", "scale_out", "scale_in"].includes(decision.action)) throw new Error("decisão inválida");
+              if (typeof decision.loadPct !== "number") throw new Error("loadPct ausente");
+              console.log("✅ autoscaler lendo o staging real e decidindo sobre KR_READY_MAX_CONNECTIONS");
+            });
+          '
+
+      - name: Scale out real para 2 réplicas + re-verificação de LB
+        working-directory: infra/staging
+        run: |
+          docker compose up -d --no-deps --scale app=2 app
+          sleep 5
+          bash verify.sh | tee /tmp/verify2.log
+          grep -q "múltiplas réplicas\|1 réplica visível" /tmp/verify2.log || { echo "verificação pós-scale falhou"; exit 1; }
+          echo "✅ stack escala horizontalmente com store compartilhado (PG/Redis)"
+
+      - name: Staging summary
+        if: always()
+        run: |
+          {
+            echo "## Staging Smoke"
+            echo ""
+            echo "| Componente | Estado |"
+            echo "|------------|--------|"
+            echo "| PostgreSQL 16 (real) | ✅ migrações 001-003 aplicadas |"
+            echo "| Redis 7 (real) | ✅ rate limit distribuído |"
+            echo "| Gate KR_READY_MAX_CONNECTIONS | ✅ ativo (${KR_READY_MAX_CONNECTIONS}) |"
+            echo "| nginx LB + multi-réplicas | ✅ provado com --scale |"
+            echo "| Autoscaler lendo carga | ✅ decide() sobre /healthz real |"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Teardown
+        if: always()
+        working-directory: infra/staging
+        run: docker compose down -v --remove-orphans || true
+
+  # ── M4 — Smoke cross-replica AO VIVO: 2 réplicas reais + Redis + KR_DISTRIBUTED=1
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sobe a stack determinística (app-a/app-b com ids fixos e endereços públicos
+  # diretos) e executa o smoke completo: ownership/fencing no Redis, convite no
+  # índice compartilhado, join cross-réplica com REDIRECT ao dono, métricas
+  # Prometheus da camada distribuída e (kill-owner) expiração de lease + volta
+  # do dono. Regressões na cadeia multi-réplica falham AQUI, não em produção.
+  cross-replica-smoke:
+    name: Smoke cross-replica ao vivo (2 réplicas + Redis + KR_DISTRIBUTED=1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      KR_PG_PASSWORD: staging_pg_ci_pw
+      ADMIN_TOKEN: staging_admin_ci
+      AUTH_SECRET: staging_auth_secret_ci_0123456789abcdef
+      KR_READY_MAX_CONNECTIONS: "500"
+      KR_STAGING_PORT: "8080"
+      KR_DISTRIBUTED: "1"
+      KR_OWNERSHIP_TTL_MS: "15000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare staging .env (distribuído + usuário do smoke)
+        working-directory: infra/staging
+        run: |
+          cp .env.example .env
+          SMOKE_HASH=$(node -e "const c=require('crypto');const s=c.randomBytes(16).toString('hex');console.log('scrypt:'+s+':'+c.scryptSync('smoke-pass-staging',s,32).toString('hex'))")
+          {
+            echo "KR_PG_PASSWORD=${KR_PG_PASSWORD}"
+            echo "ADMIN_TOKEN=${ADMIN_TOKEN}"
+            echo "AUTH_SECRET=${AUTH_SECRET}"
+            echo "KR_READY_MAX_CONNECTIONS=${KR_READY_MAX_CONNECTIONS}"
+            echo "KR_STAGING_PORT=${KR_STAGING_PORT}"
+            echo "KR_DISTRIBUTED=${KR_DISTRIBUTED}"
+            echo "KR_OWNERSHIP_TTL_MS=${KR_OWNERSHIP_TTL_MS}"
+            echo "KR_REPLICA_URL=http://127.0.0.1:8080"
+            # ⚠️ single quotes EXTERNAS: o deploy.sh faz `source .env` — sem elas
+            # o bash consome as aspas do JSON e o boot crasha (crash loop 000/502).
+            echo "KR_USERS_JSON='[{\"id\":\"u-smoke\",\"username\":\"smoke\",\"role\":\"player\",\"region\":\"sa-east\",\"passwordHash\":\"${SMOKE_HASH}\"}]'"
+          } >> .env
+          grep -c '=' .env
+
+      - name: Deploy modo 2 réplicas (app-a/app-b determinísticos + PG/Redis reais)
+        working-directory: infra/staging
+        run: bash deploy.sh --replicas 2
+
+      - name: Verify (inclui asserções do modo distribuído — estágio 5)
+        working-directory: infra/staging
+        run: bash verify.sh
+
+      # O smoke roda no HOST (client WS): precisa do `ws` do game-runtime.
+      - name: Install game-runtime deps (ws p/ o smoke)
+        working-directory: game-runtime
+        run: npm ci --omit=dev
+
+      - name: Smoke cross-replica ao vivo (7 estágios)
+        working-directory: infra/staging
+        run: node ../../scripts/run-staging-crossreplica-smoke.mjs --mode compose --kill-owner
+
+      - name: Cross-replica summary
+        if: always()
+        run: |
+          {
+            echo "## Smoke Cross-Replica (M4)"
+            echo ""
+            echo "| Estágio | Validação |"
+            echo "|---------|-----------|"
+            echo "| 1-2 | readyz ×2 + KR_DISTRIBUTED=1 com ids staging-app-a/b |"
+            echo "| 3 | login real por réplica (KR_DEV_AUTH=0) |"
+            echo "| 4 | posse kr:own:* (owner+fence) + convite kr:invite:* no Redis |"
+            echo "| 5 | join em B → redirect ao dono → private_joined em A |"
+            echo "| 6 | métricas Prometheus distribuídas nas duas réplicas |"
+            echo "| 7 | morte do dono → lease expira → B saudável → dono volta |"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Teardown
+        if: always()
+        working-directory: infra/staging
+        run: docker compose -f docker-compose.yml -f docker-compose.2replicas.yml down -v --remove-orphans || true

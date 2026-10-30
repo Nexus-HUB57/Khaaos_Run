@@ -14,9 +14,14 @@ const activate = (sim, operativeId) => {
 };
 
 test('existe uma habilidade definida e identificável para cada operativo canônico', () => {
-  assert.equal(roster.length, 16);
-  assert.deepEqual(Object.keys(OPERATIVE_ABILITIES).sort(), roster.map((operative) => operative.id).sort());
-  for (const operative of roster) {
+  // Fase 26 — catálogo com 17 operativos: os 16 canônicos + TALON (Hacker &
+  // Urban Runner). As 3 insígnias OCE estendem a tabela além do catálogo.
+  assert.equal(roster.length, 17);
+  const oceIds = ['OCE_01', 'OCE_02', 'OCE_03'];
+  const abilityIds = Object.keys(OPERATIVE_ABILITIES);
+  for (const id of oceIds) assert.ok(abilityIds.includes(id), `${id} presente na tabela de habilidades`);
+  assert.deepEqual(abilityIds.filter((id) => !oceIds.includes(id)).sort(), roster.map((operative) => operative.id).sort());
+  for (const operative of [...roster, ...oceIds.map((id) => ({ id }))]) {
     const ability = getOperativeAbility(operative.id);
     assert.equal(ability.operativeId, operative.id);
     assert.ok(ability.name && ability.description);

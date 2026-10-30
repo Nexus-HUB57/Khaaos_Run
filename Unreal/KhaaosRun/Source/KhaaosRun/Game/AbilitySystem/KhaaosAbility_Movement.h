@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "Game/AbilitySystem/KhaaosGameplayAbility.h"
+#include "NiagaraSystem.h"
 #include "KhaaosAbility_Movement.generated.h"
 
 // ─── Forward Declarations ─────────────────────────────────────────────────────
@@ -49,6 +50,12 @@ public:
         /** Minimum energy required to start sprinting. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Sprint")
         float MinEnergyToActivate;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Sprint speed trail Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Sprint|VFX")
+        TSoftObjectPtr<UNiagaraSystem> SprintTrailVFX;
 
         // ─── Server RPC ────────────────────────────────────────────────────────
 
@@ -213,6 +220,12 @@ public:
         /** Energy cost per grapple. */
         UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Grapple")
         float GrappleEnergyCost;
+
+        // ─── VFX References ─────────────────────────────────────────────────
+
+        /** Grapple rope Niagara VFX. */
+        UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Ability|Grapple|VFX")
+        TSoftObjectPtr<UNiagaraSystem> GrappleRopeVFX;
 
         // ─── Server RPC ────────────────────────────────────────────────────────
 

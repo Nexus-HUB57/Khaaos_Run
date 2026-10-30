@@ -335,8 +335,6 @@ private:
         const FRotator& Rotation,
         ELootRarity Rarity = ELootRarity::Comum);
 
-    bool bMissingLootPickupClassWarningLogged = false;
-
     /** Get lifetime for replicated properties */
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

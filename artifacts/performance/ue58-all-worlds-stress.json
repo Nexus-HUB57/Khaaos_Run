@@ -1,0 +1,129 @@
+{
+  "schema": "khaaos.ue58.all-world-stress/v1",
+  "generatedAt": "2026-10-27T12:27:40.683Z",
+  "worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "engine": {
+    "status": "skipped_no_engine",
+    "engine": null,
+    "message": "UnrealEditor-Cmd/UE5_ROOT ausente neste ambiente; o resultado usa o proxy determinístico da simulação."
+  },
+  "proxy": {
+    "mode": "deterministic_runtime_proxy",
+    "durationSeconds": 30,
+    "playersPerWorld": 60,
+    "totalPlayers": 300,
+    "worldCount": 5,
+    "totalWallMs": 1593.114,
+    "aggregateProxyFps": 941.62,
+    "worlds": [
+      {
+        "world": "CIGKV",
+        "players": 60,
+        "simulatedSeconds": 30,
+        "ticks": 900,
+        "wallMs": 320.909,
+        "frameMs": {
+          "p50": 0.154,
+          "p95": 0.999,
+          "p99": 1.629,
+          "max": 9.645
+        },
+        "proxyServerFps": 1001.32,
+        "targetServerFps": 30,
+        "targetFrameMs": 33.333,
+        "budgetPass": true,
+        "renderFps": null,
+        "renderFpsStatus": "not_measured_without_ue5",
+        "events": 953
+      },
+      {
+        "world": "Barburhen",
+        "players": 60,
+        "simulatedSeconds": 30,
+        "ticks": 900,
+        "wallMs": 336.709,
+        "frameMs": {
+          "p50": 0.181,
+          "p95": 1.062,
+          "p99": 1.732,
+          "max": 5.479
+        },
+        "proxyServerFps": 941.91,
+        "targetServerFps": 30,
+        "targetFrameMs": 33.333,
+        "budgetPass": true,
+        "renderFps": null,
+        "renderFpsStatus": "not_measured_without_ue5",
+        "events": 1464
+      },
+      {
+        "world": "Priadus",
+        "players": 60,
+        "simulatedSeconds": 30,
+        "ticks": 900,
+        "wallMs": 319.416,
+        "frameMs": {
+          "p50": 0.174,
+          "p95": 1.043,
+          "p99": 1.708,
+          "max": 3.537
+        },
+        "proxyServerFps": 958.67,
+        "targetServerFps": 30,
+        "targetFrameMs": 33.333,
+        "budgetPass": true,
+        "renderFps": null,
+        "renderFpsStatus": "not_measured_without_ue5",
+        "events": 1396
+      },
+      {
+        "world": "Ckesalth",
+        "players": 60,
+        "simulatedSeconds": 30,
+        "ticks": 900,
+        "wallMs": 327.882,
+        "frameMs": {
+          "p50": 0.231,
+          "p95": 0.998,
+          "p99": 1.599,
+          "max": 6.27
+        },
+        "proxyServerFps": 1002.46,
+        "targetServerFps": 30,
+        "targetFrameMs": 33.333,
+        "budgetPass": true,
+        "renderFps": null,
+        "renderFpsStatus": "not_measured_without_ue5",
+        "events": 1398
+      },
+      {
+        "world": "Arukheea",
+        "players": 60,
+        "simulatedSeconds": 30,
+        "ticks": 900,
+        "wallMs": 285.804,
+        "frameMs": {
+          "p50": 0.138,
+          "p95": 0.984,
+          "p99": 1.48,
+          "max": 2.907
+        },
+        "proxyServerFps": 1016.48,
+        "targetServerFps": 30,
+        "targetFrameMs": 33.333,
+        "budgetPass": true,
+        "renderFps": null,
+        "renderFpsStatus": "not_measured_without_ue5",
+        "events": 1215
+      }
+    ],
+    "pass": true,
+    "note": "Proxy da simulação autoritativa; não representa FPS de renderização UE5.8."
+  }
+}

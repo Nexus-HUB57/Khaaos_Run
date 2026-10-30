@@ -131,13 +131,15 @@ export class MarshalConsoleStore {
 
   private start(requestId: string): void {
     void this.run(requestId).catch(async () => {
-      try { await this.repository.markCouncilFailed(requestId, "COUNCIL_UNAVAILABLE"); } catch { /* database retry will preserve the last durable status */ }
+      // run() owns failure transitions after a successful claim. This outer
+      // catch must not fail a newer attempt without its fencing token.
     });
   }
 
   private async run(requestId: string): Promise<void> {
     const record = await this.repository.claimQueuedCouncil(requestId);
     if (!record) return; // another process already claimed this job
+    if (!record.attemptId) throw new Error("Council claim did not return a fencing token");
     const telemetry = record.telemetrySnapshot;
     const request: CouncilRequest = {
       requestId: record.requestId,
@@ -168,9 +170,9 @@ export class MarshalConsoleStore {
             subject: governance.subject, governance,
           }))
         : [];
-      await this.repository.saveCouncilResult(record.requestId, result, proposals);
+      await this.repository.saveCouncilResult(record.requestId, record.attemptId, result, proposals);
     } catch {
-      await this.repository.markCouncilFailed(record.requestId, "COUNCIL_UNAVAILABLE");
+      await this.repository.markCouncilFailed(record.requestId, record.attemptId, "COUNCIL_UNAVAILABLE");
     }
   }
 

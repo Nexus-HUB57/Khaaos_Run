@@ -155,8 +155,15 @@ export class EconomyService {
 
   async requestLoan(userId: string, key: string, amountKrc: number, days: number): Promise<EconomyResponse> {
     return this.execute(userId, key, "loans.request", { amountKrc, days }, async (tx, context) => {
-      if (!Number.isSafeInteger(amountKrc) || amountKrc < 100 || amountKrc > 10_000) throw new RangeError("Valor do empréstimo fora da faixa permitida");
-      if (!Number.isSafeInteger(days) || days < 1 || days > 30) throw new RangeError("Prazo do empréstimo fora da faixa permitida");
+      // M2: domínio e termos derivados do contrato canônico (shared/money) —
+      // idênticos aos do preview /api/economy/loan-preview (gate loan-parity).
+      if (typeof amountKrc !== "number" || !Number.isSafeInteger(amountKrc)
+        || BigInt(amountKrc) < LOAN_PRINCIPAL_MIN_KRC || BigInt(amountKrc) > LOAN_PRINCIPAL_MAX_KRC) {
+        throw new RangeError("Valor do empréstimo fora da faixa permitida");
+      }
+      if (!Number.isSafeInteger(days) || days < LOAN_DAYS_MIN || days > LOAN_DAYS_MAX) {
+        throw new RangeError("Prazo do empréstimo fora da faixa permitida");
+      }
       await this.lockBank(tx, userId);
       const activeLoans = await tx.select({ id: loans.id }).from(loans).where(and(
         eq(loans.userId, userId),
@@ -165,11 +172,11 @@ export class EconomyService {
       if (activeLoans.length >= 3) {
         return { status: 403, body: { message: "Limite de 3 empréstimos ativos atingido" } };
       }
-      const principalMinor = toMinorUnits(amountKrc);
-      const interestMinor = calculateLoanInterestMinorUnits(amountKrc, days);
-      const principal = fromMinorUnits(principalMinor);
-      const interest = fromMinorUnits(interestMinor);
-      const totalDue = fromMinorUnits(principalMinor + interestMinor);
+      // Mesma função do preview: computeLoanTerms (minor units, half-up).
+      const terms = computeLoanTerms(amountKrc, days);
+      const principal = terms.principal;
+      const interest = terms.interest;
+      const totalDue = terms.totalDue;
       const [loan] = await tx.insert(loans).values({
         userId,
         principal,

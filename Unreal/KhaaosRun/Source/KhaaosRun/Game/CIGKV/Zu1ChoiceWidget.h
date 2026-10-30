@@ -17,7 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnZu1WidgetChoice, bool, bSeatbeltF
  * Texto + voz do Marechal.
  */
 UCLASS()
-class KHAOSRUN_API UZu1ChoiceWidget : public UUserWidget
+class KHAAOSRUN_API UZu1ChoiceWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

@@ -9,7 +9,7 @@
 #include "Game/UI/KhaaosKillFeedComponent.h"
 #include "Game/Loot/KhaaosLootPickup.h"
 #include "Game/Economy/EconomyBridge.h"
-#include "Game/Player/KhaaosPlayerState.h"
+#include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"

@@ -8,6 +8,7 @@
 // ─── Forward Declarations ─────────────────────────────────────────────────────
 
 class UPrimaryDataAsset;
+class AKhaaosLootPickup;
 
 // ─── Inventory Slot Type ───────────────────────────────────────────────────────
 
@@ -20,6 +21,22 @@ enum class EKhaaosInventorySlot : uint8
     Utility     UMETA(DisplayName = "UTILITY"),
     Shield      UMETA(DisplayName = "SHIELD"),
     Backpack    UMETA(DisplayName = "BACKPACK")
+};
+
+/** Server-side item allowlist entry; clients cannot inject arbitrary item IDs/stacks. */
+USTRUCT(BlueprintType)
+struct FKhaaosInventoryItemDefinition
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory|Catalog")
+    FName ItemID;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory|Catalog")
+    EKhaaosInventorySlot SlotType = EKhaaosInventorySlot::Utility;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory|Catalog", meta=(ClampMin="1", ClampMax="9999"))
+    int32 MaxStack = 1;
 };
 
 // ─── Inventory Slot Struct ─────────────────────────────────────────────────────
@@ -102,6 +119,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Khaaos|Inventory")
     void DropItem(EKhaaosInventorySlot SlotType);
 
+    /** Request a nearby world pickup; the server rechecks distance and capacity. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|Inventory")
+    void RequestPickup(AKhaaosLootPickup* Pickup);
+
     // ─── Query ──────────────────────────────────────────────────────────────
 
     /** Get item ID in a slot. Returns NAME_None if empty. */
@@ -156,6 +177,14 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory")
     int32 BackpackStackBonus = 5;
 
+    /** Derived pickup class configured by the game content for dropped inventory items. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory|Loot")
+    TSubclassOf<AKhaaosLootPickup> DroppedPickupClass;
+
+    /** Authoritative allowlist and stack rules populated in the game's inventory data asset/BP. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Inventory|Catalog")
+    TArray<FKhaaosInventoryItemDefinition> ItemCatalog;
+
     // ─── Delegates ──────────────────────────────────────────────────────────
 
     UPROPERTY(BlueprintAssignable, Category = "Khaaos|Inventory")
@@ -169,11 +198,32 @@ public:
 
 protected:
 
-    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
+    UPROPERTY(ReplicatedUsing=OnRep_Slots, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
     TArray<FKhaaosInventorySlot> Slots;
 
-    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
+    UPROPERTY(ReplicatedUsing=OnRep_ActiveSlot, VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Inventory")
     EKhaaosInventorySlot ActiveSlot = EKhaaosInventorySlot::Primary;
+
+    UFUNCTION()
+    void OnRep_Slots();
+
+    UFUNCTION()
+    void OnRep_ActiveSlot();
+
+    UFUNCTION(Server, Reliable)
+    void ServerRemoveItem(EKhaaosInventorySlot SlotType, int32 Count);
+
+    UFUNCTION(Server, Reliable)
+    void ServerSwapSlots(EKhaaosInventorySlot SlotA, EKhaaosInventorySlot SlotB);
+
+    UFUNCTION(Server, Reliable)
+    void ServerDropItem(EKhaaosInventorySlot SlotType);
+
+    UFUNCTION(Server, Reliable)
+    void ServerSetActiveSlot(EKhaaosInventorySlot SlotType);
+
+    UFUNCTION(Server, Reliable)
+    void ServerRequestPickup(AKhaaosLootPickup* Pickup);
 
     // ─── Replication ──────────────────────────────────────────────────────
 
@@ -182,6 +232,5 @@ protected:
     /** Find slot index by type. Returns -1 if not found. */
     int32 FindSlotIndex(EKhaaosInventorySlot SlotType) const;
 
-    /** Determine the appropriate slot type for an item ID. */
-    static EKhaaosInventorySlot DetermineSlotType(FName ItemID);
+    bool ResolveItemDefinition(FName ItemID, FKhaaosInventoryItemDefinition& OutDefinition) const;
 };

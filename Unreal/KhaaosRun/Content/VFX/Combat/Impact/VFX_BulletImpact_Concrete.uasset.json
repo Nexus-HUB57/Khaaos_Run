@@ -1,0 +1,77 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_BulletImpact_Concrete",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.329360+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Bullet impact on concrete - dust puff + debris",
+    "category": "Combat",
+    "subcategory": "Impact",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_Dust",
+        "spawn_rate": 80.0,
+        "lifetime": 0.8,
+        "initial_size": 20.0,
+        "initial_color": {
+          "r": 0.7,
+          "g": 0.65,
+          "b": 0.6,
+          "a": 0.5
+        },
+        "initial_velocity": 30.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Debris",
+        "spawn_rate": 100.0,
+        "lifetime": 0.6,
+        "initial_size": 4.0,
+        "initial_color": {
+          "r": 0.6,
+          "g": 0.55,
+          "b": 0.5,
+          "a": 1.0
+        },
+        "initial_velocity": 100.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "GravityForce",
+      "Drag",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Impact_Concrete",
+      "sort_order": 5
+    },
+    "gpu_simulation_settings": {
+      "capacity": 256,
+      "spawn_rate": 100.0,
+      "bounds_scale": 1.0
+    },
+    "pool_config": {
+      "max_pool_size": 32,
+      "auto_release_threshold": 3.0
+    },
+    "significance_rank": 1
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Combat/Impact/VFX_BulletImpact_Concrete",
+    "package_name": "/Game/VFX/Combat/Impact/VFX_BulletImpact_Concrete",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "50727d3647c526d6"
+}

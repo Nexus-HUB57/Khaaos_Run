@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_VenexSpeedBonus",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "MoveSpeed",
+  "magnitude": 1.2,
+  "tag": "Effect.Buff.SpeedBonus",
+  "description": "+20% movement speed for Venex species",
+  "generated_by": "wire_all_4_tasks.py"
+}

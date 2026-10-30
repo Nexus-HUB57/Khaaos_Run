@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_EnergyCost",
+  "type": "Cost",
+  "duration_policy": "Instant",
+  "modifier_op": "Add",
+  "attribute": "Energy",
+  "magnitude": -10.0,
+  "tag": "Effect.Cost.Energy",
+  "description": "Energy cost template (override magnitude)",
+  "generated_by": "wire_all_4_tasks.py"
+}

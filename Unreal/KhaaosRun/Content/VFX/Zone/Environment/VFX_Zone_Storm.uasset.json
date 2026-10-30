@@ -1,0 +1,91 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Zone_Storm",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.331189+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Zone storm effect - heavy rain + lightning + wind debris",
+    "category": "Zone",
+    "subcategory": "Environment",
+    "species": null,
+    "emitters": [
+      {
+        "emitter_name": "Emitter_HeavyRain",
+        "spawn_rate": 3000.0,
+        "lifetime": 0.3,
+        "initial_size": 0.5,
+        "initial_color": {
+          "r": 0.5,
+          "g": 0.55,
+          "b": 0.7,
+          "a": 0.5
+        },
+        "initial_velocity": 1200.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Lightning",
+        "spawn_rate": 5.0,
+        "lifetime": 0.1,
+        "initial_size": 100.0,
+        "initial_color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        },
+        "initial_velocity": 0.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_Debris",
+        "spawn_rate": 100.0,
+        "lifetime": 2.0,
+        "initial_size": 5.0,
+        "initial_color": {
+          "r": 0.4,
+          "g": 0.35,
+          "b": 0.3,
+          "a": 0.7
+        },
+        "initial_velocity": 300.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "GravityForce",
+      "Turbulence",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Storm",
+      "sort_order": 0
+    },
+    "gpu_simulation_settings": {
+      "capacity": 8192,
+      "spawn_rate": 3000.0,
+      "bounds_scale": 15.0
+    },
+    "pool_config": {
+      "max_pool_size": 2,
+      "auto_release_threshold": 10.0
+    },
+    "significance_rank": 1
+  },
+  "species_vfx_config": null,
+  "ue5_import_metadata": {
+    "content_path": "VFX/Zone/Environment/VFX_Zone_Storm",
+    "package_name": "/Game/VFX/Zone/Environment/VFX_Zone_Storm",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "bb7799965e1e2dec"
+}

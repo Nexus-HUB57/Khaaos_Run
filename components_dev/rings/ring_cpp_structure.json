@@ -1,0 +1,356 @@
+{
+  "cpp_version": "2.0.0",
+  "description": "Estrutura C++ UE5 do Ring System - classes, componentes, subsystems",
+  "classes": [
+    {
+      "name": "AKhaaosRingManager",
+      "type": "AActor",
+      "header": "KhaaosRingManager.h",
+      "cpp": "KhaaosRingManager.cpp",
+      "description": "Actor principal que gerencia todos os rings em um mundo. Spawnado pelo GameMode no inicio da partida.",
+      "responsibilities": [
+        "Inicializar ring phases conforme ring_config.json",
+        "Gerenciar timer de shrink por fase",
+        "Calcular dano por tick para cada player no ring",
+        "Detectar transicao de mundo quando ring fecha",
+        "Spawnar portal Khaaos para proximo mundo"
+      ],
+      "key_methods": [
+        "void InitializeRingForWorld(EKhaaosWorld WorldId)",
+        "void StartNextPhase()",
+        "void TickRingShrink(float DeltaSeconds)",
+        "float CalculateDamageForPosition(const FVector& Position) const",
+        "bool IsPositionInSafeZone(const FVector& Position) const",
+        "void OnRingPhaseComplete(int32 PhaseIndex)",
+        "void OnWorldRingClosed()",
+        "void TriggerWorldTransition()"
+      ],
+      "properties": [
+        "EKhaaosWorld CurrentWorld",
+        "int32 CurrentPhase",
+        "float CurrentRadius",
+        "float TargetRadius",
+        "float ShrinkSpeed",
+        "float DamagePerTick",
+        "FVector RingCenter",
+        "TArray<FRingPhase> RingPhases",
+        "FTimerHandle RingShrinkTimer",
+        "FTimerHandle DamageTickTimer"
+      ]
+    },
+    {
+      "name": "UKhaaosRingComponent",
+      "type": "UActorComponent",
+      "header": "KhaaosRingComponent.h",
+      "cpp": "KhaaosRingComponent.cpp",
+      "description": "Componente attachado ao PlayerState para rastrear posicao relativa ao ring e calcular dano.",
+      "responsibilities": [
+        "Verificar se player esta em safe zone, danger zone, ou water zone",
+        "Aplicar dano do ring por tick",
+        "Notificar UI sobre status de zona",
+        "Modificar dano para Huran operatives em water zones"
+      ],
+      "key_methods": [
+        "void UpdateZoneStatus()",
+        "ERingZoneType GetCurrentZoneType() const",
+        "float GetCurrentDamage() const",
+        "void ApplyRingDamage()",
+        "bool IsInWaterZone() const",
+        "float GetHuranDamageModifier() const"
+      ]
+    },
+    {
+      "name": "UKhaaosRingVisualComponent",
+      "type": "UActorComponent",
+      "header": "KhaaosRingVisualComponent.h",
+      "cpp": "KhaaosRingVisualComponent.cpp",
+      "description": "Componente visual que renderiza o ring no mundo - bordas eletricas, particulas, efeitos de zona.",
+      "responsibilities": [
+        "Renderizar borda do ring (Niagara particles + material)",
+        "Atualizar cor/intensidade baseado em fase",
+        "Mostrar preview do proximo ring no minimap",
+        "Ativar efeitos de electrical storm no ring final"
+      ],
+      "key_methods": [
+        "void UpdateRingVisual(float CurrentRadius, float TargetRadius)",
+        "void SetRingPhaseVisual(int32 Phase)",
+        "void ShowNextRingPreview(float PreviewRadius)",
+        "void ActivateElectricalStorm()"
+      ]
+    },
+    {
+      "name": "UKhaaosRingSubsystem",
+      "type": "UGameInstanceSubsystem",
+      "header": "KhaaosRingSubsystem.h",
+      "cpp": "KhaaosRingSubsystem.cpp",
+      "description": "Subsystem global que carrega ring_config.json e prov dados para todos os RingManagers.",
+      "responsibilities": [
+        "Carregar ring_config.json no startup",
+        "Prover dados de configuracao por mundo",
+        "Rastrear estado global do pipeline multi-world",
+        "Coordinar transicoes entre mundos"
+      ],
+      "key_methods": [
+        "FRingWorldConfig GetRingConfig(EKhaaosWorld WorldId) const",
+        "TArray<FRingPhase> GetPhasesForWorld(EKhaaosWorld WorldId) const",
+        "EKhaaosWorld GetNextWorldInPipeline(EKhaaosWorld CurrentWorld) const",
+        "void OnWorldTransitionComplete(EKhaaosWorld FromWorld, EKhaaosWorld ToWorld)"
+      ]
+    },
+    {
+      "name": "AKhaaosAirdropManager",
+      "type": "AActor",
+      "header": "KhaaosAirdropManager.h",
+      "cpp": "KhaaosAirdropManager.cpp",
+      "description": "Gerencia airdrops por fase do ring. Spawn airdrops conforme configuracao de probabilidade por fase. Water drops para water zones com bonus Huran.",
+      "responsibilities": [
+        "Rastrear fase atual do ring para probabilidade de airdrop",
+        "Spawnar airdrop crate no mundo com loot tier correto",
+        "Criar water drops em water zones (submarine insertion)",
+        "Notificar HUD e spectator sobre airdrops",
+        "Gerenciar flare gun airdrops (player-triggered)"
+      ],
+      "key_methods": [
+        "void OnRingPhaseChanged(int32 NewPhase)",
+        "void SpawnAirdrop(const FVector& Location, EAirdropType Type)",
+        "void SpawnWaterDrop(const FWaterZone& WaterZone)",
+        "float GetAirdropProbability(int32 Phase) const",
+        "void OnFlareGunActivated(const FVector& FlareLocation)"
+      ],
+      "properties": [
+        "int32 CurrentPhase",
+        "EAirdropType PendingDropType",
+        "TArray<FAirdropSpawnPoint> ActiveDrops",
+        "FTimerHandle AirdropSpawnTimer"
+      ]
+    },
+    {
+      "name": "UKhaaosRingPredictionComponent",
+      "type": "UActorComponent",
+      "header": "KhaaosRingPredictionComponent.h",
+      "cpp": "KhaaosRingPredictionComponent.cpp",
+      "description": "Componente que calcula e exibe a previsao do proximo ring no minimap. FreeFire style: mostra proximo circle antes do shrink.",
+      "responsibilities": [
+        "Calcular proximo ring center e radius com accuracy por fase",
+        "Exibir preview no minimap",
+        "Atualizar conforme ring phase muda",
+        "Aplicar random shift em phases finais (accuracy reduz)"
+      ],
+      "key_methods": [
+        "void UpdatePrediction(int32 NextPhase)",
+        "FVector GetPredictedCenter() const",
+        "float GetPredictedRadius() const",
+        "void ApplyAccuracyShift(int32 Phase)",
+        "void RenderMinimapPreview()"
+      ],
+      "properties": [
+        "FVector PredictedCenter",
+        "float PredictedRadius",
+        "float AccuracyPercentage",
+        "bool bShowOnMinimap"
+      ]
+    },
+    {
+      "name": "UKhaaosSpectatorSystem",
+      "type": "UGameInstanceSubsystem",
+      "header": "KhaaosSpectatorSystem.h",
+      "cpp": "KhaaosSpectatorSystem.cpp",
+      "description": "Subsystem que gerencia espectadores e broadcast. Integracao Discord para eventos do ring.",
+      "responsibilities": [
+        "Gerenciar conexoes de espectadores com delay",
+        "Fornecer camera modes: freecam, follow, overhead, ring-center",
+        "Broadcast eventos do ring para Discord/Twitch/YouTube",
+        "Ativar commentator AI para eventos criticos",
+        "Picture-in-picture para ring view + player follow"
+      ],
+      "key_methods": [
+        "void AddSpectator(APlayerController* Spectator)",
+        "void RemoveSpectator(APlayerController* Spectator)",
+        "void SetSpectatorCameraMode(ESpectatorCameraMode Mode)",
+        "void BroadcastRingEvent(ERingEventType Event, const FString& Data)",
+        "void TriggerCommentary(ERingEventType Event)",
+        "void UpdatePictureInPicture()"
+      ],
+      "properties": [
+        "TArray<APlayerController*> ActiveSpectators",
+        "ESpectatorCameraMode CurrentCameraMode",
+        "int32 SpectatorDelaySeconds",
+        "bool bBroadcastEnabled",
+        "FString DiscordWebhookUrl"
+      ]
+    },
+    {
+      "name": "UKhaaosZoneHazardComponent",
+      "type": "UActorComponent",
+      "header": "KhaaosZoneHazardComponent.h",
+      "cpp": "KhaaosZoneHazardComponent.cpp",
+      "description": "Componente que aplica hazards ambientais adicionais ao ring dano base. Toxic fog (W2), radiation (W3), cryo storm (W4).",
+      "responsibilities": [
+        "Verificar hazard ativo no mundo atual",
+        "Aplicar dano de hazard adicional ao ring dano",
+        "Aplicar efeitos secundarios (slow, shield reduce)",
+        "Modificar dano para Huran operatives (resistencia)",
+        "Ativar VFX/PPP de hazard"
+      ],
+      "key_methods": [
+        "EZoneHazardType GetActiveHazard(EKhaaosWorld World) const",
+        "float GetHazardDamage(EZoneHazardType Hazard, float BaseDamage) const",
+        "float GetHuranResistance(EZoneHazardType Hazard) const",
+        "void ApplySecondaryEffects(AKhaaosCharacter* Character)",
+        "void ActivateHazardVFX(EZoneHazardType Hazard)"
+      ],
+      "properties": [
+        "EZoneHazardType ActiveHazard",
+        "TMap<EZoneHazardType, FHazardConfig> HazardConfigs",
+        "bool bHazardActive"
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "FRingPhase",
+      "fields": [
+        "int32 PhaseIndex",
+        "float RadiusStart",
+        "float RadiusEnd",
+        "float DurationSeconds",
+        "float DamagePerTick",
+        "float ShrinkSpeed"
+      ]
+    },
+    {
+      "name": "FRingWorldConfig",
+      "fields": [
+        "EKhaaosWorld WorldId",
+        "FString WorldName",
+        "int32 Capacity",
+        "int32 RingPhases",
+        "TArray<FRingPhase> Phases",
+        "TArray<FWaterZone> WaterZones"
+      ]
+    },
+    {
+      "name": "FWaterZone",
+      "fields": [
+        "FString Type",
+        "FVector Center",
+        "float Radius",
+        "float Depth",
+        "float DamageModifier"
+      ]
+    },
+    {
+      "name": "FRingEvent",
+      "fields": [
+        "ERingEventType EventType",
+        "FString AudioAsset",
+        "FString VFXAsset",
+        "FString UINotification",
+        "float Duration"
+      ]
+    },
+    {
+      "name": "FAirdropSpawnPoint",
+      "fields": [
+        "FVector Location",
+        "EAirdropType Type",
+        "ELootTier LootTier",
+        "int32 LootCount",
+        "bool bIsWaterDrop",
+        "float FallTimeSeconds"
+      ]
+    },
+    {
+      "name": "FHazardConfig",
+      "fields": [
+        "EZoneHazardType HazardType",
+        "FString VFXAsset",
+        "FString PostProcessAsset",
+        "float DamageModifier",
+        "bool bSlowsMovement",
+        "float SlowPercentage",
+        "float HuranResistance"
+      ]
+    },
+    {
+      "name": "FRingPrediction",
+      "fields": [
+        "FVector PredictedCenter",
+        "float PredictedRadius",
+        "EPredictionAccuracy Accuracy",
+        "float RandomShiftMeters",
+        "int32 PhaseIndex"
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "ERingZoneType",
+      "values": [
+        "SAFE",
+        "SHRINKING",
+        "DANGER",
+        "DEADLY",
+        "WATER",
+        "VOID"
+      ]
+    },
+    {
+      "name": "ERingEventType",
+      "values": [
+        "RING_START",
+        "RING_SHRINKING",
+        "RING_CLOSED",
+        "WORLD_TRANSITION",
+        "FINAL_RING"
+      ]
+    },
+    {
+      "name": "EKhaaosWorld",
+      "values": [
+        "CIGKV",
+        "W1_BARBURHEN",
+        "W2_PRIADUS",
+        "W3_CKESALTH",
+        "W4_ARUKHEEA"
+      ]
+    },
+    {
+      "name": "EAirdropType",
+      "values": [
+        "STANDARD",
+        "FLARE_GUN",
+        "WATER_DROP"
+      ]
+    },
+    {
+      "name": "EZoneHazardType",
+      "values": [
+        "NONE",
+        "ELECTRIC_ENERGY",
+        "TOXIC_FOG",
+        "RADIATION_ZONE",
+        "CRYO_STORM"
+      ]
+    },
+    {
+      "name": "ESpectatorCameraMode",
+      "values": [
+        "FREECAM",
+        "FOLLOW_PLAYER",
+        "OVERHEAD",
+        "RING_CENTER"
+      ]
+    },
+    {
+      "name": "EPredictionAccuracy",
+      "values": [
+        "EXACT",
+        "APPROXIMATE_90PCT",
+        "APPROXIMATE_80PCT",
+        "APPROXIMATE_70PCT",
+        "RANDOM_SHIFT"
+      ]
+    }
+  ]
+}

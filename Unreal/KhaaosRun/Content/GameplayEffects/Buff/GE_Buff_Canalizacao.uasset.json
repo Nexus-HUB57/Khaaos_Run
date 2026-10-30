@@ -1,0 +1,44 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Buff_Canalizacao",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.286199+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "Infinite",
+    "duration_magnitude": -1.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Energy",
+        "modifier_op": "Additive",
+        "magnitude": 3.0,
+        "channel": "Periodic"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Buff.Canalizacao",
+      "Ability.Passive.Species.Khael.CanalizacaoMistica"
+    ],
+    "required_tags": [
+      "Species.Khael"
+    ],
+    "stacking_type": "NoStacking",
+    "stack_limit_count": 1
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 1.0,
+    "execute_periodic_on_apply": true,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Buff/GE_Buff_Canalizacao",
+    "package_name": "/Game/GameplayEffects/Buff/GE_Buff_Canalizacao",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "b765bf3bd62415a4"
+}

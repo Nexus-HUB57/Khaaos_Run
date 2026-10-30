@@ -1,0 +1,73 @@
+{
+  "environment": "Chromium headless / SwiftShader; emulação touch; não mede GPU mobile",
+  "results": [
+    {
+      "scenario": "CIGKV",
+      "initial": 1200,
+      "actual": 660,
+      "expected": 660,
+      "passes": 4,
+      "fxaa": true,
+      "ssr": false,
+      "bloom": false
+    },
+    {
+      "scenario": "Barburhen",
+      "initial": 1200,
+      "actual": 660,
+      "expected": 660,
+      "passes": 4,
+      "fxaa": true,
+      "ssr": false,
+      "bloom": false
+    },
+    {
+      "scenario": "Priadus",
+      "initial": 1200,
+      "actual": 660,
+      "expected": 660,
+      "passes": 4,
+      "fxaa": true,
+      "ssr": false,
+      "bloom": false
+    },
+    {
+      "scenario": "Ckesalth",
+      "initial": 1200,
+      "actual": 660,
+      "expected": 660,
+      "passes": 4,
+      "fxaa": true,
+      "ssr": false,
+      "bloom": false
+    },
+    {
+      "scenario": "Arukheea",
+      "initial": 1200,
+      "actual": 660,
+      "expected": 660,
+      "passes": 4,
+      "fxaa": true,
+      "ssr": false,
+      "bloom": false
+    }
+  ],
+  "lifecycle": {
+    "disposed": 4,
+    "ssr": {
+      "width": 570,
+      "height": 320
+    },
+    "lowDirect": true
+  },
+  "resized": {
+    "width": 550,
+    "height": 412.5
+  },
+  "touch": {
+    "profile": "competitive",
+    "basePixelRatio": 1.25,
+    "coarsePointer": true
+  },
+  "errors": []
+}

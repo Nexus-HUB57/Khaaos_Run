@@ -38,6 +38,26 @@ kbd {
   transition: opacity .12s;
 }
 
+/* F36 — VINHETA SAZONAL da aura: a borda da tela respira na cor da skin
+   mítica equipada (--aura-season setada pelo hud3d no body; a estação entra
+   pelo data-aura-season). Custo ~0: 1 camada fixa, mix-blend screen, sem
+   layout extra; INATIVA (opacity 0, sem animação) sem skin mítica. */
+#auraVignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  opacity: 0; transition: opacity .9s ease;
+  background:
+    radial-gradient(ellipse 118% 96% at 50% 50%, transparent 62%,
+      color-mix(in srgb, var(--aura-season, #ff2d78) 30%, transparent) 100%);
+  mix-blend-mode: screen;
+}
+body[data-aura] #auraVignette { opacity: .5; }
+body[data-aura-season='inverno'] #auraVignette { opacity: .36; }   /* frio contém o festival */
+body[data-aura-season='primavera'] #auraVignette { opacity: .58; } /* estação frenética */
+@media (prefers-reduced-motion: reduce) {
+  #auraVignette { transition: none; }
+  body[data-aura] #auraVignette { opacity: .3; }  /* presença estática, sem pulso */
+}
+
 /* ---------- topbar ---------- */
 .topbar3d {
   position: fixed; top: 0; left: 0; right: 0; z-index: 20;
@@ -89,6 +109,29 @@ kbd {
 #crosshair .l { width: 9px; height: 2px; transform: translate(calc(-9px - var(--ch-gap)), -1px); }
 #crosshair .r { width: 9px; height: 2px; transform: translate(var(--ch-gap), -1px); }
 #crosshair .dot { width: 2px; height: 2px; transform: translate(-1px,-1px); border-radius: 50%; }
+/* ---------- Fase 38 — mira no festival sazonal por aura ---------- */
+/* Com skin mítica (hud3d acende #crosshair.mythic + body[data-aura]): braços
+   na cor da SKIN (--ch-aura), ponto central + glow na cor TINGIDA pela
+   ESTAÇÃO (--ch-season) e anel cônico girando no RITMO --ch-dur (mesmos
+   keyframes mythicSeason do badge/ícone). Elemento de COMBATE: anel em
+   opacidade baixa e raio acoplado ao spread (--ch-gap) — nunca cobre o alvo;
+   prefers-reduced-motion congela a rotação mantendo a tintura. */
+#crosshair.mythic .ch { background: var(--ch-aura, var(--acid)); box-shadow: 0 0 5px var(--ch-season, rgba(200,255,61,.8)); }
+#crosshair.mythic .dot { background: var(--ch-season, var(--acid)); box-shadow: 0 0 6px var(--ch-season, var(--acid)); }
+#crosshair.mythic::before {
+  content: ''; position: absolute;
+  inset: calc(-1 * var(--ch-gap, 8px) - 8px);   /* anel abraça os braços, segue o spread */
+  border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 70%, var(--ch-season, var(--acid)) 86%, transparent 100%);
+  opacity: .26; filter: blur(.6px);
+  animation: mythicSeason calc(3.6s * var(--ch-dur, 1)) linear infinite;
+}
+/* ritmo da ESTAÇÃO (hemisfério sul) — frio contém, primavera acende */
+body[data-aura-season='inverno'] #crosshair.mythic::before { opacity: .18; }
+body[data-aura-season='primavera'] #crosshair.mythic::before { opacity: .34; }
+@media (prefers-reduced-motion: reduce) {
+  #crosshair.mythic::before { animation: none; opacity: .2; }
+}
 
 /* ---------- hitmarker ---------- */
 #hitmarker { position: fixed; left: 50%; top: 50%; z-index: 16; pointer-events: none; opacity: 0; }
@@ -102,17 +145,102 @@ kbd {
 #hitmarker i:nth-child(4) { transform: rotate(315deg) translate(8px, 0); }
 #hitmarker.head i { background: var(--red); box-shadow: 0 0 6px var(--red); }
 
+/* ---------- Fase 27 — números de dano flutuantes (assinatura Free Fire) ---------- */
+#damageNumbers { position: fixed; inset: 0; z-index: 15; pointer-events: none; overflow: hidden; }
+.dmg-num {
+  position: absolute; display: none; will-change: left, top, opacity, transform;
+  font-family: 'Arial Black', 'Segoe UI', sans-serif; font-weight: 900; font-size: 19px;
+  color: #fff; letter-spacing: .5px; white-space: nowrap;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 1px 2px rgba(0,0,0,.9), 0 0 12px rgba(0,0,0,.5);
+}
+.dmg-head { color: #ff4d4d; font-size: 24px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,61,82,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-knock { color: var(--gold); font-size: 17px; letter-spacing: 2.5px; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 12px rgba(255,181,46,.6), 0 1px 2px rgba(0,0,0,.9); }
+/* Fase 29 — dano AMBIENTAL na transmissão: o mundo mordeu. Paleta idêntica ao
+   banner de hazard (#spectatorHud .spec-hazard.hazard-*) — identidade por mundo. */
+.dmg-hazard { font-size: 21px; }
+.dmg-hazard.hz-tsunami { color: #7fd8e8; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(127,216,232,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-lava { color: #ff8a4d; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,90,20,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-gravity { color: #9fe8ff; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,255,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-acid { color: #a8e86a; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,60,.6), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-ring { color: #ff6b2c; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,107,44,.65), 0 1px 2px rgba(0,0,0,.9); }
+/* F39 — números de dano no festival sazonal (pool acende .mythic só nos
+   tiers NEUTROS dmg-body/dmg-head): corpo na IDENTIDADE da skin (--dmg-aura),
+   halo no glow TINGIDO pela estação (--dmg-season). Gramática intacta:
+   headshot mantém o VERMELHO (ganha só o halo) e hazard/knock nunca recebem
+   a classe — semáforo de combate informa, estação decora. */
+.dmg-num.mythic {
+  color: var(--dmg-aura, #fff);
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px color-mix(in srgb, var(--dmg-season, #fff) 65%, transparent), 0 1px 2px rgba(0,0,0,.9);
+}
+.dmg-num.mythic.dmg-head {
+  color: #ff4d4d;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 12px color-mix(in srgb, var(--dmg-season, #ff3d52) 75%, transparent), 0 1px 3px rgba(0,0,0,.9);
+}
+
 /* ---------- minimapa ---------- */
 .map-corner { position: fixed; top: 64px; right: 14px; z-index: 18; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 .minimap-frame {
   position: relative; border: 1px solid var(--panel-border); border-radius: 4px;
   background: var(--panel); padding: 4px; box-shadow: 0 4px 22px rgba(0,0,0,.5);
 }
+/* F39 — moldura respira com a ESTAÇÃO (hud3d acende .seasonal + --mm-edge
+   a cada draw): borda tingida e halo da temporada. Semâforos do canvas
+   (anéis/terminais/loot/jogador) ficam intactos — a estação tinge, nunca
+   substitui. Transição suave entre estações, custo ~0 (2 propriedades). */
+.minimap-frame.seasonal {
+  border-color: color-mix(in srgb, var(--mm-edge, #c8b46a) 45%, var(--panel-border));
+  box-shadow: 0 4px 22px rgba(0,0,0,.5), 0 0 12px color-mix(in srgb, var(--mm-edge, #c8b46a) 28%, transparent);
+  transition: border-color .4s, box-shadow .4s;
+}
 .minimap-frame canvas { display: block; border-radius: 2px; }
 .compass {
   position: absolute; top: 8px; left: 10px; color: var(--gold);
   font-family: var(--font-mono); font-size: 11px;
 }
+/* ---------- Fase 40 — mapa tático em tela cheia (tecla M) ---------- */
+/* Leitura COMPLETA do ring sobre o jogo PAUSADO-NUNCA (a partida continua —
+   overlay translúcido, mesmo vocabulário sazonal do radar: a estação tinge
+   fundo/grade/moldura via --mm-edge; semáforos funcionais intactos). */
+#tacticalMap {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4,3,10,.72); backdrop-filter: blur(2px);
+}
+#tacticalMap.hidden { display: none; }
+.tactical-frame {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  background: var(--panel); padding: 10px 12px;
+  box-shadow: 0 8px 34px rgba(0,0,0,.6);
+  max-width: min(86vmin, 744px);
+}
+.tactical-frame.seasonal {
+  border-color: color-mix(in srgb, var(--mm-edge, #c8b46a) 45%, var(--panel-border));
+  box-shadow: 0 8px 34px rgba(0,0,0,.6), 0 0 16px color-mix(in srgb, var(--mm-edge, #c8b46a) 26%, transparent);
+  transition: border-color .4s, box-shadow .4s;
+}
+.tactical-head {
+  display: flex; align-items: baseline; gap: 12px;
+  font-family: var(--font-mono); letter-spacing: 1.5px;
+}
+.tactical-head b { font-size: 13px; color: var(--gold); }
+.tactical-sub { flex: 1; font-size: 10px; color: var(--muted); }
+.tactical-close { font-size: 10px; color: var(--cyan); }
+#tacticalCanvas {
+  display: block; width: min(78vmin, 720px); height: min(78vmin, 720px);
+  border-radius: 4px; border: 1px solid rgba(122,90,158,.25);
+}
+.tactical-legend { display: flex; flex-wrap: wrap; gap: 10px; font: 10px/1.4 var(--font-mono); color: var(--muted); }
+.tactical-legend .lg::before {
+  content: ''; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 5px; vertical-align: -1px;
+}
+.tactical-legend .lg-ring::before { background: rgba(200,255,61,.9); }
+.tactical-legend .lg-target::before { background: transparent; border: 1px dashed rgba(255,107,44,.85); border-radius: 2px; }
+.tactical-legend .lg-terminal::before { background: #39ff88; }
+.tactical-legend .lg-loot::before { background: rgba(66,217,222,.8); border-radius: 1px; }
+.tactical-legend .lg-recon::before { background: #ffb52e; }
+.tactical-legend .lg-player::before { background: #ffd28a; clip-path: polygon(50% 0, 100% 100%, 50% 70%, 0 100%); border-radius: 0; }
 #killfeed { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 .kill-entry {
   display: flex; gap: 8px; align-items: center;
@@ -124,6 +252,18 @@ kbd {
 .kill-entry.mine { border-color: rgba(200,255,61,.5); }
 .kill-entry.mine i { color: var(--acid); }
 @keyframes killin { from { transform: translateX(20px); opacity: 0; } }
+/* F39 — killfeed no festival sazonal: entradas .mine.mythic (hud3d acende
+   só kills do PRÓPRIO jogador com aura ativa). Borda na IDENTIDADE da skin
+   (--kf-aura), ícone ☠/✕/◌ no glow da ESTAÇÃO (--kf-season), ritmo da
+   entrada escalado pela temporada (--kf-dur). kills entre bots: neutras. */
+.kill-entry.mythic { border-color: color-mix(in srgb, var(--kf-aura, #ff2d78) 55%, transparent); }
+.kill-entry.mine.mythic i {
+  color: var(--kf-season, var(--acid));
+  text-shadow: 0 0 6px var(--kf-season, var(--acid));
+  animation: kfSeason calc(2.8s * var(--kf-dur, 1)) ease-in-out infinite;
+}
+@keyframes kfSeason { 50% { filter: brightness(1.35); } }
+@media (prefers-reduced-motion: reduce) { .kill-entry.mine.mythic i { animation: none; } }
 
 /* ---------- vitais ---------- */
 .vitals {
@@ -156,6 +296,85 @@ kbd {
 .ammo-row b { font-size: 42px; color: #fff; font-family: var(--font-mono); line-height: 1; }
 .ammo-row span { font-size: 18px; color: var(--muted); font-family: var(--font-mono); }
 .weapon-name { font-size: 15px; letter-spacing: 2px; font-weight: 600; }
+/* Fase 30 — faixa de anexos (4 sockets da AR-47) + estágio mítico evolutivo */
+.attach-strip { display: flex; gap: 4px; min-height: 16px; justify-content: flex-end; }
+.attach-strip i {
+  font-style: normal; font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+  color: var(--cyan); background: rgba(66,217,222,.12); border: 1px solid rgba(66,217,222,.55);
+  border-radius: 3px; padding: 1px 5px; text-shadow: 0 0 6px rgba(66,217,222,.6);
+}
+.mythic-stage {
+  position: relative; isolation: isolate;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1.5px; font-weight: 700;
+  color: #ff2d78; text-shadow: 0 0 8px rgba(255,45,120,.75);
+}
+.mythic-stage.hidden { display: none; }
+/* Fase 34 — efeito SAZONAL por aura: anel cônico girando + varredura de
+   brilho, ambos na cor da skin (--aura definida pelo hud3d a cada update).
+   Pseudo-elementos: zero custo de layout; animam só com o badge visível. */
+.mythic-stage::before {
+  content: ''; position: absolute; inset: -5px -7px; border-radius: 6px;
+  background: conic-gradient(from 0deg, transparent 0 68%, var(--aura, #ff2d78) 84%, transparent 100%);
+  opacity: .55; filter: blur(.5px); pointer-events: none; z-index: -1;
+  /* F36 — ritmo da ESTAÇÃO: duração escala por --aura-dur (inverno 1.4×
+     mais calmo, primavera 0.84× frenética) */
+  animation: mythicSeason calc(3.2s * var(--aura-dur, 1)) linear infinite;
+}
+.mythic-stage::after {
+  content: ''; position: absolute; inset: 0; border-radius: 3px; overflow: hidden;
+  background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.8) 50%, transparent 58%);
+  background-size: 260% 100%; mix-blend-mode: screen; opacity: .6; pointer-events: none;
+  animation: mythicShimmer calc(2.8s * var(--aura-dur, 1)) ease-in-out infinite;
+}
+@keyframes mythicSeason { to { transform: rotate(360deg); } }
+@keyframes mythicShimmer { 0% { background-position: 135% 0; } 60%, 100% { background-position: -65% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mythic-stage::before, .mythic-stage::after { animation: none; opacity: .35; }
+}
+/* ---------- Fase 37 — ícone da arma no inventário ---------- */
+/* Silhueta por categoria (svg path com data-cat; hud3d acende o ativo via
+   [data-cat] no wrapper). Cor = raridade coletada (--wi). Com skin MÍTICA:
+   MESMO festival sazonal do badge (anel cônico + varredura de brilho), na
+   cor da estação (--aura-season) e no RITMO dela (--aura-dur) — a identidade
+   da skin (--aura) permanece no traço. Zero layout shift (absolute). */
+.weapon-icon {
+  position: relative; isolation: isolate; height: 30px; margin-bottom: 2px;
+  display: flex; align-items: center; justify-content: flex-end;
+  color: var(--wi, #e8e3d5);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--wi, #e8e3d5) 55%, transparent));
+  transition: filter .35s ease, color .35s ease;
+}
+.weapon-icon svg { height: 100%; width: auto; overflow: visible; }
+.weapon-icon svg path { display: none; fill: currentColor; }
+.weapon-icon[data-cat='rifle']   svg path[data-cat='rifle'],
+.weapon-icon[data-cat='sniper']  svg path[data-cat='sniper'],
+.weapon-icon[data-cat='shotgun'] svg path[data-cat='shotgun'],
+.weapon-icon[data-cat='lmg']     svg path[data-cat='lmg'],
+.weapon-icon[data-cat='smg']     svg path[data-cat='smg'],
+.weapon-icon[data-cat='sidearm'] svg path[data-cat='sidearm'],
+.weapon-icon[data-cat='energy']  svg path[data-cat='energy'],
+.weapon-icon[data-cat='melee']   svg path[data-cat='melee'] { display: block; }
+/* festival SAZONAL — só com .mythic (classe acendida pelo hud3d com aura) */
+.weapon-icon.mythic { color: var(--aura, #ff2d78); }
+.weapon-icon.mythic svg { filter: drop-shadow(0 0 5px var(--aura-season, #ff2d78)); }
+.weapon-icon.mythic::before {
+  content: ''; position: absolute; inset: -6px -10px; border-radius: 8px; z-index: -1;
+  background: conic-gradient(from 0deg, transparent 0 72%, var(--aura-season, #ff2d78) 87%, transparent 100%);
+  opacity: .4; filter: blur(.5px); pointer-events: none;
+  animation: mythicSeason calc(3.2s * var(--aura-dur, 1)) linear infinite;
+}
+.weapon-icon.mythic::after {
+  content: ''; position: absolute; inset: 0; border-radius: 4px; pointer-events: none;
+  background: linear-gradient(105deg, transparent 44%, rgba(255,255,255,.75) 50%, transparent 56%);
+  background-size: 260% 100%; mix-blend-mode: screen; opacity: .5;
+  animation: mythicShimmer calc(2.8s * var(--aura-dur, 1)) ease-in-out infinite;
+}
+/* ritmo da ESTAÇÃO (hemisfério sul) — frio contém, primavera acende */
+body[data-aura-season='inverno'] .weapon-icon.mythic::before { opacity: .3; }
+body[data-aura-season='primavera'] .weapon-icon.mythic::before { opacity: .52; }
+@media (prefers-reduced-motion: reduce) {
+  .weapon-icon.mythic::before, .weapon-icon.mythic::after { animation: none; opacity: .3; }
+}
 .ability-chip {
   margin-top: 6px; display: inline-flex; align-items: center; gap: 8px;
   min-width: 174px; text-align: left; background: var(--panel);
@@ -189,6 +408,40 @@ kbd {
   pointer-events: none;
 }
 #interactPrompt.visible { opacity: 1; }
+
+/* ---------- Fase 26 — HP do alvo quebrável (porta/janela) ---------- */
+#targetPanel {
+  position: fixed; left: 50%; top: 58%; transform: translateX(-50%) translateY(40px);
+  z-index: 17; width: 210px;
+  background: rgba(11,8,20,.85); border: 1px solid rgba(200,255,61,.4);
+  border-radius: 4px; padding: 7px 12px 9px;
+  opacity: 0; transition: opacity .12s, transform .12s; pointer-events: none;
+}
+#targetPanel.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+#targetPanel .tp-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-mono); margin-bottom: 5px;
+}
+#targetPanel .tp-head span { font-size: 10px; letter-spacing: 2px; color: var(--muted); }
+#targetPanel .tp-head b { font-size: 11px; color: var(--acid); font-variant-numeric: tabular-nums; }
+#targetPanel .tp-track {
+  height: 5px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden;
+}
+#targetPanel .tp-track i {
+  display: block; height: 100%; width: 100%; border-radius: 2px;
+  background: var(--acid); transition: width .1s linear;
+}
+/* material do alvo pinta a barra: aço / madeira / vidro */
+#targetPanel[data-mat="metal"] .tp-track i { background: linear-gradient(90deg, #9fb4c4, #5f7484); }
+#targetPanel[data-mat="metal"] .tp-head b { color: #b9cddc; }
+#targetPanel[data-mat="wood"]  .tp-track i { background: linear-gradient(90deg, #d9a45b, #96682f); }
+#targetPanel[data-mat="wood"]  .tp-head b { color: #e0b478; }
+#targetPanel[data-mat="glass"] .tp-track i { background: linear-gradient(90deg, #a8d8e8, #5fa5c2); }
+#targetPanel[data-mat="glass"] .tp-head b { color: #a8d8e8; }
+/* perto de quebrar: pisca vermelho (mesma gramática da vida baixa) */
+#targetPanel.low .tp-track i { background: var(--danger, #ff5a3c); animation: tpBlink .5s steps(2) infinite; }
+#targetPanel.low .tp-head b { color: var(--danger, #ff5a3c); }
+@keyframes tpBlink { 50% { opacity: .55; } }
 
 /* ---------- feed + missão ---------- */
 .feed-panel {
@@ -363,4 +616,303 @@ body.locked .controls-hint { opacity: .25; }
 #altimeter .alt-open {
   position: absolute; right: 32%; top: -14px; font-style: normal;
   font-family: var(--font-mono); font-size: 8px; color: rgba(200,255,61,.6);
+}
+
+/* ---------- Fase 5 — modo espectador ---------- */
+#spectatorBar {
+  position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 18; display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; background: rgba(11,8,20,.82);
+  border: 1px solid rgba(232,106,122,.45); border-radius: 4px;
+  font-family: var(--font-mono); pointer-events: auto;
+}
+#spectatorBar.hidden { display: none; }
+#spectatorBar .spec-label { color: #e86a7a; font-size: 10px; letter-spacing: .18em; }
+#spectatorBar #specName { color: #ffd28a; font-size: 14px; letter-spacing: .06em; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#spectatorBar .spec-chip { color: var(--acid); font-size: 12px; }
+#spectatorBar .spec-hint { color: var(--muted); font-size: 9px; letter-spacing: .1em; }
+#spectatorBar .spec-btn {
+  width: 26px; height: 26px; border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.06); color: #e8e3d5; border-radius: 3px;
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+#spectatorBar .spec-btn:hover { background: rgba(255,255,255,.14); }
+#spectatorBar .spec-btn.leave { border-color: rgba(232,106,122,.5); color: #e86a7a; }
+body.spectating #crosshair { display: none; }
+body.spectating #operativeAbility { opacity: .35; }
+
+/* ---------- Fase 13 — espectador remoto (pipeline /ws/spectator) ---------- */
+/* modo transmissão: painéis de JOGADOR saem de cena, HUD de broadcast entra */
+body.spectating .vitals,
+body.spectating .weapon-panel,
+body.spectating .mission-panel,
+body.spectating .controls-hint,
+body.spectating .feed-panel,
+body.spectating #spectatorBar,
+body.spectating .seed-box,
+body.spectating #altimeter,
+body.spectating #knockOverlay,
+body.spectating #hitmarker { display: none !important; }
+
+#spectatorHud {
+  position: fixed; top: 64px; left: 18px; z-index: 18; width: 264px;
+  padding: 10px 12px 12px; background: rgba(11,8,20,.85);
+  border: 1px solid rgba(200,255,61,.28); border-radius: 4px;
+  font-family: var(--font-mono); pointer-events: auto;
+}
+#spectatorHud.hidden { display: none; }
+#spectatorHud .spec-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#spectatorHud .spec-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #ff5f6d; font-size: 10px; letter-spacing: .22em; font-weight: 700;
+}
+#spectatorHud .spec-live i {
+  width: 7px; height: 7px; border-radius: 50%; background: #ff5f6d;
+  animation: spec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes spec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+#spectatorHud #specStatus { color: #ffd28a; font-size: 11px; letter-spacing: .08em; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#spectatorHud .spec-chip {
+  color: var(--acid); font-size: 9px; letter-spacing: .1em;
+  border: 1px solid rgba(200,255,61,.3); border-radius: 3px; padding: 2px 5px;
+}
+#spectatorHud .spec-ring {
+  color: #e8e3d5; font-size: 11px; letter-spacing: .06em; margin-bottom: 8px;
+  padding: 5px 7px; border: 1px solid rgba(255,107,44,.4); border-radius: 3px;
+  background: rgba(255,107,44,.08);
+}
+#spectatorHud .spec-ring.shrinking { color: #ffb52e; border-color: rgba(255,181,46,.7); }
+/* Fase 18 — banner de sobrevivência na transmissão (identidade por mundo) */
+#spectatorHud .spec-hazard {
+  font-size: 10px; letter-spacing: .08em; margin-bottom: 8px; padding: 5px 7px;
+  border-radius: 3px; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35);
+  animation: specHazardPulse 1.6s ease-in-out infinite;
+}
+#spectatorHud .spec-hazard.hazard-tsunami { color: #7fd8e8; border-color: rgba(127,216,232,.75); background: rgba(20,84,96,.32); }
+#spectatorHud .spec-hazard.hazard-lava { color: #ff8a4d; border-color: rgba(255,90,20,.8); background: rgba(96,26,8,.4); }
+#spectatorHud .spec-hazard.hazard-gravity { color: #9fe8ff; border-color: rgba(120,220,255,.7); background: rgba(30,52,96,.35); }
+#spectatorHud .spec-hazard.hazard-acid { color: #a8e86a; border-color: rgba(120,220,60,.7); background: rgba(42,72,18,.35); }
+@keyframes specHazardPulse {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+#spectatorHud .spec-standings-label { color: var(--muted); font-size: 8px; letter-spacing: .2em; margin-bottom: 4px; }
+#spectatorHud .spec-standings { display: flex; flex-direction: column; gap: 3px; }
+#spectatorHud .spec-row {
+  display: grid; grid-template-columns: 20px 1fr 40px 64px; align-items: center; gap: 6px;
+  color: #e8e3d5; font-size: 11px; padding: 2px 4px; border-radius: 2px;
+}
+#spectatorHud .spec-row:nth-child(1) { background: rgba(255,210,138,.1); }
+#spectatorHud .spec-row b { color: var(--acid); font-size: 9px; }
+#spectatorHud .spec-row .spec-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .04em; }
+#spectatorHud .spec-row .spec-kills { color: #ffd28a; font-size: 10px; text-align: right; }
+#spectatorHud .spec-row .spec-life { display: block; height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+#spectatorHud .spec-row .spec-life em { display: block; height: 100%; background: linear-gradient(90deg, #ff6b2c, #c8ff3d); }
+#spectatorHud .spec-row.out { opacity: .38; }
+#spectatorHud .spec-row.out .spec-life em { background: #5a4046; }
+#spectatorHud .spec-row.down .spec-name::after { content: ' · NOCAUTE'; color: #e86a7a; font-size: 8px; }
+/* Fase 21 — standings clicáveis: linha viva segue aquele operativo */
+#spectatorHud .spec-row.clickable { cursor: pointer; transition: background .12s; }
+#spectatorHud .spec-row.clickable:hover { background: rgba(255,255,255,.09); }
+#spectatorHud .spec-row.is-follow { background: rgba(200,255,61,.12); box-shadow: inset 2px 0 0 var(--acid); }
+#spectatorHud .spec-row.is-follow .spec-name { color: var(--acid); }
+#spectatorHud .spec-cams { display: flex; align-items: center; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+#spectatorHud .spec-btn {
+  height: 24px; padding: 0 8px; border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.06); color: #e8e3d5; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; cursor: pointer;
+}
+#spectatorHud .spec-btn:hover { background: rgba(255,255,255,.14); }
+#spectatorHud .spec-cams.cam-follow [data-cam='FOLLOW_PLAYER'] { border-color: rgba(200,255,61,.7); color: var(--acid); }
+#spectatorHud .spec-btn.leave { border-color: rgba(232,106,122,.5); color: #e86a7a; }
+#spectatorHud .spec-hint { color: var(--muted); font-size: 8px; letter-spacing: .14em; margin-left: 2px; }
+
+#specFeed {
+  position: fixed; left: 18px; bottom: 96px; z-index: 17; width: 300px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-family: var(--font-mono); pointer-events: none;
+}
+#specFeed.hidden { display: none; }
+#specFeed .spec-feed-entry {
+  padding: 4px 8px; font-size: 10px; letter-spacing: .04em; color: #cfc9b8;
+  background: rgba(11,8,20,.72); border-left: 2px solid rgba(200,255,61,.4); border-radius: 2px;
+}
+#specFeed .spec-feed-entry b { color: #ffd28a; }
+#specFeed .spec-feed-entry.kill { border-left-color: #ff5f6d; }
+#specFeed .spec-feed-entry.good { border-left-color: #39ff88; }
+#specFeed .spec-feed-entry.warn { border-left-color: #ffb52e; }
+
+/* ---------- Fase 7 — squads, DBNO e sala privada ---------- */
+.squad-row { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
+
+/* ---------- Fase 9 — painel POJ (Protocolo de Ordem de Jogo) ---------- */
+.poj-strip {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  margin: 10px 0 2px; padding: 8px 10px;
+  border: 1px solid rgba(200,255,61,.22); border-radius: 4px;
+  background: rgba(10,14,10,.55);
+}
+.poj-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 72px; padding: 4px 8px; border-radius: 3px;
+  background: rgba(200,255,61,.05);
+  font-family: var(--font-mono);
+}
+.poj-chip small { color: var(--muted); font-size: 8px; letter-spacing: .14em; }
+.poj-chip strong { color: #c8ff3d; font-size: 12px; letter-spacing: .06em; }
+.poj-chip strong.poj-warn { color: #ffb45e; }
+.poj-chip strong.poj-live { color: #6ee7a0; }
+/* Fase 10 — chip PATENTE: ouro canônico dos Oficiais de Classe Especial */
+.poj-chip-rank { background: rgba(201,162,39,.08); border: 1px solid rgba(255,215,94,.25); }
+.poj-chip-rank strong { color: #ffd75e; }
+.squad-toggle {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid rgba(200,255,61,.3); border-radius: 4px;
+  background: rgba(200,255,61,.06); cursor: pointer;
+  font-family: var(--font-mono); color: #e8e3d5; font-size: 12px; letter-spacing: .08em;
+}
+.squad-toggle input { accent-color: #c8ff3d; width: 16px; height: 16px; cursor: pointer; }
+.squad-toggle small { display: block; color: var(--muted); font-size: 9px; letter-spacing: .06em; }
+.squad-toggle.hidden { display: none; }
+.private-room {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border: 1px solid rgba(232,106,122,.4); border-radius: 4px;
+  background: rgba(232,106,122,.07);
+  font-family: var(--font-mono); color: #e8e3d5; font-size: 11px; letter-spacing: .1em;
+}
+.private-room.hidden { display: none; }
+.private-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.private-actions input {
+  width: 96px; padding: 8px 10px; text-transform: uppercase;
+  background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.25); border-radius: 3px;
+  color: #ffd28a; font-family: var(--font-mono); font-size: 14px; letter-spacing: .3em; text-align: center;
+}
+.private-actions .ghost-btn { padding: 8px 12px; font-size: 10px; }
+/* Fase 14 — botão ASSISTIR (transmissão da sala): destaque teal de broadcast */
+.private-actions .ghost-btn.spectate {
+  border-color: rgba(66,217,222,.55); color: #42d9de; letter-spacing: .18em;
+}
+.private-actions .ghost-btn.spectate:hover {
+  border-color: #42d9de; background: rgba(66,217,222,.12); box-shadow: 0 0 14px rgba(66,217,222,.25);
+}
+/* Fase 8 — login da plataforma no modal ZU */
+#loginBox { border-color: rgba(102,204,255,.4); background: rgba(64,140,200,.08); }
+#loginBox .private-actions input { text-transform: none; letter-spacing: .12em; text-align: left; }
+#loginBox .private-actions input[type="password"] { letter-spacing: .3em; text-align: center; }
+.login-hint { color: var(--muted); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+
+#knockOverlay {
+  position: fixed; left: 50%; bottom: 17%; transform: translateX(-50%);
+  z-index: 17; width: min(440px, 84vw);
+  padding: 14px 18px; border-radius: 4px;
+  background: linear-gradient(180deg, rgba(60,8,14,.88), rgba(24,6,10,.9));
+  border: 1px solid rgba(232,50,70,.55);
+  box-shadow: 0 0 40px rgba(160,10,25,.35), inset 0 0 24px rgba(90,0,10,.4);
+  text-align: center; pointer-events: none;
+  font-family: var(--font-mono);
+}
+#knockOverlay.hidden { display: none; }
+#knockOverlay .knock-title {
+  color: #ff4d63; font-size: 20px; letter-spacing: .42em; font-weight: 700;
+  text-shadow: 0 0 14px rgba(255,40,60,.7); margin-bottom: 8px;
+  animation: knockPulse 1.1s ease-in-out infinite;
+}
+@keyframes knockPulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+#knockOverlay .knock-bar {
+  height: 8px; border-radius: 3px; overflow: hidden;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.14);
+  margin-bottom: 6px;
+}
+#knockOverlay #knockFill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ff4d63, #ff9a3d);
+  transition: width .3s linear;
+}
+#knockOverlay .revise-wrap, #knockOverlay .revive-wrap { margin: 6px 0 2px; }
+#knockOverlay .revive-wrap.hidden { display: none; }
+#knockOverlay .revive-label { color: #7dff8a; font-size: 10px; letter-spacing: .24em; margin-bottom: 4px; }
+#knockOverlay .revive-bar {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(125,255,138,.3);
+}
+#knockOverlay #reviveFill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #7dff8a, #c8ff3d);
+  transition: width .12s linear;
+}
+#knockOverlay .knock-hint { color: rgba(232,227,213,.75); font-size: 9.5px; letter-spacing: .08em; }
+#knockOverlay .knock-hint kbd {
+  padding: 1px 5px; border: 1px solid rgba(255,255,255,.3); border-radius: 3px;
+  background: rgba(255,255,255,.08); color: #ffd28a;
+}
+
+/* ---------- Fase 13 — replay da ata da Corte Marcial ---------- */
+.ata-card { width: min(680px, 94vw); }
+.ata-sub { font-size: 12px !important; color: var(--muted) !important; margin-bottom: 14px !important; }
+.ata-timeline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.ata-step {
+  border-left: 3px solid var(--volcanic); padding: 8px 12px; border-radius: 3px;
+  background: rgba(255,255,255,.03); opacity: 0; transform: translateX(-8px);
+  transition: opacity .28s ease-out, transform .28s ease-out;
+}
+.ata-step.shown { opacity: 1; transform: none; }
+.ata-step h4 {
+  margin: 0 0 4px; font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 2.4px; color: #d9a05a;
+}
+.ata-step .ata-line { margin: 0; font-size: 13px; line-height: 1.5; color: #e8e2f2; }
+.ata-step.good { border-left-color: var(--acid); }
+.ata-step.good h4 { color: var(--acid); }
+.ata-step.bad { border-left-color: #e86a7a; }
+.ata-step.bad h4 { color: #e86a7a; }
+.ata-step.warn { border-left-color: #ffd28a; }
+.ata-step.warn h4 { color: #ffd28a; }
+.ata-step.pending { border-left-color: rgba(255,255,255,.22); opacity: 0; }
+.ata-step.pending.shown { opacity: .78; }
+.ata-step.pending .ata-line { color: var(--muted); font-style: italic; }
+
+/* ---------- Fase 19 — mixagem de volume (KR_AUDIO_*) + diretor AUTO ---------- */
+.audio-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 10px; font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: .14em; color: var(--muted);
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 3px; cursor: pointer; transition: all .15s ease;
+}
+.audio-toggle:hover { background: rgba(200,255,61,.1); border-color: rgba(200,255,61,.4); color: var(--acid); }
+.audio-mixer {
+  position: fixed; left: 18px; bottom: 178px; z-index: 26; width: 224px;
+  padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 7px;
+  background: rgba(11,8,20,.9); border: 1px solid rgba(200,255,61,.25);
+  border-radius: 4px; font-family: var(--font-mono);
+}
+.audio-mixer.hidden { display: none; }
+.audio-mixer .section-label { margin-bottom: 2px; }
+.audio-mixer label {
+  display: grid; grid-template-columns: 66px 1fr 36px; align-items: center; gap: 7px;
+  font-size: 9px; letter-spacing: .1em; color: rgba(255,255,255,.74); cursor: pointer;
+}
+.audio-mixer input[type='range'] { width: 100%; height: 14px; accent-color: #c8ff3d; cursor: pointer; }
+.audio-mixer b { font-size: 9px; color: var(--acid); text-align: right; font-variant-numeric: tabular-nums; }
+.audio-mixer-hint { font-size: 8px; letter-spacing: .08em; color: var(--muted); }
+/* Fase 35 — painel de vídeo/performance (mesma linguagem do mixer de áudio,
+// aberto AO LADO dele para permitir comparar mix e vídeo simultaneamente) */
+#gfxPanel.audio-mixer { left: 252px; bottom: 178px; }
+.audio-mixer select {
+  width: 100%; background: rgba(0,0,0,.5); color: var(--acid);
+  border: 1px solid rgba(200,255,61,.3); border-radius: 2px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; padding: 2px 4px; cursor: pointer;
+}
+.audio-mixer input[type='checkbox'] { accent-color: #c8ff3d; cursor: pointer; }
+/* Fase 35 — telemetria de performance (FPS · RES · tier), setting KR_GFX fps */
+.perf-readout {
+  position: fixed; right: 14px; bottom: 12px; z-index: 26; padding: 3px 8px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+  color: rgba(200,255,61,.85); background: rgba(11,8,20,.78);
+  border: 1px solid rgba(200,255,61,.22); border-radius: 3px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.perf-readout.hidden { display: none; }
+#spectatorHud .spec-btn.active {
+  border-color: rgba(200,255,61,.7); color: var(--acid); background: rgba(200,255,61,.1);
 }

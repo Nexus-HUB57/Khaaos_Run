@@ -62,13 +62,25 @@ public:
 	FGameplayAttributeData MaxHealth;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxHealth)
 
-	/** Current energy (for abilities). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
-	float Energy;
+	/** Current shield pool consumed before health. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Shield, Category = "Khaaos|Attributes|Combat")
+	FGameplayAttributeData Shield;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, Shield)
 
-	/** Maximum energy (default 100, from schema.ts). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "1"))
-	float MaxEnergy;
+	/** Maximum shield pool. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxShield, Category = "Khaaos|Attributes|Combat")
+	FGameplayAttributeData MaxShield;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxShield)
+
+	/** Current energy (for abilities); replicated only to the owning player. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Energy, Category = "Khaaos|Attributes")
+	FGameplayAttributeData Energy;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, Energy)
+
+	/** Maximum energy; replicated only to the owning player. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxEnergy, Category = "Khaaos|Attributes")
+	FGameplayAttributeData MaxEnergy;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, MaxEnergy)
 
 	/** Currency credits (KRC). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes")
@@ -82,9 +94,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
 	float DamageMultiplier;
 
-	/** Defense rating from equipped armor. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
-	float DefenseRating;
+	/** Defense rating from equipped armor; private to the owning connection. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_DefenseRating, Category = "Khaaos|Attributes|Combat")
+	FGameplayAttributeData DefenseRating;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, DefenseRating)
 
 	/** Onith passive reduction against projectile damage, applied by an infinite GameplayEffect. */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithProjectileDamageReduction, Category = "Khaaos|Attributes|Species")
@@ -95,6 +108,16 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithExplosionDamageReduction, Category = "Khaaos|Attributes|Species")
 	FGameplayAttributeData OnithExplosionDamageReduction;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, OnithExplosionDamageReduction)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData AirSpeedBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, AirSpeedBonus)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData WaterRegenPerSecond;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, WaterRegenPerSecond)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData HealBonusPercent;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, HealBonusPercent)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData FireRateBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, FireRateBonus)
+	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData ReloadSpeedBonus;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, ReloadSpeedBonus)
 
 	/** Attack range in map percentage. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Khaaos|Attributes", meta = (ClampMin = "0"))
@@ -164,6 +187,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	void InitFromSchemaDefaults();
 
+	/** Apply an authoritative operative profile before combat begins. */
+	void InitializeCombatProfile(float InHealth, float InMaxHealth, float InShield, float InMaxShield,
+		float InEnergy, float InMaxEnergy, float InSpeed);
+
 	// ─── Delegate ───────────────────────────────────────────────────────────
 
 	/** Broadcast when any attribute value changes. */
@@ -174,6 +201,8 @@ public:
 	FOnKhaaosOutOfHealth OnOutOfHealth;
 
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
+	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
+	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION()
@@ -183,15 +212,27 @@ public:
 	void OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth);
 
 	UFUNCTION()
+	void OnRep_Shield(const FGameplayAttributeData& OldShield);
+
+	UFUNCTION()
+	void OnRep_MaxShield(const FGameplayAttributeData& OldMaxShield);
+
+	UFUNCTION()
+	void OnRep_Energy(const FGameplayAttributeData& OldEnergy);
+
+	UFUNCTION()
+	void OnRep_MaxEnergy(const FGameplayAttributeData& OldMaxEnergy);
+
+	UFUNCTION()
+	void OnRep_DefenseRating(const FGameplayAttributeData& OldDefenseRating);
+
+	UFUNCTION()
 	void OnRep_OnithProjectileDamageReduction(const FGameplayAttributeData& OldReduction);
 
 	UFUNCTION()
 	void OnRep_OnithExplosionDamageReduction(const FGameplayAttributeData& OldReduction);
 
 protected:
-
-	/** Internal setter for the legacy Energy value. */
-	void SetEnergy(float NewEnergy);
 
 	/** Default values (from schema.ts playerStats). */
 	static constexpr float DefaultMaxHealth = 100.0f;

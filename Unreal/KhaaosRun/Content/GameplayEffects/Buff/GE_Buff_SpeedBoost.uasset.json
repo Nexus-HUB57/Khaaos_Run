@@ -1,0 +1,41 @@
+{
+  "asset_type": "GameplayEffect",
+  "asset_class": "UGameplayEffect",
+  "asset_name": "GE_Buff_SpeedBoost",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.284441+00:00",
+  "generator": "generate_ge_uassets.py",
+  "f_gameplay_effect_spec": {
+    "duration_policy": "HasDuration",
+    "duration_magnitude": 5.0,
+    "modifiers": [
+      {
+        "attribute": "Attribute.Speed",
+        "modifier_op": "Multiplicative",
+        "magnitude": 1.4,
+        "channel": "Primary"
+      }
+    ],
+    "granted_tags": [
+      "Effect.Buff.SpeedBoost"
+    ],
+    "required_tags": [],
+    "stacking_type": "StackByDuration",
+    "stack_limit_count": 5
+  },
+  "execution_info": {
+    "calc_modifiers_from_base": true,
+    "period": 0.0,
+    "execute_periodic_on_apply": false,
+    "is_radial": false,
+    "radial_radius": 0.0
+  },
+  "gameplay_cues": [],
+  "ue5_import_metadata": {
+    "content_path": "GameplayEffects/Buff/GE_Buff_SpeedBoost",
+    "package_name": "/Game/GameplayEffects/Buff/GE_Buff_SpeedBoost",
+    "asset_registry_type": "GameplayEffect",
+    "import_script": "import_ge_to_ue5.py"
+  },
+  "checksum": "b66491075ca9c844"
+}

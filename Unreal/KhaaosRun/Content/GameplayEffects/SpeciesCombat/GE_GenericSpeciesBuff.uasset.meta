@@ -1,0 +1,25 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_GenericSpeciesBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "Damage",
+      "modifierOp": "Multiply",
+      "magnitude": 1.0,
+      "isConfigurable": true
+    },
+    {
+      "attribute": "MoveSpeed",
+      "modifierOp": "Multiply",
+      "magnitude": 1.0,
+      "isConfigurable": true
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Generic"],
+    "requiredTags": []
+  },
+  "description": "Generic species combat template: configurable multiplier for any species"
+}

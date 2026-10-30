@@ -125,6 +125,65 @@ test("PostgreSQL: item, ownership, loadout e consumo concorrente de durabilidade
   }
 });
 
+test("PostgreSQL: uso de curativo exige durabilidade suficiente e reverte o consumo se a cura falhar", async () => {
+  const userId = `rollback-item-use-${randomUUID()}`;
+  let itemId: number | undefined;
+  try {
+    await storage.getPlayerStats(userId);
+    await storage.updatePlayerStats(userId, { health: 20 });
+    const created = await storage.createItem({
+      userId,
+      name: "Curativo transacional",
+      type: "CURATIVO",
+      durability: "5",
+      maxDurability: "100",
+      stats: { heal: 25 },
+    });
+    itemId = created.id;
+
+    const insufficient = await storage.useItemAndHealAtomic(created.id, userId, 10, 25);
+    assert.equal(insufficient, undefined, "durabilidade inferior ao custo deve rejeitar o uso");
+    assert.equal(Number((await storage.getItemForUser(created.id, userId))?.durability), 5);
+    assert.equal((await storage.getPlayerStats(userId)).health, 20);
+
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION reject_test_item_use_heal() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.user_id LIKE 'rollback-item-use-%' AND NEW.health > OLD.health THEN
+          RAISE EXCEPTION 'injected item-use heal failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await pool.query("DROP TRIGGER IF EXISTS reject_test_item_use_heal ON player_stats");
+    await pool.query(`
+      CREATE TRIGGER reject_test_item_use_heal
+      BEFORE UPDATE OF health ON player_stats
+      FOR EACH ROW EXECUTE FUNCTION reject_test_item_use_heal()
+    `);
+
+    await assert.rejects(
+      storage.useItemAndHealAtomic(created.id, userId, 5, 25),
+      (error: any) => /injected item-use heal failure/.test(`${error?.message ?? ""} ${error?.cause?.message ?? ""}`),
+    );
+    assert.equal(Number((await storage.getItemForUser(created.id, userId))?.durability), 5, "o consumo deve ser revertido com a falha da cura");
+    assert.equal((await storage.getPlayerStats(userId)).health, 20, "a falha não deve alterar a vitalidade");
+
+    await pool.query("DROP TRIGGER IF EXISTS reject_test_item_use_heal ON player_stats");
+    await pool.query("DROP FUNCTION IF EXISTS reject_test_item_use_heal()");
+    const used = await storage.useItemAndHealAtomic(created.id, userId, 5, 25);
+    assert.equal(Number(used?.item.durability), 0);
+    assert.equal(used?.healed, 25);
+    assert.equal(used?.stats.health, 45);
+  } finally {
+    await pool.query("DROP TRIGGER IF EXISTS reject_test_item_use_heal ON player_stats");
+    await pool.query("DROP FUNCTION IF EXISTS reject_test_item_use_heal()");
+    if (itemId !== undefined) await pool.query("DELETE FROM items WHERE id = $1", [itemId]);
+    await cleanUserRows(userId);
+  }
+});
+
 test("PostgreSQL: pickup de curativo confirma loot, inventário e cura em uma transação", async () => {
   const userId = uniqueUserId();
   const rollbackUserId = `rollback-probe-user-${randomUUID()}`;

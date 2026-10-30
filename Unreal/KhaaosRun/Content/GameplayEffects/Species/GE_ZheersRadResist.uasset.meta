@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_ZheersRadResist",
+  "type": "Buff",
+  "duration_policy": "Infinite",
+  "modifier_op": "Multiply",
+  "attribute": "RadDamageTaken",
+  "magnitude": 0.9,
+  "tag": "Effect.Buff.RadResist",
+  "description": "10% radiation damage reduction for Zheers species",
+  "generated_by": "wire_all_4_tasks.py"
+}

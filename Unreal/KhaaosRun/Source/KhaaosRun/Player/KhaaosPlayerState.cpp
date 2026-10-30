@@ -93,6 +93,8 @@ void AKhaaosPlayerState::BeginPlay()
 	{
 		Health = KhaaosAttributeSet->GetHealth();
 		MaxHealth = KhaaosAttributeSet->GetMaxHealth();
+		Energy = KhaaosAttributeSet->GetEnergy();
+		MaxEnergy = KhaaosAttributeSet->GetMaxEnergy();
 		KhaaosAttributeSet->OnAttributeChanged.AddDynamic(this, &AKhaaosPlayerState::HandleAttributeChanged);
 		OutOfHealthDelegateHandle = KhaaosAttributeSet->OnOutOfHealth.AddUObject(
 			this,
@@ -187,6 +189,14 @@ void AKhaaosPlayerState::HandleAttributeChanged(
 	else if (AttributeName == TEXT("MaxHealth"))
 	{
 		MaxHealth = NewValue;
+	}
+	else if (AttributeName == TEXT("Energy"))
+	{
+		Energy = NewValue;
+	}
+	else if (AttributeName == TEXT("MaxEnergy"))
+	{
+		MaxEnergy = NewValue;
 	}
 }
 
@@ -454,11 +464,9 @@ void AKhaaosPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
         Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-		// Health and MaxHealth replicate through the GAS AttributeSet.
+		// Combat values replicate through GAS; private energy/defense are owner-only.
 		DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, Credits, COND_None, REPNOTIFY_Always);
         DOREPLIFETIME(AKhaaosPlayerState, Speed);
-        DOREPLIFETIME(AKhaaosPlayerState, Energy);
-        DOREPLIFETIME(AKhaaosPlayerState, MaxEnergy);
 
         // Player status
         DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, PlayerStatus, COND_None, REPNOTIFY_Always);

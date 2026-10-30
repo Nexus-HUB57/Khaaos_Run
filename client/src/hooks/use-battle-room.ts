@@ -92,6 +92,7 @@ type ServerMessage =
   | { type: "queue_joined"; position: number; rating: number; mode: string }
   | { type: "queue_left" }
   | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
+  | { type: "invite_issued"; roomId: string; invitedUserId: string; expiresAt: number }
   | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
 export interface PackBackScan {
@@ -164,6 +165,8 @@ export function useBattleRoom() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
+  /** M1: último convite emitido pelo host (feedback no lobby). */
+  const [inviteIssued, setInviteIssued] = useState<{ invitedUserId: string; expiresAt: number; at: number } | null>(null);
   const [eliminations, setEliminations] = useState<{ userId: string; cause: string }[]>([]);
   const [lastMatchResult, setLastMatchResult] = useState<LastMatchResult | null>(null);
   const [packbackItems, setPackbackItems] = useState<WarIActionItem[]>([]);
@@ -367,6 +370,14 @@ export function useBattleRoom() {
             setInQueue(false);
             setQueueInfo(null);
             break;
+          case "invite_issued":
+            // M1: confirmação do host — convite ligado a jogador emitido.
+            setInviteIssued({
+              invitedUserId: msg.invitedUserId,
+              expiresAt: msg.expiresAt,
+              at: Date.now(),
+            });
+            break;
           case "error":
             if (pendingPackbackItemIdRef.current !== null) clearPendingPackbackUse();
             setLastError(msg.message);
@@ -479,6 +490,12 @@ export function useBattleRoom() {
     [send],
   );
 
+  /** M1: host emite convite LIGADO a jogador/sala (uso único, com quotas). */
+  const invitePlayer = useCallback(
+    (targetUserId: string) => send({ type: "invite_player", targetUserId }),
+    [send],
+  );
+
   const kickPlayer = useCallback(
     (targetId: string) => send({ type: "kick", targetId }),
     [send],
@@ -516,6 +533,8 @@ export function useBattleRoom() {
     setReady,
     createLobby,
     joinByCode,
+    invitePlayer,
+    inviteIssued,
     kickPlayer,
     cancelCountdown,
     lastMatchResult,

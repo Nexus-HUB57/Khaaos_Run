@@ -18,6 +18,7 @@ import type { Server } from "http";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { storage } from "../storage";
+import { metrics } from "./metrics";
 import {
   ZONE_PHASES,
   PlayerStatus,
@@ -28,16 +29,20 @@ import {
 import { generateMatchContent } from "./ProceduralGenerator";
 import { SpatialGrid } from "./SpatialGrid";
 import { PositionHistory, lagCompensatedHit } from "./LagCompensation";
+import { NodeWsGateway } from "./NodeWsGateway";
 import { deriveCombatLoadout, getLootWeight, hasValidDurability } from "./loadout";
 import { planPackBackAction } from "./packback-actions";
 import { getWarIUseKind, type WarIActionItem } from "@shared/war-i";
 import { applyMatchRankings, type MatchParticipant } from "./RankingService";
+import { computeMatchPayouts, settleMatchPayouts } from "./EconomyPayoutSettlement";
 import { MatchmakingService, type QueueMode, type MatchmakingEvent } from "./MatchmakingService";
 import { consumeWsAccessToken } from "../replit_integrations/auth/ws-token";
 import { isAllowedOrigin, requestOriginFromHeaders } from "../replit_integrations/auth/origin";
+import { routeWebSocketUpgrade } from "./wsUpgradeRouter";
 import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
+import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,10 +145,24 @@ export type ClientMessage =
   | { type: "cancel_countdown" } // host only
   | { type: "kick"; targetId: string } // host only
   | { type: "create_lobby"; private?: boolean; maxPlayers?: number; worldId?: WorldId }
-  | { type: "join_code"; code: string };
+  | { type: "join_code"; code: string }
+  | { type: "invite_player"; targetUserId: string }; // host de lobby privado (M1)
+
+/** Roadmap M1 — convite ligado a jogador/sala: quotas e TTL. */
+export const INVITE_TTL_MS = 60 * 60_000; // convite vive 1 h
+export const INVITE_ROOM_PENDING_LIMIT = 64; // pendentes por sala
+export const INVITE_HOST_WINDOW_MS = 10 * 60_000; // janela móvel por host
+export const INVITE_HOST_WINDOW_LIMIT = 30; // emissões por janela
+/** Mensagem uniforme de rejeição de join privado — sem oráculo de existência
+ *  (M1: "join privado sem convite retorna 403/404" — mesma resposta sempre). */
+const INVITE_JOIN_REJECTION = {
+  type: "error" as const,
+  code: "INVITE_REQUIRED",
+  message: "Código de lobby inválido, expirado ou sem convite válido para este operativo",
+};
 
 const clientMessageSchema = z.object({
-  type: z.enum(["join", "resume", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code"]),
+  type: z.enum(["join", "resume", "leave", "position", "pickup", "attack", "use_packback_item", "queue", "dequeue", "set_ready", "start", "cancel_countdown", "kick", "create_lobby", "join_code", "invite_player"]),
   roomId: z.string().trim().max(128).optional(),
   worldId: z.enum(["CIGKV", "W1", "W2", "W3", "W4"]).optional(),
   displayName: z.string().max(64).optional(),
@@ -158,6 +177,7 @@ const clientMessageSchema = z.object({
   private: z.boolean().optional(),
   maxPlayers: z.number().int().min(2).max(50).optional(),
   code: z.string().trim().max(32).optional(),
+  targetUserId: z.string().trim().min(1).max(256).optional(),
 }).strip();
 
 export type ServerMessage =
@@ -172,11 +192,12 @@ export type ServerMessage =
   | { type: "packback_scan"; itemId: number; durationMs: number; players: { userId: string; displayName: string; posX: number; posY: number }[]; loot: { id: number; name: string; type: string; posX: number; posY: number }[] }
   | { type: "interest_update"; players: SerializedPlayer[]; loot: RoomLoot[] } // AOI subset
   | { type: "match_finished"; winnerId: string | null; rankings: { userId: string; kills: number; placement: number; xpGained?: number; ratingAfter?: number; rankAfter?: string; promoted?: boolean }[] }
-  | { type: "error"; message: string; code?: string }
+  | { type: "error"; message: string; code?: string; roomId?: string; nodeId?: string; endpoint?: string | null }
   | { type: "countdown"; seconds: number }
   | { type: "queue_joined"; position: number; rating: number; mode: QueueMode }
   | { type: "queue_left" }
   | { type: "queue_update"; position: number; estimatedWaitSec: number; currentDelta: number; playersInQueue: number }
+  | { type: "invite_issued"; roomId: string; invitedUserId: string; expiresAt: number }
   | { type: "match_found"; roomId: string; players: { userId: string; displayName: string; rating: number }[] };
 
 interface SerializedPlayer {
@@ -228,6 +249,40 @@ class RoomManager {
   private socketWorlds = new WeakMap<WebSocket, WorldId>();
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
+  /** M1: janela móvel de emissões de convite por host (quota anti-spam). */
+  private inviteIssueLog = new Map<string, number[]>();
+
+  /**
+   * Redis Event Mesh (auditoria Fase 0/2): espelha o índice de salas em
+   * HASH Redis + leases de vivacidade, publica eventos entre nós e detecta
+   * morte de nó via reconcile. Estado autoritativo continua LOCAL (sockets
+   * são deste processo); o mesh é o barramento de descoberta/eventos.
+   */
+  readonly mesh = new RoomEventMesh({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient(),
+    publishControl: (event) => distributedState.publishControl(event),
+  });
+
+  /**
+   * Node WS Gateway (proxy cross-node — auditoria Fase 2): roteia mensagens
+   * de clientes por nodeId até o nó dono da sala (RelaySocket), mantendo o
+   * socket no nó de origem. Sem Redis/gateway, o caminho legado
+   * (ROOM_REMOTE_NODE + reconexão) permanece intacto.
+   */
+  readonly gateway = new NodeWsGateway({
+    nodeId: distributedState.nodeId,
+    redisClientProvider: () => distributedState.getRedisClient() as never,
+    callbacks: {
+      onSessionStart: (socket) => this.registerSocket(socket.userId, socket as unknown as WebSocket),
+      onClientMessage: (socket, userId, displayName, msg, relayAuthorized) =>
+        this.handleMessage(userId, displayName, socket as unknown as WebSocket, msg as ClientMessage, { relayInviteAuthorized: relayAuthorized }),
+      onSessionEnd: (socket) => {
+        this.unregisterSocket(socket.userId, socket as unknown as WebSocket);
+        this.onDisconnect(socket.userId, socket as unknown as WebSocket);
+      },
+    },
+  });
 
   /** Attach to existing HTTP server */
   constructor() {
@@ -243,6 +298,56 @@ class RoomManager {
       });
       if (process.env.NODE_ENV === "production") process.exitCode = 1;
     });
+
+    // M3 — fencing de ownership: quando o epoch prova que OUTRO nó deteve a
+    // sala no intervalo (gap > 1), o mesh notifica com "fenced" e o dono
+    // local drena a autoridade (mesma UX de ROOM_NODE_LOST, razão auditável).
+    this.mesh.onRoomLost((record, reason) => {
+      if (reason !== "fenced") return;
+      try {
+        this.drainFencedRoom(record.id);
+      } catch (error) {
+        console.warn("[RoomManager] drenagem de sala cercada falhou", {
+          roomId: record.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    // M3 — samplers de gauge lidos no scrape do Prometheus (custo zero fora dele).
+    metrics.gaugeSampler("khaaos_ws_connections", {}, () =>
+      [...this.socketsByUser.values()].reduce((total, set) => total + set.size, 0));
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "LOBBY" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "LOBBY").length);
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "COUNTDOWN" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "COUNTDOWN").length);
+    metrics.gaugeSampler("khaaos_ws_rooms", { status: "IN_PROGRESS" }, () =>
+      [...this.rooms.values()].filter((room) => room.status === "IN_PROGRESS").length);
+    metrics.gaugeSampler("khaaos_ws_relay_tunnels_active", {}, () => this.gateway.originSessionCount());
+    metrics.gaugeSampler("khaaos_ws_relay_sessions_hosted", {}, () => this.gateway.hostSessionCount());
+  }
+
+  /** M3 — drena a autoridade de uma sala cercada: notifica os jogadores e
+   *  remove a sala local. O cliente trata como ROOM_NODE_LOST (contrato
+   *  existente) com reason=fenced para o telemetry distinguir. */
+  private drainFencedRoom(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    for (const [userId, player] of room.players) {
+      if (userId === room.hostId) continue; // host é notificado no cleanup abaixo
+      try {
+        player.ws?.send(JSON.stringify({
+          type: "error",
+          code: "ROOM_NODE_LOST",
+          reason: "fenced",
+          roomId,
+          message: "A sala mudou de nó dono; entre novamente.",
+        }));
+      } catch {
+        // socket já morto
+      }
+    }
+    this.destroyRoom(roomId, "fenced");
   }
 
   private closeUserSockets(userId: string): void {
@@ -264,9 +369,12 @@ class RoomManager {
   }
 
   attach(httpServer: Server) {
+    // noServer + roteador compartilhado: o SpectatorPipeline (/ws/spectator)
+    // vive no MESMO httpServer e um listener ws com `{ server }` responde 400
+    // a paths alheios, matando o handshake deste servidor (corrida contra o
+    // verifyClient async). Detalhes em wsUpgradeRouter.ts.
     this.wss = new WebSocketServer({
-      server: httpServer,
-      path: "/ws",
+      noServer: true,
       maxPayload: 16 * 1024,
       perMessageDeflate: false,
       handleProtocols: (protocols) => protocols.has("khaaos-v1") ? "khaaos-v1" : false,
@@ -295,7 +403,21 @@ class RoomManager {
         })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
     });
+    routeWebSocketUpgrade(httpServer, "/ws", (req, socket, head) => {
+      this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit("connection", ws, req));
+    });
     this.matchmaking.start();
+
+    // Event Mesh: leases + reconcile (queda de nó, órfãos self) a cada 10s.
+    this.mesh.startHeartbeat(() => new Set(this.rooms.keys()));
+
+    // Gateway cross-node: registro de nós + canal relay deste nó (best-effort;
+    // sem Redis fica desabilitado e o caminho legado ROOM_REMOTE_NODE vale).
+    void this.gateway.start().catch((error) => {
+      console.warn("[RoomManager] gateway cross-node indisponível", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     this.wss.on("connection", (ws, req) => {
       const userId = (req as typeof req & { khaaosUserId?: string }).khaaosUserId;
@@ -350,6 +472,7 @@ class RoomManager {
           ws.close(1011, "Realtime security unavailable");
           return;
         }
+        let msgType: string | undefined;
         try {
           const parsed = clientMessageSchema.safeParse(JSON.parse(raw.toString()));
           if (!parsed.success) {
@@ -357,6 +480,7 @@ class RoomManager {
             return;
           }
           const msg = parsed.data as ClientMessage;
+          msgType = msg.type;
           if ((msg.type === "join" || msg.type === "queue" || msg.type === "create_lobby") && msg.worldId && isWorldId(msg.worldId)) {
             this.socketWorlds.set(ws, msg.worldId);
           } else if (msg.type === "join" && !msg.roomId) {
@@ -369,7 +493,15 @@ class RoomManager {
           const activeRoomId = this.userToRoom.get(userId);
           const activeWorld = activeRoomId ? this.rooms.get(activeRoomId)?.worldId : undefined;
           if (activeWorld) this.socketWorlds.set(ws, activeWorld);
-        } catch {
+        } catch (error) {
+          // Observabilidade: o cliente recebe apenas "Invalid message" (sem
+          // leak), mas o servidor registra a causa real para diagnóstico
+          // (console.warn inspeciona a cadeia .cause do drizzle/pg).
+          console.warn("[RoomManager] message handler error", {
+            userId,
+            type: msgType,
+            error,
+          });
           this.send(ws, { type: "error", message: "Invalid message" });
         }
       });
@@ -377,6 +509,8 @@ class RoomManager {
       ws.on("close", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        // Gateway: se este socket sustentava um túnel relay, encerra (cls).
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -384,6 +518,7 @@ class RoomManager {
       ws.on("error", () => {
         clearInterval(rateReset);
         clearInterval(pingInterval);
+        this.gateway.onLocalSocketClosed(userId, ws);
         this.unregisterSocket(userId, ws);
         this.onDisconnect(userId, ws);
       });
@@ -394,6 +529,14 @@ class RoomManager {
 
   stop() {
     this.matchmaking.stop();
+    void this.gateway.stop().catch(() => undefined);
+  }
+
+  /** Somente testes: alinha mesh + gateway deste manager a um nodeId de
+   *  barramento LOCAL (multi-nó simulado no mesmo processo, sem Redis). */
+  async __startLocalBusNodeForTests(nodeId: string): Promise<void> {
+    (this as unknown as { mesh: RoomEventMesh }).mesh = new RoomEventMesh({ nodeId, enabled: false });
+    await this.gateway.__startLocalBusForTests(nodeId);
   }
 
   isInLiveMatch(userId: string): boolean {
@@ -413,7 +556,12 @@ class RoomManager {
     displayName: string,
     ws: WebSocket,
     msg: ClientMessage,
+    relayContext?: { relayInviteAuthorized?: boolean },
   ) {
+    // Gateway cross-node: usuário com túnel ativo tem a mensagem roteada ao
+    // nó dono da sala. Operações de âncora (join/queue/create_lobby/join_code)
+    // encerram o túnel e caem para o dispatch LOCAL abaixo.
+    if (this.gateway.routeIfRelayed(userId, msg as unknown as { type: string } & Record<string, unknown>)) return;
     switch (msg.type) {
       case "join": {
         if (msg.worldId !== undefined && !isWorldId(msg.worldId)) {
@@ -423,11 +571,23 @@ class RoomManager {
         const worldId = msg.worldId ?? "CIGKV";
         const requestedRoom = msg.roomId ? this.rooms.get(msg.roomId) : undefined;
         if (msg.worldId !== undefined && requestedRoom && requestedRoom.worldId !== worldId) {
-          this.send(ws, { type: "error", message: "A sala pertence a outro mundo" });
+          this.send(ws, { type: "error", message: requestedRoom.isPrivate ? "Sala não encontrada" : "A sala pertence a outro mundo" });
           break;
         }
+        // Gateway: roomId explícito que só existe em OUTRO nó → túnel relay
+        // (antes disso o join caia silenciosamente em um lobby local novo).
+        // Salas PRIVADAS remotas NUNCA relayam por roomId cru — exigem
+        // join_code (a autorização de convite via túnel vem do hop de relay).
+        if (msg.roomId && !requestedRoom) {
+          const remote = await this.mesh.getRemoteRoom(msg.roomId).catch(() => null);
+          // ensureNodeKnown: leitura fresca do registro (mesma proteção da
+          // corrida de boot aplicada ao join por código).
+          if (remote && !remote.isPrivate && (await this.gateway.ensureNodeKnown(remote.nodeId))) {
+            if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
+          }
+        }
         const roomId = msg.roomId || this.findOrCreateLobby(worldId);
-        await this.joinRoom(userId, displayName, ws, roomId, worldId);
+        await this.joinRoom(userId, displayName, ws, roomId, worldId, relayContext?.relayInviteAuthorized === true);
         break;
       }
       case "resume": {
@@ -499,6 +659,10 @@ class RoomManager {
         await this.joinByInviteCode(userId, displayName, ws, msg.code);
         break;
       }
+      case "invite_player": {
+        await this.invitePlayer(userId, ws, msg.targetUserId);
+        break;
+      }
       default:
         this.send(ws, { type: "error", message: "Unknown message type" });
     }
@@ -509,7 +673,7 @@ class RoomManager {
   private findOrCreateLobby(worldId: WorldId = "CIGKV"): string {
     // Prefer an existing lobby with space
     for (const room of this.rooms.values()) {
-      if (room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
+      if (!room.isPrivate && room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
         return room.id;
       }
     }
@@ -547,7 +711,24 @@ class RoomManager {
     return id;
   }
 
-  async joinRoom(userId: string, displayName: string, ws: WebSocket, roomId: string, worldId: WorldId = "CIGKV") {
+  async joinRoom(
+    userId: string,
+    displayName: string,
+    ws: WebSocket,
+    roomId: string,
+    worldId: WorldId = "CIGKV",
+    privateInviteAuthorized = false,
+  ) {
+    let room = this.rooms.get(roomId);
+    if (!room) {
+      roomId = this.findOrCreateLobby(worldId);
+      room = this.rooms.get(roomId)!;
+    }
+    if (room.isPrivate && !privateInviteAuthorized) {
+      this.send(ws, { type: "error", message: "Sala não encontrada" });
+      return;
+    }
+
     // Leave matchmaking queue if present
     this.matchmaking.dequeue(userId);
     this.matchmaking.rebindWs(userId, ws);
@@ -555,12 +736,6 @@ class RoomManager {
     // Leave previous room if any
     if (this.userToRoom.has(userId)) {
       this.leaveRoom(userId);
-    }
-
-    let room = this.rooms.get(roomId);
-    if (!room) {
-      roomId = this.findOrCreateLobby(worldId);
-      room = this.rooms.get(roomId)!;
     }
 
     if (room.status !== "LOBBY" && room.status !== "COUNTDOWN") {
@@ -1050,6 +1225,30 @@ class RoomManager {
           });
           this.broadcastRoomState(room);
         });
+
+      // Fase 16 — payouts KRC do fim de partida (2PC + Idempotency-Key
+      // determinística payout.<roomId>.<userId>): PREPARE reserva na treasury,
+      // COMMIT credita a wallet; crash entre fases é concluído pelo recovery.
+      // Falha de settlement NUNCA propaga para o fluxo da partida.
+      const payouts = computeMatchPayouts(participants.map((p) => ({
+        userId: p.userId,
+        kills: p.kills,
+        placement: p.placement,
+        totalPlayers: participants.length,
+      })));
+      if (payouts.length > 0) {
+        settleMatchPayouts(room.id, payouts)
+          .then((summary) => {
+            console.log("[Payouts] settlement concluído", {
+              roomId: summary.roomId,
+              totalKrcCommitted: summary.totalKrcCommitted,
+              players: summary.settled.length,
+            });
+          })
+          .catch((err) => {
+            console.error("[Payouts] settlement falhou (recovery cobrirá)", err);
+          });
+      }
     }
   }
 
@@ -1471,13 +1670,45 @@ class RoomManager {
           winnerId: room.winnerId,
           hostId: room.hostId,
           isPrivate: room.isPrivate,
-          inviteCode: room.inviteCode,
+          // M1: o código de convite NUNCA sai para não-hosts — apenas o dono
+          // distribui convites ligados a jogador; convidados não retransmitem.
+          inviteCode:
+            room.isPrivate && recipient.userId === room.hostId ? room.inviteCode : undefined,
           readyCount: [...room.players.values()].filter((p) => p.isReady).length,
           minPlayersToStart: room.minPlayersToStart,
         },
       };
       this.send(recipient.ws, payload);
     }
+    // Event Mesh: toda mudança de estado visível atualiza o índice
+    // distribuído (dedupe por fingerprint + throttle dentro do mesh).
+    this.mirrorRoomSafely(room);
+  }
+
+  private toMeshRecord(room: BattleRoom): RoomMeshRecord {
+    return {
+      id: room.id,
+      worldId: room.worldId,
+      status: room.status,
+      playerCount: room.players.size,
+      maxPlayers: room.maxPlayers,
+      isPrivate: room.isPrivate,
+      inviteCode: room.inviteCode,
+      hostId: room.hostId,
+      nodeId: this.mesh.nodeId,
+      createdAt: room.createdAt,
+      updatedAt: Date.now(),
+    };
+  }
+
+  /** Fire-and-forget: falha do mesh NUNCA propaga para o fluxo do jogo. */
+  private mirrorRoomSafely(room: BattleRoom): void {
+    this.mesh.mirrorRoom(this.toMeshRecord(room)).catch((error) => {
+      console.warn("[RoomManager] mesh mirror falhou", {
+        roomId: room.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   private broadcast(room: BattleRoom, msg: ServerMessage) {
@@ -1492,15 +1723,33 @@ class RoomManager {
   private send(ws: WebSocket, msg: ServerMessage) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg));
+      metrics.counter("khaaos_ws_messages_total", { direction: "s2c" });
     }
   }
 
-  private destroyRoom(roomId: string) {
+  private destroyRoom(roomId: string, reason = "destroyed") {
     const room = this.rooms.get(roomId);
     if (!room) return;
     if (room.tickHandle) clearInterval(room.tickHandle);
     if (room.countdownHandle) clearInterval(room.countdownHandle);
     this.rooms.delete(roomId);
+    void distributedState.releaseRoomOwner(roomId).catch(() => undefined);
+    // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
+    void this.mesh.markRoomClosed(roomId, reason).catch(() => undefined);
+    // M1: convites do código morrem com a sala (fire-and-forget).
+    if (room.inviteCode) {
+      void this.mesh.purgeInvites(room.inviteCode).catch(() => undefined);
+    }
+    // Gateway: sessões relayadas desta sala recebem drop (cliente reentra).
+    this.gateway.dropSessionsForRoom(roomId);
+  }
+
+  private rollbackRoomCreation(room: BattleRoom, reason: string): void {
+    for (const userId of room.players.keys()) {
+      if (this.userToRoom.get(userId) === room.id) this.userToRoom.delete(userId);
+    }
+    room.players.clear();
+    this.destroyRoom(room.id, reason);
   }
 
   // ─── Lobby controls ──────────────────────────────────────────────────────
@@ -1546,6 +1795,11 @@ class RoomManager {
     const target = room.players.get(targetId);
     if (target?.ws) {
       this.send(target.ws, { type: "error", message: "Você foi removido do lobby pelo host" });
+    }
+    // M1: convite pendente do removido é revogado (reentrada exige novo
+    // convite do host, dentro das quotas).
+    if (room.isPrivate && room.inviteCode) {
+      void this.mesh.revokeInvite(room.inviteCode, targetId).catch(() => undefined);
     }
     this.leaveRoom(targetId);
   }
@@ -1595,13 +1849,87 @@ class RoomManager {
     this.rooms.set(id, room);
     if (!(await distributedState.setRoomOwner(id))) {
       this.send(ws, { type: "error", message: "Lobby indisponível; tente novamente" });
-      this.rooms.delete(id);
+      this.rollbackRoomCreation(room, "ownership_failed");
       return;
     }
-    await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
-    await this.joinRoom(userId, displayName, ws, id);
+    try {
+      await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
+      await this.joinRoom(userId, displayName, ws, id, worldId, isPrivate);
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
   }
 
+  /**
+   * M1 — Emissão de convite LIGADO a jogador/sala. Somente o host de um
+   * lobby privado em LOBBY/COUNTDOWN emite; quotas: pendentes por sala e
+   * emissões por host numa janela móvel (anti-spam). O convite é registrado
+   * no mesh (compartilhado entre nós) e consumo é único.
+   */
+  private async invitePlayer(userId: string, ws: WebSocket, targetUserId: string) {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    if (!room || room.hostId !== userId) {
+      this.send(ws, { type: "error", code: "INVITE_FORBIDDEN", message: "Somente o host do lobby pode convidar operativos" });
+      return;
+    }
+    if (!room.isPrivate || !room.inviteCode) {
+      this.send(ws, { type: "error", code: "INVITE_FORBIDDEN", message: "Convites se aplicam apenas a lobbies privados" });
+      return;
+    }
+    if (room.status !== "LOBBY" && room.status !== "COUNTDOWN") {
+      this.send(ws, { type: "error", code: "INVITE_FORBIDDEN", message: "Convites encerrados para esta partida" });
+      return;
+    }
+    const target = targetUserId.trim();
+    if (!target || target.length > 256) {
+      this.send(ws, { type: "error", code: "INVITE_INVALID", message: "Operativo alvo inválido" });
+      return;
+    }
+
+    // Quota 1: janela móvel por host (emissões, não pendentes).
+    const now = Date.now();
+    const window = (this.inviteIssueLog.get(userId) ?? []).filter(
+      (at) => now - at < INVITE_HOST_WINDOW_MS,
+    );
+    if (window.length >= INVITE_HOST_WINDOW_LIMIT) {
+      this.send(ws, { type: "error", code: "INVITE_HOST_LIMIT", message: "Limite de convites atingido; tente novamente mais tarde" });
+      return;
+    }
+
+    // Quota 2: pendentes por sala (re-convite do MESMO alvo refresca — não conta).
+    const pending = await this.mesh.listInvites(room.inviteCode).catch(() => []);
+    const alreadyInvited = pending.some((entry) => entry.invitedUserId === target);
+    if (!alreadyInvited && pending.length >= INVITE_ROOM_PENDING_LIMIT) {
+      this.send(ws, { type: "error", code: "INVITE_ROOM_LIMIT", message: "Limite de convites pendentes do lobby atingido" });
+      return;
+    }
+
+    const record: RoomInviteRecord = {
+      code: room.inviteCode,
+      roomId: room.id,
+      worldId: room.worldId,
+      nodeId: this.mesh.nodeId,
+      invitedUserId: target,
+      issuedBy: userId,
+      createdAt: now,
+      expiresAt: now + INVITE_TTL_MS,
+      status: "pending",
+      usedAt: null,
+    };
+    await this.mesh.issueInvite(record, INVITE_TTL_MS);
+    window.push(now);
+    this.inviteIssueLog.set(userId, window);
+    this.send(ws, { type: "invite_issued", roomId: room.id, invitedUserId: target, expiresAt: record.expiresAt });
+  }
+
+  /**
+   * M1 — join por código EXIGE convite ligado a ESTE jogador: o código da
+   * sala sozinho não autoriza mais entrada. Verificação idêntica no caminho
+   * local e no remoto (a origem do túnel pré-verifica; o nó dono RE-verifica
+   * e consome — o relay não é autoridade). Rejeição uniforme, sem oráculo.
+   */
   private async joinByInviteCode(
     userId: string,
     displayName: string,
@@ -1609,16 +1937,70 @@ class RoomManager {
     code: string,
   ) {
     const normalized = code.trim().toUpperCase();
+    const invite = await this.mesh.getPendingInvite(normalized, userId).catch(() => null);
+
     const room = [...this.rooms.values()].find(
       (r) =>
         r.inviteCode === normalized &&
         (r.status === "LOBBY" || r.status === "COUNTDOWN"),
     );
-    if (!room) {
-      this.send(ws, { type: "error", message: "Código de lobby inválido ou expirado" });
+    if (room) {
+      const bindingValid =
+        invite && invite.roomId === room.id && invite.status === "pending" && invite.expiresAt > Date.now();
+      if (!bindingValid) {
+        this.send(ws, INVITE_JOIN_REJECTION);
+        return;
+      }
+      // Consumo único (dono da sala é este nó).
+      const consumed = await this.mesh.consumeInvite(normalized, userId);
+      if (!consumed) {
+        this.send(ws, INVITE_JOIN_REJECTION);
+        return;
+      }
+      await this.joinRoom(userId, displayName, ws, room.id, room.worldId, true);
       return;
     }
-    await this.joinRoom(userId, displayName, ws, room.id);
+
+    // Event Mesh: o lobby pode existir em OUTRO nó — lookup fresco no
+    // índice distribuído antes de declarar o código inválido. O túnel só
+    // abre com convite PRÉ-VERIFICADO na origem; o dono re-verifica.
+    const remote = await this.mesh.findRemoteByInviteCode(normalized).catch(() => null);
+    if (remote) {
+      const bindingValid =
+        invite && invite.roomId === remote.id && invite.status === "pending" && invite.expiresAt > Date.now();
+      if (!bindingValid) {
+        this.send(ws, INVITE_JOIN_REJECTION);
+        return;
+      }
+      // Gateway: com registro de nós vivo, ABRIMOS TÚNEL — o socket fica
+      // neste nó e as mensagens são roteadas por nodeId ao dono da sala.
+      // O join sintético carrega ra=1 (autorização do hop, validada AQUI
+      // na origem contra índice + convite do mesh).
+      // Consumo único do convite TAMBÉM no caminho cross-node (M1): sem
+      // isso o mesmo join_code poderia reabrir o túnel (replay).
+      const consumed = await this.mesh.consumeInvite(normalized, userId);
+      if (!consumed) {
+        this.send(ws, INVITE_JOIN_REJECTION);
+        return;
+      }
+      // ensureNodeKnown: leitura FRESCA do registro quando o cache ainda
+      // não conhece o alvo — elimina a corrida de boot (F16: join remoto
+      // chegando antes do primeiro heartbeat de 5 s do gateway).
+      if (await this.gateway.ensureNodeKnown(remote.nodeId)) {
+        if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId, { inviteAuthorized: true })) return;
+      }
+      const endpoint = await this.gateway.remoteNodeEndpoint(remote.nodeId).catch(() => null);
+      this.send(ws, {
+        type: "error",
+        code: "ROOM_REMOTE_NODE",
+        roomId: remote.id,
+        nodeId: remote.nodeId,
+        endpoint: endpoint ?? process.env.NODE_PUBLIC_URL ?? null,
+        message: "Este lobby está hospedado em outro nó; reconecte no endpoint indicado",
+      });
+      return;
+    }
+    this.send(ws, INVITE_JOIN_REJECTION);
   }
 
   // ─── Matchmaking integration ─────────────────────────────────────────────
@@ -1684,9 +2066,15 @@ class RoomManager {
     };
     this.rooms.set(id, room);
     if (!(await distributedState.setRoomOwner(id))) {
+      this.rollbackRoomCreation(room, "ownership_failed");
       throw new Error("Sala distribuída indisponível");
     }
-    await distributedState.publishControl({ type: "match_created", roomId: id, players: players.map((p) => p.userId) });
+    try {
+      await distributedState.publishControl({ type: "match_created", roomId: id, players: players.map((p) => p.userId) });
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
 
     for (const p of players) {
       // Seat without going through public join (already authenticated)
@@ -1783,7 +2171,22 @@ class RoomManager {
 
   getRoomSummary(roomId: string) {
     const room = this.rooms.get(roomId);
-    if (!room) return null;
+    if (!room) {
+      // Event Mesh: sala de outro nó, via cache síncrono do reconcile.
+      const remote = this.mesh.getCachedRoom(roomId);
+      if (remote) {
+        return {
+          id: remote.id,
+          worldId: remote.worldId,
+          status: remote.status,
+          playerCount: remote.playerCount,
+          maxPlayers: remote.maxPlayers,
+          remote: true,
+          nodeId: remote.nodeId,
+        };
+      }
+      return null;
+    }
     return {
       id: room.id,
       worldId: room.worldId,
@@ -1794,15 +2197,27 @@ class RoomManager {
   }
 
   listLobbies() {
-    return [...this.rooms.values()]
-      .filter((r) => r.status === "LOBBY" || r.status === "COUNTDOWN")
+    const local = [...this.rooms.values()]
+      .filter((r) => !r.isPrivate && (r.status === "LOBBY" || r.status === "COUNTDOWN"))
       .map((r) => ({
         id: r.id,
         status: r.status,
         playerCount: r.players.size,
         maxPlayers: r.maxPlayers,
       }));
+    // Event Mesh: lobbies de outros nós (cache atualizado pelo heartbeat).
+    const remote = this.mesh.listRemoteLobbiesSync().map((record) => ({
+      id: record.id,
+      status: record.status,
+      playerCount: record.playerCount,
+      maxPlayers: record.maxPlayers,
+      remote: true,
+      nodeId: record.nodeId,
+    }));
+    return [...local, ...remote];
   }
 }
 
 export const roomManager = new RoomManager();
+// Classe exportada para testes multi-nó (instâncias adicionais no mesmo processo).
+export { RoomManager as RoomManagerClass };

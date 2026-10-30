@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/Nexus-HUB57/Khaaos_Run",
+  "base_commit": "d8f14e26852487784fc23387e8347999ce159104",
+  "scope": "Implementação local, sem push ou PR; runtime Three.js; UE5 não modificado",
+  "patch_sha256": "8e3930ad282087c01f6b50e59705c3bba2495ca89ec183415174cd9f6e6e3bf9",
+  "forward_patch_verified": true,
+  "files": {
+    "game-runtime/src/game3d/main3d.js": "4d9cb32a981b6b947f6532ad5a6efb1a564612a374c9ad13308db2a7c3c8f026",
+    "game-runtime/src/game3d/postfx3d.js": "731e7e84cf77ee4dc01062c4c8a85d27c226822ddd2f420625668f10087312b1",
+    "game-runtime/src/game3d/renderpipeline3d.js": "9ed2a17e76ad5fe3cc478348cc9bd238f20a26351dc998769bc01703a94c58f2",
+    "game-runtime/src/game3d/terrain3d.js": "c132167d8e31d5c7a4fb6661ad9de58cb2349d8e59809f59688117e7806a1f06",
+    "game-runtime/src/game3d/world3d.js": "3f19483384ab5d97f3fde6e0422d192184782bf067afeeb8b832e3f56f6181a0",
+    "game-runtime/test/graphics-upgrade.test.js": "d368da0e487471f860da3d487caf57f06c2cdcc519ad38376180630c32101e03"
+  }
+}

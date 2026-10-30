@@ -1,0 +1,72 @@
+{
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-10-23T18:51:00.592017+00:00",
+  "files": [
+    {
+      "file": "ring_config.json",
+      "description": "Configuracao completa do ring system por mundo"
+    },
+    {
+      "file": "ring_visuals.json",
+      "description": "Referencia visual UE5 - materiais, particulas, HUD"
+    },
+    {
+      "file": "ring_cpp_structure.json",
+      "description": "Estrutura C++ - classes, structs, enums"
+    },
+    {
+      "file": "ring_config.json",
+      "description": "Configuracao completa do ring system por mundo (v2 - airdrop, spectator, hazards, prediction)"
+    },
+    {
+      "file": "ring_visuals.json",
+      "description": "Referencia visual UE5 - materiais, particulas, HUD (v2 - water, airdrop, spectator, hazard visuals)"
+    },
+    {
+      "file": "ring_cpp_structure.json",
+      "description": "Estrutura C++ - classes, structs, enums (v2 - 8 classes, 7 structs, 7 enums)"
+    }
+  ],
+  "world_coverage": {
+    "CIGKV": {
+      "phases": 2,
+      "max_radius": 500
+    },
+    "W1": {
+      "phases": 6,
+      "max_radius": 800,
+      "water_zones": 2
+    },
+    "W2": {
+      "phases": 5,
+      "max_radius": 700,
+      "water_zones": 1
+    },
+    "W3": {
+      "phases": 4,
+      "max_radius": 600,
+      "water_zones": 0
+    },
+    "W4": {
+      "phases": 5,
+      "max_radius": 750,
+      "water_zones": 2
+    }
+  },
+  "total_phases": 22,
+  "total_water_zones": 5,
+  "cpp_classes": 8,
+  "cpp_structs": 7,
+  "cpp_enums": 7,
+  "features": {
+    "airdrop_system": true,
+    "spectator_system": true,
+    "zone_hazards": true,
+    "ring_prediction": true,
+    "zone_loot_bonus": true,
+    "live_broadcast": true,
+    "commentator_ai": true,
+    "huran_water_mechanics": true,
+    "discord_integration": true
+  }
+}

@@ -35,11 +35,21 @@ import {
   economyBatchSimulationInput,
 } from "./game/mutationSchemas";
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
+import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
+import { registerMetricsRoutes } from "./routes/metrics";
+import { economy2pcService } from "./game/economy2pcService";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
   await distributedState.connect();
+
+  // ── OBSERVABILITY (antes de tudo: /metrics + /healthz sem auth) ──────────
+  registerMetricsRoutes(app);
+
+  // ── ECONOMY 2PC (antes de registerApiRoutes: auth própria, sem OIDC) ─────
+  registerEconomy2PCRoutes(app);
+  economy2pcService.startRecoveryLoop();
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
   roomManager.attach(httpServer);
@@ -255,7 +265,13 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     res.json(await storage.getBankAccount(getUserId(req)));
   });
 
-  app.post(api.bank.deposit.path, requireAuth, (_req, res) => {
+  app.post(api.bank.deposit.path, requireAuth, (req, res) => {
+    // Idempotência uniforme em TODA mutação /api/bank/* (auditoria Fase 2):
+    // o depósito está congelado (PAYMENTS_NOT_CONFIGURED), mas a chave já é
+    // validada AGORA para que a reabertura dos pagamentos herde a proteção
+    // estrutural (nenhuma rota de banco mutável sem Idempotency-Key).
+    const key = readIdempotencyKey(req, res);
+    if (!key) return;
     res.status(503).json({
       code: "PAYMENTS_NOT_CONFIGURED",
       message: "Depósitos estão temporariamente indisponíveis. Nenhum KRC foi creditado.",
@@ -372,12 +388,10 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       if (!Number.isFinite(Number(item.durability)) || Number(item.durability) <= 0) {
         return res.status(409).json({ message: "Item sem durabilidade disponível." });
       }
-      const consumed = await storage.consumeItemDurability(id, userId, 10);
-      if (!consumed) return res.status(409).json({ message: "Item sem durabilidade disponível." });
       const healAmount = Math.min(100, Math.max(1, Math.floor(Number(item.stats?.heal))));
-      const before = await storage.getPlayerStats(userId);
-      const stats = await storage.healPlayer(userId, healAmount);
-      res.json({ message: `${item.name} usado`, newDurability: consumed.durability, effect: { healed: stats.health - before.health } });
+      const result = await storage.useItemAndHealAtomic(id, userId, 10, healAmount);
+      if (!result) return res.status(409).json({ message: "Item sem durabilidade disponível." });
+      res.json({ message: `${item.name} usado`, newDurability: result.item.durability, effect: { healed: result.healed } });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -626,6 +640,8 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     try {
       const input = parseMutationBody(req, res, loanPreviewInput);
       if (!input) return;
+      // M2: preview usa o MESMO contrato canônico da cobrança (computeLoanTerms
+      // via EconomyEngine.computeLoan) — gate loan-parity: preview === débito.
       res.json(computeLoan(input.principal, input.days));
     } catch {
       res.status(400).json({ message: "Invalid loan params" });

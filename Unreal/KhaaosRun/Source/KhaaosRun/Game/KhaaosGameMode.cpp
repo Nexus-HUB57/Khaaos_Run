@@ -25,6 +25,9 @@
 #include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/MatchFlow/KhaaosMatchTimeline.h"
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
+#include "AbilitySystemComponent.h"
+#include "Player/KhaaosCharacter.h"
+#include "Game/AbilitySystem/Species/KhaaosAbilityRegistry.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Player/KhaaosPlayerState.h"
 #include "KhaaosRun.h"
@@ -352,7 +355,14 @@ void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDa
     AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(Player);
     if (!KPS) return;
 
-    // Apply species stats to player
+    // Apply species stats to the authoritative GAS source of truth.
+    if (KPS->KhaaosAttributeSet)
+    {
+        KPS->KhaaosAttributeSet->SetMaxHealth(SpeciesAsset->BaseHealth);
+        KPS->KhaaosAttributeSet->SetHealth(SpeciesAsset->BaseHealth);
+        KPS->KhaaosAttributeSet->SetMaxEnergy(SpeciesAsset->BaseEnergy);
+        KPS->KhaaosAttributeSet->SetEnergy(SpeciesAsset->BaseEnergy);
+    }
     KPS->MaxHealth = SpeciesAsset->BaseHealth;
     KPS->Health = SpeciesAsset->BaseHealth;
     KPS->MaxEnergy = SpeciesAsset->BaseEnergy;
@@ -365,16 +375,32 @@ void AKhaaosGameMode::AssignSpecies(APlayerState* Player, const UKhaaosSpeciesDa
         SpeciesComp->SetSpecies(SpeciesAsset);
     }
 
-    const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
-    const bool bIsOnith = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase) ||
-        (SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Onith.IsValid() &&
-            SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Onith);
-    KPS->SetSpeciesPassiveAbility(
-        bIsOnith ? UKhaaosAbility_OnithPassive::StaticClass() : nullptr);
+    TSubclassOf<UGameplayAbility> PassiveClass = nullptr;
+    const FName Id = SpeciesAsset->SpeciesID;
+    if (Id.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_OnithPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_ZheersPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Huran")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_HuranPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Khael")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_KhaelPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Venex")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_VenexPassive::StaticClass();
+    else if (Id.IsEqual(FName(TEXT("Skeetw")), ENameCase::IgnoreCase)) PassiveClass = UKhaaosAbility_SkeetwPassive::StaticClass();
+    KPS->SetSpeciesPassiveAbility(PassiveClass);
 
-    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s (HP=%d, Energy=%d, Speed=%.1f)"),
-        *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(),
-        SpeciesAsset->BaseHealth, SpeciesAsset->BaseEnergy, SpeciesAsset->BaseSpeed);
+    if (UAbilitySystemComponent* ASC = KPS->GetAbilitySystemComponent())
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UKhaaosAbilityRegistry* Registry = GI->GetSubsystem<UKhaaosAbilityRegistry>())
+            {
+                Registry->GrantAbilitiesForSpecies(ASC, Id, KPS->SpeciesActiveAbilityHandles, KPS);
+            }
+        }
+    }
+    if (AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(Player->GetPawn()))
+    {
+        Character->ApplySpeciesPresentation(Id);
+    }
+    UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosGameMode::AssignSpecies - %s → %s actives=%d"),
+        *Player->GetPlayerName(), *SpeciesAsset->SpeciesID.ToString(), KPS->SpeciesActiveAbilityHandles.Num());
 }
 
 TArray<UKhaaosSpeciesDataAsset*> AKhaaosGameMode::GetAvailableSpecies() const
@@ -504,6 +530,51 @@ UKhaaosWeaponDataAsset* AKhaaosGameMode::SelectRandomWeaponForSlot(FName SlotTag
 
 // ─── Loot Distribution ─────────────────────────────────────────────────────────
 
+AKhaaosLootPickup* AKhaaosGameMode::SpawnCatalogLoot(
+    const UKhaaosLootItemDataAsset* Item,
+    const FVector& Location,
+    const FRotator& Rotation,
+    int32 StackCount,
+    TSubclassOf<AKhaaosLootPickup> PickupClassOverride)
+{
+    if (!HasAuthority() || !GetWorld() || !Item || Item->ItemID.IsNone() ||
+        Item->StackMax <= 0 || StackCount <= 0 || StackCount > Item->StackMax)
+    {
+        return nullptr;
+    }
+
+    if (const UKhaaosWorldConfigDataAsset* WorldConfig = GetCurrentWorldConfig())
+    {
+        if (!Item->CanSpawnInWorld(WorldConfig->WorldID)) return nullptr;
+    }
+
+    UClass* PickupClass = PickupClassOverride.Get();
+    if (!PickupClass) PickupClass = LootPickupClass.Get();
+    if (!PickupClass || PickupClass->HasAnyClassFlags(CLASS_Abstract))
+    {
+        if (!bMissingLootPickupClassWarningLogged)
+        {
+            UE_LOG(LogKhaaosRun, Error,
+                TEXT("Assign a concrete LootPickupClass on the active GameMode (or map override) before spawning loot"));
+            bMissingLootPickupClassWarningLogged = true;
+        }
+        return nullptr;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    AKhaaosLootPickup* Pickup = GetWorld()->SpawnActor<AKhaaosLootPickup>(
+        PickupClass, Location, Rotation, SpawnParams);
+    if (!Pickup) return nullptr;
+
+    if (!Pickup->ConfigureFromCatalog(Item, StackCount))
+    {
+        Pickup->Destroy();
+        return nullptr;
+    }
+    return Pickup;
+}
+
 void AKhaaosGameMode::SpawnLootFromDataAssets()
 {
     UKhaaosWorldConfigDataAsset* WorldConfig = GetCurrentWorldConfig();
@@ -527,36 +598,9 @@ void AKhaaosGameMode::SpawnLootFromDataAssets()
         FVector SpawnLocation(LootPoint.Location.X, LootPoint.Location.Y, 0.0f);
         FRotator SpawnRotation(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f);
 
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-        AKhaaosLootPickup* Pickup = World->SpawnActor<AKhaaosLootPickup>(
-            AKhaaosLootPickup::StaticClass(), SpawnLocation, SpawnRotation, SpawnParams);
-
-        if (Pickup)
+        if (SpawnCatalogLoot(SelectedItem, SpawnLocation, SpawnRotation))
         {
-            ELootRarity MappedRarity = ELootRarity::Comum;
-            switch (SelectedItem->Rarity)
-            {
-            case EKhaaosRarity::Comum:    MappedRarity = ELootRarity::Comum; break;
-            case EKhaaosRarity::Raro:     MappedRarity = ELootRarity::Raro; break;
-            case EKhaaosRarity::Epico:    MappedRarity = ELootRarity::Epico; break;
-            case EKhaaosRarity::Lendario: MappedRarity = ELootRarity::Lendario; break;
-            case EKhaaosRarity::Mitico:   MappedRarity = ELootRarity::Mitico; break;
-            }
-
-            EItemType MappedType = EItemType::Curativo;
-            if (SelectedItem->IsCurativo()) MappedType = EItemType::Curativo;
-            else if (SelectedItem->IsDefesa()) MappedType = EItemType::Defesa;
-            else MappedType = EItemType::Utilidade;
-
-            FLootStats Stats;
-            Stats.Heal = SelectedItem->HealAmount;
-            Stats.Defense = SelectedItem->DefenseAmount;
-
-            Pickup->InitFromPreset(SpawnCount, SelectedItem->ItemID.ToString(),
-                MappedType, MappedRarity, LootPoint.Location.X, LootPoint.Location.Y, Stats);
-            SpawnCount++;
+            ++SpawnCount;
         }
     }
 
@@ -846,16 +890,8 @@ void AKhaaosGameMode::SpawnPulsoLoot()
     else if (Roll < 0.65f)                              TargetRarity = EKhaaosRarity::Raro;
     else                                                TargetRarity = EKhaaosRarity::Comum;
 
-    TArray<UKhaaosLootItemDataAsset*> Candidates;
-    for (UKhaaosLootItemDataAsset* Item : LoadedLootItemAssets)
-    {
-        if (Item && Item->Rarity == TargetRarity) Candidates.Add(Item);
-    }
-
-    UKhaaosLootItemDataAsset* SelectedItem = (Candidates.Num() > 0)
-        ? Candidates[FMath::RandRange(0, Candidates.Num() - 1)]
-        : SelectWeightedRandomLoot();
-
+    UKhaaosLootItemDataAsset* SelectedItem = SelectLootByRarity(TargetRarity);
+    if (!SelectedItem) SelectedItem = SelectWeightedRandomLoot();
     if (!SelectedItem) return;
 
     // Random position within 80% of Pulso radius
@@ -864,31 +900,10 @@ void AKhaaosGameMode::SpawnPulsoLoot()
     FVector SpawnLoc = ActivePulso.CenterLocation + FVector(
         FMath::Cos(Angle) * Dist, FMath::Sin(Angle) * Dist, 0.0f);
 
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    AKhaaosLootPickup* Pickup = World->SpawnActor<AKhaaosLootPickup>(
-        AKhaaosLootPickup::StaticClass(), SpawnLoc, FRotator::ZeroRotator, SpawnParams);
-
+    AKhaaosLootPickup* Pickup = SpawnCatalogLoot(
+        SelectedItem, SpawnLoc, FRotator::ZeroRotator);
     if (Pickup)
     {
-        ELootRarity MappedRarity = ELootRarity::Raro;
-        switch (SelectedItem->Rarity)
-        {
-        case EKhaaosRarity::Comum:    MappedRarity = ELootRarity::Comum; break;
-        case EKhaaosRarity::Raro:     MappedRarity = ELootRarity::Raro; break;
-        case EKhaaosRarity::Epico:    MappedRarity = ELootRarity::Epico; break;
-        case EKhaaosRarity::Lendario: MappedRarity = ELootRarity::Lendario; break;
-        case EKhaaosRarity::Mitico:   MappedRarity = ELootRarity::Mitico; break;
-        }
-
-        FLootStats Stats;
-        Stats.Heal = SelectedItem->HealAmount;
-        Stats.Defense = SelectedItem->DefenseAmount;
-
-        Pickup->InitFromPreset(0, SelectedItem->ItemID.ToString(),
-            EItemType::Curativo, MappedRarity, SpawnLoc.X, SpawnLoc.Y, Stats);
-
         UE_LOG(LogKhaaosRun, Log, TEXT("SpawnPulsoLoot - %s (%s) at Pulso (boost=%.1fx)"),
             *SelectedItem->ItemID.ToString(), *SelectedItem->RarityTag.ToString(), ActivePulso.RarityBoost);
     }
@@ -1148,6 +1163,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
             ElimPS->Kills++;
             VictimPS->EliminatorId = ElimPS->GetUniqueId().ToString();
             ElimPS->GrantCredits(50);
+            if (UAbilitySystemComponent* KillerASC = ElimPS->GetAbilitySystemComponent())
+            {
+                UKhaaosAbility_VenexPassive::TryApplyOverclockOnASC(KillerASC);
+            }
         }
     }
 
@@ -1317,29 +1336,60 @@ void AKhaaosGameMode::ComputeRankings()
 
 UKhaaosLootItemDataAsset* AKhaaosGameMode::SelectWeightedRandomLoot() const
 {
-    if (LoadedLootItemAssets.Num() == 0) return nullptr;
-
-    // Build weight array from RarityWeight
+    const UKhaaosWorldConfigDataAsset* WorldConfig = GetCurrentWorldConfig();
+    TArray<UKhaaosLootItemDataAsset*> Candidates;
     TArray<int32> Weights;
     int32 TotalWeight = 0;
     for (UKhaaosLootItemDataAsset* Item : LoadedLootItemAssets)
     {
-        int32 W = Item->RarityWeight;
-        Weights.Add(W);
-        TotalWeight += W;
+        if (!Item || Item->ItemID.IsNone() || Item->RarityWeight <= 0 ||
+            (WorldConfig && !Item->CanSpawnInWorld(WorldConfig->WorldID)))
+        {
+            continue;
+        }
+        Candidates.Add(Item);
+        Weights.Add(Item->RarityWeight);
+        TotalWeight += Item->RarityWeight;
     }
 
     if (TotalWeight <= 0) return nullptr;
-
-    int32 Roll = FMath::RandRange(1, TotalWeight);
+    const int32 Roll = FMath::RandRange(1, TotalWeight);
     int32 Cumulative = 0;
-    for (int32 i = 0; i < LoadedLootItemAssets.Num(); ++i)
+    for (int32 Index = 0; Index < Candidates.Num(); ++Index)
     {
-        Cumulative += Weights[i];
-        if (Roll <= Cumulative) return LoadedLootItemAssets[i];
+        Cumulative += Weights[Index];
+        if (Roll <= Cumulative) return Candidates[Index];
+    }
+    return Candidates.Last();
+}
+
+UKhaaosLootItemDataAsset* AKhaaosGameMode::SelectLootByRarity(EKhaaosRarity Rarity) const
+{
+    const UKhaaosWorldConfigDataAsset* WorldConfig = GetCurrentWorldConfig();
+    TArray<UKhaaosLootItemDataAsset*> Candidates;
+    TArray<int32> Weights;
+    int32 TotalWeight = 0;
+    for (UKhaaosLootItemDataAsset* Item : LoadedLootItemAssets)
+    {
+        if (!Item || Item->ItemID.IsNone() || Item->Rarity != Rarity || Item->RarityWeight <= 0 ||
+            (WorldConfig && !Item->CanSpawnInWorld(WorldConfig->WorldID)))
+        {
+            continue;
+        }
+        Candidates.Add(Item);
+        Weights.Add(Item->RarityWeight);
+        TotalWeight += Item->RarityWeight;
     }
 
-    return LoadedLootItemAssets.Last();
+    if (TotalWeight <= 0) return nullptr;
+    const int32 Roll = FMath::RandRange(1, TotalWeight);
+    int32 Cumulative = 0;
+    for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+    {
+        Cumulative += Weights[Index];
+        if (Roll <= Cumulative) return Candidates[Index];
+    }
+    return Candidates.Last();
 }
 
 void AKhaaosGameMode::BuildLootWeightTable()

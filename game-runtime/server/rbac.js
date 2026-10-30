@@ -12,11 +12,17 @@ export const PERMISSIONS = {
   'admin:metrics': 'Ler métricas e estado operacional',
   'keys:rotate': 'Rotacionar/derrubar chaves de assinatura',
   'audit:read': 'Ler a trilha de auditoria',
+  'obs:read': 'Ler traces e logs agregados da observabilidade',
+  'economy:grant': 'Conceder créditos virtuais KRC (sem valor real)',
+  'poj:command': 'Comandar o Protocolo de Ordem de Jogo (Marechal: convocar, encerrar, julgar)',
+  'eos:operate': 'Ancorar/operar sessões EOS nativas do dedicated server (M4)',
 };
 
 export const ROLE_PERMISSIONS = {
   player: ['room:join', 'room:start', 'room:input'],
-  moderator: ['room:join', 'room:start', 'room:input', 'admin:metrics', 'audit:read'],
+  moderator: ['room:join', 'room:start', 'room:input', 'admin:metrics', 'audit:read', 'obs:read'],
+  // dedicated server service (papel dedicado à ponte EOS nativa — M4)
+  service: ['room:join', 'eos:operate', 'admin:metrics'],
 };
 
 const ROOM_SCOPED = new Set(['room:join', 'room:start', 'room:input']);

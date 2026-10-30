@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M003",
+  "operative_id": "M-03",
+  "codename": "VNX-01",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Venex",
+    "name": "Venex",
+    "type": "cyborg",
+    "skeleton": "SK_Manny",
+    "passive": "Interface Neural - +10% eficiencia de escudo",
+    "base_stats": {
+      "health": 90,
+      "energy": 110,
+      "speed": 1.1
+    },
+    "physical": {
+      "height_cm": 185,
+      "weight_kg": 80
+    },
+    "abbr": "VNX"
+  },
+  "world": {
+    "id": "W3",
+    "name": "Ckesalth",
+    "capacity": 60
+  },
+  "rank": "VENEX",
+  "specialization": "Engenharia Cibernetica",
+  "ethnicity": {
+    "label": "Japones",
+    "heritage": "Ainu/Hokkaido (paterno) + Japones Continental (materno)",
+    "region": "Norte do Japao / Hokkaido",
+    "cultural_fusion": "Heranca Ainu (povo indigena do Japao) mesclada com disciplina tecnologica japonesa. Nome Ren (lotus/ren) + Tanaka (centro do arrozal)."
+  },
+  "phenotype": {
+    "skin_tone": "Oliva claro (#D4B896) com placas dermicas ciberneticas no lado esquerdo do rosto",
+    "hair": "Jet black, undercut com topo penteado a direita, textura lisa e densa",
+    "eyes": "Castanho escuro direito; OLHO ESQUERDO: implante optico Venex - brilho ambar constante (#FFBF00), sem pupila visivel",
+    "facial_structure": "Rosto refinado e simetrico, placa cibernetica no maxilar esquerdo (mandibula inferior), barba sempre limpa",
+    "body_type": "Lean muscular - 180 cm, 76 kg. Definicao magra, augments ciberneticos adicionam 3 kg de implantes",
+    "distinctive_silhouette": "Postura tech-ninja - centro de gravidade baixo, ombros rolados para frente. Silhueta assimetrica (lado cibernetico mais angular)."
+  },
+  "cultural_markers": {
+    "tattoos": "Codigo de barras no pulso direito (designado militar Venex - estilo yakuza-moderno), kanji NIN (shinobi) na nuca",
+    "scars": "Cicatrizes de incisao cirurgica ao longo da coluna (portas de interface neural), minimalistas e precisas",
+    "ornaments": "Bracelete de titanio com gravado Ainu (spiral motif) no pulso direito - ultimo vinculo com heranca cultural",
+    "clothing_style": "Techwear minimalista japones - gola alta, linhas retas, preto/cinza com acentos ambar (matching eye implant), silhueta slim-fit"
+  },
+  "species_traits": {
+    "visible_modification": "35% augments Venex - olho esquerdo (implante optico ambar), placa mandibular esquerda, portas neurais visiveis no pescoco, tatuagens circuit-line na pele (subcutaneas visiveis)",
+    "passive_manifestation": "Interface Neural ativa: olho ambar pulsa ao usar shield - sincronizado visual shield-energy",
+    "combat_style_id": "Estilo precision-tech - hacking em combate, over-shield tatico, ranged precision. Unico operative com real-time target override via eye implant."
+  },
+  "distinguishing_summary": "Unico Japones/Ainu; olho cibernetico ambar constante (mais reconhecel do roster); placa mandibular Venex; codigo de barras + kanji na nuca; unico techwear preto-ambar; postura assimetrica",
+  "generated_at": "2026-10-22T13:30:29.511125+00:00",
+  "ref_code": "VNX-01",
+  "operative_ref": "OP_VNX_M_01",
+  "avatar_ref": "AVT_VNX_M_01",
+  "legacy_codename": "REN TANAKA",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299086+00:00"
+}

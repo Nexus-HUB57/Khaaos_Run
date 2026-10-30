@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M004",
+  "operative_id": "M-04",
+  "codename": "ZHR-02",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Zheers",
+    "name": "Zheers",
+    "type": "humanoid",
+    "skeleton": "SK_Manny",
+    "passive": "Adaptabilidade - +10% resistencia ao ambiente local",
+    "base_stats": {
+      "health": 100,
+      "energy": 100,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 180,
+      "weight_kg": 75
+    },
+    "abbr": "ZHR"
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "HURAN",
+  "specialization": "Reconhecimento e Infiltracao",
+  "ethnicity": {
+    "label": "Subsaariano",
+    "heritage": "Hausa/Fulani (paterno) + Songhai/Zarma (materno)",
+    "region": "Sahel Ocidental - Niguer/Mali",
+    "cultural_fusion": "Tradies nomades Fulani de travessia desertica combinadas com espionagem Saheliana. Nome Tariq (aquele que bate a porta/noite) + Bakari (nobre/promissor em Swahili)."
+  },
+  "phenotype": {
+    "skin_tone": "Mogno muito escuro (#4A2C17) com subtom quente avermelhado sob luz direta",
+    "hair": "Close-cropped, padroes geometricos lineares raspados (zig-zag Saheliano)",
+    "eyes": "Castanho profundo (#1C0F05), intensidade penetrante, leve squint natural (adaptado solar Sahel)",
+    "facial_structure": "Testa alta e larga, nariz estreito na raiz alargando nas asas, macas do rosto definidas, bochechas magras",
+    "body_type": "Alto e wiry (endurance) - 185 cm, 74 kg. Frame longo, magro, extremo reach. Segundo mais alto masculino.",
+    "distinctive_silhouette": "Postura de sentinel - ereto, olhar varredor, membros longos. Maior reach de melee do roster."
+  },
+  "cultural_markers": {
+    "tattoos": "Nenhum - tradido de scarificacao em vez de tatuagem",
+    "scars": "Tres cicatrizes keloid horizontais na bochecha direita (marca tribal Songhai - rito de passagem), shrapnel antigo na coxa esquerda",
+    "ornaments": "Brincos Fulani - aneis de ouro em ambas as orelhas (tradio pastoral), cordao de micangas de agata no pescoco",
+    "clothing_style": "Tatica desertica com camadas soltas Sahelianas - jellaba modificada, faixa de cintura larga, botas de areia, visual de scout nomade"
+  },
+  "species_traits": {
+    "visible_modification": "Nenhuma - Zheers puro, aparencia humana sem alterades de especie",
+    "passive_manifestation": "Adaptabilidade Zheers: em desertos, taxa de sudorese reduzida visivel (nao seca como outros operatives); em ambientes umidos, slight sheen adaptativo",
+    "combat_style_id": "Estilo phantom-scout - infiltracao silenciosa, traversal vertical extremo, recon-range. Maior stamina de sprint do roster."
+  },
+  "distinguishing_summary": "Unico Subsaariano Hausa/Fulani; tres cicatrizes keloid na bochecha direita (mais iconico); brincos de ouro duplos Fulani; padroes geometricos no cabelo; frame mais longo/wiry; visual nomade desertico",
+  "generated_at": "2026-10-22T13:30:29.511232+00:00",
+  "ref_code": "ZHR-02",
+  "operative_ref": "OP_ZHR_M_02",
+  "avatar_ref": "AVT_ZHR_M_02",
+  "legacy_codename": "TARIQ BAKARI",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299216+00:00"
+}

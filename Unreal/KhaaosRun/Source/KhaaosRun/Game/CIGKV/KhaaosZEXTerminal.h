@@ -28,7 +28,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnZEXExtracted, APawn*, Player, 
  * - 15 instâncias no perímetro do CIGKV (README)
  */
 UCLASS(Blueprintable, BlueprintType)
-class KHAOSRUN_API AKhaaosZEXTerminal : public AActor
+class KHAAOSRUN_API AKhaaosZEXTerminal : public AActor
 {
 	GENERATED_BODY()
 

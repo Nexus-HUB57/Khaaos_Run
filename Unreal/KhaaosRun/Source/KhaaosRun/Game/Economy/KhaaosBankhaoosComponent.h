@@ -16,7 +16,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnKRCChanged, int32, NewBalance, i
  * - Saldo local de protótipo; não é uma fonte autoritativa de KRC
  */
 UCLASS(ClassGroup = (Khaaos), meta = (BlueprintSpawnableComponent))
-class KHAOSRUN_API UKhaaosBankhaoosComponent : public UActorComponent
+class KHAAOSRUN_API UKhaaosBankhaoosComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

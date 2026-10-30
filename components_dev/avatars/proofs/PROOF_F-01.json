@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F001",
+  "operative_id": "F-01",
+  "codename": "SKW-01",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Skeetw",
+    "name": "Skeetw",
+    "type": "avian",
+    "skeleton": "SK_Gwen",
+    "passive": "Voo Planado - velocidade +15% apos queda",
+    "base_stats": {
+      "health": 80,
+      "energy": 120,
+      "speed": 1.3
+    },
+    "physical": {
+      "height_cm": 170,
+      "weight_kg": 55
+    },
+    "abbr": "SKW"
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "VENEX",
+  "specialization": "Inteligencia e Recon Aereo",
+  "ethnicity": {
+    "label": "Afro-Brasileira",
+    "heritage": "Yoruba/Ketu (paterno) + Bahiana/Reconcavo (materno)",
+    "region": "Salvador, Bahia, Brasil",
+    "cultural_fusion": "Tradies Candomble e capoeira regional baiana combinadas com recon aereo Skeetw. Nome Nyra (Nyr = novo/negra em Yoruba) + Vex (vexillology/vento cortante)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom quente rico (#6B4226) com subtom dourado baiano",
+    "hair": "Afro volumoso e crespo, pontas tingidas com bioluminescencia Skeetw AZUL (#00BFFF) - brilham no escuro",
+    "eyes": "Castanho com membrana nictitante Skeetw visivel - anel dourado (#FFD700) ao redor da iris quando ativa",
+    "facial_structure": "Labios cheios, nariz largo, macas do rosto altas, rosto redondo com queixo definido",
+    "body_type": "Athletic - 168 cm, 58 kg. Frame Skeetw lightweight (ossos pneumticos), agil, flexivel",
+    "distinctive_silhouette": "Postura de flight-ready - ombros rolados para tras, peito aberto para flight, silhueta aerodinamica. Pontas de cabelo azul brilham como farol."
+  },
+  "cultural_markers": {
+    "tattoos": "Simbolo OXUM (Candomble - orixa das aguas doces) nos ombros, estilo pointillist dourado",
+    "scars": "Marca de navalha na sobrancelha direita (capoeira - 2 cm), cicatriz de queda aerea no joelho esquerdo",
+    "ornaments": "Fio de contas de acaja (Candomble) no pescoco, balangandas (pendores baianos) na armadura - micangas que tilintam em voo (audio signature)",
+    "clothing_style": "Armadura aerodinamica leve com beadwork baiano - cores vivas (amarelo/verde/azul OXUM), visual de warrior-aerial-baiana"
+  },
+  "species_traits": {
+    "visible_modification": "Crista de penas Skeetw ao longo dos antebraos - iridescente azul-preto, erectable em combate; bioluminescencia nas pontas do cabelo",
+    "passive_manifestation": "Voo Planado: apos queda, penas dos antebraos se abrem - efeito visual de air-brake natural. Velocidade +15% visivel como blur trail azul.",
+    "combat_style_id": "Estilo aerial-scout - recon de cima, dive-bomb attacks, retreat to air. Bioluminescencia funciona como IFF (Identification Friend or Foe) noturno."
+  },
+  "distinguishing_summary": "Unica Afro-Brasileira Bahiana; pontas de cabelo BIOLUMINESCENTES AZUL (mais visivel no escuro); penas azul-preto nos antebraos; simbolos OXUM nos ombros; balangandas tilintantes; membrana nictitante dourada; visual aerial-baiano colorido",
+  "generated_at": "2026-10-22T13:30:29.511712+00:00",
+  "ref_code": "SKW-01",
+  "operative_ref": "OP_SKW_F_01",
+  "avatar_ref": "AVT_SKW_F_01",
+  "legacy_codename": "NYRA VEX",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.297536+00:00"
+}

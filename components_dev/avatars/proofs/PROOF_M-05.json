@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M005",
+  "operative_id": "M-05",
+  "codename": "ZHR-03",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Zheers",
+    "name": "Zheers",
+    "type": "humanoid",
+    "skeleton": "SK_Manny",
+    "passive": "Adaptabilidade - +10% resistencia ao ambiente local",
+    "base_stats": {
+      "health": 100,
+      "energy": 100,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 180,
+      "weight_kg": 75
+    },
+    "abbr": "ZHR"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "RECRUTA",
+  "specialization": "Sobrevivencia e Navegacao Selvagem",
+  "ethnicity": {
+    "label": "Tupi-Guarani",
+    "heritage": "Tupi-Guarani (Xingu/Arawak) - sangue integral indigena",
+    "region": "Bacia do Xingu, Amazonia Brasileira",
+    "cultural_fusion": "Conhecimento ancestral de floresta tropical combinado com treinamento CIGKV. Nome Arani (espirito do sol/aurora em Tupi) + Yvy (terra/mundo em Guarani)."
+  },
+  "phenotype": {
+    "skin_tone": "Cobre-avermelhado (#A0522D) com subtom solar dourado intenso",
+    "hair": "Preto reto, longo ate ombro, amarrado com cordao vermelho (urucum tingido), sem corte moderno",
+    "eyes": "Castanho escuro com leve dobra epicantica (trado amerindio), formato amendoado alongado",
+    "facial_structure": "Rosto largo e redondo, macas do rosto muito proeminentes e largas, nariz pequeno e largo, labios cheios",
+    "body_type": "Compacto e muscular - 172 cm, 68 kg. Frame mais baixo masculino, build compacto-power. Maior forca relativa.",
+    "distinctive_silhouette": "Postura de cacador - agachado natural, centro de gravidade muito baixo. Movimentos furtivos de floresta."
+  },
+  "cultural_markers": {
+    "tattoos": "Tatuagem geometrica Tupi no antebrao esquerdo (pattern losangular - tradio Xingu), tinta preta de jenipapo",
+    "scars": "Picada de inseto amazonico cicatrizada no pescoco (multiplas, padrao irregular), marca de flecha no ombro esquerdo",
+    "ornaments": "Braceletes de sementes de aci nos dois pulsos, cordao de dentes de caca (jaguatirica) no pescoco, brinco de osso na orelha direita",
+    "clothing_style": "Leve tatica jungle - armadura minima para mobilidade, bracadeiras transadas, calca cargo florestal, peito descoberto com war paint"
+  },
+  "species_traits": {
+    "visible_modification": "Nenhuma - Zheers puro, aparencia humana. MAS: urucum (annatto) war paint vermelho vivo nas macas do rosto - semi-permanente, renovado ritual",
+    "passive_manifestation": "Adaptabilidade Zheers maxima em ambientes florestais - movimentos entre vegetacao silenciosos (biofeedback), tolerancia a toxinas naturais elevada",
+    "combat_style_id": "Estilo hunter-stalker - tracking, ambush, trap-laying. Maior stealth em vegetado do roster. Sobrevivencia passiva ativa."
+  },
+  "distinguishing_summary": "Unico Tupi-Guarani integral; cabelo longo com cordao vermelho; war paint urucum nas macas do rosto (mais colorido masculino); braceletes de sementes; frame compacto; unico RECRUTA masculino; postura de cacador furtiva",
+  "generated_at": "2026-10-22T13:30:29.511327+00:00",
+  "ref_code": "ZHR-03",
+  "operative_ref": "OP_ZHR_M_03",
+  "avatar_ref": "AVT_ZHR_M_03",
+  "legacy_codename": "ARANI YVY",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.299342+00:00"
+}

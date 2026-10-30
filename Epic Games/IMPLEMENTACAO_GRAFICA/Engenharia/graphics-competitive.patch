@@ -1,0 +1,353 @@
+diff --git a/game-runtime/src/game3d/main3d.js b/game-runtime/src/game3d/main3d.js
+index f2bf81b..20a9f9b 100644
+--- a/game-runtime/src/game3d/main3d.js
++++ b/game-runtime/src/game3d/main3d.js
+@@ -21,6 +21,7 @@ import { loadGfxSettings, saveGfxSettings, effectiveBaseTier } from './gfxsettin
+ import { HUD } from './hud3d.js';
+ import { createPostFX } from './postfx3d.js';
+ import { resolveQuality, qualityTier } from './quality3d.js';
++import { resolveVisualProfile, renderPixelRatio } from './visualprofile3d.js';
+ import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
+ import { officerCatalogEntries } from './officers.js';
+ import { SCENARIOS, resolveScenario } from './scenarios.js';
+@@ -45,6 +46,7 @@ export class Game3D {
+     // Fase 7 — modo squad (DBNO/revive) via ?squad=1; LOD mobile via ?q=low|medium|high
+     // Fase 10 — prévia offline dos Oficiais de Classe Especial via ?officers=1
+     const urlParams = new URLSearchParams(location.search);
++    this.visualProfile = resolveVisualProfile({ query: urlParams.get('look'), isTouch: matchMedia('(pointer: coarse)').matches });
+     this.squadMode = urlParams.get('squad') === '1';
+     this.officersMode = urlParams.get('officers') === '1';
+     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
+@@ -204,7 +206,7 @@ export class Game3D {
+     this.renderer.setSize(innerWidth, innerHeight);
+     // Fase 35 — pixelRatio BASE do tier (cap); a escala DRS multiplicada é
+     // aplicada por applyRenderScale() (inicia em 1.0 = comportamento antigo).
+-    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio);
++    this.basePixelRatio = renderPixelRatio(this.quality, devicePixelRatio, this.visualProfile);
+     this.renderer.setPixelRatio(this.basePixelRatio);
+     this.drsScale = 1;
+     this.renderer.shadowMap.enabled = true;
+@@ -227,7 +229,7 @@ export class Game3D {
+   initPost() {
+     const fxOff = new URLSearchParams(location.search).get('fx') === '0';
+     if (fxOff || !this.gfx.postfx || !postFxPlanFor(this.quality)) { this.post = null; return; }
+-    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: this.quality });
++    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: this.quality, profile: this.visualProfile });
+   }
+ 
+   // Fase 35 — reconstrói o composer pós troca de tier/setting (alvo raro:
+@@ -236,7 +238,7 @@ export class Game3D {
+     const old = this.post;
+     this.initPost();
+     if (this.post) this.post.setSize(innerWidth, innerHeight);
+-    old?.composer?.dispose?.();
++    old?.dispose?.();
+   }
+ 
+   // Fase 35 — aplica a escala DRS ao pipeline (throttle 150 ms; muda pixelRatio
+@@ -256,7 +258,7 @@ export class Game3D {
+   applyTierRuntime(tier) {
+     if (!this.renderer) return;
+     this.quality = tier;
+-    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(tier).pixelRatio);
++    this.basePixelRatio = renderPixelRatio(tier, devicePixelRatio, this.visualProfile);
+     const q = qualityTier(tier);
+     if (this.sun) {
+       const size = q.shadowMapSize;
+diff --git a/game-runtime/src/game3d/postfx3d.js b/game-runtime/src/game3d/postfx3d.js
+index 2f0f41e..18947c5 100644
+--- a/game-runtime/src/game3d/postfx3d.js
++++ b/game-runtime/src/game3d/postfx3d.js
+@@ -9,12 +9,15 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
+ import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
+ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+-import { postFxPlanFor } from './perf3d.js'; // Fase 35 — plano por tier (SSR só no high)
++import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
++import { syncPostResolution, disposePostResources } from './renderpipeline3d.js';
++import { visualPostPlan } from './visualprofile3d.js';
+ 
+ const GradeShader = {
+   uniforms: {
+     tDiffuse: { value: null },
+     uTime: { value: 0 },
++    uTint: { value: 1 },
+     // Acabamento limpo de beta: o grão continua orgânico, mas não mascara
+     // normal maps, roughness e microdetalhes de fachadas/terreno.
+     uGrain: { value: 0.022 },
+@@ -31,7 +34,7 @@ const GradeShader = {
+     }`,
+   fragmentShader: /* glsl */ `
+     uniform sampler2D tDiffuse;
+-    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff;
++    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff, uTint;
+     varying vec2 vUv;
+     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uTime) * 43758.5453); }
+     void main() {
+@@ -40,7 +43,7 @@ const GradeShader = {
+       // tinta de cinema: sombras frias, altas luzes quentes
+       vec3 shadowTint = vec3(0.93, 0.985, 1.06);
+       vec3 highTint   = vec3(1.05, 1.00, 0.94);
+-      c.rgb *= mix(shadowTint, highTint, smoothstep(0.15, 0.85, l));
++      c.rgb *= mix(vec3(1.0), mix(shadowTint, highTint, smoothstep(0.15, 0.85, l)), uTint);
+       // contraste + saturação controlados
+       c.rgb = (c.rgb - 0.5) * uContrast + 0.5;
+       c.rgb = mix(vec3(l), c.rgb, uSaturation);
+@@ -60,16 +63,19 @@ const GradeShader = {
+ };
+ 
+ // Cria a cadeia de pós-processamento; retorna null se indisponível (fallback direto)
+-// ou quando o PLANO do tier é null (low — Fase 35: render direto, sem composer).
+-export function createPostFX(renderer, scene, camera, { quality = 'high' } = {}) {
++// ou quando o PLANO do tier é null (low — Fase 34: render direto, sem composer).
++export function createPostFX(renderer, scene, camera, { quality = 'high', profile = 'cinematic' } = {}) {
++  let composer = null;
++  const ownedPasses = [];
+   try {
+-    // Fase 35 — plano por tier (perf3d.postFxPlanFor): intensidade de bloom,
++    // Fase 34 — plano por tier (perf3d.postFxPlanFor): intensidade de bloom,
+     // grão do grade e SSR (exclusivo do high) vêm da MESMA fonte de verdade
+     // usada pelo auto-tier em runtime — medium deixou de pagar SSR (achado G2).
+-    const plan = postFxPlanFor(quality);
++    const plan = visualPostPlan(quality, profile);
+     if (!plan) return null;
+-    const composer = new EffectComposer(renderer);
+-    composer.addPass(new RenderPass(scene, camera));
++    composer = new EffectComposer(renderer);
++    const addPass = (pass) => { ownedPasses.push(pass); composer.addPass(pass); };
++    addPass(new RenderPass(scene, camera));
+     const size = renderer.getSize(new THREE.Vector2());
+     let ssr = null;
+     // SSR é deliberadamente limitado ao tier alto e renderizado em resolução
+@@ -88,34 +94,56 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
+         ssr.blur = true;
+         ssr.fresnel = true;
+         ssr.distanceAttenuation = true;
+-        composer.addPass(ssr);
++        addPass(ssr);
+       } catch {
++        ssr?.dispose();
+         ssr = null;
+       }
+     }
+-    const bloom = new UnrealBloomPass(size, plan.bloomStrength, 0.52, 0.88);
+-    composer.addPass(bloom);
++    let bloom = null;
++    if (plan.bloomStrength > 0) {
++      bloom = new UnrealBloomPass(size, plan.bloomStrength, 0.52, 0.88);
++      addPass(bloom);
++    }
+     const grade = new ShaderPass(GradeShader);
+     grade.uniforms.uGrain.value = plan.grain;
+-    composer.addPass(grade);
+-    composer.addPass(new OutputPass());
++    grade.uniforms.uVignette.value = plan.vignette;
++    grade.uniforms.uSaturation.value = plan.saturation;
++    grade.uniforms.uContrast.value = plan.contrast;
++    grade.uniforms.uTint.value = plan.tint;
++    grade.uniforms.uHighlightRollOff.value = plan.highlightRollOff;
++    addPass(grade);
++    addPass(new OutputPass());
++    // FXAA recebe imagem em display-space; MSAA do canvas não cobre os FBOs.
++    const aa = new ShaderPass(FXAAShader);
++    addPass(aa);
++    const resize = (w, h) => syncPostResolution({ renderer, composer, ssr, aa }, w, h);
++    resize(size.x, size.y);
++    let disposed = false;
+     let elapsed = 0;
+     return {
+       composer,
+       ssr,
+       bloom,
+       grade,
++      aa,
+       render(dt = 0) {
++        if (disposed) return;
+         elapsed += dt;
+         grade.uniforms.uTime.value = elapsed % 1000;
+         composer.render(dt);
+       },
+       setSize(w, h) {
+-        composer.setSize(w, h);
+-        ssr?.setSize(Math.max(320, Math.floor(w * .72)), Math.max(180, Math.floor(h * .72)));
++        if (!disposed) resize(w, h);
++      },
++      dispose() {
++        if (disposed) return;
++        disposed = true;
++        disposePostResources(composer, ownedPasses);
+       },
+     };
+   } catch {
++    disposePostResources(composer, ownedPasses);
+     return null;
+   }
+ }
+diff --git a/game-runtime/src/game3d/renderpipeline3d.js b/game-runtime/src/game3d/renderpipeline3d.js
+new file mode 100644
+index 0000000..5258d4c
+--- /dev/null
++++ b/game-runtime/src/game3d/renderpipeline3d.js
+@@ -0,0 +1,41 @@
++// Helpers testáveis sem GPU: resolução física e recursos do pós-processamento.
++export function postBufferSize(width, height, pixelRatio = 1) {
++  const safe = (n, fallback) => Number.isFinite(n) && n > 0 ? n : fallback;
++  const ratio = safe(pixelRatio, 1);
++  const w = safe(width, 1), h = safe(height, 1);
++  const physicalWidth = Math.max(1, Math.floor(w * ratio));
++  const physicalHeight = Math.max(1, Math.floor(h * ratio));
++  return {
++    width: w, height: h, pixelRatio: ratio, physicalWidth, physicalHeight,
++    // SSR nunca ultrapassa o buffer principal, inclusive em DRS baixo.
++    ssrWidth: Math.max(1, Math.floor(physicalWidth * .72)),
++    ssrHeight: Math.max(1, Math.floor(physicalHeight * .72)),
++  };
++}
++
++const composerSizes = new WeakMap();
++
++export function syncPostResolution({ renderer, composer, ssr, aa }, width, height) {
++  const size = postBufferSize(width, height, renderer.getPixelRatio());
++  // setPixelRatio já chama setSize no EffectComposer r169.
++  // Evitar realocação de todos os FBOs em chamadas repetidas de resize.
++  const previous = composerSizes.get(composer);
++  const ratioChanged = !previous || previous.pixelRatio !== size.pixelRatio;
++  const dimensionsChanged = !previous || previous.width !== size.width || previous.height !== size.height;
++  if (ratioChanged) composer.setPixelRatio(size.pixelRatio);
++  if (dimensionsChanged) composer.setSize(size.width, size.height);
++  if (ratioChanged || dimensionsChanged) {
++    ssr?.setSize(size.ssrWidth, size.ssrHeight);
++    aa?.uniforms.resolution.value.set(1 / size.physicalWidth, 1 / size.physicalHeight);
++    composerSizes.set(composer, size);
++  }
++  return size;
++}
++
++export function disposePostResources(composer, passes = []) {
++  // Composer só libera os próprios targets; os passes são propriedade daqui.
++  // Continuar a limpeza mesmo se um driver/pass lançar em dispose().
++  for (const resource of new Set([...passes, composer])) {
++    try { resource?.dispose?.(); } catch { /* best effort: liberar os demais */ }
++  }
++}
+diff --git a/game-runtime/src/game3d/visualprofile3d.js b/game-runtime/src/game3d/visualprofile3d.js
+new file mode 100644
+index 0000000..cfef71a
+--- /dev/null
++++ b/game-runtime/src/game3d/visualprofile3d.js
+@@ -0,0 +1,26 @@
++// Direção visual independente do tier e da simulação. Sem ativos da Garena.
++import { postFxPlanFor } from './perf3d.js';
++import { qualityTier } from './quality3d.js';
++
++export function resolveVisualProfile({ query = '', isTouch = false } = {}) {
++  const value = String(query ?? '').trim().toLowerCase();
++  if (value === 'competitive' || value === 'cinematic') return value;
++  return isTouch ? 'competitive' : 'cinematic';
++}
++
++export function renderPixelRatio(tier, nativeRatio = 1, profile = 'cinematic') {
++  const ratio = Number.isFinite(nativeRatio) && nativeRatio > 0 ? nativeRatio : 1;
++  const cap = profile === 'competitive' ? 1.25 : Infinity;
++  return Math.min(ratio, qualityTier(tier).pixelRatio, cap);
++}
++
++export function visualPostPlan(tier, profile = 'cinematic') {
++  const base = postFxPlanFor(tier);
++  if (!base) return null; // low preserva render direto e HUD em resolução DOM.
++  if (profile === 'competitive') {
++    return { ...base, ssr: false, bloomStrength: 0, grain: 0,
++      vignette: 0, saturation: 1.02, contrast: 1.02, tint: 0, highlightRollOff: 0.12 };
++  }
++  return { ...base, vignette: 0.23, saturation: 1.045, contrast: 1.035,
++    tint: 1, highlightRollOff: 0.28 };
++}
+diff --git a/game-runtime/test/graphics-upgrade.test.js b/game-runtime/test/graphics-upgrade.test.js
+new file mode 100644
+index 0000000..3ccd5b5
+--- /dev/null
++++ b/game-runtime/test/graphics-upgrade.test.js
+@@ -0,0 +1,83 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { postBufferSize, syncPostResolution, disposePostResources } from '../src/game3d/renderpipeline3d.js';
++import { resolveVisualProfile, renderPixelRatio, visualPostPlan } from '../src/game3d/visualprofile3d.js';
++
++test('buffers: DPR nativo, DRS fracionário e SSR proporcional', () => {
++  const a = postBufferSize(1280, 720, 1.5);
++  assert.equal(a.physicalWidth, 1920);
++  assert.equal(a.ssrWidth, 1382);
++  const b = postBufferSize(1280, 720, .825);
++  assert.equal(b.physicalWidth, 1056);
++  assert.ok(b.ssrWidth < a.ssrWidth);
++  assert.deepEqual(postBufferSize(0, NaN, Infinity), {
++    width: 1, height: 1, pixelRatio: 1, physicalWidth: 1, physicalHeight: 1, ssrWidth: 1, ssrHeight: 1,
++  });
++});
++test('DRS sincroniza composer, SSR e inverso da resolução FXAA', () => {
++  let ratio = 1.75;
++  const calls = [];
++  const composer = { getPixelRatio: () => ratio,
++    setPixelRatio: (v) => { ratio = v; calls.push(['ratio', v]); },
++    setSize: (w, h) => calls.push(['size', w, h]) };
++  const ssr = { setSize: (w, h) => calls.push(['ssr', w, h]) };
++  const aa = { uniforms: { resolution: { value: { set: (x, y) => calls.push(['aa', x, y]) } } } };
++  const state = syncPostResolution({ renderer: { getPixelRatio: () => .75 }, composer, ssr, aa }, 800, 600);
++  assert.deepEqual(calls, [['ratio', .75], ['size', 800, 600], ['ssr', 432, 324], ['aa', 1/600, 1/450]]);
++  assert.equal(state.physicalWidth, 600);
++});
++test('resolução não realoca DPR se inalterado; passes opcionais', () => {
++  let allocations = 0;
++  const pipeline = { renderer: { getPixelRatio: () => 1 }, composer: {
++    setPixelRatio: () => { allocations++; }, setSize() {},
++  } };
++  syncPostResolution(pipeline, 640, 360);
++  syncPostResolution(pipeline, 800, 600);
++  assert.equal(allocations, 1);
++});
++test('descarte libera cada passe e composer mesmo com erro intermediário', () => {
++  const calls = [];
++  const p = { dispose: () => calls.push('pass') };
++  disposePostResources({ dispose: () => calls.push('composer') }, [p, p, { dispose() { throw Error('driver'); } }]);
++  assert.deepEqual(calls, ['pass', 'composer']);
++});
++test('resize idêntico não realoca buffers; DPR novo sincroniza passes', () => {
++  let ratio = 1, allocations = 0, updates = 0;
++  const pipeline = { renderer: { getPixelRatio: () => ratio }, composer: {
++    setPixelRatio() { allocations++; }, setSize() { allocations++; }
++  }, ssr: { setSize() { updates++; } } };
++  syncPostResolution(pipeline, 800, 600);
++  const before = allocations;
++  syncPostResolution(pipeline, 800, 600);
++  assert.equal(allocations, before);
++  ratio = .75;
++  syncPostResolution(pipeline, 800, 600);
++  assert.equal(allocations, before + 1);
++  assert.equal(updates, 2);
++});
++test('perfil touch, override e entrada desconhecida têm fallback previsível', () => {
++  assert.equal(resolveVisualProfile({ isTouch: true }), 'competitive');
++  assert.equal(resolveVisualProfile(), 'cinematic');
++  assert.equal(resolveVisualProfile({ query: ' CINEMATIC ', isTouch: true }), 'cinematic');
++  assert.equal(resolveVisualProfile({ query: 'inválido', isTouch: true }), 'competitive');
++});
++test('perfil competitivo limita DPR sem mudar tiers nem aceitar NaN', () => {
++  assert.equal(renderPixelRatio('high', 3, 'competitive'), 1.25);
++  assert.equal(renderPixelRatio('low', 3, 'competitive'), 1.2);
++  assert.equal(renderPixelRatio('high', 3, 'cinematic'), 1.75);
++  assert.equal(renderPixelRatio('high', NaN, 'competitive'), 1);
++  assert.equal(renderPixelRatio('high', .8, 'competitive'), .8);
++});
++test('competitivo não cria SSR/bloom/grão/vinheta; low mantém render direto', () => {
++  for (const tier of ['medium', 'high']) {
++    const p = visualPostPlan(tier, 'competitive');
++    assert.equal(p.ssr, false);
++    assert.equal(p.bloomStrength, 0);
++    assert.equal(p.grain, 0);
++    assert.equal(p.vignette, 0);
++    assert.equal(p.tint, 0);
++  }
++  assert.equal(visualPostPlan('low', 'competitive'), null);
++  assert.equal(visualPostPlan('high').ssr, true);
++  assert.equal(visualPostPlan('medium').ssr, false);
++});

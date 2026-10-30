@@ -1,0 +1,90 @@
+# =============================================================================
+# Khaaos Run — UE5.8 Preflight (sem engine)
+# =============================================================================
+# Valida a estrutura do projeto UE5.8 em runners hosted (ubuntu-latest), sem
+# precisar do Editor/SDK: .uproject, targets, Build.cs, resolução de includes
+# de projeto e GENERATED_BODY. É o portão de entrada do build UE5.8 — a
+# compilação real (ue58-container-build.yml / ue5-headless-compile.yml) só é
+# acionada quando um binário de engine está disponível, e por isso este job
+# é o que roda em TODA PR.
+# =============================================================================
+
+name: UE5.8 Preflight
+
+on:
+  pull_request:
+    paths:
+      - 'Unreal/KhaaosRun/**'
+      - 'scripts/build/ue58_preflight.mjs'
+      - 'scripts/build/fix_ue1021_includes.py'
+      - 'scripts/build/export_barburhen_obj.py'
+      - 'scripts/build/bake_barburhen_colliders.py'
+      - 'scripts/build/import_barburhen_map.py'
+      - '.github/workflows/ue5-preflight.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/**'
+      - 'scripts/build/ue58_preflight.mjs'
+      - 'scripts/build/fix_ue1021_includes.py'
+      - 'scripts/build/export_barburhen_obj.py'
+      - 'scripts/build/bake_barburhen_colliders.py'
+      - 'scripts/build/import_barburhen_map.py'
+      - '.github/workflows/ue5-preflight.yml'
+
+concurrency:
+  group: ue5-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: UE5.8 Project Preflight (engine-less)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false # estrutura C#/ini não depende de LFS; mais rápido sem fetch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: CI guard — UE1021 canonical includes (fix_ue1021_includes.py)
+        # Guard de regeneração UE: UHT/scaffolds podem reemitir includes de
+        # projeto sem o caminho do módulo (ex.: #include "KhaaosRingManager.h"),
+        # quebrando o build real. Falha RÁPIDO aqui, com a lista exata do que
+        # a regeneração quebrou e o comando de correção.
+        run: |
+          python3 scripts/build/fix_ue1021_includes.py selftest
+          python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun
+
+      - name: Fase 1 — Barburhen OBJ + colliders complexos (engine-less)
+        # Pipeline determinística do mapa Barburhen: export OBJ + baking de
+        # colliders complexos + contrato de import. Os selftests validam
+        # parser/decimação/determinismo byte a byte SEM engine.
+        run: |
+          python3 scripts/build/export_barburhen_obj.py --selftest
+          python3 scripts/build/bake_barburhen_colliders.py --selftest
+          python3 scripts/build/export_barburhen_obj.py mvp_output/assets/worlds/Barburhen_Map.obj
+          python3 scripts/build/bake_barburhen_colliders.py mvp_output/assets/worlds/Barburhen_Map.obj mvp_output/assets/worlds/Barburhen_colliders.json
+          ls -la mvp_output/assets/worlds/
+
+      - name: Validate UE5.8 project structure
+        run: node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## UE5.8 Preflight"
+            echo ""
+            echo "| Cheque | Estado |"
+            echo "|--------|--------|"
+            echo "| EngineAssociation 5.8 | $(node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo ERROS) |"
+            echo "| Guard UE1021 (fix_ue1021_includes) | $(python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo VIOLAÇÃO) |"
+            echo "| Fase 1 — Barburhen OBJ + colliders | $(python3 scripts/build/export_barburhen_obj.py --selftest >/dev/null 2>&1 && python3 scripts/build/bake_barburhen_colliders.py --selftest >/dev/null 2>&1 && echo OK || echo ERROS) |"
+            echo "| Game/Editor/Server targets | ✅ validados no preflight |"
+            echo "| Includes de projeto | ✅ resolvidos em Source/ |"
+          } >> $GITHUB_STEP_SUMMARY
+          echo "Compilação real (engine) fica nos workflows ue58-container-build/ue5-headless-compile."

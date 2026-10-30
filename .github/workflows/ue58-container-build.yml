@@ -1,0 +1,155 @@
+# =============================================================================
+# Khaaos Run — UE5.8 Compile via Official Container (Epic Games)
+# =============================================================================
+# Caminho de compilação REAL do UE5.8 em runners hosted: usa as imagens
+# oficiais de contêiner da Epic (ghcr.io/epicgames/unreal-engine), construídas
+# pela própria Epic a partir do código-fonte licenciado (EULA).
+#
+# PRÉ-REQUISITO (único passo manual, feito uma vez):
+#   1. Conta GitHub vinculada à Epic Games (aceitar a EULA da UE e vincular em
+#      https://epicgames.com/account/connected).
+#   2. PAT clássico dessa conta com escopo `read:packages`, ou o segredo
+#      `UNREAL_ENGINE_LOGIN` com acesso equivalente à imagem Epic no GHCR.
+#   3. Settings → Secrets and variables → Actions:
+#        - Secret  UE_CONTAINER_PAT ou UNREAL_ENGINE_LOGIN = credencial do GHCR
+#        - Variable UE_CONTAINER_IMAGE = tag da imagem (opcional; confira as
+#          tags publicadas em github.com/orgs/epicgames/packages — ex.
+#          dev-slim-5.8.0; o default abaixo assume dev-slim-5.8)
+#   Sem o secret o job de build é PULADO com resumo explicativo — a CI nunca
+#   falha por falta de engine: estrutura é validada no ue5-preflight.yml e a
+#   compilação exige o binário licenciado (container ou self-hosted).
+# Referência: https://unrealcontainers.com/docs/obtaining-images/epic
+# =============================================================================
+
+name: UE5.8 Container Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        type: choice
+        options: [Development, Shipping]
+        default: Development
+      target:
+        description: 'Build target'
+        type: choice
+        options: [KhaaosRunServer, KhaaosRun, KhaaosRunEditor]
+        default: KhaaosRunServer
+  push:
+    branches: [main]
+    paths:
+      - 'Unreal/KhaaosRun/Source/**'
+      - '.github/workflows/ue58-container-build.yml'
+
+concurrency:
+  group: ue58-container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Engine image gate (UE_CONTAINER_PAT)
+    runs-on: ubuntu-latest
+    outputs:
+      has_pat: ${{ steps.check.outputs.has_pat }}
+    steps:
+      - name: Check Epic container credential
+        id: check
+        env:
+          UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+          UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
+        run: |
+          # Fase 31 — UNREAL_ENGINE_LOGIN (ghcr, validado pelo ue-infra-smoke)
+          # serve como credencial ALTERNATIVA: o segredo precisa AUTENTICAR no
+          # ghcr e a conta precisa ter acesso ao pacote epicgames/unreal-engine
+          # (EULA aceito + read:packages) — o mesmo requisito do PAT.
+          if [ -n "$UE_CONTAINER_PAT" ]; then
+            echo "has_pat=true" >> $GITHUB_OUTPUT
+            echo "✅ UE_CONTAINER_PAT configurado — build de engine habilitado"
+          elif [ -n "$UE_LOGIN" ]; then
+            echo "has_pat=true" >> $GITHUB_OUTPUT
+            echo "✅ UNREAL_ENGINE_LOGIN presente — credencial alternativa do container (fallback do UE_CONTAINER_PAT)"
+            echo "   ⚠️ o login ghcr PRECISA autenticar E ter acesso ao pacote epicgames/unreal-engine;"
+            echo "   o ue-infra-smoke valida o login a cada execução (ghcr denied = revisar valor/escopo)."
+          else
+            echo "has_pat=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ UE_CONTAINER_PAT/UNREAL_ENGINE_LOGIN ausentes — build de engine PULADO (não é falha)."
+            echo "   Configure o PAT de conta vinculada à Epic; veja o cabeçalho"
+            echo "   deste workflow ou scripts/build/bootstrap_ue58_runner.sh (self-hosted)."
+          fi
+
+  build:
+    name: UBT Build (${{ github.event.inputs.target || 'KhaaosRunServer' }} / ${{ github.event.inputs.configuration || 'Development' }})
+    needs: gate
+    if: needs.gate.outputs.has_pat == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.UE_CONTAINER_PAT || secrets.UNREAL_ENGINE_LOGIN }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Resolve EAC SDK (real vs stub)
+        # SDK real do EAC (KHAAOS_EAC_SDK_DIR / EACSDK/ local / EAC_SDK_URL).
+        # Sem SDK o build segue em stub — nunca quebra (contrato UE1040);
+        # go-live usa bash scripts/build/setup_eac_sdk.sh --require.
+        run: |
+          set -euo pipefail
+          eval "$(bash scripts/build/setup_eac_sdk.sh --emit-env)"
+          echo "EAC_SDK_MODE=${EAC_SDK_MODE}" >> $GITHUB_ENV
+          if [[ "${EAC_SDK_MODE}" == "real" ]]; then
+            echo "KHAAOS_EAC_SDK_DIR=${KHAAOS_EAC_SDK_DIR}" >> $GITHUB_ENV
+          fi
+          echo "EAC mode: ${EAC_SDK_MODE}"
+
+      - name: Build target with UBT
+        env:
+          UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+        run: |
+          set -euo pipefail
+          UBT="/home/ue4/UnrealEngine/Engine/Build/BatchFiles/Build.sh"
+          if [ ! -f "$UBT" ]; then
+            # Layout das imagens dev varia (ENGINE_DIR pode diferir).
+            UBT="$(find / -maxdepth 6 -path '*/Engine/Build/BatchFiles/Build.sh' 2>/dev/null | head -1)"
+          fi
+          if [ -z "$UBT" ]; then
+            echo "::error::Build.sh da engine não encontrado na imagem — ajuste a variable UE_CONTAINER_IMAGE"
+            exit 1
+          fi
+          bash "$UBT" ${{ github.event.inputs.target || 'KhaaosRunServer' }} Linux \
+            ${{ github.event.inputs.configuration || 'Development' }} -project="$UPROJECT" -waitmutex
+
+      - name: "EAC Dedicated Smoke (exigir 'EAC Status: Active' no binário construído)"
+        # Fase 0.3 (auditoria): valida o binário do servidor dedicado REAL
+        # construído no passo anterior. Com SDK real o smoke é ESTRITO (exit 0
+        # só com 'EAC Status: Active' no log); com stub marca SKIPPED
+        # (contrato UE1040) — go-live exige reexecução estrita com SDK.
+        run: |
+          set -euo pipefail
+          if [[ "${EAC_SDK_MODE:-stub}" != "real" ]]; then
+            echo "::warning::EAC SDK ausente — smoke estrito SKIPPED (go-live exige SDK real + 'EAC Status: Active')"
+            node scripts/build/eac_dedicated_smoke.mjs --allow-missing-input \
+              --reason "SDK stub: servidor dedicado logaria 'Running (stub)', nunca Active"
+          else
+            SERVER_BIN="$(find Unreal/KhaaosRun/Binaries/Linux -maxdepth 1 -name 'KhaaosRunServer*' 2>/dev/null | head -1 || true)"
+            if [[ -z "${SERVER_BIN}" ]]; then
+              echo "::error::SDK real presente mas binário do servidor não encontrado em Binaries/Linux"
+              exit 1
+            fi
+            node scripts/build/eac_dedicated_smoke.mjs --binary "${SERVER_BIN}" --timeout-ms 180000
+          fi
+
+      - name: Upload built binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: khaaos-${{ github.event.inputs.target || 'KhaaosRunServer' }}-${{ github.event.inputs.configuration || 'Development' }}-${{ github.sha }}
+          path: |
+            Unreal/KhaaosRun/Binaries/Linux/*
+          if-no-files-found: error
+          retention-days: 14

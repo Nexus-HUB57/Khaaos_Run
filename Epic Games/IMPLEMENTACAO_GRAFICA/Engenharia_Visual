@@ -1,0 +1,332 @@
+Khaaos_Run
+
+Como aplicar melhorias no sistema de desenvolvimento para aprimorar os gráficos dos cenários
+
+Plano técnico de implementação • 29 de outubro de 2026
+
+Repositório: Nexus-HUB57/Khaaos_Run
+Base analisada: commit ffc830bd83b16d7495299a4dd47d885338fb4d67 (29/10/2026).
+
+Recomendação central
+Melhore primeiro uma área-piloto de CIGKV: materiais, luz, composição e desempenho. Depois transforme a solução em configurações e kits reutilizáveis para os outros mundos. Não comece aumentando a resolução de todas as texturas nem ativando todos os efeitos ao mesmo tempo.
+
+A análise encontrou duas implementações distintas: o runtime web em Three.js e o projeto Unreal com EngineAssociation 5.8. As mudanças precisam ser implementadas e validadas separadamente, com direção de arte compartilhada, mas sem presumir equivalência entre recursos das engines.
+
+Escopo e limites: inspeção estática de código, configurações e documentação após clone público. Não foram executados o jogo, testes automatizados, build Unreal, cook ou medições de GPU. Este documento é um plano de aplicação, não uma declaração de melhorias já implementadas.
+
+Sumário
+
+2. Materiais, assets e iluminação no runtime web
+
+3. Cenários: identidade sem quebrar a jogabilidade
+
+4. Unreal: sair do blockout para uma cena validada
+
+5. Qualidade escalável e desempenho mensurável
+
+6. Sistema de desenvolvimento: pipeline e entregas
+
+
+
+
+1. Diagnóstico: evoluir o que já existe
+A base já possui recursos relevantes. O maior ganho vem de integrá-los com consistência, substituir os elementos de blockout de maior impacto e exigir evidências visuais e de desempenho em cada entrega.
+
+Área inspecionada
+
+Situação observada
+
+Aplicação recomendada
+
+game-runtime/package.json
+
+Three.js ^0.169.0 e Vite; build e testes próprios.
+
+Tratar o runtime web como frente de entrega independente.
+
+main3d.js e postfx3d.js
+
+ACES, saída sRGB, sombras, composer, bloom, grade e SSR condicionado ao plano de qualidade.
+
+Calibrar a cadeia atual; não criar outro pós-processamento paralelo.
+
+materials3d.js e vegetation3d.js
+
+Microdetalhes PBR determinísticos, vegetação procedural, instanciamento e vento por shader.
+
+Melhorar autoria e distribuição preservando determinismo e agrupamento.
+
+quality3d.js, perf3d.js e gfxsettings.js
+
+Presets low/medium/high, DRS, auto-tier e preferências persistidas.
+
+Manter contratos existentes e ampliar testes de aplicação em cena.
+
+Unreal/.../Config/DefaultEngine.ini
+
+Lumen, Nanite, Virtual Shadow Maps e distance fields já declarados.
+
+Validar suporte, build e custo no hardware; não confundir declaração com efeito comprovado.
+
+docs/ue58-worlds.md
+
+Documenta geração de blockout e dependência do Editor para assets finais.
+
+Substituir blockout por kit final, importar e testar mapa cooked.
+
+
+
+Três riscos que precisam aparecer no backlog
+Clone/LFS: o Git reportou 121 arquivos que deveriam ser ponteiros LFS, mas não eram. Auditar atributos, arquivos e objetos antes de confiar no pipeline de assets; não reescrever o histórico compartilhado sem planejamento.
+Terreno: terrain3d.js mantém altura zero quando max(|x|, |z|) ≤ 197. Alterar esse contrato sem atualizar colisão e simulação pode fazer personagens e objetos flutuarem ou atravessarem o chão.
+Fallbacks silenciosos: assets3d.js retorna null quando o GLTF falha. Isso evita quebra do jogo, mas pode esconder a ausência de arte final. Adicionar relatório de carregamento ao modo de desenvolvimento.
+
+
+
+2. Materiais, assets e iluminação no runtime web
+Aplicação nos arquivos existentes
+textures3d.js e materials3d.js: padronizar uma biblioteca por superfície — concreto, metal, solo, madeira e folhagem. Combinar albedo e roughness com o microdetalhe já existente; evitar brilho uniforme e normais excessivas.
+assets3d.js: conservar GLTFLoader, cache e fallback. Para adotar GLB, alterar explicitamente a resolução de URL, hoje fixa em /assets/models/<nome>.gltf, ou usar um manifesto. Não basta trocar o arquivo de extensão.
+world3d.js, detail3d.js e decals3d.js: substituir primeiro props visíveis na rota principal; acrescentar desgaste em contatos, quinas e transições. Distribuir sujeira com lógica de uso, não por ruído indiscriminado.
+main3d.js: revisar a exposição atual, definida como 1.24, com capturas de exterior e interior. Esse valor é um ponto de partida existente, não um erro demonstrado. Ajustar luzes e materiais antes de compensar tudo com exposição.
+Regras de autoria PBR
+Base color e emissivo devem usar interpretação de cor sRGB quando apropriado. Normal, roughness, metalness e oclusão são dados e não devem receber conversão sRGB. Respeitar o empacotamento por canais usado pelo glTF, UVs, tangentes, escala e orientação das normais.
+
+Texturas maiores ficam restritas a superfícies que realmente ocupam muitos pixels na câmera. Criar mipmaps e níveis por plataforma. KTX2/Basis e compressão de malha são propostas de evolução: exigem integrar os decodificadores correspondentes ao loader e conferir o deploy; não estão garantidos pelo carregador inspecionado.
+
+Luz e reflexos com função visual
+Definir luz principal, preenchimento e pontos de interesse por cenário. Avaliar iluminação baseada em ambiente; se um HDR for introduzido, preparar filtragem de ambiente com PMREM e liberar recursos temporários. Usar reflexos de ambiente como base e SSR apenas como complemento, pois objetos fora da tela não podem ser refletidos corretamente por esse efeito.
+
+O composer atual termina com OutputPass. Preservar uma única transformação final de saída ao editar o grade. Comparar render direto e pós-FX para detectar dupla conversão, pretos esmagados e highlights estourados. Grão e bloom devem favorecer a atmosfera sem esconder os materiais ou a silhueta dos adversários.
+
+Entrega verificável
+Uma área CIGKV com materiais aprovados, props finais prioritários, relatório de assets ausentes e capturas iguais antes/depois. Não prometer ganho de FPS sem medir.
+
+
+
+
+3. Cenários: identidade sem quebrar a jogabilidade
+Os nomes e temas abaixo usam scenarios.js como referência do runtime. São diretrizes propostas de arte, não uma afirmação de como os mapas finais já estão renderizados.
+
+Mundo
+
+Melhoria proposta
+
+Cuidado de aplicação
+
+CIGKV — instrução
+
+Concreto usado, metal industrial, sinalização, contraste quente/frio e marcos claros.
+
+Usar como piloto; manter rotas, coberturas e localização de loot.
+
+Barburhen — destruição
+
+Ruínas, desgaste urbano, variações de superfície úmida e poeira localizada.
+
+Evitar reflexos em tudo e partículas que escondam ameaças.
+
+Priadus — floresta
+
+Vegetação em camadas, solo orgânico, raízes, umidade e luz filtrada.
+
+Controlar overdraw e não criar cobertura visual unilateral entre presets.
+
+Ckesalth — deserto
+
+Areia, rocha, metal gasto, dunas no horizonte e transições de solo.
+
+Não usar bloom para simular calor; preservar leitura da refinaria e do terreno.
+
+Arukheea — ilha
+
+Marina, pedra costeira, vegetação própria, horizonte e névoa por distância.
+
+Preservar a identidade da Ilha GriCa e visibilidade de marcos e rotas.
+
+
+
+Passo a passo do dressing
+Escolher uma rota do spawn a um ponto de interesse. Fixar câmeras de exterior, interior, horizonte e combate; usar as mesmas posições e condições em todas as revisões.
+Organizar cenário em primeiro plano, área jogável e horizonte. Detalhes finos ficam perto da câmera; silhuetas e massas de cor resolvem a distância.
+Agrupar árvores e arbustos em manchas coerentes com solo, umidade e circulação. Reaproveitar instanciamento, sementes e vento do módulo vegetation3d.js.
+Garantir transições de LOD suaves e impostores consistentes. Dividir grandes lotes em setores se uma única bounding box impedir culling eficiente; medir o custo adicional de draw calls.
+Relevo: duas entregas diferentes
+Entrega visual segura: enriquecer o relevo fora da área plana, verificar o anel de transição e não ocultar os marcos. Entrega de gameplay: para ter relevo dentro da arena, criar uma tarefa própria com altura autoritativa, colisão, movimentação, tiro, veículos, loot e reconciliação de rede atualizados e testados juntos.
+
+Mudanças apenas gráficas não devem modificar os multiplicadores, regras de sobrevivência ou spawns existentes em scenarios.js. Presets podem reduzir detalhe, mas não eliminar obstáculos relevantes nem revelar adversários ocultos nos demais níveis.
+
+
+
+
+4. Unreal: sair do blockout para uma cena validada
+Ponto de partida real
+KhaaosRun.uproject declara EngineAssociation 5.8. Confirme a instalação e compatibilidade dessa versão com plugins e plataforma-alvo antes de executar o fluxo. O DefaultEngine.ini já solicita recursos avançados; a prioridade não é repetir essas linhas, mas demonstrar que o conteúdo, o renderer e os presets funcionam no build real.
+
+Sequência de implementação
+Preparar uma estação ou runner licenciado com Editor, SDKs e plugins compatíveis. Compilar módulos de runtime e Editor antes de atribuir a falha de um mapa a materiais ou iluminação.
+Gerar ou abrir os mapas de baseline. A documentação registra Menu_Khaaos e CIGKV_BR como alvos do gerador. Fazer backup/branch: o script documenta substituição de assets existentes ao ser reexecutado.
+Criar uma área-piloto de arte separada do baseline gerado. Substituir BasicShapes por módulos com escala, pivôs, colisões e materiais corretos, preservando os pontos de referência de gameplay.
+Criar materiais-mestre e instâncias por mundo. Reservar camadas e efeitos caros para superfícies que justifiquem o custo; preparar alternativas para dispositivos de menor capacidade.
+Validar Nanite em meshes compatíveis e Lumen no perfil desktop suportado. Não assumir que a mesma configuração é adequada a Android/iOS: revisar os Device Profiles e configurações de plataforma existentes.
+Adotar Landscape, HLOD e World Partition apenas conforme dimensão e necessidade de streaming. São decisões de arquitetura de conteúdo, não opções a ativar indiscriminadamente em uma arena pequena.
+Comandos já documentados no projeto
+gh repo clone Nexus-HUB57/Khaaos_Run
+
+cd Khaaos_Run
+
+./scripts/build/build_worlds.sh --check
+
+UE_ROOT=/caminho/real/da/engine ./scripts/build/build_worlds.sh
+
+O caminho da engine acima deve ser substituído pelo caminho local. O modo --check valida a presença do pipeline; não importa assets nem prova aparência ou desempenho. O script pode terminar com código zero e status editor_unavailable quando não há Editor. O CI deve interpretar KHR_WORLDGEN_RESULT_JSON e os artefatos produzidos, não apenas o exit code.
+
+Critério de conclusão
+Mapa .umap e dependências .uasset gerados/importados, build e cook completos, inicialização no cliente-alvo e perfil de GPU registrado. Os validadores em KhaaosGraphicsBenchmarkCommandlet.cpp incluem verificações headless de contratos; o nome “benchmark” não comprova medição do tempo de renderização do cenário.
+
+
+
+
+5. Qualidade escalável e desempenho mensurável
+Uma política, não vários controles conflitantes
+No runtime, quality3d.js define densidades e sombras; perf3d.js define orçamentos, DRS e plano de pós-FX; gfxsettings.js persiste preferências. Tratar esses módulos como um contrato coordenado: cada nova opção precisa ter valor padrão, validação, efeito aplicado em cena e comportamento no modo automático.
+
+A implementação inspecionada já ajusta escala de resolução e tier. Alguns fatores estruturais são aplicados na criação do mundo seguinte. A interface deve deixar claro o que muda imediatamente e o que depende de recarregar o cenário. Não reconstruir a floresta inteira a cada oscilação de frame time.
+
+Instrumentação proposta
+Web: registrar frame time mediano e percentil 95, chamadas de desenho, triângulos, contagem de geometrias/texturas e eventos de troca de tier/DRS. renderer.info.memory fornece contagens, não uma medição exata de bytes de VRAM.
+Separar tempo total de frame e custo de GPU quando houver suporte a timer queries. Não interpretar requestAnimationFrame como cronômetro exclusivo da GPU.
+Unreal: capturar stat unit, stat gpu e ProfileGPU no mapa jogável e complementar com Unreal Insights. Registrar build, resolução, hardware, driver, preset, rota e clima em cada resultado.
+Metas de aceite propostas — não resultados medidos
+Em uma máquina de referência escolhida pela equipe, adotar inicialmente 60 FPS para desktop e avaliar o percentil 95 próximo de 16,7 ms; para um dispositivo móvel de entrada, negociar uma meta inicial de 30 FPS com percentil 95 próximo de 33,3 ms. Esses alvos são novos critérios sugeridos, não os valores atuais de BUDGET_MS e não garantias para todo hardware.
+
+Aprovar uma alteração somente com comparação reproduzível. Em modo de benchmark, fixar tier e escala; depois repetir em auto para comprovar estabilidade. Se o DRS reduzir resolução entre as capturas, uma melhora de FPS isolada pode esconder perda de nitidez.
+
+Ordem para reduzir custo sem destruir a arte
+Identificar se o gargalo é CPU, GPU, carregamento ou memória; reduzir primeiro o subsistema responsável.
+Quando for GPU: comparar SSR desligado, sombras mais baratas, transparência reduzida e densidade por distância. Preservar materiais principais e legibilidade antes de adicionar novos passes.
+Quando houver stutter: investigar criação de geometria, compilação de shaders, upload de texturas e descarte. Reutilizar recursos e executar dispose de forma compatível com assets compartilhados.
+
+
+
+6. Sistema de desenvolvimento: pipeline e entregas
+Higiene de repositório e assets
+git switch -c feat/cigkv-visual-pilot
+
+git lfs install
+
+git lfs ls-files
+
+git lfs fsck
+
+Esses comandos iniciam o trabalho isolado e ajudam a diagnosticar LFS; não corrigem automaticamente os 121 avisos do clone. Revisar .gitattributes, distinguir binários reais de ponteiros inválidos e elaborar uma correção em branch. Evitar git lfs migrate import no histórico compartilhado sem aprovação e plano de sincronização.
+
+Propor um manifesto de assets com ID estável, caminho de origem, licença, hash, unidade de escala, variantes, materiais e LODs. No CI, detectar arquivo ausente, ponteiro LFS não resolvido, dependência externa quebrada e textura acima do orçamento aprovado.
+
+Validação do runtime web
+cd game-runtime
+
+npm ci
+
+npm test
+
+npm run build
+
+npm run dev
+
+Rodar na máquina de desenvolvimento com a versão de Node adotada pela equipe e o lockfile do runtime. Estes comandos são instruções de execução; não foram executados nesta análise. O servidor Vite do script dev expõe 0.0.0.0: limitar o acesso à rede de desenvolvimento confiável.
+
+Expandir os testes existentes gfxsettings.test.js, perf3d.test.js, interiors-terrain.test.js, materials-microdetail.test.js e vegetation3d.test.js. Eles ajudam a proteger contratos, mas não substituem capturas em navegador com GPU, teste de contexto WebGL perdido, redimensionamento e alternância de qualidade.
+
+Pacotes de trabalho e dependências
+Entrega
+
+Responsável sugerido
+
+Condição de passagem
+
+Baseline e diagnóstico
+
+Renderização + QA
+
+Assets auditados, rota fixa e medições armazenadas.
+
+Piloto CIGKV web
+
+Arte técnica + frontend 3D
+
+Materiais e iluminação aprovados; build/testes e desempenho aceitos.
+
+Piloto CIGKV Unreal
+
+Arte técnica + engenharia UE
+
+Editor funcional, importação/cook e execução no alvo comprovados.
+
+Replicação aos mundos
+
+Arte de ambiente
+
+Kits e perfis por mundo; identidade e jogabilidade preservadas.
+
+Regressão e publicação
+
+QA + CI/CD
+
+Relatório antes/depois, fallback e rollback verificados.
+
+
+
+Cada pacote deve virar PR pequeno com escopo, arquivos alterados, capturas comparáveis, custo observado e limitações. Estimar prazo somente após o piloto; a inspeção estática não permite um cronograma confiável.
+
+
+
+
+7. Checklist de aprovação e referências
+Checklist de aplicação
+Baseline preservado e branch de trabalho criada; origem, licença e integridade dos assets conferidas.
+Uma rota CIGKV aprovada antes de expandir o escopo para os cinco mundos.
+Materiais com espaços de cor corretos, UVs e escala consistentes; iluminação revisada com e sem pós-FX.
+Área jogável plana preservada, ou alteração de relevo entregue com simulação e colisão integradas.
+Qualidade baixa, média e alta verificadas; mudanças de tier, DRS e preferências testadas.
+Assets ausentes não passam despercebidos; fallback e recuperação de carregamento exercitados.
+Capturas e frame times obtidos nas mesmas condições, incluindo combate e cenário denso.
+No Unreal, status JSON, .umap/.uasset, build, cook e execução comprovados, sem depender só de preflight.
+PR contém evidências e procedimento de rollback; não houve publicação ou migração destrutiva automática.
+Fontes do diagnóstico
+Todos os caminhos abaixo foram consultados no commit informado. Os links são referências ao código versionado, não evidência de execução. Para reproduzir a análise, utilizar esse commit, pois a branch principal pode mudar.
+
+Status e limitações declaradas
+
+Dependências e scripts do runtime
+
+Inicialização do renderer
+
+Carregador GLTF e fallback
+
+Pós-FX e saída de cor
+
+Qualidade, densidades e sombras
+
+DRS e auto-tier
+
+Configurações persistidas
+
+Microdetalhe de materiais
+
+Vegetação e instanciamento
+
+Contrato de terreno
+
+Identidade dos mundos
+
+Renderer Unreal
+
+Pipeline de mundos
+
+Runner e contrato de status
+
+Verificações gráficas headless
+
+Próxima ação recomendada: abrir o PR do piloto CIGKV com baseline, biblioteca mínima de materiais e protocolo de captura. Só ampliar para os demais cenários depois de comprovar qualidade, estabilidade e custo no hardware-alvo.
+

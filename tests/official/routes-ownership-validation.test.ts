@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { after, test } from "node:test";
 import express from "express";
@@ -192,7 +193,7 @@ test("depósito é bloqueado antes de serviço/storage e ignora valor escolhido 
     amountUsd: "10000.00",
     amountKrc: "999999999.00",
     userId: "victim",
-  });
+  }, { "Idempotency-Key": randomUUID() });
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {

@@ -20,6 +20,18 @@ if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
 local ttl = redis.call('PTTL', KEYS[1])
 return { count, ttl }
 `;
+const RELEASE_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
+const RENEW_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`;
 
 /**
  * Shared coordination primitive for horizontally scaled realtime nodes.
@@ -36,6 +48,8 @@ export class DistributedState {
   private readonly prefix = process.env.REDIS_NAMESPACE || "khaaos";
   private readonly localExpirations = new Map<string, number>();
   private readonly localCounters = new Map<string, { count: number; expiresAt: number }>();
+  private readonly roomOwnerTokens = new Map<string, string>();
+  private readonly roomOwnerTimers = new Map<string, NodeJS.Timeout>();
   private controlSubscriber: RedisClientType | null = null;
   private readonly controlHandlers = new Set<(event: Record<string, unknown>) => void>();
 
@@ -69,11 +83,22 @@ export class DistributedState {
   }
 
   async close(): Promise<void> {
+    for (const timer of this.roomOwnerTimers.values()) clearTimeout(timer);
+    this.roomOwnerTimers.clear();
+    this.roomOwnerTokens.clear();
     if (this.controlSubscriber) await this.controlSubscriber.quit().catch(() => undefined);
     this.controlSubscriber = null;
     if (this.client) await this.client.close().catch(() => undefined);
     this.client = null;
     this.connected = false;
+  }
+
+  /**
+   * Cliente Redis conectado (ou null). Compartilhado com subsistemas que
+   * precisam de primitivas próprias sobre a MESMA conexão (ex.: RoomEventMesh).
+   */
+  getRedisClient(): RedisLike | null {
+    return this.connected ? this.client : null;
   }
 
   private key(name: string): string {
@@ -91,8 +116,7 @@ export class DistributedState {
   async releaseLock(name: string, token: string | null): Promise<void> {
     if (!token || !this.client || token.startsWith("local:")) return;
     const key = this.key(`lock:${name}`);
-    const current = await this.client.get(key);
-    if (current === token) await this.client.del(key);
+    await this.client.eval(RELEASE_LOCK_SCRIPT, { keys: [key], arguments: [token] });
   }
 
   async upsertQueueEntry(entry: DistributedQueueEntry): Promise<void> {
@@ -105,6 +129,12 @@ export class DistributedState {
     await this.connect();
     if (!this.client) return;
     await this.client.hDel(this.key("matchmaking:queue"), userId);
+  }
+
+  async restoreQueueEntryIfAbsent(entry: DistributedQueueEntry): Promise<void> {
+    await this.connect();
+    if (!this.client) return;
+    await this.client.hSetNX(this.key("matchmaking:queue"), entry.userId, JSON.stringify(entry));
   }
 
   async getQueueEntries(): Promise<DistributedQueueEntry[]> {
@@ -132,21 +162,66 @@ export class DistributedState {
     return token;
   }
 
-  async setRoomOwner(roomId: string, ttlMs = 30_000): Promise<boolean> {
+  async setRoomOwner(roomId: string, ttlMs = 30_000): Promise<string | null> {
     await this.connect();
-    if (!this.client) return true;
-    const owner = await this.client.set(this.key(`room:${roomId}:owner`), this.nodeId, { NX: true, PX: ttlMs });
-    return Boolean(owner);
+    const token = `${this.nodeId}:${randomUUID()}`;
+    if (!this.client) {
+      this.roomOwnerTokens.set(roomId, token);
+      this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
+      return token;
+    }
+    const owner = await this.client.set(this.key(`room:${roomId}:owner`), token, { NX: true, PX: ttlMs });
+    if (!owner) return null;
+    this.roomOwnerTokens.set(roomId, token);
+    this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
+    return token;
   }
 
-  async renewRoomOwner(roomId: string, ttlMs = 30_000): Promise<boolean> {
+  private scheduleRoomOwnerRenewal(roomId: string, token: string, ttlMs: number): void {
+    const previous = this.roomOwnerTimers.get(roomId);
+    if (previous) clearTimeout(previous);
+    const delay = Math.max(250, Math.floor(ttlMs * 2 / 3));
+    const timer = setTimeout(async () => {
+      const renewed = await this.renewRoomOwner(roomId, token, ttlMs).catch(() => false);
+      if (renewed && this.roomOwnerTokens.get(roomId) === token) {
+        this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
+      } else if (this.roomOwnerTokens.get(roomId) === token) {
+        this.roomOwnerTokens.delete(roomId);
+        this.roomOwnerTimers.delete(roomId);
+      }
+    }, delay);
+    timer.unref?.();
+    this.roomOwnerTimers.set(roomId, timer);
+  }
+
+  async renewRoomOwner(roomId: string, token = this.roomOwnerTokens.get(roomId) ?? null, ttlMs = 30_000): Promise<boolean> {
     await this.connect();
-    if (!this.client) return true;
+    if (!token) return false;
+    if (!this.client) return this.roomOwnerTokens.get(roomId) === token;
     const key = this.key(`room:${roomId}:owner`);
-    const current = await this.client.get(key);
-    if (current !== this.nodeId) return false;
-    await this.client.pExpire(key, ttlMs);
-    return true;
+    const renewed = await this.client.eval(RENEW_LOCK_SCRIPT, { keys: [key], arguments: [token, String(ttlMs)] });
+    const ok = Number(renewed) === 1;
+    if (!ok && this.roomOwnerTokens.get(roomId) === token) {
+      this.roomOwnerTokens.delete(roomId);
+      const timer = this.roomOwnerTimers.get(roomId);
+      if (timer) clearTimeout(timer);
+      this.roomOwnerTimers.delete(roomId);
+    }
+    return ok;
+  }
+
+  async releaseRoomOwner(roomId: string, token = this.roomOwnerTokens.get(roomId) ?? null): Promise<boolean> {
+    const current = this.roomOwnerTokens.get(roomId);
+    if (current === token || !token) {
+      this.roomOwnerTokens.delete(roomId);
+      const timer = this.roomOwnerTimers.get(roomId);
+      if (timer) clearTimeout(timer);
+      this.roomOwnerTimers.delete(roomId);
+    }
+    if (!token || !this.client) return Boolean(current === token);
+    const key = this.key(`room:${roomId}:owner`);
+    const released = await this.client.eval(RELEASE_LOCK_SCRIPT, { keys: [key], arguments: [token] });
+    return Number(released) === 1;
   }
 
   async publishControl(event: Record<string, unknown>): Promise<void> {

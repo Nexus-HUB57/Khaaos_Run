@@ -1,0 +1,25 @@
+{
+  "assetType": "GameplayEffect",
+  "name": "GE_SkeetwCombatBuff",
+  "category": "SpeciesCombat",
+  "durationPolicy": "Infinite",
+  "modifiers": [
+    {
+      "attribute": "Visibility",
+      "modifierOp": "Override",
+      "magnitude": 0.0,
+      "condition": "OnCrouchInFog"
+    },
+    {
+      "attribute": "AmbushDamage",
+      "modifierOp": "Multiply",
+      "magnitude": 1.20,
+      "condition": "FromStealth"
+    }
+  ],
+  "tags": {
+    "grantedTags": ["Combat.Species.Skeetw.FogStealth", "Combat.Species.Skeetw.AmbushBonus"],
+    "requiredTags": ["Species.Skeetw"]
+  },
+  "description": "Skeetw fog combat bonus: fog stealth on crouch, +20% ambush damage"
+}

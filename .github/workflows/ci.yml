@@ -85,6 +85,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Guarda anti-reversão de suítes (zero vitest/aliases, arquivos canônicos)
+        run: npm run guard:tests
+
       - name: Apply versioned database migrations
         run: npm run db:migrate
 

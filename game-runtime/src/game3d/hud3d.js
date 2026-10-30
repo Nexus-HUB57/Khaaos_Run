@@ -1,8 +1,15 @@
 // Khaaos Run — HUD tático (estilo FreeFire): barras, munição, minimapa, killfeed,
 // crosshair dinâmico, prompts de interação, modais ZU/fim e controles touch.
 import { RARITIES } from '../shared/weapons.js';
-import { WEAPONS3D } from './sim3d.js';
+import { WEAPONS3D, DBNO } from './sim3d.js';
 import { getOperativeAbility } from './operativeAbilities.js';
+import { buildAtaSteps, ATA_STEP_MS } from './courtAta.js';
+import { MYTHIC_SKIN, MYTHIC_STAGE_NAMES, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
+import { RateLimiter } from './perf3d.js'; // Fase 35 — throttle do minimapa (achado G4)
+import { hudAuraFor, shiftAuraHex, weaponIconVars, crosshairVars, killfeedVars, damageVars, seasonIndexFor, minimapTintFor } from './aura3d.js'; // F36-39 — aura sazonal do HUD + ícone + mira + killfeed/dano + minimapa
+import { tacticalProject, tacticalScale, tacticalMarkers } from './tacticalmap3d.js'; // F40 — mapa tático em tela cheia
+
+const ATTACH_SHORTS = { mira4x: '4X', silenciador: 'SIL', magestendida: 'MAG', gripvertical: 'GRP' };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -15,6 +22,11 @@ export class HUD {
     this.lastHeartbeat = 0;
     this.damageFlash = 0;
     this.hitmarkerT = 0;
+    // Fase 35 — minimapa a 30 Hz (canvas 2D full-redraw a 60+ Hz custava
+    // real em touch sem ganho perceptível — achado G4 da revisão GFX/UX)
+    this.mmLimiter = new RateLimiter(33);
+    this.auraCombat = null; // F39 — vars da temporada p/ killfeed/números (decisão PURA no update)
+    this.mapOpen = false;   // F40 — estado do mapa tático (toggle tecla M / botão)
     this.#bindButtons();
   }
 
@@ -23,6 +35,7 @@ export class HUD {
     $('#rushBtn')?.addEventListener('click', () => { this.uiClick(); this.onEntry('rush'); });
     $('#endBtn')?.addEventListener('click', () => { this.uiClick(); this.onRestart(); });
     $('#replayBtn')?.addEventListener('click', () => this.onReplayExport?.());
+    $('#mapBtn')?.addEventListener('click', () => { this.uiClick(); this.toggleMap(); }); // F40 — mapa tático (touch)
     $('#seedInput').value = this.seed;
     $('#seedInput')?.addEventListener('change', (e) => {
       this.onRestart(e.target.value.trim() || this.seed);
@@ -67,6 +80,112 @@ export class HUD {
   }
   uiClick() { this.audio?.ui?.(); }
 
+  // ---------- Fase 40 — mapa tático em tela cheia ----------
+  // Toggle por tecla M (main3d binda o keydown) ou botão MAPA (touch). O jogo
+  // NUNCA pausa: overlay translúcido sobre a partida viva (assinatura
+  // Free Fire). Redesenho a 30 Hz enquanto aberto (mesmo mmLimiter do radar).
+  toggleMap(force) {
+    const el = $('#tacticalMap');
+    if (!el) return false;
+    this.mapOpen = typeof force === 'boolean' ? force : !this.mapOpen;
+    el.classList.toggle('hidden', !this.mapOpen);
+    el.setAttribute('aria-hidden', this.mapOpen ? 'false' : 'true');
+    if (this.mapOpen) this.#drawTacticalMap();
+    return this.mapOpen;
+  }
+
+  closeMap() { if (this.mapOpen) this.toggleMap(false); }
+
+  #drawTacticalMap() {
+    const canvas = $('#tacticalCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;                          // resolução interna 720
+    const s = this.sim, p = s.player;
+    // F40 — MESMO tint sazonal do radar (F39): a estação tinge fundo/grade/
+    // moldura; semáforos funcionais nunca mudam.
+    const tint = minimapTintFor(seasonIndexFor(new Date()));
+    const frame = $('#tacticalFrame');
+    if (frame) {
+      frame.classList.add('seasonal');
+      frame.style.setProperty('--mm-edge', tint.edge);
+      $('#tacticalSub').textContent = `${s.ring?.pulse != null ? `PULSO ${String(s.ring.pulse).padStart(2, '0')} · ` : ''}${tint.id.toUpperCase()} · M PARA FECHAR`;
+    }
+    const scale = tacticalScale(size);
+    const at = (x, z) => tacticalProject(x, z, size);
+    ctx.clearRect(0, 0, size, size);
+    // fundo + grade da estação (10 linhas — leitura de coordenadas)
+    ctx.fillStyle = 'rgba(10,10,16,.88)';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = tint.grid; ctx.lineWidth = 1;
+    for (let g = -200; g <= 200; g += 50) {
+      const a = at(g, -200), b = at(g, 200);
+      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+      const c = at(-200, g), d = at(200, g);
+      ctx.beginPath(); ctx.moveTo(c.px, c.py); ctx.lineTo(d.px, d.py); ctx.stroke();
+    }
+    // véu da estação (antes dos marcadores — semáforos intactos)
+    ctx.fillStyle = tint.overlay;
+    ctx.fillRect(0, 0, size, size);
+    // distritos nomeados (círculo + rótulo — a leitura de SETOR é o ganho do mapa)
+    const markers = tacticalMarkers({
+      player: p, ring: s.ring, terminals: s.terminals,
+      bots: s.bots, loot: s.loot, districts: this.sim.world?.districts ?? [],
+    });
+    ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    for (const m of markers) if (m.kind === 'district') {
+      const c = at(m.x, m.z);
+      ctx.strokeStyle = 'rgba(122,90,158,.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+      ctx.fillStyle = 'rgba(232,227,213,.6)';
+      ctx.fillText(m.label, c.px, c.py - m.r * scale - 6);
+    }
+    // anel alvo (tracejado) + atual — SEMÁFOROS intocados
+    for (const m of markers) if (m.kind === 'ringTarget') {
+      const c = at(m.x, m.z);
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = 'rgba(255,107,44,.75)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for (const m of markers) if (m.kind === 'ring') {
+      const c = at(m.x, m.z);
+      ctx.strokeStyle = 'rgba(200,255,61,.9)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(c.px, c.py, m.r * scale, 0, 7); ctx.stroke();
+    }
+    // terminais (verde ativo/cinza inativo — mesmo semáforo do radar)
+    for (const m of markers) if (m.kind === 'terminal') {
+      const c = at(m.x, m.z);
+      ctx.fillStyle = m.active ? '#39ff88' : 'rgba(90,90,90,.5)';
+      ctx.fillRect(c.px - 4, c.py - 4, 8, 8);
+      if (m.active) { ctx.strokeStyle = '#39ff88'; ctx.lineWidth = 1; ctx.strokeRect(c.px - 7, c.py - 7, 14, 14); }
+    }
+    // loot ativo
+    ctx.fillStyle = 'rgba(66,217,222,.8)';
+    for (const m of markers) if (m.kind === 'loot') {
+      const c = at(m.x, m.z);
+      ctx.fillRect(c.px - 1.5, c.py - 1.5, 3, 3);
+    }
+    // contatos revelados (mesmo gate determinístico do radar)
+    ctx.fillStyle = '#ffb52e';
+    for (const m of markers) if (m.kind === 'recon') {
+      const c = at(m.x, m.z);
+      ctx.beginPath(); ctx.arc(c.px, c.py, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    // jogador (seta girada pelo yaw — MESMA gramática do radar)
+    for (const m of markers) if (m.kind === 'player') {
+      const c = at(m.x, m.z);
+      ctx.save();
+      ctx.translate(c.px, c.py);
+      ctx.rotate(-m.yaw + Math.PI);
+      ctx.fillStyle = '#ffd28a';
+      ctx.beginPath();
+      ctx.moveTo(0, -9); ctx.lineTo(6.5, 7.5); ctx.lineTo(0, 3.5); ctx.lineTo(-6.5, 7.5);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
   setAbility(operativeId, online = false) {
     this.operativeId = operativeId;
     this.abilityOnline = online;
@@ -75,9 +194,10 @@ export class HUD {
     const status = $('#abilityStatus');
     const chip = $('#operativeAbility');
     if (name) name.textContent = ability.name.toLocaleUpperCase('pt-BR');
-    if (status) status.textContent = online ? 'ONLINE · INDISPONÍVEL' : 'Q · PRONTA';
+    // Fase 8 — habilidade autoritativa também no online (cooldown vem do snapshot)
+    if (status) status.textContent = 'Q · PRONTA';
     if (chip) chip.title = online
-      ? 'Habilidades por operativo ainda não são suportadas pelo servidor online.'
+      ? `${ability.description} (autoritativa no servidor)`
       : ability.description;
   }
 
@@ -90,10 +210,21 @@ export class HUD {
     while (list.children.length > 6) list.lastChild.remove();
   }
 
-  killfeed(killer, victim, head, isPlayerKill) {
+  killfeed(killer, victim, head, isPlayerKill, knock = false) {
     const el = document.createElement('div');
     el.className = `kill-entry ${isPlayerKill ? 'mine' : ''}`;
-    el.innerHTML = `<span>${killer}</span><i>${head ? '☠ HEADSHOT' : '✕'}</i><span>${victim}</span>`;
+    el.innerHTML = `<span>${killer}</span><i>${knock ? '◌ NOCAUTE' : head ? '☠ HEADSHOT' : '✕'}</i><span>${victim}</span>`;
+    // F39 — festival sazonal: só as eliminações do PRÓPRIO jogador (a aura é
+    // a skin EQUIPADA — ela celebra a eli do jogador, não o que ele assiste).
+    // Variáveis injetadas no elemento: borda na IDENTIDADE (--kf-aura), ícone
+    // no glow da ESTAÇÃO (--kf-season), ritmo da entrada pela temporada
+    // (--kf-dur). Sem aura/mythic: killfeed neutro (custo 0).
+    if (isPlayerKill && this.auraCombat) {
+      el.classList.add('mythic');
+      el.style.setProperty('--kf-aura', this.auraCombat.aura);
+      el.style.setProperty('--kf-season', this.auraCombat.season);
+      el.style.setProperty('--kf-dur', this.auraCombat.dur);
+    }
     const list = $('#killfeed');
     list.prepend(el);
     while (list.children.length > 4) list.lastChild.remove();
@@ -122,15 +253,141 @@ export class HUD {
     // arma
     const w = WEAPONS3D[p.weapon];
     $('#weaponName').textContent = w?.name ?? '—';
-    const rar = w ? RARITIES[w.rarity] : null;
+    // Fase 30 — a cor segue a SKIN coletada (MÍTICA pinta o painel de rosa-caos)
+    const rar = RARITIES[p.weaponSkin ?? w?.rarity] ?? RARITIES[w?.rarity] ?? null;
     $('#weaponName').style.color = rar?.color ?? '#e8e3d5';
+    // Fase 37 — ÍCONE da arma no inventário: silhueta pela CATEGORIA da arma
+    // e cor da raridade coletada (mesma fonte do #weaponName — leitura única
+    // de "o que tenho na mão"). Sem skin mítica o ícone é neutro (custo 0);
+    // com mítica, o festival sazonal entra no bloco do #mythicStage abaixo.
+    const iconEl = $('#weaponIcon');
+    if (iconEl) {
+      iconEl.dataset.cat = w?.category ?? 'sidearm';
+      iconEl.style.setProperty('--wi', rar?.color ?? '#e8e3d5');
+    }
     $('#ammoMag').textContent = p.weapon === 'sucata' ? '∞' : p.ammoMag;
     $('#ammoReserve').textContent = p.weapon === 'sucata' ? '' : `/ ${p.inventory.ammo[w?.ammo] ?? 0}`;
+    // Fase 30/32 — faixa de anexos com CHIP de raridade (gasto→dourado) +
+    // estágio da skin mítica da ARMA (catálogo MYTHIC_SKINS)
+    const strip = $('#attachStrip');
+    if (strip) {
+      const atts = p.weaponAttachments ?? [];
+      const attRars = p.attachmentRarities ?? [];
+      strip.innerHTML = atts.map((a, i) => {
+        const rc = RARITIES[attRars[i]]?.color ?? null;
+        const title = `${ATTACH_SHORTS[a] ?? a}${attRars[i] ? ` · ${attRars[i]}` : ''}`;
+        return `<i title="${title}"${rc ? ` style="border-color:${rc};box-shadow:0 0 5px ${rc}66"` : ''}>${ATTACH_SHORTS[a] ?? '?'}</i>`;
+      }).join('');
+      strip.classList.toggle('filled', atts.length > 0);
+    }
+    const mythicEl = $('#mythicStage');
+    if (mythicEl) {
+      const mDef = mythicSkinFor(p.weapon);
+      const mythic = !!mDef && p.weaponSkin === MYTHIC_SKIN.id;
+      mythicEl.classList.toggle('hidden', !mythic);
+      // F36 — estado SAZONAL do HUD: quando há skin mítica equipada, o corpo
+      // recebe data-aura + data-aura-season e as variáveis CSS (--aura/
+      // --aura-season/--aura-dur) — a vinheta #auraVignette e o ritmo do
+      // festival seguem a estação. Sem skin mítica: corpo limpo (custo 0,
+      // decisão PURA de aura3d.hudAuraFor — testável headless).
+      const aura = mythic ? hudAuraFor({ weaponId: p.weapon, weaponSkin: p.weaponSkin, mythicStage: p.mythicStage || 1 }) : null;
+      if (mythic && aura) {
+        mythicEl.textContent = `EV.${p.mythicStage || 1} · ${MYTHIC_STAGE_NAMES[(p.mythicStage || 1) - 1]}`;
+        mythicEl.style.color = mDef.aura; // Fase 32 — badge na cor da aura da skin
+        // Fase 34/36 — efeito SAZONAL por aura: anel de brilho girando +
+        // shimmer de festival na cor PRÓPRIA da arma, RITMO da estação (CSS
+        // lê --aura/--aura-dur; anima só quando o badge está visível).
+        mythicEl.style.setProperty('--aura', mDef.aura);
+        mythicEl.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
+        mythicEl.style.setProperty('--aura-dur', String(aura.durMul));
+        const body = document.body;
+        if (body) {
+          body.dataset.aura = mDef.aura;
+          body.dataset.auraSeason = aura.season;
+          body.style.setProperty('--aura', mDef.aura);
+          body.style.setProperty('--aura-season', shiftAuraHex(mDef.aura, aura.hueShift));
+        }
+        // F39 — variáveis de COMBATE da temporada (killfeed + números de
+        // dano): decisão PURA killfeedVars/damageVars (mesma fonte do
+        // badge/vinheta/mira/ícone), consumidas por hud.killfeed (entries do
+        // jogador) e pelo pool DamageNumbers3D (main3d repassa 1×/frame).
+        const kfVars = killfeedVars(aura, mDef.aura);
+        const dgVars = damageVars(aura, mDef.aura);
+        this.auraCombat = kfVars && dgVars
+          ? Object.freeze({ aura: kfVars.aura, season: kfVars.season, dur: kfVars.dur })
+          : null;
+        // Fase 37 — o ÍCONE da arma entra no festival: MESMAS variáveis da
+        // temporada (decisão PURA weaponIconVars — fonte única com badge/
+        // vinheta), glow e varredura na cor tingida pela estação. Sem mítica
+        // ou sem hex válido: limpa e volta ao ícone neutro (custo 0).
+        const iconVars = weaponIconVars(aura, mDef.aura);
+        const iconEl2 = $('#weaponIcon');
+        if (iconEl2) {
+          if (iconVars) {
+            iconEl2.classList.add('mythic');
+            iconEl2.style.setProperty('--aura', iconVars.aura);
+            iconEl2.style.setProperty('--aura-season', iconVars.season);
+            iconEl2.style.setProperty('--aura-dur', iconVars.dur);
+          } else {
+            iconEl2.classList.remove('mythic');
+            iconEl2.style.removeProperty('--aura');
+            iconEl2.style.removeProperty('--aura-season');
+            iconEl2.style.removeProperty('--aura-dur');
+          }
+        }
+        // Fase 38 — a MIRA entra no festival: braços na cor da SKIN
+        // (--ch-aura), ponto + glow na cor da ESTAÇÃO (--ch-season) e anel
+        // cônico no ritmo --ch-dur (CSS do #crosshair.mythic). Elemento de
+        // combate: decisão PURA crosshairVars (mesma fonte do badge/ícone);
+        // sem hex válido → limpa e volta à mira neutra (custo 0).
+        const chVars = crosshairVars(aura, mDef.aura);
+        const chEl = $('#crosshair');
+        if (chEl) {
+          if (chVars) {
+            chEl.classList.add('mythic');
+            chEl.style.setProperty('--ch-aura', chVars.aura);
+            chEl.style.setProperty('--ch-season', chVars.season);
+            chEl.style.setProperty('--ch-dur', chVars.dur);
+          } else {
+            chEl.classList.remove('mythic');
+            chEl.style.removeProperty('--ch-aura');
+            chEl.style.removeProperty('--ch-season');
+            chEl.style.removeProperty('--ch-dur');
+          }
+        }
+      } else if (!mythic) {
+        const body = document.body;
+        if (body?.dataset.aura) {
+          delete body.dataset.aura;              // volta ao HUD neutro (custo 0)
+          delete body.dataset.auraSeason;
+        }
+        this.auraCombat = null;                  // F39 — killfeed/números neutros (custo 0)
+        // Fase 37 — ícone volta ao neutro junto com o corpo (custo 0)
+        const iconEl3 = $('#weaponIcon');
+        if (iconEl3?.classList.contains('mythic')) {
+          iconEl3.classList.remove('mythic');
+          iconEl3.style.removeProperty('--aura');
+          iconEl3.style.removeProperty('--aura-season');
+          iconEl3.style.removeProperty('--aura-dur');
+        }
+        // Fase 38 — mira volta ao neutro junto com o corpo (custo 0)
+        const chEl2 = $('#crosshair');
+        if (chEl2?.classList.contains('mythic')) {
+          chEl2.classList.remove('mythic');
+          chEl2.style.removeProperty('--ch-aura');
+          chEl2.style.removeProperty('--ch-season');
+          chEl2.style.removeProperty('--ch-dur');
+        }
+      }
+    }
     const reloading = p.reloadT > 0;
     $('#reloadHint').classList.toggle('visible', reloading || (!reloading && p.ammoMag === 0));
     $('#reloadHint').textContent = reloading ? 'RECARREGANDO…' : 'SEM MUNIÇÃO — [R]';
     // topo
-    const alive = s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0);
+    // M3 — AOI: com fan-out por área de interesse o array bots NÃO contém todos
+    // os vivos do ring; o snapshot traz aliveCount autoritativo — usa-o quando
+    // existir (online), mantém a contagem local no modo offline.
+    const alive = s.aliveCount ?? (s.bots.filter(b => b.alive).length + (p.alive ? 1 : 0));
     $('#aliveValue').textContent = String(alive).padStart(2, '0');
     const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     $('#matchClock').textContent = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
@@ -152,18 +409,25 @@ export class HUD {
       $('#altPhase').textContent = p.dropPhase === 'sky' ? 'QUEDA LIVRE' : 'PARAQUEDAS';
       $('#altFill').style.width = `${Math.min(100, (alt / 140) * 100)}%`;
     }
+    // Fase 7 — overlay de nocaute (DBNO): contador de sangramento + progresso do revive
+    const knocked = !!p.knocked;
+    $('#knockOverlay')?.classList.toggle('hidden', !knocked);
+    if (knocked) {
+      const max = DBNO.bleedOutSeconds * Math.pow(DBNO.bleedOutDecay, Math.max(0, (p.downedCount ?? 1) - 1));
+      $('#knockFill').style.width = `${Math.max(0, Math.min(100, ((p.knockT ?? 0) / max) * 100))}%`;
+      const prog = p.reviveProgress ?? 0;
+      $('#reviveWrap')?.classList.toggle('hidden', prog <= 0);
+      if (prog > 0) $('#reviveFill').style.width = `${Math.min(100, (prog / DBNO.reviveSeconds) * 100)}%`;
+    }
     const ability = getOperativeAbility(p.operativeId || this.operativeId);
     const abilityStatus = $('#abilityStatus');
     const abilityChip = $('#operativeAbility');
     if (abilityStatus && abilityChip) {
-      if (this.abilityOnline || s.online) {
-        abilityStatus.textContent = 'ONLINE · INDISPONÍVEL';
-        abilityChip.classList.add('unavailable');
-      } else {
-        const remaining = Math.max(0, p.abilityState?.cooldownTicks || 0) / (s.tickRate || 30);
-        abilityStatus.textContent = remaining > 0 ? `Q · ${remaining.toFixed(1)} s` : 'Q · PRONTA';
-        abilityChip.classList.toggle('unavailable', remaining > 0);
-      }
+      // Fase 8 — habilidade funcional nos dois modos: offline resolve na sim local;
+      // online o estado vem do snapshot autoritativo (abilityState do servidor)
+      const remaining = Math.max(0, p.abilityState?.cooldownTicks || 0) / (s.tickRate || 30);
+      abilityStatus.textContent = remaining > 0 ? `Q · ${remaining.toFixed(1)} s` : 'Q · PRONTA';
+      abilityChip.classList.toggle('unavailable', remaining > 0);
     }
     // objetivos
     $('#objPulse').classList.toggle('done', s.ring.pulse >= 1);
@@ -183,8 +447,24 @@ export class HUD {
     // crosshair dinâmico — abre com movimento/tiro
     const spreadPx = this.#crosshairSpread(input);
     document.documentElement.style.setProperty('--ch-gap', `${spreadPx}px`);
-    // minimapa
-    this.#drawMinimap();
+    // minimapa (Fase 35 — 30 Hz; o mundo 3D é interpolado, ninguém lê 60 Hz de radar)
+    if (this.mmLimiter.ready()) {
+      this.#drawMinimap();
+      // Fase 40 — mapa tático aberto redesenha no MESMO tick de 30 Hz
+      // (a partida continua viva atrás: anéis/terminais/contatos atualizam)
+      if (this.mapOpen) this.#drawTacticalMap();
+    }
+  }
+
+  // Fase 35 — telemetria de performance no HUD (FPS médio + escala DRS + tier).
+  // Chamada a 2 Hz pelo main3d; elemento escondido por padrão (setting KR_GFX fps).
+  setPerf(fps, scale, tier) {
+    const el = $('#perfReadout');
+    if (!el) return;
+    if (fps == null) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    const pct = Math.round((scale ?? 1) * 100);
+    el.textContent = `${Math.round(fps)} FPS · RES ${pct}% · ${String(tier ?? '').toUpperCase()}`;
   }
 
   #crosshairSpread(input) {
@@ -205,15 +485,29 @@ export class HUD {
     ctx.save();
     ctx.translate(size / 2, size / 2);
     const scale = size / 420; // mundo 400m
+    // F39 — TINT SAZONAL POR ESTAÇÃO: o radar obedece ao CALENDÁRIO (mesma
+    // fonte da vinheta — seasonIndexFor). Semáforos funcionais (terminais,
+    // loot, recon, jogador, anéis) NUNCA mudam — a estação tinge só as
+    // camadas decorativas: fundo, grade, véu e a moldura do painel.
+    const tint = minimapTintFor(seasonIndexFor(new Date()));
+    const frame = this.minimap?.parentElement;
+    if (frame) {
+      frame.classList.add('seasonal');
+      frame.style.setProperty('--mm-edge', tint.edge);
+    }
     // fundo
     ctx.fillStyle = 'rgba(10,10,16,.72)';
     ctx.fillRect(-size / 2, -size / 2, size, size);
-    // grid
-    ctx.strokeStyle = 'rgba(122,90,158,.18)'; ctx.lineWidth = 1;
+    // grid — cor da ESTAÇÃO (antes roxo fixo)
+    ctx.strokeStyle = tint.grid; ctx.lineWidth = 1;
     for (let g = -200; g <= 200; g += 50) {
       ctx.beginPath(); ctx.moveTo(g * scale, -size / 2); ctx.lineTo(g * scale, size / 2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-size / 2, g * scale); ctx.lineTo(size / 2, g * scale); ctx.stroke();
     }
+    // véu da estação sobre fundo+grade (ANTES dos marcadores funcionais —
+    // alpha ≤ .12: leitura tática preservada, temporada presente)
+    ctx.fillStyle = tint.overlay;
+    ctx.fillRect(-size / 2, -size / 2, size, size);
     // anel alvo (tracejado) + atual
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = 'rgba(255,107,44,.75)';
@@ -230,8 +524,9 @@ export class HUD {
       ctx.fillRect(t.x * scale - 2.5, t.z * scale - 2.5, 5, 5);
     }
     // contatos de reconhecimento somente enquanto a marca determinística está ativa
+    // (offline: revealedTicks; online: flag revealed do snapshot — Fase 8)
     ctx.fillStyle = '#ffb52e';
-    for (const bot of s.bots) if (bot.alive && bot.revealedTicks > 0) {
+    for (const bot of s.bots) if (bot.alive && (bot.revealedTicks > 0 || bot.revealed)) {
       ctx.beginPath(); ctx.arc(bot.x * scale, bot.z * scale, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     // loot
@@ -255,16 +550,114 @@ export class HUD {
     else el.classList.remove('visible');
   }
 
+  // Fase 26 — BARRA DE HP do alvo quebrável (porta/janela) no alcance.
+  // info = null esconde; senão { label, hp, max, cls } — cls pinta a barra
+  // (metal = aço, wood = âmbar, glass = ciano-vidro). Igual à vida do jogador:
+  // atualização por frame, zero reflow além do width da barra.
+  target(info) {
+    const el = $('#targetPanel');
+    if (!el) return;
+    if (!info || !info.max) { el.classList.remove('visible'); return; }
+    $('#targetLabel').textContent = info.label;
+    $('#targetHp').textContent = `${info.hp}/${info.max}`;
+    el.dataset.mat = info.cls || 'wood';
+    const pct = Math.max(0, Math.min(100, (info.hp / info.max) * 100));
+    $('#targetFill').style.width = `${pct}%`;
+    el.classList.toggle('low', pct <= 34);
+    el.classList.add('visible');
+  }
+
   showZu() { $('#zuModal').classList.remove('hidden'); }
   hideZu() { $('#zuModal').classList.add('hidden'); }
+  // Fase 5 — barra do espectador
+  showSpectator({ name, placement } = {}) {
+    $('#spectatorBar')?.classList.remove('hidden');
+    if (name) $('#specName').textContent = name;
+    $('#specPlacement').textContent = placement ? `#${placement}` : '';
+  }
+  updateSpectator(name) {
+    const el = $('#specName');
+    if (el && name) el.textContent = name;
+  }
+  hideSpectator() { $('#spectatorBar')?.classList.add('hidden'); }
+  // ---------- Fase 13 — replay da ata da Corte Marcial (jogador eliminado) ----------
+  // Renderiza a ata do caso e a reproduz encenada (passos revelados em ritmo
+  // fixo; clique adianta; botão reproduz novamente). Best-effort: nunca bloqueia.
+  showCourtAta(caso, extra = {}) {
+    const modal = $('#courtAtaModal');
+    const timeline = $('#ataTimeline');
+    if (!modal || !timeline || !caso) return;
+    this.#clearAtaTimers();
+    $('#ataTitle').textContent = `ATA DO CASO ${caso.id ?? '—'}`;
+    const steps = buildAtaSteps(caso, extra);
+    timeline.innerHTML = '';
+    const nodes = steps.map((step) => {
+      const el = document.createElement('div');
+      el.className = `ata-step${step.cls ? ` ${step.cls}` : ''}`;
+      const h = document.createElement('h4');
+      h.textContent = step.tag;
+      el.appendChild(h);
+      for (const line of step.lines) {
+        const p = document.createElement('p');
+        p.className = 'ata-line';
+        p.textContent = line;
+        el.appendChild(p);
+      }
+      timeline.appendChild(el);
+      return el;
+    });
+    this.ataNodes = nodes;
+    this.ataCase = { caso, extra };
+    modal.classList.remove('hidden');
+    this.#playAta();
+  }
+
+  #playAta() {
+    const nodes = this.ataNodes ?? [];
+    nodes.forEach((n) => n.classList.remove('shown'));
+    this.#clearAtaTimers();
+    let i = 0;
+    const reveal = () => {
+      if (i < nodes.length) {
+        nodes[i].classList.add('shown');
+        i += 1;
+        this.ataTimers.push(setTimeout(reveal, ATA_STEP_MS));
+      }
+    };
+    reveal();
+  }
+
+  #clearAtaTimers() {
+    (this.ataTimers ?? []).forEach(clearTimeout);
+    this.ataTimers = [];
+  }
+
+  hideCourtAta() {
+    this.#clearAtaTimers();
+    $('#courtAtaModal')?.classList.add('hidden');
+  }
+
+  replayCourtAta() {
+    if (this.ataCase) this.showCourtAta(this.ataCase.caso, this.ataCase.extra);
+  }
+
+  // Disponibilidade da ata: botões do espectador e do end modal aparecem só
+  // quando existe caso do próprio jogador (eliminado → caso aberto pelo POJ).
+  setCourtAtaAvailable(on) {
+    $('#specAta')?.classList.toggle('hidden', !on);
+    $('#endAtaBtn')?.classList.toggle('hidden', !on);
+  }
+
   showEnd(win, stats) {
     const m = $('#endModal');
     m.classList.remove('hidden');
+    const placement = stats?.placement && !win ? ` Posição #${stats.placement} entre os operativos do ring.` : '';
+    const winner = stats?.winner && !win ? ` Vencedor do ring: ${stats.winner}.` : '';
     $('#endTitle').textContent = win ? 'VOCÊ SOBREVIVEU AO RING' : 'VOCÊ FOI ELIMINADO';
     $('#endTitle').classList.toggle('win', win);
     $('#endText').textContent = win
       ? `Seed ${this.seed} concluída. ${stats.kills} abates, ${stats.xp} XP e ${stats.krc} KRC garantidos. O Marechal aguarda seu retorno ao QG.`
-      : `A mensagem de misericórdia aguarda no QG-War'I. ${stats.kills} abates antes da queda. O replay desta tentativa fica disponível no console.`;
+      : `A mensagem de misericórdia aguarda no QG-War'I. ${stats.kills} abates antes da queda.${placement}${winner} O replay desta tentativa fica disponível no console.`;
   }
   hideEnd() { $('#endModal').classList.add('hidden'); }
   setMatchStatus(txt) { $('#matchStatus').textContent = txt; }

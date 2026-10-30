@@ -1,0 +1,118 @@
+{
+  "asset_type": "NiagaraSystem",
+  "asset_class": "UNiagaraSystem",
+  "asset_name": "VFX_Onith_Smoke",
+  "version": 1,
+  "generated_at": "2026-10-26T23:35:11.335587+00:00",
+  "generator": "generate_vfx_uassets.py",
+  "niagara_system_spec": {
+    "description": "Onith toxic smoke - poisonous green/purple smoke cloud",
+    "category": "Species",
+    "subcategory": "Onith",
+    "species": "Onith",
+    "emitters": [
+      {
+        "emitter_name": "Emitter_ToxicSmoke",
+        "spawn_rate": 35.0,
+        "lifetime": 4.0,
+        "initial_size": 40.0,
+        "initial_color": {
+          "r": 0.2,
+          "g": 0.8,
+          "b": 0.1,
+          "a": 0.15
+        },
+        "initial_velocity": 20.0,
+        "emitter_type": "GPU"
+      },
+      {
+        "emitter_name": "Emitter_PurpleWisps",
+        "spawn_rate": 15.0,
+        "lifetime": 3.0,
+        "initial_size": 20.0,
+        "initial_color": {
+          "r": 0.5,
+          "g": 0.1,
+          "b": 0.8,
+          "a": 0.1
+        },
+        "initial_velocity": 10.0,
+        "emitter_type": "GPU"
+      }
+    ],
+    "module_stack": [
+      "SpawnRate",
+      "Lifetime",
+      "InitialSize",
+      "InitialColor",
+      "InitialVelocity",
+      "Turbulence",
+      "Drag",
+      "CullByAge"
+    ],
+    "render_settings": {
+      "type": "Sprite",
+      "material": "M_VFX_Toxic_Smoke",
+      "sort_order": 1
+    },
+    "gpu_simulation_settings": {
+      "capacity": 512,
+      "spawn_rate": 35.0,
+      "bounds_scale": 3.0
+    },
+    "pool_config": {
+      "max_pool_size": 8,
+      "auto_release_threshold": 5.0
+    },
+    "significance_rank": 1
+  },
+  "species_vfx_config": {
+    "description": "Toxic particles - reptile species",
+    "primary_color": [
+      0.2,
+      0.8,
+      0.1,
+      1.0
+    ],
+    "secondary_color": [
+      0.5,
+      0.1,
+      0.8,
+      0.85
+    ],
+    "emitter_types": [
+      "Smoke",
+      "Bubble",
+      "Drip"
+    ],
+    "particle_count_range": [
+      40,
+      250
+    ],
+    "lifetime_range": [
+      1.0,
+      5.0
+    ],
+    "size_range": [
+      10.0,
+      50.0
+    ],
+    "velocity_range": [
+      20.0,
+      80.0
+    ],
+    "gpu_sim_settings": {
+      "capacity": 768,
+      "spawn_rate": 50.0,
+      "bounds_scale": 2.0,
+      "random_seed": 13
+    }
+  },
+  "ue5_import_metadata": {
+    "content_path": "VFX/Species/Onith/VFX_Onith_Smoke",
+    "package_name": "/Game/VFX/Species/Onith/VFX_Onith_Smoke",
+    "asset_registry_type": "NiagaraSystem",
+    "import_script": "import_vfx_to_ue5.py"
+  },
+  "checksum": "6d9e695e7028cff1"
+}

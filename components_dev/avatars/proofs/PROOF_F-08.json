@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F008",
+  "operative_id": "F-08",
+  "codename": "SKW-04",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Skeetw",
+    "name": "Skeetw",
+    "type": "avian",
+    "skeleton": "SK_Gwen",
+    "passive": "Voo Planado - velocidade +15% apos queda",
+    "base_stats": {
+      "health": 80,
+      "energy": 120,
+      "speed": 1.3
+    },
+    "physical": {
+      "height_cm": 170,
+      "weight_kg": 55
+    },
+    "abbr": "SKW"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "HURAN",
+  "specialization": "Bio-Engenharia e Voo Tatico",
+  "ethnicity": {
+    "label": "Dravidiana/Kerala",
+    "heritage": "Nair/Kshatriya (paterno) + Tamil/Chera (materno) - Kerala, Sul da India",
+    "region": "Kerala, Malabar Coast, India do Sul",
+    "cultural_fusion": "Tradies marciais Nair (Kalaripayattu) combinadas com voo tatico Skeetw. Nome Priya (amada/senhora) + Nair (casta guerreira de Kerala)."
+  },
+  "phenotype": {
+    "skin_tone": "Marrom medio-escuro (#7B4B2A) com subtom quente South Indian",
+    "hair": "Preto espesso, longo, oleado, STREAKS bioluminescentes Skeetw TEAL (#008080) - brilham verde-azulado no escuro",
+    "eyes": "Castanho escuro, grandes, expressivos, membrana nictitante Skeetw - anel TEAL (#008080) ao redor da iris",
+    "facial_structure": "Rosto classico Dravidiano - nariz largo, labios cheios, olhos redondos, testa ampla",
+    "body_type": "Esvelta com musculatura definida - 166 cm, 55 kg. Frame Skeetw esguio com Kalaripayattu muscle tone",
+    "distinctive_silhouette": "Postura de Kalaripayattu - stance wide, hands em posicao de martial, flight feathers em display. Peacock tail fanned em emote/combat stance."
+  },
+  "cultural_markers": {
+    "tattoos": "Sindoor bindi na testa (marca Kerala tradicional - red dot, permanente), nada mais (pure Nair - sem tatuagem casta)",
+    "scars": "Cicatriz de Kalaripayattu na palma da mao direita (arma cortante - 3 cm), marcas de azeite ritual nas costas (uychilulli treatment)",
+    "ornaments": "Jasmine flower ear piece (gajra) na orelha esquerda - flores frescas (repostas), brinco de ouro Kerala (thali-inspired) no direito",
+    "clothing_style": "Tatica form-fitting com Kerala mundu-inspired lower garment - drape element na cintura, Skeetw flight membranes, visual de warrior-aerial Dravidiana"
+  },
+  "species_traits": {
+    "visible_modification": "DISPLAY FEATHERS Skeetw tail - PAVAO-inspired (short, iridescente verde-azul-dourado, fan-able); streaks bioluminescentes TEAL no cabelo",
+    "passive_manifestation": "Voo Planado + peacock display: flight mais colorido do roster - feathers scatter light em rainbow iridescence. Display = intimidation/IFF visual. Bioluminescencia TEAL (difere de AZUL de NYRA).",
+    "combat_style_id": "Estilo bio-engineer/aerial - flight tatico com bio-tech, peacock display como flash-bang visual, Kalaripayattu melee em ar. Maior color variation do roster."
+  },
+  "distinguishing_summary": "Unica Dravidiana/Kerala; PAVAO display feathers iridescentes verde-azul-dourado (mais colorido do roster); streaks TEAL no cabelo (difere de AZUL de NYRA); nictitante TEAL (difere de dourada de NYRA, prateada de MEI-LING, ouro palido de FREJA); sindoor bindi vermelho; jasmine ear piece; Kalaripayattu stance",
+  "generated_at": "2026-10-22T13:30:29.512394+00:00",
+  "ref_code": "SKW-04",
+  "operative_ref": "OP_SKW_F_04",
+  "avatar_ref": "AVT_SKW_F_04",
+  "legacy_codename": "PRIYA NAIR",
+  "ref_code_assigned_at": "2026-10-22T14:54:51.298665+00:00"
+}

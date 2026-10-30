@@ -1,0 +1,12 @@
+{
+  "asset_class": "GameplayEffect",
+  "name": "GE_BurnDebuff",
+  "type": "Debuff",
+  "duration_policy": "HasDuration",
+  "modifier_op": "Add",
+  "attribute": "Health",
+  "magnitude": -5.0,
+  "tag": "Effect.Debuff.Burning",
+  "description": "Burn debuff (5 dmg/s, 4s)",
+  "generated_by": "wire_all_4_tasks.py"
+}

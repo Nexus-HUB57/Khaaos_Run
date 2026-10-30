@@ -26,6 +26,16 @@ bash scripts/test_ue5_logic.sh
 ```
 Esse comando compila subconjuntos de regras com g++; não valida UHT, módulos/plugins UE, replicação nem o executável dedicado.
 
+## Empacotamento do slice FPS CIGKV
+
+O script `scripts/build/package_ue5_first_world.py` cria um ZIP do primeiro slice de combate/ballística, inclui um manifesto SHA-256 e valida o `.uproject`, plugins, configuração CIGKV, perfil visual e contratos C++ necessários:
+
+```bash
+python3 scripts/build/package_ue5_first_world.py --run-engine
+```
+
+Com `--run-engine`, o script usa `UE5_ROOT`, `RUNUAT` ou `UNREAL_EDITOR` quando disponíveis. Sem uma instalação real do UE5.8, ele ainda empacota e executa a validação estática, mas registra `skipped_no_engine`; isso não deve ser interpretado como cook, UHT, UBT ou PIE aprovados. O artefato é escrito em `artifacts/ue5/`.
+
 ## Estrutura do Projeto
 
 ```
@@ -89,6 +99,78 @@ KhaaosRun/
 `server/` contém código TypeScript do backend, mas não é um pacote Node autônomo: `package.json`, `shared/`, o build do cliente e o schema ficam na raiz do repositório. Portanto, `server/Dockerfile` é o arquivo da imagem e o **contexto de build é a raiz (`.`)**. A imagem publicada em GHCR é a aplicação Node completa (API e arquivos estáticos do cliente), não um microserviço de economia separado.
 
 O workflow `UE5 CD` valida em PR e constrói a imagem sem publicá-la. Em `main`, primeiro roda `npm run verify:all` e só então publica as tags SHA e `main` em `ghcr.io/nexus-hub57/khaaos-run-server`. O `GITHUB_TOKEN` recebe `packages: write` apenas no job de build; segredos de execução são fornecidos pelo ambiente de deploy, nunca copiados para a imagem.
+
+## Sistemas de Experiência do Jogador (v2.0)
+
+### Pipeline Gráfica
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Pipeline Manager | `UKhaaosGraphicsPipelineManager` | Orquestrador central: 7 estágios (init→asset loading→quality calibration→**post process setup**→**lighting setup**→runtime optimization→hot reload) |
+| Quality Profile Runtime | `UKhaaosQualityProfileRuntime` | Override por-jogador, LOD bias para spectating/killcam, console command integration |
+| Material Pipeline | `UKhaaosMaterialPipeline` | Pipeline de materiais por espécie: 8 passes (BaseColor, Normal, Emissive, ORM, Subsurface, ClearCoat, WetMap, SpeciesTrait) + rim light por espécie, async streaming |
+| LOD System | `UKhaaosCharacterLODSystem` | Distance-based LOD (HIGH 0-30m, MEDIUM 30-60m, LOW 60-100m, CULLED 100m+), animation budget 2ms |
+| Species LOD Manager | `UKhaaosSpeciesLODManager` | LOD por espécie (5 níveis LOD0-LOD4), disable morph/emissive/VFX por nível |
+| Graphics Presets | `UKhaaosGraphicsPresetSubsystem` | 5 presets (Low 720p30→PhD 4K120), auto-detect GPU VRAM, DLSS/FSR/XeSS/TSR + sharpen tonemapper + TSR samples |
+| Dynamic Resolution | `UKhaaosDynamicResolution` | GPU-time-based DRS (Conservative/Aggressive/Adaptive), 8-frame moving average |
+| Post Process Manager | `UKhaaosPostProcessManager` | Efeitos por espécie (bloom, chromatic aberration, DOF, motion blur), GPU budget optimization — grading delegado ao Director |
+| Material Optimizer | `UKhaaosMaterialOptimizer` | Streaming budget, batch parameter updates, distant material optimization |
+
+### Pipeline Gráfica v3 — "Look Free Fire" (2026-10-28)
+O objetivo da v3 é fechar o gap visual vs Free Fire: imagem **clara, saturada e estável**, com **personagens que "popam"** do cenário e **profundidade via névoa**.
+
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Post Process Director | `UKhaaosPostProcessDirector` (WorldSubsystem) | Pós-processamento **REAL** via `FPostProcessSettings` em `APostProcessVolume` unbounded (prioridade 100). Assinatura FF: exposição fixa (histograma colapsado Min==Max, sem pop de adaptação), tonemapper de alto contraste (Slope 0.85/Toe 0.30/Shoulder 0.22), saturação 1.22x + tint quente, bloom com threshold 0.85, grain zero, vignette sutil. 5 moods: `PadraoBattle` (FF signature), `NoiteNeon` (Arukheea), `NebulosaAlien` (Ckesalth), `AmanhecerVenenoso` (Barburhen), `LowEndLeve`. Overlay por espécie (tint+vignette) exposto ao PostProcessManager. Crossfade via BlendWeight |
+| Lighting Director | `UKhaaosLightingDirector` (WorldSubsystem) | Rig de luz programático: `ADirectionalLight` (lux/temperatura/cascatas/contact shadows), `ASkyLight` (captura única SLS_CapturedScene), `AExponentialHeightFog` (densidade/inscattering/profundidade), `ASkyAtmosphere`. 4 presets: `DiaSolarPadrao` (12 lux@6100K — FF), `TardeDourada` (Priadus), `NoiteNeon` (Arukheea), `NebulosaVioleta` (Barburhen/Ckesalth). Auto-mapping por nome de mundo. Guardas: dedicated server/-NullRHI/commandlet não spawnam |
+| Character Pop Component | `UKhaaosCharacterPopComponent` (ActorComponent) | "Pop" de personagem estilo FF: **rim light Fresnel por espécie** (Huran ciano 0.9, Khael violeta 1.1, Venex magenta 1.0, Onith laranja 0.8, Zheers violeta-espiritual 0.7, Skeetw verde-pena 0.6) via MID params `RimLightIntensity`/`RimLightColor`, **custom depth stencil** (1+espécie, para outline PP), **point light de ancoragem** (só pawn local, cast shadows off, preset>Low). Hook de gameplay: `SetRimBoost(0-3)` para as 48 skills |
+| Correções de CVars | `KhaaosPostProcessManager` | Removidas CVars **inexistentes** na engine (`r.ColorGradingLUT`, `r.VignetteIntensity`, `r.UnderwaterDistortion`, `r.BloomIntensity`, `r.SceneChromaticAberration`) — substituídas por `r.SceneColorFringe.Intensity` real + delegação ao Director |
+| Testes | `KhaaosGraphicsV3Spec.cpp` | 6 specs: receitas válidas, mapeamento de mundos, presets de luz, rim único por espécie, 7 estágios do pipeline, tradução real de `FPostProcessSettings` |
+
+**Fluxo de inicialização gráfica v3:** `InitializePipeline()` → estágio 4 pré-aquece receita de PP → estágio 5 valida preset de luz → no `OnWorldBeginPlay` os WorldSubsystems criam volume PP + rig de luz e aplicam mood/preset automático do mundo (CIGKV=PadraoBattle/Dia, Arukheea=NoiteNeon, Barburhen=AmanhecerVenenoso/NebulosaVioleta, Ckesalth=NebulosaAlien, Priadus=PadraoBattle/TardeDourada).
+
+**Nota de materiais:** os parâmetros `RimLightIntensity`, `RimLightColor`, `EmissiveIntensity` etc. assumem master materials com esses parâmetros expostos (convenção do pipeline); materiais sem o parâmetro ignoram o set de MID — sem risco de crash.
+
+### Sistema de Personagens (6 Espécies)
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Mesh Registry | `UKhaaosSpeciesMeshRegistry` | Registry central de skeletal meshes por espécie (4 LODs), async loading via FStreamableManager |
+| Trait Builder | `UKhaaosSpeciesTraitBuilder` | Constrói e aplica GAS traits: HP/Energy/Speed/Shield + passives por espécie |
+| Anim BP Proxy | `UKhaaosAnimBPProxy` | State machine de animação (8 estados), physics blend por body part, combat layer, LOD tick rate |
+| Operative Actor | `AKhaaosOperativeActor` | Base abstrata com SpeciesGAS, ApplySpeciesTraits, species-specific stats |
+| Species GAS | `UKhaaosSpeciesGAS` | ASC + AttributeSet, 6 GameplayEffects por espécie (regen/resist/bonus) |
+| Animation Blend | `UKhaaosAnimationBlendManager` | Physics-based animation por espécie (spring-damper), gameplay event reactions |
+| Character Customizer | `UKhaaosCharacterCustomizer` | Morph targets, color channels, species presets, JSON serialization |
+| Emote System | `UKhaaosEmoteSystem` | 5 categorias, montage+VFX+audio, 8-slot emote wheel |
+
+**Traits por Espécie:**
+- **Huran** (85 bones): HP=120, WaterBreathing, HPRegen 2/s, SwimSpeed+25%
+- **Khael** (92 bones): Energy=120, Shield=20, CryoResist+40%, CrystalArmor, ManaRegen 3/s
+- **Venex** (88 bones): Speed=680, Shield=15, SpeedBoost+15%, CyberShield, HUDHack
+- **Onith** (110 bones, tail): HP=150, Shield=30, ToxicResist+50%, CarapaceArmor, TailWhip
+- **Zheers** (78 bones): Speed=600, Shield=10, RadResist+35%, FogStealth, EarPerception
+- **Skeetw** (120 bones, wings): Speed=720, Shield=5, FlightGlide, FeatherDodge, WindSense
+
+### Sistema de Acessórios
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Point Manager | `UKhaaosAccessoryPointManager` | 10 pontos de attachment com hierarquia (Head/Face/Shoulders/Back/Chest/Waist/Legs/Feet/Weapon_L/R) |
+| Material Variants | `UKhaaosMaterialVariantSystem` | 18 variantes por espécie (3 cada), MID com parameter overrides, blend transitions, compra KRC |
+| VFX Hook System | `UKhaaosVFXHookSystem` | 18 hooks VFX por espécie (3 cada), 10 lifecycle events, species filtering, Niagara pooling |
+| Socket System | `UKhaaosAccessorySocketSystem` | Socket-based attachment, instancing, draw call batching |
+| Skin System | `UKhaaosSkinSystem` | 6 rarities (COMUM→MITICO), mesh/material/VFX overrides, rarity aura VFX |
+| Cosmetic Validator | `UKhaaosCosmeticValidator` | Validação server-side, species compatibility, battle pass tier, anti-cheat rate limiting |
+
+### Economy 2PC (Two-Phase Commit)
+| Sistema | Classe | Descrição |
+|---|---|---|
+| Economy Bridge 2PC | `UKhaaosEconomyBridge2PC` | C++/TS two-phase commit: PREPARE→COMMIT/ABORT, Idempotency-Key anti-double-spend, timeout recovery (10s check, 30s timeout). **v2:** HTTP aceita toda faixa 2xx (prepare fresh = 201), erro server lido de `code`/`message`, `playerId` em TODAS as fases (fix 403 dev-mode) |
+| Economy Bridge | `UEconomyBridgeSubsystem` | HTTP bridge: /api/economy/prices, /simulate, /health. TTL cache, rate limiting |
+| Armorer Forge | `AKhaaosArmorerForge` | Marketplace de equipamentos, DataTable catalog. **v2:** `TryPurchase` roteado pelo 2PC (escrow server-side → entrega pós-commit), fallback local Bankhaoos (`bUseTwoPhaseCommit=false`), guardas de compra única por jogador, `EndPlay` aborta pendências, idempotency key `forge.<item>.<guid32>` |
+| Shop System | `UKhaaosShopSystem` | Daily deals (24h), featured rotation (7d), Fisher-Yates shuffle, discount system |
+
+**2PC Flow (wired na Forja):** `TryPurchase` → `BeginTransaction(forge.<item>.<guid32>)` → `PreparePhase()` [POST /api/economy/2pc/prepare — escrow server-side] → auto-commit do bridge [POST /api/economy/2pc/commit com `playerId`] → `Handle2PCPurchaseCompleted` (débito no espelho local + entrega do item + feedback). Falha em qualquer fase → `AbortPhase()` (refund) → `Handle2PCPurchaseFailed`.
+
+**Observabilidade:** `GET /metrics` no economy-api expõe `khaaos_economy_2pc_*` (requests por fase/resultado, latência p95, escrows por status, GC) — dashboards em `infra/grafana/khaaos-economy-dashboard.json`; `GET /healthz` = postgres/health agregado.
 
 ## Novos Sistemas dos Devs (NÃO MODIFICAR)
 
