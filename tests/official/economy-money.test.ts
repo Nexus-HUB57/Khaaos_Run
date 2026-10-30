@@ -26,6 +26,8 @@ test("entrada econômica aceita somente centavos exatos e rejeita destinos inexi
   assert.equal(api.bank.transfer.input.safeParse({ amountKrc: 2.25, destination: "weapons" }).success, false);
   assert.equal(api.bank.transfer.input.safeParse({ amountKrc: 1.005, destination: "fbm" }).success, false);
   assert.equal(api.items.repair.input.safeParse({ amountKrc: 1.001 }).success, false);
+  assert.equal(api.items.purchase.input.safeParse({ catalogId: "rifle-de-plasma" }).success, true);
+  assert.equal(api.items.purchase.input.safeParse({ catalogId: "rifle-inventado" }).success, false);
 });
 
 test("respostas econômicas preservam correlação e depósito sem pagamento permanece indisponível", () => {

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useItems, useSetItemEquipped, useUseItem, useRepairItem } from "@/hooks/use-items";
 import type { Item } from "@shared/routes";
-import { canUseItemOutsideMatch, getWarICategory, getWarIUseKind, type WarICategory } from "@shared/war-i";
+import { canUseItemOutsideMatch, getWarICategory, getWarIUseKind, hasValidWarIDurability, type WarICategory } from "@shared/war-i";
 import { useSharedBattleRoom } from "@/hooks/battle-room-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,8 @@ export default function Inventory() {
   const [activeCompartment, setActiveCompartment] = useState<(typeof COMPARTMENTS)[number]["id"]>("TODOS");
   const [search, setSearch] = useState("");
   const selectedItems = items.filter((item) => item.isEquipped);
+  const battleReadyItems = selectedItems.filter((item) => hasValidWarIDurability(item.durability, item.maxDurability));
+  const unusableEquippedItems = selectedItems.length - battleReadyItems.length;
   const visibleItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
     return items.filter((item) => {
@@ -128,6 +130,24 @@ export default function Inventory() {
             {selectedItems.length > 8 && <span className="px-2 py-1 text-[10px] font-mono text-muted-foreground">+{selectedItems.length - 8} OUTROS</span>}
           </div>
         )}
+        <div className="relative mt-4 border-t border-primary/15 pt-3">
+          {loadoutLocked ? (
+            <p role="status" className="text-[10px] font-mono tracking-wider text-amber-200">
+              LOADOUT CONGELADO — alterações valem para a próxima batalha.
+            </p>
+          ) : (
+            <>
+              <p className="text-[10px] font-mono tracking-wider text-muted-foreground">
+                PRONTOS PARA A BATALHA <span className="font-bold text-primary">{battleReadyItems.length}/{selectedItems.length}</span>
+              </p>
+              {unusableEquippedItems > 0 && (
+                <p role="status" className="mt-1 text-[10px] font-mono text-amber-200">
+                  {unusableEquippedItems} item(ns) equipado(s) sem durabilidade válida ficam no War’I e não concedem bônus nesta partida. Repare-os ou remova-os da PackBack.
+                </p>
+              )}
+            </>
+          )}
+        </div>
       </section>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">

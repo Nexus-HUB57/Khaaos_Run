@@ -22,7 +22,7 @@ export function useItems() {
 export function usePurchaseItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { type: string, name: string }) => {
+    mutationFn: async (data: { catalogId: string }) => {
       const validated = api.items.purchase.input.parse(data);
       const res = await idempotentFetch(api.items.purchase.path, {
         method: "POST",
@@ -39,8 +39,14 @@ export function usePurchaseItem() {
       }
       return api.items.purchase.responses[201].parse(await res.json());
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
+    onSuccess: (purchasedItem) => {
+      queryClient.setQueryData<Item[]>([api.items.list.path], (current = []) => {
+        const alreadyPresent = current.some((item) => item.id === purchasedItem.id);
+        return alreadyPresent
+          ? current.map((item) => item.id === purchasedItem.id ? purchasedItem : item)
+          : [...current, purchasedItem];
+      });
+      void queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.bank.get.path] });
     },
   });

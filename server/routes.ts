@@ -363,7 +363,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const result = await economyService.purchaseItem(userId, key, { name: input.name, type: input.type });
+      const result = await economyService.purchaseItem(userId, key, { catalogId: input.catalogId });
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });

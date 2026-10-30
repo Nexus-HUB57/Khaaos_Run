@@ -19,7 +19,9 @@ test("bank/loan/item inputs reject non-finite, out-of-range, fractional and extr
   rejects(api.bank.transfer.input, { amountKrc: -1, destination: "fbm" });
   rejects(api.bank.transfer.input, { amountKrc: 5, destination: "fbm", userId: "victim" });
   rejects(api.loans.request.input, { amountKrc: 100.5, days: 1 });
-  rejects(api.items.purchase.input, { type: "ARMA", name: "   " });
+  assert.equal(api.items.purchase.input.safeParse({ catalogId: "rifle-de-plasma" }).success, true);
+  rejects(api.items.purchase.input, { catalogId: "produto-inexistente" });
+  rejects(api.items.purchase.input, { catalogId: "rifle-de-plasma", priceKrc: 1 });
   rejects(api.items.equip.input, { isEquipped: true, userId: "victim" });
   rejects(api.items.repair.input, { amountKrc: 100001 });
   rejects(api.player.specialization.input, { specializationId: "ADMIN" });
