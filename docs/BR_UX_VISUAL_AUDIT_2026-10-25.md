@@ -44,6 +44,8 @@ A prioridade técnica imediata é tornar a evidência verdadeira e reproduzível
 3. `tests/python/test_quality_preflights.py`, `npm run test:python` e `verify:all`: testes automatizados das regras acima.
 4. `.github/workflows/08-weapon-balance.yml`: falhas do script não são mais mascaradas com `|| echo`.
 5. Revisões de `PR_CONSOLE_E2E.md` e do documento de parâmetros para distinguir implementação, hipótese e evidência.
+6. [Protocolo de playtest de armas](WEAPON_PLAYTEST_TELEMETRY_PROTOCOL.md) e `scripts/analyze_weapon_playtests.py`: contrato CSV v1 e resumo descritivo reproduzível. O analyzer não certifica balanceamento; a captura Unreal end-to-end não está habilitada.
+7. [ADR espacial CIGKV em rascunho](ADR-CIGKV-SPATIAL-CONTRACT-DRAFT.md): questões/owners organizados sem aprovar valores nem modificar coordenadas.
 
 ## Próximos gates para UX de última geração
 
@@ -56,5 +58,6 @@ A prioridade técnica imediata é tornar a evidência verdadeira e reproduzível
 
 - `python3 tests/python/test_quality_preflights.py` — 8 testes passaram.
 - `python3 scripts/validate_weapon_balance.py --check` — passou; 11 armas reproduzidas e relatório consistente.
-- `npm run verify:all` — **PASSOU**: TypeScript, build, 39 testes oficiais, preflights Python, Redis opt-in, regras portáveis UE5 e build/testes/stress do runtime.
+- `npm run verify:all` — **PASSOU em 31/10/2026**: TypeScript, build, suíte oficial, 35 testes Python + validador de armas, regras portáveis UE5 e build/testes do runtime (967 passaram, 13 foram ignorados, 0 falharam). A integração PostgreSQL opt-in foi ignorada porque `TEST_DATABASE_URL` não estava configurada.
 - O pipeline acima não contém build/cook do Unreal Editor; esse gate permanece pendente por ausência de Unreal Editor e conteúdo importado.
+- O analyzer de playtest passou em 15 testes unitários usando fixtures sintéticas apenas para testar o código; o template CSV vazio foi rejeitado como esperado. Nenhum dado real de playtest foi fornecido/analisado; o balanceamento continua **UNVERIFIED**.

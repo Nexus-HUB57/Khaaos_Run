@@ -67,6 +67,8 @@ Medições do JSON atual, reproduzidas neste ambiente:
 
 ### Fase B — aprovar contrato espacial e política de distribuição
 
+**Estado (31/10/2026): ADR preparado como rascunho, NÃO aprovado.** Veja [ADR do contrato espacial CIGKV](ADR-CIGKV-SPATIAL-CONTRACT-DRAFT.md), que organiza as decisões D1–D8 e os owners necessários. As opções e recomendações ali registradas não autorizam migração; dimensões, contagens, spacing, clearance, loot e fonte canônica seguem pendentes de aprovação e confirmação em mapa/runtime Unreal.
+
 **Decisões P0**
 
 1. Dimensão: manter 10 km × 10 km como especificado no INI/guia/Data Asset ou justificar outra medida.

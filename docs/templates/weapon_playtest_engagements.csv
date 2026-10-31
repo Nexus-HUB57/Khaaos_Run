@@ -1,0 +1,1 @@
+engagement_id,build_id,scenario_id,mode,weapon_id,target_armor_class,distance_m,shots_fired,shots_hit,damage_applied,time_to_kill_ms,eliminated,server_rtt_ms
