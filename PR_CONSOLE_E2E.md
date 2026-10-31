@@ -1,110 +1,53 @@
-# feat: E2E Phases 1-4 — Console Quality Complete (Free Fire/Fortnite Parity)
+# Inventário técnico — Sistemas Battle Royale (paridade não validada)
 
-## Summary
+> **Status em 25/10/2026:** este documento registra sistemas descritos no código-fonte e metas de projeto. Não é um benchmark, uma aprovação de build Unreal nem uma demonstração de paridade com Free Fire, Fortnite ou consoles comerciais.
 
-This PR delivers 4 end-to-end phases that upgrade Khaaos Run to **console-quality Battle Royale** (Free Fire/Garena, Fortnite parity). All additions are **non-breaking** — forward declarations, new components, and additive GameMode integration.
+## Resumo de evidências
 
-**39 files changed, 7,041 insertions(+), 18 deletions(-)**
+O inventário histórico descreve quatro fases, 39 arquivos e 7.041 linhas adicionadas. Esses números são metadados do resumo original, não uma validação independente do conteúdo final. Há classes C++ e testes de lógica portáveis no repositório, mas o ambiente de revisão não contém Unreal Editor, `.uasset`, `.umap`, `.pak`, `.utoc` ou `.ucas`; também há 17 marcadores `*_pending_import` em `Unreal/KhaaosRun/Content`. Portanto, integração em `UWorld`, interface renderizada, replicação em rede real, cook, FPS e qualidade visual continuam sem prova executável aqui.
 
----
+## Sistemas listados no código-fonte
 
-## Phase 1 — Network Replication & Iris Serialization
+| Área | Componentes descritos | O que isso comprova | O que ainda não comprova |
+|---|---|---|---|
+| Rede/Iris | `KhaaosReplicationBudget`, `KhaaosIrisConfig` e propriedades replicadas | Há implementação C++ declarada | Perfil Iris ativo em build, perda de pacote, latência, servidor dedicado ou teste de 50/100 jogadores |
+| Fluxo da partida | Match-flow FSM, airdrop, deploy e previsão de círculo | Há classes e parâmetros de design | Partida completa jogável, mapa carregado, widgets configurados ou ciclo de zona validado no Editor |
+| Performance | Orçamentos, LOD e significance | Existem perfis e código de escalabilidade | Calibração em PS5/XSX/Switch/PC, captura de frame-time ou estabilidade sustentada |
+| Combate/UX | Inventário, revive, kill feed, spectator e anti-cheat | Há componentes/testes de lógica | Sensação de mira, legibilidade do HUD, controle por plataforma, segurança em servidor ou resultado de playtest |
+| Conteúdo visual | Fontes de meshes, texturas e VFX | Há arquivos-fonte e relatórios de geração | Importação Unreal, materiais finais, animações, Niagara, iluminação, cook ou avaliação em jogo |
 
-| File | Purpose |
-|------|---------|
-| `Game/Network/KhaaosReplicationBudget.h/.cpp` | Adaptive bandwidth budgets (Combat 40%, Movement 25%, Inventory 10%, UI 15%, Other 10%), RTT-based quality detection, tick rate adaptation (LAN 30Hz → Poor 8Hz) |
-| `Game/Network/KhaaosIrisConfig.h/.cpp` | Iris priority system (Critical/High/Medium/Low), per-world spatial grid, dynamic escalation at <20 players |
+## Metas de plataforma — não são resultados
 
-**Enhanced existing components with `GetLifetimeReplicatedProps`:**
-- `KhaaosZoneManager` — 9 replicated properties (ZoneCenter, ZoneRadius, TargetCenter, TargetRadius, etc.)
-- `KhaaosInventoryComponent` — 2 (Slots, ActiveSlot)
-- `KhaaosReviveSystem` — 2 (ReviveStations, PlayerReviveStates via TMap→TArray bridge)
-- `KhaaosSpectatorComponent` — 3 (CurrentMode, SpectateTarget, FreeCamSpeed)
-- `KhaaosKillFeedComponent` — 1 (RecentKills)
-- `KhaaosVehicleBase` — 1 added (Seats — was missing)
+Os alvos de FPS, quantidade de jogadores visíveis, sombras e distância de visão abaixo são especificações presentes no documento original. Nenhum deles deve ser divulgado como desempenho medido sem hardware, build, mapa, preset, resolução, duração do ensaio e captura de frame-time identificados.
 
----
+| Perfil planejado | Alvo declarado | Status de validação |
+|---|---:|---|
+| PS5 / XSX | 60 FPS, até 60 jogadores visíveis | Não medido |
+| Switch 2 | 30 FPS, até 30 jogadores visíveis | Não medido |
+| PC High | 120 FPS, até 100 jogadores visíveis | Não medido |
+| PC Medium | 60 FPS, até 60 jogadores visíveis | Não medido |
+| Mobile | 30 FPS, até 20 jogadores visíveis | Não medido |
 
-## Phase 2 — Match Flow State Machine + Complete Game Loop
+## Inventário de funcionalidades
 
-| File | Purpose |
-|------|---------|
-| `Game/MatchFlow/KhaaosMatchFlowStateMachine.h/.cpp` | 8-state FSM: Lobby → Deploy → Parachute → Looting → Combat → Endgame → WorldTransition → Results |
-| `Game/Airdrop/KhaaosAirdropSystem.h/.cpp` | Free Fire-style supply drops with escalating frequency (120s → 30s), zone-edge weighted placement, rarity escalation |
-| `Game/Deploy/KhaaosDeploySystem.h/.cpp` | Parachute deployment with per-world config (CIGKV 50p vs Barburhen 100p), auto-open at 200m |
-| `Game/UI/KhaaosCirclePrediction.h/.cpp` | Fortnite white circle prediction for minimap, accuracy model (0.3 → 0.99) |
+Os itens do checklist abaixo indicam apenas presença declarada no código-fonte; não certificam paridade funcional, visual ou de desempenho com outro jogo.
 
----
+- [x] Código-fonte de anel multi-fase e easing.
+- [x] Código-fonte de airdrop e deploy/parachute.
+- [x] Código-fonte de previsão de zona para minimapa.
+- [x] Código-fonte de spectator, revive/downed e inventário de seis slots.
+- [x] Código-fonte de kill feed e verificações anti-cheat.
+- [x] Código-fonte de budgets de performance e replicação adaptativa.
+- [ ] Build Unreal 5.8 limpa e mapa jogável carregado.
+- [ ] HUD/minimapa e VFX observados dentro do jogo.
+- [ ] Cook/package e teste de rede em ambiente dedicado.
+- [ ] Sessões de playtest com telemetria de combate, estabilidade e UX.
+- [ ] Benchmarks comparáveis e autorizados para qualquer alegação de paridade externa.
 
-## Phase 3 — Console Performance & Optimization
+## Testes
 
-| File | Purpose |
-|------|---------|
-| `Game/Performance/KhaaosPerformanceBudget.h/.cpp` | Console targets (PS5/XSX 60fps, Switch2 30fps, PC 60-120fps), 24 profiles (6 targets × 4 modes), dynamic quality scaling via FPS monitoring |
-| `Game/Performance/KhaaosLODStrategy.h/.cpp` | 5-level LOD (Full → Medium → Low → Billboard → Culled) with per-world density multipliers (Ckesalth 0.6×, Barburhen 1.2×) |
-| `Game/Performance/KhaaosSignificanceManager.h/.cpp` | Battle royale actor significance (Player=Critical, Combat=High, Distant=Medium, Far=Low, Culled=Invisible), downed/vehicle rules |
+O resumo histórico enumera 24 casos para zona, combate e smoke/integration. Os testes portáveis de lógica podem verificar regras determinísticas no host, mas não são equivalentes a Unreal Automation Tests executados em mundo UE. Até haver logs de uma build/editor, a contagem histórica de casos não deve ser descrita como teste end-to-end de uma partida renderizada.
 
----
+## Critério para voltar a usar “paridade”
 
-## Phase 4 — Integration Tests + Build Configuration
-
-| File | Purpose |
-|------|---------|
-| `Tests/KhaaosZoneManagerSpec.h/.cpp` | 6 zone tests (Initialize, AdvancePhase, Shrink, DamageEscalate, CubicEase, IsComplete) |
-| `Tests/KhaaosCombatSystemSpec.h/.cpp` | 12 combat/inventory/revive/ADS/killfeed/anticheat tests |
-| `Tests/KhaaosSmokeTest.h/.cpp` | 6 integration smoke tests (MatchLifecycle, PlayerJoinLeave, ZoneDamage, LootSpawns, EconomyBridge, WorldTransition) |
-| `Config/KhaaosConsoleTargets.ini` | Console/server/replication/performance configuration (PS5, XSX, Switch2, dedicated server) |
-
----
-
-## GameMode Integration (Non-Breaking)
-
-- 7 new subsystem pointers: `MatchFlow`, `AirdropSystem`, `DeploySystem`, `CirclePrediction`, `PerformanceBudget`, `LODStrategy`, `ReplicationBudget`
-- 7 new forward declarations
-- `InitializePhDSubsystems()` now creates **11 total subsystems** (4 original + 7 new)
-- All `NewObject<>()` + `RegisterComponent()` pattern — consistent with existing code
-
----
-
-## Console Targets
-
-| Platform | Target FPS | Max Visible Players | Shadow Quality | View Distance |
-|----------|-----------|---------------------|---------------|---------------|
-| PS5 | 60 | 60 | 3 (High) | 1.0× |
-| XSX | 60 | 60 | 3 (High) | 1.0× |
-| Switch2 | 30 | 30 | 1 (Low) | 0.6× |
-| PC High | 120 | 100 | 3 (Ultra) | 1.5× |
-| PC Medium | 60 | 60 | 2 (Medium) | 1.0× |
-| Mobile | 30 | 20 | 0 (Off) | 0.4× |
-
----
-
-## Free Fire / Fortnite Parity Checklist
-
-- [x] Multi-phase storm circle with cubic easing
-- [x] Airdrop/supply drop with escalating frequency
-- [x] Deploy/parachute system with auto-open
-- [x] White circle prediction (Fortnite minimap)
-- [x] Spectator system (Follow/FreeCam/Overview)
-- [x] Revive/downed/reboot station system
-- [x] 6-slot inventory (Primary/Secondary/Melee/Utility/Shield/Backpack)
-- [x] Kill feed with rarity-colored entries
-- [x] Anti-cheat validation (rate limit, teleport, impossible hit)
-- [x] Console performance budgets with dynamic quality scaling
-- [x] Server-authoritative match flow state machine
-- [x] Adaptive network replication based on connection quality
-
----
-
-## Testing
-
-**24 automated tests:**
-- Zone Manager: 6 (initialization, phase advance, shrink interpolation, damage escalation, cubic ease, completion)
-- Combat System: 12 (damage valid/invalid, headshot, rate limit, inventory add/swap/cycle, revive down/alive, ADS, killfeed, anticheat)
-- Smoke/Integration: 6 (match lifecycle, player counts, zone damage, loot spawn, economy bridge, world transition)
-
----
-
-## ⚠️ Breaking Changes
-
-**None.** All additions use forward declarations, new components, and additive `InitializePhDSubsystems()` calls. Existing signatures are unchanged — safe for other devs on the codebase.
+Antes de afirmar “console quality”, “paridade Free Fire/Fortnite” ou desempenho por plataforma, registrar: (1) hash/versão do build Unreal; (2) mapa e conteúdo importado; (3) hardware, resolução e preset; (4) cenário reproduzível e número de jogadores; (5) p50/p95/p99 de frame-time e RTT; (6) resultados de playtest de UX/combate; e (7) fonte e metodologia do benchmark externo. Até lá, os termos corretos são **meta de design** e **implementação em código-fonte**.
