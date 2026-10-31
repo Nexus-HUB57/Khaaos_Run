@@ -1,53 +1,31 @@
-⚙️ Comandos de Console e Parâmetros de Configuração (Base para o Khaaos Run)
-O Free Fire permite ajustes profundos via SetEdit (app de edição de banco de dados) e ADB, que alteram o comportamento do motor do jogo. Estes são os parâmetros de referência para replicar no Khaaos Run:
+# Referência de UX e parâmetros — hipótese, não benchmark de Free Fire
 
-Parâmetro (Free Fire)	Valor de Referência	Função Técnica	Aplicação no Khaaos Run
-Dalvik.vm.heapstartsize / heapsize	5m / 512m	Alocação de memória para o motor.	Ajustar o pool de memória da engine para evitar stutters em cenas densas.
-GraphicsQuality / ShadowQuality	2 / 0	Reduz complexidade de shaders e sombras.	Implementar um sistema de escalabilidade de renderização dinâmica.
-Touch.screen.delay	0.00	Zera o delay de input do toque.	Priorizar a latência de input na pipeline de gameplay.
-GyroscopeSensitivity	3.5	Sensibilidade do giroscópio para mira.	Mapear sensibilidade de dispositivos de input (gamepad, mouse) para o giroscópio virtual.
-user_refresh_rate / peak_refresh_rate	90 / 90	Força a taxa de atualização da tela.	Sincronizar a taxa de quadros do jogo com a taxa de atualização do display.
-net.dns	9.9.9.9	DNS alternativo para reduzir ping.	Otimizar a camada de rede para roteamento de baixa latência.
-Referências: Comandos de performance e rede.
+> **Aviso de evidência:** este documento é uma lista de hipóteses de design, não um relatório técnico oficial da Garena nem uma comparação medida entre Free Fire e Khaaos Run. Os valores abaixo não possuem fonte primária, versão do jogo, aparelho, método de medição ou contexto reproduzível neste repositório. Não os copie para produção nem os apresente como configuração real do Free Fire.
 
-🎯 Algoritmos de Mira Assistida e Sensibilidade
-O sistema de Aim Assist do Free Fire é um algoritmo de "puxão magnético" baseado em proximidade. Para replicá-lo no Khaaos Run, é necessário implementar uma lógica de priorização de alvos e fatores de sensibilidade:
+## Revisão das afirmações anteriores
 
-Lógica de Aim Assist (Baseado em Área Sensorial): O sistema cria uma "caixa imaginária" ao redor do inimigo. Quando a mira entra nessa área, o algoritmo aplica uma força de atração em direção ao centro de massa do alvo (prioritariamente o tórax, por ter maior área de superfície). A força do magnetismo deve ser inversamente proporcional à distância: forte a curta distância, fraca a longa distância.
+| Afirmação registrada | Situação | Orientação para Khaaos Run |
+|---|---|---|
+| `Dalvik.vm.heapstartsize` / `heapsize` e valores 5m/512m | Propriedades Android/ART sem comprovação de relação com os parâmetros internos do Free Fire; não se aplicam diretamente ao processo Unreal | Dimensionar memória por plataforma com Unreal Device Profiles e perfis de conteúdo; medir pico, alocação e stutter em build de referência |
+| `GraphicsQuality` / `ShadowQuality` 2/0 | Valores sem versão ou escala documentadas | Expor presets próprios no `UGameUserSettings`; validar sombras, resolução, GPU time e legibilidade por plataforma |
+| `Touch.screen.delay=0.00` | Não há evidência de que essa chave controle a latência de toque do jogo | Medir latência de ponta a ponta (input → simulação → render → display) e reduzir buffering onde for suportado |
+| Sensibilidade de giroscópio e scopes 90–100/50–60 | Faixas sem método ou escala verificável; sensibilidade é dependente de aparelho, FOV e curva | Configuração normalizada por eixo/dispositivo, curva ajustável, aceleração opcional e calibração no menu |
+| `user_refresh_rate` / `peak_refresh_rate` 90/90 | Configuração do dispositivo, não garantia de FPS sustentado pelo jogo | Solicitar/selecionar taxas permitidas pelo SO e limitar FPS conforme capacidade térmica e perfil do aparelho |
+| `net.dns=9.9.9.9` como redução de ping | DNS resolve nomes; não é medida nem garantia de menor RTT da sessão de jogo | Melhorar seleção de região/servidor, medir RTT/jitter/perda e evitar prometer redução de ping por DNS |
+| Aim assist como “puxão magnético” e faixas de sensibilidade | Descrição não citada nem confirmada para o jogo; pode prejudicar justiça e acessibilidade se aplicada sem transparência | Projetar assistência configurável por tipo de input, com limites, regras competitivas claras e testes de aquisição/retensão de alvo |
+| Slots de habilidades, exemplos de personagens e “algoritmo usado pela Epic/Garena” | Alegações sem fonte neste documento | Tratar como referências de design, nunca como descrição comprovada de sistemas proprietários |
+| Balanceamento automático/hotfix remoto | Proposta de arquitetura, não evidência de um processo real no Khaaos Run | Começar por telemetria agregada e revisão humana; controlar versão, rollback, auditoria e proteção contra alteração não autorizada |
 
-Parâmetros de Sensibilidade (Referência para o Khaaos Run): A sensibilidade é dividida por tipo de mira. Os valores abaixo servem como ponto de partida para calibrar o input do seu novo console:
+## Parâmetros e ferramentas para o projeto
 
-Tipo de Mira	Faixa de Sensibilidade (Free Fire)	Observação Técnica
-Geral / Free Look	90 - 100	Sensibilidade base para movimentação de câmera.
-Ponto Vermelho (Red Dot)	85 - 95	Afeta a precisão em combate de curta distância sem scope.
-Mira 2x	75 - 85	Equilíbrio entre mobilidade e precisão.
-Mira 4x	65 - 75	Requer movimentos mais finos para não perder o alvo.
-Mira AWM (Sniper)	50 - 60	Sensibilidade baixa para estabilidade em longas distâncias.
-Olhadinha (Free Look)	30 - 50	Sensibilidade reduzida para varredura de ambiente.
-Referências: Mecânica do Aim Assist e faixas de sensibilidade.
+1. **Gráficos:** definir aparelhos e metas por perfil antes de mudar qualidade. Registrar resolução, preset, GPU/CPU, memória, temperatura, FPS médio e frame-time p95/p99. Aplicar configurações Unreal específicas por plataforma; não alterar propriedades Android globais como substituto de profiling.
+2. **Input:** fornecer opções explícitas para mouse/teclado, controle e toque, incluindo sensibilidade por mira, deadzone, curva e giroscópio quando suportado. Persistir preferências e oferecer restauração de padrão.
+3. **Assistência de mira:** separar configuração casual/competitiva e dispositivo de entrada; testar vantagem relativa e acessibilidade. Não copiar algoritmo de outro jogo sem documentação e validação.
+4. **Rede:** medir RTT, jitter, perda, correção de servidor e divergência cliente-servidor por região e plataforma. DNS não deve ser usado como substituto de matchmaking/região bem configurados.
+5. **Balanceamento:** medir pick rate, taxa de vitória, mortes por arma, distância, armor state, hit rate e TTK contextualizados. Toda mudança requer janela de coleta, segmentos relevantes e rollback versionado.
 
-Modo de Precisão de Mira (Aim Precision): No Free Fire, a configuração "Default" é a mais eficaz, pois permite que o aim assist funcione tanto dentro quanto fora do escopo. Para o Khaaos Run, implemente três modos: Full Control (desliga assistência), Precision Aim (assistência só fora do escopo) e Default (assistência sempre ativa).
+## Estado de evidência do repositório
 
-🧠 Sistema de Habilidades e Algoritmo de Balanceamento
-O Free Fire estrutura suas habilidades em Ativas (1 slot) e Passivas (3 slots). Para o Khaaos Run, o algoritmo de balanceamento deve seguir a mesma lógica baseada em taxa de escolha (pick rate) e taxa de vitória (win rate).
+A data desta revisão, os documentos disponíveis não trazem um benchmark reproduzível de Free Fire contra Khaaos Run. Há código C++ de budgets/perfis de performance e relatórios teóricos de armas, mas os alvos por plataforma não têm capturas de build ou de frame-time anexadas. O relatório de assets indica fontes geradas/placeholder e o Content Unreal contém marcadores de importação pendente; portanto, não há base para concluir qualidade gráfica ou paridade.
 
-Tipo de Habilidade	Mecânica	Exemplo (Free Fire)	Implementação no Khaaos Run
-Ativa	Ativada manualmente, com cooldown. Efeito de curta duração e alto impacto.	Alok – Drop the Beat: Aura que restaura HP e aumenta velocidade.	Criar um GameplayAbility com Cooldown e Duration. O efeito deve ser um GameplayEffect que aplica um buff de velocidade e regeneração.
-Passiva	Sempre ativa, sem cooldown. Buffs consistentes.	Kelly – Dash: Aumento permanente de velocidade de corrida.	Implementar como um GameplayEffect infinito (Infinite) que modifica o atributo de MovementSpeed.
-Awakening	Versão aprimorada da habilidade, desbloqueada por missão.	Hayato – Firebrand: Aumenta a penetração de armadura conforme o HP diminui.	Criar uma variação do GameplayAbility base com parâmetros de Modifier mais agressivos, condicionada a uma flag de Unlock.
-Algoritmo de Balanceamento: A Epic/Garena utiliza um ciclo de feedback: Coleta de Dados (Pick/Win Rate) → Análise → Rework (Ajuste de Stats ou Redesign de Mecânica) → Validação. No Khaaos Run, você deve implementar um sistema de telemetria que registre a escolha de habilidades e o resultado das partidas, e uma ferramenta de ajuste remoto (hotfix) para modificar os valores de Cooldown, Duration, Magnitude dos efeitos sem necessidade de atualização do cliente.
-
-Referências: Estrutura de habilidades ativas/passivas e processo de balanceamento da Garena.
-
-🚀 Diretrizes de Aplicação no "Khaaos Run"
-Para aplicar esses parâmetros no seu novo console, siga este fluxo:
-
-Camada de Configuração: Crie um arquivo de configuração global (ex: KhaaosRun.ini) que exponha os parâmetros da tabela acima. Permita que sejam modificados em tempo de execução via console de desenvolvimento (ex: KhaaosRun.Set GraphicsQuality 2).
-
-Módulo de Input: Implemente uma classe AimAssistComponent que recebe a Sensitivity como multiplicador. A lógica de magnetismo deve ser um SphereTrace a cada frame para detectar alvos próximos e aplicar uma força de rotação na câmera.
-
-Framework de Habilidades: Use um sistema baseado em Gameplay Ability System (GAS) da Unreal Engine (ou similar). Defina cada habilidade como um Ability com tags de Cooldown, Cost e Effect. O balanceamento deve ser feito via Data Tables que possam ser atualizadas dinamicamente.
-
-Telemetria: Implemente um AnalyticsSubsystem que envie eventos de AbilityActivated, Kill, Death e MatchEnd. Use esses dados para alimentar o algoritmo de balanceamento automático.
-
-Este guia fornece a base técnica para replicar a sensação de jogo e a profundidade estratégica do Free Fire no seu novo console, adaptando os parâmetros e algoritmos para uma arquitetura de jogo nativa.
+**Decisão:** manter os números originais apenas como hipóteses históricas não validadas; usar medições próprias do Khaaos Run para definir os parâmetros finais.

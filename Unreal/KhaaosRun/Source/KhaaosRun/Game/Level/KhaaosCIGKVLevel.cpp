@@ -524,6 +524,7 @@ void AKhaaosCIGKVLevel::InitializeMapData()
     // Load map data from DataTable or create defaults
     if (!MapData)
     {
+        bMapDataGeneratedAtRuntime = true;
         MapData = NewObject<UKhaaosCIGKVMapData>(this);
         MapData->InitializeDefaults();
     }

@@ -5,9 +5,11 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimeRoot = path.join(root, "game-runtime");
 const checks = [
+  { name: "App oficial · guarda das suítes", cwd: root, args: ["run", "guard:tests"] },
   { name: "App oficial · TypeScript", cwd: root, args: ["run", "check"] },
   { name: "App oficial · build", cwd: root, args: ["run", "build"] },
   { name: "App oficial · testes + coverage", cwd: root, args: ["run", "coverage:official"] },
+  { name: "Qualidade BR · preflights Python", cwd: root, args: ["run", "test:python"] },
   { name: "UE5 · regras de loot", cwd: root, args: ["run", "test:ue5:logic"] },
   { name: "Runtime · build", cwd: runtimeRoot, args: ["run", "build"] },
   { name: "Runtime · testes + coverage", cwd: runtimeRoot, args: ["run", "coverage"] },

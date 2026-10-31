@@ -1,5 +1,6 @@
 {
-  "generated_at": "2026-10-15T00:55:55.789010+00:00",
+  "generated_at": "2026-10-25T18:57:15Z",
+  "evidence_scope": "THEORETICAL_CONTINUOUS_FIRE_ALL_PROJECTILES_HIT_NO_ARMOR_OR_MATCH_TELEMETRY",
   "weapons": [
     {
       "id": "WPN_Pistol_Onith",
@@ -7,7 +8,7 @@
       "category": "PISTOL",
       "rarity": "COMUM",
       "dps": 186.67,
-      "headshot_dps": 373.34,
+      "headshot_dps": 373.33,
       "ttk_100hp": 0.536,
       "mag_burst_damage": 420,
       "sustain_dps": 112.0,
@@ -63,7 +64,7 @@
       "category": "SNIPER",
       "rarity": "EPICO",
       "dps": 63.33,
-      "headshot_dps": 189.99,
+      "headshot_dps": 190.0,
       "ttk_100hp": 1.579,
       "mag_burst_damage": 475,
       "sustain_dps": 43.18,
@@ -121,7 +122,7 @@
       "dps": 90.0,
       "headshot_dps": 90.0,
       "ttk_100hp": 1.111,
-      "mag_burst_damage": 45,
+      "mag_burst_damage": 0,
       "sustain_dps": 90.0,
       "range": 3,
       "pellet_count": 1,
@@ -135,7 +136,7 @@
       "dps": 100.0,
       "headshot_dps": 100.0,
       "ttk_100hp": 1.0,
-      "mag_burst_damage": 75,
+      "mag_burst_damage": 0,
       "sustain_dps": 100.0,
       "range": 4,
       "pellet_count": 1,
@@ -163,12 +164,18 @@
     "avg_dps": 197.03,
     "weapon_count": 11,
     "tier_distribution": {
-      "S": 3,
-      "A": 1,
       "B": 2,
-      "C": 3,
-      "D": 2
+      "A": 1,
+      "S": 3,
+      "D": 2,
+      "C": 3
     },
-    "balance_status": "VALID"
-  }
+    "balance_status": "UNVERIFIED",
+    "evidence_status": "NO_PLAYTEST_TELEMETRY"
+  },
+  "limitations": [
+    "DPS pressupõe fogo contínuo e todos os projéteis/pellets acertando.",
+    "TTK é uma aproximação de 100 HP: não modela armadura, precisão, recuo, falloff, tempo entre disparos, latência ou hit registration.",
+    "Este relatório confere fórmulas e consistência dos arquivos; não certifica balanceamento nem paridade com outro jogo."
+  ]
 }

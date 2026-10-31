@@ -51,6 +51,14 @@ struct FKhaaosZonePhase
     UPROPERTY(EditAnywhere, BlueprintReadWrite) FVector Center = FVector(1024.f, 1024.f, 0.f);
 };
 
+UENUM(BlueprintType)
+enum class ECIGKVLevelDataSource : uint8
+{
+    NotLoaded,
+    JsonFile,
+    HardcodedFallback
+};
+
 UCLASS(BlueprintType, Blueprintable)
 class KHAAOSRUN_API AKhaaosCIGKVLevelData : public AActor
 {
@@ -93,6 +101,18 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Khaaos|Level")
     int32 EXCOTarget = 1000000;
+
+    /** Runtime provenance for diagnostics and automation tests. */
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Khaaos|Level|Diagnostics")
+    ECIGKVLevelDataSource ActiveDataSource = ECIGKVLevelDataSource::NotLoaded;
+
+    /** JSON file path that supplied the active data; empty for hardcoded fallback. */
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Khaaos|Level|Diagnostics")
+    FString ActiveDataPath;
+
+    /** Most recent JSON path attempted, whether or not it loaded successfully. */
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Khaaos|Level|Diagnostics")
+    FString LastDataPathAttempt;
 
     // ─── Loading ───
     UFUNCTION(BlueprintCallable, Category="Khaaos|Level")
