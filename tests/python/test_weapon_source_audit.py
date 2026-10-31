@@ -3,6 +3,7 @@
 import csv
 import importlib.util
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -106,6 +107,12 @@ class WeaponSourceAuditTests(unittest.TestCase):
         self.assertEqual(row["weapon_id"], "WPN_Test")
         self.assertEqual(row["field_conflicts"]["damage"]["components_dev_json"], 40)
         self.assertEqual(row["field_conflicts"]["damage"]["mvp_asset_manifest"], 120)
+
+    def test_report_is_identical_across_different_checkout_roots(self):
+        with tempfile.TemporaryDirectory() as other_temp:
+            clone = Path(other_temp) / "checkout"
+            shutil.copytree(self.root, clone)
+            self.assertEqual(AUDIT.build_report(self.root), AUDIT.build_report(clone))
 
     def test_agreement_and_uasset_presence_still_do_not_prove_runtime_loading(self):
         mvp = [{"id": "WPN_Test", "gameplay": {

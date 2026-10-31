@@ -169,11 +169,11 @@ def _sha256(path: Path) -> str:
         raise AuditError(f"não foi possível calcular SHA-256 de {path}: {exc}") from exc
 
 
-def _sha256_many(paths: list[Path]) -> str:
+def _sha256_many(paths: list[Path], base_dir: Path) -> str:
     digest = hashlib.sha256()
     try:
         for path in sorted(paths, key=lambda item: item.as_posix()):
-            digest.update(path.as_posix().encode("utf-8"))
+            digest.update(path.relative_to(base_dir).as_posix().encode("utf-8"))
             digest.update(b"\0")
             digest.update(path.read_bytes())
             digest.update(b"\0")
@@ -261,7 +261,7 @@ def build_report(repo_root: Path = ROOT) -> dict[str, Any]:
     source_inventory[0]["included_files"] = [
         path.relative_to(repo_root).as_posix() for path in component_files
     ]
-    source_inventory[0]["sha256"] = _sha256_many(component_files)
+    source_inventory[0]["sha256"] = _sha256_many(component_files, repo_root)
     return {
         "report_schema_version": 1,
         "audit_status": "CONFLICTS_DETECTED" if conflict_pair_count else "NO_RAW_VALUE_CONFLICTS_DETECTED",
