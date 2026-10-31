@@ -46,18 +46,21 @@ A prioridade técnica imediata é tornar a evidência verdadeira e reproduzível
 5. Revisões de `PR_CONSOLE_E2E.md` e do documento de parâmetros para distinguir implementação, hipótese e evidência.
 6. [Protocolo de playtest de armas](WEAPON_PLAYTEST_TELEMETRY_PROTOCOL.md) e `scripts/analyze_weapon_playtests.py`: contrato CSV v1 e resumo descritivo reproduzível. O analyzer não certifica balanceamento; a captura Unreal end-to-end não está habilitada.
 7. [ADR espacial CIGKV em rascunho](ADR-CIGKV-SPATIAL-CONTRACT-DRAFT.md): questões/owners organizados sem aprovar valores nem modificar coordenadas.
+8. [Auditoria de fontes de armas](WEAPON_DATA_SOURCE_AUDIT.md) e `scripts/audit_weapon_source_divergence.py`: compara JSON, CSV e MVP manifest; encontrou 12 pares arma/campo divergentes em três armas e deixa a autoridade `UNRESOLVED`.
 
 ## Próximos gates para UX de última geração
 
 1. Escolher uma fonte autoritativa para escala, setores, spawns, ZEX, loot e distribuição; alinhar JSON, `AKhaaosCIGKVLevelData`, `UKhaaosCIGKVMapData`, teste e gerador. Depois, revisar fairness espacial com regra de clearance aprovada.
-2. Definir plataformas/hardware de referência e metas por perfil. Importar arte final de personagens, armas, ambiente, materiais, animações e VFX; abrir o mapa em Unreal 5.8, compilar, cozinhar e capturar frame-time/resolução.
-3. Executar sessões de playtest com telemetria contextual: spawn/POI, mortes por causa, TTK, hit rate, loot por raridade, win/pick rate, RTT/jitter e feedback de legibilidade do HUD.
-4. Somente então ajustar parâmetros e declarar desempenho ou paridade. O Unreal Engine é a ferramenta, não um benchmark; “acima do nível Unreal” precisa ser traduzido em métricas observáveis por hardware e build.
+2. Armas: resolver crosswalk/semântica, aprovar fonte autoritativa e comprovar import/consumo em Unreal antes de sincronizar os arquivos conflitantes; depois, capturar playtests para recalibrar parâmetros.
+3. Definir plataformas/hardware de referência e metas por perfil. Importar arte final de personagens, armas, ambiente, materiais, animações e VFX; abrir o mapa em Unreal 5.8, compilar, cozinhar e capturar frame-time/resolução.
+4. Executar sessões de playtest com telemetria contextual: spawn/POI, mortes por causa, TTK, hit rate, loot por raridade, win/pick rate, RTT/jitter e feedback de legibilidade do HUD.
+5. Somente então ajustar parâmetros e declarar desempenho ou paridade. O Unreal Engine é a ferramenta, não um benchmark; “acima do nível Unreal” precisa ser traduzido em métricas observáveis por hardware e build.
 
 ## Validação realizada nesta branch
 
 - `python3 tests/python/test_quality_preflights.py` — 8 testes passaram.
 - `python3 scripts/validate_weapon_balance.py --check` — passou; 11 armas reproduzidas e relatório consistente.
-- `npm run verify:all` — **PASSOU em 31/10/2026**: TypeScript, build, suíte oficial, 35 testes Python + validador de armas, regras portáveis UE5 e build/testes do runtime (967 passaram, 13 foram ignorados, 0 falharam). A integração PostgreSQL opt-in foi ignorada porque `TEST_DATABASE_URL` não estava configurada.
+- `npm run verify:all` — **PASSOU em 31/10/2026**: guard de suítes, TypeScript, build, suíte oficial, 40 testes Python, validadores de armas/fontes, regras portáveis UE5 e build/testes do runtime (967 passaram, 13 foram ignorados, 0 falharam). A integração PostgreSQL opt-in foi ignorada porque `TEST_DATABASE_URL` não estava configurada.
 - O pipeline acima não contém build/cook do Unreal Editor; esse gate permanece pendente por ausência de Unreal Editor e conteúdo importado.
 - O analyzer de playtest passou em 15 testes unitários usando fixtures sintéticas apenas para testar o código; o template CSV vazio foi rejeitado como esperado. Nenhum dado real de playtest foi fornecido/analisado; o balanceamento continua **UNVERIFIED**.
+- A auditoria estática de fontes passou em 5 testes unitários; no snapshot atual, JSON=11 IDs, CSV=12 e MVP manifest=3, com 12 pares arma/campo divergentes em AR, shotgun e sniper. Foram achados 0 `.uasset` de arma/DataTable e 4 marcadores pending-import nas pastas varridas; fonte canônica e carregamento em runtime continuam **UNRESOLVED/UNPROVEN**.
