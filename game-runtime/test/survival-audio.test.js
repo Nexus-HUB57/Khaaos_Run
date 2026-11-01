@@ -10,9 +10,9 @@ import { GameAudio } from '../src/game3d/audio3d.js';
 test('survival: liga camada por hazard e registra kind/intensity no contrato', () => {
   const a = new GameAudio();
   a.survival('tsunami', true);
-  a.survival('lava', true, { intensity: .5 });
+  a.survival('smoke', true, { intensity: .5 });
   assert.equal(a.survivalLayers.tsunami.kind, 'tsunami');
-  assert.equal(a.survivalLayers.lava.intensity, .5);
+  assert.equal(a.survivalLayers.smoke.intensity, .5);
   // sem ctx (headless) nenhum nó é criado
   assert.deepEqual(a.survivalNodes, {});
 });
@@ -45,11 +45,13 @@ test('survival: duration não agenda timer headless (ctx null)', async () => {
 
 test('stopAllSurvival: mata TODAS as camadas de uma vez', () => {
   const a = new GameAudio();
+  // Fase 42 — 5 hazards canônicos do README (lava saiu; spore/smoke entraram)
   a.survival('tsunami', true);
-  a.survival('lava', true);
+  a.survival('spore', true);
+  a.survival('smoke', true);
   a.survival('gravity', true);
   a.survival('acid', true);
-  assert.equal(Object.keys(a.survivalLayers).length, 4);
+  assert.equal(Object.keys(a.survivalLayers).length, 5);
   a.stopAllSurvival();
   assert.deepEqual(a.survivalLayers, {});
 });
@@ -62,7 +64,7 @@ test('stopAllSurvival sem camadas é no-op', () => {
 
 test('stingers e confirmações são no-op seguros sem AudioContext', () => {
   const a = new GameAudio();
-  for (const kind of ['tsunami', 'lava', 'gravity', 'acid', 'desconhecido']) {
+  for (const kind of ['tsunami', 'spore', 'smoke', 'gravity', 'acid', 'desconhecido']) {
     a.hazardStinger(kind); // nunca lança
   }
   a.killConfirm(false);
@@ -82,8 +84,8 @@ test('hazards distintos coexistem como camadas independentes', () => {
 test('enabled=false mantém o contrato de estado (mesma gramática do legado)', () => {
   const a = new GameAudio();
   a.enabled = false;
-  a.survival('lava', true);
-  assert.ok(a.survivalLayers.lava, 'estado registrado mesmo silenciado');
-  a.survival('lava', false);
+  a.survival('smoke', true);
+  assert.ok(a.survivalLayers.smoke, 'estado registrado mesmo silenciado');
+  a.survival('smoke', false);
   assert.deepEqual(a.survivalLayers, {});
 });

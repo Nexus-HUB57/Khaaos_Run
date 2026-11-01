@@ -281,10 +281,11 @@ test('cascas substituem a caixa sólida: sem box duplicado, sem cap, collider in
   assert.equal(layout.colliders.length, fresh.colliders.length, 'colliders idênticos ao layout canônico');
 });
 
-test('cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)', () => {
+test('cenários preservados: SCENARIOS com o cânon F42 (README 1:1)', () => {
   assert.equal(Object.keys(SCENARIOS).length, 5);
   assert.equal(SCENARIOS.PRIADUS.ringDamageMultiplier, 1.75);
-  assert.equal(SCENARIOS.CKESALTH.survival.type, 'VOLCANIC_LAVA');
-  assert.equal(SCENARIOS.ARUKHEEA.survival.anchors.length, 4);
+  assert.equal(SCENARIOS.CKESALTH.survival.type, 'TOXIC_SMOKE');
+  assert.equal(SCENARIOS.ARUKHEEA.survival.type, 'TSUNAMI_WAVE');
+  assert.equal(SCENARIOS.CIGKV.survival.type, 'KHAOS_GRAVITY');
   assert.equal(SCENARIOS.CIGKV.playerSpawn.x, 0);
 });

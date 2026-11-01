@@ -9,7 +9,7 @@
 //   2. SIM OFFLINE (sim3d): 'melee' com o mesmo contrato (owner filtra quem vê);
 //   3. CLIENTE (spectator3d): specDamageSpawn é PURO — número só no FOLLOW
 //      envolvendo o seguido; SpectatorView ingere/drena DAMAGE.
-//   4. Fase 29: kinds AMBIENTAIS (tsunami/eruption/ring/acid/quantum) chegam
+//   4. Fase 29/42: kinds AMBIENTAIS (tsunami/spore/smoke/ring/acid/quantum) chegam
 //      com a identidade do golpe — specDamageSpawn marca `hazard` e o pool
 //      rende o tier `dmg-hazard hz-*` (paleta do banner). A anomalia Khaaos
 //      (quantum) passa a espelhar a VIDA perdida no DAMAGE (o drain pousa
@@ -172,7 +172,7 @@ function withFakeDoc(fn) {
 test('specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard false', () => {
   const follow = 'h_aaa';
   // cada kind de hazard → hazard true com kind preservado
-  for (const kind of ['tsunami', 'eruption', 'ring', 'acid', 'quantum']) {
+  for (const kind of ['tsunami', 'spore', 'smoke', 'ring', 'acid', 'quantum']) {
     const s = specDamageSpawn({ x: 5, y: 1, z: 6, damage: 12, victim: follow, kind }, follow, 'FOLLOW_PLAYER');
     assert.ok(s, `kind ${kind} gera spawn`);
     assert.equal(s.kind, kind);
@@ -201,7 +201,8 @@ test('specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard
 test('damageTier: hazard ganha tier próprio com cor por kind (paleta do banner)', () => {
   // cada kind de hazard → classe canônica
   assert.equal(damageTier({ hazard: true, kind: 'tsunami' }).cls, 'dmg-hazard hz-tsunami');
-  assert.equal(damageTier({ hazard: true, kind: 'eruption' }).cls, 'dmg-hazard hz-lava');
+  assert.equal(damageTier({ hazard: true, kind: 'spore' }).cls, 'dmg-hazard hz-spore');
+  assert.equal(damageTier({ hazard: true, kind: 'smoke' }).cls, 'dmg-hazard hz-smoke');
   assert.equal(damageTier({ hazard: true, kind: 'quantum' }).cls, 'dmg-hazard hz-gravity');
   assert.equal(damageTier({ hazard: true, kind: 'acid' }).cls, 'dmg-hazard hz-acid');
   assert.equal(damageTier({ hazard: true, kind: 'ring' }).cls, 'dmg-hazard hz-ring');
@@ -235,7 +236,7 @@ test('pool: spawn de hazard rende nó dmg-hazard com a classe do kind e o dano c
 });
 
 test('room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind quantum', () => {
-  const room = new MatchRoom3D({ id: 'tv-quantum-29', seed: 'TV-QUANTUM-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: 'tv-quantum-29', seed: 'TV-QUANTUM-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
   const victim = room.bots[0];
@@ -244,7 +245,7 @@ test('room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind 
   victim.temporaryArmor = 0;
   victim.x = 60; victim.z = 60; // longe dos 4 pilões (raio 28)
   const lifeBefore = victim.life;
-  room.quantumTimer = 120; // intervalSeconds do Arukheea — dispara no próximo tick
+  room.quantumTimer = 120; // intervalSeconds do Pulso Khaaos (CIGKV) — dispara no próximo tick
   room.tick(0.02);
   assert.equal(room.quantumActive, true, 'anomalia ativa no tick disparado');
   assert.ok(victim.life < lifeBefore, 'vida caiu com a anomalia');
@@ -257,7 +258,7 @@ test('room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind 
 });
 
 test('room3d: drain com blindagem NÃO vira número — só vida perdida é informação', () => {
-  const room = new MatchRoom3D({ id: 'tv-quantum-armor', seed: 'TV-QUANTUM-AR', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: 'tv-quantum-armor', seed: 'TV-QUANTUM-AR', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
   const shielded = room.bots[0];
@@ -273,12 +274,13 @@ test('room3d: drain com blindagem NÃO vira número — só vida perdida é info
 });
 
 test('room3d: TSUNAMI vira DAMAGE kind tsunami e atravessa o pipeline até o número do FOLLOW', () => {
-  const room = new MatchRoom3D({ id: 'tv-tsunami-29', seed: 'TV-TSUNAMI-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Priadus' });
+  // Fase 42 — o tsunami canônico (README W4) mora no Arukheea
+  const room = new MatchRoom3D({ id: 'tv-tsunami-29', seed: 'TV-TSUNAMI-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
   const victim = room.bots[0];
   victim.y = 0; // nível do mar: submergeBelowY = 90 → dano garantido
-  room.tsunamiTimer = 180; // intervalSeconds do Priadus — dispara no próximo tick
+  room.tsunamiTimer = 180; // intervalSeconds do Arukheea — dispara no próximo tick
   room.tick(0.02);
   const ev = room.spectatorView().events.find((e) => e.type === 'DAMAGE' && e.data.kind === 'tsunami' && e.data.victim === victim.id);
   assert.ok(ev, 'DAMAGE kind tsunami na transmissão');

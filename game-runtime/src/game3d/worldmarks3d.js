@@ -273,11 +273,12 @@ function marksPriadus(group, scene, scenario, rng, hazard) {
   return { counts, animators: [waterShimmer(water, hazard)] };
 }
 
-// Fase 26 — tsunami (Priadus): o oceano-anel é a ORIGEM da onda — maré de
-// tempestade sobe +6 m com ondulação agitada; opacidade fecha o céu d'água.
+// Fase 26/42 — neblina de esporos (Priadus, W2 "Emboscada Verde"): o oceano-anel
+// é a ORIGEM da névoa — maré VERDE sobe +6 m com ondulação agitada; opacidade
+// fecha o céu d'água tingido pelos esporos.
 function waterShimmer(water, hazard) {
   return (dt, t) => {
-    const boost = hazard?.kind === 'tsunami' ? hazard.boost : 0;
+    const boost = hazard?.kind === 'spore' ? hazard.boost : 0;
     water.position.y = .3 + Math.sin(t * .8) * .045 + boost * (5.5 + Math.sin(t * 1.9) * 1.2);
     if (boost > 0) water.material.opacity = Math.min(.95, .8 + boost * .15);
   };
@@ -369,11 +370,12 @@ function marksCkesalth(group, scene, scenario, rng, hazard) {
   return { counts, animators: [flameFlicker(flameMats, flame, hazard, flareEmitters), ...flareEmitters.map((e) => (dt, t) => e.update(dt, t))] };
 }
 
-// Fase 26 — erupção (CKESALTH): a tocha ERUPCIONA com a lava — chama 3× mais
-// alta e brilhante, emissores reais disparam (fagulhas 4×, fumaça 3×).
+// Fase 26/42 — fumaça tóxica (CKESALTH, W3 "Assassino Silencioso"): a tocha da
+// refinaria INGLE com a fumaça — chama 3× mais alta e brilhante, emissores
+// reais disparam (fagulhas 4×, fumaça 3×).
 function flameFlicker(mats, flame, hazard, flareEmitters = []) {
   return (dt, t) => {
-    const boost = hazard?.kind === 'lava' ? hazard.boost : 0;
+    const boost = hazard?.kind === 'smoke' ? hazard.boost : 0;
     const k = (1.3 + Math.sin(t * 11) * .28 + Math.sin(t * 23.7) * .12) * (1 + boost * 2.2);
     for (const m of mats) m.emissiveIntensity = k;
     flame.scale.y = .9 + Math.sin(t * 9.3) * .16 + boost * 2;
@@ -416,10 +418,15 @@ function marksArukheea(group, scene, scenario, rng, hazard) {
   spireBase.position.set(sp.x, 1.1, sp.z);
   group.add(spire, spireBase);
   counts.spires++;
-  // pilões nos ANCHORS oficiais da gravidade (dados do cenário — mesma posição da sim;
-  // DENTRO da arena por design, por isso o grupo próprio p/ o bounds test)
+  // pilões nos ANCHORS canônicos da gravidade (dados do cenário — mesma posição
+  // da sim; DENTRO da arena por design, por isso o grupo próprio p/ o bounds
+  // test). Fase 42 — a ANOMALIA migrou p/ o Pulso do CIGKV, mas os pilões
+  // seguem como arquitetura quântica da prisão (posição canônica congelada).
   const pylonRings = [];
-  const anchors = scenario.survival?.anchors ?? [];
+  const anchors = scenario.survival?.anchors ?? [
+    { id: 'NEXUS', x: 0, z: 0 }, { id: 'NORTH', x: 0, z: -95 },
+    { id: 'EAST', x: 95, z: 0 }, { id: 'WEST', x: -95, z: 0 },
+  ];
   if (anchors.length) {
     const pylonGroup = new THREE.Group();
     pylonGroup.name = 'anchor-pylons';

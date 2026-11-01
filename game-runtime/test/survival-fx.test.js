@@ -76,16 +76,28 @@ test('tsunami: espuma real — partículas emitidas durante a elevação', () =>
   assert.ok(particles.activeCount > 0, `espuma viva (${particles.activeCount})`);
 });
 
-test('erupção: lava sobe até lavaBelowY (180 m) e emite brasas + fumaça', () => {
+test('fumaça tóxica: teto sobe até smokeTopY (180 m) e emite colunas de fumaça (Fase 42 — W3 canônica)', () => {
   const { particles, fx } = makeFX(CKESALTH);
-  fx.handleEvent({ type: 'eruptionStart', durationSeconds: 35, lavaBelowY: 180 });
-  assert.equal(fx.state.active, 'lava');
+  fx.handleEvent({ type: 'toxicSmokeStart', durationSeconds: 35, smokeTopY: 180 });
+  assert.equal(fx.state.active, 'smoke');
   const rise = Math.min(10, 35 * .28); // 9.8 s
   for (let i = 0; i < Math.ceil(rise / (1 / 30)); i++) { fx.update(1 / 30, i / 30); particles.update(1 / 30); }
-  assert.ok(Math.abs(fx.state.surfaceY - 180) < .5, `lava no alvo 180 (${fx.state.surfaceY.toFixed(2)})`);
-  assert.ok(particles.activeCount > 0, `brasas/fumaça vivas (${particles.activeCount})`);
-  const surface = fx.group.children.find((m) => m.name === 'lava-surface');
-  assert.ok(surface, 'superfície nomeada lava-surface na cena');
+  assert.ok(Math.abs(fx.state.surfaceY - 180) < .5, `fumaça no alvo 180 (${fx.state.surfaceY.toFixed(2)})`);
+  assert.ok(particles.activeCount > 0, `colunas de fumaça vivas (${particles.activeCount})`);
+  const surface = fx.group.children.find((m) => m.name === 'smoke-surface');
+  assert.ok(surface, 'superfície nomeada smoke-surface na cena');
+});
+
+test('neblina de esporos: teto verde sobe até sporeTopY (90 m) com motes vivos (Fase 42 — W2 canônica)', () => {
+  const { particles, fx } = makeFX(PRIADUS);
+  fx.handleEvent({ type: 'sporeFogStart', durationSeconds: 45, sporeTopY: 90 });
+  assert.equal(fx.state.active, 'spore');
+  const rise = Math.min(10, 45 * .28); // 9.9 s (subida 28%)
+  for (let i = 0; i < Math.ceil(rise / (1 / 30)); i++) { fx.update(1 / 30, i / 30); particles.update(1 / 30); }
+  assert.ok(Math.abs(fx.state.surfaceY - 90) < .5, `neblina no alvo 90 (${fx.state.surfaceY.toFixed(2)})`);
+  assert.ok(particles.activeCount > 0, `motes de esporo vivos (${particles.activeCount})`);
+  const surface = fx.group.children.find((m) => m.name === 'spore-surface');
+  assert.ok(surface, 'superfície nomeada spore-surface na cena');
 });
 
 test('idempotência: tsunamiStart duplicado NÃO duplica a superfície', () => {
@@ -134,12 +146,12 @@ test('evento desconhecido é ignorado sem erro e sem estado', () => {
   assert.equal(fx.state.phase, 'idle');
 });
 
-test('mudança de hazard: tsunami ativo → erupção assume a MESMA superfície', () => {
+test('mudança de hazard: tsunami ativo → fumaça assume a MESMA superfície (Fase 42)', () => {
   const { fx } = makeFX(PRIADUS);
   fx.handleEvent({ type: 'tsunamiStart', durationSeconds: 40, submergeBelowY: 90 });
   fx.handleEvent({ type: 'tsunamiEnd' });
-  fx.handleEvent({ type: 'eruptionStart', durationSeconds: 35, lavaBelowY: 180 });
-  assert.equal(fx.state.active, 'lava');
+  fx.handleEvent({ type: 'toxicSmokeStart', durationSeconds: 35, smokeTopY: 180 });
+  assert.equal(fx.state.active, 'smoke');
   assert.equal(fx.group.children.filter((m) => m.name.includes('surface')).length, 1, 'uma superfície só');
 });
 
@@ -157,12 +169,13 @@ import { buildScene } from '../src/game3d/world3d.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { SCENARIOS } from '../src/game3d/scenarios.js';
 
+// Fase 42 — 1:1 com a dinâmica canônica de cada mundo no README
 const HAZARD_EVENT = {
-  CIGKV: () => ({ type: 'acidRain', damage: 1, intervalSeconds: 10 }),
-  Barburhen: () => null, // sem survival hazard — só partículas de chaminé
-  Priadus: (s) => ({ type: 'tsunamiStart', durationSeconds: s.durationSeconds, submergeBelowY: s.submergeBelowY }),
-  Ckesalth: (s) => ({ type: 'eruptionStart', durationSeconds: s.durationSeconds, lavaBelowY: s.lavaBelowY }),
-  Arukheea: (s) => ({ type: 'gravityAnomalyStart', durationSeconds: s.durationSeconds, gravityScale: s.gravityScale, anchorRadius: s.anchorRadius, anchors: s.anchors }),
+  CIGKV: (s) => ({ type: 'gravityAnomalyStart', durationSeconds: s.durationSeconds, gravityScale: s.gravityScale, anchorRadius: s.anchorRadius, anchors: s.anchors }), // Pulso Khaaos
+  Barburhen: () => null, // chuva ácida é id-gated no sim (W1) — só partículas de chaminé
+  Priadus: (s) => ({ type: 'sporeFogStart', durationSeconds: s.durationSeconds, sporeTopY: s.sporeTopY }),
+  Ckesalth: (s) => ({ type: 'toxicSmokeStart', durationSeconds: s.durationSeconds, smokeTopY: s.smokeTopY }),
+  Arukheea: (s) => ({ type: 'tsunamiStart', durationSeconds: s.durationSeconds, submergeBelowY: s.submergeBelowY }),
 };
 
 test('5 mundos: marcos + partículas + SurvivalFX integram sem erro nem NaN', () => {
@@ -237,14 +250,19 @@ test('Fase 26: tsunami abastece os marcos — boost 0→1 na subida, 1 na susten
   assert.equal(pushes.length, len, 'idle não repete push');
 });
 
-test('Fase 26: lava e gravidade abastecem os marcos com o MESMO contrato', () => {
-  const lava = makeFXWithLandmarks(CKESALTH);
-  lava.fx.handleEvent({ type: 'eruptionStart', durationSeconds: 35, lavaBelowY: 180 });
+test('Fase 26/42: fumaça/esporos e gravidade abastecem os marcos com o MESMO contrato', () => {
+  const smoke = makeFXWithLandmarks(CKESALTH);
+  smoke.fx.handleEvent({ type: 'toxicSmokeStart', durationSeconds: 35, smokeTopY: 180 });
   // push ocorre no INÍCIO do update (antes de elapsed avançar): 1º frame boost 0,
   // frames seguintes sobem — mesmo smoothstep da superfície
-  for (let i = 0; i < 10; i++) lava.fx.update(1 / 30, i / 30);
-  assert.equal(lava.pushes.at(-1).kind, 'lava');
-  assert.ok(lava.pushes.at(-1).boost > 0, 'boost começa a subir');
+  for (let i = 0; i < 10; i++) smoke.fx.update(1 / 30, i / 30);
+  assert.equal(smoke.pushes.at(-1).kind, 'smoke');
+  assert.ok(smoke.pushes.at(-1).boost > 0, 'boost começa a subir');
+  const spore = makeFXWithLandmarks(PRIADUS);
+  spore.fx.handleEvent({ type: 'sporeFogStart', durationSeconds: 45, sporeTopY: 90 });
+  for (let i = 0; i < 10; i++) spore.fx.update(1 / 30, i / 30);
+  assert.equal(spore.pushes.at(-1).kind, 'spore');
+  assert.ok(spore.pushes.at(-1).boost > 0, 'boost da neblina começa a subir');
   const grav = makeFXWithLandmarks(ARUKHEEA);
   grav.fx.handleEvent({ type: 'gravityAnomalyStart', durationSeconds: 30, anchors: ARUKHEEA.survival.anchors, anchorRadius: 28 });
   grav.fx.update(1 / 30, 0);

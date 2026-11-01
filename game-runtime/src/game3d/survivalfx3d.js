@@ -1,15 +1,18 @@
 // Khaaos Run — Fase 17: FX das SOBREVIVÊNCIAS de cada mundo, ligados aos marcos.
 // ==============================================================================
 // A sim/servidor já emite os eventos de sobrevivência (sim3d emit / room3d
-// #emitAll) e o dano é POR ALTURA (submergeBelowY / lavaBelowY). O FX aqui
-// materializa a MESMA regra no mundo visual:
-//   Priadus  — TSUNAMI_WAVE: nível do mar sobe até submergeBelowY (lâmina
-//              translúcida + espuma na borda do anel oceânico)
-//   Ckesalth — VOLCANIC_LAVA: lava sobe até lavaBelowY (plano emissivo +
-//              brasas + coluna de fumaça)
-//   Arukheea — KHAOS_GRAVITY: domos de contenção nos ANCHORS oficiais +
-//              motos ascendentes (gravidade invertida)
-//   CIGKV    — acidRain: chuva ácida drizzle verde sobre a arena
+// #emitAll) e o dano é POR ALTURA (submergeBelowY / sporeTopY / smokeTopY). O FX
+// aqui materializa a MESMA regra no mundo visual — Fase 42: 1:1 com a dinâmica
+// canônica de cada Ring no README:
+//   Arukheea — TSUNAMI_WAVE (W4 "Tsunami"): nível do mar sobe até submergeBelowY
+//              (lâmina translúcida + espuma na borda do anel oceânico)
+//   Priadus  — SPORE_FOG (W2 "Emboscada Verde"): neblina de esporos sobe até
+//              sporeTopY (teto verde translúcido + motes de esporo à deriva)
+//   Ckesalth — TOXIC_SMOKE (W3 "Assassino Silencioso"): fumaça tóxica sobe até
+//              smokeTopY (teto cinza denso + colunas de fumaça)
+//   CIGKV    — KHAOS_GRAVITY (Pulso Khaaos): domos de contenção nos ANCHORS +
+//              motes ascendentes (gravidade reduzida)
+//   Barburhen — acidRain (W1 "Água da Morte"): chuva ácida drizzle verde
 // Puro visual: NENHUM dano é aplicado aqui (o dano continua autoritativo na
 // sim/servidor — o FX só mostra a superfície da regra que já mata).
 //
@@ -17,8 +20,8 @@
 // ABASTECE os marcos do mundo (deps.landmarks = registro de scene.userData.
 // worldMarks) com o estado do hazard a cada frame — kind + boost 0..1 (fade
 // in na subida, 1 na sustentação, fade out no recuo) + surfaceY. Os marcos
-// reagem: maré no anel oceânico (Priadus), erupção da tocha (CKESALTH),
-// despertar dos pilões (Arukheea), estrobo dos beacons (ácido/CIGKV).
+// reagem: maré verde no anel oceânico (Priadus), tempestade de fumaça na tocha
+// (CKESALTH), despertar dos pilões (CIGKV), estrobo dos beacons (ácido/W1).
 import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 
@@ -46,7 +49,7 @@ export class SurvivalFX {
     this.group.name = 'survival-fx';
     scene.add(this.group);
 
-    this.active = null;        // 'tsunami' | 'lava' | 'gravity' | null
+    this.active = null;        // 'tsunami' | 'spore' | 'smoke' | 'gravity' | 'acid' | null
     this.phase = 'idle';       // idle | rising | sustained | receding
     this.elapsed = 0;
     this.duration = 0;
@@ -66,8 +69,10 @@ export class SurvivalFX {
     switch (e.type) {
       case 'tsunamiStart': this.#startSurface('tsunami', e.submergeBelowY ?? 90, e.durationSeconds ?? 40); break;
       case 'tsunamiEnd': if (this.active === 'tsunami') this.#recede(); break;
-      case 'eruptionStart': this.#startSurface('lava', e.lavaBelowY ?? 180, e.durationSeconds ?? 35); break;
-      case 'eruptionEnd': if (this.active === 'lava') this.#recede(); break;
+      case 'sporeFogStart': this.#startSurface('spore', e.sporeTopY ?? 90, e.durationSeconds ?? 45); break;
+      case 'sporeFogEnd': if (this.active === 'spore') this.#recede(); break;
+      case 'toxicSmokeStart': this.#startSurface('smoke', e.smokeTopY ?? 180, e.durationSeconds ?? 35); break;
+      case 'toxicSmokeEnd': if (this.active === 'smoke') this.#recede(); break;
       case 'gravityAnomalyStart': this.#startGravity(e); break;
       case 'gravityAnomalyEnd': if (this.active === 'gravity') this.#endGravity(); break;
       case 'acidRain': this.acidT = Math.max(this.acidT, 1.6); break;
@@ -99,15 +104,31 @@ export class SurvivalFX {
       this.surfaceMat.opacity = .48;
       this.surfaceMat.roughness = .12;
       this.surfaceMat.metalness = .3;
-    } else {
-      this.surfaceMat.color.set('#3a120a');
-      this.surfaceMat.emissive.set('#ff4a12');
-      this.surfaceMat.emissiveIntensity = 1.5;
-      this.surfaceMat.opacity = .88;
-      this.surfaceMat.roughness = .85;
+    } else if (kind === 'spore') {
+      // Fase 42 — neblina de esporos (W2): teto VERDE translúcido e vivo
+      this.surfaceMat.color.set('#3d5c22');
+      this.surfaceMat.emissive.set('#5a7a20');
+      this.surfaceMat.emissiveIntensity = .5;
+      this.surfaceMat.opacity = .4;
+      this.surfaceMat.roughness = .9;
       this.surfaceMat.metalness = 0;
+    } else if (kind === 'smoke') {
+      // Fase 42 — fumaça tóxica (W3): teto CINZA denso e abafado
+      this.surfaceMat.color.set('#2e2c28');
+      this.surfaceMat.emissive.set('#0d0c0a');
+      this.surfaceMat.emissiveIntensity = .3;
+      this.surfaceMat.opacity = .62;
+      this.surfaceMat.roughness = .95;
+      this.surfaceMat.metalness = 0;
+    } else {
+      this.surfaceMat.color.set('#2a7d8c');
+      this.surfaceMat.emissive.set('#0a2a34');
+      this.surfaceMat.emissiveIntensity = .25;
+      this.surfaceMat.opacity = .48;
+      this.surfaceMat.roughness = .12;
+      this.surfaceMat.metalness = .3;
     }
-    this.surface.name = kind === 'tsunami' ? 'tsunami-surface' : 'lava-surface';
+    this.surface.name = `${kind}-surface`;
     this.surface.visible = true;
     this.riseTime = Math.min(10, this.duration * RISE_FRACTION);
   }
@@ -167,7 +188,7 @@ export class SurvivalFX {
   #landmarkBoost() {
     if (this.active === 'gravity') return this.gravityBoost;
     if (this.active === 'acid') return 1; // pulse ativo = alerta pleno nos marcos
-    if (this.active === 'tsunami' || this.active === 'lava') {
+    if (this.active === 'tsunami' || this.active === 'spore' || this.active === 'smoke') {
       if (this.phase === 'rising') return Math.min(1, this.elapsed / Math.max(.001, this.riseTime));
       if (this.phase === 'sustained') return 1;
       if (this.phase === 'receding') return Math.max(0, 1 - this.elapsed / RECEDE_SECONDS);
@@ -191,8 +212,8 @@ export class SurvivalFX {
     // ---------- Fase 26 — estado p/ os marcos do mundo (sempre) ----------
     this.#pushLandmarks();
 
-    // ---------- superfície (tsunami/lava) ----------
-    if (this.surface && (this.active === 'tsunami' || this.active === 'lava')) {
+    // ---------- superfície (tsunami/spore/smoke) ----------
+    if (this.surface && (this.active === 'tsunami' || this.active === 'spore' || this.active === 'smoke')) {
       this.elapsed += dt;
       const y = this.surface.position.y;
       if (this.phase === 'rising') {
@@ -213,8 +234,8 @@ export class SurvivalFX {
         }
       }
       if (this.surfaceMat) {
-        // lava pulsa emissiva; água cintila levemente
-        const pulse = this.active === 'lava' ? 1.5 + Math.sin(t * 7.3) * .35 : .25 + Math.sin(t * 2.1) * .08;
+        // espore/smoke pulsam levemente; água cintila — a regra de dano é da sim
+        const pulse = this.active === 'tsunami' ? .25 + Math.sin(t * 2.1) * .08 : .4 + Math.sin(t * 1.7) * .15;
         this.surfaceMat.emissiveIntensity = pulse;
       }
       // partículas de borda
@@ -237,37 +258,40 @@ export class SurvivalFX {
             },
           },
         });
-      } else if (this.active === 'lava') {
+      } else if (this.active === 'spore') {
+        // Fase 42 — W2 "Emboscada Verde": motes de esporo verdes à deriva sob o teto
         this.#particleRate(dt, {
           rate,
           spawn: {
-            tag: 'ember',
-            fn: () => {
-              const a = this.rng.next() * Math.PI * 2;
-              const r = 30 + this.rng.next() * (ARENA_RADIUS - 34);
-              return {
-                x: Math.cos(a) * r, y: this.surface.position.y + .5, z: Math.sin(a) * r,
-                vx: (this.rng.next() - .5) * 2.2, vy: 4 + this.rng.next() * 4.4, vz: (this.rng.next() - .5) * 2.2,
-                size: .5 + this.rng.next() * .7, growth: -.06, life: 1.2 + this.rng.next() * 1.1,
-                drag: .12, gravity: 2.6, alpha: .9,
-                color: [1, .62, .18], endColor: [.35, .08, .03],
-              };
-            },
-          },
-        });
-        this.#particleRate(dt, {
-          rate: 7,
-          spawn: {
-            tag: 'lavaSmoke',
+            tag: 'spore',
             fn: () => {
               const a = this.rng.next() * Math.PI * 2;
               const r = this.rng.next() * ARENA_RADIUS;
               return {
-                x: Math.cos(a) * r, y: this.surface.position.y + 1, z: Math.sin(a) * r,
-                vx: (this.rng.next() - .5) * 1.4, vy: 3 + this.rng.next() * 2.4, vz: (this.rng.next() - .5) * 1.4,
-                size: 2.4 + this.rng.next() * 2, growth: 1.6, life: 3 + this.rng.next() * 2,
-                drag: .5, gravity: -0.8, alpha: .34,
-                color: [.25, .22, .2], endColor: [.42, .4, .38],
+                x: Math.cos(a) * r, y: this.rng.next() * Math.max(2, this.surface.position.y), z: Math.sin(a) * r,
+                vx: (this.rng.next() - .5) * 1.2, vy: .4 + this.rng.next() * 1.2, vz: (this.rng.next() - .5) * 1.2,
+                size: .3 + this.rng.next() * .5, growth: .35, life: 2.4 + this.rng.next() * 2,
+                drag: .4, gravity: -0.4, alpha: .7,
+                color: [.62, .78, .3], endColor: [.32, .46, .16],
+              };
+            },
+          },
+        });
+      } else if (this.active === 'smoke') {
+        // Fase 42 — W3 "Assassino Silencioso": colunas de fumaça tóxica densa
+        this.#particleRate(dt, {
+          rate,
+          spawn: {
+            tag: 'toxicSmoke',
+            fn: () => {
+              const a = this.rng.next() * Math.PI * 2;
+              const r = 20 + this.rng.next() * (ARENA_RADIUS - 24);
+              return {
+                x: Math.cos(a) * r, y: .6, z: Math.sin(a) * r,
+                vx: (this.rng.next() - .5) * 1.4, vy: 3 + this.rng.next() * 2.6, vz: (this.rng.next() - .5) * 1.4,
+                size: 2.2 + this.rng.next() * 2, growth: 1.7, life: 3 + this.rng.next() * 2,
+                drag: .5, gravity: -0.9, alpha: .4,
+                color: [.2, .19, .17], endColor: [.4, .39, .36],
               };
             },
           },
@@ -275,7 +299,7 @@ export class SurvivalFX {
       }
     }
 
-    // ---------- gravidade (Arukheea) ----------
+    // ---------- gravidade (Pulso Khaaos — CIGKV) ----------
     if (this.active === 'gravity') {
       this.elapsed += dt;
       this.gravityBoost = Math.min(1, this.gravityBoost + dt * 2);

@@ -24,14 +24,15 @@ import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 
-// Arukheea — KHAOS_GRAVITY: interval 120 s, dano 12/s, âncoras raio 28 em
+// Fase 42 — PULSO KHAAOS do CIGKV (Protocolo CIGKV do README): KHAOS_GRAVITY
+// interval 120 s, dano 12/s, âncoras raio 28 em
 // NEXUS(0,0)/NORTH/EAST/WEST. O ponto (60,60) fica FORA de todas as âncoras
 // (mesma posição usada pelos testes da Fase 29). Um tick de 0,02 s drena
 // 0,24 de vida — life 0.05 morre no 1º tick; life intacta não morre.
 const TICK = 0.02;
 
 function exposedBotRoom(t) {
-  const room = new MatchRoom3D({ id: `env-death-${t}`, seed: `ENV-DEATH-${t}`, capacity: 2, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: `env-death-${t}`, seed: `ENV-DEATH-${t}`, capacity: 2, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
   room.quantumTimer = 120; // dispara a anomalia no próximo tick
@@ -79,7 +80,7 @@ test('room3d: crédito via lastHitBy — último atirador leva o kill da anomali
 });
 
 test('room3d: vítima HUMANA da anomalia recebe eliminated com by ANOMALIA', () => {
-  const room = new MatchRoom3D({ id: 'env-death-hum', seed: 'ENV-DEATH-HUM', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: 'env-death-hum', seed: 'ENV-DEATH-HUM', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('v', 'VITIMA-QUANTUM'));
   assert.ok(room.addPlayer('w', 'SOBREVIVENTE'));
   assert.ok(room.start('v', 'belt'));
@@ -112,7 +113,7 @@ test('room3d: caído (DBNO) dentro do campo é FINALIZADO pela anomalia', () => 
 // ---------------------------------------------------------------------------
 
 test('sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)', () => {
-  const sim = new KhaaosSim3D({ seed: 'ENV-BOT', botCount: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const sim = new KhaaosSim3D({ seed: 'ENV-BOT', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const bot = sim.bots[0];
   bot.armor = 0; bot.temporaryArmor = 0; bot.life = 0.05;
@@ -129,7 +130,7 @@ test('sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)', 
 });
 
 test('sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador', () => {
-  const sim = new KhaaosSim3D({ seed: 'ENV-CREDIT', botCount: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const sim = new KhaaosSim3D({ seed: 'ENV-CREDIT', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const bot = sim.bots[0];
   bot.armor = 0; bot.temporaryArmor = 0; bot.life = 0.05;
@@ -146,7 +147,7 @@ test('sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador', () 
 });
 
 test('sim offline: PLAYER morto pela anomalia — eliminated com colocação + espólio', () => {
-  const sim = new KhaaosSim3D({ seed: 'ENV-PLAYER', botCount: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const sim = new KhaaosSim3D({ seed: 'ENV-PLAYER', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const p = sim.player;
   p.armor = 0; p.temporaryArmor = 0; p.life = 0.05;
@@ -164,7 +165,7 @@ test('sim offline: PLAYER morto pela anomalia — eliminated com colocação + e
 });
 
 test('sim offline: blindagem absorve e âncora protege — SEM morte espúria', () => {
-  const sim = new KhaaosSim3D({ seed: 'ENV-SAFE', botCount: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const sim = new KhaaosSim3D({ seed: 'ENV-SAFE', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const p = sim.player;
   p.temporaryArmor = 0; p.armor = 500; p.life = 100;
@@ -174,7 +175,7 @@ test('sim offline: blindagem absorve e âncora protege — SEM morte espúria', 
   assert.equal(p.alive, true, 'blindagem absorve o dreno — ninguém morre');
   assert.equal(p.life, 100);
 
-  const anchored = new KhaaosSim3D({ seed: 'ENV-ANCHOR', botCount: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const anchored = new KhaaosSim3D({ seed: 'ENV-ANCHOR', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   anchored.start('belt');
   anchored.player.armor = 0; anchored.player.temporaryArmor = 0; anchored.player.life = 0.05;
   anchored.player.x = 0; anchored.player.z = 0; // NEXUS, raio 28

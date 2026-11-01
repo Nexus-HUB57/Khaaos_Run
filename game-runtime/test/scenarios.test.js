@@ -21,9 +21,10 @@ test('Barburhen resolve o MUNDO DA DESTRUIÇÃO (diretiva W1) e mapeia os setore
   assert.equal(scenario.id, 'Barburhen');
   assert.equal(layout.scenarioId, 'Barburhen');
   // Fase 31 — identidade da diretiva de arte (Mundos W1/C1)
+  // Fase 42 — setores 1:1 com a tabela W1 do README ("Área Urbana e Comercial")
   assert.equal(scenario.label, 'Barburhen — O Mundo da Destruição');
   assert.deepEqual(layout.sectors.map((sector) => sector.name), [
-    'ÁREA URBANA EM RUÍNAS', 'SETOR INDUSTRIAL', 'PARQUE ABANDONADO', 'ZONA DE EXTRAÇÃO', 'TERMINAL ZEX',
+    'ÁREA URBANA E COMERCIAL', 'SETOR INDUSTRIAL', 'PARQUE ABANDONADO', 'ZONA DE EXTRAÇÃO', 'TERMINAL ZEX',
   ]);
   assert.deepEqual(layout.playerSpawn, { x: 90, z: 150 });
   assert.ok(layout.lootSpots.every((spot) => spot.sectorId && spot.lootZone));

@@ -592,7 +592,8 @@ export class KhaaosSim3D {
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
     this.tsunamiTimer = 0; this.tsunamiRemaining = 0; this.tsunamiActive = false;
-    this.volcanicTimer = 0; this.volcanicRemaining = 0; this.volcanicActive = false;
+    this.sporeTimer = 0; this.sporeRemaining = 0; this.sporeActive = false;
+    this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
@@ -928,7 +929,16 @@ export class KhaaosSim3D {
       this.pulseTimer = 0;
       this.ring.pulse++;
       this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
-      this.emit('pulse', { pulse: this.ring.pulse, target: this.ring.target });
+      // Fase 42 — README (Mundos W1–W4): o anel FECHA SOBRE o setor canônico de
+      // cada mundo (W1 Parque / W2 Templo / W3 Vila Sombria / W4 Prisão). O centro
+      // deriva em passos determinísticos: 25% do caminho por pulso (100% no 4º).
+      const fin = this.scenario.ringFinal;
+      if (fin) {
+        const k = Math.min(1, this.ring.pulse / 4);
+        this.ring.x = fin.x * k;
+        this.ring.z = fin.z * k;
+      }
+      this.emit('pulse', { pulse: this.ring.pulse, target: this.ring.target, finalName: fin?.name ?? null });
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
@@ -936,9 +946,13 @@ export class KhaaosSim3D {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
-    if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
-    if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
-    if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
+    // Fase 42 — sobrevivência dirigida pela CONFIGURAÇÃO do mundo (scenarios.js),
+    // 1:1 com a dinâmica canônica de cada Ring no README.
+    const survivalType = this.scenario.survival?.type ?? null;
+    if (survivalType === 'TSUNAMI_WAVE') this.#stepTsunami(dt);
+    else if (survivalType === 'SPORE_FOG') this.#stepSporeFog(dt);
+    else if (survivalType === 'TOXIC_SMOKE') this.#stepToxicSmoke(dt);
+    else if (survivalType === 'KHAOS_GRAVITY') this.#stepGravityAnomaly(dt);
 
     // --- Fase 28 — airdrop de suprimento (caixa blindada com AR-47 LENDÁRIO) ---
     if (!this.supplyDropItem) {
@@ -1641,26 +1655,52 @@ export class KhaaosSim3D {
       this.emit('tsunamiEnd', {});
     }
   }
-  #stepVolcanicEruption(dt) {
+  // Fase 42 — "Emboscada Verde" (README W2): a neblina com esporos tóxicos desce
+  // como um teto que sobe até sporeTopY — quem fica no baixo é punido pelo atraso.
+  #stepSporeFog(dt) {
     const hazard = this.scenario.survival;
     if (!hazard) return;
-    if (!this.volcanicActive) {
-      this.volcanicTimer += dt;
-      if (this.volcanicTimer >= hazard.intervalSeconds) {
-        this.volcanicTimer -= hazard.intervalSeconds;
-        this.volcanicRemaining = hazard.durationSeconds;
-        this.volcanicActive = true;
-        this.emit('eruptionStart', { durationSeconds: hazard.durationSeconds, lavaBelowY: hazard.lavaBelowY });
+    if (!this.sporeActive) {
+      this.sporeTimer += dt;
+      if (this.sporeTimer >= hazard.intervalSeconds) {
+        this.sporeTimer -= hazard.intervalSeconds;
+        this.sporeRemaining = hazard.durationSeconds;
+        this.sporeActive = true;
+        this.emit('sporeFogStart', { durationSeconds: hazard.durationSeconds, sporeTopY: hazard.sporeTopY });
       }
     }
-    if (!this.volcanicActive) return;
-    if (this.player.alive && this.player.y < hazard.lavaBelowY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'eruption');
-    for (const bot of this.bots) if (bot.alive && bot.y < hazard.lavaBelowY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'eruption');
-    this.volcanicRemaining -= dt;
-    if (this.volcanicRemaining <= 0) {
-      this.volcanicRemaining = 0;
-      this.volcanicActive = false;
-      this.emit('eruptionEnd', {});
+    if (!this.sporeActive) return;
+    if (this.player.alive && this.player.y < hazard.sporeTopY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'spore');
+    for (const bot of this.bots) if (bot.alive && bot.y < hazard.sporeTopY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'spore');
+    this.sporeRemaining -= dt;
+    if (this.sporeRemaining <= 0) {
+      this.sporeRemaining = 0;
+      this.sporeActive = false;
+      this.emit('sporeFogEnd', {});
+    }
+  }
+  // Fase 42 — "Assassino Silencioso" (README W3): a fumaça tóxica inunda o terreno
+  // baixo até smokeTopY — o anel fecha na Vila Sombria sob a fumaça.
+  #stepToxicSmoke(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.smokeActive) {
+      this.smokeTimer += dt;
+      if (this.smokeTimer >= hazard.intervalSeconds) {
+        this.smokeTimer -= hazard.intervalSeconds;
+        this.smokeRemaining = hazard.durationSeconds;
+        this.smokeActive = true;
+        this.emit('toxicSmokeStart', { durationSeconds: hazard.durationSeconds, smokeTopY: hazard.smokeTopY });
+      }
+    }
+    if (!this.smokeActive) return;
+    if (this.player.alive && this.player.y < hazard.smokeTopY) this.#hurtPlayer(hazard.damagePerSecond * dt, null, 'smoke');
+    for (const bot of this.bots) if (bot.alive && bot.y < hazard.smokeTopY) this.#damageBot(bot, hazard.damagePerSecond * dt, null, false, 'smoke');
+    this.smokeRemaining -= dt;
+    if (this.smokeRemaining <= 0) {
+      this.smokeRemaining = 0;
+      this.smokeActive = false;
+      this.emit('toxicSmokeEnd', {});
     }
   }
   #stepGravityAnomaly(dt) {
@@ -1714,7 +1754,7 @@ export class KhaaosSim3D {
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
-    if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
+    if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (ownerId) bot.lastHitBy = ownerId;
     if (bot.life <= 0) {
@@ -1752,7 +1792,8 @@ export class KhaaosSim3D {
       const soak = Math.min(p.temporaryArmor, dmg);
       p.temporaryArmor -= soak; dmg -= soak;
     }
-    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
+    // Fase 42 — mantos ambientais (ácido/tsunami/esporos/fumaça) furam blindagem
+    if (p.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(p.armor, dmg * 0.6); p.armor -= soak; dmg -= soak; }
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {
@@ -2163,7 +2204,7 @@ export class KhaaosSim3D {
   // ---------- snapshot / replay ----------
   snapshot() {
     return { seed: this.seed, scenarioId: this.scenario.id, tick: this.tick, time: this.time, over: this.over, started: this.started,
-      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.volcanicActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.volcanicRemaining, anchors: this.world.quantumAnchors ?? [] },
+      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.sporeActive || this.smokeActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.sporeRemaining || this.smokeRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),
       bullets: this.bullets.map(b => ({ ...b })), loot: this.loot.map(i => ({ ...i })),

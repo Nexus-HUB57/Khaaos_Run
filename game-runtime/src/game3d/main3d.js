@@ -1432,10 +1432,14 @@ export class Game3D {
             if (p.alive && !p.knocked) this.hitFX.set('player', { angle: 0, power: .3, age: 0 });
           }
           break;
-        case 'pulse':
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.`, 'warn');
+        case 'pulse': {
+          // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
+          // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
           this.audio.ringWarn();
           break;
+        }
         case 'ringDamage':
           if (!this._ringWarned || performance.now() - this._ringWarned > 4000) {
             this._ringWarned = performance.now();
@@ -1557,28 +1561,40 @@ export class Game3D {
           this.audio?.survival?.('tsunami', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
           break;
-        case 'eruptionStart':
+        case 'sporeFogStart': // Fase 42 — W2 "Emboscada Verde" (README)
           this.survivalFX?.handleEvent(e);
-          this.shake = Math.max(this.shake, .3);
-          this.audio?.survival?.('lava', true);
-          this.audio?.hazardStinger?.('lava');
-          this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          this.shake = Math.max(this.shake, .18);
+          this.audio?.survival?.('spore', true);
+          this.audio?.hazardStinger?.('spore');
+          this.hud.feed('SOBREVIVÊNCIA', `EMBOSCADA VERDE: neblina com esporos tóxicos sobe até ${Math.round(e.sporeTopY ?? 90)}m — não fique no terreno baixo (${Math.round(e.durationSeconds ?? 45)}s).`, 'bad');
           break;
-        case 'eruptionEnd':
+        case 'sporeFogEnd':
           this.survivalFX?.handleEvent(e);
-          this.audio?.survival?.('lava', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
+          this.audio?.survival?.('spore', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A neblina de esporos se dissipa. Terreno baixo liberado.', 'good');
           break;
-        case 'gravityAnomalyStart':
+        case 'toxicSmokeStart': // Fase 42 — W3 "Assassino Silencioso" (README)
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .22);
+          this.audio?.survival?.('smoke', true);
+          this.audio?.hazardStinger?.('smoke');
+          this.hud.feed('SOBREVIVÊNCIA', `ASSASSINO SILENCIOSO: fumaça tóxica inunda o terreno baixo até ${Math.round(e.smokeTopY ?? 180)}m — suba ou pereça (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          break;
+        case 'toxicSmokeEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('smoke', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A fumaça tóxica se assenta. Área baixa liberada.', 'good');
+          break;
+        case 'gravityAnomalyStart': // Fase 42 — Pulso Khaaos do CIGKV (README, Protocolo CIGKV)
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', true);
           this.audio?.hazardStinger?.('gravity');
-          this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
+          this.hud.feed('SOBREVIVÊNCIA', `PULSO KHAAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
           break;
         case 'gravityAnomalyEnd':
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
+          this.hud.feed('SOBREVIVÊNCIA', 'Pulso Khaaos dissipado. Gravidade restaurada.', 'good');
           break;
         case 'acidRain':
           this.survivalFX?.handleEvent(e);

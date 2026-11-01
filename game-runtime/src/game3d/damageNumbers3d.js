@@ -36,10 +36,12 @@ export const DMG_POP_S = 0.12;
 // mordeu — destaque sem roubar a cena do headshot).
 export const DMG_HAZARD_SCALE = 1.2;
 
-/** Fase 29 — sufixo de cor por kind de hazard (MESMA paleta do banner). */
+/** Fase 29 — sufixo de cor por kind de hazard (MESMA paleta do banner).
+ *  Fase 42: eruption/lava saem; spore (W2) e smoke (W3) entram — 1:1 com o README. */
 export const HAZARD_TIER_CLASSES = Object.freeze({
   tsunami: 'hz-tsunami',
-  eruption: 'hz-lava',
+  spore: 'hz-spore',
+  smoke: 'hz-smoke',
   ring: 'hz-ring',
   acid: 'hz-acid',
   quantum: 'hz-gravity',
