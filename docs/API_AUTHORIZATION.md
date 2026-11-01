@@ -23,6 +23,11 @@ No multiplayer, capacidade/carga e o temporizador/multiplicador de Adrenalina s�
 | `POST /api/player/respawn` | estado do jogador | usuário autenticado, próprio userId | não altera outro jogador; revisar política/cooldown de respawn |
 | `POST /api/economy/loan-preview` | cálculo efêmero | usuário autenticado | input limitado; sem escrita |
 | `POST /api/economy/simulate`, `POST /api/economy/simulate-batch` | cálculo efêmero | usuário autenticado | dimensões limitadas para conter custo; sem escrita |
+| `POST /api/economy/2pc/prepare|commit|abort` | escrow, saldo e ledger | nó dedicado com `x-2pc-node-secret` ou usuário com sessão | schema Zod; identidade sintética por `playerId` é recusada em produção |
+| `GET /api/economy/2pc/transactions/:id` | estado do escrow | nó dedicado ou sessão; consulta filtrada pelo ator | ID validado pelo serviço; sem dados de outro ator |
+| `GET /api/economy/2pc/health` | diagnóstico global de escrow | nó dedicado ou sessão | auth obrigatória em produção; resposta operacional não é pública |
+
+O segredo `ECONOMY_2PC_NODE_SECRET` deve existir somente no ambiente do serviço API e do processo UE5 dedicated server confiável. O bridge lê a variável em runtime e envia o header apenas quando `IsRunningDedicatedServer()`; nunca incluir o valor em código, config versionada ou build de cliente. Em produção, segredo e sessão ausentes resultam em HTTP 401.
 
 ## Leitura com efeito colateral conhecido
 

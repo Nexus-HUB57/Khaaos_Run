@@ -15,6 +15,7 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Engine/Engine.h"
+#include "HAL/PlatformMisc.h"
 #include "Misc/Guid.h"
 #include "Misc/DateTime.h"
 
@@ -535,6 +536,16 @@ void UKhaaosEconomyBridge2PC::SendPostRequest(const FString& Endpoint, const FSt
     Request->SetTimeout(RequestTimeout);
     Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     Request->SetHeader(TEXT("X-Coordinator-Node"), CoordinatorNodeID);
+    // Keep the node credential in the dedicated-server process environment;
+    // never package it in client config or send it from a player client.
+    if (IsRunningDedicatedServer())
+    {
+        const FString NodeSecret = FPlatformMisc::GetEnvironmentVariable(TEXT("ECONOMY_2PC_NODE_SECRET"));
+        if (!NodeSecret.IsEmpty())
+        {
+            Request->SetHeader(TEXT("x-2pc-node-secret"), NodeSecret);
+        }
+    }
 
     Request->OnProcessRequestComplete().BindLambda(
         [Callback](FHttpRequestPtr Req, FHttpResponsePtr Resp, bool bWasSuccessful)
