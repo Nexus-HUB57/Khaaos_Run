@@ -32,7 +32,10 @@ if (unsupported.length > 0) {
         execute: args.includes("--execute"),
       });
       console.log(JSON.stringify(report, null, 2));
-      if (report.incompleteClaimsNotDeleted > 0 || report.successfulClaimsWithoutLedgerNotDeleted > 0) process.exitCode = 2;
+      if (report.mode === "held_for_drift"
+        || report.auditStatus !== "clean"
+        || report.incompleteClaimsNotDeleted > 0
+        || report.successfulClaimsWithoutLedgerNotDeleted > 0) process.exitCode = 2;
     } catch (error) {
       console.error("Falha na limpeza de claims idempotentes:", error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
