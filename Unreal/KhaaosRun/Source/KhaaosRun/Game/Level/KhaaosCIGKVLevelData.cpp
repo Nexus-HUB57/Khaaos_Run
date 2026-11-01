@@ -17,11 +17,12 @@ void AKhaaosCIGKVLevelData::BeginPlay()
     Super::BeginPlay();
 
     // Try loading from JSON; fall back to hardcoded defaults
-    FString JsonPath = GetDefaultJsonPath();
-    if (!LoadFromJSON(JsonPath))
+    ActiveDataSource = ECIGKVLevelDataSource::NotLoaded;
+    ActiveDataPath.Reset();
+    LastDataPathAttempt.Reset();
+    if (!LoadFromJSON(GetDefaultJsonPath()))
     {
         UE_LOG(LogTemp, Warning, TEXT("CIGKV: JSON load failed, using default data"));
-        LoadDefaultData();
     }
 
     UE_LOG(LogTemp, Log, TEXT("CIGKV: Loaded %d spawns, %d ZEX, %d loot, %d zones"),
@@ -35,10 +36,13 @@ FString AKhaaosCIGKVLevelData::GetDefaultJsonPath() const
 
 bool AKhaaosCIGKVLevelData::LoadFromJSON(const FString& JsonPath)
 {
+    LastDataPathAttempt = JsonPath;
+
     IFileManager& FileManager = IFileManager::Get();
     if (!FileManager.FileExists(*JsonPath))
     {
         UE_LOG(LogTemp, Error, TEXT("CIGKV: JSON file not found: %s"), *JsonPath);
+        LoadDefaultData();
         return false;
     }
 
@@ -46,10 +50,19 @@ bool AKhaaosCIGKVLevelData::LoadFromJSON(const FString& JsonPath)
     if (!FFileHelper::LoadFileToString(JsonString, *JsonPath))
     {
         UE_LOG(LogTemp, Error, TEXT("CIGKV: Failed to read JSON: %s"), *JsonPath);
+        LoadDefaultData();
         return false;
     }
 
-    return ParseJSON(JsonString);
+    if (!ParseJSON(JsonString))
+    {
+        LoadDefaultData();
+        return false;
+    }
+
+    ActiveDataSource = ECIGKVLevelDataSource::JsonFile;
+    ActiveDataPath = JsonPath;
+    return true;
 }
 
 bool AKhaaosCIGKVLevelData::ParseJSON(const FString& JsonString)
@@ -168,6 +181,9 @@ bool AKhaaosCIGKVLevelData::ParseJSON(const FString& JsonString)
 
 bool AKhaaosCIGKVLevelData::LoadDefaultData()
 {
+    ActiveDataPath.Reset();
+    ActiveDataSource = ECIGKVLevelDataSource::HardcodedFallback;
+    LootPoints.Reset();
     // Hardcoded fallback: 5 spawns per sector (minimum for testing)
     SpawnPoints = {
         {1,  FVector(256,256,0),   0,   TEXT("ArmoryHub"),      TEXT("neutral")},
