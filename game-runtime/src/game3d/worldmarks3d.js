@@ -387,7 +387,7 @@ function flameFlicker(mats, flame, hazard, flareEmitters = []) {
 
 // ---------- Arukheea — Singularidade Dimensional ----------
 function marksArukheea(group, scene, scenario, rng, hazard) {
-  const counts = { fragments: 0, spires: 0, anchorPylons: 0, rifts: 0 };
+  const counts = { fragments: 0, spires: 0, anchorPylons: 0, rifts: 0, sea: 0, sharks: 0 };
   const rockMat = M('#42505e', { rough: .8, metal: .2 });
   const crystalMat = new THREE.MeshStandardMaterial({ color: '#7fd8e8', emissive: '#3ba8c8', emissiveIntensity: .9, roughness: .25, metalness: .4 });
   // fragmentos flutuantes à deriva (icosaedros irregulares)
@@ -473,14 +473,68 @@ function marksArukheea(group, scene, scenario, rng, hazard) {
       }),
     }));
   }
+  // F43 — mar + tubarões (README W4) — veja buildArukheeaSea
+  const sharks = buildArukheeaSea(group, counts, rng);
   return {
     counts,
     animators: [
       fragmentDrift(frags, drifters),
       riftPulse(riftMats, hazard),
       pylonAwakening(pylonRings, crystalMat, hazard), // Fase 26 — giro + incandescência
+      sharkPatrol(sharks),                            // F43 — tubarões no mar
       ...riftEmitters.map((e) => (dt, t) => e.update(dt, t)),
     ],
+  };
+}
+
+// Fase 43 — MAR DE ARUKHEEA (README W4: "Ilha isolada... tubarões"): anel
+// oceânico cinza-astral (mesma gramática do arquipélago de Priadus — a arena
+// permanece seca, gameplay intacto) e TUBARÕES patrulhando em arco fechado —
+// fauna SEM IA: caminho analítico por t, determinístico, fora da área jogável.
+function buildArukheeaSea(group, counts, rng) {
+  const sea = new THREE.Mesh(
+    new THREE.RingGeometry(190, 360, 48),
+    new THREE.MeshStandardMaterial({
+      color: '#3d566e', transparent: true, opacity: .82, roughness: .14, metalness: .3,
+    }),
+  );
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.y = .3;
+  sea.name = 'arukheea-sea-ring'; // anel centrado na origem — isento do bounds test
+  noShadow(sea);
+  group.add(sea);
+  counts.sea++;
+  const finMat = M('#3d4a52', { rough: .35, metal: .1 });
+  const sharks = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + .7;
+    const r = 208 + rng.next() * 40;   // mar aberto, além da rampa do terreno
+    const anchor = { x: Math.cos(a) * r, z: Math.sin(a) * r };
+    const shark = new THREE.Group();
+    shark.name = 'sharkfin';
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(.04, .5, 1.1, 4), finMat);
+    blade.scale.set(1.4, 1, .35); blade.position.y = .4; blade.rotation.x = -.12;
+    const back = new THREE.Mesh(new THREE.SphereGeometry(.7, 8, 6), finMat);
+    back.scale.set(1.6, .3, .7);
+    noShadow(blade); noShadow(back);
+    shark.add(blade, back);
+    shark.position.set(anchor.x, .3, anchor.z);
+    group.add(shark);
+    sharks.push({ g: shark, anchor, r: 2.2 + rng.next() * .6, speed: .3 + rng.next() * .2, phase: rng.next() * 6.28 });
+    counts.sharks++;
+  }
+  return sharks;
+}
+
+function sharkPatrol(sharks) {
+  return (dt, t) => {
+    for (const s of sharks) {
+      const a = s.phase + t * s.speed;
+      s.g.position.x = s.anchor.x + Math.cos(a) * s.r;
+      s.g.position.z = s.anchor.z + Math.sin(a) * s.r;
+      s.g.position.y = .3 + Math.sin(t * 1.3 + s.phase) * .05; // ondulação
+      s.g.rotation.y = -a;                                     // aponta na tangente do arco
+    }
   };
 }
 

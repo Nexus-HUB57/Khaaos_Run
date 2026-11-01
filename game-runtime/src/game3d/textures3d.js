@@ -1004,3 +1004,57 @@ export function lightPoolTexture() {
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
+
+// Fase 43 — AREIA MOVIDIÇA (Ckesalth, README W3): solo molhado escuro com
+// anéis concêntricos de afundamento — leitura imediata do " terreno que engole".
+function quicksandCanvas() {
+  const [c, x] = canvas(256);
+  x.fillStyle = '#6e5836';
+  x.fillRect(0, 0, 256, 256);
+  // anéis concêntricos (sucessivas ondas de afundamento)
+  for (let i = 6; i >= 1; i--) {
+    x.beginPath();
+    x.arc(128, 128, i * 19, 0, Math.PI * 2);
+    x.strokeStyle = `rgba(44,34,18,${.5 - i * .06})`;
+    x.lineWidth = 5 - i * .5;
+    x.stroke();
+  }
+  // grumos molhados
+  for (let i = 0; i < 40; i++) {
+    x.fillStyle = `rgba(30,24,12,${.12 + random() * .2})`;
+    x.beginPath();
+    x.arc(random() * 256, random() * 256, 2 + random() * 7, 0, Math.PI * 2);
+    x.fill();
+  }
+  noise(x, 256, .14, .5);
+  return c;
+}
+export function quicksandMaterial() {
+  return dressMemo('quicksand', () => new THREE.MeshStandardMaterial({
+    map: tex(quicksandCanvas(), { repeat: 1 }),
+    roughness: .42, metalness: .05,          // molhado = brilho raso
+    transparent: true, opacity: .94,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  }));
+}
+
+// Fase 43 — NEBLINA ALUCINÓGENA RASTEIRA (Priadus, README W2): banco de névoa
+// translúcido que pulsa no chão — a "neblina com esporos tóxicos" ganha corpo
+// fora do manto do hazard (atmosfera PERMANENTE do mundo, não o evento).
+function mistCanvas() {
+  const [c, x] = canvas(128);
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(214,232,190,.85)');
+  g.addColorStop(.55, 'rgba(190,214,168,.38)');
+  g.addColorStop(1, 'rgba(172,200,150,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 128, 128);
+  return c;
+}
+export function mistMaterial() {
+  return dressMemo('mist', () => new THREE.MeshBasicMaterial({
+    map: tex(mistCanvas(), { repeat: 1 }),
+    transparent: true, opacity: .22, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  }));
+}
