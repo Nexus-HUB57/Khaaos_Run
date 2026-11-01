@@ -205,6 +205,24 @@ describe("2PC resolve2PCActor", () => {
     assert.deepEqual(actor, { actorId: "ue5-player-0", trusted: false });
   });
 
+  it("produção sem secret e sem sessão rejeita o fallback sintético por playerId", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousSecret = process.env.ECONOMY_2PC_NODE_SECRET;
+    process.env.NODE_ENV = "production";
+    delete process.env.ECONOMY_2PC_NODE_SECRET;
+    try {
+      const result = resolve2PCActor(fakeReq({ body: ue5PrepareBody({ playerId: 42 }) }));
+      assert.ok("error" in result);
+      assert.equal(result.error.status, 401);
+      assert.deepEqual(result.error.body, { message: "Autenticação 2PC obrigatória" });
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSecret === undefined) delete process.env.ECONOMY_2PC_NODE_SECRET;
+      else process.env.ECONOMY_2PC_NODE_SECRET = previousSecret;
+    }
+  });
+
   it("com secret configurado: header correto + userId → nó confiável", () => {
     process.env.ECONOMY_2PC_NODE_SECRET = "segredo-do-no-42";
     const actor = resolve2PCActor(fakeReq({
@@ -213,6 +231,19 @@ describe("2PC resolve2PCActor", () => {
     }));
     assert.deepEqual(actor, { actorId: "web-user-abc", trusted: true });
     process.env.ECONOMY_2PC_NODE_SECRET = SAVED_SECRET;
+  });
+
+  it("nó UE5 autenticado sem userId usa playerId e permanece trusted", () => {
+    process.env.ECONOMY_2PC_NODE_SECRET = "segredo-do-no-42";
+    try {
+      const actor = resolve2PCActor(fakeReq({
+        headers: { "x-2pc-node-secret": "segredo-do-no-42" },
+        body: ue5PrepareBody({ playerId: 42 }),
+      }));
+      assert.deepEqual(actor, { actorId: "ue5-player-42", trusted: true });
+    } finally {
+      process.env.ECONOMY_2PC_NODE_SECRET = SAVED_SECRET;
+    }
   });
 
   it("com secret configurado: sem header e sem sessão → 401", () => {
