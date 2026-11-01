@@ -62,9 +62,10 @@ const KITS = {
   },
   Barburhen: {
     // Diretiva (Mundos W1): cidade pós-guerra — entulho, carros queimados,
-    // árvores mortas, crateras e colunas de fumaça sobre a identidade fria
-    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1 },      // Área Urbana em Ruínas
-    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1 }, // Setor Industrial
+    // árvores mortas, crateras e colunas de fumaça sobre a identidade fria.
+    // F42 — trilhos no setor da ESTAÇÃO (README W1: ZEX = estação ferroviária)
+    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1 },      // Área Urbana e Comercial
+    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1, rail: 2 }, // Setor Industrial (estação)
     2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1 },     // Parque Abandonado
     3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1 }, // Zona de Extração
     4: {},
@@ -205,6 +206,7 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         burntcar: { sMin: .95, sMax: 1.1, size: 2.0, gap: 7 },
         fallenlog: { sMin: 1, sMax: 1.2, size: 2.4, gap: 6 },
         pipeline: { sMin: 1, sMax: 1, size: 2.6, gap: 8 },
+        rail: { sMin: 1, sMax: 1, size: 3.2, gap: 9 },   // F42 — trilho da estação W1
         deadtree: { sMin: .95, sMax: 1.25, size: 1.6, gap: 5 },
         palmtree: { sMin: 1.05, sMax: 1.4, size: 1.6, gap: 5.5 },
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
@@ -235,6 +237,7 @@ const SHADOW_SIZE = {
   rubble: 1.6, burntcar: 2.0, deadtree: 1.8, smokecolumn: 1.2,
   roots: 1.8, fallenlog: 2.6, sporesac: 1.0, totem: 1.2,
   palmstump: 1.0, oiltank: 2.0, pipeline: 3.0, bones: 1.8, resortwall: 2.6,
+  rail: 3.4,   // F42 — trilho da estação ferroviária (W1)
   palmtree: 1.8, prisonwall: 2.8, lighthouse: 2.2, whaleribs: 3.0, shipwreck: 3.2,
 };
 
@@ -838,6 +841,24 @@ const BUILDERS = {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(.08, .42, .08), m.steel);
       leg.position.set(Math.cos(i * 2.1) * 1.1, .21, Math.sin(i * 2.1) * 1.1);
       g.add(leg);
+    }
+    return g;
+  },
+  // F42 — trilho da ESTAÇÃO FERROVIÁRIA (README W1: ZEX = estação): dois trilhos
+  // de aço + dormentes de madeira — leitura imediata de ferrovia no Setor da estação.
+  rail(m) {
+    const g = new THREE.Group();
+    for (const side of [-.72, .72]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(3.2, .09, .1), m.steel);
+      bar.position.set(0, .18, side);
+      bar.castShadow = true;
+      g.add(bar);
+    }
+    for (let i = 0; i < 5; i++) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(.34, .07, 1.7), m.woodDark);
+      tie.position.set(-1.2 + i * .6, .04, 0);
+      tie.receiveShadow = true;
+      g.add(tie);
     }
     return g;
   },

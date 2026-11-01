@@ -159,7 +159,8 @@ body[data-aura-season='primavera'] #crosshair.mythic::before { opacity: .34; }
    banner de hazard (#spectatorHud .spec-hazard.hazard-*) — identidade por mundo. */
 .dmg-hazard { font-size: 21px; }
 .dmg-hazard.hz-tsunami { color: #7fd8e8; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(127,216,232,.65), 0 1px 2px rgba(0,0,0,.9); }
-.dmg-hazard.hz-lava { color: #ff8a4d; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,90,20,.65), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-spore { color: #d6e86a; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(190,230,90,.6), 0 1px 2px rgba(0,0,0,.9); }
+.dmg-hazard.hz-smoke { color: #b8bcc4; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(170,178,190,.55), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-hazard.hz-gravity { color: #9fe8ff; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,255,.65), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-hazard.hz-acid { color: #a8e86a; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(120,220,60,.6), 0 1px 2px rgba(0,0,0,.9); }
 .dmg-hazard.hz-ring { color: #ff6b2c; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 10px rgba(255,107,44,.65), 0 1px 2px rgba(0,0,0,.9); }
@@ -689,7 +690,8 @@ body.spectating #hitmarker { display: none !important; }
   animation: specHazardPulse 1.6s ease-in-out infinite;
 }
 #spectatorHud .spec-hazard.hazard-tsunami { color: #7fd8e8; border-color: rgba(127,216,232,.75); background: rgba(20,84,96,.32); }
-#spectatorHud .spec-hazard.hazard-lava { color: #ff8a4d; border-color: rgba(255,90,20,.8); background: rgba(96,26,8,.4); }
+#spectatorHud .spec-hazard.hazard-spore { color: #d6e86a; border-color: rgba(190,230,90,.7); background: rgba(56,78,16,.38); }
+#spectatorHud .spec-hazard.hazard-smoke { color: #b8bcc4; border-color: rgba(170,178,190,.7); background: rgba(52,54,58,.45); }
 #spectatorHud .spec-hazard.hazard-gravity { color: #9fe8ff; border-color: rgba(120,220,255,.7); background: rgba(30,52,96,.35); }
 #spectatorHud .spec-hazard.hazard-acid { color: #a8e86a; border-color: rgba(120,220,60,.7); background: rgba(42,72,18,.35); }
 @keyframes specHazardPulse {

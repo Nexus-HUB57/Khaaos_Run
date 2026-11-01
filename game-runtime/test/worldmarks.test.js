@@ -57,9 +57,9 @@ test('Priadus: a água é um ANEL no horizonte — a arena permanece seca', () =
   assert.equal(water.geometry.parameters.innerRadius, 190, 'borda interna fora da área jogável');
 });
 
-test('Arukheea: pilões nos ANCHORS da gravidade (mesmas posições da sim)', () => {
+test('Arukheea: pilões nos ANCHORS canônicos (Fase 42 — arquitetura da prisão; a anomalia é o Pulso do CIGKV)', () => {
   const { scene } = buildScene(9, 'Arukheea', null, 'high');
-  const anchors = SCENARIOS.ARUKHEEA.survival.anchors;
+  const anchors = SCENARIOS.CIGKV.survival.anchors; // mesmas coordenadas canônicas
   const pylons = scene.getObjectByName('anchor-pylons');
   assert.ok(pylons, 'grupo de pilões presente');
   const placed = pylons.children.map((p) => `${p.position.x},${p.position.z}`).sort();
@@ -132,18 +132,18 @@ test('Fase 26: registro expõe applyHazard + hazardState zerado na criação', (
   }
 });
 
-test('Priadus × tsunami: o ANEL oceânico sobe (maré) e recua ao idle', () => {
+test('Priadus × spore (Emboscada Verde F42): o ANEL oceânico sobe (maré verde) e recua ao idle', () => {
   const { scene } = buildScene(9, 'Priadus', null, 'high');
   const marks = scene.userData.worldMarks;
   const water = scene.getObjectByName('priadus-water-ring');
   const baseY = water.position.y; // ~.3 (shimmer)
-  marks.applyHazard('tsunami', 1, 90);
+  marks.applyHazard('spore', 1, 90);
   for (const fn of marks.animators) fn(1 / 60, 2.5);
   const surgeY = water.position.y;
   assert.ok(surgeY > baseY + 3, `maré de tempestade subiu (${surgeY.toFixed(2)} > ${(baseY + 3).toFixed(2)})`);
   assert.ok(water.material.opacity > .8, 'opacidade fecha o céu d\'água');
   // boost parcial — maré proporcional (smoothstep do SurvivalFX)
-  marks.applyHazard('tsunami', .5, 45);
+  marks.applyHazard('spore', .5, 45);
   for (const fn of marks.animators) fn(1 / 60, 2.5);
   const halfY = water.position.y;
   assert.ok(halfY > baseY && halfY < surgeY, `boost 0.5 entre base e pico (${halfY.toFixed(2)})`);
@@ -153,7 +153,7 @@ test('Priadus × tsunami: o ANEL oceânico sobe (maré) e recua ao idle', () => 
   assert.ok(Math.abs(water.position.y - baseY) < .1, 'recuo ao idle');
 });
 
-test('Ckesalth × lava: a tocha ERUPCIONA (escala/emissiva ×) com fagulhas reais', () => {
+test('Ckesalth × smoke (Assassino Silencioso F42): a tocha INGLE (escala/emissiva ×) com fagulhas reais', () => {
   const { scene } = buildScene(42, 'Ckesalth', null, 'high');
   const marks = scene.userData.worldMarks;
   const system0 = scene.userData.particles;
@@ -168,7 +168,7 @@ test('Ckesalth × lava: a tocha ERUPCIONA (escala/emissiva ×) com fagulhas reai
   for (const fn of marks.animators) fn(1 / 60, 1);
   const baseIntensity = flame.material.emissiveIntensity;
   const baseScale = flame.scale.y;
-  marks.applyHazard('lava', 1, 180);
+  marks.applyHazard('smoke', 1, 180);
   // 120 frames — emissores acumulam dívida (rate 4/s: 1 frame = debt .067 < 1)
   for (let i = 0; i < 120; i++) for (const fn of marks.animators) fn(1 / 60, 1.1 + i / 60);
   assert.ok(flame.material.emissiveIntensity > baseIntensity * 2.5, `chama incandesce (${flame.material.emissiveIntensity.toFixed(2)} > ${(baseIntensity * 2.5).toFixed(2)})`);

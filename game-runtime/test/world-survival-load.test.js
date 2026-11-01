@@ -4,31 +4,36 @@ import { performance } from 'node:perf_hooks';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 
-test('Ckesalth eruption damages low terrain and preserves high exploration routes', () => {
-  const sim = new KhaaosSim3D({ seed: 'CKESALTH-ERUPTION', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
+// Fase 42 — sobrevivências 1:1 com o README:
+//   Ckesalth (W3) — TOXIC_SMOKE  "Assassino Silencioso" (fumaça até smokeTopY 180)
+//   CIGKV         — KHAOS_GRAVITY "Pulso Khaaos" (Protocolo CIGKV, 4 pilões)
+//   Arukheea (W4) — TSUNAMI_WAVE  "Tsunami" (mar até submergeBelowY 90)
+
+test('Ckesalth toxic smoke floods low terrain and preserves high exploration routes', () => {
+  const sim = new KhaaosSim3D({ seed: 'CKESALTH-SMOKE', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
   sim.start('belt');
   sim.player.x = 0;
   sim.player.z = 0;
-  sim.volcanicTimer = 139.99;
+  sim.smokeTimer = 139.99;
   sim.step(DEFAULT_INPUT, 0.02);
-  assert.equal(sim.volcanicActive, true);
+  assert.equal(sim.smokeActive, true);
   assert.ok(sim.player.life < 100);
-  assert.ok(sim.events.some((event) => event.type === 'eruptionStart'));
+  assert.ok(sim.events.some((event) => event.type === 'toxicSmokeStart'));
 
   const high = new KhaaosSim3D({ seed: 'CKESALTH-FORGE', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
   high.start('belt');
   high.player.x = 0;
   high.player.z = 0;
   high.player.y = 220;
-  high.volcanicTimer = 139.99;
+  high.smokeTimer = 139.99;
   high.step(DEFAULT_INPUT, 0.02);
   const lifeAtStart = high.player.life;
   high.step(DEFAULT_INPUT, 1);
   assert.equal(high.player.life, lifeAtStart);
 });
 
-test('Arukheea anomaly drains exposed shields while quantum anchors protect explorers', () => {
-  const exposed = new KhaaosSim3D({ seed: 'ARUKHEEA-EXPOSED', botCount: 0, airdrop: false, scenarioId: 'Arukheea' });
+test('CIGKV Pulso Khaaos drains exposed shields while quantum anchors protect explorers', () => {
+  const exposed = new KhaaosSim3D({ seed: 'CIGKV-EXPOSED', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   exposed.start('belt');
   exposed.player.x = 160;
   exposed.player.z = -90;
@@ -43,19 +48,19 @@ test('Arukheea anomaly drains exposed shields while quantum anchors protect expl
   assert.ok(exposed.player.y > 0, 'gravidade reduzida deve manter o operador no ar por mais tempo');
   assert.ok(exposed.events.some((event) => event.type === 'gravityAnomalyStart'));
 
-  const anchored = new KhaaosSim3D({ seed: 'ARUKHEEA-ANCHOR', botCount: 0, airdrop: false, scenarioId: 'Arukheea' });
+  const anchored = new KhaaosSim3D({ seed: 'CIGKV-ANCHOR', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   anchored.start('belt');
   anchored.player.x = 0;
   anchored.player.z = 0;
   const anchoredArmor = anchored.player.armor;
   anchored.quantumTimer = 119.99;
   anchored.step(DEFAULT_INPUT, 0.02);
-  assert.equal(anchored.player.armor, anchoredArmor, 'Nexus deve proteger o escudo durante a anomalia');
+  assert.equal(anchored.player.armor, anchoredArmor, 'Nexus deve proteger o escudo durante o Pulso Khaaos');
   assert.deepEqual(anchored.world.quantumAnchors.map((anchor) => anchor.id), ['NEXUS', 'NORTH', 'EAST', 'WEST']);
 });
 
-test('Arukheea authoritative room replicates anomaly events and anchor protection', () => {
-  const room = new MatchRoom3D({ id: 'arukheea-survival', seed: 'ARUKHEEA-ROOM', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'Arukheea' });
+test('CIGKV authoritative room replicates anomaly events and anchor protection', () => {
+  const room = new MatchRoom3D({ id: 'cigkv-survival', seed: 'CIGKV-ROOM', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('exposed', 'EXPOSED'));
   assert.ok(room.addPlayer('anchored', 'ANCHORED'));
   assert.ok(room.start('exposed', 'belt'));
@@ -74,11 +79,12 @@ test('Arukheea authoritative room replicates anomaly events and anchor protectio
   assert.equal(room.snapshot('anchored').survival.active, true);
 });
 
-test('Priadus tsunami integrates 60 players and remains within the simulation budget', () => {
-  const room = new MatchRoom3D({ id: 'priadus-load', seed: 'PRIADUS-60P', region: 'sa-east', capacity: 60, botFill: 0, airdrop: false, scenarioId: 'Priadus' });
+test('Arukheea tsunami integrates 60 players and remains within the simulation budget', () => {
+  // Fase 42 — o tsunami canônico (README W4) mora no Arukheea
+  const room = new MatchRoom3D({ id: 'arukheea-load', seed: 'ARUKHEEA-60P', region: 'sa-east', capacity: 60, botFill: 0, airdrop: false, scenarioId: 'Arukheea' });
   for (let i = 0; i < 60; i++) assert.ok(room.addPlayer(`p${i}`, `OPERADOR-${i}`));
   assert.ok(room.start('p0', 'belt'));
-  // Fase 24 — REFÚGIO PISÁVEL: floors são a mecânica de superfícies altas
+  // REFÚGIO PISÁVEL (Fase 24): floors são a mecânica de superfícies altas
   // (mezaninos); uma plataforma em y=95 (> submergeBelowY 90) abriga 12 atores
   // que CAEM de 120m e pousam (pouso varrido) — o tsunami completa o ciclo
   // porque a partida não acaba (sobreviventes > 1).

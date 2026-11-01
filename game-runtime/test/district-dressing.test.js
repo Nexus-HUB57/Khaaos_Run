@@ -212,11 +212,16 @@ test('patches de solo usam materiais do mundo (lava emissiva, água translúcida
   assert.ok(runeFound, 'círculo de runa astral presente no Arukheea');
 });
 
-test('cenários preservados: SCENARIOS intactos pela Fase 22 (contrato de gameplay)', () => {
+test('cenários preservados: SCENARIOS com o cânon F42 (README 1:1)', () => {
   assert.equal(Object.keys(SCENARIOS).length, 5);
   assert.equal(SCENARIOS.PRIADUS.ringDamageMultiplier, 1.75);
-  assert.equal(SCENARIOS.CKESALTH.survival.type, 'VOLCANIC_LAVA');
-  assert.equal(SCENARIOS.ARUKHEEA.survival.anchors.length, 4);
+  // Fase 42 — dinâmicas 1:1 com o README (Emboscada Verde / Assassino Silencioso /
+  // Tsunami / Pulso Khaaos)
+  assert.equal(SCENARIOS.CKESALTH.survival.type, 'TOXIC_SMOKE');
+  assert.equal(SCENARIOS.PRIADUS.survival.type, 'SPORE_FOG');
+  assert.equal(SCENARIOS.ARUKHEEA.survival.type, 'TSUNAMI_WAVE');
+  assert.equal(SCENARIOS.CIGKV.survival.type, 'KHAOS_GRAVITY');
+  assert.equal(SCENARIOS.CIGKV.survival.anchors.length, 4);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
