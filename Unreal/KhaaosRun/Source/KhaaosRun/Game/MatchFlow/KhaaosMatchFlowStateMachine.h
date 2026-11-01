@@ -8,15 +8,14 @@
 // ─── Match Flow State Enum ────────────────────────────────────────────────────
 
 /** Complete match lifecycle states for the Khaaos Run battle royale.
- *  Lobby → Deploy → Parachute → Looting → Combat → Endgame → WorldTransition → Results
+ *  Lobby → ZuIngress → Looting → Combat → Endgame → WorldTransition → Results
  *  Each state has configurable duration, entry/exit delegates, and transition conditions.
  *  Server-authoritative: only the dedicated server may drive state transitions. */
 UENUM(BlueprintType)
 enum class EKhaaosMatchFlowState : uint8
 {
     Lobby            UMETA(DisplayName = "LOBBY"),
-    Deploy           UMETA(DisplayName = "DEPLOY"),
-    Parachute        UMETA(DisplayName = "PARACHUTE"),
+    ZuIngress        UMETA(DisplayName = "ZU_INGRESS"),
     Looting          UMETA(DisplayName = "LOOTING"),
     Combat           UMETA(DisplayName = "COMBAT"),
     Endgame          UMETA(DisplayName = "ENDGAME"),
@@ -40,7 +39,7 @@ struct FKhaaosMatchFlowTransition
 
     /** Destination state for this transition. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|MatchFlow")
-    EKhaaosMatchFlowState ToState = EKhaaosMatchFlowState::Deploy;
+    EKhaaosMatchFlowState ToState = EKhaaosMatchFlowState::ZuIngress;
 
     /** Named condition that must be satisfied (GameMode resolves via function map). */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|MatchFlow")
@@ -56,7 +55,7 @@ struct FKhaaosMatchFlowTransition
 
     FKhaaosMatchFlowTransition()
         : FromState(EKhaaosMatchFlowState::Lobby)
-        , ToState(EKhaaosMatchFlowState::Deploy)
+        , ToState(EKhaaosMatchFlowState::ZuIngress)
         , Condition(NAME_None)
         , MinPlayers(1)
         , MaxTimeSeconds(0.0f)
@@ -102,14 +101,14 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchPhaseExit, EKhaaosMatchFlowS
  * PhD-Level match flow state machine for the complete Khaaos Run game loop.
  *
  * Architecture:
- *   - 8-state lifecycle: Lobby → Deploy → Parachute → Looting → Combat →
+ *   - 7-state lifecycle: Lobby → ZuIngress → Looting → Combat →
  *     Endgame → WorldTransition → Results
  *   - Transition table: each transition is gated by condition FName,
  *     minimum player count, and maximum time constraint.
  *   - Server-authoritative: only ROLE_Authority may call TransitionTo().
  *     Clients read replicated CurrentState for UI rendering.
  *   - TickComponent evaluates auto-transition rules:
- *     • Looting→Combat when first shot fired OR 30s after last player lands
+ *     • Looting→Combat when first shot fired OR 30s after the last player completes Zu entry
  *     • Combat→Endgame when players alive <= threshold (default 10)
  *     • Endgame→WorldTransition on match end or win
  *     • WorldTransition→Results after world transition completes
@@ -192,11 +191,11 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|MatchFlow")
     int32 EndgamePlayerThreshold = 10;
 
-    /** Seconds after all players land before Looting → Combat auto-transitions. */
+    /** Seconds after all players complete Zu entry before Looting → Combat auto-transitions. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|MatchFlow")
     float LootingToCombatGraceSeconds = 30.0f;
 
-    /** Minimum players to start the match (Lobby → Deploy). */
+    /** Minimum players to start the match (Lobby → ZuIngress). */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|MatchFlow")
     int32 MinPlayersToStart = 2;
 
@@ -241,7 +240,7 @@ protected:
     float LastLandingTimestamp = 0.0f;
 
     /** Whether all players have landed. */
-    uint8 bAllPlayersLanded : 1;
+    uint8 bZuIngressComplete : 1;
 
     /** Whether a shot has been fired this match. */
     uint8 bFirstShotFired : 1;

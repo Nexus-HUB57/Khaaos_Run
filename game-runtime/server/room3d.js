@@ -92,7 +92,7 @@ export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolaç�
 export const AOI_ENTER_M = 130, AOI_EXIT_M = 165, AOI_PROJECTILE_M = 180;
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = false, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
@@ -117,7 +117,9 @@ export class MatchRoom3D {
     this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
-    this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_portal_v1';
+    this.zuIngress = { protocol: 'ZU_PORTAL_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
     this.isPrivate = !!isPrivate;
     this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
@@ -453,18 +455,28 @@ export class MatchRoom3D {
         article: this.officerMeta.article, names: deployment.map((o) => o.name),
       });
     }
-    // Fase 4 — infiltração aérea: humanos e bots entram caindo do céu
+    // Zu de entrada: os atores já nascem nos spawns de solo autoritativos.
+    // O evento sincroniza a apresentação do portal; não há fase aérea de gameplay.
     if (this.airdrop) {
       let idx = 0;
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
+    } else {
+      this.zuIngress.startedAt = Date.now();
+      this.#emitAll('zuIngress', {
+        protocol: this.zuIngress.protocol,
+        startedAt: this.zuIngress.startedAt,
+        durationMs: this.zuIngress.durationMs,
+        world: this.scenario.id,
+        spawnCount: this.humans.size + this.bots.length,
+      });
     }
     // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
     // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
     // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
     // join decidem tocar ou pular pelo elapsed).
     this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
-    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length, train: this.trainAnnounce });
+    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, entryProtocol: this.entryProtocol, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
     return true;

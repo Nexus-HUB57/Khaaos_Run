@@ -18,7 +18,6 @@
 #include "Game/Revive/KhaaosReviveSystem.h"
 #include "Game/MatchFlow/KhaaosMatchFlowStateMachine.h"
 #include "Game/Airdrop/KhaaosAirdropSystem.h"
-#include "Game/Deploy/KhaaosDeploySystem.h"
 #include "Game/UI/KhaaosCirclePrediction.h"
 #include "Game/Performance/KhaaosPerformanceBudget.h"
 #include "Game/Performance/KhaaosLODStrategy.h"
@@ -295,13 +294,7 @@ void AKhaaosGameMode::InitializePhDSubsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - AirdropSystem initialized"));
     }
 
-    // Deploy System: Parachute deployment
-    DeploySystem = NewObject<UKhaaosDeploySystemComponent>(this, UKhaaosDeploySystemComponent::StaticClass());
-    if (DeploySystem)
-    {
-        DeploySystem->RegisterComponent();
-        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - DeploySystem initialized"));
-    }
+    // Player entry is handled by the server-authoritative Zu portal protocol.
 
     // Circle Prediction: Minimap UI white circle (Fortnite-style)
     CirclePrediction = NewObject<UKhaaosCirclePredictionComponent>(this, UKhaaosCirclePredictionComponent::StaticClass());
