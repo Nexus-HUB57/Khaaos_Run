@@ -21,7 +21,7 @@
 | Ponte server-side nativa | ✅ pronta | `game-runtime/server/eos.js` (PR #171), unit tests em `game-runtime/test/eos-bridge.test.js` |
 | RBAC `eos:operate` + papel `service` | ✅ pronta | endpoints `/eos/sessions*` (docs/M4_UE5_EOS_NATIVES.md §2) |
 | `DefaultEOS.ini` | ⏳ placeholders | `KHAOS_PRODUCT_ID…KHAOS_CLIENT_SECRET` em `Unreal/KhaaosRun/Config/DefaultEOS.ini` |
-| Secrets `EOS_*` no GitHub | ❌ ausentes | inventário atual só tem Render/Discord/UE5_INSTALL_DIR |
+| Secrets `EOS_*` no GitHub | ❌ ausentes | inventário: Render/Discord/UE5_INSTALL_DIR + `UNREAL_ENGINE_LOGIN` (28/10, ghcr **denied** — run #9 do ue-infra-smoke, linha 226; valor presente mas não autenticável) — diagnóstico com `node scripts/build/ue58_eac_unblock.mjs --probe-ghcr` |
 | `/eos/status` | ⏳ honesto | `mode:'unconfigured'` + `missing[]` até a Fase B deste checklist |
 
 ## Fase A — Epic Developer Portal (dev.epicgames.com)

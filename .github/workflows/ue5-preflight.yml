@@ -70,6 +70,11 @@ jobs:
           python3 scripts/build/bake_barburhen_colliders.py mvp_output/assets/worlds/Barburhen_Map.obj mvp_output/assets/worlds/Barburhen_colliders.json
           ls -la mvp_output/assets/worlds/
 
+      - name: Selftest do relatório UE5.8/EAC unblock (relatório + sonda ghcr)
+        # Fase 31+ — contrato do relatório de bloqueios (ue58_eac_unblock.mjs)
+        # e da sonda ghcr de 2 camadas, 100% offline (APIs mockadas).
+        run: node scripts/build/ue58_eac_unblock_selftest.mjs
+
       - name: Validate UE5.8 project structure
         run: node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun
 
@@ -84,6 +89,7 @@ jobs:
             echo "| EngineAssociation 5.8 | $(node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Guard UE1021 (fix_ue1021_includes) | $(python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo VIOLAÇÃO) |"
             echo "| Fase 1 — Barburhen OBJ + colliders | $(python3 scripts/build/export_barburhen_obj.py --selftest >/dev/null 2>&1 && python3 scripts/build/bake_barburhen_colliders.py --selftest >/dev/null 2>&1 && echo OK || echo ERROS) |"
+            echo "| Unblock UE5.8/EAC (relatório + sonda ghcr) | $(node scripts/build/ue58_eac_unblock_selftest.mjs >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Game/Editor/Server targets | ✅ validados no preflight |"
             echo "| Includes de projeto | ✅ resolvidos em Source/ |"
           } >> $GITHUB_STEP_SUMMARY
