@@ -79,7 +79,8 @@ vinheta, grão de filme animado, contraste/saturação leves e tinta de cinema
 `?fx=0` desliga o pipeline (fallback render direto); touch usa qualidade reduzida.
 O disparo próprio adiciona recuo visual à câmera (`camKick`, não afeta a mira).
 
-**Testes:** `node --test test/sim3d.test.js` cobre a sim offline (determinística de mundo/loot,
+**Testes:** `node --test test/zu-entry.test.js` cobre o contrato `ZU_PORTAL_V1` (offline e online:
+entrada no solo, relógio autoritativo e ausência de estado aéreo). `node --test test/sim3d.test.js` cobre a sim offline (determinística de mundo/loot,
 movimento+colisão, balística corpo/headshot ×1.75, pulsos e dano de zona, coleta, recarga, fim de
 partida, replay e snapshot roundtrip). `node --test test/room3d.test.js` cobre a sala autoritativa,
 o anti-cheat 3D, a fila de inputs (`ackSeq`, cap anti-speedhack), e a lag compensation (rewind
@@ -91,16 +92,16 @@ movimento/balas e expirando, throw/gloo autoritativos com replicação no snapsh
 one-shots e predição durante a queda). `node --test test/server3d.test.js` valida o end-to-end real
 (login HTTP → matchmaking 3D → partida com inputs → anti-cheat → isolamento 2D/3D → healthz).
 
-### Infiltração Aérea + Arremessáveis Táticos + Realismo PBR (Fase 4)
+### Entrada Zu em solo + Arremessáveis Táticos + Realismo PBR (Fase 4)
 
 | Sistema | Módulo | Comportamento |
 |---------|--------|---------------|
-| Infiltração aérea | `src/game3d/sim3d.js` | `start()` lança todos os operativos de `DROP_START_Y=140m`: queda livre (`sky`, cap −52 m/s) até 45 m, abertura automática do paraquedas (`chute`, cap −9 m/s), aterrissagem em tempo finito. Física em `stepActorMovement` — sim offline, `MatchRoom3D` e preditor replicam exatamente. No ar não há tiro/coleta/arremesso; deriva horizontal ×2,6 direciona o destino. Opção `airdrop: false` preserva partidas de solo (usada pelos testes das fases 1–3). |
+| Entrada Zu em solo (padrão) | `src/game3d/sim3d.js` + `server/room3d.js` | `start()` mantém todos os operativos em spawns autoritativos no solo e emite `zuIngress` com o protocolo `ZU_PORTAL_V1`, relógio sincronizado e duração de apresentação de 2,2 s. Não há queda, altitude ou estado de paraquedas no ingresso de gameplay; o servidor online e a simulação offline compartilham o contrato. `airdrop: true` existe somente como compatibilidade explícita para fixtures legados e não é o default. |
 | Granada FRAG | `sim3d.js` + `room3d.js` | Item looteável (`kind: 'frag'`, cap 3, 1 no spawn). Tecla `G` (one-shot `throw`): projétil balístico com gravidade, quique amortecido (0.38) em chão/AABBs, pavio de 2,2 s. Explosão: 110 de dano no epicentro, decaimento linear até 9 m, atenuação ×0.25 quando `rayAabb` encontra parede entre epicentro e alvo (auto-dano incluído). Granada também desgasta Gloo Walls no raio. |
 | Gloo Wall | `sim3d.js` + `room3d.js` | Item looteável (`kind: 'gloo'`, cap 2, 1 no spawn). Tecla `F` (one-shot `gloo`): parede 4×3×0.4 m a 2,2 m à frente (rotação 0/90°), HP 220, dura 60 s. Entra nos colliders dinâmicos (`physicsWorld`): bloqueia movimento, balas (desgastam o HP — impacto `kind: 'gloo'`), LOS e granadas. Deploy rejeitado sobre collider existente. Expiração/destruição emitem `glooDown` e removem o collider. |
-| Replicação online | `server/room3d.js` + `net3d.js` | Snapshot expõe `grenades` (interpolação posicional no cliente) e `walls` (id/x/z/rot/hp). Eventos `airdrop`, `land`, `frag`, `explosion`, `gloo`, `glooDown` entregues por raio. Anti-cheat `validateInput3D` valida `throw`/`gloo` como booleanos. Preditor local respeita as paredes autoritativas (colliders reconstruídos por snapshot, sem mutar o layout cacheado). |
+| Replicação online | `server/room3d.js` + `net3d.js` | Snapshot expõe `grenades` (interpolação posicional no cliente) e `walls` (id/x/z/rot/hp). O evento `zuIngress` entrega o relógio autoritativo de entrada; `airdrop` fica reservado ao legado explícito. Eventos `land`, `frag`, `explosion`, `gloo`, `glooDown` são entregues por raio. Anti-cheat `validateInput3D` valida `throw`/`gloo` como booleanos. |
 | Realismo PBR | `textures3d.js` + `world3d.js` | Normal maps procedurais (Sobel sobre o canvas de cor) para concreto/metal/terreno/asfalto — relevo real sob o sol. `scene.environment` via PMREM+RoomEnvironment (metais refletem de verdade, intensidade sutil 0.35). Vegetação instanciada (46 árvores em 2 draw calls + 30 pedras) fora dos distritos, decorativa (sem colisão — sim idêntica). 14 nuvens de crepúsculo com deriva lenta. |
-| Apresentação | `entities3d.js`, `effects3d.js`, `audio3d.js`, `hud3d.js` | Paraquedas procedural (dossel + suspensórios, só na fase `chute`), pose de queda com braços abertos; granada com LED do pavio piscando e tombo em voo; gloo com animação de deploy (ease-out) e brilho que decai com o HP. Explosão: bola de fogo + fumaça + debris + luz + tremor de câmera proporcional à distância. Áudio 100% procedural: vento de queda, abertura do paraquedas, aterrissagem, whoosh do arremesso, detonação (sub-bass + estilhaços), cristalização do gloo. HUD: altímetro com marca de abertura (45 m), contagens 💣/🧊 com teclas, botões touch novos. |
+| Apresentação | `entities3d.js`, `effects3d.js`, `audio3d.js`, `hud3d.js` | A chegada Zu é apresentada por portal sincronizado, sem pose de queda, altímetro ou paraquedas. Granada com LED do pavio piscando e tombo em voo; gloo com animação de deploy (ease-out) e brilho que decai com o HP. Explosão: bola de fogo + fumaça + debris + luz + tremor de câmera proporcional à distância. |
 
 ### Agachamento, Espectador e Impactos de Combate (Fase 5)
 

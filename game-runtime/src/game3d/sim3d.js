@@ -585,7 +585,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 }
 
 export class KhaaosSim3D {
-  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = true, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
+  constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = false, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
     this.seed = String(seed);
     this.seedHash = [...this.seed].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0; // Fase 28 — hash numérico p/ agendadores
     this.scenario = resolveScenario(scenarioId);
@@ -596,7 +596,9 @@ export class KhaaosSim3D {
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
-    this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_portal_v1';
+    this.zuIngress = { protocol: 'ZU_PORTAL_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
@@ -803,13 +805,23 @@ export class KhaaosSim3D {
     const p = this.player;
     p.armor = entry === 'belt' ? 60 : 18;
     p.speed = entry === 'belt' ? 5.2 : 6.1;
-    // Fase 4 — infiltração aérea: todos os operativos entram caindo do céu
+    // Zu de entrada: os operativos já estão no spawn autoritativo de solo.
+    // O relógio compartilhado serve apenas para a apresentação do portal.
     if (this.airdrop) {
       this.#airdropActor(p, 0, this.world.lootSpots);
       this.bots.forEach((b, i) => this.#airdropActor(b, i + 1, this.world.lootSpots));
-      this.emit('airdrop', { altitude: DROP_START_Y });
+      this.emit('airdrop', { altitude: DROP_START_Y, deprecated: true });
+    } else {
+      this.zuIngress.startedAt = this.time;
+      this.emit('zuIngress', {
+        protocol: this.zuIngress.protocol,
+        startedAt: this.zuIngress.startedAt,
+        durationMs: this.zuIngress.durationMs,
+        world: this.scenario.id,
+        spawn: this.world.playerSpawn,
+      });
     }
-    this.emit('entry', { entry });
+    this.emit('entry', { entry, entryProtocol: this.entryProtocol });
   }
   #airdropActor(a, idx, lootSpots) {
     // espalha na borda do anel com jitter determinístico; bots escolhem loot spot como destino

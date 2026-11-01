@@ -24,8 +24,8 @@ function makeRoom({ humans = 3, botFill = 0, seed = 'P4-3D' } = {}) {
 }
 
 // ---------- infiltração aérea (sim offline) ----------
-test('fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em tempo finito', () => {
-  const s = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2 }); // airdrop ON por padrão
+test('fase4 sim: airdrop legado explícito inicia no céu, proíbe combate no ar e aterrissa em tempo finito', () => {
+  const s = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2, airdrop: true });
   s.start('belt');
   assert.equal(s.player.dropPhase, 'sky');
   assert.ok(s.player.y >= 130, `altitude inicial ${s.player.y}`);
@@ -54,7 +54,7 @@ test('fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em te
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'land'), 'evento land esperado');
   // airdrop determinístico: mesma seed → mesma posição de aterrissagem
-  const s2 = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2 });
+  const s2 = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2, airdrop: true });
   s2.start('belt');
   for (let i = 0; i < 30 * 12; i++) s2.step(idle(), STEP);
   assert.equal(Math.abs(s2.player.x - s.player.x) < 1e-9, true);
@@ -62,10 +62,10 @@ test('fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em te
 });
 
 test('fase4 sim: controle de deriva direciona a queda (input afeta o destino)', () => {
-  const a = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0 });
+  const a = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0, airdrop: true });
   a.start('belt');
   for (let i = 0; i < 120; i++) a.step({ ...idle(0), dy: -1 }, STEP); // deriva para frente
-  const b = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0 });
+  const b = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0, airdrop: true });
   b.start('belt');
   for (let i = 0; i < 120; i++) b.step(idle(), STEP); // cai quase parado
   const drift = Math.hypot(a.player.x - b.player.x, a.player.z - b.player.z);

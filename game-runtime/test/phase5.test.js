@@ -66,7 +66,7 @@ test('fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)'
   // no salto, o salto prevalece: o ator sai do chão e o sprint/agachar não combinam
   s.step({ ...idle(), seq: 1, jump: true, crouch: true }, STEP);
   assert.ok(!s.player.onGround, 'ator no ar após o salto');
-  const drop = new KhaaosSim3D({ seed: 'P5-AIR-DROP', botCount: 0 }); // airdrop ON
+  const drop = new KhaaosSim3D({ seed: 'P5-AIR-DROP', botCount: 0, airdrop: true }); // airdrop legado explícito
   drop.start('belt');
   assert.equal(drop.player.dropPhase, 'sky');
   drop.step({ ...idle(), seq: 1, crouch: true }, STEP);
