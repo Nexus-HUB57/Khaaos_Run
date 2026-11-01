@@ -25,8 +25,13 @@ jobs:
         env:
           UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
         run: |
+          {
+            echo "### UNREAL_ENGINE_LOGIN — validação ghcr"
+            echo ""
+          } > "$GITHUB_STEP_SUMMARY"
           if [ -z "$UE_LOGIN" ]; then
             echo "::warning::UNREAL_ENGINE_LOGIN ausente — imagens do contrato são públicas; seguindo sem login"
+            echo "- ℹ️ secret ausente — imagens do contrato são públicas; smoke segue sem login." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           # Formatos aceitos: "user:token" ou apenas o token (usuário fixo do org owner)
@@ -35,11 +40,25 @@ jobs:
           else
             LOGIN_USER="Nexus-HUB57"; LOGIN_TOKEN="$UE_LOGIN"
           fi
-          if echo "$LOGIN_TOKEN" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin; then
+          # Saída do login capturada para o relatório (o daemon NÃO ecoa a
+          # senha; erros ficam limitados a denied/unauthorized).
+          LOGIN_OUT="$(echo "$LOGIN_TOKEN" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin 2>&1)" && LOGIN_RC=0 || LOGIN_RC=$?
+          if [ "$LOGIN_RC" -eq 0 ]; then
             echo "UNREAL_ENGINE_LOGIN_VALID=ok" >> "$GITHUB_ENV"
             echo "✅ docker login ghcr.io com UNREAL_ENGINE_LOGIN OK"
+            echo "- ✅ **login ghcr OK** (usuário \`$LOGIN_USER\`) — credencial autenticável." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning::secret UNREAL_ENGINE_LOGIN presente mas NÃO autentica no ghcr — revisar valor/escopo read:packages (imagens públicas: o smoke segue)"
+            {
+              echo "- ❌ **login ghcr NEGADO** (usuário \`$LOGIN_USER\`) — o valor existe mas NÃO autentica; o smoke segue (imagens públicas)."
+              echo ""
+              echo '```'
+              echo "$LOGIN_OUT" | grep -i -m 3 'denied\|unauthorized\|error' || echo "$LOGIN_OUT"
+              echo '```'
+              echo ""
+              echo "**Correção:** valor de conta GitHub **vinculada à Epic** (EULA aceito) com escopo \`read:packages\` → \`gh secret set UNREAL_ENGINE_LOGIN\` (formato \`user:token\` ou só o token)."
+              echo "O workflow ue58-container-build usa o valor VERBATIM como senha: preferir SÓ o token (ou o secret \`UE_CONTAINER_PAT\`)."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Pull do contrato P1 (com validação de digests)

@@ -106,23 +106,57 @@ jobs:
 
   # ─── Job 2: UE5.8 licenciado — UBT + Automation + dois clientes (+ package) ──
   ue58-gate:
-    name: Engine licenciada gate (UE_CONTAINER_PAT)
+    name: Engine licenciada gate (UE_CONTAINER_PAT — validação funcional)
     runs-on: ubuntu-latest
     outputs:
       has_pat: ${{ steps.check.outputs.has_pat }}
+      login_user: ${{ steps.check.outputs.login_user }}
     steps:
-      - name: Check Epic container credential
+      - name: Check Epic container credential (login ghcr funcional)
+        id: check
         env:
           UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+          UE_CONTAINER_USER: ${{ vars.UE_CONTAINER_USER }}
+          ACTOR: ${{ github.actor }}
         run: |
-          if [ -n "$UE_CONTAINER_PAT" ]; then
+          {
+            echo "### UE5.8 licenciado (M4) — gate de credencial"
+            echo ""
+          } > "$GITHUB_STEP_SUMMARY"
+          if [ -z "$UE_CONTAINER_PAT" ]; then
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "- ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha; a estrutura C++ é validada no ue5-preflight)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha)."
+            exit 0
+          fi
+          LOGIN_USER="${UE_CONTAINER_USER:-$ACTOR}"
+          LOGIN_ERR="$(mktemp)"
+          # Validação FUNCIONAL: só habilita a trilha se a combinação
+          # (username, password) realmente autentica no ghcr — evita a falha
+          # "Docker login failed" dentro do Initialize containers.
+          if echo "$UE_CONTAINER_PAT" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin 2>"$LOGIN_ERR"; then
             echo "has_pat=true" >> "$GITHUB_OUTPUT"
-            echo "✅ UE_CONTAINER_PAT configurado — trilha UE5.8 real habilitada"
+            echo "login_user=$LOGIN_USER" >> "$GITHUB_OUTPUT"
+            {
+              echo "- ✅ **UE_CONTAINER_PAT autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha UE5.8 real habilitada."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ UE_CONTAINER_PAT autentica no ghcr — trilha UE5.8 real habilitada"
           else
             echo "has_pat=false" >> "$GITHUB_OUTPUT"
-            echo "ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha;"
-            echo "   a estrutura C++ é validada no ue5-preflight e a compilação exige o binário licenciado)."
+            {
+              echo "- ❌ **UE_CONTAINER_PAT presente mas NÃO autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha PULADA (a CI NÃO falha por isso)."
+              echo ""
+              echo '```'
+              grep -i -m 3 'denied\|unauthorized\|error' "$LOGIN_ERR" || head -3 "$LOGIN_ERR"
+              echo '```'
+              echo ""
+              echo "**Correção:** PAT de conta vinculada à Epic (EULA + \`read:packages\`) → \`gh secret set UE_CONTAINER_PAT\`; usuário em \`UE_CONTAINER_USER\` se ≠ actor."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::UE_CONTAINER_PAT presente mas NÃO autentica no ghcr — trilha pulada com diagnóstico no summary"
           fi
+          rm -f "$LOGIN_ERR"
 
   ue58-licensed:
     name: UE5.8 real — UBT Server/Editor/Client + Automation + 2 clientes
@@ -133,7 +167,8 @@ jobs:
     container:
       image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
       credentials:
-        username: ${{ github.actor }}
+        # username validado funcionalmente pelo gate (UE_CONTAINER_USER > actor)
+        username: ${{ needs.ue58-gate.outputs.login_user || github.actor }}
         password: ${{ secrets.UE_CONTAINER_PAT }}
       options: --user root
     steps:
