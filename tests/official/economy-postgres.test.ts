@@ -422,6 +422,11 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(cleanAudit.counts.successfulClaimsWithoutLedger, 0);
     assert.equal(cleanAudit.counts.incompleteIdempotencyClaims, 0);
 
+    const holdCandidateKey = `hold-candidate-${randomUUID()}`;
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
+      VALUES ($1, $2, $3, 400, '{"message":"expired candidate"}'::jsonb, TIMESTAMP '2000-01-01')
+    `, [salaryUser, holdCandidateKey, "e".repeat(64)]);
     await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance + 1 WHERE user_id = $1", [salaryUser]);
     const [orphanEvent] = (await pool.query(`
       INSERT INTO transactions (user_id, type, amount_krc, operation_id, description)
@@ -441,10 +446,26 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(driftAudit.counts.successfulClaimsWithoutLedger, 1);
     const stillDrifted = await pool.query("SELECT bonus_balance::text FROM bank_accounts WHERE user_id = $1", [salaryUser]);
     assert.equal(stillDrifted.rows[0].bonus_balance, "101.00", "audit reports drift without silently changing balances");
+    const driftPreview = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1 });
+    assert.equal(driftPreview.mode, "dry_run");
+    assert.equal(driftPreview.auditStatus, "needs_attention");
+    assert.equal(driftPreview.auditFindings.walletDrifts, 1);
+    assert.equal(driftPreview.deletedClaims, 0, "dry-run with drift never deletes claims");
+    const heldPrune = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
+    assert.equal(heldPrune.mode, "held_for_drift");
+    assert.equal(heldPrune.auditStatus, "needs_attention");
+    assert.equal(heldPrune.auditFindings.walletDrifts, 1);
+    assert.equal(heldPrune.deletedClaims, 0, "drift must hold pruning before any delete");
+    const heldCandidate = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [holdCandidateKey],
+    );
+    assert.equal(heldCandidate.rows[0].count, 1, "the hold preserves otherwise-eligible claims");
     await pool.query("DELETE FROM transactions WHERE id = $1", [orphanEvent.id]);
     await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [orphanClaimKey]);
     await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance - 1 WHERE user_id = $1", [salaryUser]);
     assert.equal((await createEconomyAuditReport(pool)).status, "clean");
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [holdCandidateKey]);
 
     await pool.query("UPDATE economy_idempotency SET created_at = TIMESTAMP '2000-01-01' WHERE user_id = $1 AND idempotency_key = $2", [transferUser, transferKey]);
     const completeExpiredKey = `retention-complete-${randomUUID()}`;
@@ -452,7 +473,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await pool.query(`
       INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
       VALUES ($1, $2, $3, 400, '{"message":"rejected"}'::jsonb, TIMESTAMP '2000-01-01')
-    `, [salaryUser, completeExpiredKey, "a".repeat(64)]);
+    `, [transferUser, completeExpiredKey, "a".repeat(64)]);
     await pool.query(`
       INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
       VALUES ($1, $2, $3, NULL, NULL, TIMESTAMP '2000-01-01')
@@ -464,14 +485,26 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(dryRun.incompleteClaimsNotDeleted, 1);
     assert.equal(dryRun.successfulClaimsWithoutLedgerNotDeleted, 1);
     assert.equal(dryRun.deletedClaims, 0);
+    assert.equal(dryRun.auditStatus, "needs_attention");
     const eligibleAfterDryRun = await pool.query(`
       SELECT count(*)::int AS count FROM economy_idempotency
       WHERE created_at < TIMESTAMP '2025-01-01' AND response_status IS NOT NULL AND response_body IS NOT NULL
         AND idempotency_key IN ($1, $2)
     `, [transferKey, completeExpiredKey]);
     assert.equal(eligibleAfterDryRun.rows[0].count, 2, "dry-run must not delete eligible claims");
+    const incompleteHold = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
+    assert.equal(incompleteHold.mode, "held_for_drift");
+    assert.equal(incompleteHold.auditFindings.incompleteIdempotencyClaims, 1);
+    assert.equal(incompleteHold.deletedClaims, 0, "incomplete claims hold all pruning until reviewed");
+    const preservedIncomplete = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [incompleteExpiredKey],
+    );
+    assert.equal(preservedIncomplete.rows[0].count, 1);
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [incompleteExpiredKey]);
     const pruned = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
     assert.equal(pruned.mode, "executed");
+    assert.equal(pruned.auditStatus, "clean");
     assert.equal(pruned.deletedClaims, 2);
     assert.equal(pruned.batches, 2);
     assert.equal(pruned.successfulClaimsWithoutLedgerNotDeleted, 1);
@@ -479,7 +512,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
       "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
       [incompleteExpiredKey],
     );
-    assert.equal(remainingIncomplete.rows[0].count, 1, "incomplete claims are never deleted by retention cleanup");
+    assert.equal(remainingIncomplete.rows[0].count, 0, "the reviewed incomplete fixture was manually removed before the clean pruning run");
     const remainingLegacySuccess = await pool.query(
       "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
       [legacySuccessKey],

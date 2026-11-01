@@ -173,6 +173,7 @@ Esta etapa transforma a atomicidade já implementada em evidência operacional a
 
 - KRC continua unidade de jogo sem resgate, custódia ou ponte para fundos reais; depósito sem liquidação comprovada permanece desabilitado.
 - Ledger append-only, idempotência, operações transacionais, valores precisos e relatório de reconciliação estão implementados e possuem testes locais/CI.
+- Pruning idempotente usa hold global: drift/anomalias mantém dry-run disponível, mas bloqueia `--execute` até reconciliação limpa; executar a retenção preserva evidência para investigação, à custa de crescimento temporário de claims.
 - Concluir ajustes compensatórios auditáveis e revisar permissões/console administrativo.
 - Auditar dados legados, validar constraints e testar recuperação sob concorrência/falha.
 - Corrigir inconsistência de juros do preview vs. cobrança autoritativa.
