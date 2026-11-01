@@ -127,7 +127,8 @@ jobs:
         if: hashFiles('game-runtime/Dockerfile') != ''
         uses: docker/build-push-action@v5
         with:
-          context: ./game-runtime
+          context: .
+          file: ./game-runtime/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/nexus-hub57/khaaos-game:${{ github.sha }}
