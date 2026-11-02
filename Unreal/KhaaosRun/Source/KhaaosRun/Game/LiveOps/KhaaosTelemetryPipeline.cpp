@@ -6,7 +6,123 @@
 #include "Misc/DateTime.h"
 #include "Serialization/JsonSerializer.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+#include "Serialization/JsonWriter.h"
 #include "HAL/PlatformTime.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Misc/AutomationTest.h"
+#endif
+
+namespace
+{
+TSharedRef<FJsonObject> MakeTelemetryEventJson(
+	const FKhaaosTelemetryEvent& Event,
+	const TArray<FString>& ActiveExperiments)
+{
+	TSharedRef<FJsonObject> JsonEvent = MakeShared<FJsonObject>();
+	JsonEvent->SetStringField(TEXT("type"), Event.EventName);
+	JsonEvent->SetNumberField(TEXT("category"), static_cast<double>(static_cast<uint8>(Event.EventType)));
+	JsonEvent->SetStringField(TEXT("player"), Event.PlayerEosId);
+	JsonEvent->SetStringField(TEXT("match"), Event.MatchId);
+	JsonEvent->SetNumberField(TEXT("ts"), static_cast<double>(Event.Timestamp));
+	JsonEvent->SetNumberField(TEXT("value"), Event.Value);
+	JsonEvent->SetStringField(TEXT("region"), Event.Region);
+	JsonEvent->SetStringField(TEXT("platform"), Event.Platform);
+
+	// Metadata permanece uma string conforme o tipo do evento; o serializer
+	// escapa aspas, barras e caracteres de controle sem montar JSON manualmente.
+	JsonEvent->SetStringField(TEXT("metadata"), Event.Metadata);
+
+	if (!ActiveExperiments.IsEmpty())
+	{
+		TArray<TSharedPtr<FJsonValue>> ExperimentValues;
+		ExperimentValues.Reserve(ActiveExperiments.Num());
+		for (const FString& Experiment : ActiveExperiments)
+		{
+			ExperimentValues.Add(MakeShared<FJsonValueString>(Experiment));
+		}
+		JsonEvent->SetArrayField(TEXT("experiments"), ExperimentValues);
+	}
+
+	return JsonEvent;
+}
+
+bool SerializeTelemetryJson(const TSharedRef<FJsonValue>& RootValue, FString& OutJson)
+{
+	OutJson.Reset();
+	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutJson);
+	return FJsonSerializer::Serialize(RootValue, Writer);
+}
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FKhaaosTelemetryJsonSerializationTest,
+	"Khaaos.Telemetry.JsonSerialization",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FKhaaosTelemetryJsonSerializationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	FKhaaosTelemetryEvent Event;
+	Event.EventType = EKhaaosTelemetryEvent::WeaponFired;
+	Event.EventName = TEXT("weapon\"fired\n");
+	Event.PlayerEosId = TEXT("player\"id");
+	Event.MatchId = TEXT("match-1");
+	Event.Timestamp = 1793574000123LL;
+	Event.Value = 12.5;
+	Event.Metadata = TEXT("{\"note\":\"quoted \\\"text\\\"\",\"line\":\"first\\nsecond\"}");
+	Event.Region = TEXT("sa1");
+	Event.Platform = TEXT("server\nlinux");
+
+	TArray<FString> Experiments;
+	Experiments.Add(TEXT("exp\"one"));
+	Experiments.Add(TEXT("exp-two\n"));
+
+	const TSharedRef<FJsonValue> EventValue = MakeShared<FJsonValueObject>(
+		MakeTelemetryEventJson(Event, Experiments));
+	FString EventJson;
+	TestTrue(TEXT("Event serializes through FJsonSerializer"), SerializeTelemetryJson(EventValue, EventJson));
+
+	TSharedPtr<FJsonObject> ParsedEvent;
+	const TSharedRef<TJsonReader<>> EventReader = TJsonReaderFactory<>::Create(EventJson);
+	TestTrue(TEXT("Serialized event parses as a JSON object"), FJsonSerializer::Deserialize(EventReader, ParsedEvent));
+	if (!ParsedEvent.IsValid())
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Event name survives quotes/newlines"), ParsedEvent->GetStringField(TEXT("type")), Event.EventName);
+	TestEqual(TEXT("Metadata survives JSON string escaping"), ParsedEvent->GetStringField(TEXT("metadata")), Event.Metadata);
+	TestTrue(TEXT("64-bit millisecond timestamp is preserved"),
+		FMath::IsNearlyEqual(ParsedEvent->GetNumberField(TEXT("ts")), static_cast<double>(Event.Timestamp)));
+	const TArray<TSharedPtr<FJsonValue>>& ParsedExperiments = ParsedEvent->GetArrayField(TEXT("experiments"));
+	TestEqual(TEXT("Both experiment tags are serialized"), ParsedExperiments.Num(), Experiments.Num());
+	if (ParsedExperiments.Num() == Experiments.Num())
+	{
+		TestEqual(TEXT("Experiment strings are escaped and restored"), ParsedExperiments[0]->AsString(), Experiments[0]);
+		TestEqual(TEXT("Experiment control characters are restored"), ParsedExperiments[1]->AsString(), Experiments[1]);
+	}
+
+	TArray<TSharedPtr<FJsonValue>> BatchValues;
+	BatchValues.Add(EventValue);
+	const TSharedRef<FJsonValue> BatchValue = MakeShared<FJsonValueArray>(MoveTemp(BatchValues));
+	FString BatchJson;
+	TestTrue(TEXT("Batch serializes through FJsonSerializer"), SerializeTelemetryJson(BatchValue, BatchJson));
+
+	TSharedPtr<FJsonValue> ParsedBatch;
+	const TSharedRef<TJsonReader<>> BatchReader = TJsonReaderFactory<>::Create(BatchJson);
+	TestTrue(TEXT("Serialized batch parses as JSON"), FJsonSerializer::Deserialize(BatchReader, ParsedBatch));
+	TestTrue(TEXT("Batch remains a top-level JSON array"), ParsedBatch.IsValid() && ParsedBatch->Type == EJson::Array);
+	if (ParsedBatch.IsValid() && ParsedBatch->Type == EJson::Array)
+	{
+		TestEqual(TEXT("Batch contains the event"), ParsedBatch->AsArray().Num(), 1);
+	}
+	return true;
+}
+#endif // WITH_DEV_AUTOMATION_TESTS
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
 
@@ -152,51 +268,49 @@ FString UKhaaosTelemetryPipeline::GetExperimentVariant(const FString& Experiment
 
 FString UKhaaosTelemetryPipeline::SerializeEvent(const FKhaaosTelemetryEvent& Event) const
 {
-        // JSON serialization of telemetry event
-        FString JsonStr;
-        JsonStr += TEXT("{\"type\":\"") + Event.EventName + TEXT("\"");
-        JsonStr += TEXT(",\"category\":") + FString::FromInt((int32)Event.EventType);
-        JsonStr += TEXT(",\"player\":\"") + Event.PlayerEosId + TEXT("\"");
-        JsonStr += TEXT(",\"match\":\"") + Event.MatchId + TEXT("\"");
-        JsonStr += TEXT(",\"ts\":") + FString::FromInt(Event.Timestamp);
-        JsonStr += TEXT(",\"value\":") + FString::SanitizeFloat(Event.Value);
-        JsonStr += TEXT(",\"region\":\"") + Event.Region + TEXT("\"");
-        JsonStr += TEXT(",\"platform\":\"") + Event.Platform + TEXT("\"");
-
-        // Add A/B experiment tags
-        if (ActiveExperiments.Num() > 0)
-        {
-                JsonStr += TEXT(",\"experiments\":[");
-                for (int32 i = 0; i < ActiveExperiments.Num(); ++i)
-                {
-                        if (i > 0) JsonStr += TEXT(",");
-                        JsonStr += TEXT("\"") + ActiveExperiments[i] + TEXT("\"");
-                }
-                JsonStr += TEXT("]");
-        }
-
-        JsonStr += TEXT("}");
-        return JsonStr;
+	const TSharedRef<FJsonValue> JsonEvent = MakeShared<FJsonValueObject>(
+		MakeTelemetryEventJson(Event, ActiveExperiments));
+	FString JsonString;
+	if (!SerializeTelemetryJson(JsonEvent, JsonString))
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("KhaaosTelemetryPipeline: Failed to serialize telemetry event"));
+		return FString();
+	}
+	return JsonString;
 }
 
 FString UKhaaosTelemetryPipeline::SerializeBatch(const TArray<FKhaaosTelemetryEvent>& Batch) const
 {
-        FString JsonStr = TEXT("[");
-        for (int32 i = 0; i < Batch.Num(); ++i)
-        {
-                if (i > 0) JsonStr += TEXT(",");
-                JsonStr += SerializeEvent(Batch[i]);
-        }
-        JsonStr += TEXT("]");
-        return JsonStr;
+	TArray<TSharedPtr<FJsonValue>> JsonEvents;
+	JsonEvents.Reserve(Batch.Num());
+	for (const FKhaaosTelemetryEvent& Event : Batch)
+	{
+		JsonEvents.Add(MakeShared<FJsonValueObject>(MakeTelemetryEventJson(Event, ActiveExperiments)));
+	}
+
+	const TSharedPtr<FJsonValue> JsonBatch = MakeShared<FJsonValueArray>(MoveTemp(JsonEvents));
+	FString JsonString;
+	if (!SerializeTelemetryJson(JsonBatch.ToSharedRef(), JsonString))
+	{
+		UE_LOG(LogKhaaosRun, Error, TEXT("KhaaosTelemetryPipeline: Failed to serialize telemetry batch"));
+		return FString();
+	}
+	return JsonString;
 }
 
 void UKhaaosTelemetryPipeline::ShipBatch(const TArray<FKhaaosTelemetryEvent>& Batch)
 {
-        // In production, this would use HTTP client to POST to analytics backend
-        // For now, log the batch size
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosTelemetryPipeline: Shipping %d events to %s"),
-                Batch.Num(), *AnalyticsUrl);
+	const FString Payload = SerializeBatch(Batch);
+	if (Payload.IsEmpty())
+	{
+		return;
+	}
+
+	// This prepares and validates the JSON payload only; HTTP transport is not
+	// implemented here, so do not report the batch as delivered to the backend.
+	UE_LOG(LogKhaaosRun, Verbose,
+		TEXT("KhaaosTelemetryPipeline: Prepared %d events (%d JSON characters) for %s; HTTP transport is not implemented"),
+		Batch.Num(), Payload.Len(), *AnalyticsUrl);
 }
 
 bool UKhaaosTelemetryPipeline::ShouldSample(EKhaaosTelemetryEvent EventType) const
