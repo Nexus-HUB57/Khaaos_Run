@@ -407,5 +407,98 @@
     "design_tier": "PhD",
     "balance_version": "2.0",
     "designer": "Nexus-HUB57"
+  },
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_ZheersAbilities.h",
+    "abilities": [
+      {
+        "name": "RadBurst",
+        "tag": "Ability.Species.Zheers.RadBurst",
+        "cooldown": 8.0,
+        "energy": 20.0,
+        "damage": 30.0,
+        "range": 600.0,
+        "duration": 1.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "MutateForm",
+        "tag": "Ability.Species.Zheers.MutateForm",
+        "cooldown": 25.0,
+        "energy": 30.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 8.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "FissionShot",
+        "tag": "Ability.Species.Zheers.FissionShot",
+        "cooldown": 5.0,
+        "energy": 15.0,
+        "damage": 20.0,
+        "range": 2500.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "RadAura",
+        "tag": "Ability.Species.Zheers.RadAura",
+        "cooldown": 15.0,
+        "energy": 10.0,
+        "damage": 5.0,
+        "range": 300.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": true
+      },
+      {
+        "name": "ChernobylCharge",
+        "tag": "Ability.Species.Zheers.ChernobylCharge",
+        "cooldown": 10.0,
+        "energy": 25.0,
+        "damage": 40.0,
+        "range": 1200.0,
+        "duration": 1.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "DegenField",
+        "tag": "Ability.Species.Zheers.DegenField",
+        "cooldown": 18.0,
+        "energy": 25.0,
+        "damage": 0.0,
+        "range": 500.0,
+        "duration": 6.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "HalfLife",
+        "tag": "Ability.Species.Zheers.HalfLife",
+        "cooldown": 12.0,
+        "energy": 20.0,
+        "damage": 60.0,
+        "range": 800.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Meltdown",
+        "tag": "Ability.Species.Zheers.Meltdown",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 200.0,
+        "range": 2000.0,
+        "duration": 2.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
   }
 }

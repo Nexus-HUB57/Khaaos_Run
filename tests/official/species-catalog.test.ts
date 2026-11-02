@@ -302,6 +302,97 @@ test("Catálogo de Espécies: kit UE5 do Huran espelha KhaaosAbility_HuranAbilit
   }
 });
 
+/**
+ * F47 — Espelha o contrato do Huran para as outras 5 espécies.
+ *
+ * Antes do F47, só SPC_Huran declarava `ue5_kit` (verificado pelo teste acima).
+ * As outras 5 espécies tinham os headers C++ completos (48 abilities no total)
+ * mas o SPC não espelhava — então o Studio não conseguia emitir o manifest UE5
+ * para Zheers/Onith/Skeetw/Khael/Venex. Agora todas as 6 espécies têm ue5_kit
+ * com 8 habilidades e 1 ultimate, e este teste garante a paridade com o header.
+ */
+test("F47 — Catálogo de Espécies: TODAS as 6 espécies declaram ue5_kit (8 habilidades, 1 ultimate, paridade header)", () => {
+  const EXPECT_ULTIMATE: Record<string, string> = {
+    SPC_Huran: "TsunamiRage",
+    SPC_Zheers: "Meltdown",
+    SPC_Onith: "Pandemic",
+    SPC_Skeetw: "StormCall",
+    SPC_Khael: "AbsoluteZero",
+    SPC_Venex: "Overload",
+  };
+
+  for (const spcId of SPECIES_IDS) {
+    const spc = loadSpecies(spcId);
+    const kit = spc.ue5_kit;
+    assert.ok(kit, `${spcId} declara ue5_kit`);
+
+    const speciesName = spcId.replace(/^SPC_/, "");
+    assert.ok(
+      kit.header.includes(`KhaaosAbility_${speciesName}Abilities.h`),
+      `${spcId}: header aponta para KhaaosAbility_${speciesName}Abilities.h`,
+    );
+
+    assert.equal(kit.abilities.length, 8, `${spcId}: kit UE5 canônico com 8 habilidades`);
+
+    const ultimates = kit.abilities.filter((a: AnyRecord) => a.is_ultimate);
+    assert.equal(ultimates.length, 1, `${spcId}: exatamente 1 ultimate`);
+    assert.equal(
+      ultimates[0].name,
+      EXPECT_ULTIMATE[spcId],
+      `${spcId}: ultimate canônico é ${EXPECT_ULTIMATE[spcId]}`,
+    );
+
+    // Paridade numérica com o header C++
+    const headerPath = path.resolve(
+      `Unreal/KhaaosRun/Source/KhaaosRun/Game/AbilitySystem/Species/KhaaosAbility_${speciesName}Abilities.h`,
+    );
+    const header = readFileSync(headerPath, "utf8");
+    const classMatches = [...header.matchAll(/class UKhaaosAbility_(\w+)/g)];
+
+    for (const ability of kit.abilities) {
+      // 1. tag presente no header
+      assert.ok(
+        header.includes(ability.tag),
+        `${spcId}.${ability.name}: GameplayTag ${ability.tag} no header`,
+      );
+
+      // 2. classe UCLASS presente
+      const start = classMatches.find((m) => m[1] === ability.name);
+      assert.ok(start, `${spcId}.${ability.name}: classe UKhaaosAbility_${ability.name} no header`);
+
+      // 3. cooldown/energy/damage batem com defaults do UPROPERTY
+      const startIdx = start!.index!;
+      const next = classMatches
+        .filter((m) => m.index! > startIdx)
+        .sort((a, b) => a.index! - b.index!)[0];
+      const block = header.slice(startIdx, next?.index);
+
+      const cooldown = Number(block.match(/Cooldown = ([\d.]+)f/)?.[1]);
+      const energy = Number(block.match(/EnergyCost = ([\d.]+)f/)?.[1]);
+      assert.equal(cooldown, ability.cooldown, `${spcId}.${ability.name}: cooldown header=JSON`);
+      assert.equal(energy, ability.energy, `${spcId}.${ability.name}: energia header=JSON`);
+
+      if (ability.damage > 0) {
+        const damage = Number(block.match(/Damage = ([\d.]+)f/)?.[1]);
+        assert.equal(damage, ability.damage, `${spcId}.${ability.name}: dano header=JSON`);
+      } else {
+        assert.ok(
+          !/Damage = [\d.]+f/.test(block),
+          `${spcId}.${ability.name}: sem dano => header não declara Damage`,
+        );
+      }
+    }
+
+    // 4. tags únicas dentro do kit
+    const tags = kit.abilities.map((a: AnyRecord) => a.tag);
+    assert.equal(new Set(tags).size, 8, `${spcId}: 8 tags únicas`);
+    assert.ok(
+      tags.every((t: string) => t.startsWith(`Ability.Species.${speciesName}.`)),
+      `${spcId}: todas as tags começam com Ability.Species.${speciesName}.`,
+    );
+  }
+});
+
 test("Catálogo de Espécies: emote_catalog.json coerente (13 emotes, categorias canônicas, resumo batendo com a lista)", () => {
   const catalog: AnyRecord = JSON.parse(
     readFileSync(path.resolve("components_dev/avatars/emote_catalog.json"), "utf8"),

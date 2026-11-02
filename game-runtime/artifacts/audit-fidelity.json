@@ -1,7 +1,7 @@
 {
   "ok": true,
   "summary": {
-    "pass": 53,
+    "pass": 80,
     "fail": 0
   },
   "checks": [
@@ -349,6 +349,195 @@
       "detail": "#0e1526 / #2a4258 / #a8c3c9"
     },
     {
+      "id": "W1",
+      "world": "CIGKV CIGKV",
+      "name": "shared/worlds.ts hazard.type = KHAOS_GRAVITY",
+      "status": "pass",
+      "detail": "type=KHAOS_GRAVITY"
+    },
+    {
+      "id": "W2",
+      "world": "CIGKV CIGKV",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=KHAOS_GRAVITY ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "CIGKV CIGKV",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "CIGKV CIGKV",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Vila Militar Murada — Pátio de Armamento, Setor de Testes (P…\""
+    },
+    {
+      "id": "W5",
+      "world": "CIGKV CIGKV",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Khaaos Ville — Campo de Instrução de Guerra\""
+    },
+    {
+      "id": "W1",
+      "world": "Barburhen Barburhen",
+      "name": "shared/worlds.ts hazard.type = ACID_RAIN",
+      "status": "pass",
+      "detail": "type=ACID_RAIN"
+    },
+    {
+      "id": "W2",
+      "world": "Barburhen Barburhen",
+      "name": "runtime survival ausente (chuva ácida id-gated no sim3d)",
+      "status": "pass",
+      "detail": "sobrevivência undefined; hazard conceitual ACID_RAIN em shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Barburhen Barburhen",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Barburhen Barburhen",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Urbano Pós-Guerra: Construções Inacabadas, Carros Abandonado…\""
+    },
+    {
+      "id": "W5",
+      "world": "Barburhen Barburhen",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)\""
+    },
+    {
+      "id": "W1",
+      "world": "Priadus Priadus",
+      "name": "shared/worlds.ts hazard.type = SPORE_FOG",
+      "status": "pass",
+      "detail": "type=SPORE_FOG"
+    },
+    {
+      "id": "W2",
+      "world": "Priadus Priadus",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=SPORE_FOG ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Priadus Priadus",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Priadus Priadus",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Selva Densa, Pântanos, Flora Carnívora, Neblina com Esporos …\""
+    },
+    {
+      "id": "W5",
+      "world": "Priadus Priadus",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)\""
+    },
+    {
+      "id": "W1",
+      "world": "Ckesalth Ckesalth",
+      "name": "shared/worlds.ts hazard.type = TOXIC_SMOKE",
+      "status": "pass",
+      "detail": "type=TOXIC_SMOKE"
+    },
+    {
+      "id": "W2",
+      "world": "Ckesalth Ckesalth",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=TOXIC_SMOKE ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Ckesalth Ckesalth",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Ckesalth Ckesalth",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Deserto Árido, Lagoas de Petróleo em Chamas, Fumaça Tóxica e…\""
+    },
+    {
+      "id": "W5",
+      "world": "Ckesalth Ckesalth",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)\""
+    },
+    {
+      "id": "W1",
+      "world": "Arukheea Arukheea",
+      "name": "shared/worlds.ts hazard.type = TSUNAMI_WAVE",
+      "status": "pass",
+      "detail": "type=TSUNAMI_WAVE"
+    },
+    {
+      "id": "W2",
+      "world": "Arukheea Arukheea",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=TSUNAMI_WAVE ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Arukheea Arukheea",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Arukheea Arukheea",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Ilha Isolada, Prisão do Sol da Noite (Luz Perpétua), Tsunami…\""
+    },
+    {
+      "id": "W5",
+      "world": "Arukheea Arukheea",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)\""
+    },
+    {
+      "id": "W6",
+      "world": "GLOBAL",
+      "name": "nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42)",
+      "status": "pass",
+      "detail": "todos os 5 mundos usam hazards canônicos F42"
+    },
+    {
+      "id": "W7",
+      "world": "GLOBAL",
+      "name": "shared/worlds.ts cobre os 5 mundos canônicos",
+      "status": "pass",
+      "detail": "5/5 mundos"
+    },
+    {
       "id": "X1",
       "world": "GLOBAL",
       "name": "erupção de lava não é cânon de nenhum mundo",
@@ -378,8 +567,8 @@
     }
   ],
   "meta": {
-    "ranAt": "2026-11-02T15:46:28.862Z",
-    "durationMs": 2094,
+    "ranAt": "2026-11-02T17:24:35.718Z",
+    "durationMs": 1979,
     "worlds": [
       "CIGKV",
       "BARBURHEN",
