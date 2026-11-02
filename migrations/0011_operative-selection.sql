@@ -1,0 +1,1 @@
+ALTER TABLE "player_stats" ADD COLUMN "selected_operative_id" text DEFAULT 'OP_MALE_VANGUARD' NOT NULL;

@@ -463,6 +463,24 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
   });
 
+  app.post(api.player.operative.path, requireAuth, async (req, res) => {
+    const parsed = api.player.operative.input.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Operativo inválido" });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const updated = await storage.updatePlayerStats(userId, {
+        selectedOperativeId: parsed.data.operativeId,
+      });
+      roomManager.updateSelectedOperative(userId, updated.selectedOperativeId);
+      res.json({ selectedOperativeId: updated.selectedOperativeId });
+    } catch {
+      res.status(500).json({ message: "Não foi possível registrar o operativo" });
+    }
+  });
+
   app.post(api.player.daily.path, requireAuth, async (req, res) => {
     if (!parseMutationBody(req, res, emptyMutationInput)) return;
     try {

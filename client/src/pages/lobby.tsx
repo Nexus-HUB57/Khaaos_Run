@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
 
 export default function LobbyPage() {
   const { user } = useAuth();
@@ -240,16 +241,23 @@ export default function LobbyPage() {
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
+                    <img
+                      src={getOperativeAvatarOption(p.selectedOperativeId).avatarPath}
+                      alt={`Avatar ${getOperativeAvatarOption(p.selectedOperativeId).codename}`}
+                      className="h-10 w-10 shrink-0 rounded border border-cyan-500/30 object-cover"
+                    />
                     {p.isHost && <Crown className="w-4 h-4 text-amber-400 shrink-0" />}
-                    <span className="font-mono text-sm truncate">
-                      {p.displayName}
-                      {p.userId === localId && (
-                        <span className="text-cyan-400 ml-1">(você)</span>
-                      )}
-                    </span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      ELO {p.rating ?? 1000}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="block font-mono text-sm truncate">
+                        {p.displayName}
+                        {p.userId === localId && (
+                          <span className="text-cyan-400 ml-1">(você)</span>
+                        )}
+                      </span>
+                      <span className="block text-[9px] font-mono text-cyan-300 truncate">
+                        {getOperativeAvatarOption(p.selectedOperativeId).codename} · ELO {p.rating ?? 1000}
+                      </span>
+                    </div>
                     {!p.isConnected && (
                       <span className="text-[10px] text-red-400">OFFLINE</span>
                     )}

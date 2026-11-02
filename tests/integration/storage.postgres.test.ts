@@ -73,14 +73,20 @@ test("PostgreSQL: player stats e bank account são inicializados e persistidos",
     assert.equal(initialStats.health, 100);
     assert.equal(initialStats.status, "VIVO");
     assert.equal(initialStats.rating, 1000);
+    assert.equal(initialStats.selectedOperativeId, "OP_MALE_VANGUARD");
     assert.equal(initialBank.userId, userId);
     assert.equal(initialBank.weaponsBalance, "0");
     assert.equal(initialBank.bonusBalance, "0");
 
-    await storage.updatePlayerStats(userId, { health: 67, xp: 420 });
+    await storage.updatePlayerStats(userId, {
+      health: 67,
+      xp: 420,
+      selectedOperativeId: "OP_MALE_TALON",
+    });
     const reloadedStats = await storage.getPlayerStats(userId);
     assert.equal(reloadedStats.health, 67, "o valor deve ser lido de volta do PostgreSQL");
     assert.equal(reloadedStats.xp, 420);
+    assert.equal(reloadedStats.selectedOperativeId, "OP_MALE_TALON");
   } finally {
     await cleanUserRows(userId);
   }
