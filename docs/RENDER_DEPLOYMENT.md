@@ -22,6 +22,14 @@ O Blueprint [`render.yaml`](../render.yaml) configura o Web Service de staging n
 
 A resposta do endpoint de deploy do Render confirma que o deploy foi aceito/agendado, não que a aplicação já está pronta. Se um deploy terminar sem ficar saudável, investigue os logs do Render e use rollback manual conforme a política do serviço.
 
+### Verificação operacional do staging — 1 de novembro de 2026
+
+No workspace de staging, o comando de build e `healthCheckPath: /healthz.json` coincidem com este Blueprint; o Auto-Deploy permanece Off. O deploy mais recente consultado consta como concluído para o commit `e652696`, mas uma requisição pública a `/healthz.json` expirou após 20 segundos sem resposta. O evento de deploy bem-sucedido, isoladamente, não comprova que o processo esteja servindo tráfego.
+
+Uma tentativa de inicialização anterior registrou `SESSION_SECRET_CURRENT must contain at least 32 bytes`. O runtime usa `SESSION_SECRET_CURRENT` e, como compatibilidade, `SESSION_SECRET`; o segredo efetivo precisa ter pelo menos 32 bytes UTF-8. A consulta filtrada não encontrou a mesma mensagem depois do deploy mais recente, portanto esse log é um diagnóstico observado, não a confirmação da causa atual do timeout. Os valores das variáveis não foram consultados. Não reduza a validação nem publique segredos no chat; o titular deve conferir/configurar o segredo diretamente no Render. Depois, repita o health check e valide os demais pré-requisitos de runtime, incluindo `DATABASE_URL`, `WS_TOKEN_SECRET`, `REPL_ID`, `PUBLIC_ORIGIN` e `REDIS_URL`.
+
+Até `/healthz.json` responder `200` e o commit implantado ser confirmado, mantenha checkout desabilitado, não rode teste de compra no staging e não trate OIDC como validado. Nenhuma variável foi alterada nem deploy foi iniciado nesta verificação.
+
 ## Login OIDC: gate obrigatório antes de produção
 
 O backend atual descobre `https://replit.com/oidc` e monta o callback como `https://<req.hostname>/api/callback`. A documentação de Replit Auth garante suporte para Development e Published Apps (`replit.dev`, `replit.app` e domínios customizados Replit), mas não afirma que um deployment em Render seja suportado. **Não presuma que login Replit funcionará em `onrender.com`.** Veja também a [análise de compatibilidade e plano de verificação](REPLIT_AUTH_RENDER_COMPATIBILITY.md).
