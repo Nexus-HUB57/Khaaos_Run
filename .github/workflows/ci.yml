@@ -256,6 +256,12 @@ jobs:
               echo "ℹ️  HEADER-ONLY: $h"
               continue
             fi
+            # Política pura (inline constexpr/inline, zero UCLASS) — desenhada
+            # sem deps de Unreal p/ testes nativos determinísticos (#236).
+            if [[ "$h" == */Game/Network/KhaaosMobileFirePolicy.h ]]; then
+              echo "ℹ️  HEADER-ONLY: $h"
+              continue
+            fi
             cpp="${h%.h}.cpp"
             if [ -f "$cpp" ]; then
               CPP_COUNT=$((CPP_COUNT + 1))

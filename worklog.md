@@ -784,3 +784,9 @@ Stage Summary:
 - A fidelidade dos Mundos agora tem 4 barreiras independentes: CI em toda PR, portão ANTES do export OBJ no preflight UE5.8 (a engine nunca mais cozinha deriva do cânon), veredito AO VIVO no painel /admin e os 9 testes que impedem o próprio portão de ser afrouxado
 - O snapshot F44 virou SERVIÇO reutilizável sem duplicar pipeline: CI, preflight e painel consomem a MESMA lib — divergência entre "o que o CI viu" e "o que o operador vê" é impossível por construção
 - Suíte: game-runtime 1024 — 1011 pass / 0 fail / 13 skipped; tsc 0; build OK; auditoria FIEL ✅ 53/0; version 0.26.0
+
+### Task 31 — Follow-up pós-merge (hotfix de integridade C++ no main)
+- REVALIDAÇÃO DO MAIN pós-merge (afa49b9 = #236 mobile de outro dev + #237 F46): CI do main veio com 1 FALHA em "UE5 C++ Validation" — atribuição honesta: a PR #236 adicionou `KhaaosMobileFirePolicy.h` SEM .cpp correspondente (300 headers / 298 implementações / 1 missing); meu #237 passou no mesmo check (mergeado antes do push de main revalidar)
+- DIAGNÓSTICO: header GENUINAMENTE header-only — inline constexpr + funções inline puras, zero UCLASS/UPROPERTY, desenhado "sem dependências de Unreal para testes nativos determinísticos" (consumido por tests/mobile/); .cpp vazio artificial seria ruído pior
+- FIX (mesma escola do allowlist existente do KhaaosEnums.h): ci.yml "Check C++ file integrity" ganhou a entrada HEADER-ONLY para Game/Network/KhaaosMobileFirePolicy.h com justificativa — loop replicado localmente: 0 missing pós-fix
+- VALIDAÇÃO NO BRANCH DO HOTFIX (= afa49b9 + 1 linha YAML): suíte 1024 — 1011/0/13; auditoria FIEL ✅ 53/0 (2,4 s); tsc 0; vite build OK
