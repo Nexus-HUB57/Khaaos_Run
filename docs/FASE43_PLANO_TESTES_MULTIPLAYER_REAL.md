@@ -115,6 +115,12 @@ Foi iniciada uma sala descartável no servidor local com dois clientes autentica
 
 A branch não continha uma correção de código desde a primeira rodada. O mesmo harness local com dois WebSockets foi executado novamente: sala compartilhada e disputa exclusiva passaram; no fechamento do socket, a canalização continuou ativa após 250 ms e concluiu depois, consumindo o terminal e concedendo novamente `+250 XP` ao ator desconectado. **Resultado: MP-ZEX-08 continua FAIL/BLOCKED; a correção ainda não foi validada.**
 
+### Reteste após correção — 2026-11-02, commit `5f14992`
+
+A sala 3D agora expõe um cancelamento ZEX específico para desconexão de transporte; o handler `close` o invoca sem remover o ator da sala, preservando o resume de 15 segundos. O novo teste E2E usa duas sessões autenticadas e valida cancelamento em até 1 segundo, zero XP/extração, liberação do terminal para B e resume de A com o evento `extractCancelled` e sem canal ativo.
+
+**MP-ZEX-08: PASS em simulação local.** O teste `server 3D: MP-ZEX-08 cancela canal na desconexão e preserva resume` passou, assim como a suíte completa: 996 testes, 983 aprovados, 0 falhas e 13 ignorados. Verificações `node --check` e `git diff --check` também passaram.
+
 ### Limites e próximo passo
 
-Esta rodada foi uma simulação no processo local, com `KR_DEV_AUTH=1` e sem staging, dispositivos separados, jitter/perda de rede, observação visual do HUD ou serviços reais. Nenhum teste foi executado em produção. Manter a aprovação multiplayer bloqueada até corrigir ou formalmente redefinir o ciclo de desconexão/resume, adicionar um teste de regressão reproduzível para dois sockets e repetir MP-ZEX-08. Depois disso, continuar com os demais cenários da matriz em staging isolado.
+O MP-ZEX-08 passou no servidor local; ainda não houve playtest em staging, dispositivos separados, jitter/perda de rede, observação visual do HUD ou serviços reais. Nenhum teste foi executado em produção. Prosseguir com os demais cenários da matriz em staging isolado; repetir MP-ZEX-08 também nesse ambiente antes da liberação multiplayer.
