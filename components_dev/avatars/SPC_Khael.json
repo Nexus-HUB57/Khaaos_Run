@@ -11,10 +11,10 @@
     "relationship_with_khaaos": "Os Khael SAO Khaaos - a manifestacao consciente dele. O Canhao Khaaos Prime e, para os Khael, um irmao."
   },
   "base_stats": {
-    "health": 70,
+    "health": 85,
     "energy": 150,
     "speed": 0.95,
-    "stamina": 60,
+    "stamina": 85,
     "armor_base": 0,
     "shield_capacity": 0,
     "regen_health_per_sec": 0.3,
@@ -25,16 +25,16 @@
   },
   "stat_curves": {
     "health_per_level": [
-      70,
-      78,
-      87,
-      97,
-      109,
-      123,
-      139,
-      157,
-      178,
-      202
+      85,
+      95,
+      106,
+      118,
+      133,
+      150,
+      170,
+      192,
+      218,
+      247
     ],
     "energy_per_level": [
       150,

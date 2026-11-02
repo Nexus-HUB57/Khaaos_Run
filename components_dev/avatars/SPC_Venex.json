@@ -11,11 +11,11 @@
     "relationship_with_khaaos": "Os implantes Venex SAO Khaaos - energia do Pulso flui pelos circuitos. Um Venex dentro de um Pulso opera a 150% capacidade."
   },
   "base_stats": {
-    "health": 110,
-    "energy": 110,
+    "health": 90,
+    "energy": 130,
     "speed": 1.05,
     "stamina": 90,
-    "armor_base": 10,
+    "armor_base": 5,
     "shield_capacity": 25,
     "regen_health_per_sec": 0.3,
     "regen_energy_per_sec": 1.2,
@@ -25,28 +25,28 @@
   },
   "stat_curves": {
     "health_per_level": [
-      110,
-      122,
-      136,
-      152,
-      170,
-      191,
-      215,
-      242,
-      273,
-      308
+      90,
+      100,
+      111,
+      124,
+      139,
+      156,
+      176,
+      198,
+      223,
+      252
     ],
     "energy_per_level": [
-      110,
-      120,
-      131,
-      143,
-      156,
-      171,
-      187,
-      205,
-      225,
-      247
+      130,
+      142,
+      155,
+      169,
+      184,
+      202,
+      221,
+      242,
+      266,
+      292
     ],
     "speed_per_level": [
       1.05,
@@ -172,7 +172,7 @@
       "color_emissive": "#10B981",
       "material_override": "MAT_Venex_Veterano_BattleChrome",
       "unlock_rank": "HURAN",
-      "description": "Chrome de batalha - placas titânio com circuitos expostos."
+      "description": "Chrome de batalha - placas tit\u00e2nio com circuitos expostos."
     },
     {
       "id": "SKN_Venex_CIGKV_Elite",

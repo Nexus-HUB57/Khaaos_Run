@@ -14,6 +14,7 @@
 - [Status do Projeto](#status-do-projeto)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
+- [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -166,6 +167,47 @@ Docs: `Docs/CIGKV_Barburhen/`
 | `fca74b0` | LUT procedural factory, material de PostProcess, servidor 2PC TypeScript, CI de runner GPU, painéis Grafana 2PC (v5) |
 
 > Esses commits estão **versionados**, não compilados: o gate de build real permanece na Fase 0 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+## Desenvolvimento recente — Personagens (2026-11-02)
+
+> Contrato novo de espécies + fechamento de lacunas do domínio de personagens, a partir de `main` (`495b91f`), branch `feat/prossiga-personagens`. Suíte oficial 100% verde após as mudanças (495 testes em `tests/official`, 0 falhas; `tsc` limpo).
+
+### Catálogo de espécies — SPC_Huran completo no schema PhD
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| `SPC_Huran.json` reescrito no schema PhD (12 chaves → 17 chaves) | ✅ | lore (4 dimensões), `base_stats` (11 campos), `stat_curves` 10 níveis, `physical` (SK_Gwen, morphs, IK, cloth), passive com 4 mecânicas, 3 habilidades ativas, kit UE5 com as 8 habilidades, 5 skins enriquecidas, 25 animações (3 blend spaces incl. `BS_Huran_Swim`), áudio por superfície, 6 slots VFX |
+| Habilidades espelhadas do header UE5 | ✅ | `ue5_kit` com TidalSurge/AquaShield/DiveBomb/FloodZone/PressureStrike/GillsRegen/Whirlpool/TsunamiRage — números idênticos a `KhaaosAbility_HuranAbilities.h` (cooldown/energia/dano) |
+| Stats ancorados no canônico | ✅ | `DT_SpeciesStats.csv`: 110 HP / 90 energia / speed 1.1 / stamina 110 / armadura 10; passive "Regeneracao Aquatica" (paridade com manifest) |
+
+### Reconciliação numérica SPC ↔ CSV ↔ manifest (fonte canônica: CSV + manifest)
+
+Divergências pré-existentes corrigidas nos SPC (curvas re-ancoradas preservando os growth ratios):
+
+| Espécie | Campo | Antes (SPC) | Depois (CSV/manifest) |
+|---------|-------|-------------|--------------------|
+| SPC_Venex | health / energy / armor_base | 110 / 110 / 10 | 90 / 130 / 5 |
+| SPC_Skeetw | speed | 1.15 | 1.3 |
+| SPC_Khael | health / stamina | 70 / 60 | 85 / 85 |
+| SPC_Onith | stamina | 130 | 120 |
+
+### Contrato automatizado — `tests/official/species-catalog.test.ts` (4 testes)
+
+1. **Schema PhD** — os 6 SPC com lore/base_stats/curvas/physical/passive/3 habilidades/5 skins (escada COMUM→MITICO)/≥23 animações/áudio/VFX/5 mundos válidos.
+2. **Paridade numérica** — SPC ↔ `DT_SpeciesStats.csv` ↔ `avatars_manifest.json` (health/energy/speed/stamina/armor + hp do manifest + passive humanizado).
+3. **Kit UE5 do Huran** — 8 classes `UKhaaosAbility_*` no header com tags, cooldown, energia e dano batendo com o JSON (Damage só existe nas classes que causam dano).
+4. **emote_catalog** — 13 emotes, categorias canônicas (typo `ACAo` banido), resumo `by_category`/`by_rarity` batendo com a lista.
+
+### Correções pontuais
+
+- `emote_catalog.json`: `_meta` prometia "40 emotes" (entrega 13, como o README §12 e o `summary`); 2 emotes com categoria `ACAo` → `ACAO`.
+- `CharacterPromptStudio` estava **órfão** (nenhuma rota importava o componente de 1.245 linhas): nova rota protegida **`/studio`** (`client/src/pages/studio.tsx` wrapper lazy) + entrada STUDIO no menu lateral/mobile do `LayoutShell`.
+
+### Próximos passos mapeados (fora deste lote)
+
+1. Rebase de `feat/character-avatar-sync` sobre o `main` (conflito da migration 0011 vs `0011_enrollment.sql` — renumerar para 0012) para levar a seleção de avatar persistida aos jogadores.
+2. ADR de esqueleto: `SK_Gwen` (SPC) vs `UE5_Mannequin` (character-studio.ts) — reconciliar antes do import UE5.
+3. Fechar a matriz de proofs sexo×espécie (faltam ~6 cruzamentos) e exportar as malhas GLB das figuras de alistamento.
 
 ## Ontologia dos Mundos
 

@@ -6,14 +6,14 @@
   "species_tag": "Species.Skeetw",
   "lore": {
     "origin": "Os Skeetw nasceram nos Cumes de Vento de Priadus - picos de 12km onde o ar e tao rarefeito que apenas criaturas com sistema respiratorio quadruplo sobrevivem. Suas asas vestigiais permitem planar por 200m, e sua visao espectral enxerga atraves de camuflagem e ilusoes.",
-    "culture": "Nomades do ceu - vivem em ninhos-cidade suspensos por cabos de Khaael nas falésias de Priadus. Governacao por Consenso de Voo - decisoes tomadas enquanto todos planam em formacao. O conceito de chao e culturalmente inferior.",
+    "culture": "Nomades do ceu - vivem em ninhos-cidade suspensos por cabos de Khaael nas fal\u00e9sias de Priadus. Governacao por Consenso de Voo - decisoes tomadas enquanto todos planam em formacao. O conceito de chao e culturalmente inferior.",
     "motivation": "Dominar o espaco aereo - a verdadeira vantagem tatica. Um Skeetw que nunca toca o chao e considerado imaculado.",
     "relationship_with_khaaos": "Os Skeetw descobriram que o Pulso Khaaos cria correntes de ar anomales - ventos Khaaos que permitem voo sustentado sem gasto energetico. A exploracao dessas correntes e a ciencia Aerokhaasia."
   },
   "base_stats": {
     "health": 80,
     "energy": 120,
-    "speed": 1.15,
+    "speed": 1.3,
     "stamina": 80,
     "armor_base": 0,
     "shield_capacity": 0,
@@ -49,16 +49,16 @@
       255
     ],
     "speed_per_level": [
-      1.15,
-      1.18,
-      1.21,
-      1.25,
-      1.29,
-      1.34,
-      1.39,
-      1.45,
-      1.52,
-      1.6
+      1.3,
+      1.33,
+      1.36,
+      1.4,
+      1.44,
+      1.5,
+      1.56,
+      1.63,
+      1.71,
+      1.8
     ]
   },
   "physical": {

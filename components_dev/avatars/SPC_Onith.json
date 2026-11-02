@@ -5,7 +5,7 @@
   "type": "reptile",
   "species_tag": "Species.Onith",
   "lore": {
-    "origin": "Os Onith emergiram dos Pantanos de Onith-Kar no mundo de Ckesalth ha 4.800 ciclos. Evoluíram de predadores escamados que cacavam nas termicas vulcanicas - suas escamas refletem projeites como armadura natural. Quando os colonizadores Zheers chegaram a Ckesalth, os Onith ja haviam desenvolvido civilizacao baseada em rituais de sobrevivencia extremos.",
+    "origin": "Os Onith emergiram dos Pantanos de Onith-Kar no mundo de Ckesalth ha 4.800 ciclos. Evolu\u00edram de predadores escamados que cacavam nas termicas vulcanicas - suas escamas refletem projeites como armadura natural. Quando os colonizadores Zheers chegaram a Ckesalth, os Onith ja haviam desenvolvido civilizacao baseada em rituais de sobrevivencia extremos.",
     "culture": "Sociedade clanica regida pela Lei do Sangue Quente. Cada cla e liderado por um Matriarca que provou superioridade em combate ritual. Os jovens devem sobreviver ao Rito da Escama - 7 dias nas Geysers de Ckesalth sem armas.",
     "motivation": "Provar que forca bruta e resiliencia natural superam qualquer tecnologia. Cada Onith busca eliminacoes para fortalecer o cla e evoluir escamas - cada eliminacao fortalece temporariamente a armadura natural.",
     "relationship_with_khaaos": "Os Onith foram os ultimos a aceitar o Pulso Khaaos. Mas quando um Matriarca sobreviveu dentro de um Pulso por 90 segundos, as escamas absorveram energia Khaaos, criando a primeira Escama Khaael."
@@ -14,7 +14,7 @@
     "health": 120,
     "energy": 80,
     "speed": 0.9,
-    "stamina": 130,
+    "stamina": 120,
     "armor_base": 15,
     "shield_capacity": 0,
     "regen_health_per_sec": 0.8,
