@@ -533,10 +533,13 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // Fase 10: `hit` = reação de impacto direcional { angle, power, age } — flinch
 // ADITIVO sobre a pose base (não a substitui): ângulo em espaço do personagem
 // (0 = frente, +π/2 = lado +x, π = costas), power 0..1 e age em segundos.
+// Fase 42: `phase` (rad, opcional) — fase da passada TRAVADA EM DISTÂNCIA
+// (gait.js): quando fornecida substitui t·W e os pés aterrisam exatamente
+// onde o corpo chega (zero patinação). Sem `phase`, regime legado intacto.
 // Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
 // (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
 // (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
   let hitEnv = 0;                                            // acopla rosto à dor
   // Fase 26 — Talon: física de mola SIMPLES das tiras da jaqueta (determinística:
   // fase semeada no userData; amplitude cresce com velocidade e no ar).
@@ -606,8 +609,11 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   // pelve gira contra o tronco, tornozelos rolam calcanhar→ponta e o corpo
   // inclina PARA DENTRO do sprint. Frequência base preservada em repouso. ----
   const W = 8.6 + 2.2 * speedNorm;                          // rad/s da passada
-  const swing = Math.sin(t * W) * .62 * speedNorm + Math.sin(t * W + 1.9) * .05 * speedNorm;
-  const swing2 = Math.cos(t * W) * .5 * speedNorm;
+  // Fase 42 — fase externa travada em distância (gait.js) tem PRIORIDADE;
+  // fallback t·W preserva o comportamento legado (chamadores existentes).
+  const PH = Number.isFinite(phase) ? phase : t * W;
+  const swing = Math.sin(PH) * .62 * speedNorm + Math.sin(PH + 1.9) * .05 * speedNorm;
+  const swing2 = Math.cos(PH) * .5 * speedNorm;
   if (crouch) {
     parts.legL.hip.rotation.x = 1.15 + swing * .15;
     parts.legR.hip.rotation.x = 1.15 - swing * .15;
@@ -623,16 +629,16 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legL.knee.rotation.x = Math.max(0, swing2) * kneeAmp;
     parts.legR.knee.rotation.x = Math.max(0, -swing2) * kneeAmp;
     // Fase 9: leve rotação lateral do quadril na passada (transferência de peso)
-    parts.legL.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
-    parts.legR.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
+    parts.legL.hip.rotation.z = Math.sin(PH) * .035 * speedNorm;
+    parts.legR.hip.rotation.z = Math.sin(PH) * .035 * speedNorm;
     // Fase 16: pelve gira CONTRA o tronco (anatomia real: torção transversal —
     // quando o tórax roda +sway, a pelve roda em contrafase)
-    parts.legL.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
-    parts.legR.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
+    parts.legL.hip.rotation.y = -Math.sin(PH) * .05 * speedNorm;
+    parts.legR.hip.rotation.y = -Math.sin(PH) * .05 * speedNorm;
     // Fase 16: rolagem do tornozelo — +x = ponta pra cima (calcanhar toca
     // primeiro quando a perna alcança à frente), -x = impulso da ponta atrás
     if (parts.legL.foot) {
-      const sL = Math.sin(t * W), sR = -sL;
+      const sL = Math.sin(PH), sR = -sL;
       parts.legL.foot.rotation.x = (Math.max(0, sL) * .25 - Math.max(0, -sL) * .45) * speedNorm;
       parts.legR.foot.rotation.x = (Math.max(0, sR) * .25 - Math.max(0, -sR) * .45) * speedNorm;
       parts.legL.foot.rotation.z = Math.sin(t * .7) * .03 * idle;   // peso no idle
@@ -641,7 +647,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   }
   const aim = -Math.PI / 2 + pitch;
   // braços seguram a arma — swing macro proibido; micro-oscilação do passo
-  const armStep = Math.cos(t * W) * .045 * speedNorm;
+  const armStep = Math.cos(PH) * .045 * speedNorm;
   parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
   parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
   parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + breathe * .012;
@@ -649,7 +655,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   // F41 — ergonomia de tiro: os OMBROS contra-rolam o tronco (mãos niveladas no
   // plano do horizonte enquanto a passada rola o tórax) e, em ADS, micro-balço
   // de respiração do atirador (2 eixos, frequências dessintonizadas — sem loop).
-  const roll = Math.sin(t * W + .4) * .05 * speedNorm;
+  const roll = Math.sin(PH + .4) * .05 * speedNorm;
   parts.armR.shoulder.rotation.z = -roll * .35;
   parts.armL.shoulder.rotation.z = -roll * .35;
   if (ads) {
@@ -659,17 +665,17 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.armL.shoulder.rotation.x += Math.sin(t * 2.6) * .008;
   }
   // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
-  const sway = Math.sin(t * W) * .07 * speedNorm;
+  const sway = Math.sin(PH) * .07 * speedNorm;
   parts.torso.rotation.y = sway;
   // Fase 16: inclinação PARA DENTRO do sprint (aceleração sobre o quadril)
   parts.torso.rotation.x = speedNorm * .1 + speedNorm * speedNorm * .09 + breathe * .014 * idle;
-  parts.torso.rotation.z = Math.sin(t * W + .4) * .05 * speedNorm   // roll de passada
+  parts.torso.rotation.z = Math.sin(PH + .4) * .05 * speedNorm   // roll de passada
     + Math.sin(t * .7) * .028 * idle;                                // transferência de peso parado
   parts.torso.position.x = Math.sin(t * .7) * .02 * idle;            // quadril desloca no idle
   // Fase 16: dupla pancada por ciclo (um bounce POR apoie) — amp cresce com a velocidade
   // F41 — bounce extraído: a estabilização de olhar da cabeça consome o MESMO
   // sinal (determinístico, sem duplicar a fórmula).
-  const bounce = Math.abs(Math.sin(t * W)) * (.045 + .02 * speedNorm) * speedNorm;
+  const bounce = Math.abs(Math.sin(PH)) * (.045 + .02 * speedNorm) * speedNorm;
   parts.torso.position.y = crouch ? .88 : 1.22 + bounce;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
