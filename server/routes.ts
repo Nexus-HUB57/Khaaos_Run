@@ -35,6 +35,7 @@ import {
 } from "./game/mutationSchemas";
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
+import { createEnrollmentRouter } from "./routes/enrollment";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
@@ -95,6 +96,9 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   // Register 2PC only after the /api-wide CSRF and rate-limit guards above.
   registerEconomy2PCRoutes(app);
+
+  // ── Alistamento E2E (T1.1) — 3 etapas + taxa U$1 idempotente ─────────
+  app.use(createEnrollmentRouter({ authenticate: isAuthenticated }));
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;
