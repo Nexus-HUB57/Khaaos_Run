@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Zap, Flame, Skull, Swords, Trophy } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { apiRequest } from "@/lib/queryClient";
+import { Shield, Zap, Flame, Skull, Swords, Trophy, CheckCircle2, Loader2, BadgeCheck } from "lucide-react";
 
 export default function Landing() {
   return (
@@ -66,6 +69,9 @@ export default function Landing() {
           <Feature icon={Skull} title="BANKHAAOS" desc="Gestão financeira com Wallet KRC, Account KR e Fundo de Investimentos FBM." color="text-purple-400" />
         </div>
 
+        {/* ALISTAMENTO (Sprint 1.1/T1.1 — contrato README 2026-11-02) */}
+        <EnrollmentFlow />
+
         {/* CTA */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 flex flex-col items-center gap-4">
           <Button
@@ -101,6 +107,156 @@ function Feature({ icon: Icon, title, desc, color }: any) {
       <Icon className={`w-8 h-8 mb-4 mx-auto ${color} group-hover:scale-110 transition-transform`} />
       <h3 className="font-display font-bold text-sm mb-2 text-foreground tracking-widest">{title}</h3>
       <p className="text-xs text-muted-foreground font-body leading-relaxed">{desc}</p>
+    </div>
+  );
+}
+
+/**
+ * Alistamento end to end (3 etapas) — server-authoritative.
+ *   ETAPA 1/3 inscrição → POST /api/enrollment gera protocolo KR-REG-<base36>
+ *   ETAPA 2/3 taxa U$1  → 100 KRC liquidadas no ledger (sandbox auto-liquidada)
+ *   ETAPA 3/3 alistado  → WELCOME_BONUS 500 KRC creditado após a taxa
+ * Idempotente: retomada via GET /api/enrollment?username= (não repete
+ * inscrição; 2ª chamada → alreadyPaid:true sem dupla cobrança).
+ */
+type EnrollmentResponse = {
+  username: string;
+  protocol: string;
+  enrollmentPaid: boolean;
+  alreadyPaid: boolean;
+  fee: { usd: string; krc: string };
+  welcomeBonusKrc: string;
+  wallet: { bonus: string };
+  enlistedAt: string;
+};
+
+function EnrollmentFlow() {
+  const [username, setUsername] = useState("");
+  const [result, setResult] = useState<EnrollmentResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  // Retomada de sessão: ao digitar 3+ chars, consulta o alistamento existente.
+  useEffect(() => {
+    const trimmed = username.trim();
+    if (trimmed.length < 3 || result) return;
+    let cancelled = false;
+    setChecking(true);
+    const timer = setTimeout(() => {
+      fetch(`/api/enrollment?username=${encodeURIComponent(trimmed)}`, { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: EnrollmentResponse | null) => {
+          if (!cancelled && data?.enrollmentPaid) {
+            setResult({ ...data, alreadyPaid: true });
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => { if (!cancelled) setChecking(false); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); setChecking(false); };
+  }, [username, result]);
+
+  const submit = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await apiRequest("POST", "/api/enrollment", { username: username.trim() });
+      const data = (await res.json()) as EnrollmentResponse;
+      setResult(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "falha no alistamento";
+      setError(message.includes("invalid_username") ? "Username inválido: 3–24 caracteres (letras, números, hífen, underline)" : message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const step = result ? 3 : username.trim().length >= 3 ? 2 : 1;
+
+  return (
+    <div className="w-full max-w-xl mx-auto mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
+      <div className="border border-primary/25 bg-black/40 backdrop-blur-sm p-6 text-left">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-black tracking-[0.25em] text-foreground text-sm">ALISTAMENTO</h3>
+          <span className="font-mono text-[10px] tracking-widest text-muted-foreground">ETAPA {step}/3</span>
+        </div>
+
+        {/* Progressão das 3 etapas */}
+        <div className="flex items-center gap-2 mb-5">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className="flex-1 h-1" style={{ background: step >= s ? "hsl(25 95% 55%)" : "rgba(255,255,255,0.1)" }} />
+          ))}
+        </div>
+
+        {!result ? (
+          <>
+            <p className="text-xs text-muted-foreground font-body leading-relaxed mb-4">
+              Inscrição na campanha. Taxa <span className="text-accent font-semibold">U$1,00</span> (= 100 KRC)
+              liquidação server-authoritative · bônus de boas-vindas <span className="text-accent font-semibold">500 KRC</span> creditado após a taxa.
+              {checking && <span className="ml-2 inline-flex items-center gap-1 font-mono text-[10px] text-primary"><Loader2 className="w-3 h-3 animate-spin" /> verificando alistamento…</span>}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="nome de operador (3–24)"
+                maxLength={24}
+                className="font-mono"
+                aria-label="Nome de operador"
+                onKeyDown={(e) => { if (e.key === "Enter" && username.trim().length >= 3 && !submitting) submit(); }}
+              />
+              <Button
+                onClick={submit}
+                disabled={submitting || username.trim().length < 3}
+                className="font-display tracking-widest whitespace-nowrap"
+                style={{ background: "linear-gradient(135deg, hsl(25 95% 55%) 0%, hsl(15 90% 48%) 100%)", color: "hsl(260 25% 5%)" }}
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4 mr-1" />}
+                ALISTAR
+              </Button>
+            </div>
+            {error && <p className="mt-3 text-xs text-red-400 font-mono" role="alert">{error}</p>}
+          </>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-green-400">
+              <CheckCircle2 className="w-5 h-5" />
+              <span className="font-display font-bold tracking-widest text-sm">
+                {result.alreadyPaid ? "ALISTAMENTO RETOMADO" : "ALISTAMENTO CONFIRMADO"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div className="border border-border/40 bg-black/30 p-3">
+                <p className="text-[9px] tracking-[0.25em] text-muted-foreground">PROTOCOLO</p>
+                <p className="mt-1 text-accent font-bold" data-testid="enrollment-protocol">{result.protocol}</p>
+              </div>
+              <div className="border border-border/40 bg-black/30 p-3">
+                <p className="text-[9px] tracking-[0.25em] text-muted-foreground">CARTEIRA BÔNUS</p>
+                <p className="mt-1 text-accent font-bold">{result.wallet.bonus} KRC</p>
+              </div>
+              <div className="border border-border/40 bg-black/30 p-3">
+                <p className="text-[9px] tracking-[0.25em] text-muted-foreground">TAXA</p>
+                <p className="mt-1 flex items-center gap-1 text-foreground"><BadgeCheck className="w-3 h-3 text-green-400" /> U${result.fee.usd} = {result.fee.krc} KRC</p>
+              </div>
+              <div className="border border-border/40 bg-black/30 p-3">
+                <p className="text-[9px] tracking-[0.25em] text-muted-foreground">BÔNUS</p>
+                <p className="mt-1 text-foreground">+{result.welcomeBonusKrc} KRC</p>
+              </div>
+            </div>
+            {result.alreadyPaid && (
+              <p className="font-mono text-[10px] text-muted-foreground">idempotente — nenhuma cobrança duplicada</p>
+            )}
+            <Button
+              onClick={() => window.location.href = "/mundos"}
+              variant="outline"
+              className="w-full font-display tracking-widest"
+            >
+              CONHECER OS MUNDOS
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -628,3 +628,32 @@ export const matchPayoutClaims = pgTable("match_payout_claims", {
 }));
 
 export type MatchPayoutClaim = typeof matchPayoutClaims.$inferSelect;
+
+// ─── Sprint 1.1 / T1.1 — Alistamento canônico (console web) ─────────────────
+// Contrato README 2026-11-02: taxa U$1 (= 100 KRC) server-authoritative,
+// protocolo KR-REG-<base36>, WELCOME_BONUS 500 KRC só após pagamento,
+// idempotente (2ª chamada → alreadyPaid:true). Ledger: fee = DEBIT
+// external.deposit / CREDIT system.item_sales; bonus = DEBIT
+// equity.opening_balance / CREDIT wallet.bonus.
+export const enrollments = pgTable("enrollments", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  username: varchar("username", { length: 24 }).notNull().unique(),
+  protocol: varchar("protocol", { length: 32 }).notNull().unique(),
+  status: text("status").notNull().default("enlisted"),
+  feeAmountKrc: numeric("fee_amount_krc").notNull().default("100"),
+  bonusAmountKrc: numeric("bonus_amount_krc").notNull().default("500"),
+  feeOperationId: uuid("fee_operation_id"),
+  bonusOperationId: uuid("bonus_operation_id"),
+  enlistedAt: timestamp("enlisted_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  usernameIdx: index("enrollments_username_idx").on(table.username),
+  enlistedAtIdx: index("enrollments_enlisted_at_idx").on(table.enlistedAt),
+  statusValid: check("enrollments_status_valid", sql`${table.status} IN ('pending', 'enlisted')`),
+  protocolFormat: check("enrollments_protocol_format", sql`${table.protocol} ~ '^KR-REG-[A-Z0-9]{10}$'`),
+  feePositive: check("enrollments_fee_positive", sql`${table.feeAmountKrc} > 0`),
+  bonusNonnegative: check("enrollments_bonus_nonnegative", sql`${table.bonusAmountKrc} >= 0`),
+}));
+
+export type Enrollment = typeof enrollments.$inferSelect;

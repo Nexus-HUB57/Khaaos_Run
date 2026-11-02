@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CyberCard } from "@/components/cyber-card";
+import { WorldMapPreview } from "@/components/world-map-preview";
 import { cn } from "@/lib/utils";
 import { KHAAOS_WORLDS, WORLD_ORDER, type WorldId } from "@shared/worlds";
 import {
@@ -170,7 +171,7 @@ export default function Mundos() {
             PROTOCOLO CIGKV ATIVO — KHAAOS VILLE — CAMPO DE INSTRUÇÃO DE GUERRA
           </p>
           <div className="flex flex-wrap gap-4 mt-5 text-xs font-mono">
-            <Stat icon={Users} label="Players / Ring" value="50" />
+            <Stat icon={Users} label="Players / Ring" value="100" />
             <Stat icon={Clock} label="Duração do Ring" value="3h" />
             <Stat icon={Map} label="Zonas ZEX" value="15" />
             <Stat icon={Zap} label="Pulso Khaaos" value="10min" />
@@ -222,6 +223,22 @@ export default function Mundos() {
               <WorldMetric label="DURAÇÃO-ALVO" value={`${world.targetDurationMinutes} min`} />
               <WorldMetric label="ESCALA" value={world.dimensionsKm} />
               <WorldMetric label="ZEX" value={`${world.zexNodes.length} nós`} />
+            </div>
+            {/* ── DIMENSÕES CANÔNICAS (Descentralizador — fonte: @shared/worlds) ── */}
+            <div className="mt-4 border border-border/30 bg-black/30 p-3">
+              <p className="font-mono text-[9px] tracking-[0.3em] text-muted-foreground mb-2">DIMENSÕES CANÔNICAS DO RING</p>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
+                <WorldMetric label="ÁREA CANÔNICA" value={`${world.dimensions.areaM2.toLocaleString("pt-BR")} m²`} />
+                <WorldMetric label="PERÍMETRO (CONTORNO)" value={`${world.dimensions.perimeterM} m`} />
+                <WorldMetric label="DENSIDADE CQB" value={`${world.dimensions.densityM2PerOperator} m²/op`} />
+                <WorldMetric label="OPERADORES" value={`${world.dimensions.operators}`} />
+              </div>
+              <p className="mt-2 font-mono text-[9px] text-muted-foreground">
+                bbox {world.dimensions.bboxMeters.x}×{world.dimensions.bboxMeters.z} m · shape <span style={{ color: world.accentColor }}>{world.dimensions.shape}</span> · área ≠ perímetro
+              </p>
+            </div>
+            <div className="mt-4 flex justify-center border border-border/30 bg-black/30 p-3">
+              <WorldMapPreview worldId={world.id} size={216} />
             </div>
             <div className="mt-4 border-t border-border/30 pt-4">
               <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-foreground">

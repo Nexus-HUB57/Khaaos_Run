@@ -36,6 +36,7 @@ import {
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
 import { registerMetricsRoutes } from "./routes/metrics";
+import { registerEnrollmentRoutes } from "./routes/enrollment";
 import { economy2pcService } from "./game/economy2pcService";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -95,6 +96,11 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   // Register 2PC only after the /api-wide CSRF and rate-limit guards above.
   registerEconomy2PCRoutes(app);
+
+  // Sprint 1.1/T1.1 — alistamento canônico + mundos (README 2026-11-02).
+  // POST/GET /api/enrollment são público-sandbox (sem auth Replit; T1.3 KYC
+  // amarra identidade real) e GET /api/worlds é catálogo estático.
+  registerEnrollmentRoutes(app);
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;

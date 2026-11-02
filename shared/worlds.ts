@@ -80,6 +80,43 @@ export interface WorldUnlockRule {
   description: string;
 }
 
+/**
+ * Contrato canônico de dimensões do ring (especificação do Descentralizador,
+ * sincronizada com o README — tabela "Dimensões canônicas").
+ *
+ * IMPORTANTE: `areaM2` ≠ `perimeterM`. A área é o tamanho do campo jogável
+ * (bounding box retangular), o perímetro é o contorno 2×(x+z). A densidade é
+ * derivada: areaM2 ÷ operators.
+ */
+export type WorldRingShape =
+  | "fortified_rectangle"
+  | "urban_gridiron"
+  | "organic_blob"
+  | "desert_basin"
+  | "coastal_island";
+
+export interface WorldRingDimensions {
+  /** Operadores simultâneos por ring (canônico: 100 em todos os mundos). */
+  operators: number;
+  /** Área jogável canônica em m² (15.000–25.000 m²). */
+  areaM2: number;
+  /** Perímetro de CONTORNO em metros (2×(x+z) da bounding box) — não confundir com área. */
+  perimeterM: number;
+  /** Bounding box jogável em metros (x × z). */
+  bboxMeters: { x: number; z: number };
+  /** Densidade de combate em m²/jogador (150–250, estilo CQB Free Fire). */
+  densityM2PerOperator: number;
+  /** Forma/bioma da geração orgânica do mapa (WorldMapPreview). */
+  shape: WorldRingShape;
+}
+
+/** Especificação canônica comum a todos os rings (README, Descentralizador). */
+export const CANONICAL_RING_SPEC = Object.freeze({
+  operators: 100,
+  areaBandM2: Object.freeze([15_000, 25_000] as const),
+  densityBandM2PerOperator: Object.freeze([150, 250] as const),
+} as const);
+
 export interface WorldDefinition {
   id: WorldId;
   order: number;
@@ -88,6 +125,8 @@ export interface WorldDefinition {
   biome: string;
   dimensionsKm: string;
   sizeMeters: number;
+  /** Dimensões canônicas do ring (Descentralizador) — ver WorldRingDimensions. */
+  dimensions: WorldRingDimensions;
   recommendedPlayers: string;
   targetDurationMinutes: number;
   krcMultiplier: number;
@@ -116,6 +155,42 @@ export interface WorldDefinition {
   };
 }
 
+/**
+ * Valida o contrato de dimensões canônicas de um mundo:
+ *  - área dentro da faixa 15.000–25.000 m²;
+ *  - perímetro = 2×(x+z) da bounding box (área ≠ perímetro);
+ *  - densidade = área ÷ operadores, dentro da faixa 150–250 m²/jogador;
+ *  - operadores = 100 (especificação do Descentralizador).
+ * Retorna lista de desvios (vazia = contrato satisfeito).
+ */
+export function validateWorldDimensions(dimensions: WorldRingDimensions): string[] {
+  const errors: string[] = [];
+  const [areaMin, areaMax] = CANONICAL_RING_SPEC.areaBandM2;
+  const [densityMin, densityMax] = CANONICAL_RING_SPEC.densityBandM2PerOperator;
+  if (dimensions.operators !== CANONICAL_RING_SPEC.operators) {
+    errors.push(`operadores ${dimensions.operators} ≠ ${CANONICAL_RING_SPEC.operators} (canônico)`);
+  }
+  if (dimensions.areaM2 < areaMin || dimensions.areaM2 > areaMax) {
+    errors.push(`área ${dimensions.areaM2} m² fora da faixa ${areaMin}–${areaMax} m²`);
+  }
+  const expectedPerimeter = 2 * (dimensions.bboxMeters.x + dimensions.bboxMeters.z);
+  if (dimensions.perimeterM !== expectedPerimeter) {
+    errors.push(`perímetro ${dimensions.perimeterM} m ≠ 2×(${dimensions.bboxMeters.x}+${dimensions.bboxMeters.z}) = ${expectedPerimeter} m`);
+  }
+  const expectedDensity = dimensions.areaM2 / dimensions.operators;
+  if (dimensions.densityM2PerOperator !== expectedDensity) {
+    errors.push(`densidade ${dimensions.densityM2PerOperator} ≠ área÷operadores = ${expectedDensity}`);
+  }
+  if (dimensions.densityM2PerOperator < densityMin || dimensions.densityM2PerOperator > densityMax) {
+    errors.push(`densidade ${dimensions.densityM2PerOperator} m²/jogador fora da faixa ${densityMin}–${densityMax}`);
+  }
+  const expectedArea = dimensions.bboxMeters.x * dimensions.bboxMeters.z;
+  if (dimensions.areaM2 !== expectedArea) {
+    errors.push(`área ${dimensions.areaM2} m² ≠ bounding box ${dimensions.bboxMeters.x}×${dimensions.bboxMeters.z} = ${expectedArea} m²`);
+  }
+  return errors;
+}
+
 export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
   CIGKV: {
     id: "CIGKV",
@@ -125,6 +200,15 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Simulação Tática Modular & Domos de Treinamento",
     dimensionsKm: "2.0 x 2.0 km",
     sizeMeters: 2000,
+    // Dimensões canônicas do ring (README — tabela "Dimensões canônicas", Descentralizador)
+    dimensions: {
+      operators: 100,
+      areaM2: 16_000,
+      perimeterM: 520,
+      bboxMeters: { x: 160, z: 100 },
+      densityM2PerOperator: 160,
+      shape: "fortified_rectangle",
+    },
     recommendedPlayers: "16 - 30 Operadores (Solo / Squad)",
     targetDurationMinutes: 15,
     krcMultiplier: 0.5,
@@ -225,6 +309,15 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Deserto Árido de Silicato com Complexos Petroquímicos Abandonados",
     dimensionsKm: "3.0 x 3.0 km",
     sizeMeters: 3000,
+    // Dimensões canônicas do ring (README — tabela "Dimensões canônicas", Descentralizador)
+    dimensions: {
+      operators: 100,
+      areaM2: 19_000,
+      perimeterM: 580,
+      bboxMeters: { x: 190, z: 100 },
+      densityM2PerOperator: 190,
+      shape: "urban_gridiron",
+    },
     recommendedPlayers: "60 Operadores (20 Trios)",
     targetDurationMinutes: 20,
     krcMultiplier: 1.0,
@@ -336,6 +429,15 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Ilhas Tropicais Submersíveis, Recifes Bioluminescentes e Plataformas Offshore",
     dimensionsKm: "3.5 x 3.5 km",
     sizeMeters: 3500,
+    // Dimensões canônicas do ring (README — tabela "Dimensões canônicas", Descentralizador)
+    dimensions: {
+      operators: 100,
+      areaM2: 22_000,
+      perimeterM: 640,
+      bboxMeters: { x: 220, z: 100 },
+      densityM2PerOperator: 220,
+      shape: "organic_blob",
+    },
     recommendedPlayers: "60 Operadores (20 Trios)",
     targetDurationMinutes: 22,
     krcMultiplier: 1.5,
@@ -437,6 +539,15 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Cordilheira Vulcânica Ativa, Rios de Magma e Usinas deObsidiana",
     dimensionsKm: "4.0 x 4.0 km",
     sizeMeters: 4000,
+    // Dimensões canônicas do ring (README — tabela "Dimensões canônicas", Descentralizador)
+    dimensions: {
+      operators: 100,
+      areaM2: 25_000,
+      perimeterM: 700,
+      bboxMeters: { x: 250, z: 100 },
+      densityM2PerOperator: 250,
+      shape: "desert_basin",
+    },
     recommendedPlayers: "60 Operadores (20 Trios)",
     targetDurationMinutes: 25,
     krcMultiplier: 2.25,
@@ -538,6 +649,15 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Fragmentos Flutuantes no Vazio, Anomalias Gravitacionais e Cidadelas Astrais",
     dimensionsKm: "4.5 x 4.5 km",
     sizeMeters: 4500,
+    // Dimensões canônicas do ring (README — tabela "Dimensões canônicas", Descentralizador)
+    dimensions: {
+      operators: 100,
+      areaM2: 18_000,
+      perimeterM: 560,
+      bboxMeters: { x: 180, z: 100 },
+      densityM2PerOperator: 180,
+      shape: "coastal_island",
+    },
     recommendedPlayers: "60 Operadores Elite (20 Trios)",
     targetDurationMinutes: 28,
     krcMultiplier: 3.5,
