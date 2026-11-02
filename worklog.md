@@ -993,3 +993,21 @@ Stage Summary:
 - O roster jogável saiu do nicho militar: 16 irregulares (milícias de controle territorial + gangues de rua) com facção declarada no dado, rig por sexo, habilidades ativas no simulador determinístico e arte servida em staging — sem migration e sem tocar nos 16 militares canônicos nem no TALON
 - Três contratos agora garantem o lote: militia-roster.test.ts (5), character-studio.test.ts (catálogo 33 + manifest no roster combinado) e game-runtime operative-abilities/scenarios (33 com habilidades ativas)
 - Estado: main cc8e8fa · staging #116 validado (healthz cc8e8fa) · suíte oficial 533+39 0 falhas · tsc 0 · F46 re-certifica no CI (README mudou — §Personagens Lote 4) · 0 self-hosted runners (editor check UE5 segue pendente)
+
+## Task ID: 39
+**Agent:** Main
+**Task:** "Prosseguir end to end" — verificação independente do Lote 4 (milícias e gangues urbanas, PRs #269/#270) sobre o main b8b2923 + revalidação completa do estado do projeto após recycle do sandbox
+
+Work Log:
+- ESTADO DE PARTIDA: sandbox reciclado; main avançou e65b1f9 → b8b2923 (22 commits: PRs #264 lote 3 rigs+viewer, #265/#266 worklog+review Task 36/37, #267 Zheers+gates, #268 F47 worlds, #269 LOTE 4 milícias/gangues, #270 worklog Task 38); 0 PRs abertos; working tree estava em branch antiga (feat/game3d-fase32) → checkout main + reset --hard origin/main
+- BASELINE: npm ci limpo no root (316 pkgs) + **npm ci em game-runtime/ (lição do Task 38 aplicada na raiz: o recycle do sandbox destrói os dois node_modules e a suíte oficial NÃO revela o do sub-pacote)**
+- VERIFICAÇÃO INDEPENDENTE DO LOTE 4 (tudo verde, sem tocar em código): 16 arquétipos em KHAAOS_MILITIA_ARCHETYPES = 8 MILICIA_URBANA + 8 GANGUE_URBANA, 4M/4F por facção, skeletons por sexo (SK_Manny/SK_Gwen); catálogo 33 selecionáveis com branch por facção; 33 SVGs em disco (17 male + 16 female); UI do perfil renderiza dinamicamente sobre OPERATIVE_AVATAR_OPTIONS (grid expande sozinha); whitelist isOperativeAvatarId absorve os 16 IDs sem migration
+- SUÍTES: tsc 0; oficial 533+39 testes — 0 falhas; game-runtime 1041 testes — 0 falhas (após npm ci do sub-pacote; antes: 19 arquivos falhando com ERR_MODULE_NOT_FOUND tweetnacl — ambiente, não código); contratos-chave explicitamente: militia-roster + character-studio + worlds-fidelity-parity + figures-glb-viewer + lyra-mapping = 30/30
+- F44/F46: headings README intactos — 4 seções `### W#/C#` (W1/C1 Barburhen .. W4/C4 Arukheea) + Lote 2/3/4 presentes; F46 re-certificado no CI do Task 38 (README §Personagens Lote 4)
+- CI/DEPLOY: CI do b8b2923 = 20 success / 3 skipped (condicionais — PR Validation Gate, Deploy to Render via dispatch, notify); deploy run #116 serviu cc8e8fa (código completo do Lote 4) — b8b2923 é docs-only (worklog) e NÃO exige novo deploy; staging healthz.json → 200 {"status":"ok","commit":"cc8e8fa…"} + /avatars/male/op_mil_male_vulto.svg → 200 + /avatars/female/op_gng_female_pixel.svg → 200
+- DÍVIDA ANTIGA RESOLVIDA: PRs #181 e #210 confirmados merged/closed (nada pendente)
+- LIÇÕES: (1) após recycle do sandbox, restaurar AMBOS os node_modules (root + game-runtime) antes de qualquer verificação — a suíte oficial passa mesmo com game-runtime quebrado, e o CI do main não teria pego (roda em runner limpo); (2) a checagem "0 falhas" da suíte oficial é necessária mas insuficiente — o par {tsc, oficial, game-runtime} é o mínimo para validar o estado
+
+Stage Summary:
+- Lote 4 verificado independentemente de ponta a ponta sobre o main b8b2923: roster 33 identidades (16 militares + TALON + 16 irregulares) com facção declarada, arte servida, habilidades ativas no simulador, contratos automatizados verdes nos DOIS repositórios de teste
+- Estado: main b8b2923 · staging #116 (healthz cc8e8fa) · tsc 0 · oficial 533+39 0 falhas · game-runtime 1041 0 falhas · CI 20/20 · 0 PRs abertos · 0 self-hosted runners (editor check UE5 segue pendente)
