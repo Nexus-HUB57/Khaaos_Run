@@ -1,6 +1,6 @@
 # Auditoria de Fidelidade — Mundos ↔ README
 
-Veredito: **FIEL ✅** — 53 checks OK, 0 falhas
+Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 
 | Check | Mundo | Verificação | Status | Detalhe |
 |---|---|---|---|---|
@@ -53,6 +53,33 @@ Veredito: **FIEL ✅** — 53 checks OK, 0 falhas
 | B2 | W4 Arukheea | extras de cena (mar/fogo) construídos | ✅ | sharkfin≥2 na cena |
 | Q1 | W4 Arukheea | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['Arukheea'] próprio |
 | Q2 | W4 Arukheea | paleta completa (céu 3 bandas + fog + ground) | ✅ | #0e1526 / #2a4258 / #a8c3c9 |
+| W1 | CIGKV CIGKV | shared/worlds.ts hazard.type = KHAOS_GRAVITY | ✅ | type=KHAOS_GRAVITY |
+| W2 | CIGKV CIGKV | runtime survival.type paridade com shared/worlds.ts | ✅ | type=KHAOS_GRAVITY ↔ shared/worlds.ts |
+| W3 | CIGKV CIGKV | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
+| W4 | CIGKV CIGKV | biome contém keyword canônica do README | ✅ | "Vila Militar Murada — Pátio de Armamento, Setor de Testes (P…" |
+| W5 | CIGKV CIGKV | subtitle contém nome canônico do README | ✅ | "Khaaos Ville — Campo de Instrução de Guerra" |
+| W1 | Barburhen Barburhen | shared/worlds.ts hazard.type = ACID_RAIN | ✅ | type=ACID_RAIN |
+| W2 | Barburhen Barburhen | runtime survival ausente (chuva ácida id-gated no sim3d) | ✅ | sobrevivência undefined; hazard conceitual ACID_RAIN em shared/worlds.ts |
+| W3 | Barburhen Barburhen | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
+| W4 | Barburhen Barburhen | biome contém keyword canônica do README | ✅ | "Urbano Pós-Guerra: Construções Inacabadas, Carros Abandonado…" |
+| W5 | Barburhen Barburhen | subtitle contém nome canônico do README | ✅ | "Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)" |
+| W1 | Priadus Priadus | shared/worlds.ts hazard.type = SPORE_FOG | ✅ | type=SPORE_FOG |
+| W2 | Priadus Priadus | runtime survival.type paridade com shared/worlds.ts | ✅ | type=SPORE_FOG ↔ shared/worlds.ts |
+| W3 | Priadus Priadus | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
+| W4 | Priadus Priadus | biome contém keyword canônica do README | ✅ | "Selva Densa, Pântanos, Flora Carnívora, Neblina com Esporos …" |
+| W5 | Priadus Priadus | subtitle contém nome canônico do README | ✅ | "Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)" |
+| W1 | Ckesalth Ckesalth | shared/worlds.ts hazard.type = TOXIC_SMOKE | ✅ | type=TOXIC_SMOKE |
+| W2 | Ckesalth Ckesalth | runtime survival.type paridade com shared/worlds.ts | ✅ | type=TOXIC_SMOKE ↔ shared/worlds.ts |
+| W3 | Ckesalth Ckesalth | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
+| W4 | Ckesalth Ckesalth | biome contém keyword canônica do README | ✅ | "Deserto Árido, Lagoas de Petróleo em Chamas, Fumaça Tóxica e…" |
+| W5 | Ckesalth Ckesalth | subtitle contém nome canônico do README | ✅ | "Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)" |
+| W1 | Arukheea Arukheea | shared/worlds.ts hazard.type = TSUNAMI_WAVE | ✅ | type=TSUNAMI_WAVE |
+| W2 | Arukheea Arukheea | runtime survival.type paridade com shared/worlds.ts | ✅ | type=TSUNAMI_WAVE ↔ shared/worlds.ts |
+| W3 | Arukheea Arukheea | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
+| W4 | Arukheea Arukheea | biome contém keyword canônica do README | ✅ | "Ilha Isolada, Prisão do Sol da Noite (Luz Perpétua), Tsunami…" |
+| W5 | Arukheea Arukheea | subtitle contém nome canônico do README | ✅ | "Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)" |
+| W6 | GLOBAL | nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42) | ✅ | todos os 5 mundos usam hazards canônicos F42 |
+| W7 | GLOBAL | shared/worlds.ts cobre os 5 mundos canônicos | ✅ | 5/5 mundos |
 | X1 | GLOBAL | erupção de lava não é cânon de nenhum mundo | ✅ | nenhum cenário com survival de lava |
 | X2 | GLOBAL | typo regressivo "Khaoos" erradicado | ✅ | mapLabel do CIGKV = "Khaaos Ville" |
 | DOC-F42 | GLOBAL | matriz de auditoria f42 cobre o escopo (5 mundos) | ✅ | 5/5 mundos citados |

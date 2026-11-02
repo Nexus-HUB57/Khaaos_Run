@@ -41,6 +41,77 @@ if (typeof globalThis.document === 'undefined') {
 }
 
 /**
+ * F47 — Extração LITE do `KHAAOS_WORLDS` de shared/worlds.ts.
+ *
+ * O snapshot é headless (não pode importar TS). Esta função faz um parse
+ * estrutural simples: para cada bloco `WorldId: { ... }` dentro de
+ * `KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {`, extrai apenas os 4
+ * campos que o portão W audita: hazard.type, configRevision, biome, subtitle.
+ *
+ * Não é um parser TS completo — é um extrator determinístico dos campos
+ * canônicos pinados. O teste de auto-verificação fidelity-audit.test.js já
+ * cobre o caminho real (corrompe inputs e mostra os checks falhando).
+ */
+function extractSharedWorldsLite(src) {
+  const WORLD_IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
+  const out = {};
+
+  // Localiza o início do objeto KHAAOS_WORLDS e seu fechamento (chaves balanceadas)
+  const startIdx = src.indexOf('KHAAOS_WORLDS:');
+  if (startIdx === -1) return null;
+  const objStart = src.indexOf('{', startIdx);
+  if (objStart === -1) return null;
+
+  // Caminha pelas chaves para encontrar o fim do objeto KHAAOS_WORLDS
+  let depth = 0;
+  let objEnd = -1;
+  for (let i = objStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) { objEnd = i; break; }
+    }
+  }
+  if (objEnd === -1) return null;
+  const block = src.slice(objStart, objEnd + 1);
+
+  for (const id of WORLD_IDS) {
+    // Cada entrada começa com `  WorldId: {` ou `\n  WorldId: {`
+    const entryRe = new RegExp(`\\b${id}:\\s*\\{`);
+    const m = entryRe.exec(block);
+    if (!m) continue;
+
+    // Encontra o fechamento do objeto deste mundo (chaves balanceadas)
+    let d = 0;
+    let entryEnd = -1;
+    for (let i = m.index + m[0].length - 1; i < block.length; i++) {
+      if (block[i] === '{') d++;
+      else if (block[i] === '}') {
+        d--;
+        if (d === 0) { entryEnd = i; break; }
+      }
+    }
+    if (entryEnd === -1) continue;
+    const entry = block.slice(m.index, entryEnd + 1);
+
+    const strField = (key) => {
+      const re = new RegExp(`${key}:\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'm');
+      const mm = re.exec(entry);
+      return mm ? mm[1] : undefined;
+    };
+
+    out[id] = {
+      hazard: { type: strField('type') }, // captura o primeiro `type:` (que é o hazard.type)
+      configRevision: strField('configRevision'),
+      biome: strField('biome'),
+      subtitle: strField('subtitle'),
+    };
+  }
+
+  return Object.keys(out).length === 5 ? out : null;
+}
+
+/**
  * Roda a auditoria completa F44 sobre o repo REAL e devolve o relatório.
  * @param {{ repoRoot?: string, runtimeRoot?: string, readmeText?: string, simSource?: string, docs?: Object<string,string> }} overrides
  *   (injeção p/ testes — default lê o README/sim/matrizes do disco)
@@ -62,6 +133,19 @@ export async function runFidelitySnapshot({
 
   const readme = readmeText ?? readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
   const sim = simSource ?? readFileSync(path.join(runtimeRoot, 'src/game3d/sim3d.js'), 'utf8');
+
+  // F47 — carrega o contrato E2E shared/worlds.ts como texto e extrai apenas o
+  // export KHAAOS_WORLDS. O snapshot é HEADLESS (não pode importar TS), então
+  // usamos uma extração por regex (a estrutura é estável e versionada). O
+  // teste de auto-verificação (fidelity-audit.test.js) cobre o caminho real.
+  let sharedWorlds = null;
+  try {
+    const sharedWorldsSrc = readFileSync(path.join(repoRoot, 'shared/worlds.ts'), 'utf8');
+    sharedWorlds = extractSharedWorldsLite(sharedWorldsSrc);
+  } catch (err) {
+    // Sem shared/worlds.ts = check W vira fail no auditWorlds
+  }
+
   const docTexts = docs ?? (() => {
     const out = {};
     for (const [id, rel] of Object.entries({
@@ -99,6 +183,7 @@ export async function runFidelitySnapshot({
     lightingKeys: Object.keys(LIGHTING_PROFILES),
     simSource: sim,
     docs: docTexts,
+    sharedWorlds,
   });
 
   return {

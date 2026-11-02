@@ -412,5 +412,98 @@
     "design_tier": "PhD",
     "balance_version": "2.0",
     "designer": "Nexus-HUB57"
+  },
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_VenexAbilities.h",
+    "abilities": [
+      {
+        "name": "PulseBlast",
+        "tag": "Ability.Species.Venex.PulseBlast",
+        "cooldown": 8.0,
+        "energy": 20.0,
+        "damage": 15.0,
+        "range": 600.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Overclock",
+        "tag": "Ability.Species.Venex.Overclock",
+        "cooldown": 20.0,
+        "energy": 30.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 5.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "TargetLock",
+        "tag": "Ability.Species.Venex.TargetLock",
+        "cooldown": 15.0,
+        "energy": 25.0,
+        "damage": 0.0,
+        "range": 2000.0,
+        "duration": 2.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "NaniteRepair",
+        "tag": "Ability.Species.Venex.NaniteRepair",
+        "cooldown": 25.0,
+        "energy": 30.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 8.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "CyberDash",
+        "tag": "Ability.Species.Venex.CyberDash",
+        "cooldown": 6.0,
+        "energy": 15.0,
+        "damage": 0.0,
+        "range": 1000.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "ScannerSweep",
+        "tag": "Ability.Species.Venex.ScannerSweep",
+        "cooldown": 10.0,
+        "energy": 15.0,
+        "damage": 0.0,
+        "range": 2000.0,
+        "duration": 4.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "StasisField",
+        "tag": "Ability.Species.Venex.StasisField",
+        "cooldown": 30.0,
+        "energy": 40.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Overload",
+        "tag": "Ability.Species.Venex.Overload",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 100.0,
+        "range": 1500.0,
+        "duration": 5.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
   }
 }
