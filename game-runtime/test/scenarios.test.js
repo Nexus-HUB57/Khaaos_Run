@@ -6,9 +6,10 @@ import { resolveScenario } from '../src/game3d/scenarios.js';
 
 test('o seletor usa os operativos canônicos com dados visuais completos', () => {
   // Fase 26 — 16 canônicos + TALON (Agilidade e Informação) = 17 selecionáveis
+  // Lote 4 — +16 não-militares (milícias e gangues urbanas) = 33 selecionáveis
   const roster = JSON.parse(readFileSync(new URL('../../Content/Avatars/avatar_catalog.json', import.meta.url), 'utf8'));
-  assert.equal(roster.length, 17);
-  assert.equal(new Set(roster.map((operative) => operative.id)).size, 17);
+  assert.equal(roster.length, 33);
+  assert.equal(new Set(roster.map((operative) => operative.id)).size, 33);
   for (const operative of roster) {
     assert.ok(operative.codename && operative.specialization && operative.defaultWorld);
     assert.ok(operative.colors?.skinTone && operative.colors?.primary && operative.colors?.secondary);
