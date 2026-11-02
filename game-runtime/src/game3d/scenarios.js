@@ -15,6 +15,9 @@ export const SCENARIOS = Object.freeze({
     label: 'CIGKV — Campo de Instrução',
     shortLabel: 'CIGKV',
     mapLabel: 'Khaaos Ville', // F42 — README: "Khaaos Ville" (antes: typo 'Khaoos Ville')
+    // Ingresso canônico do campo: o esquadrão chega no trem do ZU, no solo.
+    // O airdrop permanece somente como fixture legado explícito.
+    zuIngress: Object.freeze({ protocol: 'zu_train_v1', eventProtocol: 'ZU_TRAIN_V1', mode: 'train', durationMs: 3400 }),
     sectorNames: ['Pátio de Armamento', 'Proving Grounds', 'Parque Abandonado', 'Urbano Denso', 'Terminal ZEX'],
     playerSpawn: { x: 0, z: 150 },
     ringDamageMultiplier: 1,

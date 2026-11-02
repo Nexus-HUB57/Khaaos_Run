@@ -117,13 +117,14 @@ export class MatchRoom3D {
     this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
+    this.scenario = resolveScenario(scenarioId);
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
-    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_portal_v1';
-    this.zuIngress = { protocol: 'ZU_PORTAL_V1', synchronized: true, startedAt: null, durationMs: 2200 };
+    const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
+    this.zuIngress = { ...zuIngress, synchronized: true, startedAt: null };
     this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
     this.isPrivate = !!isPrivate;
     this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
-    this.scenario = resolveScenario(scenarioId);
     this.mode = '3d';
     this.is3d = true;
     this.rng = new SeededRng(`${this.seed}:room3d`);
@@ -464,7 +465,9 @@ export class MatchRoom3D {
     } else {
       this.zuIngress.startedAt = Date.now();
       this.#emitAll('zuIngress', {
-        protocol: this.zuIngress.protocol,
+        protocol: this.zuIngress.eventProtocol,
+        entryProtocol: this.entryProtocol,
+        mode: this.zuIngress.mode,
         startedAt: this.zuIngress.startedAt,
         durationMs: this.zuIngress.durationMs,
         world: this.scenario.id,
