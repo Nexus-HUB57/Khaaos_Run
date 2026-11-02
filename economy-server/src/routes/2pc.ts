@@ -129,7 +129,7 @@ twoPcRouter.post("/prepare", async (req: Request, res: Response) => {
     return res.json({ prepared: true, transactionId });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ prepared: false, code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ prepared: false, code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Prepare error:", error);
     return res.status(500).json({ prepared: false, code: "INTERNAL_ERROR", message: "Erro interno no servidor" });
@@ -204,7 +204,7 @@ twoPcRouter.post("/commit", async (req: Request, res: Response) => {
     return res.json({ committed: true, transactionId, amountKrc: amount });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Commit error:", error);
     return res.status(500).json({ code: "INTERNAL_ERROR", message: "Erro interno no servidor" });
@@ -282,7 +282,7 @@ twoPcRouter.post("/abort", async (req: Request, res: Response) => {
     return res.json({ aborted: true, transactionId, refundKrc: amount });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.errors });
+      return res.status(400).json({ code: "VALIDATION_ERROR", errors: error.issues });
     }
     console.error("[2PC] Abort error:", error);
     return res.status(500).json({ code: "INTERNAL_ERROR", message: "Erro interno no servidor" });

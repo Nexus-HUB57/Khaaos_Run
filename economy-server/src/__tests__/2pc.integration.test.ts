@@ -55,7 +55,7 @@ describe("2PC Protocol — Integration Tests", () => {
       const res = await request(app)
         .post("/api/economy/2pc/commit")
         .send({
-          transactionId: "00000000-0000-0000-0000-999999999999",
+          transactionId: "00000000-0000-4000-8000-999999999999",
           playerId: 9999,
         });
 
@@ -69,7 +69,7 @@ describe("2PC Protocol — Integration Tests", () => {
       const res = await request(app)
         .post("/api/economy/2pc/abort")
         .send({
-          transactionId: "00000000-0000-0000-0000-999999999998",
+          transactionId: "00000000-0000-4000-8000-999999999998",
           playerId: 9999,
           reason: "test",
         });
