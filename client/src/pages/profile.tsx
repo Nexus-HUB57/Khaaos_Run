@@ -6,6 +6,7 @@ import { User, Activity, Shield, Hash, Star, Swords, HeartPulse, Trophy, Trendin
 import { useMyRanking, winRate, kdRatio } from "@/hooks/use-ranking";
 import { useToast } from "@/hooks/use-toast";
 import { FIGURES, figureSrc } from "@shared/figures";
+import { FigureGlbViewer } from "@/components/FigureGlbViewer";
 import { Link } from "wouter";
 import {
   canUnlockSpecialization,
@@ -171,24 +172,23 @@ export default function Profile() {
       <CyberCard title="FIGURAS DE ALISTAMENTO" subtitle="RENDER 3D · A TABELA EP555 NÃO MUDA">
         <p className="mb-4 text-xs font-mono leading-relaxed tracking-wide text-muted-foreground">
           Seis corpos. Três masculinos, três femininos. Origem e marca são do rosto, não do dano.
-          As seis placas 3D estão no ar. A malha riggada (GLB) ainda não foi exportada.
+          As seis malhas GLB (A-pose, cores por vértice da ficha) estão no ar — arraste para girar.
+          Placeholder de alistamento: a substituição por scan/retopo real mantém o mesmo nome de asset.
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {FIGURES.map((figure) => (
             <article key={figure.id} className="border border-border/40 bg-black/30">
-              {figure.render === "placa" ? (
-                <img
-                  src={figureSrc(figure.id)}
-                  alt={`${figure.name}, render 3D de alistamento`}
-                  className="aspect-[3/4] w-full object-cover object-top"
-                />
-              ) : (
-                <div className="flex aspect-[3/4] items-end border-b border-border/30 bg-black/50 p-3">
-                  <span className="font-mono text-[10px] tracking-widest text-muted-foreground">RENDER 3D PENDENTE</span>
-                </div>
-              )}
+              <FigureGlbViewer figureId={figure.id} figureName={figure.name} className="aspect-[3/4] w-full border-b border-border/30" />
               <div className="p-3">
-                <h3 className="font-display text-lg">{figure.name}</h3>
+                <div className="flex items-center gap-2">
+                  <img
+                    src={figureSrc(figure.id)}
+                    alt={`Placa de rosto de ${figure.name}`}
+                    loading="lazy"
+                    className="h-10 w-8 shrink-0 border border-white/10 object-cover object-top"
+                  />
+                  <h3 className="font-display text-lg">{figure.name}</h3>
+                </div>
                 <p className="font-mono text-[10px] tracking-widest text-primary">
                   {figure.sexLabel} · {figure.origin} · {figure.age}
                 </p>

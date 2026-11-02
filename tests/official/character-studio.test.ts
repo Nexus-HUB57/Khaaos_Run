@@ -156,6 +156,15 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
     const entry = manifest.characters.find((c: any) => c.id === op.ueAssetId);
     assert.ok(entry, `Manifest contains character entry for ${op.ueAssetId}`);
     assert.equal(entry.gender, op.gender);
+    // ADR-ESQUELETO-RIG-POR-SEXO: rig base por sexo, sem placeholder UE5_Mannequin
+    assert.equal(entry.skeleton, op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+      `${op.ueAssetId} deve carregar o rig canônico do seu sexo`);
     assert.ok(entry.avatar_svg && fs.existsSync(path.resolve(entry.avatar_svg)), `Manifest avatar_svg points to valid file for ${op.ueAssetId}`);
   }
+
+  // CHR_Zheers_Base (base da espécie, sem sexo) carrega o preview rig do SPC_Zheers
+  const base = manifest.characters.find((c: any) => c.id === "CHR_Zheers_Base");
+  assert.ok(base, "Manifest contains CHR_Zheers_Base");
+  assert.equal(base.skeleton, "SK_Manny", "preview rig da espécie Zheers é SK_Manny");
+  assert.ok(!JSON.stringify(manifest).includes("UE5_Mannequin"), "nenhum resíduo do placeholder UE5_Mannequin no manifest");
 });
