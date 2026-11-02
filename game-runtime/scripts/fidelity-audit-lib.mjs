@@ -209,8 +209,11 @@ function check(checks, { id, world, name, ok, detail }) {
  *  - lightingKeys      : chaves de LIGHTING_PROFILES (perfil dedicado = chave própria)
  *  - simSource         : texto de sim3d.js (gate da chuva ácida W1)
  *  - docs              : { f42?: string, f43?: string } textos das matrizes
+ *  - sharedWorlds      : (F47) KHAAOS_WORLDS de shared/worlds.ts — contrato E2E
+ *                        que anteriormente ficava de fora do portão F44 e
+ *                        driftava silenciosamente para o layout pré-F42.
  */
-export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneCounts = {}, lightingKeys = [], simSource = '', docs = {} }) {
+export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneCounts = {}, lightingKeys = [], simSource = '', docs = {}, sharedWorlds = null }) {
   const checks = [];
   const { worlds, issues } = extractWorldsFromReadme(readmeText);
   for (const issue of issues) {
@@ -328,6 +331,105 @@ export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneC
     check(checks, {
       id: 'Q2', world: worldTag, name: 'paleta completa (céu 3 bandas + fog + ground)', ok: paletteOk,
       detail: paletteOk ? `${sc.sky.top} / ${sc.sky.mid} / ${sc.sky.horizon}` : 'céu/fog/tint incompletos',
+    });
+  }
+
+  // --- W (F47) — paridade shared/worlds.ts (contrato E2E) ↔ runtime scenarios ---
+  // Antes do F47, o portão F44 só auditava o runtime — `shared/worlds.ts`
+  // driftou silenciosamente para o layout pré-F42 (lava no Ckesalth, tsunami no
+  // Priadus, SAFE_TRAINING no CIGKV). Este bloco fecha o buraco.
+  if (sharedWorlds) {
+    const SHARED_WORLDS_EXPECT = Object.freeze({
+      CIGKV: { hazardType: 'KHAOS_GRAVITY', subtitleRegex: /Khaaos Ville/i, biomeRegex: /Vila Militar Murada/i },
+      Barburhen: { hazardType: 'ACID_RAIN', subtitleRegex: /Mundo da Destrui(ç|c)(ã|a)o/i, biomeRegex: /Urbano P(ó|o)s-Guerra/i },
+      Priadus: { hazardType: 'SPORE_FOG', subtitleRegex: /Floresta da Escurid(ã|a)o/i, biomeRegex: /(Selva Densa|P(â|a)ntanos|Flora Carn(í|i)vora|Neblina)/i },
+      Ckesalth: { hazardType: 'TOXIC_SMOKE', subtitleRegex: /Deserto das Almas Esquecidas/i, biomeRegex: /(Deserto|( Petr(ó|o)leo|Fuma(ç|c)a T(ó|o)xica|Areia Movedi(ç|c)a))/i },
+      Arukheea: { hazardType: 'TSUNAMI_WAVE', subtitleRegex: /Ilha dos Gritos Calados/i, biomeRegex: /(Ilha Isolada|Pris(ã|a)o do Sol da Noite|Tsunami|Tubar(õ|o)es)/i },
+    });
+    const WORLDS_WITH_RUNTIME_SURVIVAL = new Set(['CIGKV', 'Priadus', 'Ckesalth', 'Arukheea']);
+
+    // Map WorldId (shared/worlds.ts) → SCENARIO_KEY (runtime scenarios.js).
+    // SCENARIO_KEY é keyed por W1..W4 (não por Barburhen/Priadus/etc.), então
+    // precisamos de um mapa direto WorldId → scenarioKey.
+    const SHARED_WORLD_TO_SCENARIO_KEY = Object.freeze({
+      CIGKV: 'CIGKV',
+      Barburhen: 'BARBURHEN',
+      Priadus: 'PRIADUS',
+      Ckesalth: 'CKESALTH',
+      Arukheea: 'ARUKHEEA',
+    });
+
+    for (const [worldId, expect] of Object.entries(SHARED_WORLDS_EXPECT)) {
+      const skey = SHARED_WORLD_TO_SCENARIO_KEY[worldId];
+      const sc = scenarios[skey];
+      const w = sharedWorlds[worldId];
+      const worldTag = `${worldId} ${sc?.id ?? '—'}`;
+
+      // W1 — hazard.type paridade
+      if (w?.hazard?.type) {
+        const hazardOk = w.hazard.type === expect.hazardType;
+        check(checks, {
+          id: 'W1', world: worldTag, name: `shared/worlds.ts hazard.type = ${expect.hazardType}`, ok: hazardOk,
+          detail: hazardOk ? `type=${w.hazard.type}` : `esperado ${expect.hazardType}, obtido ${w.hazard.type}`,
+        });
+      } else {
+        check(checks, { id: 'W1', world: worldTag, name: `shared/worlds.ts hazard.type = ${expect.hazardType}`, ok: false, detail: 'entrada KHAAOS_WORLDS ausente ou sem hazard' });
+      }
+
+      // W2 — runtime survival.type paridade (Barburhen é exceção — id-gated no sim3d)
+      if (WORLDS_WITH_RUNTIME_SURVIVAL.has(worldId)) {
+        const runtimeOk = sc?.survival?.type === expect.hazardType;
+        check(checks, {
+          id: 'W2', world: worldTag, name: `runtime survival.type paridade com shared/worlds.ts`, ok: runtimeOk,
+          detail: runtimeOk ? `type=${sc.survival.type} ↔ shared/worlds.ts` : `runtime="${sc?.survival?.type}", shared="${w?.hazard?.type}"`,
+        });
+      } else {
+        // Barburhen: runtime tem survival undefined (chuva ácida id-gated no sim3d)
+        const okBarb = sc?.survival === undefined;
+        check(checks, {
+          id: 'W2', world: worldTag, name: `runtime survival ausente (chuva ácida id-gated no sim3d)`, ok: okBarb,
+          detail: okBarb ? 'sobrevivência undefined; hazard conceitual ACID_RAIN em shared/worlds.ts' : `runtime survival="${sc?.survival?.type}" deveria ser undefined`,
+        });
+      }
+
+      // W3 — configRevision pinned
+      const revOk = w?.configRevision === 'f42-2026-11-02';
+      check(checks, {
+        id: 'W3', world: worldTag, name: 'configRevision pinned em f42-2026-11-02', ok: revOk,
+        detail: revOk ? `rev=${w.configRevision}` : `esperado "f42-2026-11-02", obtido "${w?.configRevision ?? 'ausente'}"`,
+      });
+
+      // W4 — biome contém keyword canônica do README
+      const biomeOk = !!w?.biome && expect.biomeRegex.test(w.biome);
+      check(checks, {
+        id: 'W4', world: worldTag, name: 'biome contém keyword canônica do README', ok: biomeOk,
+        detail: biomeOk ? `"${w.biome.slice(0, 60)}…"` : `biome="${w?.biome ?? 'ausente'}" não casa ${expect.biomeRegex}`,
+      });
+
+      // W5 — subtitle contém nome canônico do README
+      const subOk = !!w?.subtitle && expect.subtitleRegex.test(w.subtitle);
+      check(checks, {
+        id: 'W5', world: worldTag, name: 'subtitle contém nome canônico do README', ok: subOk,
+        detail: subOk ? `"${w.subtitle}"` : `subtitle="${w?.subtitle ?? 'ausente'}" não casa ${expect.subtitleRegex}`,
+      });
+    }
+
+    // W6 — nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42)
+    const forbidden = ['VOLCANIC_LAVA', 'SAFE_TRAINING'];
+    const badWorlds = Object.entries(sharedWorlds)
+      .filter(([, w]) => forbidden.includes(w?.hazard?.type))
+      .map(([id]) => id);
+    check(checks, {
+      id: 'W6', world: 'GLOBAL', name: 'nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42)', ok: badWorlds.length === 0,
+      detail: badWorlds.length ? `tokens proibidos em ${badWorlds.join(', ')}` : 'todos os 5 mundos usam hazards canônicos F42',
+    });
+
+    // W7 — 5 mundos cobertos
+    const expectedCount = Object.keys(SHARED_WORLDS_EXPECT).length;
+    const actualCount = Object.keys(sharedWorlds).length;
+    check(checks, {
+      id: 'W7', world: 'GLOBAL', name: `shared/worlds.ts cobre os ${expectedCount} mundos canônicos`, ok: actualCount === expectedCount,
+      detail: actualCount === expectedCount ? `${actualCount}/${expectedCount} mundos` : `esperado ${expectedCount}, obtido ${actualCount}`,
     });
   }
 

@@ -430,5 +430,98 @@
     "design_tier": "PhD",
     "balance_version": "2.0",
     "designer": "Nexus-HUB57"
+  },
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_KhaelAbilities.h",
+    "abilities": [
+      {
+        "name": "FrostBolt",
+        "tag": "Ability.Species.Khael.FrostBolt",
+        "cooldown": 3.0,
+        "energy": 15.0,
+        "damage": 40.0,
+        "range": 3000.0,
+        "duration": 2.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "CryoWall",
+        "tag": "Ability.Species.Khael.CryoWall",
+        "cooldown": 12.0,
+        "energy": 30.0,
+        "damage": 0.0,
+        "range": 500.0,
+        "duration": 6.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Blizzard",
+        "tag": "Ability.Species.Khael.Blizzard",
+        "cooldown": 15.0,
+        "energy": 35.0,
+        "damage": 10.0,
+        "range": 800.0,
+        "duration": 4.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "FrozenArmor",
+        "tag": "Ability.Species.Khael.FrozenArmor",
+        "cooldown": 20.0,
+        "energy": 25.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 8.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Avalanche",
+        "tag": "Ability.Species.Khael.Avalanche",
+        "cooldown": 10.0,
+        "energy": 30.0,
+        "damage": 60.0,
+        "range": 1500.0,
+        "duration": 1.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Frostbite",
+        "tag": "Ability.Species.Khael.Frostbite",
+        "cooldown": 3.0,
+        "energy": 10.0,
+        "damage": 30.0,
+        "range": 150.0,
+        "duration": 1.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "IceClone",
+        "tag": "Ability.Species.Khael.IceClone",
+        "cooldown": 18.0,
+        "energy": 25.0,
+        "damage": 40.0,
+        "range": 300.0,
+        "duration": 8.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "AbsoluteZero",
+        "tag": "Ability.Species.Khael.AbsoluteZero",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 80.0,
+        "range": 1200.0,
+        "duration": 3.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
   }
 }

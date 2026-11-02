@@ -129,7 +129,7 @@ Esta etapa transforma a atomicidade já implementada em evidência operacional a
 - [x] Calcular zona na retomada com raio interpolado e tempos restantes coerentes com o tick do servidor; renderizar a geometria como elipse no canvas responsivo.
 - [x] Expor estado de conexão, impedir ações enquanto offline e oferecer controle de movimento pelo teclado (setas; Shift para passo maior), com foco e instruções acessíveis.
 - [x] Expandir E2E WebSocket autenticado para cobrir match, PackBack, granada/dano/durabilidade, coleta só após persistência, rollback de coleta e retomada sem desconexão falsa.
-- [x] Persistir seleção de operativo/avatar no perfil autenticado (migration 0010), validar IDs contra catálogo local dos 16 canônicos + Talon e apresentar seleção no perfil sem misturar com a imagem OIDC.
+- [x] Persistir seleção de operativo/avatar no perfil autenticado (migration 0012), validar IDs contra catálogo local dos 16 canônicos + Talon e apresentar seleção no perfil sem misturar com a imagem OIDC.
 - [x] Carregar o ID salvo do banco no join e propagar pelo room_state/AOI; atualizar lobbies locais abertos e manter identidade de countdown/partida como snapshot estável.
 - [x] Cobrir paridade dos catálogos/SVGs, autorização de seleção, persistência PostgreSQL, propagação WebSocket relayada e seleção visual Playwright.
 - [ ] Adicionar testes de UI em navegador para teclado, leitor de tela, estados de erro, loading e breakpoints móveis.
