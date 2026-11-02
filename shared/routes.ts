@@ -202,13 +202,21 @@ export const api = {
         200: z.array(z.custom<typeof items.$inferSelect>()),
       },
     },
-    purchase: {
+    materials: {
+      method: 'GET' as const,
+      path: '/api/armorer/materials',
+      responses: {
+        200: z.array(z.object({ materialId: z.string(), quantity: z.number().int().nonnegative() })),
+      },
+    },
+    craft: {
       method: 'POST' as const,
-      path: '/api/items/purchase',
+      path: '/api/items/craft',
       input: z.object({ catalogId: z.enum(ARMORER_CATALOG_IDS) }).strict(),
       responses: {
         201: z.object({ operationId: z.string().uuid() }).passthrough().and(z.custom<typeof items.$inferSelect>()),
         402: errorSchemas.insufficientFunds,
+        409: z.object({ message: z.string(), missingMaterials: z.array(z.object({ materialId: z.string(), required: z.number().int(), available: z.number().int() })).optional() }),
       },
     },
     equip: {

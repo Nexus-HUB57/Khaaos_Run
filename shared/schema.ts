@@ -170,6 +170,14 @@ export const LOOT_PRESETS = [
   { posX: 70, posY: 45, type: "ARMA",     rarity: "RARO",     name: "SMG Huran",               stats: { damage: 22, accuracy: 65, ammo: 25 } },
   { posX: 45, posY: 20, type: "CURATIVO", rarity: "EPICO",    name: "Adrenalina Khael",        stats: { heal: 75, speed: 20 } },
   { posX: 18, posY: 85, type: "DEFESA",   rarity: "COMUM",    name: "Capacete Simples",        stats: { defense: 15 } },
+  { posX: 12, posY: 28, type: "RECURSO", rarity: "COMUM", name: "Metal Recuperado", stats: { materialCode: 1, quantity: 4, weight: 2 } },
+  { posX: 26, posY: 62, type: "RECURSO", rarity: "COMUM", name: "Madeira Estrutural", stats: { materialCode: 2, quantity: 3, weight: 2 } },
+  { posX: 38, posY: 12, type: "RECURSO", rarity: "COMUM", name: "Polímero", stats: { materialCode: 3, quantity: 3, weight: 2 } },
+  { posX: 52, posY: 34, type: "RECURSO", rarity: "RARO", name: "Pólvora", stats: { materialCode: 4, quantity: 2, weight: 2 } },
+  { posX: 68, posY: 52, type: "RECURSO", rarity: "RARO", name: "Componente Eletrônico", stats: { materialCode: 5, quantity: 2, weight: 2 } },
+  { posX: 82, posY: 24, type: "RECURSO", rarity: "COMUM", name: "Fibra Tática", stats: { materialCode: 6, quantity: 4, weight: 2 } },
+  { posX: 46, posY: 78, type: "RECURSO", rarity: "COMUM", name: "Gel Médico", stats: { materialCode: 7, quantity: 3, weight: 2 } },
+  { posX: 91, posY: 68, type: "RECURSO", rarity: "EPICO", name: "Liga Cristalina", stats: { materialCode: 8, quantity: 1, weight: 3 } },
 ] as const;
 
 // === TABLE DEFINITIONS ===
@@ -391,6 +399,19 @@ export const items = pgTable("items", {
   durabilityWithinMaximum: check("items_durability_within_maximum", sql`${table.durability} <= ${table.maxDurability}`),
 }));
 
+/** Empilhamento de matérias-primas coletadas; receitas/custos vêm do catálogo compartilhado. */
+export const playerMaterials = pgTable("player_materials", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  materialId: text("material_id").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerMaterialUnique: uniqueIndex("player_materials_owner_material_uq").on(table.userId, table.materialId),
+  ownerIndex: index("player_materials_owner_idx").on(table.userId, table.materialId),
+  quantityNonnegative: check("player_materials_quantity_nonnegative", sql`${table.quantity} >= 0`),
+}));
+
 // BP_SafeZone Actor equivalent
 export const zoneSessions = pgTable("zone_sessions", {
   id: serial("id").primaryKey(),
@@ -513,6 +534,7 @@ export type EconomyIdempotency = typeof economyIdempotency.$inferSelect;
 export type Economy2PCTransaction = typeof economy2pcTransactions.$inferSelect;
 export type Loan = typeof loans.$inferSelect;
 export type Item = typeof items.$inferSelect;
+export type PlayerMaterial = typeof playerMaterials.$inferSelect;
 export type PlayerStats = typeof playerStats.$inferSelect;
 export type ZoneSession = typeof zoneSessions.$inferSelect;
 export type LootItem = typeof lootItems.$inferSelect;

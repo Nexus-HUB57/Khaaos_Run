@@ -89,8 +89,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "transferência negativa", path: "/api/bank/transfer", body: { amountKrc: -1, destination: "fbm" } },
     { name: "transferência com usuário forjado", path: "/api/bank/transfer", body: { amountKrc: 5, destination: "fbm", userId: "victim" } },
     { name: "empréstimo fracionário", path: "/api/loans", body: { amountKrc: 100.5, days: 1 } },
-    { name: "compra com produto inexistente", path: "/api/items/purchase", body: { catalogId: "produto-inexistente" } },
-    { name: "compra com atributos econômicos forjados", path: "/api/items/purchase", body: { catalogId: "rifle-de-plasma", name: "Rifle barato", priceKrc: 1, stats: { damage: 999 } } },
+    { name: "craft com receita inexistente", path: "/api/items/craft", body: { catalogId: "produto-inexistente" } },
+    { name: "craft com fee, receita ou atributos forjados", path: "/api/items/craft", body: { catalogId: "rifle-de-plasma", armorerFeeKrc: 1, recipe: [], stats: { damage: 999 } } },
     { name: "equipamento com proprietário forjado", path: "/api/items/1/equip", body: { isEquipped: true, userId: "victim" } },
     { name: "uso de item com campo extra", path: "/api/items/1/use", body: { userId: "victim" } },
     { name: "reparo abaixo do mínimo", path: "/api/items/1/repair", body: { amountKrc: 0 } },
@@ -143,12 +143,12 @@ test("IDs inválidos são rejeitados antes de acessar o storage", async (t) => {
 });
 
 test("mutações financeiras usam o serviço idempotente e preservam status e DTOs", async () => {
-  const methodNames = ["transfer", "requestLoan", "payLoan", "purchaseItem", "repairItem", "claimDailySalary"];
+  const methodNames = ["transfer", "requestLoan", "payLoan", "craftItem", "repairItem", "claimDailySalary"];
   const replies: Record<string, { status: number; body: Record<string, unknown> }> = {
     transfer: { status: 200, body: { message: "Transferência realizada", newBalance: "113.00", operationId: "00000000-0000-4000-8000-000000000012" } },
     requestLoan: { status: 201, body: { id: 12, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000013" } },
     payLoan: { status: 200, body: { message: "Empréstimo pago", operationId: "00000000-0000-4000-8000-000000000014" } },
-    purchaseItem: { status: 201, body: { id: 13, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000015" } },
+    craftItem: { status: 201, body: { id: 13, userId: "player-1", operationId: "00000000-0000-4000-8000-000000000015" } },
     repairItem: { status: 200, body: { message: "Reparado Item", newDurability: "55.00", operationId: "00000000-0000-4000-8000-000000000016" } },
     claimDailySalary: { status: 200, body: { message: "Salário recebido", amount: "100.00", operationId: "00000000-0000-4000-8000-000000000017" } },
   };
@@ -164,7 +164,7 @@ test("mutações financeiras usam o serviço idempotente e preservam status e DT
     { method: "transfer", path: "/api/bank/transfer", body: { amountKrc: "10.00", destination: "fbm" }, key: "route-transfer-key-0001", args: ["player-1", "route-transfer-key-0001", "10.00", "fbm"] },
     { method: "requestLoan", path: "/api/loans", body: { amountKrc: 100, days: 2 }, key: "route-loan-key-000001", args: ["player-1", "route-loan-key-000001", 100, 2] },
     { method: "payLoan", path: "/api/loans/1/pay", body: {}, key: "route-payloan-key-0001", args: ["player-1", "route-payloan-key-0001", 1] },
-    { method: "purchaseItem", path: "/api/items/purchase", body: { catalogId: "rifle-de-plasma" }, key: "route-purchase-key-0001", args: ["player-1", "route-purchase-key-0001", { catalogId: "rifle-de-plasma" }] },
+    { method: "craftItem", path: "/api/items/craft", body: { catalogId: "rifle-de-plasma" }, key: "route-craft-key-0001", args: ["player-1", "route-craft-key-0001", { catalogId: "rifle-de-plasma" }] },
     { method: "repairItem", path: "/api/items/1/repair", body: { amountKrc: "1.00" }, key: "route-repair-key-00001", args: ["player-1", "route-repair-key-00001", 1, "1.00"] },
     { method: "claimDailySalary", path: "/api/player/daily-salary", body: {}, key: "route-salary-key-0001", args: ["player-1", "route-salary-key-0001"] },
   ];
