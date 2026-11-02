@@ -936,6 +936,11 @@ Work Log:
 - CONTRATO NOVO tests/official/figures-glb-viewer.test.ts (9 testes): parser lê os 6 GLB REAIS de client/public/figures/glb/ com paridade total ao manifest (vértices 280, triângulos 488, altura/bbox, min y=0, alpha opaco, índices em range), figureGlbSrc() = nome de asset do manifest (substituição transparente) e rejeição explícita de não-GLB
 - VALIDAÇÃO FINAL: tsc 0; suíte oficial 518+39 — 510 pass / 0 fail / 8 skip (14 testes novos no lote 3); vite build OK; auditoria FIEL ✅ 53/0; smoke visual 6/6; docs atualizados (README §Personagens Lote 3 + próximos passos recalibrados)
 
+- MERGE PR #264: CI 38 check-runs — 31 success / 7 skipped / 0 falhas (corrida detectou falha real no job "Verify app before image delivery": o audit_weapon_source_divergence inclui asset_manifest_mvp.json como fonte e o fix de skeleton do lote 3 invalidou o sha256 do relatório — regenerado com --write, valores de armas idênticos, --check verde); merge commit 4829f1d
+- DEPLOY STAGING (deploy.yml dispatch ref=main): run #115 (41477457297) completed/success — Pre-Deploy Validation ✅ → Build Docker Images ✅ (ghcr) → Deploy Staging via Render ✅ → Production skipped (by design) → Post-Deploy Verification ✅
+- STAGING VALIDADO: `https://khaaos-run-staging.onrender.com/healthz.json` → 200 `{"status":"ok","commit":"4829f1dfa1500e3ec713ad446d759129b680948f"}` (matches main HEAD 4829f1d); `/healthz` → 200 database ok (PostgreSQL 18.6, 4ms), economy2pc ok (0 escrows); SPA `/` → 200; **`/figures/glb/FIG_kane.glb` → 200 — os assets do viewer 3D das figuras de alistamento estão servidos no staging**
+- LIÇÃO: qualquer arquivo listado em SOURCE_SPECS do audit_weapon_source_divergence.py (incluindo asset_manifest_mvp.json) invalida o relatório ao mudar — rodar `--write` no mesmo PR que o altera, senão o job de delivery do UE5/CD cai
+
 Stage Summary:
 - O domínio de personagens fechou o último follow-up executável do ADR de esqueleto: os dois rigs canônicos agora estão apontados no mapeamento Lyra com paridade automatizada contra o runtime UE5 (registry .cpp) e os SPCs — e os manifests de import UE5 carregam assets que existem (SK_Manny/SK_Gwen), não placeholders
 - Os manequins GLB saíram de "arquivos mortos" para tela: o jogador vê os 6 corpos de alistamento em 3D interativo no perfil, com paleta por ficha, sem uma única dependência nova
