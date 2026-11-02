@@ -30,7 +30,7 @@
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
     "verify:all": "node scripts/verify-all.mjs",
     "test:e2e:war-i": "playwright test --config=playwright.config.ts",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
