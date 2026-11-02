@@ -135,6 +135,10 @@ for (const [id, w] of Object.entries(WEAPONS)) {
 }
 export const AMMO_CAP = { '9MM': 120, '5.56': 150, '7.62': 120, '.338': 25, CELL: 60, SHELL: 32 }; // F28: 7.62 (AR-47) · F36: SHELL (SG-12)
 
+export const ZEX_CHANNEL_SECONDS = 4;
+export const ZEX_CHANNEL_CANCEL_DISTANCE = 0.75;
+export const EXTRACT_XP = 250;
+
 export const DEFAULT_INPUT = Object.freeze({
   seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,
   crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false,});
@@ -627,7 +631,7 @@ export class KhaaosSim3D {
     this.windows = (this.world.windows ?? []).map((w) => ({ ...w, hp: WINDOW.hp, destroyed: false }));
     this.loot = this.#spawnLoot();
     this.interiorLootSpots = this.loot.filter((l) => l.sectorId === 'interior').map((l) => ({ x: l.x, z: l.z }));
-    this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
+    this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true, channelerId: null, channelProgress: 0 }));
     // Fase 28 — airdrop de suprimento: agendado por seed a ~38% da partida
     this.supplyDropState = { scheduledTick: null, done: false };
     this.supplyDropItem = null; // item de loot da caixa após o pouso
@@ -670,7 +674,7 @@ export class KhaaosSim3D {
       weaponAttachments: [], attachmentRarities: [], attachmentBag: [], attachmentBagRarities: [],
       mythicKills: 0, mythicStage: 0, attachStats: attachmentStats([]),
       inventory: { metal: 0, wood: 0, components: 0, medkit: 1, fuel: 0, frag: 1, gloo: 1, ammo: { '9MM': 45 } },
-      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
+      slots: { 1: 'g19' }, activeSlot: 1, extracted: 0, zexChannel: null, interactLatch: false, alive: true, onGround: true, moving: false, sprinting: false, ads: false,
       stamina: 100, crouching: false, sliding: false, slideT: 0,      dropPhase: null, dropTarget: null };
   }
   #spawnBot(i) {
@@ -1004,7 +1008,11 @@ export class KhaaosSim3D {
     this.#stepThrowables(dt);
     // --- fim de partida ---
     const aliveAfter = [p, ...this.bots].filter(a => a.alive).length;
-    if (p.alive && this.time <= 0) { this.over = true; this.emit('victory', { kills: p.kills, xp: p.xp, krc: p.krc }); }
+    if (p.alive && this.time <= 0) {
+      if (p.zexChannel) this.#cancelZexChannel(p, 'match_end');
+      this.over = true;
+      this.emit('victory', { kills: p.kills, xp: p.xp, krc: p.krc });
+    }
     if (!p.alive && !this.spectate && !this.over) { this.over = true; this.emit('eliminated', { kills: p.kills }); }
     // Fase 5 — espectador: a partida segue até o último operativo (ou tempo zerar)
     if (this.spectate && !this.over && (this.time <= 0 || aliveAfter <= 1)) {
@@ -1039,10 +1047,11 @@ export class KhaaosSim3D {
       a.abilityAccuracyMultiplier = active && ability.effect === 'precision' ? ability.parameters.accuracyMultiplier : 1;
     }
     stepActorMovement(a, input, dt, this.physicsWorld);
+    if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
     // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) return;
+    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
     // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
     if (this.squad && input.interact) this.#tryRevive(a, dt);
     if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
@@ -1062,6 +1071,50 @@ export class KhaaosSim3D {
         else if (input.fire) this.#fire(a, w);
       }
     }
+  }
+
+  #startZexChannel(a, terminal) {
+    if (!terminal?.active || a.zexChannel || a.interactLatch) return false;
+    if (terminal.channelerId && terminal.channelerId !== a.id) {
+      this.emit('extractUnavailable', { terminalId: terminal.id });
+      a.interactLatch = true;
+      return false;
+    }
+    terminal.channelerId = a.id;
+    terminal.channelProgress = 0;
+    a.zexChannel = { terminalId: terminal.id, startX: a.x, startZ: a.z, elapsed: 0, progress: 0 };
+    a.interactLatch = true;
+    this.emit('extractStarted', { terminalId: terminal.id, duration: ZEX_CHANNEL_SECONDS });
+    return true;
+  }
+  #cancelZexChannel(a, reason) {
+    const channel = a.zexChannel;
+    if (!channel) return false;
+    const terminal = this.terminals.find(t => t.id === channel.terminalId);
+    if (terminal?.channelerId === a.id) { terminal.channelerId = null; terminal.channelProgress = 0; }
+    a.zexChannel = null;
+    this.emit('extractCancelled', { terminalId: channel.terminalId, reason });
+    return true;
+  }
+  #advanceZexChannel(a, dt) {
+    const channel = a.zexChannel;
+    if (!channel) return;
+    const terminal = this.terminals.find(t => t.id === channel.terminalId);
+    if (!terminal?.active || terminal.channelerId !== a.id) return this.#cancelZexChannel(a, 'terminal_unavailable');
+    if (!a.alive || a.knocked) return this.#cancelZexChannel(a, 'knocked');
+    if (Math.hypot(a.x - channel.startX, a.z - channel.startZ) >= ZEX_CHANNEL_CANCEL_DISTANCE) return this.#cancelZexChannel(a, 'movement');
+    if (Math.hypot(a.x - terminal.x, a.z - terminal.z) >= 3.4) return this.#cancelZexChannel(a, 'out_of_range');
+    channel.elapsed = Math.min(ZEX_CHANNEL_SECONDS, channel.elapsed + dt);
+    channel.progress = channel.elapsed / ZEX_CHANNEL_SECONDS;
+    terminal.channelProgress = channel.progress;
+    if (channel.elapsed + 1e-9 < ZEX_CHANNEL_SECONDS) return;
+    terminal.active = false;
+    terminal.channelerId = null;
+    terminal.channelProgress = 0;
+    a.zexChannel = null;
+    a.extracted++;
+    a.xp += EXTRACT_XP;
+    this.emit('extract', { count: a.extracted, x: terminal.x, z: terminal.z });
   }
 
   // Fase 7 — canalização de revive (aliado de pé, mesmo esquadrão, no alcance)
@@ -1797,6 +1850,7 @@ export class KhaaosSim3D {
   #hurtPlayer(dmg, ownerId, kind) {
     const p = this.player;
     if (!p.alive) return;
+    if (dmg > 0 && p.zexChannel) this.#cancelZexChannel(p, 'damage');
     const ability = getOperativeAbility(p.operativeId);
     if (kind === 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'ringResistance') {
       dmg *= 1 - ability.parameters.ringDamageReduction;
@@ -1827,6 +1881,7 @@ export class KhaaosSim3D {
   }
   // Fase 7 — morte final (sangramento no DBNO)
   #finalizeDeath(a, ownerId, kind) {
+    if (a.zexChannel) this.#cancelZexChannel(a, 'death');
     a.alive = false;
     a.knocked = false;
     this.#dropDeathBox(a); // Fase 28 — espólios na posição da morte
@@ -1986,6 +2041,7 @@ export class KhaaosSim3D {
   // PRÓXIMO entre loot/terminal/porta — colado na folha, a porta domina;
   // latch p/ abrir/fechar por TOQUE (segurar não fica alternando)
   #interact(a) {
+    if (a.zexChannel) return;
     const item = this.loot.find(i => i.active && dist2d(i.x, i.z, a.x, a.z) < 2.6 && Math.abs(i.y - a.y) < 2.2);
     const itemD = item ? dist2d(item.x, item.z, a.x, a.z) : Infinity;
     const t = this.terminals.find(t => t.active && dist2d(t.x, t.z, a.x, a.z) < 3.4);
@@ -2003,7 +2059,7 @@ export class KhaaosSim3D {
       return;
     }
     if (item && itemD <= tD) { item.active = false; this.#pickup(a, item); return; }
-    if (t) { t.active = false; a.extracted++; a.xp += 250; this.emit('extract', { count: a.extracted, x: t.x, z: t.z }); }
+    if (t) this.#startZexChannel(a, t);
   }
 
   // Fase 25 — toggle autoritativo da folha (jogador E ou IA de bot)
