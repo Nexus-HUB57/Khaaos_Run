@@ -29,7 +29,8 @@
     "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
     "verify:all": "node scripts/verify-all.mjs",
-    "test:e2e:war-i": "playwright test --config=playwright.config.ts"
+    "test:e2e:war-i": "playwright test --config=playwright.config.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -120,6 +121,7 @@
     "c8": "^12.0.0",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
     "postcss": "^8.5.30",
     "supertest": "^7.3.1",
     "tailwindcss": "^4.3.3",
