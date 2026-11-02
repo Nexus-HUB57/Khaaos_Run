@@ -14,7 +14,6 @@ import type { ZoneStatus } from "@shared/schema";
 import { roomManager } from "./game/RoomManager";
 import { quoteItem, probeEconomyHealth, computeLoan, rollRarity } from "./game/EconomyEngine";
 import { generateMatchContent, generateLootField } from "./game/ProceduralGenerator";
-import { runMonteCarlo, runMonteCarloBatch } from "./game/MonteCarloEconomy";
 import { createWsAccessToken } from "./replit_integrations/auth/ws-token";
 import { createZoneOperatorGuard, isZoneOperator } from "./game/zoneAuthorization";
 import { distributedState } from "./game/DistributedState";
@@ -724,10 +723,11 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   });
 
   // ── MONTE-CARLO ECONOMY SIMULATION ───────────────────────────────────────
-  app.post("/api/economy/simulate", requireAuth, (req, res) => {
+  app.post("/api/economy/simulate", requireAuth, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, economySimulationInput);
       if (!input) return;
+      const { runMonteCarlo } = await import("./game/MonteCarloEconomy");
       const result = runMonteCarlo({ ...input, seed: input.seed ?? Date.now() });
       res.json(result);
     } catch (err: any) {
@@ -735,11 +735,12 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
   });
 
-  app.post("/api/economy/simulate-batch", requireAuth, (req, res) => {
+  app.post("/api/economy/simulate-batch", requireAuth, async (req, res) => {
     try {
       const input = parseMutationBody(req, res, economyBatchSimulationInput);
       if (!input) return;
       const { runs, ...simulation } = input;
+      const { runMonteCarloBatch } = await import("./game/MonteCarloEconomy");
       const result = runMonteCarloBatch(runs, simulation);
       // Don't send full per-run daily arrays to keep payload small
       res.json({

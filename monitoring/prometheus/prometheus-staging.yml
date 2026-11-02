@@ -43,7 +43,7 @@ scrape_configs:
           node: 'staging-2'
           component: 'app'
 
-  # ── Servidor raiz TS (dist/index.cjs — cadeia mesh/gateway/2PC) ──
+  # ── Servidor raiz TS (dist/index.mjs — cadeia mesh/gateway/2PC) ──
   # Mesmo endpoint /metrics (module server/game/metrics.ts).
   - job_name: 'khaaos-app-staging'
     metrics_path: '/metrics'
