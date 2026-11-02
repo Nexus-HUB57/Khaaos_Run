@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F012",
+  "operative_id": "F-12",
+  "codename": "ONI-03",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Onith",
+    "name": "Onith",
+    "type": "reptile",
+    "skeleton": "SK_Manny",
+    "passive": "Escamas Refletivas - +20% defesa contra projteis, stacks de armadura apos dano",
+    "base_stats": {
+      "health": 120,
+      "energy": 80,
+      "speed": 0.9
+    },
+    "physical": {
+      "height_cm": 190,
+      "weight_kg": 95
+    },
+    "abbr": "ONI"
+  },
+  "world": {
+    "id": "W2",
+    "name": "Priadus",
+    "capacity": 75
+  },
+  "rank": "ONITH",
+  "specialization": "Defesa de Perimetro e Escolta Blindada",
+  "ethnicity": {
+    "label": "Mongol/Khalkha",
+    "heritage": "Mongola/Khalkha (paterna) + Buryat (materno)",
+    "region": "Estepe Mongol / Ulaanbaatar",
+    "cultural_fusion": "Tradio de cavalaria das estepes combinada com a coura Onith. Nome ODVAL (estrela turquesa) + GEREL (luz) - a muralha que avana com a linha do amanhecer."
+  },
+  "phenotype": {
+    "skin_tone": "Palida com subtom azulado-verde (influncia Onith reptiliana) e vento seco gravado nas bochechas",
+    "hair": "Preto grosso, longo, em duas tranas pesadas com anis de metal nas pontas (tradio de sela)",
+    "eyes": "Gelo azul (#87CEEB) com pupilas em fenda VERTICAL (tradio Onith) - mira de predador de horizonte",
+    "facial_structure": "Arcada superciliar proeminente, macas largas e altas, queixo firme de quem cavalga contra o vento",
+    "body_type": "Constituio Onith reforada - 186 cm, 88 kg. Quadril largo e centro de gravidade baixo, feita para absorver impacto e continuar",
+    "distinctive_silhouette": "Postura de muralha - ombros largos, pes firmes no cho, escamas verde-preto visveis na mandibula e omoplata. Escolta que nunca fica entre o fogo e o protegido por acidente."
+  },
+  "cultural_markers": {
+    "tattoos": "Smbolo soyombo no ombro direito (proteo de estepe); anis de sela tatuados nos dedos (uma linha por cavalo da famlia)",
+    "scars": "Cicatriz de arco de choque cruzando a omoplata esquerda (defesa de caravana); escamas regeneradas mais escuras no ponto",
+    "ornaments": "Anis de metal nas pontas das tranas (peso de sela);pulseira de aao com sino de cavalo miniatura",
+    "clothing_style": "Couraa de escolta Onith - placas sobre escamas dorsais, capa de estepe enrolada no cinto, botas de calcanhar reforado para plantar linha"
+  },
+  "species_traits": {
+    "visible_modification": "Escamas Onith iridescentes verde-preto em mandibula, antebraos e omoplata (maior cobertura que os machos do roster - pads dorsais completos); garras retrteis curtas nos indicadores",
+    "passive_manifestation": "Escamas Refletivas: +20% defesa contra projteis; apos dano, +5% armadura por 5s (stack 3x); eliminacoes concedem +3% armadura permanente - deflexao visvel como flash espelhado nos pads",
+    "combat_style_id": "Estilo keshig-moderno - defesa de permetro, escolta blindada de VIPs e cargas, interceptor de dano do squad. Avana em arco (ttica de envolvimento das estepes) e planta linha onde o coordenador apontar."
+  },
+  "distinguishing_summary": "Unica Mongol/Khalkha; tranas com anis de sela; escamas dorsais mais cobrourage que os machos; pupilas em fenda gelo; soyombo no ombro; escolta blindada e defesa de permetro.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "ONI-03",
+  "operative_ref": "OP_ONI_F_01",
+  "avatar_ref": "AVT_ONI_F_01",
+  "legacy_codename": "ODVAL GEREL",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

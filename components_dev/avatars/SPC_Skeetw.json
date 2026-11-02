@@ -13,7 +13,7 @@
   "base_stats": {
     "health": 80,
     "energy": 120,
-    "speed": 1.15,
+    "speed": 1.3,
     "stamina": 80,
     "armor_base": 0,
     "shield_capacity": 0,
@@ -49,16 +49,16 @@
       255
     ],
     "speed_per_level": [
-      1.15,
-      1.18,
-      1.21,
-      1.25,
-      1.29,
-      1.34,
-      1.39,
-      1.45,
-      1.52,
-      1.6
+      1.3,
+      1.33,
+      1.36,
+      1.4,
+      1.44,
+      1.5,
+      1.56,
+      1.63,
+      1.71,
+      1.8
     ]
   },
   "physical": {
@@ -87,7 +87,12 @@
         "feather_cape",
         "leg_straps"
       ]
-    }
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
   },
   "passive": {
     "name": "Visao Espectral",

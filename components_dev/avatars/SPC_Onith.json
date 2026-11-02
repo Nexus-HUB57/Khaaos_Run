@@ -14,7 +14,7 @@
     "health": 120,
     "energy": 80,
     "speed": 0.9,
-    "stamina": 130,
+    "stamina": 120,
     "armor_base": 15,
     "shield_capacity": 0,
     "regen_health_per_sec": 0.8,
@@ -86,7 +86,12 @@
         "tail_sheathe",
         "shoulder_spikes"
       ]
-    }
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
   },
   "passive": {
     "name": "Escamas Refletivas",

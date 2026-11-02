@@ -14,6 +14,7 @@ const Bank = lazy(() => import("@/pages/bank"));
 const Inventory = lazy(() => import("@/pages/inventory"));
 const Market = lazy(() => import("@/pages/market"));
 const Profile = lazy(() => import("@/pages/profile"));
+const Studio = lazy(() => import("@/pages/studio"));
 const Mundos = lazy(() => import("@/pages/mundos"));
 const Zona = lazy(() => import("@/pages/zona"));
 const Loot = lazy(() => import("@/pages/loot"));
@@ -72,6 +73,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/studio">
+        <ProtectedRoute component={Studio} />
       </Route>
       <Route path="/marshal-console">
         <ProtectedRoute component={MarshalConsole} />

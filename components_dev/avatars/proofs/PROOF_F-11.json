@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F011",
+  "operative_id": "F-11",
+  "codename": "ZHR-05",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Zheers",
+    "name": "Zheers",
+    "type": "humanoid",
+    "skeleton": "SK_Manny",
+    "passive": "Adaptabilidade Ambiental - +15% resistencia ao bioma local + 5% velocidade apos 30s no terreno",
+    "base_stats": {
+      "health": 100,
+      "energy": 100,
+      "speed": 1.0
+    },
+    "physical": {
+      "height_cm": 180,
+      "weight_kg": 75
+    },
+    "abbr": "ZHR"
+  },
+  "world": {
+    "id": "W1",
+    "name": "Barburhen",
+    "capacity": 100
+  },
+  "rank": "RECRUTA",
+  "specialization": "Logistica de Combate e Adaptacao de Bioma",
+  "ethnicity": {
+    "label": "Amazigh/Berber (Atlas)",
+    "heritage": "Marroquina/Amazigh - Rif (paterno) + Atlas Medio (materno)",
+    "region": "Montanhas do Atlas / Rif - Marrocos",
+    "cultural_fusion": "Tradio Amazigh das rotas de montanha combinada com a Adaptabilidade Zheers. Nome TALA (fonte/primavera em Tamazight) + OUAZZANI (de Ouezzane) - quem conhece o caminho da gua conhece todos os biomas."
+  },
+  "phenotype": {
+    "skin_tone": "Oliva dourada (#C68642) que ajusta sutilmente de tom entre biomas (biofeedback Zheers visvel como leve shift de subtom)",
+    "hair": "Preto encaracolado em tranas longas com fios vermelhos henna, colhidas sob leno azul Majorelle em campo",
+    "eyes": "Castanho-mbar com marcao de kohl discreta (tradio Amazigh de proteo solar)",
+    "facial_structure": "Tatuagem facial simbolo Yaz (azar - homem livre) em ponto fino sob a bochecha direita, macas marcadas por vento seco",
+    "body_type": "Resistente e adaptavel - 170 cm, 62 kg. Caminhante de crista com frame eficiente (metabolismo Zheers otimizado por terreno)",
+    "distinctive_silhouette": "Postura de marchadora - passada longa e constante, equipamento modular reconfigurado por bioma. A unica silhueta do roster que muda de cor conforme o mapa."
+  },
+  "cultural_markers": {
+    "tattoos": "Smbolo Yaz (azar) tatuado sob a bochecha direita (tradio facial Amazigh); alfabeto tifinagh com a rota da gua do Atlas no antebraco interno",
+    "scars": "Nenhuma de combate - RECRUTA recm-formada; calos de marcha nas plantas (logstica de crista)",
+    "ornaments": "Broche de fibula Amazigh (tralance de prata triangular) no colarinho; leno azul Majorelle dobrado no bolso do peito",
+    "clothing_style": "Equipamento modular Zheers - colete reconfigurvel por bioma, cala de marcha com k do Atlas bordado, leno azul como marcador de posio"
+  },
+  "species_traits": {
+    "visible_modification": "Nenhuma - Zheers pura, aparencia humana sem alteraes de especie; biofeedback de bioma visvel apenas como mudana sutil de subtom de pele",
+    "passive_manifestation": "Adaptabilidade Ambiental: +15% resistencia ao bioma local + 5% velocidade apos 30s no mesmo terreno (aureola discreta de partculas de poeira coloridas por bioma)",
+    "combat_style_id": "Estilo rota-de-agua - logistica de combate, linhas de suprimento improvisadas, camuflagem de bioma e extracao rpida. Mantm o squad abastecido e nunca desaparece do mapa por falta de rota."
+  },
+  "distinguishing_summary": "Unica Amazigh/Berber; smbolo Yaz facial; tranas com henna; fibula de prata; biofeedback de bioma visvel; nica Zheers feminina do roster e primeira RECRUTA da matriz.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "ZHR-05",
+  "operative_ref": "OP_ZHR_F_01",
+  "avatar_ref": "AVT_ZHR_F_01",
+  "legacy_codename": "TALA OUAZZANI",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

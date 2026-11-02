@@ -59,7 +59,8 @@ export interface OperativeArchetype {
     slideFrictionCoeff: number;
     recoilAbsorptionDeg: number;
     vaultClearanceCm: number;
-    skeleton: "UE5_Mannequin";
+    /** Rig base do operante: por SEXO (ADR-ESQUELETO-RIG-POR-SEXO). */
+    skeleton: "SK_Manny" | "SK_Gwen";
     lyraHeroBridge: "KhaaosLyraHeroComponent";
     targetPolycount: number;
     lodCount: number;
@@ -236,7 +237,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.68,
       recoilAbsorptionDeg: 2.8,
       vaultClearanceCm: 115,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -290,7 +291,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.74,
       recoilAbsorptionDeg: 1.9,
       vaultClearanceCm: 108,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -344,7 +345,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.58,
       recoilAbsorptionDeg: 2.3,
       vaultClearanceCm: 124,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -398,7 +399,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.69,
       recoilAbsorptionDeg: 2.2,
       vaultClearanceCm: 116,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -452,7 +453,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.61,
       recoilAbsorptionDeg: 2.0,
       vaultClearanceCm: 125,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -506,7 +507,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.65,
       recoilAbsorptionDeg: 2.1,
       vaultClearanceCm: 114,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -560,7 +561,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.78,
       recoilAbsorptionDeg: 1.5,
       vaultClearanceCm: 104,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -614,7 +615,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.63,
       recoilAbsorptionDeg: 2.5,
       vaultClearanceCm: 118,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -672,7 +673,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.64,
       recoilAbsorptionDeg: 2.4,
       vaultClearanceCm: 120,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -726,7 +727,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.62,
       recoilAbsorptionDeg: 2.1,
       vaultClearanceCm: 122,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -780,7 +781,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.60,
       recoilAbsorptionDeg: 2.5,
       vaultClearanceCm: 123,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -834,7 +835,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.72,
       recoilAbsorptionDeg: 1.8,
       vaultClearanceCm: 112,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -888,7 +889,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.60,
       recoilAbsorptionDeg: 2.3,
       vaultClearanceCm: 122,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -942,7 +943,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.65,
       recoilAbsorptionDeg: 2.2,
       vaultClearanceCm: 119,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -996,7 +997,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.67,
       recoilAbsorptionDeg: 2.1,
       vaultClearanceCm: 117,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -1050,7 +1051,7 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
       slideFrictionCoeff: 0.62,
       recoilAbsorptionDeg: 2.2,
       vaultClearanceCm: 121,
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Gwen",
       lyraHeroBridge: "KhaaosLyraHeroComponent",
       targetPolycount: 80000,
       lodCount: 4,
@@ -1151,9 +1152,9 @@ export const SYNCED_HIGH_TECH_TOOLS: SyncedToolPipeline[] = [
     repoSyncPath: "Unreal/KhaaosRun/Content/Characters/Zheers/ & epic_integration/lyra_mapping.json",
     status: "SINCRONIZADO",
     description:
-      "Pipeline oficial sincronizado ao esqueleto UE5_Mannequin (SK_Zheers_Base), KhaaosLyraHeroComponent, KhaaosLyraWeaponBridge e ABP_Zheers_Base com validação de movimento server-authoritative.",
+      "Pipeline oficial sincronizado aos rigs base por sexo (SK_Manny/SK_Gwen) com camadas de espécie (mesh variant + ABP_Zheers_Base), KhaaosLyraHeroComponent, KhaaosLyraWeaponBridge e validação de movimento server-authoritative.",
     recommendedParams: {
-      skeleton: "UE5_Mannequin",
+      skeleton: "SK_Manny / SK_Gwen (rig base por sexo)",
       heroComponent: "KhaaosLyraHeroComponent",
       weaponBridge: "KhaaosLyraWeaponBridge",
       targetPolycount: 80000,
@@ -1191,7 +1192,7 @@ export const SYNCED_HIGH_TECH_TOOLS: SyncedToolPipeline[] = [
     repoSyncPath: "Content/Assets/asset_manifest.json",
     status: "PRONTO_EXPORTACAO",
     description:
-      "Converte o retrato/corpo inteiro gerados com o Prompt de Imagem Khaaos Run em malha 3D PBR quad-dominant pronta para retopologia e rig no UE5_Mannequin.",
+      "Converte o retrato/corpo inteiro gerados com o Prompt de Imagem Khaaos Run em malha 3D PBR quad-dominant pronta para retopologia e rig no esqueleto base UE5 (SK_Manny/SK_Gwen por sexo).",
     recommendedParams: {
       topology: "Quad-Dominant Retopology",
       targetPolycount: 80000,
@@ -1228,7 +1229,7 @@ export const QUICK_PRODUCTION_TIPS = [
   "Peça sempre 'single continuous tracking shot' e 'realistic tactical movement' para evitar animações artificiais ou flutuantes de videogame.",
   "Duração ideal: 8–10 segundos por clipe; depois emende cenas de corrida (0–2s), slide/cobertura (2–4s), disparo controlado (4–6s), recarga/vault (6–8s) e varredura tática (8–10s).",
   "Adicione a cláusula biomecânica de alta precisão: 'physically accurate weight, momentum, foot placement, natural weapon handling and trigger discipline'.",
-  "Para modelagem 3D/Skin compatível com UE5_Mannequin e Lyra, gere uma variante em enquadramento 'Sheet 3D / A-Pose' antes de exportar os mapas PBR (T_D, T_N, T_ORM, T_E).",
+  "Para modelagem 3D/Skin compatível com os rigs base SK_Manny/SK_Gwen e Lyra, gere uma variante em enquadramento 'Sheet 3D / A-Pose' antes de exportar os mapas PBR (T_D, T_N, T_ORM, T_E).",
 ];
 
 export function buildOperativePromptBundle(options?: {

@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_M011",
+  "operative_id": "M-11",
+  "codename": "KHL-05",
+  "gender": "MASCULINO",
+  "species": {
+    "id": "SPC_Khael",
+    "name": "Khael",
+    "type": "mystic",
+    "skeleton": "SK_Gwen",
+    "passive": "Canalizacao Mistica - -25% custo de energia; auto-revive 1x (30% HP)",
+    "base_stats": {
+      "health": 85,
+      "energy": 150,
+      "speed": 0.95
+    },
+    "physical": {
+      "height_cm": 178,
+      "weight_kg": 65
+    },
+    "abbr": "KHL"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "ONITH",
+  "specialization": "Ritual de Campo e Negacao Arcana",
+  "ethnicity": {
+    "label": "Himalaia/Tibetana",
+    "heritage": "Tibetano/Nepales (Sherpa - paterno) + Mustang (materno)",
+    "region": "Plato Tibetano / Vale de Katmandu",
+    "cultural_fusion": "Tradio monastica e de portadores (Sherpa) combinada com a canalizacao Khael. Nome TENZIN (detentor do ensinamento) + DORJE (raio/vajra) - a oracao que vira arma."
+  },
+  "phenotype": {
+    "skin_tone": "Dourada clara com sardas de altitude (#E8C39E) e marcas de queimadura de sol no osso nasal",
+    "hair": "Preto, raspado nas laterais, topknot ritual no alto com um fio prateado (cordao de oracao)",
+    "eyes": "Castanho-escuros, profundos e calmos, com flecks de energia Khael pulsando violeta (#8B5CF6) em ritmo de respiracao",
+    "facial_structure": "Macas altas, olhos mongolicos fundos, face larga e serena de meditao de longo prazo",
+    "body_type": "Esguio e resistente a altitude - 176 cm, 66 kg. Capacidade pulmonar de portador adaptada ao custo de energia Khael",
+    "distinctive_silhouette": "Postura de meditao em pe - mos abertas baixas, sigils violetas girando lentamente. Silhueta estatica at o pulso, depois explosiva."
+  },
+  "cultural_markers": {
+    "tattoos": "Runas Khael de negacao nos antebraos (acendem violeta ao canalizar); mantra de seis slabas em tibetano antigo na nuca",
+    "scars": "Queimadura de altitude em ambas as mos (rito de fogo do monastrio) - cicatrizes funcionais, no de combate",
+    "ornaments": "Mala (rosrio tibetano) de 27 contas no pulso esquerdo, amuleto gau de proteo amarrado ao topknot",
+    "clothing_style": "Robe de campo mongastico-bacute - l Himalaia sobre aramor Khael, faixa de orao cruzada, botas de portador com solado de trao"
+  },
+  "species_traits": {
+    "visible_modification": "Sigils de energia Khael flutuam ao redor das mos em repouso - formas geomtricas de roda de orao em rotacao lenta; runas Khael tatuadas nos antebraos que acendem violeta ao canalizar",
+    "passive_manifestation": "Canalizacao Mistica: -25% custo de energia em habilidades; no Pulso, regen +100% e dano +20%; auto-revive 1x (30% HP) manifestado como mandala de luz violeta",
+    "combat_style_id": "Estilo ritual-de-campo - negacao arcana de dano em area, buffs de squad com cantos bacades, selamento de rotas. Bendice a posicao antes de perder terreno: nunca perde duas vezes o mesmo cho."
+  },
+  "distinguishing_summary": "Unico Himalaio/Tibetano; sigils de roda de orao nas mos; runas violetas nos antebraos; topknot ritual; mala no pulso; auto-revive como mandala; nico support de negao arcana masculino.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "KHL-05",
+  "operative_ref": "OP_KHL_M_01",
+  "avatar_ref": "AVT_KHL_M_01",
+  "legacy_codename": "TENZIN DORJE",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

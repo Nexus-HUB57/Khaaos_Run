@@ -1,0 +1,62 @@
+{
+  "proof_id": "PROOF_F013",
+  "operative_id": "F-13",
+  "codename": "VNX-03",
+  "gender": "FEMININO",
+  "species": {
+    "id": "SPC_Venex",
+    "name": "Venex",
+    "type": "cyborg",
+    "skeleton": "SK_Manny",
+    "passive": "Circuito Khaaos - shield passivo 25 (regen 2/s) + 15% eficacia de itens",
+    "base_stats": {
+      "health": 90,
+      "energy": 130,
+      "speed": 1.05
+    },
+    "physical": {
+      "height_cm": 185,
+      "weight_kg": 85
+    },
+    "abbr": "VNX"
+  },
+  "world": {
+    "id": "W4",
+    "name": "Arukheea",
+    "capacity": 80
+  },
+  "rank": "VENEX",
+  "specialization": "Guerra Eletronica e Enxame de Drones",
+  "ethnicity": {
+    "label": "Coreana",
+    "heritage": "Sul-coreana (Busan - paterna) + Jeju (materno)",
+    "region": "Busan / Seul - Coreia do Sul",
+    "cultural_fusion": "Cultura de rooftops e enxames de drone de Busan combinada com os augments Venex. Nome HANEUL (cu em coreano) + BAEK (branco) - o cu conectado, a assinatura branca no radar."
+  },
+  "phenotype": {
+    "skin_tone": "Clara fria (#EAD5C4) com placas dermicas ciberneticas na tenmpora direita e linha de port neural atrs da orelha",
+    "hair": "Bob assimtrico azul-escuro (tinta) com fios de fibra optica tranados que piscam mbar ao transmitir",
+    "eyes": "Olho direito castanho; OLHO ESQUERDO: implante optico Venex - brilho ambar constante (#FFBF00), sem pupila visivel, HUD de enxame refletido",
+    "facial_structure": "Rosto oval refinado, placa cibernetica no osso zigomatico direito, expresso neutra de operadora de sala de controle",
+    "body_type": "Lean - 172 cm, 61 kg (+3 kg de implantes). Postura de quem carrega um drone-dock dorsal sem perder agilidade",
+    "distinctive_silhouette": "Tech-ninja feminina - drone-dock dobrado nas costas como gaiola de corvos, lado cibernetico mais angular. Em operao, cercada por um halo de 6 micro-drones."
+  },
+  "cultural_markers": {
+    "tattoos": "Circuit-lines subcutneas Venex do pulso esquerdo at o port neural (acendem mbar ao hackear); hangul fino 'haneul' (cu) atrs da orelha direita",
+    "scars": "Nenhuma fsica - todas as reparaes so cibernticas (placa zigomatica v2.1 com chave de fenda gravada)",
+    "ornaments": "Brinco de fibra optica (piscando em sync com o drone-dock); anel de assinatura branca 'BAEK' no polegar direito",
+    "clothing_style": "Jaqueta de operadora de enxame - drone-dock dobrado nas costas, luvas de interface com dgitos expostos, culotes cargo com antenas de reposio"
+  },
+  "species_traits": {
+    "visible_modification": "35% augments Venex - olho esquerdo (implante optico ambar), placa zigomatica direita, portas neurais no pescoco, tatuagens circuit-line subcutneas que acendem ao hackear",
+    "passive_manifestation": "Circuito Khaaos: shield passivo 25 regen 2/s apos 3s sem dano (malha hexagonal visvel); +15% eficacia de itens; no Pulso, stats +25%",
+    "combat_style_id": "Estilo sala-de-controle - guerra eletronica, jamming de comunicaes inimigas, enxame de 6 micro-drones (recon, tag, empurrão) e hacking tatico de coberturas. O mapa dela  um espectro, no um terreno."
+  },
+  "distinguishing_summary": "Unica Coreana; olho esquerdo mbar com HUD de enxame; fibra optica no cabelo; drone-dock dorsal de 6 micro-drones; circuit-lines que acendem ao hackear; nica especialista em guerra eletrnica da matriz.",
+  "generated_at": "2026-11-02T14:18:59.653945+00:00",
+  "ref_code": "VNX-03",
+  "operative_ref": "OP_VNX_F_01",
+  "avatar_ref": "AVT_VNX_F_01",
+  "legacy_codename": "HANEUL BAEK",
+  "ref_code_assigned_at": "2026-11-02T14:18:59.653945+00:00"
+}

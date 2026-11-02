@@ -21,6 +21,7 @@ import {
   Train,
   Users,
   Trophy,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -55,6 +56,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/inventory", label: "WAR'I", icon: Shield },
     { href: "/market", label: "FORJA DO ARMEIRO", icon: Crosshair },
     { href: "/profile", label: "OPERATIVO", icon: User },
+    { href: "/studio", label: "STUDIO", icon: Camera },
   ];
   if (canAccessMarshalConsole) {
     navItems.splice(1, 0, { href: "/marshal-console", label: "MARECHAL", icon: Shield });

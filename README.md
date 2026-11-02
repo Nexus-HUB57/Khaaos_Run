@@ -14,6 +14,7 @@
 - [Status do Projeto](#status-do-projeto)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
+- [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -166,6 +167,56 @@ Docs: `Docs/CIGKV_Barburhen/`
 | `fca74b0` | LUT procedural factory, material de PostProcess, servidor 2PC TypeScript, CI de runner GPU, painéis Grafana 2PC (v5) |
 
 > Esses commits estão **versionados**, não compilados: o gate de build real permanece na Fase 0 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+## Desenvolvimento recente — Personagens (2026-11-02)
+
+> Contrato novo de espécies + fechamento de lacunas do domínio de personagens, a partir de `main` (`495b91f`), branch `feat/prossiga-personagens`. Suíte oficial 100% verde após os dois lotes (504 testes em `tests/official`, 0 falhas; `tsc` limpo).
+
+### Catálogo de espécies — SPC_Huran completo no schema PhD
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| `SPC_Huran.json` reescrito no schema PhD (12 chaves → 17 chaves) | ✅ | lore (4 dimensões), `base_stats` (11 campos), `stat_curves` 10 níveis, `physical` (SK_Gwen, morphs, IK, cloth), passive com 4 mecânicas, 3 habilidades ativas, kit UE5 com as 8 habilidades, 5 skins enriquecidas, 25 animações (3 blend spaces incl. `BS_Huran_Swim`), áudio por superfície, 6 slots VFX |
+| Habilidades espelhadas do header UE5 | ✅ | `ue5_kit` com TidalSurge/AquaShield/DiveBomb/FloodZone/PressureStrike/GillsRegen/Whirlpool/TsunamiRage — números idênticos a `KhaaosAbility_HuranAbilities.h` (cooldown/energia/dano) |
+| Stats ancorados no canônico | ✅ | `DT_SpeciesStats.csv`: 110 HP / 90 energia / speed 1.1 / stamina 110 / armadura 10; passive "Regeneracao Aquatica" (paridade com manifest) |
+
+### Reconciliação numérica SPC ↔ CSV ↔ manifest (fonte canônica: CSV + manifest)
+
+Divergências pré-existentes corrigidas nos SPC (curvas re-ancoradas preservando os growth ratios):
+
+| Espécie | Campo | Antes (SPC) | Depois (CSV/manifest) |
+|---------|-------|-------------|--------------------|
+| SPC_Venex | health / energy / armor_base | 110 / 110 / 10 | 90 / 130 / 5 |
+| SPC_Skeetw | speed | 1.15 | 1.3 |
+| SPC_Khael | health / stamina | 70 / 60 | 85 / 85 |
+| SPC_Onith | stamina | 130 | 120 |
+
+### Contrato automatizado — `tests/official/species-catalog.test.ts` (4 testes)
+
+1. **Schema PhD** — os 6 SPC com lore/base_stats/curvas/physical/passive/3 habilidades/5 skins (escada COMUM→MITICO)/≥23 animações/áudio/VFX/5 mundos válidos.
+2. **Paridade numérica** — SPC ↔ `DT_SpeciesStats.csv` ↔ `avatars_manifest.json` (health/energy/speed/stamina/armor + hp do manifest + passive humanizado).
+3. **Kit UE5 do Huran** — 8 classes `UKhaaosAbility_*` no header com tags, cooldown, energia e dano batendo com o JSON (Damage só existe nas classes que causam dano).
+4. **emote_catalog** — 13 emotes, categorias canônicas (typo `ACAo` banido), resumo `by_category`/`by_rarity` batendo com a lista.
+
+### Correções pontuais
+
+- `emote_catalog.json`: `_meta` prometia "40 emotes" (entrega 13, como o README §12 e o `summary`); 2 emotes com categoria `ACAo` → `ACAO`.
+- `CharacterPromptStudio` estava **órfão** (nenhuma rota importava o componente de 1.245 linhas): nova rota protegida **`/studio`** (`client/src/pages/studio.tsx` wrapper lazy) + entrada STUDIO no menu lateral/mobile do `LayoutShell`.
+
+### Lote 2 (mesmo dia) — matriz fechada, ADR de esqueleto e seleção de avatar persistida
+
+Os 3 passos mapeados acima foram executados no mesmo branch (`feat/prossiga-personagens`), com merge do branch de avatar-sync e suíte oficial 100% verde (504+39 testes, 0 falhas; `tsc` limpo):
+
+1. **Seleção de operante persistida** — merge de `feat/character-avatar-sync` (migration `0012_operative-selection.sql`: `player_stats.selected_operative_id`, default `OP_MALE_VANGUARD`; catálogo `shared/operative-avatar-catalog.ts` com os 16 canônicos + TALON; PATCH em `/api/player/operative` com propagação ao `RoomManager`; UI de perfil/lobby).
+2. **Matriz de proofs sexo×espécie FECHADA** — 6 novos dossiês (`PROOF_M-09..M-11` Skeetw/Huran/Khael · `PROOF_F-11..F-13` Zheers/Onith/Venex) com a mesma estrutura dos 18 existentes (etnia/heritage inéditos: Andino/Quechua, Cabo-verdiana, Himalaia/Tibetana, Amazigh, Mongol/Khalkha, Coreana); `proofs_manifest.json` atualizado (24 proofs, 11 M + 13 F, cobertura 12/12); `base_stats` dos 24 proofs normalizados ao canônico `DT_SpeciesStats.csv`. Contrato novo `tests/official/proofs-matrix.test.ts` (4 testes).
+3. **ADR-ESQUELETO-RIG-POR-SEXO** (`docs/ADR-ESQUELETO-RIG-POR-SEXO.md`) — decisão: rig base **por sexo** (`SK_Manny` M / `SK_Gwen` F, padrão dos 24 actors `KhaaosOp*.cpp` e do fluxo Lyra); espécie vira camada (mesh variant + morphs + ABP). Executado: `shared/character-studio.ts` abandona o rótulo genérico `UE5_Mannequin` (type + 16 operatives + pipeline UE5), SPCs ganham `physical.rig_by_sex` + `skeleton_note`; testes de studio/espécies atualizados.
+4. **Malhas GLB das figuras de alistamento** — 6 manequins A-pose low-poly (glTF 2.0 binário, cores por vértice da ficha de cada figura) em `client/public/figures/glb/` + manifest com sha256/contagens; exportador versionado `scripts/figures/export_figures_glb.py`; contrato `tests/official/figures-glb.test.ts`.
+
+### Próximos passos mapeados (fora deste lote)
+
+1. Merge do PR deste branch na `main` e novo deploy de staging com a seleção de operante ativa.
+2. Follow-ups do ADR de esqueleto: apontar os dois rigs canônicos no `epic_integration/lyra_mapping.json`; validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs.
+3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset) e consumi-los na tela de alistamento.
 
 ## Ontologia dos Mundos
 
