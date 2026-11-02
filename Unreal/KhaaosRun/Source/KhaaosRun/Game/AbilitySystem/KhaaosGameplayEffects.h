@@ -102,9 +102,11 @@ public:
          */
         static UGameplayEffect* CreateDamageEffect(float Damage, FGameplayTag DamageType);
 
-        /** Create the persistent Onith passive effect; Reduction is a fraction in [0, 1]. */
-        static UGameplayEffect* CreateOnithPassiveEffect(float Reduction);
-        static UGameplayEffect* CreateVenexOverclockEffect(float FireRateBonus, float ReloadSpeedBonus, float DurationSeconds);
+		/** Create the persistent Onith passive effect; Reduction is a fraction in [0, 1]. */
+		static UGameplayEffect* CreateOnithPassiveEffect(float Reduction);
+		/** Create the persistent Zheers environment-only passive effect; Reduction is in [0, 1]. */
+		static UGameplayEffect* CreateZheersPassiveEffect(float Reduction);
+		static UGameplayEffect* CreateVenexOverclockEffect(float FireRateBonus, float ReloadSpeedBonus, float DurationSeconds);
         static UGameplayEffect* CreateSkeetwPassiveEffect(float AirSpeedBonus);
         static UGameplayEffect* CreateHuranPassiveEffect(float HealBonus, float WaterRegen);
 

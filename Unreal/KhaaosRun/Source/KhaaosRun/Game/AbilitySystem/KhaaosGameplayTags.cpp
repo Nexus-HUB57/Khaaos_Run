@@ -80,6 +80,7 @@ return Tag;
 	GameplayTags.Effect_Damage_Zone = RequestTag(GameplayTags.Effect_Damage_Zone, "Effect.Damage.Zone");
 	GameplayTags.Effect_Damage_Pulso = RequestTag(GameplayTags.Effect_Damage_Pulso, "Effect.Damage.Pulso");
 	GameplayTags.Effect_Damage_Fall = RequestTag(GameplayTags.Effect_Damage_Fall, "Effect.Damage.Fall");
+	GameplayTags.Effect_Damage_Environment = RequestTag(GameplayTags.Effect_Damage_Environment, "Effect.Damage.Environment");
 	GameplayTags.Effect_Buff_Shielded = RequestTag(GameplayTags.Effect_Buff_Shielded, "Effect.Buff.Shielded");
 	GameplayTags.Effect_Buff_SpeedBoost = RequestTag(GameplayTags.Effect_Buff_SpeedBoost, "Effect.Buff.SpeedBoost");
 	// ─── State.Match ─────────────────────────────────────────────────────

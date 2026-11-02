@@ -208,6 +208,14 @@ void AKhaaosCharacter::PossessedBy(AController* NewController)
         {
                 CachedPS->GetAbilitySystemComponent()->InitAbilityActorInfo(CachedPS, this);
         }
+        if (CachedPS && CachedPS->KhaaosAttributeSet)
+        {
+                SyncHealthAndShieldFromPlayerState(
+                        CachedPS->KhaaosAttributeSet->GetHealth(),
+                        CachedPS->KhaaosAttributeSet->GetMaxHealth(),
+                        CachedPS->KhaaosAttributeSet->GetShield(),
+                        CachedPS->KhaaosAttributeSet->GetMaxShield());
+        }
 
         UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: PossessedBy %s"), *GetNameSafe(NewController));
 }
@@ -698,8 +706,19 @@ void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
                 const bool bIsOnith = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Onith")), ENameCase::IgnoreCase) ||
                         (SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Onith.IsValid() &&
                                 SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Onith);
-                CachedPS->SetSpeciesPassiveAbility(
-                        bIsOnith ? UKhaaosAbility_OnithPassive::StaticClass() : nullptr);
+                const bool bIsZheers = SpeciesAsset->SpeciesID.IsEqual(FName(TEXT("Zheers")), ENameCase::IgnoreCase) ||
+                        (SpeciesAsset->PassiveAbilityTag.IsValid() && Tags.Ability_Passive_Species_Zheers.IsValid() &&
+                                SpeciesAsset->PassiveAbilityTag == Tags.Ability_Passive_Species_Zheers);
+                TSubclassOf<UGameplayAbility> PassiveClass = nullptr;
+                if (bIsOnith)
+                {
+                        PassiveClass = UKhaaosAbility_OnithPassive::StaticClass();
+                }
+                else if (bIsZheers)
+                {
+                        PassiveClass = UKhaaosAbility_ZheersPassive::StaticClass();
+                }
+                CachedPS->SetSpeciesPassiveAbility(PassiveClass);
         }
 }
 
@@ -719,7 +738,8 @@ float AKhaaosCharacter::ApplyDamage(float DamageAmount, AActor* DamageInstigator
                         DamageAmount,
                         DamageType,
                         CachedPS->KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
-                        CachedPS->KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+                        CachedPS->KhaaosAttributeSet->GetOnithExplosionDamageReduction(),
+                        CachedPS->KhaaosAttributeSet->GetZheersEnvironmentalDamageReduction());
         }
         if (DamageAmount <= 0.0f)
         {
@@ -737,7 +757,31 @@ float AKhaaosCharacter::ApplyDamage(float DamageAmount, AActor* DamageInstigator
                 Die(DamageInstigator);
         }
 
-        return ActualDamage;
+	return ActualDamage;
+}
+
+void AKhaaosCharacter::SyncHealthAndShieldFromPlayerState(
+	float NewHealth, float NewMaxHealth, float NewShield, float NewMaxShield)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MaxHealth = FMath::Max(NewMaxHealth, 1.0f);
+	MaxShield = FMath::Max(NewMaxShield, 0.0f);
+	const float PreviousHealth = Health;
+	const float PreviousShield = Shield;
+	Health = FMath::Clamp(NewHealth, 0.0f, MaxHealth);
+	Shield = FMath::Clamp(NewShield, 0.0f, MaxShield);
+	if (!FMath::IsNearlyEqual(PreviousHealth, Health))
+	{
+		OnHealthChanged.Broadcast(Health, Health - PreviousHealth);
+	}
+	if (!FMath::IsNearlyEqual(PreviousShield, Shield))
+	{
+		OnShieldChanged.Broadcast(Shield, Shield - PreviousShield);
+	}
 }
 
 float AKhaaosCharacter::InternalApplyDamage(float DamageAmount, AActor* DamageInstigator)
@@ -804,44 +848,51 @@ float AKhaaosCharacter::RepairShield(float Amount)
 
 void AKhaaosCharacter::Die(AActor* Killer)
 {
-        if (!HasAuthority() || bIsDead)
-        {
-                return;
-        }
+	EnterDeadState(Killer, true);
+}
 
-        bIsDead = true;
-        bIsSprinting = false;
-        bIsCrouching = false;
-        bIsSliding = false;
-        Health = 0.0f;
+void AKhaaosCharacter::FinalizeDeathFromPlayerState()
+{
+	EnterDeadState(nullptr, false);
+}
 
-        // Set PlayerStatus to Eliminado
-        if (CachedPS)
-        {
-                CachedPS->SetPlayerStatus(EPlayerStatus::Eliminado);
-                if (Killer)
-                {
-                        CachedPS->EliminatorId = Killer->GetUniqueID().ToString();
-                }
-        }
+void AKhaaosCharacter::EnterDeadState(AActor* Killer, bool bUpdatePlayerState)
+{
+	if (!HasAuthority() || bIsDead)
+	{
+		return;
+	}
 
-        // Disable movement
-        UCharacterMovementComponent* MoveComp = GetCharacterMovement();
-        if (MoveComp)
-        {
-                MoveComp->StopMovementImmediately();
-                MoveComp->DisableMovement();
-        }
+	bIsDead = true;
+	bIsSprinting = false;
+	bIsCrouching = false;
+	bIsSliding = false;
+	Health = 0.0f;
 
-        // Ragdoll
-        if (GetMesh())
-        {
-                GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
-                GetMesh()->SetSimulatePhysics(true);
-        }
+	if (bUpdatePlayerState && CachedPS)
+	{
+		CachedPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+		if (Killer)
+		{
+			CachedPS->EliminatorId = Killer->GetUniqueID().ToString();
+		}
+	}
 
-        OnDeath.Broadcast();
-        UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: %s died (Killer=%s)"), *GetName(), *GetNameSafe(Killer));
+	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+	if (MoveComp)
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->DisableMovement();
+	}
+
+	if (GetMesh())
+	{
+		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		GetMesh()->SetSimulatePhysics(true);
+	}
+
+	OnDeath.Broadcast();
+	UE_LOG(LogKhaaosRun, Log, TEXT("KhaaosCharacter: %s died (Killer=%s)"), *GetName(), *GetNameSafe(Killer));
 }
 
 // ─── RepNotify Callbacks ─────────────────────────────────────────────────────────

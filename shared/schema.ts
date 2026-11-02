@@ -448,7 +448,7 @@ export const eliminations = pgTable("eliminations", {
   eliminatedName: text("eliminated_name"),
   eliminatorUserId: text("eliminator_user_id"),
   eliminatorName: text("eliminator_name"),
-  cause: text("cause").notNull().default("ZONA"), // ZONA | PVP | QUEDA
+  cause: text("cause").notNull().default("ZONA"), // ZONA | PVP | QUEDA | AMBIENTE
   sessionId: integer("session_id"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
