@@ -110,10 +110,10 @@ bool ABarburhenAcidRainVolume::HasAcidProtection(AActor* Actor) const
 
 void ABarburhenAcidRainVolume::ApplyRainTick()
 {
-        if (!bRainActive || !GetWorld() || DamagePercentPerTick <= 0.f)
-        {
-                return;
-        }
+	if (!HasAuthority() || !bRainActive || !GetWorld() || DamagePercentPerTick <= 0.f)
+	{
+		return;
+	}
 
         TArray<AActor*> Overlapping;
         RainVolume->GetOverlappingActors(Overlapping, ACharacter::StaticClass());
@@ -138,9 +138,16 @@ void ABarburhenAcidRainVolume::ApplyRainTick()
                         continue;
                 }
 
-                // −DamagePercentPerTick da MaxVitality (ex.: 0.01 = 1 %)
-                Vitality->ApplyPercentageDamage(DamagePercentPerTick, this);
-                Vitality->Fear = FMath::Min(100.f, Vitality->Fear + FearPerTick);
+			// Acid rain is eligible world-environment damage; the PlayerState validates
+			// that Barburhen is still the active server world before applying mitigation.
+			const float AppliedDamage = Vitality->ApplyWorldEnvironmentalPercentageDamage(
+				DamagePercentPerTick, this, FName(TEXT("Barburhen")));
+			if (AppliedDamage <= 0.0f)
+			{
+				continue;
+			}
+
+			Vitality->Fear = FMath::Min(100.f, Vitality->Fear + FearPerTick);
                 OnAcidRainTick.Broadcast(Char, DamagePercentPerTick);
                 ++HitCount;
         }

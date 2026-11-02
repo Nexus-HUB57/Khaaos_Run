@@ -144,7 +144,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   const parseMutationBody = <T extends z.ZodTypeAny>(req: any, res: any, inputSchema: T): z.infer<T> | null => {
     const parsed = inputSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Entrada inválida" });
+      res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Entrada inválida" });
       return null;
     }
     return parsed.data;
@@ -301,7 +301,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.transfer(userId, key, input.amountKrc, input.destination);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -326,7 +326,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.requestLoan(userId, key, input.amountKrc, input.days);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -368,7 +368,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       if (!item) return res.status(404).json({ message: "Item não encontrado" });
       res.json(item);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -383,7 +383,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.craftItem(userId, key, { catalogId: input.catalogId });
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -426,7 +426,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       const result = await economyService.repairItem(userId, key, id, input.amountKrc);
       res.status(result.status).json(result.body);
     } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.issues[0].message });
       return sendFinancialError(res, err);
     }
   });
@@ -451,7 +451,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   app.post(api.player.specialization.path, requireAuth, async (req, res) => {
     const parsed = api.player.specialization.input.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Especialização inválida" });
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Especialização inválida" });
     }
 
     try {
@@ -475,7 +475,7 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   app.post(api.player.operative.path, requireAuth, async (req, res) => {
     const parsed = api.player.operative.input.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Operativo inválido" });
+      return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Operativo inválido" });
     }
 
     try {

@@ -1141,6 +1141,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
     {
         VictimPS->EliminationCause = EEliminationCause::PvP;
     }
+    else if (Cause == TEXT("AMBIENTE"))
+    {
+        VictimPS->EliminationCause = EEliminationCause::Ambiente;
+    }
     else
     {
         VictimPS->EliminationCause = EEliminationCause::Queda;
@@ -1164,6 +1168,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
     }
 
     VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+	if (AKhaaosCharacter* VictimCharacter = Cast<AKhaaosCharacter>(VictimPS->GetPawn()))
+	{
+		VictimCharacter->FinalizeDeathFromPlayerState();
+	}
 
     if (KhaaosGameState)
     {

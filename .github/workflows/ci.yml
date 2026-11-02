@@ -5,16 +5,13 @@ name: CI
 on:
   push:
     branches: [main, develop]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
-      - "attached_assets/**"
   pull_request:
     branches: [main, develop]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
-      - "attached_assets/**"
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -25,9 +22,9 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # ─── Job 1: Lint + Type Check ─────────────────────────────────
+  # ─── Job 1: TypeScript Type Check ─────────────────────────────
   lint:
-    name: Lint & Type Check
+    name: TypeScript Type Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,11 +36,8 @@ jobs:
 
       - run: npm ci
 
-      - name: TypeScript type check
-        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee typecheck.log
-
-      - name: ESLint
-        run: npx eslint . --ext .ts,.tsx --max-warnings 0 2>&1 | tee eslint.log || true
+      - name: TypeScript and repository checks
+        run: npm run check
 
   # ─── Job 2: Unit Tests ────────────────────────────────────────
   test-unit:
@@ -164,7 +158,7 @@ jobs:
 
       - name: Game infra tests
         working-directory: game-runtime
-        run: npm run test:infra 2>&1 | tee test-infra.log || npm test 2>&1 | tee test-infra.log
+        run: set -o pipefail; npm run test:infra 2>&1 | tee test-infra.log
 
       - name: Runtime tests with coverage
         working-directory: game-runtime
@@ -204,10 +198,34 @@ jobs:
 
   # ─── Job 5: Docker Build (Server) ─────────────────────────────
   docker-build:
-    name: Docker Build (Server)
+    name: Docker Build (PR-safe, no push)
     runs-on: ubuntu-latest
     needs: build-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image without registry credentials
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./server/Dockerfile
+          push: false
+          tags: |
+            ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-publish:
+    name: Publish Docker image (main only)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test-unit, test-game, build-server, ue5-validate, ue5-logic, economy-check, security]
     permissions:
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
@@ -222,12 +240,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & Push
+      - name: Build and push after validation
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./server/Dockerfile
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: true
           tags: |
             ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:${{ github.sha }}
             ${{ env.REGISTRY }}/nexus-hub57/khaaos-server:latest
@@ -304,6 +322,22 @@ jobs:
           echo ""
           echo "✅ All C++ files validated"
 
+  # ─── Portable UE5/CIGKV rules; this is not an Unreal Engine build. ───
+  ue5-logic:
+    name: UE5/CIGKV Portable Logic Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Compile and test portable UE5/CIGKV rules
+        run: npm run test:ue5:logic
+
   # ─── Job 7: Economy Integrity Check ──────────────────────────
   economy-check:
     name: Economy Integrity
@@ -360,6 +394,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     permissions:
+      contents: read
       security-events: write
     steps:
       - uses: actions/checkout@v4
@@ -370,12 +405,12 @@ jobs:
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL,HIGH"
-          exit-code: "0"
+          exit-code: "1"
           format: "sarif"
           output: "trivy-results.sarif"
 
       - name: Upload Trivy results
-        if: always()
+        if: always() && github.event_name == 'push'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-results.sarif"
@@ -400,6 +435,27 @@ jobs:
             echo "  ✅ No hardcoded secrets detected"
           fi
 
+  pr-validation-gate:
+    name: PR Validation Gate
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    needs: [lint, test-unit, test-game, build-server, docker-build, ue5-validate, ue5-logic, economy-check, security]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          RESULTS: ${{ needs.lint.result }},${{ needs.test-unit.result }},${{ needs.test-game.result }},${{ needs.build-server.result }},${{ needs.docker-build.result }},${{ needs.ue5-validate.result }},${{ needs.ue5-logic.result }},${{ needs.economy-check.result }},${{ needs.security.result }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -r -a results <<< "$RESULTS"
+          for result in "${results[@]}"; do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::PR validation blocked: a required job concluded '$result'"
+              exit 1
+            fi
+          done
+          echo "All required PR validation jobs succeeded."
+
   # ─── Job 9: Deploy to Render only after every CI gate ───────────
   deploy-render:
     name: Deploy to Render (after full CI)
@@ -410,7 +466,7 @@ jobs:
         test-unit,
         test-game,
         build-server,
-        docker-build,
+        docker-publish,
         ue5-validate,
         economy-check,
         security,
@@ -471,11 +527,12 @@ jobs:
     name: Notify on CI failure
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     needs:
-      [lint, test-unit, test-game, build-server, docker-build, ue5-validate, economy-check, security, deploy-render]
+      [lint, test-unit, test-game, build-server, docker-build, docker-publish, ue5-validate, ue5-logic, economy-check, security, pr-validation-gate, deploy-render]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
       - name: Notify Discord (when configured)
+        if: github.event_name == 'push'
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -503,6 +560,7 @@ jobs:
             echo "::warning::Discord notification transport failed (curl exit $curl_status). The Slack step will still run."
           fi
       - name: Notify Slack (when configured)
+        if: github.event_name == 'push'
         continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
