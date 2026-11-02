@@ -5,6 +5,7 @@
 // + resume token próprio do modo 3D.
 import { NetworkClient } from '../network/client.js';
 import { estimateClockOffset, serverElapsedMs } from '../shared/clock.js';
+import { angleLerp, adaptiveDelayMs } from './gait.js'; // Fase 42 — yaw por arco curto + delay adaptativo
 
 const RESUME_KEY = 'kr_resume_3d';
 const BUFFER_SIZE = 3;
@@ -28,6 +29,7 @@ export class NetClient3D {
     this.retry = 0;
     this.closed = false;
     this.rtt = null;
+    this.arrival = { last: null, jitter: 0 }; // Fase 42 — telemetria de chegada (jitter EWMA)
     this.pingTimer = null;
     this.connectedAt = null;
     this.clockOffset = null; // Fase 12 — offset local→servidor (estimado no pong)
@@ -134,7 +136,16 @@ export class NetClient3D {
   }
 
   push(snapshot) {
-    this.buffer.push({ snapshot, receivedAt: performance.now() });
+    // Fase 42 — telemetria de chegada: desvio do intervalo esperado (20 Hz →
+    // 50 ms) alimenta o delay ADAPTATIVO da interpolação. Jitter alto funda o
+    // buffer mais fundo ANTES do stutter aparecer (sincronia cirúrgica).
+    const arrivalNow = performance.now();
+    if (this.arrival.last != null) {
+      const err = Math.abs(arrivalNow - this.arrival.last - 50);
+      this.arrival.jitter += (err - this.arrival.jitter) * .12;
+    }
+    this.arrival.last = arrivalNow;
+    this.buffer.push({ snapshot, receivedAt: arrivalNow });
     if (this.buffer.length > BUFFER_SIZE) this.buffer.shift();
     // reconciliação: ack do servidor descarta inputs já processados
     const ack = snapshot.player?.ackSeq;
@@ -148,12 +159,20 @@ export class NetClient3D {
 
   latest() { return this.buffer.at(-1)?.snapshot ?? null; }
 
+  // Fase 42 — delay de interpolação ADAPTATIVO: base 110 ms + 2.2·jitter(EWMA)
+  // + folga de RTT acima de 120 ms. Piso 95 ms (responsividade), teto 240 ms.
+  recommendedDelay() {
+    return adaptiveDelayMs({ jitterMs: this.arrival?.jitter ?? 0, rttMs: this.rtt ?? 60 });
+  }
+
   // Interpolação entre os dois snapshots que cercam (agora - delayMs):
   // interpola posição do jogador local e dos demais atores; demais campos = mais recente.
-  interpolate(delayMs = 110) {
+  // Fase 42 — delayMs nulo → delay ADAPTATIVO (recommendedDelay); yaw dos
+  // atores interpola pelo ARCO MAIS CURTO (nunca "dá volante" 360°).
+  interpolate(delayMs = null) {
     if (this.buffer.length === 0) return null;
     if (this.buffer.length === 1) return this.buffer[0].snapshot;
-    const now = performance.now() - delayMs;
+    const now = performance.now() - (delayMs ?? this.recommendedDelay());
     let a = this.buffer[0], b = this.buffer[this.buffer.length - 1];
     for (let i = 0; i < this.buffer.length - 1; i++) {
       if (this.buffer[i].receivedAt <= now && this.buffer[i + 1].receivedAt >= now) {
@@ -180,7 +199,8 @@ export class NetClient3D {
       view.others = B.others.map((o) => {
         const prev = byId.get(o.id);
         if (!prev) return o;
-        return { ...o, x: lerp(prev.x, o.x), y: lerp(prev.y, o.y), z: lerp(prev.z, o.z) };
+        // Fase 42 — posição linear + yaw pelo arco curto (rotação sem pop)
+        return { ...o, x: lerp(prev.x, o.x), y: lerp(prev.y, o.y), z: lerp(prev.z, o.z), yaw: angleLerp(prev.yaw ?? o.yaw, o.yaw, alpha) };
       });
     }
     // Fase 4 — granadas: lerp posicional pelo mesmo par de snapshots
