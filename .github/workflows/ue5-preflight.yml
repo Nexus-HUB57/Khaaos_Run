@@ -15,6 +15,13 @@ on:
   pull_request:
     paths:
       - 'Unreal/KhaaosRun/**'
+      - 'README.md' # F46: o README é a fonte do cânon — mudou, o portão re-certifica antes do export
+      - 'game-runtime/scripts/fidelity-audit-lib.mjs' # F46: instrumento F44
+      - 'game-runtime/scripts/fidelity-snapshot.mjs'
+      - 'game-runtime/scripts/audit-fidelity.mjs'
+      - 'game-runtime/src/game3d/scenarios.js' # F46: fontes da geometria canônica consumida pelo pipeline UE
+      - 'game-runtime/src/game3d/world3d.js'
+      - 'game-runtime/src/game3d/districts3d.js'
       - 'scripts/build/ue58_preflight.mjs'
       - 'scripts/build/fix_ue1021_includes.py'
       - 'scripts/build/export_barburhen_obj.py'
@@ -25,6 +32,13 @@ on:
     branches: [main]
     paths:
       - 'Unreal/KhaaosRun/**'
+      - 'README.md' # F46: o README é a fonte do cânon — mudou, o portão re-certifica antes do export
+      - 'game-runtime/scripts/fidelity-audit-lib.mjs' # F46: instrumento F44
+      - 'game-runtime/scripts/fidelity-snapshot.mjs'
+      - 'game-runtime/scripts/audit-fidelity.mjs'
+      - 'game-runtime/src/game3d/scenarios.js' # F46: fontes da geometria canônica consumida pelo pipeline UE
+      - 'game-runtime/src/game3d/world3d.js'
+      - 'game-runtime/src/game3d/districts3d.js'
       - 'scripts/build/ue58_preflight.mjs'
       - 'scripts/build/fix_ue1021_includes.py'
       - 'scripts/build/export_barburhen_obj.py'
@@ -49,6 +63,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Fidelity gate — Mundos ↔ README (F44/F46)
+        # O pipeline UE5.8 CONSUME a geometria do runtime (export OBJ →
+        # colliders → import da engine). Este portão roda o instrumento F44 AO
+        # VIVO (lê o README, constrói os 5 mundos headless, valida os checks
+        # canônicos) ANTES do export — geometria derivada do cânon nunca é
+        # cozida no build da engine. Falha RÁPIDO, com o check nomeado.
+        run: |
+          cd game-runtime
+          npm ci --no-audit --no-fund
+          npm run audit:fidelity
 
       - name: CI guard — UE1021 canonical includes (fix_ue1021_includes.py)
         # Guard de regeneração UE: UHT/scaffolds podem reemitir includes de
@@ -90,6 +115,7 @@ jobs:
             echo "| Guard UE1021 (fix_ue1021_includes) | $(python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo VIOLAÇÃO) |"
             echo "| Fase 1 — Barburhen OBJ + colliders | $(python3 scripts/build/export_barburhen_obj.py --selftest >/dev/null 2>&1 && python3 scripts/build/bake_barburhen_colliders.py --selftest >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Unblock UE5.8/EAC (relatório + sonda ghcr) | $(node scripts/build/ue58_eac_unblock_selftest.mjs >/dev/null 2>&1 && echo OK || echo ERROS) |"
+            echo "| Fidelidade Mundos ↔ README (F44) | $(cd game-runtime && npm run audit:fidelity >/dev/null 2>&1 && echo '✅ FIEL' || echo '❌ DERIVA') |"
             echo "| Game/Editor/Server targets | ✅ validados no preflight |"
             echo "| Includes de projeto | ✅ resolvidos em Source/ |"
           } >> $GITHUB_STEP_SUMMARY
