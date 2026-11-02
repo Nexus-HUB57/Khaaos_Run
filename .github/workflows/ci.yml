@@ -409,6 +409,13 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
 
+      # Observabilidade: em falha, imprime a tabela legível (o gate acima continua
+      # sendo o sarif com exit-code 1 — este passo NÃO altera a decisão do job).
+      - name: Trivy table on failure
+        if: failure()
+        run: |
+          trivy fs . --severity CRITICAL,HIGH --format table || true
+
       - name: Upload Trivy results
         if: always() && github.event_name == 'push'
         uses: github/codeql-action/upload-sarif@v3
