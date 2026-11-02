@@ -111,6 +111,10 @@ Foi iniciada uma sala descartável no servidor local com dois clientes autentica
 
 **MP-ZEX-08 falhou.** A queda do socket de A foi observada com progresso em 6,25%. Após 250 ms, `zexChannel` continuava ativo e `channelerId` ainda apontava para A. Sem reconexão, o servidor concluiu o canal e consumiu o terminal; o estado direto da sala mostrou `extracted = 1` e delta de XP `+250` para o jogador desconectado. Isso contradiz o critério de cancelamento por desconexão e confirma que a reserva não é liberada pelo fechamento do socket.
 
+### Reteste confirmatório — 2026-11-02, commit `b1a7300`
+
+A branch não continha uma correção de código desde a primeira rodada. O mesmo harness local com dois WebSockets foi executado novamente: sala compartilhada e disputa exclusiva passaram; no fechamento do socket, a canalização continuou ativa após 250 ms e concluiu depois, consumindo o terminal e concedendo novamente `+250 XP` ao ator desconectado. **Resultado: MP-ZEX-08 continua FAIL/BLOCKED; a correção ainda não foi validada.**
+
 ### Limites e próximo passo
 
 Esta rodada foi uma simulação no processo local, com `KR_DEV_AUTH=1` e sem staging, dispositivos separados, jitter/perda de rede, observação visual do HUD ou serviços reais. Nenhum teste foi executado em produção. Manter a aprovação multiplayer bloqueada até corrigir ou formalmente redefinir o ciclo de desconexão/resume, adicionar um teste de regressão reproduzível para dois sockets e repetir MP-ZEX-08. Depois disso, continuar com os demais cenários da matriz em staging isolado.
