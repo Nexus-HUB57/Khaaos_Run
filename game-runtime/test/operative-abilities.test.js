@@ -13,10 +13,12 @@ const activate = (sim, operativeId) => {
   return sim.consumeEvents().find((event) => event.type === 'ability');
 };
 
-test('existe uma habilidade definida e identificável para cada operativo canônico', () => {
+test('existe uma habilidade definida e identificável para cada operativo do catálogo', () => {
   // Fase 26 — catálogo com 17 operativos: os 16 canônicos + TALON (Hacker &
   // Urban Runner). As 3 insígnias OCE estendem a tabela além do catálogo.
-  assert.equal(roster.length, 17);
+  // Lote 4 — +16 não-militares (milícias MIL-01..08 + gangues GNG-01..08) = 33;
+  // habilidades irregulares reaproveitam os mesmos efeitos autoritativos.
+  assert.equal(roster.length, 33);
   const oceIds = ['OCE_01', 'OCE_02', 'OCE_03'];
   const abilityIds = Object.keys(OPERATIVE_ABILITIES);
   for (const id of oceIds) assert.ok(abilityIds.includes(id), `${id} presente na tabela de habilidades`);
@@ -30,7 +32,7 @@ test('existe uma habilidade definida e identificável para cada operativo canôn
   }
 });
 
-test('cada um dos 16 operativos ativa sua habilidade correspondente no simulador', () => {
+test('cada um dos 33 operativos do catálogo ativa sua habilidade correspondente no simulador', () => {
   for (const operative of roster) {
     const sim = createSim({ seed: `ABILITY-${operative.id}`, botCount: 0 });
     sim.player.life = 50;

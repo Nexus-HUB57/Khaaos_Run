@@ -55,7 +55,27 @@ auditoria, como nos demais guards.
 4. Com mais de uma instância: `GET /admin/traces?remote=1&traceId=<id>` —
    junta as duas pontas mesmo se o jogador trocou de réplica pelo nginx.
 
-## Evolução (fora de escopo deste PR)
+## Integração Prometheus/Grafana
+
+O runtime expõe `/metrics` em formato Prometheus. Quando `KR_DISTRIBUTED=1`,
+as séries `khaaos_runtime_redis_pubsub_*` cobrem disponibilidade do Redis,
+publicações com resultado, gaps, duplicatas e erros de leitura do relay; as
+séries `khaaos_runtime_distributed_*` cobrem ownership, fencing, redirects,
+leases e salas congeladas. O contrato evita labels por usuário ou sala para
+manter cardinalidade operacional bounded.
+
+Para staging, use o overlay [`monitoring/docker-compose.staging.yml`](../../monitoring/docker-compose.staging.yml),
+que provisiona Prometheus, Alertmanager, Grafana, Redis Exporter, PostgreSQL
+Exporter e Node Exporter. O dashboard distribuído fica em
+[`infra/grafana/khaaos-runtime-distributed-dashboard.json`](../../infra/grafana/khaaos-runtime-distributed-dashboard.json),
+e as regras em `monitoring/prometheus/rules/`.
+
+Alertas de Redis down, falhas de publicação, gaps do stream, erros de leitura,
+fencing e salas congeladas são encaminhados ao Alertmanager. O overlay deve
+ser aplicado com duas ou mais réplicas do game-runtime para que a topologia
+cross-replica seja observável.
+
+## Evolução futura
 
 - **OTLP**: um `Exporter` que fala OTLP/gRPC para Tempo/Jaeger — a interface
   (`exportSpan/exportLog`) já é o ponto de encaixe.

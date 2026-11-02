@@ -13,6 +13,8 @@
 
 - [Status do Projeto](#status-do-projeto)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
+- [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
+- [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -37,6 +39,7 @@
 - [Limitações Conhecidas](#limitações-conhecidas)
 - [Roadmap Go Live](#roadmap-go-live)
 - [Auditoria e Roadmap de Correções](docs/README_AUDIT_ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Referências](#referências)
 
 ---
@@ -125,6 +128,121 @@ Docs: `Docs/CIGKV_Barburhen/`
 - Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
 - Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
 
+---
+
+## Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)
+
+> **Nota de status:** "validado E2E" abaixo significa evidência de execução em browser real no preview do console; não equivale a staging de produção, build UE5 ou go-live. Branch de trabalho do repo: **novo branch a partir de `main` atual (`9df772e`)** — `feat/e2e-phases-9-12` está 100% contido na `main` (232 commits atrás; congelar). Revisão E2E de 2026-11-02: `docs/REVISAO_E2E_2026-11-02.md`.
+
+### Console Web (preview Next.js) — alistamento end to end
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| Fluxo de alistamento (ETAPA 1/3 inscrição → 2/3 taxa → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
+| Taxa de inscrição U$1 (= 100 KRC) server-authoritative | ✅ Liquidação + transações `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (2ª chamada → `alreadyPaid:true`, sem dupla cobrança) |
+| Retomada de sessão | ✅ `GET /api/enrollment?username=` reconhece alistado após reload | Não repete inscrição |
+| Erro Prisma `Unknown argument enrollmentProtocol` | ✅ Resolvido | Causa: PrismaClient stale em memória (schema e SQLite já tinham as colunas); processo atualizado sem migração |
+
+- Contrato: `POST /api/enrollment` (liquida taxa, credita bônus de boas-vindas 500 KRC só após pagamento, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
+- Pagamento segue **economia de jogo** (KRC); habilitação de valor real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+### Aba Mundos — especificação canônica do Descentralizador aplicada
+
+- **100 operadores por ring** nos 5 rings (CIGKV PRÉ + C1–C4), perímetros **15.000–25.000 m²**, densidade **150–250 m²/jogador** (CQB estilo Free Fire).
+- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, cluster de 100 dots, pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.
+- Contrato de dimensões sincronizado console ↔ orquestração: `src/lib/game-constants.ts` (`WorldDef.dimensions`) espelha `shared/worlds.ts` do repo.
+- Render validado por análise visual (VLM) dos 5 cartões: formas não-quadradas, POIs rotulados, métricas m² legíveis, sem anomalias.
+
+### Infra do preview
+
+- Keeper embutido no game-service (porta 3003) com spawn detached do `next dev :3000` + watchdog cron a cada 5 min em `GET /api/match` (auto-religue documentada no runbook interno).
+
+### Gráficos v3–v5 (repo UE5, branch `feat/e2e-phases-9-12`)
+
+| Commit | Escopo |
+|--------|--------|
+| `98aa769` | Post-processing real + lighting director + character pop (look Free Fire) |
+| `7e18ff0` | 5 subsistemas gráficos v3.0 — PostProcessStack (13 LUTs), StylizedMaterialSystem (11 shading models), AtmosphereLighting (8 fases do dia × 8 biomas), VFXQualityManager, PerformanceBudget |
+| `519be5c` | ColorGradeLUT + Outline + MobileOptimizer + ShaderTiers (v4) |
+| `fca74b0` | LUT procedural factory, material de PostProcess, servidor 2PC TypeScript, CI de runner GPU, painéis Grafana 2PC (v5) |
+
+> Esses commits estão **versionados**, não compilados: o gate de build real permanece na Fase 0 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+## Desenvolvimento recente — Personagens (2026-11-02)
+
+> Contrato novo de espécies + fechamento de lacunas do domínio de personagens, a partir de `main` (`495b91f`), branch `feat/prossiga-personagens`. Suíte oficial 100% verde após os dois lotes (504 testes em `tests/official`, 0 falhas; `tsc` limpo).
+
+### Catálogo de espécies — SPC_Huran completo no schema PhD
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| `SPC_Huran.json` reescrito no schema PhD (12 chaves → 17 chaves) | ✅ | lore (4 dimensões), `base_stats` (11 campos), `stat_curves` 10 níveis, `physical` (SK_Gwen, morphs, IK, cloth), passive com 4 mecânicas, 3 habilidades ativas, kit UE5 com as 8 habilidades, 5 skins enriquecidas, 25 animações (3 blend spaces incl. `BS_Huran_Swim`), áudio por superfície, 6 slots VFX |
+| Habilidades espelhadas do header UE5 | ✅ | `ue5_kit` com TidalSurge/AquaShield/DiveBomb/FloodZone/PressureStrike/GillsRegen/Whirlpool/TsunamiRage — números idênticos a `KhaaosAbility_HuranAbilities.h` (cooldown/energia/dano) |
+| Stats ancorados no canônico | ✅ | `DT_SpeciesStats.csv`: 110 HP / 90 energia / speed 1.1 / stamina 110 / armadura 10; passive "Regeneracao Aquatica" (paridade com manifest) |
+
+### Reconciliação numérica SPC ↔ CSV ↔ manifest (fonte canônica: CSV + manifest)
+
+Divergências pré-existentes corrigidas nos SPC (curvas re-ancoradas preservando os growth ratios):
+
+| Espécie | Campo | Antes (SPC) | Depois (CSV/manifest) |
+|---------|-------|-------------|--------------------|
+| SPC_Venex | health / energy / armor_base | 110 / 110 / 10 | 90 / 130 / 5 |
+| SPC_Skeetw | speed | 1.15 | 1.3 |
+| SPC_Khael | health / stamina | 70 / 60 | 85 / 85 |
+| SPC_Onith | stamina | 130 | 120 |
+
+### Contrato automatizado — `tests/official/species-catalog.test.ts` (4 testes)
+
+1. **Schema PhD** — os 6 SPC com lore/base_stats/curvas/physical/passive/3 habilidades/5 skins (escada COMUM→MITICO)/≥23 animações/áudio/VFX/5 mundos válidos.
+2. **Paridade numérica** — SPC ↔ `DT_SpeciesStats.csv` ↔ `avatars_manifest.json` (health/energy/speed/stamina/armor + hp do manifest + passive humanizado).
+3. **Kit UE5 do Huran** — 8 classes `UKhaaosAbility_*` no header com tags, cooldown, energia e dano batendo com o JSON (Damage só existe nas classes que causam dano).
+4. **emote_catalog** — 13 emotes, categorias canônicas (typo `ACAo` banido), resumo `by_category`/`by_rarity` batendo com a lista.
+
+### Correções pontuais
+
+- `emote_catalog.json`: `_meta` prometia "40 emotes" (entrega 13, como o README §12 e o `summary`); 2 emotes com categoria `ACAo` → `ACAO`.
+- `CharacterPromptStudio` estava **órfão** (nenhuma rota importava o componente de 1.245 linhas): nova rota protegida **`/studio`** (`client/src/pages/studio.tsx` wrapper lazy) + entrada STUDIO no menu lateral/mobile do `LayoutShell`.
+
+### Lote 2 (mesmo dia) — matriz fechada, ADR de esqueleto e seleção de avatar persistida
+
+Os 3 passos mapeados acima foram executados no mesmo branch (`feat/prossiga-personagens`), com merge do branch de avatar-sync e suíte oficial 100% verde (504+39 testes, 0 falhas; `tsc` limpo):
+
+1. **Seleção de operante persistida** — merge de `feat/character-avatar-sync` (migration `0012_operative-selection.sql`: `player_stats.selected_operative_id`, default `OP_MALE_VANGUARD`; catálogo `shared/operative-avatar-catalog.ts` com os 16 canônicos + TALON; PATCH em `/api/player/operative` com propagação ao `RoomManager`; UI de perfil/lobby).
+2. **Matriz de proofs sexo×espécie FECHADA** — 6 novos dossiês (`PROOF_M-09..M-11` Skeetw/Huran/Khael · `PROOF_F-11..F-13` Zheers/Onith/Venex) com a mesma estrutura dos 18 existentes (etnia/heritage inéditos: Andino/Quechua, Cabo-verdiana, Himalaia/Tibetana, Amazigh, Mongol/Khalkha, Coreana); `proofs_manifest.json` atualizado (24 proofs, 11 M + 13 F, cobertura 12/12); `base_stats` dos 24 proofs normalizados ao canônico `DT_SpeciesStats.csv`. Contrato novo `tests/official/proofs-matrix.test.ts` (4 testes).
+3. **ADR-ESQUELETO-RIG-POR-SEXO** (`docs/ADR-ESQUELETO-RIG-POR-SEXO.md`) — decisão: rig base **por sexo** (`SK_Manny` M / `SK_Gwen` F, padrão dos 24 actors `KhaaosOp*.cpp` e do fluxo Lyra); espécie vira camada (mesh variant + morphs + ABP). Executado: `shared/character-studio.ts` abandona o rótulo genérico `UE5_Mannequin` (type + 16 operatives + pipeline UE5), SPCs ganham `physical.rig_by_sex` + `skeleton_note`; testes de studio/espécies atualizados.
+4. **Malhas GLB das figuras de alistamento** — 6 manequins A-pose low-poly (glTF 2.0 binário, cores por vértice da ficha de cada figura) em `client/public/figures/glb/` + manifest com sha256/contagens; exportador versionado `scripts/figures/export_figures_glb.py`; contrato `tests/official/figures-glb.test.ts`.
+
+### Lote 3 (mesmo dia) — rigs canônicos no mapeamento Lyra e viewer 3D das figuras
+
+Validação end to end do branch + execução dos follow-ups do ADR e do consumo dos GLBs (suíte oficial 518+39 testes, 0 falhas; `tsc` limpo; auditoria F44/F46 FIEL ✅ 53/0):
+
+1. **Follow-up 1 do ADR executado** — `epic_integration/lyra_mapping.json` ganhou a seção `skeleton_rigs`: os DOIS rigs canônicos (`SK_Manny` masculino / `SK_Gwen` feminino, derivados de `SKM_Manny`/`SKM_Quinn` do UE5 5.8, 4 LODs), as 6 camadas de espécie (preview rig do SPC + `SK_<Espécie>_LOD0..3` + `ABP_<Espécie>` + `PA_<Espécie>`) e o estado honesto da validação de editor (PENDENTE — bloqueada por 0 self-hosted runners). Contrato novo `tests/official/lyra-mapping.test.ts` (5 testes): rigs exatos, paridade `preview_rig` ↔ `SPC.physical.skeleton` e paridade 1:1 de `anim_bp`/`physics_asset` com `KhaaosSpeciesMeshRegistry.cpp` — o runtime UE5 é a fonte da verdade, o mapping não pode derivar dele.
+2. **Viewer 3D das figuras de alistamento (sem dependências)** — `client/src/lib/glb.ts` (parser GLB puro, sem DOM, testável em Node — cobre o layout do exportador; erro explícito fora dele) + `client/src/components/FigureGlbViewer.tsx` (WebGL 2 com fallback 1, cor por vértice, luz chave+rim, câmera orbitada por arraste, rotação idle, enquadramento pela bbox). Consumido na grade **FIGURAS DE ALISTAMENTO** do perfil — os 6 manequins agora são exibidos em 3D junto à placa de rosto; o texto desatualizado "A malha riggada (GLB) ainda não foi exportada" foi corrigido. Contrato novo `tests/official/figures-glb-viewer.test.ts` (9 testes): parser lê os 6 GLB reais com paridade total ao manifest (vértices/triângulos/altura/bbox y=0/alpha opaco) e rejeita arquivos não-GLB com erro explícito. Smoke visual Playwright (mock das rotas, mesma escola da spec war-i-ui) confirmou 6 viewers montados, 0 overlays de erro e renderização correta das paletas por ficha.
+3. **Mapeamento de asset à prova de substituição** — `figureGlbSrc()` fixa `/figures/glb/FIG_<id>.glb` como nome canônico; a troca futura do placeholder por scan/retopo real (mesmo nome de asset) não exige mudança no viewer, no parser ou no card.
+
+### Lote 4 — Milícias e Gangues Urbanas (16 operantes não-militares)
+
+O roster jogável sai do nicho militar: 16 identidades irregulares recrutadas pelo mesmo alistamento, com facção declarada no dado (`faction: MILICIA_URBANA | GANGUE_URBANA`) e rig base por sexo (ADR-ESQUELETO-RIG-POR-SEXO). Os 16 militares canônicos e o TALON permanecem byte-idênticos; o catálogo selecionável passa a 33 identidades e a whitelist da API absorve os IDs novos automaticamente (sem migration — `player_stats.selected_operative_id` é texto validado por `isOperativeAvatarId`). Suíte oficial 524+39 testes, 0 falhas; `tsc` limpo.
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| 8 milicianos (MIL-01..08) | ✅ | VULTO (comandante de bloco), ECO (radarista das lajes), FERRAZ (armeiro de quintal), GRAU (motoqueiro), NOTA (cobradora de proteção), SIRENE (oradora de perímetro), SORO (enfermeira de clínica), CORUJA (vigia noturna) — 4M/4F, ranks ZHEERS/ONITH/SKEETW |
+| 8 gangues urbanas (GNG-01..08) | ✅ | SPRAY (grafiteiro de viaduto), VENTANIA (corredor de galho), CORTA (soldado de facção), BAILE (DJ do comando), ROTA (entregadora), COTOVELA (lutadora de galpão), SOMBRA (batedora), PIXEL (hacker de lan house) — 4M/4F |
+| `KHAAOS_MILITIA_ARCHETYPES` + `ALL_KHAAOS_OPERATIVE_ARCHETYPES` | ✅ | `shared/character-studio.ts`: campo opcional `faction?: OperativeFaction` (militares ficam sem o campo = MILITAR); `buildOperativePromptBundle` busca no roster combinado (bundles de imagem/vídeo funcionam para todo o lote) |
+| Catálogo de avatares | ✅ | `shared/operative-avatar-catalog.ts` com campo `branch` por facção; 33 opções (17 MILITAR incl. TALON suplementar + 8 MILÍCIA + 8 GANGUE); `DEFAULT_OPERATIVE_AVATAR_ID` segue `OP_MALE_VANGUARD` |
+| 16 SVGs byte-idênticos | ✅ | `Content/Avatars/{male,female}/` ↔ `client/public/avatars/{male,female}/` (512×512, marca d'água do codinome, retrato paramétrico por hairstyle/headgear/paleta de facção); `avatar_catalog.json` (2 cópias idênticas) anota `faction` em todas as 33 entradas |
+| `Content/Assets/asset_manifest.json` | ✅ | +16 entradas `CHR_{clã}_{Sexo}_{Nome}` com `skeleton` por sexo (SK_Manny/SK_Gwen), `faction`, 4 mapas PBR canônicos, `priority: P1`, `status: avatar_generated` — zero resíduo `UE5_Mannequin` |
+| UI de perfil | ✅ | Grade OPERATIVO & AVATAR lista as 33 identidades com badge de facção (MILITAR/MILÍCIA/GANGUE/SUPLEMENTAR); seleção persistida via POST `/api/player/operative` sem mudança de contrato |
+| Contrato automatizado | ✅ | `tests/official/militia-roster.test.ts` (5 testes): 16 operantes 8M/8F sem colisão com os militares; identidade completa (rank/spec/mundo, biomaecânica plausível, rig por sexo, prompt bundle); catálogo 33 com branch correto e whitelist rejeitando `OP_MIL_FAKE`/`OP_GNG_FAKE`; SVGs byte-idênticos; manifest com rig/faction/texturas. `character-studio.test.ts` atualizado para 33 no catálogo e paridade de manifest sobre o roster combinado |
+
+Distribuição de mundos: 7 em Barburhen (coração urbano pós-guerra), 7 no CIGKV (vilas e lajes), 1 em Priadus (posto avançado de floresta — CORUJA) e 1 em Ckesalth (entreposto — PIXEL). Espécie-clã no `ueAssetId`: Zheers×3, Skeetw×3, Venex×3, Khael×3, Onith×2, Huran×2. Raridades COMUM/RARO (equipamento irregular) — os militares mantêm EPICO/LENDÁRIO/MÍTICO.
+
+### Próximos passos mapeados (fora deste lote)
+
+1. Merge do PR deste branch na `main` e novo deploy de staging com o viewer 3D das figuras ativo.
+2. Validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs (bloqueio: 0 self-hosted runners `[self-hosted, linux, gpu, ue5.8, x64]`).
+3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset — `figureGlbSrc()` e o contrato `figures-glb-viewer.test.ts` já garantem a troca transparente).
+
 ## Ontologia dos Mundos
 
 O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência de *Rings* (ambientes de batalha) organizados em estágios de intensidade crescente. Cada Ring é, simultaneamente:
@@ -160,7 +278,7 @@ O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimens
          ▼              ▼              ▼              ▼
    Protocolo CIGKV   Anel de       Emboscada      Tsunami /
    Ring 3 h          Conflito      Verde          Assassino
-   50 players        10 min        10 min         Silencioso
+   100 players       10 min        10 min         Silencioso
    Fluxo contínuo    Zona →        Zona →         Zona →
                      Parque        Templo         Prisão
 ```
@@ -190,7 +308,8 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: 50 jogadores.
+- **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
+- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade 160 m²/jogador (CQB).
 - **Duração**: 3 horas (Ring de Longa Duração).
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
@@ -210,6 +329,16 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 ---
 
 ## Mundos Oficiais (W1–W4)
+
+> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). Contrato de dimensões definido no console (`src/lib/game-constants.ts`, `WorldDef.dimensions` — `areaM2` ≠ `perimeterM` de contorno); o port para `shared/worlds.ts` do repo está no item 1.1 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+| Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
+|------|---------------|--------------|------------------------|----------------------------|-------------|
+| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 m²/jogador | Vila militar murada (`fortified_rectangle`) |
+| W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
+| W2/C2 Priadus | 22.000 m² | 220 m × 100 m | 640 m | 220 m²/jogador | Blob orgânico radial (`organic_blob`) |
+| W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
+| W4/C4 Arukheea | 18.000 m² | 180 m × 100 m | 560 m | 180 m²/jogador | Ilha costeira com enseadas (`coastal_island`) |
 
 ### W1/C1 — Barburhen (Mundo da Destruição)
 
@@ -909,7 +1038,7 @@ Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102)
 
 ### Web
 
-- **Replit Autoscale**: `npm run build` → `node ./dist/index.cjs`
+- **Replit Autoscale**: `npm run build` → `node ./dist/index.mjs`
 - **Render**: Blueprint `render.yaml` + Deploy Hook (opt-in via `RENDER_DEPLOY_ENABLED`)
 
 ### UE5 Dedicated Server
@@ -934,7 +1063,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 - **Sem assets cozidos no Unreal**: Os cinco mundos agora têm pacotes source de intake e contratos visuais versionados; mapas jogáveis, `.uasset`/`.umap`, materiais Niagara finais e cook ainda exigem UE5.8 Editor/runner.
 - **EAC sem aceite operacional**: Há integração e validações versionadas, mas o binário/SDK da Epic e a execução em servidor compilado ainda são necessários.
 - **Economia sem aceite para valor real**: Há ledger e regras versionados, mas não habilitar valor real até auditoria imutável, teste de atomicidade, compliance review e aceite operacional.
-- **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
+- **Aceite operacional do monitoring**: ownership/fencing e relay cross-replica já usam Redis em `KR_DISTRIBUTED=1`; o overlay Prometheus/Grafana/Alertmanager e os exporters estão versionados em `monitoring/`, mas o go-live ainda exige executar a stack de staging com duas ou mais réplicas e validar os canais reais do Alertmanager.
 - **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
 - **Coverage instrumentado**: c8 configurado para `client/src`, `server` e `shared`, com relatório completo atual de 27,46% de linhas, 68,45% de branches e 48,58% de funções; a suíte browser ainda é incompleta.
 - **Webhook secrets placeholder**: DISCORD_WEBHOOK_URL e SLACK_WEBHOOK_URL configurados como placeholder — necessitam URLs reais.
@@ -1046,6 +1175,7 @@ Semana  1   4   8   11  15  23  28
 - [Lighthouse / code-splitting](docs/LIGHTHOUSE_PERFORMANCE.md)
 - [Deploy Render](docs/RENDER_DEPLOYMENT.md)
 - [Roadmap de engenharia](docs/ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end (2026-11)](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
 - [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)

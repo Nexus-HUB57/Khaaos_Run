@@ -11,8 +11,8 @@
     "passive": "Interface Neural - +10% eficiencia de escudo",
     "base_stats": {
       "health": 90,
-      "energy": 110,
-      "speed": 1.1
+      "energy": 130,
+      "speed": 1.05
     },
     "physical": {
       "height_cm": 185,

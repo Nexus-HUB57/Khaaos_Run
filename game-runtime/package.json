@@ -1,12 +1,13 @@
 {
   "name": "khaaos-run",
-  "version": "0.24.0",
+  "version": "0.26.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test test/*.test.js",
+    "audit:fidelity": "node scripts/audit-fidelity.mjs",
     "test:stress": "node --test test/stress.test.js",
     "test:infra": "node --test test/infrastructure.test.js",
     "test:economy": "node --test test/economy.test.js",

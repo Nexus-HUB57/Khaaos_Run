@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { KhaaosSim3D, getWorldLayout, WEAPONS3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
+import { KhaaosSim3D, getWorldLayout, WEAPONS3D, DEFAULT_INPUT, ZEX_CHANNEL_SECONDS, EXTRACT_XP } from '../src/game3d/sim3d.js';
 
 const STEP = 1 / 30;
 const idle = (yaw = 0, pitch = 0) => ({ ...DEFAULT_INPUT, yaw, pitch });
@@ -111,6 +111,53 @@ test('loot: coleta altera estado (arma, kit, armadura ou recurso)', () => {
   assert.equal(item.active, false, 'item deveria ser desativado');
   const after = JSON.stringify({ w: s.player.weapon, mk: s.player.inventory.medkit, ar: s.player.armor, inv: s.player.inventory });
   assert.notEqual(before, after, 'coleta deveria alterar estado do jogador');
+});
+
+test('ZEX: canaliza por quatro segundos e concede XP uma única vez ao concluir', () => {
+  const s = new KhaaosSim3D({ seed: 'ZEX-CHANNEL', botCount: 0, airdrop: false });
+  s.start('belt');
+  const t = s.terminals[0], p = s.player;
+  for (const item of s.loot) item.active = false;
+  s.doors = [];
+  p.x = t.x; p.z = t.z;
+  const xp0 = p.xp;
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.ok(p.zexChannel, 'um toque inicia o canal');
+  assert.equal(t.active, true, 'terminal não é consumido no início');
+  assert.equal(p.xp, xp0, 'XP não é concedido antes da conclusão');
+  for (let i = 0; i < Math.round(ZEX_CHANNEL_SECONDS / STEP) - 1; i++) s.step(idle(), STEP);
+  assert.equal(t.active, true, 'terminal permanece ativo até o último passo');
+  assert.ok(p.zexChannel.progress > 0.9 && p.zexChannel.progress < 1);
+  s.step(idle(), STEP);
+  assert.equal(t.active, false);
+  assert.equal(p.zexChannel, null);
+  assert.equal(p.extracted, 1);
+  assert.equal(p.xp, xp0 + EXTRACT_XP);
+});
+
+test('ZEX: movimento ou dano cancela sem gastar o terminal nem conceder XP', () => {
+  const s = new KhaaosSim3D({ seed: 'ZEX-CANCEL', botCount: 0, airdrop: false });
+  s.start('belt');
+  const t = s.terminals[0], p = s.player;
+  for (const item of s.loot) item.active = false;
+  s.doors = [];
+  p.x = t.x; p.z = t.z;
+  const xp0 = p.xp;
+  s.step({ ...idle(), interact: true }, STEP);
+  p.x += 0.8;
+  s.step(idle(), STEP);
+  assert.equal(p.zexChannel, null);
+  assert.equal(t.active, true);
+  assert.equal(p.xp, xp0);
+
+  p.x = t.x; p.z = t.z;
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.ok(p.zexChannel, 'o jogador pode reiniciar após cancelar');
+  s.ring.x = t.x + 20; s.ring.z = t.z + 20; s.ring.radius = 0;
+  s.step(idle(), STEP);
+  assert.equal(p.zexChannel, null, 'dano ambiental interrompe o canal');
+  assert.equal(t.active, true);
+  assert.equal(p.xp, xp0);
 });
 
 test('recarga respeita reserva e capacidade do pente', () => {

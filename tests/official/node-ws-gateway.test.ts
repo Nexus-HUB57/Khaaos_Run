@@ -29,6 +29,7 @@ const { storage } = await import("../../server/storage.ts");
   status: "VIVO",
   kills: 0,
   rating: 1000,
+  selectedOperativeId: "OP_MALE_TALON",
 });
 
 function uniqueId(prefix: string): string {
@@ -239,6 +240,19 @@ test("RoomManager: join em sala de OUTRO nó abre túnel e entrega welcome/room_
     assert.ok(roomState, "room_state deveria ser transmitido pelo túnel");
     const memberIds = roomState.room.players.map((p: any) => p.userId);
     assert.ok(memberIds.includes("u-host") && memberIds.includes("u-relay"));
+    const relayMemberAtJoin = roomState.room.players.find((p: any) => p.userId === "u-relay");
+    assert.equal(relayMemberAtJoin.selectedOperativeId, "OP_MALE_TALON");
+    const matchmakingHost = roomState.room.players.find((p: any) => p.userId === "u-host");
+    assert.equal(matchmakingHost.selectedOperativeId, "OP_MALE_TALON");
+
+    managerHost.updateSelectedOperative("u-relay", "OP_FEMALE_VALKYRIE");
+    await new Promise((resolve) => setImmediate(resolve));
+    const changedAvatarState = state.messages.filter((msg) => msg.type === "room_state").at(-1);
+    assert.equal(
+      changedAvatarState.room.players.find((p: any) => p.userId === "u-relay").selectedOperativeId,
+      "OP_FEMALE_VALKYRIE",
+      "a preferência atualizada em lobby deve voltar pelo relay",
+    );
 
     // set_ready roteado pelo túnel atualiza a sala AUTORITATIVA no nó B.
     assert.equal((managerOrigin as any).gateway.routeIfRelayed("u-relay", { type: "set_ready", ready: true }), true);
@@ -247,6 +261,17 @@ test("RoomManager: join em sala de OUTRO nó abre túnel e entrega welcome/room_
     const readyState = state.messages.filter((msg) => msg.type === "room_state").at(-1);
     const relayMember = readyState.room.players.find((p: any) => p.userId === "u-relay");
     assert.equal(relayMember.isReady, true);
+    assert.equal(relayMember.selectedOperativeId, "OP_FEMALE_VALKYRIE");
+
+    const authoritativeRoom = (managerHost as any).rooms.get(roomId);
+    authoritativeRoom.status = "IN_PROGRESS";
+    managerHost.updateSelectedOperative("u-relay", "OP_MALE_TALON");
+    assert.equal(
+      authoritativeRoom.players.get("u-relay").selectedOperativeId,
+      "OP_FEMALE_VALKYRIE",
+      "a identidade deve permanecer como snapshot durante a partida",
+    );
+    authoritativeRoom.status = "LOBBY";
 
     // Sala do usuário na ORIGEM permanece vazia (estado autoritativo no host).
     assert.equal((managerOrigin as any).userToRoom.get("u-relay"), undefined);

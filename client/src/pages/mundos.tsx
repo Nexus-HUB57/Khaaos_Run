@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { CyberCard } from "@/components/cyber-card";
 import { cn } from "@/lib/utils";
-import { KHAAOS_WORLDS, WORLD_ORDER, type WorldId } from "@shared/worlds";
+import { KHAAOS_WORLDS, WORLD_ORDER, WORLD_RING_DIMENSIONS, type WorldId } from "@shared/worlds";
+import { WorldMapPreview } from "@/components/world-map-preview";
 import {
   Sword, Shield, TreePine, Target, Truck, Zap, Clock, Users, Map,
   ChevronDown, ChevronUp, AlertTriangle, Star, Trophy, Radio,
@@ -222,6 +223,8 @@ export default function Mundos() {
               <WorldMetric label="DURAÇÃO-ALVO" value={`${world.targetDurationMinutes} min`} />
               <WorldMetric label="ESCALA" value={world.dimensionsKm} />
               <WorldMetric label="ZEX" value={`${world.zexNodes.length} nós`} />
+              <WorldMetric label="RING CANÔNICO" value={`${WORLD_RING_DIMENSIONS[world.id].areaM2.toLocaleString("pt-BR")} m²`} />
+              <WorldMetric label="DENSIDADE" value={`${WORLD_RING_DIMENSIONS[world.id].densityM2PerOperator} m²/op`} />
             </div>
             <div className="mt-4 border-t border-border/30 pt-4">
               <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-foreground">
@@ -232,6 +235,14 @@ export default function Mundos() {
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground"><span className="text-foreground">Acesso:</span> {world.unlockRule.description}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── MAPA TÁTICO DO RING (WorldMapPreview — canvas orgânico) ── */}
+      <div>
+        <SectionHeader label="MAPA TÁTICO DO RING" sub={`CONTRATO CANÔNICO · ${WORLD_RING_DIMENSIONS[selectedWorld].shape.toUpperCase()} · ${WORLD_RING_DIMENSIONS[selectedWorld].boundingBoxM.widthM}×${WORLD_RING_DIMENSIONS[selectedWorld].boundingBoxM.depthM} m · PERÍMETRO ${WORLD_RING_DIMENSIONS[selectedWorld].perimeterM} m`} />
+        <div className="mt-4">
+          <WorldMapPreview worldId={selectedWorld} height={340} />
         </div>
       </div>
 

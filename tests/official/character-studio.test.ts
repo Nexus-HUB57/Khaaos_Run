@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   KHAAOS_OPERATIVE_ARCHETYPES,
+  KHAAOS_MILITIA_ARCHETYPES,
   buildOperativePromptBundle,
 } from "../../shared/character-studio";
+import { OPERATIVE_AVATAR_OPTIONS } from "../../shared/operative-avatar-catalog";
 import { EP555_RANKS, SPECIALIZATION_IDS } from "../../shared/schema";
 import { WORLD_ORDER } from "../../shared/worlds";
 
@@ -44,7 +46,11 @@ test("Character Studio: 16 Operativos canônicos (8 masculinos e 8 femininos) co
     assert.ok(op.biomechanics.heightCm >= 160 && op.biomechanics.heightCm <= 200, `Height plausible`);
     assert.ok(op.biomechanics.massKg >= 50 && op.biomechanics.massKg <= 110, `Mass plausible`);
     assert.ok(op.biomechanics.sprintSpeedMps >= 6.0 && op.biomechanics.sprintSpeedMps <= 9.0);
-    assert.equal(op.biomechanics.skeleton, "UE5_Mannequin");
+    // Rig base por sexo (ADR-ESQUELETO-RIG-POR-SEXO): SK_Manny (M) / SK_Gwen (F)
+    assert.equal(
+      op.biomechanics.skeleton,
+      op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+    );
     assert.equal(op.biomechanics.lyraHeroBridge, "KhaaosLyraHeroComponent");
 
     // Prompt Bundle Generation
@@ -61,7 +67,10 @@ test("Character Studio: 16 Operativos canônicos (8 masculinos e 8 femininos) co
     assert.ok(bundle.imagePromptPt.includes(op.appearancePromptPt));
     assert.ok(bundle.videoPromptEn.toLowerCase().includes("single continuous tracking shot"));
     assert.equal(bundle.timelineKeyframes.length, 5, "Must have 5 timeline keyframes across 10s");
-    assert.equal(bundle.ue5ManifestEntry.skeleton, "UE5_Mannequin");
+    assert.equal(
+      bundle.ue5ManifestEntry.skeleton,
+      op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+    );
   }
 });
 
@@ -100,14 +109,26 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   assert.ok(fs.existsSync(publicCatalogPath), "Public avatar_catalog.json must exist");
 
   const catalog = JSON.parse(fs.readFileSync(contentCatalogPath, "utf8"));
+  assert.equal(
+    fs.readFileSync(contentCatalogPath, "utf8"),
+    fs.readFileSync(publicCatalogPath, "utf8"),
+    "Content and client avatar catalogs must remain byte-identical",
+  );
   // Fase 26 — 16 canônicos + TALON (Hacker & Urban Runner) = 17 no catálogo;
   // 9 masculinos (Talon entra como M-09) e 8 femininos.
-  assert.equal(catalog.length, 17, "Catalog must list 17 operatives");
+  // Lote 4 — +16 não-militares (8 milicianos MIL-01..08 + 8 gangues GNG-01..08) = 33;
+  // 17 masculinos e 16 femininos.
+  assert.equal(catalog.length, 33, "Catalog must list 33 operatives (17 militares + 16 Lote 4)");
 
   const males = catalog.filter((c: any) => c.gender === "MASCULINO");
   const females = catalog.filter((c: any) => c.gender === "FEMININO");
-  assert.equal(males.length, 9, "9 masculine avatars in catalog (incl. Talon M-09)");
-  assert.equal(females.length, 8, "8 feminine avatars in catalog");
+  assert.equal(males.length, 17, "17 masculine avatars in catalog (incl. Talon M-09)");
+  assert.equal(females.length, 16, "16 feminine avatars in catalog");
+  assert.deepEqual(
+    OPERATIVE_AVATAR_OPTIONS.map((item) => item.id).sort(),
+    catalog.map((item: any) => item.id).sort(),
+    "The server/client selectable IDs must exactly match the asset catalog",
+  );
 
   for (const item of catalog) {
     const contentSvgPath = path.resolve(item.svgPathContent);
@@ -121,18 +142,32 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
     assert.ok(svgContent.includes("viewBox=\"0 0 512 512\""), "512x512 tactical viewport");
     assert.ok(svgContent.includes(item.codename), "SVG includes codename watermark");
     assert.ok(svgContent.length > 1000, "SVG has rich vector content (>1000 bytes)");
+    const publicSvg = fs.readFileSync(publicSvgPath);
+    assert.ok(fs.readFileSync(contentSvgPath).equals(publicSvg), `${item.id} SVG copies must be byte-identical`);
+    const option = OPERATIVE_AVATAR_OPTIONS.find((candidate) => candidate.id === item.id);
+    assert.ok(option, `Selectable avatar option exists for ${item.id}`);
+    assert.equal(option.avatarPath, item.svgPathPublic, `Selectable option path matches ${item.id}`);
   }
 
   // Asset Manifest parity
   const manifestPath = path.resolve("Content/Assets/asset_manifest.json");
   assert.ok(fs.existsSync(manifestPath), "Content/Assets/asset_manifest.json must exist");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  assert.ok(manifest.characters && manifest.characters.length >= 17, "Manifest includes all 16 operatives plus base");
+  assert.ok(manifest.characters && manifest.characters.length >= 33, "Manifest includes all 32 playable operatives plus base");
 
-  for (const op of KHAAOS_OPERATIVE_ARCHETYPES) {
+  for (const op of [...KHAAOS_OPERATIVE_ARCHETYPES, ...KHAAOS_MILITIA_ARCHETYPES]) {
     const entry = manifest.characters.find((c: any) => c.id === op.ueAssetId);
     assert.ok(entry, `Manifest contains character entry for ${op.ueAssetId}`);
     assert.equal(entry.gender, op.gender);
+    // ADR-ESQUELETO-RIG-POR-SEXO: rig base por sexo, sem placeholder UE5_Mannequin
+    assert.equal(entry.skeleton, op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+      `${op.ueAssetId} deve carregar o rig canônico do seu sexo`);
     assert.ok(entry.avatar_svg && fs.existsSync(path.resolve(entry.avatar_svg)), `Manifest avatar_svg points to valid file for ${op.ueAssetId}`);
   }
+
+  // CHR_Zheers_Base (base da espécie, sem sexo) carrega o preview rig do SPC_Zheers
+  const base = manifest.characters.find((c: any) => c.id === "CHR_Zheers_Base");
+  assert.ok(base, "Manifest contains CHR_Zheers_Base");
+  assert.equal(base.skeleton, "SK_Manny", "preview rig da espécie Zheers é SK_Manny");
+  assert.ok(!JSON.stringify(manifest).includes("UE5_Mannequin"), "nenhum resíduo do placeholder UE5_Mannequin no manifest");
 });

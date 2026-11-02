@@ -10,7 +10,7 @@
     "skeleton": "SK_Gwen",
     "passive": "Energia Khaael - custo de habilidade -20%",
     "base_stats": {
-      "health": 70,
+      "health": 85,
       "energy": 150,
       "speed": 0.95
     },

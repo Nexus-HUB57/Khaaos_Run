@@ -53,7 +53,7 @@ for _ in $(seq 1 30); do pg_ready && break; sleep 0.5; done
 pg_ready || { echo "SMOKE_SETUP_FAIL: postgres"; exit 1; }
 echo "[wrap-ext] PostgreSQL 55432 pronto"
 
-# ── 3. Dois nós de aplicação de produção (dist/index.cjs) ────────────────────
+# ── 3. Dois nós de aplicação de produção (dist/index.mjs) ────────────────────
 nodeEnv() { # nodeId port
   echo "NODE_ENV=production PORT=$2 NODE_ID=$1 NODE_PUBLIC_URL=http://127.0.0.1:$2 \
 REDIS_URL=redis://127.0.0.1:56379 REDIS_NAMESPACE=khaaos_f16 \
@@ -63,9 +63,9 @@ SESSION_SECRET_CURRENT=f16-cross-node-smoke-session-secret-0123456789 \
 REPL_ID=khaaos-f16-smoke ALLOWED_WS_ORIGINS=http://127.0.0.1"
 }
 cd "$REPO"
-env $(nodeEnv staging-node-a 8910) node dist/index.cjs >"$LOGDIR/node-a.log" 2>&1 &
+env $(nodeEnv staging-node-a 8910) node dist/index.mjs >"$LOGDIR/node-a.log" 2>&1 &
 NODE_A_PID=$!
-env $(nodeEnv staging-node-b 8911) node dist/index.cjs >"$LOGDIR/node-b.log" 2>&1 &
+env $(nodeEnv staging-node-b 8911) node dist/index.mjs >"$LOGDIR/node-b.log" 2>&1 &
 NODE_B_PID=$!
 sleep 8
 

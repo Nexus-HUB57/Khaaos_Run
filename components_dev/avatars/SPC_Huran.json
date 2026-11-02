@@ -1,156 +1,531 @@
 {
   "id": "SPC_Huran",
   "name": "Huran",
+  "codename": "HURAN_PHD",
   "type": "amphibian",
-  "base_health": 110,
-  "base_energy": 90,
-  "base_speed": 1.0,
-  "height_cm": 168,
-  "weight_kg": 60,
-  "skeleton": "SK_Gwen",
-  "passive": "Regeneração Anfíbia — +5 HP/s na água",
+  "species_tag": "Species.Huran",
+  "lore": {
+    "origin": "Os Huran evoluiram nas planicies de inundacao de Barburhen, o Mundo Aquatico - anfibios perfeitos que respiram por branquias externas e pulmoes. Quando os Rings abriram, os Huran foram a primeira especie a sobreviver as mares mutantes de Barburhen sem abrigo. Nasceram para a agua; foram forjados para a guerra.",
+    "culture": "Organizados em Castas da Mare, os Huran medem honra pela capacidade de manter o grupo vivo - nao por eliminacoes. Seus bolsos de agua sagrados carregam o ultimo oceano limpo de Barburhen. Um Huran que abandona um aliado na agua perde a casta para sempre.",
+    "motivation": "Reclamar Barburhen das mares venenosas e provar que a paciencia anfibia vence a furia terrestre. Cada vitoria financia mais um banco de filtragem para o oceano natal.",
+    "relationship_with_khaaos": "O Khaaos corrente nas mares de Barburhen - e os Huran aprendem a le-lo na pele. Submersos no Pulso, a regeneracao anfibia dobra e a pele iridescente antecipa o proximo ringue como um pronostico de tempestade."
+  },
+  "base_stats": {
+    "health": 110,
+    "energy": 90,
+    "speed": 1.1,
+    "stamina": 110,
+    "armor_base": 10,
+    "shield_capacity": 0,
+    "regen_health_per_sec": 0.5,
+    "regen_energy_per_sec": 1.0,
+    "regen_stamina_per_sec": 2.2,
+    "crit_chance": 0.05,
+    "crit_multiplier": 1.5
+  },
+  "stat_curves": {
+    "health_per_level": [
+      110,
+      123,
+      138,
+      155,
+      174,
+      196,
+      220,
+      247,
+      278,
+      313
+    ],
+    "energy_per_level": [
+      90,
+      98,
+      107,
+      117,
+      128,
+      140,
+      153,
+      167,
+      182,
+      199
+    ],
+    "speed_per_level": [
+      1.1,
+      1.13,
+      1.16,
+      1.19,
+      1.23,
+      1.27,
+      1.31,
+      1.36,
+      1.42,
+      1.48
+    ]
+  },
+  "physical": {
+    "height_cm": 168,
+    "weight_kg": 60,
+    "skeleton": "SK_Gwen",
+    "morph_targets": [
+      "MT_Huran_Aquatic",
+      "MT_Huran_Bulked",
+      "MT_Huran_Sleek"
+    ],
+    "ik_settings": {
+      "foot_ik_enabled": true,
+      "foot_ik_trace_distance": 48.0,
+      "hand_ik_enabled": true,
+      "hand_ik_reach_radius": 48.0,
+      "full_body_ik_blend": 0.7
+    },
+    "clothing_physics": {
+      "cloth_sim_enabled": true,
+      "cloth_wind_scale": 0.7,
+      "cloth_damping": 0.4,
+      "cloth_stiffness": 0.55,
+      "loose_parts": [
+        "fin_crest",
+        "water_sac_pouch",
+        "leg_straps"
+      ]
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
+  },
+  "passive": {
+    "name": "Regeneracao Aquatica",
+    "description": "+5 HP/s e +3 stamina/s em contato com agua. Submerso, +10% velocidade e a pele iridescente antecipa dano: -10% de dano recebido por 2s apos entrar na agua.",
+    "tag": "Ability.Passive.Species.Huran.RegeneracaoAquatica",
+    "class": "KhaaosAbility_HuranPassive",
+    "mechanics": [
+      {
+        "trigger": "in_water",
+        "effect": "health_regen",
+        "value": 5.0
+      },
+      {
+        "trigger": "in_water",
+        "effect": "stamina_regen",
+        "value": 3.0
+      },
+      {
+        "trigger": "in_water",
+        "effect": "speed_bonus",
+        "value": 0.1
+      },
+      {
+        "trigger": "on_enter_water",
+        "effect": "damage_reduction",
+        "value": 0.1,
+        "duration": 2.0
+      }
+    ]
+  },
+  "active_abilities": [
+    {
+      "name": "Mare de Choque",
+      "tag": "Ability.Species.Huran.TidalSurge",
+      "cooldown": 2.0,
+      "energy_cost": 15,
+      "duration": 0.0,
+      "description": "Onda de agua em AoE de 8m que empurra todos os inimigos (40 de dano, knockback 800).",
+      "vfx": "VFX_Huran_TidalSurge",
+      "sfx": "SFX_Huran_TidalSurge"
+    },
+    {
+      "name": "Escudo Aquatico",
+      "tag": "Ability.Species.Huran.AquaShield",
+      "cooldown": 15.0,
+      "energy_cost": 25,
+      "duration": 10.0,
+      "description": "Barreira de agua absorve 50 de dano por 10s.",
+      "vfx": "VFX_Huran_AquaShield",
+      "sfx": "SFX_Huran_AquaShield"
+    },
+    {
+      "name": "Furia Tsunami",
+      "tag": "Ability.Species.Huran.TsunamiRage",
+      "cooldown": 120.0,
+      "energy_cost": 80,
+      "duration": 3.0,
+      "description": "Ultimate: onda massiva de 15m de largura que causa 150 de dano e empurra tudo em 15m.",
+      "vfx": "VFX_Huran_TsunamiRage",
+      "sfx": "SFX_Huran_TsunamiRage"
+    }
+  ],
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_HuranAbilities.h",
+    "abilities": [
+      {
+        "name": "TidalSurge",
+        "tag": "Ability.Species.Huran.TidalSurge",
+        "cooldown": 2.0,
+        "energy": 15.0,
+        "damage": 40.0,
+        "range": 800.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "AquaShield",
+        "tag": "Ability.Species.Huran.AquaShield",
+        "cooldown": 15.0,
+        "energy": 25.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 10.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "DiveBomb",
+        "tag": "Ability.Species.Huran.DiveBomb",
+        "cooldown": 8.0,
+        "energy": 30.0,
+        "damage": 30.0,
+        "range": 2000.0,
+        "duration": 0.5,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "FloodZone",
+        "tag": "Ability.Species.Huran.FloodZone",
+        "cooldown": 30.0,
+        "energy": 40.0,
+        "damage": 0.0,
+        "range": 500.0,
+        "duration": 15.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "PressureStrike",
+        "tag": "Ability.Species.Huran.PressureStrike",
+        "cooldown": 4.0,
+        "energy": 20.0,
+        "damage": 75.0,
+        "range": 150.0,
+        "duration": 2.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "GillsRegen",
+        "tag": "Ability.Species.Huran.GillsRegen",
+        "cooldown": 5.0,
+        "energy": 10.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": true
+      },
+      {
+        "name": "Whirlpool",
+        "tag": "Ability.Species.Huran.Whirlpool",
+        "cooldown": 20.0,
+        "energy": 35.0,
+        "damage": 15.0,
+        "range": 600.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "TsunamiRage",
+        "tag": "Ability.Species.Huran.TsunamiRage",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 150.0,
+        "range": 1500.0,
+        "duration": 3.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
+  },
   "skins": [
     {
       "id": "SKN_Huran_Recruta",
       "name": "Recruta",
       "rarity": "COMUM",
       "color_primary": "#84CC16",
+      "color_secondary": "#4D7C0F",
       "color_accent": "#D9F99D",
-      "unlock_rank": "RECRUTA"
+      "color_emissive": "#A3E635",
+      "material_override": null,
+      "unlock_rank": "RECRUTA",
+      "description": "Pele lima padrao das Castas da Mare com branquias expostas."
     },
     {
       "id": "SKN_Huran_Veterano",
       "name": "Veterano",
       "rarity": "RARO",
       "color_primary": "#65A30D",
+      "color_secondary": "#3F6212",
       "color_accent": "#BEF264",
-      "unlock_rank": "HURAN"
+      "color_emissive": "#84CC16",
+      "material_override": "MAT_Huran_Veterano_Marisol",
+      "unlock_rank": "HURAN",
+      "description": "Cicatrizes de mare e placas de filtro de agua polidas pelo uso."
     },
     {
       "id": "SKN_Huran_CIGKV_Elite",
       "name": "CIGKV Elite",
       "rarity": "EPICO",
       "color_primary": "#7C3AED",
+      "color_secondary": "#4C1D95",
       "color_accent": "#C4B5FD",
-      "unlock_rank": "VENEX"
+      "color_emissive": "#8B5CF6",
+      "material_override": "MAT_Huran_Elite_CorrenteVioleta",
+      "unlock_rank": "VENEX",
+      "description": "Corrente venenosa das zonas profundas - iridescencia violeta reativa."
     },
     {
       "id": "SKN_Huran_Guarda_Overlord",
       "name": "Guarda Overlord",
       "rarity": "LENDARIO",
       "color_primary": "#F59E0B",
+      "color_secondary": "#78350F",
       "color_accent": "#FDE68A",
-      "unlock_rank": "ONITH"
+      "color_emissive": "#FBBF24",
+      "material_override": "MAT_Huran_Overlord_CrestAureo",
+      "unlock_rank": "ONITH",
+      "description": "Crista dorsal aurea dos guardas do Ultimo Oceano."
     },
     {
       "id": "SKN_Huran_Khaaos_Prime",
       "name": "Khaaos Prime",
       "rarity": "MITICO",
       "color_primary": "#EF4444",
+      "color_secondary": "#7F1D1D",
       "color_accent": "#FCA5A5",
-      "unlock_rank": "MALAKOR"
+      "color_emissive": "#DC2626",
+      "material_override": "MAT_Huran_KhaaosPrime_MareVermelha",
+      "unlock_rank": "MALAKOR",
+      "description": "A Mare Vermelha - pele que pulsa com o proprio Khaaos de Barburhen."
     }
   ],
-  "animations": [
-    {
-      "id": "ANM_SPC_Huran_01",
-      "name": "idle",
-      "skeleton": "SK_Gwen"
+  "animations": {
+    "base_skeleton": "SK_Gwen",
+    "blend_spaces": [
+      {
+        "id": "BS_Huran_Move",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Direction"
+        ],
+        "samples": 9
+      },
+      {
+        "id": "BS_Huran_AimOffset",
+        "type": "1D",
+        "axes": [
+          "Pitch"
+        ],
+        "samples": 7
+      },
+      {
+        "id": "BS_Huran_Swim",
+        "type": "2D",
+        "axes": [
+          "Speed",
+          "Depth"
+        ],
+        "samples": 6
+      }
+    ],
+    "anim_sequences": [
+      {
+        "id": "ANM_Huran_idle",
+        "name": "idle",
+        "duration": 1.5,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_walk",
+        "name": "walk",
+        "duration": 0.8,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_run",
+        "name": "run",
+        "duration": 0.6,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_sprint",
+        "name": "sprint",
+        "duration": 0.45,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_slide",
+        "name": "slide",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_crouch_idle",
+        "name": "crouch_idle",
+        "duration": 1.2,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_crouch_walk",
+        "name": "crouch_walk",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_jump_start",
+        "name": "jump_start",
+        "duration": 0.3,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_jump_loop",
+        "name": "jump_loop",
+        "duration": 0.25,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_jump_land",
+        "name": "jump_land",
+        "duration": 0.25,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_mantle",
+        "name": "mantle",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_vault",
+        "name": "vault",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_shoot_rifle",
+        "name": "shoot_rifle",
+        "duration": 0.15,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_reload",
+        "name": "reload",
+        "duration": 2.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_melee_swing",
+        "name": "melee_swing",
+        "duration": 0.4,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_downed",
+        "name": "downed",
+        "duration": 1.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_eliminated",
+        "name": "eliminated",
+        "duration": 1.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_revive",
+        "name": "revive",
+        "duration": 3.0,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_loot_pickup",
+        "name": "loot_pickup",
+        "duration": 0.6,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_throw_grenade",
+        "name": "throw_grenade",
+        "duration": 0.5,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_swim_idle",
+        "name": "swim_idle",
+        "duration": 2.0,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_swim_fast",
+        "name": "swim_fast",
+        "duration": 0.55,
+        "loop": true
+      },
+      {
+        "id": "ANM_Huran_tidal_surge",
+        "name": "tidal_surge",
+        "duration": 0.7,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_aqua_shield",
+        "name": "aqua_shield",
+        "duration": 0.8,
+        "loop": false
+      },
+      {
+        "id": "ANM_Huran_tsunami_rage",
+        "name": "tsunami_rage",
+        "duration": 2.5,
+        "loop": false
+      }
+    ]
+  },
+  "audio": {
+    "footstep_surfaces": {
+      "metal": "SFX_FStep_Metal_Wet",
+      "dirt": "SFX_FStep_Dirt_Squelch",
+      "concrete": "SFX_FStep_Concrete_Drip",
+      "water": "SFX_FStep_Water_Amphibian"
     },
-    {
-      "id": "ANM_SPC_Huran_02",
-      "name": "walk",
-      "skeleton": "SK_Gwen"
+    "voice_lines": {
+      "eliminate": "VO_Huran_Elim",
+      "eliminated": "VO_Huran_Down",
+      "revive": "VO_Huran_Revive",
+      "ultimate": "VO_Huran_Ult"
     },
-    {
-      "id": "ANM_SPC_Huran_03",
-      "name": "run",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_04",
-      "name": "sprint",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_05",
-      "name": "slide",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_06",
-      "name": "jump_start",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_07",
-      "name": "jump_loop",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_08",
-      "name": "jump_land",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_09",
-      "name": "shoot_rifle",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_10",
-      "name": "shoot_sniper",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_11",
-      "name": "shoot_shotgun",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_12",
-      "name": "reload",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_13",
-      "name": "melee",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_14",
-      "name": "downed",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_15",
-      "name": "eliminated",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_16",
-      "name": "revive",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_17",
-      "name": "grappling_hook",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_18",
-      "name": "shield_activate",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_19",
-      "name": "heal_use",
-      "skeleton": "SK_Gwen"
-    },
-    {
-      "id": "ANM_SPC_Huran_20",
-      "name": "loot_pickup",
-      "skeleton": "SK_Gwen"
-    }
-  ]
+    "ambient_emitter": "SFX_Huran_Ambient_WaterPulse"
+  },
+  "vfx": {
+    "passive_indicator": "VFX_Huran_AmphibianGlow",
+    "ability_1": "VFX_Huran_TidalSurge",
+    "ability_2": "VFX_Huran_AquaShield",
+    "ultimate": "VFX_Huran_TsunamiRage",
+    "death": "VFX_Huran_DeathDissolve",
+    "spawn": "VFX_Huran_SpawnBarburhen"
+  },
+  "available_worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "meta": {
+    "design_tier": "PhD",
+    "balance_version": "2.0",
+    "designer": "Nexus-HUB57"
+  }
 }

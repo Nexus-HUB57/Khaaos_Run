@@ -106,7 +106,7 @@ jobs:
 
   # ─── Job 2: UE5.8 licenciado — UBT + Automation + dois clientes (+ package) ──
   ue58-gate:
-    name: Engine licenciada gate (UE_CONTAINER_PAT — validação funcional)
+    name: Engine licenciada gate (UE_CONTAINER_PAT/UE5_GITHUB_TOKEN — validação funcional)
     runs-on: ubuntu-latest
     outputs:
       has_pat: ${{ steps.check.outputs.has_pat }}
@@ -115,7 +115,7 @@ jobs:
       - name: Check Epic container credential (login ghcr funcional)
         id: check
         env:
-          UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
+          UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT || secrets.UE5_GITHUB_TOKEN }}
           UE_CONTAINER_USER: ${{ vars.UE_CONTAINER_USER }}
           ACTOR: ${{ github.actor }}
         run: |
@@ -126,9 +126,9 @@ jobs:
           if [ -z "$UE_CONTAINER_PAT" ]; then
             echo "has_pat=false" >> "$GITHUB_OUTPUT"
             {
-              echo "- ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha; a estrutura C++ é validada no ue5-preflight)."
+              echo "- ℹ️ UE_CONTAINER_PAT/UE5_GITHUB_TOKEN ausentes — build/Automation UE5.8 PULADO (não é falha; a estrutura C++ é validada no ue5-preflight)."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "ℹ️ UE_CONTAINER_PAT ausente — build/Automation UE5.8 PULADO (não é falha)."
+            echo "ℹ️ UE_CONTAINER_PAT/UE5_GITHUB_TOKEN ausentes — build/Automation UE5.8 PULADO (não é falha)."
             exit 0
           fi
           LOGIN_USER="${UE_CONTAINER_USER:-$ACTOR}"
@@ -140,21 +140,21 @@ jobs:
             echo "has_pat=true" >> "$GITHUB_OUTPUT"
             echo "login_user=$LOGIN_USER" >> "$GITHUB_OUTPUT"
             {
-              echo "- ✅ **UE_CONTAINER_PAT autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha UE5.8 real habilitada."
+              echo "- ✅ **Credencial de container autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha UE5.8 real habilitada."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "✅ UE_CONTAINER_PAT autentica no ghcr — trilha UE5.8 real habilitada"
+            echo "✅ credencial de container autentica no ghcr — trilha UE5.8 real habilitada"
           else
             echo "has_pat=false" >> "$GITHUB_OUTPUT"
             {
-              echo "- ❌ **UE_CONTAINER_PAT presente mas NÃO autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha PULADA (a CI NÃO falha por isso)."
+              echo "- ❌ **Credencial de container presente mas NÃO autentica no ghcr** (usuário \`$LOGIN_USER\`) — trilha PULADA (a CI NÃO falha por isso)."
               echo ""
               echo '```'
               grep -i -m 3 'denied\|unauthorized\|error' "$LOGIN_ERR" || head -3 "$LOGIN_ERR"
               echo '```'
               echo ""
-              echo "**Correção:** PAT de conta vinculada à Epic (EULA + \`read:packages\`) → \`gh secret set UE_CONTAINER_PAT\`; usuário em \`UE_CONTAINER_USER\` se ≠ actor."
+              echo "**Correção:** PAT de conta vinculada à Epic (EULA + \`read:packages\`) em \`UE_CONTAINER_PAT\` ou \`UE5_GITHUB_TOKEN\`; configure \`UE_CONTAINER_USER\` se ≠ actor."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::UE_CONTAINER_PAT presente mas NÃO autentica no ghcr — trilha pulada com diagnóstico no summary"
+            echo "::warning::credencial presente mas NÃO autentica no ghcr — trilha pulada com diagnóstico no summary"
           fi
           rm -f "$LOGIN_ERR"
 
@@ -169,7 +169,7 @@ jobs:
       credentials:
         # username validado funcionalmente pelo gate (UE_CONTAINER_USER > actor)
         username: ${{ needs.ue58-gate.outputs.login_user || github.actor }}
-        password: ${{ secrets.UE_CONTAINER_PAT }}
+        password: ${{ secrets.UE_CONTAINER_PAT || secrets.UE5_GITHUB_TOKEN }}
       options: --user root
     steps:
       - uses: actions/checkout@v4
@@ -259,7 +259,7 @@ jobs:
             echo "## M4 — UE5.8 real"
             echo ""
             if [ "${{ needs.ue58-gate.outputs.has_pat }}" != "true" ]; then
-              echo "**SKIPPED** — configure o secret UE_CONTAINER_PAT (conta GitHub vinculada à Epic) para habilitar a trilha licenciada."
+              echo "**SKIPPED** — configure UE_CONTAINER_PAT ou UE5_GITHUB_TOKEN com EULA Epic e permissão read:packages para habilitar a trilha licenciada."
             else
               grep -q "AUTOMATION_OK" /tmp/automation-contract.txt 2>/dev/null && echo "**AUTOMATION_OK** — suite Khaaos executada com exit 0" || echo "Automation: ver etapas"
               grep -q "^TWO_CLIENT_CONNECT_SMOKE_OK$" /tmp/two-client.log 2>/dev/null && echo "**TWO_CLIENT_CONNECT_SMOKE_OK** — dois clientes reais conectaram ao servidor dedicado" || echo "Two-client: ver etapas"

@@ -122,8 +122,8 @@ function parseBody(req: Request, res: any, schema: z.ZodTypeAny): Record<string,
   const parsed = schema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({
-      message: parsed.error.errors[0]?.message ?? "Payload inválido",
-      issues: parsed.error.errors.map((e) => ({ path: e.path.join("."), message: e.message })),
+      message: parsed.error.issues[0]?.message ?? "Payload inválido",
+      issues: parsed.error.issues.map((e) => ({ path: e.path.join("."), message: e.message })),
     });
     return null;
   }

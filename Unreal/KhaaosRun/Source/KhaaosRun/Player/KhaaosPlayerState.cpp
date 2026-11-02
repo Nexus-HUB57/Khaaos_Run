@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Player/KhaaosPlayerState.h"
+#include "Player/KhaaosCharacter.h"
 #include "KhaaosRun.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbility.h"
@@ -8,11 +9,14 @@
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/KhaaosGameMode.h"
+#include "Game/WorldGen/KhaaosEnvironmentalDamagePolicy.h"
 #include "Game/UI/KhaaosHUD.h"
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 
@@ -198,6 +202,28 @@ void AKhaaosPlayerState::HandleAttributeChanged(
 	{
 		MaxEnergy = NewValue;
 	}
+
+	if (AttributeName == TEXT("Health") || AttributeName == TEXT("MaxHealth") ||
+		AttributeName == TEXT("Shield") || AttributeName == TEXT("MaxShield"))
+	{
+		if (APawn* Pawn = GetPawn())
+		{
+			if (AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(Pawn))
+			{
+				Character->SyncHealthAndShieldFromPlayerState(
+					Health, MaxHealth,
+					KhaaosAttributeSet ? KhaaosAttributeSet->GetShield() : 0.0f,
+					KhaaosAttributeSet ? KhaaosAttributeSet->GetMaxShield() : 0.0f);
+			}
+			if (AttributeName == TEXT("Health") || AttributeName == TEXT("MaxHealth"))
+			{
+				if (UKhaaosVitalityComponent* Vitality = Pawn->FindComponentByClass<UKhaaosVitalityComponent>())
+				{
+					Vitality->InitializeFromASC(AbilitySystemComponent);
+				}
+			}
+		}
+	}
 }
 
 void AKhaaosPlayerState::HandleOutOfHealth(
@@ -212,8 +238,10 @@ void AKhaaosPlayerState::HandleOutOfHealth(
 	}
 
 	const bool bKilledByZone = Cast<AKhaaosSafeZone>(EffectCauser) != nullptr;
-	APlayerState* Eliminator = bKilledByZone ? nullptr : Cast<APlayerState>(EffectCauser);
-	const FString Cause = bKilledByZone ? TEXT("ZONA") : (Eliminator ? TEXT("PVP") : TEXT("QUEDA"));
+	const bool bKilledByEnvironment = bApplyingWorldEnvironmentalDamage;
+	APlayerState* Eliminator = (bKilledByZone || bKilledByEnvironment) ? nullptr : Cast<APlayerState>(EffectCauser);
+	const FString Cause = bKilledByZone ? TEXT("ZONA") :
+		(bKilledByEnvironment ? TEXT("AMBIENTE") : (Eliminator ? TEXT("PVP") : TEXT("QUEDA")));
 
 	if (UWorld* World = GetWorld())
 	{
@@ -286,7 +314,8 @@ float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayT
 		DamageAmount,
 		DamageType,
 		KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
-		KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+		KhaaosAttributeSet->GetOnithExplosionDamageReduction(),
+		KhaaosAttributeSet->GetZheersEnvironmentalDamageReduction());
 	if (MitigatedDamage <= 0.0f)
 	{
 		return 0.0f;
@@ -308,6 +337,28 @@ float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayT
 
 	const float ActualDamage = FMath::Max(0.0f, OldHealth - KhaaosAttributeSet->GetHealth());
 	DamageDealt += ActualDamage;
+	return ActualDamage;
+}
+
+float AKhaaosPlayerState::ApplyWorldEnvironmentalDamage(float DamageAmount, AActor* DamageCauser, FName SourceWorldId)
+{
+	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo || !KhaaosAttributeSet || DamageAmount <= 0.0f ||
+		!KhaaosEnvironmentalDamagePolicy::IsSourceWorldActive(GetWorld(), SourceWorldId))
+	{
+		return 0.0f;
+	}
+
+	const FGameplayTag EnvironmentDamageTag = FKhaaosGameplayTags::Get().Effect_Damage_Environment;
+	if (!EnvironmentDamageTag.IsValid())
+	{
+		return 0.0f;
+	}
+
+	const bool bWasApplyingEnvironmentDamage = bApplyingWorldEnvironmentalDamage;
+	bApplyingWorldEnvironmentalDamage = true;
+	const float ActualDamage = KhaaosAttributeSet->ApplyDamageOfType(
+		DamageAmount, DamageCauser, EnvironmentDamageTag);
+	bApplyingWorldEnvironmentalDamage = bWasApplyingEnvironmentDamage;
 	return ActualDamage;
 }
 

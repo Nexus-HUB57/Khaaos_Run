@@ -13,7 +13,7 @@
   "base_stats": {
     "health": 80,
     "energy": 120,
-    "speed": 1.15,
+    "speed": 1.3,
     "stamina": 80,
     "armor_base": 0,
     "shield_capacity": 0,
@@ -49,16 +49,16 @@
       255
     ],
     "speed_per_level": [
-      1.15,
-      1.18,
-      1.21,
-      1.25,
-      1.29,
-      1.34,
-      1.39,
-      1.45,
-      1.52,
-      1.6
+      1.3,
+      1.33,
+      1.36,
+      1.4,
+      1.44,
+      1.5,
+      1.56,
+      1.63,
+      1.71,
+      1.8
     ]
   },
   "physical": {
@@ -87,7 +87,12 @@
         "feather_cape",
         "leg_straps"
       ]
-    }
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
   },
   "passive": {
     "name": "Visao Espectral",
@@ -434,5 +439,98 @@
     "design_tier": "PhD",
     "balance_version": "2.0",
     "designer": "Nexus-HUB57"
+  },
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_SkeetwAbilities.h",
+    "abilities": [
+      {
+        "name": "FogCloud",
+        "tag": "Ability.Species.Skeetw.FogCloud",
+        "cooldown": 10.0,
+        "energy": 15.0,
+        "damage": 0.0,
+        "range": 800.0,
+        "duration": 6.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "SkyDive",
+        "tag": "Ability.Species.Skeetw.SkyDive",
+        "cooldown": 8.0,
+        "energy": 25.0,
+        "damage": 70.0,
+        "range": 1500.0,
+        "duration": 1.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "TalonStrike",
+        "tag": "Ability.Species.Skeetw.TalonStrike",
+        "cooldown": 3.0,
+        "energy": 10.0,
+        "damage": 50.0,
+        "range": 200.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "WindGust",
+        "tag": "Ability.Species.Skeetw.WindGust",
+        "cooldown": 6.0,
+        "energy": 15.0,
+        "damage": 10.0,
+        "range": 800.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "FeatherFlurry",
+        "tag": "Ability.Species.Skeetw.FeatherFlurry",
+        "cooldown": 4.0,
+        "energy": 15.0,
+        "damage": 15.0,
+        "range": 1500.0,
+        "duration": 0.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Camouflage",
+        "tag": "Ability.Species.Skeetw.Camouflage",
+        "cooldown": 25.0,
+        "energy": 20.0,
+        "damage": 0.0,
+        "range": 0.0,
+        "duration": 4.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "ScoutEye",
+        "tag": "Ability.Species.Skeetw.ScoutEye",
+        "cooldown": 12.0,
+        "energy": 15.0,
+        "damage": 0.0,
+        "range": 2500.0,
+        "duration": 5.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "StormCall",
+        "tag": "Ability.Species.Skeetw.StormCall",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 25.0,
+        "range": 1000.0,
+        "duration": 4.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
   }
 }

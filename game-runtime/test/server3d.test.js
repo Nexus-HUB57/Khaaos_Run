@@ -25,8 +25,10 @@ async function waitFor(fn, timeoutMs = 5000, step = 25) {
   throw new Error(`waitFor esgotou (${timeoutMs}ms)`);
 }
 
-function connect(port, token, mode = '3d') {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${encodeURIComponent(token)}&mode=${mode}`);
+function connect(port, token, mode = '3d', resume = null) {
+  const params = new URLSearchParams({ token, mode });
+  if (resume) params.set('resume', resume);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?${params}`);
   const state = { messages: [], snapshots: [], closed: null };
   ws.on('message', (raw) => {
     const msg = JSON.parse(raw.toString());
@@ -134,6 +136,89 @@ test('server 3D end-to-end: login → matchmaking → partida → snapshots → 
     c1.ws.close();
     c2d.ws.close();
   } finally {
+    await app.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}, { timeout: 20000 });
+
+test('server 3D: MP-ZEX-08 cancela canal na desconexão e preserva resume', async () => {
+  process.env.KR_DEV_AUTH = '1';
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-zex-disconnect-'));
+  const app = createAuthoritativeServer({
+    port: 0,
+    roomCapacity: 4,
+    store: new DurableJsonStore(path.join(dir, 'state.json')),
+    rateStore: new SharedMemoryRateStore(),
+  });
+  const sockets = [];
+  await new Promise((resolve) => app.server.listen(0, resolve));
+  const port = app.server.address().port;
+
+  try {
+    const login = async (username) => {
+      const response = await fetch(`http://127.0.0.1:${port}/auth/login`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username, password: 'kr123' }),
+      });
+      assert.equal(response.status, 200);
+      return (await response.json()).token;
+    };
+    const [tokenA, tokenB] = await Promise.all([login('kr_player'), login('kr_admin')]);
+    const a = connect(port, tokenA);
+    sockets.push(a);
+    await new Promise((resolve, reject) => { a.ws.once('open', resolve); a.ws.once('error', reject); });
+    const foundA = await waitFor(() => a.state.messages.find((m) => m.type === 'match_found'));
+    const b = connect(port, tokenB);
+    sockets.push(b);
+    await new Promise((resolve, reject) => { b.ws.once('open', resolve); b.ws.once('error', reject); });
+    const foundB = await waitFor(() => b.state.messages.find((m) => m.type === 'match_found'));
+    assert.equal(foundB.roomId, foundA.roomId, 'os dois clientes devem estar na mesma sala');
+
+    const room = app.rooms.get(foundA.roomId);
+    assert.ok(room?.is3d);
+    a.ws.send(JSON.stringify({ type: 'start', entry: 'belt' }));
+    await waitFor(() => a.state.snapshots.find((snapshot) => snapshot.state === 'IN_PROGRESS'));
+    const actorA = room.humans.get(foundA.id), actorB = room.humans.get(foundB.id);
+    assert.ok(actorA && actorB);
+    const terminal = room.terminals.find((t) => !room.doors.some((d) => !d.destroyed && Math.hypot(d.x - t.x, d.z - t.z) < 2.6));
+    assert.ok(terminal, 'deve haver um terminal sem porta concorrente para o teste');
+    for (const item of room.loot) item.active = false;
+    for (const bot of room.bots) bot.alive = false; // isola a integração de ruído de combate dos bots
+    actorA.x = actorB.x = terminal.x;
+    actorA.z = actorB.z = terminal.z;
+    for (const actor of [actorA, actorB]) {
+      actor.dropPhase = null;
+      actor.y = 0; actor.vy = 0; actor.onGround = true;
+    }
+    const xpBefore = actorA.xp;
+
+    a.ws.send(JSON.stringify({ type: 'input', input: blank3D(1, { interact: true }) }));
+    await waitFor(() => actorA.zexChannel);
+    assert.equal(terminal.channelerId, foundA.id);
+    a.ws.terminate();
+    await waitFor(() => a.state.closed !== null);
+    await waitFor(() => actorA.zexChannel === null && terminal.channelerId === null, 1000);
+    assert.equal(terminal.active, true, 'desconectar não consome o terminal');
+    assert.equal(actorA.extracted, 0);
+    assert.equal(actorA.xp, xpBefore, 'desconectar não concede XP');
+    assert.ok(room.events.get(foundA.id)?.some((event) => event.type === 'extractCancelled' && event.reason === 'disconnect'));
+
+    b.ws.send(JSON.stringify({ type: 'input', input: blank3D(1, { interact: true }) }));
+    await waitFor(() => actorB.zexChannel);
+    assert.equal(terminal.channelerId, foundB.id, 'o outro jogador consegue reservar após a queda');
+
+    await new Promise((resolve) => setTimeout(resolve, 100)); // aguarda a gravação do token de resume no store local
+    const resumed = connect(port, tokenA, '3d', foundA.resumeToken);
+    sockets.push(resumed);
+    await new Promise((resolve, reject) => { resumed.ws.once('open', resolve); resumed.ws.once('error', reject); });
+    const resumedMessage = await waitFor(() => resumed.state.messages.find((m) => m.type === 'resumed'));
+    assert.equal(resumedMessage.id, foundA.id);
+    assert.equal(resumedMessage.roomId, foundA.roomId);
+    assert.equal(resumedMessage.snapshot.player.zexChannel, null);
+    assert.equal(resumedMessage.snapshot.terminals.find((t) => t.id === terminal.id).channeling, true);
+    assert.ok(resumedMessage.snapshot.events.some((event) => event.type === 'extractCancelled' && event.reason === 'disconnect'));
+  } finally {
+    for (const client of sockets) if (client.ws.readyState === WebSocket.OPEN) client.ws.close();
     await app.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }

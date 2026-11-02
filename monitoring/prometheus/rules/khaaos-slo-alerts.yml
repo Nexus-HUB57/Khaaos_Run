@@ -74,6 +74,48 @@ groups:
           summary: "Relay cross-node com erros sustentados em {{ $labels.job }}"
           description: "Túneis falhando (publish_failed). Ver PB-03 (mesh/relay) e checar índice de nós no Redis."
 
+      # ── PAGE: o runtime perdeu o Redis usado por ownership/relay ──
+      - alert: KhaaosRedisPubSubDown
+        expr: khaaos_runtime_redis_pubsub_up == 0
+        for: 2m
+        labels:
+          severity: page
+          slo: redis-relay
+        annotations:
+          summary: "Redis relay indisponível em {{ $labels.instance }}"
+          description: "A réplica segue viva, mas ownership, relay e sincronização cross-node estão degradados. Verificar Redis e conectividade do nó."
+
+      # ── PAGE: o stream perdeu eventos entre réplicas ──
+      - alert: KhaaosRedisPubSubGaps
+        expr: khaaos:slo:redis_pubsub_gap_rate_5m > 0
+        for: 2m
+        labels:
+          severity: page
+          slo: redis-relay
+        annotations:
+          summary: "Gaps no relay Redis entre réplicas em {{ $labels.job }}"
+          description: "Eventos de sala foram pulados pelo consumidor monotônico. Investigar saturação, latência ou retenção do stream."
+
+      - alert: KhaaosRedisPubSubReadErrors
+        expr: khaaos:slo:redis_pubsub_read_error_rate_5m > 0
+        for: 5m
+        labels:
+          severity: ticket
+          slo: redis-relay
+        annotations:
+          summary: "Erros persistentes de leitura do relay Redis em {{ $labels.job }}"
+          description: "O espelho cross-node não consegue ler o stream global; validar Redis, ACLs e latência de rede."
+
+      - alert: KhaaosFrozenRooms
+        expr: khaaos_runtime_distributed_frozen_rooms > 0
+        for: 2m
+        labels:
+          severity: page
+          slo: ownership
+        annotations:
+          summary: "Salas congeladas após perda de ownership em {{ $labels.instance }}"
+          description: "Uma réplica perdeu lease/fence. Confirmar failover e que os clientes foram redirecionados ao novo owner."
+
       # ── Fences disparando = partição de rede / split-brain em curso ──
       - alert: KhaaosRoomFencedSpike
         expr: khaaos:slo:room_fenced_rate_5m > 0

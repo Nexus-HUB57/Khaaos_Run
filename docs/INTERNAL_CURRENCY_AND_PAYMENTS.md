@@ -69,6 +69,10 @@ Começar em sandbox; depois canary limitado por feature flag, país e pacote, co
 
 Valores são inteiros em minor units e moedas ISO 4217; nunca `float` para dinheiro. Persistir apenas os dados pessoais estritamente necessários. Não gravar PAN, CVV, segredo de webhook, client secret ou tokens de pagamento no ledger nem nos logs.
 
+## Progressão competitiva e partidas de participante único
+
+XP e Rating são progressão competitiva autoritativa, separada do settlement de KRC. `applyMatchRankings` só aplica resultados quando há **pelo menos dois participantes**; uma sala de treino/partida de jogador único não grava `match_results` nem altera XP, Rating, rank ou contadores derivados de ranking. Isso não desativa a fila `mode="solo"` quando há dois ou mais concorrentes humanos. O settlement de KRC é um pipeline distinto; esta regra não altera seus pagamentos.
+
 ## Aceite obrigatório antes de live
 
 - Nenhuma rota autenticada concede KRC com base em um campo numérico enviado pelo cliente.

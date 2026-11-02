@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_GNG_MALE_VENTANIA" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#F973166b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_GNG_MALE_VENTANIA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a2c17"/>
+      <stop offset="100%" stop-color="#331d0f"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_GNG_MALE_VENTANIA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#263344"/>
+      <stop offset="100%" stop-color="#11161e"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_GNG_MALE_VENTANIA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff8a1a"/>
+      <stop offset="55%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#b3520f"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_GNG_MALE_VENTANIA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#151515"/>
+      <stop offset="100%" stop-color="#0b0b0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_GNG_MALE_VENTANIA)"/>
+  <g stroke="#F9731672" stroke-width="6" fill="none" stroke-linecap="round"><path d="M18 200 Q78 172 138 202 M28 246 Q92 220 152 248 M368 200 Q428 172 490 202 M362 246 Q426 220 486 248"/><path d="M60 430 Q140 400 210 440" opacity="0.5"/></g>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_GNG_MALE_VENTANIA)"/>
+  <path d="M170 352 L342 352" stroke="#F97316" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#F97316" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#0c1016" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#151c26"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#F97316" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <circle cx="256" cy="352" r="13" fill="none" stroke="#F97316" stroke-width="4" opacity="0.9"/>
+  <circle cx="256" cy="384" r="13" fill="none" stroke="#F97316" stroke-width="4" opacity="0.75"/>
+  <rect x="238" y="404" width="36" height="20" rx="4" fill="#0f141b"/>
+  <circle cx="256" cy="414" r="4" fill="#F97316"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_GNG_MALE_VENTANIA)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_MALE_VENTANIA)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_MALE_VENTANIA)"/>
+  <path d="M186 190 Q186 128 256 122 Q326 128 326 190 Q326 242 300 272 Q276 294 256 294 Q232 294 212 272 Q186 242 186 190 Z" fill="url(#skin-OP_GNG_MALE_VENTANIA)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#0e0e0e" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#0e0e0e" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#fdba74"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#fdba74"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 262 Q256 270 274 262" stroke="#00000055" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="256" cy="104" r="32" fill="url(#hairg-OP_GNG_MALE_VENTANIA)"/>
+  <path d="M190 184 Q194 132 256 126 Q318 132 322 184 Q318 146 294 138 Q256 130 218 138 Q194 146 190 184 Z" fill="url(#hairg-OP_GNG_MALE_VENTANIA)"/>
+  <rect x="239" y="84" width="10" height="22" rx="5" fill="#161616" opacity="0.55"/>
+  <rect x="253" y="84" width="10" height="22" rx="5" fill="#161616" opacity="0.55"/>
+  <rect x="267" y="84" width="10" height="22" rx="5" fill="#161616" opacity="0.55"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <path d="M186 176 Q256 148 326 176 L326 164 Q256 136 186 164 Z" fill="#F97316"/>
+  <path d="M186 170 Q256 142 326 170" stroke="#ffffff" stroke-opacity="0.25" stroke-width="3" fill="none"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#F97316" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#2b394d" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">VENTANIA</text>
+</svg>

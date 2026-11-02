@@ -76,7 +76,7 @@ struct FKhaaosTelemetryEvent
 
 // ─── Delegates ──────────────────────────────────────────────────────────────────
 
-DECLARE_DYNAMIC_DELEGATE_OneParam(FOnTelemetryFlushed, int32, EventsFlushed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTelemetryFlushed, int32, EventsFlushed);
 
 /**
  * UKhaaosTelemetryPipeline
@@ -87,16 +87,13 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FOnTelemetryFlushed, int32, EventsFlushed);
  * Architecture:
  *   UE5 Server → TelemetryPipeline (batch) → HTTP POST → Analytics Backend
  *
- * Features:
+ * Current behavior:
  *   - Structured event types with typed metadata
- *   - Batch flush: 100 events or 5s interval (whichever first)
- *   - Compression: gzip for large batches (>1KB)
- *   - Priority queue: Critical events (crash, perf) bypass batch
- *   - Rate limit: 1000 events/second per server instance
- *   - Local buffer: 10K events persisted if backend unreachable
- *   - Sampling: 100% for critical, 10% for verbose (configurable)
- *   - A/B test tagging: Every event includes active experiment IDs
- *   - Region/Platform tagging: Automatic from EOS session
+ *   - Batch flush at the configured threshold; critical events request immediate flush
+ *   - Optional async POST from dedicated servers when endpoint and token are configured
+ *   - Up to 10K events mirrored in memory; this is not durable persistence or replay
+ *   - Verbose sampling defaults to 10%; critical event categories are not sampled
+ *   - Experiment tags are included when configured; region currently defaults to sa1
  *
  * Analytics Use Cases:
  *   - Win rate by species, weapon, platform
@@ -110,7 +107,7 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FOnTelemetryFlushed, int32, EventsFlushed);
  *   - Telemetry overhead: <0.1ms per tick
  *   - Memory: 10K event buffer ≈ 5MB max
  */
-UCLASS(ClassGroup=(Khaaos))
+UCLASS(Config=Game, ClassGroup=(Khaaos))
 class UKhaaosTelemetryPipeline : public UEngineSubsystem
 {
         GENERATED_BODY()
@@ -191,10 +188,24 @@ public:
 
 private:
 
+        /** Serialized batch retained until the backend acknowledges it. */
+        struct FPendingBatch
+        {
+                FString BatchId;
+                FString JsonPayload;
+                int32 EventCount = 0;
+                int32 RetryCount = 0;
+                bool bInFlight = false;
+                bool bRetryScheduled = false;
+        };
+
         /** Pending events buffer. */
         TArray<FKhaaosTelemetryEvent> PendingEvents;
 
-        /** Local persistence buffer (for offline). */
+        /** Batches awaiting HTTP acknowledgement or a scheduled retry. */
+        TMap<FString, FPendingBatch> PendingBatches;
+
+        /** Best-effort in-memory buffer; no disk persistence or automatic replay. */
         TArray<FKhaaosTelemetryEvent> LocalBuffer;
 
         /** Total events recorded. */
@@ -221,6 +232,20 @@ private:
         /** HTTP POST batch to analytics backend. */
         void ShipBatch(const TArray<FKhaaosTelemetryEvent>& Batch);
 
+        /** Send or resend one retained batch asynchronously. */
+        void SendPendingBatch(const FString& BatchId);
+
+        /** Handle an HTTP completion without logging the response body. */
+        void HandleBatchResponse(const FString& BatchId, bool bWasSuccessful,
+                int32 ResponseCode, float RetryAfterSeconds);
+
+        /** Schedule a bounded retry for a transient transport/server failure. */
+        void ScheduleRetry(const FString& BatchId, const FString& FailureReason,
+                float RetryAfterSeconds = 0.0f);
+
         /** Check if event should be sampled. */
         bool ShouldSample(EKhaaosTelemetryEvent EventType) const;
+
+        /** Prevent callbacks from creating new retries during subsystem teardown. */
+        bool bIsShuttingDown = false;
 };

@@ -2,7 +2,7 @@
   "_meta": {
     "version": "1.0.0",
     "generated": "2026-10-27",
-    "description": "Catálogo de Emotes do Khaaos Run — 40 emotes em 5 categorias e 5 raridades"
+    "description": "Catálogo de Emotes do Khaaos Run — 13 emotes em 5 categorias e 5 raridades"
   },
   "emotes": [
     {
@@ -64,7 +64,7 @@
     {
       "id": "EMT_Onith_TailWhip",
       "name": "Chicote de Cauda",
-      "category": "ACAo",
+      "category": "ACAO",
       "rarity": "RARO",
       "price_krc": 500,
       "anim_montage": "Anim/Emotes/EMT_Onith_TailWhip",
@@ -78,7 +78,7 @@
     {
       "id": "EMT_Venex_SystemCheck",
       "name": "Diagnóstico Cybernético",
-      "category": "ACAo",
+      "category": "ACAO",
       "rarity": "EPICO",
       "price_krc": 1200,
       "anim_montage": "Anim/Emotes/EMT_Venex_SystemCheck",
@@ -188,8 +188,20 @@
       "description": "Juramento tribal Zheers com runas brilhantes — laço de equipe."
     }
   ],
-  "categories": ["EXPRESSAO", "ACAO", "DANCA", "MEDITACAO", "INTERACAO"],
-  "rarities": ["COMUM", "RARO", "EPICO", "LENDARIO", "MITICO"],
+  "categories": [
+    "EXPRESSAO",
+    "ACAO",
+    "DANCA",
+    "MEDITACAO",
+    "INTERACAO"
+  ],
+  "rarities": [
+    "COMUM",
+    "RARO",
+    "EPICO",
+    "LENDARIO",
+    "MITICO"
+  ],
   "wheel_slots": 8,
   "summary": {
     "total_emotes": 13,

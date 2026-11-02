@@ -22,7 +22,7 @@ if (env.RUN_DB_MIGRATIONS === "true") {
   console.log("Drizzle migrations completed; starting the application.");
 }
 
-const server = spawn(process.execPath, ["dist/index.cjs"], {
+const server = spawn(process.execPath, ["dist/index.mjs"], {
   env,
   stdio: "inherit",
 });

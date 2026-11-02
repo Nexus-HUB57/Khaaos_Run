@@ -1,0 +1,664 @@
+{
+  "ok": true,
+  "summary": {
+    "pass": 80,
+    "fail": 0
+  },
+  "checks": [
+    {
+      "id": "S1",
+      "world": "CIGKV CIGKV",
+      "name": "setores do README presentes no runtime",
+      "status": "pass",
+      "detail": "5 setores cobrem 4 âncoras do README"
+    },
+    {
+      "id": "S2",
+      "world": "CIGKV CIGKV",
+      "name": "setores do runtime ancorados no README/matriz F42 (sem invenção)",
+      "status": "pass",
+      "detail": "todos os setores têm âncora canônica"
+    },
+    {
+      "id": "D1",
+      "world": "CIGKV CIGKV",
+      "name": "dinâmica canônica (KHAOS_GRAVITY)",
+      "status": "pass",
+      "detail": "README: \"**Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendári…\""
+    },
+    {
+      "id": "D1b",
+      "world": "CIGKV CIGKV",
+      "name": "survival.type = KHAOS_GRAVITY",
+      "status": "pass",
+      "detail": "type=KHAOS_GRAVITY"
+    },
+    {
+      "id": "D2",
+      "world": "CIGKV CIGKV",
+      "name": "dinâmica exclusiva do mundo (sem vazamento)",
+      "status": "pass",
+      "detail": "KHAOS_GRAVITY só em CIGKV"
+    },
+    {
+      "id": "B1",
+      "world": "CIGKV CIGKV",
+      "name": "dressing canônico ≥ mínimo Free Fire",
+      "status": "pass",
+      "detail": "4 builders canônicos na densidade"
+    },
+    {
+      "id": "B2",
+      "world": "CIGKV CIGKV",
+      "name": "extras de cena (mar/fogo) construídos",
+      "status": "pass",
+      "detail": "n/a (nenhum extra canônico)"
+    },
+    {
+      "id": "Q1",
+      "world": "CIGKV CIGKV",
+      "name": "perfil de luz dedicado (F41)",
+      "status": "pass",
+      "detail": "LIGHTING_PROFILES['CIGKV'] próprio"
+    },
+    {
+      "id": "Q2",
+      "world": "CIGKV CIGKV",
+      "name": "paleta completa (céu 3 bandas + fog + ground)",
+      "status": "pass",
+      "detail": "#160f2e / #4a2a4e / #c65a2e"
+    },
+    {
+      "id": "S1",
+      "world": "W1 Barburhen",
+      "name": "setores do README presentes no runtime",
+      "status": "pass",
+      "detail": "5 setores cobrem 4 âncoras do README"
+    },
+    {
+      "id": "S2",
+      "world": "W1 Barburhen",
+      "name": "setores do runtime ancorados no README/matriz F42 (sem invenção)",
+      "status": "pass",
+      "detail": "todos os setores têm âncora canônica"
+    },
+    {
+      "id": "D1",
+      "world": "W1 Barburhen",
+      "name": "dinâmica canônica (ACID_RAIN_SIM)",
+      "status": "pass",
+      "detail": "README: \"**Dinâmica**: \"Água da Morte\" — anel de conflito fecha em 10 min em direção ao P…\""
+    },
+    {
+      "id": "D1a",
+      "world": "W1 Barburhen",
+      "name": "chuva ácida id-gated no sim (sem survival)",
+      "status": "pass",
+      "detail": "sim3d tem acidTimer + gate Barburhen; cenário sem survival"
+    },
+    {
+      "id": "D2",
+      "world": "W1 Barburhen",
+      "name": "dinâmica exclusiva do mundo (sem vazamento)",
+      "status": "pass",
+      "detail": "ACID_RAIN_SIM só em BARBURHEN"
+    },
+    {
+      "id": "R1",
+      "world": "W1 Barburhen",
+      "name": "anel fecha em Parque Abandonado",
+      "status": "pass",
+      "detail": "ringFinal (-100, 95) = setor canônico"
+    },
+    {
+      "id": "B1",
+      "world": "W1 Barburhen",
+      "name": "dressing canônico ≥ mínimo Free Fire",
+      "status": "pass",
+      "detail": "6 builders canônicos na densidade"
+    },
+    {
+      "id": "B2",
+      "world": "W1 Barburhen",
+      "name": "extras de cena (mar/fogo) construídos",
+      "status": "pass",
+      "detail": "n/a (nenhum extra canônico)"
+    },
+    {
+      "id": "Q1",
+      "world": "W1 Barburhen",
+      "name": "perfil de luz dedicado (F41)",
+      "status": "pass",
+      "detail": "LIGHTING_PROFILES['Barburhen'] próprio"
+    },
+    {
+      "id": "Q2",
+      "world": "W1 Barburhen",
+      "name": "paleta completa (céu 3 bandas + fog + ground)",
+      "status": "pass",
+      "detail": "#4e5a64 / #8e958f / #d8b894"
+    },
+    {
+      "id": "S1",
+      "world": "W2 Priadus",
+      "name": "setores do README presentes no runtime",
+      "status": "pass",
+      "detail": "5 setores cobrem 5 âncoras do README"
+    },
+    {
+      "id": "S2",
+      "world": "W2 Priadus",
+      "name": "setores do runtime ancorados no README/matriz F42 (sem invenção)",
+      "status": "pass",
+      "detail": "todos os setores têm âncora canônica"
+    },
+    {
+      "id": "D1",
+      "world": "W2 Priadus",
+      "name": "dinâmica canônica (SPORE_FOG)",
+      "status": "pass",
+      "detail": "README: \"**Dinâmica**: \"Emboscada Verde\" — anel fecha no templo; neblina com esporos tóxi…\""
+    },
+    {
+      "id": "D1b",
+      "world": "W2 Priadus",
+      "name": "survival.type = SPORE_FOG",
+      "status": "pass",
+      "detail": "type=SPORE_FOG"
+    },
+    {
+      "id": "D2",
+      "world": "W2 Priadus",
+      "name": "dinâmica exclusiva do mundo (sem vazamento)",
+      "status": "pass",
+      "detail": "SPORE_FOG só em PRIADUS"
+    },
+    {
+      "id": "R1",
+      "world": "W2 Priadus",
+      "name": "anel fecha em Templo Antigo",
+      "status": "pass",
+      "detail": "ringFinal (100, 95) = setor canônico"
+    },
+    {
+      "id": "B1",
+      "world": "W2 Priadus",
+      "name": "dressing canônico ≥ mínimo Free Fire",
+      "status": "pass",
+      "detail": "6 builders canônicos na densidade"
+    },
+    {
+      "id": "B2",
+      "world": "W2 Priadus",
+      "name": "extras de cena (mar/fogo) construídos",
+      "status": "pass",
+      "detail": "n/a (nenhum extra canônico)"
+    },
+    {
+      "id": "Q1",
+      "world": "W2 Priadus",
+      "name": "perfil de luz dedicado (F41)",
+      "status": "pass",
+      "detail": "LIGHTING_PROFILES['Priadus'] próprio"
+    },
+    {
+      "id": "Q2",
+      "world": "W2 Priadus",
+      "name": "paleta completa (céu 3 bandas + fog + ground)",
+      "status": "pass",
+      "detail": "#0a0f1c / #252c44 / #7d9078"
+    },
+    {
+      "id": "S1",
+      "world": "W3 Ckesalth",
+      "name": "setores do README presentes no runtime",
+      "status": "pass",
+      "detail": "5 setores cobrem 4 âncoras do README"
+    },
+    {
+      "id": "S2",
+      "world": "W3 Ckesalth",
+      "name": "setores do runtime ancorados no README/matriz F42 (sem invenção)",
+      "status": "pass",
+      "detail": "todos os setores têm âncora canônica"
+    },
+    {
+      "id": "D1",
+      "world": "W3 Ckesalth",
+      "name": "dinâmica canônica (TOXIC_SMOKE)",
+      "status": "pass",
+      "detail": "README: \"**Dinâmica**: \"Assassino Silencioso\" — a partir de 5 min o anel fecha na Vila So…\""
+    },
+    {
+      "id": "D1b",
+      "world": "W3 Ckesalth",
+      "name": "survival.type = TOXIC_SMOKE",
+      "status": "pass",
+      "detail": "type=TOXIC_SMOKE"
+    },
+    {
+      "id": "D2",
+      "world": "W3 Ckesalth",
+      "name": "dinâmica exclusiva do mundo (sem vazamento)",
+      "status": "pass",
+      "detail": "TOXIC_SMOKE só em CKESALTH"
+    },
+    {
+      "id": "R1",
+      "world": "W3 Ckesalth",
+      "name": "anel fecha em Vila Sombria",
+      "status": "pass",
+      "detail": "ringFinal (95, -95) = setor canônico"
+    },
+    {
+      "id": "B1",
+      "world": "W3 Ckesalth",
+      "name": "dressing canônico ≥ mínimo Free Fire",
+      "status": "pass",
+      "detail": "6 builders canônicos na densidade"
+    },
+    {
+      "id": "B2",
+      "world": "W3 Ckesalth",
+      "name": "extras de cena (mar/fogo) construídos",
+      "status": "pass",
+      "detail": "oilfire≥2 na cena"
+    },
+    {
+      "id": "Q1",
+      "world": "W3 Ckesalth",
+      "name": "perfil de luz dedicado (F41)",
+      "status": "pass",
+      "detail": "LIGHTING_PROFILES['Ckesalth'] próprio"
+    },
+    {
+      "id": "Q2",
+      "world": "W3 Ckesalth",
+      "name": "paleta completa (céu 3 bandas + fog + ground)",
+      "status": "pass",
+      "detail": "#241418 / #8a4a2a / #e8bd6e"
+    },
+    {
+      "id": "S1",
+      "world": "W4 Arukheea",
+      "name": "setores do README presentes no runtime",
+      "status": "pass",
+      "detail": "5 setores cobrem 4 âncoras do README"
+    },
+    {
+      "id": "S2",
+      "world": "W4 Arukheea",
+      "name": "setores do runtime ancorados no README/matriz F42 (sem invenção)",
+      "status": "pass",
+      "detail": "todos os setores têm âncora canônica"
+    },
+    {
+      "id": "D1",
+      "world": "W4 Arukheea",
+      "name": "dinâmica canônica (TSUNAMI_WAVE)",
+      "status": "pass",
+      "detail": "README: \"**Dinâmica**: \"Tsunami\" — anel fecha na Prisão; quem não sobe no helicóptero tor…\""
+    },
+    {
+      "id": "D1b",
+      "world": "W4 Arukheea",
+      "name": "survival.type = TSUNAMI_WAVE",
+      "status": "pass",
+      "detail": "type=TSUNAMI_WAVE"
+    },
+    {
+      "id": "D2",
+      "world": "W4 Arukheea",
+      "name": "dinâmica exclusiva do mundo (sem vazamento)",
+      "status": "pass",
+      "detail": "TSUNAMI_WAVE só em ARUKHEEA"
+    },
+    {
+      "id": "R1",
+      "world": "W4 Arukheea",
+      "name": "anel fecha em Prisão do Sol da Noite",
+      "status": "pass",
+      "detail": "ringFinal (95, -95) = setor canônico"
+    },
+    {
+      "id": "B1",
+      "world": "W4 Arukheea",
+      "name": "dressing canônico ≥ mínimo Free Fire",
+      "status": "pass",
+      "detail": "5 builders canônicos na densidade"
+    },
+    {
+      "id": "B2",
+      "world": "W4 Arukheea",
+      "name": "extras de cena (mar/fogo) construídos",
+      "status": "pass",
+      "detail": "sharkfin≥2 na cena"
+    },
+    {
+      "id": "Q1",
+      "world": "W4 Arukheea",
+      "name": "perfil de luz dedicado (F41)",
+      "status": "pass",
+      "detail": "LIGHTING_PROFILES['Arukheea'] próprio"
+    },
+    {
+      "id": "Q2",
+      "world": "W4 Arukheea",
+      "name": "paleta completa (céu 3 bandas + fog + ground)",
+      "status": "pass",
+      "detail": "#0e1526 / #2a4258 / #a8c3c9"
+    },
+    {
+      "id": "W1",
+      "world": "CIGKV CIGKV",
+      "name": "shared/worlds.ts hazard.type = KHAOS_GRAVITY",
+      "status": "pass",
+      "detail": "type=KHAOS_GRAVITY"
+    },
+    {
+      "id": "W2",
+      "world": "CIGKV CIGKV",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=KHAOS_GRAVITY ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "CIGKV CIGKV",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "CIGKV CIGKV",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Vila Militar Murada — Pátio de Armamento, Setor de Testes (P…\""
+    },
+    {
+      "id": "W5",
+      "world": "CIGKV CIGKV",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Khaaos Ville — Campo de Instrução de Guerra\""
+    },
+    {
+      "id": "W1",
+      "world": "Barburhen Barburhen",
+      "name": "shared/worlds.ts hazard.type = ACID_RAIN",
+      "status": "pass",
+      "detail": "type=ACID_RAIN"
+    },
+    {
+      "id": "W2",
+      "world": "Barburhen Barburhen",
+      "name": "runtime survival ausente (chuva ácida id-gated no sim3d)",
+      "status": "pass",
+      "detail": "sobrevivência undefined; hazard conceitual ACID_RAIN em shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Barburhen Barburhen",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Barburhen Barburhen",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Urbano Pós-Guerra: Construções Inacabadas, Carros Abandonado…\""
+    },
+    {
+      "id": "W5",
+      "world": "Barburhen Barburhen",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)\""
+    },
+    {
+      "id": "W1",
+      "world": "Priadus Priadus",
+      "name": "shared/worlds.ts hazard.type = SPORE_FOG",
+      "status": "pass",
+      "detail": "type=SPORE_FOG"
+    },
+    {
+      "id": "W2",
+      "world": "Priadus Priadus",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=SPORE_FOG ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Priadus Priadus",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Priadus Priadus",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Selva Densa, Pântanos, Flora Carnívora, Neblina com Esporos …\""
+    },
+    {
+      "id": "W5",
+      "world": "Priadus Priadus",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)\""
+    },
+    {
+      "id": "W1",
+      "world": "Ckesalth Ckesalth",
+      "name": "shared/worlds.ts hazard.type = TOXIC_SMOKE",
+      "status": "pass",
+      "detail": "type=TOXIC_SMOKE"
+    },
+    {
+      "id": "W2",
+      "world": "Ckesalth Ckesalth",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=TOXIC_SMOKE ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Ckesalth Ckesalth",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Ckesalth Ckesalth",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Deserto Árido, Lagoas de Petróleo em Chamas, Fumaça Tóxica e…\""
+    },
+    {
+      "id": "W5",
+      "world": "Ckesalth Ckesalth",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)\""
+    },
+    {
+      "id": "W1",
+      "world": "Arukheea Arukheea",
+      "name": "shared/worlds.ts hazard.type = TSUNAMI_WAVE",
+      "status": "pass",
+      "detail": "type=TSUNAMI_WAVE"
+    },
+    {
+      "id": "W2",
+      "world": "Arukheea Arukheea",
+      "name": "runtime survival.type paridade com shared/worlds.ts",
+      "status": "pass",
+      "detail": "type=TSUNAMI_WAVE ↔ shared/worlds.ts"
+    },
+    {
+      "id": "W3",
+      "world": "Arukheea Arukheea",
+      "name": "configRevision pinned em f42-2026-11-02",
+      "status": "pass",
+      "detail": "rev=f42-2026-11-02"
+    },
+    {
+      "id": "W4",
+      "world": "Arukheea Arukheea",
+      "name": "biome contém keyword canônica do README",
+      "status": "pass",
+      "detail": "\"Ilha Isolada, Prisão do Sol da Noite (Luz Perpétua), Tsunami…\""
+    },
+    {
+      "id": "W5",
+      "world": "Arukheea Arukheea",
+      "name": "subtitle contém nome canônico do README",
+      "status": "pass",
+      "detail": "\"Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)\""
+    },
+    {
+      "id": "W6",
+      "world": "GLOBAL",
+      "name": "nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42)",
+      "status": "pass",
+      "detail": "todos os 5 mundos usam hazards canônicos F42"
+    },
+    {
+      "id": "W7",
+      "world": "GLOBAL",
+      "name": "shared/worlds.ts cobre os 5 mundos canônicos",
+      "status": "pass",
+      "detail": "5/5 mundos"
+    },
+    {
+      "id": "X1",
+      "world": "GLOBAL",
+      "name": "erupção de lava não é cânon de nenhum mundo",
+      "status": "pass",
+      "detail": "nenhum cenário com survival de lava"
+    },
+    {
+      "id": "X2",
+      "world": "GLOBAL",
+      "name": "typo regressivo \"Khaoos\" erradicado",
+      "status": "pass",
+      "detail": "mapLabel do CIGKV = \"Khaaos Ville\""
+    },
+    {
+      "id": "DOC-F42",
+      "world": "GLOBAL",
+      "name": "matriz de auditoria f42 cobre o escopo (5 mundos)",
+      "status": "pass",
+      "detail": "5/5 mundos citados"
+    },
+    {
+      "id": "DOC-F43",
+      "world": "GLOBAL",
+      "name": "matriz de auditoria f43 cobre o escopo (4 mundos)",
+      "status": "pass",
+      "detail": "4/4 mundos citados"
+    }
+  ],
+  "meta": {
+    "ranAt": "2026-11-02T17:24:35.718Z",
+    "durationMs": 1979,
+    "worlds": [
+      "CIGKV",
+      "BARBURHEN",
+      "PRIADUS",
+      "CKESALTH",
+      "ARUKHEEA"
+    ],
+    "dressingCounts": {
+      "CIGKV": {
+        "tent": 4,
+        "flagmast": 4,
+        "tirerow": 2,
+        "bleacher": 2,
+        "fanunit": 2
+      },
+      "BARBURHEN": {
+        "stall": 3,
+        "billboard": 1,
+        "rubble": 6,
+        "burntcar": 2,
+        "deadtree": 3,
+        "skeleton": 3,
+        "collapse": 2,
+        "machinery": 4,
+        "snowpile": 3,
+        "snowpatch": 2,
+        "crater": 3,
+        "smokecolumn": 2,
+        "rail": 2,
+        "fanunit": 2
+      },
+      "PRIADUS": {
+        "waterpool": 4,
+        "mudpatch": 3,
+        "mangrove": 5,
+        "hut": 2,
+        "walkway": 3,
+        "roots": 3,
+        "coral": 2,
+        "carnplant": 4,
+        "mist": 6,
+        "labdome": 1,
+        "fallenlog": 3,
+        "sporesac": 3,
+        "statue": 4,
+        "totem": 2,
+        "templestep": 1,
+        "brazier": 2
+      },
+      "CKESALTH": {
+        "dune": 4,
+        "banner": 3,
+        "palmstump": 4,
+        "resortwall": 1,
+        "oilpool": 2,
+        "tent": 2,
+        "campfire": 1,
+        "bones": 4,
+        "refinetower": 1,
+        "oiltank": 2,
+        "pipeline": 2,
+        "lavapatch": 2,
+        "minecart": 1,
+        "quicksand": 2
+      },
+      "ARUKHEEA": {
+        "runering": 2,
+        "shard": 7,
+        "palmtree": 5,
+        "crystal": 2,
+        "quantumring": 3,
+        "prisonwall": 2,
+        "lighthouse": 1,
+        "rift": 1,
+        "whaleribs": 2,
+        "bones": 2,
+        "shipwreck": 2,
+        "voidscorch": 4
+      }
+    },
+    "sceneCounts": {
+      "CIGKV": {},
+      "BARBURHEN": {},
+      "PRIADUS": {},
+      "CKESALTH": {
+        "oilfire": 2
+      },
+      "ARUKHEEA": {
+        "sharkfin": 3
+      }
+    }
+  }
+}

@@ -99,6 +99,10 @@ struct FKhaaosActiveHazard
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen|Hazard")
 	FVector OriginLocation = FVector::ZeroVector;
 
+	/** Server-captured active world ID; clients cannot choose the damage source world. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen|Hazard")
+	FName SourceWorldId;
+
 	/** Remaining time for the hazard. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|WorldGen|Hazard")
 	float RemainingTime = 0.0f;

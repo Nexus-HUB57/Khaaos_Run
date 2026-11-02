@@ -43,6 +43,7 @@ import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
+import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 export interface RoomPlayer {
   userId: string;
   displayName: string;
+  selectedOperativeId?: string;
   ws: WebSocket | null;
   posX: number; // 0-100
   posY: number;
@@ -186,6 +188,7 @@ export type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: SerializedPlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "loot_material_collected"; materialId: string; quantity: number; totalQuantity: number }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "packback_ready"; items: WarIActionItem[] }
   | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
@@ -203,6 +206,7 @@ export type ServerMessage =
 interface SerializedPlayer {
   userId: string;
   displayName: string;
+  selectedOperativeId: string;
   posX: number;
   posY: number;
   carryCapacity?: number;
@@ -545,6 +549,17 @@ class RoomManager {
     return room?.status === "COUNTDOWN" || room?.status === "IN_PROGRESS";
   }
 
+  updateSelectedOperative(userId: string, selectedOperativeId: string): void {
+    const roomId = this.userToRoom.get(userId);
+    const room = roomId ? this.rooms.get(roomId) : undefined;
+    const player = room?.players.get(userId);
+    // A live match uses the identity snapshot captured at join. Open lobbies
+    // can safely reflect the newly persisted preference immediately.
+    if (!room || !player || room.status !== "LOBBY") return;
+    player.selectedOperativeId = getOperativeAvatarOption(selectedOperativeId).id;
+    this.broadcastRoomState(room);
+  }
+
   private secureId(prefix: string): string {
     return `${prefix}_${Date.now()}_${randomBytes(8).toString("hex")}`;
   }
@@ -762,6 +777,7 @@ class RoomManager {
     const player: RoomPlayer = {
       userId,
       displayName,
+      selectedOperativeId: getOperativeAvatarOption(stats.selectedOperativeId).id,
       ws,
       posX: initialPosX,
       posY: initialPosY,
@@ -1289,6 +1305,7 @@ class RoomManager {
     const players: SerializedPlayer[] = nearPlayers.map((p) => ({
       userId: p.userId,
       displayName: p.displayName,
+      selectedOperativeId: getOperativeAvatarOption(p.selectedOperativeId).id,
       posX: p.posX,
       posY: p.posY,
       ...(p.userId === observer.userId ? {
@@ -1558,13 +1575,15 @@ class RoomManager {
     player.carriedWeight += lootWeight;
     room.lootGrid.remove(lootId);
     try {
-      await storage.createItem({
-        userId,
-        name: loot.name,
-        type: loot.type,
-        rarity: loot.rarity,
-        stats: loot.stats,
-      });
+      const collected = await storage.pickupLoot(lootId, userId, player.displayName);
+      if (collected.materials && player.ws) {
+        this.send(player.ws, {
+          type: "loot_material_collected",
+          materialId: collected.materials.materialId,
+          quantity: loot.stats?.quantity ?? 0,
+          totalQuantity: collected.materials.quantity,
+        });
+      }
     } catch (error) {
       loot.isPickedUp = false;
       delete loot.pickedUpBy;
@@ -1603,6 +1622,7 @@ class RoomManager {
     return visiblePlayers.map((p) => ({
       userId: p.userId,
       displayName: p.displayName,
+      selectedOperativeId: getOperativeAvatarOption(p.selectedOperativeId).id,
       posX: p.posX,
       posY: p.posY,
       ...(p.userId === viewerUserId ? {
@@ -2107,6 +2127,7 @@ class RoomManager {
       const player: RoomPlayer = {
         userId: p.userId,
         displayName: p.displayName,
+        selectedOperativeId: getOperativeAvatarOption(stats.selectedOperativeId).id,
         ws: p.ws,
         posX: initialPosX,
         posY: initialPosY,

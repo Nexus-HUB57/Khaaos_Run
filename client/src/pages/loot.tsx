@@ -181,6 +181,7 @@ export default function LootPage() {
       }, ...prev.slice(0, 14)]);
       qc.invalidateQueries({ queryKey: ["/api/loot"] });
       qc.invalidateQueries({ queryKey: ["/api/items"] });
+      qc.invalidateQueries({ queryKey: ["/api/armorer/materials"] });
       setNearbyLoot(null);
     },
   });

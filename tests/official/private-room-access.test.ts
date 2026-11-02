@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-process.env.DATABASE_URL ||= "postgres://test:test@127.0.0.1:5432/khaaos_test";
+if (!process.env.DATABASE_URL?.trim()) process.env.DATABASE_URL = "postgres://test:test@127.0.0.1:5432/khaaos_test";
 process.env.WS_TOKEN_SECRET ??= "official-private-room-test-key-32-bytes";
 
 const {

@@ -318,6 +318,29 @@ export class GameAudio {
     osc.start(t); osc.stop(t + .2);
   }
 
+  // Fase 42 — PASSO (heel strike do gait.js): burst de ruído filtrado com
+  // rolagem calcanhar→ponta. Disparado PELO cruzamento de fase da passada
+  // (não por timer) → o áudio é cirúrgico em relação ao visual. Alternância
+  // L/R via filtro sutil (calcanhar esquerdo ~780 Hz, direito ~660 Hz).
+  // intensity 0..1 (velocidade do ator), distance em m (remotos: atenuação).
+  step(intensity = .5, distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    this._stepSide = !this._stepSide;
+    const att = 1 / (1 + distance * distance * .012);      // falloff suave
+    const peak = Math.max(.015, (.12 + .3 * Math.min(1, intensity)) * att);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.09);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(this._stepSide ? 780 : 660, t);
+    bp.frequency.exponentialRampToValueAtTime(240, t + .07);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .004, .085, peak);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
+    src.start(t);
+  }
+
   // arremesso da granada (whoosh curto)
   fragThrow() {
     if (!this.ctx || !this.enabled) return;

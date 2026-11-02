@@ -18,7 +18,8 @@
       "eyes": "#f59e0b",
       "hair": "#171717"
     },
-    "lore": "Nascido nas favelas verticais em torno do CIGKV. Especialista em CQB e incursão."
+    "lore": "Nascido nas favelas verticais em torno do CIGKV. Especialista em CQB e incursão.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_BREACHER",
@@ -39,7 +40,8 @@
       "eyes": "#38bdf8",
       "hair": "#e2e8f0"
     },
-    "lore": "Sobrevivente dos complexos mineiros de Barburhen. Treinado em forja vulcânica."
+    "lore": "Sobrevivente dos complexos mineiros de Barburhen. Treinado em forja vulcânica.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_RECON_ASIAN",
@@ -60,7 +62,8 @@
       "eyes": "#06b6d4",
       "hair": "#09090b"
     },
-    "lore": "Esquadrões de reconhecimento avançado de Tóquio Subterrânea. Furtividade em Priadus."
+    "lore": "Esquadrões de reconhecimento avançado de Tóquio Subterrânea. Furtividade em Priadus.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_MEDIC_AFRICAN",
@@ -81,7 +84,8 @@
       "eyes": "#10b981",
       "hair": "#0a0a0a"
     },
-    "lore": "Cirurgião de trauma em Ckesalth. Desenvolveu injetores de coagulação rápida sob fogo."
+    "lore": "Cirurgião de trauma em Ckesalth. Desenvolveu injetores de coagulação rápida sob fogo.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_HUNTER_INDIGENOUS",
@@ -102,7 +106,8 @@
       "eyes": "#d97706",
       "hair": "#050505"
     },
-    "lore": "Mestre de selva e emboscada. Pressente correntes de ar e fechamento de anéis em Priadus."
+    "lore": "Mestre de selva e emboscada. Pressente correntes de ar e fechamento de anéis em Priadus.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_MARKSMAN_MENA",
@@ -123,7 +128,8 @@
       "eyes": "#f59e0b",
       "hair": "#1c1917"
     },
-    "lore": "Franco-atirador de longo alcance. Balística calculada sobre refração de calor em Ckesalth."
+    "lore": "Franco-atirador de longo alcance. Balística calculada sobre refração de calor em Ckesalth.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_BERSERKER_PACIFIC",
@@ -144,7 +150,8 @@
       "eyes": "#38bdf8",
       "hair": "#0c0a09"
     },
-    "lore": "Estrutura maciça forjada enfrentando ondas oceânicas em Arukheea. Infantaria de choque."
+    "lore": "Estrutura maciça forjada enfrentando ondas oceânicas em Arukheea. Infantaria de choque.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_TECH_INDIAN",
@@ -165,7 +172,8 @@
       "eyes": "#38bdf8",
       "hair": "#111827"
     },
-    "lore": "Guerra eletrônica e antecipação de anéis de confinamento no CIGKV por telemetria quântica."
+    "lore": "Guerra eletrônica e antecipação de anéis de confinamento no CIGKV por telemetria quântica.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_VALKYRIE",
@@ -186,7 +194,8 @@
       "eyes": "#a855f7",
       "hair": "#09090b"
     },
-    "lore": "Líder de parkour e infiltração rápida no CIGKV. Reflexos acrobáticos e flanqueamento."
+    "lore": "Líder de parkour e infiltração rápida no CIGKV. Reflexos acrobáticos e flanqueamento.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_SNIPER",
@@ -207,7 +216,8 @@
       "eyes": "#f59e0b",
       "hair": "#292524"
     },
-    "lore": "Atiradora de precisão em Priadus. Abates limpos a 800m através de névoa e fumaça densa."
+    "lore": "Atiradora de precisão em Priadus. Abates limpos a 800m através de névoa e fumaça densa.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_STEALTH_ASIAN",
@@ -228,7 +238,8 @@
       "eyes": "#a855f7",
       "hair": "#030712"
     },
-    "lore": "Descidas noturnas com planador sobre zonas industriais em Barburhen. Combate ágil e adagas."
+    "lore": "Descidas noturnas com planador sobre zonas industriais em Barburhen. Combate ágil e adagas.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_HEAVY_AFRICAN",
@@ -249,7 +260,8 @@
       "eyes": "#eab308",
       "hair": "#0a0a0a"
     },
-    "lore": "Piloto de comboios pesados sob chuva ácida em Barburhen. Armadura térmica e liderança."
+    "lore": "Piloto de comboios pesados sob chuva ácida em Barburhen. Armadura térmica e liderança.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_SURVIVOR_INDIGENOUS",
@@ -270,7 +282,8 @@
       "eyes": "#10b981",
       "hair": "#050505"
     },
-    "lore": "Manipulação de toxinas botânicas e filtros naturais de esporos na selva de Priadus."
+    "lore": "Manipulação de toxinas botânicas e filtros naturais de esporos na selva de Priadus.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_PILOT_EURO",
@@ -291,7 +304,8 @@
       "eyes": "#0284c7",
       "hair": "#f8fafc"
     },
-    "lore": "Piloto de helicóptero e resgate em tempestades na parede de água de Arukheea."
+    "lore": "Piloto de helicóptero e resgate em tempestades na parede de água de Arukheea.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_DISRUPTOR_MENA",
@@ -312,7 +326,8 @@
       "eyes": "#ef4444",
       "hair": "#1c1917"
     },
-    "lore": "Desativação de explosivos e granadas sônicas. Engenheira de demolição em Ckesalth."
+    "lore": "Desativação de explosivos e granadas sônicas. Engenheira de demolição em Ckesalth.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_FEMALE_TACTICIAN_SOUTHASIAN",
@@ -333,7 +348,8 @@
       "eyes": "#f59e0b",
       "hair": "#09090b"
     },
-    "lore": "Kalaripayattu tático e projeção de barreira Égide contra as marés de choque em Arukheea."
+    "lore": "Kalaripayattu tático e projeção de barreira Égide contra as marés de choque em Arukheea.",
+    "faction": "MILITAR"
   },
   {
     "id": "OP_MALE_TALON",
@@ -354,6 +370,359 @@
       "eyes": "#22d3ee",
       "hair": "#1e40af"
     },
-    "lore": "Praticante de parkour e hacker de subúrbio que descobriu os segredos de monitoramento das arenas. Usa agilidade e traquitanas cibernéticas para virar o jogo a favor do squad."
+    "lore": "Praticante de parkour e hacker de subúrbio que descobriu os segredos de monitoramento das arenas. Usa agilidade e traquitanas cibernéticas para virar o jogo a favor do squad.",
+    "faction": "MILITAR"
+  },
+  {
+    "id": "OP_MIL_MALE_VULTO",
+    "codename": "VULTO",
+    "fullName": "Rui 'Vulto' Nascimento · Comandante de Bloco MIL-01",
+    "gender": "MASCULINO",
+    "ethnicity": "Afro-Brasileiro / Sertão Nordestino",
+    "rank": "ONITH",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Barburhen",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_mil_male_vulto.svg",
+    "svgPathPublic": "/avatars/male/op_mil_male_vulto.svg",
+    "colors": {
+      "primary": "#D97706",
+      "secondary": "#4B5563",
+      "trim": "#FACC15",
+      "skinTone": "#7a4a24",
+      "eyes": "#f59e0b",
+      "hair": "#9ca3af"
+    },
+    "lore": "Comandante de bloco em Barburhen, ex-bombeiro civil que perdeu a equipe no primeiro colapso do anel urbano. Governa 4 lajes e 2 galerias com regras próprias: ninguém passa sem…"
+  },
+  {
+    "id": "OP_MIL_MALE_ECO",
+    "codename": "ECO",
+    "fullName": "Zico 'Eco' Amaral · Radarista das Lajes MIL-02",
+    "gender": "MASCULINO",
+    "ethnicity": "Pardo Amazônido / Ribeirinho Belenense",
+    "rank": "ZHEERS",
+    "specialization": "COMUNICACOES_HACKER",
+    "defaultWorld": "CIGKV",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_mil_male_eco.svg",
+    "svgPathPublic": "/avatars/male/op_mil_male_eco.svg",
+    "colors": {
+      "primary": "#0EA5E9",
+      "secondary": "#374151",
+      "trim": "#22D3EE",
+      "skinTone": "#b07b4f",
+      "eyes": "#22d3ee",
+      "hair": "#1f2937"
+    },
+    "lore": "Subiu no telhado do CIGKV aos 12 anos e nunca mais desceu: das lajes coordena a rede de rádios HT e espelhos solares da milícia. Dizem que escuta um drone ligando 3 quadras antes…"
+  },
+  {
+    "id": "OP_MIL_MALE_FERRAZ",
+    "codename": "FERRAZ",
+    "fullName": "Tonho Ferraz · Armeiro de Quintal MIL-03",
+    "gender": "MASCULINO",
+    "ethnicity": "Caipira Paulista / Italiano-Luso",
+    "rank": "ONITH",
+    "specialization": "ENGENHARIA_TATICA",
+    "defaultWorld": "Barburhen",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_mil_male_ferraz.svg",
+    "svgPathPublic": "/avatars/male/op_mil_male_ferraz.svg",
+    "colors": {
+      "primary": "#B45309",
+      "secondary": "#57534E",
+      "trim": "#F59E0B",
+      "skinTone": "#e8b98a",
+      "eyes": "#78716c",
+      "hair": "#6b7280"
+    },
+    "lore": "Transforma gás, cano de água e mola de caminhão em escopeta confiável dentro do quintal de Barburhen. A milícia inteira atira com o que a bancada dele aprova — e o punho do Ferraz…"
+  },
+  {
+    "id": "OP_MIL_MALE_GRAU",
+    "codename": "GRAU",
+    "fullName": "Márcio 'Grau' Quispe · Motoqueiro de Esquina MIL-04",
+    "gender": "MASCULINO",
+    "ethnicity": "Mestiço Andino / Peruano-Limeño",
+    "rank": "ZHEERS",
+    "specialization": "MOTORISTA_PESADOS",
+    "defaultWorld": "CIGKV",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_mil_male_grau.svg",
+    "svgPathPublic": "/avatars/male/op_mil_male_grau.svg",
+    "colors": {
+      "primary": "#65A30D",
+      "secondary": "#44403C",
+      "trim": "#FDE047",
+      "skinTone": "#c68a53",
+      "eyes": "#65a30d",
+      "hair": "#111827"
+    },
+    "lore": "Atravessa o CIGKV de costas da moto em 4 minutos no pico do bloqueio. É o recado vivo da milícia: se o Grau chegou de mau humor, o perímetro já sabe que algo…"
+  },
+  {
+    "id": "OP_MIL_FEMALE_NOTA",
+    "codename": "NOTA",
+    "fullName": "Dandara 'Nota' Lisboa · Cobradora de Proteção MIL-05",
+    "gender": "FEMININO",
+    "ethnicity": "Afro-Brasileira / Periferia Carioca",
+    "rank": "ZHEERS",
+    "specialization": "FUZILEIROS",
+    "defaultWorld": "Barburhen",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_mil_female_nota.svg",
+    "svgPathPublic": "/avatars/female/op_mil_female_nota.svg",
+    "colors": {
+      "primary": "#DC2626",
+      "secondary": "#52525B",
+      "trim": "#E7E5E4",
+      "skinTone": "#5c3a21",
+      "eyes": "#e879f9",
+      "hair": "#101010"
+    },
+    "lore": "Cobradora de 'proteção' com caderneta mimeografada: cada venda de Barburhen tem sua linha, cada linha tem prazo. Trata a caderneta como arquivo de guerra — quem a acha, acha o…"
+  },
+  {
+    "id": "OP_MIL_FEMALE_SIRENE",
+    "codename": "SIRENE",
+    "fullName": "Marisa 'Sirene' Kalinda · Oradora de Perímetro MIL-06",
+    "gender": "FEMININO",
+    "ethnicity": "Cigana Calon (Romani Brasileira) / Interior Sudeste",
+    "rank": "SKEETW",
+    "specialization": "COMUNICACOES_HACKER",
+    "defaultWorld": "CIGKV",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_mil_female_sirene.svg",
+    "svgPathPublic": "/avatars/female/op_mil_female_sirene.svg",
+    "colors": {
+      "primary": "#7C3AED",
+      "secondary": "#3F3F46",
+      "trim": "#FB7185",
+      "skinTone": "#c99b6e",
+      "eyes": "#a78bfa",
+      "hair": "#2b1d12"
+    },
+    "lore": "Comanda o alto-falante de 400 watts no topo da laje-mãe do CIGKV: anúncio de curfew, listagem de desaparecidos e hinos de resistência. Os portões abrem quando a Sirene fala — e…"
+  },
+  {
+    "id": "OP_MIL_FEMALE_SORO",
+    "codename": "SORO",
+    "fullName": "Hana 'Soro' Seo · Enfermeira de Clínica MIL-07",
+    "gender": "FEMININO",
+    "ethnicity": "Coreana / Liberdade, São Paulo",
+    "rank": "ZHEERS",
+    "specialization": "MEDICO_COMBATE",
+    "defaultWorld": "Barburhen",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_mil_female_soro.svg",
+    "svgPathPublic": "/avatars/female/op_mil_female_soro.svg",
+    "colors": {
+      "primary": "#10B981",
+      "secondary": "#475569",
+      "trim": "#5EEAD4",
+      "skinTone": "#f3c89d",
+      "eyes": "#38bdf8",
+      "hair": "#2d1b0e"
+    },
+    "lore": "Mantém a clínica de andar térreo de Barburhen funcionando com soro caseiro, anestesia de aquário e luz de celular. A regra dela é absoluta: dentro da sala, nenhuma arma carregada…"
+  },
+  {
+    "id": "OP_MIL_FEMALE_CORUJA",
+    "codename": "CORUJA",
+    "fullName": "Nina 'Coruja' Mamani · Vigia Noturna MIL-08",
+    "gender": "FEMININO",
+    "ethnicity": "Boliviana Aymara / El Alto",
+    "rank": "ZHEERS",
+    "specialization": "RASTREADORES",
+    "defaultWorld": "Priadus",
+    "faction": "MILICIA_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_mil_female_coruja.svg",
+    "svgPathPublic": "/avatars/female/op_mil_female_coruja.svg",
+    "colors": {
+      "primary": "#334155",
+      "secondary": "#1E293B",
+      "trim": "#94A3B8",
+      "skinTone": "#a9714b",
+      "eyes": "#fbbf24",
+      "hair": "#141414"
+    },
+    "lore": "Vigia as bordas do perímetro de Priadus das 22h às 5h da milícia do posto avançado. Treinou os olhos nas madrugadas frias de El Alto: conta silhuetas antes de contar estrelas e…"
+  },
+  {
+    "id": "OP_GNG_MALE_SPRAY",
+    "codename": "SPRAY",
+    "fullName": "Dudu 'Spray' Cavalcanti · Grafiteiro de Viaduto GNG-01",
+    "gender": "MASCULINO",
+    "ethnicity": "Pardo Nordestino / Recife",
+    "rank": "ZHEERS",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Barburhen",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_gng_male_spray.svg",
+    "svgPathPublic": "/avatars/male/op_gng_male_spray.svg",
+    "colors": {
+      "primary": "#22C55E",
+      "secondary": "#6D28D9",
+      "trim": "#A3E635",
+      "skinTone": "#8d5524",
+      "eyes": "#a3e635",
+      "hair": "#151515"
+    },
+    "lore": "Marca território da facção com grafite visível só sob luz negra — mapa codificado que a polícia fotografa e não entende. Dentro do viaduto, ele conhece cada pilar de cor e cada…"
+  },
+  {
+    "id": "OP_GNG_MALE_VENTANIA",
+    "codename": "VENTANIA",
+    "fullName": "Leleco 'Ventania' Souza · Corredor de Galho GNG-02",
+    "gender": "MASCULINO",
+    "ethnicity": "Afro-Brasileiro / Pelourinho, Salvador",
+    "rank": "ZHEERS",
+    "specialization": "RASTREADORES",
+    "defaultWorld": "CIGKV",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_gng_male_ventania.svg",
+    "svgPathPublic": "/avatars/male/op_gng_male_ventania.svg",
+    "colors": {
+      "primary": "#F97316",
+      "secondary": "#1F2937",
+      "trim": "#FDBA74",
+      "skinTone": "#4a2c17",
+      "eyes": "#fdba74",
+      "hair": "#101010"
+    },
+    "lore": "Corredor de galho da facção do CIGKV: atravessa laje, muro e varal sem derrubar uma prega de roupa. Corre porque é o único do bairro que consegue — e volta com o lanche de…"
+  },
+  {
+    "id": "OP_GNG_MALE_CORTA",
+    "codename": "CORTA",
+    "fullName": "Goran 'Corta' Vukas · Soldado de Facção GNG-03",
+    "gender": "MASCULINO",
+    "ethnicity": "Balcânico Bósnio / Imigrante Brasileiro",
+    "rank": "ONITH",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Barburhen",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_gng_male_corta.svg",
+    "svgPathPublic": "/avatars/male/op_gng_male_corta.svg",
+    "colors": {
+      "primary": "#EF4444",
+      "secondary": "#171717",
+      "trim": "#F87171",
+      "skinTone": "#e0ac69",
+      "eyes": "#57534e",
+      "hair": "#6b4423"
+    },
+    "lore": "Soldado de primeira linha da facção de Barburhen, veterano de duas guerras que não têm nome nos mapas. Ensina os mais novos a contar cartuchos antes de contar vítimas — a facção…"
+  },
+  {
+    "id": "OP_GNG_MALE_BAILE",
+    "codename": "BAILE",
+    "fullName": "Ras 'Baile' Thompson · DJ do Comando GNG-04",
+    "gender": "MASCULINO",
+    "ethnicity": "Afro-Caribenho / Jamaicano-Paulistano",
+    "rank": "ZHEERS",
+    "specialization": "COMUNICACOES_HACKER",
+    "defaultWorld": "CIGKV",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/male/op_gng_male_baile.svg",
+    "svgPathPublic": "/avatars/male/op_gng_male_baile.svg",
+    "colors": {
+      "primary": "#EC4899",
+      "secondary": "#18181B",
+      "trim": "#22D3EE",
+      "skinTone": "#4a2f1a",
+      "eyes": "#22d3ee",
+      "hair": "#1c1917"
+    },
+    "lore": "É o DJ que avisa por som qual rua está livre no CIGKV: o baile começa quando o perímetro está limpo e acaba em scratch se algo dá errado. A pista dele é o radar — quem dança, está…"
+  },
+  {
+    "id": "OP_GNG_FEMALE_ROTA",
+    "codename": "ROTA",
+    "fullName": "Mirta 'Rota' Benítez · Entregadora da Facção GNG-05",
+    "gender": "FEMININO",
+    "ethnicity": "Paraguaia / Ciudad del Este",
+    "rank": "ZHEERS",
+    "specialization": "MOTORISTA_PESADOS",
+    "defaultWorld": "CIGKV",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_gng_female_rota.svg",
+    "svgPathPublic": "/avatars/female/op_gng_female_rota.svg",
+    "colors": {
+      "primary": "#F59E0B",
+      "secondary": "#3F3F46",
+      "trim": "#FBBF24",
+      "skinTone": "#d29b6e",
+      "eyes": "#84cc16",
+      "hair": "#3b2314"
+    },
+    "lore": "Leva e traz a logística da facção pelas ciclovias do CIGKV: nenhum checkpoint olha duas vezes para uma entregadora de app. Guarda o mapa das rotas na cabeça e a chave de contato…"
+  },
+  {
+    "id": "OP_GNG_FEMALE_COTOVELA",
+    "codename": "COTOVELA",
+    "fullName": "Iara 'Cotovela' Teixeira · Lutadora de Galpão GNG-06",
+    "gender": "FEMININO",
+    "ethnicity": "Nordestina Litorânea / Fortaleza",
+    "rank": "ONITH",
+    "specialization": "INFANTARIA",
+    "defaultWorld": "Barburhen",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_gng_female_cotovela.svg",
+    "svgPathPublic": "/avatars/female/op_gng_female_cotovela.svg",
+    "colors": {
+      "primary": "#F43F5E",
+      "secondary": "#292524",
+      "trim": "#FBBF24",
+      "skinTone": "#9c6644",
+      "eyes": "#f43f5e",
+      "hair": "#ec4899"
+    },
+    "lore": "Campeã do galpão: luta por dinheiro e por respeito no anel improvisado de Barburhen. A facção a levou quando descobriu que ela abre portas blindadas com cotovelada e fecha…"
+  },
+  {
+    "id": "OP_GNG_FEMALE_SOMBRA",
+    "codename": "SOMBRA",
+    "fullName": "Bruna 'Sombra' Bellini · Batedora de Território GNG-07",
+    "gender": "FEMININO",
+    "ethnicity": "Italo-Gaúcha / Serra Rio-Grandense",
+    "rank": "ZHEERS",
+    "specialization": "RASTREADORES",
+    "defaultWorld": "CIGKV",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_gng_female_sombra.svg",
+    "svgPathPublic": "/avatars/female/op_gng_female_sombra.svg",
+    "colors": {
+      "primary": "#64748B",
+      "secondary": "#0F172A",
+      "trim": "#CBD5E1",
+      "skinTone": "#f0c8a0",
+      "eyes": "#94a3b8",
+      "hair": "#0b0b0c"
+    },
+    "lore": "Bate o território antes de qualquer movimento da facção: entra pelo telhado, conta camêras, cães e turnos, e sai sem som. Nunca foi vista duas vezes no mesmo ponto — os rivalês…"
+  },
+  {
+    "id": "OP_GNG_FEMALE_PIXEL",
+    "codename": "PIXEL",
+    "fullName": "Linh 'Pixel' Trần · Hacker de Lan House GNG-08",
+    "gender": "FEMININO",
+    "ethnicity": "Vietnamita-Brasileira / Zona Leste de São Paulo",
+    "rank": "ZHEERS",
+    "specialization": "COMUNICACOES_HACKER",
+    "defaultWorld": "Ckesalth",
+    "faction": "GANGUE_URBANA",
+    "svgPathContent": "Content/Avatars/female/op_gng_female_pixel.svg",
+    "svgPathPublic": "/avatars/female/op_gng_female_pixel.svg",
+    "colors": {
+      "primary": "#06B6D4",
+      "secondary": "#27272A",
+      "trim": "#A78BFA",
+      "skinTone": "#f5cba7",
+      "eyes": "#a78bfa",
+      "hair": "#22d3ee"
+    },
+    "lore": "Roda a lan house da facção num entreposto de Ckesalth: clona chip, quebra bloqueio de drone e vende sinal para quem precisa. Dizem que ela derruba o saldo do rival na hora do…"
   }
 ]

@@ -39,6 +39,19 @@ o Ring fecha. Paridade 1:1 sim offline ↔ MatchRoom3D; o evento `pulse` agora
 carrega `finalName` e o HUD anuncia o destino ("O anel fecha em direção ao
 Templo Antigo"). CIGKV não desvia (protocolo de praça central).
 
+## Setores "Plus" do runtime (decisão registrada — instrumento F44 anota)
+
+O README dimensiona 4 setores por mundo; o runtime opera com 5 (o 5º é o
+Terminal ZEX, protocolo de extração comum a todos). Além disso, dois setores
+do runtime não têm linha própria na tabela do README e são DECISÃO documentada
+(a auditoria de fidelidade F44 os valida via esta matriz — alterar o setor
+exige atualizar esta lista junto):
+
+| Mundo | Setor | Âncora canônica | Decisão |
+|---|---|---|---|
+| W3 Ckesalth | **Areia Movediça** | README W3, parágrafo: "lagoas de petróleo em chamas, fumaça tóxica, **areia movediça**" | o substantivo canônico virou SETOR (dunas + patch quicksand no setor 3) — matrix row W3 ("Plus− do README") |
+| W4 Arukheea | **Marina Fantasma** | README W4: ilha isolada com naufrágios/tubarões; distrito 3 = marina com naufrágios (`shipwreck`×2, `whaleribs`×2) | o nome batiza a marina dos naufrágios da ilha dos piratas; renomear não agregaria fidelidade (nome pinado em worldmarks/HUD/testes) |
+
 ## Desvios documentados (não cabem no runtime 3D)
 
 - **Jacarés (W2) / tubarões (W4) / flora carnívora (W2)** — fauna com IA: conteúdo de engine (UE5.8), fora do escopo do runtime procedural;

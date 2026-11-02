@@ -85,7 +85,10 @@ export async function applyMatchRankings(
   roomId: string,
   participants: MatchParticipant[],
 ): Promise<RankingUpdateResult[]> {
-  if (participants.length === 0) return [];
+  // A partida precisa de pelo menos um adversário para representar resultado competitivo.
+  // Uma sala de treino/solo de participante único não concede XP nem altera Rating.
+  // A fila "solo" com vários participantes continua elegível normalmente.
+  if (participants.length < 2) return [];
 
   // Load current stats
   const statsMap = new Map<string, Awaited<ReturnType<typeof storage.getPlayerStats>>>();

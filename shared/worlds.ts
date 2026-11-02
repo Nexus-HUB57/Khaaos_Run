@@ -54,15 +54,44 @@ export interface WorldPoi {
   strategicNote: string;
 }
 
+export interface WorldHazardAnchor {
+  id: string;
+  name: string;
+  x: number;
+  z: number;
+}
+
 export interface WorldHazardSpec {
   id: string;
   name: string;
-  type: "ACID_RAIN" | "TSUNAMI_WAVE" | "VOLCANIC_LAVA" | "KHAOS_GRAVITY" | "SAFE_TRAINING";
+  /**
+   * Cânon F42 (docs/FASE42_MUNDOS_FIDELIDADE_README.md).
+   * - ACID_RAIN     → Barburhen  (id-gated no sim3d via `acidTimer` + gate `Barburhen`)
+   * - SPORE_FOG      → Priadus    (Neblina com Esporos Tóxicos; sporeTopY = 90)
+   * - TOXIC_SMOKE    → Ckesalth   (Fumaça Tóxica; smokeTopY = 180)
+   * - TSUNAMI_WAVE   → Arukheea   (Tsunami; submergeBelowY = 90)
+   * - KHAOS_GRAVITY  → CIGKV      (Pulso Khaaos; gravityScale = 0.35 + 4 âncoras)
+   *
+   * `VOLCANIC_LAVA` e `SAFE_TRAINING` foram removidos em F42 (não-cânon do
+   * README; a erupção de lava saiu do vocabulário e o Pulso Khaaos substituiu
+   * o placeholder de "treinamento seguro" do CIGKV).
+   */
+  type: "ACID_RAIN" | "TSUNAMI_WAVE" | "SPORE_FOG" | "TOXIC_SMOKE" | "KHAOS_GRAVITY";
   intervalSeconds: number;
   durationSeconds: number;
   damagePerSecond: number;
   description: string;
   counterplay: string;
+  /** F42 cânon: KHAOS_GRAVITY (CIGKV Pulso Khaaos) — gravidade reduzida e âncoras de contenção. */
+  gravityScale?: number;
+  anchorRadius?: number;
+  anchors?: ReadonlyArray<WorldHazardAnchor>;
+  /** F42 cânon: SPORE_FOG (Priadus) — teto da neblina de esporos (acima = seguro). */
+  sporeTopY?: number;
+  /** F42 cânon: TOXIC_SMOKE (Ckesalth) — teto da fumaça tóxica (acima = seguro). */
+  smokeTopY?: number;
+  /** F42 cânon: TSUNAMI_WAVE (Arukheea) — cota de submersão (abaixo = afogamento). */
+  submergeBelowY?: number;
 }
 
 export interface WorldZexNode {
@@ -93,6 +122,12 @@ export interface WorldDefinition {
   krcMultiplier: number;
   xpMultiplier: number;
   accentColor: string;
+  /**
+   * Tag de revisão canônica (contrato da arquitetura §4).
+   * Pinado em `f42-2026-11-02` após a migração F42 (Pulso Khaaos → CIGKV,
+   * Tsunami → Arukheea, lava removida, SPORE_FOG/TOXIC_SMOKE introduzidos).
+   */
+  configRevision: string;
   unlockRule: WorldUnlockRule;
   safeZonePhases: WorldSafeZonePhase[];
   pois: WorldPoi[];
@@ -121,15 +156,16 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     id: "CIGKV",
     order: 0,
     name: "CIGKV",
-    subtitle: "Centro Integrado de Guerra Khaaos Virtual",
-    biome: "Simulação Tática Modular & Domos de Treinamento",
+    subtitle: "Khaaos Ville — Campo de Instrução de Guerra",
+    biome: "Vila Militar Murada — Pátio de Armamento, Setor de Testes (Proving Grounds), Parque Abandonado e 15 Zonas de Extração de XP",
     dimensionsKm: "2.0 x 2.0 km",
     sizeMeters: 2000,
-    recommendedPlayers: "16 - 30 Operadores (Solo / Squad)",
+    recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
     targetDurationMinutes: 15,
     krcMultiplier: 0.5,
     xpMultiplier: 1.0,
     accentColor: "#00f0ff",
+    configRevision: "f42-2026-11-02",
     unlockRule: {
       requiredWorld: null,
       requiredCompletions: 0,
@@ -185,14 +221,22 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       }
     ],
     hazard: {
-      id: "HAZ_CIGKV_SIM",
-      name: "Pulso Eletromagnético de Calibração",
-      type: "SAFE_TRAINING",
-      intervalSeconds: 180,
-      durationSeconds: 20,
-      damagePerSecond: 1.5,
-      description: "Varredura controlada que sinaliza campistas e aplica leve drenagem em escudos fora das estruturas.",
-      counterplay: "Manter deslocamento ativo ou entrar nos domos blindados dos POIs."
+      id: "HAZ_CIGKV_PULSO_KHAAOS",
+      name: "Pulso Khaaos — Anomalia de Inversão Gravitacional",
+      type: "KHAOS_GRAVITY",
+      intervalSeconds: 120,
+      durationSeconds: 30,
+      damagePerSecond: 12,
+      gravityScale: 0.35,
+      anchorRadius: 28,
+      anchors: [
+        { id: "NEXUS", name: "Nexus of Khaaos", x: 0, z: 0 },
+        { id: "NORTH", name: "North Astral Spire", x: 0, z: -95 },
+        { id: "EAST", name: "East Void Sanctum", x: 95, z: 0 },
+        { id: "WEST", name: "West Quantum Array", x: -95, z: 0 },
+      ],
+      description: "Pulso Khaaos a cada 10 minutos (README, Protocolo CIGKV): alteração climática ou drop de loot lendário. Fora das âncoras de contenção a gravidade cai para 0.35G e escudos/vida são drenados a 12 dps — morte direta, sem DBNO.",
+      counterplay: "Permanecer dentro do raio das 4 âncoras quânticas (NEXUS/NORTH/EAST/WEST) ou ativar Botas Magnéticas durante o pulso."
     },
     zexNodes: [
       { id: "ZEX-CIGKV-01", name: "Heliporto Norte", coordinates: { x: 0, y: 650, z: 120 }, activationPhase: 2, extractionTimeSeconds: 20, capacityPlayers: 3 },
@@ -212,7 +256,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     },
     ue5Class: {
       mapDataHeader: "Game/World/CIGKV/KhaaosCIGKVMapData.h",
-      levelHeader: "Game/Level/KhaaosCIGKVLevel.h",
+      levelHeader: "Game/World/CIGKV/KhaaosCIGKVLevel.h",
       persistenceEnum: "EKhaaosWorld::CIGKV"
     }
   },
@@ -221,15 +265,16 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     id: "Barburhen",
     order: 1,
     name: "Barburhen",
-    subtitle: "Deserto Industrial Pós-Colapso & Refinarias Tóxicas",
-    biome: "Deserto Árido de Silicato com Complexos Petroquímicos Abandonados",
+    subtitle: "Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)",
+    biome: "Urbano Pós-Guerra: Construções Inacabadas, Carros Abandonados, Cadáveres que Apodrecem, Chuva Ácida, Desabamentos e Fumaça",
     dimensionsKm: "3.0 x 3.0 km",
     sizeMeters: 3000,
-    recommendedPlayers: "60 Operadores (20 Trios)",
+    recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
     targetDurationMinutes: 20,
     krcMultiplier: 1.0,
     xpMultiplier: 1.25,
     accentColor: "#f59e0b",
+    configRevision: "f42-2026-11-02",
     unlockRule: {
       requiredWorld: "CIGKV",
       requiredCompletions: 1,
@@ -332,78 +377,80 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     id: "Priadus",
     order: 2,
     name: "Priadus",
-    subtitle: "Arquipélago Abissal & Plataformas Oceânicas",
-    biome: "Ilhas Tropicais Submersíveis, Recifes Bioluminescentes e Plataformas Offshore",
+    subtitle: "Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)",
+    biome: "Selva Densa, Pântanos, Flora Carnívora, Neblina com Esporos Tóxicos e Jacarés — Teste de Sanidade Mental diante do Invisível",
     dimensionsKm: "3.5 x 3.5 km",
     sizeMeters: 3500,
-    recommendedPlayers: "60 Operadores (20 Trios)",
+    recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
     targetDurationMinutes: 22,
     krcMultiplier: 1.5,
     xpMultiplier: 1.5,
     accentColor: "#06b6d4",
+    configRevision: "f42-2026-11-02",
     unlockRule: {
       requiredWorld: "Barburhen",
       requiredCompletions: 5,
       description: "Requer 5 extrações bem-sucedidas em Barburhen."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Maré Alta 1", durationSeconds: 300, radiusMeters: 1750, damagePerSecond: 1.5, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 1, phaseName: "Maré Alta 2", durationSeconds: 300, radiusMeters: 1200, damagePerSecond: 3.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 2, phaseName: "Vórtice Marinho 3", durationSeconds: 240, radiusMeters: 750, damagePerSecond: 6.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 3, phaseName: "Pressão Abissal 4", durationSeconds: 180, radiusMeters: 380, damagePerSecond: 12.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 4, phaseName: "Olho do Tufão", durationSeconds: 180, radiusMeters: 60, damagePerSecond: 25.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 0, phaseName: "Neblina Crescente 1", durationSeconds: 300, radiusMeters: 1750, damagePerSecond: 1.5, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 1, phaseName: "Neblina Crescente 2", durationSeconds: 300, radiusMeters: 1200, damagePerSecond: 3.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 2, phaseName: "Esporos Densos 3", durationSeconds: 240, radiusMeters: 750, damagePerSecond: 6.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 3, phaseName: "Floresta Sufocante 4", durationSeconds: 180, radiusMeters: 380, damagePerSecond: 12.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 4, phaseName: "Coração do Templo", durationSeconds: 180, radiusMeters: 60, damagePerSecond: 25.0, center: { x: 0, y: 0, z: 100 } },
     ],
     pois: [
       {
-        name: "Central Atoll",
+        name: "Templo Antigo",
         tier: 3,
-        theme: "Estação Hidro-Naval Central",
+        theme: "Ruínas do Templo da Selva — Centro do Anel de Fechamento",
         coordinates: { x: 0, y: 0, z: 150 },
         radiusMeters: 280,
         lootSpawnCount: 16,
         rarityWeights: { common: 8, uncommon: 20, rare: 32, epic: 25, legendary: 15 },
-        strategicNote: "Anel de pontes retráteis com sub-nível subaquático rico em KRC cristalizado."
+        strategicNote: "Anel fecha no templo; neblina com esporos tóxicos pune o atraso (acima de 90m = seguro)."
       },
       {
-        name: "North Lighthouse",
+        name: "Bosque",
         tier: 3,
-        theme: "Farol Orbital Costeiro",
+        theme: "Bosque de Desembarque — Setor de Inserção Zu",
         coordinates: { x: 0, y: 1050, z: 280 },
         radiusMeters: 210,
         lootSpawnCount: 13,
         rarityWeights: { common: 10, uncommon: 22, rare: 33, epic: 25, legendary: 10 },
-        strategicNote: "Imune a inundações de tsunami devido à altitude; disputado por snipers."
+        strategicNote: "Dossel alto oferece cobertura aérea contra a neblina rasteira; disputado por snipers."
       },
       {
-        name: "East Coral Lab",
+        name: "Área de Caça",
         tier: 2,
-        theme: "Domo Submarino de Pesquisa Genética",
+        theme: "Clareira de Caça com Flora Carnívora",
         coordinates: { x: 950, y: 150, z: 60 },
         radiusMeters: 190,
         lootSpawnCount: 11,
         rarityWeights: { common: 18, uncommon: 32, rare: 28, epic: 16, legendary: 6 },
-        strategicNote: "Comportas de contenção que bloqueiam ondas gigantes se acionadas a tempo."
+        strategicNote: "Arbustos carnívoros ocultam armadilhas; alto risco de emboscada em CQB."
       },
       {
-        name: "West Shipwreck",
+        name: "Área Pantanosa",
         tier: 2,
-        theme: "Destroços do Cargueiro Titã",
+        theme: "Pântano dos Jacarés — Setor de Inundação Lenta",
         coordinates: { x: -950, y: -100, z: 95 },
         radiusMeters: 200,
         lootSpawnCount: 11,
         rarityWeights: { common: 20, uncommon: 30, rare: 28, epic: 16, legendary: 6 },
-        strategicNote: "Casco partido em três níveis com tirolesas conectando os mastros."
+        strategicNote: "Jacarés com IA patrulham o pântano; conteúdo de engine UE5.8 (deferred em F42)."
       }
     ],
     hazard: {
-      id: "HAZ_PRIADUS_TSUNAMI",
-      name: "Onda de Tsunami & Elevação de Maré",
-      type: "TSUNAMI_WAVE",
-      intervalSeconds: 180,
-      durationSeconds: 40,
-      damagePerSecond: 6.0,
-      description: "Parede hidrodinâmica que submerge terrenos abaixo de 90m de altitude, causando arrasto e afogamento.",
-      counterplay: "Subir para plataformas superiores, faróis ou usar propulsores anfíbios."
+      id: "HAZ_PRIADUS_SPORE_FOG",
+      name: "Neblina com Esporos Tóxicos (Emboscada Verde)",
+      type: "SPORE_FOG",
+      intervalSeconds: 150,
+      durationSeconds: 45,
+      damagePerSecond: 7,
+      sporeTopY: 90,
+      description: "Neblina alucinógena de esporos tóxicos abaixo de 90m de altitude — furam blindagem e causam dano contínuo. README W2: 'anel fecha no templo; neblina com esporos tóxicos pune o atraso'.",
+      counterplay: "Subir para platforms elevadas (>90m), ativar máscara de esporos ou avançar rápido para o templo antes do fechamento do anel."
     },
     zexNodes: [
       { id: "ZEX-PRI-01", name: "Doca Suspensa Norte", coordinates: { x: 150, y: 900, z: 210 }, activationPhase: 2, extractionTimeSeconds: 30, capacityPlayers: 3 },
@@ -433,78 +480,80 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     id: "Ckesalth",
     order: 3,
     name: "Ckesalth",
-    subtitle: "Caldeira Vulcânica & Fundições Geotérmicas",
-    biome: "Cordilheira Vulcânica Ativa, Rios de Magma e Usinas deObsidiana",
+    subtitle: "Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)",
+    biome: "Deserto Árido, Lagoas de Petróleo em Chamas, Fumaça Tóxica e Areia Movediça — Lição sobre a Fragilidade da Vaidade",
     dimensionsKm: "4.0 x 4.0 km",
     sizeMeters: 4000,
-    recommendedPlayers: "60 Operadores (20 Trios)",
+    recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
     targetDurationMinutes: 25,
     krcMultiplier: 2.25,
     xpMultiplier: 2.0,
     accentColor: "#ef4444",
+    configRevision: "f42-2026-11-02",
     unlockRule: {
       requiredWorld: "Priadus",
       requiredCompletions: 10,
       description: "Requer 10 extrações bem-sucedidas em Priadus."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Cinturão Magmático 1", durationSeconds: 330, radiusMeters: 2000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 1, phaseName: "Cinturão Magmático 2", durationSeconds: 300, radiusMeters: 1350, damagePerSecond: 4.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 2, phaseName: "Fissura Piroclástica 3", durationSeconds: 240, radiusMeters: 800, damagePerSecond: 8.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 3, phaseName: "Câmara de Ignis 4", durationSeconds: 180, radiusMeters: 400, damagePerSecond: 15.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 4, phaseName: "Erupção Total", durationSeconds: 180, radiusMeters: 65, damagePerSecond: 30.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 0, phaseName: "Duna Exterior 1", durationSeconds: 330, radiusMeters: 2000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 1, phaseName: "Duna Exterior 2", durationSeconds: 300, radiusMeters: 1350, damagePerSecond: 4.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 2, phaseName: "Areia Movediça 3", durationSeconds: 240, radiusMeters: 800, damagePerSecond: 8.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 3, phaseName: "Refinaria em Chamas 4", durationSeconds: 180, radiusMeters: 400, damagePerSecond: 15.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 4, phaseName: "Vila Sombria Suffocada", durationSeconds: 180, radiusMeters: 65, damagePerSecond: 30.0, center: { x: 0, y: 0, z: 200 } },
     ],
     pois: [
       {
-        name: "Volcano Core",
+        name: "Refinaria de Petróleo",
         tier: 3,
-        theme: "Reator Geotérmico Suspenso na Cratera",
+        theme: "Refinaria Central em Chamas — Centro do Anel de Fechamento",
         coordinates: { x: 0, y: 0, z: 380 },
         radiusMeters: 300,
         lootSpawnCount: 18,
         rarityWeights: { common: 5, uncommon: 15, rare: 35, epic: 28, legendary: 17 },
-        strategicNote: "Pontes de titânio sobre magma vivo; maior concentração de loot lendário de Ckesalth."
+        strategicNote: "Lagoas de petróleo em chamas cercam a refinaria; maior concentração de loot lendário de Ckesalth."
       },
       {
-        name: "North Forge",
+        name: "Vilarejo dos Beduínos",
         tier: 3,
-        theme: "Fundição Automatizada de Armamentos",
+        theme: "Vilarejo dos Beduínos — Setor de Inserção Zu",
         coordinates: { x: 0, y: 1200, z: 310 },
         radiusMeters: 230,
         lootSpawnCount: 14,
         rarityWeights: { common: 8, uncommon: 20, rare: 34, epic: 26, legendary: 12 },
-        strategicNote: "Prensas térmicas ativas e terminais de upgrade imediato de armas."
+        strategicNote: "Construções de adobe oferecem abrigo contra a fumaça tóxica; terminais de upgrade de armas."
       },
       {
-        name: "East Obsidian Temple",
+        name: "Resort Abandonado",
         tier: 2,
-        theme: "Santuário Monolítico de Basalto",
+        theme: "Resort Abandonado no Deserto",
         coordinates: { x: 1150, y: 100, z: 240 },
         radiusMeters: 200,
         lootSpawnCount: 12,
         rarityWeights: { common: 15, uncommon: 30, rare: 30, epic: 18, legendary: 7 },
-        strategicNote: "Labirinto de colunas de basalto que bloqueiam bombas piroclásticas."
+        strategicNote: "Piscinas secas e cabanas de praia fornecem cobertura CQB; refúgio contra tempestades de areia."
       },
       {
-        name: "West Lava Tube",
+        name: "Areia Movediça",
         tier: 2,
-        theme: "Rede de Túneis Térmicos Subterrâneos",
+        theme: "Caminho de Areia Movediça — Setor Plus- do README",
         coordinates: { x: -1150, y: -150, z: 140 },
         radiusMeters: 210,
         lootSpawnCount: 12,
         rarityWeights: { common: 15, uncommon: 30, rare: 30, epic: 18, legendary: 7 },
-        strategicNote: "Rota rápida entre quadrantes, mas vulnerável a inundações de lava durante erupções."
+        strategicNote: "Mecânica de afundamento diferida para o cook UE5.8 (F42); o setor existe com nome + dunas canônicas."
       }
     ],
     hazard: {
-      id: "HAZ_CKESALTH_ERUPTION",
-      name: "Erupção Piroclástica & Gêiseres de Lava",
-      type: "VOLCANIC_LAVA",
+      id: "HAZ_CKESALTH_TOXIC_SMOKE",
+      name: "Fumaça Tóxica (Assassino Silencioso)",
+      type: "TOXIC_SMOKE",
       intervalSeconds: 140,
       durationSeconds: 35,
-      damagePerSecond: 9.0,
-      description: "Bombardeio de meteoros vulcânicos e elevação súbita dos canais de magma nas cotas baixas.",
-      counterplay: "Monitorar tremores sísmicos no HUD e posicionar-se sob escudos térmicos das fundições."
+      damagePerSecond: 9,
+      smokeTopY: 180,
+      description: "Fumaça tóxica das lagoas de petróleo em chamas abaixo de 180m de altitude — furam blindagem e causam dano contínuo. README W3: 'a partir de 5 min o anel fecha na Vila Sombria sob fumaça tóxica'.",
+      counterplay: "Subir para plataformas elevadas (>180m), ativar máscara de gás ou avançar para o Vilarejo dos Beduínos antes do fechamento do anel."
     },
     zexNodes: [
       { id: "ZEX-CKE-01", name: "Bastião da Forja Norte", coordinates: { x: -200, y: 1050, z: 320 }, activationPhase: 2, extractionTimeSeconds: 35, capacityPlayers: 3 },
@@ -534,78 +583,80 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     id: "Arukheea",
     order: 4,
     name: "Arukheea",
-    subtitle: "Singularidade Dimensional & Ruptura de Khaaos",
-    biome: "Fragmentos Flutuantes no Vazio, Anomalias Gravitacionais e Cidadelas Astrais",
+    subtitle: "Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)",
+    biome: "Ilha Isolada, Prisão do Sol da Noite (Luz Perpétua), Tsunami Iminente, Tubarões e Cemitério das Baleias — Pressão Hidráulica e Claustrofobia em Céu Aberto",
     dimensionsKm: "4.5 x 4.5 km",
     sizeMeters: 4500,
-    recommendedPlayers: "60 Operadores Elite (20 Trios)",
+    recommendedPlayers: "100 Operadores Elite (especificação canônica do Descentralizador)",
     targetDurationMinutes: 28,
     krcMultiplier: 3.5,
     xpMultiplier: 3.0,
     accentColor: "#a855f7",
+    configRevision: "f42-2026-11-02",
     unlockRule: {
       requiredWorld: "Ckesalth",
       requiredCompletions: 15,
       description: "Requer 15 extrações bem-sucedidas em Ckesalth."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Horizonte de Eventos 1", durationSeconds: 360, radiusMeters: 2250, damagePerSecond: 2.5, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 1, phaseName: "Horizonte de Eventos 2", durationSeconds: 300, radiusMeters: 1500, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 2, phaseName: "Distorsão Quântica 3", durationSeconds: 240, radiusMeters: 900, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 3, phaseName: "Ruptura Astral 4", durationSeconds: 180, radiusMeters: 450, damagePerSecond: 18.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 4, phaseName: "Singularidade Zero", durationSeconds: 180, radiusMeters: 70, damagePerSecond: 40.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 0, phaseName: "Maré Baixa 1", durationSeconds: 360, radiusMeters: 2250, damagePerSecond: 2.5, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 1, phaseName: "Maré Baixa 2", durationSeconds: 300, radiusMeters: 1500, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 2, phaseName: "Tromba d'água 3", durationSeconds: 240, radiusMeters: 900, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 3, phaseName: "Tsunami Iminente 4", durationSeconds: 180, radiusMeters: 450, damagePerSecond: 18.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 4, phaseName: "Prisão do Sol da Noite", durationSeconds: 180, radiusMeters: 70, damagePerSecond: 40.0, center: { x: 0, y: 0, z: 300 } },
     ],
     pois: [
       {
-        name: "Nexus of Khaaos",
+        name: "Prisão do Sol da Noite",
         tier: 3,
-        theme: "Núcleo da Singularidade Dimensional",
+        theme: "Prisão de Luz Perpétua — Centro do Anel de Fechamento",
         coordinates: { x: 0, y: 0, z: 500 },
         radiusMeters: 320,
         lootSpawnCount: 20,
         rarityWeights: { common: 0, uncommon: 10, rare: 35, epic: 33, legendary: 22 },
-        strategicNote: "Gravidade baixa permanente e portais de dobra curta; maior multiplicador de KRC do jogo."
+        strategicNote: "Luz perpétua e heliponto da torre de extração final; maior multiplicador de KRC do jogo."
       },
       {
-        name: "North Astral Spire",
+        name: "Bosque dos Perdidos",
         tier: 3,
-        theme: "Pináculo Flutuante dos Arquitetos",
+        theme: "Bosque dos Perdidos — Setor de Inserção Zu",
         coordinates: { x: 0, y: 1400, z: 450 },
         radiusMeters: 240,
         lootSpawnCount: 15,
         rarityWeights: { common: 5, uncommon: 15, rare: 35, epic: 30, legendary: 15 },
-        strategicNote: "Ilhas conectadas por feixes de energia que impulsionam operadores entre níveis."
+        strategicNote: "Dossel denso oferece cobertura aérea contra o tsunami; rotas de tirolesa para a prisão."
       },
       {
-        name: "East Void Sanctum",
+        name: "Cemitério das Baleias",
         tier: 2,
-        theme: "Catedral Invertida do Vazio",
+        theme: "Cemitério das Baleias — Costão com Esqueletos",
         coordinates: { x: 1350, y: 150, z: 340 },
         radiusMeters: 220,
         lootSpawnCount: 13,
         rarityWeights: { common: 10, uncommon: 25, rare: 35, epic: 20, legendary: 10 },
-        strategicNote: "Cobertura dimensional que oculta assinaturas térmicas contra radares inimigos."
+        strategicNote: "Costão rochoso com esqueletos de baleia — cobertura CQB natural e tubarões patrulhando o mar."
       },
       {
-        name: "West Quantum Array",
+        name: "Fábrica Abandonada",
         tier: 2,
-        theme: "Matriz de Estabilização de Realidade",
+        theme: "Fábrica da Ilha — Setor Industrial Decaído",
         coordinates: { x: -1350, y: -150, z: 320 },
         radiusMeters: 220,
         lootSpawnCount: 13,
         rarityWeights: { common: 10, uncommon: 25, rare: 35, epic: 20, legendary: 10 },
-        strategicNote: "Permite ativar estabilizadores locais que anulam tempestades gravitacionais."
+        strategicNote: "Estrutura elevada e impermeável ao tsunami; terminais de upgrade de equipamento."
       }
     ],
     hazard: {
-      id: "HAZ_ARUKHEEA_SINGULARITY",
-      name: "Anomalia de Inversão Gravitacional & Fenda de Khaaos",
-      type: "KHAOS_GRAVITY",
-      intervalSeconds: 120,
-      durationSeconds: 30,
-      damagePerSecond: 12.0,
-      description: "Rupturas espaço-temporais alteram a gravidade para 0.35G e drenam escudos fora de âncoras quânticas.",
-      counterplay: "Ativar Botas Magnéticas ou permanecer dentro do raio das Âncoras de Realidade nos POIs."
+      id: "HAZ_ARUKHEEA_TSUNAMI",
+      name: "Tsunami Iminente (Ilha dos Gritos Calados)",
+      type: "TSUNAMI_WAVE",
+      intervalSeconds: 180,
+      durationSeconds: 40,
+      damagePerSecond: 6,
+      submergeBelowY: 90,
+      description: "Onda de tsunami que submerge terrenos abaixo de 90m de altitude, causando arrasto e afogamento. README W4: 'anel fecha na Prisão; quem não sobe no helicóptero torna-se grito calado'.",
+      counterplay: "Subir para plataformas superiores (>90m) — Prisão do Sol da Noite, Fábrica Abandonada, Bosque dos Perdidos — ou aguardar extração por helicóptero na torre."
     },
     zexNodes: [
       { id: "ZEX-ARU-01", name: "Portal Astral Norte", coordinates: { x: 250, y: 1250, z: 460 }, activationPhase: 2, extractionTimeSeconds: 40, capacityPlayers: 3 },
@@ -675,3 +726,107 @@ export function evaluateWorldUnlocks(
 
   return next;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Contrato de dimensões canônicas dos rings (especificação do Descentralizador)
+ *
+ * Faixa 15.000–25.000 m² · 100 operadores por ring · densidade 150–250 m²/jogador
+ * (combate CQB estilo Free Fire). `areaM2` ≠ `perimeterM` de contorno — ambos são
+ * campos independentes do contrato e a paridade é verificada por
+ * `tests/official/worlds-dimensions.test.ts`.
+ *
+ * Fonte: README.md § "Mundos Oficiais (W1–W4)" (sync 2026-11-02, PRs #243/#244);
+ * port do item 1.1 do Roadmap end to end (docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type WorldShape =
+  | "fortified_rectangle"
+  | "urban_gridiron"
+  | "organic_blob"
+  | "desert_basin"
+  | "coastal_island";
+
+export interface WorldRingDimensions {
+  worldId: WorldId;
+  operationalId: OperationalWorldId;
+  /** Forma orgânica do contorno por bioma (spec do WorldMapPreview). */
+  shape: WorldShape;
+  /** Área canônica jogável em m² (≠ perímetro de contorno). */
+  areaM2: number;
+  /** Bounding box canônica em metros. */
+  boundingBoxM: { widthM: number; depthM: number };
+  /** Perímetro de contorno em metros (contrato independente da área). */
+  perimeterM: number;
+  /** Capacidade fixa do Descentralizador: 100 operadores por ring. */
+  operatorCapacity: number;
+  /** Densidade canônica em m² por operador (areaM2 / operatorCapacity). */
+  densityM2PerOperator: number;
+  shapeNote: string;
+}
+
+export const WORLD_RING_CAPACITY_OPERATORS = 100;
+
+export const WORLD_RING_DIMENSIONS: Readonly<
+  Record<WorldId, WorldRingDimensions>
+> = {
+  CIGKV: {
+    worldId: "CIGKV",
+    operationalId: "CIGKV",
+    shape: "fortified_rectangle",
+    areaM2: 16_000,
+    boundingBoxM: { widthM: 160, depthM: 100 },
+    perimeterM: 520,
+    operatorCapacity: 100,
+    densityM2PerOperator: 160,
+    shapeNote: "Vila militar murada",
+  },
+  Barburhen: {
+    worldId: "Barburhen",
+    operationalId: "W1",
+    shape: "urban_gridiron",
+    areaM2: 19_000,
+    boundingBoxM: { widthM: 190, depthM: 100 },
+    perimeterM: 580,
+    operatorCapacity: 100,
+    densityM2PerOperator: 190,
+    shapeNote: "Grid urbano irregular",
+  },
+  Priadus: {
+    worldId: "Priadus",
+    operationalId: "W2",
+    shape: "organic_blob",
+    areaM2: 22_000,
+    boundingBoxM: { widthM: 220, depthM: 100 },
+    perimeterM: 640,
+    operatorCapacity: 100,
+    densityM2PerOperator: 220,
+    shapeNote: "Blob orgânico radial",
+  },
+  Ckesalth: {
+    worldId: "Ckesalth",
+    operationalId: "W3",
+    shape: "desert_basin",
+    areaM2: 25_000,
+    boundingBoxM: { widthM: 250, depthM: 100 },
+    perimeterM: 700,
+    operatorCapacity: 100,
+    densityM2PerOperator: 250,
+    shapeNote: "Bacia de dunas",
+  },
+  Arukheea: {
+    worldId: "Arukheea",
+    operationalId: "W4",
+    shape: "coastal_island",
+    areaM2: 18_000,
+    boundingBoxM: { widthM: 180, depthM: 100 },
+    perimeterM: 560,
+    operatorCapacity: 100,
+    densityM2PerOperator: 180,
+    shapeNote: "Ilha costeira com enseadas",
+  },
+} as const;
+
+/** Lista ordenada (CIGKV → W4) das dimensões canônicas dos rings. */
+export const WORLD_RING_DIMENSIONS_LIST: readonly WorldRingDimensions[] = (
+  ["CIGKV", "Barburhen", "Priadus", "Ckesalth", "Arukheea"] as const
+).map((id) => WORLD_RING_DIMENSIONS[id]);

@@ -236,6 +236,13 @@ public:
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
         virtual void Die(AActor* Killer);
 
+        /** Mirror authoritative PlayerState/GAS health and shield into this replicated pawn. */
+        void SyncHealthAndShieldFromPlayerState(
+                float NewHealth, float NewMaxHealth, float NewShield, float NewMaxShield);
+
+        /** Finalize pawn visuals/state after GameMode has recorded a PlayerState elimination. */
+        void FinalizeDeathFromPlayerState();
+
         // ─── Movement State Queries ─────────────────────────────────────────────
 
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Movement")
@@ -551,4 +558,7 @@ protected:
 
         /** Server-only: apply damage to health after shield absorption. */
         float InternalApplyDamage(float DamageAmount, AActor* DamageInstigator);
+
+        /** Shared death-state transition; optionally updates PlayerState for legacy Character damage. */
+        void EnterDeadState(AActor* Killer, bool bUpdatePlayerState);
 };

@@ -38,13 +38,14 @@ enum class EPatenteRank : uint8
 	Overlord  UMETA(DisplayName = "OVERLORD")
 };
 
-/** Elimination cause (from schema.ts eliminations table: ZONA|PVP|QUEDA). */
+/** Elimination cause (world environmental damage is distinct from a fall). */
 UENUM(BlueprintType)
 enum class EEliminationCause : uint8
 {
 	Zona  UMETA(DisplayName = "ZONA"),
 	PvP   UMETA(DisplayName = "PVP"),
-	Queda UMETA(DisplayName = "QUEDA")
+	Queda UMETA(DisplayName = "QUEDA"),
+	Ambiente UMETA(DisplayName = "AMBIENTE")
 };
 
 /**
@@ -217,6 +218,9 @@ public:
 	/** Apply typed damage (server only) so species passives can filter it. */
 	float ApplyDamageOfType(float DamageAmount, const FGameplayTag& DamageType, APlayerState* Instigator);
 
+	/** Apply environmental world damage only when SourceWorldId matches the active server world. */
+	float ApplyWorldEnvironmentalDamage(float DamageAmount, AActor* DamageCauser, FName SourceWorldId);
+
 	/** Replace the current species passive ability; null removes any previous passive. */
 	void SetSpeciesPassiveAbility(TSubclassOf<UGameplayAbility> PassiveAbilityClass, UObject* SourceObject = nullptr);
 
@@ -254,6 +258,7 @@ private:
 	FDelegateHandle OutOfHealthDelegateHandle;
 	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
 	TArray<FGameplayAbilitySpecHandle> SpeciesActiveAbilityHandles;
+	bool bApplyingWorldEnvironmentalDamage = false;
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 

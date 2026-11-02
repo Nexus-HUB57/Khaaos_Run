@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
-import { bankAccounts, economyIdempotency, economyLedgerEntries, items, loans, playerStats, transactions } from "@shared/schema";
+import { bankAccounts, economyIdempotency, economyLedgerEntries, items, loans, playerMaterials, playerStats, transactions } from "@shared/schema";
 import { getArmorerProduct, type ArmorerCatalogId } from "@shared/armorer-catalog";
 import {
   calculateLoanInterestMinorUnits,
@@ -269,20 +269,57 @@ export class EconomyService {
     });
   }
 
-  async purchaseItem(userId: string, key: string, input: { catalogId: ArmorerCatalogId }): Promise<EconomyResponse> {
+  async craftItem(userId: string, key: string, input: { catalogId: ArmorerCatalogId }): Promise<EconomyResponse> {
     const product = getArmorerProduct(input.catalogId);
-    if (!product) throw new RangeError("Produto não encontrado na Forja do Armeiro");
+    if (!product) throw new RangeError("Receita não encontrada na Forja do Armeiro");
     const normalizedInput = { catalogId: product.id };
-    return this.execute(userId, key, "items.purchase", normalizedInput, async (tx, context) => {
+    return this.execute(userId, key, "items.craft", normalizedInput, async (tx, context) => {
       const account = await this.lockBank(tx, userId);
-      const price = product.priceKrc.toFixed(2);
+      const fee = product.armorerFeeKrc.toFixed(2);
+
+      // Lock inventories in canonical order so simultaneous recipes cannot double-spend
+      // stock or deadlock by acquiring shared material rows in different sequences.
+      const ingredients = [...product.recipe].sort((left, right) => left.materialId.localeCompare(right.materialId));
+      const stock = new Map<string, number>();
+      for (const ingredient of ingredients) {
+        await tx.insert(playerMaterials).values({ userId, materialId: ingredient.materialId, quantity: 0 }).onConflictDoNothing();
+        const [balance] = await tx.select().from(playerMaterials).where(and(
+          eq(playerMaterials.userId, userId),
+          eq(playerMaterials.materialId, ingredient.materialId),
+        )).for("update");
+        stock.set(ingredient.materialId, balance?.quantity ?? 0);
+      }
+
+      const missingMaterials = ingredients.flatMap((ingredient) => {
+        const available = stock.get(ingredient.materialId) ?? 0;
+        return available < ingredient.quantity
+          ? [{ materialId: ingredient.materialId, required: ingredient.quantity, available }]
+          : [];
+      });
+      if (missingMaterials.length) {
+        return { status: 409, body: { message: "Materiais insuficientes para esta receita.", missingMaterials } };
+      }
+
       const [updated] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`round(${bankAccounts.weaponsBalance} - ${price}::numeric, 2)`,
+        weaponsBalance: sql`round(${bankAccounts.weaponsBalance} - ${fee}::numeric, 2)`,
       }).where(and(
         eq(bankAccounts.userId, userId),
-        sql`${bankAccounts.weaponsBalance} >= ${price}::numeric`,
+        sql`${bankAccounts.weaponsBalance} >= ${fee}::numeric`,
       )).returning();
-      if (!updated) return insufficientFunds(price, String(account.weaponsBalance));
+      if (!updated) return insufficientFunds(fee, String(account.weaponsBalance));
+
+      for (const ingredient of ingredients) {
+        const [consumed] = await tx.update(playerMaterials).set({
+          quantity: sql`${playerMaterials.quantity} - ${ingredient.quantity}`,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(playerMaterials.userId, userId),
+          eq(playerMaterials.materialId, ingredient.materialId),
+          sql`${playerMaterials.quantity} >= ${ingredient.quantity}`,
+        )).returning();
+        if (!consumed) throw new Error(`Material stock changed during craft: ${ingredient.materialId}`);
+      }
+
       const [item] = await tx.insert(items).values({
         userId,
         name: product.name,
@@ -294,15 +331,15 @@ export class EconomyService {
         stats: { ...product.stats },
       }).returning();
       await appendLedger(tx, context, [
-        { accountCode: "system.item_sales", side: "CREDIT", amountKrc: price, description: `Item sale: ${product.name}` },
-        { accountCode: "wallet.weapons", side: "DEBIT", amountKrc: price, description: `Purchase from Weapons wallet: ${product.name}` },
+        { accountCode: "system.armorer_fees", side: "CREDIT", amountKrc: fee, description: `Armorer service fee: ${product.name}` },
+        { accountCode: "wallet.weapons", side: "DEBIT", amountKrc: fee, description: `Armorer service payment: ${product.name}` },
       ]);
       await tx.insert(transactions).values({
         userId,
-        type: "COMPRA",
-        amountKrc: price,
+        type: "FABRICACAO",
+        amountKrc: fee,
         operationId: context.operationId,
-        description: `Purchased ${product.name}`,
+        description: `Armorer crafted ${product.name}`,
       });
       return { status: 201, body: item as unknown as ResponseBody };
     });
