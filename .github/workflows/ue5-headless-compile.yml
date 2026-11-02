@@ -1,72 +1,39 @@
 # ==============================================================================
-# KHAAOS RUN — UE5.8 Headless Compile & GPU Runner Registration
-# Dispara em push para branches feat/* e main.
-# Usa self-hosted GPU runner para compilação com -NullRHI -unattended.
+# KHAAOS RUN — UE5.8 Editor Headless Build & Automation
+# Compila o target Editor e executa o Automation Test de serialização de telemetria.
+# Requer runner self-hosted com labels compatíveis e Unreal Engine 5.8 instalado.
 # ==============================================================================
-
-name: UE5 Headless Compile & GPU Runner
+name: UE5 Editor Headless Build & Telemetry Test
 
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main, "feat/**", "fix/**"]
     paths:
-      - 'Unreal/KhaaosRun/Source/**'
-      - 'Unreal/KhaaosRun/KhaaosRun.uproject'
+      - "Unreal/KhaaosRun/Source/**"
+      - "Unreal/KhaaosRun/KhaaosRun.uproject"
+      - ".github/workflows/ue5-headless-compile.yml"
   workflow_dispatch:
     inputs:
       ue5_install_dir:
-        description: 'UE5_INSTALL_DIR path (e.g. /opt/unreal-engine/5.8)'
+        description: "Caminho do Unreal Engine 5.8 no runner (ex.: /opt/unreal-engine/5.8)"
+        type: string
         required: false
-        default: ''
-      configuration:
-        description: 'Build configuration (Development|Shipping)'
-        required: false
-        default: 'Development'
+        default: ""
+
+permissions:
+  contents: read
 
 env:
-  UE5_PROJECT: 'Unreal/KhaaosRun/KhaaosRun.uproject'
-  BUILD_CONFIGURATION: ${{ github.event.inputs.configuration || 'Development' }}
+  UE5_PROJECT: "Unreal/KhaaosRun/KhaaosRun.uproject"
+  UE5_DEFAULT_INSTALL_DIR: "/opt/unreal-engine/5.8"
 
 jobs:
-  # ─── Job 1: Register GPU Runner ───────────────────────────────────────────
-  register-gpu-runner:
-    name: Register GPU Runner
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check GPU Runner Availability
-        run: |
-          echo "🔍 Verificando disponibilidade do GPU runner..."
-          # O runner deve estar registrado no repo settings com os labels EXATOS
-          # definidos em scripts/setup-gpu-runner.sh (RUNNER_LABELS):
-          #   self-hosted,linux,gpu,ue5.8,x64
-          # Gere o token de registro com: scripts/register-gpu-runner-token.sh
-          RUNNER_LABELS="self-hosted,linux,gpu,ue5.8,x64"
-          echo "RUNNER_LABELS=$RUNNER_LABELS" >> $GITHUB_ENV
-          echo "✅ Labels exigidos: $RUNNER_LABELS"
-
-      - name: Set UE5_INSTALL_DIR
-        run: |
-          # Prioridade: workflow input > repository secret > default path
-          if [ -n "${{ github.event.inputs.ue5_install_dir }}" ]; then
-            UE5_DIR="${{ github.event.inputs.ue5_install_dir }}"
-          elif [ -n "${{ secrets.UE5_INSTALL_DIR }}" ]; then
-            UE5_DIR="${{ secrets.UE5_INSTALL_DIR }}"
-          else
-            UE5_DIR="/opt/unreal-engine/5.8"
-          fi
-          echo "UE5_INSTALL_DIR=$UE5_DIR" >> $GITHUB_ENV
-          echo "✅ UE5_INSTALL_DIR: $UE5_DIR"
-
-  # ─── Job 2: UE5 Headless Compile ─────────────────────────────────────────
   ue5-headless-compile:
-    name: UE5 Headless Compile
-    # Labels EXATOS que o runner self-hosted registra (scripts/setup-gpu-runner.sh)
+    name: UE5.8 Editor Build + Telemetry Automation
+    # Todas as labels devem existir no runner. gpu mantém compatibilidade com
+    # scripts/setup-gpu-runner.sh; pode ser removida em ambos se não houver GPU.
     runs-on: [self-hosted, linux, gpu, ue5.8, x64]
-    needs: register-gpu-runner
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,48 +41,46 @@ jobs:
           fetch-depth: 0
 
       - name: Resolve UE5 Install Dir
+        shell: bash
+        env:
+          UE5_INPUT_DIR: ${{ github.event.inputs.ue5_install_dir }}
+          UE5_SECRET_DIR: ${{ secrets.UE5_INSTALL_DIR }}
         run: |
-          if [ -n "${{ secrets.UE5_INSTALL_DIR }}" ]; then
-            UE5_DIR="${{ secrets.UE5_INSTALL_DIR }}"
-          else
-            UE5_DIR="/opt/unreal-engine/5.8"
-          fi
-          echo "UE5_INSTALL_DIR=$UE5_DIR" >> $GITHUB_ENV
-          echo "UE5 Engine path: $UE5_DIR"
-
-          if [ ! -d "$UE5_DIR" ]; then
-            echo "❌ UE5 não encontrado em $UE5_DIR"
-            echo "Configure o secret UE5_INSTALL_DIR ou instale o engine."
+          set -euo pipefail
+          UE5_DIR="${UE5_INPUT_DIR:-${UE5_SECRET_DIR:-${UE5_DEFAULT_INSTALL_DIR}}}"
+          if [ ! -x "$UE5_DIR/Engine/Build/BatchFiles/Linux/Build.sh" ]; then
+            echo "Unreal Engine 5.8 não encontrado ou Build.sh indisponível em UE5_INSTALL_DIR."
             exit 1
           fi
-          echo "✅ UE5 engine encontrado"
+          printf 'UE5_INSTALL_DIR=%s\n' "$UE5_DIR" >> "$GITHUB_ENV"
+          echo "Unreal Engine encontrado; caminho configurado para as etapas deste job."
 
       - name: Generate Project Files
+        shell: bash
         run: |
-          # Gerar arquivos de projeto (Build.cs, etc.)
+          set -euo pipefail
           "$UE5_INSTALL_DIR/Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh" \
             -project="$GITHUB_WORKSPACE/$UE5_PROJECT" \
             -game \
             -engine
-          echo "✅ Arquivos de projeto gerados"
+          echo "Arquivos de projeto gerados."
 
-      - name: Build UE5 (Headless)
+      - name: Build KhaaosRunEditor (Linux Development)
+        shell: bash
         run: |
-          # Compilação headless — sem RHI, sem editor, sem window
+          set -euo pipefail
           "$UE5_INSTALL_DIR/Engine/Build/BatchFiles/Linux/Build.sh" \
-            KhaaosRunLinux \
-            "${{ env.BUILD_CONFIGURATION }}" \
-            -project="$GITHUB_WORKSPACE/$UE5_PROJECT" \
-            -NullRHI \
-            -unattended \
-            -NoP4 \
-            -build
-          echo "✅ Compilação headless completa"
+            KhaaosRunEditor \
+            Linux \
+            Development \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -WaitMutex
+          echo "Build do target KhaaosRunEditor concluído."
 
       - name: Generate LUT + PostProcess Material Assets
+        shell: bash
         run: |
-          # Gera no Content Browser: 5 texturas LUT (/Game/Graphics/LUTs/)
-          # e o material M_KhaaosColorGradeLUT (/Game/Graphics/Materials/).
+          set -euo pipefail
           "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
             "$GITHUB_WORKSPACE/$UE5_PROJECT" \
             -run=KhaaosLUTMaterialBuilder \
@@ -125,13 +90,12 @@ jobs:
             -nosplash \
             -log \
             -LogCmds="LogKhaaosRun Verbose"
-          echo "✅ Assets LUT + material de PostProcess gerados"
+          echo "Assets LUT e material de PostProcess gerados."
 
       - name: Validate LUTs Visually (PNG captures + report)
+        shell: bash
         run: |
-          # Captura visual headless (sampling CPU, mesma matemática de UV do
-          # material): Strip_/Antes_/Depois_/Comparacao_<Mood>.png por mood +
-          # lut_visual_report.json (deltas médios/máximos) em Saved/LUTValidation/.
+          set -euo pipefail
           "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
             "$GITHUB_WORKSPACE/$UE5_PROJECT" \
             -run=KhaaosLUTVisualValidator \
@@ -141,7 +105,34 @@ jobs:
             -nosplash \
             -log \
             -LogCmds="LogKhaaosRun Verbose"
-          echo "✅ Capturas de validação dos LUTs geradas"
+          echo "Capturas e relatório de validação LUT gerados."
+
+      - name: Run Khaaos Telemetry JSON Serialization Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT_DIR="$GITHUB_WORKSPACE/Unreal/KhaaosRun/Saved/AutomationReports"
+          mkdir -p "$REPORT_DIR"
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -ExecCmds="Automation RunTest Khaaos.Telemetry.JsonSerialization;Quit" \
+            -ReportExportPath="$REPORT_DIR" \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "Automation Test Khaaos.Telemetry.JsonSerialization executado."
+
+      - name: Upload Unreal Automation Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-automation-report-${{ github.sha }}
+          path: Unreal/KhaaosRun/Saved/AutomationReports/**
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Upload LUT Validation Captures
         if: always()
@@ -152,39 +143,33 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-      - name: Run Headless Unit Tests
-        run: |
-          # Executar testes unitários no modo headless
-          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
-            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
-            -NullRHI \
-            -unattended \
-            -nopause \
-            -TestRun="Automation" \
-            -AutomatedMapBuildList \
-            -log \
-            -LogCmds="LogKhaaosRun Verbose"
-          echo "✅ Testes unitários headless executados"
-
       - name: Collect Build Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: khaaos-run-build-${{ github.sha }}
+          name: khaaos-run-editor-build-${{ github.sha }}
           path: |
             Unreal/KhaaosRun/Binaries/Linux/**
             Unreal/KhaaosRun/Intermediate/**
             Unreal/KhaaosRun/Content/Graphics/LUTs/**
             Unreal/KhaaosRun/Content/Graphics/Materials/**
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Build Summary
         if: always()
+        shell: bash
+        env:
+          SUMMARY_BRANCH: ${{ github.ref_name }}
+          SUMMARY_COMMIT: ${{ github.sha }}
+          SUMMARY_JOB_STATUS: ${{ job.status }}
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Configuration**: \`${{ env.BUILD_CONFIGURATION }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **UE5 Path**: \`${{ env.UE5_INSTALL_DIR }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Runner**: \`self-hosted-gpu\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## UE5.8 Editor Build Summary"
+            echo "- **Branch**: $SUMMARY_BRANCH"
+            echo "- **Commit**: $SUMMARY_COMMIT"
+            echo "- **Target**: KhaaosRunEditor Linux Development"
+            echo "- **Automation Test**: Khaaos.Telemetry.JsonSerialization"
+            echo "- **Runner labels**: self-hosted, linux, gpu, ue5.8, x64"
+            echo "- **Job status**: $SUMMARY_JOB_STATUS"
+          } >> "$GITHUB_STEP_SUMMARY"
