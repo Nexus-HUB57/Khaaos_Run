@@ -745,3 +745,21 @@ Stage Summary:
 - O instrumento é barreira dupla: pega deriva de runtime (setor renomeado, dinâmica vazada, dressing abaixo do mínimo FF, luz sem identidade) E deriva de documento (matriz ausente, README novo sem implementação) — e os 8 testes de drift garantem que ninguém "afrouxa" a auditoria sem quebrar a suíte
 - Três bugs de PARSE pegos no caminho provam o valor do método: o cânon extraído na primeira versão estava ERRADO de formas sutis (linha de dados consumida como cabeçalho, seção cortada em '###') — exatamente o tipo de discrepância silenciosa que a diretiva manda erradicar
 - Suíte: game-runtime 1011 — 998 pass / 0 fail / 13 skipped (+9 líquidos F44); auditoria FIEL ✅ 53 checks / 0 falhas; tsc 0; vite build OK; version 0.25.0
+
+## Task ID: 30
+**Agent:** Main
+**Task:** End-to-end de importação — validação técnica e merge dos PRs #232 (docs Stripe/staging) e #233 (F45: árvores e detalhes naturais do terreno) + main revalidada
+
+Work Log:
+- ESTADO DE PARTIDA: main 189c65f (F44), 0 PRs pendentes meus; 2 PRs abertos de autoria org detectados via API (#232 docs-only 3 arquivos; #233 5 arquivos +336/−24 em vegetation3d/detail3d/world3d + 2 suítes de teste)
+- REVISÃO TÉCNICA #233 (linha a linha do diff antes de qualquer merge): (1) addSurfaceMottle — variação tonal por VÉRTICE (casca com nervuras senoidais, copa com dapple) via hash2 determinístico existente, sem textura externa; (2) árvores/arbustos/pedras/clutter ancorados à altura REAL do terreno via terrainHeightAt (F23) — fim da flutuação sobre relevo; (3) naturalDressingPlacements PURO (SeededRng por seed:scenário) — pedras/troncos caídos/tocos/samambaias com pesos POR MUNDO (Priadus 48% samambaia, Ckesalth 58% pedra), paleta por mundo, fora de rotas (+3,2 m), loot (+4,2 m), distritos (+4 m), colliders (margem AABB 2 m com exceção yMin>.5 p/ elevados) e avoidSpots de árvore/arbusto; (4) árvores 52→64 (tier high) com silhueta por eixo (sx/sy/sz) e espaçamento mínimo 5,5 m; (5) sombras de contato ELÍPTICAS (sizeX/sizeZ) seguindo o relevo com stagger limitado a 3,5 mm (anti z-fight sem trilho ascendente); (6) instancing por família (1 draw call por tipo — stone/fallenLog/stump/fern)
+- TESTES DO PR VALIDADOS (4 novos): clutter determinístico byte-idêntico + contratos espaciais completos; mottle determinístico (color.array deepEqual) com variação tonal real (<.9 e >.95); campos instanciados (group 'naturalGroundDressing', counts 1/1/1/1, material vertexColors); sombras com âncora de relevo e elipse exata
+- VALIDAÇÃO LOCAL NO SHA DO PR (6cb0428): suíte completa 1015 — 1002 pass / 0 fail / 13 skipped (+4 líquidos); tsc 0; vite build OK; AUDITORIA F44 FIEL ✅ 53/0 (o dressing novo não viola NENHUMA classe — clutter é visual-only, zero collider, fora dos mínimos B1/B2)
+- CI REAL: #232 16 success / 0 pendentes; #233 28 success / 5 skipped / 0 pendentes / 0 falha
+- MERGES: #232 (docs: Stripe checkout test-only + staging Render Auto-Deploy Off + healthz) → #233 (código), ordem docs→código para evitar rebasing desnecessário; main pós-merge 5a74cba revalidada localmente: 1015 — 1002/0/13 + auditoria FIEL ✅ 53/0
+- NOTA DE PROCESSO: git pull de branch remoto NO main local fast-forwardou o main ao sha do PR (corrigido: branch local criado no sha, main resetado a origin/main — nunca pushar main local deslocado)
+
+Stage Summary:
+- O runtime ganhou a camada F45 de realismo de solo: copa/casca com variação tonal por vértice, tudo que cresce do chão AGORA SENTADO no relevo real, e o chão da selva/deserto/cidade ganhou pedras, troncos caídos, tocos e samambaias com densidade e paleta por mundo — determinístico, instanciado e sem um collider a mais
+- Dois PRs externos entraram pelo mesmo padrão de governança: revisão de diff linha a linha → suíte completa local no sha → CI real verde → merge → main revalidada; a auditoria de fidelidade F44 provou o valor no primeiro dia (barreira automática no merge de código de terceiros)
+- Suíte: game-runtime 1015 — 1002 pass / 0 fail / 13 skipped; tsc 0; build OK; auditoria FIEL ✅ 53/0
