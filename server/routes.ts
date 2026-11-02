@@ -36,6 +36,8 @@ import {
 import { registerDiscordApiV1Routes } from "./game/discordApiV1";
 import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
 import { createEnrollmentRouter } from "./routes/enrollment";
+import { createPostgresEnrollmentStore } from "./game/enrollmentStore.postgres";
+import { recordEnrollmentFeeLedger } from "./game/enrollmentLedger";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
@@ -98,7 +100,14 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   registerEconomy2PCRoutes(app);
 
   // ── Alistamento E2E (T1.1) — 3 etapas + taxa U$1 idempotente ─────────
-  app.use(createEnrollmentRouter({ authenticate: isAuthenticated }));
+  // Fase 47.1: persistência PostgreSQL (ENROLLMENT_STORE=postgres, migration
+  // 0011) + ledger REAL da taxa (double-entry economy_ledger_entries +
+  // bank_accounts) — o guard financeiro roda ANTES de marcar a sessão paga.
+  app.use(createEnrollmentRouter({
+    authenticate: isAuthenticated,
+    ...(process.env.ENROLLMENT_STORE === "postgres" ? { store: createPostgresEnrollmentStore() } : {}),
+    ledger: { recordEnrollmentFeeLedger },
+  }));
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;

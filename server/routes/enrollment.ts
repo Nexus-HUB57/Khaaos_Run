@@ -52,10 +52,16 @@ export interface EnrollmentSession {
   updatedAt: string;
 }
 
-/** Persistência plugável (default: memória do processo). */
+/** Persistência plugável (default: memória do processo).
+ *
+ * Fase 47.1: `get`/`put` aceitam Promise — a store PostgreSQL
+ * (server/game/enrollmentStore.postgres.ts, migration 0011) é assíncrona.
+ * A store em memória do #252 continua válida sem alteração (valores
+ * síncronos atravessam `await` normalmente).
+ */
 export interface EnrollmentStore {
-  get(userId: string): EnrollmentSession | undefined;
-  put(session: EnrollmentSession): void;
+  get(userId: string): EnrollmentSession | undefined | Promise<EnrollmentSession | undefined>;
+  put(session: EnrollmentSession): void | Promise<void>;
 }
 
 export function createInMemoryEnrollmentStore(): EnrollmentStore {
@@ -108,6 +114,23 @@ export interface EnrollmentRouterOptions {
   now?: () => Date;
   /** Resolvedor do userId a partir da request autenticada. */
   getUserId?: (req: Request) => string;
+  /**
+   * Fase 47.1 — camada financeira REAL da taxa (opcional, DI): grava o
+   * double-entry no `economy_ledger_entries` (taxa: `external.deposit` →
+   * `system.item_sales`; bônus: `equity.opening_balance` → `wallet.bonus` +
+   * bank_accounts) com idempotência dura do banco. Chamada ANTES de marcar a
+   * sessão como paga: se falhar, a sessão fica em AWAITING_FEE e o cliente
+   * reenvia a MESMA Idempotency-Key (replay não paga duas vezes).
+   * Obrigatória em produção (wiring em server/routes.ts); testes herméticos
+   * do #252 continuam sem ledger e intactos.
+   */
+  ledger?: {
+    recordEnrollmentFeeLedger(input: {
+      userId: string;
+      protocol: string;
+      idempotencyKey: string;
+    }): Promise<{ feeRecorded: boolean; bonusRecorded: boolean }>;
+  };
 }
 
 function defaultGetUserId(req: Request): string {
@@ -122,6 +145,7 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
   const now = options.now ?? (() => new Date());
   const getUserId = options.getUserId ?? defaultGetUserId;
   const authenticate = options.authenticate;
+  const ledger = options.ledger;
 
   // Respostas idempotentes por chave de taxa (por usuário)
   const feeResponses = new Map<string, { status: number; body: unknown }>();
@@ -139,9 +163,9 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
 
   router.use("/api/enrollment", authenticate);
 
-  router.post("/api/enrollment/start", (req: Request, res: Response) => {
+  router.post("/api/enrollment/start", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const existing = store.get(userId);
+    const existing = await store.get(userId);
     if (existing) {
       // retomada de sessão: nunca reseta etapas concluídas
       return res.status(200).json({ resumed: true, ...serialize(existing) });
@@ -158,13 +182,13 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    store.put(session);
+    await store.put(session);
     return res.status(201).json({ resumed: false, ...serialize(session) });
   });
 
-  router.post("/api/enrollment/steps/data", (req: Request, res: Response) => {
+  router.post("/api/enrollment/steps/data", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const session = store.get(userId);
+    const session = await store.get(userId);
     if (!session) return res.status(404).json({ message: "Alistamento não iniciado" });
     if (session.step !== "AWAITING_DATA") {
       return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
@@ -176,13 +200,13 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     session.data = parsed.data;
     session.step = "AWAITING_TERMS";
     session.updatedAt = now().toISOString();
-    store.put(session);
+    await store.put(session);
     return res.status(200).json(serialize(session));
   });
 
-  router.post("/api/enrollment/steps/terms", (req: Request, res: Response) => {
+  router.post("/api/enrollment/steps/terms", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const session = store.get(userId);
+    const session = await store.get(userId);
     if (!session) return res.status(404).json({ message: "Alistamento não iniciado" });
     if (session.step !== "AWAITING_TERMS") {
       return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
@@ -197,13 +221,13 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     };
     session.step = "AWAITING_FEE";
     session.updatedAt = session.terms.acceptedAt;
-    store.put(session);
+    await store.put(session);
     return res.status(200).json(serialize(session));
   });
 
-  router.post("/api/enrollment/fee", (req: Request, res: Response) => {
+  router.post("/api/enrollment/fee", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const session = store.get(userId);
+    const session = await store.get(userId);
     if (!session) return res.status(404).json({ message: "Alistamento não iniciado" });
     const parsed = feeInput.safeParse(req.body);
     if (!parsed.success) {
@@ -225,6 +249,22 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
       return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
     }
 
+    // Fase 47.1 — ledger REAL antes de marcar a sessão como paga (guard
+    // financeiro: taxa falhou ⇒ nada é marcado; replay da mesma Idempotency-Key
+    // é absorvido pelo unique (user_id, idempotency_key, line) do ledger).
+    if (ledger) {
+      try {
+        await ledger.recordEnrollmentFeeLedger({
+          userId,
+          protocol: session.protocol,
+          idempotencyKey: headerKey,
+        });
+      } catch (err) {
+        console.error("[enrollment] ledger indisponível — taxa não marcada:", err);
+        return res.status(503).json({ message: "Ledger indisponível — tente novamente com a mesma Idempotency-Key" });
+      }
+    }
+
     const paidAt = now().toISOString();
     session.fee = {
       idempotencyKey: headerKey,
@@ -235,7 +275,7 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     session.bonusKrcCredited = ENROLLMENT_BONUS_KRC; // bônus único
     session.step = "COMPLETED";
     session.updatedAt = paidAt;
-    store.put(session);
+    await store.put(session);
 
     const body = {
       ...serialize(session),
@@ -245,9 +285,9 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     return res.status(200).json(body);
   });
 
-  router.get("/api/enrollment/status", (req: Request, res: Response) => {
+  router.get("/api/enrollment/status", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const session = store.get(userId);
+    const session = await store.get(userId);
     if (!session) return res.status(404).json({ message: "Alistamento não iniciado" });
     return res.status(200).json(serialize(session));
   });
