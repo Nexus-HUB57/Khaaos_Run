@@ -217,6 +217,81 @@ export function propPlacements(layout, { seed = 'props', density = 1 } = {}) {
 }
 
 /**
+ * Dressing natural fora das rotas/distritos: pedras pequenas, troncos caídos,
+ * tocos e samambaias. É apenas visual (sem collider), determinístico por
+ * mundo/seed e respeita os mesmos contratos espaciais dos props urbanos.
+ */
+export function naturalDressingPlacements(layout, {
+  seed = 'forest-floor', density = 1, avoidSpots = [],
+} = {}) {
+  const d = Math.max(0, Math.min(1.5, Number(density) || 0));
+  const target = Math.round(76 * d);
+  if (!target) return [];
+
+  const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
+  const roads = roadSegments(layout);
+  const colliders = layout.colliders ?? [];
+  const districts = layout.districts ?? [];
+  const loot = layout.lootSpots ?? [];
+  const weights = layout.scenarioId === 'Priadus'
+    ? [['stone', .18], ['fallenLog', .24], ['stump', .10], ['fern', .48]]
+    : layout.scenarioId === 'Ckesalth'
+      ? [['stone', .58], ['fallenLog', .19], ['stump', .13], ['fern', .10]]
+      : layout.scenarioId === 'Barburhen'
+        ? [['stone', .38], ['fallenLog', .34], ['stump', .16], ['fern', .12]]
+        : [['stone', .32], ['fallenLog', .25], ['stump', .15], ['fern', .28]];
+  const palette = {
+    stone: ['#786f64', '#8b8174', '#625f5a'],
+    fallenLog: ['#604a35', '#70583d', '#524536'],
+    stump: ['#70583d', '#5b4936', '#806543'],
+    fern: layout.scenarioId === 'Priadus' ? ['#416347', '#527455', '#355c43']
+      : layout.scenarioId === 'Ckesalth' ? ['#777044', '#8a7c4a', '#665f39']
+        : ['#536b42', '#637b4c', '#455b39'],
+  };
+  const radius = { stone: .58, fallenLog: 1.45, stump: .48, fern: .72 };
+  const out = [];
+  const blockedByRoad = (x, z) => roads.some((r) =>
+    distToSeg(x, z, r.x1, r.z1, r.x2, r.z2) < r.width / 2 + 3.2);
+  const nearAvoid = (x, z) => avoidSpots.some((p) => Math.hypot(x - p.x, z - p.z) < 2.4);
+
+  let attempts = 0;
+  while (out.length < target && attempts++ < target * 80) {
+    const x = (rng.next() - .5) * 378;
+    const z = (rng.next() - .5) * 378;
+    if (!freeForNaturalDressing(x, z, colliders)) continue;
+    if (districts.some((region) => Math.hypot(x - region.cx, z - region.cz) <= region.r + 4)) continue;
+    if (loot.some((item) => Math.hypot(x - item.x, z - item.z) <= 4.2)) continue;
+    if (blockedByRoad(x, z) || nearAvoid(x, z)) continue;
+
+    const roll = rng.next();
+    let acc = 0, type = weights[weights.length - 1][0];
+    for (const [name, weight] of weights) { acc += weight; if (roll < acc) { type = name; break; } }
+    const scale = type === 'fallenLog' ? .72 + rng.next() * .62 : .62 + rng.next() * .78;
+    if (out.some((p) => Math.hypot(x - p.x, z - p.z) < radius[type] * scale + radius[p.type] * p.scale + .35)) continue;
+
+    const colors = palette[type];
+    out.push({
+      type, x: +x.toFixed(2), z: +z.toFixed(2),
+      rot: +(rng.next() * Math.PI * 2).toFixed(3),
+      scale: +scale.toFixed(2),
+      tilt: +((rng.next() - .5) * (type === 'fallenLog' ? .10 : .06)).toFixed(3),
+      tint: colors[rng.int(0, colors.length - 1)],
+    });
+  }
+  return out;
+}
+
+// O maior item (tronco) alcança ~1,51m do centro na escala máxima; 2m de
+// margem AABB deixam tolerância adicional mesmo quando o tronco está rotacionado.
+const NATURAL_COLLIDER_MARGIN = 2.0;
+function freeForNaturalDressing(x, z, colliders) {
+  return Math.abs(x) <= 189 && Math.abs(z) <= 189
+    && colliders.every((c) => c.yMin > .5
+      || x < c.minX - NATURAL_COLLIDER_MARGIN || x > c.maxX + NATURAL_COLLIDER_MARGIN
+      || z < c.minZ - NATURAL_COLLIDER_MARGIN || z > c.maxZ + NATURAL_COLLIDER_MARGIN);
+}
+
+/**
  * Fase 8 — Tráfego urbano estático (sem colisão): carros e vans abandonados nas
  * faixas das estradas, alinhados à direção da via, com espaçamento mínimo e
  * afastados de loot/estruturas. Determinístico por seed do layout.

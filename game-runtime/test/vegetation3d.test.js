@@ -15,14 +15,14 @@ import * as THREE from 'three';
 import {
   TREE_ARCHETYPES, treeArchetypeFor, vegRng,
   mergeGeoms, buildTreeGeometries, buildBushGeometry, grassTuftGeometry,
-  patchSway, tickVegetationWind, buildTreeField, buildBushField,
+  patchSway, tickVegetationWind, buildTreeField, buildBushField, buildNaturalDressingField,
   grassChunkify, grassChunkTier, buildGrassFieldLOD, grassImpostorGeometry,
   grassImpostorFade,                    // F37 — fade suave da banda de impostores
   grassSparseCount, bushShadowEntries,  // F38 — desbaste gradual + sombra dos arbustos
   grassOutdoorBake, applyOutdoorTint,   // F36 — impostor outdoor (bake no terreno)
   scrubShadowBand,                      // F39 — banda de distância da sombra do scrub
 } from '../src/game3d/vegetation3d.js';
-import { buildScene, buildBandContactShadows } from '../src/game3d/world3d.js';
+import { buildScene, buildBandContactShadows, buildContactShadows } from '../src/game3d/world3d.js';
 
 // ---- shim de canvas 2D (padrão da suíte) — texturas procedurais em Node ----
 const ctx2d = {
@@ -935,4 +935,63 @@ test('F40 · buildScene W1-W4: props dos distritos com campo de sombras em banda
     handle.update(e0.x, e0.z);
     assert.deepEqual([...handle.alpha.array], before, `${scenarioId}: update idempotente`);
   }
+});
+
+test('F45 · árvores: casca/copa com mottle determinístico e instância acompanha relevo', () => {
+  const a = buildTreeGeometries({ archetype: 'temperate', seed: 45 });
+  const b = buildTreeGeometries({ archetype: 'temperate', seed: 45 });
+  for (const key of ['trunk', 'canopy']) {
+    assert.ok(a[key].attributes.color, `${key}: vertex colors presentes`);
+    assert.deepEqual(a[key].attributes.color.array, b[key].attributes.color.array, `${key}: mottle determinístico`);
+    const values = a[key].attributes.color.array;
+    assert.ok(values.some((v) => v < .9) && values.some((v) => v > .95), `${key}: variação tonal, não cor chapada`);
+  }
+  const { trunks } = buildTreeField({ spots: [{ x: 3, y: 7.25, z: -4, s: 2, sx: .8, sy: 1.1, sz: .9 }] });
+  const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+  trunks.getMatrixAt(0, matrix);
+  matrix.decompose(position, rotation, scale);
+  assert.equal(position.y, 7.25, 'árvore encosta no terreno elevado');
+  assert.ok(Math.abs(scale.x - 1.6) < 1e-6 && Math.abs(scale.y - 2.2) < 1e-6 && Math.abs(scale.z - 1.8) < 1e-6,
+    'forma da copa varia por eixo sem separar o tronco');
+});
+
+test('F45 · terreno: rochas, troncos, tocos e samambaias usam campos instanciados', () => {
+  const placements = [
+    { type: 'stone', x: 0, z: 0, y: 2, scale: 1.2, tint: '#786f64' },
+    { type: 'fallenLog', x: 4, z: 0, y: 3, scale: .9, rot: .5, tilt: .03, tint: '#604a35' },
+    { type: 'stump', x: 8, z: 0, y: 4, scale: 1.1, tint: '#70583d' },
+    { type: 'fern', x: 12, z: 0, y: 5, scale: .8, tint: '#536b42' },
+  ];
+  const field = buildNaturalDressingField({ placements, seed: 45 });
+  assert.equal(field.group.name, 'naturalGroundDressing');
+  assert.deepEqual(field.counts, { stone: 1, fallenLog: 1, stump: 1, fern: 1 });
+  assert.equal(field.meshes.length, 4, 'um draw call instanciado por família');
+  for (const mesh of field.meshes) {
+    assert.equal(mesh.isInstancedMesh, true);
+    assert.equal(mesh.count, 1);
+    assert.ok(mesh.geometry.attributes.color, `${mesh.name}: mottle de superfície`);
+    assert.equal(mesh.material.vertexColors, true, `${mesh.name}: material lê vertex colors`);
+  }
+  const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), q = new THREE.Quaternion(), scale = new THREE.Vector3();
+  const stone = field.meshes.find((m) => m.name.endsWith(':stone'));
+  stone.getMatrixAt(0, matrix); matrix.decompose(position, q, scale);
+  assert.ok(Math.abs(position.y - 2.24) < 1e-6, 'pedra assenta no relevo com offset de meia altura');
+  const stump = field.meshes.find((m) => m.name.endsWith(':stump'));
+  stump.getMatrixAt(0, matrix); matrix.decompose(position, q, scale);
+  assert.equal(position.y, 4, 'toco usa a base do terreno como origem');
+});
+
+test('F45 · sombras de contato: seguem altura e proporção natural do objeto', () => {
+  const scene = new THREE.Scene();
+  const shadow = buildContactShadows(scene, [
+    { x: 4, y: 6.5, z: -2, rot: .4, sizeX: 3.2, sizeZ: 1.1 },
+    { x: 0, z: 0, size: 2 }, // compatibilidade de chamadas antigas: y=0 + lift
+  ]);
+  const matrix = new THREE.Matrix4(), pos = new THREE.Vector3(), rot = new THREE.Quaternion(), scale = new THREE.Vector3();
+  shadow.getMatrixAt(0, matrix); matrix.decompose(pos, rot, scale);
+  assert.ok(Math.abs(pos.y - 6.512) < 1e-6, 'sombra acompanha o relevo com lift anti z-fight');
+  assert.ok(Math.abs(scale.x - 3.2) < 1e-6 && Math.abs(scale.y - 1.1) < 1e-6, 'sombra de tronco é elíptica');
+  shadow.getMatrixAt(1, matrix); matrix.decompose(pos, rot, scale);
+  assert.ok(Math.abs(pos.y - .01215) < 1e-6, 'chamadas sem y preservam fallback e stagger limitado');
+  assert.ok(Math.abs(scale.x - 2) < 1e-6 && Math.abs(scale.y - 2) < 1e-6, 'size antigo continua isotrópico');
 });
