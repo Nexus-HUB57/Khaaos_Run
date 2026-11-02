@@ -146,6 +146,10 @@ jobs:
         working-directory: game-runtime
         run: npm ci
 
+      - name: Auditoria de fidelidade Mundos ↔ README (F44)
+        working-directory: game-runtime
+        run: npm run audit:fidelity
+
       - name: Apply runtime PostgreSQL migrations
         working-directory: game-runtime
         run: npm run db:migrate

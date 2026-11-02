@@ -12,6 +12,7 @@ const checks = [
   { name: "Qualidade BR · preflights Python", cwd: root, args: ["run", "test:python"] },
   { name: "UE5 · regras de loot", cwd: root, args: ["run", "test:ue5:logic"] },
   { name: "Runtime · build", cwd: runtimeRoot, args: ["run", "build"] },
+  { name: "Runtime · auditoria de fidelidade Mundos ↔ README", cwd: runtimeRoot, args: ["run", "audit:fidelity"] },
   { name: "Runtime · testes + coverage", cwd: runtimeRoot, args: ["run", "coverage"] },
 ];
 
