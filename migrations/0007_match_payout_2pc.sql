@@ -20,6 +20,7 @@ ALTER TABLE economy_ledger_entries ADD CONSTRAINT economy_ledger_account_valid C
   'wallet.weapons', 'wallet.bonus', 'wallet.fbm',
   'external.deposit', 'system.loan_receivable', 'system.loan_interest_income',
   'system.item_sales', 'system.item_repairs', 'system.salary_expense',
+  'system.2pc_escrow',
   'equity.opening_balance',
   'treasury.match_rewards', 'payout.in_transit'
 ));
