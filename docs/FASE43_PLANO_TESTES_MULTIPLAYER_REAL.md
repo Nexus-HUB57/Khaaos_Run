@@ -1,6 +1,6 @@
 # Fase 43 — Plano de testes da canalização ZEX em multiplayer real
 
-**Status:** plano preparado; os cenários abaixo ainda não foram executados em uma partida multiplayer real.
+**Status:** rodada automatizada local executada; playtest em staging/multiplayer real ainda pendente.
 
 **Versão-alvo:** commit `00c2b1a` — `feat/gameplay-next`.
 
@@ -92,3 +92,25 @@ Não anexar credenciais, tokens, cookies, IDs pessoais ou dumps integrais de red
 No código atualmente revisado, `server/server.js` salva um resume token válido por 15 segundos no evento WebSocket `close`, mas esse handler não chama `room.removePlayer()`. O método `MatchRoom3D.removePlayer()` libera a reserva ZEX quando é chamado, porém a busca atual não encontrou ligação desse método ao fechamento do socket no runtime. Assim, o comportamento de desconexão descrito na especificação pode não estar conectado ao ciclo real de rede: o ator pode permanecer na sala durante a janela de resume, e o terminal pode continuar reservado.
 
 Por isso, MP-ZEX-08 é um **gate de validação**, não um caso presumido como aprovado. Antes de declarar a feature pronta para partidas multiplayer reais, confirmar o comportamento com dois clientes no ambiente isolado e, se a reserva não for cancelada/liberada como esperado, abrir a correção do ciclo de vida da sessão e repetir o cenário. Não contornar a falha removendo manualmente o ator durante a medição.
+
+## 7. Registro da execução inicial — 2026-11-02
+
+### Suítes automatizadas locais
+
+Comando executado em `game-runtime`:
+
+```bash
+node --test test/sim3d.test.js test/room3d.test.js test/server3d.test.js
+```
+
+**Resultado: 41 testes aprovados, 0 falhas, 0 ignorados.** A cobertura confirma a conclusão/cancelamento na simulação local, conclusão e disputa na `MatchRoom3D`, e o E2E existente de login/matchmaking/WebSocket 3D. O teste E2E existente usa um humano mais bots; portanto, sozinho, não representa dois jogadores humanos.
+
+### Simulação local com dois WebSockets autenticados
+
+Foi iniciada uma sala descartável no servidor local com dois clientes autenticados em sockets distintos e no mesmo `roomId`; os bots foram neutralizados apenas nesse harness para isolar o ciclo ZEX. A disputa concorrente passou: A reservou o terminal e B não iniciou uma segunda canalização.
+
+**MP-ZEX-08 falhou.** A queda do socket de A foi observada com progresso em 6,25%. Após 250 ms, `zexChannel` continuava ativo e `channelerId` ainda apontava para A. Sem reconexão, o servidor concluiu o canal e consumiu o terminal; o estado direto da sala mostrou `extracted = 1` e delta de XP `+250` para o jogador desconectado. Isso contradiz o critério de cancelamento por desconexão e confirma que a reserva não é liberada pelo fechamento do socket.
+
+### Limites e próximo passo
+
+Esta rodada foi uma simulação no processo local, com `KR_DEV_AUTH=1` e sem staging, dispositivos separados, jitter/perda de rede, observação visual do HUD ou serviços reais. Nenhum teste foi executado em produção. Manter a aprovação multiplayer bloqueada até corrigir ou formalmente redefinir o ciclo de desconexão/resume, adicionar um teste de regressão reproduzível para dois sockets e repetir MP-ZEX-08. Depois disso, continuar com os demais cenários da matriz em staging isolado.
