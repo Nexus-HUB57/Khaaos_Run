@@ -816,3 +816,22 @@ Stage Summary:
 - REVISÃO: docs-only, não toca headings W#/C# nem tabelas de setores (contrato F44 ileso); validado no SHA f10b203: auditoria FIEL ✅ 53/0 + suíte 1011/0/13 (base do PR é pré-Zu-train) + CI 17 success ⇒ MERGE b2a98cd
 - MAIN FINAL b2a98cd: CI 9/9 success; UE5.8 Preflight log: "Veredito: FIEL ✅ (53 OK / 0 falhas) — snapshot em 2414 ms" — o README com dimensões canônicas re-certificado pelo portão; staging permanece servindo 23c910f (docs-only posterior: sem novo deploy necessário)
 - Estado final: main b2a98cd | 0 PRs abertos | staging 23c910f validado | versão 0.26.0
+
+## Task ID: 33
+**Agent:** Main
+**Task:** "Revisar Repo e Prosseguir end to end" — revisão do PR #250 com bug real pescado (husky × docker --omit=dev), hotfix #251 restaurando o gate Docker do main, revisão/merge do port T1.1 (#252/#254) fechando o gap §1.1 do roadmap
+
+Work Log:
+- ESTADO DE PARTIDA: main ca50b84 (#249), PR #250 aberto (Nexus-HUB57, Husky pre-commit), #244 já mergeado (b2a98cd); baseline local restaurada (npm ci root + game-runtime — sandbox reciclado, padrão tweetnacl)
+- REVISÃO PR #250 linha a linha: dedup de INVITE_HOST_WINDOW_LIMIT/INVITE_ROOM_PENDING_LIMIT correto (bindings já no topo, linhas 8–12; teste afetado 13/13); husky 9.1.7 devDep + prepare — MAS o check "Docker Build (Server)" vermelho: log do job mostra `sh: 1: husky: not found / npm error code 127` — o Dockerfile roda `npm ci --omit=dev`, husky é devDep e o `prepare` executa mesmo assim ⇒ build da imagem de produção quebrado
+- CORRETIVO 8d06d42 pushed na branch do PR (`prepare: "husky || true"` — dev funciona, imagem neutra); validação local: `sh -c 'missing || true'` = 0; tsc 0; suíte oficial exit 0; review técnico postado no PR
+- EVENTO CONCORRENTE: o merge do #250 pousou no main (484a874) ANTES do corretivo — main com Docker Build vermelho bloqueando releases; HOTFIX imediato no padrão Task 31: branch hotfix/husky-docker-omit-dev + cherry-pick → PR #251 → CI 30/30 (Docker Build success) ⇒ MERGE 2b4e934 — gate Docker do main restaurado
+- T1.1 (gap §1.1 quantificado no roadmap: "WorldMapPreview e rota HTTP de alistamento não existem no app canônico"): detectada branch feat/t11-port-console-canonical (ec1bd35, ator paralelo, mesma identidade de container, criada sobre o hotfix b9f61cb, SEM PR) — revisão linha a linha: WorldMapPreview canvas orgânico 5 formas por bioma (586 linhas); shared/worlds.ts +104 com o contrato WORLD_RING_DIMENSIONS (fonte README #243/#244: CIGKV 16.000/520 · W1 19.000/580 · W2 22.000/640 · W3 25.000/700 · W4 18.000/560; aritmética conferida área=w×d, perímetro=2(w+d), densidade=área/100, faixa 150–250); rota de alistamento 3 etapas KR-REG-* com idempotência verificada ANTES do guard de etapa (retry pós-COMPLETED devolve a resposta original, nunca 409) + retomada de sessão; testes 16/16 novos
+- VALIDAÇÃO no SHA ec1bd35: tsc 0; suíte oficial exit 0 (259 checks, 0 falhas); game-runtime 1036 — 1023 pass / 0 fail / 13 skipped (baseline cresceu com #247 gait); auditoria F44/F46 FIEL ✅ 53/0 (2,1 s — shared/worlds.ts não toca o contrato README↔runtime)
+- GOVERNANÇA: PR #254 aberto (branch não tinha PR); CI 30/30 success ⇒ merge — dupla entrada do mesmo conteúdo: o paralelo mergeou o port via #252 durante o CI do #254 ⇒ meu merge virou no-op (árvore idêntica, sem reverter nada; verificado: 4 arquivos-chave presentes + prepare=husky||true preservado)
+- REVALIDAÇÃO DO MAIN (cc65c31): tsc 0; suíte oficial exit 0; auditoria F44/F46 FIEL ✅ 53/0
+
+Stage Summary:
+- O gate Docker de produção agora é à prova de `prepare`: hooks Husky funcionais em dev sem quebrar o `npm ci --omit=dev` da imagem — e o incidente provou o valor do ritual (review de log de CI + hotfix de 1 linha + PR com CI completo em <30 min)
+- O app canônico (client/+server/+shared/) recebeu as entregas validadas do preview: mapa tático orgânico por bioma, dimensões canônicas dos 5 rings como contrato testado e alistamento E2E idempotente — o §1.1 do roadmap fecha em CÓDIGO; o aceite final (E2E browser real contra staging) fica para o próximo ciclo de deploy
+- Suíte: oficial exit 0 · game-runtime 1023/0/13 · tsc 0 · auditoria FIEL ✅ 53/0 · main cc65c31
