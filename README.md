@@ -220,6 +220,23 @@ Validação end to end do branch + execução dos follow-ups do ADR e do consumo
 2. **Viewer 3D das figuras de alistamento (sem dependências)** — `client/src/lib/glb.ts` (parser GLB puro, sem DOM, testável em Node — cobre o layout do exportador; erro explícito fora dele) + `client/src/components/FigureGlbViewer.tsx` (WebGL 2 com fallback 1, cor por vértice, luz chave+rim, câmera orbitada por arraste, rotação idle, enquadramento pela bbox). Consumido na grade **FIGURAS DE ALISTAMENTO** do perfil — os 6 manequins agora são exibidos em 3D junto à placa de rosto; o texto desatualizado "A malha riggada (GLB) ainda não foi exportada" foi corrigido. Contrato novo `tests/official/figures-glb-viewer.test.ts` (9 testes): parser lê os 6 GLB reais com paridade total ao manifest (vértices/triângulos/altura/bbox y=0/alpha opaco) e rejeita arquivos não-GLB com erro explícito. Smoke visual Playwright (mock das rotas, mesma escola da spec war-i-ui) confirmou 6 viewers montados, 0 overlays de erro e renderização correta das paletas por ficha.
 3. **Mapeamento de asset à prova de substituição** — `figureGlbSrc()` fixa `/figures/glb/FIG_<id>.glb` como nome canônico; a troca futura do placeholder por scan/retopo real (mesmo nome de asset) não exige mudança no viewer, no parser ou no card.
 
+### Lote 4 — Milícias e Gangues Urbanas (16 operantes não-militares)
+
+O roster jogável sai do nicho militar: 16 identidades irregulares recrutadas pelo mesmo alistamento, com facção declarada no dado (`faction: MILICIA_URBANA | GANGUE_URBANA`) e rig base por sexo (ADR-ESQUELETO-RIG-POR-SEXO). Os 16 militares canônicos e o TALON permanecem byte-idênticos; o catálogo selecionável passa a 33 identidades e a whitelist da API absorve os IDs novos automaticamente (sem migration — `player_stats.selected_operative_id` é texto validado por `isOperativeAvatarId`). Suíte oficial 524+39 testes, 0 falhas; `tsc` limpo.
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| 8 milicianos (MIL-01..08) | ✅ | VULTO (comandante de bloco), ECO (radarista das lajes), FERRAZ (armeiro de quintal), GRAU (motoqueiro), NOTA (cobradora de proteção), SIRENE (oradora de perímetro), SORO (enfermeira de clínica), CORUJA (vigia noturna) — 4M/4F, ranks ZHEERS/ONITH/SKEETW |
+| 8 gangues urbanas (GNG-01..08) | ✅ | SPRAY (grafiteiro de viaduto), VENTANIA (corredor de galho), CORTA (soldado de facção), BAILE (DJ do comando), ROTA (entregadora), COTOVELA (lutadora de galpão), SOMBRA (batedora), PIXEL (hacker de lan house) — 4M/4F |
+| `KHAAOS_MILITIA_ARCHETYPES` + `ALL_KHAAOS_OPERATIVE_ARCHETYPES` | ✅ | `shared/character-studio.ts`: campo opcional `faction?: OperativeFaction` (militares ficam sem o campo = MILITAR); `buildOperativePromptBundle` busca no roster combinado (bundles de imagem/vídeo funcionam para todo o lote) |
+| Catálogo de avatares | ✅ | `shared/operative-avatar-catalog.ts` com campo `branch` por facção; 33 opções (17 MILITAR incl. TALON suplementar + 8 MILÍCIA + 8 GANGUE); `DEFAULT_OPERATIVE_AVATAR_ID` segue `OP_MALE_VANGUARD` |
+| 16 SVGs byte-idênticos | ✅ | `Content/Avatars/{male,female}/` ↔ `client/public/avatars/{male,female}/` (512×512, marca d'água do codinome, retrato paramétrico por hairstyle/headgear/paleta de facção); `avatar_catalog.json` (2 cópias idênticas) anota `faction` em todas as 33 entradas |
+| `Content/Assets/asset_manifest.json` | ✅ | +16 entradas `CHR_{clã}_{Sexo}_{Nome}` com `skeleton` por sexo (SK_Manny/SK_Gwen), `faction`, 4 mapas PBR canônicos, `priority: P1`, `status: avatar_generated` — zero resíduo `UE5_Mannequin` |
+| UI de perfil | ✅ | Grade OPERATIVO & AVATAR lista as 33 identidades com badge de facção (MILITAR/MILÍCIA/GANGUE/SUPLEMENTAR); seleção persistida via POST `/api/player/operative` sem mudança de contrato |
+| Contrato automatizado | ✅ | `tests/official/militia-roster.test.ts` (5 testes): 16 operantes 8M/8F sem colisão com os militares; identidade completa (rank/spec/mundo, biomaecânica plausível, rig por sexo, prompt bundle); catálogo 33 com branch correto e whitelist rejeitando `OP_MIL_FAKE`/`OP_GNG_FAKE`; SVGs byte-idênticos; manifest com rig/faction/texturas. `character-studio.test.ts` atualizado para 33 no catálogo e paridade de manifest sobre o roster combinado |
+
+Distribuição de mundos: 7 em Barburhen (coração urbano pós-guerra), 7 no CIGKV (vilas e lajes), 1 em Priadus (posto avançado de floresta — CORUJA) e 1 em Ckesalth (entreposto — PIXEL). Espécie-clã no `ueAssetId`: Zheers×3, Skeetw×3, Venex×3, Khael×3, Onith×2, Huran×2. Raridades COMUM/RARO (equipamento irregular) — os militares mantêm EPICO/LENDÁRIO/MÍTICO.
+
 ### Próximos passos mapeados (fora deste lote)
 
 1. Merge do PR deste branch na `main` e novo deploy de staging com o viewer 3D das figuras ativo.

@@ -1,4 +1,4 @@
-import { KHAAOS_OPERATIVE_ARCHETYPES, type OperativeGender } from "./character-studio";
+import { KHAAOS_OPERATIVE_ARCHETYPES, KHAAOS_MILITIA_ARCHETYPES, type OperativeFaction } from "./character-studio";
 
 export interface OperativeAvatarOption {
   id: string;
@@ -8,7 +8,11 @@ export interface OperativeAvatarOption {
   rank: string;
   avatarPath: string;
   canonical: boolean;
+  /** Facção declarada: militares canônicos, milícias e gangues urbanas (Lote 4). */
+  branch: OperativeFaction;
 }
+
+type OperativeGender = "MASCULINO" | "FEMININO";
 
 function avatarPath(id: string, gender: OperativeGender): string {
   const folder = gender === "MASCULINO" ? "male" : "female";
@@ -16,8 +20,9 @@ function avatarPath(id: string, gender: OperativeGender): string {
 }
 
 /**
- * The 16 canonical operatives plus TALON, the already-shipped supplemental
- * avatar/runtime operative. Paths are local static assets, never user URLs.
+ * The 16 canonical military operatives, TALON (already-shipped supplemental
+ * avatar/runtime operative) and the Lote 4 militia/urban-gang batch — 33
+ * selectable identities. Paths are local static assets, never user URLs.
  */
 export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
   ...KHAAOS_OPERATIVE_ARCHETYPES.map((operative) => ({
@@ -28,6 +33,7 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     rank: operative.rank,
     avatarPath: avatarPath(operative.id, operative.gender),
     canonical: true,
+    branch: "MILITAR" as const,
   })),
   {
     id: "OP_MALE_TALON",
@@ -37,7 +43,18 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     rank: "ZHEERS",
     avatarPath: avatarPath("OP_MALE_TALON", "MASCULINO"),
     canonical: false,
+    branch: "MILITAR" as const,
   },
+  ...KHAAOS_MILITIA_ARCHETYPES.map((operative) => ({
+    id: operative.id,
+    codename: operative.codename,
+    fullName: operative.fullName,
+    gender: operative.gender,
+    rank: operative.rank,
+    avatarPath: avatarPath(operative.id, operative.gender),
+    canonical: true,
+    branch: operative.faction ?? ("MILITAR" as const),
+  })),
 ];
 
 export const DEFAULT_OPERATIVE_AVATAR_ID = "OP_MALE_VANGUARD";

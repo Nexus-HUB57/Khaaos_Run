@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   KHAAOS_OPERATIVE_ARCHETYPES,
+  KHAAOS_MILITIA_ARCHETYPES,
   buildOperativePromptBundle,
 } from "../../shared/character-studio";
 import { OPERATIVE_AVATAR_OPTIONS } from "../../shared/operative-avatar-catalog";
@@ -115,12 +116,14 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   );
   // Fase 26 — 16 canônicos + TALON (Hacker & Urban Runner) = 17 no catálogo;
   // 9 masculinos (Talon entra como M-09) e 8 femininos.
-  assert.equal(catalog.length, 17, "Catalog must list 17 operatives");
+  // Lote 4 — +16 não-militares (8 milicianos MIL-01..08 + 8 gangues GNG-01..08) = 33;
+  // 17 masculinos e 16 femininos.
+  assert.equal(catalog.length, 33, "Catalog must list 33 operatives (17 militares + 16 Lote 4)");
 
   const males = catalog.filter((c: any) => c.gender === "MASCULINO");
   const females = catalog.filter((c: any) => c.gender === "FEMININO");
-  assert.equal(males.length, 9, "9 masculine avatars in catalog (incl. Talon M-09)");
-  assert.equal(females.length, 8, "8 feminine avatars in catalog");
+  assert.equal(males.length, 17, "17 masculine avatars in catalog (incl. Talon M-09)");
+  assert.equal(females.length, 16, "16 feminine avatars in catalog");
   assert.deepEqual(
     OPERATIVE_AVATAR_OPTIONS.map((item) => item.id).sort(),
     catalog.map((item: any) => item.id).sort(),
@@ -150,9 +153,9 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   const manifestPath = path.resolve("Content/Assets/asset_manifest.json");
   assert.ok(fs.existsSync(manifestPath), "Content/Assets/asset_manifest.json must exist");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  assert.ok(manifest.characters && manifest.characters.length >= 17, "Manifest includes all 16 operatives plus base");
+  assert.ok(manifest.characters && manifest.characters.length >= 33, "Manifest includes all 32 playable operatives plus base");
 
-  for (const op of KHAAOS_OPERATIVE_ARCHETYPES) {
+  for (const op of [...KHAAOS_OPERATIVE_ARCHETYPES, ...KHAAOS_MILITIA_ARCHETYPES]) {
     const entry = manifest.characters.find((c: any) => c.id === op.ueAssetId);
     assert.ok(entry, `Manifest contains character entry for ${op.ueAssetId}`);
     assert.equal(entry.gender, op.gender);
