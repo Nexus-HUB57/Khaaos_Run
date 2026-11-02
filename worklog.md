@@ -810,3 +810,9 @@ Stage Summary:
 - O projeto tem um deploy de staging REAL e rastreável de ponta a ponta: dispatch → imagens ghcr → Render → healthz reportando o SHA exato do merge — e o portão de fidelidade F46 validou o main novo (FIEL 53/0) ANTES de qualquer export de engine
 - PR de terceiros (README canônico + fix de ledger) entrou pela governança estabelecida com um achado de revisão relevante: migrations são rastreadas por tag sem checksum, então o estado canônico do ledger depende da 0008 (união) — o edit da 0007 é correço defensivo, não breaking
 - Suíte: game-runtime 1012 — 1012 pass / 0 fail / 13 skipped; tsc 0; build OK; auditoria FIEL ✅ 53/0; staging servindo 23c910f; version 0.26.0
+
+### Task 32 — Follow-up: merge do PR #244 (docs complementares) + re-certificação do main
+- Durante o ciclo de deploy surgiu o PR #244 (mesma sessão de docs do #243, branch contendo dcbd8ee+80c253f+f10b203 — diff líquido restante: 3 arquivos, +17/−6): README ganhou a TABELA DE DIMENSÕES CANÔNICAS dos 5 rings (CIGKV 16.000 m²/520 m contorno, W1 19.000/580, W2 22.000/640, W3 25.000/700, W4 18.000/560 — aritmética conferida: área=bbox, perímetro=2×(x+y), densidade=área÷100 dentro da faixa 150–250 m²/jogador) + correção terminológica área≠perímetro + refinamentos REVISAO_E2E/ROADMAP
+- REVISÃO: docs-only, não toca headings W#/C# nem tabelas de setores (contrato F44 ileso); validado no SHA f10b203: auditoria FIEL ✅ 53/0 + suíte 1011/0/13 (base do PR é pré-Zu-train) + CI 17 success ⇒ MERGE b2a98cd
+- MAIN FINAL b2a98cd: CI 9/9 success; UE5.8 Preflight log: "Veredito: FIEL ✅ (53 OK / 0 falhas) — snapshot em 2414 ms" — o README com dimensões canônicas re-certificado pelo portão; staging permanece servindo 23c910f (docs-only posterior: sem novo deploy necessário)
+- Estado final: main b2a98cd | 0 PRs abertos | staging 23c910f validado | versão 0.26.0
