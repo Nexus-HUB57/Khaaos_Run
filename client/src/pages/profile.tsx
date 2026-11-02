@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { usePlayer, useSelectSpecialization } from "@/hooks/use-player";
+import { usePlayer, useSelectSpecialization, useSelectOperative } from "@/hooks/use-player";
 import { CyberCard } from "@/components/cyber-card";
 import { Button } from "@/components/ui/button";
 import { User, Activity, Shield, Hash, Star, Swords, HeartPulse, Trophy, TrendingUp } from "lucide-react";
@@ -13,12 +13,18 @@ import {
   EP555_SPECIALIZATIONS,
   getRankProgress,
 } from "@shared/schema";
+import {
+  DEFAULT_OPERATIVE_AVATAR_ID,
+  getOperativeAvatarOption,
+  OPERATIVE_AVATAR_OPTIONS,
+} from "@shared/operative-avatar-catalog";
 
 export default function Profile() {
   const { user } = useAuth();
   const { data: playerData } = usePlayer();
   const { data: ranking } = useMyRanking();
   const { mutate: selectSpecialization, isPending: isSelecting } = useSelectSpecialization();
+  const { mutate: selectOperative, isPending: isSelectingOperative } = useSelectOperative();
   const { toast } = useToast();
 
   if (!playerData) {
@@ -34,11 +40,20 @@ export default function Profile() {
   const rankIdx = EP555_RANKS.findIndex(({ id }) => id === progression.rank);
   const currentRank = EP555_RANKS[rankIdx];
   const activeSpecialization = EP555_SPECIALIZATIONS.find(({ id }) => id === stats.specializationId);
+  const selectedOperativeId = stats.selectedOperativeId ?? DEFAULT_OPERATIVE_AVATAR_ID;
+  const selectedAvatar = getOperativeAvatarOption(selectedOperativeId);
 
   const handleSelectSpecialization = (specializationId: string) => {
     selectSpecialization(specializationId, {
       onSuccess: () => toast({ title: "CERTIFICAÇÃO REGISTRADA", description: "Especialidade atualizada no seu QG-WAR'I." }),
       onError: (error) => toast({ title: "REQUISITOS NÃO ATINGIDOS", description: error.message, variant: "destructive" }),
+    });
+  };
+
+  const handleSelectOperative = (operativeId: string) => {
+    selectOperative(operativeId, {
+      onSuccess: () => toast({ title: "AVATAR DE OPERAÇÃO ATUALIZADO", description: "Preferência salva. Lobby local aberto atualizado; countdown/partida ou sala de outro nó aplicam a escolha na próxima entrada." }),
+      onError: (error) => toast({ title: "NÃO FOI POSSÍVEL SALVAR", description: error.message, variant: "destructive" }),
     });
   };
 
@@ -54,14 +69,16 @@ export default function Profile() {
         </div>
 
         <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center md:items-start">
-          {/* Avatar Placeholder */}
+          {/* Avatar de jogo confiável, resolvido pelo catálogo local */}
           <div className="w-32 h-32 border-2 border-accent/60 bg-black/50 flex flex-col items-center justify-center shrink-0 relative"
             style={{ boxShadow: "0 0 20px -5px hsla(45,90%,55%,0.3)" }}
           >
             <div className="absolute top-0 left-0 w-3 h-3 border-l-2 border-t-2 border-accent/60" />
             <div className="absolute bottom-0 right-0 w-3 h-3 border-r-2 border-b-2 border-accent/60" />
-            <span className="text-3xl font-display font-bold text-accent">{progression.rank.substring(0, 2)}</span>
-            <span className="text-[9px] font-mono text-muted-foreground tracking-widest mt-1">AVATAR</span>
+            <img src={selectedAvatar.avatarPath} alt={`Avatar de ${selectedAvatar.codename}`} className="h-full w-full object-cover" />
+            <span className="absolute bottom-0 w-full bg-black/80 px-1 py-1 text-center text-[9px] font-mono text-accent tracking-widest">
+              {selectedAvatar.codename}
+            </span>
           </div>
 
           <div className="flex-1 text-center md:text-left">
@@ -112,6 +129,42 @@ export default function Profile() {
               <StatBox label="NRG" value={stats.maxEnergy} icon={Swords} color="text-amber-400" />
             </div>
           </div>
+        </div>
+      </CyberCard>
+
+      <CyberCard title="OPERATIVO & AVATAR" subtitle="SELEÇÃO PERSISTENTE · IDENTIDADE SINCRONIZADA COM O LOBBY">
+        <p className="mb-4 text-xs font-mono leading-relaxed text-muted-foreground">
+          Escolha entre os 16 operativos canônicos e Talon. O servidor grava apenas um ID do catálogo e resolve a arte local;
+          a imagem de perfil do provedor de login continua independente.
+        </p>
+        <p className="mb-4 text-[10px] font-mono text-muted-foreground">
+          A identidade fica travada durante countdown/partida para não mudar no meio do combate.
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {OPERATIVE_AVATAR_OPTIONS.map((operative) => {
+            const isSelected = operative.id === selectedOperativeId;
+            return (
+              <button
+                key={operative.id}
+                type="button"
+                data-testid={`select-operative-avatar-${operative.id}`}
+                aria-pressed={isSelected}
+                disabled={isSelected || isSelectingOperative}
+                onClick={() => handleSelectOperative(operative.id)}
+                className={`flex min-w-0 items-center gap-2 border p-2 text-left transition-colors ${
+                  isSelected
+                    ? "border-cyan-400/70 bg-cyan-950/30 ring-1 ring-cyan-400/30"
+                    : "border-border/40 bg-black/30 hover:border-primary/60"
+                }`}
+              >
+                <img src={operative.avatarPath} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-white/10 object-cover" />
+                <span className="min-w-0">
+                  <span className="block truncate font-display text-xs font-bold">{operative.codename}</span>
+                  <span className="block truncate font-mono text-[9px] text-muted-foreground">{operative.rank} · {operative.canonical ? "CANÔNICO" : "SUPLEMENTAR"}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </CyberCard>
 

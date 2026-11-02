@@ -197,6 +197,7 @@ export const playerStats = pgTable("player_stats", {
   deaths: integer("deaths").notNull().default(0),
   lastSalaryDate: timestamp("last_salary_date"),
   specializationId: text("specialization_id"),
+  selectedOperativeId: text("selected_operative_id").notNull().default("OP_MALE_VANGUARD"),
   // Persistent competitive ranking
   rating: integer("rating").notNull().default(1000), // ELO-like
   matchesPlayed: integer("matches_played").notNull().default(0),

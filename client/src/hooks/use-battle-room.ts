@@ -14,6 +14,7 @@ export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 export interface BattlePlayer {
   userId: string;
   displayName: string;
+  selectedOperativeId?: string;
   posX: number;
   posY: number;
   carryCapacity?: number;

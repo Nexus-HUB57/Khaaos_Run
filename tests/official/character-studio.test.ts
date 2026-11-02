@@ -4,6 +4,7 @@ import {
   KHAAOS_OPERATIVE_ARCHETYPES,
   buildOperativePromptBundle,
 } from "../../shared/character-studio";
+import { OPERATIVE_AVATAR_OPTIONS } from "../../shared/operative-avatar-catalog";
 import { EP555_RANKS, SPECIALIZATION_IDS } from "../../shared/schema";
 import { WORLD_ORDER } from "../../shared/worlds";
 
@@ -100,6 +101,11 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   assert.ok(fs.existsSync(publicCatalogPath), "Public avatar_catalog.json must exist");
 
   const catalog = JSON.parse(fs.readFileSync(contentCatalogPath, "utf8"));
+  assert.equal(
+    fs.readFileSync(contentCatalogPath, "utf8"),
+    fs.readFileSync(publicCatalogPath, "utf8"),
+    "Content and client avatar catalogs must remain byte-identical",
+  );
   // Fase 26 — 16 canônicos + TALON (Hacker & Urban Runner) = 17 no catálogo;
   // 9 masculinos (Talon entra como M-09) e 8 femininos.
   assert.equal(catalog.length, 17, "Catalog must list 17 operatives");
@@ -108,6 +114,11 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   const females = catalog.filter((c: any) => c.gender === "FEMININO");
   assert.equal(males.length, 9, "9 masculine avatars in catalog (incl. Talon M-09)");
   assert.equal(females.length, 8, "8 feminine avatars in catalog");
+  assert.deepEqual(
+    OPERATIVE_AVATAR_OPTIONS.map((item) => item.id).sort(),
+    catalog.map((item: any) => item.id).sort(),
+    "The server/client selectable IDs must exactly match the asset catalog",
+  );
 
   for (const item of catalog) {
     const contentSvgPath = path.resolve(item.svgPathContent);
@@ -121,6 +132,11 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
     assert.ok(svgContent.includes("viewBox=\"0 0 512 512\""), "512x512 tactical viewport");
     assert.ok(svgContent.includes(item.codename), "SVG includes codename watermark");
     assert.ok(svgContent.length > 1000, "SVG has rich vector content (>1000 bytes)");
+    const publicSvg = fs.readFileSync(publicSvgPath);
+    assert.ok(fs.readFileSync(contentSvgPath).equals(publicSvg), `${item.id} SVG copies must be byte-identical`);
+    const option = OPERATIVE_AVATAR_OPTIONS.find((candidate) => candidate.id === item.id);
+    assert.ok(option, `Selectable avatar option exists for ${item.id}`);
+    assert.equal(option.avatarPath, item.svgPathPublic, `Selectable option path matches ${item.id}`);
   }
 
   // Asset Manifest parity

@@ -103,6 +103,8 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
     { name: "salário diário com campo extra", path: "/api/player/daily-salary", body: { userId: "victim" } },
     { name: "especialização desconhecida", path: "/api/player/specialization", body: { specializationId: "ADMIN" } },
     { name: "especialização com usuário forjado", path: "/api/player/specialization", body: { specializationId: "INFANTARIA", userId: "victim" } },
+    { name: "operativo inexistente", path: "/api/player/operative", body: { operativeId: "OP_ADMIN" } },
+    { name: "operativo com usuário forjado", path: "/api/player/operative", body: { operativeId: "OP_MALE_TALON", userId: "victim" } },
     { name: "respawn com campo extra", path: "/api/player/respawn", body: { userId: "victim" } },
     { name: "prévia de empréstimo fora do limite", path: "/api/economy/loan-preview", body: { principal: 0, days: 1 } },
     { name: "simulação fora do limite", path: "/api/economy/simulate", body: { agents: 501, days: 30 } },
@@ -385,4 +387,19 @@ test("especialização exige os requisitos EP555 e grava apenas no perfil da ses
   assert.equal(selected.status, 200);
   assert.deepEqual(await selected.json(), { specializationId: "INFANTARIA" });
   assert.deepEqual(updates, [{ userId: "player-1", specializationId: "INFANTARIA" }]);
+});
+
+test("seleção de operativo aceita apenas catálogo confiável e grava somente no perfil da sessão", async () => {
+  const updates: { userId: string; selectedOperativeId?: string }[] = [];
+  stubStorage("updatePlayerStats", async (userId: string, values: { selectedOperativeId?: string }) => {
+    updates.push({ userId, ...values });
+    return { userId, selectedOperativeId: values.selectedOperativeId };
+  });
+
+  const selected = await request("POST", "/api/player/operative", "player-1", {
+    operativeId: "OP_MALE_TALON",
+  });
+  assert.equal(selected.status, 200);
+  assert.deepEqual(await selected.json(), { selectedOperativeId: "OP_MALE_TALON" });
+  assert.deepEqual(updates, [{ userId: "player-1", selectedOperativeId: "OP_MALE_TALON" }]);
 });
