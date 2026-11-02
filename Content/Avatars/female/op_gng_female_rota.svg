@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_GNG_FEMALE_ROTA" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#F59E0B6b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_GNG_FEMALE_ROTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d29b6e"/>
+      <stop offset="100%" stop-color="#b07c4f"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_GNG_FEMALE_ROTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4e4e57"/>
+      <stop offset="100%" stop-color="#222226"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_GNG_FEMALE_ROTA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffbd0d"/>
+      <stop offset="55%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#b07107"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_GNG_FEMALE_ROTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4f2f1b"/>
+      <stop offset="100%" stop-color="#29180e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_GNG_FEMALE_ROTA)"/>
+  <g stroke="#F59E0B7f" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M60 420 L150 420 M150 420 L120 390 M150 420 L120 450"/></g>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_GNG_FEMALE_ROTA)"/>
+  <path d="M170 352 L342 352" stroke="#F59E0B" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#F59E0B" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#19191c" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#2c2c31"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#F59E0B" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <circle cx="256" cy="352" r="13" fill="none" stroke="#F59E0B" stroke-width="4" opacity="0.9"/>
+  <circle cx="256" cy="384" r="13" fill="none" stroke="#F59E0B" stroke-width="4" opacity="0.75"/>
+  <rect x="238" y="404" width="36" height="20" rx="4" fill="#1f1f23"/>
+  <circle cx="256" cy="414" r="4" fill="#F59E0B"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_GNG_FEMALE_ROTA)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_FEMALE_ROTA)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_FEMALE_ROTA)"/>
+  <path d="M318 150 Q344 200 334 268 Q330 300 316 316 Q322 276 312 224 Q304 180 292 156 Z" fill="url(#hairg-OP_GNG_FEMALE_ROTA)"/>
+  <path d="M188 190 Q188 128 256 122 Q324 128 324 190 Q324 238 298 268 Q278 290 256 290 Q234 290 214 268 Q188 238 188 190 Z" fill="url(#skin-OP_GNG_FEMALE_ROTA)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#351f12" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#351f12" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#84cc16"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#84cc16"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 264 Q256 272 274 264 Q256 280 238 264 Z" fill="#d08609"/>
+  <path d="M238 264 Q256 270 274 264" stroke="#00000040" stroke-width="2" fill="none"/>
+  <path d="M190 184 Q194 126 256 120 Q318 126 322 184 Q318 146 294 138 Q256 130 218 138 Q194 146 190 184 Z" fill="url(#hairg-OP_GNG_FEMALE_ROTA)"/>
+  <circle cx="314" cy="146" r="9" fill="#ffad0c"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <path d="M178 212 Q172 112 256 104 Q340 112 334 212 L334 224 Q322 236 306 228 L306 180 Q306 132 256 128 Q206 132 206 180 L206 228 Q190 236 178 224 Z" fill="#F59E0B"/>
+  <path d="M206 200 Q256 176 306 200" stroke="#0b0b0f" stroke-opacity="0.3" stroke-width="4" fill="none"/>
+  <path d="M300 236 L318 250" stroke="#0f172a" stroke-width="5"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#F59E0B" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#585862" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">ROTA</text>
+</svg>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_MIL_FEMALE_SORO" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#10B9816b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_MIL_FEMALE_SORO" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f3c89d"/>
+      <stop offset="100%" stop-color="#d9a673"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_MIL_FEMALE_SORO" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#586a83"/>
+      <stop offset="100%" stop-color="#272e39"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_MIL_FEMALE_SORO" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#13de9a"/>
+      <stop offset="55%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#0b855c"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_MIL_FEMALE_SORO" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3c2412"/>
+      <stop offset="100%" stop-color="#1f1209"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_MIL_FEMALE_SORO)"/>
+  <path d="M440 40 h24 v24 h24 v24 h-24 v24 h-24 v-24 h-24 v-24 h24 z" fill="#10B9817f"/>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_MIL_FEMALE_SORO)"/>
+  <path d="M170 352 L342 352" stroke="#10B981" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#10B981" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#1c222a" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#313b49"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#10B981" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="#10B981" opacity="0.92"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="none" stroke="#00000066" stroke-width="2"/>
+  <rect x="166" y="408" width="14" height="26" rx="3" fill="#0b0b0f" opacity="0.75"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_MIL_FEMALE_SORO)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_FEMALE_SORO)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_FEMALE_SORO)"/>
+  <path d="M180 200 Q176 116 256 112 Q336 116 332 200 L332 258 Q322 268 310 258 L310 204 Q310 150 256 146 Q202 150 202 204 L202 258 Q190 268 180 258 Z" fill="url(#hairg-OP_MIL_FEMALE_SORO)"/>
+  <path d="M188 190 Q188 128 256 122 Q324 128 324 190 Q324 238 298 268 Q278 290 256 290 Q234 290 214 268 Q188 238 188 190 Z" fill="url(#skin-OP_MIL_FEMALE_SORO)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#28180c" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#28180c" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#38bdf8"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#38bdf8"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 264 Q256 272 274 264 Q256 280 238 264 Z" fill="#0d9d6d"/>
+  <path d="M238 264 Q256 270 274 264" stroke="#00000040" stroke-width="2" fill="none"/>
+  <path d="M182 196 Q182 122 256 116 Q330 122 330 196 Q326 148 296 138 Q256 128 216 138 Q186 148 182 196 Z" fill="url(#hairg-OP_MIL_FEMALE_SORO)"/>
+  <path d="M202 170 Q256 140 310 170" stroke="#ffffff" stroke-opacity="0.12" stroke-width="6" fill="none"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <path d="M186 182 Q190 124 256 118 Q322 124 326 182 L326 170 Q318 136 294 128 Q256 118 218 128 Q194 136 186 170 Z" fill="#10B981"/>
+  <path d="M186 176 Q256 152 326 176" stroke="#0b0b0f" stroke-opacity="0.3" stroke-width="4" fill="none"/>
+  <path d="M282 296 Q296 306 308 302" stroke="#f8fafc" stroke-opacity="0.8" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#10B981" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#637693" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">SORO</text>
+</svg>

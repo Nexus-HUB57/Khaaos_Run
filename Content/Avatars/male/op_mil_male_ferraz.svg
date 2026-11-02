@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_MIL_MALE_FERRAZ" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#B453096b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_MIL_MALE_FERRAZ" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8b98a"/>
+      <stop offset="100%" stop-color="#c2905f"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_MIL_MALE_FERRAZ" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6c6761"/>
+      <stop offset="100%" stop-color="#2f2d2a"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_MIL_MALE_FERRAZ" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d8630a"/>
+      <stop offset="55%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#813b06"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_MIL_MALE_FERRAZ" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9099ac"/>
+      <stop offset="100%" stop-color="#4a4f59"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_MIL_MALE_FERRAZ)"/>
+  <g stroke="#B4530972" stroke-width="4" fill="none"><path d="M120 90 L150 130 M400 80 L372 120 M70 250 L110 240 M440 240 L402 232 M110 420 L146 398 M400 430 L368 404"/></g>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_MIL_MALE_FERRAZ)"/>
+  <path d="M170 352 L342 352" stroke="#B45309" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#B45309" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#22211f" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#3c3a36"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#B45309" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="#B45309" opacity="0.92"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="none" stroke="#00000066" stroke-width="2"/>
+  <rect x="166" y="408" width="14" height="26" rx="3" fill="#0b0b0f" opacity="0.75"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_MIL_MALE_FERRAZ)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_MALE_FERRAZ)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_MALE_FERRAZ)"/>
+  <path d="M186 190 Q186 128 256 122 Q326 128 326 190 Q326 242 300 272 Q276 294 256 294 Q232 294 212 272 Q186 242 186 190 Z" fill="url(#skin-OP_MIL_MALE_FERRAZ)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#606673" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#606673" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#78716c"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#78716c"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 262 Q256 270 274 262" stroke="#00000055" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M196 218 Q200 276 232 296 Q256 308 280 296 Q312 276 316 218 Q316 268 296 288 Q256 316 216 288 Q196 268 196 218 Z" fill="url(#hairg-OP_MIL_MALE_FERRAZ)" opacity="0.9"/>
+  <path d="M238 262 Q256 272 274 262" stroke="#00000055" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M214 150 Q256 132 298 150" stroke="#ffffff" stroke-opacity="0.16" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <rect x="196" y="150" width="120" height="30" rx="14" fill="#0f172a" opacity="0.9"/>
+  <rect x="200" y="155" width="50" height="20" rx="10" fill="#B45309" opacity="0.85"/>
+  <rect x="262" y="155" width="50" height="20" rx="10" fill="#B45309" opacity="0.85"/>
+  <path d="M186 164 L166 156 M326 164 L346 156" stroke="#0f172a" stroke-width="6"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#B45309" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#79746d" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">FERRAZ</text>
+</svg>

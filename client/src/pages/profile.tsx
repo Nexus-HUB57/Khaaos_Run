@@ -135,8 +135,9 @@ export default function Profile() {
 
       <CyberCard title="OPERATIVO & AVATAR" subtitle="SELEÇÃO PERSISTENTE · IDENTIDADE SINCRONIZADA COM O LOBBY">
         <p className="mb-4 text-xs font-mono leading-relaxed text-muted-foreground">
-          Escolha entre os 16 operativos canônicos e Talon. O servidor grava apenas um ID do catálogo e resolve a arte local;
-          a imagem de perfil do provedor de login continua independente.
+          Escolha entre os 16 militares canônicos, Talon e o Lote 4 de não-militares (8 milicianos e
+          8 membros de gangues urbanas — 33 identidades). O servidor grava apenas um ID do catálogo e
+          resolve a arte local; a imagem de perfil do provedor de login continua independente.
         </p>
         <p className="mb-4 text-[10px] font-mono text-muted-foreground">
           A identidade fica travada durante countdown/partida para não mudar no meio do combate.
@@ -144,6 +145,11 @@ export default function Profile() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {OPERATIVE_AVATAR_OPTIONS.map((operative) => {
             const isSelected = operative.id === selectedOperativeId;
+            const branchLabel = operative.branch === "MILICIA_URBANA"
+              ? "MILÍCIA"
+              : operative.branch === "GANGUE_URBANA"
+                ? "GANGUE"
+                : operative.canonical ? "MILITAR" : "SUPLEMENTAR";
             return (
               <button
                 key={operative.id}
@@ -161,7 +167,7 @@ export default function Profile() {
                 <img src={operative.avatarPath} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-white/10 object-cover" />
                 <span className="min-w-0">
                   <span className="block truncate font-display text-xs font-bold">{operative.codename}</span>
-                  <span className="block truncate font-mono text-[9px] text-muted-foreground">{operative.rank} · {operative.canonical ? "CANÔNICO" : "SUPLEMENTAR"}</span>
+                  <span className="block truncate font-mono text-[9px] text-muted-foreground">{operative.rank} · {branchLabel}</span>
                 </span>
               </button>
             );

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_GNG_MALE_BAILE" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#EC48996b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_GNG_MALE_BAILE" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a2f1a"/>
+      <stop offset="100%" stop-color="#33200f"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_GNG_MALE_BAILE" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e1e21"/>
+      <stop offset="100%" stop-color="#0d0d0e"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_GNG_MALE_BAILE" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff56b7"/>
+      <stop offset="55%" stop-color="#EC4899"/>
+      <stop offset="100%" stop-color="#a9336e"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_GNG_MALE_BAILE" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#25211f"/>
+      <stop offset="100%" stop-color="#131110"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_GNG_MALE_BAILE)"/>
+  <circle cx="60" cy="96" r="4.5" fill="#EC48998c"/><circle cx="116" cy="132" r="4.5" fill="#EC48998c"/><circle cx="172" cy="96" r="4.5" fill="#EC48998c"/><circle cx="228" cy="132" r="4.5" fill="#EC48998c"/><circle cx="284" cy="96" r="4.5" fill="#EC48998c"/><circle cx="340" cy="132" r="4.5" fill="#EC48998c"/><circle cx="396" cy="96" r="4.5" fill="#EC48998c"/><circle cx="452" cy="132" r="4.5" fill="#EC48998c"/>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_GNG_MALE_BAILE)"/>
+  <path d="M170 352 L342 352" stroke="#EC4899" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#EC4899" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#09090a" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#101012"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#EC4899" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <circle cx="256" cy="352" r="13" fill="none" stroke="#EC4899" stroke-width="4" opacity="0.9"/>
+  <circle cx="256" cy="384" r="13" fill="none" stroke="#EC4899" stroke-width="4" opacity="0.75"/>
+  <rect x="238" y="404" width="36" height="20" rx="4" fill="#0c0c0d"/>
+  <circle cx="256" cy="414" r="4" fill="#EC4899"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_GNG_MALE_BAILE)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_MALE_BAILE)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_GNG_MALE_BAILE)"/>
+  <path d="M194 172 Q200 240 191.60000000000002 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M212 172 Q218 240 212.3 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M231 172 Q237 240 234.15 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M250 172 Q256 240 256.0 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M269 172 Q275 240 277.85 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M288 172 Q294 240 299.7 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M306 172 Q312 240 320.4 286" stroke="url(#hairg-OP_GNG_MALE_BAILE)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M186 190 Q186 128 256 122 Q326 128 326 190 Q326 242 300 272 Q276 294 256 294 Q232 294 212 272 Q186 242 186 190 Z" fill="url(#skin-OP_GNG_MALE_BAILE)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#191614" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#191614" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#22d3ee"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#22d3ee"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 262 Q256 270 274 262" stroke="#00000055" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M240 262 Q256 276 272 262 Q270 296 256 300 Q242 296 240 262 Z" fill="url(#hairg-OP_GNG_MALE_BAILE)" opacity="0.85"/>
+  <path d="M188 168 Q192 118 256 114 Q320 118 324 168 L324 178 Q256 156 188 178 Z" fill="#1c1917"/>
+  <path d="M188 168 Q256 146 324 168" stroke="#ff56b7" stroke-opacity="0.5" stroke-width="4" fill="none"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <path d="M184 188 Q184 124 256 118 Q328 124 328 188" stroke="#18181b" stroke-width="18" fill="none"/>
+  <rect x="166" y="192" width="34" height="50" rx="10" fill="#18181b"/>
+  <rect x="312" y="192" width="34" height="50" rx="10" fill="#18181b"/>
+  <rect x="172" y="200" width="22" height="34" rx="8" fill="#EC4899" opacity="0.9"/>
+  <rect x="318" y="200" width="22" height="34" rx="8" fill="#EC4899" opacity="0.9"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#EC4899" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#212125" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">BAILE</text>
+</svg>
