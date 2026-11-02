@@ -376,5 +376,100 @@
       "status": "pass",
       "detail": "4/4 mundos citados"
     }
-  ]
+  ],
+  "meta": {
+    "ranAt": "2026-11-02T02:14:00.411Z",
+    "durationMs": 1940,
+    "worlds": [
+      "CIGKV",
+      "BARBURHEN",
+      "PRIADUS",
+      "CKESALTH",
+      "ARUKHEEA"
+    ],
+    "dressingCounts": {
+      "CIGKV": {
+        "tent": 4,
+        "flagmast": 4,
+        "tirerow": 2,
+        "bleacher": 2,
+        "fanunit": 2
+      },
+      "BARBURHEN": {
+        "stall": 3,
+        "billboard": 1,
+        "rubble": 6,
+        "burntcar": 2,
+        "deadtree": 3,
+        "skeleton": 3,
+        "collapse": 2,
+        "machinery": 4,
+        "snowpile": 3,
+        "snowpatch": 2,
+        "crater": 3,
+        "smokecolumn": 2,
+        "rail": 2,
+        "fanunit": 2
+      },
+      "PRIADUS": {
+        "waterpool": 4,
+        "mudpatch": 3,
+        "mangrove": 5,
+        "hut": 2,
+        "walkway": 3,
+        "roots": 3,
+        "coral": 2,
+        "carnplant": 4,
+        "mist": 6,
+        "labdome": 1,
+        "fallenlog": 3,
+        "sporesac": 3,
+        "statue": 4,
+        "totem": 2,
+        "templestep": 1,
+        "brazier": 2
+      },
+      "CKESALTH": {
+        "dune": 4,
+        "banner": 3,
+        "palmstump": 4,
+        "resortwall": 1,
+        "oilpool": 2,
+        "tent": 2,
+        "campfire": 1,
+        "bones": 4,
+        "refinetower": 1,
+        "oiltank": 2,
+        "pipeline": 2,
+        "lavapatch": 2,
+        "minecart": 1,
+        "quicksand": 2
+      },
+      "ARUKHEEA": {
+        "runering": 2,
+        "shard": 7,
+        "palmtree": 5,
+        "crystal": 2,
+        "quantumring": 3,
+        "prisonwall": 2,
+        "lighthouse": 1,
+        "rift": 1,
+        "whaleribs": 2,
+        "bones": 2,
+        "shipwreck": 2,
+        "voidscorch": 4
+      }
+    },
+    "sceneCounts": {
+      "CIGKV": {},
+      "BARBURHEN": {},
+      "PRIADUS": {},
+      "CKESALTH": {
+        "oilfire": 2
+      },
+      "ARUKHEEA": {
+        "sharkfin": 3
+      }
+    }
+  }
 }

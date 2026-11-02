@@ -80,6 +80,18 @@ export function createAuthoritativeServer({
     fetchImpl: ue58?.fetchImpl ?? globalThis.fetch,
     rootDir: ue58?.rootDir ?? ROOT,
   };
+  // Fase 46 — portão de fidelidade: o snapshot F44 (README ao vivo → buildScene
+  // headless → 53 checks) roda AO VIVO no painel. Runner injetável p/ testes;
+  // default importa o módulo DE FORMA LAZY (three.js só entra no processo na
+  // primeira auditoria — boot do servidor e testes de rota ficam leves).
+  // Cache TTL: o snapshot custa ~2 s (5 mundos construídos) — martelo no botão
+  // não reconstrói a cena a cada clique.
+  const FIDELITY_TTL_MS = 30_000;
+  let fidelityCache = null; // { at, report }
+  const runFidelityAudit = ue58?.fidelityRunner ?? (async () => {
+    const mod = await import('../scripts/fidelity-snapshot.mjs');
+    return mod.runFidelitySnapshot();
+  });
   // TLS operacional: { cert, key } direto ou KR_TLS_CERT/KR_TLS_KEY (caminhos PEM).
   const tlsConfig = tls || (process.env.KR_TLS_CERT && process.env.KR_TLS_KEY
     ? { cert: fs.readFileSync(process.env.KR_TLS_CERT), key: fs.readFileSync(process.env.KR_TLS_KEY) }
@@ -917,6 +929,36 @@ export function createAuthoritativeServer({
           audit.record({ actor: admin.username, action: 'ue58.smoke', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
           res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
           res.end(JSON.stringify({ error: 'ue58_smoke_failed', detail: String(error?.message ?? error) }));
+        }
+        return;
+      }
+      // ---------- Fase 46 — portão de fidelidade Mundos ↔ README ----------
+      // Roda o instrumento F44 AO VIVO (README ao vivo → buildScene headless
+      // dos 5 mundos → checks canônicos). Cache TTL de 30 s — o snapshot
+      // constrói 5 cenas; martelo no botão serve a última auditoria.
+      if (url.pathname === '/admin/ue58/fidelity' && req.method === 'GET') {
+        const admin = guardHttp(req, res, 'admin:metrics');
+        if (!admin) return;
+        try {
+          const now = Date.now();
+          if (fidelityCache && now - fidelityCache.at < FIDELITY_TTL_MS) {
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({ ...fidelityCache.report, cached: true, cacheAgeMs: now - fidelityCache.at }));
+            return;
+          }
+          const report = await runFidelityAudit();
+          fidelityCache = { at: now, report };
+          audit.record({
+            actor: admin?.username || 'legacy-token', action: 'ue58.fidelity', resource: 'repo',
+            outcome: report.ok ? 'allow' : 'deny',
+            detail: { pass: report.summary.pass, fail: report.summary.fail, durationMs: report.meta?.durationMs ?? null },
+          });
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ ...report, cached: false, cacheAgeMs: 0 }));
+        } catch (error) {
+          audit.record({ actor: admin?.username || 'legacy-token', action: 'ue58.fidelity', resource: 'repo', outcome: 'deny', detail: { error: String(error?.message ?? error).slice(0, 200) } });
+          res.writeHead(502, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ error: 'ue58_fidelity_failed', detail: String(error?.message ?? error) }));
         }
         return;
       }

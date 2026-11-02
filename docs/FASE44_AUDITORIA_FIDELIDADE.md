@@ -80,7 +80,11 @@ auditoria for "afrouxada".
 - CI (`ci.yml`): step **"Auditoria de fidelidade Mundos ↔ README (F44)"**
   logo após o install das deps do runtime;
 - `scripts/verify-all.mjs`: check **"Runtime · auditoria de fidelidade Mundos ↔
-  README"** no fecho end-to-end local.
+  README"** no fecho end-to-end local;
+- **Fase 46** adicionou o terceiro e o quarto ponto de barreira: portão no
+  `ue5-preflight.yml` (ANTES do export OBJ — geometria derivada nunca é cozida
+  na engine) e veredito AO VIVO no painel `GET /admin/ue58/fidelity` — ver
+  `FASE46_FIDELIDADE_GATE_UE58.md`.
 
 ## Estado da auditoria no merge
 
