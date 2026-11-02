@@ -20,6 +20,7 @@ import {
   botCanEngage, botTargetModifiers, // Fase 9 — paraquedistas intocáveis (mesma tabela offline)
   windowPaneOnSegment, // Fase 31 — vão de vidro consciente (mira no vão + standoff)
   BOT_SURVIVAL, // Fase 32 — economia de sobrevivência dos bots (mesmos números)
+  ZEX_CHANNEL_SECONDS, ZEX_CHANNEL_CANCEL_DISTANCE, EXTRACT_XP as SIM_EXTRACT_XP,
 } from '../src/game3d/sim3d.js';
 // Fase 8 — habilidades autoritativas por operativo (mesma tabela da sim offline)
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
@@ -76,7 +77,7 @@ const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 
 export const HEADSHOT_MULT = 1.75;
 export const KILL_XP = 120, KILL_XP_HEAD = 180, KILL_KRC = 15;
-export const EXTRACT_XP = 250;
+export const EXTRACT_XP = SIM_EXTRACT_XP;
 export const BOT_SIGHT = 70;
 
 // Fase 3 — netfeel: fila de inputs (predição/reconciliação) e lag compensation.
@@ -273,6 +274,7 @@ export class MatchRoom3D {
       // Fase 8 — identidade do operativo + estado de habilidade autoritativo
       operativeId: 'OP_MALE_VANGUARD', temporaryArmor: 0, revealedTicks: 0,
       abilityState: { cooldownT: 0, activeT: 0, effect: null, distanceRemaining: 0, targetIds: [], targetTerminalId: null },
+      zexChannel: null, interactLatch: false,
       lastInput: null, lastSeq: 0, lastProcessedSeq: 0,
       inputQueue: [], rtt: null,
     };
@@ -367,9 +369,17 @@ export class MatchRoom3D {
     this.#emitTo(humanId, type, payload);
     return true;
   }
+  // Desconexão de transporte: interrompe ações temporizadas sem remover o
+  // operativo da sala, pois o WebSocket pode ser retomado dentro da janela.
+  cancelZexChannelForDisconnect(id) {
+    const actor = this.humans.get(id);
+    if (!actor?.zexChannel) return false;
+    return this.#cancelZexChannel(actor, 'disconnect');
+  }
   removePlayer(id) {
     this.aoiState.delete(id); // M3 — estado AOI do observador sai junto
     const actor = this.humans.get(id);
+    if (actor?.zexChannel) this.#cancelZexChannel(actor, 'disconnect');
     this.humans.delete(id);
     this.events.delete(id);
     if (actor && this.state === ROOM_STATES.IN_PROGRESS) {
@@ -438,7 +448,7 @@ export class MatchRoom3D {
     this.matchId = `${this.id}#${this.matchIndex}`;
     this.matchRewarded = false;
     this.loot = this.#spawnLoot();
-    this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true }));
+    this.terminals = this.world.terminals.map((t, i) => ({ id: `zex-${i}`, ...t, active: true, channelerId: null, channelProgress: 0 }));
     // preenche com bots até a capacidade (botFill limita o máximo de bots)
     const botCount = Math.max(0, Math.min(this.botFill, this.capacity - this.humans.size));
     this.bots = Array.from({ length: botCount }, (_, i) => this.#spawnBot(i));
@@ -660,6 +670,7 @@ export class MatchRoom3D {
     // Fase 5 — espectador: humanos mortos PERMANECEM na sala acompanhando a partida;
     // o ring encerra apenas por tempo, último vivo ou sala vazia (todos desconectaram).
     if (this.time <= 0 || aliveAll.length <= 1 || this.humans.size === 0) {
+      for (const actor of this.#actors()) if (actor.zexChannel) this.#cancelZexChannel(actor, 'match_end');
       this.state = ROOM_STATES.FINISHED;
       // 'eliminated' já foi emitido no momento da morte (#damage); aqui só falta a vitória
       const winner = aliveAll.sort((a, b) => b.kills - a.kills)[0];
@@ -713,8 +724,9 @@ export class MatchRoom3D {
       if (!a.isBot) this.#emitTo(a.id, 'land', { x: a.x, z: a.z });
     }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
+    if (a.zexChannel) this.#advanceZexChannel(a, dt);
     // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) return;
+    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
     // Fase 8 — dash: devolve o orçamento remanescente ao estado e encerra ao esgotar
     this.#syncDashBudget(a);
     // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
@@ -1658,6 +1670,7 @@ export class MatchRoom3D {
   }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
+    if (actor.zexChannel) this.#cancelZexChannel(actor, 'damage');
     // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
     // redução de dano direto e blindagem temporária (soak antes da armadura fixa).
     const st = actor.abilityState;
@@ -1708,6 +1721,7 @@ export class MatchRoom3D {
 
   // Fase 7 — morte FINAL (finalização, sangramento, ring/caído)
   #finalizeDeath(actor, ownerId, kind) {
+    if (actor.zexChannel) this.#cancelZexChannel(actor, 'death');
     actor.life = 0;
     actor.alive = false;
     actor.knocked = false;
@@ -1758,6 +1772,7 @@ export class MatchRoom3D {
   // vence o alvo mais próximo; latch por toque. Toggle é GLOBAL: todos os
   // humanos recebem doorToggle (o visual balança em todo cliente).
   #interact(a) {
+    if (a.zexChannel) return;
     const item = this.loot.find((i) => i.active && dist2d(i.x, i.z, a.x, a.z) < 2.6 && Math.abs(i.y - a.y) < 2.2);
     const itemD = item ? dist2d(item.x, item.z, a.x, a.z) : Infinity;
     const t = this.terminals.find((t) => t.active && dist2d(t.x, t.z, a.x, a.z) < 3.4);
@@ -1776,10 +1791,51 @@ export class MatchRoom3D {
     }
     if (item && itemD <= tD) { item.active = false; this.#pickup(a, item); return; }
     const t2 = this.terminals.find((t) => t.active && dist2d(t.x, t.z, a.x, a.z) < 3.4);
-    if (t2) {
-      t2.active = false; a.extracted++; a.xp += EXTRACT_XP;
-      if (!a.isBot) this.#emitTo(a.id, 'extract', { count: a.extracted, x: t2.x, z: t2.z });
+    if (t2) this.#startZexChannel(a, t2);
+  }
+
+  #startZexChannel(actor, terminal) {
+    if (!terminal?.active || actor.zexChannel || actor.interactLatch) return false;
+    if (terminal.channelerId && terminal.channelerId !== actor.id) {
+      if (!actor.isBot) this.#emitTo(actor.id, 'extractUnavailable', { terminalId: terminal.id });
+      actor.interactLatch = true;
+      return false;
     }
+    terminal.channelerId = actor.id;
+    terminal.channelProgress = 0;
+    actor.zexChannel = { terminalId: terminal.id, startX: actor.x, startZ: actor.z, elapsed: 0, progress: 0 };
+    actor.interactLatch = true;
+    if (!actor.isBot) this.#emitTo(actor.id, 'extractStarted', { terminalId: terminal.id, duration: ZEX_CHANNEL_SECONDS });
+    return true;
+  }
+  #cancelZexChannel(actor, reason) {
+    const channel = actor.zexChannel;
+    if (!channel) return false;
+    const terminal = this.terminals.find((t) => t.id === channel.terminalId);
+    if (terminal?.channelerId === actor.id) { terminal.channelerId = null; terminal.channelProgress = 0; }
+    actor.zexChannel = null;
+    if (!actor.isBot) this.#emitTo(actor.id, 'extractCancelled', { terminalId: channel.terminalId, reason });
+    return true;
+  }
+  #advanceZexChannel(actor, dt) {
+    const channel = actor.zexChannel;
+    if (!channel) return;
+    const terminal = this.terminals.find((t) => t.id === channel.terminalId);
+    if (!terminal?.active || terminal.channelerId !== actor.id) return this.#cancelZexChannel(actor, 'terminal_unavailable');
+    if (!actor.alive || actor.knocked) return this.#cancelZexChannel(actor, 'knocked');
+    if (Math.hypot(actor.x - channel.startX, actor.z - channel.startZ) >= ZEX_CHANNEL_CANCEL_DISTANCE) return this.#cancelZexChannel(actor, 'movement');
+    if (Math.hypot(actor.x - terminal.x, actor.z - terminal.z) >= 3.4) return this.#cancelZexChannel(actor, 'out_of_range');
+    channel.elapsed = Math.min(ZEX_CHANNEL_SECONDS, channel.elapsed + dt);
+    channel.progress = channel.elapsed / ZEX_CHANNEL_SECONDS;
+    terminal.channelProgress = channel.progress;
+    if (channel.elapsed + 1e-9 < ZEX_CHANNEL_SECONDS) return;
+    terminal.active = false;
+    terminal.channelerId = null;
+    terminal.channelProgress = 0;
+    actor.zexChannel = null;
+    actor.extracted++;
+    actor.xp += EXTRACT_XP;
+    if (!actor.isBot) this.#emitTo(actor.id, 'extract', { count: actor.extracted, x: terminal.x, z: terminal.z });
   }
 
   // Fase 25 — toggle autoritativo da folha (humano via E ou IA de bot)
@@ -1889,7 +1945,7 @@ export class MatchRoom3D {
       // Fase 26 — estado do VIDRO (global: visual estilhaça em todo cliente)
       windows: this.windows.map((w) => ({ id: w.id, destroyed: w.destroyed, hp: Math.round(w.hp) })),
       loot: this.loot.map((i) => ({ id: i.id, x: i.x, y: i.y, z: i.z, name: i.name, kind: i.kind, rarity: i.rarity, active: i.active })),
-      terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active })),
+      terminals: this.terminals.map((t) => ({ id: t.id, x: t.x, z: t.z, label: t.label, active: t.active, channeling: !!t.channelerId, channelProgress: t.channelProgress ?? 0 })),
       // Fase 12 — anúncio autoritativo do trem (late join/reconexão sincronizam
       // ou pulam a cinemática pelo elapsed; null antes do primeiro start).
       train: this.trainAnnounce ?? null,
@@ -1951,7 +2007,7 @@ export class MatchRoom3D {
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, stamina: a.stamina,
       crouching: a.crouching, sliding: a.sliding, slideT: a.slideT,      dropPhase: a.dropPhase ?? null,
       knocked: !!a.knocked, knockT: a.knockT ?? 0, reviveProgress: a.reviveProgress ?? 0, downedCount: a.downedCount ?? 0,
-      squad: a.squad ?? null,
+      squad: a.squad ?? null, zexChannel: a.zexChannel ? { terminalId: a.zexChannel.terminalId, progress: a.zexChannel.progress, duration: ZEX_CHANNEL_SECONDS } : null,
       // Fase 11 — patente do perfil (nametag/HUD) + identidade OCE reivindicada
       patente: a.patente ?? null, officer: !!a.officer, officerCallsign: a.officerCallsign ?? null,
       // Fase 8 — identidade + habilidade (cooldown/duração em ticks @30Hz p/ HUD)

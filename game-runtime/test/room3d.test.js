@@ -6,7 +6,7 @@ import { MatchRoom3D, KILL_XP, KILL_KRC, EXTRACT_XP } from '../server/room3d.js'
 import { validateInput3D } from '../server/antiCheat.js';
 import { chooseRoom } from '../server/matchmaking.js';
 import { MatchRoom } from '../server/room.js';
-import { PULSE_INTERVAL, WEAPONS3D } from '../src/game3d/sim3d.js';
+import { PULSE_INTERVAL, WEAPONS3D, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
 
 const DT = 1 / 20;
 
@@ -138,7 +138,7 @@ test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
 });
 
 test('room3d: coleta de loot e extração em terminal ZEX', () => {
-  const room = makeRoom({ humans: 1, botFill: 1 });
+  const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
   const p = room.humans.get('p1');
   const item = room.loot.find((i) => i.active);
@@ -155,10 +155,63 @@ test('room3d: coleta de loot e extração em terminal ZEX', () => {
   const xp0 = p.xp;
   room.input('p1', blankInput({ seq: 2, interact: true }));
   room.tick(DT);
-  assert.equal(t.active, false);
+  assert.equal(t.active, true, 'o terminal permanece ativo durante a canalização');
+  assert.ok(p.zexChannel, 'a interação inicia a canalização');
+  assert.equal(p.extracted, 0);
+  for (let i = 0; i < Math.ceil(ZEX_CHANNEL_SECONDS / DT) + 1 && t.active; i++) room.tick(DT);
+  assert.equal(t.active, false, 'o terminal só é consumido ao concluir');
   assert.equal(p.extracted, 1);
   assert.equal(p.xp, xp0 + EXTRACT_XP);
   assert.ok(room.drainEvents('p1').some((e) => e.type === 'extract'));
+});
+
+test('room3d: terminal ZEX fica reservado, cancela por movimento e pode ser retomado', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  p1.x = p2.x = t.x; p1.z = p2.z = t.z;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.input('p2', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p1', 'o primeiro jogador reserva o terminal');
+  assert.ok(p1.zexChannel);
+  assert.equal(p2.zexChannel, null, 'o segundo jogador não inicia em paralelo');
+  const spectatorSnapshot = room.snapshot('p2');
+  assert.equal(spectatorSnapshot.terminals.find((item) => item.id === t.id).channeling, true);
+  assert.equal(spectatorSnapshot.player.zexChannel, null);
+  assert.ok(spectatorSnapshot.events.some((e) => e.type === 'extractUnavailable'));
+
+  p1.x += 1;
+  room.tick(DT);
+  assert.equal(p1.zexChannel, null, 'deslocamento acima do limite cancela');
+  assert.equal(t.channelerId, null, 'cancelamento libera a reserva');
+  room.input('p2', blankInput({ seq: 2, interact: false }));
+  room.tick(DT);
+  room.input('p2', blankInput({ seq: 3, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p2', 'outro jogador consegue iniciar após liberação');
+  assert.equal(p2.extracted, 0);
+});
+
+test('room3d: dano recebido cancela canal ZEX sem conceder XP', () => {
+  const room = makeRoom({ humans: 1, botFill: 1 });
+  room.start('p1', 'belt');
+  for (const item of room.loot) item.active = false;
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  p.x = t.x; p.z = t.z;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p.zexChannel);
+  const xp0 = p.xp;
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  room.tick(DT);
+  assert.equal(p.zexChannel, null);
+  assert.equal(t.active, true);
+  assert.equal(p.xp, xp0);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'extractCancelled' && e.reason === 'damage'));
 });
 
 test('room3d: recarga conserva munição de reserva', () => {
