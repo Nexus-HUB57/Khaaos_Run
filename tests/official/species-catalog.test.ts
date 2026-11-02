@@ -130,6 +130,18 @@ test("Catálogo de Espécies: 6 SPC completos no schema PhD (lore, stats, curvas
       spc.physical.skeleton,
       `${id}: base_skeleton deve bater com physical.skeleton`,
     );
+    // ADR-ESQUELETO-RIG-POR-SEXO: rig base do runtime é por sexo; 'skeleton'
+    // nos SPC é o preview rig da espécie (estúdio/proofs)
+    assert.deepEqual(
+      spc.physical.rig_by_sex,
+      { masculino: "SK_Manny", feminino: "SK_Gwen" },
+      `${id}: rig_by_sex deve declarar SK_Manny/SK_Gwen`,
+    );
+    assert.ok(
+      typeof spc.physical.skeleton_note === "string" &&
+        spc.physical.skeleton_note.includes("ADR-ESQUELETO-RIG-POR-SEXO"),
+      `${id}: skeleton_note deve referenciar o ADR`,
+    );
     assert.ok(spc.animations.blend_spaces.length >= 2, `${id}: 2+ blend spaces`);
     assert.ok(spc.animations.anim_sequences.length >= 23, `${id}: 23+ anim sequences`);
     const animNames = spc.animations.anim_sequences.map((a: AnyRecord) => a.name);

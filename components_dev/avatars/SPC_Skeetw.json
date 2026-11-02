@@ -6,7 +6,7 @@
   "species_tag": "Species.Skeetw",
   "lore": {
     "origin": "Os Skeetw nasceram nos Cumes de Vento de Priadus - picos de 12km onde o ar e tao rarefeito que apenas criaturas com sistema respiratorio quadruplo sobrevivem. Suas asas vestigiais permitem planar por 200m, e sua visao espectral enxerga atraves de camuflagem e ilusoes.",
-    "culture": "Nomades do ceu - vivem em ninhos-cidade suspensos por cabos de Khaael nas fal\u00e9sias de Priadus. Governacao por Consenso de Voo - decisoes tomadas enquanto todos planam em formacao. O conceito de chao e culturalmente inferior.",
+    "culture": "Nomades do ceu - vivem em ninhos-cidade suspensos por cabos de Khaael nas falésias de Priadus. Governacao por Consenso de Voo - decisoes tomadas enquanto todos planam em formacao. O conceito de chao e culturalmente inferior.",
     "motivation": "Dominar o espaco aereo - a verdadeira vantagem tatica. Um Skeetw que nunca toca o chao e considerado imaculado.",
     "relationship_with_khaaos": "Os Skeetw descobriram que o Pulso Khaaos cria correntes de ar anomales - ventos Khaaos que permitem voo sustentado sem gasto energetico. A exploracao dessas correntes e a ciencia Aerokhaasia."
   },
@@ -87,7 +87,12 @@
         "feather_cape",
         "leg_straps"
       ]
-    }
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
   },
   "passive": {
     "name": "Visao Espectral",

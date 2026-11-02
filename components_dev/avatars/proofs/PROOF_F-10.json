@@ -16,7 +16,7 @@
     "base_stats": {
       "health": 110,
       "energy": 90,
-      "speed": 1.0
+      "speed": 1.1
     },
     "physical": {
       "height_cm": 168,

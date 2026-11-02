@@ -45,7 +45,11 @@ test("Character Studio: 16 Operativos canônicos (8 masculinos e 8 femininos) co
     assert.ok(op.biomechanics.heightCm >= 160 && op.biomechanics.heightCm <= 200, `Height plausible`);
     assert.ok(op.biomechanics.massKg >= 50 && op.biomechanics.massKg <= 110, `Mass plausible`);
     assert.ok(op.biomechanics.sprintSpeedMps >= 6.0 && op.biomechanics.sprintSpeedMps <= 9.0);
-    assert.equal(op.biomechanics.skeleton, "UE5_Mannequin");
+    // Rig base por sexo (ADR-ESQUELETO-RIG-POR-SEXO): SK_Manny (M) / SK_Gwen (F)
+    assert.equal(
+      op.biomechanics.skeleton,
+      op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+    );
     assert.equal(op.biomechanics.lyraHeroBridge, "KhaaosLyraHeroComponent");
 
     // Prompt Bundle Generation
@@ -62,7 +66,10 @@ test("Character Studio: 16 Operativos canônicos (8 masculinos e 8 femininos) co
     assert.ok(bundle.imagePromptPt.includes(op.appearancePromptPt));
     assert.ok(bundle.videoPromptEn.toLowerCase().includes("single continuous tracking shot"));
     assert.equal(bundle.timelineKeyframes.length, 5, "Must have 5 timeline keyframes across 10s");
-    assert.equal(bundle.ue5ManifestEntry.skeleton, "UE5_Mannequin");
+    assert.equal(
+      bundle.ue5ManifestEntry.skeleton,
+      op.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen",
+    );
   }
 });
 

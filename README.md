@@ -170,7 +170,7 @@ Docs: `Docs/CIGKV_Barburhen/`
 
 ## Desenvolvimento recente — Personagens (2026-11-02)
 
-> Contrato novo de espécies + fechamento de lacunas do domínio de personagens, a partir de `main` (`495b91f`), branch `feat/prossiga-personagens`. Suíte oficial 100% verde após as mudanças (495 testes em `tests/official`, 0 falhas; `tsc` limpo).
+> Contrato novo de espécies + fechamento de lacunas do domínio de personagens, a partir de `main` (`495b91f`), branch `feat/prossiga-personagens`. Suíte oficial 100% verde após os dois lotes (504 testes em `tests/official`, 0 falhas; `tsc` limpo).
 
 ### Catálogo de espécies — SPC_Huran completo no schema PhD
 
@@ -203,11 +203,20 @@ Divergências pré-existentes corrigidas nos SPC (curvas re-ancoradas preservand
 - `emote_catalog.json`: `_meta` prometia "40 emotes" (entrega 13, como o README §12 e o `summary`); 2 emotes com categoria `ACAo` → `ACAO`.
 - `CharacterPromptStudio` estava **órfão** (nenhuma rota importava o componente de 1.245 linhas): nova rota protegida **`/studio`** (`client/src/pages/studio.tsx` wrapper lazy) + entrada STUDIO no menu lateral/mobile do `LayoutShell`.
 
+### Lote 2 (mesmo dia) — matriz fechada, ADR de esqueleto e seleção de avatar persistida
+
+Os 3 passos mapeados acima foram executados no mesmo branch (`feat/prossiga-personagens`), com merge do branch de avatar-sync e suíte oficial 100% verde (504+39 testes, 0 falhas; `tsc` limpo):
+
+1. **Seleção de operante persistida** — merge de `feat/character-avatar-sync` (migration `0012_operative-selection.sql`: `player_stats.selected_operative_id`, default `OP_MALE_VANGUARD`; catálogo `shared/operative-avatar-catalog.ts` com os 16 canônicos + TALON; PATCH em `/api/player/operative` com propagação ao `RoomManager`; UI de perfil/lobby).
+2. **Matriz de proofs sexo×espécie FECHADA** — 6 novos dossiês (`PROOF_M-09..M-11` Skeetw/Huran/Khael · `PROOF_F-11..F-13` Zheers/Onith/Venex) com a mesma estrutura dos 18 existentes (etnia/heritage inéditos: Andino/Quechua, Cabo-verdiana, Himalaia/Tibetana, Amazigh, Mongol/Khalkha, Coreana); `proofs_manifest.json` atualizado (24 proofs, 11 M + 13 F, cobertura 12/12); `base_stats` dos 24 proofs normalizados ao canônico `DT_SpeciesStats.csv`. Contrato novo `tests/official/proofs-matrix.test.ts` (4 testes).
+3. **ADR-ESQUELETO-RIG-POR-SEXO** (`docs/ADR-ESQUELETO-RIG-POR-SEXO.md`) — decisão: rig base **por sexo** (`SK_Manny` M / `SK_Gwen` F, padrão dos 24 actors `KhaaosOp*.cpp` e do fluxo Lyra); espécie vira camada (mesh variant + morphs + ABP). Executado: `shared/character-studio.ts` abandona o rótulo genérico `UE5_Mannequin` (type + 16 operatives + pipeline UE5), SPCs ganham `physical.rig_by_sex` + `skeleton_note`; testes de studio/espécies atualizados.
+4. **Malhas GLB das figuras de alistamento** — 6 manequins A-pose low-poly (glTF 2.0 binário, cores por vértice da ficha de cada figura) em `client/public/figures/glb/` + manifest com sha256/contagens; exportador versionado `scripts/figures/export_figures_glb.py`; contrato `tests/official/figures-glb.test.ts`.
+
 ### Próximos passos mapeados (fora deste lote)
 
-1. Rebase de `feat/character-avatar-sync` sobre o `main` (conflito da migration 0011 vs `0011_enrollment.sql` — renumerar para 0012) para levar a seleção de avatar persistida aos jogadores.
-2. ADR de esqueleto: `SK_Gwen` (SPC) vs `UE5_Mannequin` (character-studio.ts) — reconciliar antes do import UE5.
-3. Fechar a matriz de proofs sexo×espécie (faltam ~6 cruzamentos) e exportar as malhas GLB das figuras de alistamento.
+1. Merge do PR deste branch na `main` e novo deploy de staging com a seleção de operante ativa.
+2. Follow-ups do ADR de esqueleto: apontar os dois rigs canônicos no `epic_integration/lyra_mapping.json`; validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs.
+3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset) e consumi-los na tela de alistamento.
 
 ## Ontologia dos Mundos
 
