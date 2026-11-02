@@ -212,11 +212,19 @@ Os 3 passos mapeados acima foram executados no mesmo branch (`feat/prossiga-pers
 3. **ADR-ESQUELETO-RIG-POR-SEXO** (`docs/ADR-ESQUELETO-RIG-POR-SEXO.md`) — decisão: rig base **por sexo** (`SK_Manny` M / `SK_Gwen` F, padrão dos 24 actors `KhaaosOp*.cpp` e do fluxo Lyra); espécie vira camada (mesh variant + morphs + ABP). Executado: `shared/character-studio.ts` abandona o rótulo genérico `UE5_Mannequin` (type + 16 operatives + pipeline UE5), SPCs ganham `physical.rig_by_sex` + `skeleton_note`; testes de studio/espécies atualizados.
 4. **Malhas GLB das figuras de alistamento** — 6 manequins A-pose low-poly (glTF 2.0 binário, cores por vértice da ficha de cada figura) em `client/public/figures/glb/` + manifest com sha256/contagens; exportador versionado `scripts/figures/export_figures_glb.py`; contrato `tests/official/figures-glb.test.ts`.
 
+### Lote 3 (mesmo dia) — rigs canônicos no mapeamento Lyra e viewer 3D das figuras
+
+Validação end to end do branch + execução dos follow-ups do ADR e do consumo dos GLBs (suíte oficial 518+39 testes, 0 falhas; `tsc` limpo; auditoria F44/F46 FIEL ✅ 53/0):
+
+1. **Follow-up 1 do ADR executado** — `epic_integration/lyra_mapping.json` ganhou a seção `skeleton_rigs`: os DOIS rigs canônicos (`SK_Manny` masculino / `SK_Gwen` feminino, derivados de `SKM_Manny`/`SKM_Quinn` do UE5 5.8, 4 LODs), as 6 camadas de espécie (preview rig do SPC + `SK_<Espécie>_LOD0..3` + `ABP_<Espécie>` + `PA_<Espécie>`) e o estado honesto da validação de editor (PENDENTE — bloqueada por 0 self-hosted runners). Contrato novo `tests/official/lyra-mapping.test.ts` (5 testes): rigs exatos, paridade `preview_rig` ↔ `SPC.physical.skeleton` e paridade 1:1 de `anim_bp`/`physics_asset` com `KhaaosSpeciesMeshRegistry.cpp` — o runtime UE5 é a fonte da verdade, o mapping não pode derivar dele.
+2. **Viewer 3D das figuras de alistamento (sem dependências)** — `client/src/lib/glb.ts` (parser GLB puro, sem DOM, testável em Node — cobre o layout do exportador; erro explícito fora dele) + `client/src/components/FigureGlbViewer.tsx` (WebGL 2 com fallback 1, cor por vértice, luz chave+rim, câmera orbitada por arraste, rotação idle, enquadramento pela bbox). Consumido na grade **FIGURAS DE ALISTAMENTO** do perfil — os 6 manequins agora são exibidos em 3D junto à placa de rosto; o texto desatualizado "A malha riggada (GLB) ainda não foi exportada" foi corrigido. Contrato novo `tests/official/figures-glb-viewer.test.ts` (9 testes): parser lê os 6 GLB reais com paridade total ao manifest (vértices/triângulos/altura/bbox y=0/alpha opaco) e rejeita arquivos não-GLB com erro explícito. Smoke visual Playwright (mock das rotas, mesma escola da spec war-i-ui) confirmou 6 viewers montados, 0 overlays de erro e renderização correta das paletas por ficha.
+3. **Mapeamento de asset à prova de substituição** — `figureGlbSrc()` fixa `/figures/glb/FIG_<id>.glb` como nome canônico; a troca futura do placeholder por scan/retopo real (mesmo nome de asset) não exige mudança no viewer, no parser ou no card.
+
 ### Próximos passos mapeados (fora deste lote)
 
-1. Merge do PR deste branch na `main` e novo deploy de staging com a seleção de operante ativa.
-2. Follow-ups do ADR de esqueleto: apontar os dois rigs canônicos no `epic_integration/lyra_mapping.json`; validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs.
-3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset) e consumi-los na tela de alistamento.
+1. Merge do PR deste branch na `main` e novo deploy de staging com o viewer 3D das figuras ativo.
+2. Validar no editor UE5 que as variantes de espécie carregam sobre `SK_Manny`/`SK_Gwen` nos 4 LODs (bloqueio: 0 self-hosted runners `[self-hosted, linux, gpu, ue5.8, x64]`).
+3. Substituir os manequins GLB placeholders por scans/retopo reais (mesmos nomes de asset — `figureGlbSrc()` e o contrato `figures-glb-viewer.test.ts` já garantem a troca transparente).
 
 ## Ontologia dos Mundos
 

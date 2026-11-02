@@ -40,5 +40,81 @@
       "bridge": "KhaaosLyraEOSBridge",
       "module": "OnlineSubsystem"
     }
-  ]
+  ],
+  "skeleton_rigs": {
+    "adr": "docs/ADR-ESQUELETO-RIG-POR-SEXO.md",
+    "policy": "Rig base atribuído por SEXO (masculino → SK_Manny, feminino → SK_Gwen). A espécie NÃO define esqueleto: define mesh variant + morphs + cloth + VFX + camadas de ABP sobre o rig base (padrão Lyra — um rig, muitas families de personagem).",
+    "runtime_reference": "Unreal/KhaaosRun/Source/KhaaosRun/Game/Character/KhaaosOperativeActor.h (FName Skeleton: 'SK_Manny or SK_Gwen') + 24 actors KhaaosOp*.cpp",
+    "manifest_source": "shared/character-studio.ts — ue5ManifestEntry.skeleton (SK_Manny | SK_Gwen por gender)",
+    "rigs": [
+      {
+        "id": "SK_Manny",
+        "sex": "masculino",
+        "derived_from": "SKM_Manny (mannequin UE5 5.8)",
+        "lod_levels": 4,
+        "actors_convention": "12 actors masculinos KhaaosOp*.cpp (M → SK_Manny)"
+      },
+      {
+        "id": "SK_Gwen",
+        "sex": "feminino",
+        "derived_from": "SKM_Quinn (mannequin UE5 5.8)",
+        "lod_levels": 4,
+        "actors_convention": "12 actors femininos KhaaosOp*.cpp (F → SK_Gwen)"
+      }
+    ],
+    "species_layers": [
+      {
+        "species": "Zheers",
+        "preview_rig": "SK_Manny",
+        "mesh_lod_prefix": "/Game/Characters/Zheers/Mesh/SK_Zheers_LOD",
+        "anim_bp": "/Game/Characters/Zheers/Anim/ABP_Zheers_Tribal.ABP_Zheers_Tribal",
+        "physics_asset": "/Game/Characters/Zheers/Physics/PA_Zheers.PA_Zheers",
+        "layer_notes": "Biofeedback — orelhas grandes usam EarBounce physics, sem bones flutuantes (KhaaosSpeciesMeshRegistry.cpp)"
+      },
+      {
+        "species": "Skeetw",
+        "preview_rig": "SK_Gwen",
+        "mesh_lod_prefix": "/Game/Characters/Skeetw/Mesh/SK_Skeetw_LOD",
+        "anim_bp": "/Game/Characters/Skeetw/Anim/ABP_Skeetw_Avian.ABP_Skeetw_Avian",
+        "physics_asset": "/Game/Characters/Skeetw/Physics/PA_Skeetw.PA_Skeetw",
+        "layer_notes": "Asas com 4 bones; penas são Niagara system (KhaaosSpeciesMeshRegistry.cpp)"
+      },
+      {
+        "species": "Huran",
+        "preview_rig": "SK_Gwen",
+        "mesh_lod_prefix": "/Game/Characters/Huran/Mesh/SK_Huran_LOD",
+        "anim_bp": "/Game/Characters/Huran/Anim/ABP_Huran_Aquatic.ABP_Huran_Aquatic",
+        "physics_asset": "/Game/Characters/Huran/Physics/PA_Huran.PA_Huran",
+        "layer_notes": "Membranas são blend shapes, não bones flutuantes (KhaaosSpeciesMeshRegistry.cpp)"
+      },
+      {
+        "species": "Khael",
+        "preview_rig": "SK_Gwen",
+        "mesh_lod_prefix": "/Game/Characters/Khael/Mesh/SK_Khael_LOD",
+        "anim_bp": "/Game/Characters/Khael/Anim/ABP_Khael_Arcane.ABP_Khael_Arcane",
+        "physics_asset": "/Game/Characters/Khael/Physics/PA_Khael.PA_Khael",
+        "layer_notes": "3 cristais flutuantes (bones extras sobre o rig base) (KhaaosSpeciesMeshRegistry.cpp)"
+      },
+      {
+        "species": "Onith",
+        "preview_rig": "SK_Manny",
+        "mesh_lod_prefix": "/Game/Characters/Onith/Mesh/SK_Onith_LOD",
+        "anim_bp": "/Game/Characters/Onith/Anim/ABP_Onith_Brute.ABP_Onith_Brute",
+        "physics_asset": "/Game/Characters/Onith/Physics/PA_Onith.PA_Onith",
+        "layer_notes": "Cauda réptil com 6 bones (KhaaosSpeciesMeshRegistry.cpp)"
+      },
+      {
+        "species": "Venex",
+        "preview_rig": "SK_Manny",
+        "mesh_lod_prefix": "/Game/Characters/Venex/Mesh/SK_Venex_LOD",
+        "anim_bp": "/Game/Characters/Venex/Anim/ABP_Venex_Tech.ABP_Venex_Tech",
+        "physics_asset": "/Game/Characters/Venex/Physics/PA_Venex.PA_Venex",
+        "layer_notes": "Implantes cibernéticos são attach points, não bones flutuantes (KhaaosSpeciesMeshRegistry.cpp)"
+      }
+    ],
+    "import_validation": {
+      "lods": 4,
+      "editor_check": "PENDENTE — validar no editor UE5.8 que as variantes de espécie carregam sobre SK_Manny/SK_Gwen nos 4 LODs (bloqueio conhecido: 0 self-hosted runners [self-hosted, linux, gpu, ue5.8, x64]; o importador usa ue5ManifestEntry.skeleton do Studio)"
+    }
+  }
 }
