@@ -108,10 +108,6 @@ test("a valid invite code reaches the authorized private-room join path", async 
 // ─── Roadmap M1 — convite ligado a jogador/sala ──────────────────────────────
 
 import type { RoomInviteRecord } from "../../server/game/RoomEventMesh.ts";
-const {
-  INVITE_HOST_WINDOW_LIMIT,
-  INVITE_ROOM_PENDING_LIMIT,
-} = await import("../../server/game/RoomManager.ts");
 
 const mesh = (roomManager as any).mesh;
 
