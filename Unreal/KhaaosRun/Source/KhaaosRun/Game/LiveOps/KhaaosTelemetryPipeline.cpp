@@ -8,7 +8,13 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonWriter.h"
+#include "Async/Async.h"
+#include "Containers/Ticker.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformTime.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
@@ -23,7 +29,8 @@ TSharedRef<FJsonObject> MakeTelemetryEventJson(
 	TSharedRef<FJsonObject> JsonEvent = MakeShared<FJsonObject>();
 	JsonEvent->SetStringField(TEXT("type"), Event.EventName);
 	JsonEvent->SetNumberField(TEXT("category"), static_cast<double>(static_cast<uint8>(Event.EventType)));
-	JsonEvent->SetStringField(TEXT("player"), Event.PlayerEosId);
+	// Never transmit the raw EOS account identifier; correlate only through
+	// server-authorized, short-lived identifiers defined by the backend contract.
 	JsonEvent->SetStringField(TEXT("match"), Event.MatchId);
 	JsonEvent->SetNumberField(TEXT("ts"), static_cast<double>(Event.Timestamp));
 	JsonEvent->SetNumberField(TEXT("value"), Event.Value);
@@ -94,6 +101,7 @@ bool FKhaaosTelemetryJsonSerializationTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	TestFalse(TEXT("Raw EOS player ID is not serialized"), ParsedEvent->HasField(TEXT("player")));
 	TestEqual(TEXT("Event name survives quotes/newlines"), ParsedEvent->GetStringField(TEXT("type")), Event.EventName);
 	TestEqual(TEXT("Metadata survives JSON string escaping"), ParsedEvent->GetStringField(TEXT("metadata")), Event.Metadata);
 	TestTrue(TEXT("64-bit millisecond timestamp is preserved"),
@@ -139,6 +147,7 @@ void UKhaaosTelemetryPipeline::Initialize(FSubsystemCollectionBase& Collection)
         EventsThisSecond = 0;
         RateLimitTimer = 0.0f;
         TimeSinceLastFlush = 0.0f;
+        bIsShuttingDown = false;
         ServerRegion = TEXT("sa1"); // Default: São Paulo
 
         PendingEvents.Reserve(BatchSize);
@@ -151,6 +160,7 @@ void UKhaaosTelemetryPipeline::Deinitialize()
 {
         // Flush remaining events before shutdown
         Flush();
+        bIsShuttingDown = true;
         Super::Deinitialize();
 }
 
@@ -239,9 +249,8 @@ void UKhaaosTelemetryPipeline::Flush()
                 LocalBuffer.Add(Event);
         }
 
-        OnTelemetryFlushed.Broadcast(Batch.Num());
-
-        UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosTelemetryPipeline: Flushed %d events"), Batch.Num());
+        UE_LOG(LogKhaaosRun, Verbose,
+                TEXT("KhaaosTelemetryPipeline: Queued %d events for telemetry delivery"), Batch.Num());
 }
 
 // ─── A/B Testing ────────────────────────────────────────────────────────────────
@@ -300,17 +309,216 @@ FString UKhaaosTelemetryPipeline::SerializeBatch(const TArray<FKhaaosTelemetryEv
 
 void UKhaaosTelemetryPipeline::ShipBatch(const TArray<FKhaaosTelemetryEvent>& Batch)
 {
+	if (Batch.IsEmpty())
+	{
+		return;
+	}
+
+	if (!IsRunningDedicatedServer())
+	{
+		UE_LOG(LogKhaaosRun, Verbose,
+			TEXT("KhaaosTelemetryPipeline: HTTP delivery is restricted to dedicated servers"));
+		return;
+	}
+
+	if (AnalyticsUrl.IsEmpty())
+	{
+		UE_LOG(LogKhaaosRun, Warning,
+			TEXT("KhaaosTelemetryPipeline: AnalyticsUrl is not configured; batch retained only in memory"));
+		return;
+	}
+
+	const FString AuthToken = FPlatformMisc::GetEnvironmentVariable(TEXT("KHAAOS_TELEMETRY_TOKEN"));
+	if (AuthToken.IsEmpty())
+	{
+		UE_LOG(LogKhaaosRun, Error,
+			TEXT("KhaaosTelemetryPipeline: KHAAOS_TELEMETRY_TOKEN is not configured; refusing unauthenticated delivery"));
+		return;
+	}
+
 	const FString Payload = SerializeBatch(Batch);
 	if (Payload.IsEmpty())
 	{
 		return;
 	}
 
-	// This prepares and validates the JSON payload only; HTTP transport is not
-	// implemented here, so do not report the batch as delivered to the backend.
-	UE_LOG(LogKhaaosRun, Verbose,
-		TEXT("KhaaosTelemetryPipeline: Prepared %d events (%d JSON characters) for %s; HTTP transport is not implemented"),
-		Batch.Num(), Payload.Len(), *AnalyticsUrl);
+	FPendingBatch PendingBatch;
+	PendingBatch.BatchId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
+	PendingBatch.JsonPayload = Payload;
+	PendingBatch.EventCount = Batch.Num();
+	const FString BatchId = PendingBatch.BatchId;
+	PendingBatches.Add(BatchId, MoveTemp(PendingBatch));
+
+	SendPendingBatch(BatchId);
+}
+
+void UKhaaosTelemetryPipeline::SendPendingBatch(const FString& BatchId)
+{
+	if (bIsShuttingDown)
+	{
+		return;
+	}
+
+	FPendingBatch* PendingBatch = PendingBatches.Find(BatchId);
+	if (PendingBatch == nullptr || PendingBatch->bInFlight)
+	{
+		return;
+	}
+
+	PendingBatch->bRetryScheduled = false;
+
+	const FString Endpoint = AnalyticsUrl.TrimStartAndEnd();
+	if (!Endpoint.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase))
+	{
+		UE_LOG(LogKhaaosRun, Error,
+			TEXT("KhaaosTelemetryPipeline: AnalyticsUrl must use HTTPS; batch %s will not be sent"), *BatchId);
+		PendingBatches.Remove(BatchId);
+		return;
+	}
+
+	const FString AuthToken = FPlatformMisc::GetEnvironmentVariable(TEXT("KHAAOS_TELEMETRY_TOKEN"));
+	if (AuthToken.IsEmpty())
+	{
+		UE_LOG(LogKhaaosRun, Error,
+			TEXT("KhaaosTelemetryPipeline: KHAAOS_TELEMETRY_TOKEN is missing; batch %s will not be sent"), *BatchId);
+		PendingBatches.Remove(BatchId);
+		return;
+	}
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
+	Request->SetURL(Endpoint);
+	Request->SetVerb(TEXT("POST"));
+	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
+	Request->SetHeader(TEXT("Idempotency-Key"), BatchId);
+	Request->SetHeader(TEXT("X-Telemetry-Schema-Version"), TEXT("1"));
+	Request->SetTimeout(10.0f);
+	Request->SetContentAsString(PendingBatch->JsonPayload);
+	PendingBatch->bInFlight = true;
+
+	const TWeakObjectPtr<UKhaaosTelemetryPipeline> WeakThis(this);
+	Request->OnProcessRequestComplete().BindLambda(
+		[WeakThis, BatchId](FHttpRequestPtr CompletedRequest, FHttpResponsePtr Response, bool bWasSuccessful)
+		{
+			const int32 ResponseCode = Response.IsValid() ? Response->GetResponseCode() : 0;
+			const FString RetryAfterHeader = Response.IsValid()
+				? Response->GetHeader(TEXT("Retry-After"))
+				: FString();
+			const float RetryAfterSeconds = FCString::Atof(*RetryAfterHeader);
+
+			AsyncTask(ENamedThreads::GameThread,
+				[WeakThis, BatchId, bWasSuccessful, ResponseCode, RetryAfterSeconds]()
+				{
+					if (UKhaaosTelemetryPipeline* StrongThis = WeakThis.Get())
+					{
+						StrongThis->HandleBatchResponse(
+							BatchId, bWasSuccessful, ResponseCode, RetryAfterSeconds);
+					}
+				});
+
+			(void)CompletedRequest;
+		});
+
+	if (!Request->ProcessRequest())
+	{
+		PendingBatch->bInFlight = false;
+		ScheduleRetry(BatchId, TEXT("request could not be started"));
+	}
+}
+
+void UKhaaosTelemetryPipeline::HandleBatchResponse(
+	const FString& BatchId, bool bWasSuccessful, int32 ResponseCode, float RetryAfterSeconds)
+{
+	if (bIsShuttingDown)
+	{
+		return;
+	}
+
+	FPendingBatch* PendingBatch = PendingBatches.Find(BatchId);
+	if (PendingBatch == nullptr)
+	{
+		return;
+	}
+	PendingBatch->bInFlight = false;
+
+	if (bWasSuccessful && ResponseCode >= 200 && ResponseCode < 300)
+	{
+		const int32 DeliveredEventCount = PendingBatch->EventCount;
+		PendingBatches.Remove(BatchId);
+		OnTelemetryFlushed.Broadcast(DeliveredEventCount);
+		UE_LOG(LogKhaaosRun, Verbose,
+			TEXT("KhaaosTelemetryPipeline: Backend acknowledged batch %s (%d events)"),
+			*BatchId, DeliveredEventCount);
+		return;
+	}
+
+	const bool bRetryableFailure = !bWasSuccessful || ResponseCode == 0 ||
+		ResponseCode == 408 || ResponseCode == 429 || ResponseCode >= 500;
+	if (bRetryableFailure)
+	{
+		ScheduleRetry(BatchId, FString::Printf(TEXT("transport/status %d"), ResponseCode), RetryAfterSeconds);
+		return;
+	}
+
+	UE_LOG(LogKhaaosRun, Error,
+		TEXT("KhaaosTelemetryPipeline: Backend permanently rejected batch %s (status %d); payload not logged"),
+		*BatchId, ResponseCode);
+	PendingBatches.Remove(BatchId);
+}
+
+void UKhaaosTelemetryPipeline::ScheduleRetry(
+	const FString& BatchId, const FString& FailureReason, float RetryAfterSeconds)
+{
+	if (bIsShuttingDown)
+	{
+		return;
+	}
+
+	FPendingBatch* PendingBatch = PendingBatches.Find(BatchId);
+	if (PendingBatch == nullptr || PendingBatch->bRetryScheduled || PendingBatch->bInFlight)
+	{
+		return;
+	}
+
+	constexpr int32 MaxRetries = 5;
+	constexpr float BaseDelaySeconds = 1.0f;
+	constexpr float MaxBackoffSeconds = 30.0f;
+	if (PendingBatch->RetryCount >= MaxRetries)
+	{
+		UE_LOG(LogKhaaosRun, Error,
+			TEXT("KhaaosTelemetryPipeline: Batch %s exhausted after %d retries (%s)"),
+			*BatchId, PendingBatch->RetryCount, *FailureReason);
+		PendingBatches.Remove(BatchId);
+		return;
+	}
+
+	++PendingBatch->RetryCount;
+	const float ExponentialDelay = FMath::Min(
+		MaxBackoffSeconds,
+		BaseDelaySeconds * FMath::Pow(2.0f, static_cast<float>(PendingBatch->RetryCount - 1)));
+	const float JitteredDelay = FMath::FRandRange(ExponentialDelay * 0.8f, ExponentialDelay * 1.2f);
+	float RetryDelaySeconds = FMath::Min(MaxBackoffSeconds, JitteredDelay);
+	if (RetryAfterSeconds > 0.0f)
+	{
+		RetryDelaySeconds = FMath::Max(RetryDelaySeconds, FMath::Min(RetryAfterSeconds, 60.0f));
+	}
+
+	PendingBatch->bRetryScheduled = true;
+	UE_LOG(LogKhaaosRun, Warning,
+		TEXT("KhaaosTelemetryPipeline: Scheduling retry %d/%d for batch %s in %.1fs (%s)"),
+		PendingBatch->RetryCount, MaxRetries, *BatchId, RetryDelaySeconds, *FailureReason);
+
+	const TWeakObjectPtr<UKhaaosTelemetryPipeline> WeakThis(this);
+	FTSTicker::GetCoreTicker().AddTicker(
+		[WeakThis, BatchId](float)
+		{
+			if (UKhaaosTelemetryPipeline* StrongThis = WeakThis.Get())
+			{
+				StrongThis->SendPendingBatch(BatchId);
+			}
+			return false;
+		},
+		RetryDelaySeconds);
 }
 
 bool UKhaaosTelemetryPipeline::ShouldSample(EKhaaosTelemetryEvent EventType) const
