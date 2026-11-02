@@ -123,6 +123,32 @@ test("mutations rejeitam entradas inválidas sem chamar o storage", async (t) =>
   }
 });
 
+test("rotas Monte Carlo carregam o simulador sob demanda e retornam resultados", async () => {
+  const single = await request("POST", "/api/economy/simulate", "player-1", {
+    agents: 10,
+    days: 7,
+    seed: "lazy-monte-carlo-route",
+  });
+  assert.equal(single.status, 200);
+  const singleResult = await single.json() as {
+    config: { agents: number; days: number; seed: string };
+    daily: unknown[];
+  };
+  assert.equal(singleResult.config.agents, 10);
+  assert.equal(singleResult.config.days, 7);
+  assert.equal(singleResult.config.seed, "lazy-monte-carlo-route");
+  assert.equal(singleResult.daily.length, 7);
+
+  const batch = await request("POST", "/api/economy/simulate-batch", "player-1", {
+    runs: 2,
+    agents: 10,
+    days: 7,
+  });
+  assert.equal(batch.status, 200);
+  const batchResult = await batch.json() as { runs: unknown[] };
+  assert.equal(batchResult.runs.length, 2);
+});
+
 test("IDs inválidos são rejeitados antes de acessar o storage", async (t) => {
   const invalidIds = [
     { path: "/api/loans/-1/pay", body: {} },

@@ -4,7 +4,7 @@
 # Executa o smoke cross-node COMPLETO (7 etapas) contra infra REAL em runner
 # hosted: PostgreSQL 16 (service container) + Redis 7 master (service
 # container) + Redis 7 RÉPLICA (docker run --network host) — e DOIS nós de
-# aplicação de produção (dist/index.cjs) que o próprio smoke sobe.
+# aplicação de produção (dist/index.mjs) que o próprio smoke sobe.
 #
 # Valida, em cada mudança da cadeia multi-nó:
 #   1. replicação Redis REAL (role:slave + probe master→réplica);
@@ -124,7 +124,7 @@ jobs:
       - name: Migrações versionadas (0000→0007, cadeia da economia 2PC)
         run: npm run db:migrate
 
-      - name: Build de produção (dist/index.cjs — nós reais do smoke)
+      - name: Build de produção (dist/index.mjs — nós reais do smoke)
         run: npm run build
 
       - name: Smoke cross-node F16 (7 etapas, morte de nó incluída)

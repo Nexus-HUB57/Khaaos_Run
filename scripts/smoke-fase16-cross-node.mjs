@@ -1,7 +1,7 @@
 // Khaaos Run — Smoke Fase 16 (cross-node em staging REAL).
 //
 // Valida o gateway WS roteando por nodeId sobre Redis REAL com DOIS nós de
-// aplicação (dist/index.cjs de produção) e DOIS nós Redis reais (master +
+// aplicação (dist/index.mjs de produção) e DOIS nós Redis reais (master +
 // réplica de leitura):
 //
 //   1. Infra: master PING, réplica com role:slave/master_link_status:up e
@@ -178,12 +178,12 @@ async function pgQuery(text, params = []) {
 let nodeA = null;
 let nodeB = null;
 if (!EXTERNAL) {
-  console.log("[f16] boot nó A em :" + PORT_A + " (dist/index.cjs de produção)");
-  nodeA = spawn(process.execPath, ["dist/index.cjs"], { env: nodeEnv("smoke-node-a", PORT_A), stdio: ["ignore", "pipe", "pipe"] });
+  console.log("[f16] boot nó A em :" + PORT_A + " (dist/index.mjs de produção)");
+  nodeA = spawn(process.execPath, ["dist/index.mjs"], { env: nodeEnv("smoke-node-a", PORT_A), stdio: ["ignore", "pipe", "pipe"] });
   nodeA.stdout.on("data", (d) => { if (process.env.SMOKE_DEBUG) process.stderr.write(`[node-a] ${d}`); });
   nodeA.stderr.on("data", (d) => process.stderr.write(`[node-a] ${d}`));
   console.log("[f16] boot nó B em :" + PORT_B);
-  nodeB = spawn(process.execPath, ["dist/index.cjs"], { env: nodeEnv("smoke-node-b", PORT_B), stdio: ["ignore", "pipe", "pipe"] });
+  nodeB = spawn(process.execPath, ["dist/index.mjs"], { env: nodeEnv("smoke-node-b", PORT_B), stdio: ["ignore", "pipe", "pipe"] });
   nodeB.stdout.on("data", (d) => { if (process.env.SMOKE_DEBUG) process.stderr.write(`[node-b] ${d}`); });
   nodeB.stderr.on("data", (d) => process.stderr.write(`[node-b] ${d}`));
   process.on("exit", () => {

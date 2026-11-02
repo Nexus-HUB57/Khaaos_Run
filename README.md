@@ -962,7 +962,7 @@ Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102)
 
 ### Web
 
-- **Replit Autoscale**: `npm run build` → `node ./dist/index.cjs`
+- **Replit Autoscale**: `npm run build` → `node ./dist/index.mjs`
 - **Render**: Blueprint `render.yaml` + Deploy Hook (opt-in via `RENDER_DEPLOY_ENABLED`)
 
 ### UE5 Dedicated Server
