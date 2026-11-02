@@ -70,7 +70,8 @@ export function eventToFeed(e = {}) {
 // jogador (main3d), para que a transmissão conte a mesma história.
 export const WORLD_HAZARD_INFO = Object.freeze({
   tsunami: { label: 'TSUNAMI', hint: 'nível do mar subindo — terreno ALTO é a única salvação' },
-  lava: { label: 'ERUPÇÃO', hint: 'lava subindo — as mesas são a única salvação' },
+  spore: { label: 'NEBLINA TÓXICA', hint: 'esporos tóxicos na neblina — fique ACIMA do teto verde' },
+  smoke: { label: 'FUMAÇA TÓXICA', hint: 'fumaça sufocante no terreno baixo — suba para sobreviver' },
   gravity: { label: 'ANOMALIA KHAOS', hint: 'gravidade instável — domos de contenção nos pilões' },
   acid: { label: 'CHUVA ÁCIDA', hint: 'chuva ácida no setor — procure cobertura' },
 });
@@ -95,8 +96,8 @@ export function spectateHref(code = '') {
 // A transmissão deve contar a história do mundo: quando um hazard ameaça,
 // a câmera corta para quem está sob perigo REAL — computado do MESMO payload
 // autoritativo do pipeline (players + ringState + WORLD_HAZARD). Sinais:
-// nocaute (DBNO), dano recente (vida caiu entre batches — tsunami/lava/ácido
-// mordendo), zona geométrica da anomalia (anchors), fora do ring, vida baixa.
+// nocaute (DBNO), dano recente (vida caiu entre batches — tsunami/esporos/
+// fumaça/ácido mordendo), zona geométrica da anomalia (anchors), fora do ring, vida baixa.
 //
 // Fase 39 — o CÉREBRO do diretor (pesos/limiares/bandas, calibrateDirector,
 // dangerScore e a sanitização populacional) mora agora em directorCalibration.js
@@ -122,8 +123,8 @@ export const SPECTATOR_CAMERAS = ['FREECAM', 'FOLLOW_PLAYER', 'OVERHEAD', 'RING_
 // PURO e determinístico: evento bruto + contexto → payload do spawn ou null.
 // Fase 29 — o `kind` do dano atravessa (identidade do golpe) e os kinds
 // AMBIENTAIS ganham o tier hazard: a transmissão diferencia "o mundo mordeu"
-// (tsunami/lava/ring/ácido/anomalia) de um tiro — MESMA paleta do banner.
-export const HAZARD_DAMAGE_KINDS = Object.freeze(new Set(['tsunami', 'eruption', 'ring', 'acid', 'quantum']));
+// (tsunami/esporos/fumaça/ring/ácido/anomalia) de um tiro — MESMA paleta do banner.
+export const HAZARD_DAMAGE_KINDS = Object.freeze(new Set(['tsunami', 'spore', 'smoke', 'ring', 'acid', 'quantum']));
 export function specDamageSpawn(d = {}, followId = null, camMode = 'RING_CENTER') {
   if (camMode !== 'FOLLOW_PLAYER' || followId == null) return null;
   const x = Number(d.x), y = Number(d.y), z = Number(d.z), damage = Number(d.damage);
@@ -498,7 +499,7 @@ export class SpectatorView {
 
   /**
    * Fase 18 — ingere evento BRUTO do pipeline (remote.onEvent) e traduz
-   * WORLD_HAZARD p/ o vocabulário da sim (tsunamiStart/eruptionStart/…).
+   * WORLD_HAZARD p/ o vocabulário da sim (tsunamiStart/sporeFogStart/…).
    * Parâmetros autoritativos passam intactos — o SurvivalFX do espectador
    * materializa a MESMA regra de dano por altura do jogador.
    * Fase 28 — DAMAGE (dano autoritativo) entra na fila própria dos números
@@ -525,8 +526,10 @@ export class SpectatorView {
     switch (`${d.hazard}:${d.phase}`) {
       case 'tsunami:start': return { type: 'tsunamiStart', submergeBelowY: d.submergeBelowY ?? 90, durationSeconds: d.durationSeconds ?? 40 };
       case 'tsunami:end': return { type: 'tsunamiEnd', submergeBelowY: d.submergeBelowY };
-      case 'lava:start': return { type: 'eruptionStart', lavaBelowY: d.lavaBelowY ?? 180, durationSeconds: d.durationSeconds ?? 35 };
-      case 'lava:end': return { type: 'eruptionEnd', lavaBelowY: d.lavaBelowY };
+      case 'spore:start': return { type: 'sporeFogStart', sporeTopY: d.sporeTopY ?? 90, durationSeconds: d.durationSeconds ?? 45 };
+      case 'spore:end': return { type: 'sporeFogEnd', sporeTopY: d.sporeTopY };
+      case 'smoke:start': return { type: 'toxicSmokeStart', smokeTopY: d.smokeTopY ?? 180, durationSeconds: d.durationSeconds ?? 35 };
+      case 'smoke:end': return { type: 'toxicSmokeEnd', smokeTopY: d.smokeTopY };
       case 'gravity:start': return { type: 'gravityAnomalyStart', gravityScale: d.gravityScale ?? .35, anchors: d.anchors ?? [], anchorRadius: d.anchorRadius ?? 28, durationSeconds: d.durationSeconds ?? 30 };
       case 'gravity:end': return { type: 'gravityAnomalyEnd', gravityScale: d.gravityScale };
       case 'acid:pulse': return { type: 'acidRain', damage: d.damage ?? 1 };

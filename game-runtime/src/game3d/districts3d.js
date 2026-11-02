@@ -27,6 +27,7 @@ import {
   mudMaterial, waterPoolMaterial, snowMaterial, lavaMaterial,
   runeMaterial, riftMaterial, awningMaterial, plankMaterial,
   duneMaterial, bannerMaterial, signTexture,
+  quicksandMaterial, mistMaterial, // F43 — areia movediça (W3) + neblina alucinógena (W2)
 } from './textures3d.js';
 
 // ============================================================================
@@ -62,20 +63,25 @@ const KITS = {
   },
   Barburhen: {
     // Diretiva (Mundos W1): cidade pós-guerra — entulho, carros queimados,
-    // árvores mortas, crateras e colunas de fumaça sobre a identidade fria
-    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1 },      // Área Urbana em Ruínas
-    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1 }, // Setor Industrial
-    2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1 },     // Parque Abandonado
-    3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1 }, // Zona de Extração
+    // árvores mortas, crateras e colunas de fumaça sobre a identidade fria.
+    // F42 — trilhos no setor da ESTAÇÃO (README W1: ZEX = estação ferroviária)
+    // F43 — README W1: "construções inacabadas... desabamentos": esqueletos de
+    // concreto + lajes tombadas sobre entulho nos 4 distritos da cidade.
+    0: { stall: 3, billboard: 1, rubble: 3, burntcar: 1, deadtree: 1, skeleton: 1, collapse: 1 },      // Área Urbana e Comercial
+    1: { machinery: 1, snowpile: 2, snowpatch: 2, crater: 2, smokecolumn: 1, rail: 2, skeleton: 1 }, // Setor Industrial (estação)
+    2: { machinery: 2, snowpile: 1, deadtree: 2, rubble: 1, crater: 1, collapse: 1 },     // Parque Abandonado
+    3: { machinery: 1, fanunit: 2, rubble: 2, smokecolumn: 1, burntcar: 1, skeleton: 1 }, // Zona de Extração
     4: {},
   },
   Priadus: {
     // Diretiva (Mundos W2): pântano negro + bosque sobre ruínas tecnológicas,
     // área de caça com totens e o Templo Antigo dos Duazhs
-    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1, roots: 2, coral: 2 },   // Área Pantanosa
-    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1, labdome: 1, fallenlog: 2, sporesac: 2 }, // O Bosque
-    2: { waterpool: 1, walkway: 1, statue: 2, totem: 2, sporesac: 1, roots: 1 },             // Área de Caça
-    3: { templestep: 1, statue: 2, brazier: 2, fallenlog: 1 },                                // Templo Antigo
+    // F43 — README W2: "flora carnívora" + "neblina alucinógena": plantas-bulbo
+    // ácidas com dentes/tentáculos e bancos de névoa rasteira pulsante.
+    0: { waterpool: 3, mudpatch: 2, mangrove: 2, hut: 1, walkway: 1, roots: 2, coral: 2, carnplant: 2, mist: 2 },   // Área Pantanosa
+    1: { mangrove: 3, hut: 1, walkway: 1, mudpatch: 1, labdome: 1, fallenlog: 2, sporesac: 2, carnplant: 2, mist: 2 }, // O Bosque
+    2: { waterpool: 1, walkway: 1, statue: 2, totem: 2, sporesac: 1, roots: 1, mist: 1 },             // Área de Caça
+    3: { templestep: 1, statue: 2, brazier: 2, fallenlog: 1, mist: 1 },                                // Templo Antigo
     4: {},
   },
   Ckesalth: {
@@ -84,7 +90,9 @@ const KITS = {
     0: { dune: 2, banner: 2, palmstump: 2, resortwall: 1, oilpool: 1 },        // Resort Abandonado
     1: { tent: 2, campfire: 1, banner: 1, bones: 2, palmstump: 1 },            // Vilarejo Beduíno
     2: { refinetower: 1, oiltank: 2, pipeline: 2, lavapatch: 2, minecart: 1, oilpool: 1 }, // Refinaria de Petróleo
-    3: { dune: 2, bones: 2, palmstump: 1 },                                    // Cemitério de Areia
+    // F43 — README W3: "areia movediça" ganha o patch visual do terreno que
+    // engole no setor canônico (a mecânica de afundamento segue UE5).
+    3: { dune: 2, bones: 2, palmstump: 1, quicksand: 2 },                      // Cemitério de Areia / Areia Movediça
     4: {},
   },
   Arukheea: {
@@ -92,6 +100,9 @@ const KITS = {
     // Sol da Noite com farol, cemitério das baleias e marina com naufrágios
     0: { runering: 2, shard: 3, palmtree: 3 },                                  // Bosque dos Perdidos
     1: { crystal: 2, quantumring: 1, prisonwall: 2, lighthouse: 1 },            // Prisão do Sol da Noite
+    // F43 — README W4: "tubarões" vivem no MAR dos worldmarks (buildArukheeaSea:
+    // anel oceânico + patrulha em arco fechado) — fauna visual fora da arena,
+    // mesma gramática do anel oceânico de Priadus.
     2: { rift: 1, shard: 2, whaleribs: 2, bones: 2 },                           // Cemitério das Baleias
     3: { quantumring: 2, shard: 2, shipwreck: 2, palmtree: 2 },                 // Marina Fantasma
     4: {},
@@ -99,7 +110,9 @@ const KITS = {
 };
 
 // patches de solo por tipo (entram em `patches`, não em `items`)
-const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool']);
+// F43 — 'quicksand' (README W3: areia movediça) e 'mist' (README W2: neblina
+// alucinógena) entram na MESMA gramática de patch de solo.
+const PATCH_TYPES = new Set(['waterpool', 'mudpatch', 'snowpatch', 'lavapatch', 'runering', 'voidscorch', 'crater', 'oilpool', 'quicksand', 'mist']);
 
 /**
  * Placements determinísticos do dressing por cenário.
@@ -205,8 +218,13 @@ export function districtDressing(layout, scenario, { seed = 'dressing', density 
         burntcar: { sMin: .95, sMax: 1.1, size: 2.0, gap: 7 },
         fallenlog: { sMin: 1, sMax: 1.2, size: 2.4, gap: 6 },
         pipeline: { sMin: 1, sMax: 1, size: 2.6, gap: 8 },
+        rail: { sMin: 1, sMax: 1, size: 3.2, gap: 9 },   // F42 — trilho da estação W1
         deadtree: { sMin: .95, sMax: 1.25, size: 1.6, gap: 5 },
         palmtree: { sMin: 1.05, sMax: 1.4, size: 1.6, gap: 5.5 },
+        // F43 — detalhes fiéis ao README (grandes marcos × micro props)
+        skeleton: { sMin: 1, sMax: 1.1, size: 2.8, gap: 10 },   // construção inacabada W1
+        collapse: { sMin: .95, sMax: 1.15, size: 2.2, gap: 8 }, // desabamento W1
+        carnplant: { sMin: .9, sMax: 1.3, size: 1.2, gap: 4.5 },// flora carnívora W2
       }[type] ?? { sMin: .9, sMax: 1.25, size: 1.1, gap: 4.5 };
       scatter(district, type, n, spec);
     }
@@ -235,7 +253,10 @@ const SHADOW_SIZE = {
   rubble: 1.6, burntcar: 2.0, deadtree: 1.8, smokecolumn: 1.2,
   roots: 1.8, fallenlog: 2.6, sporesac: 1.0, totem: 1.2,
   palmstump: 1.0, oiltank: 2.0, pipeline: 3.0, bones: 1.8, resortwall: 2.6,
+  rail: 3.4,   // F42 — trilho da estação ferroviária (W1)
   palmtree: 1.8, prisonwall: 2.8, lighthouse: 2.2, whaleribs: 3.0, shipwreck: 3.2,
+  // F43 — detalhes fiéis ao README por mundo
+  skeleton: 3.6, collapse: 2.8, carnplant: 1.2,
 };
 
 const ST = (color, o = {}) => new THREE.MeshStandardMaterial({
@@ -287,6 +308,12 @@ function sharedMaterials() {
     holo: new THREE.MeshBasicMaterial({
       color: '#ffd28a', transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false,
     }),                                                        // luz do farol
+    // F43 — materiais dos detalhes fiéis por mundo
+    concrete: ST('#8f8a80', { rough: .93, flat: true }),       // concreto cru (esqueleto W1)
+    debris: ST('#5c574f', { rough: .96, flat: true }),         // entulho do desabamento W1
+    acid: ST('#7dd45a', { emissive: '#3f8a1e', ei: .75, rough: .55, flat: true }), // flora carnívora W2
+    vine: ST('#3f6b2a', { rough: .92 }),                       // tentáculos rasteiros W2
+    finMat: ST('#3d4a52', { rough: .35, metal: .1 }),          // pele molhada do tubarão W4
   };
 }
 
@@ -841,6 +868,24 @@ const BUILDERS = {
     }
     return g;
   },
+  // F42 — trilho da ESTAÇÃO FERROVIÁRIA (README W1: ZEX = estação): dois trilhos
+  // de aço + dormentes de madeira — leitura imediata de ferrovia no Setor da estação.
+  rail(m) {
+    const g = new THREE.Group();
+    for (const side of [-.72, .72]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(3.2, .09, .1), m.steel);
+      bar.position.set(0, .18, side);
+      bar.castShadow = true;
+      g.add(bar);
+    }
+    for (let i = 0; i < 5; i++) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(.34, .07, 1.7), m.woodDark);
+      tie.position.set(-1.2 + i * .6, .04, 0);
+      tie.receiveShadow = true;
+      g.add(tie);
+    }
+    return g;
+  },
   bones(m) {
     const g = new THREE.Group();
     const rib = new THREE.Mesh(new THREE.TorusGeometry(.34, .045, 5, 10, Math.PI), m.bone);
@@ -935,6 +980,83 @@ const BUILDERS = {
     g.add(hull, mast, rail);
     return g;
   },
+
+  // F43 — W1 BARBURHEN (README): "construções inacabadas... desabamentos"
+  skeleton(m) {
+    // esqueleto de concreto: 4 pilares + 2 lajes crua + vergalhão exposto no topo
+    const g = new THREE.Group();
+    g.name = 'skeleton';
+    const colGeo = new THREE.BoxGeometry(.3, 3.2, .3);
+    for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const col = new THREE.Mesh(colGeo, m.concrete);
+      col.position.set(px, 1.6, pz); col.castShadow = true;
+      g.add(col);
+    }
+    for (const y of [1.5, 3.05]) {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(2.5, .18, 2.5), m.concrete);
+      slab.position.y = y; slab.castShadow = slab.receiveShadow = true;
+      g.add(slab);
+    }
+    for (let i = 0; i < 5; i++) {
+      const rebar = new THREE.Mesh(new THREE.CylinderGeometry(.02, .02, .7, 4), m.rust);
+      rebar.position.set(-.8 + (i % 3) * .8, 3.5, i < 3 ? -.6 : .6);
+      rebar.rotation.z = i % 2 ? .12 : -.1;
+      g.add(rebar);
+    }
+    return g;
+  },
+  collapse(m) {
+    // desabamento: laje tombada sobre pilha de entulho com vergalhão torcido
+    const g = new THREE.Group();
+    g.name = 'collapse';
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(2.4, .2, 1.6), m.concrete);
+    slab.position.set(0, .55, .2); slab.rotation.set(.5, .4, .18);
+    slab.castShadow = slab.receiveShadow = true;
+    g.add(slab);
+    const geo = new THREE.DodecahedronGeometry(.4, 0);
+    for (const [dx, dz, s] of [[-.5, -.3, 1], [.4, .1, .8], [.1, .5, .6], [-.2, .1, .5]]) {
+      const r = new THREE.Mesh(geo, m.debris);
+      r.position.set(dx, .2 * s, dz);
+      r.rotation.set(dx * 2, dz * 3, dx + dz);
+      r.scale.setScalar(s); r.castShadow = true;
+      g.add(r);
+    }
+    const rebar = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, 1.4, 5), m.rust);
+    rebar.position.set(.7, .8, -.2); rebar.rotation.set(.6, .3, -.7);
+    g.add(rebar);
+    return g;
+  },
+
+  // F43 — W2 PRIADUS (README): "flora carnívora" — bulbo ácido aberto com
+  // dentes inclinados para dentro e tentáculos rasteiros; pulso bioluminescente
+  // (a FAUNA — jacarés — segue conteúdo UE5; a FLORA é dressing estático).
+  carnplant(m) {
+    const g = new THREE.Group();
+    g.name = 'carnplant';
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(.05, .09, .5, 6), m.swampRoot);
+    stalk.position.y = .25; stalk.castShadow = true;
+    const pod = new THREE.Mesh(
+      new THREE.SphereGeometry(.28, 8, 6, 0, Math.PI * 2, 0, Math.PI * .55), m.acid);
+    pod.position.y = .58; pod.rotation.x = Math.PI; pod.scale.set(1, .8, 1);
+    pod.castShadow = true;
+    g.add(stalk, pod);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(.045, .18, 4), m.acid);
+      tooth.position.set(Math.cos(a) * .24, .62, Math.sin(a) * .24);
+      tooth.rotation.set(Math.sin(a) * .8, 0, -Math.cos(a) * .8); // inclinados para dentro
+      g.add(tooth);
+    }
+    for (let i = 0; i < 3; i++) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(.02, .04, .7, 5), m.vine);
+      t.position.set(Math.cos(i * 2.2) * .4, .1, Math.sin(i * 2.2) * .4);
+      t.rotation.set(Math.cos(i * 2.2) * 1.1, 0, Math.sin(i * 2.2) * -1.1);
+      t.castShadow = true;
+      g.add(t);
+    }
+    g.userData.pulse = pod; // pulso bioluminescente no animator (F43 ativa o contrato)
+    return g;
+  },
 };
 
 // materiais de patch por tipo
@@ -948,6 +1070,8 @@ function patchMaterial(type, scenario) {
     case 'voidscorch': return voidScorchMaterial();
     case 'crater': return craterMaterial();     // Fase 31 — cratera de Barburhen
     case 'oilpool': return oilPoolMaterial();   // Fase 31 — óleo negro de Ckesalth
+    case 'quicksand': return quicksandMaterial(); // F43 — areia movediça (W3)
+    case 'mist': return mistMaterial();         // F43 — neblina alucinógena (W2)
     default: return mudMaterial(2);
   }
 }
@@ -1069,6 +1193,25 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
       }
     }
     for (const p of placements.patches) {
+      if (p.type === 'oilpool') {
+        // F43 — lagoas de petróleo EM CHAMAS: fagulhas baixas e quentes saltam
+        // do espelho de óleo (mesma gramática das brasas de lavapatch, menor).
+        addEmitter({ x: p.x, y: .12, z: p.z }, .8, () => ({
+          dx: (particleRng.next() - .5) * p.r * 1.1, dy: 0, dz: (particleRng.next() - .5) * p.r * 1.1,
+          vx: (particleRng.next() - .5) * 1.1, vy: 1.9 + particleRng.next() * 1.6, vz: (particleRng.next() - .5) * 1.1,
+          size: .14 + particleRng.next() * .16, growth: -.02, life: .6 + particleRng.next() * .55,
+          drag: .08, gravity: 2.2, alpha: .9,
+          color: [1, .64, .18], endColor: [.4, .09, .03],
+        }));
+        // fumaça fina do óleo queimando
+        addEmitter({ x: p.x, y: .3, z: p.z }, .4, () => ({
+          dx: (particleRng.next() - .5) * p.r * .8, dy: 0, dz: (particleRng.next() - .5) * p.r * .8,
+          vx: (particleRng.next() - .5) * .4, vy: .9 + particleRng.next() * .7, vz: (particleRng.next() - .5) * .4,
+          size: .5 + particleRng.next() * .5, growth: .7, life: 2.2 + particleRng.next() * 1.4,
+          drag: .4, gravity: -0.4, alpha: .2,
+          color: [.16, .15, .14], endColor: [.42, .4, .38],
+        }));
+      }
       if (p.type === 'lavapatch') {
         // Fase 26 — fendas de lava: brasas saltam da crosta + wisp de calor
         addEmitter({ x: p.x, y: .1, z: p.z }, 1.1, () => ({
@@ -1092,6 +1235,13 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
     // já registrou, nada a fazer (nunca 2× — ver bindParticleTicker).
     bindParticleTicker(scene, sharedSystem, emitterAnimators);
   }
+
+  // ---------- animáveis (coletores usados por patches e itens) ----------
+  const floaters = [];   // shards: { mesh, baseY, phase, speed }
+  const flags = [];      // bandeiras: { mesh, baseRot, phase }
+  const flames = [];     // fogo: { mesh, base, phase }
+  const spinners = [];   // anéis quânticos / rotores: { obj, axis, speed, phase }
+  const pulses = [];     // F43 — bioluminescência: { mesh, base, phase }
 
   // ---------- patches de solo ----------
   const patchGeo = new THREE.CircleGeometry(1, 26);
@@ -1118,13 +1268,34 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
       const base = mat.emissiveIntensity;
       animators.push((dt, t) => { mat.emissiveIntensity = base * (0.82 + Math.sin(t * 1.35) * .3); });
     }
+    if (type === 'mist') {
+      // F43 — neblina alucinógena respira: opacidade sobe/desce devagar
+      animators.push((dt, t) => { mat.opacity = .15 + (Math.sin(t * .55) * .5 + .5) * .17; });
+    }
+    if (type === 'oilpool') {
+      // F43 — README W3: "lagoas de petróleo EM CHAMAS" — cada lagoa ganha
+      // chamas reais (cones tremulando no animator de flames) + fagulhas no pool.
+      for (const p of list) {
+        const fireRng = new SeededRng(`${layout.seed}:oilfire:${p.x}:${p.z}`);
+        const fire = new THREE.Group();
+        fire.name = 'oilfire';
+        const n = 3;
+        for (let i = 0; i < n; i++) {
+          const cone = new THREE.Mesh(new THREE.ConeGeometry(.16 + fireRng.next() * .12, .5 + fireRng.next() * .4, 6), m.fire);
+          const a = fireRng.next() * Math.PI * 2;
+          const rr = fireRng.next() * p.r * .55;
+          cone.position.set(Math.cos(a) * rr, .18, Math.sin(a) * rr);
+          cone.castShadow = false;
+          fire.add(cone);
+          flames.push({ mesh: cone, base: cone.material.emissiveIntensity ?? 1.6, phase: fireRng.next() * 6.28 });
+        }
+        fire.position.set(p.x, .02, p.z);
+        dressing.add(fire);
+      }
+    }
   }
 
   // ---------- itens (multi-mesh, contagem pequena por tipo) ----------
-  const floaters = [];   // shards: { mesh, baseY, phase, speed }
-  const flags = [];      // bandeiras: { mesh, baseRot, phase }
-  const flames = [];     // fogo: { mesh, base, phase }
-  const spinners = [];   // anéis quânticos / rotores: { obj, axis, speed, phase }
   const variantRng = new SeededRng(`${layout.seed}:${layout.scenarioId}:dressing-variant`);
   for (const item of placements.items) {
     const build = BUILDERS[item.type];
@@ -1145,6 +1316,12 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
     if (g.userData?.rotor) spinners.push({ obj: g.userData.rotor, axis: 'y', speed: 1.1, phase: 0 });
     if (g.userData?.spinners) for (const s of g.userData.spinners) spinners.push({ obj: s, axis: 'z', speed: .38, phase: variantRng.next() * 6.28 });
     if (g.userData?.waver) floaters.push({ mesh: g.userData.waver, baseY: g.userData.waver.position.y, phase: variantRng.next() * 6.28, speed: .5, waver: true });
+    if (g.userData?.pulse) {
+      // F43 — bioluminescência (sporesac F22 + carnplant F43): o contrato
+      // "pulso no animator" agora tem consumidor de verdade.
+      const mesh = g.userData.pulse;
+      pulses.push({ mesh, base: mesh.material.emissiveIntensity ?? 1, phase: variantRng.next() * 6.28 });
+    }
   }
 
   // F40 — as sombras do dressing entram nas BANDAS DE DISTÂNCIA quando o
@@ -1179,6 +1356,13 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   if (spinners.length) {
     animators.push((dt, t) => {
       for (const s of spinners) s.obj.rotation[s.axis] = s.phase + t * s.speed;
+    });
+  }
+  if (pulses.length) {
+    animators.push((dt, t) => {
+      for (const p of pulses) {
+        p.mesh.material.emissiveIntensity = p.base * (.72 + Math.sin(t * 2.4 + p.phase) * .28);
+      }
     });
   }
 

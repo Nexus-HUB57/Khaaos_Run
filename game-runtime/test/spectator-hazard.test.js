@@ -13,8 +13,8 @@ import {
 
 // ───server: espelho do hazard autoritativo para a transmissão───────────────
 
-test('room3d: tsunami autoritativo (Priadus) vira WORLD_HAZARD no spectatorLog', () => {
-  const room = new MatchRoom3D({ id: 'ring3d-hz1', seed: 'HZ-TSUNAMI', region: 'sa-east', capacity: 4, botFill: 3, airdrop: false, scenarioId: 'Priadus' });
+test('room3d: tsunami autoritativo (Arukheea — W4 do README) vira WORLD_HAZARD no spectatorLog', () => {
+  const room = new MatchRoom3D({ id: 'ring3d-hz1', seed: 'HZ-TSUNAMI', region: 'sa-east', capacity: 4, botFill: 3, airdrop: false, scenarioId: 'Arukheea' });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
   for (let i = 0; i < 380 && !room.spectatorLog.some((e) => e.type === 'WORLD_HAZARD' && e.data.hazard === 'tsunami'); i++) room.tick(0.5);
@@ -52,9 +52,11 @@ test('worldHazardFeedLine: start/end/pulse com a MESMA gramática dos avisos do 
   assert.equal(start.who, 'MUNDO');
   assert.equal(start.cls, 'bad');
   assert.match(start.msg, /TSUNAMI ATIVO \(40s\)/);
-  const end = worldHazardFeedLine({ hazard: 'lava', phase: 'end' });
+  const end = worldHazardFeedLine({ hazard: 'smoke', phase: 'end' });
   assert.equal(end.cls, 'good');
-  assert.match(end.msg, /ERUPÇÃO recuando/);
+  assert.match(end.msg, /FUMAÇA TÓXICA recuando/);
+  const sporeStart = worldHazardFeedLine({ hazard: 'spore', phase: 'start', durationSeconds: 45 });
+  assert.match(sporeStart.msg, /NEBLINA TÓXICA ATIVO \(45s\)/);
   const pulse = worldHazardFeedLine({ hazard: 'acid', phase: 'pulse' });
   assert.equal(pulse.cls, 'warn');
   assert.match(pulse.msg, /CHUVA ÁCIDA/);
@@ -93,15 +95,17 @@ test('SpectatorView.ingestEvent: tsunami end → tsunamiEnd + banner limpo', () 
   assert.deepEqual(evts.map((e) => e.type), ['tsunamiStart', 'tsunamiEnd']);
 });
 
-test('SpectatorView.ingestEvent: lava/gravity/acid no contrato da sim', () => {
+test('SpectatorView.ingestEvent: spore/smoke/gravity/acid no contrato da sim (Fase 42)', () => {
   const v = new SpectatorView();
-  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'lava', phase: 'start', lavaBelowY: 175, durationSeconds: 33 } });
+  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'spore', phase: 'start', sporeTopY: 85, durationSeconds: 44 } });
+  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'smoke', phase: 'start', smokeTopY: 175, durationSeconds: 33 } });
   v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'gravity', phase: 'start', gravityScale: .4, anchorRadius: 30, anchors: [{ id: 'a1', x: 10, z: 20 }], durationSeconds: 28 } });
   v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'acid', phase: 'pulse', damage: 1 } });
-  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'lava', phase: 'end' } });
+  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'smoke', phase: 'end' } });
+  v.ingestEvent({ type: 'WORLD_HAZARD', data: { hazard: 'spore', phase: 'end' } });
   const types = v.consumeEvents().map((e) => e.type);
-  assert.deepEqual(types, ['eruptionStart', 'gravityAnomalyStart', 'acidRain', 'eruptionEnd']);
-  // ácido NÃO grava banner persistente; lava end limpa
+  assert.deepEqual(types, ['sporeFogStart', 'toxicSmokeStart', 'gravityAnomalyStart', 'acidRain', 'toxicSmokeEnd', 'sporeFogEnd']);
+  // ácido NÃO grava banner persistente; ends limpam
   assert.equal(v.hazardActive, null);
 });
 
@@ -139,9 +143,9 @@ test('SpectatorRemote: onEvent recebe cada evento NOVO (dedupe mantido, onFeed p
 // ───client: VM + banner no HUD (headless-safe)───────────────────────────────
 
 test('spectatorViewModel: hazard ativo vira { label, hint, kind } p/ o banner', () => {
-  const vm = spectatorViewModel({ hazard: { hazard: 'lava', phase: 'active' } });
-  assert.equal(vm.hazard.kind, 'lava');
-  assert.equal(vm.hazard.label, 'ERUPÇÃO');
+  const vm = spectatorViewModel({ hazard: { hazard: 'smoke', phase: 'active' } });
+  assert.equal(vm.hazard.kind, 'smoke');
+  assert.equal(vm.hazard.label, 'FUMAÇA TÓXICA');
   assert.ok(vm.hazard.hint.length > 0);
   assert.equal(spectatorViewModel({}).hazard, null);
   assert.equal(spectatorViewModel({ hazard: { hazard: 'desconhecido' } }).hazard.kind, 'desconhecido');

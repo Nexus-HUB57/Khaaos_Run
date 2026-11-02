@@ -145,13 +145,16 @@ public:
 	/** Server: fire weapon. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerFire();
-	/** Server: begin/end held fire; automatic shots are paced authoritatively. */
+	/** Server: reliably begin held fire for one unique local press. */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSetFireHeld(bool bHeld);
+	void ServerSetFireHeld(bool bHeld, uint32 PressToken);
+	/** Server: refresh the active press lease; redundant heartbeats need not queue reliably. */
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerFireHeartbeat(uint32 PressToken);
 
-	/** Server: stop firing. */
+	/** Server: reliably stop firing only for the matching local press. */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerStopFire();
+	void ServerStopFire(uint32 PressToken);
 
 	/** Server: reload weapon. */
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -284,6 +287,8 @@ private:
 	double LastFireInputTimestamp = 0.0;
 	bool bLocalFireHeld = false;
 	double NextFireHeartbeatTimestamp = 0.0;
+	uint32 LocalFirePressToken = 0;
+	uint32 ServerFirePressToken = 0;
 	void TryServerFireShot();
 
 protected:

@@ -43,9 +43,9 @@ test('dangerScore: dano recente vale MAIS com hazard ativo (o mundo mordendo)', 
   assert.equal(semHazard, DANGER_WEIGHTS.recentDamage);
   assert.ok(comHazard > semHazard);
   // vida igual ou maior: nenhum sinal
-  assert.equal(dangerScore(player({ health: 100 }), { hazard: { hazard: 'lava' }, prevHealth: { p1: 100 } }), 0);
+  assert.equal(dangerScore(player({ health: 100 }), { hazard: { hazard: 'smoke' }, prevHealth: { p1: 100 } }), 0);
   // primeiro batch (sem histórico): sem falso positivo
-  assert.equal(dangerScore(player({ health: 40 }), { hazard: { hazard: 'lava' }, prevHealth: {} }), 0, 'sem prevHealth não há sinal de dano');
+  assert.equal(dangerScore(player({ health: 40 }), { hazard: { hazard: 'smoke' }, prevHealth: {} }), 0, 'sem prevHealth não há sinal de dano');
 });
 
 test('dangerScore: anomalia Khaaos é PERIGO GEOMÉTRICO (anchors do payload autoritativo)', () => {
@@ -218,7 +218,7 @@ test('remote: navegação MANUAL reserva o hazard — diretor não disputa até 
   assert.equal(cameraMsgs(ws).length, total, 'hold manual: nenhum corte forçado');
   // tsunami termina → re-arma; NOVO hazard → diretor retoma (momento de diretor)
   ws.message(batch([player({ id: 'a' })], [{ type: 'WORLD_HAZARD', data: { hazard: 'tsunami', phase: 'end' }, timestamp: 2 }]));
-  ws.message(batch([player({ id: 'a' })], [{ type: 'WORLD_HAZARD', data: { hazard: 'lava', phase: 'start', lavaBelowY: 180 }, timestamp: 3 }]));
+  ws.message(batch([player({ id: 'a' })], [{ type: 'WORLD_HAZARD', data: { hazard: 'smoke', phase: 'start', smokeTopY: 180 }, timestamp: 3 }]));
   assert.ok(cameraMsgs(ws).length > total, 'novo hazard retoma o controle');
   assert.equal(cameraMsgs(ws).at(-1).followPlayerId, 'a');
 });

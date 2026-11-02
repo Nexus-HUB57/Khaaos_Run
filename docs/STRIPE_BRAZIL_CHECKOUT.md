@@ -1,10 +1,14 @@
 # Stripe Checkout — Brasil (sandbox)
 
-**Atualizado:** 2026-10-21
+**Atualizado:** 2026-11-01
 
 **Decisão de produto recebida:** empresa estabelecida no Brasil; primeiro mercado Brasil; venda de pacotes fixos de KRC.
 
 **Estado de segurança:** planejamento e implementação devem permanecer em modo Stripe test. Nenhuma cobrança live, criação de sessão no Stripe do usuário ou ativação de checkout em produção foi autorizada.
+
+**Estado da entrega:** o checkout test-only foi mesclado na `main` pelo [PR #82](https://github.com/Nexus-HUB57/Khaaos_Run/pull/82). O CI aplicou a migration 0005 em PostgreSQL efêmero e aprovou o teste de idempotência/fulfillment Stripe ([run de integração #41365466419](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41365466419)). Isso valida o código contra banco descartável, não credenciais ou configuração do titular.
+
+**Gate atual de staging:** o serviço Render mantém Auto-Deploy Off e o checkout está configurado para permanecer desativado. O último deploy aparece concluído, mas `GET /healthz.json` expirou sem resposta; uma tentativa anterior de inicialização indicou segredo de sessão efetivo menor que 32 bytes. Não houve leitura de valores de secrets, correção no serviço, login OIDC ou teste de compra em staging. Não habilite `KRC_CHECKOUT_ENABLED` até restaurar o health check e concluir o preflight abaixo.
 
 ## Evidência oficial e requisitos
 

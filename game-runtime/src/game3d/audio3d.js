@@ -318,6 +318,29 @@ export class GameAudio {
     osc.start(t); osc.stop(t + .2);
   }
 
+  // Fase 42 — PASSO (heel strike do gait.js): burst de ruído filtrado com
+  // rolagem calcanhar→ponta. Disparado PELO cruzamento de fase da passada
+  // (não por timer) → o áudio é cirúrgico em relação ao visual. Alternância
+  // L/R via filtro sutil (calcanhar esquerdo ~780 Hz, direito ~660 Hz).
+  // intensity 0..1 (velocidade do ator), distance em m (remotos: atenuação).
+  step(intensity = .5, distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    this._stepSide = !this._stepSide;
+    const att = 1 / (1 + distance * distance * .012);      // falloff suave
+    const peak = Math.max(.015, (.12 + .3 * Math.min(1, intensity)) * att);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.#noiseBuffer(.09);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(this._stepSide ? 780 : 660, t);
+    bp.frequency.exponentialRampToValueAtTime(240, t + .07);
+    const g = this.ctx.createGain();
+    this.#env(g, t, .004, .085, peak);
+    src.connect(bp); bp.connect(g); g.connect(this.#bus('sfx'));
+    src.start(t);
+  }
+
   // arremesso da granada (whoosh curto)
   fragThrow() {
     if (!this.ctx || !this.enabled) return;
@@ -558,20 +581,21 @@ export class GameAudio {
   }
 
   // ---------- Fase 18 — sobrevivências imersivas + game feel de abate ----------
-  // Camadas CONTÍNUAS de áudio por hazard do mundo (tsunami/lava/gravidade/
-  // ácido): cada camada é um pequeno grafo WebAudio criado no start e
+  // Camadas CONTÍNUAS de áudio por hazard do mundo (tsunami/esporos/fumaça/
+  // gravidade/ácido): cada camada é um pequeno grafo WebAudio criado no start e
   // desvanecido no stop (setTargetAtTime) — identidade sonora POR MUNDO em
   // vez do ringWarn genérico. Sem ctx (headless/testes) tudo é no-op, mas o
   // CONTRATO de estado (survivalLayers) continua registrado p/ verificação.
   // Assinaturas curtas (hazardStinger/killConfirm/knockTick) fecham o game
   // feel: o jogador OUVE o que ameaça e CONFIRMA o que abate.
 
-  // perfis de mixagem por hazard (ganho alvo da camada contínua)
-  #SURVIVAL_GAIN = { tsunami: .5, lava: .55, gravity: .3, acid: .24 };
+  // perfis de mixagem por hazard (ganho alvo da camada contínua) — Fase 42:
+  // lava sai; esporos (W2) e fumaça (W3) entram com identidade própria
+  #SURVIVAL_GAIN = { tsunami: .5, spore: .32, smoke: .44, gravity: .3, acid: .24 };
 
   /**
    * Liga/desliga a camada contínua de um hazard.
-   * @param {'tsunami'|'lava'|'gravity'|'acid'} kind
+   * @param {'tsunami'|'spore'|'smoke'|'gravity'|'acid'} kind
    * @param {boolean} on
    * @param {{ intensity?: number, duration?: number }} opts
    *   intensity escala o ganho (0..1+); duration (s) agenda auto-off (hazard
@@ -613,22 +637,41 @@ export class GameAudio {
         lfo.connect(lfoG); lfoG.connect(wG.gain);
         wSrc.connect(bp); bp.connect(wG); wSrc.start(); lfo.start();
         nodes.push(rSrc, wSrc, lfo); gains.push(rG, wG);
-      } else if (kind === 'lava') {
-        // rumble vulcânico (sub oscilando) + corpo de fogo abafado
+      } else if (kind === 'spore') {
+        // Fase 42 — W2 "Emboscada Verde": sopro de selva (ruído médio com LFO
+        // lento) + zumbido orgânico de esporos (trêmulo agudo dissonante)
+        const wSrc = mkNoise();
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 320; bp.Q.value = .55;
+        const wG = mkGain(base * .6);
+        const lfo = this.ctx.createOscillator(); lfo.frequency.value = .13;
+        const lfoG = this.ctx.createGain(); lfoG.gain.value = base * .22;
+        lfo.connect(lfoG); lfoG.connect(wG.gain);
+        wSrc.connect(bp); bp.connect(wG); wSrc.start(); lfo.start();
+        const hum = this.ctx.createOscillator(); hum.type = 'triangle'; hum.frequency.value = 233.1;
+        const hG = mkGain(base * .14);
+        const tre = this.ctx.createOscillator(); tre.frequency.value = 3.1;
+        const treG = this.ctx.createGain(); treG.gain.value = base * .1;
+        tre.connect(treG); treG.connect(hG.gain);
+        hum.connect(hG); hum.start(); tre.start();
+        nodes.push(wSrc, lfo, hum, tre); gains.push(wG, hG);
+      } else if (kind === 'smoke') {
+        // Fase 42 — W3 "Assassino Silencioso": sub abafado (pressão da fumaça)
+        // + crepitar grave (ruído lowpass com tremolo curto)
         const sub = this.ctx.createOscillator();
         sub.type = 'sine';
-        sub.frequency.setValueAtTime(36, t);
-        const wob = this.ctx.createOscillator(); wob.frequency.value = .9;
-        const wobG = this.ctx.createGain(); wobG.gain.value = 6;
-        wob.connect(wobG); wobG.connect(sub.frequency);
-        const sG = mkGain(base * .9);
-        sub.connect(sG); sub.start(); wob.start();
-        const fSrc = mkNoise();
+        sub.frequency.setValueAtTime(41, t);
+        const sG = mkGain(base * .8);
+        sub.connect(sG); sub.start();
+        const cSrc = mkNoise();
         const lp = this.ctx.createBiquadFilter();
-        lp.type = 'lowpass'; lp.frequency.value = 140; lp.Q.value = .7;
-        const fG = mkGain(base * .5);
-        fSrc.connect(lp); lp.connect(fG); fSrc.start();
-        nodes.push(sub, wob, fSrc); gains.push(sG, fG);
+        lp.type = 'lowpass'; lp.frequency.value = 210; lp.Q.value = .8;
+        const cG = mkGain(base * .45);
+        const trem = this.ctx.createOscillator(); trem.frequency.value = 5.3;
+        const tremG = this.ctx.createGain(); tremG.gain.value = base * .2;
+        trem.connect(tremG); tremG.connect(cG.gain);
+        cSrc.connect(lp); lp.connect(cG); cSrc.start(); trem.start();
+        nodes.push(sub, cSrc, trem); gains.push(sG, cG);
       } else if (kind === 'gravity') {
         // hum etéreo: par detunado (batimento) + shimmer alto em tremolo
         const o1 = this.ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 110;
@@ -799,10 +842,14 @@ export class GameAudio {
         tone('sawtooth', 196, 98, .02, .9, .3);
         tone('sawtooth', 199, 100, .02, .9, .18, .02); // detune — batimento
         break;
-      case 'lava': // duplo estrondo + fenda abrindo
-        tone('sine', 70, 32, .005, .5, .6);
-        tone('sine', 70, 32, .005, .5, .45, .3);
-        noise(500, 90, .7, .3, 'lowpass');
+      case 'spore': // Fase 42 — W2: sopro verde descendo + zumbido orgânico curto
+        noise(900, 260, .55, .26, 'bandpass');
+        tone('triangle', 233.1, 180.2, .02, .5, .16);
+        break;
+      case 'smoke': // Fase 42 — W3: alarme abafado duplo (o assassino silencioso)
+        tone('sine', 110, 84, .01, .45, .42);
+        tone('sine', 110, 84, .01, .45, .32, .28);
+        noise(400, 120, .6, .2, 'lowpass');
         break;
       case 'gravity': // glissando INVERTIDO — o mundo de cabeça pra baixo
         tone('sine', 220, 880, .01, .55, .26);

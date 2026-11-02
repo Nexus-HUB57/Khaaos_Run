@@ -138,7 +138,7 @@ test('followPlayer: RESERVA MANUAL — diretor não disputa o hazard corrente (i
   // NOVO hazard → diretor retoma (momento de diretor)
   ws.message(batch([player({ id: 'a' }), player({ id: 'b', health: 100 })], [{ type: 'WORLD_HAZARD', data: { hazard: 'tsunami', phase: 'end' }, timestamp: 2 }]));
   assert.equal(cameraMsgs(ws).length, total, 'fim do hazard não corta por si só');
-  ws.message(batch([player({ id: 'a' }), player({ id: 'b', health: 100 })], [{ type: 'WORLD_HAZARD', data: { hazard: 'lava', phase: 'start', lavaBelowY: 180 }, timestamp: 3 }]));
+  ws.message(batch([player({ id: 'a' }), player({ id: 'b', health: 100 })], [{ type: 'WORLD_HAZARD', data: { hazard: 'smoke', phase: 'start', smokeTopY: 180 }, timestamp: 3 }]));
   assert.ok(cameraMsgs(ws).length > total, 'novo hazard devolve o controle ao diretor');
   assert.equal(cameraMsgs(ws).at(-1).followPlayerId, 'a', 'empate → id decide (diretor de volta)');
 });

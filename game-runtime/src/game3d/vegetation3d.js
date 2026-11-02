@@ -102,6 +102,33 @@ function deformOrganic(geo, { amp = .22, seed = 0, minY = null, yFade = 1 } = {}
   return geo;
 }
 
+// Variação de superfície por vértice: quebra o aspecto de cor chapada sem
+// texturas externas, mantendo a geração determinística e compatível com Node.
+function addSurfaceMottle(geo, seed, surface = 'foliage') {
+  const p = geo.attributes.position, n = geo.attributes.normal;
+  const box = new THREE.Box3().setFromBufferAttribute(p);
+  const spanY = Math.max(.001, box.max.y - box.min.y);
+  const colors = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const h = THREE.MathUtils.clamp((y - box.min.y) / spanY, 0, 1);
+    const grain = hash2(i, seed);
+    let r, g, b;
+    if (surface === 'bark') {
+      const rib = Math.sin(Math.atan2(z, x) * 10 + y * 2.4 + seed * .013);
+      const v = THREE.MathUtils.clamp(.82 + grain * .16 + rib * .045 - (1 - h) * .035, .68, 1.04);
+      r = v * 1.04; g = v * .98; b = v * .88;
+    } else {
+      const dapple = Math.sin(x * 5.2 + z * 4.1 + y * 3.2 + seed * .17) * .035;
+      const v = THREE.MathUtils.clamp(.78 + grain * .20 + Math.max(0, n.getY(i)) * .05 + (h - .45) * .04 + dapple, .68, 1.04);
+      r = v * .95; g = v; b = v * .88;
+    }
+    colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
 // ------------------------------------------------------- arquétipos ----
 // Cada arquétipo descreve: altura do tronco, raio base/topo, número de
 // galhos primários, blob do dossel (raio, achatamento, contagem, espalhamento
@@ -198,8 +225,8 @@ export function buildTreeGeometries({ archetype = 'temperate', seed = 1 } = {}) 
     });
     canopyParts.push(blob);
   }
-  const trunk = mergeGeoms(barkParts);
-  const canopy = mergeGeoms(canopyParts);
+  const trunk = addSurfaceMottle(mergeGeoms(barkParts), seed, 'bark');
+  const canopy = addSurfaceMottle(mergeGeoms(canopyParts), seed + 101, 'foliage');
   return { trunk, canopy, height: A.trunkH + A.blobR * A.squash };
 }
 
@@ -294,8 +321,8 @@ export function tickVegetationWind(scene, t) {
 // (tronco+raízes+galhos | dossel) com tint por instância e vento ativo.
 export function buildTreeField({ archetype = 'temperate', seed = 1, spots = [], swayStrength = .045 } = {}) {
   const { trunk, canopy } = buildTreeGeometries({ archetype, seed });
-  const trunkMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .95, metalness: .02 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .88, metalness: 0, flatShading: true });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .96, metalness: 0, vertexColors: true });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .92, metalness: 0, flatShading: true, vertexColors: true });
   patchSway(canopyMat, { strength: swayStrength, freq: 1.45, yScale: .2 });
   const trunks = new THREE.InstancedMesh(trunk, trunkMat, Math.max(1, spots.length));
   const canopies = new THREE.InstancedMesh(canopy, canopyMat, Math.max(1, spots.length));
@@ -303,9 +330,10 @@ export function buildTreeField({ archetype = 'temperate', seed = 1, spots = [], 
   canopies.castShadow = canopies.receiveShadow = true;
   const dummy = new THREE.Object3D();
   spots.forEach((sp, i) => {
-    dummy.position.set(sp.x, 0, sp.z);
+    const s = sp.s ?? 1;
+    dummy.position.set(sp.x, sp.y ?? 0, sp.z);
     dummy.rotation.set((sp.tiltX ?? 0), sp.rot ?? 0, sp.tilt ?? 0);
-    dummy.scale.setScalar(sp.s ?? 1);
+    dummy.scale.set(s * (sp.sx ?? 1), s * (sp.sy ?? 1), s * (sp.sz ?? 1));
     dummy.updateMatrix();
     trunks.setMatrixAt(i, dummy.matrix);
     canopies.setMatrixAt(i, dummy.matrix);
@@ -328,7 +356,7 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
   bushes.castShadow = bushes.receiveShadow = true;
   const dummy = new THREE.Object3D();
   spots.forEach((sp, i) => {
-    dummy.position.set(sp.x, 0, sp.z);
+    dummy.position.set(sp.x, sp.y ?? 0, sp.z);
     dummy.rotation.set(0, sp.rot ?? 0, 0);
     dummy.scale.set(sp.sx ?? sp.s ?? 1, sp.s ?? 1, sp.sz ?? sp.s ?? 1);
     dummy.updateMatrix();
@@ -339,6 +367,97 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
   if (bushes.instanceColor) bushes.instanceColor.needsUpdate = true;
   bushes.computeBoundingSphere?.();
   return bushes;
+}
+
+// F45 — elementos naturais do chão: malhas de detalhe geradas uma vez e
+// instanciadas por família para manter o custo de draw calls previsível.
+function buildFallenLogGeometry(seed) {
+  const trunk = new THREE.CylinderGeometry(.15, .22, 2.25, 8, 3);
+  xform(trunk, { rz: Math.PI / 2 }); // eixo longitudinal no chão (X)
+  const branchA = new THREE.CylinderGeometry(.035, .075, .62, 6, 2);
+  xform(branchA, { x: -.42, y: .18, z: .02, rz: .78 });
+  const branchB = new THREE.CylinderGeometry(.03, .065, .48, 6, 2);
+  xform(branchB, { x: .38, y: .13, z: -.03, rz: -.9 });
+  return addSurfaceMottle(mergeGeoms([trunk, branchA, branchB]), seed, 'bark');
+}
+
+function buildStumpGeometry(seed) {
+  const body = new THREE.CylinderGeometry(.22, .34, .58, 9, 2);
+  xform(body, { y: .29 });
+  const top = new THREE.CircleGeometry(.22, 9);
+  xform(top, { rx: -Math.PI / 2, y: .58 });
+  const ringA = new THREE.TorusGeometry(.15, .009, 4, 14);
+  xform(ringA, { rx: -Math.PI / 2, y: .585 });
+  const ringB = new THREE.TorusGeometry(.08, .006, 4, 12);
+  xform(ringB, { rx: -Math.PI / 2, y: .586 });
+  return addSurfaceMottle(mergeGeoms([body, top, ringA, ringB]), seed, 'bark');
+}
+
+function buildFernGeometry(seed) {
+  const rng = vegRng(seed), blades = [];
+  for (let i = 0; i < 7; i++) {
+    const h = .62 + rng() * .38;
+    const blade = new THREE.PlaneGeometry(.22 + rng() * .08, h, 1, 4);
+    const p = blade.attributes.position;
+    for (let v = 0; v < p.count; v++) {
+      const t = THREE.MathUtils.clamp((p.getY(v) + h / 2) / h, 0, 1);
+      p.setX(v, p.getX(v) * (1 - .72 * t));
+      p.setZ(v, Math.sin(t * Math.PI / 2) * .12);
+    }
+    blade.translate(0, h / 2, 0);
+    xform(blade, { ry: (i / 7) * Math.PI * 2 + (rng() - .5) * .25 });
+    blades.push(blade);
+  }
+  const geo = mergeGeoms(blades);
+  geo.computeVertexNormals();
+  return addSurfaceMottle(geo, seed, 'foliage');
+}
+
+export function buildNaturalDressingField({ placements = [], seed = 1 } = {}) {
+  const group = new THREE.Group();
+  group.name = 'naturalGroundDressing';
+  const definitions = {
+    stone: {
+      geometry: () => {
+        const geo = new THREE.IcosahedronGeometry(.52, 0);
+        deformOrganic(geo, { amp: .12, seed });
+        return addSurfaceMottle(geo, seed + 1, 'bark');
+      }, roughness: .97, shadow: true, offset: .20,
+    },
+    fallenLog: { geometry: () => buildFallenLogGeometry(seed + 2), roughness: .96, shadow: true, offset: .17 },
+    stump: { geometry: () => buildStumpGeometry(seed + 3), roughness: .95, shadow: true, offset: 0 },
+    fern: { geometry: () => buildFernGeometry(seed + 4), roughness: .9, shadow: false, offset: 0 },
+  };
+  const meshes = [];
+  const dummy = new THREE.Object3D();
+  for (const [type, spec] of Object.entries(definitions)) {
+    const list = placements.filter((p) => p.type === type);
+    if (!list.length) continue;
+    const material = new THREE.MeshStandardMaterial({
+      color: '#ffffff', roughness: spec.roughness, metalness: 0,
+      vertexColors: true, flatShading: type !== 'fern',
+      side: type === 'fern' ? THREE.DoubleSide : THREE.FrontSide,
+    });
+    const mesh = new THREE.InstancedMesh(spec.geometry(), material, list.length);
+    mesh.name = `groundDressing:${type}`;
+    mesh.castShadow = spec.shadow;
+    mesh.receiveShadow = spec.shadow;
+    list.forEach((p, i) => {
+      const s = p.scale ?? 1;
+      dummy.position.set(p.x, (p.y ?? 0) + spec.offset * s, p.z);
+      dummy.rotation.set(type === 'fallenLog' ? (p.tilt ?? 0) : 0, p.rot ?? 0, type === 'fallenLog' ? (p.tilt ?? 0) : 0);
+      dummy.scale.setScalar(s);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      if (p.tint) mesh.setColorAt(i, new THREE.Color(p.tint));
+    });
+    mesh.count = list.length;
+    mesh.computeBoundingSphere?.();
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    group.add(mesh);
+    meshes.push(mesh);
+  }
+  return { group, meshes, counts: Object.fromEntries(meshes.map((m) => [m.name.split(':')[1], m.count])) };
 }
 
 // ------------------------------------------- grama com LOD de distância ----

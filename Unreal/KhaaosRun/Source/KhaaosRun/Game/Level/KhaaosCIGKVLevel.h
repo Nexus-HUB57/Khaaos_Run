@@ -290,6 +290,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Khaaos|CIGKV|Zu")
     TArray<FCIGKVZuEntry> ZuVariants;
 
+    /** Read-only runtime data source diagnostics. */
+    const UKhaaosCIGKVMapData* GetMapData() const { return MapData; }
+    bool WasMapDataGeneratedAtRuntime() const { return bMapDataGeneratedAtRuntime; }
+
 protected:
 
     /** Current zone phase index */
@@ -315,6 +319,10 @@ protected:
     /** Map data table reference */
     UPROPERTY()
     UKhaaosCIGKVMapData* MapData = nullptr;
+
+    /** True when InitializeMapData created the map data from C++ defaults. */
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = "Khaaos|CIGKV|Diagnostics")
+    bool bMapDataGeneratedAtRuntime = false;
 
 private:
 

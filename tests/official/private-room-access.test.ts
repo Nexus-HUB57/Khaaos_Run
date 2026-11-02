@@ -4,7 +4,11 @@ import { test } from "node:test";
 if (!process.env.DATABASE_URL?.trim()) process.env.DATABASE_URL = "postgres://test:test@127.0.0.1:5432/khaaos_test";
 process.env.WS_TOKEN_SECRET ??= "official-private-room-test-key-32-bytes";
 
-const { roomManager } = await import("../../server/game/RoomManager.ts");
+const {
+  roomManager,
+  INVITE_HOST_WINDOW_LIMIT,
+  INVITE_ROOM_PENDING_LIMIT,
+} = await import("../../server/game/RoomManager.ts");
 const rooms: Map<string, any> = (roomManager as any).rooms;
 
 function privateRoom(id: string, inviteCode = "KX7T2Q") {

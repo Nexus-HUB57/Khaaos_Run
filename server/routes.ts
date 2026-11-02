@@ -47,8 +47,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── OBSERVABILITY (antes de tudo: /metrics + /healthz sem auth) ──────────
   registerMetricsRoutes(app);
 
-  // ── ECONOMY 2PC (antes de registerApiRoutes: auth própria, sem OIDC) ─────
-  registerEconomy2PCRoutes(app);
   economy2pcService.startRecoveryLoop();
 
   // ── REAL-TIME ROOM SYSTEM (highest systemic impact) ──────────────────────
@@ -95,6 +93,9 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
       next();
     }).catch(() => res.status(503).json({ message: "Rate limiting unavailable" }));
   });
+
+  // Register 2PC only after the /api-wide CSRF and rate-limit guards above.
+  registerEconomy2PCRoutes(app);
 
   const requireAuth = isAuthenticated;
   const requireZoneOperator = [isAuthenticated, createZoneOperatorGuard()] as const;

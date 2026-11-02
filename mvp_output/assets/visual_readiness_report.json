@@ -1,0 +1,180 @@
+{
+  "report_version": 1,
+  "readiness_status": "BLOCKED_NO_IMPORTED_UE_CONTENT_OR_MAP",
+  "engine_visual_validation": false,
+  "source_asset_report": "asset_report.json",
+  "source_geometry": {
+    "mesh_count": 11,
+    "actual_vertices": 502,
+    "actual_faces": 812,
+    "declared_target_polycount_sum": 112800,
+    "actual_vertices_to_declared_target_percent": 0.445,
+    "matches_asset_report_summary": true,
+    "missing_mesh_ids": [],
+    "meshes": [
+      {
+        "asset_id": "CHR_Zheers_Base",
+        "source_obj": "characters/CHR_Zheers_Base/CHR_Zheers_Base.obj",
+        "vertices": 128,
+        "faces": 192
+      },
+      {
+        "asset_id": "WPN_AssaultRifle_MK1",
+        "source_obj": "weapons/WPN_AssaultRifle_MK1/WPN_AssaultRifle_MK1.obj",
+        "vertices": 86,
+        "faces": 144
+      },
+      {
+        "asset_id": "WPN_Shotgun_Breach",
+        "source_obj": "weapons/WPN_Shotgun_Breach/WPN_Shotgun_Breach.obj",
+        "vertices": 68,
+        "faces": 112
+      },
+      {
+        "asset_id": "WPN_Sniper_DMR",
+        "source_obj": "weapons/WPN_Sniper_DMR/WPN_Sniper_DMR.obj",
+        "vertices": 148,
+        "faces": 248
+      },
+      {
+        "asset_id": "LOOT_MedKit_Small",
+        "source_obj": "loot/LOOT_MedKit_Small/LOOT_MedKit_Small.obj",
+        "vertices": 8,
+        "faces": 12
+      },
+      {
+        "asset_id": "LOOT_MedKit_Medium",
+        "source_obj": "loot/LOOT_MedKit_Medium/LOOT_MedKit_Medium.obj",
+        "vertices": 8,
+        "faces": 12
+      },
+      {
+        "asset_id": "LOOT_Bandage",
+        "source_obj": "loot/LOOT_Bandage/LOOT_Bandage.obj",
+        "vertices": 8,
+        "faces": 12
+      },
+      {
+        "asset_id": "LOOT_Shield_Lv1",
+        "source_obj": "loot/LOOT_Shield_Lv1/LOOT_Shield_Lv1.obj",
+        "vertices": 16,
+        "faces": 28
+      },
+      {
+        "asset_id": "LOOT_Shield_Lv2",
+        "source_obj": "loot/LOOT_Shield_Lv2/LOOT_Shield_Lv2.obj",
+        "vertices": 16,
+        "faces": 28
+      },
+      {
+        "asset_id": "LOOT_AmmoBox_556",
+        "source_obj": "loot/LOOT_AmmoBox_556/LOOT_AmmoBox_556.obj",
+        "vertices": 8,
+        "faces": 12
+      },
+      {
+        "asset_id": "LOOT_AmmoBox_762",
+        "source_obj": "loot/LOOT_AmmoBox_762/LOOT_AmmoBox_762.obj",
+        "vertices": 8,
+        "faces": 12
+      }
+    ]
+  },
+  "textures": {
+    "tga_count": 12,
+    "minimum_dimension_threshold_px": 256,
+    "below_threshold_count": 12,
+    "below_threshold_paths": [
+      "vfx/VFX_BulletImpact_Concrete/T_VFX_BulletImpact_Concrete_D.tga",
+      "vfx/VFX_BulletImpact_Concrete/T_VFX_BulletImpact_Concrete_N.tga",
+      "vfx/VFX_BulletImpact_Dirt/T_VFX_BulletImpact_Dirt_D.tga",
+      "vfx/VFX_BulletImpact_Dirt/T_VFX_BulletImpact_Dirt_N.tga",
+      "vfx/VFX_BulletImpact_Metal/T_VFX_BulletImpact_Metal_D.tga",
+      "vfx/VFX_BulletImpact_Metal/T_VFX_BulletImpact_Metal_N.tga",
+      "vfx/VFX_MuzzleFlash_Assault/T_VFX_MuzzleFlash_Assault_D.tga",
+      "vfx/VFX_MuzzleFlash_Assault/T_VFX_MuzzleFlash_Assault_N.tga",
+      "vfx/VFX_MuzzleFlash_Shotgun/T_VFX_MuzzleFlash_Shotgun_D.tga",
+      "vfx/VFX_MuzzleFlash_Shotgun/T_VFX_MuzzleFlash_Shotgun_N.tga",
+      "vfx/VFX_MuzzleFlash_Sniper/T_VFX_MuzzleFlash_Sniper_D.tga",
+      "vfx/VFX_MuzzleFlash_Sniper/T_VFX_MuzzleFlash_Sniper_N.tga"
+    ],
+    "invalid_paths": [],
+    "files": [
+      {
+        "path": "vfx/VFX_BulletImpact_Concrete/T_VFX_BulletImpact_Concrete_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_BulletImpact_Concrete/T_VFX_BulletImpact_Concrete_N.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_BulletImpact_Dirt/T_VFX_BulletImpact_Dirt_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_BulletImpact_Dirt/T_VFX_BulletImpact_Dirt_N.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_BulletImpact_Metal/T_VFX_BulletImpact_Metal_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_BulletImpact_Metal/T_VFX_BulletImpact_Metal_N.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Assault/T_VFX_MuzzleFlash_Assault_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Assault/T_VFX_MuzzleFlash_Assault_N.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Shotgun/T_VFX_MuzzleFlash_Shotgun_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Shotgun/T_VFX_MuzzleFlash_Shotgun_N.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Sniper/T_VFX_MuzzleFlash_Sniper_D.tga",
+        "width": 64,
+        "height": 64
+      },
+      {
+        "path": "vfx/VFX_MuzzleFlash_Sniper/T_VFX_MuzzleFlash_Sniper_N.tga",
+        "width": 64,
+        "height": 64
+      }
+    ]
+  },
+  "unreal_content": {
+    "uasset_count": 0,
+    "umap_count": 0,
+    "pending_import_count": 17,
+    "content_directory_exists": true
+  },
+  "warnings": [
+    "12 texturas TGA abaixo de 256px no menor lado.",
+    "Sem .uasset e .umap simultâneos ou ainda há marcadores pending_import.",
+    "Este preflight não mede renderização, materiais, LOD em execução, iluminação, cook, FPS ou qualidade percebida."
+  ],
+  "limitations": [
+    "Contagens de fonte não comprovam fidelidade visual; target_polycount pode ser meta ou orçamento e precisa de interpretação de design.",
+    "UE_FILES_PRESENT_UNVALIDATED indica somente presença de extensões; não inspeciona payload, referências, build, cook ou qualidade visual."
+  ]
+}

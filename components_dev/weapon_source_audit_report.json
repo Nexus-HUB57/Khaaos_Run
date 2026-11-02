@@ -1,0 +1,382 @@
+{
+  "audit_status": "CONFLICTS_DETECTED",
+  "authority_status": "UNRESOLVED",
+  "canonical_source": null,
+  "comparisons": [
+    {
+      "field_conflicts": {
+        "damage": {
+          "components_dev_json": 35,
+          "mvp_asset_manifest": 28
+        },
+        "reload": {
+          "components_dev_json": 2,
+          "mvp_asset_manifest": 2.1
+        }
+      },
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv",
+        "mvp_asset_manifest"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 35,
+          "fire_rate": 600,
+          "headshot_multiplier": 2,
+          "magazine_size": 30,
+          "pellet_count": 1,
+          "range": 80,
+          "reload": 2
+        },
+        "mvp_asset_manifest": {
+          "damage": 28,
+          "fire_rate": 600,
+          "magazine_size": 30,
+          "range": 80,
+          "reload": 2.1
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_AssaultRifle_MK1"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 150,
+          "fire_rate": 30,
+          "headshot_multiplier": 2,
+          "magazine_size": 3,
+          "pellet_count": 1,
+          "range": 150,
+          "reload": 6
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Canhao_KhaaosPrime"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 30,
+          "fire_rate": 700,
+          "headshot_multiplier": 1.8,
+          "magazine_size": 25,
+          "pellet_count": 1,
+          "range": 65,
+          "reload": 1.8
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Carbine_Venex"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Crossbow_Ancient"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 55,
+          "fire_rate": 180,
+          "headshot_multiplier": 2.5,
+          "magazine_size": 10,
+          "pellet_count": 1,
+          "range": 120,
+          "reload": 2.5
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_DMR_Khael"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 75,
+          "fire_rate": 80,
+          "headshot_multiplier": 1,
+          "magazine_size": 0,
+          "pellet_count": 1,
+          "range": 4,
+          "reload": 0
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Espada_Overlord"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 45,
+          "fire_rate": 120,
+          "headshot_multiplier": 1,
+          "magazine_size": 0,
+          "pellet_count": 1,
+          "range": 3,
+          "reload": 0
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Knife_Combat"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 28,
+          "fire_rate": 750,
+          "headshot_multiplier": 1.5,
+          "magazine_size": 100,
+          "pellet_count": 1,
+          "range": 70,
+          "reload": 5
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_LMG_Skeetw"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 28,
+          "fire_rate": 400,
+          "headshot_multiplier": 2,
+          "magazine_size": 15,
+          "pellet_count": 1,
+          "range": 40,
+          "reload": 1.5
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Pistol_Onith"
+    },
+    {
+      "field_conflicts": {},
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 22,
+          "fire_rate": 800,
+          "headshot_multiplier": 1.5,
+          "magazine_size": 30,
+          "pellet_count": 1,
+          "range": 35,
+          "reload": 1.8
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_SMG_Huran"
+    },
+    {
+      "field_conflicts": {
+        "damage": {
+          "components_dev_json": 12,
+          "mvp_asset_manifest": 120
+        },
+        "fire_rate": {
+          "components_dev_json": 80,
+          "mvp_asset_manifest": 60
+        },
+        "magazine_size": {
+          "components_dev_json": 6,
+          "mvp_asset_manifest": 2
+        },
+        "pellet_count": {
+          "components_dev_json": 9,
+          "mvp_asset_manifest": 8
+        },
+        "reload": {
+          "components_dev_json": 4.2,
+          "mvp_asset_manifest": 3.5
+        }
+      },
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv",
+        "mvp_asset_manifest"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 12,
+          "fire_rate": 80,
+          "headshot_multiplier": 1.2,
+          "magazine_size": 6,
+          "pellet_count": 9,
+          "range": 15,
+          "reload": 4.2
+        },
+        "mvp_asset_manifest": {
+          "damage": 120,
+          "fire_rate": 60,
+          "magazine_size": 2,
+          "pellet_count": 8,
+          "range": 15,
+          "reload": 3.5
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Shotgun_Breach"
+    },
+    {
+      "field_conflicts": {
+        "damage": {
+          "components_dev_json": 95,
+          "mvp_asset_manifest": 65
+        },
+        "fire_rate": {
+          "components_dev_json": 40,
+          "mvp_asset_manifest": 180
+        },
+        "headshot_multiplier": {
+          "components_dev_json": 3,
+          "mvp_asset_manifest": 2
+        },
+        "magazine_size": {
+          "components_dev_json": 5,
+          "mvp_asset_manifest": 10
+        },
+        "reload": {
+          "components_dev_json": 3.5,
+          "mvp_asset_manifest": 2.8
+        }
+      },
+      "present_in": [
+        "components_dev_json",
+        "unreal_datatable_csv",
+        "mvp_asset_manifest"
+      ],
+      "source_values": {
+        "components_dev_json": {
+          "damage": 95,
+          "fire_rate": 40,
+          "headshot_multiplier": 3,
+          "magazine_size": 5,
+          "pellet_count": 1,
+          "range": 200,
+          "reload": 3.5
+        },
+        "mvp_asset_manifest": {
+          "damage": 65,
+          "fire_rate": 180,
+          "headshot_multiplier": 2,
+          "magazine_size": 10,
+          "range": 200,
+          "reload": 2.8
+        },
+        "unreal_datatable_csv": {}
+      },
+      "weapon_id": "WPN_Sniper_DMR"
+    }
+  ],
+  "conflicting_weapon_field_pairs": 12,
+  "evidence_scope": "static_declarative_source_comparison_only",
+  "limitations": [
+    "A comparação preserva valores declarados; igualdade não prova carregamento em runtime.",
+    "Os significados/unidades de dano, cadência e alcance não foram reconciliados por decisão de design.",
+    "Para shotgun, dano por pellet versus dano total do disparo permanece ambíguo entre artefatos.",
+    "A classe C++ define estrutura/fórmula; estes arquivos não provam qual Data Asset o mapa/build carrega.",
+    "Nenhum arquivo de dados foi escolhido como autoridade; nenhum valor foi alterado."
+  ],
+  "report_schema_version": 1,
+  "runtime_content_evidence": {
+    "interpretation": "NO_IMPORTED_WEAPON_DATA_ASSETS_FOUND_IN_SCANNED_FOLDERS",
+    "pending_import_marker_count": 4,
+    "weapon_and_datatable_uasset_count": 0
+  },
+  "runtime_loading_proven": false,
+  "sources": [
+    {
+      "included_files": [
+        "components_dev/weapons/weapons_manifest.json",
+        "components_dev/weapons/WPN_AssaultRifle_MK1.json",
+        "components_dev/weapons/WPN_Canhao_KhaaosPrime.json",
+        "components_dev/weapons/WPN_Carbine_Venex.json",
+        "components_dev/weapons/WPN_DMR_Khael.json",
+        "components_dev/weapons/WPN_Espada_Overlord.json",
+        "components_dev/weapons/WPN_Knife_Combat.json",
+        "components_dev/weapons/WPN_LMG_Skeetw.json",
+        "components_dev/weapons/WPN_Pistol_Onith.json",
+        "components_dev/weapons/WPN_SMG_Huran.json",
+        "components_dev/weapons/WPN_Shotgun_Breach.json",
+        "components_dev/weapons/WPN_Sniper_DMR.json"
+      ],
+      "path": "components_dev/weapons/weapons_manifest.json",
+      "record_count": 11,
+      "sha256": "59a8da7027a87cd57f5538d509d90e821e9ece28cd3689f2c8ba6a241e37f772",
+      "source_id": "components_dev_json"
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/DataTables/DT_WeaponBalance.csv",
+      "record_count": 12,
+      "sha256": "af42770166237e3d64d2bb9763114e8d6ad8a15efed921f24c86987bc777638b",
+      "source_id": "unreal_datatable_csv"
+    },
+    {
+      "path": "scripts/mvp/step4_3d_assets/asset_manifest_mvp.json",
+      "record_count": 3,
+      "sha256": "539fc2e3a8c6ccf5ed53e6a4ba1e0c3e5f009efccb6d29ba4aae88f4154d34b9",
+      "source_id": "mvp_asset_manifest"
+    }
+  ],
+  "unmatched_ids": {
+    "components_dev_json": [
+      "WPN_Crossbow_Ancient"
+    ],
+    "mvp_asset_manifest": [
+      "WPN_Canhao_KhaaosPrime",
+      "WPN_Carbine_Venex",
+      "WPN_Crossbow_Ancient",
+      "WPN_DMR_Khael",
+      "WPN_Espada_Overlord",
+      "WPN_Knife_Combat",
+      "WPN_LMG_Skeetw",
+      "WPN_Pistol_Onith",
+      "WPN_SMG_Huran"
+    ],
+    "unreal_datatable_csv": []
+  },
+  "weapon_id_count_union": 12
+}

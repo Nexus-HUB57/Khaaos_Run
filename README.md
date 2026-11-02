@@ -13,6 +13,7 @@
 
 - [Status do Projeto](#status-do-projeto)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
+- [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -37,6 +38,7 @@
 - [Limitações Conhecidas](#limitações-conhecidas)
 - [Roadmap Go Live](#roadmap-go-live)
 - [Auditoria e Roadmap de Correções](docs/README_AUDIT_ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Referências](#referências)
 
 ---
@@ -61,6 +63,7 @@
 | **Launch Readiness** | 🟡 Checklist versionado | Rate limiting, DDoS e checklist implementados; PASS operacional ainda precisa ser demonstrado |
 | **Build UE5 (compilação)** | 🟡 Preflight operacional; build real pendente de engine | Preflight UE5.8 em toda PR (verde); caminhos prontos: container `ghcr.io/epicgames/unreal-engine` (gate no secret `UE_CONTAINER_PAT`) ou runner self-hosted (`scripts/build/bootstrap_ue58_runner.sh`) |
 | **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | `scripts/build/generate_world_asset_packages.py` gera intake determinístico para os cinco mundos; `.uasset`/`.umap` finais exigem import/cook no UE Editor |
+| **Entrada dos Mundos (Zu)** | 🟡 Protocolo autoritativo implementado | `ZU_PORTAL_V1` mantém o jogador em spawn de solo, sincroniza a apresentação por relógio do servidor e elimina `Deploy → Parachute` do fluxo UE5; airdrop de suprimentos permanece separado do ingresso |
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
 | **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
@@ -124,6 +127,46 @@ Docs: `Docs/CIGKV_Barburhen/`
 - Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
 - Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
 
+---
+
+## Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)
+
+> **Nota de status:** "validado E2E" abaixo significa evidência de execução em browser real no preview do console; não equivale a staging de produção, build UE5 ou go-live. Branch de trabalho do repo: **novo branch a partir de `main` atual (`9df772e`)** — `feat/e2e-phases-9-12` está 100% contido na `main` (232 commits atrás; congelar). Revisão E2E de 2026-11-02: `docs/REVISAO_E2E_2026-11-02.md`.
+
+### Console Web (preview Next.js) — alistamento end to end
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| Fluxo de alistamento (ETAPA 1/3 inscrição → 2/3 taxa → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
+| Taxa de inscrição U$1 (= 100 KRC) server-authoritative | ✅ Liquidação + transações `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (2ª chamada → `alreadyPaid:true`, sem dupla cobrança) |
+| Retomada de sessão | ✅ `GET /api/enrollment?username=` reconhece alistado após reload | Não repete inscrição |
+| Erro Prisma `Unknown argument enrollmentProtocol` | ✅ Resolvido | Causa: PrismaClient stale em memória (schema e SQLite já tinham as colunas); processo atualizado sem migração |
+
+- Contrato: `POST /api/enrollment` (liquida taxa, credita bônus de boas-vindas 500 KRC só após pagamento, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
+- Pagamento segue **economia de jogo** (KRC); habilitação de valor real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+### Aba Mundos — especificação canônica do Descentralizador aplicada
+
+- **100 operadores por ring** nos 5 rings (CIGKV PRÉ + C1–C4), perímetros **15.000–25.000 m²**, densidade **150–250 m²/jogador** (CQB estilo Free Fire).
+- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, cluster de 100 dots, pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.
+- Contrato de dimensões sincronizado console ↔ orquestração: `src/lib/game-constants.ts` (`WorldDef.dimensions`) espelha `shared/worlds.ts` do repo.
+- Render validado por análise visual (VLM) dos 5 cartões: formas não-quadradas, POIs rotulados, métricas m² legíveis, sem anomalias.
+
+### Infra do preview
+
+- Keeper embutido no game-service (porta 3003) com spawn detached do `next dev :3000` + watchdog cron a cada 5 min em `GET /api/match` (auto-religue documentada no runbook interno).
+
+### Gráficos v3–v5 (repo UE5, branch `feat/e2e-phases-9-12`)
+
+| Commit | Escopo |
+|--------|--------|
+| `98aa769` | Post-processing real + lighting director + character pop (look Free Fire) |
+| `7e18ff0` | 5 subsistemas gráficos v3.0 — PostProcessStack (13 LUTs), StylizedMaterialSystem (11 shading models), AtmosphereLighting (8 fases do dia × 8 biomas), VFXQualityManager, PerformanceBudget |
+| `519be5c` | ColorGradeLUT + Outline + MobileOptimizer + ShaderTiers (v4) |
+| `fca74b0` | LUT procedural factory, material de PostProcess, servidor 2PC TypeScript, CI de runner GPU, painéis Grafana 2PC (v5) |
+
+> Esses commits estão **versionados**, não compilados: o gate de build real permanece na Fase 0 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
 ## Ontologia dos Mundos
 
 O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência de *Rings* (ambientes de batalha) organizados em estágios de intensidade crescente. Cada Ring é, simultaneamente:
@@ -159,7 +202,7 @@ O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimens
          ▼              ▼              ▼              ▼
    Protocolo CIGKV   Anel de       Emboscada      Tsunami /
    Ring 3 h          Conflito      Verde          Assassino
-   50 players        10 min        10 min         Silencioso
+   100 players       10 min        10 min         Silencioso
    Fluxo contínuo    Zona →        Zona →         Zona →
                      Parque        Templo         Prisão
 ```
@@ -189,7 +232,8 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: 50 jogadores.
+- **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
+- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade 160 m²/jogador (CQB).
 - **Duração**: 3 horas (Ring de Longa Duração).
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
@@ -209,6 +253,16 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 ---
 
 ## Mundos Oficiais (W1–W4)
+
+> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). Contrato de dimensões definido no console (`src/lib/game-constants.ts`, `WorldDef.dimensions` — `areaM2` ≠ `perimeterM` de contorno); o port para `shared/worlds.ts` do repo está no item 1.1 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+| Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
+|------|---------------|--------------|------------------------|----------------------------|-------------|
+| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 m²/jogador | Vila militar murada (`fortified_rectangle`) |
+| W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
+| W2/C2 Priadus | 22.000 m² | 220 m × 100 m | 640 m | 220 m²/jogador | Blob orgânico radial (`organic_blob`) |
+| W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
+| W4/C4 Arukheea | 18.000 m² | 180 m × 100 m | 560 m | 180 m²/jogador | Ilha costeira com enseadas (`coastal_island`) |
 
 ### W1/C1 — Barburhen (Mundo da Destruição)
 
@@ -276,11 +330,15 @@ Todo Ring possui **três variantes de Zu** (entrada cinematográfica). O jogador
 | **W3/C3** | Tempestade de areia → cinto | Explosão no túnel → saltar | Caminhão-tanque em chamas → máscara |
 | **W4/C4** | Trilho desmorona → cinto | Colisão com tanque → saltar no mar | Bombas de gás por drones → máscara |
 
-Em todos os casos:
+Em todos os casos, a decisão ocorre durante a apresentação do portal Zu, sem lançamento aéreo do jogador:
 
 - Decisão correta → 0 dano + possível atordoamento/visão embaçada (5–7 s);
 - Decisão incorreta → até −30 % de vitalidade;
 - Caixotes de armamento caem no perímetro (1 item por jogador).
+
+### Contrato de execução
+
+O runtime offline (`KhaaosSim3D`) e o servidor online (`MatchRoom3D`) usam `zu_portal_v1` por padrão. O evento `zuIngress` carrega `protocol: "ZU_PORTAL_V1"`, `startedAt` e `durationMs: 2200`; os atores já estão em seus spawns autoritativos no solo. A opção `airdrop: true` foi preservada apenas para fixtures legados explícitos e não participa do caminho normal de partida. No UE5, a máquina de estados usa `Lobby → ZuIngress → Looting`, e o `GameMode` não instancia mais o sistema de deploy/parachute do jogador.
 
 ---
 
@@ -1041,6 +1099,7 @@ Semana  1   4   8   11  15  23  28
 - [Lighthouse / code-splitting](docs/LIGHTHOUSE_PERFORMANCE.md)
 - [Deploy Render](docs/RENDER_DEPLOYMENT.md)
 - [Roadmap de engenharia](docs/ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end (2026-11)](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
 - [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
@@ -1073,7 +1132,7 @@ Semana  1   4   8   11  15  23  28
 
 ### Economia 2PC (2 novos arquivos C++20 + 1 TypeScript)
 
-6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
+6. **EconomyBridge2PC** (UGameInstanceSubsystem) — Protocolo Two-Phase Commit (Prepare→Commit/Abort) para consistência transacional de KRC, usado pelo processo UE5 dedicated server. Idempotency-Key HTTP header contra double-spending. Estados: Idle→Preparing→Prepared→Committing→Idle (sucesso) ou Idle→Preparing→Aborting→Idle (rollback).
 
 7. **server/routes/economy-2pc.ts** — Express 5 + Drizzle ORM + PostgreSQL backend com endpoints /prepare, /commit, /abort, /health. Escrow registry com TTL de 60s, garbage collector periódico (15s) para transações órfãs, row-level locking ACID no commit, idempotência O(1) via header. ✅ **IMPLEMENTADO (P0)** — ver detalhes abaixo.
 
@@ -1083,10 +1142,11 @@ Semana  1   4   8   11  15  23  28
 |---|---|
 | `shared/schema.ts` | Tabela `economy_2pc_transactions` (escrow): PK uuid, `client_transaction_id` (fallback não-UUID), unique `(actor_id, idempotency_key)`, `request_hash` SHA-256, TTL `expires_at`, CHECKs de status/valor/destino. Conta contábil `system.2pc_escrow` adicionada ao ledger. |
 | `server/game/economy2pcService.ts` | Serviço 2PC: escrow double-entry (`wallet.weapons`→`system.2pc_escrow` linhas 1-2; commit linhas 3-4; abort linhas 5-6 — mesma key, linhas disjuntas), claim idempotente via unique index, `SELECT ... FOR UPDATE` na wallet, TTL 60s (10-300), GC preventivo no prepare + `recoverExpired()` + loop 15s (`startRecoveryLoop`, unref). |
-| `server/routes/economy-2pc.ts` | Rotas `POST /api/economy/2pc/prepare|commit|abort`, `GET /transactions/:id`, `GET /health`. Zod validation com o payload EXATO do UE5 (`transactionId, idempotencyKey, amountKrc:int, playerId:int, itemId, description, coordinatorNodeId, expiryTimestamp`; resposta com `prepared: bool` para `GetBoolField`). Auth: `x-2pc-node-secret` (`ECONOMY_2PC_NODE_SECRET`) > sessão web > modo dev `ue5-player-<playerId>` (recusado com secret configurado). |
-| `server/routes.ts` | `registerEconomy2PCRoutes(app)` + `economy2pcService.startRecoveryLoop()` registrados antes de `registerApiRoutes` (auth própria, sem OIDC). |
+| `server/routes/economy-2pc.ts` | Rotas `POST /api/economy/2pc/prepare|commit|abort`, `GET /transactions/:id`, `GET /health`. Zod validation com o payload UE5 (`transactionId, idempotencyKey, amountKrc:int, playerId:int, itemId, description, coordinatorNodeId, expiryTimestamp`; resposta com `prepared: bool`). Em produção exige `x-2pc-node-secret` ou sessão; fallback sintético `ue5-player-<playerId>` existe somente fora de produção. |
+| `server/routes.ts` | `registerEconomy2PCRoutes(app)` é montado dentro de `registerApiRoutes`, após CSRF/rate-limit globais; `economy2pcService.startRecoveryLoop()` inicia em `registerRoutes`. |
+| `Unreal/.../KhaaosEconomyBridge2PC.cpp` | Lê `ECONOMY_2PC_NODE_SECRET` do ambiente do processo e envia o header apenas em dedicated server; nunca embutir a chave em build/config de cliente. |
 | `migrations/0006_economy-2pc-escrow.sql` | Migration idempotente (IF NOT EXISTS / DROP CONSTRAINT IF EXISTS). |
-| `tests/official/economy-2pc-contract.test.ts` | 25 testes de contrato DB-free: payload UE5 nos schemas zod, GUID FGuid DigitsWithHyphensLower, plano de linhas 1-2/3-4/5-6, TTL bounds, resolve2PCActor (secret/sessão/dev). |
+| `tests/official/economy-2pc-contract.test.ts` | 28 testes de contrato DB-free: payload UE5 nos schemas Zod, GUID FGuid, plano de linhas 1-2/3-4/5-6, TTL bounds e resolve2PCActor (secret/sessão/dev/produção). `economy-2pc-route-guards.test.ts` cobre CSRF, rate limit e auth HTTP. |
 | `tests/integration/economy-2pc.postgres.test.ts` | 15 testes E2E PostgreSQL: payload UE5 exato, anti double-spend (replay sem duplo débito), 402/404/409 por cenário, commit pós-abort, TTL→ESCROW_EXPIRED com reembolso, GC, invariante ΣDEBIT=ΣCREDIT por operationId. Bootstrap: mini-migrador idempotente de `migrations/*.sql`. |
 
 **Executar:**

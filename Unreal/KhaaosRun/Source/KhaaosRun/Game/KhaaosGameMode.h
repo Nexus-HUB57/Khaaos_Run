@@ -25,7 +25,6 @@ class UKhaaosKillFeedComponent;
 class UKhaaosReviveSystemComponent;
 class UKhaaosMatchFlowStateMachineComponent;
 class UKhaaosAirdropSystemComponent;
-class UKhaaosDeploySystemComponent;
 class UKhaaosCirclePredictionComponent;
 class UKhaaosPerformanceBudgetComponent;
 class UKhaaosLODStrategyComponent;
@@ -453,10 +452,6 @@ protected:
     /** Free Fire-style airdrop/supply drop system. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosAirdropSystemComponent* AirdropSystem;
-
-    /** Deploy/parachute system. */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
-    UKhaaosDeploySystemComponent* DeploySystem;
 
     /** Circle prediction for minimap UI (Fortnite white circle). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")

@@ -38,13 +38,15 @@ const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
 // Fase 18 — espelho de hazard p/ a TRANSMISSÃO: evento da sim/servidor →
 // vocabulário WORLD_HAZARD { hazard, phase }. O payload autoritativo
-// (submergeBelowY/lavaBelowY/anchors/gravityScale) segue intacto — o cliente
-// materializa a MESMA regra de dano por altura com o SurvivalFX dele.
+// (submergeBelowY/sporeTopY/smokeTopY/anchors/gravityScale) segue intacto — o
+// cliente materializa a MESMA regra de dano por altura com o SurvivalFX dele.
 const HAZARD_SPECTATOR_MIRROR = Object.freeze({
   tsunamiStart: { hazard: 'tsunami', phase: 'start' },
   tsunamiEnd: { hazard: 'tsunami', phase: 'end' },
-  eruptionStart: { hazard: 'lava', phase: 'start' },
-  eruptionEnd: { hazard: 'lava', phase: 'end' },
+  sporeFogStart: { hazard: 'spore', phase: 'start' },
+  sporeFogEnd: { hazard: 'spore', phase: 'end' },
+  toxicSmokeStart: { hazard: 'smoke', phase: 'start' },
+  toxicSmokeEnd: { hazard: 'smoke', phase: 'end' },
   gravityAnomalyStart: { hazard: 'gravity', phase: 'start' },
   gravityAnomalyEnd: { hazard: 'gravity', phase: 'end' },
   acidRain: { hazard: 'acid', phase: 'pulse' },
@@ -90,7 +92,7 @@ export const INTERP_DELAY_MS = 110, HALF_TICK_MS = 25; // buffer de interpolaç�
 export const AOI_ENTER_M = 130, AOI_EXIT_M = 165, AOI_PROJECTILE_M = 180;
 
 export class MatchRoom3D {
-  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = true, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
+  constructor({ id, seed, region = 'sa-east', capacity = 16, botFill, airdrop = false, scenarioId = 'CIGKV', squad = false, isPrivate = false, inviteCode = null, onMatchEnd = null, officerPlanFn = null, aoi = false } = {}) {
     this.id = id;
     this.seed = String(seed);
     this.region = region;
@@ -115,11 +117,14 @@ export class MatchRoom3D {
     this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
-    this.airdrop = !!airdrop; // Fase 4: infiltração aérea no início da partida
+    this.scenario = resolveScenario(scenarioId);
+    this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
+    const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
+    this.zuIngress = { ...zuIngress, synchronized: true, startedAt: null };
     this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
     this.isPrivate = !!isPrivate;
     this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
-    this.scenario = resolveScenario(scenarioId);
     this.mode = '3d';
     this.is3d = true;
     this.rng = new SeededRng(`${this.seed}:room3d`);
@@ -143,9 +148,12 @@ export class MatchRoom3D {
     this.tsunamiTimer = 0;
     this.tsunamiRemaining = 0;
     this.tsunamiActive = false;
-    this.volcanicTimer = 0;
-    this.volcanicRemaining = 0;
-    this.volcanicActive = false;
+    this.sporeTimer = 0;
+    this.sporeRemaining = 0;
+    this.sporeActive = false;
+    this.smokeTimer = 0;
+    this.smokeRemaining = 0;
+    this.smokeActive = false;
     this.quantumTimer = 0;
     this.quantumRemaining = 0;
     this.quantumActive = false;
@@ -448,18 +456,30 @@ export class MatchRoom3D {
         article: this.officerMeta.article, names: deployment.map((o) => o.name),
       });
     }
-    // Fase 4 — infiltração aérea: humanos e bots entram caindo do céu
+    // Zu de entrada: os atores já nascem nos spawns de solo autoritativos.
+    // O evento sincroniza a apresentação do portal; não há fase aérea de gameplay.
     if (this.airdrop) {
       let idx = 0;
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
+    } else {
+      this.zuIngress.startedAt = Date.now();
+      this.#emitAll('zuIngress', {
+        protocol: this.zuIngress.eventProtocol,
+        entryProtocol: this.entryProtocol,
+        mode: this.zuIngress.mode,
+        startedAt: this.zuIngress.startedAt,
+        durationMs: this.zuIngress.durationMs,
+        world: this.scenario.id,
+        spawnCount: this.humans.size + this.bots.length,
+      });
     }
     // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
     // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
     // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
     // join decidem tocar ou pular pelo elapsed).
     this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
-    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, bots: this.bots.length, train: this.trainAnnounce });
+    for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, entryProtocol: this.entryProtocol, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
     return true;
@@ -559,7 +579,15 @@ export class MatchRoom3D {
       this.pulseTimer = 0;
       this.ring.pulse++;
       this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
-      this.#emitAll('pulse', { pulse: this.ring.pulse, target: this.ring.target });
+      // Fase 42 — paridade 1:1 com a sim: o anel FECHA sobre o setor canônico do
+      // mundo (scenarios.ringFinal — README "Dinâmica" de cada Ring).
+      const fin = this.scenario.ringFinal;
+      if (fin) {
+        const k = Math.min(1, this.ring.pulse / 4);
+        this.ring.x = fin.x * k;
+        this.ring.z = fin.z * k;
+      }
+      this.#emitAll('pulse', { pulse: this.ring.pulse, target: this.ring.target, finalName: fin?.name ?? null });
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     for (const actor of this.#actors()) {
@@ -568,9 +596,12 @@ export class MatchRoom3D {
       }
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
-    if (this.scenario.id === 'Priadus') this.#stepTsunami(dt);
-    if (this.scenario.id === 'Ckesalth') this.#stepVolcanicEruption(dt);
-    if (this.scenario.id === 'Arukheea') this.#stepGravityAnomaly(dt);
+    // Fase 42 — sobrevivência pela CONFIGURAÇÃO do mundo (paridade 1:1 com sim3d).
+    const survivalType = this.scenario.survival?.type ?? null;
+    if (survivalType === 'TSUNAMI_WAVE') this.#stepTsunami(dt);
+    else if (survivalType === 'SPORE_FOG') this.#stepSporeFog(dt);
+    else if (survivalType === 'TOXIC_SMOKE') this.#stepToxicSmoke(dt);
+    else if (survivalType === 'KHAOS_GRAVITY') this.#stepGravityAnomaly(dt);
 
     // Fase 25 — cooldown de toggle das folhas (anti-thrash de E/bot)
     for (const d of this.doors) if (d.cooldown > 0) d.cooldown = Math.max(0, d.cooldown - dt);
@@ -1524,27 +1555,52 @@ export class MatchRoom3D {
       this.#emitAll('tsunamiEnd', {});
     }
   }
-  #stepVolcanicEruption(dt) {
+  // Fase 42 — "Emboscada Verde" (W2): neblina de esporos (paridade com sim3d).
+  #stepSporeFog(dt) {
     const hazard = this.scenario.survival;
     if (!hazard) return;
-    if (!this.volcanicActive) {
-      this.volcanicTimer += dt;
-      if (this.volcanicTimer >= hazard.intervalSeconds) {
-        this.volcanicTimer -= hazard.intervalSeconds;
-        this.volcanicRemaining = hazard.durationSeconds;
-        this.volcanicActive = true;
-        this.#emitAll('eruptionStart', { durationSeconds: hazard.durationSeconds, lavaBelowY: hazard.lavaBelowY });
+    if (!this.sporeActive) {
+      this.sporeTimer += dt;
+      if (this.sporeTimer >= hazard.intervalSeconds) {
+        this.sporeTimer -= hazard.intervalSeconds;
+        this.sporeRemaining = hazard.durationSeconds;
+        this.sporeActive = true;
+        this.#emitAll('sporeFogStart', { durationSeconds: hazard.durationSeconds, sporeTopY: hazard.sporeTopY });
       }
     }
-    if (!this.volcanicActive) return;
+    if (!this.sporeActive) return;
     for (const actor of this.#actors()) {
-      if (actor.alive && actor.y < hazard.lavaBelowY) this.#damage(actor, hazard.damagePerSecond * dt, null, 'eruption');
+      if (actor.alive && actor.y < hazard.sporeTopY) this.#damage(actor, hazard.damagePerSecond * dt, null, 'spore');
     }
-    this.volcanicRemaining -= dt;
-    if (this.volcanicRemaining <= 0) {
-      this.volcanicRemaining = 0;
-      this.volcanicActive = false;
-      this.#emitAll('eruptionEnd', {});
+    this.sporeRemaining -= dt;
+    if (this.sporeRemaining <= 0) {
+      this.sporeRemaining = 0;
+      this.sporeActive = false;
+      this.#emitAll('sporeFogEnd', {});
+    }
+  }
+  // Fase 42 — "Assassino Silencioso" (W3): fumaça tóxica (paridade com sim3d).
+  #stepToxicSmoke(dt) {
+    const hazard = this.scenario.survival;
+    if (!hazard) return;
+    if (!this.smokeActive) {
+      this.smokeTimer += dt;
+      if (this.smokeTimer >= hazard.intervalSeconds) {
+        this.smokeTimer -= hazard.intervalSeconds;
+        this.smokeRemaining = hazard.durationSeconds;
+        this.smokeActive = true;
+        this.#emitAll('toxicSmokeStart', { durationSeconds: hazard.durationSeconds, smokeTopY: hazard.smokeTopY });
+      }
+    }
+    if (!this.smokeActive) return;
+    for (const actor of this.#actors()) {
+      if (actor.alive && actor.y < hazard.smokeTopY) this.#damage(actor, hazard.damagePerSecond * dt, null, 'smoke');
+    }
+    this.smokeRemaining -= dt;
+    if (this.smokeRemaining <= 0) {
+      this.smokeRemaining = 0;
+      this.smokeActive = false;
+      this.#emitAll('toxicSmokeEnd', {});
     }
   }
   #stepGravityAnomaly(dt) {
@@ -1613,12 +1669,14 @@ export class MatchRoom3D {
         dmg *= 1 - (ability.parameters.damageReduction ?? 0);
       }
     }
-    if (kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption' && (actor.temporaryArmor ?? 0) > 0) {
+    if (kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke' && (actor.temporaryArmor ?? 0) > 0) {
       const soakT = Math.min(actor.temporaryArmor, dmg);
       actor.temporaryArmor -= soakT;
       dmg -= soakT;
     }
-    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'eruption') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
+    // Fase 42 — mantos ambientais (ácido/tsunami/esporos/fumaça) não são
+    // absorvidos por blindagem (kevlar não filtra o mundo; máscara/terreno alto sim).
+    if (actor.armor > 0 && kind !== 'ring' && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(actor.armor, dmg * 0.6); actor.armor -= soak; dmg -= soak; }
     actor.life -= dmg;
     if (ownerId) actor.lastHitBy = ownerId;
     // Fase 28 — dano na TRANSMISSÃO: evento DAMAGE (número flutuante do
@@ -1818,7 +1876,7 @@ export class MatchRoom3D {
       tick: this.tickCount, time: this.time,
       state: this.state, started: this.started,
       over: this.state === ROOM_STATES.FINISHED,
-      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.volcanicActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.volcanicRemaining, anchors: this.world.quantumAnchors ?? [] },
+      survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.sporeActive || this.smokeActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.sporeRemaining || this.smokeRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring },
       aliveCount: actors.filter((a) => a.alive).length,
       player: self ? this.#selfView(self) : null,

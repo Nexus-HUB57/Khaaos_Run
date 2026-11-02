@@ -3,7 +3,7 @@
 // dentro dos limites; tudo determinístico por seed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roadSegments, propPlacements, facadeDetails, canopyTint } from '../src/game3d/detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, naturalDressingPlacements } from '../src/game3d/detail3d.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { SeededRng } from '../src/shared/rng.js';
 
@@ -102,4 +102,41 @@ test('canopyTint retorna paleta fechada e variada', () => {
   for (let i = 0; i < 40; i++) seen.add(canopyTint(rng));
   assert.ok(seen.size >= 2, 'variedade de copas');
   for (const v of seen) assert.ok(Number.isInteger(v), 'tint inteiro');
+});
+
+function pointToSegmentDistance(x, z, seg) {
+  const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
+  const len2 = dx * dx + dz * dz;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - seg.x1) * dx + (z - seg.z1) * dz) / len2));
+  return Math.hypot(x - (seg.x1 + dx * t), z - (seg.z1 + dz * t));
+}
+
+test('F45 · clutter natural determinístico, fora de rotas, loot, distritos e colliders', () => {
+  const avoidSpots = [{ x: 12, z: -18 }, { x: -20, z: 22 }];
+  const footprint = { stone: .58, fallenLog: 1.45, stump: .48, fern: .72 };
+  for (const scenarioId of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    const layout = getWorldLayout(`f45-ground-${scenarioId}`, scenarioId);
+    const spots = naturalDressingPlacements(layout, { seed: 'stable-natural-dressing', avoidSpots });
+    assert.ok(spots.length >= 35, `${scenarioId}: clutter visível suficiente (${spots.length})`);
+    assert.deepEqual(spots, naturalDressingPlacements(layout, { seed: 'stable-natural-dressing', avoidSpots }),
+      `${scenarioId}: mesmas coordenadas por seed`);
+    assert.deepEqual(new Set(spots.map((p) => p.type)), new Set(['stone', 'fallenLog', 'stump', 'fern']),
+      `${scenarioId}: quatro famílias naturais presentes`);
+    for (const p of spots) {
+      assert.ok(Math.abs(p.x) <= 189 && Math.abs(p.z) <= 189, 'item dentro do campo válido');
+      assert.ok(layout.colliders.every((c) => c.yMin > .5
+        || p.x < c.minX - 2 || p.x > c.maxX + 2 || p.z < c.minZ - 2 || p.z > c.maxZ + 2),
+      `${p.type}: fora de collider`);
+      assert.ok(layout.lootSpots.every((l) => Math.hypot(p.x - l.x, p.z - l.z) > 4.2), `${p.type}: longe do loot`);
+      assert.ok(layout.districts.every((d) => Math.hypot(p.x - d.cx, p.z - d.cz) > d.r + 4), `${p.type}: fora do distrito`);
+      assert.ok(avoidSpots.every((s) => Math.hypot(p.x - s.x, p.z - s.z) >= 2.4), `${p.type}: sem sobrepor árvore/arbusto`);
+      assert.ok(roadSegments(layout).every((r) => pointToSegmentDistance(p.x, p.z, r) >= r.width / 2 + 3.2),
+        `${p.type}: fora da pista/calçada`);
+    }
+    for (let i = 0; i < spots.length; i++) for (let j = i + 1; j < spots.length; j++) {
+      const min = footprint[spots[i].type] * spots[i].scale + footprint[spots[j].type] * spots[j].scale + .35;
+      assert.ok(Math.hypot(spots[i].x - spots[j].x, spots[i].z - spots[j].z) >= min,
+        `${spots[i].type}/${spots[j].type}: espaçamento de segurança`);
+    }
+  }
 });

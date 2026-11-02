@@ -22,9 +22,9 @@ const FCopy& CopyFor(ERing Ring, int Variant)
 {
 	static const FCopy Table[5][3] = {
 		{
-			{"Risco de Colisao - Apertar os Cintos S/N", "O caminhao perde o controle depois de atropelar uma manada de bois.", "Khaaos Ville"},
-			{"Area com Alto Risco de Desmoronamento - Saltar do Caminhao S/N", "Uma rocha gigante atinge o caminhao e o faz capotar.", "Khaaos Ville"},
-			{"Ponte Antiga / Risco de Queda - Usar Mascara de Oxigenio S/N", "O trilho da ponte quebra. O caminhao cai e submerge.", "Khaaos Ville"},
+			{"Risco de Descarrilamento - Apertar os Cintos S/N", "O trem do ZU perde o controle na curva de entrada de Khaaos Ville.", "Khaaos Ville"},
+			{"Obstaculo na Linha - Saltar do Trem S/N", "Uma composicao de carga invade a linha e o trem do ZU freia em emergencia.", "Khaaos Ville"},
+			{"Fumaca no Tunel - Usar Mascara de Oxigenio S/N", "Uma pane eletrica enche os vagoes do trem do ZU de fumaca antes da plataforma.", "Khaaos Ville"},
 		},
 		{
 			{"Risco de Descarrilamento - Apertar os Cintos S/N", "O trem descarrila numa curva fechada de Barburhen.", "Barburhen"},

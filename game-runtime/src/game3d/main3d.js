@@ -9,6 +9,7 @@ import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (me
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
@@ -976,9 +977,18 @@ export class Game3D {
     }
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
+    // Fase 42 — passada do jogador LOCAL travada em DISTÂNCIA PREDITA: a fase
+    // avança pelos metros percorridos (não pelo relógio) → os pés aterrisam
+    // onde o corpo chega (zero patinação) e os heel strikes viram o relógio
+    // físico do áudio de passos.
+    this._gait ??= newGait();
+    advanceGait(this._gait, { x: p.x, z: p.z, dt });
+    if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
+      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0);
+    }
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
-      t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
+      t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
@@ -1105,7 +1115,23 @@ export class Game3D {
       // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
       // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      // Fase 42 — passada dos REMOTOS travada em DISTÂNCIA INTERPOLADA:
+      // fase avança pelos metros que o ator realmente percorreu (Δ do snapshot
+      // interpolado) e speedNorm é o EWMA da velocidade real (0..1.25) — o
+      // binário .9/.15 (patinação + "rotor") foi aposentado. Heel strikes a
+      // menos de 22 m do ouvinte viram passos audíveis com atenuação.
+      if (parts && !entry.frozen) {
+        entry.gait ??= newGait();
+        advanceGait(entry.gait, { x: b.x, z: b.z, dt });
+        const gsn = Math.max(b.moving ? .12 : 0, entry.gait.speed);
+        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+        if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
+          const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
+          if (dListener < 22) {
+            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener);
+          }
+        }
+      }
       // Fase 26 — silhueta LARANJA do fieldScan (revelado atrás de cobertura):
       // offline revela por revealedTicks; online pelo flag revealed do snapshot.
       this.#setBotRevealGlow(entry, !!(b.revealedTicks > 0 || b.revealed));
@@ -1432,10 +1458,14 @@ export class Game3D {
             if (p.alive && !p.knocked) this.hitFX.set('player', { angle: 0, power: .3, age: 0 });
           }
           break;
-        case 'pulse':
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.`, 'warn');
+        case 'pulse': {
+          // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
+          // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
           this.audio.ringWarn();
           break;
+        }
         case 'ringDamage':
           if (!this._ringWarned || performance.now() - this._ringWarned > 4000) {
             this._ringWarned = performance.now();
@@ -1557,28 +1587,40 @@ export class Game3D {
           this.audio?.survival?.('tsunami', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
           break;
-        case 'eruptionStart':
+        case 'sporeFogStart': // Fase 42 — W2 "Emboscada Verde" (README)
           this.survivalFX?.handleEvent(e);
-          this.shake = Math.max(this.shake, .3);
-          this.audio?.survival?.('lava', true);
-          this.audio?.hazardStinger?.('lava');
-          this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          this.shake = Math.max(this.shake, .18);
+          this.audio?.survival?.('spore', true);
+          this.audio?.hazardStinger?.('spore');
+          this.hud.feed('SOBREVIVÊNCIA', `EMBOSCADA VERDE: neblina com esporos tóxicos sobe até ${Math.round(e.sporeTopY ?? 90)}m — não fique no terreno baixo (${Math.round(e.durationSeconds ?? 45)}s).`, 'bad');
           break;
-        case 'eruptionEnd':
+        case 'sporeFogEnd':
           this.survivalFX?.handleEvent(e);
-          this.audio?.survival?.('lava', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
+          this.audio?.survival?.('spore', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A neblina de esporos se dissipa. Terreno baixo liberado.', 'good');
           break;
-        case 'gravityAnomalyStart':
+        case 'toxicSmokeStart': // Fase 42 — W3 "Assassino Silencioso" (README)
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .22);
+          this.audio?.survival?.('smoke', true);
+          this.audio?.hazardStinger?.('smoke');
+          this.hud.feed('SOBREVIVÊNCIA', `ASSASSINO SILENCIOSO: fumaça tóxica inunda o terreno baixo até ${Math.round(e.smokeTopY ?? 180)}m — suba ou pereça (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          break;
+        case 'toxicSmokeEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('smoke', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A fumaça tóxica se assenta. Área baixa liberada.', 'good');
+          break;
+        case 'gravityAnomalyStart': // Fase 42 — Pulso Khaaos do CIGKV (README, Protocolo CIGKV)
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', true);
           this.audio?.hazardStinger?.('gravity');
-          this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
+          this.hud.feed('SOBREVIVÊNCIA', `PULSO KHAAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
           break;
         case 'gravityAnomalyEnd':
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
+          this.hud.feed('SOBREVIVÊNCIA', 'Pulso Khaaos dissipado. Gravidade restaurada.', 'good');
           break;
         case 'acidRain':
           this.survivalFX?.handleEvent(e);

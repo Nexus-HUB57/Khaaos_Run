@@ -175,3 +175,40 @@ Adicionar reaper para jogadores desconectados.
 Aplicar AOI no broadcast efetivo.
 Depois disso, validar multi-réplica e staging com dois clientes reais.
 Veredito: War’I/PackBack estão funcionais como vertical slice local e single-instance, com boa cobertura de contratos e fluxo WebSocket. Ainda precisam de endurecimento de integridade, persistência e distribuição antes de serem classificados como multiplayer de produção.
+
+
+---
+
+## Atualização da revisão de sincronização — 2026-10-30
+
+Esta seção supersede o cabeçalho histórico acima para fins de estado atual. O relatório original foi produzido no HEAD `187bc9f`; o repositório agora está em `9e6a723` e recebeu muitos merges posteriores de infraestrutura, War'I, PackBack e experiência do jogador.
+
+### Validações executadas
+
+A suíte focada atual passou **27/27**: catálogo completo da Forja, classificação de itens, contratos de UI, snapshot de PackBack no início da partida, capacidade/peso, ações de cura/granada/reconhecimento, durabilidade, privacidade do snapshot, pickup/rollback, salas privadas e WebSocket E2E com retomada autenticada. A suíte usa fixtures quando PostgreSQL não está disponível; isso valida o fluxo de contrato, mas não substitui o teste concorrente contra PostgreSQL real.
+
+Chromium está disponível no ambiente, mas o binário Playwright não estava instalado no checkout desta sessão; a suíte visual `npm run test:e2e:war-i` não foi declarada como executada nesta revisão.
+
+### Estado sincronizado encontrado
+
+- O catálogo da Forja em `shared/armorer-catalog.ts` é a fonte de identidade, preço, durabilidade e atributos dos produtos. O teste `armorer-catalog.test.ts` cobre a sincronização catálogo → compra → item persistido.
+- O servidor filtra salas privadas, não expõe a existência de sala sem convite e mantém convites vinculados ao jogador. Os contratos estão cobertos por `private-room-access.test.ts` e pelo fluxo de convite do `RoomManager`.
+- Ownership distribuído e fencing por epoch foram incorporados ao upstream (`da83f6c`, `ddf839b`). A drenagem de sala cercada interrompe a autoridade local e notifica os jogadores; isso ainda precisa de smoke real com duas réplicas Redis para ser considerado prova operacional.
+- O consumo de durabilidade já exige `durability >= amount` no update condicional; o risco histórico de consumo parcial está coberto pelo caminho atual e pelos testes de PackBack.
+
+### Correção aplicada nesta revisão
+
+O AOI estava implementado em `pushInterest()`, porém o método não era chamado pelo fluxo principal. Antes desta correção, `zone_tick` e `room_state` serializavam todos os jogadores e todo o loot durante `IN_PROGRESS`. O `RoomManager` agora filtra jogadores e loot pelo raio de interesse de 28 pontos do mapa para snapshots e ticks de partida, mantendo lobby/countdown completos. O cliente já consumia a lista de jogadores do `zone_tick`, portanto a correção foi aplicada nesse canal sem exigir mudança de protocolo.
+
+### Pendências reais
+
+- O loot procedural continua com claim durável incompleto: o fluxo marca o objeto em memória, cria um item persistente e faz rollback local em caso de falha, mas não há claim atômico compartilhado por `matchId/roomId` que sobreviva a restart ou disputa entre réplicas.
+- `carriedWeight` e parte do estado de capacidade continuam na memória da sala; failover precisa de reconstrução definida a partir de eventos/snapshot persistente.
+- O `game-runtime` 3D e o War'I web permanecem implementações separadas. É necessário escolher uma fonte canônica ou manter testes de paridade de inventário, durabilidade, autenticação e ranking.
+- `lastSeenAt` é atualizado, mas não foi identificado nesta revisão um reaper de abandono que retire jogador desconectado após grace period e o exclua corretamente da condição de vitória.
+- Slots semânticos e revisão otimista de loadout ainda não formam um contrato completo de servidor; a documentação menciona mochila de cinco slots, enquanto o servidor atual aplica principalmente capacidade/peso.
+- A execução Playwright visual e o smoke multi-réplica com PostgreSQL/Redis reais permanecem gates externos a esta sessão.
+
+### Veredito atualizado
+
+War'I/PackBack estão sincronizados como vertical slice web autoritativo com cobertura de contrato forte e os principais fixes históricos incorporados. Depois do patch de AOI, não há evidência de vazamento espacial no payload de partida dentro do processo local. O sistema ainda não deve ser classificado como multiplayer distribuído pronto para produção até que claim persistente de loot, reconstrução de carga, reaper de abandono, paridade runtime e smoke multi-réplica sejam concluídos.

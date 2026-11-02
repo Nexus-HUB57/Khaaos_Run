@@ -146,6 +146,10 @@ jobs:
         working-directory: game-runtime
         run: npm ci
 
+      - name: Auditoria de fidelidade Mundos ↔ README (F44)
+        working-directory: game-runtime
+        run: npm run audit:fidelity
+
       - name: Apply runtime PostgreSQL migrations
         working-directory: game-runtime
         run: npm run db:migrate
@@ -249,6 +253,12 @@ jobs:
             HEADER_COUNT=$((HEADER_COUNT + 1))
             # Shared enums and inline helpers are intentionally header-only.
             if [[ "$h" == */Game/Data/KhaaosEnums.h ]]; then
+              echo "ℹ️  HEADER-ONLY: $h"
+              continue
+            fi
+            # Política pura (inline constexpr/inline, zero UCLASS) — desenhada
+            # sem deps de Unreal p/ testes nativos determinísticos (#236).
+            if [[ "$h" == */Game/Network/KhaaosMobileFirePolicy.h ]]; then
               echo "ℹ️  HEADER-ONLY: $h"
               continue
             fi

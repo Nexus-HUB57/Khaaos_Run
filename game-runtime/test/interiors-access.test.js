@@ -325,10 +325,14 @@ test('integração buildScene: nada quebrou nos 5 cenários (posições finitas,
   }
 });
 
-test('cenários preservados: SCENARIOS intactos pela Fase 24 (contrato de gameplay)', () => {
+test('cenários preservados: SCENARIOS com o cânon F42 (README 1:1)', () => {
   assert.equal(Object.keys(SCENARIOS).length, 5);
   assert.equal(SCENARIOS.PRIADUS.ringDamageMultiplier, 1.75);
-  assert.equal(SCENARIOS.PRIADUS.survival.submergeBelowY, 90);
+  // Fase 42 — Emboscada Verde no lugar do tsunami (canônico W4); teto de esporos 90
+  assert.equal(SCENARIOS.PRIADUS.survival.type, 'SPORE_FOG');
+  assert.equal(SCENARIOS.PRIADUS.survival.sporeTopY, 90);
+  // Assassino Silencioso mantém 9 dps (era a erupção; fumaça canônica W3)
+  assert.equal(SCENARIOS.CKESALTH.survival.type, 'TOXIC_SMOKE');
   assert.equal(SCENARIOS.CKESALTH.survival.damagePerSecond, 9);
   assert.equal(SCENARIOS.CIGKV.playerSpawn.x, 0);
 });
