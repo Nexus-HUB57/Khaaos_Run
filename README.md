@@ -13,6 +13,7 @@
 
 - [Status do Projeto](#status-do-projeto)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
+- [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
 - [Ontologia dos Mundos](#ontologia-dos-mundos)
 - [Arquitetura de Ciclos e Rings](#arquitetura-de-ciclos-e-rings)
 - [Protocolo CIGKV — Campo de Treinamento](#protocolo-cigkv--campo-de-treinamento)
@@ -37,6 +38,7 @@
 - [Limitações Conhecidas](#limitações-conhecidas)
 - [Roadmap Go Live](#roadmap-go-live)
 - [Auditoria e Roadmap de Correções](docs/README_AUDIT_ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Referências](#referências)
 
 ---
@@ -125,6 +127,46 @@ Docs: `Docs/CIGKV_Barburhen/`
 - Abilities de tiro/melee usam GAS; survival (Zu/Ring/chuva) usa `%` via Vitality
 - Doc: `Docs/CIGKV_Barburhen/Combat_and_Vitality.md`
 
+---
+
+## Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)
+
+> **Nota de status:** "validado E2E" abaixo significa evidência de execução em browser real no preview do console; não equivale a staging de produção, build UE5 ou go-live. Branch de trabalho do repo: **novo branch a partir de `main` atual (`9df772e`)** — `feat/e2e-phases-9-12` está 100% contido na `main` (232 commits atrás; congelar). Revisão E2E de 2026-11-02: `docs/REVISAO_E2E_2026-11-02.md`.
+
+### Console Web (preview Next.js) — alistamento end to end
+
+| Item | Estado | Evidência |
+|------|--------|----------|
+| Fluxo de alistamento (ETAPA 1/3 inscrição → 2/3 taxa → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
+| Taxa de inscrição U$1 (= 100 KRC) server-authoritative | ✅ Liquidação + transações `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (2ª chamada → `alreadyPaid:true`, sem dupla cobrança) |
+| Retomada de sessão | ✅ `GET /api/enrollment?username=` reconhece alistado após reload | Não repete inscrição |
+| Erro Prisma `Unknown argument enrollmentProtocol` | ✅ Resolvido | Causa: PrismaClient stale em memória (schema e SQLite já tinham as colunas); processo atualizado sem migração |
+
+- Contrato: `POST /api/enrollment` (liquida taxa, credita bônus de boas-vindas 500 KRC só após pagamento, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
+- Pagamento segue **economia de jogo** (KRC); habilitação de valor real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+### Aba Mundos — especificação canônica do Descentralizador aplicada
+
+- **100 operadores por ring** nos 5 rings (CIGKV PRÉ + C1–C4), perímetros **15.000–25.000 m²**, densidade **150–250 m²/jogador** (CQB estilo Free Fire).
+- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, cluster de 100 dots, pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.
+- Contrato de dimensões sincronizado console ↔ orquestração: `src/lib/game-constants.ts` (`WorldDef.dimensions`) espelha `shared/worlds.ts` do repo.
+- Render validado por análise visual (VLM) dos 5 cartões: formas não-quadradas, POIs rotulados, métricas m² legíveis, sem anomalias.
+
+### Infra do preview
+
+- Keeper embutido no game-service (porta 3003) com spawn detached do `next dev :3000` + watchdog cron a cada 5 min em `GET /api/match` (auto-religue documentada no runbook interno).
+
+### Gráficos v3–v5 (repo UE5, branch `feat/e2e-phases-9-12`)
+
+| Commit | Escopo |
+|--------|--------|
+| `98aa769` | Post-processing real + lighting director + character pop (look Free Fire) |
+| `7e18ff0` | 5 subsistemas gráficos v3.0 — PostProcessStack (13 LUTs), StylizedMaterialSystem (11 shading models), AtmosphereLighting (8 fases do dia × 8 biomas), VFXQualityManager, PerformanceBudget |
+| `519be5c` | ColorGradeLUT + Outline + MobileOptimizer + ShaderTiers (v4) |
+| `fca74b0` | LUT procedural factory, material de PostProcess, servidor 2PC TypeScript, CI de runner GPU, painéis Grafana 2PC (v5) |
+
+> Esses commits estão **versionados**, não compilados: o gate de build real permanece na Fase 0 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
 ## Ontologia dos Mundos
 
 O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência de *Rings* (ambientes de batalha) organizados em estágios de intensidade crescente. Cada Ring é, simultaneamente:
@@ -160,7 +202,7 @@ O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimens
          ▼              ▼              ▼              ▼
    Protocolo CIGKV   Anel de       Emboscada      Tsunami /
    Ring 3 h          Conflito      Verde          Assassino
-   50 players        10 min        10 min         Silencioso
+   100 players       10 min        10 min         Silencioso
    Fluxo contínuo    Zona →        Zona →         Zona →
                      Parque        Templo         Prisão
 ```
@@ -190,7 +232,8 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: 50 jogadores.
+- **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
+- **Perímetro canônico**: 16.000 m² (160 m × 100 m) • densidade 160 m²/jogador (CQB).
 - **Duração**: 3 horas (Ring de Longa Duração).
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
