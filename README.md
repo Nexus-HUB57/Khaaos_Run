@@ -233,7 +233,7 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 ### Dinâmica de Ring
 
 - **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
-- **Perímetro canônico**: 16.000 m² (160 m × 100 m) • densidade 160 m²/jogador (CQB).
+- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade 160 m²/jogador (CQB).
 - **Duração**: 3 horas (Ring de Longa Duração).
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
@@ -253,6 +253,16 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 ---
 
 ## Mundos Oficiais (W1–W4)
+
+> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). Contrato de dimensões definido no console (`src/lib/game-constants.ts`, `WorldDef.dimensions` — `areaM2` ≠ `perimeterM` de contorno); o port para `shared/worlds.ts` do repo está no item 1.1 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+| Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
+|------|---------------|--------------|------------------------|----------------------------|-------------|
+| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 m²/jogador | Vila militar murada (`fortified_rectangle`) |
+| W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
+| W2/C2 Priadus | 22.000 m² | 220 m × 100 m | 640 m | 220 m²/jogador | Blob orgânico radial (`organic_blob`) |
+| W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
+| W4/C4 Arukheea | 18.000 m² | 180 m × 100 m | 560 m | 180 m²/jogador | Ilha costeira com enseadas (`coastal_island`) |
 
 ### W1/C1 — Barburhen (Mundo da Destruição)
 
@@ -1089,6 +1099,7 @@ Semana  1   4   8   11  15  23  28
 - [Lighthouse / code-splitting](docs/LIGHTHOUSE_PERFORMANCE.md)
 - [Deploy Render](docs/RENDER_DEPLOYMENT.md)
 - [Roadmap de engenharia](docs/ROADMAP.md)
+- [Roadmap de Desenvolvimento — Próximos Passos end to end (2026-11)](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md)
 - [Fundação Unreal Engine 5.8](Unreal/README.md)
 - [Plano do runtime isolado](game-runtime/plan.md)
 - [Convenções de nomenclatura UE5](Unreal/KhaaosRun/Docs/ASSET_NAMING_CONVENTIONS.md)
