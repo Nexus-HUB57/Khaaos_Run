@@ -366,6 +366,13 @@ export class MatchRoom3D {
     this.#emitTo(humanId, type, payload);
     return true;
   }
+  // Desconexão de transporte: interrompe ações temporizadas sem remover o
+  // operativo da sala, pois o WebSocket pode ser retomado dentro da janela.
+  cancelZexChannelForDisconnect(id) {
+    const actor = this.humans.get(id);
+    if (!actor?.zexChannel) return false;
+    return this.#cancelZexChannel(actor, 'disconnect');
+  }
   removePlayer(id) {
     this.aoiState.delete(id); // M3 — estado AOI do observador sai junto
     const actor = this.humans.get(id);

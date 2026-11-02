@@ -1176,6 +1176,8 @@ export function createAuthoritativeServer({
     for (const raw of earlyMessages.splice(0)) messageHandler(raw);
     ws.on('message', messageHandler);
     ws.on('close', () => {
+      const room = client.roomId ? rooms.get(client.roomId) : null;
+      room?.cancelZexChannelForDisconnect?.(client.id);
       void durable.setSession(client.resumeToken, { id: client.id, userId: user.sub, roomId: client.roomId, expiresAt: Date.now() + 15000 }).catch?.(() => {});
       clients.delete(client.id);
       observability.recordLog({ level: 'info', event: 'ws.disconnect', trace: wsCtx, fields: { username: client.identity.username, roomId: client.roomId, liveConnections: clients.size } });
