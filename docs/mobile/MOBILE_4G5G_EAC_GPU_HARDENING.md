@@ -1,7 +1,7 @@
 # Khaaos Run — endurecimento mobile: SDK, EAC, GPU e rede 4G/5G
 
 **Branch de trabalho:** `feat/mobile-toolchain-network-chaos`
-**Base revisada:** `main` em `def3e99` (após o merge do PR #180)
+**Base revisada:** `main` em `1832851` (após os merges até o PR #235)
 **Status:** código e testes determinísticos adicionados. O sandbox é `aarch64`, sem SDK/NDK, `javac`, Unreal Editor ou assets `.uasset/.umap`; o cook real precisa de runner UE/Linux apropriado e conteúdo importado. O EAC real ainda depende do SDK e acesso oficiais.
 
 ## O que foi implementado
@@ -12,6 +12,12 @@
 - A política de heartbeat, lease, token e cadência autoritativa foi extraída para header C++ sem dependência Unreal, chamado pelo `KhaaosPlayerController` e pelo teste nativo.
 - O setup EAC por URL salvava todo pacote como `.pkg` e calculava o diretório do SDK um nível acima do layout extraído. Corrigi o reconhecimento ZIP/TAR e a localização de `Sdk/anticheat`; pacotes inválidos agora falham em vez de cair silenciosamente para stub.
 - Foi criado um bootstrap Linux do Android SDK/NDK para UE 5.8. Ele valida checksum do command-line tools oficial e não aceita licenças sem a flag explícita `--accept-licenses`.
+
+## Resultado do workflow M4 UE5.8/EOS
+
+Em 1 nov 2026, disparei duas vezes o workflow oficial [M4 — UE5.8/EOS Acceptance](https://github.com/Nexus-HUB57/Khaaos_Run/actions/workflows/m4-ue5-eos-acceptance.yml) com `package=true`: [primeira execução](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41376087851) e [segunda execução após adicionar fallback de `UE5_GITHUB_TOKEN`](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41376282565). Ambas terminaram com conclusão geral `success`, mas **não executaram build nem cook**: o gate reportou `UE_CONTAINER_PAT` ausente e, na segunda execução, também `UE5_GITHUB_TOKEN` ausente; por isso, `ue58-licensed` foi pulado. Nenhum UBT, Automation Tests, teste de dois clientes ou `BuildCookRun` aconteceu. A API Actions também retornou `total_count=0` para runners registrados, então não há runner self-hosted UE5.8 disponível como alternativa.
+
+O job EOS reportou `EOS_*` ausentes e `EOS_LIVE_SMOKE_SKIPPED`; não houve autenticação live. A API do GitHub usada nesta sessão também negou permissão para listar nomes de secrets, então nenhuma credencial foi lida ou exposta. O fallback de workflow é mantido para aceitar um token com leitura do container caso ele seja configurado; o PR permanece draft até uma execução real.
 
 ## Android SDK/NDK e cook
 
