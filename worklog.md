@@ -901,3 +901,23 @@ Stage Summary:
 - O domínio de personagens fechou o ciclo pedido: espécies canônicas (lote 1), roster de operatives completo para as 6 espécies × 2 sexos com dossiês auditáveis (lote 2), seleção de avatar persistida chegando aos jogadores via migration 0012, esqueleto reconciliado por ADR executado (fim do UE5_Mannequin fantasma) e figuras de alistamento com malhas 3D importáveis
 - A matriz 12/12 de proofs elimina o "recorte invisível" de gênero no conteúdo dos mundos: qualquer combinação sexo×espécie agora tem dossiê com fenótipo, marcadores culturais e traços de espécie
 - Suíte: oficial 504+39 — 0 falhas · tsc 0 · trimesh 6/6 · GLBs 6/6 válidos
+
+## Task ID: 35
+**Agent:** Main
+**Task:** "Prosseguir end to end" — validação do main avançado (PR #261 lote 2 de personagens de outro dev), re-certificação F46 sobre README alterado (§Personagens Lote 2), deploy staging #113/#114 validado por healthz
+
+Work Log:
+- ESTADO DE PARTIDA: sandbox persistido, main avançou 5566158 → 6e5548d durante o intervalo — PR #261 (feat(personagens) lote 2) mergeado por outro dev: matriz de proofs 12/12 sexo×espécie (6 dossiês novos PROOF_M-09..11/F-11..13, manifest → 24 proofs), ADR-ESQUELETO-RIG-POR-SEXO executado (shared/character-studio.ts com type "SK_Manny"|"SK_Gwen" + 16 operatives reescritos por gender), GLBs das 6 figuras de alistamento (exportador puro Python glTF 2.0, scripts/figures/export_figures_glb.py + client/public/figures/glb/), 3 suítes de teste novas (proofs-matrix 4, species-catalog 4, figures-glb 2); worklog recebeu "Task ID: 34 (continuação — lote 2)" do outro dev (numeração colidente mas conteúdo distinto e honesto — NOTA: próxima sessão deve usar ID sequencial único)
+- REVISÃO DO AVANÇO (5566158..6e5548d, 51 arquivos +2453/−350): código+docs+assets de personagens; README alterado (§Personagens Lote 2) ⇒ F46 obrigatoriamente re-certificado
+- F46 FIDELITY GATE no main 6e5548d (CI run #41465854553 run 572): `Veredito: FIEL ✅ (53 OK / 0 falhas) — snapshot em 1621 ms` — o §Personagens não toca headings W#/C# nem tabelas de setores (contrato F44 ileso)
+- MAIN CI 6e5548d: 28 check-runs — 25 success / 3 skipped / 0 falha
+- VALIDAÇÃO LOCAL no main sincronizado (git reset --hard origin/main): tsc --noEmit 0 erros; species-catalog 4/4; proofs-matrix 4/4; figures-glb 2/2; character-studio 3/3 (paridade de catálogo de avatares mantida pós-ADR); suíte oficial completa exit 0 (39 pass / 0 fail no 2º bloco de testes node --test)
+- DEPLOY STAGING (deploy.yml dispatch ref=main): run #114 (41470875292) completed/success — Pre-Deploy Validation ✅ → Build Docker Images ✅ (ghcr) → Deploy Staging via Render ✅ → Production skipped (by design) → Post-Deploy Verification ✅; run #113 (41465982502) também success no mesmo SHA (disparado por outro agoritmo/dev às 14:51 — Render idempotente, sem conflito)
+- STAGING VALIDADO: `https://khaaos-run-staging.onrender.com/healthz.json` → 200 `{"status":"ok","commit":"6e5548d8423faaa6f985bbd4b554c03aafd34724"}` (matches main HEAD 6e5548d); `/healthz` → 200 database ok (PostgreSQL 18.6, 13ms), economy2pc ok (0 escrows)
+- BLOQUEIOS HUMANOS (sem ação de código possível): 0 self-hosted runners registrados ⇒ runs UE5.8 Preflight (ue5-headless-compile [self-hosted, linux, gpu, ue5.8, x64]) permanecem queued; 11 secrets presentes mas SEM `EOS_*` nem `UE_CONTAINER_PAT` — inalterado
+- LIÇÕES: (a) numeração de Task do worklog colide quando dois agentes rodam em paralelo — a entrada "34 (continuação)" do outro dev é honesta mas quebra a sequência; normalizar futuras entradas para ID sequencial único (35 em diante) e verificar o tail do worklog ANTES de numerar; (b) quando README muda no main, o portão F46 re-certifica automaticamente via paths do trigger — zero intervenção manual necessária (F46 provou valor de novo)
+
+Stage Summary:
+- O main evoluiu de forma saudável sob trabalho paralelo: lote 2 de personagens (proofs 12/12, ADR de esqueleto executado, GLBs das figuras) entrou com CI 100% verde, portão F46 re-certificando o README alterado (FIEL 53/0) e deploy de staging rastreável por healthz
+- Loop e2e fechado nesta sessão sem código novo meu: validação de avanço de terceiros → re-certificação F46 → deploy #113/#114 → healthz reportando o SHA exato — a máquina continua saudável com outro dev ativo
+- Suíte: tsc 0 · species-catalog 4/4 · proofs-matrix 4/4 · figures-glb 2/2 · character-studio 3/3 · oficial exit 0 · F46 FIEL ✅ 53/0 (1621 ms) · main 6e5548d 28 checks 0 fails · staging 6e5548d validado · 0 PRs abertos
