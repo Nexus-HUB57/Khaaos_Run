@@ -29,4 +29,5 @@ Os relatórios HTML e artefatos de falha ficam em `playwright-report/` e `test-r
 ## Cenários cobertos
 
 - Inventário War’I: compartimentos/abas visíveis, indicador de itens prontos, aviso de durabilidade inválida, filtro PackBack e busca de item.
+- Perfil: seleção de avatar (incluindo Talon), POST persistente simulado, atualização do estado selecionado e resolução de SVG local.
 - Zona em viewport móvel: conexão WebSocket simulada, curativo e granada visíveis, estado “confirmando”, bloqueio de cliques repetidos, confirmação e atualização de durabilidade.

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { items, loans, transactions, bankAccounts, playerStats, SPECIALIZATION_IDS } from './schema';
 import { fromMinorUnits, toMinorUnits } from './money';
 import { ARMORER_CATALOG_IDS } from './armorer-catalog';
+import { isOperativeAvatarId } from './operative-avatar-catalog';
 
 const moneyAmountInput = (minimum: bigint, maximum: bigint) => z.union([
   z.number().finite(),
@@ -295,6 +296,17 @@ export const api = {
         200: z.object({ specializationId: z.string() }),
         400: errorSchemas.validation,
         403: errorSchemas.validation,
+      },
+    },
+    operative: {
+      method: 'POST' as const,
+      path: '/api/player/operative',
+      input: z.object({
+        operativeId: z.string().refine(isOperativeAvatarId, 'Operativo inválido'),
+      }).strict(),
+      responses: {
+        200: z.object({ selectedOperativeId: z.string() }).strict(),
+        400: errorSchemas.validation,
       },
     },
   },

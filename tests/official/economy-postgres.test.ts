@@ -59,6 +59,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
       CREATE TABLE IF NOT EXISTS player_stats (
         id SERIAL PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, rank TEXT NOT NULL DEFAULT 'ZHEERS',
         specialization_id TEXT,
+        selected_operative_id TEXT NOT NULL DEFAULT 'OP_MALE_VANGUARD',
         xp INTEGER NOT NULL DEFAULT 0, health INTEGER NOT NULL DEFAULT 100,
         max_health INTEGER NOT NULL DEFAULT 100, energy INTEGER NOT NULL DEFAULT 100,
         max_energy INTEGER NOT NULL DEFAULT 100, status TEXT NOT NULL DEFAULT 'VIVO',

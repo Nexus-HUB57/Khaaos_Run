@@ -57,6 +57,8 @@ async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
   const craftRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
   const balances = ARMORER_MATERIALS.map((material) => ({ materialId: material.id, quantity: initialMaterialQuantity }));
   const equipRequests: Array<{ itemId: number; isEquipped: boolean }> = [];
+  const operativeRequests: string[] = [];
+  let selectedOperativeId = "OP_MALE_VANGUARD";
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -64,7 +66,17 @@ async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
     let status = 200;
     let body: unknown;
 
-    if (pathname === "/api/items/craft" && request.method() === "POST") {
+    if (pathname === "/api/player/operative" && request.method() === "POST") {
+      const input = request.postDataJSON() as { operativeId?: string };
+      if (typeof input.operativeId !== "string") {
+        status = 400;
+        body = { message: "Operativo inválido." };
+      } else {
+        selectedOperativeId = input.operativeId;
+        operativeRequests.push(selectedOperativeId);
+        body = { selectedOperativeId };
+      }
+    } else if (pathname === "/api/items/craft" && request.method() === "POST") {
       const input = request.postDataJSON() as { catalogId?: string };
       craftRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
       const product = ARMORER_CATALOG.find((candidate) => candidate.id === input.catalogId);
@@ -125,7 +137,7 @@ async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
           case "/api/player/me":
             body = {
               user: { id: playerId, firstName: "Zheers", lastName: "Teste" },
-              stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0 },
+              stats: { id: 1, userId: playerId, rank: "ZHEERS", xp: 0, health: 82, maxHealth: 100, energy: 100, maxEnergy: 100, status: "VIVO", kills: 0, deaths: 0, rating: 1000, matchesPlayed: 0, wins: 0, top5: 0, seasonKills: 0, selectedOperativeId },
             };
             break;
           case "/api/zone/status":
@@ -144,7 +156,7 @@ async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
 
-  return { craftRequests, equipRequests };
+  return { craftRequests, equipRequests, operativeRequests };
 }
 
 async function mockBattleSocket(page: Page, inMatch: boolean) {
@@ -200,10 +212,24 @@ async function mockBattleSocket(page: Page, inMatch: boolean) {
 }
 
 async function openApp(page: Page, path: string, inMatch: boolean) {
-  await mockPlayerApis(page);
+  const apiMocks = await mockPlayerApis(page);
   await mockBattleSocket(page, inMatch);
   await page.goto(path);
+  return apiMocks;
 }
+
+test("perfil salva avatar do catálogo e exibe o mesmo ID selecionado", async ({ page }) => {
+  const { operativeRequests } = await openApp(page, "/profile", false);
+  const talon = page.getByTestId("select-operative-avatar-OP_MALE_TALON");
+
+  await expect(talon).toBeVisible();
+  await expect(talon).toHaveAttribute("aria-pressed", "false");
+  await talon.click();
+
+  await expect(talon).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("img", { name: "Avatar de TALON" })).toHaveAttribute("src", "/avatars/male/op_male_talon.svg");
+  expect(operativeRequests).toEqual(["OP_MALE_TALON"]);
+});
 
 test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", async ({ page }) => {
   test.setTimeout(60_000);
