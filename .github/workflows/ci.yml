@@ -399,22 +399,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      # Gate: tabela com exit-code 1 (mesma semântica do sarif, output legível
+      # no log e execução determinística no runner — o caminho sarif do
+      # trivy-action v0.76.1 falhava 4× seguidas com árvore comprovadamente
+      # limpa: a tabela on-failure registrou 0 findings na mesma árvore/DB).
+      - name: Run Trivy gate (CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          format: "table"
+
+      # Best-effort: alimenta o GitHub Security Dashboard; o formato sarif do
+      # trivy 0.76.1 está instável no runner (falha determinística com 0
+      # findings), então não bloqueia o job.
+      - name: Run Trivy SARIF (best-effort — Security Dashboard)
+        if: always()
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
           format: "sarif"
           output: "trivy-results.sarif"
-
-      # Observabilidade: em falha, imprime a tabela legível (o gate acima continua
-      # sendo o sarif com exit-code 1 — este passo NÃO altera a decisão do job).
-      - name: Trivy table on failure
-        if: failure()
-        run: |
-          trivy fs . --severity CRITICAL,HIGH --format table || true
 
       - name: Upload Trivy results
         if: always() && github.event_name == 'push'
