@@ -675,3 +675,107 @@ export function evaluateWorldUnlocks(
 
   return next;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Contrato de dimensões canônicas dos rings (especificação do Descentralizador)
+ *
+ * Faixa 15.000–25.000 m² · 100 operadores por ring · densidade 150–250 m²/jogador
+ * (combate CQB estilo Free Fire). `areaM2` ≠ `perimeterM` de contorno — ambos são
+ * campos independentes do contrato e a paridade é verificada por
+ * `tests/official/worlds-dimensions.test.ts`.
+ *
+ * Fonte: README.md § "Mundos Oficiais (W1–W4)" (sync 2026-11-02, PRs #243/#244);
+ * port do item 1.1 do Roadmap end to end (docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type WorldShape =
+  | "fortified_rectangle"
+  | "urban_gridiron"
+  | "organic_blob"
+  | "desert_basin"
+  | "coastal_island";
+
+export interface WorldRingDimensions {
+  worldId: WorldId;
+  operationalId: OperationalWorldId;
+  /** Forma orgânica do contorno por bioma (spec do WorldMapPreview). */
+  shape: WorldShape;
+  /** Área canônica jogável em m² (≠ perímetro de contorno). */
+  areaM2: number;
+  /** Bounding box canônica em metros. */
+  boundingBoxM: { widthM: number; depthM: number };
+  /** Perímetro de contorno em metros (contrato independente da área). */
+  perimeterM: number;
+  /** Capacidade fixa do Descentralizador: 100 operadores por ring. */
+  operatorCapacity: number;
+  /** Densidade canônica em m² por operador (areaM2 / operatorCapacity). */
+  densityM2PerOperator: number;
+  shapeNote: string;
+}
+
+export const WORLD_RING_CAPACITY_OPERATORS = 100;
+
+export const WORLD_RING_DIMENSIONS: Readonly<
+  Record<WorldId, WorldRingDimensions>
+> = {
+  CIGKV: {
+    worldId: "CIGKV",
+    operationalId: "CIGKV",
+    shape: "fortified_rectangle",
+    areaM2: 16_000,
+    boundingBoxM: { widthM: 160, depthM: 100 },
+    perimeterM: 520,
+    operatorCapacity: 100,
+    densityM2PerOperator: 160,
+    shapeNote: "Vila militar murada",
+  },
+  Barburhen: {
+    worldId: "Barburhen",
+    operationalId: "W1",
+    shape: "urban_gridiron",
+    areaM2: 19_000,
+    boundingBoxM: { widthM: 190, depthM: 100 },
+    perimeterM: 580,
+    operatorCapacity: 100,
+    densityM2PerOperator: 190,
+    shapeNote: "Grid urbano irregular",
+  },
+  Priadus: {
+    worldId: "Priadus",
+    operationalId: "W2",
+    shape: "organic_blob",
+    areaM2: 22_000,
+    boundingBoxM: { widthM: 220, depthM: 100 },
+    perimeterM: 640,
+    operatorCapacity: 100,
+    densityM2PerOperator: 220,
+    shapeNote: "Blob orgânico radial",
+  },
+  Ckesalth: {
+    worldId: "Ckesalth",
+    operationalId: "W3",
+    shape: "desert_basin",
+    areaM2: 25_000,
+    boundingBoxM: { widthM: 250, depthM: 100 },
+    perimeterM: 700,
+    operatorCapacity: 100,
+    densityM2PerOperator: 250,
+    shapeNote: "Bacia de dunas",
+  },
+  Arukheea: {
+    worldId: "Arukheea",
+    operationalId: "W4",
+    shape: "coastal_island",
+    areaM2: 18_000,
+    boundingBoxM: { widthM: 180, depthM: 100 },
+    perimeterM: 560,
+    operatorCapacity: 100,
+    densityM2PerOperator: 180,
+    shapeNote: "Ilha costeira com enseadas",
+  },
+} as const;
+
+/** Lista ordenada (CIGKV → W4) das dimensões canônicas dos rings. */
+export const WORLD_RING_DIMENSIONS_LIST: readonly WorldRingDimensions[] = (
+  ["CIGKV", "Barburhen", "Priadus", "Ckesalth", "Arukheea"] as const
+).map((id) => WORLD_RING_DIMENSIONS[id]);
