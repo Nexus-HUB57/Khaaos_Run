@@ -2,7 +2,7 @@
 
 ## Implementação inicial
 
-Transferência, solicitação/pagamento de empréstimo, compra/reparo de item e salário diário passam por `server/game/economyService.ts`. Cada operação habilitada grava débito/crédito, recurso (quando aplicável) e linha do ledger no mesmo `db.transaction` do PostgreSQL. O depósito legado foi **desativado**: `POST /api/bank/deposit` retorna HTTP 503 sem chamar serviço econômico ou storage; o método antigo `DatabaseStorage.depositFunds` foi removido. A resposta não significa pagamento aceito nem KRC creditado.
+Transferência, solicitação/pagamento de empréstimo, fabricação/reparo de item e salário diário passam por `server/game/economyService.ts`. A fabricação debita a mão de obra do Armeiro em KRC e consome ingredientes da tabela `player_materials`; item, estoque, saldo, transação e postings do ledger são escritos no mesmo `db.transaction` do PostgreSQL. O depósito legado foi **desativado**: `POST /api/bank/deposit` retorna HTTP 503 sem chamar serviço econômico ou storage; o método antigo `DatabaseStorage.depositFunds` foi removido. A resposta não significa pagamento aceito nem KRC creditado.
 
 - Todas as operações monetárias exigem `Idempotency-Key` (16–128 caracteres permitidos), escopada pelo usuário autenticado.
 - **Guard uniforme /api/bank/\*** (auditoria Fase 2): TODA mutação sob `/api/bank/*` valida o header antes de qualquer lógica — inclusive o depósito congelado, que responde `400` sem chave e só então `503 PAYMENTS_NOT_CONFIGURED`. Nenhuma rota de banco reabrirá sem a proteção de idempotência herdada; a suíte `tests/official/bank-idempotency.test.ts` fixa o contrato (400 sem chave, replay idêntico no PG, `409` com payload divergente e par de ledger não duplicado).
@@ -24,6 +24,8 @@ Não execute os dois mecanismos em paralelo sem comparar o estado do schema. As 
 
 ## Ledger correlacionável — início da Priority 0.3
 
+**Forja por receitas:** a migration `0010_aspiring_captain_midlands.sql` adiciona `player_materials` com unicidade por jogador/material, quantidade não negativa e a conta `system.armorer_fees` à whitelist do ledger. Ela é aditiva: materiais existentes não são criados nem debitados na migração; o estoque começa a crescer quando o jogador coleta drops de recurso. A matriz de produtos, ingredientes e taxas está em [`ARMORER_CRAFTING_RECIPES.md`](ARMORER_CRAFTING_RECIPES.md).
+
 A migration `0004_correlated_append_only_ledger.sql` mantém `transactions` como histórico de eventos compatível com a UI e adiciona `economy_ledger_entries` como registro contábil de linhas. Cada chamada econômica ganha um `operation_id` UUID persistido junto à claim de idempotência; a resposta (inclusive replay) devolve o mesmo ID. A linha de evento em `transactions` e todas as linhas do ledger recebem esse mesmo ID e a chave de idempotência. Uma chamada rejeitada por saldo/regra não cria evento nem posting.
 
 As entradas usam KRC `numeric` positivo, `DEBIT`/`CREDIT`, número de linha e código de conta. Carteiras de jogador são tratadas como passivos de saldo normal credor; reconciliação da carteira é `créditos - débitos`. Cada operação precisa balancear débitos e créditos e o PostgreSQL verifica isso com constraint trigger `DEFERRABLE INITIALLY DEFERRED`, ao fim da transação.
@@ -33,12 +35,13 @@ As entradas usam KRC `numeric` positivo, `DEBIT`/`CREDIT`, número de linha e c�
 | Transferência | Débito na carteira Weapons; crédito em Bonus ou FBM. |
 | Empréstimo | Crédito em Weapons; débito em recebíveis de principal. |
 | Pagamento de empréstimo | Débito em Weapons; crédito em recebíveis de principal e, separadamente, em receita de juros. |
-| Compra/reparo | Débito em Weapons; crédito em vendas/serviços. |
+| Fabricação | Débito em Weapons pela mão de obra; crédito em `system.armorer_fees`. Ingredientes são recursos de inventário e não lançamentos KRC. |
+| Reparo | Débito em Weapons; crédito em `system.item_repairs`. |
 | Salário | Crédito em Bonus; débito em despesa salarial. |
 
 Para as carteiras existentes, a migration cria postings de abertura uma única vez por usuário/conta, contra `equity.opening_balance`, e grava um marcador de migration para evitar que uma reexecução posterior interprete saldos já transacionados como novos saldos iniciais; isso estabelece a base de reconciliação sem reinterpretar o histórico antigo, que não discriminava carteiras. As migrations econômicas 0002–0004 foram exercitadas apenas num PostgreSQL local descartável. O trigger impede `UPDATE`, `DELETE` e `TRUNCATE` via o caminho SQL comum; um dono/superuser do banco ainda pode desabilitar triggers, então a separação de privilégios da role de runtime permanece requisito operacional.
 
-**Verificação:** `economy-postgres.test.ts` aplica 0002–0004 e reaplica a migration do ledger, confere snapshot inicial sem duplicação, replay de `operation_id`, vínculo evento→idempotência→ledger, balanced postings, bloqueio de mutação e reconciliação exata das carteiras com KRC `numeric`.
+**Verificação:** `economy-postgres.test.ts` aplica 0002–0004 e a migration de crafting, confere snapshot inicial sem duplicação, replay de `operation_id`, concorrência sobre estoque, rollback de ingredientes/fee/item, vínculo evento→idempotência→ledger, balanced postings, bloqueio de mutação e reconciliação exata das carteiras com KRC `numeric`.
 
 ## Auditoria e retenção operacionais — Priority 0.3
 

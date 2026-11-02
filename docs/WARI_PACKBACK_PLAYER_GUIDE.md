@@ -1,21 +1,22 @@
 # Guia do jogador — War’I e PackBack
 
-Este guia explica como usar o **War’I**, o arsenal do jogador, e a **PackBack Tática** — chamada informalmente de Backbag — para preparar o loadout, comprar equipamento na Forja do Armeiro e usar itens durante uma partida.
+Este guia explica como usar o **War’I**, o arsenal do jogador, a **PackBack Tática** — chamada informalmente de Backbag — e a Forja do Armeiro para reunir materiais, fabricar equipamentos e usá-los durante uma partida.
 
 ## Em poucas palavras
 
 - **War’I** é o inventário completo. Nele você consulta, filtra, equipa, repara e organiza seus itens.
 - **PackBack** é a seleção de itens equipada para o próximo combate; não é um inventário separado.
-- **Forja do Armeiro** é a loja de equipamento. Uma compra aceita é adicionada ao War’I com os atributos definidos pelo catálogo do jogo.
+- **Forja do Armeiro** fabrica itens a partir de receitas canônicas. O jogador fornece os materiais coletados e paga a mão de obra em KRC; o produto concluído entra no War’I.
 - **Zona → Ações da PackBack** é o painel usado para ativar curas, granadas e itens de reconhecimento durante uma partida em andamento.
 
 ## Fluxo recomendado
 
-1. Abra a **Forja do Armeiro**, confira preço e atributos e adquira os itens desejados com KRC.
-2. Abra **War’I** e localize os itens recém-adquiridos no Arsenal. Use os compartimentos ou a busca para encontrá-los.
-3. Abra os detalhes de cada item e escolha **ADICIONAR À PACKBACK**. A etiqueta **PACKBACK** indica que ele está equipado.
-4. Antes da partida, revise o resumo **PRONTOS PARA A BATALHA**. Itens sem durabilidade válida permanecem no Arsenal, mas não concedem bônus no combate.
-5. Durante uma partida, abra **Zona** e use **WAR’I · AÇÕES DA PACKBACK** para ativar um consumível ou utilidade compatível.
+1. Colete matérias-primas (metal, madeira, polímero, pólvora e outros componentes) como loot na Zona ou durante uma partida.
+2. Abra a **Forja do Armeiro**, confira seu estoque, os ingredientes de cada receita e a taxa de serviço em KRC. Fabrique o item quando houver materiais suficientes.
+3. Abra **War’I** e localize os itens recém-fabricados no Arsenal. Use os compartimentos ou a busca para encontrá-los.
+4. Abra os detalhes de cada item e escolha **ADICIONAR À PACKBACK**. A etiqueta **PACKBACK** indica que ele está equipado.
+5. Antes da partida, revise o resumo **PRONTOS PARA A BATALHA**. Itens sem durabilidade válida permanecem no Arsenal, mas não concedem bônus no combate.
+6. Durante uma partida, abra **Zona** e use **WAR’I · AÇÕES DA PACKBACK** para ativar um consumível ou utilidade compatível.
 
 ## Compartimentos do War’I
 
@@ -24,7 +25,7 @@ Este guia explica como usar o **War’I**, o arsenal do jogador, e a **PackBack 
 | **Arsenal** | Todos os itens do jogador. |
 | **Armamento** | Itens do tipo arma. |
 | **Defesa** | Itens do tipo defesa. |
-| **Bag** | Curativos, utilidades e recursos. |
+| **Bag** | Curativos e utilidades. Matérias-primas ficam no estoque da Forja, não como itens avulsos do Arsenal. |
 | **PackBack** | Itens marcados como equipados para o loadout. |
 
 Os contadores mostram quantos itens pertencem a cada filtro. A busca procura pelo nome, tipo e raridade. Selecione um cartão para ver raridade, tipo, durabilidade e stats.
@@ -68,22 +69,24 @@ Cada uso confirmado consome **10 pontos de durabilidade** — tanto a cura fora 
 
 Se a sala estiver em andamento e nenhum item equipado tiver uma ação ativa compatível, o painel informa que não há consumíveis ou utilidades ativas carregadas.
 
-## Catálogo atual da Forja
+## Receitas e taxas da Forja
 
-Os itens abaixo são definidos pelo catálogo compartilhado da Forja e do War’I. Preços em KRC; todos começam com durabilidade `100/100`.
+O catálogo atual contém oito produtos. A raridade/poder afeta a escassez dos componentes e o custo do serviço; todos os itens fabricados começam com durabilidade `100/100`.
 
-| Item | Tipo / raridade | Preço | Stats e efeito principal |
-|---|---|---:|---|
-| Lâmina Nano | Arma / COMUM | 500 | Dano 18, alcance 6. |
-| Rifle de Plasma | Arma / RARO | 1.200 | Dano 35, alcance 9. |
-| Colete de Kevlar | Defesa / COMUM | 800 | Defesa 20; concede +5 à saúde máxima enquanto pronto e equipado. |
-| Escudo Tático | Defesa / EPICO | 2.000 | Defesa 60; concede +15 à saúde máxima enquanto pronto e equipado. |
-| Stim Pack | Curativo / COMUM | 100 | Cura até 20 pontos de saúde. |
-| Mochila Tática | Utilidade / COMUM | 150 | Capacidade +20, aplicada passivamente ao loadout. |
-| Granada de Fragmentação | Utilidade / RARO | 600 | Dano 30, raio 5; ativada pela PackBack durante a partida. |
-| Kit Médico Avançado | Curativo / EPICO | 350 | Cura até 80 pontos de saúde. |
+| Item | Tipo / raridade | Componentes principais | Trabalho (KRC) |
+|---|---|---|---:|
+| Lâmina Nano | Arma / COMUM | 3 Metal + 2 Madeira + 1 Polímero | 120 |
+| Colete de Kevlar | Defesa / COMUM | 3 Metal + 6 Fibra Tática + 2 Polímero | 180 |
+| Stim Pack | Curativo / COMUM | 2 Gel Médico + 1 Fibra Tática | 25 |
+| Mochila Tática | Utilidade / COMUM | 2 Madeira + 3 Fibra Tática + 2 Polímero | 50 |
+| Granada de Fragmentação | Utilidade / RARO | 2 Metal + 3 Pólvora + 1 Polímero | 240 |
+| Rifle de Plasma | Arma / RARO | 8 Metal + 4 Polímero + 3 Componentes Eletrônicos + 2 Pólvora | 500 |
+| Kit Médico Avançado | Curativo / EPICO | 6 Gel Médico + 2 Componentes Eletrônicos + 3 Polímero | 650 |
+| Escudo Tático | Defesa / EPICO | 10 Metal + 8 Polímero + 3 Componentes Eletrônicos + 2 Ligas Cristalinas | 900 |
 
-O servidor usa o ID do produto para resolver preço e atributos. A compra não aceita que o cliente substitua preço, raridade ou stats; uma compra aprovada grava no War’I os mesmos dados exibidos pela Forja.
+A tela da Forja mostra o estoque individual, os componentes exigidos e o que falta. A solicitação não envia preço, stats nem receita do cliente: o servidor resolve o catálogo, debita materiais e mão de obra, cria o item no War’I e registra o KRC de serviço de forma atômica. Se faltar algum recurso ou saldo, nada é consumido.
+
+Veja a [tabela completa de fabricação e obtenção de materiais](ARMORER_CRAFTING_RECIPES.md) para quantidades dos drops, APIs e garantias da transação.
 
 ## Problemas comuns
 

@@ -56,6 +56,7 @@ async function cleanUserRows(userId: string) {
   // All IDs are unique to the test. Delete only rows created by this fixture;
   // never truncate shared CI data or reset global sequences.
   await pool.query("DELETE FROM items WHERE user_id = $1", [userId]);
+  await pool.query("DELETE FROM player_materials WHERE user_id = $1", [userId]);
   await pool.query("DELETE FROM transactions WHERE user_id = $1", [userId]);
   await pool.query("DELETE FROM loans WHERE user_id = $1", [userId]);
   await pool.query("DELETE FROM bank_accounts WHERE user_id = $1", [userId]);
@@ -191,6 +192,7 @@ test("PostgreSQL: pickup de curativo confirma loot, inventário e cura em uma tr
   const rollbackLootName = `Rollback pickup medkit ${randomUUID()}`;
   let successLootId: number | undefined;
   let rollbackLootId: number | undefined;
+  let materialLootId: number | undefined;
 
   try {
     await storage.getPlayerStats(userId);
@@ -212,6 +214,19 @@ test("PostgreSQL: pickup de curativo confirma loot, inventário e cura em uma tr
       [userId],
     );
     assert.equal(healed.rows[0].health, 65);
+
+    const materialLoot = await pool.query<{ id: number }>(
+      `INSERT INTO loot_items (name, type, rarity, pos_x, pos_y, stats)
+       VALUES ('Metal Recuperado', 'RECURSO', 'COMUM', 35, 45, '{"materialCode":1,"quantity":4,"weight":2}'::jsonb) RETURNING id`,
+    );
+    materialLootId = materialLoot.rows[0].id;
+    const collectedMaterial = await storage.pickupLoot(materialLootId, userId);
+    assert.equal(collectedMaterial.loot.isPickedUp, true);
+    assert.equal(collectedMaterial.item, undefined, "matéria-prima deve ser empilhada, não virar item individual");
+    assert.deepEqual(collectedMaterial.materials, { materialId: "metal", quantity: 4 });
+    assert.equal((await storage.getPlayerMaterials(userId)).find((entry) => entry.materialId === "metal")?.quantity, 4);
+    await assert.rejects(storage.pickupLoot(materialLootId, userId), /já foi coletado/);
+    assert.equal((await storage.getPlayerMaterials(userId)).find((entry) => entry.materialId === "metal")?.quantity, 4, "replay do pickup não pode duplicar materiais");
 
     await storage.getPlayerStats(rollbackUserId);
     await storage.updatePlayerStats(rollbackUserId, { health: 20 });
@@ -262,6 +277,7 @@ test("PostgreSQL: pickup de curativo confirma loot, inventário e cura em uma tr
   } finally {
     await pool.query("DROP TRIGGER IF EXISTS reject_test_pickup_heal ON player_stats");
     await pool.query("DROP FUNCTION IF EXISTS reject_test_pickup_heal()");
+    if (materialLootId !== undefined) await pool.query("DELETE FROM loot_items WHERE id = $1", [materialLootId]);
     if (successLootId !== undefined) await pool.query("DELETE FROM loot_items WHERE id = $1", [successLootId]);
     if (rollbackLootId !== undefined) await pool.query("DELETE FROM loot_items WHERE id = $1", [rollbackLootId]);
     await cleanUserRows(userId);

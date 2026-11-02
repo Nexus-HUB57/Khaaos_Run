@@ -338,6 +338,10 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     res.json(await storage.getItems(getUserId(req)));
   });
 
+  app.get(api.items.materials.path, requireAuth, async (req, res) => {
+    res.json(await storage.getPlayerMaterials(getUserId(req)));
+  });
+
   app.post(api.items.equip.path, requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -356,14 +360,14 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
   });
 
-  app.post(api.items.purchase.path, requireAuth, async (req, res) => {
+  app.post(api.items.craft.path, requireAuth, async (req, res) => {
     try {
-      const input = parseMutationBody(req, res, api.items.purchase.input);
+      const input = parseMutationBody(req, res, api.items.craft.input);
       if (!input) return;
       const key = readIdempotencyKey(req, res);
       if (!key) return;
       const userId = getUserId(req);
-      const result = await economyService.purchaseItem(userId, key, { catalogId: input.catalogId });
+      const result = await economyService.craftItem(userId, key, { catalogId: input.catalogId });
       res.status(result.status).json(result.body);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });

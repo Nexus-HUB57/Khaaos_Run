@@ -1,12 +1,13 @@
 import { db } from "./db";
 import {
-  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, eliminations, matchResults, users,
+  playerStats, bankAccounts, items, loans, transactions, zoneSessions, lootItems, playerMaterials, eliminations, matchResults, users,
   discordLinks, tournaments,
   type PlayerStats, type BankAccount, type Item, type Loan, type Transaction,
   type ZoneSession, type LootItem, type Elimination, type MatchResult,
   type DiscordLink, type Tournament,
   PatenteKR, Rarity, ItemType, PlayerStatus, LOOT_PRESETS, rankFromXp,
 } from "@shared/schema";
+import { ARMORER_MATERIALS, getArmorerMaterialByCode } from "@shared/armorer-catalog";
 import { eq, desc, and, isNull, gte, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
@@ -31,13 +32,13 @@ export interface IStorage {
   getEquippedItems(userId: string): Promise<Item[]>;
   getItem(id: number): Promise<Item | undefined>;
   getItemForUser(id: number, userId: string): Promise<Item | undefined>;
+  getPlayerMaterials(userId: string): Promise<Array<{ materialId: string; quantity: number }>>;
   consumeItemDurability(id: number, userId: string, amount: number): Promise<Item | undefined>;
   useItemAndHealAtomic(id: number, userId: string, durabilityCost: number, healAmount: number): Promise<{ item: Item; stats: PlayerStats; healed: number } | undefined>;
   createItem(item: Partial<Item> & { userId: string }): Promise<Item>;
   updateItem(id: number, updates: Partial<Item>): Promise<Item>;
   updateItemForUser(id: number, userId: string, updates: Partial<Item>): Promise<Item | undefined>;
   setItemEquipped(id: number, userId: string, isEquipped: boolean): Promise<Item | undefined>;
-  purchaseItemAtomic(userId: string, name: string, type: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
   repairItemAtomic(userId: string, itemId: number, amountKrc: string): Promise<{ bank: BankAccount; item: Item; transaction: Transaction }>;
   // Zone
   getActiveZoneSession(): Promise<ZoneSession | undefined>;
@@ -51,7 +52,11 @@ export interface IStorage {
   getLootItem(id: number): Promise<LootItem | undefined>;
   spawnLootPresets(sessionId?: number): Promise<LootItem[]>;
   clearLoot(): Promise<void>;
-  pickupLoot(lootId: number, userId: string, userName?: string): Promise<{ loot: LootItem; item: Item }>;
+  pickupLoot(lootId: number, userId: string, userName?: string): Promise<{
+    loot: LootItem;
+    item?: Item;
+    materials?: { materialId: string; quantity: number };
+  }>;
   // Elimination (BP_Character death)
   eliminatePlayer(userId: string, cause: string, userName?: string, sessionId?: number): Promise<PlayerStats>;
   respawnPlayer(userId: string): Promise<PlayerStats>;
@@ -204,29 +209,6 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async purchaseItemAtomic(userId: string, name: string, type: string) {
-    return db.transaction(async (tx) => {
-      const bank = await this.lockBankAccount(tx, userId);
-      const prices: Record<string, number> = { ARMA: 500, DEFESA: 300, CURATIVO: 150, UTILIDADE: 200 };
-      const price = prices[type] ?? 500;
-      if (Number(bank.weaponsBalance) < price) {
-        const error = new Error("Saldo insuficiente");
-        (error as any).code = "INSUFFICIENT_FUNDS";
-        (error as any).required = price;
-        (error as any).available = Number(bank.weaponsBalance);
-        throw error;
-      }
-      const [updatedBank] = await tx.update(bankAccounts).set({
-        weaponsBalance: sql`${bankAccounts.weaponsBalance} - ${price}::numeric`,
-      }).where(eq(bankAccounts.userId, userId)).returning();
-      const [item] = await tx.insert(items).values({ userId, name, type }).returning();
-      const [transaction] = await tx.insert(transactions).values({
-        userId, type: "COMPRA", amountKrc: price.toString(), description: `Purchased ${name}`,
-      }).returning();
-      return { bank: updatedBank, item, transaction };
-    });
-  }
-
   async repairItemAtomic(userId: string, itemId: number, amountKrc: string) {
     return db.transaction(async (tx) => {
       const bank = await this.lockBankAccount(tx, userId);
@@ -294,6 +276,13 @@ export class DatabaseStorage implements IStorage {
 
   async getItems(userId: string): Promise<Item[]> {
     return await db.select().from(items).where(eq(items.userId, userId));
+  }
+
+  async getPlayerMaterials(userId: string): Promise<Array<{ materialId: string; quantity: number }>> {
+    const balances = await db.select({ materialId: playerMaterials.materialId, quantity: playerMaterials.quantity })
+      .from(playerMaterials).where(eq(playerMaterials.userId, userId));
+    const byId = new Map(balances.map((balance) => [balance.materialId, balance.quantity]));
+    return ARMORER_MATERIALS.map(({ id }) => ({ materialId: id, quantity: byId.get(id) ?? 0 }));
   }
 
   async getEquippedItems(userId: string): Promise<Item[]> {
@@ -464,7 +453,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Server_PickupItem RPC equivalent — runs on server, validates, grants item, destroys loot actor
-  async pickupLoot(lootId: number, userId: string, userName?: string): Promise<{ loot: LootItem; item: Item }> {
+  async pickupLoot(lootId: number, userId: string, userName?: string): Promise<{
+    loot: LootItem;
+    item?: Item;
+    materials?: { materialId: string; quantity: number };
+  }> {
     return db.transaction(async (tx) => {
       const [loot] = await tx.select().from(lootItems).where(eq(lootItems.id, lootId)).for("update");
       if (!loot) throw new Error("Item de loot não encontrado");
@@ -481,16 +474,35 @@ export class DatabaseStorage implements IStorage {
         .returning();
       if (!updatedLoot) throw new Error("Conflito: item já coletado");
 
-      const [item] = await tx.insert(items).values({
-        userId,
-        name: loot.name,
-        type: loot.type,
-        rarity: loot.rarity,
-        stats: loot.stats ?? {},
-        durability: "100",
-        maxDurability: "100",
-      }).returning();
-      if (!item) throw new Error("Não foi possível adicionar o loot ao inventário");
+      let item: Item | undefined;
+      let materials: { materialId: string; quantity: number } | undefined;
+      if (loot.type === "RECURSO") {
+        const materialCode = loot.stats?.materialCode;
+        const quantity = loot.stats?.quantity;
+        const material = typeof materialCode === "number" ? getArmorerMaterialByCode(materialCode) : undefined;
+        if (!material || !Number.isSafeInteger(quantity) || (quantity ?? 0) <= 0) {
+          throw new Error("Matéria-prima inválida no loot");
+        }
+        const [updatedMaterial] = await tx.insert(playerMaterials).values({ userId, materialId: material.id, quantity })
+          .onConflictDoUpdate({
+            target: [playerMaterials.userId, playerMaterials.materialId],
+            set: { quantity: sql`${playerMaterials.quantity} + ${quantity}`, updatedAt: new Date() },
+          }).returning({ quantity: playerMaterials.quantity });
+        if (!updatedMaterial) throw new Error("Não foi possível adicionar a matéria-prima ao estoque");
+        materials = { materialId: material.id, quantity: updatedMaterial.quantity };
+      } else {
+        const [createdItem] = await tx.insert(items).values({
+          userId,
+          name: loot.name,
+          type: loot.type,
+          rarity: loot.rarity,
+          stats: loot.stats ?? {},
+          durability: "100",
+          maxDurability: "100",
+        }).returning();
+        if (!createdItem) throw new Error("Não foi possível adicionar o loot ao inventário");
+        item = createdItem;
+      }
 
       const heal = loot.stats?.heal;
       if (loot.type === "CURATIVO" && typeof heal === "number" && Number.isFinite(heal) && heal > 0) {
@@ -501,7 +513,7 @@ export class DatabaseStorage implements IStorage {
         if (!healedStats) throw new Error("Não foi possível aplicar a cura do loot");
       }
 
-      return { loot: updatedLoot, item };
+      return { loot: updatedLoot, ...(item ? { item } : {}), ...(materials ? { materials } : {}) };
     });
   }
 

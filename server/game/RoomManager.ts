@@ -186,6 +186,7 @@ export type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: SerializedPlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "loot_material_collected"; materialId: string; quantity: number; totalQuantity: number }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "packback_ready"; items: WarIActionItem[] }
   | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
@@ -1558,13 +1559,15 @@ class RoomManager {
     player.carriedWeight += lootWeight;
     room.lootGrid.remove(lootId);
     try {
-      await storage.createItem({
-        userId,
-        name: loot.name,
-        type: loot.type,
-        rarity: loot.rarity,
-        stats: loot.stats,
-      });
+      const collected = await storage.pickupLoot(lootId, userId, player.displayName);
+      if (collected.materials && player.ws) {
+        this.send(player.ws, {
+          type: "loot_material_collected",
+          materialId: collected.materials.materialId,
+          quantity: loot.stats?.quantity ?? 0,
+          totalQuantity: collected.materials.quantity,
+        });
+      }
     } catch (error) {
       loot.isPickedUp = false;
       delete loot.pickedUpBy;

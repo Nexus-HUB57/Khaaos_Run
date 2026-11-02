@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ARMORER_CATALOG } from "../../shared/armorer-catalog";
+import { ARMORER_CATALOG, ARMORER_MATERIALS } from "../../shared/armorer-catalog";
 
 type MockInventoryItem = {
   id: number;
@@ -52,9 +52,10 @@ const zone = {
   centerY: 50,
 };
 
-async function mockPlayerApis(page: Page) {
+async function mockPlayerApis(page: Page, initialMaterialQuantity = 100) {
   const inventory = items.map((item) => ({ ...item, stats: { ...item.stats } }));
-  const purchaseRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
+  const craftRequests: Array<{ catalogId: string | undefined; idempotencyKey: string | undefined }> = [];
+  const balances = ARMORER_MATERIALS.map((material) => ({ materialId: material.id, quantity: initialMaterialQuantity }));
   const equipRequests: Array<{ itemId: number; isEquipped: boolean }> = [];
 
   await page.route("**/api/**", async (route) => {
@@ -63,16 +64,20 @@ async function mockPlayerApis(page: Page) {
     let status = 200;
     let body: unknown;
 
-    if (pathname === "/api/items/purchase" && request.method() === "POST") {
+    if (pathname === "/api/items/craft" && request.method() === "POST") {
       const input = request.postDataJSON() as { catalogId?: string };
-      purchaseRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
+      craftRequests.push({ catalogId: input.catalogId, idempotencyKey: request.headers()["idempotency-key"] });
       const product = ARMORER_CATALOG.find((candidate) => candidate.id === input.catalogId);
       if (!product) {
         status = 400;
         body = { message: "Produto de fixture desconhecido." };
       } else {
+        for (const ingredient of product.recipe) {
+          const balance = balances.find((entry) => entry.materialId === ingredient.materialId)!;
+          balance.quantity -= ingredient.quantity;
+        }
         const purchasedItem: MockInventoryItem = {
-          id: 200 + purchaseRequests.length,
+          id: 200 + craftRequests.length,
           userId: playerId,
           name: product.name,
           type: product.type,
@@ -88,9 +93,11 @@ async function mockPlayerApis(page: Page) {
         status = 201;
         body = {
           ...purchasedItem,
-          operationId: `00000000-0000-4000-8000-${String(purchaseRequests.length).padStart(12, "0")}`,
+          operationId: `00000000-0000-4000-8000-${String(craftRequests.length).padStart(12, "0")}`,
         };
       }
+    } else if (pathname === "/api/armorer/materials" && request.method() === "GET") {
+      body = balances;
     } else if (pathname === "/api/items" && request.method() === "GET") {
       body = inventory;
     } else {
@@ -137,7 +144,7 @@ async function mockPlayerApis(page: Page) {
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
 
-  return { purchaseRequests, equipRequests };
+  return { craftRequests, equipRequests };
 }
 
 async function mockBattleSocket(page: Page, inMatch: boolean) {
@@ -199,6 +206,7 @@ async function openApp(page: Page, path: string, inMatch: boolean) {
 }
 
 test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", async ({ page }) => {
+  test.setTimeout(60_000);
   await openApp(page, "/inventory", false);
   await expect(page.getByRole("heading", { name: "WAR’I" })).toBeVisible();
   await expect(page.getByText("4/6")).toBeVisible();
@@ -219,25 +227,31 @@ test("War’I mostra compartimentos, prontidão e itens quebrados no loadout", a
   await expect(page.getByTestId("card-item-101")).not.toBeVisible();
 });
 
-test("todos os produtos da Forja sincronizam identidade e atributos com o War’I e a PackBack", async ({ page }) => {
+test("receitas da Forja consomem materiais, cobram serviço e sincronizam produtos com War’I/PackBack", async ({ page }) => {
   test.setTimeout(60_000);
-  const { purchaseRequests, equipRequests } = await mockPlayerApis(page);
+  const { craftRequests, equipRequests } = await mockPlayerApis(page);
   await mockBattleSocket(page, false);
   await page.goto("/market");
 
   for (const [index, product] of ARMORER_CATALOG.entries()) {
     const offer = page.getByTestId(`card-market-item-${index}`);
     await expect(offer).toContainText(product.name);
-    await expect(offer).toContainText(`${product.priceKrc} KRC`);
+    await expect(offer).toContainText(`${product.armorerFeeKrc} KRC`);
+    await expect(offer).toContainText("TRABALHO DO ARMEIRO");
     await expect(offer).toContainText(product.rarity);
     await expect(offer).toContainText(product.type);
     await expect(offer).toContainText(product.description);
-    const buyButton = page.getByTestId(`button-buy-${index}`);
-    await buyButton.click();
-    await expect.poll(() => purchaseRequests.length).toBe(index + 1);
-    await expect(buyButton).toBeEnabled();
-    expect(purchaseRequests[index].catalogId).toBe(product.id);
-    expect(purchaseRequests[index].idempotencyKey).toBeTruthy();
+    const craftButton = page.getByTestId(`button-craft-${index}`);
+    for (const ingredient of product.recipe) {
+      const material = ARMORER_MATERIALS.find((entry) => entry.id === ingredient.materialId)!;
+      await expect(offer.getByTestId(`ingredient-${product.id}-${material.id}`)).toContainText(material.name);
+      await expect(offer.getByTestId(`ingredient-${product.id}-${material.id}`)).toContainText(new RegExp(`\\d+/${ingredient.quantity}$`));
+    }
+    await craftButton.click();
+    await expect.poll(() => craftRequests.length).toBe(index + 1);
+    await expect(craftButton).toBeEnabled();
+    expect(craftRequests[index].catalogId).toBe(product.id);
+    expect(craftRequests[index].idempotencyKey).toBeTruthy();
   }
 
   await page.goto("/inventory");
@@ -267,6 +281,18 @@ test("todos os produtos da Forja sincronizam identidade e atributos com o War’
     await page.getByRole("button", { name: "FECHAR" }).click();
     if (product.id === "granada-de-fragmentacao") await expect(itemCard).toContainText("PACKBACK");
   }
+});
+
+test("Forja informa ingrediente ausente e impede fabricação sem estoque suficiente", async ({ page }) => {
+  const { craftRequests } = await mockPlayerApis(page, 0);
+  await mockBattleSocket(page, false);
+  await page.goto("/market");
+  const offer = page.getByTestId("card-market-item-0");
+  const craftButton = page.getByTestId("button-craft-0");
+  await expect(offer.getByTestId("ingredient-lamina-nano-metal")).toContainText("0/3");
+  await expect(craftButton).toContainText("FALTAM MATERIAIS");
+  await expect(craftButton).toBeDisabled();
+  await expect.poll(() => craftRequests.length).toBe(0);
 });
 
 test("Zona exibe a PackBack no celular, evita toque duplicado e confirma durabilidade", async ({ page }) => {

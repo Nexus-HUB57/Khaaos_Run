@@ -11,7 +11,8 @@ No multiplayer, capacidade/carga e o temporizador/multiplicador de Adrenalina s�
 | `POST /api/loans` | empréstimo, saldo e ledger | usuário autenticado; empréstimo do próprio usuário | input Zod limitado; mutação ainda não transacional (0.2) |
 | `POST /api/loans/:id/pay` | empréstimo, saldo e ledger | proprietário do empréstimo | leitura e update usam ID + userId; débito/update ainda precisam de transação atômica (0.2) |
 | `POST /api/items/:id/equip` | loadout | proprietário do item no `UPDATE` | escopo SQL por ID + userId |
-| `POST /api/items/purchase` | saldo, item e ledger | usuário autenticado; item criado para o próprio usuário | aceita apenas `catalogId` canônico; preço e atributos vêm de `shared/armorer-catalog.ts` e saldo/item/ledger são persistidos na mesma transação |
+| `GET /api/armorer/materials` | estoque de matérias-primas | usuário autenticado; retorna apenas o estoque do próprio usuário | catálogo canônico de materiais; quantidades vêm de coleta de loot e são empilhadas por jogador/material |
+| `POST /api/items/craft` | materiais, saldo KRC, item e ledger | usuário autenticado; item criado para o próprio usuário | aceita apenas `catalogId` canônico; receita, atributos e fee vêm de `shared/armorer-catalog.ts`; estoque, saldo, item, transação e ledger são persistidos atomicamente e com idempotência |
 | `POST /api/items/:id/use` | durabilidade e vida | proprietário do item e stats do servidor | durabilidade consumida com ID + userId; durante match só WebSocket autoritativo |
 | `POST /api/items/:id/repair` | saldo, durabilidade e ledger | proprietário do item | update SQL por ID + userId; coordenação saldo/item ainda não transacional (0.2) |
 | `POST /api/player/daily-salary` | salário/saldo/ledger | usuário autenticado, aplicado ao próprio perfil | janela de 24h ainda vulnerável a concorrência; transação/idempotência em 0.2 |
