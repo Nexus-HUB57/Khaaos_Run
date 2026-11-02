@@ -22,6 +22,12 @@ global:
     cluster: 'khaaos-run'
     environment: 'staging'
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+
 rule_files:
   - '/etc/prometheus/rules/khaaos-slo-recording-rules.yml'
   - '/etc/prometheus/rules/khaaos-slo-alerts.yml'

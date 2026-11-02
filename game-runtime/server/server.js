@@ -434,6 +434,16 @@ export function createAuthoritativeServer({
           dcounter('khaaos_runtime_distributed_publishes_total', 'Eventos publicados no relay', dist.publishes);
           dcounter('khaaos_runtime_distributed_mirror_applied_total', 'Eventos do relay aplicados no espelho', dist.mirrorApplied);
           dcounter('khaaos_runtime_distributed_mirror_gaps_total', 'Gaps de seq detectados no espelho', dist.mirrorGaps);
+          dcounter('khaaos_runtime_distributed_mirror_duplicates_total', 'Eventos duplicados descartados pelo espelho', dist.mirrorDuplicates);
+          dcounter('khaaos_runtime_distributed_mirror_read_errors_total', 'Falhas de leitura do relay no espelho', dist.mirrorReadErrors);
+          lines.push('# HELP khaaos_runtime_redis_pubsub_publish_total Operações de publicação no relay Redis por resultado');
+          lines.push('# TYPE khaaos_runtime_redis_pubsub_publish_total counter');
+          lines.push(`khaaos_runtime_redis_pubsub_publish_total{result="ok"} ${Number(dist.publishSuccesses || 0)}`);
+          lines.push(`khaaos_runtime_redis_pubsub_publish_total{result="error"} ${Number(dist.publishErrors || 0)}`);
+          dcounter('khaaos_runtime_redis_pubsub_mirror_gaps_total', 'Gaps de sequência observados no relay Redis', dist.mirrorGaps);
+          dcounter('khaaos_runtime_redis_pubsub_mirror_duplicates_total', 'Mensagens duplicadas descartadas no relay Redis', dist.mirrorDuplicates);
+          dcounter('khaaos_runtime_redis_pubsub_read_errors_total', 'Falhas de leitura do relay Redis', dist.mirrorReadErrors);
+          gauge('khaaos_runtime_redis_pubsub_up', 'Conexão Redis disponível para ownership e relay', distributedLayer.redisReady?.() ?? 0);
           dcounter('khaaos_runtime_distributed_invites_published_total', 'Convites publicados no índice compartilhado', dist.invitesPublished);
           dcounter('khaaos_runtime_distributed_invite_lookups_total', 'Consultas ao índice de convites', dist.inviteLookups);
           dcounter('khaaos_runtime_distributed_invite_hits_total', 'Consultas resolvidas no índice de convites', dist.inviteHits);

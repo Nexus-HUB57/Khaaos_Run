@@ -1046,7 +1046,7 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 - **Sem assets cozidos no Unreal**: Os cinco mundos agora têm pacotes source de intake e contratos visuais versionados; mapas jogáveis, `.uasset`/`.umap`, materiais Niagara finais e cook ainda exigem UE5.8 Editor/runner.
 - **EAC sem aceite operacional**: Há integração e validações versionadas, mas o binário/SDK da Epic e a execução em servidor compilado ainda são necessários.
 - **Economia sem aceite para valor real**: Há ledger e regras versionados, mas não habilitar valor real até auditoria imutável, teste de atomicidade, compliance review e aceite operacional.
-- **RoomManager em memória**: Scaling horizontal exige coordenador externo e pub/sub (Redis está no docker-compose mas não é usado para rooms ainda).
+- **Aceite operacional do monitoring**: ownership/fencing e relay cross-replica já usam Redis em `KR_DISTRIBUTED=1`; o overlay Prometheus/Grafana/Alertmanager e os exporters estão versionados em `monitoring/`, mas o go-live ainda exige executar a stack de staging com duas ou mais réplicas e validar os canais reais do Alertmanager.
 - **Persistência multi-mundo**: CIGKV → W1–W4 e protocolos Zu permanecem em design; implementação concentra-se no CIGKV.
 - **Coverage instrumentado**: c8 configurado para `client/src`, `server` e `shared`, com relatório completo atual de 27,46% de linhas, 68,45% de branches e 48,58% de funções; a suíte browser ainda é incompleta.
 - **Webhook secrets placeholder**: DISCORD_WEBHOOK_URL e SLACK_WEBHOOK_URL configurados como placeholder — necessitam URLs reais.

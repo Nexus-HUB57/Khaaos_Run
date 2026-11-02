@@ -178,14 +178,16 @@ test('cross-replica: convite criado em A é resolvido em B via redirect e a auto
     assert.ok(layerB.metrics.redirects >= 1, 'B redirecionou ao dono');
     assert.ok(layerB.metrics.inviteLookups >= 1 && layerB.metrics.inviteHits >= 1, 'índice de convites consultado e resolvido em B');
 
-    // ── 8. Relay espelhado: LIMITAÇÃO M3 documentada — o espelho lê o stream
-    // global '__global__' que nenhum publisher escreve (publish vai por sala);
-    // sem asserção aqui até o espelho global ser ativado. Ver docs/CROSS_REPLICA_SMOKE.md.
+    // ── 8. Relay espelhado e contrato Prometheus do barramento ─────────────
+    // O publisher escreve no stream da sala e no stream global; o consumidor
+    // remoto aplica os eventos com seq monotônica e expõe saúde operacional.
 
     const metricsText = await fetch(`http://127.0.0.1:${portA}/metrics`).then((r) => r.text());
     assert.match(metricsText, /khaaos_runtime_replica_info\{replica_id="rep-a"\} 1/);
     assert.match(metricsText, /khaaos_runtime_distributed_acquired_total [1-9]/);
     assert.match(metricsText, /khaaos_runtime_distributed_held_rooms [1-9]/);
+    assert.match(metricsText, /khaaos_runtime_redis_pubsub_publish_total\{result="ok"\} [1-9]/);
+    assert.match(metricsText, /khaaos_runtime_redis_pubsub_up 0/);
     const metricsB = await fetch(`http://127.0.0.1:${portB}/metrics`).then((r) => r.text());
     assert.match(metricsB, /khaaos_runtime_distributed_redirects_total [1-9]/);
   } finally {
