@@ -597,8 +597,8 @@ export class KhaaosSim3D {
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
-    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_portal_v1';
-    this.zuIngress = { protocol: 'ZU_PORTAL_V1', synchronized: true, startedAt: null, durationMs: 2200 };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_vehicle_entry_v1';
+    this.zuVehicleEntry = { protocol: 'ZU_VEHICLE_ENTRY_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.spectate = !!spectate; // Fase 5: partida continua após a eliminação do jogador
     this.squad = !!squad;      // Fase 7: squads com DBNO/revive
     this.world = getWorldLayout(this.seed, this.scenario.id);
@@ -806,17 +806,18 @@ export class KhaaosSim3D {
     p.armor = entry === 'belt' ? 60 : 18;
     p.speed = entry === 'belt' ? 5.2 : 6.1;
     // Zu de entrada: os operativos já estão no spawn autoritativo de solo.
-    // O relógio compartilhado serve apenas para a apresentação do portal.
+    // O relógio compartilhado serve apenas para a apresentação do veículo.
     if (this.airdrop) {
       this.#airdropActor(p, 0, this.world.lootSpots);
       this.bots.forEach((b, i) => this.#airdropActor(b, i + 1, this.world.lootSpots));
       this.emit('airdrop', { altitude: DROP_START_Y, deprecated: true });
     } else {
-      this.zuIngress.startedAt = this.time;
+      this.zuVehicleEntry.startedAt = this.time;
       this.emit('zuIngress', {
-        protocol: this.zuIngress.protocol,
-        startedAt: this.zuIngress.startedAt,
-        durationMs: this.zuIngress.durationMs,
+        protocol: this.zuVehicleEntry.protocol,
+        vehicle: 'train',
+        startedAt: this.zuVehicleEntry.startedAt,
+        durationMs: this.zuVehicleEntry.durationMs,
         world: this.scenario.id,
         spawn: this.world.playerSpawn,
       });

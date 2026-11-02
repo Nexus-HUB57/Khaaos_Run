@@ -118,8 +118,8 @@ export class MatchRoom3D {
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
-    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_portal_v1';
-    this.zuIngress = { protocol: 'ZU_PORTAL_V1', synchronized: true, startedAt: null, durationMs: 2200 };
+    this.entryProtocol = this.airdrop ? 'legacy_airdrop' : 'zu_vehicle_entry_v1';
+    this.zuVehicleEntry = { protocol: 'ZU_VEHICLE_ENTRY_V1', synchronized: true, startedAt: null, durationMs: 2200 };
     this.squad = !!squad;     // Fase 7: squads com DBNO/revive (salas privadas)
     this.isPrivate = !!isPrivate;
     this.inviteCode = inviteCode ? String(inviteCode).toUpperCase() : null;
@@ -456,17 +456,18 @@ export class MatchRoom3D {
       });
     }
     // Zu de entrada: os atores já nascem nos spawns de solo autoritativos.
-    // O evento sincroniza a apresentação do portal; não há fase aérea de gameplay.
+    // O evento sincroniza a apresentação do veículo; não há fase aérea de gameplay.
     if (this.airdrop) {
       let idx = 0;
       for (const h of this.humans.values()) this.#airdropActor(h, idx++, this.world.lootSpots);
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
     } else {
-      this.zuIngress.startedAt = Date.now();
+      this.zuVehicleEntry.startedAt = Date.now();
       this.#emitAll('zuIngress', {
-        protocol: this.zuIngress.protocol,
-        startedAt: this.zuIngress.startedAt,
-        durationMs: this.zuIngress.durationMs,
+        protocol: this.zuVehicleEntry.protocol,
+        vehicle: 'train',
+        startedAt: this.zuVehicleEntry.startedAt,
+        durationMs: this.zuVehicleEntry.durationMs,
         world: this.scenario.id,
         spawnCount: this.humans.size + this.bots.length,
       });
