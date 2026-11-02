@@ -629,3 +629,28 @@ export const matchPayoutClaims = pgTable("match_payout_claims", {
 }));
 
 export type MatchPayoutClaim = typeof matchPayoutClaims.$inferSelect;
+
+// ─── Fase 47.1 — Persistência PostgreSQL do alistamento (interface EnrollmentStore do #252) ──
+// Materializa a store plugável do alistamento canônico: a MESMA shape de
+// sessão (step/data/terms/fee), única por usuário, sobrevivente a restarts.
+// O ledger double-entry da taxa vive em server/game/enrollmentLedger.ts
+// (contas canônicas da whitelist 0010 — nenhuma constraint nova aqui).
+export const enrollmentSessions = pgTable("enrollment_sessions", {
+  userId: text("user_id").primaryKey(),
+  protocol: varchar("protocol", { length: 32 }).notNull().unique(),
+  step: text("step").notNull().default("AWAITING_DATA"),
+  data: jsonb("data"),
+  terms: jsonb("terms"),
+  fee: jsonb("fee"),
+  bonusKrcCredited: numeric("bonus_krc_credited").notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  stepIdx: index("enrollment_sessions_step_idx").on(table.step),
+  protocolIdx: index("enrollment_sessions_protocol_idx").on(table.protocol),
+  stepValid: check("enrollment_sessions_step_valid", sql`${table.step} IN ('AWAITING_DATA', 'AWAITING_TERMS', 'AWAITING_FEE', 'COMPLETED')`),
+  protocolFormat: check("enrollment_sessions_protocol_format", sql`${table.protocol} ~ '^KR-REG-[0-9A-Z]{8}$'`),
+  bonusNonnegative: check("enrollment_sessions_bonus_nonnegative", sql`${table.bonusKrcCredited} >= 0`),
+}));
+
+export type EnrollmentSessionRow = typeof enrollmentSessions.$inferSelect;
