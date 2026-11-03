@@ -85,6 +85,22 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
         "created_at" timestamptz DEFAULT now() NOT NULL,
         "updated_at" timestamptz DEFAULT now() NOT NULL
       );
+      -- a auditoria de reconciliação consulta também estas superfícies
+      -- (transactionWithoutLedger / incompleteClaims / snapshot state)
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, type TEXT NOT NULL,
+        amount_krc NUMERIC NOT NULL, amount_usd NUMERIC,
+        operation_id UUID, description TEXT, timestamp TIMESTAMP DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS economy_idempotency (
+        id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL UNIQUE, request_hash TEXT,
+        operation_id UUID, response_status INTEGER, response_body JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS economy_ledger_migration_state (
+        migration_key TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
     `);
 
     const { createPostgresEnrollmentStore } = await import("../../server/game/enrollmentStore.postgres.ts");
