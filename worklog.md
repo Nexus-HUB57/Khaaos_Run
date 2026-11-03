@@ -1047,7 +1047,7 @@ Work Log:
 - VALIDAÇÃO: tsc 0; suíte oficial 537+39 — 529 pass / 0 fail / 8 skip; game-runtime 1041 — 1041 pass / 0 fail / 13 skipped (+9 testes novos); audit:fidelity FIEL ✅ 94 OK / 0 falhas (era 53 checks na F44 original; snapshot ~2 s); vite build OK 4.87 s; node --check ×5 + git diff --check OK
 - CI DO PR #273: 36 check-runs — 30 success / 6 skipped / 0 falhas; MERGE: merge commit 27876dc
 - DEPLOY STAGING (deploy.yml dispatch ref=main): run #118 completed/success — Pre-Deploy ✅ → Build (ghcr) ✅ → Deploy Staging via Render ✅ → Production skipped (by design) → Post-Deploy ✅
-- STAGING VALIDADO: healthz.json → 200 {"status":"ok","commit":"27876dcc6bee292251b43a695006149dab292251"} (matches main HEAD 27876dc); /healthz → 200 database ok (PostgreSQL 18.6, 3ms), economy2pc ok
+- STAGING VALIDADO: healthz.json → 200 {"status":"ok","commit":"27876dcc6bee292251b43a695006149dab297759"} (matches main HEAD 27876dc); /healthz → 200 database ok (PostgreSQL 18.6, 3ms), economy2pc ok
 - BLOQUEIOS HUMANOS INALTERADOS: 0 self-hosted runners (editor check UE5.8 continua pendente); secrets EOS_* ausentes (P0 do M4 aguarda ações externas do usuário)
 
 Stage Summary:
