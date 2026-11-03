@@ -180,7 +180,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
       "SELECT bonus_balance FROM bank_accounts WHERE user_id = $1",
       [userId],
     );
-    assert.equal(wallet.rows[0]?.bonus_balance, "500.00");
+    assert.equal(Number(wallet.rows[0]?.bonus_balance), 500);
 
     // re-entrega do MESMO evento → duplicate, nenhuma linha nova
     const duplicate = await service.processEvent(paidEvent, payloadHash);
@@ -194,7 +194,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
       "SELECT bonus_balance FROM bank_accounts WHERE user_id = $1",
       [userId],
     );
-    assert.equal(walletAfterDuplicate.rows[0].bonus_balance, "500.00", "bônus único: replay não credita de novo");
+    assert.equal(Number(walletAfterDuplicate.rows[0].bonus_balance), 500, "bônus único: replay não credita de novo");
 
     // ─── Reconciliação SSOT (seções novas da Task 44) ────────────────────
     const cleanReport = await createEconomyAuditReport(pool as never);
