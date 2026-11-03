@@ -1011,3 +1011,21 @@ Work Log:
 Stage Summary:
 - Lote 4 verificado independentemente de ponta a ponta sobre o main b8b2923: roster 33 identidades (16 militares + TALON + 16 irregulares) com facção declarada, arte servida, habilidades ativas no simulador, contratos automatizados verdes nos DOIS repositórios de teste
 - Estado: main b8b2923 · staging #116 (healthz cc8e8fa) · tsc 0 · oficial 533+39 0 falhas · game-runtime 1041 0 falhas · CI 20/20 · 0 PRs abertos · 0 self-hosted runners (editor check UE5 segue pendente)
+
+## Task ID: 40
+**Agent:** Main
+**Task:** "Prosseguir" — gap do Lote 4 fechado no Estúdio de Personagens: /studio agora expõe o roster completo (32 arquétipos = 16 militares + 16 milícias/gangues) com filtro de facção, chips nos cards e cópia sem resíduo UE5_Mannequin + contrato automatizado novo
+
+Work Log:
+- ESTADO DE PARTIDA: main 2993096 (Task 39); 0 PRs abertos; issues abertas #54-#60 = meta-tracker antigo (2026-10-17, não acionável); provas auditadas — matriz 12/12 espécie×sexo é sistema independente do roster (sem gap com o Lote 4); varredura de TODOs no client/server = falsos positivos ("TODOS" em PT)
+- GAP ACHADO: client/src/components/character-prompt-studio.tsx usava KHAAOS_OPERATIVE_ARCHETYPES (16 militares) em 7 pontos — o Estúdio de Prompts NÃO mostrava os 16 do Lote 4, embora buildOperativePromptBundle já suportasse o roster combinado (Task 38); a página /studio ficava silenciosamente fora do lote
+- UI (componente): import trocado para ALL_KHAAOS_OPERATIVE_ARCHETYPES + type OperativeFaction; helper factionOf (undefined = MILITAR — militares canônicos não declaram o campo, contra-teste do contrato do Lote 4); maleCount/femaleCount sobre o combinado (16/16); factionCounts (16/8/8); filteredArchetypes encadeia sexo × facção × busca; handleSelectArchetype busca no combinado
+- UI (novo filtro de facção): switcher com 4 botões data-testid (filter-faction-all/militar/milicia/gangue), contadores ao vivo, cores por facção (slate/âmbar/rosa); cards do grid ganham chip de facção ao lado do chip de sexo
+- CÓPIA DESATUALIZADA CORRIGIDA: subtítulo do estúdio ainda exportava para "UE5_Mannequin (SK_Zheers_Base)" — resíduo eliminado no Lote 3; agora aponta rigs Lyra SK_Manny/SK_Gwen + menciona roster completo (32); wrapper client/src/pages/studio.tsx atualizado (comentário 16 → 32 com Lote 4)
+- CONTRATO NOVO: tests/official/character-prompt-studio.test.ts (4 testes) — componente consome o roster combinado (regex nega uso bare do roster militar isolado), filtro de facção completo com data-testids, cópia sem UE5_Mannequin e com SK_Manny/SK_Gwen, matemática do roster (32/16M/16F/facções 16-8-8) com buildOperativePromptBundle válido para TODOS os 32 IDs
+- README: linha "Estúdio de personagens (follow-up)" na tabela do Lote 4 + Status do Projeto atualizado ("Avatares & Operativos (16)" → "(33)", 16♂/16♀ + TALON, filtro de facção) — headings intactos (F44/F46 re-certifica no CI)
+- VALIDAÇÃO: tsc 0; suíte oficial 537+39 — 0 falhas (4 testes novos); game-runtime 1041 — 0 falhas; vite build OK; guard:tests íntegro
+- LIÇÕES: (1) a restauração do snapshot do sandbox pode reverter node_modules de qualquer pacote mesmo com eles no .gitignore (double-ignore em game-runtime/node_modules; git clean -fd NÃO remove ignorados — a causa é o restore, não o clean): revalidar AMBOS os node_modules a cada sessão antes de crer em "0 falhas"; (2) gaps de UI pós-lote são silenciosos — componentes que consomem catálogo por import próprio (não pela whitelist) ficam defasados quando o lote expande; caçar usos diretos do roster antigo deve virar passo padrão de auditoria pós-lote
+Stage Summary:
+- O Estúdio de Personagens agora é a segunda superfície do jogador a cobrir as 33 identidades (ao lado da grade do perfil): navegação por facção, chips visuais, cópia fiel aos rigs atuais e contrato automatizado que impede regressão para o roster parcial
+- Estado: main 2993096 + este PR · tsc 0 · oficial 537+39 0 falhas · game-runtime 1041 0 falhas · vite build OK · 0 self-hosted runners (bloqueios humanos inalterados)
