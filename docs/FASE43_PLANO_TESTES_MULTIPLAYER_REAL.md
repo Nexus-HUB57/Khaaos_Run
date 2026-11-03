@@ -124,3 +124,14 @@ A sala 3D agora expõe um cancelamento ZEX específico para desconexão de trans
 ### Limites e próximo passo
 
 O MP-ZEX-08 passou no servidor local; ainda não houve playtest em staging, dispositivos separados, jitter/perda de rede, observação visual do HUD ou serviços reais. Nenhum teste foi executado em produção. Prosseguir com os demais cenários da matriz em staging isolado; repetir MP-ZEX-08 também nesse ambiente antes da liberação multiplayer.
+
+### Fase 48 — MP-ZEX-04 e MP-ZEX-07 automatizados localmente (2026-11-03)
+
+Os dois cenários restantes que não exigiam staging ganharam testes determinísticos (detalhes em [FASE48_FIDELIDADE_ACOUSTICA_MPZEX_LOCAL.md](FASE48_FIDELIDADE_ACOUSTICA_MPZEX_LOCAL.md)):
+
+- **MP-ZEX-04** (`test/sim3d.test.js`): 2 s de rotação pura de câmera (yaw 0..2π, pitch oscilante, sem translação) NÃO cancelam o canal; conclusão ao girar concede XP exatamente uma vez.
+- **MP-ZEX-07** (`test/room3d.test.js`, 3 testes): nocaute (sala squad/DBNO) cancela o canal, libera a reserva e outro jogador assume sem reiniciar a sala; o ciclo nocaute→morte produz EXATAMENTE UM `extractCancelled` (o cancelamento real é reason `damage`, no tick do dano — `knocked`/`death` são defense-in-depth); o fim de partida cancela todos os canais sem XP, sem consumir terminal e sem reserva órfã.
+
+Descoberta registrada: o cancelamento por dano precede o nocaute no MESMO tick (1ª linha de `#damage`), portanto o evento observado é sempre `damage` — o contrato §4.2 (zero dupla concessão) passou a ser provado por asserção de cardinalidade. Suíte: 1041 pass / 0 fail / 13 skipped.
+
+Superfície manual restante da matriz: MP-ZEX-08 (gate staging), MP-ZEX-09 (latência/jitter), MP-ZEX-10 (prioridade de interação), MP-ZEX-11 (clientes mistos/touch) — todos exigem staging isolado com dois clientes humanos.

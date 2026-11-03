@@ -160,6 +160,38 @@ test('ZEX: movimento ou dano cancela sem gastar o terminal nem conceder XP', () 
   assert.equal(p.xp, xp0);
 });
 
+test('ZEX MP-ZEX-04: girar a câmera sem transladar NÃO cancela o canal', () => {
+  const s = new KhaaosSim3D({ seed: 'ZEX-CAMERA', botCount: 0, airdrop: false });
+  s.start('belt');
+  const t = s.terminals[0], p = s.player;
+  for (const item of s.loot) item.active = false;
+  s.doors = [];
+  p.x = t.x; p.z = t.z;
+  const xp0 = p.xp;
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.ok(p.zexChannel, 'canal iniciado');
+
+  // rotação PURA por 2 s: yaw varre 0..2π, pitch oscila ±0.4 rad — SEM dx/dy
+  // (a mira gira; o personagem não sai do lugar — regra MP-ZEX-04)
+  const total = Math.round(ZEX_CHANNEL_SECONDS / STEP);
+  const half = Math.round(total / 2);
+  const turn = (i) => idle((i * 0.7) % (Math.PI * 2), Math.sin(i / 6) * 0.4);
+  for (let i = 0; i < half; i++) s.step(turn(i), STEP);
+
+  assert.ok(p.zexChannel, 'rotação de câmera não cancela a canalização');
+  assert.ok(p.zexChannel.progress > 0.4 && p.zexChannel.progress < 0.65,
+    `progresso ~50% no meio do canal (obtido ${(p.zexChannel.progress * 100).toFixed(1)}%)`);
+  assert.equal(Math.hypot(p.x - t.x, p.z - t.z), 0, 'câmera girou, personagem não transladou');
+
+  // conclui girando: terminal consumido, XP concedido EXATAMENTE uma vez
+  for (let i = half; i < total; i++) s.step(turn(i), STEP);
+  s.step(idle(), STEP);
+  assert.equal(t.active, false);
+  assert.equal(p.zexChannel, null);
+  assert.equal(p.extracted, 1);
+  assert.equal(p.xp, xp0 + EXTRACT_XP);
+});
+
 test('recarga respeita reserva e capacidade do pente', () => {
   const s = new KhaaosSim3D({ seed: 'RELOAD-1', botCount: 0, airdrop: false });
   s.start('belt');

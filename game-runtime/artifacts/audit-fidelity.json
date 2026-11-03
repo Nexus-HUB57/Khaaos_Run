@@ -1,7 +1,7 @@
 {
   "ok": true,
   "summary": {
-    "pass": 80,
+    "pass": 94,
     "fail": 0
   },
   "checks": [
@@ -67,6 +67,27 @@
       "name": "paleta completa (céu 3 bandas + fog + ground)",
       "status": "pass",
       "detail": "#160f2e / #4a2a4e / #c65a2e"
+    },
+    {
+      "id": "AU2",
+      "world": "CIGKV CIGKV",
+      "name": "rótulo acústico cita substantivo canônico do README",
+      "status": "pass",
+      "detail": "label=\"pátio militar aberto\""
+    },
+    {
+      "id": "AU3",
+      "world": "CIGKV CIGKV",
+      "name": "superfície de passos tem perfil de footstep (fecho)",
+      "status": "pass",
+      "detail": "surface=\"concrete\" ∈ FOOTSTEP_PROFILES"
+    },
+    {
+      "id": "AU4",
+      "world": "CIGKV CIGKV",
+      "name": "chuva coerente com a dinâmica canônica (= 0)",
+      "status": "pass",
+      "detail": "rain=0"
     },
     {
       "id": "S1",
@@ -139,6 +160,27 @@
       "detail": "#4e5a64 / #8e958f / #d8b894"
     },
     {
+      "id": "AU2",
+      "world": "W1 Barburhen",
+      "name": "rótulo acústico cita substantivo canônico do README",
+      "status": "pass",
+      "detail": "label=\"ruínas industriais sob chuva ácida\""
+    },
+    {
+      "id": "AU3",
+      "world": "W1 Barburhen",
+      "name": "superfície de passos tem perfil de footstep (fecho)",
+      "status": "pass",
+      "detail": "surface=\"metal\" ∈ FOOTSTEP_PROFILES"
+    },
+    {
+      "id": "AU4",
+      "world": "W1 Barburhen",
+      "name": "chuva coerente com a dinâmica canônica (≥ 0.5)",
+      "status": "pass",
+      "detail": "rain=0.72"
+    },
+    {
       "id": "S1",
       "world": "W2 Priadus",
       "name": "setores do README presentes no runtime",
@@ -207,6 +249,20 @@
       "name": "paleta completa (céu 3 bandas + fog + ground)",
       "status": "pass",
       "detail": "#0a0f1c / #252c44 / #7d9078"
+    },
+    {
+      "id": "AU2",
+      "world": "W2 Priadus",
+      "name": "rótulo acústico cita substantivo canônico do README",
+      "status": "pass",
+      "detail": "label=\"selva úmida com esporos\""
+    },
+    {
+      "id": "AU3",
+      "world": "W2 Priadus",
+      "name": "superfície de passos tem perfil de footstep (fecho)",
+      "status": "pass",
+      "detail": "surface=\"mud\" ∈ FOOTSTEP_PROFILES"
     },
     {
       "id": "S1",
@@ -279,6 +335,27 @@
       "detail": "#241418 / #8a4a2a / #e8bd6e"
     },
     {
+      "id": "AU2",
+      "world": "W3 Ckesalth",
+      "name": "rótulo acústico cita substantivo canônico do README",
+      "status": "pass",
+      "detail": "label=\"bacia desértica com fumaça\""
+    },
+    {
+      "id": "AU3",
+      "world": "W3 Ckesalth",
+      "name": "superfície de passos tem perfil de footstep (fecho)",
+      "status": "pass",
+      "detail": "surface=\"sand\" ∈ FOOTSTEP_PROFILES"
+    },
+    {
+      "id": "AU4",
+      "world": "W3 Ckesalth",
+      "name": "chuva coerente com a dinâmica canônica (= 0)",
+      "status": "pass",
+      "detail": "rain=0"
+    },
+    {
       "id": "S1",
       "world": "W4 Arukheea",
       "name": "setores do README presentes no runtime",
@@ -347,6 +424,20 @@
       "name": "paleta completa (céu 3 bandas + fog + ground)",
       "status": "pass",
       "detail": "#0e1526 / #2a4258 / #a8c3c9"
+    },
+    {
+      "id": "AU2",
+      "world": "W4 Arukheea",
+      "name": "rótulo acústico cita substantivo canônico do README",
+      "status": "pass",
+      "detail": "label=\"ilha costeira e maré distante\""
+    },
+    {
+      "id": "AU3",
+      "world": "W4 Arukheea",
+      "name": "superfície de passos tem perfil de footstep (fecho)",
+      "status": "pass",
+      "detail": "surface=\"stone\" ∈ FOOTSTEP_PROFILES"
     },
     {
       "id": "W1",
@@ -538,6 +629,13 @@
       "detail": "5/5 mundos"
     },
     {
+      "id": "AU1",
+      "world": "GLOBAL",
+      "name": "perfis acústicos cobrem exatamente os 5 mundos canônicos",
+      "status": "pass",
+      "detail": "5/5 mundos com identidade sonora"
+    },
+    {
       "id": "X1",
       "world": "GLOBAL",
       "name": "erupção de lava não é cânon de nenhum mundo",
@@ -567,8 +665,8 @@
     }
   ],
   "meta": {
-    "ranAt": "2026-11-02T17:24:35.718Z",
-    "durationMs": 1979,
+    "ranAt": "2026-11-03T11:51:11.286Z",
+    "durationMs": 1984,
     "worlds": [
       "CIGKV",
       "BARBURHEN",
