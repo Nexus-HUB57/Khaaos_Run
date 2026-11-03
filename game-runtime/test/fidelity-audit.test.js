@@ -6,7 +6,9 @@
 //   1. o repo REAL passa 100% (contrato de fidelidade corrente);
 //   2. cada classe de deriva (setor renomeado, dinâmica vazada, typo
 //      regressivo, anel deslocado, dressing abaixo do mínimo, luz sem
-//      identidade, README evoluindo sozinho) faz o check ESPECÍFICO falhar.
+//      identidade, README evoluindo sozinho, paridade shared/worlds.ts ↔
+//      runtime quebrada, lore pré-F42 reencarnando) faz o check ESPECÍFICO
+//      falhar.
 // Se alguém "afrouxar" a auditoria, um desses testes quebra.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,6 +21,7 @@ import { districtDressing } from '../src/game3d/districts3d.js';
 import { buildScene, LIGHTING_PROFILES } from '../src/game3d/world3d.js';
 import { WORLD_AUDIO_PROFILES, FOOTSTEP_PROFILES } from '../src/game3d/worldAudioProfiles.js';
 import { auditWorlds, renderReport } from '../scripts/fidelity-audit-lib.mjs';
+import { extractSharedWorldsLite } from '../scripts/fidelity-snapshot.mjs';
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão dos testes F43)
 const ctx2d = {
@@ -46,6 +49,10 @@ const docs = {
   f42: readFileSync(path.join(repoRoot, 'docs/FASE42_MUNDOS_FIDELIDADE_README.md'), 'utf8'),
   f43: readFileSync(path.join(repoRoot, 'docs/FASE43_DETALHES_MUNDOS.md'), 'utf8'),
 };
+// F47 — o contrato E2E shared/worlds.ts entra na meta-auditoria pelo MESMO
+// caminho real do snapshot (extração headless por regex), não por um parser
+// de teste: se o extrator quebrar, o teste verde quebra junto.
+const sharedWorlds = extractSharedWorldsLite(readFileSync(path.join(repoRoot, 'shared/worlds.ts'), 'utf8'));
 const LIGHTING_KEYS = Object.keys(LIGHTING_PROFILES);
 
 // dados reais computados UMA vez (dressing puro + cena construída por mundo)
@@ -65,6 +72,7 @@ for (const [skey, scenario] of Object.entries(SCENARIOS)) {
 
 const BASE = {
   readmeText, scenarios: SCENARIOS, dressingCounts, sceneCounts, lightingKeys: LIGHTING_KEYS, simSource, docs,
+  sharedWorlds,
   audio: { worlds: WORLD_AUDIO_PROFILES, footsteps: FOOTSTEP_PROFILES },
 };
 const audit = (over = {}) => auditWorlds({ ...BASE, ...over });
@@ -139,7 +147,71 @@ test('F48 drift AU4 — chuva viola a dinâmica canônica → AU4 quebra', () =>
   assert.equal(statusOf(audit({ audio: secaBarburhen }), 'AU4', 'Barburhen'), 'fail');
 });
 
+// ---------- 1c. paridade de contrato shared/worlds.ts (F47) — o repo real passa ----------
+
+test('F47 — paridade shared/worlds.ts ↔ runtime é FIEL (W1–W7 verdes)', () => {
+  assert.ok(sharedWorlds, 'extração headless de shared/worlds.ts deveria produzir os 5 mundos');
+  const report = audit();
+  for (const w of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    assert.equal(statusOf(report, 'W1', w), 'pass', `W1 ${w}`);
+    assert.equal(statusOf(report, 'W2', w), 'pass', `W2 ${w}`);
+    assert.equal(statusOf(report, 'W3', w), 'pass', `W3 ${w}`);
+    assert.equal(statusOf(report, 'W4', w), 'pass', `W4 ${w}`);
+    assert.equal(statusOf(report, 'W5', w), 'pass', `W5 ${w}`);
+  }
+  assert.equal(statusOf(report, 'W6'), 'pass');
+  assert.equal(statusOf(report, 'W7'), 'pass');
+});
+
 // ---------- 2. o instrumento PEGA cada classe de deriva ----------
+
+test('F47 drift W1/W6 — hazard não-cânon reentra no contrato → W1 (e W6) quebram', () => {
+  const lava = structuredClone(sharedWorlds);
+  lava.Ckesalth.hazard.type = 'VOLCANIC_LAVA'; // lore pré-F42 (caldeira vulcânica) reencarnando
+  const r = audit({ sharedWorlds: lava });
+  assert.equal(statusOf(r, 'W1', 'Ckesalth'), 'fail');
+  assert.equal(statusOf(r, 'W6'), 'fail');
+});
+
+test('F47 drift W2 — paridade runtime↔contrato quebra nos DOIS lados', () => {
+  // lado runtime: Barburhen ganha survival (a chuva ácida é id-gated no sim3d —
+  // survival explícito no cenário é exatamente o drift que a F47 fechou)
+  const comSurvival = structuredClone(SCENARIOS);
+  comSurvival.BARBURHEN.survival = { type: 'KHAOS_GRAVITY' };
+  assert.equal(statusOf(audit({ scenarios: comSurvival }), 'W2', 'Barburhen'), 'fail');
+  // lado runtime: CIGKV perde o survival canônico (Pulso Khaaos)
+  const semSurvival = structuredClone(SCENARIOS);
+  semSurvival.CIGKV.survival = undefined;
+  assert.equal(statusOf(audit({ scenarios: semSurvival }), 'W2', 'CIGKV'), 'fail');
+});
+
+test('F47 drift W3 — configRevision desafixada do pin → W3 quebra', () => {
+  const derivado = structuredClone(sharedWorlds);
+  derivado.CIGKV.configRevision = 'pre-f42-2026-10-25';
+  assert.equal(statusOf(audit({ sharedWorlds: derivado }), 'W3', 'CIGKV'), 'fail');
+});
+
+test('F47 drift W4/W5 — lore pré-F42 reencarna em biome/subtitle → W4/W5 quebram', () => {
+  const antigo = structuredClone(sharedWorlds);
+  antigo.Priadus.subtitle = 'Priadus — Cumes de Vento'; // geração arquipélago (pré-cânon)
+  antigo.Priadus.biome = 'Arquipélago abissal com plataformas offshore';
+  const r = audit({ sharedWorlds: antigo });
+  assert.equal(statusOf(r, 'W4', 'Priadus'), 'fail');
+  assert.equal(statusOf(r, 'W5', 'Priadus'), 'fail');
+  // falha ESPECÍFICA: o mundo dono do lore correto segue verde
+  assert.equal(statusOf(r, 'W5', 'Ckesalth'), 'pass');
+});
+
+test('F47 drift W7 — mundo inventado entra / canônico sai → W7 quebra', () => {
+  const inventado = structuredClone(sharedWorlds);
+  inventado.ZoneOfTraining = { hazard: { type: 'SAFE_TRAINING' }, configRevision: 'f42-2026-11-02', biome: 'campo de treinamento', subtitle: 'Zona de Treinamento' };
+  assert.equal(statusOf(audit({ sharedWorlds: inventado }), 'W7'), 'fail');
+  const faltando = structuredClone(sharedWorlds);
+  delete faltando.Arukheea;
+  const r2 = audit({ sharedWorlds: faltando });
+  assert.equal(statusOf(r2, 'W7'), 'fail');
+  assert.equal(statusOf(r2, 'W1', 'Arukheea'), 'fail'); // e o mundo sumido falha no W1
+});
 
 test('F44 drift S — setor canônico renomeado/removido no runtime → S1 quebra', () => {
   const scenarios = structuredClone(SCENARIOS);

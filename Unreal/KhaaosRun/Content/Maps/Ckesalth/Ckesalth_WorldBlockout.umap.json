@@ -1,7 +1,8 @@
 {
   "schema": "khaaos.ue5.umap-intake/v1",
   "world_id": "Ckesalth",
-  "display_name": "Ckesalth — Pantanos Vulcanicos",
+  "display_name": "Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)",
+  "canonical_config_revision": "f42-2026-11-02",
   "engine_target": "UE5.8",
   "source_config": "components_dev/worlds/WCFG_Ckesalth.json",
   "status": "source_intake_requires_editor_import",

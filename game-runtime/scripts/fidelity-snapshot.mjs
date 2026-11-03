@@ -52,7 +52,7 @@ if (typeof globalThis.document === 'undefined') {
  * canônicos pinados. O teste de auto-verificação fidelity-audit.test.js já
  * cobre o caminho real (corrompe inputs e mostra os checks falhando).
  */
-function extractSharedWorldsLite(src) {
+export function extractSharedWorldsLite(src) {
   const WORLD_IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
   const out = {};
 
