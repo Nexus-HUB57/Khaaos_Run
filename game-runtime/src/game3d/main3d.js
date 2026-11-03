@@ -66,6 +66,10 @@ export class Game3D {
     this.audio = new GameAudio();
     // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
     this.audio.setMix(loadAudioMix());
+    // Fase 43 — assinatura acústica por mundo (vento, chuva e piso padrão).
+    this.audio.setWorldAmbience(this.scenario.id, {
+      weather: ['Barburhen', 'Arukheea'].includes(this.scenario.id) ? 'rain' : 'clear',
+    });
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -984,7 +988,7 @@ export class Game3D {
     this._gait ??= newGait();
     advanceGait(this._gait, { x: p.x, z: p.z, dt });
     if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
-      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0);
+      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
     }
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
@@ -1128,7 +1132,7 @@ export class Game3D {
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
-            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener);
+            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
           }
         }
       }
