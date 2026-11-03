@@ -214,6 +214,110 @@ test('room3d: dano recebido cancela canal ZEX sem conceder XP', () => {
   assert.ok(room.drainEvents('p1').some((e) => e.type === 'extractCancelled' && e.reason === 'damage'));
 });
 
+test('room3d: MP-ZEX-07 nocaute cancela o canal, libera o terminal e outro jogador assume', () => {
+  // sala SQUAD (privada): DBNO ativo — primeiro dano letal NOCAUTEIA, não mata
+  const room = new MatchRoom3D({ id: 'ring3d-knock', seed: 'TESTE-KNOCK', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  room.addPlayer('p1', 'CAÇADOR');
+  room.addPlayer('p2', 'RETAKE');
+  room.start('p1', 'belt');
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  assert.ok(p1.squad && p1.squad === p2.squad, 'mesmo esquadrão → DBNO ativo');
+
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  // dano letal determinístico: vida fixada em 1 e ring DESLOCADO (raio 0 não
+  // fere quem está exatamente no centro — dist > radius), nocauteia em ~5 ticks
+  p1.life = 1;
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
+  assert.ok(p1.knocked, 'nocaute aconteceu (squad, não morte)');
+  assert.equal(p1.zexChannel, null, 'nocaute cancela a canalização');
+  assert.equal(t.active, true, 'terminal permanece utilizável');
+  assert.equal(t.channelerId, null, 'reserva liberada sem deixar órfã');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'nocaute não concede XP de extração');
+  // o MESMO tick que nocauteia cancela o canal como 'damage' (a 1ª linha de
+  // #damage cancela antes do knock pousar); 'knocked'/'death' no advanceZex
+  // são defense-in-depth. UM único cancelamento = zero dupla recompensa.
+  const knocks = room.drainEvents('p1').filter((e) => e.type === 'extractCancelled');
+  assert.equal(knocks.length, 1, 'exatamente um cancelamento (sem dupla concessão)');
+  assert.equal(knocks[0].reason, 'damage');
+
+  // afasta o ring e o retake: outro jogador assume sem reiniciar a sala
+  room.ring.radius = 500;
+  p2.x = t.x; p2.z = t.z;
+  room.input('p2', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.equal(t.channelerId, 'p2', 'outro jogador assume o terminal após o nocaute');
+  assert.ok(p2.zexChannel);
+  assert.equal(p2.extracted, 0);
+});
+
+test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal utilizável', () => {
+  const room = new MatchRoom3D({ id: 'ring3d-death', seed: 'TESTE-DEATH', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  room.addPlayer('p1', 'VÍTIMA');
+  room.addPlayer('p2', 'TESTEMUNHA');
+  room.start('p1', 'belt');
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
+  p2.x = t.x + 40; p2.z = t.z; // longe do ring
+
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  p1.life = 1; // dano letal determinístico (ver teste do nocaute)
+  room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
+  for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
+  assert.ok(p1.knocked);
+  // dano sobre o caído é LETAL → morte final cancela com 'death'
+  for (let i = 0; i < 50 && p1.alive; i++) { room.input('p1', blankInput({ seq: 500 + i })); room.tick(DT); }
+  assert.equal(p1.alive, false, 'morte final (dano sobre caído)');
+  assert.equal(p1.zexChannel, null, 'nenhum canal sobrevive à morte');
+  assert.equal(t.active, true, 'terminal segue utilizável para quem chegar');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'morte não concede XP de extração');
+  const events = room.drainEvents('p1');
+  // UM único cancelamento (no tick do nocaute) — a morte não concede nem cancela de novo
+  const cancels = events.filter((e) => e.type === 'extractCancelled');
+  assert.equal(cancels.length, 1, 'exatamente um cancelamento em todo o ciclo nocaute→morte');
+  assert.equal(cancels[0].reason, 'damage');
+  assert.ok(events.some((e) => e.type === 'knocked'), 'vítima recebe evento knocked');
+  assert.ok(events.some((e) => e.type === 'eliminated'), 'vítima recebe evento eliminated');
+});
+
+test('room3d: MP-ZEX-07 fim de partida cancela todos os canais sem XP nem reserva órfã', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  for (const item of room.loot) item.active = false;
+  const t = room.terminals[0];
+  const p1 = room.humans.get('p1');
+  p1.x = t.x; p1.z = t.z;
+  const xp0 = p1.xp;
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+  assert.ok(p1.zexChannel);
+
+  room.time = 0.05; // relógio da partida encerra com canalização em curso
+  room.tick(DT);
+  assert.equal(room.state, 'FINISHED');
+  assert.equal(p1.zexChannel, null, 'fim de partida cancela o canal');
+  assert.equal(t.active, true, 'terminal não é consumido pelo cancelamento');
+  assert.equal(t.channelerId, null, 'nenhuma reserva órfã após o match_end');
+  assert.equal(p1.extracted, 0);
+  assert.equal(p1.xp, xp0, 'cancelamento por fim de partida não concede XP');
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'extractCancelled' && e.reason === 'match_end'));
+});
+
 test('room3d: recarga conserva munição de reserva', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');

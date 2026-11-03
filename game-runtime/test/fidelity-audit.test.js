@@ -17,6 +17,7 @@ import { SCENARIOS } from '../src/game3d/scenarios.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { districtDressing } from '../src/game3d/districts3d.js';
 import { buildScene, LIGHTING_PROFILES } from '../src/game3d/world3d.js';
+import { WORLD_AUDIO_PROFILES, FOOTSTEP_PROFILES } from '../src/game3d/worldAudioProfiles.js';
 import { auditWorlds, renderReport } from '../scripts/fidelity-audit-lib.mjs';
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão dos testes F43)
@@ -62,7 +63,10 @@ for (const [skey, scenario] of Object.entries(SCENARIOS)) {
   sceneCounts[skey] = named;
 }
 
-const BASE = { readmeText, scenarios: SCENARIOS, dressingCounts, sceneCounts, lightingKeys: LIGHTING_KEYS, simSource, docs };
+const BASE = {
+  readmeText, scenarios: SCENARIOS, dressingCounts, sceneCounts, lightingKeys: LIGHTING_KEYS, simSource, docs,
+  audio: { worlds: WORLD_AUDIO_PROFILES, footsteps: FOOTSTEP_PROFILES },
+};
 const audit = (over = {}) => auditWorlds({ ...BASE, ...over });
 const statusOf = (report, id, world) => {
   const c = report.checks.find((x) => x.id === id && (world === undefined || x.world.includes(world)));
@@ -85,6 +89,54 @@ test('F44 — o repo real está FIEL ao README (auditoria 100% verde)', () => {
     assert.equal(statusOf(report, id, 'Barburhen'), 'pass', `${id} Barburhen`);
     assert.equal(statusOf(report, id, 'Arukheea'), 'pass', `${id} Arukheea`);
   }
+});
+
+// ---------- 1b. identidade acústica (F48) — o repo real passa ----------
+
+test('F48 — identidade acústica dos 5 mundos é FIEL (AU1-AU4 verdes)', () => {
+  const report = audit();
+  assert.equal(statusOf(report, 'AU1'), 'pass');
+  // AU2/AU3 em todos os mundos; AU4 nos três com semântica de chuva no cânon
+  for (const w of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+    assert.equal(statusOf(report, 'AU2', w), 'pass', `AU2 ${w}`);
+    assert.equal(statusOf(report, 'AU3', w), 'pass', `AU3 ${w}`);
+  }
+  for (const w of ['CIGKV', 'Barburhen', 'Ckesalth']) {
+    assert.equal(statusOf(report, 'AU4', w), 'pass', `AU4 ${w}`);
+  }
+  // W2/W4 NÃO têm semântica de chuva no README — a auditoria não inventa regra
+  assert.ok(!report.checks.some((c) => c.id === 'AU4' && c.world.includes('Priadus')));
+  assert.ok(!report.checks.some((c) => c.id === 'AU4' && c.world.includes('Arukheea')));
+});
+
+test('F48 drift AU1 — mundo inventado ou canônico sem perfil → AU1 quebra', () => {
+  const inventado = { worlds: { ...WORLD_AUDIO_PROFILES, ZoneOfTraining: { world: 'ZoneOfTraining', surface: 'concrete', rain: 0, label: 'campo de treinamento' } }, footsteps: FOOTSTEP_PROFILES };
+  assert.equal(statusOf(audit({ audio: inventado }), 'AU1'), 'fail');
+  const semPriadus = { worlds: Object.fromEntries(Object.entries(WORLD_AUDIO_PROFILES).filter(([k]) => k !== 'Priadus')), footsteps: FOOTSTEP_PROFILES };
+  const r2 = audit({ audio: semPriadus });
+  assert.equal(statusOf(r2, 'AU1'), 'fail');
+  assert.equal(statusOf(r2, 'AU2', 'Priadus'), 'fail'); // e o mundo sem perfil falha no AU2
+});
+
+test('F48 drift AU2 — rótulo acústico divergente do cânon → AU2 quebra', () => {
+  const corrompido = { worlds: { ...WORLD_AUDIO_PROFILES, Priadus: { ...WORLD_AUDIO_PROFILES.Priadus, label: 'bacia desértica com fumaça' } }, footsteps: FOOTSTEP_PROFILES };
+  const r = audit({ audio: corrompido });
+  assert.equal(statusOf(r, 'AU2', 'Priadus'), 'fail'); // label do DESERTO no mundo da SELVA
+  assert.equal(statusOf(r, 'AU2', 'Ckesalth'), 'pass', 'o mundo dono do rótulo segue verde');
+});
+
+test('F48 drift AU3 — superfície sem perfil de footstep → AU3 quebra', () => {
+  const semCadeia = { worlds: { ...WORLD_AUDIO_PROFILES, Ckesalth: { ...WORLD_AUDIO_PROFILES.Ckesalth, surface: 'vidro' } }, footsteps: FOOTSTEP_PROFILES };
+  assert.equal(statusOf(audit({ audio: semCadeia }), 'AU3', 'Ckesalth'), 'fail');
+});
+
+test('F48 drift AU4 — chuva viola a dinâmica canônica → AU4 quebra', () => {
+  // deserto com chuva (W3 é o Deserto das Almas Esquecidas — zero chuva)
+  const chuvaNoDeserto = { worlds: { ...WORLD_AUDIO_PROFILES, Ckesalth: { ...WORLD_AUDIO_PROFILES.Ckesalth, rain: 0.4 } }, footsteps: FOOTSTEP_PROFILES };
+  assert.equal(statusOf(audit({ audio: chuvaNoDeserto }), 'AU4', 'Ckesalth'), 'fail');
+  // Barburhen sem chuva (a chuva ácida é a dinâmica canônica do mundo)
+  const secaBarburhen = { worlds: { ...WORLD_AUDIO_PROFILES, Barburhen: { ...WORLD_AUDIO_PROFILES.Barburhen, rain: 0 } }, footsteps: FOOTSTEP_PROFILES };
+  assert.equal(statusOf(audit({ audio: secaBarburhen }), 'AU4', 'Barburhen'), 'fail');
 });
 
 // ---------- 2. o instrumento PEGA cada classe de deriva ----------

@@ -192,6 +192,28 @@ export const SCENE_MIN = Object.freeze({
 // Mapa W# → chave de cenário no runtime
 export const SCENARIO_KEY = Object.freeze({ CIGKV: 'CIGKV', W1: 'BARBURHEN', W2: 'PRIADUS', W3: 'CKESALTH', W4: 'ARUKHEEA' });
 
+// Contrato ACÚSTICO por mundo (Fase 48) — a identidade sonora de cada Mundo
+// (`src/game3d/worldAudioProfiles.js`, consumida por audio3d.js) segue a MESMA
+// doutrina de fidelidade da luz (Q1) e do dressing (B1): ancorada no README.
+//  - labelRegex  : o rótulo acústico deve citar o substantivo canônico do
+//                  README (W1 "chuva ácida"/ruínas industriais; W2 selva/
+//                  esporos; W3 deserto/fumaça; W4 ilha/maré; CIGKV pátio
+//                  militar do Campo de Instrução);
+//  - rain        : pinado SOMENTE onde a dinâmica canônica é explícita —
+//                  W1 tem chuva ácida contínua (rain alto); W3 é o Deserto
+//                  das Almas Esquecidas (zero chuva); CIGKV é campo aberto
+//                  de instrução (zero chuva). W2 (neblina de esporos) e W4
+//                  (tsunami/maré) NÃO têm semântica de chuva no README —
+//                  não pinado (a auditoria não inventa regra que o cânon
+//                  não declara).
+export const AUDIO_CONTRACT = Object.freeze({
+  CIGKV: Object.freeze({ labelRegex: /p(á|a)tio militar|campo de instru/i, rain: Object.freeze({ max: 0 }) }),
+  Barburhen: Object.freeze({ labelRegex: /ru(í|i)nas industriais|chuva (á|a)cida/i, rain: Object.freeze({ min: 0.5 }) }),
+  Priadus: Object.freeze({ labelRegex: /selva (ú|u)mida|esporos/i }),
+  Ckesalth: Object.freeze({ labelRegex: /des(é|e)rtica|fuma(ç|c)a/i, rain: Object.freeze({ max: 0 }) }),
+  Arukheea: Object.freeze({ labelRegex: /ilha|mar(é|e)/i }),
+});
+
 // ---------------------------------------------------------------------------
 // 3. Motor de auditoria
 // ---------------------------------------------------------------------------
@@ -212,8 +234,12 @@ function check(checks, { id, world, name, ok, detail }) {
  *  - sharedWorlds      : (F47) KHAAOS_WORLDS de shared/worlds.ts — contrato E2E
  *                        que anteriormente ficava de fora do portão F44 e
  *                        driftava silenciosamente para o layout pré-F42.
+ *  - audio             : (F48) { worlds: WORLD_AUDIO_PROFILES, footsteps:
+ *                        FOOTSTEP_PROFILES } de worldAudioProfiles.js — a
+ *                        identidade acústica dos mundos sob o MESMO portão
+ *                        (checks AU1–AU4).
  */
-export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneCounts = {}, lightingKeys = [], simSource = '', docs = {}, sharedWorlds = null }) {
+export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneCounts = {}, lightingKeys = [], simSource = '', docs = {}, sharedWorlds = null, audio = null }) {
   const checks = [];
   const { worlds, issues } = extractWorldsFromReadme(readmeText);
   for (const issue of issues) {
@@ -332,6 +358,43 @@ export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneC
       id: 'Q2', world: worldTag, name: 'paleta completa (céu 3 bandas + fog + ground)', ok: paletteOk,
       detail: paletteOk ? `${sc.sky.top} / ${sc.sky.mid} / ${sc.sky.horizon}` : 'céu/fog/tint incompletos',
     });
+
+    // --- AU2/AU3/AU4 — identidade acústica (Fase 48) ---
+    // O perfil de áudio do mundo (worldAudioProfiles.js, consumido pelo
+    // audio3d.setWorldAmbience) segue ancorado no README, como a luz (Q1) e o
+    // dressing (B1). AU1 (cobertura global) fica fora do loop, junto dos W/X.
+    if (audio) {
+      const ac = AUDIO_CONTRACT[canon.world];
+      const profile = audio.worlds?.[canon.world];
+      if (ac && profile) {
+        const labelOk = typeof profile.label === 'string' && ac.labelRegex.test(profile.label);
+        check(checks, {
+          id: 'AU2', world: worldTag, name: 'rótulo acústico cita substantivo canônico do README', ok: labelOk,
+          detail: labelOk ? `label="${profile.label}"` : `label="${profile.label ?? 'ausente'}" não casa ${ac.labelRegex}`,
+        });
+        const surfaceOk = !!profile.surface && !!audio.footsteps?.[profile.surface];
+        check(checks, {
+          id: 'AU3', world: worldTag, name: 'superfície de passos tem perfil de footstep (fecho)', ok: surfaceOk,
+          detail: surfaceOk ? `surface="${profile.surface}" ∈ FOOTSTEP_PROFILES` : `surface="${profile.surface ?? 'ausente'}" sem FOOTSTEP_PROFILES`,
+        });
+        if (ac.rain) {
+          const rain = profile.rain;
+          const rainOk = typeof rain === 'number'
+            && (ac.rain.min === undefined || rain >= ac.rain.min)
+            && (ac.rain.max === undefined || rain <= ac.rain.max);
+          const expect = ac.rain.min !== undefined ? `≥ ${ac.rain.min}` : `= 0`;
+          check(checks, {
+            id: 'AU4', world: worldTag, name: `chuva coerente com a dinâmica canônica (${expect})`, ok: rainOk,
+            detail: rainOk ? `rain=${rain}` : `rain=${rain} viola o cânon (${expect})`,
+          });
+        }
+      } else {
+        check(checks, {
+          id: 'AU2', world: worldTag, name: 'perfil acústico existe para o mundo canônico', ok: false,
+          detail: ac ? `WORLD_AUDIO_PROFILES['${canon.world}'] ausente` : `sem contrato acústico para ${canon.world}`,
+        });
+      }
+    }
   }
 
   // --- W (F47) — paridade shared/worlds.ts (contrato E2E) ↔ runtime scenarios ---
@@ -430,6 +493,19 @@ export function auditWorlds({ readmeText, scenarios, dressingCounts = {}, sceneC
     check(checks, {
       id: 'W7', world: 'GLOBAL', name: `shared/worlds.ts cobre os ${expectedCount} mundos canônicos`, ok: actualCount === expectedCount,
       detail: actualCount === expectedCount ? `${actualCount}/${expectedCount} mundos` : `esperado ${expectedCount}, obtido ${actualCount}`,
+    });
+  }
+
+  // --- AU1 (F48) — cobertura acústica EXATA: o mapa de perfis cobre os 5
+  // mundos canônicos e nada mais (nem mundo inventado, nem mundo faltando).
+  if (audio) {
+    const canonical = new Set(['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']);
+    const keys = new Set(Object.keys(audio.worlds ?? {}));
+    const extra = [...keys].filter((k) => !canonical.has(k));
+    const missing = [...canonical].filter((k) => !keys.has(k));
+    check(checks, {
+      id: 'AU1', world: 'GLOBAL', name: 'perfis acústicos cobrem exatamente os 5 mundos canônicos', ok: extra.length === 0 && missing.length === 0,
+      detail: extra.length ? `mundo sem cânon: ${extra.join(', ')}` : missing.length ? `mundo canônico sem perfil: ${missing.join(', ')}` : '5/5 mundos com identidade sonora',
     });
   }
 
