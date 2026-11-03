@@ -114,7 +114,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
 
     // sessão AWAITING_FEE real (store postgres)
     await store.put({
-      protocol: "KR-REG-4FEE001",
+      protocol: "KR-REG-4FEE0012",
       userId,
       step: "AWAITING_FEE",
       data: { displayName: "Operador Fee", birthDate: "1991-02-02", country: "BR" },
@@ -143,7 +143,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
           metadata: {
             kind: "enrollment_fee",
             userId,
-            protocol: "KR-REG-4FEE001",
+            protocol: "KR-REG-4FEE0012",
             clientIdempotencyKey: "idem-fee-postgres-0001",
           },
         },
@@ -211,11 +211,11 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
     assert.equal(driftReport.counts.paidEnrollmentSessionsWithoutLedger, 1);
     assert.deepEqual(
       driftReport.paidEnrollmentSessionsWithoutLedger.map((row) => row.protocol),
-      ["KR-REG-4FEE001"],
+      ["KR-REG-4FEE0012"],
     );
 
     // caso negativo 2: ΣDEBIT ≠ ΣCREDIT GLOBAL → ledgerGlobalDrift
-    const protocol = "KR-REG-4FEE001";
+    const protocol = "KR-REG-4FEE0012";
     await pool.query(
       `INSERT INTO economy_ledger_entries (operation_id, idempotency_key, user_id, line_number, account_code, side, amount_krc, description)
        VALUES ($1, $2, $3, 1, 'system.item_sales', 'CREDIT', 100, 'Enrollment fee U$1.00 (' || $4 || ')')`,
