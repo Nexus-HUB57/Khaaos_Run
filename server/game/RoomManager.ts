@@ -601,7 +601,7 @@ class RoomManager {
             if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
           }
         }
-        const roomId = msg.roomId || this.findOrCreateLobby(worldId);
+        const roomId = msg.roomId || await this.findOrCreateLobby(worldId);
         await this.joinRoom(userId, displayName, ws, roomId, worldId, relayContext?.relayInviteAuthorized === true);
         break;
       }
@@ -685,7 +685,7 @@ class RoomManager {
 
   // ─── Room Lifecycle ──────────────────────────────────────────────────────
 
-  private findOrCreateLobby(worldId: WorldId = "CIGKV"): string {
+  private async findOrCreateLobby(worldId: WorldId = "CIGKV"): Promise<string> {
     // Prefer an existing lobby with space
     for (const room of this.rooms.values()) {
       if (!room.isPrivate && room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
@@ -721,9 +721,15 @@ class RoomManager {
       minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
-    void distributedState.setRoomOwner(id);
-    void distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
-    return id;
+    try {
+      const ownerAcquired = await distributedState.setRoomOwner(id);
+      if (!ownerAcquired) throw new Error("room ownership unavailable");
+      await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
+      return id;
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
   }
 
   async joinRoom(
@@ -736,7 +742,7 @@ class RoomManager {
   ) {
     let room = this.rooms.get(roomId);
     if (!room) {
-      roomId = this.findOrCreateLobby(worldId);
+      roomId = await this.findOrCreateLobby(worldId);
       room = this.rooms.get(roomId)!;
     }
     if (room.isPrivate && !privateInviteAuthorized) {
@@ -857,7 +863,7 @@ class RoomManager {
     this.userToRoom.delete(userId);
 
     if (room.players.size === 0) {
-      if (room.countdownHandle) clearInterval(room.countdownHandle);
+      this.clearCountdown(room);
       this.destroyRoom(roomId);
     } else {
       if (wasHost) {
@@ -928,7 +934,7 @@ class RoomManager {
   }
 
   private beginCountdown(room: BattleRoom) {
-    if (room.countdownHandle) clearInterval(room.countdownHandle);
+    this.clearCountdown(room);
 
     room.status = "COUNTDOWN";
     room.countdownSeconds = 10;
@@ -939,18 +945,20 @@ class RoomManager {
       this.broadcast(room, { type: "countdown", seconds: room.countdownSeconds });
 
       if (room.countdownSeconds <= 0) {
-        if (room.countdownHandle) clearInterval(room.countdownHandle);
-        room.countdownHandle = null;
+        this.clearCountdown(room);
         this.beginMatch(room);
       }
     }, 1000);
   }
 
+  private clearCountdown(room: BattleRoom): void {
+    if (!room.countdownHandle) return;
+    clearInterval(room.countdownHandle);
+    room.countdownHandle = null;
+  }
+
   private cancelCountdown(room: BattleRoom) {
-    if (room.countdownHandle) {
-      clearInterval(room.countdownHandle);
-      room.countdownHandle = null;
-    }
+    this.clearCountdown(room);
     room.status = "LOBBY";
     room.countdownSeconds = 10;
     // Reset ready so players confirm again
@@ -1762,8 +1770,11 @@ class RoomManager {
   private destroyRoom(roomId: string, reason = "destroyed") {
     const room = this.rooms.get(roomId);
     if (!room) return;
-    if (room.tickHandle) clearInterval(room.tickHandle);
-    if (room.countdownHandle) clearInterval(room.countdownHandle);
+    if (room.tickHandle) {
+      clearInterval(room.tickHandle);
+      room.tickHandle = null;
+    }
+    this.clearCountdown(room);
     this.rooms.delete(roomId);
     void distributedState.releaseRoomOwner(roomId).catch(() => undefined);
     // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
@@ -2108,7 +2119,8 @@ class RoomManager {
       throw error;
     }
 
-    for (const p of players) {
+    try {
+      for (const p of players) {
       // Seat without going through public join (already authenticated)
       if (this.userToRoom.has(p.userId)) {
         this.leaveRoom(p.userId);
@@ -2165,16 +2177,20 @@ class RoomManager {
       if (p.ws) {
         this.send(p.ws, { type: "welcome", userId: p.userId, roomId: id });
       }
-    }
+      }
 
-    this.broadcastRoomState(room);
+      this.broadcastRoomState(room);
 
     // Auto-start countdown when matchmaking fills a lobby
-    if (room.players.size >= 2) {
-      this.tryStartMatch(id, players[0].userId);
-    }
+      if (room.players.size >= 2) {
+        this.tryStartMatch(id, players[0].userId);
+      }
 
-    return id;
+      return id;
+    } catch (error) {
+      this.rollbackRoomCreation(room, "seating_failed");
+      throw error;
+    }
   }
 
   getMatchmakingStatus(userId: string) {
