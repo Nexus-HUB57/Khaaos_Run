@@ -38,6 +38,7 @@ import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
 import { createEnrollmentRouter } from "./routes/enrollment";
 import { createPostgresEnrollmentStore } from "./game/enrollmentStore.postgres";
 import { recordEnrollmentFeeLedger } from "./game/enrollmentLedger";
+import { createEnrollmentFeeGatewayFromEnv, createEnrollmentFeePaymentService, isEnrollmentFeeEvent } from "./payments/enrollmentFeePayment";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
@@ -103,10 +104,24 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   // Fase 47.1: persistência PostgreSQL (ENROLLMENT_STORE=postgres, migration
   // 0011) + ledger REAL da taxa (double-entry economy_ledger_entries +
   // bank_accounts) — o guard financeiro roda ANTES de marcar a sessão paga.
+  // Task 44 — store de alistamento compartilhada entre o router e o
+  // processador de webhook da taxa: o fulfillment precisa enxergar a MESMA
+  // sessão que o router criou. O gateway REAL (stripe, test-only) exige
+  // store postgres — sem ela o webhook não sobreviveria a restart e a
+  // sessão poderia nunca concluir (fail-closed no boot).
+  const enrollmentStore = process.env.ENROLLMENT_STORE === "postgres" ? createPostgresEnrollmentStore() : undefined;
+  const enrollmentFeeGateway = createEnrollmentFeeGatewayFromEnv();
+  if (enrollmentFeeGateway && !enrollmentStore) {
+    console.error("[enrollment] ENROLLMENT_FEE_GATEWAY=stripe exige ENROLLMENT_STORE=postgres — gateway da taxa permanece DESLIGADO");
+  }
+  const enrollmentFeePaymentService = enrollmentFeeGateway && enrollmentStore
+    ? createEnrollmentFeePaymentService({ store: enrollmentStore })
+    : null;
   app.use(createEnrollmentRouter({
     authenticate: isAuthenticated,
-    ...(process.env.ENROLLMENT_STORE === "postgres" ? { store: createPostgresEnrollmentStore() } : {}),
+    ...(enrollmentStore ? { store: enrollmentStore } : {}),
     ledger: { recordEnrollmentFeeLedger },
+    ...(enrollmentFeeGateway && enrollmentStore ? { gateway: enrollmentFeeGateway } : {}),
   }));
 
   const requireAuth = isAuthenticated;
@@ -180,7 +195,17 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
 
     try {
-      await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      // Task 44 — eventos da taxa de alistamento (metadata.kind =
+      // "enrollment_fee") NÃO são pedidos de pacote KRC: o processador de
+      // pacotes rejeitaria metadata sem orderId UUID. Roteia para o
+      // fulfillment dedicado, que deduplica na mesma payment_webhook_events.
+      // Sem o gateway ligado (default), eventos de taxa não existem —
+      // qualquer evento cai no processador de pacotes como antes.
+      if (enrollmentFeePaymentService && isEnrollmentFeeEvent(event)) {
+        await enrollmentFeePaymentService.processEvent(event, sha256Payload(rawBody));
+      } else {
+        await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      }
       return res.status(200).json({ received: true });
     } catch (error: any) {
       console.error("Stripe webhook processing failed", { name: error?.name, code: error?.code });

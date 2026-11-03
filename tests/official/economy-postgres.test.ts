@@ -488,6 +488,10 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(cleanAudit.counts.transactionsWithoutLedger, 0);
     assert.equal(cleanAudit.counts.successfulClaimsWithoutLedger, 0);
     assert.equal(cleanAudit.counts.incompleteIdempotencyClaims, 0);
+    // Task 44 — seções novas da reconciliação SSOT
+    assert.equal(cleanAudit.counts.ledgerGlobalDrift, 0);
+    assert.equal(cleanAudit.counts.paidEnrollmentSessionsWithoutLedger, 0);
+    assert.equal(Number(cleanAudit.ledgerGlobalConservation?.difference_krc ?? 0), 0);
 
     const holdCandidateKey = `hold-candidate-${randomUUID()}`;
     await pool.query(`

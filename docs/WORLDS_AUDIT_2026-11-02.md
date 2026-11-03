@@ -115,9 +115,16 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
    `src/lib/game-constants.ts` citada abaixo existia apenas no web game de
    preview do sandbox (fora do repo) e foi retirada com o ambiente — **não há
    duplicação de mundos no repo** (verificado por varredura em 03/11/2026).
-4. A taxa de inscrição U$1 é **mock local** (sem gateway) — 🔴 **ABERTA** (fora
-   do escopo de fidelidade de mundos; compliance já previsto no
-   WORLDS_DESIGN.md §Compliance).
+4. A taxa de inscrição U$1 é **mock local** (sem gateway) — 🟡 **MITIGADA EM
+   CÓDIGO (Task 44, 04/11/2026)**: o fluxo real existe atrás de gate
+   fail-closed (`ENROLLMENT_FEE_GATEWAY=stripe` + config test-only completa
+   + `ENROLLMENT_STORE=postgres`, desligado por default) —
+   `server/payments/enrollmentFeePayment.ts` cria a Checkout Session
+   (usd, U$1,00) e o webhook conclui a sessão com o mesmo ledger double-entry
+   do SSOT (docs/ECONOMY_LEDGER_SSOT.md). O caminho mock do #252 permanece
+   para dev/testes. 🔴 Pendência HUMANA remanescente: credenciais Stripe do
+   titular em staging (`sk_test_`/`whsec_` secrets) e decisão de precificação
+   Pix-BRL para a taxa (hoje USD/card-only) — ver docs/STRIPE_BRAZIL_CHECKOUT.md.
 5. Portões por **extrações válidas** exigem contagem autoritativa no servidor —
    🔴 **ABERTA** (protótipo web; o runtime game3d/server já é
    server-authoritative).
