@@ -96,21 +96,68 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
 - Evidências: `download/khaaos_fee_receipt.png`, `download/khaaos_mundos_audit.png`,
   `download/khaaos_mundos_audit2.png`, `download/khaaos_bank_fee_tx.png`
 
-## 7. Recomendações abertas (para os devs conjuntos)
+## 7. Recomendações e encaminhamento (atualizado em 03/11/2026 — Tarefa 42)
 
-1. **Nomear um registro canônico versionado** (`shared/worlds.ts` é o candidato
-   natural) e propagar para WORLDS_DESIGN.md/README/INIs, com `configRevision` —
-   conforme a "Nota de reconciliação" da doc de arquitetura;
-2. Definir a **ligação entre os 3 pares de lore** (ex.: Barburhen inverno vs
-   deserto tóxico) — hoje o mesmo nome descreve biomas incompatíveis entre docs;
-3. Migrar o web game para consumir `shared/worlds.ts` **diretamente** (hoje há uma
-   cópia fiel em `src/lib/game-constants.ts` — a duplicação é o próximo risco);
-4. A taxa de inscrição U$1 é **mock local** (sem gateway): plugar provedor real +
-   idempotência + ledger append-only antes de qualquer valor real (compliance já
-   previsto no WORLDS_DESIGN.md §Compliance);
+1. **Nomear um registro canônico versionado** — ✅ **RESOLVIDA (F47, PR #268,
+   merge 664a9e3)**: `shared/worlds.ts` é o registro canônico com
+   `configRevision: "f42-2026-11-02"`; hazard/POIs/biome/subtitle reconciliados
+   com o cânon F42/README; paridade com o runtime sob o portão de fidelidade
+   (cheques **W1–W7** em `audit:fidelity`) e paridade contratual em
+   `tests/official/worlds-fidelity-parity.test.ts`.
+2. Definir a **ligação entre os 3 pares de lore** — 🟡 **PARCIALMENTE
+   RESOLVIDA**: a escolha do cânon está explícita e versionada (§3 + F47), e os
+   display_names do intake UE5 agora citam o nome canônico (rec #7). A
+   reconciliação editorial de WORLDS_DESIGN.md/README (um único lore por mundo
+   nas docs de design) continua aberta para os devs conjuntos.
+3. Migrar o web game para consumir `shared/worlds.ts` **diretamente** — ✅
+   **RESOLVIDA/OBSOLETA**: no repositório o client do console já importa
+   `KHAAOS_WORLDS` de `@shared/worlds` (`client/src/pages/mundos.tsx`); a cópia
+   `src/lib/game-constants.ts` citada abaixo existia apenas no web game de
+   preview do sandbox (fora do repo) e foi retirada com o ambiente — **não há
+   duplicação de mundos no repo** (verificado por varredura em 03/11/2026).
+4. A taxa de inscrição U$1 é **mock local** (sem gateway) — 🔴 **ABERTA** (fora
+   do escopo de fidelidade de mundos; compliance já previsto no
+   WORLDS_DESIGN.md §Compliance).
 5. Portões por **extrações válidas** exigem contagem autoritativa no servidor —
-   hoje o cliente não valida (protótipo).
+   🔴 **ABERTA** (protótipo web; o runtime game3d/server já é
+   server-authoritative).
+
+## 8. Encerramento pós-auditoria (F47 → Tarefa 42, 03/11/2026)
+
+- **F47 (PR #268, merged 02/11)** — contrato `shared/worlds.ts` reconciliado com
+  o cânon F42 (hazards KHAOS_GRAVITY/ACID_RAIN/SPORE_FOG/TOXIC_SMOKE/
+  TSUNAMI_WAVE, configRevision pinada, POIs com nomes do README) + `ue5_kit`
+  (header + 8 abilities) nas 6 espécies; paridade auditável (W1–W7).
+- **F48 (PR #273, merged 03/11)** — identidade acústica dos 5 mundos sob o
+  mesmo portão (checks AU1–AU4) + MP-ZEX-04/07 automatizados.
+- **Tarefa 42 (este PR)** — três frentes de fechamento:
+  1. **Meta-auditoria dos cheques W** (`game-runtime/test/fidelity-audit.test.js`):
+     o repo real exercita W1–W7 pelo caminho real do snapshot
+     (`extractSharedWorldsLite`, agora exportada) e 5 classes de deriva provam
+     que o instrumento pega a quebra (hazard não-cânon reentrando → W1+W6;
+     paridade runtime↔contrato quebrada nos dois lados → W2; configRevision
+     desafixada → W3; lore pré-F42 em biome/subtitle → W4/W5; mundo inventado
+     ou canônico sumido → W7).
+  2. **Rec #7 — intake UE5 alinhado ao cânon**: os 5 `.umap.json` e
+     `DT_*_WorldConfig.csv` carregavam display_names da geração pré-F42
+     ("Barburhen — Mundo Aquatico", "Ckesalth — Pantanos Vulcanicos",
+     "Priadus — Cumes de Vento", "Arukheea — Forja Khaael"). O gerador
+     (`scripts/build/generate_world_asset_packages.py`) agora **governa** o
+     display_name via `CANON_DISPLAY_NAMES` (nomes canônicos do README) e
+     carimba `canonical_config_revision` no intake; os
+     `components_dev/worlds/WCFG_*.json` ficam marcados como
+     `"status": "legacy-pre-f42"` com apontamento para o cânon (inserção
+     textual cirúrgica, byte-idempotente).
+  3. **Contrato UE5 5/5 mundos** — os stubs
+     `Khaaos{CIGKV,Barburhen,Priadus,Ckesalth,Arukheea}Level.{h,cpp}` +
+     `*MapData.{h,cpp}` existem em `Source/KhaaosRun/Game/` (padrão CIGKV);
+     *nota registrada*: os enums de gameplay dos stubs W1–W4 ainda citam lore
+     WORLDS_DESIGN (ex.: estações Verão/Inverno em Barburhen, POIs de deserto
+     em Arukheea) — material de editor-import a reconciliar quando o cook real
+     (runner self-hosted GPU) existir; o display_name/manifesto já seguem o
+     cânon.
 
 ---
 *Auditoria gerada em 02/11/2026. Fonts verificadas via git log do repositório
-Khaaos_Run. Contrato adotado: `shared/worlds.ts` @ 9cd9e94.*
+Khaaos_Run. Contrato adotado: `shared/worlds.ts` @ 9cd9e94. Status das
+recomendações e encerramento F47/Tarefa 42 adicionados em 03/11/2026.*
