@@ -37,6 +37,28 @@ export interface SuccessfulClaimWithoutLedgerRow {
   response_status: number;
 }
 
+/** Task 44 — conservação GLOBAL do SSOT (ΣDEBIT = ΣCREDIT em todo o livro). */
+export interface LedgerGlobalConservationRow {
+  debit_total: string;
+  credit_total: string;
+  entry_count: number;
+  difference_krc: string;
+}
+
+/** Task 44 — sessão de alistamento paga no SSOT, mas sem par no ledger.
+ * Complemento direto do gap do WORLDS_AUDIT: toda sessão COMPLETED (com
+ * bônus) precisa de entrada de ledger citando o protocolo — a mesma
+ * invariante que o guard financeiro do #252 impõe na escrita, verificada
+ * na leitura. Sessões em store em memória não aparecem aqui (limitação
+ * honesta: a auditoria opera sobre o banco; usar ENROLLMENT_STORE=postgres
+ * em produção para a checagem cobrir tudo).
+ */
+export interface PaidEnrollmentSessionWithoutLedgerRow {
+  user_id: string;
+  protocol: string;
+  completed_at: string;
+}
+
 export interface EconomyAuditReport {
   generatedAt: string;
   status: "clean" | "needs_attention";
@@ -47,12 +69,19 @@ export interface EconomyAuditReport {
     transactionsWithoutLedger: number;
     successfulClaimsWithoutLedger: number;
     incompleteIdempotencyClaims: number;
+    /** Task 44 — 1 quando ΣDEBIT ≠ ΣCREDIT no livro inteiro. */
+    ledgerGlobalDrift: number;
+    /** Task 44 — sessões COMPLETED sem par no ledger (migration 0011 presente). */
+    paidEnrollmentSessionsWithoutLedger: number;
   };
   walletDrifts: WalletDriftRow[];
   unbalancedOperations: UnbalancedOperationRow[];
   transactionsWithoutLedger: TransactionWithoutLedgerRow[];
   successfulClaimsWithoutLedger: SuccessfulClaimWithoutLedgerRow[];
   incompleteIdempotencyClaims: IncompleteIdempotencyClaimRow[];
+  /** Task 44 — null quando o livro está vazio. */
+  ledgerGlobalConservation: LedgerGlobalConservationRow | null;
+  paidEnrollmentSessionsWithoutLedger: PaidEnrollmentSessionWithoutLedgerRow[];
 }
 
 const walletDriftSql = `
@@ -112,6 +141,37 @@ const incompleteClaimsSql = `
   ORDER BY created_at, id
 `;
 
+// Task 44 — conservação global: o trigger 0004 valida ΣDEBIT=ΣCREDIT por
+// operação no commit; a soma GLOBAL só diverge com corrupção fora do caminho
+// do ledger (edit manual, truncamento, restauração parcial de backup).
+const ledgerGlobalConservationSql = `
+  SELECT
+    COALESCE(SUM(amount_krc) FILTER (WHERE side = 'DEBIT'), 0::numeric)::text AS debit_total,
+    COALESCE(SUM(amount_krc) FILTER (WHERE side = 'CREDIT'), 0::numeric)::text AS credit_total,
+    COUNT(*)::int AS entry_count,
+    (COALESCE(SUM(amount_krc) FILTER (WHERE side = 'DEBIT'), 0::numeric)
+       - COALESCE(SUM(amount_krc) FILTER (WHERE side = 'CREDIT'), 0::numeric))::text AS difference_krc
+  FROM economy_ledger_entries
+`;
+
+// Task 44 — sessão de alistamento concluída sem evidência no SSOT. O
+// protocolo KR-REG-* aparece na description das duas operações de ledger
+// (taxa e bônus), então a existência de UMA linha citando o protocolo prova
+// o registro. Guard via to_regclass: ambientes sem a migration 0011 (ex.:
+// bancos de teste antigos) simplesmente pulam a seção.
+const paidEnrollmentSessionsWithoutLedgerSql = `
+  SELECT s.user_id, s.protocol, s.updated_at::text AS completed_at
+  FROM enrollment_sessions s
+  WHERE s.step = 'COMPLETED'
+    AND s.bonus_krc_credited > 0
+    AND NOT EXISTS (
+      SELECT 1 FROM economy_ledger_entries e
+      WHERE e.user_id = s.user_id
+        AND e.description LIKE '%(' || s.protocol || ')%'
+    )
+  ORDER BY s.user_id, s.protocol
+`;
+
 const successfulClaimsWithoutLedgerSql = `
   SELECT i.id, i.user_id, i.operation_id::text AS operation_id,
     i.response_status
@@ -132,14 +192,29 @@ export async function createEconomyAuditReport(
   pool: Queryable,
   generatedAt = new Date(),
 ): Promise<EconomyAuditReport> {
-  const [wallets, unbalanced, transactionsWithoutLedger, successfulClaimsWithoutLedger, incompleteClaims, accounts] = await Promise.all([
+  // Task 44 — seções novas toleram ambientes sem a tabela de sessões
+  // (migration 0011 ausente): sem a tabela, nenhuma linha é reportada.
+  const enrollmentTable = await pool.query<{ present: string | null }>(
+    "SELECT to_regclass('public.enrollment_sessions')::text AS present",
+  );
+  const enrollmentTablePresent = Boolean(enrollmentTable.rows[0]?.present);
+
+  const [wallets, unbalanced, transactionsWithoutLedger, successfulClaimsWithoutLedger, incompleteClaims, accounts, globalConservation, paidEnrollmentSessions] = await Promise.all([
     pool.query<WalletDriftRow>(walletDriftSql),
     pool.query<UnbalancedOperationRow>(unbalancedOperationsSql),
     pool.query<TransactionWithoutLedgerRow>(transactionWithoutLedgerSql),
     pool.query<SuccessfulClaimWithoutLedgerRow>(successfulClaimsWithoutLedgerSql),
     pool.query<IncompleteIdempotencyClaimRow>(incompleteClaimsSql),
     pool.query<{ count: number }>("SELECT COUNT(*)::int AS count FROM bank_accounts"),
+    pool.query<LedgerGlobalConservationRow>(ledgerGlobalConservationSql),
+    enrollmentTablePresent
+      ? pool.query<PaidEnrollmentSessionWithoutLedgerRow>(paidEnrollmentSessionsWithoutLedgerSql)
+      : Promise.resolve({ rows: [] as PaidEnrollmentSessionWithoutLedgerRow[] }),
   ]);
+
+  const globalConservationRow = globalConservation.rows[0];
+  const ledgerGlobalDrift = globalConservationRow
+    && Number(globalConservationRow.difference_krc) !== 0 ? 1 : 0;
 
   const counts = {
     walletAccountsScanned: Number(accounts.rows[0]?.count ?? 0) * 3,
@@ -148,6 +223,8 @@ export async function createEconomyAuditReport(
     transactionsWithoutLedger: transactionsWithoutLedger.rows.length,
     successfulClaimsWithoutLedger: successfulClaimsWithoutLedger.rows.length,
     incompleteIdempotencyClaims: incompleteClaims.rows.length,
+    ledgerGlobalDrift,
+    paidEnrollmentSessionsWithoutLedger: paidEnrollmentSessions.rows.length,
   };
   const status = [
     counts.walletDrifts,
@@ -155,6 +232,8 @@ export async function createEconomyAuditReport(
     counts.transactionsWithoutLedger,
     counts.successfulClaimsWithoutLedger,
     counts.incompleteIdempotencyClaims,
+    counts.ledgerGlobalDrift,
+    counts.paidEnrollmentSessionsWithoutLedger,
   ].some((count) => count > 0)
     ? "needs_attention"
     : "clean";
@@ -168,5 +247,7 @@ export async function createEconomyAuditReport(
     transactionsWithoutLedger: transactionsWithoutLedger.rows,
     successfulClaimsWithoutLedger: successfulClaimsWithoutLedger.rows,
     incompleteIdempotencyClaims: incompleteClaims.rows,
+    ledgerGlobalConservation: globalConservationRow ?? null,
+    paidEnrollmentSessionsWithoutLedger: paidEnrollmentSessions.rows,
   };
 }

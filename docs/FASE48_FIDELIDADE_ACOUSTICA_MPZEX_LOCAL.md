@@ -105,6 +105,13 @@ audit:fidelity: FIEL ✅ 94 OK / 0 falhas
 | MP-ZEX-08 | ✅ automatizado E2E local (F43, commit `5f14992`) — **gate staging permanece pendente** |
 | MP-ZEX-09/10/11 | ⏳ exigem staging isolado com 2 clientes humanos / touch (ação externa) |
 
+**Status P0 (Task 44, 04/11/2026)** — MP-ZEX-08 (gate staging) e
+MP-ZEX-09/10/11 (2 clientes humanos em staging isolado) ficam **estacionados
+como bloqueio humano**: exigem sessão presencial no staging (dispositivos
+separados, jitter/perda induzida, touch) e não são automatizáveis no CI.
+Nenhuma frente de código os destrava; a fila de automação para aqui até a
+sessão com humanos acontecer.
+
 O playtest em staging isolado (dispositivos separados, jitter/perda, HUD
 visual) continua sendo o passo de liberação multiplayer — nada da F48 o
 substitui; a F48 apenas reduz a superfície manual de 5 para 3 cenários.

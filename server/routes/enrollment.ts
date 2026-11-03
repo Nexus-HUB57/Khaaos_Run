@@ -131,6 +131,23 @@ export interface EnrollmentRouterOptions {
       idempotencyKey: string;
     }): Promise<{ feeRecorded: boolean; bonusRecorded: boolean }>;
   };
+  /**
+   * Task 44 (Fase 47.2) — gateway REAL da taxa (opcional, DI). Presente
+   * somente com ENROLLMENT_FEE_GATEWAY=stripe + config test-only completa.
+   * Nesse modo `POST /fee` NÃO marca a sessão como paga: devolve uma
+   * Checkout Session (U$1,00 test-only) e a conclusão chega pelo webhook
+   * (server/payments/enrollmentFeePayment.ts), que grava o ledger e completa
+   * a sessão na ordem falha-cerrada do #252. A chave de idempotência do
+   * Stripe é determinística por (protocol, Idempotency-Key) — replay da
+   * mesma chave devolve a MESMA Checkout Session.
+   */
+  gateway?: {
+    createFeeCheckout(input: {
+      userId: string;
+      protocol: string;
+      idempotencyKey: string;
+    }): Promise<{ checkoutUrl: string }>;
+  };
 }
 
 function defaultGetUserId(req: Request): string {
@@ -146,6 +163,7 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
   const getUserId = options.getUserId ?? defaultGetUserId;
   const authenticate = options.authenticate;
   const ledger = options.ledger;
+  const gateway = options.gateway;
 
   // Respostas idempotentes por chave de taxa (por usuário)
   const feeResponses = new Map<string, { status: number; body: unknown }>();
@@ -244,6 +262,46 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     const cacheKey = `${session.protocol}:${headerKey}`;
     const cached = feeResponses.get(cacheKey);
     if (cached) return res.status(cached.status).json(cached.body);
+
+    // Task 44 (Fase 47.2) — modo gateway REAL: nada é marcado aqui. A
+    // Checkout Session carrega (userId, protocol, Idempotency-Key) na
+    // metadata; o webhook grava o ledger e completa a sessão. Sem gateway,
+    // o caminho simulado do #252/47.1 segue intacto abaixo. A leitura do
+    // estado vem SEMPRE da store (fonte da verdade): após o pagamento pelo
+    // webhook, o replay da mesma chave devolve a sessão COMPLETED — nunca
+    // uma Checkout Session velha. A idempotência da criação no Stripe é
+    // determinística por (protocol, Idempotency-Key) — ver enrollmentFeePayment.
+    if (gateway) {
+      if (session.step === "COMPLETED") {
+        return res.status(200).json(serialize(session));
+      }
+      if (session.step !== "AWAITING_FEE") {
+        return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
+      }
+      // Mesma chave → mesma resposta GATEWAY_PENDING (sem nova chamada de
+      // criação). A leitura COMPLETED acima vem antes do cache: após o
+      // webhook concluir, o replay devolve a sessão paga, nunca o cache.
+      const gatewayCacheKey = `${cacheKey}:gateway`;
+      const cachedGateway = feeResponses.get(gatewayCacheKey);
+      if (cachedGateway) return res.status(cachedGateway.status).json(cachedGateway.body);
+      try {
+        const { checkoutUrl } = await gateway.createFeeCheckout({
+          userId,
+          protocol: session.protocol,
+          idempotencyKey: headerKey,
+        });
+        const body = {
+          ...serialize(session),
+          feeStatus: "GATEWAY_PENDING",
+          checkoutUrl,
+        };
+        feeResponses.set(gatewayCacheKey, { status: 200, body });
+        return res.status(200).json(body);
+      } catch (err) {
+        console.error("[enrollment] gateway de taxa indisponível:", err);
+        return res.status(503).json({ message: "Gateway de pagamento indisponível — tente novamente com a mesma Idempotency-Key" });
+      }
+    }
 
     if (session.step !== "AWAITING_FEE") {
       return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
