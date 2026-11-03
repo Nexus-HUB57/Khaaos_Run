@@ -96,7 +96,7 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
 - Evidências: `download/khaaos_fee_receipt.png`, `download/khaaos_mundos_audit.png`,
   `download/khaaos_mundos_audit2.png`, `download/khaaos_bank_fee_tx.png`
 
-## 7. Recomendações e encaminhamento (atualizado em 03/11/2026 — Tarefa 42)
+## 7. Recomendações e encaminhamento (atualizado em 03/11/2026 — Tarefa 43)
 
 1. **Nomear um registro canônico versionado** — ✅ **RESOLVIDA (F47, PR #268,
    merge 664a9e3)**: `shared/worlds.ts` é o registro canônico com
@@ -122,7 +122,7 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
    🔴 **ABERTA** (protótipo web; o runtime game3d/server já é
    server-authoritative).
 
-## 8. Encerramento pós-auditoria (F47 → Tarefa 42, 03/11/2026)
+## 8. Encerramento pós-auditoria (F47 → Tarefa 43, 03/11/2026)
 
 - **F47 (PR #268, merged 02/11)** — contrato `shared/worlds.ts` reconciliado com
   o cânon F42 (hazards KHAOS_GRAVITY/ACID_RAIN/SPORE_FOG/TOXIC_SMOKE/
@@ -130,7 +130,7 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
   (header + 8 abilities) nas 6 espécies; paridade auditável (W1–W7).
 - **F48 (PR #273, merged 03/11)** — identidade acústica dos 5 mundos sob o
   mesmo portão (checks AU1–AU4) + MP-ZEX-04/07 automatizados.
-- **Tarefa 42 (este PR)** — três frentes de fechamento:
+- **Tarefa 43 (este PR)** — três frentes de fechamento:
   1. **Meta-auditoria dos cheques W** (`game-runtime/test/fidelity-audit.test.js`):
      o repo real exercita W1–W7 pelo caminho real do snapshot
      (`extractSharedWorldsLite`, agora exportada) e 5 classes de deriva provam
@@ -160,4 +160,4 @@ escolher silenciosamente entre valores conflitantes"). A escolha precisa ser
 ---
 *Auditoria gerada em 02/11/2026. Fonts verificadas via git log do repositório
 Khaaos_Run. Contrato adotado: `shared/worlds.ts` @ 9cd9e94. Status das
-recomendações e encerramento F47/Tarefa 42 adicionados em 03/11/2026.*
+recomendações e encerramento F47/Tarefa 43 adicionados em 03/11/2026.*
