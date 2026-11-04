@@ -30,7 +30,7 @@
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
     "verify:all": "node scripts/verify-all.mjs",
     "test:e2e:war-i": "playwright test --config=playwright.config.ts",
-    "prepare": "husky || true"
+    "prepare": "node -e \"const fs = require('node:fs'); if (fs.existsSync('node_modules/husky/bin.js')) require('node:child_process').execFileSync(process.execPath, ['node_modules/husky/bin.js'], {stdio: 'inherit'})\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
