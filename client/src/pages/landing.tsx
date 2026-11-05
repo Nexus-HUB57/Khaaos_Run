@@ -76,7 +76,7 @@ export default function Landing() {
               color: "hsl(260 25% 5%)",
               boxShadow: "0 0 30px -5px hsla(25, 95%, 55%, 0.7), 0 4px 20px -5px hsla(0,0%,0%,0.5)"
             }}
-            onClick={() => window.location.href = "/api/login"}
+            onClick={() => window.location.href = "/auth"}
           >
             <Flame className="w-5 h-5 mr-2" />
             INICIAR SESSÃO

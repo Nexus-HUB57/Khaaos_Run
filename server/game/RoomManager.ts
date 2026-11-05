@@ -251,6 +251,7 @@ class RoomManager {
   private nextLootId = 1;
   private matchmaking: MatchmakingService;
   private socketWorlds = new WeakMap<WebSocket, WorldId>();
+  private socketAuthenticatedAtMs = new WeakMap<WebSocket, number>();
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
   /** M1: janela móvel de emissões de convite por host (quota anti-spam). */
@@ -402,7 +403,10 @@ class RoomManager {
           if (!verified) { done(false, 401, "Unauthorized"); return; }
           const identityLimit = await distributedState.rateLimit(`ws:identity:${verified.sub}`, 120, 60_000);
           if (!identityLimit.allowed) { done(false, 429, "Too Many Requests"); return; }
-          (req as typeof req & { khaaosUserId?: string }).khaaosUserId = verified.sub;
+          Object.assign(req, {
+            khaaosUserId: verified.sub,
+            khaaosAuthenticatedAtMs: verified.authenticatedAtMs,
+          });
           done(true);
         })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
@@ -429,6 +433,12 @@ class RoomManager {
         ws.close(1008, "Unauthorized");
         return;
       }
+      const authenticatedAtMs = (req as typeof req & { khaaosAuthenticatedAtMs?: number }).khaaosAuthenticatedAtMs;
+      if (!Number.isSafeInteger(authenticatedAtMs)) {
+        ws.close(1008, "Unauthorized");
+        return;
+      }
+      this.socketAuthenticatedAtMs.set(ws, authenticatedAtMs as number);
       this.registerSocket(userId, ws);
       let displayName = "Operativo";
       let messagesThisSecond = 0;
@@ -463,7 +473,7 @@ class RoomManager {
 
       ws.on("message", async (raw) => {
         try {
-          if (await distributedState.isUserRevoked(userId)) {
+          if (await distributedState.isUserRevoked(userId, this.socketAuthenticatedAtMs.get(ws))) {
             ws.close(4001, "Session revoked");
             return;
           }

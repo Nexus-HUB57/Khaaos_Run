@@ -134,11 +134,13 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     const userId = getUserId(req);
+    const sessionUser = req.user as { authenticatedAtMs?: number; claims?: { iat?: number } };
+    const authenticatedAtMs = sessionUser.authenticatedAtMs ?? (sessionUser.claims?.iat ? sessionUser.claims.iat * 1000 : Date.now());
     void distributedState.rateLimit(`auth:ws-token:${userId}:${req.ip}`, 20, 60_000).then((limit) => {
       if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many WebSocket token requests" });
       try {
         res.setHeader("Cache-Control", "no-store");
-        res.json(createWsAccessToken(userId, undefined, req.sessionID));
+        res.json(createWsAccessToken(userId, undefined, req.sessionID, authenticatedAtMs));
       } catch {
         res.status(503).json({ message: "Autenticação WebSocket indisponível" });
       }
