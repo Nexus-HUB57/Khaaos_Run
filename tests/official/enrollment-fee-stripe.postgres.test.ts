@@ -142,7 +142,6 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
           payment_status: "paid",
           metadata: {
             kind: "enrollment_fee",
-            userId,
             protocol: "KR-REG-4FEE0012",
             clientIdempotencyKey: "idem-fee-postgres-0001",
           },

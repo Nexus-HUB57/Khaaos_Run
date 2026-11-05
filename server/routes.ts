@@ -106,7 +106,8 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   // bank_accounts) — o guard financeiro roda ANTES de marcar a sessão paga.
   // Task 44 — store de alistamento compartilhada entre o router e o
   // processador de webhook da taxa: o fulfillment precisa enxergar a MESMA
-  // sessão que o router criou. O gateway REAL (stripe, test-only) exige
+  // sessão que o router criou. O protocolo único resolve o usuário no banco;
+  // o subject interno não é enviado à metadata Stripe. O gateway (test-only) exige
   // store postgres — sem ela o webhook não sobreviveria a restart e a
   // sessão poderia nunca concluir (fail-closed no boot).
   const enrollmentStore = process.env.ENROLLMENT_STORE === "postgres" ? createPostgresEnrollmentStore() : undefined;

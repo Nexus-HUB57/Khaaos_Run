@@ -29,10 +29,10 @@ const fakeAuth = (req: Request, _res: Response, next: NextFunction) => {
   next();
 };
 
-function buildApp(store?: EnrollmentStore) {
+function buildApp(store?: EnrollmentStore, allowSimulatedFeeForTests = false) {
   const app = express();
   app.use(express.json());
-  app.use(createEnrollmentRouter({ authenticate: fakeAuth, store }));
+  app.use(createEnrollmentRouter({ authenticate: fakeAuth, store, allowSimulatedFeeForTests }));
   return app;
 }
 
@@ -49,7 +49,7 @@ async function enrollThroughTerms(app: express.Express, userId: string) {
 }
 
 test("fluxo completo: start → dados → termos → taxa com bônus único de 500 KRC", async () => {
-  const app = buildApp();
+  const app = buildApp(undefined, true);
 
   const start = await request(app).post("/api/enrollment/start");
   assert.equal(start.status, 201);
@@ -83,8 +83,26 @@ test("fluxo completo: start → dados → termos → taxa com bônus único de 5
   assert.equal(fee.body.walletDeltaKrc, ENROLLMENT_FEE_KRC + ENROLLMENT_BONUS_KRC);
 });
 
-test("taxa idempotente: mesma chave devolve a mesma resposta sem recreditar", async () => {
+test("sem gateway e sem opt-in de teste: taxa falha fechada sem concluir nem creditar", async () => {
   const app = buildApp();
+  await enrollThroughTerms(app, "op-no-payment");
+
+  const response = await request(app)
+    .post("/api/enrollment/fee")
+    .set("x-test-user", "op-no-payment")
+    .set("Idempotency-Key", VALID_FEE_KEY)
+    .send({ confirm: true });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, "PAYMENT_PROVIDER_NOT_CONFIGURED");
+  const status = await request(app).get("/api/enrollment/status").set("x-test-user", "op-no-payment");
+  assert.equal(status.body.step, "AWAITING_FEE");
+  assert.equal(status.body.fee, null);
+  assert.equal(status.body.bonusKrcCredited, 0);
+});
+
+test("taxa idempotente: mesma chave devolve a mesma resposta sem recreditar", async () => {
+  const app = buildApp(undefined, true);
   await enrollThroughTerms(app, "op-idem");
 
   const first = await request(app)
@@ -165,6 +183,7 @@ test("store plugável: persistência externa é honrada (retomada entre instânc
   const sessions = new Map<string, EnrollmentSession>();
   const store: EnrollmentStore = {
     get: (userId) => sessions.get(userId),
+    getByProtocol: (protocol) => [...sessions.values()].find((session) => session.protocol === protocol),
     put: (session) => {
       sessions.set(session.userId, session);
     },

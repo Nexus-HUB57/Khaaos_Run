@@ -6,6 +6,8 @@
 **Revisão (2026-11-02, 2ª passada):** auditoria E2E corrigiu 6 desvios neste documento — 1.3 já concluído (PRs mesclados 2026-10-26), branch de trabalho contido na `main`, baseline UE5 ~3× maior (298/293 headers), fila de 97 workflows sem runner, gap canônico quantificado, 36 workflows. Detalhes em [`REVISAO_E2E_2026-11-02.md`](REVISAO_E2E_2026-11-02.md).
 **Relação com outros roadmaps:** este documento é o **plano de execução consolidado** ("o que fazer a partir de hoje, em que ordem e com que critério de aceite"). [`docs/ROADMAP.md`](ROADMAP.md) mantém o detalhamento de engenharia por issues (#53–#60); [`docs/README_AUDIT_ROADMAP.md`](README_AUDIT_ROADMAP.md) mantém a auditoria documental do README; o "Roadmap Go Live" do README mantém as fases 0–5 de produto. Onde houver sobreposição, vale o critério de aceite mais rigoroso.
 
+**Atualização 2026-11-05 — Jornada Oficial:** a revisão confirmou que a jornada de 7 etapas ainda não está E2E: autenticação é OIDC-only; a integração da taxa é test-only, USD e sem gate pago transversal; o marco 1.000.000, Academia KR, notificações e agenda CIGKV não estão ligados à fonte de alistamentos confirmados. A rota sem gateway agora falha fechado. Antes de live permanecem P1: preço/cotação BRL e sign-off jurídico/fiscal, tentativas de pagamento duráveis/atômicas contra concorrência, acesso pago, contador/entitlement e outbox do CIGKV. Evidências e critérios de aceite: [`REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md`](REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md). `npm run verify:all` passou; a suíte PostgreSQL serializada passou (172 testes, 2 skips).
+
 **Princípio (mesma disciplina do README):**
 
 - **Versionado** = código/configuração commitado. Não equivale a operacional.

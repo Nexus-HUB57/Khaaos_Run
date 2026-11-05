@@ -12,6 +12,7 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
 - [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
@@ -70,6 +71,33 @@
 | **Avatares & Operativos (33)** | ✅ 16♂ e 16♀ + TALON | 16 operativos canônicos militares + Lote 4 (8 milícias MIL-01..08 + 8 gangues GNG-01..08, facção declarada) com diversidade étnica/racial; 33 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON, Studio 4K com filtro de facção e whitelist de seleção |
 | **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
+| **Jornada Oficial do Jogador** | 📋 Especificada como alvo; não habilitada em produção | Cadastro/login por email, taxa nominal de US$ 1, perfil/War’I após pagamento confirmado, Academia KR e marco de 1.000.000 com CIGKV agendado; cobrança real e gatilhos ainda pendentes |
+
+---
+
+## Jornada Oficial do Jogador
+
+> **Escopo:** este é o fluxo-alvo de produto para cadastro, alistamento e abertura do CIGKV. Documentá-lo não ativa checkout, não autoriza cobrança live e não declara essas etapas implementadas. O estado executável continua limitado ao que está descrito em [Console Web — preview](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02) e nos gates de [economia e compliance](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+| Etapa | Experiência do jogador | Regra de produto e autorização | Situação atual |
+|---|---|---|---|
+| 1. Cadastro | Informa nome, email, senha e confirmação de senha. | A confirmação é validada e descartada; nunca é armazenada como credencial. A implementação deve validar e normalizar email e armazenar senha somente com hash seguro. | Alvo documentado; a aplicação principal usa sessão OIDC e ainda não oferece este formulário/senha como fluxo canônico. |
+| 2. Login | Entra com email e senha. | Sessão autenticada dá acesso ao estado da conta. Enquanto o alistamento estiver pendente, o usuário pode concluir pagamento e consultar seu status, mas não recebe ainda o acesso pago ao Perfil/War’I. | Alvo documentado; fluxo de senha não implementado na aplicação principal. |
+| 3. Efetivação e pagamento | Paga uma taxa única nominal de **US$ 1,00** para efetivar o alistamento. | Para jogadores no Brasil, o checkout deve apresentar e cobrar o total em **BRL**, resolvido no servidor a partir de uma cotação aprovada e fixada na ordem. Fonte e horário do câmbio, validade da cotação, arredondamento, taxas e tributos precisam ser definidos antes do lançamento; o cliente não escolhe valor nem conversão. | Há gateway de teste opcional em USD; sem gateway a API falha fechado (`503`) e não credita. Conversão BRL e cobrança live não estão aprovadas nem habilitadas. |
+| 4. Confirmação e liberação | Recebe a confirmação do pagamento e passa a acessar a plataforma, incluindo Perfil e painel de controle War’I. | A liberação ocorre após confirmação final server-side do provedor e conciliação da ordem; retorno/redirect do navegador não prova pagamento. A operação é idempotente para impedir dupla cobrança ou dupla concessão. | Webhook de teste pode concluir a sessão, mas o gate pago transversal de Perfil/War’I ainda não existe; login OIDC não comprova pagamento. |
+| 5. Espera pelo marco | A plataforma mostra o progresso até **1.000.000 de alistamentos efetivados**. | A contagem é global e autoritativa no servidor. Definição operacional proposta: uma conta elegível por alistamento, com pagamento confirmado; sandbox, duplicatas, pagamentos pendentes/falhos e pagamentos revertidos não contam. O tratamento final de reembolsos/chargebacks e a regra de unicidade devem ser aprovados por Produto/Compliance antes do go-live. | Contador e gate global de Academia ainda não implementados na aplicação principal. |
+| 6. Academia KR | Ao atingir o marco, jogadores alistados recebem acesso à Academia KR: dicas, manual, estratégia de jogo, testes de armas e conteúdo de preparação. | O desbloqueio é concedido pelo servidor aos alistados elegíveis, em evento único e idempotente. A experiência não deve depender de contador enviado pelo cliente. | Conteúdo e automação de desbloqueio ainda precisam ser construídos e aprovados. |
+| 7. Confirmação do marco e CIGKV | Ao cruzar 1.000.000, recebe notificação de confirmação do alistamento e o cronograma de abertura do CIGKV. | Registrar o marco uma única vez; publicar data, hora, fuso, regras de acesso e capacidade. O alcance do número inicia o processo de comunicação/agendamento, não abre automaticamente uma partida ou ambiente sem os gates operacionais. Canal de notificação e janela de abertura ainda serão definidos. | Gatilho, notificações e agenda do CIGKV não estão conectados ao cadastro/pagamento atual. |
+
+### Separação de moedas e confirmação
+
+A taxa nominal de **US$ 1,00** é uma cobrança fiduciária de alistamento e não é uma conversão de KRC. KRC permanece moeda exclusivamente interna do jogo, sem paridade, saque ou resgate externo. Qualquer valor em BRL deve ser cotado e gravado server-side em unidades monetárias menores, com a moeda ISO e a regra de cotação aprovadas; não fixar uma taxa USD/BRL no cliente ou inferi-la a partir de KRC.
+
+O contador deve consumir somente eventos de alistamento confirmados pelo servidor e deduplicados. O evento de chegada ao marco precisa ser persistido de modo que retry de webhook, reload de página ou reprocessamento não duplique o desbloqueio da Academia, a notificação ou o agendamento.
+
+### Gates antes de qualquer lançamento com dinheiro real
+
+Permanecem obrigatórios: decidir se a aplicação adotará credenciais próprias email/senha ou estenderá o OIDC; aprovar cotação e preço exato em BRL, tributos e recibo; fechar política de reembolso, chargeback, suporte e proteção de dados; concluir a revisão jurídica/fiscal de T5.3; tornar tentativas de pagamento e fulfillment atômicos, duráveis e conciliáveis; habilitar provedor/webhooks apenas após testes; aplicar o gate pago; e definir a contagem elegível, conteúdo da Academia e agenda/capacidade do CIGKV. Até esses gates e autorização de rollout serem concluídos, a taxa de US$ 1,00 é requisito de produto documentado, não cobrança disponível. Ver [`docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md`](docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md).
 
 ---
 
@@ -134,17 +162,17 @@ Docs: `Docs/CIGKV_Barburhen/`
 
 > **Nota de status:** "validado E2E" abaixo significa evidência de execução em browser real no preview do console; não equivale a staging de produção, build UE5 ou go-live. Branch de trabalho do repo: **novo branch a partir de `main` atual (`9df772e`)** — `feat/e2e-phases-9-12` está 100% contido na `main` (232 commits atrás; congelar). Revisão E2E de 2026-11-02: `docs/REVISAO_E2E_2026-11-02.md`.
 
-### Console Web (preview Next.js) — alistamento end to end
+### Console Web (preview Next.js) — alistamento de teste, sem pagamento fiduciário
 
 | Item | Estado | Evidência |
 |------|--------|----------|
-| Fluxo de alistamento (ETAPA 1/3 inscrição → 2/3 taxa → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
-| Taxa de inscrição U$1 (= 100 KRC) server-authoritative | ✅ Liquidação + transações `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (2ª chamada → `alreadyPaid:true`, sem dupla cobrança) |
+| Fluxo de inscrição/alistamento do preview (ETAPA 1/3 inscrição → 2/3 taxa simulada → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
+| Taxa simulada do preview (mapeamento interno de U$1 para 100 KRC) | ✅ Transações de jogo `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (`alreadyPaid:true` no replay); não cria cobrança fiduciária |
 | Retomada de sessão | ✅ `GET /api/enrollment?username=` reconhece alistado após reload | Não repete inscrição |
 | Erro Prisma `Unknown argument enrollmentProtocol` | ✅ Resolvido | Causa: PrismaClient stale em memória (schema e SQLite já tinham as colunas); processo atualizado sem migração |
 
-- Contrato: `POST /api/enrollment` (liquida taxa, credita bônus de boas-vindas 500 KRC só após pagamento, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
-- Pagamento segue **economia de jogo** (KRC); habilitação de valor real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+- Contrato do preview: `POST /api/enrollment` (registra a taxa simulada em KRC, credita bônus de boas-vindas de 500 KRC só após a etapa de teste, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
+- O mapeamento de 100 KRC **não é** cotação de USD para BRL nem pagamento de US$ 1. Não há processador fiduciário nem confirmação bancária neste fluxo de preview. A jornada oficial-alvo está em [Jornada Oficial do Jogador](#jornada-oficial-do-jogador); cobrança real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
 
 ### Aba Mundos — especificação canônica do Descentralizador aplicada
 
@@ -421,14 +449,14 @@ O runtime offline (`KhaaosSim3D`) e o servidor online (`MatchRoom3D`) usam `zu_p
 
 ## Modelo Econômico e Persistência
 
-- **KRC** (Khaaos Run Coin) — criptomoeda de jogo. Adquirida por sobrevivência, eliminações, captura de Data Cores e ranking de convites.
-- **Bankhaoos** — conta bancária automática ao alistamento + endereço de depósito.
-- **Fundo de Investimentos KR** — acumula o prêmio de US$ 1.000.000 destinado ao(à) grande vencedor(a).
+- **KRC** (Khaaos Run Coin) — moeda virtual exclusivamente interna, adquirida por atividades do jogo; não é criptomoeda, não tem paridade ou valor externo e não permite saque/resgate.
+- **Bankhaoos** — representação de conta/saldo de jogo. Não é conta bancária, não cria endereço de depósito e não está conectada a instituição financeira.
+- **Meta/recompensa de US$ 1.000.000** — conceito de campanha/lore, não garantia de prêmio ou investimento. Qualquer premiação fiduciária depende de financiamento comprovado, regras publicadas e aprovação jurídica, fiscal e operacional antes de divulgação como oferta real.
 - **Forja do Armeiro** — marketplace de equipamentos e upgrades pagos em KRC.
 - **Persistência seletiva**: conquistas do CIGKV não migram integralmente; apenas Tokens de Veterano, packs e os 1000 melhores pontuados recebem transferência parcial para W1/C1.
 - **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
-> **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+> **Atenção de engenharia**: a economia atual é de jogo. A taxa fiduciária nominal de alistamento descrita na jornada oficial é um fluxo separado e não está habilitada. Antes de qualquer cobrança ou prêmio em valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão jurídica/fiscal/compliance. Consulte [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](docs/INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](docs/STRIPE_BRAZIL_CHECKOUT.md).
 
 ---
 

@@ -10,11 +10,9 @@
 //   3. Sessão COMPLETED (fulfillment do webhook simulado via store) → replay
 //      devolve a sessão concluída, nunca uma Checkout Session velha
 //   4. Gateway indisponível → 503 e sessão intacta (fail-closed)
-//   5. SEM gateway (default do #252) → caminho mock intacto: /fee marca
-//      COMPLETED + walletDeltaKrc 600 (regression guard — primeira cobertura
-//      hermética oficial do router de alistamento)
-//   6. Contrato do checkout: moeda usd, amount 100, metadata completa
-//      (kind/userId/protocol/clientIdempotencyKey) e chave Stripe
+//   5. SEM gateway (default operacional) → 503 fail-closed, sem concluir sessão
+//   6. Contrato do checkout: moeda usd, amount 100, metadata sem userId
+//      (kind/protocol/clientIdempotencyKey) e chave Stripe
 //      determinística
 
 import assert from "node:assert/strict";
@@ -59,7 +57,7 @@ type Handler = (req: Request, res: Response, next: NextFunction) => void;
 
 function buildApp(options: {
   store: ReturnType<typeof createInMemoryEnrollmentStore>;
-  gateway?: { createFeeCheckout: (input: { userId: string; protocol: string; idempotencyKey: string }) => Promise<{ checkoutUrl: string }> };
+  gateway?: { createFeeCheckout: (input: { protocol: string; idempotencyKey: string }) => Promise<{ checkoutUrl: string }> };
 }) {
   const app = express();
   app.use(express.json());
@@ -80,7 +78,6 @@ test("gateway: /fee devolve Checkout Session sem marcar a sessão como paga", as
   const store = createInMemoryEnrollmentStore();
   const { api, calls } = fakeStripeApi();
   const checkout = await createEnrollmentFeeCheckout({
-    userId: "operator-1",
     protocol: "KR-REG-ABCD2345",
     idempotencyKey: "idem-fee-key-1-0001",
     stripe: api as never,
@@ -98,7 +95,7 @@ test("gateway: /fee devolve Checkout Session sem marcar a sessão como paga", as
   assert.equal(params.mode, "payment");
   assert.equal(params.client_reference_id, "KR-REG-ABCD2345");
   assert.equal(params.metadata.kind, ENROLLMENT_FEE_METADATA_KIND);
-  assert.equal(params.metadata.userId, "operator-1");
+  assert.equal(params.metadata.userId, undefined, "subject interno não deve ir para Stripe metadata");
   assert.equal(params.metadata.protocol, "KR-REG-ABCD2345");
   assert.equal(params.metadata.clientIdempotencyKey, "idem-fee-key-1-0001");
   assert.equal(params.line_items[0].price_data.currency, "usd");
@@ -119,7 +116,7 @@ test("router com gateway: /fee fica GATEWAY_PENDING e replay reusa a mesma sess�
   const app = buildApp({
     store,
     gateway: {
-      createFeeCheckout: async ({ userId, protocol, idempotencyKey }) => {
+      createFeeCheckout: async ({ protocol, idempotencyKey }) => {
         createCalls += 1;
         const cacheKey = `${protocol}:${idempotencyKey}`;
         if (!seenKeys.has(cacheKey)) {
@@ -206,7 +203,7 @@ test("router com gateway: gateway indisponível → 503 e sessão permanece AWAI
   assert.equal(store.get("operator-1")?.step, "AWAITING_FEE", "fail-closed: sem gateway, sem pagamento");
 });
 
-test("sem gateway (default #252): caminho mock intacto — COMPLETED + bônus 500", async () => {
+test("sem gateway (default operacional): 503 fail-closed e sessão sem pagamento", async () => {
   const store = createInMemoryEnrollmentStore();
   const app = buildApp({ store });
 
@@ -214,18 +211,14 @@ test("sem gateway (default #252): caminho mock intacto — COMPLETED + bônus 50
   await fetchJSON(app, "POST", "/api/enrollment/steps/data", { displayName: "Operador Um", birthDate: "1990-05-10", country: "BR" });
   await fetchJSON(app, "POST", "/api/enrollment/steps/terms", { accepted: true });
 
-  const paid = await fetchJSON(app, "POST", "/api/enrollment/fee", { confirm: true }, "idem-fee-key-mock-01");
-  assert.equal(paid.status, 200);
-  assert.equal(paid.body.step, "COMPLETED");
-  assert.equal(paid.body.bonusKrcCredited, 500);
-  assert.equal(paid.body.walletDeltaKrc, 600);
-  assert.equal(paid.body.fee.amountUsdCents, 100);
-
-  // replay da mesma chave → mesma resposta (idempotência original preservada)
-  const replay = await fetchJSON(app, "POST", "/api/enrollment/fee", { confirm: true }, "idem-fee-key-mock-01");
-  assert.equal(replay.status, 200);
-  assert.equal(replay.body.step, "COMPLETED");
-  assert.equal(replay.body.fee.paidAt, paid.body.fee.paidAt);
+  const pending = await fetchJSON(app, "POST", "/api/enrollment/fee", { confirm: true }, "idem-fee-key-mock-01");
+  assert.equal(pending.status, 503);
+  assert.equal(pending.body.code, "PAYMENT_PROVIDER_NOT_CONFIGURED");
+  assert.equal(pending.body.step, undefined);
+  const status = await fetchJSON(app, "GET", "/api/enrollment/status");
+  assert.equal(status.body.step, "AWAITING_FEE");
+  assert.equal(status.body.fee, null);
+  assert.equal(status.body.bonusKrcCredited, 0);
 });
 
 test("webhook: roteamento e transições de estado do fulfillment da taxa", async () => {
@@ -257,7 +250,6 @@ test("webhook: roteamento e transições de estado do fulfillment da taxa", asyn
     payment_status: "paid",
     metadata: {
       kind: ENROLLMENT_FEE_METADATA_KIND,
-      userId: "operator-1",
       protocol: "KR-REG-ABCD2345",
       clientIdempotencyKey: "idem-fee-key-wh-0001",
     },
@@ -328,7 +320,7 @@ test("webhook: roteamento e transições de estado do fulfillment da taxa", asyn
     id: "evt_fee_wrong_amount",
     type: "checkout.session.completed",
     livemode: false,
-    data: { object: { ...baseSession, id: "cs_test_c3", amount_total: 200, metadata: { ...baseSession.metadata, userId: "operator-2", protocol: "KR-REG-ZZ9X8765" } } },
+    data: { object: { ...baseSession, id: "cs_test_c3", amount_total: 200, metadata: { ...baseSession.metadata, protocol: "KR-REG-ZZ9X8765" } } },
   } as never;
   const wrongAmount = await service.processEvent(wrongAmountEvent, "d".repeat(64));
   assert.equal(wrongAmount, "rejected");
@@ -340,7 +332,7 @@ test("webhook: roteamento e transições de estado do fulfillment da taxa", asyn
     id: "evt_fee_ghost",
     type: "checkout.session.completed",
     livemode: false,
-    data: { object: { ...baseSession, id: "cs_test_d4", metadata: { ...baseSession.metadata, userId: "operator-404" } } },
+    data: { object: { ...baseSession, id: "cs_test_d4", metadata: { ...baseSession.metadata, protocol: "KR-REG-40440404" } } },
   } as never;
   assert.equal(await service.processEvent(ghostEvent, "e".repeat(64)), "rejected");
 });
