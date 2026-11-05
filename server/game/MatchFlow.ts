@@ -25,6 +25,10 @@ import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvival
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
 import { DBNO_CONTRACT } from "@shared/dbno";
+// Hotfix Task 45-b: linha perdida silenciosamente no merge do PR #284 — o
+// d15712a introduziu as referências WORLD_* aqui, mas o import ficou fora
+// do resultado do merge (TS2304 em main). Fonte canônica: @shared/worlds.
+import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "@shared/worlds";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
