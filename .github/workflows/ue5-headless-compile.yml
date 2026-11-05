@@ -30,9 +30,9 @@ env:
 jobs:
   ue5-headless-compile:
     name: UE5.8 Editor Build + Telemetry Automation
-    # Todas as labels devem existir no runner. gpu mantém compatibilidade com
-    # scripts/setup-gpu-runner.sh; pode ser removida em ambos se não houver GPU.
-    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    # Compilação e automação usam -NullRHI; GPU não é necessária. Benchmarks
+    # gráficos permanecem no workflow ue58-release-cd.yml com label GPU.
+    runs-on: [self-hosted, linux, ue5.8, x64]
     timeout-minutes: 180
     steps:
       - name: Checkout
@@ -170,6 +170,6 @@ jobs:
             echo "- **Commit**: $SUMMARY_COMMIT"
             echo "- **Target**: KhaaosRunEditor Linux Development"
             echo "- **Automation Tests**: telemetry + Khaaos.Combat (inclui DBNO/revive)"
-            echo "- **Runner labels**: self-hosted, linux, gpu, ue5.8, x64"
+            echo "- **Runner labels**: self-hosted, linux, ue5.8, x64"
             echo "- **Job status**: $SUMMARY_JOB_STATUS"
           } >> "$GITHUB_STEP_SUMMARY"
