@@ -112,7 +112,7 @@ function darken(hex, f = .55) {
 // ---------- Fase 7 — acessórios determinísticos por operativo ----------
 // `variant` (id do operativo / nome do bot) deriva, por hash, quais acessórios o
 // modelo carrega — cada operativo tem identidade visual própria e estável.
-function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM }) {
+function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM, hairM }) {
   // ---- Fase 26 — TALON (Hacker & Urban Runner): identidade FIXA, sem roll —
   // moicano azul + visor digital emissivo na testa + jaqueta techwear volumosa
   // de gola alta + tiras soltas (física de mola no animateOperative) + LEDs
@@ -222,6 +222,54 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   if (roll(3, 'a') === 0) {
     torso.add(box(.15, .04, .18, M(bandColors[roll(5, 'b2')], { rough: .75 }), -.33, .12, 0));
   }
+
+  // ---- F49 — RABO DE CABELO (operatrizes) + CAPA (1 em 5 por variant) ----
+  // Movimento secundário “física de mola” no animateOperative (mesma família
+  // das tiras do Talon): onda viajante com fase SEMEADA em userData —
+  // determinística, cresce com speedNorm e com o ar, a ponta atrasa mais.
+  const hairTail = [];
+  if (/FEMALE/.test(variant || '')) {
+    const anchor = new THREE.Group();
+    anchor.position.set(0, -.01, .168);               // nuca (fora do casco, +z)
+    head.add(anchor);
+    const lens = [.15, .13, .11], ws = [.055, .047, .036];
+    let parent = anchor;
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Group();
+      seg.position.set(0, i === 0 ? .02 : -lens[i - 1] + .015, i === 0 ? 0 : .006);
+      const tuft = ball(ws[i], hairM, 0, -lens[i] * .5, 0, 6, 5, 1, 1.18 + i * .14, .78); // 6×5: orgânico e DENTRO do orçamento ≤6500
+      seg.add(tuft);
+      seg.userData.hairPhase = i * 1.15 + hashIdx(variant || 'hair', 97) * .063;
+      parent.add(seg);
+      hairTail.push(seg);
+      parent = seg;
+    }
+  }
+  let cape = null;
+  if (roll(5, 'cape') === 0) {
+    const anchor = new THREE.Group();
+    anchor.position.set(0, .3, .335);                 // atrás da mochila base (+z)
+    anchor.rotation.x = -.16;                         // capa nasce aberta do ombro (−x = abre p/ trás)
+    torso.add(anchor);
+    // fivela nos ombros (capa lê como vestimenta REAL, não pano colado)
+    torso.add(box(.05, .04, .045, gearM2, -.13, .27, .3));
+    torso.add(box(.05, .04, .045, gearM2, .13, .27, .3));
+    const lens = [.3, .3, .26], wds = [.5, .55, .58];
+    let parent = anchor;
+    cape = [];
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Group();
+      seg.position.set(0, i === 0 ? 0 : -lens[i - 1] + .035, 0);
+      const panel = box(wds[i], lens[i], .02, secM, 0, -lens[i] * .5, 0); // pano plano: custo mínimo, DENTRO do orçamento ≤6500
+      seg.add(panel);
+      if (i === 2) seg.add(box(wds[2] * .68, .03, .024, trimM, 0, -lens[2] + .04, 0)); // barra emissiva FF
+      seg.userData.capePhase = i * 1.35;
+      parent.add(seg);
+      cape.push(seg);
+      parent = seg;
+    }
+  }
+  return { hairTail, cape };
 }
 
 // ---------- operativo (Fase 6/7/9) ----------
@@ -530,9 +578,10 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(armR.shoulder, armL.shoulder);
 
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
-  const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
+  // F49 — hairM entra p/ o rabo de cabelo com física de mola (FEMALE)
+  const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM, hairM });
 
-  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null };
+  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null, hairTail: acc?.hairTail?.length ? acc.hairTail : null, cape: acc?.cape ?? null };
   parts.userData = { vestColor: vest }; // Fase 28 — tinge o gear com a cor da equipe
   return { group: g, parts };
 }
@@ -574,6 +623,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   }
   if (dead) {
     parts.torso.scale.set(1, 1, 1);
+    // F49 — cabelo/capa assentam no chão (não congelam no último passo)
+    if (parts.hairTail) for (const seg of parts.hairTail) { seg.rotation.x = -.14; seg.rotation.z = 0; }
+    if (parts.cape) for (const seg of parts.cape) { seg.rotation.x = -.06; seg.rotation.z = 0; }
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
@@ -614,6 +666,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
     if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
+    // F49 — cabelo arrasta no rastejo; capa comprimida sob o tronco
+    if (parts.hairTail) for (const seg of parts.hairTail) { seg.rotation.x = -.12; seg.rotation.z = Math.sin(t * 5.2) * .05; }
+    if (parts.cape) for (const seg of parts.cape) { seg.rotation.x = -.04; seg.rotation.z = 0; }
     return;
   }
   const idle = 1 - Math.min(1, speedNorm);
@@ -702,6 +757,40 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   // nivelada enquanto o corpo sobe/desce/rola (ergonomia humana de mirar).
   parts.head.position.y = .46 - (crouch ? 0 : bounce * .3);
   parts.head.position.x = -sway * .3;
+  // ---- F49 — movimento secundário de CABELO (rabo) e CAPA: onda viajante ----
+  // Fase por segmento SEMEADA em userData (determinística, como as tiras do
+  // Talon); amplitude cresce com speedNorm e no ar; a ponta atrasa mais
+  // (lag por segmento); acopla ao passo (PH), ao sway do tronco e ao pitch
+  // da cabeça — o cabelo segue o olhar com atraso, a capa voa na corrida.
+  if (parts.hairTail) {
+    const stepPulse = Math.abs(Math.sin(PH)) * .1 * speedNorm;  // pulso do passo
+    for (let i = 0; i < parts.hairTail.length; i++) {
+      const seg = parts.hairTail[i];
+      const ph = seg.userData.hairPhase || 0;
+      const lag = 1 + i * .55;                                  // ponta atrasa mais
+      const amp = .04 + .085 * speedNorm + Math.min(.16, air * .028);
+      const base = -.34 * (1 - i * .25);                        // drapeia SOBRE a mochila (decai por segmento)
+      seg.rotation.x = base - stepPulse * (1 + i * .3)
+        + Math.sin(t * 5.1 + ph) * amp * lag * .5
+        + pitch * .12 * (1 - i * .3);                           // ponta segue o olhar com atraso
+      seg.rotation.z = Math.sin(t * 3.7 + ph * 1.6) * amp * lag * .5
+        - sway * .35;                                           // vento lateral do tronco
+    }
+  }
+  if (parts.cape) {
+    const billow = .05 + speedNorm * .34 + Math.min(.5, air * .09); // abre ao correr/no ar
+    for (let i = 0; i < parts.cape.length; i++) {
+      const seg = parts.cape[i];
+      const ph = seg.userData.capePhase || 0;
+      const lag = 1 + i * .5;
+      const amp = .028 + .06 * speedNorm + Math.min(.12, air * .022);
+      seg.rotation.x = Math.sin(t * 4.6 + ph) * amp * lag * .5
+        - billow * (i * .3)
+        + pitch * .04 * (1 - i * .3);
+      seg.rotation.z = Math.sin(t * 3.1 + ph * 1.4) * amp * lag * .5
+        - sway * .45;                                           // capa reage ao roll da passada
+    }
+  }
   // ---- Fase 10 — reação de impacto: flinch direcional aditivo ----
   // Envelope: ataque rápido (~2 frames) + decaimento exponencial τ .17 s —
   // o corpo dobra PARA LONGE da bala, afunda e os braços abrem em sobressalto,

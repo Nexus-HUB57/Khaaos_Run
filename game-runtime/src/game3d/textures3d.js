@@ -147,9 +147,177 @@ function groundCanvas() {
   noise(x, 512, 0.09);
   return c;
 }
-export function groundTexture(repeat = 28) { return tex(groundCanvas(), { repeat }); }
-export function groundMaterial(repeat = 28, tint = null) {
-  return pbr(groundCanvas(), { repeat, rough: .95, strength: 1.5, extra: tint ? { color: new THREE.Color(tint) } : {} });
+export function groundTexture(repeat = 28, biome = null) { return tex(biomeGroundCanvas(biome), { repeat }); }
+
+// ---- F49 — TERRENO POR BIOMA: a identidade do solo nasce da TEXTURA, não só
+// do tint por vértice. Antes os 5 mundos compartilhavam a MESMA terra seca
+// marrom (#6d5f45) e a bioma era sugerida por vertex colors — neve de
+// Barburhen e areia de Arukheea liam como terra tingida em ângulo raso.
+// Agora cada mundo tem canvas próprio, motivado fisicamente, com
+// roughness/força de relevo próprias (neve compacta desliza, areia cede,
+// basalto queimado é áspero). Tint externo passa a ser opcional: o buildTerrain
+// usa null e deixa textura + vertex colors carregarem a bioma — o groundTint
+// do cenário continua servindo ao IBL (envmap) e ao minimapa.
+export const GROUND_BIOMES = Object.freeze({
+  CIGKV:     Object.freeze({ rough: .95, strength: 1.5,  label: 'terra seca · savana' }),
+  Barburhen: Object.freeze({ rough: .74, strength: 1.15, label: 'neve compactada · gelo' }),
+  Priadus:   Object.freeze({ rough: .97, strength: 1.7,  label: 'musgo · pântano' }),
+  Ckesalth:  Object.freeze({ rough: .9,  strength: 1.95, label: 'basalto queimado · brasa' }),
+  Arukheea:  Object.freeze({ rough: .99, strength: .9,   label: 'areia branca · ondulações' }),
+});
+export function groundBiomeParams(id) { return GROUND_BIOMES[id] ?? GROUND_BIOMES.CIGKV; }
+
+// neve compactada com gelo e tufos secos pontuando (W1 Barburhen)
+// NOTA F49: só métodos presentes nos stubs de canvas dos testes (arc/lineTo...)
+// — sem rotate/ellipse, que não existem em todos os stubs legados.
+function snowGroundCanvas() {
+  const [c, x] = canvas(512);
+  x.fillStyle = '#c9cdd4'; x.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 2200; i++) {                       // nevascas/drifts
+    const r = random();
+    x.fillStyle = r < .6 ? `rgba(${218 + random() * 20},${222 + random() * 18},${230 + random() * 14},${.14 + random() * .22})`
+      : `rgba(${175 + random() * 25},${184 + random() * 22},${198 + random() * 20},${.12 + random() * .2})`;
+    x.beginPath(); x.arc(random() * 512, random() * 512, 5 + random() * 24, 0, 7); x.fill();
+  }
+  // placas de gelo compactado (pegadas/trilhas viram brilho frio)
+  x.strokeStyle = 'rgba(140,152,166,.5)'; x.lineWidth = 1.2;
+  for (let i = 0; i < 14; i++) {
+    x.beginPath();
+    let px = random() * 512, py = random() * 512;
+    x.moveTo(px, py);
+    for (let s = 0; s < 6; s++) { px += (random() - .5) * 80; py += (random() - .5) * 80; x.lineTo(px, py); }
+    x.stroke();
+  }
+  // tufos de grama seca atravessando a neve
+  for (let i = 0; i < 90; i++) {
+    x.strokeStyle = `rgba(${128 + random() * 30},${108 + random() * 24},${64 + random() * 20},${.35 + random() * .3})`;
+    x.lineWidth = 1;
+    const gx = random() * 512, gy = random() * 512;
+    for (let b = 0; b < 4; b++) {
+      x.beginPath(); x.moveTo(gx, gy);
+      x.lineTo(gx + (random() - .5) * 8, gy - 3 - random() * 6); x.stroke();
+    }
+  }
+  noise(x, 512, 0.05);
+  return c;
+}
+
+// musgo escuro de pântano com poças e raízes (W2 Priadus)
+function mossGroundCanvas() {
+  const [c, x] = canvas(512);
+  x.fillStyle = '#3c4a33'; x.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 2400; i++) {
+    const r = random();
+    x.fillStyle = r < .45 ? `rgba(${58 + random() * 22},${76 + random() * 24},${48 + random() * 18},${.2 + random() * .3})`
+      : r < .8 ? `rgba(${40 + random() * 16},${52 + random() * 16},${34 + random() * 14},${.18 + random() * .26})`
+        : `rgba(${88 + random() * 24},${102 + random() * 22},${60 + random() * 18},${.1 + random() * .2})`;
+    x.beginPath(); x.arc(random() * 512, random() * 512, 3 + random() * 20, 0, 7); x.fill();
+  }
+  // poças rasas (borda orgânica, água mais escura ao centro)
+  for (let i = 0; i < 10; i++) {
+    const px = random() * 512, py = random() * 512, pr = 14 + random() * 30;
+    const g = x.createRadialGradient(px, py, 2, px, py, pr);
+    g.addColorStop(0, 'rgba(16,24,20,.85)');
+    g.addColorStop(.75, 'rgba(22,32,26,.5)');
+    g.addColorStop(1, 'rgba(28,40,30,0)');
+    x.fillStyle = g;
+    x.beginPath(); x.arc(px, py, pr, 0, 7); x.fill();
+  }
+  // raízes/raízes submersas
+  x.strokeStyle = 'rgba(24,30,20,.45)'; x.lineWidth = 1.6;
+  for (let i = 0; i < 16; i++) {
+    x.beginPath();
+    let px = random() * 512, py = random() * 512;
+    x.moveTo(px, py);
+    for (let s = 0; s < 7; s++) { px += (random() - .5) * 60; py += (random() - .5) * 60; x.quadraticCurveTo(px + 6, py - 6, px, py); }
+    x.stroke();
+  }
+  noise(x, 512, 0.08);
+  return c;
+}
+
+// basalto queimado com cinza e fendas de brasa (W3 Ckesalth)
+function basaltGroundCanvas() {
+  const [c, x] = canvas(512);
+  x.fillStyle = '#37322f'; x.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 2100; i++) {
+    const r = random();
+    x.fillStyle = r < .5 ? `rgba(${66 + random() * 22},${60 + random() * 20},${56 + random() * 18},${.16 + random() * .26})`
+      : r < .85 ? `rgba(${46 + random() * 14},${42 + random() * 12},${40 + random() * 12},${.18 + random() * .24})`
+        : `rgba(${104 + random() * 30},${96 + random() * 26},${90 + random() * 24},${.1 + random() * .18})`; // cinza pousada
+    x.beginPath(); x.arc(random() * 512, random() * 512, 2 + random() * 16, 0, 7); x.fill();
+  }
+  // placas de basalto com juntas (lava resfriada quebra em polígonos)
+  x.strokeStyle = 'rgba(22,20,19,.6)'; x.lineWidth = 2;
+  for (let i = 0; i < 22; i++) {
+    x.beginPath();
+    const cx = random() * 512, cy = random() * 512;
+    const n = 4 + (random() * 3 | 0);
+    for (let s = 0; s <= n; s++) {
+      const a = (s / n) * Math.PI * 2;
+      const rr = 16 + random() * 26;
+      const fx = cx + Math.cos(a) * rr, fy = cy + Math.sin(a) * rr;
+      s === 0 ? x.moveTo(fx, fy) : x.lineTo(fx, fy);
+    }
+    x.stroke();
+  }
+  // fendas de brasa (a luz do perfil "terra de brasa" faz o resto)
+  for (let i = 0; i < 26; i++) {
+    x.strokeStyle = `rgba(${150 + random() * 60},${60 + random() * 40},${18 + random() * 16},${.4 + random() * .35})`;
+    x.lineWidth = .8 + random() * 1.6;
+    x.beginPath();
+    let px = random() * 512, py = random() * 512;
+    x.moveTo(px, py);
+    for (let s = 0; s < 5; s++) { px += (random() - .5) * 46; py += (random() - .5) * 46; x.lineTo(px, py); }
+    x.stroke();
+  }
+  noise(x, 512, 0.1);
+  return c;
+}
+
+// areia branca com ondulações de vento (W4 Arukheea)
+function sandGroundCanvas() {
+  const [c, x] = canvas(512);
+  x.fillStyle = '#cfc9b2'; x.fillRect(0, 0, 512, 512);
+  // ondulações de duna: faixas onduladas claro/escuro (ripple de vento) —
+  // polilinha senoidal (só moveTo/lineTo: compatível com stubs de teste)
+  for (let band = 0; band < 36; band++) {
+    const y0 = band * 15 - 6;
+    x.fillStyle = band % 2 ? 'rgba(215,209,190,.4)' : 'rgba(198,192,170,.36)';
+    x.beginPath();
+    x.moveTo(-4, y0);
+    for (let px = 0; px <= 516; px += 43) x.lineTo(px, y0 + Math.sin(px * .021 + band * 1.7) * 5);
+    x.lineTo(516, y0 + 9);
+    for (let px = 516; px >= -4; px -= 43) x.lineTo(px, y0 + 9 + Math.sin(px * .017 + band * 2.3) * 5);
+    x.closePath(); x.fill();
+  }
+  // grãos e conchinhas
+  for (let i = 0; i < 700; i++) {
+    x.fillStyle = `rgba(${230 + random() * 18},${224 + random() * 16},${202 + random() * 20},${.14 + random() * .2})`;
+    x.fillRect(random() * 512, random() * 512, 1 + random() * 2.4, 1 + random() * 2.4);
+  }
+  for (let i = 0; i < 120; i++) {
+    x.fillStyle = `rgba(${150 + random() * 30},${142 + random() * 28},${118 + random() * 26},${.3 + random() * .3})`;
+    x.beginPath(); x.arc(random() * 512, random() * 512, .8 + random() * 2.2, 0, 7); x.fill();
+  }
+  noise(x, 512, 0.06);
+  return c;
+}
+
+const BIOME_CANVASES = {
+  CIGKV: groundCanvas,
+  Barburhen: snowGroundCanvas,
+  Priadus: mossGroundCanvas,
+  Ckesalth: basaltGroundCanvas,
+  Arukheea: sandGroundCanvas,
+};
+function biomeGroundCanvas(biome) {
+  const fn = BIOME_CANVASES[biome] ?? BIOME_CANVASES.CIGKV;
+  return fn();
+}
+export function groundMaterial(repeat = 28, tint = null, biome = null) {
+  const p = groundBiomeParams(biome);
+  return pbr(biomeGroundCanvas(biome), { repeat, rough: p.rough, strength: p.strength, extra: tint ? { color: new THREE.Color(tint) } : {} });
 }
 
 // ---- asfalto (praças/estradas) ----
