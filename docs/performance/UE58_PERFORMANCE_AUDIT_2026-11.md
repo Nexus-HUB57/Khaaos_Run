@@ -193,3 +193,35 @@ Depois das otimizações de CPU, o maior risco não medido é gráfico: Lumen, V
 - soak de 10 minutos por mundo e execução simultânea.
 
 O release gráfico só deve passar com p95 de renderização ≤ 16,67 ms no perfil Medium, sem crash, hitch persistente ou crescimento de memória.
+
+## 8. Replay fixo e soak gráfico implementados
+
+O contrato determinístico do soak está versionado em `scripts/performance/ue58-fixed-replay.json`. Ele fixa:
+
+- seed `UE58-FIVE-WORLDS-FIXED-REPLAY-2026-11`;
+- cinco mundos canônicos;
+- 60 operadores por mundo;
+- duração de 600 segundos;
+- perfil Medium;
+- Lumen, Nanite, Virtual Shadow Maps e TAAU ativos;
+- captura de Stat Unit, Stat Unit Graph, GPU Visualizer, CSV, Insights e shader pipeline cache;
+- gates de p95 do cliente, tick do servidor, crescimento de memória e hitch persistente.
+
+O executor `scripts/performance/ue58_fixed_replay.mjs`:
+
+1. valida o manifesto do replay;
+2. registra engine, seed, mundos, duração e diretório de saída;
+3. exporta `KHAAOS_REPLAY_*` para o comando do AutomationTest;
+4. executa `UE5_REPLAY_COMMAND` com timeout de duração + 120 segundos;
+5. captura stdout/stderr;
+6. procura CSVs de Game Thread, Render Thread e GPU;
+7. calcula p50, p95 e máximo;
+8. gera `replay-result.json` e falha o job quando o comando UE falha.
+
+O workflow `.github/workflows/ue58-release-cd.yml` ganhou o job `graphics_soak`, executado somente quando `run_engine=true`, `run_graphics_soak=true` e `UE58_ENABLED=true`. Ele exige as labels:
+
+```text
+self-hosted, linux, gpu, ue5.8, x64
+```
+
+O ambiente de homologação deve fornecer a variável protegida `UE5_REPLAY_COMMAND`. Ela deve chamar o AutomationTest cookado e escrever os CSVs/Insights no diretório recebido por `KHAAOS_REPLAY_OUTPUT`. O sandbox atual não possui GPU, UnrealEditor-Cmd nem permissão administrativa de Actions; por isso a conexão com a Epic e a execução real do soak permanecem gates do ambiente de homologação, não são simuladas localmente.
