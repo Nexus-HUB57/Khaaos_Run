@@ -32,6 +32,7 @@ import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte 
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
 import { TACTICAL_HOTKEY } from './tacticalmap3d.js'; // Fase 40 — hotkey do mapa tático (fonte única)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
+import { refreshPojStrip, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — painel POJ também no modo local
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -123,9 +124,24 @@ export class Game3D {
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
     this.initGfxPanel(); // Fase 35 — painel de vídeo/performance (KR_GFX_*)
+    this.initPojPanel(); // Fase 9 (fix) — painel POJ do modal ZU também no modo local
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 9 (fix) — painel POJ do modal ZU no modo LOCAL ----------
+  // O regramento é público (/poj/state no mesmo origin) e o painel não pode
+  // ficar eternamente em "—" só porque o jogador não entrou em sala online.
+  // Em hospedagens estáticas (sem backend) o fetch falha e o painel permanece
+  // neutro — o jogo nunca quebra. No modo online o OnlineGame3D mantém o
+  // próprio ciclo de 15 s (sem duplicar timers: este método sai cedo lá).
+  initPojPanel() {
+    if (this.online) return;
+    if (!document.querySelector('#pojStrip')) return;
+    refreshPojStrip();
+    refreshPatenteChip();
+    this.pojTimer = setInterval(() => { refreshPojStrip(); refreshPatenteChip(); }, 15000);
   }
 
   // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
@@ -408,6 +424,14 @@ export class Game3D {
     }
     select.replaceChildren(...this.#operativeOptions());
     select.value = this.selectedOperative.id;
+    // Fase 11 (fix) — o rótulo "16 DISPONÍVEIS" era fixo no HTML e ficou
+    // desatualizado quando o catálogo cresceu (operativos + insígnias OCE).
+    // A contagem real vem das opções recém-montadas — nunca dessincroniza.
+    const operativeLabel = document.querySelector('label[for="operativeSelect"]');
+    if (operativeLabel && this.#selectableOperatives?.length) {
+      const total = this.#selectableOperatives.length;
+      operativeLabel.textContent = `OPERATIVO CANÔNICO · ${total} ${total === 1 ? 'DISPONÍVEL' : 'DISPONÍVEIS'}`;
+    }
     this.renderOperativeCard(this.selectedOperative);
     select.addEventListener('change', () => {
       if (this.sim.started) return;

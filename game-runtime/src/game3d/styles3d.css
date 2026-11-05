@@ -580,6 +580,43 @@ body.locked .controls-hint { opacity: .25; }
   .operator-chip { display: none; }
 }
 
+/* ---------- fix responsivo — telas estreitas (≤700px) ----------
+   A topbar era uma linha flex única: em 390px o PULSO cortava e
+   SEED/MIX/GFX/MAPA saíam da tela; o rádio invadia o minimapa e os
+   vitais colidiam com a faixa de arremessáveis. Quebra de linha na
+   barra, HUD encolhido e painéis laterais com largura limitada. */
+@media (max-width: 700px) {
+  .topbar3d { padding: 8px 10px; gap: 6px 10px; flex-wrap: wrap; row-gap: 6px; }
+  .brand { gap: 8px; }
+  .brand-mark { width: 30px; height: 30px; font-size: 12px; }
+  .brand strong { font-size: 12px; letter-spacing: 2px; }
+  .match-state { gap: 8px; padding: 5px 9px; font-size: 10px; flex-wrap: wrap; row-gap: 2px; }
+  #matchClock { font-size: 14px; }
+  .alive-chip b { font-size: 13px; }
+  .seed-box { font-size: 10px; }
+  .seed-box input { width: 72px; font-size: 11px; padding: 4px 6px; }
+  .audio-toggle { height: 26px; padding: 0 8px; font-size: 9px; }
+  /* a topbar quebra em 2–3 linhas (~85–120px) — painéis fixos descem abaixo
+     dela para não cobrir SEED/MIX/GFX/MAPA nem serem cobertos */
+  .map-corner { top: 122px; right: 10px; }
+  .minimap-frame canvas { width: 128px; height: 128px; }
+  .feed-panel { width: min(170px, 42vw); top: 122px; }
+  .feed-entry { font-size: 10px; padding: 3px 7px; }
+  .vitals { left: 10px; bottom: 10px; width: min(200px, 50vw); }
+  .stat-strip { gap: 7px; font-size: 9px; flex-wrap: wrap; }
+  .stat-strip b { font-size: 11px; }
+  .vitality-row .bar { height: 10px; }
+  .weapon-panel { right: 10px; bottom: 10px; max-width: 46vw; }
+  .ammo-row b { font-size: 30px; }
+  .ammo-row span { font-size: 13px; }
+  .weapon-name { font-size: 11px; letter-spacing: 1px; }
+  .throwables-row { flex-wrap: wrap; justify-content: flex-end; }
+  .throw-chip { padding: 4px 7px; font-size: 12px; }
+  .medkit-chip { padding: 4px 7px; font-size: 12px; }
+  #interactPrompt { font-size: 11px; }
+  .classic-link { bottom: 8px; }
+}
+
 /* ---------- Fase 4 — arremessáveis táticos + infiltração aérea ---------- */
 .throwables-row {
   margin-top: 6px; display: flex; align-items: center; gap: 6px;
