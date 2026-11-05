@@ -161,7 +161,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     dimensionsKm: "2.0 x 2.0 km",
     sizeMeters: 2000,
     recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 15,
+    targetDurationMinutes: 10,
     krcMultiplier: 0.5,
     xpMultiplier: 1.0,
     accentColor: "#00f0ff",
@@ -172,11 +172,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Desbloqueado por padrão para calibração neural e certificação tática."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Calibração Inicial", durationSeconds: 240, radiusMeters: 1000, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 1, phaseName: "Compressão Alfa", durationSeconds: 240, radiusMeters: 700, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 2, phaseName: "Compressão Beta", durationSeconds: 180, radiusMeters: 450, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 3, phaseName: "Fechamento Crítico", durationSeconds: 150, radiusMeters: 220, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 4, phaseName: "Colapso ZU", durationSeconds: 90, radiusMeters: 60, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 0, phaseName: "Calibração Inicial", durationSeconds: 120, radiusMeters: 1000, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 1, phaseName: "Compressão Alfa", durationSeconds: 120, radiusMeters: 700, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 2, phaseName: "Compressão Beta", durationSeconds: 120, radiusMeters: 450, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 3, phaseName: "Fechamento Crítico", durationSeconds: 120, radiusMeters: 220, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 4, phaseName: "Colapso ZU", durationSeconds: 120, radiusMeters: 60, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
     ],
     pois: [
       {
@@ -270,7 +270,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     dimensionsKm: "3.0 x 3.0 km",
     sizeMeters: 3000,
     recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 20,
+    targetDurationMinutes: 10,
     krcMultiplier: 1.0,
     xpMultiplier: 1.25,
     accentColor: "#f59e0b",
@@ -281,11 +281,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Requer 1 extração ou conclusão validada no CIGKV."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Anel Industrial 1", durationSeconds: 300, radiusMeters: 1500, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 1, phaseName: "Anel Industrial 2", durationSeconds: 300, radiusMeters: 1000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 2, phaseName: "Anel Ácido 3", durationSeconds: 240, radiusMeters: 600, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 3, phaseName: "Anel Térmico 4", durationSeconds: 180, radiusMeters: 300, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 4, phaseName: "Colapso da Refinaria", durationSeconds: 180, radiusMeters: 50, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 0, phaseName: "Anel Industrial 1", durationSeconds: 120, radiusMeters: 1500, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 1, phaseName: "Anel Industrial 2", durationSeconds: 120, radiusMeters: 1000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 2, phaseName: "Anel Ácido 3", durationSeconds: 120, radiusMeters: 600, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 3, phaseName: "Anel Térmico 4", durationSeconds: 120, radiusMeters: 300, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 4, phaseName: "Colapso da Refinaria", durationSeconds: 120, radiusMeters: 50, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
     ],
     pois: [
       {
@@ -382,7 +382,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     dimensionsKm: "3.5 x 3.5 km",
     sizeMeters: 3500,
     recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 22,
+    targetDurationMinutes: 10,
     krcMultiplier: 1.5,
     xpMultiplier: 1.5,
     accentColor: "#06b6d4",
@@ -393,11 +393,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Requer 5 extrações bem-sucedidas em Barburhen."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Neblina Crescente 1", durationSeconds: 300, radiusMeters: 1750, damagePerSecond: 1.5, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 1, phaseName: "Neblina Crescente 2", durationSeconds: 300, radiusMeters: 1200, damagePerSecond: 3.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 2, phaseName: "Esporos Densos 3", durationSeconds: 240, radiusMeters: 750, damagePerSecond: 6.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 3, phaseName: "Floresta Sufocante 4", durationSeconds: 180, radiusMeters: 380, damagePerSecond: 12.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 4, phaseName: "Coração do Templo", durationSeconds: 180, radiusMeters: 60, damagePerSecond: 25.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 0, phaseName: "Neblina Crescente 1", durationSeconds: 120, radiusMeters: 1750, damagePerSecond: 1.5, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 1, phaseName: "Neblina Crescente 2", durationSeconds: 120, radiusMeters: 1200, damagePerSecond: 3.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 2, phaseName: "Esporos Densos 3", durationSeconds: 120, radiusMeters: 750, damagePerSecond: 6.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 3, phaseName: "Floresta Sufocante 4", durationSeconds: 120, radiusMeters: 380, damagePerSecond: 12.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 4, phaseName: "Coração do Templo", durationSeconds: 120, radiusMeters: 60, damagePerSecond: 25.0, center: { x: 0, y: 0, z: 100 } },
     ],
     pois: [
       {
@@ -485,7 +485,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     dimensionsKm: "4.0 x 4.0 km",
     sizeMeters: 4000,
     recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 25,
+    targetDurationMinutes: 10,
     krcMultiplier: 2.25,
     xpMultiplier: 2.0,
     accentColor: "#ef4444",
@@ -496,11 +496,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Requer 10 extrações bem-sucedidas em Priadus."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Duna Exterior 1", durationSeconds: 330, radiusMeters: 2000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 1, phaseName: "Duna Exterior 2", durationSeconds: 300, radiusMeters: 1350, damagePerSecond: 4.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 2, phaseName: "Areia Movediça 3", durationSeconds: 240, radiusMeters: 800, damagePerSecond: 8.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 3, phaseName: "Refinaria em Chamas 4", durationSeconds: 180, radiusMeters: 400, damagePerSecond: 15.0, center: { x: 0, y: 0, z: 200 } },
-      { phaseIndex: 4, phaseName: "Vila Sombria Suffocada", durationSeconds: 180, radiusMeters: 65, damagePerSecond: 30.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 0, phaseName: "Duna Exterior 1", durationSeconds: 120, radiusMeters: 2000, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 1, phaseName: "Duna Exterior 2", durationSeconds: 120, radiusMeters: 1350, damagePerSecond: 4.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 2, phaseName: "Areia Movediça 3", durationSeconds: 120, radiusMeters: 800, damagePerSecond: 8.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 3, phaseName: "Refinaria em Chamas 4", durationSeconds: 120, radiusMeters: 400, damagePerSecond: 15.0, center: { x: 0, y: 0, z: 200 } },
+      { phaseIndex: 4, phaseName: "Vila Sombria Suffocada", durationSeconds: 120, radiusMeters: 65, damagePerSecond: 30.0, center: { x: 0, y: 0, z: 200 } },
     ],
     pois: [
       {
@@ -588,7 +588,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     dimensionsKm: "4.5 x 4.5 km",
     sizeMeters: 4500,
     recommendedPlayers: "100 Operadores Elite (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 28,
+    targetDurationMinutes: 10,
     krcMultiplier: 3.5,
     xpMultiplier: 3.0,
     accentColor: "#a855f7",
@@ -599,11 +599,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Requer 15 extrações bem-sucedidas em Ckesalth."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Maré Baixa 1", durationSeconds: 360, radiusMeters: 2250, damagePerSecond: 2.5, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 1, phaseName: "Maré Baixa 2", durationSeconds: 300, radiusMeters: 1500, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 2, phaseName: "Tromba d'água 3", durationSeconds: 240, radiusMeters: 900, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 3, phaseName: "Tsunami Iminente 4", durationSeconds: 180, radiusMeters: 450, damagePerSecond: 18.0, center: { x: 0, y: 0, z: 300 } },
-      { phaseIndex: 4, phaseName: "Prisão do Sol da Noite", durationSeconds: 180, radiusMeters: 70, damagePerSecond: 40.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 0, phaseName: "Maré Baixa 1", durationSeconds: 120, radiusMeters: 2250, damagePerSecond: 2.5, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 1, phaseName: "Maré Baixa 2", durationSeconds: 120, radiusMeters: 1500, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 2, phaseName: "Tromba d'água 3", durationSeconds: 120, radiusMeters: 900, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 3, phaseName: "Tsunami Iminente 4", durationSeconds: 120, radiusMeters: 450, damagePerSecond: 18.0, center: { x: 0, y: 0, z: 300 } },
+      { phaseIndex: 4, phaseName: "Prisão do Sol da Noite", durationSeconds: 120, radiusMeters: 70, damagePerSecond: 40.0, center: { x: 0, y: 0, z: 300 } },
     ],
     pois: [
       {
@@ -765,6 +765,8 @@ export interface WorldRingDimensions {
 }
 
 export const WORLD_RING_CAPACITY_OPERATORS = 100;
+/** Limite operacional canônico: cada partida/ring termina em 10 minutos. */
+export const WORLD_MATCH_DURATION_SECONDS = 10 * 60;
 
 export const WORLD_RING_DIMENSIONS: Readonly<
   Record<WorldId, WorldRingDimensions>

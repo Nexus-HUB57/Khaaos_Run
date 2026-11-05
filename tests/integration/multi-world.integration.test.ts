@@ -8,11 +8,11 @@ import { describe, it } from 'node:test';
 
 // ─── World & Rank Definitions ─────────────────────────────────────────────
 const WORLDS = [
-  { id: 'CIGKV',    players: 50,  requiredRank: 'RECRUTA',  order: 0 },
+  { id: 'CIGKV',    players: 100,  requiredRank: 'RECRUTA',  order: 0 },
   { id: 'Barburhen', players: 100, requiredRank: 'HURAN',   order: 1 },
-  { id: 'Priadus',  players: 75,  requiredRank: 'VENEX',   order: 2 },
-  { id: 'Ckesalth', players: 60,  requiredRank: 'SKEETW',  order: 3 },
-  { id: 'Arukheea', players: 80,  requiredRank: 'ONITH',   order: 4 },
+  { id: 'Priadus',  players: 100,  requiredRank: 'VENEX',   order: 2 },
+  { id: 'Ckesalth', players: 100,  requiredRank: 'SKEETW',  order: 3 },
+  { id: 'Arukheea', players: 100,  requiredRank: 'ONITH',   order: 4 },
 ];
 
 const RANK_ORDER = ['RECRUTA', 'HURAN', 'VENEX', 'SKEETW', 'ONITH', 'OVERLORD', 'MALAKOR'];
@@ -83,8 +83,7 @@ describe('Multi-World Progression', () => {
     assert.equal(WORLDS[0].requiredRank, 'RECRUTA');
   });
 
-  it('Barburhen has highest player count (100)', () => {
-    const max = Math.max(...WORLDS.map(w => w.players));
-    assert.equal(max, 100);
+  it('all rings use the canonical player count (100)', () => {
+    WORLDS.forEach(w => assert.equal(w.players, 100));
   });
 });

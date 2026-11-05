@@ -36,9 +36,9 @@ const ABBRS: Record<string, string> = {
 };
 const WORLDS: Record<string, { name: string; capacity: number }> = {
   W1: { name: "Barburhen", capacity: 100 },
-  W2: { name: "Priadus", capacity: 75 },
-  W3: { name: "Ckesalth", capacity: 60 },
-  W4: { name: "Arukheea", capacity: 80 },
+  W2: { name: "Priadus", capacity: 100 },
+  W3: { name: "Ckesalth", capacity: 100 },
+  W4: { name: "Arukheea", capacity: 100 },
 };
 const RANK_LADDER = ["RECRUTA", "VENEX", "ONITH", "HURAN"];
 
