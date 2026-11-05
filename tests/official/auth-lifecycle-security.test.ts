@@ -22,11 +22,19 @@ test("WS token carries jti/kid and rejects replay after atomic consumption", asy
   assert.equal(await consumeWsAccessToken(first.token, "https://khaaos.example.test"), null);
 });
 
-test("revoked identity cannot consume a newly issued WS ticket", async () => {
+test("logout revocation blocks old sessions and WS tickets but permits a fresh login", async () => {
   const userId = `security-revoked-${Date.now()}`;
+  const oldAuthenticatedAt = Date.now() - 1_000;
   await distributedState.revokeUser(userId, 60_000);
-  const token = createWsAccessToken(userId);
-  assert.equal(await consumeWsAccessToken(token.token, "https://khaaos.example.test"), null);
+  assert.equal(await distributedState.isUserRevoked(userId, oldAuthenticatedAt), true);
+
+  const oldToken = createWsAccessToken(userId, undefined, undefined, oldAuthenticatedAt);
+  assert.equal(await consumeWsAccessToken(oldToken.token, "https://khaaos.example.test"), null);
+
+  const revokedAt = Date.now();
+  assert.equal(await distributedState.isUserRevoked(userId, revokedAt + 1), false, "uma nova autenticação recebe timestamp posterior ao logout");
+  const newToken = createWsAccessToken(userId, undefined, undefined, revokedAt + 1);
+  assert.equal((await consumeWsAccessToken(newToken.token, "https://khaaos.example.test"))?.sub, userId);
 });
 
 test("Origin allowlist rejects attacker origins and permits the configured origin", () => {
