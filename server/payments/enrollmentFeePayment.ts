@@ -10,7 +10,7 @@
  *
  *   1. CHECKOUT — `createEnrollmentFeeCheckout` cria uma Checkout Session
  *      test-only (usd, 100 centavos = U$1,00) com metadata que carrega
- *      userId/protocol + a Idempotency-Key do cliente. A chave de idempotência
+ *      protocol + a Idempotency-Key do cliente, sem userId interno. A chave de idempotência
  *      do Stripe é determinística (`enrollment-fee-<protocol>-<hash(clientKey)>`)
  *      — replay da MESMA Idempotency-Key devolve a MESMA sessão; retry do
  *      cliente com chave NOVA após expiração cria sessão nova (sem brick).
@@ -29,7 +29,8 @@
  *   3. GATE — nada disso liga sozinho: `createEnrollmentFeeGatewayFromEnv`
  *      só retorna um gateway com ENROLLMENT_FEE_GATEWAY=stripe E a config
  *      test-only completa (KRC_CHECKOUT_ENABLED=true + sk_test_ + whsec_ +
- *      PUBLIC_ORIGIN). Sem env, o fluxo do #252 segue intacto (mock).
+ *      PUBLIC_ORIGIN). Sem gateway, o endpoint falha fechado: confirmação
+ *      enviada pelo browser não representa pagamento e não conclui a sessão.
  *
  * Moeda deliberada: USD (a taxa canônica é U$1). Pix no Stripe é doméstico
  * BRL — precificar a taxa em BRL/Pix é decisão de produto do titular
@@ -63,13 +64,11 @@ export interface EnrollmentFeeCheckoutResult {
 type CheckoutApi = Pick<Stripe, "checkout">;
 
 export async function createEnrollmentFeeCheckout(input: {
-  userId: string;
   protocol: string;
   idempotencyKey: string;
   stripe: CheckoutApi;
   publicOrigin: string;
 }): Promise<EnrollmentFeeCheckoutResult> {
-  if (!input.userId?.trim()) throw new Error("Authenticated user ID is required");
   if (!PROTOCOL_PATTERN.test(input.protocol)) throw new Error("Enrollment protocol is invalid");
 
   const clientKeyHash = createHash("sha256").update(input.idempotencyKey).digest("hex").slice(0, 16);
@@ -86,7 +85,6 @@ export async function createEnrollmentFeeCheckout(input: {
       client_reference_id: input.protocol,
       metadata: {
         kind: ENROLLMENT_FEE_METADATA_KIND,
-        userId: input.userId,
         protocol: input.protocol,
         clientIdempotencyKey: input.idempotencyKey,
       },
@@ -126,7 +124,6 @@ export type EnrollmentFeeEventResult = "processed" | "ignored" | "rejected" | "d
 
 export interface EnrollmentFeeGateway {
   createFeeCheckout(input: {
-    userId: string;
     protocol: string;
     idempotencyKey: string;
   }): Promise<{ checkoutUrl: string }>;
@@ -140,9 +137,8 @@ export function createEnrollmentFeeGatewayFromEnv(
   if (!config) return null;
   const stripe = new Stripe(config.secretKey, { maxNetworkRetries: 2 }) as Pick<Stripe, "checkout">;
   return {
-    async createFeeCheckout({ userId, protocol, idempotencyKey }) {
+    async createFeeCheckout({ protocol, idempotencyKey }) {
       const result = await createEnrollmentFeeCheckout({
-        userId,
         protocol,
         idempotencyKey,
         stripe,
@@ -220,7 +216,6 @@ export function createEnrollmentFeePaymentService(options: {
 
       const checkoutSession = event.data.object as Stripe.Checkout.Session;
       const metadata = checkoutSession.metadata ?? {};
-      const userId = metadata.userId ?? "";
       const protocol = metadata.protocol ?? "";
       const clientKey = metadata.clientIdempotencyKey ?? "";
 
@@ -230,7 +225,6 @@ export function createEnrollmentFeePaymentService(options: {
         && checkoutSession.currency === "usd"
         && checkoutSession.amount_total === ENROLLMENT_FEE_USD_CENTS
         && metadata.kind === ENROLLMENT_FEE_METADATA_KIND
-        && Boolean(userId.trim())
         && PROTOCOL_PATTERN.test(protocol)
         && Boolean(clientKey.trim());
       if (!sessionMatchesFee) {
@@ -254,11 +248,12 @@ export function createEnrollmentFeePaymentService(options: {
         return "rejected";
       }
 
-      const enrollment = await store.get(userId);
-      if (!enrollment || enrollment.protocol !== protocol) {
+      const enrollment = await store.getByProtocol(protocol);
+      if (!enrollment) {
         await finishEvent("rejected", "ENROLLMENT_SESSION_NOT_FOUND");
         return "rejected";
       }
+      const userId = enrollment.userId;
       if (enrollment.step === "COMPLETED") {
         // Re-entrega após conclusão (ex.: retry do Stripe depois de um crash
         // pós-put): idempotente por definição — o ledger é unique por chave.

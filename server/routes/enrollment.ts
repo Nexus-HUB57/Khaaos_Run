@@ -6,14 +6,15 @@ import { randomBytes } from "node:crypto";
 /* ────────────────────────────────────────────────────────────────────────────
  * Alistamento E2E (T1.1 — port da entrega validada no preview)
  *
- * Fluxo canônico em 3 etapas com protocolo `KR-REG-*`:
+ * Fluxo de inscrição com protocolo `KR-REG-*`:
  *   1) Dados do operador  → AWAITING_TERMS
  *   2) Aceite de termos   → AWAITING_FEE
- *   3) Taxa U$1 (= 100 KRC) → COMPLETED + bônus único de 500 KRC
+ *   3) Checkout sandbox   → continua AWAITING_FEE até webhook pago; sem
+ *      gateway falha fechado. Simulação exige opt-in de teste.
  *
  * Propriedades validadas no preview e preservadas aqui:
  *   - Idempotência: `Idempotency-Key` na etapa de taxa; reenvio da mesma chave
- *     devolve a mesma resposta e credita o bônus exatamente uma vez.
+ *     devolve a mesma resposta e a liquidação só ocorre uma vez.
  *   - Retomada de sessão: `GET /status` reconstrói o estado; `POST /start`
  *     com sessão existente devolve a mesma sessão (200) sem resetar etapas.
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -61,6 +62,7 @@ export interface EnrollmentSession {
  */
 export interface EnrollmentStore {
   get(userId: string): EnrollmentSession | undefined | Promise<EnrollmentSession | undefined>;
+  getByProtocol(protocol: string): EnrollmentSession | undefined | Promise<EnrollmentSession | undefined>;
   put(session: EnrollmentSession): void | Promise<void>;
 }
 
@@ -68,6 +70,7 @@ export function createInMemoryEnrollmentStore(): EnrollmentStore {
   const sessions = new Map<string, EnrollmentSession>();
   return {
     get: (userId) => sessions.get(userId),
+    getByProtocol: (protocol) => [...sessions.values()].find((session) => session.protocol === protocol),
     put: (session) => {
       sessions.set(session.userId, session);
     },
@@ -143,11 +146,12 @@ export interface EnrollmentRouterOptions {
    */
   gateway?: {
     createFeeCheckout(input: {
-      userId: string;
       protocol: string;
       idempotencyKey: string;
     }): Promise<{ checkoutUrl: string }>;
   };
+  /** Simulação sem provedor, habilitada somente em testes não-production. */
+  allowSimulatedFeeForTests?: boolean;
 }
 
 function defaultGetUserId(req: Request): string {
@@ -164,6 +168,8 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
   const authenticate = options.authenticate;
   const ledger = options.ledger;
   const gateway = options.gateway;
+  const allowSimulatedFeeForTests = options.allowSimulatedFeeForTests === true
+    && process.env.NODE_ENV !== "production";
 
   // Respostas idempotentes por chave de taxa (por usuário)
   const feeResponses = new Map<string, { status: number; body: unknown }>();
@@ -264,10 +270,10 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
     if (cached) return res.status(cached.status).json(cached.body);
 
     // Task 44 (Fase 47.2) — modo gateway REAL: nada é marcado aqui. A
-    // Checkout Session carrega (userId, protocol, Idempotency-Key) na
-    // metadata; o webhook grava o ledger e completa a sessão. Sem gateway,
-    // o caminho simulado do #252/47.1 segue intacto abaixo. A leitura do
-    // estado vem SEMPRE da store (fonte da verdade): após o pagamento pelo
+    // Checkout Session carrega (protocol, Idempotency-Key) na metadata; o
+    // webhook resolve o usuário pela store, grava o ledger e completa a sessão. Sem gateway,
+    // apenas o opt-in explícito de teste pode usar a simulação abaixo. A
+    // leitura do estado vem SEMPRE da store (fonte da verdade): após o pagamento pelo
     // webhook, o replay da mesma chave devolve a sessão COMPLETED — nunca
     // uma Checkout Session velha. A idempotência da criação no Stripe é
     // determinística por (protocol, Idempotency-Key) — ver enrollmentFeePayment.
@@ -286,7 +292,6 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
       if (cachedGateway) return res.status(cachedGateway.status).json(cachedGateway.body);
       try {
         const { checkoutUrl } = await gateway.createFeeCheckout({
-          userId,
           protocol: session.protocol,
           idempotencyKey: headerKey,
         });
@@ -305,6 +310,15 @@ export function createEnrollmentRouter(options: EnrollmentRouterOptions): Router
 
     if (session.step !== "AWAITING_FEE") {
       return res.status(409).json({ message: `Etapa inválida para ${session.step}` });
+    }
+
+    // Fail closed. Sem um gateway, um POST do browser não é prova de pagamento
+    // e não pode gravar ledger, concluir o alistamento nem conceder bônus.
+    if (!allowSimulatedFeeForTests) {
+      return res.status(503).json({
+        code: "PAYMENT_PROVIDER_NOT_CONFIGURED",
+        message: "Pagamento indisponível. Nenhuma cobrança ou crédito foi aplicado.",
+      });
     }
 
     // Fase 47.1 — ledger REAL antes de marcar a sessão como paga (guard

@@ -5,8 +5,9 @@
  * sobre PostgreSQL/Drizzle: as sessões sobrevivem a restarts e ganham trilha
  * auditável (migrations/0011_enrollment.sql — enrollment_sessions).
  *
- * Contrato preservado: get(userId) → sessão idêntica à que foi `put` (round-
- * trip JSONB); put é UPSERT (start → insert; steps → update). Único por
+ * Contrato preservado: get(userId) e getByProtocol(protocol) → sessão
+ * idêntica à que foi `put` (round-trip JSONB); put é UPSERT (start → insert;
+ * steps → update). Único por
  * usuário (PK user_id) e protocolo único (unique) — a retomada de sessão do
  * #252 funciona idêntica com a store trocada.
  *
@@ -40,6 +41,15 @@ export function createPostgresEnrollmentStore(): EnrollmentStore {
         .select()
         .from(enrollmentSessions)
         .where(eq(enrollmentSessions.userId, userId))
+        .limit(1);
+      return row ? rowToSession(row) : undefined;
+    },
+
+    async getByProtocol(protocol: string): Promise<EnrollmentSession | undefined> {
+      const [row] = await db
+        .select()
+        .from(enrollmentSessions)
+        .where(eq(enrollmentSessions.protocol, protocol))
         .limit(1);
       return row ? rowToSession(row) : undefined;
     },

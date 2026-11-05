@@ -124,6 +124,8 @@ function buildApp() {
     authenticate: fakeAuth,
     store: createPostgresEnrollmentStore(),
     ledger: { recordEnrollmentFeeLedger },
+    // Somente esta suíte contra PostgreSQL *_test simula a confirmação do provedor.
+    allowSimulatedFeeForTests: true,
   }));
   return app;
 }
@@ -345,6 +347,7 @@ test("ledger falho → 503 e a sessão permanece AWAITING_FEE (guard financeiro)
     authenticate: fakeAuth,
     store: createPostgresEnrollmentStore(),
     ledger: failingLedger,
+    allowSimulatedFeeForTests: true,
   }));
   const server = app.listen(0);
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
