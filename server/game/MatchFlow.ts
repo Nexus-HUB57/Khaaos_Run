@@ -25,6 +25,7 @@ import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvival
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
 import { DBNO_CONTRACT } from "@shared/dbno";
+import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "@shared/worlds";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

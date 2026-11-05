@@ -91,3 +91,7 @@ O contrato foi alinhado nos seguintes pontos:
 - `game-runtime/scripts/audit-fidelity.mjs`.
 
 O teste de catálogo garante explicitamente que os cinco mundos usam 100 operadores, que cada conjunto de fases soma 600 segundos e que os hazards permanecem alinhados ao runtime F42/F47.
+
+## Artefatos operacionais atualizados
+
+A mesma capacidade canônica está refletida nos fixtures de prova em `components_dev/avatars/proofs/`, na configuração de Rings em `components_dev/rings/ring_config.json`, no validador `scripts/validate_e2e_v4.py` e no teste de integração `tests/integration/ring-system.integration.test.ts`. Esses artefatos não devem reintroduzir os valores legados 50, 60, 75 ou 80 operadores.
