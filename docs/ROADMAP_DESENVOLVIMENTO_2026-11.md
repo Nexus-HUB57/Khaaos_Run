@@ -66,6 +66,12 @@ Cada trilha lista objetivo, tarefas com prioridade, critério de aceite e depend
 | T1.5 | EP555 (8 patentes) + War'I + Forja + BankHaaos no console com dados do repo | P1 | Navegação completa sem stubs; inventário persistido |
 | T1.6 | Deploy staging do console (Render ou equivalente) | P1 | URL de staging com smoke test automatizado verde |
 | T1.7 | Observabilidade do console: `/healthz`, métricas, log de auditoria do fluxo financeiro | P1 | Dashboards do console scraping `/metrics`; alerta em falha de pagamento |
+| T1.8 | Cadastro/login próprio por email e senha, coexistente com OIDC | P0 | Nome, email normalizado, senha e confirmação; senha com hash de custo adaptativo, login negado antes de verificação de email, tokens de verificação com hash/uso único/expiração; sem vinculação automática por email; limites e proteção Origin; teste de sessão regenerada |
+| T1.9 | Tentativa de taxa durável e fulfillment financeiro atômico | P0 | Uma tentativa ativa por protocolo; persistir e validar `Stripe Session ID` + `client_reference_id`; transação cobre evento, ledger, saldo e estado do alistamento; concorrência, falhas parciais e reconciliação testadas |
+| T1.10 | Aplicar entitlement de alistamento pago ao Perfil/War'I | P0 | Middleware server-side em páginas e APIs protegidas; login, pagamento, status e suporte são exceções explícitas; teste prova bloqueio antes e liberação só após webhook elegível |
+| T1.11 | Contador EXCO global + Academia KR | P0 | Contar somente contas elegíveis com pagamento confirmado, deduplicar e excluir sandbox/reversões; evento único durável desbloqueia conteúdo da Academia apenas no servidor |
+| T1.12 | Notificação e agenda operacional do CIGKV | P1 | Outbox idempotente, canal aprovado, data/hora/fuso/capacidade definidos; marco inicia agendamento, e abertura aguarda os gates operacionais |
+| T1.13 | Cotação US$→BRL e aceite jurídico/fiscal para alistamento | P0 | Aprovação documentada de fonte/validade/arredondamento, preço exibido e fixado em BRL, tributos/recibo, refunds/chargebacks e sign-off T5.3; sem esse aceite live permanece desligado |
 
 **Dependências:** T1.2 exige decisão de compliance (ver T5) antes de valor real; sandbox pode avançar já.
 
