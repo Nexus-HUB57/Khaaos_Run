@@ -177,7 +177,7 @@ const clientMessageSchema = z.object({
   mode: z.enum(["solo", "duo", "squad"]).optional(),
   ready: z.boolean().optional(),
   private: z.boolean().optional(),
-  maxPlayers: z.number().int().min(2).max(50).optional(),
+  maxPlayers: z.number().int().min(2).max(100).optional(),
   code: z.string().trim().max(32).optional(),
   targetUserId: z.string().trim().min(1).max(256).optional(),
 }).strip();
@@ -698,7 +698,7 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: 50, // scalable later
+      maxPlayers: 100, // capacidade canônica: 100 operadores por ring
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),
@@ -1867,7 +1867,7 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: Math.min(50, Math.max(2, maxPlayers ?? 16)),
+      maxPlayers: Math.min(100, Math.max(2, maxPlayers ?? 100)),
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),

@@ -12,7 +12,7 @@
  *   - RingStateManager (zone shrinking)
  *
  * Multi-World Pipeline:
- *   CIGKV(50p) → W1_Barburhen(100p) → W2_Priadus(75p) → W3_Ckesalth(60p) → W4_Arukheea(80p)
+ *   CIGKV(100p) → W1_Barburhen(100p) → W2_Priadus(100p) → W3_Ckesalth(100p) → W4_Arukheea(100p)
  *
  * Match phases:
  *   0: Initial safe zone
@@ -91,21 +91,22 @@ export interface MatchConfig {
 // ─── Default World Pipeline ─────────────────────────────────────────────────
 
 export const DEFAULT_WORLD_PIPELINE = [
-  { worldId: "cigkv",      worldName: "CIGKV",      capacity: 50  },
-  { worldId: "barburhen",  worldName: "Barburhen",  capacity: 100 },
-  { worldId: "priadus",    worldName: "Priadus",    capacity: 75  },
-  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: 60  },
-  { worldId: "arukheea",   worldName: "Arukheea",   capacity: 80  },
+  { worldId: "cigkv",      worldName: "CIGKV",      capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "barburhen",  worldName: "Barburhen",  capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "priadus",    worldName: "Priadus",    capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "arukheea",   worldName: "Arukheea",   capacity: WORLD_RING_CAPACITY_OPERATORS },
 ];
 
 // ─── Match Ring Phase Config ────────────────────────────────────────────────
 
+const RING_PHASE_DURATION_SECONDS = WORLD_MATCH_DURATION_SECONDS / 5;
 const RING_PHASES = [
-  { radiusStart: 800, radiusEnd: 500, durationS: 120, damagePerTick: 1  },
-  { radiusStart: 500, radiusEnd: 300, durationS: 90,  damagePerTick: 3  },
-  { radiusStart: 300, radiusEnd: 150, durationS: 60,  damagePerTick: 5  },
-  { radiusStart: 150, radiusEnd: 50,  durationS: 45,  damagePerTick: 10 },
-  { radiusStart: 50,  radiusEnd: 0,   durationS: 30,  damagePerTick: 25 },
+  { radiusStart: 800, radiusEnd: 500, durationS: RING_PHASE_DURATION_SECONDS, damagePerTick: 1  },
+  { radiusStart: 500, radiusEnd: 300, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 3  },
+  { radiusStart: 300, radiusEnd: 150, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 5  },
+  { radiusStart: 150, radiusEnd: 50,  durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 10 },
+  { radiusStart: 50,  radiusEnd: 0,   durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 25 },
 ];
 
 // ─── MatchFlow Class ────────────────────────────────────────────────────────
@@ -132,9 +133,9 @@ export class MatchFlow {
       countdownSeconds: config.countdownSeconds ?? 30,
       tickIntervalMs: config.tickIntervalMs ?? 1000,
       worldPipeline: config.worldPipeline ?? DEFAULT_WORLD_PIPELINE,
-      maxPlayers: config.maxPlayers ?? 100,
+      maxPlayers: config.maxPlayers ?? WORLD_RING_CAPACITY_OPERATORS,
       ringPhasesPerWorld: config.ringPhasesPerWorld ?? 5,
-      phaseDurationSeconds: config.phaseDurationSeconds ?? 120,
+      phaseDurationSeconds: config.phaseDurationSeconds ?? RING_PHASE_DURATION_SECONDS,
     };
 
     this.economyBridge = economyBridge;
