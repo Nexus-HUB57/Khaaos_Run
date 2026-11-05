@@ -8,8 +8,8 @@
 //
 //  1. Drain letal sai pelo MESMO #finalizeDeath das outras mortes (as duas
 //     trilhas — sim offline e MatchRoom3D autoritativa — 1:1);
-//  2. A anomalia fura blindagem/escudo e mata DIRETO: SEM DBNO/nocaute neste
-//     caminho (decisão registrada na Fase 29 — dano já caído é letal);
+//  2. A anomalia fura blindagem/escudo; jogadores entram no DBNO canônico de
+//     sete segundos, enquanto as regras existentes de bots continuam válidas;
 //  3. Atribuição via lastHitBy: o último atirador recebe o crédito (mesma
 //     regra das mortes por RING/ácido/tsunami no funil #damage);
 //  4. Rótulo ambiental no killfeed do servidor: 'ANOMALIA' ao lado de
@@ -30,6 +30,7 @@ import { MatchRoom3D } from '../server/room3d.js';
 // (mesma posição usada pelos testes da Fase 29). Um tick de 0,02 s drena
 // 0,24 de vida — life 0.05 morre no 1º tick; life intacta não morre.
 const TICK = 0.02;
+const BLEED_OUT_SECONDS = 7;
 
 function exposedBotRoom(t) {
   const room = new MatchRoom3D({ id: `env-death-${t}`, seed: `ENV-DEATH-${t}`, capacity: 2, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
@@ -79,7 +80,7 @@ test('room3d: crédito via lastHitBy — último atirador leva o kill da anomali
   assert.equal(feed.some((e) => e.killer === 'ANOMALIA'), false, 'crédito vai ao atirador, não ao rótulo ambiental');
 });
 
-test('room3d: vítima HUMANA da anomalia recebe eliminated com by ANOMALIA', () => {
+test('room3d: vítima HUMANA da anomalia recebe 7 s de DBNO antes de eliminated', () => {
   const room = new MatchRoom3D({ id: 'env-death-hum', seed: 'ENV-DEATH-HUM', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('v', 'VITIMA-QUANTUM'));
   assert.ok(room.addPlayer('w', 'SOBREVIVENTE'));
@@ -89,10 +90,15 @@ test('room3d: vítima HUMANA da anomalia recebe eliminated com by ANOMALIA', () 
   victim.x = 60; victim.z = 60;
   room.quantumTimer = 120;
   room.tick(TICK);
-  assert.equal(victim.alive, false);
+  assert.equal(victim.alive, true, 'dano letal inicial inicia a janela, não elimina');
+  assert.equal(victim.knocked, true);
+  assert.ok(victim.knockT > 0);
+  for (let i = 0; i < Math.ceil(BLEED_OUT_SECONDS / TICK) + 2 && victim.alive; i++) room.tick(TICK);
+  assert.equal(victim.alive, false, 'a eliminação ocorre só após o prazo de DBNO');
   const ev = room.drainEvents('v');
+  assert.ok(ev.some((e) => e.type === 'knocked'), 'o início do DBNO é transmitido à vítima');
   const eliminated = ev.find((e) => e.type === 'eliminated');
-  assert.ok(eliminated, 'vítima humana recebe eliminated (entra em espectador)');
+  assert.ok(eliminated, 'após sete segundos a vítima entra em espectador');
   assert.equal(eliminated.by, 'ANOMALIA');
   assert.equal(eliminated.placement, 2, 'sobrevivente humano ainda vivo → posição #2');
 });
@@ -146,7 +152,7 @@ test('sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador', () 
   assert.ok(sim.events.some((e) => e.type === 'kill' && e.target === bot.name && e.finish === true), 'evento kill com finish');
 });
 
-test('sim offline: PLAYER morto pela anomalia — eliminated com colocação + espólio', () => {
+test('sim offline: PLAYER ferido pela anomalia mantém DBNO 7 s, depois eliminated + espólio', () => {
   const sim = new KhaaosSim3D({ seed: 'ENV-PLAYER', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const p = sim.player;
@@ -154,8 +160,10 @@ test('sim offline: PLAYER morto pela anomalia — eliminated com colocação + e
   p.x = 60; p.z = 60;
   sim.quantumTimer = 120;
   sim.step(DEFAULT_INPUT, TICK);
-  assert.equal(p.alive, false, 'anomalia derruba o jogador');
-  assert.equal(p.knocked, false, 'sem DBNO — anomalia mata direto');
+  assert.equal(p.alive, true, 'o jogador permanece recuperável durante o deadline');
+  assert.equal(p.knocked, true, 'a anomalia inicia DBNO');
+  for (let i = 0; i < Math.ceil(BLEED_OUT_SECONDS / TICK) + 2 && p.alive; i++) sim.step(DEFAULT_INPUT, TICK);
+  assert.equal(p.alive, false, 'o timeout individual confirma a eliminação após sete segundos');
   const box = sim.loot.find((l) => l.kind === 'deathBox' && l.victimName === p.name);
   assert.ok(box, 'caixa de morte do jogador cai no campo');
   const eliminated = sim.events.find((e) => e.type === 'eliminated');

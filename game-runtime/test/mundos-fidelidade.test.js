@@ -136,7 +136,7 @@ test('F42 — Assassino Silencioso (W3): fumaça inunda o baixo e termina sozinh
   assert.ok(sim.events.some((e) => e.type === 'toxicSmokeEnd'));
 });
 
-test('F42 — Pulso Khaaos (CIGKV): dreno pula blindagem e mata DIRETO (Fase 30 preservada)', () => {
+test('F42 — Pulso Khaaos (CIGKV): dreno pula blindagem e confirma DBNO após 7 s', () => {
   const sim = new KhaaosSim3D({ seed: 'F42-PULSO', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
   const p = sim.player;
@@ -145,8 +145,11 @@ test('F42 — Pulso Khaaos (CIGKV): dreno pula blindagem e mata DIRETO (Fase 30 
   sim.quantumTimer = 119.99;
   sim.step(DEFAULT_INPUT, TICK);
   assert.equal(sim.quantumActive, true);
-  assert.equal(p.alive, false, 'anomalia mata DIRETO, sem DBNO');
-  assert.equal(p.knocked, false);
+  assert.equal(p.alive, true, 'pulso letal inicia o prazo de recuperação');
+  assert.equal(p.knocked, true);
+  assert.ok(p.knockT > 0 && p.knockT <= 7);
+  for (let i = 0; i < Math.ceil(7 / TICK) + 2 && p.alive; i++) sim.step(DEFAULT_INPUT, TICK);
+  assert.equal(p.alive, false, 'só o timeout de sete segundos confirma a morte');
   assert.ok(sim.loot.some((l) => l.kind === 'deathBox' && l.victimName === p.name), 'espólio cai onde caiu');
   assert.ok(sim.events.some((e) => e.type === 'eliminated'), 'eliminated dispara (cliente entra em espectador)');
 });

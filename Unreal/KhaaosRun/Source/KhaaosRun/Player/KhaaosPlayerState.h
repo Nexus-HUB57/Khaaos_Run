@@ -110,6 +110,14 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_PlayerStatus, BlueprintReadOnly, Category = "Khaaos|Status")
 	EPlayerStatus PlayerStatus;
 
+	/** Player is in the recoverable 7-second window; PlayerStatus remains Vivo until timeout. */
+	UPROPERTY(ReplicatedUsing = OnRep_DownedState, BlueprintReadOnly, Category = "Khaaos|Status")
+	uint8 bIsDowned : 1;
+
+	/** Server-authoritative remaining time before individual elimination. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Status")
+	float DownedTimeRemaining;
+
 	/** Patente rank (from schema.ts PatenteKR). */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Rank")
 	EPatenteRank Patente;
@@ -192,6 +200,9 @@ public:
 	UFUNCTION()
 	void OnRep_PlayerStatus();
 
+	UFUNCTION()
+	void OnRep_DownedState();
+
 	// ─── Delegates ──────────────────────────────────────────────────────────
 
 	/** Broadcast when health changes (for UI health bar). */
@@ -208,6 +219,14 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerStatusChanged, EPlayerStatus, OldStatus, EPlayerStatus, NewStatus);
 	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Status")
 	FOnPlayerStatusChanged OnPlayerStatusChanged;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDowned);
+	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Status")
+	FOnPlayerDowned OnPlayerDowned;
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerRevived);
+	UPROPERTY(BlueprintAssignable, Category = "Khaaos|Status")
+	FOnPlayerRevived OnPlayerRevived;
 
 	// ─── Server Authority Methods ───────────────────────────────────────────
 
@@ -231,6 +250,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	float Heal(float HealAmount);
 
+	/** Enter the shared server-authoritative recovery window when a damage path reaches zero HP. */
+	void StartDownedWindow(AActor* EffectCauser);
+
+	/** Commit an expired downed window through the match elimination path (server only). */
+	void FinalizeDownedTimeout();
+
 	/** Grant credits (server only). */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Attributes")
 	void GrantCredits(int32 Amount);
@@ -238,6 +263,12 @@ public:
 	/** Set player status (server only). */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Status")
 	void SetPlayerStatus(EPlayerStatus NewStatus);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Status")
+	bool IsDowned() const { return bIsDowned; }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Status")
+	float GetDownedTimeRemaining() const { return DownedTimeRemaining; }
 
 	/** Compute patente rank from XP (port of schema.ts rankFromXp). */
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Rank")
@@ -247,9 +278,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Khaaos|Rank")
 	static FString PatenteToString(EPatenteRank Rank);
 
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	void ClearDownedWindow(bool bWasRevived);
+
 	UFUNCTION()
 	void HandleAttributeChanged(UKhaaosAttributeSet* AttributeSet, const FString& AttributeName, float NewValue);
 
@@ -259,6 +293,9 @@ private:
 	FGameplayAbilitySpecHandle SpeciesPassiveAbilityHandle;
 	TArray<FGameplayAbilitySpecHandle> SpeciesActiveAbilityHandles;
 	bool bApplyingWorldEnvironmentalDamage = false;
+	TWeakObjectPtr<APlayerState> DownedBy;
+	FString DownedCause = TEXT("QUEDA");
+	static constexpr float DownedTimeLimitSeconds = 7.0f;
 
 	// ─── XP Thresholds (from schema.ts RANK_XP_THRESHOLDS) ─────────────────
 

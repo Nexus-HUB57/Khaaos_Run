@@ -148,15 +148,13 @@ export const DEFAULT_INPUT = Object.freeze({
 // (padrão legado/testes) a morte encerra a partida imediatamente.
 export const SPECTATE_MIN_ALIVE = 2;
 
-// ---------- Fase 7 — Squad & DBNO (knockdown/revive, estilo FreeFire) ----------
-// No modo squad, dano letal NÃO elimina: o operativo cai NOCAUTEADO (knocked),
-// rasteja lentamente e sangra até o fim do contador. Um aliado do MESMO esquadrão,
-// vivo e de pé, que segure INTERAGIR por perto revive o companheiro. Dano recebido
-// já caído é letal (finalização). Companheiros caídos sangram mais rápido a cada
-// nocaute subsequente (bleedOutDecay).
+// ---------- Fase 7 — Squad & protocolo DBNO de 7 s ----------
+// O primeiro dano letal coloca o jogador em estado caído por no máximo sete
+// segundos. H/medkit pode recuperar o próprio jogador ou um aliado do squad;
+// E ainda canaliza o revive. Dano letal recebido já caído confirma eliminação.
 export const DBNO = {
-  bleedOutSeconds: 45,     // tempo de sangramento do 1º nocaute
-  bleedOutDecay: 0.72,     // multiplicador do contador a cada nocaute extra
+  bleedOutSeconds: 7,      // janela máxima para autocuidado ou socorro
+  bleedOutDecay: 1,        // cada novo nocaute conserva o prazo acordado de 7 s
   reviveSeconds: 3.2,      // canalização de revive (segure E)
   reviveDistance: 2.4,     // alcance do revive (m)
   reviveLifeFraction: 0.4, // vida restaurada no revive
@@ -184,8 +182,8 @@ export function knockActor(a, ownerId, kind = 'body') {
   return a;
 }
 
-// Melhor alvo de revive para `actor`: companheiro do MESMO esquadrão, caído,
-// vivo, dentro do alcance — o mais próximo.
+// Melhor alvo de revive: exige mesmo esquadrão quando o ator pertence a um;
+// sem squad (solo), permite qualquer jogador caído e vivo dentro do alcance.
 export function reviveTargetFor(actor, candidates) {
   let best = null, bestD = DBNO.reviveDistance;
   for (const c of candidates) {
@@ -1050,10 +1048,14 @@ export class KhaaosSim3D {
     if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
-    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
-    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
-    if (this.squad && input.interact) this.#tryRevive(a, dt);
+    // Caído: rasteja e pode usar um medkit em si mesmo; não combate/coleta.
+    if (a.knocked) {
+      if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
+      if (isPlayer && input.medkit) this.#useMedkit(a);
+      return;
+    }
+    // Fase 7 — revive: aliado próximo segura INTERAGIR; em solo, sem squad lock.
+    if (input.interact) this.#tryRevive(a, dt);
     if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
       a.abilityState.distanceRemaining = a.abilityDistanceBudget;
       if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeTicks = 0;
@@ -1814,10 +1816,16 @@ export class KhaaosSim3D {
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
     if (actor.life > 0) return;
-    // Fase 30 — morte AMBIENTAL canônica: a anomalia fura escudo/blindagem e
-    // mata DIRETO (sem DBNO), mas sai pelo MESMO #finalizeDeath das outras
-    // mortes — espólio onde caiu (Fase 28), killfeed/eliminado com colocação e
-    // atribuição via lastHitBy (paridade 1:1 com a trilha autoritativa).
+    if (actor.id === 'player') {
+      if (!actor.knocked) {
+        knockActor(actor, actor.lastHitBy ?? null, 'quantum');
+        this.emit('knocked', { by: null, kind: 'quantum', knockT: actor.knockT });
+      } else {
+        actor.life = 0; // dano contínuo não antecipa o prazo de recuperação
+      }
+      return;
+    }
+    // Bots sem DBNO de jogador continuam finalizados diretamente pela anomalia.
     this.#finalizeDeath(actor, null, 'quantum');
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
@@ -1866,24 +1874,23 @@ export class KhaaosSim3D {
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {
-      // Fase 7 — squads: nocaute com chance de revive; dano já caído elimina
-      if (this.squad && !p.knocked) {
+      // Protocolo DBNO: todo jogador mantém a janela fixa mesmo sob dano contínuo.
+      if (!p.knocked) {
         knockActor(p, ownerId, kind);
         this.emit('knocked', { by: ownerId, kind, knockT: p.knockT });
         return;
       }
-      p.life = 0; p.alive = false; p.knocked = false;
-      this.#dropDeathBox(p); // Fase 28
-      // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
-      const placement = [this.player, ...this.bots].filter((a) => a.alive).length + 1;
-      this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
+      p.life = 0;
     }
   }
   // Fase 7 — morte final (sangramento no DBNO)
   #finalizeDeath(a, ownerId, kind) {
     if (a.zexChannel) this.#cancelZexChannel(a, 'death');
+    a.life = 0;
     a.alive = false;
     a.knocked = false;
+    a.knockT = 0;
+    a.reviveProgress = 0;
     this.#dropDeathBox(a); // Fase 28 — espólios na posição da morte
     if (a.id === 'player') {
       const placement = [this.player, ...this.bots].filter((x) => x.alive).length + 1;
@@ -1957,9 +1964,22 @@ export class KhaaosSim3D {
     } else a.ammoMag = this.#magCap(a, w);
   }
   #useMedkit(a) {
-    if (a.inventory.medkit <= 0 || a.life >= 100) return;
-    a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
-    this.emit('medkit', { life: a.life });
+    if ((a.inventory.medkit ?? 0) <= 0) return;
+    const target = a.knocked ? a : (reviveTargetFor(a, [this.player, ...this.bots]) ?? a);
+    if (!target.knocked && target.life >= 100) return;
+    a.inventory.medkit--;
+    if (target.knocked) {
+      target.knocked = false;
+      target.knockT = 0;
+      target.reviveProgress = 0;
+      target.lastReviveTick = -1;
+      target.life = 30;
+      this.emit('revived', {
+        by: a.name ?? a.id, target: target.id, targetName: target.name ?? target.id,
+        life: target.life, isSelf: target === a, item: 'medkit',
+      });
+    } else target.life = Math.min(100, target.life + 30);
+    this.emit('medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
   // ---------- Fase 32 — economia de sobrevivência dos bots ----------
   // Coleta por proximidade, cura fora de combate e utilitários no engajamento.

@@ -414,6 +414,13 @@ export class HUD {
     $('#knockOverlay')?.classList.toggle('hidden', !knocked);
     if (knocked) {
       const max = DBNO.bleedOutSeconds * Math.pow(DBNO.bleedOutDecay, Math.max(0, (p.downedCount ?? 1) - 1));
+      const secondsLeft = Math.ceil(Math.max(0, p.knockT ?? 0));
+      const knockCountdown = $('#knockCountdown');
+      if (knockCountdown) {
+        knockCountdown.textContent = `${secondsLeft} s`;
+        knockCountdown.setAttribute('aria-label', `Prazo para recuperação: ${secondsLeft} segundos`);
+      }
+      $('#knockOverlay')?.classList.toggle('critical', secondsLeft <= 2);
       $('#knockFill').style.width = `${Math.max(0, Math.min(100, ((p.knockT ?? 0) / max) * 100))}%`;
       const prog = p.reviveProgress ?? 0;
       $('#reviveWrap')?.classList.toggle('hidden', prog <= 0);

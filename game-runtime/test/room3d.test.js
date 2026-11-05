@@ -279,9 +279,13 @@ test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal
   room.ring.x = t.x + 20; room.ring.z = t.z + 20; room.ring.radius = 0;
   for (let i = 0; i < 30 && !p1.knocked; i++) { room.input('p1', blankInput({ seq: i + 2 })); room.tick(DT); }
   assert.ok(p1.knocked);
-  // dano sobre o caído é LETAL → morte final cancela com 'death'
+  // Dano adicional não antecipa o prazo fixo de recuperação de sete segundos.
   for (let i = 0; i < 50 && p1.alive; i++) { room.input('p1', blankInput({ seq: 500 + i })); room.tick(DT); }
-  assert.equal(p1.alive, false, 'morte final (dano sobre caído)');
+  assert.equal(p1.alive, true, 'vítima permanece viva durante a janela DBNO');
+  assert.equal(p1.knocked, true, 'dano repetido não elimina antes do timeout');
+  assert.ok(p1.knockT > 0, 'prazo de recuperação ainda está ativo');
+  for (let i = 0; i < 300 && p1.alive; i++) { room.input('p1', blankInput({ seq: 600 + i })); room.tick(DT); }
+  assert.equal(p1.alive, false, 'morte final ocorre quando o deadline DBNO expira');
   assert.equal(p1.zexChannel, null, 'nenhum canal sobrevive à morte');
   assert.equal(t.active, true, 'terminal segue utilizável para quem chegar');
   assert.equal(p1.extracted, 0);

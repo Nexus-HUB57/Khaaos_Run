@@ -28,6 +28,7 @@
     "test:game:stress": "npm --prefix game-runtime run test:stress",
     "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
+    "test:python:dashboard": "python3 -m unittest discover -s tools/operative-synergy-dashboard/tests -v",
     "verify:all": "node scripts/verify-all.mjs",
     "test:e2e:war-i": "playwright test --config=playwright.config.ts",
     "prepare": "husky || true"

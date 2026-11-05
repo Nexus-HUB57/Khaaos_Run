@@ -107,7 +107,7 @@ jobs:
             -LogCmds="LogKhaaosRun Verbose"
           echo "Capturas e relatório de validação LUT gerados."
 
-      - name: Run Khaaos Telemetry JSON Serialization Test
+      - name: Run UE5 Telemetry and Combat/DBNO Automation Tests
         shell: bash
         run: |
           set -euo pipefail
@@ -119,17 +119,17 @@ jobs:
             -unattended \
             -nopause \
             -nosplash \
-            -ExecCmds="Automation RunTest Khaaos.Telemetry.JsonSerialization;Quit" \
+            -ExecCmds="Automation RunTest Khaaos.Telemetry.JsonSerialization;Automation RunTests Khaaos.Combat;Quit" \
             -ReportExportPath="$REPORT_DIR" \
             -log \
             -LogCmds="LogKhaaosRun Verbose"
-          echo "Automation Test Khaaos.Telemetry.JsonSerialization executado."
+          echo "Testes de automação Telemetry e Khaaos.Combat (inclui Revive/DBNO) executados."
 
       - name: Upload Unreal Automation Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: telemetry-automation-report-${{ github.sha }}
+          name: ue5-automation-report-${{ github.sha }}
           path: Unreal/KhaaosRun/Saved/AutomationReports/**
           retention-days: 30
           if-no-files-found: warn
@@ -169,7 +169,7 @@ jobs:
             echo "- **Branch**: $SUMMARY_BRANCH"
             echo "- **Commit**: $SUMMARY_COMMIT"
             echo "- **Target**: KhaaosRunEditor Linux Development"
-            echo "- **Automation Test**: Khaaos.Telemetry.JsonSerialization"
+            echo "- **Automation Tests**: telemetry + Khaaos.Combat (inclui DBNO/revive)"
             echo "- **Runner labels**: self-hosted, linux, gpu, ue5.8, x64"
             echo "- **Job status**: $SUMMARY_JOB_STATUS"
           } >> "$GITHUB_STEP_SUMMARY"

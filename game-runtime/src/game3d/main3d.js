@@ -1429,12 +1429,17 @@ export class Game3D {
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
           break;
-        case 'revived':
-          this.hud.feed('SQUAD', `${e.by} reviveu ${e.targetName}.${e.target === 'player' ? ' De volta ao combate!' : ''}`, 'good');
+        case 'revived': {
+          const selfTarget = e.isSelf || e.target === 'player' || e.target === p.id;
+          const message = e.isSelf
+            ? 'Você se recuperou usando um medkit.'
+            : `${e.by} ${e.item === 'medkit' ? 'prestou primeiros socorros a' : 'reviveu'} ${selfTarget ? 'você' : e.targetName}.${selfTarget ? ' De volta ao combate!' : ''}`;
+          this.hud.feed(e.item === 'medkit' ? 'PRIMEIROS SOCORROS' : 'SQUAD', message, 'good');
           this.audio?.pickup?.();
           break;
+        }
         case 'knocked':
-          this.hud.feed('ZU', `Você está NOCAUTEADO${e.by ? ` por ${e.by}` : ''} — aliados podem reviver. Rasteje para cobertura.`, 'bad');
+          this.hud.feed('ZU', `NOCAUTEADO: até 7 s para usar H/✚ em si ou receber primeiros socorros; E canaliza o revive de um aliado. Rasteje para cobertura.`, 'bad');
           this.audio?.heartbeat?.();
           this.hud.damageFlash = .6;
           break;
