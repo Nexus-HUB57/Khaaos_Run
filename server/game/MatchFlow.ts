@@ -24,7 +24,7 @@
 import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvivalEvent, type WorldTransitionEvent } from "./EconomyMatchBridge";
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
-import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "../../shared/worlds";
+import { DBNO_CONTRACT } from "@shared/dbno";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -383,7 +383,7 @@ export class MatchFlow {
 
   /**
    * Process a kill event through the full pipeline:
-   *   Damage → Shield → Health → Downed(30s bleed-out) → Eliminate / Revive
+   *   Damage → Shield → Health → Downed(7s bleed-out) → Eliminate / Revive
    */
   processKill(killerId: string, victimId: string, damage: number, weapon: string): void {
     const killer = this.state.players.get(killerId);
@@ -441,12 +441,14 @@ export class MatchFlow {
         weapon
       );
 
-      // Auto-eliminate after 30 seconds if not revived
+      // Auto-eliminate após a janela acordada do protocolo DBNO de 7 s
+      // (@shared/dbno — paridade com game-runtime sim3d.js e UE5.8
+      // DownedTimeLimitSeconds = 7.0f; gate tests/official/dbno-parity.test.ts).
       setTimeout(() => {
         if (victim.isDowned && !victim.isEliminated) {
           this.eliminatePlayer(killerId, victimId, weapon);
         }
-      }, 30_000);
+      }, DBNO_CONTRACT.bleedOutSeconds * 1000);
     }
   }
 
@@ -470,7 +472,7 @@ export class MatchFlow {
     if (!player || !player.isDowned || player.isEliminated) return false;
 
     player.isDowned = false;
-    player.health = 30; // Revive with 30 HP
+    player.health = DBNO_CONTRACT.reviveHealFlatHp; // 30 HP — acordo UE5.8/raiz (@shared/dbno)
     this.logEvent("PLAYER_REVIVED", { playerId, reviverId });
     return true;
   }

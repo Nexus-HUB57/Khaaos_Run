@@ -157,7 +157,8 @@ export const DBNO = {
   bleedOutDecay: 1,        // cada novo nocaute conserva o prazo acordado de 7 s
   reviveSeconds: 3.2,      // canalização de revive (segure E)
   reviveDistance: 2.4,     // alcance do revive (m)
-  reviveLifeFraction: 0.4, // vida restaurada no revive
+  reviveLifeFraction: 0.3, // vida restaurada no revive — 30 HP fixos, acordo
+                           // UE5.8 (Heal(30.0f)) / raiz (@shared/dbno.reviveHealFlatHp)
   crawlSpeedMult: 0.42,    // velocidade rastejando
 };
 
