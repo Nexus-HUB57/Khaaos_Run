@@ -78,22 +78,23 @@
 
 ## Performance UE5.8 e FPS Live Action
 
-O ciclo de 27/10/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea:
+O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:
 
 | Métrica | Resultado |
 |----------|-----------|
 | Mundos | CIGKV, Barburhen, Priadus, Ckesalth e Arukheea |
 | Carga | 60 operadores por mundo; 300 no total |
 | Duração | 30 segundos; 900 ticks por mundo |
-| Gate da simulação | **PASS** — p95 agregado de 1,062 ms contra orçamento de 33,33 ms |
-| Pior mundo no p95 | Barburhen — 1,062 ms |
+| Gate da simulação | **PASS** — p95 agregado de 4,589 ms contra orçamento de 33,33 ms |
+| Pior mundo no p95 | Barburhen — 4,589 ms |
 | FPS gráfico UE5.8 | **Ainda não medido** — o sandbox não possui Unreal Engine 5.8 licenciado |
 
-O número de 941,62 FPS registrado no relatório é **server-equivalente do proxy determinístico da simulação**. Ele não é FPS de tela, não mede GPU e não aprova a renderização Live Action. A aprovação gráfica depende de captura no runner UE5.8 com frame time p95 de renderização igual ou inferior a 16,67 ms no perfil Medium.
+O número de 217,91 FPS registrado no relatório é **server-equivalente do proxy determinístico da simulação**. Ele não é FPS de tela, não mede GPU e não aprova a renderização Live Action. A aprovação gráfica depende de captura no runner UE5.8 com frame time p95 de renderização igual ou inferior a 16,67 ms no perfil Medium.
 
 Documentação e evidências:
 
 - [Relatório de performance e FPS Live Action](docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md)
+- [Auditoria de gargalos e configuração UE5.8/CI-CD](docs/performance/UE58_PERFORMANCE_AUDIT_2026-11.md)
 - [Roteiro de apresentação dos resultados](docs/performance/ROTEIRO_APRESENTACAO_UE58_LIVE_ACTION.md)
 - [Resultado JSON do stress dos cinco mundos](artifacts/performance/ue58-all-worlds-stress.json)
 - [Workflow CI/CD UE5.8](.github/workflows/ue58-release-cd.yml)

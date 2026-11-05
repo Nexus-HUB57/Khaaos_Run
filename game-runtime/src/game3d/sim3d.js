@@ -290,13 +290,26 @@ export function circlePushAabb(px, pz, r, b) {
 }
 export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   let tmin = 0, tmax = maxT;
-  const axes = [[ox, dx, box.minX, box.maxX], [oy, dy, box.yMin, box.yMax], [oz, dz, box.minZ, box.maxZ]];
-  for (const [o, d, lo, hi] of axes) {
-    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
-    let t1 = (lo - o) / d, t2 = (hi - o) / d;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return null;
+  // Caminho quente: não criar arrays, destructuring ou pares temporários para
+  // cada raio. A forma escalar preserva o slab test original e reduz pressão
+  // no GC durante LOS, projéteis e explosões.
+  if (Math.abs(dx) < 1e-9) { if (ox < box.minX || ox > box.maxX) return null; }
+  else {
+    let t1 = (box.minX - ox) / dx, t2 = (box.maxX - ox) / dx;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dy) < 1e-9) { if (oy < box.yMin || oy > box.yMax) return null; }
+  else {
+    let t1 = (box.yMin - oy) / dy, t2 = (box.yMax - oy) / dy;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dz) < 1e-9) { if (oz < box.minZ || oz > box.maxZ) return null; }
+  else {
+    let t1 = (box.minZ - oz) / dz, t2 = (box.maxZ - oz) / dz;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
   }
   return tmin;
 }
@@ -315,7 +328,7 @@ export function windowPaneOnSegment(ox, oy, oz, tx, ty, tz, windows) {
   dx /= len; dy /= len; dz /= len;
   let best = null, bestT = Infinity;
   for (const p of windows ?? []) {
-    const box = windowBoxCollider({ ...p, destroyed: false }); // abertura persiste
+    const box = windowBoxCollider(p, true); // abertura persiste mesmo após estilhaçar
     if (!box) continue;
     const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
     if (t !== null && t < bestT) { best = p; bestT = t; }
@@ -639,7 +652,7 @@ export class KhaaosSim3D {
     // layout (ex.: testes que removem colliders) continuam valendo para
     // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
     // s.doors e re-sincronizam via syncPhysicsWorld()).
-    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    this.physicsWorld = { colliders: this.world.colliders, losColliders: this.world.colliders, losSource: this.world.colliders, floors: this.world.floors };
     // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
     this.syncPhysicsWorld();
   }
@@ -656,6 +669,10 @@ export class KhaaosSim3D {
     for (const w of this.windows) { if (!w.destroyed) { const box = windowBoxCollider(w); if (box) panes.push(box); } }
     const dyn = active.length || leafs.length || panes.length ? active.concat(leafs, panes) : [];
     this.physicsWorld.colliders = dyn.length ? this.world.colliders.concat(dyn) : this.world.colliders;
+    // Vidro é balístico, mas transparente para LOS. Evita testar cada painel
+    // em cada candidato de IA sem alterar a lista usada por movimento/balas.
+    this.physicsWorld.losColliders = this.physicsWorld.colliders.filter((box) => box.kind !== 'window' && !box.noBlock);
+    this.physicsWorld.losSource = this.physicsWorld.colliders;
   }
 
   // ---------- spawn ----------
@@ -1430,11 +1447,13 @@ export class KhaaosSim3D {
     let dx = b.x - ox, dy = (b.y + 1.6) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
-    for (const box of this.physicsWorld.colliders) {
-      if (box.noBlock) continue;
-      // Fase 26 — vidro é TRANSPARENTE p/ visão (bots enxergam por janelas
-      // como na Fase 24); o bloqueio do vidro é só balístico (#stepBullets).
-      if (box.kind === 'window') continue;
+    const minX = Math.min(ox, b.x), maxX = Math.max(ox, b.x);
+    const minY = Math.min(oy, b.y + 1.6), maxY = Math.max(oy, b.y + 1.6);
+    const minZ = Math.min(oz, b.z), maxZ = Math.max(oz, b.z);
+    const colliders = this.physicsWorld.losSource === this.physicsWorld.colliders ? this.physicsWorld.losColliders : this.physicsWorld.colliders;
+    for (const box of colliders) {
+      if (box.noBlock || box.kind === 'window') continue;
+      if (box.maxX < minX || box.minX > maxX || box.maxZ < minZ || box.minZ > maxZ || box.yMax < minY || box.yMin > maxY) continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
     return true;
@@ -1633,9 +1652,13 @@ export class KhaaosSim3D {
       b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
+      const segMinX = Math.min(ox, b.x), segMaxX = Math.max(ox, b.x);
+      const segMinY = Math.min(oy, b.y), segMaxY = Math.max(oy, b.y);
+      const segMinZ = Math.min(oz, b.z), segMaxZ = Math.max(oz, b.z);
       let hitT = Infinity, hitBox = null;
       for (const box of this.physicsWorld.colliders) {
         if (box.noBlock) continue;
+        if (box.maxX < segMinX || box.minX > segMaxX || box.maxZ < segMinZ || box.minZ > segMaxZ || box.yMax < segMinY || box.yMin > segMaxY) continue;
         const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
         if (t !== null && t < hitT) { hitT = t; hitBox = box; }
       }
