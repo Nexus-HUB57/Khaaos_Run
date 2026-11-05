@@ -122,7 +122,10 @@ export function buildOperativeProxy({ skin = '#d9a06b', vest = '#3a3f47' } = {})
     return m;
   };
   const P = {
-    cap: (r, l) => pgeo(`c${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 1, 5)),
+    // O proxy ainda é econômico, mas não pode virar um manequim facetado na
+    // distância de combate. Seis lados na cápsula e 7×5 na cabeça suavizam a
+    // leitura humana sem romper o orçamento de 900 tris.
+    cap: (r, l) => pgeo(`c${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 1, 6)),
     sph: (r) => pgeo(`s${r}`, () => new THREE.SphereGeometry(r, 7, 5)),
     box: (w, h, d) => pgeo(`b${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d)),
   };

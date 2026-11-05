@@ -75,6 +75,15 @@ test('anatomia curva: crânio/membros não são mais caixas — esferas, cápsul
   assert.ok((bb.min.z + bb.max.z) / 2 < 0, 'rosto voltado para -z (frente do modelo)');
 });
 
+test('volumes de contato: colete, mochila, botas e luvas usam transição arredondada', () => {
+  const { group } = createOperative({ variant: 'onith' });
+  const rounded = [];
+  group.traverse((o) => { if (o.isMesh && o.userData.roundedVolume) rounded.push(o); });
+  assert.ok(rounded.length >= 6, `volumes arredondados presentes (${rounded.length})`);
+  assert.ok(rounded.every((o) => o.geometry.attributes.position.count > 24),
+    'volumes arredondados não regridem para cubos de 8 vértices');
+});
+
 test('API preservada: parts e pivôs idênticos à Fase 7 (armas/câmera não quebram)', () => {
   const { group, parts } = createOperative({ variant: 'vrekai' });
   for (const k of ['head', 'torso', 'legL', 'legR', 'armL', 'armR']) assert.ok(parts[k], `parts.${k} existe`);

@@ -12,6 +12,7 @@
 // cadarço/colarinho na bota, estabilização vestibular do olhar (cabeça
 // contra-move bounce/sway), ombros contra-rolam a passada e micro-balço ADS.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {
   camoMaterial, contactShadowTexture, faceTexture, goggleMaterial, skinMaterial,
 } from './textures3d.js';
@@ -59,10 +60,23 @@ function geo(key, factory) {
 const sphereGeo = (r, w = 10, h = 8) => geo(`s${r}:${w}x${h}`, () => new THREE.SphereGeometry(r, w, h));
 const capsuleGeo = (r, l) => geo(`c${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 3, 8));
 const cylGeo = (rt, rb, h, seg = 10) => geo(`y${rt}:${rb}:${h}:${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg));
+const roundedBoxGeo = (w, h, d, radius = 0.04) => geo(
+  `rb${w}:${h}:${d}:${radius}`,
+  () => new RoundedBoxGeometry(w, h, d, 1, radius),
+);
 
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+// Equipamentos que encostam ao corpo devem receber luz contínua, não arestas
+// de bloco. A malha é cacheada e mantém o orçamento do avatar sob controle.
+function softBox(w, h, d, mat, radius = Math.min(w, h, d) * 0.18, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(roundedBoxGeo(w, h, d, radius), mat);
+  m.position.set(x, y, z);
+  m.userData.roundedVolume = true;
   m.castShadow = true; m.receiveShadow = true;
   return m;
 }
@@ -382,7 +396,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const clavR = ball(.065, camo, .18, .24, 0, 8, 6, 1.15, .8, .9);
   const traps = ball(.085, camo, 0, .3, .025, 8, 6, 1.3, .75, .9);
   torso.add(clavL, clavR, traps);
-  const vestMesh = box(.5, .42, .33, vestM, 0, .06, .01);           // plate carrier rígido sobre o peitoral
+  const vestMesh = softBox(.5, .42, .33, vestM, .045, 0, .06, .01); // plate carrier anatômico, sem quinas de bloco
   torso.add(vestMesh);
   // pouches frontais de carregador (3) + porta-radio
   for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.04, -.185));
@@ -392,7 +406,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
   // mochila tática: corpo + straps + bedroll + faixa de equipe (BASE — a
   // Fase 28 substitui por níveis Nv1-3 quando o ator equipa mochila)
-  const pack = box(.38, .42, .17, gearM2, 0, .02, .22);
+  const pack = softBox(.38, .42, .17, gearM2, .035, 0, .02, .22);
   pack.userData.basePack = true;
   torso.add(pack);
   const packLid = box(.3, .05, .19, vestDarkM, 0, .12, .23);
@@ -442,7 +456,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   if (helmet) {
     const dome = ball(.145, gearM, 0, .1, .01, 12, 10, 1.05, .85, 1.12); // casco arredondado
     const brim = box(.28, .04, .08, gearM, 0, .1, -.15);
-    const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos empilhados
+    const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos contornam o rosto
     dome.userData.baseHeadGear = brim.userData.baseHeadGear = band.userData.baseHeadGear = true;
     head.add(dome, brim, band);
     // F41 — jugular: tira sob o queixo amarra o casco (acessório lê como capacete
@@ -476,7 +490,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const lower = capsule(.066, .24, camo, 0, -.19, 0);
     const pad = box(.15, .1, .17, gearM, 0, -.06, -.005);
     const foot = new THREE.Group(); foot.position.set(0, -.31, .01);
-    const boot = box(.17, .12, .28, bootM, 0, -.12, .05);
+    const boot = softBox(.17, .12, .28, bootM, .028, 0, -.12, .05);
     const toe = ball(.085, bootM, 0, -.13, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
     const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.19, .05);
     // F41 — cadarço de combate no peito do pé + colarinho do cano (bota lê como
@@ -499,7 +513,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const elbow = new THREE.Group(); elbow.position.set(0, -.31, 0);
     const elbowCap = ball(.055, gearM, 0, -.01, .002, 8, 6);
     const lower = capsule(.054, .18, camo, 0, -.15, 0);
-    const glove = box(.12, .12, .13, gearM, 0, -.31, 0);
+    const glove = softBox(.12, .12, .13, gearM, .026, 0, -.31, 0);
     const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
     const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
     // F41 — dedos enrolando o grip + polegar oposto: a mão em 3ª pessoa lê como
