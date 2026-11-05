@@ -12,6 +12,7 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
@@ -72,6 +73,56 @@
 | **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 | **Jornada Oficial do Jogador** | 🟡 Código de conta por email/senha versionado; alistamento e lançamento ainda pendentes | App passa a ter cadastro/login local com verificação por email e OIDC coexistente nesta entrega; criação de conta por email permanece indisponível até SMTP configurado. Taxa nominal de US$ 1, perfil/War’I após pagamento, Academia KR e marco de 1.000.000 continuam condicionados aos gates de cobrança, compliance e produção. |
+
+---
+
+## Performance UE5.8 e FPS Live Action
+
+O ciclo de 27/10/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea:
+
+| Métrica | Resultado |
+|----------|-----------|
+| Mundos | CIGKV, Barburhen, Priadus, Ckesalth e Arukheea |
+| Carga | 60 operadores por mundo; 300 no total |
+| Duração | 30 segundos; 900 ticks por mundo |
+| Gate da simulação | **PASS** — p95 agregado de 1,062 ms contra orçamento de 33,33 ms |
+| Pior mundo no p95 | Barburhen — 1,062 ms |
+| FPS gráfico UE5.8 | **Ainda não medido** — o sandbox não possui Unreal Engine 5.8 licenciado |
+
+O número de 941,62 FPS registrado no relatório é **server-equivalente do proxy determinístico da simulação**. Ele não é FPS de tela, não mede GPU e não aprova a renderização Live Action. A aprovação gráfica depende de captura no runner UE5.8 com frame time p95 de renderização igual ou inferior a 16,67 ms no perfil Medium.
+
+Documentação e evidências:
+
+- [Relatório de performance e FPS Live Action](docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md)
+- [Roteiro de apresentação dos resultados](docs/performance/ROTEIRO_APRESENTACAO_UE58_LIVE_ACTION.md)
+- [Resultado JSON do stress dos cinco mundos](artifacts/performance/ue58-all-worlds-stress.json)
+- [Workflow CI/CD UE5.8](.github/workflows/ue58-release-cd.yml)
+
+### Executar o stress localmente
+
+```bash
+node scripts/performance/ue58_all_world_stress.mjs \
+  --duration-seconds 30 \
+  --players-per-world 60 \
+  --run-engine \
+  --output artifacts/performance/ue58-all-worlds-stress.json \
+  --markdown docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md
+```
+
+Sem `UE5_ROOT` ou `UnrealEditor-Cmd`, `--run-engine` registra `skipped_no_engine` e executa somente o proxy determinístico. Isso é intencional: o resultado não transforma uma simulação engine-less em uma alegação de FPS gráfico.
+
+### Pipeline de release UE5.8
+
+O workflow [`UE5.8 Release CI/CD`](.github/workflows/ue58-release-cd.yml) executa preflight, testes do runtime, stress dos cinco mundos, empacotamento reprodutível e publicação controlada. O build/cook/pak real é habilitado quando `run_engine=true` e `UE58_ENABLED=true` em um runner com as labels `self-hosted`, `linux`, `ue5.8` e `x64`.
+
+Configure `UE5_ROOT` e `UE5_WORLD_STRESS_COMMAND` como variáveis do GitHub Actions. A promoção para staging ou produção exige o secret protegido `KHAAOS_DEPLOY_COMMAND`, que recebe `KHAAOS_PACKAGE` e `KHAAOS_ENVIRONMENT`.
+
+### Critérios de go/no-go
+
+- Servidor: p95 do tick menor ou igual a 33,33 ms nos cinco mundos.
+- Cliente: p95 do frame time de renderização menor ou igual a 16,67 ms no perfil Medium.
+- Estabilidade: nenhum crash, hitch persistente ou crescimento de memória no soak test.
+- Qualidade: câmera de primeira pessoa, iluminação PBR/Lumen e feedback de combate preservados.
 
 ---
 
