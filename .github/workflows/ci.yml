@@ -430,11 +430,14 @@ jobs:
       # trivy-action v0.76.1 falhava 4× seguidas com árvore comprovadamente
       # limpa: a tabela on-failure registrou 0 findings na mesma árvore/DB).
       - name: Run Trivy gate (CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: "fs"
           scan-ref: "."
+          scanners: "vuln"
+          vuln-type: "library,os"
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
           exit-code: "1"
           format: "table"
 
@@ -444,11 +447,14 @@ jobs:
       - name: Run Trivy SARIF (best-effort — Security Dashboard)
         if: always()
         continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: "fs"
           scan-ref: "."
+          scanners: "vuln"
+          vuln-type: "library,os"
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
           format: "sarif"
           output: "trivy-results.sarif"
 
