@@ -60,7 +60,7 @@
     "transition_type": "portal_khaaos",
     "CIGKV": {
       "name": "CIGKV Hub",
-      "capacity": 50,
+      "capacity": 100,
       "is_hub": true,
       "ring_phases": 2,
       "ring_config": {
@@ -154,7 +154,7 @@
     },
     "W2": {
       "name": "Priadus",
-      "capacity": 75,
+      "capacity": 100,
       "is_hub": false,
       "ring_phases": 5,
       "ring_config": {
@@ -210,7 +210,7 @@
     },
     "W3": {
       "name": "Ckesalth",
-      "capacity": 60,
+      "capacity": 100,
       "is_hub": false,
       "ring_phases": 4,
       "ring_config": {
@@ -247,7 +247,7 @@
     },
     "W4": {
       "name": "Arukheea",
-      "capacity": 80,
+      "capacity": 100,
       "is_hub": false,
       "ring_phases": 5,
       "ring_config": {
