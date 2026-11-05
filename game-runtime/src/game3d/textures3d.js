@@ -649,6 +649,48 @@ export function faceTexture(skin = '#d9a06b', eyes = '#f59e0b', hair = '#171717'
   });
 }
 
+// ---- Fase 50 — complexão por expressão (SEM traços pintados) ----
+// O kit canônico (heads3d) esculpe olhos/sobrancelhas/nariz/lábios em GEOMETRIA
+// 3D; este mapa só pinta o sombreamento do complexão + tint por expressão
+// (rubor de dor, palidez de morte, hematoma de DBNO) — o rig troca o map igual
+// à Fase 12 (teste facial-blendshapes verde) sem conflitar com os traços 3D.
+export function complexionTexture(skin = '#d9a06b', expression = 'neutral') {
+  return memo(`complexion:${skin}:${expression}`, () => {
+    const [c, x] = canvas(128);
+    x.fillStyle = skin; x.fillRect(0, 0, 128, 128);
+    const shade = x.createLinearGradient(0, 0, 128, 0);
+    shade.addColorStop(0, 'rgba(0,0,0,.28)'); shade.addColorStop(.25, 'rgba(0,0,0,0)');
+    shade.addColorStop(.78, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,.24)');
+    x.fillStyle = shade; x.fillRect(0, 0, 128, 128);
+    x.fillStyle = 'rgba(0,0,0,.10)'; x.fillRect(0, 34, 128, 6); // olheiras
+    for (const cx of [34, 94]) {                                 // maçãs iluminadas + sombra sub-malar
+      const glow = x.createRadialGradient(cx, 74, 2, cx, 74, 16);
+      glow.addColorStop(0, 'rgba(255,236,214,0.14)'); glow.addColorStop(1, 'rgba(255,236,214,0)');
+      x.fillStyle = glow; x.fillRect(0, 0, 128, 128);
+      x.fillStyle = 'rgba(40,22,14,0.16)';
+      x.beginPath(); x.ellipse(cx, 86, 13, 6, 0, 0, 7); x.fill();
+    }
+    const jaw = x.createLinearGradient(0, 92, 0, 128);
+    jaw.addColorStop(0, 'rgba(0,0,0,0)'); jaw.addColorStop(1, 'rgba(30,16,10,0.30)');
+    x.fillStyle = jaw; x.fillRect(0, 92, 128, 36);
+    const expr = (expression || 'neutral').toLowerCase();
+    if (expr === 'pain' || expr === 'shout') {                   // rubor de esforço
+      x.fillStyle = expr === 'shout' ? 'rgba(170,58,38,.20)' : 'rgba(160,60,40,.16)';
+      for (const cx of [34, 94]) { x.beginPath(); x.ellipse(cx, 74, 18, 11, 0, 0, 7); x.fill(); }
+      x.beginPath(); x.ellipse(64, 44, 24, 9, 0, 0, 7); x.fill();
+    } else if (expr === 'death') {                               // palidez
+      x.fillStyle = 'rgba(168,178,192,.20)'; x.fillRect(0, 0, 128, 128);
+    } else if (expr === 'knocked') {                             // hematomas assimétricas
+      x.fillStyle = 'rgba(120,50,40,.22)';
+      x.beginPath(); x.ellipse(94, 76, 12, 7, .3, 0, 7); x.fill();
+      x.beginPath(); x.ellipse(34, 76, 10, 6, -.2, 0, 7); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
 // ---- estrada com faixas (central amarela tracejada + bordas brancas) ----
 function roadCanvas() {
   const [c, x] = canvas(256);

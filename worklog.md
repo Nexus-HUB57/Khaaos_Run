@@ -1160,3 +1160,20 @@ Work Log:
 Stage Summary:
 - O solo virou bioma REAL por mundo (textura+relevo+roughness próprios, acoplados ao perfil de luz F41) e os operantes ganharam tecido vivo: capa que abre na corrida e no ar, rabo que segue o olhar com atraso — silhueta FF à distância, física determinística e dentro do orçamento de polígonos
 - Estado: base 507309f + este PR · game-runtime 1080 testes 0 fail · build OK · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)
+
+## Task ID: 47
+**Agent:** Main
+**Task:** "O gráfico melhorou bastante mas os avatares ainda estão muito robotizados e sem os aspectos canônicos dos personagens com as características das etnias e semblante. Aplicar correções e utilizar ferramentas novas de construção de personagens com referência do modelo call of duty" — Fase 50: kit de construção canônica (etnia esculpida + semblante 3D + proporção CoD)
+
+Work Log:
+- DIAGNÓSTICO: o cânone EXISTIA no catálogo (33 operativos, 25+ etnias documentadas com gênero/olhos/cabelo) mas o rig só trocava COR — crânio de esfera genérica, rosto PINTADO em calota (olhos/sobrancelhas/boca = tinta), cabeça ~5,6 cabeças (leitura chibi). A auditoria também achou o capacete-esfera fechado ENGOLINDO o rosto (o semblante ficava em sombra interna — o "robô" que o usuário viu)
+- KIT NOVO (src/game3d/heads3d.js): sculptSkullGeo (esfera 14×11 com displacement por vértice: glabella, zigomático, sub-malar, taper mandibular, mento, achatamento facial — 8 famílias ETHNIC_SCULPT com dimorfismo) + semblante 3D (esclera+íris+popila+pálpebra com piscar real, sobrancelhas, nariz ponte/dorso/asas, lábios com volume, orelhas, pescoço/trapézio) + cabelo por estilo (buzz/straight/curly 6 cachos/long/longUnder/shaved) + barba por viés de família (.72 árabe … .18 indígena, nunca Talon) + CANON congelado 33 ids + resolveEthnicity com fallback hash p/ bots
+- PROPORÇÃO CoD: crânio .125→.105/.108 (~8 cabeças) — ombros/pivôs intactos; capacete viro CALOTA aberta (a 1ª rodada com esfera fechada nova escondeu o rosto DE NOVO — evidência em close mostrou face preta; 2ª rodada calota 1.22 rad liberta o semblante) LIÇÃO: capacete de esfera FECHADA sobre crânio esculpido = rosto em sombra — casco de personagem tem que ser calota aberta ou shell
+- RIG FACIAL v2: mandíbula F12 preservada (magnitudes do teste intactas) + sobrancelhas/pálpebras/lábios geométricos + complexionTexture nova (complexão SEM traços pintados + rubor/palidez/hematomas por expressão) — bug clássico evitado: clonar face.material AO VIVO quebra no 2º swap (o clone não tem clone) — capturar baseMat UMA vez
+- ORÇAMENTO: 1ª rodada 7266 tris (estouro) → re-cortes cirúrgicos (crânio 14×11, patch 10×7, sem concha da orelha, brows/nariz-ponte em box, mechas 3×2, longUnder sem gorro) → todos os gates ≤6500 verdes (SORO rabo+capa+longo 6486); teste novo character-canon (7 testes) + realism-f41 atualizado às coords canônicas novas (x ±.095)
+- VALIDAÇÃO: personagem 89/89 (canon+realism+f41+blendshapes+f49+lod+lod2+hit-reaction) · suíte total 1009 (20 fail = infra pré-existente pg/redis/WS, idêntica na base limpa — stash comprovou) · vite build OK 7.3 s · browser: vitrine f50 com alinhamento de 8 etnias + 4 closes de semblante (DRAXEN europeu loiro barba platina / KHAEL pardo curly barba cheia / REN asiático zigoma largo / NYRA afro-F lábios 1.55 olhos violeta) + DOR/GRITO ao vivo + IN-GAME w4 TPS (proporção ~8 cabeças visível no mundo)
+- EVIDÊNCIAS: 9 arquivos f50-* em game-runtime/artifacts (alinhamento, 4 closes étnicos, 2 expressões, 3 in-game)
+
+Stage Summary:
+- Os 33 operativos agora EXPRESSAM o cânone: crânio esculpido por família étnica com semblante 3D completo (olhos que piscam, sobrancelhas/lábios/nariz geométricos), cabelo/barba por estilo canônico, proporção humana ~8 cabeças e capacete que deixa o rosto À LUZ — o rig facial F12 ganhou geometria viva sem quebrar 1 contrato de pivôs/API/orçamento
+- Estado: base 16d1b35 · personagem 89/89 · build OK · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)

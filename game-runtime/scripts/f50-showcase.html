@@ -1,0 +1,268 @@
+<!doctype html>
+<!-- Fase 50 — vitrine dev (evidência visual): KIT DE CONSTRUÇÃO CANÔNICA DE
+     PERSONAGENS (referência CoD). Linha multi-etnia com os crânios ESCULPIDOS
+     do heads3d (8 famílias), olhos 3D com piscar, sobrancelhas/lábios/nariz em
+     geometria, cabelo/barba por estilo canônico e proporção ~8 cabeças.
+     Câmeras de inspeção (alinhamento/cabeça/perfil) + expressões do rig facial
+     ao vivo + biomas/luz F41/F49. Serve via `npm run dev` em
+     /scripts/f50-showcase.html — módulos REAIS do jogo. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F50 Showcase — Personagens Canônicos</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 700px; }
+  #hud b { color: #ffb52e; }
+  #readout { position: fixed; left: 12px; bottom: 12px; z-index: 5; color: #e8e3d5; font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre; }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 92px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 760px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #side {
+    position: fixed; right: 12px; top: 12px; z-index: 6; display: flex; flex-direction: column; gap: 10px;
+    width: 260px;
+  }
+  #side .panel {
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px;
+  }
+  #side h3 { margin: 0 0 4px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #side .note { font: 10px/1.5 monospace; color: #8d8598; margin-bottom: 8px; }
+  .btnrow { display: flex; gap: 5px; flex-wrap: wrap; }
+  .btnrow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(10,8,16,.8); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 6px 8px; cursor: pointer;
+  }
+  .btnrow button.on { border-color: #42d9de; color: #42d9de; }
+</style>
+</head>
+<body>
+<div id="hud"><b>KHAAOS RUN — Fase 50</b><br>
+<b>PERSONAGENS CANÔNICOS</b> (referência CoD): crânio ESCULPIDO por etnia (8 famílias do catálogo),
+olhos 3D c/ piscar, sobrancelhas/lábios/nariz geométricos, cabelo/barba por estilo — proporção ~8 cabeças.</div>
+<div id="readout"></div>
+<div id="rail">
+  <div class="btnrow" id="camRow"></div>
+  <div class="btnrow" id="expRow"></div>
+  <div class="btnrow" id="moRow"></div>
+</div>
+<div id="side">
+  <div class="panel">
+    <h3>ALINHAMENTO CANÔNICO</h3>
+    <div class="note" id="lineupNote">33 operativos do catálogo — 8 famílias esculpidas</div>
+    <div class="btnrow" id="opRow"></div>
+  </div>
+  <div class="panel">
+    <h3>BIOMA / LUZ</h3>
+    <div class="note" id="bioNote">luz F41 por bioma (troca ao vivo)</div>
+    <div class="btnrow" id="bioRow"></div>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createOperative, animateOperative } from '../src/game3d/entities3d.js';
+import { LIGHTING_PROFILES } from '../src/game3d/world3d.js';
+import { GROUND_BIOMES, groundBiomeParams, groundMaterial } from '../src/game3d/textures3d.js';
+import { ETHNIC_SCULPT } from '../src/game3d/heads3d.js';
+import catalog from '../../Content/Avatars/avatar_catalog.json';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2('#10161c', .0035);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#ffc98f', 2.35);
+sun.position.set(-14, 20, 14);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 2; sun.shadow.camera.far = 90;
+sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
+sun.shadow.camera.top = 14; sun.shadow.camera.bottom = -14;
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight('#8f74b4', '#4a3d2e', 1.18);
+scene.add(hemi);
+const fill = new THREE.DirectionalLight('#6a5aa0', .72);
+fill.position.set(14, 8, -14);
+scene.add(fill);
+// luz-chave de INSPEÇÃO (character viewer): frontal suave garante a leitura do
+// semblante esculpido em qualquer bioma (o sol do bioma continua p/ o clima)
+const keyFill = new THREE.DirectionalLight('#fff2dd', .85);
+keyFill.position.set(1.5, 2.4, 7);
+scene.add(keyFill);
+
+let ground = null;
+function setGround(biome) {
+  if (ground) { scene.remove(ground); ground.geometry.dispose(); ground.material.dispose(); }
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300, 48, 48), groundMaterial(34, null, biome));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  ground.userData.biome = biome;
+  scene.add(ground);
+}
+
+// ------------------------------------------- ALINHAMENTO CANÔNICO (8 etnias) ----
+// Um representante por família esculpida + gêneros, cores do PRÓPRIO catálogo.
+const LINEUP = [
+  'OP_MALE_VANGUARD',           // pardo · curly
+  'OP_MALE_BREACHER',           // europeu · straight (loiro)
+  'OP_MALE_MEDIC_AFRICAN',      // afro · buzz
+  'OP_MALE_RECON_ASIAN',        // asiatico · straight
+  'OP_MALE_MARKSMAN_MENA',      // arabe · straight + barba
+  'OP_MALE_HUNTER_INDIGENOUS',  // indigena · straight
+  'OP_FEMALE_PILOT_EURO',       // europeu F · long (loira)
+  'OP_FEMALE_VALKYRIE',         // afro F · long
+];
+const byId = new Map(catalog.map((o) => [o.id, o]));
+const squad = [];
+let focus = 0;
+LINEUP.forEach((id, i) => {
+  const entry = byId.get(id);
+  const c = entry.colors;
+  const op = createOperative({ skin: c.skinTone, vest: c.primary, secondary: c.secondary, trim: c.trim, eyes: c.eyes, hair: c.hair, helmet: i % 3 !== 2, variant: id });
+  op.group.position.set((i - (LINEUP.length - 1) / 2) * 1.05, 0, 0);
+  op.group.rotation.y = Math.PI;                       // alinhamento de frente p/ câmera
+  op.group.userData.idx = i;
+  let tris = 0;
+  op.group.traverse((o) => { if (o.isMesh) tris += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; });
+  op.group.userData.tris = tris;
+  scene.add(op.group);
+  squad.push(op);
+});
+
+// --------------------------------------------------- estado da vitrine ----
+const state = {
+  t: 0, speedNorm: 0, air: 0, pitch: 0,
+  cam: 'alinhamento',    // alinhamento | cabeca | perfil
+  expression: 'neutral',
+  biome: 'CIGKV',
+};
+const MOVES = { parado: { speedNorm: 0, air: 0 }, andar: { speedNorm: .35, air: 0 }, correr: { speedNorm: .9, air: 0 } };
+const CAMS = {
+  alinhamento: () => { camera.position.set(0, 1.65, 6.4); camera.lookAt(0, 1.05, 0); },
+  cabeca: () => {
+    const g = squad[focus].group;
+    camera.position.set(g.position.x + .16, 1.72, 1.15);
+    camera.lookAt(g.position.x, 1.66, 0);
+  },
+  perfil: () => {
+    const g = squad[focus].group;
+    camera.position.set(g.position.x + 1.35, 1.6, .85);
+    camera.lookAt(g.position.x, 1.35, 0);
+  },
+};
+
+function applyBiome(id) {
+  const biome = GROUND_BIOMES[id] ? id : 'CIGKV';
+  state.biome = biome;
+  const lp = LIGHTING_PROFILES[biome] ?? LIGHTING_PROFILES.CIGKV;
+  sun.color.set(lp.sunColor); sun.intensity = lp.sunIntensity;
+  sun.shadow.bias = lp.shadowBias; sun.shadow.normalBias = lp.shadowNormalBias;
+  hemi.color.set(lp.hemiSky); hemi.groundColor.set(lp.hemiGround); hemi.intensity = lp.hemiIntensity;
+  fill.color.set(lp.fillColor); fill.intensity = lp.fillIntensity;
+  renderer.toneMappingExposure = lp.exposure;
+  setGround(biome);
+  const p = groundBiomeParams(biome);
+  for (const b of bioRow.children) b.classList.toggle('on', b.dataset.id === biome);
+  bioNote.textContent = `${biome} · ${p.label} · sol ${lp.sunColor} @${lp.sunIntensity} · exp ${lp.exposure}`;
+}
+
+// ------------------------------------------------------------- UI rail ----
+const camRow = document.querySelector('#camRow');
+for (const [label, key] of [['ALINHAMENTO', 'alinhamento'], ['CABEÇA', 'cabeca'], ['PERFIL 3/4', 'perfil']]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.id = key;
+  b.onclick = () => { state.cam = key; for (const o of camRow.children) o.classList.toggle('on', o === b); };
+  if (key === 'alinhamento') b.classList.add('on');
+  camRow.appendChild(b);
+}
+const expRow = document.querySelector('#expRow');
+for (const [label, key] of [['NEUTRO', 'neutral'], ['PISCAR', 'blink'], ['DOR', 'pain'], ['GRITO', 'shout'], ['MORTE', 'death']]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.id = key;
+  b.onclick = () => {
+    state.expression = key;
+    for (const op of squad) op.parts.face.set(key, 1);
+    for (const o of expRow.children) o.classList.toggle('on', o === b);
+  };
+  if (key === 'neutral') b.classList.add('on');
+  expRow.appendChild(b);
+}
+const moRow = document.querySelector('#moRow');
+for (const [label, key] of [['PARADO', 'parado'], ['ANDAR', 'andar'], ['CORRER', 'correr']]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.id = key;
+  b.onclick = () => { Object.assign(state, MOVES[key]); for (const o of moRow.children) o.classList.toggle('on', o === b); };
+  if (key === 'parado') b.classList.add('on');
+  moRow.appendChild(b);
+}
+// seleção de foco (cabeça/perfil) com o cânone no readout
+const opRow = document.querySelector('#opRow');
+LINEUP.forEach((id, i) => {
+  const b = document.createElement('button');
+  const e = byId.get(id);
+  b.textContent = e.codename.split(' ')[0];
+  b.dataset.id = String(i);
+  b.onclick = () => { focus = i; for (const o of opRow.children) o.classList.toggle('on', +o.dataset.id === i); CAMS[state.cam](); };
+  if (i === focus) b.classList.add('on');
+  opRow.appendChild(b);
+});
+const bioRow = document.querySelector('#bioRow');
+for (const id of Object.keys(GROUND_BIOMES)) {
+  const b = document.createElement('button');
+  b.textContent = id;
+  b.dataset.id = id;
+  b.onclick = () => applyBiome(id);
+  bioRow.appendChild(b);
+}
+
+applyBiome('CIGKV');
+CAMS.alinhamento();
+
+// ------------------------------------------------------------- loop ----
+const readout = document.querySelector('#readout');
+let last = performance.now();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(.05, (performance.now() - last) / 1000); last = performance.now();
+  state.t += dt;
+  squad.forEach((op, i) => {
+    animateOperative(op.parts, {
+      t: state.t + i * .37, phase: state.speedNorm > 0 ? state.t * (7.4 + 2 * state.speedNorm) + i * 1.1 : null,
+      speedNorm: state.speedNorm, air: state.air, pitch: 0,
+      ads: false, crouch: false, knocked: false, dead: false,
+    });
+    if (state.expression !== 'neutral') op.parts.face.set(state.expression, 1);
+  });
+  renderer.render(scene, camera);
+  const e = byId.get(LINEUP[focus]);
+  const canon = squad[focus].parts.head.userData.canon;
+  const sc = ETHNIC_SCULPT[canon.preset];
+  readout.innerHTML =
+    `<b>${e.codename}</b> · ${e.ethnicity}\n` +
+    `etnia esculpida <b>${canon.preset}</b> · gênero ${canon.gender} · cabelo ${canon.style}${canon.beard ? ' · BARBA' : ''}\n` +
+    `nariz w${sc.noseW} · lábios ${sc.lipFull} · zigoma ${sc.cheekH} · mandíbula ${sc.jawW} · olhos sp ${sc.eyeSp}\n` +
+    `expressão <b>${state.expression}</b> · ${squad[focus].group.userData.tris} tris no operativo · alinhamento de 8 em ≤6500`;
+});
+
+// hook p/ evidências automatizadas (mesma família do __f32/__f49)
+window.__f50 = { shot: () => renderer.domElement.toDataURL('image/png'), state, squad, focusRef: () => focus };
+</script>
+</body>
+</html>
