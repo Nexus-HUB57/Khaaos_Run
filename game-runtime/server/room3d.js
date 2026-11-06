@@ -119,6 +119,7 @@ export class MatchRoom3D {
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.scenario = resolveScenario(scenarioId);
+    this.worldXp = (base) => Math.round(base * (this.scenario.xpMultiplier ?? 1));
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
     this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
@@ -1722,9 +1723,9 @@ export class MatchRoom3D {
           this.#emitTo(actor.id, 'knocked', { by: knocker?.name ?? null, kind, knockT: actor.knockT });
           // nocaute dá XP/KRC parcial ao caçador humano
           if (knocker && !knocker.isBot && knocker.id !== actor.id) {
-            knocker.xp += kind === 'headshot' ? 60 : 40;
-            knocker.krc += 5;
-            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: kind === 'headshot' ? 60 : 40, krc: 5 });
+            knocker.xp += this.worldXp(kind === 'headshot' ? 60 : 40);
+            knocker.krc += Math.round(5 * this.scenario.krcMultiplier);
+            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: this.worldXp(kind === 'headshot' ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
           }
         }
         return;
@@ -1752,9 +1753,9 @@ export class MatchRoom3D {
       killer.kills++;
       if (!killer.isBot) {
         const head = eliminationKind === 'headshot';
-        killer.xp += head ? KILL_XP_HEAD : KILL_XP;
-        killer.krc += KILL_KRC;
-        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC, finish: kind === 'bleedout' });
+        killer.xp += this.worldXp(head ? KILL_XP_HEAD : KILL_XP);
+        killer.krc += Math.round(KILL_KRC * this.scenario.krcMultiplier);
+        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: this.worldXp(head ? KILL_XP_HEAD : KILL_XP), krc: Math.round(KILL_KRC * this.scenario.krcMultiplier), finish: kind === 'bleedout' });
       }
       this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: eliminationKind === 'headshot' });
     } else {
@@ -1868,7 +1869,7 @@ export class MatchRoom3D {
     terminal.channelProgress = 0;
     actor.zexChannel = null;
     actor.extracted++;
-    actor.xp += EXTRACT_XP;
+    actor.xp += this.worldXp(EXTRACT_XP);
     if (!actor.isBot) this.#emitTo(actor.id, 'extract', { count: actor.extracted, x: terminal.x, z: terminal.z });
   }
 
