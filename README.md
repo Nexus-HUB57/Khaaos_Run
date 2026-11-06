@@ -339,7 +339,7 @@ O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência 
 
 | Estágio | Identificador | Nome Canônico | Função Primária | Duração-alvo |
 |---------|---------------|---------------|-----------------|--------------|
-| Pré-lançamento | **CIGKV** | Khaaos Ville — Campo de Instrução de Guerra | Treinamento, coleta de dados, campanha de massa | Até 1.000.000 de alistamentos |
+| Pré-lançamento | **CIGKV** | Khaaos Ville — Campo de Instrução de Guerra | Treinamento, coleta de dados, campanha de massa | Batalhas de 3 h; etapa ativa até 1.000.000 de alistamentos |
 | Ciclo 1 | **W1/C1** | Barburhen — Mundo da Destruição | Brutalidade urbana pós-guerra | 7 dias (12 h/dia) |
 | Ciclo 2 | **W2/C2** | Priadus — Floresta da Escuridão | Sanidade sob invisibilidade e neblina | 7 dias |
 | Ciclo 3 | **W3/C3** | Ckesalth — Deserto das Almas Esquecidas | Fragilidade da vaidade / ambiente em extinção | 7 dias |
@@ -363,7 +363,7 @@ O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimens
          ▼              ▼              ▼              ▼
    Protocolo CIGKV   Anel de       Emboscada      Tsunami /
    Ring 3 h          Conflito      Verde          Assassino
-   100 players       10 min        10 min         Silencioso
+   50/100 pendente   10 min        10 min         Silencioso
    Fluxo contínuo    Zona →        Zona →         Zona →
                      Parque        Templo         Prisão
 ```
@@ -393,9 +393,9 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
-- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade 160 m²/jogador (CQB).
-- **Duração**: 3 horas (Ring de Longa Duração).
+- **Capacidade**: pendente de reconciliação editorial: este README especifica 100 operadores por ring; o DOCX oficial `KhaaosRun-Mundos.docx` especifica limite de 50 jogadores para o ring CIGKV. Não tratar a capacidade como validada até a decisão do responsável pelo cânone.
+- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade de 160 m²/jogador (100 operadores) ou 320 m²/jogador (50 jogadores).
+- **Duração oficial**: 3 horas (Ring de Longa Duração). **Divergência de implementação aberta**: `shared/worlds.ts` e `WORLD_MATCH_DURATION_SECONDS` ainda configuram 10 minutos, e o runtime de preview comprime o ring. Não considerar a duração de 3 h implementada/validada até que o MatchFlow e a cadência do Pulso Khaaos sejam reconciliados e testados.
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
 - **Arsenal sem limites de patente**: Recruta pode testar equipamento de nível General — objetivo é coleta de dados de balanceamento.
@@ -415,11 +415,11 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 
 ## Mundos Oficiais (W1–W4)
 
-> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). Contrato de dimensões definido no console (`src/lib/game-constants.ts`, `WorldDef.dimensions` — `areaM2` ≠ `perimeterM` de contorno); o port para `shared/worlds.ts` do repo está no item 1.1 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). O contrato vigente do repositório está em `shared/worlds.ts` (`WORLD_RING_DIMENSIONS`; `areaM2` é distinto do perímetro de contorno), com testes em `tests/official/worlds-dimensions.test.ts`. **Conflito ainda aberto:** o DOCX oficial `KhaaosRun-Mundos.docx` define limite de 50 jogadores para CIGKV, enquanto o README e o contrato de dimensões definem 100; requer decisão editorial antes da validação de capacidade.
 
 | Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
 |------|---------------|--------------|------------------------|----------------------------|-------------|
-| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 m²/jogador | Vila militar murada (`fortified_rectangle`) |
+| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 (100p) / 320 (50p) m²/jogador | Vila militar murada (`fortified_rectangle`) |
 | W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
 | W2/C2 Priadus | 22.000 m² | 220 m × 100 m | 640 m | 220 m²/jogador | Blob orgânico radial (`organic_blob`) |
 | W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
@@ -1207,14 +1207,14 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | 3.7 | Prometheus + Grafana provisioning (auto-config) | P1 | Zero manual setup | ✅ datasources + dashboards |
 | 3.8 | Alpha deploy/verify/backup/restore scripts | P1 | Full deploy automation | ✅ `scripts/alpha/` |
 
-### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) 🟡 CÓDIGO/DADOS IMPLEMENTADOS; VALIDAÇÃO E COMPLIANCE PENDENTES
+### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) 🟡 PROTÓTIPOS VERSIONADOS; FIDELIDADE E VALIDAÇÃO UE5 PENDENTES
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 4.1 | Mapa W1/C1 — Barburhen (100p, seasons Verão/Inverno, Giants Challenge) | P0 | Zone + season system funcional | ✅ `KhaaosBarburhenLevel` (679 linhas) |
-| 4.2 | Mapa W2/C2 — Priadus (75p, aquatic zones, tsunami, nadando Zu) | P0 | Water zones + drowning funcional | ✅ `KhaaosPriadusLevel` (479 linhas) |
-| 4.3 | Mapa W3/C3 — Ckesalth (60p, altitude, thin air, escalando Zu) | P1 | Vertical combat + thin air funcional | ✅ `KhaaosCkesalthLevel` (210 linhas) |
-| 4.4 | Mapa W4/C4 — Arukheea (80p, desert, oasis, sandstorms, areia Zu) | P1 | Heat/oasis/sandstorm funcional | ✅ `KhaaosArukheeaLevel` (315 linhas) |
+| 4.1 | Mapa W1/C1 — Barburhen: cidade pós-guerra, setores urbano/industrial/parque e extração na estação ferroviária | P0 | Anel em direção ao Parque e chuva ácida conforme contrato canônico | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.2 | Mapa W2/C2 — Priadus: floresta/pântano, neblina alucinógena, flora carnívora e jacarés | P0 | Anel no Templo Antigo, perigos e extração no matadouro conforme contrato | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.3 | Mapa W3/C3 — Ckesalth: deserto, resort, vilarejo beduíno, refinaria e fumaça tóxica | P1 | Anel na Vila Sombria, setores e perigos conforme contrato canônico | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.4 | Mapa W4/C4 — Arukheea: ilha isolada, Prisão do Sol da Noite, tsunami e tubarões | P1 | Anel na Prisão e extração final no heliporto da torre | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
 | 4.5 | Ledger atômico para KRC (15 tx types, SHA256, escrow, 1B cap) | P0 | Zero double-spend em stress test | ✅ `KhaaosAtomicLedger` (460 linhas) |
 | 4.6 | Compliance Framework (KYC/AML/BCB/IRPF) | P0 | Legal sign-off ready | ✅ `KhaaosComplianceFramework` (373 linhas) |
 | 4.7 | Economy Bridge (UE5 ↔ Node.js HTTP) | P1 | Transfer/buy/sell funcional | ✅ `EconomyBridge` (428 linhas) |
