@@ -1,0 +1,2 @@
+[eos-live] SKIPPED — EOS_CLIENT_ID/EOS_CLIENT_SECRET ausentes no ambiente (configure os secrets EOS_* e reexecute)
+[eos-live] FALHA: --strict exige credenciais reais

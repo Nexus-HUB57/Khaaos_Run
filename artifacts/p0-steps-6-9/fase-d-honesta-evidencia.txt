@@ -1,0 +1,30 @@
+== eos-live-smoke skip ==
+[eos-live] SKIPPED — EOS_CLIENT_ID/EOS_CLIENT_SECRET ausentes no ambiente (configure os secrets EOS_* e reexecute)
+EOS_LIVE_SMOKE_SKIPPED
+== eos-live-smoke strict (exit 1 esperado) ==
+[eos-live] SKIPPED — EOS_CLIENT_ID/EOS_CLIENT_SECRET ausentes no ambiente (configure os secrets EOS_* e reexecute)
+[eos-live] FALHA: --strict exige credenciais reais
+== /eos/status live ==
+{
+    "mode": "unconfigured",
+    "configured": false,
+    "missing": [
+        "productId",
+        "sandboxId",
+        "deploymentId",
+        "clientId",
+        "clientSecret"
+    ],
+    "sdkVersion": "1.16.0",
+    "subsystems": [
+        "Auth",
+        "Sessions",
+== POST /eos/sessions sem auth ==
+HTTP 403 {"error":"forbidden","permission":"eos:operate"}
+== npm test ==
+ℹ pass 1055
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 13
+ℹ todo 0
+ℹ duration_ms 94504.990024
