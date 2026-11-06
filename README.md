@@ -97,6 +97,7 @@ Documentação e evidências:
 - [Auditoria de gargalos e configuração UE5.8/CI-CD](docs/performance/UE58_PERFORMANCE_AUDIT_2026-11.md)
 - [Manifesto do replay fixo de 10 minutos](scripts/performance/ue58-fixed-replay.json)
 - [Executor do replay e captura Game/Render/GPU](scripts/performance/ue58_fixed_replay.mjs)
+- [Análise detalhada do dry-run, p50/p95 e gates Lumen/Nanite](docs/performance/UE58_FIXED_REPLAY_DRY_RUN_2026-11.md)
 - [Roteiro de apresentação dos resultados](docs/performance/ROTEIRO_APRESENTACAO_UE58_LIVE_ACTION.md)
 - [Resultado JSON do stress dos cinco mundos](artifacts/performance/ue58-all-worlds-stress.json)
 - [Workflow CI/CD UE5.8](.github/workflows/ue58-release-cd.yml)
@@ -119,6 +120,8 @@ Sem `UE5_ROOT` ou `UnrealEditor-Cmd`, `--run-engine` registra `skipped_no_engine
 O workflow [`UE5.8 Release CI/CD`](.github/workflows/ue58-release-cd.yml) executa preflight, testes do runtime, stress dos cinco mundos, empacotamento reprodutível e publicação controlada. O build/cook/pak real é habilitado quando `run_engine=true` e `UE58_ENABLED=true` em um runner com as labels `self-hosted`, `linux`, `ue5.8` e `x64`.
 
 Para o soak gráfico, habilite também `run_graphics_soak=true`. O job usa um runner com GPU e labels `self-hosted`, `linux`, `gpu`, `ue5.8` e `x64`, executa o replay fixo por 10 minutos com Lumen e Virtual Shadow Maps e publica as métricas de Game Thread, Render Thread e GPU. A variável protegida `UE5_REPLAY_COMMAND` deve apontar para o AutomationTest cookado.
+
+O modo `--dry-run --simulate-metrics` valida o contrato e o parser com métricas sintéticas. Ele reporta `configurationPass=true`, mas mantém `realRunnerPass=false` enquanto não houver amostras específicas de custo Lumen e fallback Nanite capturadas no runner UE5.8.
 
 Configure `UE5_ROOT` e `UE5_WORLD_STRESS_COMMAND` como variáveis do GitHub Actions. A promoção para staging ou produção exige o secret protegido `KHAAOS_DEPLOY_COMMAND`, que recebe `KHAAOS_PACKAGE` e `KHAAOS_ENVIRONMENT`.
 

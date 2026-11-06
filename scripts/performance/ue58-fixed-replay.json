@@ -29,10 +29,25 @@
     "shaderPipelineCache": true
   },
   "acceptance": {
-    "clientRenderP95Ms": 16.67,
     "serverTickP95Ms": 33.33,
+    "gameThreadP95Ms": 8.33,
+    "renderThreadP95Ms": 8.33,
+    "clientRenderP95Ms": 16.67,
+    "gpuP95Ms": 16.67,
     "maxMemoryGrowthMb": 512,
-    "persistentHitchMs": 100
+    "persistentHitchMs": 100,
+    "lumen": {
+      "enabled": true,
+      "requiredCapture": "gpuVisualizer",
+      "maxGpuP95Ms": 8.33,
+      "status": "configured_until_real_runner_capture"
+    },
+    "nanite": {
+      "enabled": true,
+      "requiredCapture": "statUnitGraph",
+      "maxFallbackPercent": 5,
+      "status": "configured_until_real_runner_capture"
+    }
   },
   "notes": [
     "Este arquivo define o replay e o perfil; o runner UE5.8 deve apontar UE5_REPLAY_COMMAND para o AutomationTest cookado.",
