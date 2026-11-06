@@ -189,7 +189,7 @@ const camRow = document.querySelector('#camRow');
 for (const [label, key] of [['ALINHAMENTO', 'alinhamento'], ['CABEÇA', 'cabeca'], ['PERFIL 3/4', 'perfil']]) {
   const b = document.createElement('button');
   b.textContent = label; b.dataset.id = key;
-  b.onclick = () => { state.cam = key; for (const o of camRow.children) o.classList.toggle('on', o === b); };
+  b.onclick = () => { state.cam = key; for (const o of camRow.children) o.classList.toggle('on', o === b); CAMS[key](); };
   if (key === 'alinhamento') b.classList.add('on');
   camRow.appendChild(b);
 }

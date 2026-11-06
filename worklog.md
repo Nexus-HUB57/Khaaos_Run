@@ -1177,3 +1177,19 @@ Work Log:
 Stage Summary:
 - Os 33 operativos agora EXPRESSAM o cânone: crânio esculpido por família étnica com semblante 3D completo (olhos que piscam, sobrancelhas/lábios/nariz geométricos), cabelo/barba por estilo canônico, proporção humana ~8 cabeças e capacete que deixa o rosto À LUZ — o rig facial F12 ganhou geometria viva sem quebrar 1 contrato de pivôs/API/orçamento
 - Estado: base 16d1b35 · personagem 89/89 · build OK · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)
+
+## Task ID: 48
+**Agent:** Main
+**Task:** "prosseguir e validar end to end" — validação cross-session da Fase 50 (personagens canônicos) + fix de bug de câmera achado na vitrine f50
+
+Work Log:
+- RECUPERAÇÃO: sandbox reciclado deixou o repo no snapshot 2035a66 (Fase 26) com 891 dirty mode-only — reset --hard para origin/main 45f35f4 (Fase 50 + docs #290) e npm install re-feito (tweetnacl etc. faltavam; 19 "fails" de suíte eram ENV, não regressão — pós-install 1091 testes 0 fail)
+- AUDITORIA DO KIT: heads3d.js (386 linhas) revisado — ETHNIC_SCULPT 8 famílias com dimorfismo, CANON 33 ids congelado, sculptSkullGeo (glabella/zigoma/sub-malar/mandíbula/mento/flat), olhos 3D (esclera/íris/pupila/pálpebra-piscar), nariz ponte/asas, lábios com volume, cabelo 5 estilos, barba por viés, capacete calota aberta; entities3d.js integra via buildCanonicalHead drop-in (pivôs/quadril .84, cabeça 1.68 intactos, rig facial re-exportado)
+- TESTES: character-canon 7/7 ✔ · suíte total 1091/1091 ✔ (incl. server3d/stress/ws que dependiam de node_modules) · vite build OK (3.1 s) + showcases 9 páginas OK
+- BUG ACHADO E CORRIGIDO (scripts/f50-showcase.html): botões de câmera (ALINHAMENTO/CABEÇA/PERFIL) só setavam state.cam — NUNCA chamavam CAMS[key](); a câmera só movia se o usuário clicasse num operativo depois. Fix: CAMS[key]() no onclick (1 linha) — verificado no browser: 1 clique em CABEÇA agora dá o close do semblante direto
+- VALIDAÇÃO BROWSER end-to-end: preview localhost:81 → Next 3000 → iframe → boot W4 ARUKHEEA TPS (13 vivos, ring/minimap/HUD vivos) + vitrine f50: alinhamento de 8 etnias, closes KHAEL (pardo curly barba, grito c/ boca aberta), NYRA (afro-F, lábios 1.55, olhos violeta), TARIQ (afro buzz, boina verde, olhos esmeralda), expressões NEUTRO/GRITO ao vivo, orçamento 6180–6380 tris ≤6500 no readout
+- EVIDÊNCIAS: +2 artifacts (f50-showcase-cam-fix-khael.png, f50-showcase-nyra-close.png)
+
+Stage Summary:
+- A Fase 50 está validada de ponta a ponta em sessão nova (repo → build → testes → browser): os semblantes étnicos esculpidos lêem como personagens CoD-style em close e in-game, e a vitrine f50 ganhou o fix de câmera que faltava para inspecionar o semblante com 1 clique
+- Estado: base 45f35f4 · suíte 1091/0 fail · build OK · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)
