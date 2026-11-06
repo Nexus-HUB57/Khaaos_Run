@@ -78,6 +78,7 @@ test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
   room.start('p1', 'belt');
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
+  const krcBefore = p1.krc;
   // coloca p2 a 4m a leste de p1
   p2.x = p1.x + 4; p2.z = p1.z; p2.armor = 0;
   // yaw que aponta p1 para p2: frente (-sin, -cos) = (1, 0) → yaw = -PI/2
@@ -91,9 +92,12 @@ test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
   assert.equal(p2.alive, false, 'p2 deve ser eliminado');
   assert.equal(p1.kills, 1);
   assert.ok(p1.xp >= KILL_XP);
-  assert.ok(p1.krc >= 250 + KILL_KRC);
+  const expectedKnockKrc = Math.round(5 * room.scenario.krcMultiplier);
+  const expectedKillKrc = Math.round(KILL_KRC * room.scenario.krcMultiplier);
+  assert.equal(p1.krc, krcBefore + expectedKnockKrc + expectedKillKrc);
   const p1Events = room.drainEvents('p1');
-  assert.ok(p1Events.some((e) => e.type === 'kill' && e.target === 'JOGADOR-2'));
+  assert.ok(p1Events.some((e) => e.type === 'knock' && e.target === 'JOGADOR-2' && e.krc === expectedKnockKrc));
+  assert.ok(p1Events.some((e) => e.type === 'kill' && e.target === 'JOGADOR-2' && e.krc === expectedKillKrc));
   const p3Events = room.drainEvents('p3');
   assert.ok(p3Events.some((e) => e.type === 'killfeed' && e.victim === 'JOGADOR-2'));
   const p2Events = room.drainEvents('p2');
@@ -163,6 +167,51 @@ test('room3d: coleta de loot e extração em terminal ZEX', () => {
   assert.equal(p.extracted, 1);
   assert.equal(p.xp, xp0 + EXTRACT_XP);
   assert.ok(room.drainEvents('p1').some((e) => e.type === 'extract'));
+});
+
+test('room3d: MP-ZEX-10 porta vence loot e terminal quando os alcances empatam', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  const item = room.loot.find((i) => i.active), door = room.doors[0];
+  assert.ok(item && door, 'fixture precisa de loot e porta');
+  for (const i of room.loot) i.active = false;
+  for (const d of room.doors) d.destroyed = true;
+  item.active = true;
+  door.destroyed = false;
+  // Sobreposição efêmera em memória para exercitar os empates; layout canônico não é alterado.
+  p.x = t.x; p.z = t.z; p.y = t.y ?? 0;
+  item.x = door.x = t.x; item.z = door.z = t.z; item.y = p.y; door.yMin = p.y;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+
+  assert.equal(t.active, true);
+  assert.equal(p.zexChannel, null);
+  assert.equal(item.active, true, 'a porta tem prioridade sobre o loot');
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'doorToggle'));
+});
+
+test('room3d: MP-ZEX-10 loot vence terminal quando os alcances empatam', () => {
+  const room = makeRoom({ humans: 2, botFill: 0 });
+  room.start('p1', 'belt');
+  const p = room.humans.get('p1'), t = room.terminals[0];
+  const item = room.loot.find((i) => i.active);
+  assert.ok(item, 'fixture precisa de loot');
+  for (const i of room.loot) i.active = false;
+  for (const d of room.doors) d.destroyed = true;
+  item.active = true;
+  // Sobreposição efêmera em memória para exercitar os empates; layout canônico não é alterado.
+  p.x = t.x; p.z = t.z; p.y = t.y ?? 0;
+  item.x = t.x; item.z = t.z; item.y = p.y;
+
+  room.input('p1', blankInput({ seq: 1, interact: true }));
+  room.tick(DT);
+
+  assert.equal(item.active, false);
+  assert.equal(t.active, true);
+  assert.equal(p.zexChannel, null);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'loot'));
 });
 
 test('room3d: terminal ZEX fica reservado, cancela por movimento e pode ser retomado', () => {
