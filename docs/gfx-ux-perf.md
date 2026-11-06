@@ -58,6 +58,35 @@ agent-browser screenshot --full <caminho-absoluto>/console-poj-full.png
     juiz kr_admin`.
   - Arquivos: `artifacts/p0-steps-6-9/console-poj.png` e `console-poj-full.png`.
 
+### Nível 2-b — jogo 3D in-game, rota `/` do vite (executado em 2026-11-05: PASS)
+
+O bundle multi-page (`vite.config.js`: `/` → 3D, `/classic.html` → 2D)
+permite validar o HUD/jogo em navegador real sem o console do Marechal:
+
+```bash
+npx vite build                                     # 2,6 s (aviso de chunk >500 kB é esperado)
+npx vite preview --port 8830 --strictPort &        # escuta [::1] — usar localhost
+agent-browser open http://localhost:8830/
+# Protocolo de Inserção → escolher teatro/operativo → "SALTAR NO CAOS"
+agent-browser eval "JSON.stringify({canvas: !!document.querySelector('canvas'),
+  seasonal: document.querySelectorAll('.seasonal').length,
+  minimapa: !!document.querySelector('[class*=minimap],[class*=radar]'),
+  crosshair: !!document.querySelector('[class*=cross],[id*=cross]')})"
+agent-browser screenshot <abs>/game3d-ingame-hud.png
+```
+
+- **Evidência registrada (2026-11-05)**: in-game `CIGKV-3D-01` — ring em
+  operação `09:59`, `13 vivos`, pulso `00`, radar com **tint sazonal ativo**
+  (`.seasonal` ×1, F39/F40), ordem `DOMINE O RING`, `Pistola 9MM 15/45`,
+  itens consumíveis, feed `ZU`/`Marechal`, canvas WebGL vivo.
+  - Arquivos: `artifacts/p0-steps-6-9/game3d-cigkv-hud.png`,
+    `game3d-cigkv-full.png` (Protocolo de Inserção) e
+    `game3d-ingame-hud.png` (in-game).
+- No UE5.8 host-side (Nível 3), os equivalentes web já integrados no main
+  são: `grassChunkTier` full/sparse/impostor/hidden + fade (F34/F37),
+  arsenal sem soquetes SG-12/MG-6 (F36) e HUD sazonal por aura
+  (`aura3d.js`, F36–F40) — o Nível 3 repete a verificação com engine real.
+
 ## Nível 3 — gráficos de engine (host licenciado UE5.8)
 
 Itens da frente gráfica/UX que o navegador web não cobre — validar em PIE no
