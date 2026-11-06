@@ -152,3 +152,21 @@ Configuração exigida no **GitHub Environment `staging`** (adicionar os valores
 **Validação local em `main` — 2026-11-06:** MP-ZEX-08 passou com um servidor local em `localhost` e as contas dev locais fictícias: A iniciou o canal, a queda liberou o terminal, B reservou-o e A retomou sem XP/extração. Isso não é resultado de staging; o playtest remoto continua pendente até o Environment estar configurado e o workflow concluir com sucesso.
 
 **Suíte da base `main` (`8b9044c`) nesta rodada:** 1.077 aprovados, 1 falha, 13 ignorados. A falha reproduzida isoladamente é o teste preexistente `room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos`, na asserção `p1.krc >= 250 + KILL_KRC`; nenhum código de economia foi alterado nesta tarefa. Registrar e tratar essa falha separadamente, sem classificá-la como falha do harness ZEX.
+
+
+### Retomada local após auditoria KRC — 2026-11-06
+
+**Correção da suíte KRC (base `7e30b37`, branch local `fix/test-krc-scenario-reward`):** a falha era uma asserção desatualizada, não um erro no crédito de produção. No cenário CIGKV, `krcMultiplier = 0,5`; com saldo inicial 250, a rodada concede 3 KRC pelo nocaute (`round(5 × 0,5)`) e 8 pelo abate final (`round(15 × 0,5)`), terminando em 261. O teste antes exigia pelo menos 265. A asserção agora valida os dois valores escalados, o saldo exato e os payloads `knock`/`kill`; nenhum código ou saldo de economia foi alterado.
+
+**Suíte completa local:** `npm test` — 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. O teste KRC passou isoladamente; a suíte `room3d.test.js` passou 30/30 antes da adição das duas regressões MP-ZEX-10, que também passaram. `node --check test/room3d.test.js` e `git diff --check` passaram.
+
+**MP-ZEX-09 — validação local parcial:** passaram cinco verificações automatizadas: RTT com clamp, lag compensation (acerto na posição rebobinada e rejeição da posição atual), cálculo adaptativo de delay e jitter de chegada sintético no `NetClient3D`. Isso valida componentes de netcode, mas **não** aplica RTT de 100–150 ms nem perda de pacotes a uma partida ZEX real; o cenário de rede degradada permanece pendente em ambiente isolado.
+
+**MP-ZEX-10 — prioridade de interação local:** adicionadas duas regressões com sobreposição temporária apenas em memória: porta vence loot e terminal em empate; loot vence terminal em empate. Ambas passaram e não alteram geometria canônica. No layout CIGKV da seed `TESTE-3D`, as distâncias mínimas observadas dos terminais foram 48,99 m até uma porta e 34,59 m até loot ativo, portanto essa fixture não oferece sobreposição espacial natural. Observacionalmente, disparar, recarregar e usar medkit não cancelaram o canal; como o contrato de produto ainda não define essas ações, o comportamento fica registrado sem ser aprovado ou reprovado.
+
+**MP-ZEX-11 — validação local parcial:** passou o teste de controles touch/joystick do HUD. Ele valida eventos touch e joystick em DOM simulado; não valida o botão ZEX em um dispositivo/browser touch, a legibilidade visual durante o canal nem uma sessão com clientes desktop e mobile mistos.
+
+**Limite da rodada:** secrets de `staging` não foram configurados e o usuário optou por prosseguir localmente; nenhum endpoint remoto foi acessado. MP-ZEX-08 continua pendente de execução em staging e permanece gate para aprovação multiplayer real. Os resultados desta seção são locais/sintéticos e não substituem os cenários reais MP-ZEX-08/09/11.
+
+
+**Atualização do baseline:** a falha KRC descrita na referência imediatamente anterior foi resolvida no teste local conforme esta auditoria; a contagem posterior é 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. As alterações permanecem apenas na branch de trabalho local, sem commit ou publicação.
