@@ -38,10 +38,35 @@
 - Branch `feat/m4-runner-eos-unblock` (labels `ue5` no bootstrap + este
   checklist): merged no main (`8a2a4e3` contido em `b55b0b5`); branch remota
   removida por higiene (2026-11-05).
-- O protocolo `docs/gfx-ux-perf.md` (validação de gráficos/UX em navegador
-  real) citado em sessão anterior **não está no main** — recriar seguindo o
-  padrão executável de `game-runtime/scripts/fase12-browser-check.sh`
-  (`agent-browser open → snapshot → click → text`, evidências salvas).
+
+### Execução de 2026-11-05 — passos 6–9 do §0.1 (lados executáveis do sandbox)
+
+- **Passo 6 ✅**: `UE5_WORLD_STRESS_COMMAND` criada via API com o valor
+  canônico do `bootstrap_ue58_runner.sh` (`UnrealEditor-Cmd … Automation
+  RunTests Khaaos.Worlds.Stress; Quit` + `-testexit="Automation Test Queue
+  Finished" -log`). Nota de API: `PUT /actions/variables/:name` retorna 404
+  para variável inexistente — usar `POST /actions/variables` (201) para
+  criar. Gate confirmado no workflow: `ue-build` exige
+  `inputs.run_engine == true && vars.UE58_ENABLED == 'true'`, logo a
+  variável pode existir sem risco de fila (só roda em dispatch manual).
+- **Passo 7 (Fase D sem credenciais Epic) ✅**: `eos-live-smoke.mjs` sem
+  creds → `EOS_LIVE_SMOKE_SKIPPED` (exit 0) e com `--strict` → exit 1
+  (go-live estrito, por design); `game-runtime` `npm test` → **1055 pass /
+  0 fail / 13 skipped** (regressão D-6 do mock confinado); `/eos/status` ao
+  vivo honesto (`mode:'unconfigured'`, `missing[]` com os 5 campos,
+  sdk 1.16.0); `POST /eos/sessions` sem auth → 403 `eos:operate`.
+  Evidências consolidadas em `artifacts/p0-steps-6-9/`.
+- **Passo 8 ✅ (web)**: `fase12-browser-check.sh` → `F12_BROWSER_OK`
+  (exit 0); sessão manual `agent-browser` com DOM evidenciado (6 seções,
+  12 comandos, Banco da Corte com caso `cm-2` pendente) e screenshots em
+  `artifacts/p0-steps-6-9/console-poj*.png`. Protocolo formalizado em
+  `docs/gfx-ux-perf.md` (neste PR) — substitui a versão da sessão anterior
+  que nunca foi commitada. O item de engine (grama impostor, catálogo
+  mítico, HUD por aura) segue no §Nível 3 do protocolo, para o host
+  licenciado.
+- **Passo 9 ⏳ host-side**: docker ausente no ambiente de automação
+  (`command not found`) — Cloud DDC/Lore permanece tarefa de host
+  autorizado (login Epic + `df -h` antes do pull).
 
 ## 0.1 Ordem de execução das pendências humanas (P0 → fechamento do M4)
 
