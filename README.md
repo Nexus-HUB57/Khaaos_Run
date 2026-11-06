@@ -13,6 +13,7 @@
 
 - [Status do Projeto](#status-do-projeto)
 - [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
+- [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
 - [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
@@ -102,6 +103,18 @@ python3 scripts/ue5/prepare_cigkv_vertical_slice.py
 ```
 
 O job `recipe` do workflow pode terminar como `blocked_missing_source` quando uma fonte não estiver no checkout, mas ainda preserva o relatório e não fabrica evidência. A etapa `engine` só é habilitada manualmente com `run_engine=true`, `UE58_ENABLED=true` e um runner com labels `self-hosted`, `linux`, `gpu`, `ue5.8` e `x64`. Nesse runner, o Blender normaliza os arquivos para FBX; em seguida o Editor importa, aplica o retarget/material master e captura as oito evidências de screenshot. Até essa execução, `.uasset`, `.umap`, métricas de GPU e screenshots permanecem explicitamente como **não medidos** no sandbox.
+
+---
+
+## Qualidade de assets 3D CIGKV
+
+O ciclo pós-PR adiciona uma auditoria engine-less para distinguir fontes de prova de personagens de produção. O auditor mede contêiner, vértices, triângulos, UVs, materiais, texturas, skin/controllers e animações expostas pelo formato; fontes abaixo dos gates são classificadas como `proxy_source`, sem promoção automática para qualidade AAA.
+
+- [Auditoria automatizada de assets](scripts/ue5/audit_cigkv_character_assets.py)
+- [Contrato de qualidade e próximos gates de modelagem](docs/CIGKV_CHARACTER_ASSET_QUALITY.md)
+- [Workflow que publica o relatório](.github/workflows/cigkv-vertical-slice.yml)
+
+O resultado engine-less não substitui a revisão de silhueta, deformação, clipping, cabelo, roupa, sockets, LOD, PBR, Lumen, Nanite ou GPU. Esses itens continuam exigindo Blender 4.x e um runner UE5.8 licenciado.
 
 ---
 

@@ -30,7 +30,13 @@ jobs:
         run: |
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
-          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5_editor/cigkv_vertical_slice.py
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5_editor/cigkv_vertical_slice.py
+      - name: Audit source mesh quality and provenance
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          python3 scripts/ue5/audit_cigkv_character_assets.py \
+            --output artifacts/cigkv-vertical-slice/asset-quality-report.json
+          test -s artifacts/cigkv-vertical-slice/asset-quality-report.json
       - name: Prepare engine-less report
         run: |
           mkdir -p artifacts/cigkv-vertical-slice
@@ -43,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cigkv-vertical-slice-recipe
-          path: artifacts/cigkv-vertical-slice/prepare-report.json
+          path: artifacts/cigkv-vertical-slice/*-report.json
 
   engine:
     name: UE5.8 import retarget and screenshots
