@@ -1211,3 +1211,20 @@ Work Log:
 Stage Summary:
 - Tudo o que era executável fora do host licenciado está fechado e evidenciado: variáveis de CI completas, Fase D honesta verde, validação em navegador real estendida ao jogo 3D in-game (HUD sazonal ativo) e protocolo gfx-ux-perf no main — restam SOMENTE os passos 1–5 humanos (revogar/reemitir tokens, portal Epic A1–A9 com EULA 404→200, 7 secrets EOS_*, gate anti-placeholder, runner UE5.8 ≥250 GB); com o runner registrado basta despachar m4-ue5-eos-acceptance.yml com run_engine=true
 - Estado: base a1cfd40 · main CI 0 fail · root 557/0 · game-runtime 1055/0/13 · bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*; 0 runners)
+
+## Task ID: 50
+**Agent:** Main
+**Task:** "prosseguir end to end" — Fase 51: SILHUETA TÁTICA (corpo) — continuação da diretiva "avatares robotizados" (Fase 50 resolveu o semblante; o corpo faltava)
+
+Work Log:
+- AUDITORIA DA FILA: os 4 itens pendentes antigos (killfeed/dano sazonal, scrub Barburhen em bandas, minimapa tint sazonal, sparse fade) JÁ mergeados pelos devs paralelos (F38/F39/F40) — confirmado por símbolo (killfeedVars/damageVars, scrubShadowBand, MINIMAP_SEASON_TINTS, grassSparseCount) e killfeed visto ao vivo no W4 ("ZHEERS-09 abatido"); fila zerada
+- DIAGNÓSTICO DO CORPO: Fase 9/16 já tinha V-taper cônico (peito .27→.225, seção elíptica .64), clavículas/trapézio, membros em cápsula — mas o colete-LAJE softBox(.5×.42×.33) cobria o cone torácico INTEIRO (a silhueta voltava a ler caixa); pads de ombro .15 e luvas .12 robusteciam os braços
+- ORÇAMENTO: auditoria por operativa (scripts/audit-f51-tris.mjs, 33 ids) — max 6488 (SORO), headroom APENAS 12 tris; medição de primitivas: RoundedBoxGeometry tem custo FIXO 108 tris (trocar 1 laje por 2 placas = +108 — inviável); plano budget-NEUTRO aplicado
+- FASE 51 (entities3d.js, só transformações de malha — pivôs/quadril .84/ombros/cabeça 1.68 e API intactos): colete .5×.42×.33→.40×.36×.28 (o cone volta a ler), pouches ±.16→±.125 e z -.185→-.15, radio -.19→-.145, zipper -.17→-.145, ribas ±.265→±.215 (abraçam o painel), ALÇAS de carrier sobre os ombros (+24 tris, 2 boxes — frontal↔costas lêem como colete VESTIDO), pad de ombro .15→.115 (deltoide lê), luva .12→.105, bedroll 8→6 seg, bico da bota 8×6→7×5 (-52) — NET -28 tris: SORO 6488→6456, gate ≤6500 verde c/ margem 44
+- VALIDAÇÃO: suíte total 1091/0 fail · character-canon 35/35 (canon+realism-f41+blendshapes) · build OK 5.8 s + showcases · browser: f50-vitrine com as silhuetas novas (KHAEL 6348 tris no readout, alças visíveis, camo do peito lê acima/ao lado do carrier) + IN-GAME W4 TPS (KHAEL correndo c/ pistola — proporção ~8 cabeças, colete slim, braços dobrados na arma)
+- EVIDÊNCIAS: +2 artifacts (f51-alinhamento-slim-vest.png, f51-ingame-w4-tps.png)
+
+Stage Summary:
+- O corpo acompanhou o semblante: a silhueta tática lê atlética (V-taper visível, alças de carrier, pads proporcionais) no MESMO orçamento de tris — a diretiva "robotizados" está fechada nas duas metades (Fase 50 cabeça/Fase 51 corpo) sem tocar 1 contrato de animação
+- Estado: base 7c1958d · suíte 1091/0 fail · gate ≤6500 verde (max 6456) · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)
+

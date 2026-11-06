@@ -413,14 +413,23 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const clavR = ball(.065, camo, .18, .24, 0, 8, 6, 1.15, .8, .9);
   const traps = ball(.085, camo, 0, .3, .025, 8, 6, 1.3, .75, .9);
   torso.add(clavL, clavR, traps);
-  const vestMesh = softBox(.5, .42, .33, vestM, .045, 0, .06, .01); // plate carrier anatômico, sem quinas de bloco
+  // Fase 51 — plate carrier ESCULPIDO: o colete encolhe p/ o painel do peitoral
+  // (não mais laje cobrindo o V-taper) — o cone torácico (.54 no peito → .45 na
+  // cintura) volta a ler na silhueta; pouches/radio/ribas abraçam o painel novo
+  const vestMesh = softBox(.4, .36, .28, vestM, .045, 0, .05, .01);
   torso.add(vestMesh);
   // pouches frontais de carregador (3) + porta-radio
-  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.04, -.185));
-  torso.add(box(.09, .13, .05, gearM, -.19, .12, -.17)); // radio
-  torso.add(cyl(.008, .008, .16, metalM, -.19, .22, -.16, 4)); // antena do radio
+  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .125, -.04, -.15));
+  torso.add(box(.09, .13, .05, gearM, -.145, .12, -.135)); // radio
+  torso.add(cyl(.008, .008, .16, metalM, -.145, .22, -.125, 4)); // antena do radio
   // zipper + fivela central
-  torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
+  torso.add(box(.03, .4, .02, gearM2, 0, .06, -.145));
+  // Fase 51 — alças do carrier sobre os ombros (frontal↔costas lêem como colete
+  // VESTIDO, não caixa flutuante); pago com o bedroll 8→6 e o bico da bota 8x6→7x5
+  const strapF = box(.07, .05, .3, vestDarkM, -.13, .28, -.02);
+  const strapB = box(.07, .05, .3, vestDarkM, .13, .28, -.02);
+  strapF.userData.basePack = strapB.userData.basePack = true;
+  torso.add(strapF, strapB);
   // mochila tática: corpo + straps + bedroll + faixa de equipe (BASE — a
   // Fase 28 substitui por níveis Nv1-3 quando o ator equipa mochila)
   const pack = softBox(.38, .42, .17, gearM2, .035, 0, .02, .22);
@@ -429,15 +438,15 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const packLid = box(.3, .05, .19, vestDarkM, 0, .12, .23);
   packLid.userData.basePack = true;
   torso.add(packLid);
-  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 8);
+  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 6);
   bedroll.userData.basePack = true;
   torso.add(bedroll);
   const teamStripe = box(.34, .06, .02, trimM, 0, -.08, .305);
   teamStripe.userData.basePack = true;
   torso.add(teamStripe);
-  // costelas laterais do colete
-  torso.add(box(.03, .3, .28, vestDarkM, -.265, .06, 0));
-  torso.add(box(.03, .3, .28, vestDarkM, .265, .06, 0));
+  // costelas laterais do colete (Fase 51: abraçam o painel estreito)
+  torso.add(box(.03, .3, .22, vestDarkM, -.215, .06, 0));
+  torso.add(box(.03, .3, .22, vestDarkM, .215, .06, 0));
   g.add(torso);
 
   // ---- CABEÇA (grupo — pitch de mira) — Fase 50: KIT CANÔNICO ----
@@ -466,7 +475,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const pad = box(.15, .1, .17, gearM, 0, -.06, -.005);
     const foot = new THREE.Group(); foot.position.set(0, -.31, .01);
     const boot = softBox(.17, .12, .28, bootM, .028, 0, -.12, .05);
-    const toe = ball(.085, bootM, 0, -.13, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
+    const toe = ball(.085, bootM, 0, -.13, -.07, 7, 5, 1, .7, 1.05); // bico arredondado (F51: 7×5 — orçamento)
     const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.19, .05);
     // F41 — cadarço de combate no peito do pé + colarinho do cano (bota lê como
     // calçado REAL em close, não como tijolo preto)
@@ -483,12 +492,12 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const deltoid = ball(.09, camo, 0, .01, 0, 10, 8, 1.1, .95, 1); // ombro curvo
     const biceps = ball(.05, camo, 0, -.09, -.015, 8, 6, .95, 1.2, .95); // Fase 16: volume do bíceps
     const upper = capsule(.062, .2, camo, 0, -.16, 0);
-    const pad = box(.15, .09, .16, gearM, 0, -.25, 0);
+    const pad = box(.115, .075, .125, gearM, 0, -.25, 0); // F51: menor — deltoide lê
     const stripe = box(.13, .05, .14, trimM, 0, -.05, 0);
     const elbow = new THREE.Group(); elbow.position.set(0, -.31, 0);
     const elbowCap = ball(.055, gearM, 0, -.01, .002, 8, 6);
     const lower = capsule(.054, .18, camo, 0, -.15, 0);
-    const glove = softBox(.12, .12, .13, gearM, .026, 0, -.31, 0);
+    const glove = softBox(.105, .11, .12, gearM, .026, 0, -.31, 0);
     const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
     const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
     // F41 — dedos enrolando o grip + polegar oposto: a mão em 3ª pessoa lê como
