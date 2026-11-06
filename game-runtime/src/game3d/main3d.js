@@ -1471,7 +1471,10 @@ export class Game3D {
           this.hud.killfeed(e.killer, e.victim, !!e.head, false, !!e.knock);
           break;
         case 'botKill':
-          this.hud.killfeed('RING', e.target, false, false);
+          // Wart B — a fonte letal chega em e.kind: morte pela ANOMALIA Khaaos
+          // (quantum, sim3d #drainQuantumShield) não é "RING" — o HUD nomeia a
+          // fonte real (mesmo rótulo do servidor: shared/worldKillers.ts).
+          this.hud.killfeed(e.kind === 'quantum' ? 'ANOMALIA' : 'RING', e.target, false, false);
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
