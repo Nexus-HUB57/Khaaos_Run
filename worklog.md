@@ -1193,3 +1193,21 @@ Work Log:
 Stage Summary:
 - A Fase 50 está validada de ponta a ponta em sessão nova (repo → build → testes → browser): os semblantes étnicos esculpidos lêem como personagens CoD-style em close e in-game, e a vitrine f50 ganhou o fix de câmera que faltava para inspecionar o semblante com 1 clique
 - Estado: base 45f35f4 · suíte 1091/0 fail · build OK · bloqueios humanos inalterados (0 self-hosted runners; EOS_*/UE_CONTAINER_PAT; credenciais Stripe test; MP-ZEX-08/09/10/11)
+
+## Task ID: 49
+**Agent:** Main
+**Task:** "prosseguir end to end / Validar / Criar PR e atualizar repo" — desbloqueio P0 dos passos 6–9 do checklist EOS + validação integral (main, root, browser real web+3D) + protocolo gfx-ux-perf formalizado
+
+Work Log:
+- PR #288 (re-auditoria P0 das pendências humanas + ordem de execução §0.1 em 9 passos, CI 27/3/0) e PR #291 (execução dos passos 6–9 com evidências, CI 27/3/0) MERGED; branches remotas removidas por higiene; branch feat/m4-runner-eos-unblock (já contida no main) também removida
+- PASSO 6: UE5_WORLD_STRESS_COMMAND criada via API com o valor canônico do bootstrap (UnrealEditor-Cmd + Automation RunTests Khaaos.Worlds.Stress + -testexit "Automation Test Queue Finished") — LIÇÃO DE API: PUT /actions/variables/:name retorna 404 para variável inexistente, usar POST /actions/variables (201); gate verificado no ue58-release-cd.yml: ue-build exige inputs.run_engine==true && vars.UE58_ENABLED — trio de variáveis completo (UE58_ENABLED/UE5_ROOT/UE5_WORLD_STRESS_COMMAND) sem risco de fila
+- PASSO 7 (Fase D sem credenciais Epic): eos-live-smoke SKIPPED limpo (exit 0) e --strict exit 1 (go-live estrito por design) · game-runtime npm test 1055 pass / 0 fail / 13 skipped · /eos/status ao vivo honesto (unconfigured, missing[] 5 campos, sdk 1.16.0) · POST /eos/sessions sem auth → 403 eos:operate
+- PASSO 8 (navegador real): fase12-browser-check.sh → F12_BROWSER_OK (exit 0); sessão agente-browser com DOM evidenciado (6 seções, 12 comandos, Banco da Corte cm-2 pendente) + screenshots; docs/gfx-ux-perf.md RECRIADO no main (versão da sessão anterior nunca foi commitada) com 3 níveis (smoke canônico / sessão manual / engine host-side)
+- PASSO 9: docker ausente no sandbox (command not found) — Cloud DDC/Lore formalizado host-side (login Epic + df -h antes do pull)
+- FRENTE GRÁFICA/UX CONFIRMADA NO MAIN (F34–F40): grama com grassChunkTier full/sparse/impostor/hidden + fade suave (impostor = 2 quads cruzados por chunk no horizonte, hidden custo 0); Shotgun Breach SG-12 + LMG Skeetw MG-6 SEM soquetes no arsenal (paridade com components_dev/weapons); HUD sazonal por aura (aura3d: hudAuraFor/seasonIndexFor/minimapTintFor) — item 1–3 da instrução anteriores já integrados por PRs paralelos, com testes próprios (vegetation3d.test.js, aura3d.test.js, graphicsdetail.test.js)
+- VALIDAÇÃO FINAL (esta sessão): main adfc16a CI 22 checks 19 success / 3 skipped / 0 fail · root guard:tests ✓ + test:official 557 pass / 0 fail (+extra 39/39) · vite build OK 2.6 s · NÍVEL 2-3D NOVO (vite preview +agent-browser): Protocolo de Inserção → SALTAR NO CAOS → IN-GAME CIGKV-3D-01 com ring 09:59 · 13 vivos · radar com tint sazonal ATIVO (.seasonal) · ordem DOMINE O RING · Pistola 9MM 15/45 · feed ZU/Marechal · canvas WebGL ok
+- EVIDÊNCIAS: artifacts/p0-steps-6-9/ (eos-live-smoke skip/strict, game-runtime-npm-test, fase-d-honesta, browser-check, fase12-live-scenario.log, console-poj.png, console-poj-full.png, game3d-cigkv-hud.png, game3d-cigkv-full.png, game3d-ingame-hud.png)
+
+Stage Summary:
+- Tudo o que era executável fora do host licenciado está fechado e evidenciado: variáveis de CI completas, Fase D honesta verde, validação em navegador real estendida ao jogo 3D in-game (HUD sazonal ativo) e protocolo gfx-ux-perf no main — restam SOMENTE os passos 1–5 humanos (revogar/reemitir tokens, portal Epic A1–A9 com EULA 404→200, 7 secrets EOS_*, gate anti-placeholder, runner UE5.8 ≥250 GB); com o runner registrado basta despachar m4-ue5-eos-acceptance.yml com run_engine=true
+- Estado: base a1cfd40 · main CI 0 fail · root 557/0 · game-runtime 1055/0/13 · bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*; 0 runners)
