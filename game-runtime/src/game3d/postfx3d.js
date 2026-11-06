@@ -22,6 +22,8 @@ const GradeShader = {
     uSaturation: { value: 1.045 },
     uContrast: { value: 1.035 },
     uHighlightRollOff: { value: 0.28 },
+    uSharpen: { value: 0.12 },
+    uResolution: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -31,7 +33,8 @@ const GradeShader = {
     }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff;
+    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff, uSharpen;
+    uniform vec2 uResolution;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uTime) * 43758.5453); }
     void main() {
@@ -48,6 +51,16 @@ const GradeShader = {
       float peak = max(max(c.rgb.r, c.rgb.g), c.rgb.b);
       float shoulder = max(peak - 0.78, 0.0) * uHighlightRollOff;
       c.rgb /= (1.0 + shoulder);
+      // Recupera microcontraste perdido na resolução dinâmica sem halo de
+      // oversharpen: a vizinhança é usada somente como detalhe de alta frequência.
+      vec2 px = 1.0 / max(uResolution, vec2(1.0));
+      vec3 neighborhood = (
+        texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb +
+        texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb +
+        texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb +
+        texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb
+      ) * 0.25;
+      c.rgb += (c.rgb - neighborhood) * uSharpen;
       // vinheta
       vec2 d = vUv - 0.5;
       float vig = 1.0 - uVignette * dot(d, d) * 1.9;
@@ -97,6 +110,8 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     composer.addPass(bloom);
     const grade = new ShaderPass(GradeShader);
     grade.uniforms.uGrain.value = plan.grain;
+    grade.uniforms.uSharpen.value = plan.sharpen;
+    grade.uniforms.uResolution.value.set(size.x, size.y);
     composer.addPass(grade);
     composer.addPass(new OutputPass());
     let elapsed = 0;
@@ -112,6 +127,7 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
       },
       setSize(w, h) {
         composer.setSize(w, h);
+        grade.uniforms.uResolution.value.set(w, h);
         ssr?.setSize(Math.max(320, Math.floor(w * .72)), Math.max(180, Math.floor(h * .72)));
       },
     };
