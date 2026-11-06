@@ -57,8 +57,10 @@ function parseCsvMetrics(file) {
     gameThread: findMetric(headers, [/game\s*thread/, /game\s*ms/, /gamethread/]),
     renderThread: findMetric(headers, [/render\s*thread/, /render\s*ms/, /renderthread/]),
     gpu: findMetric(headers, [/gpu\s*frame/, /gpu\s*ms/, /^gpu$/]),
+    lumenGpu: findMetric(headers, [/lumen\s*gpu/, /lumen\s*ms/]),
+    naniteFallback: findMetric(headers, [/nanite\s*fallback/, /fallback\s*percent/]),
   };
-  const values = { gameThread: [], renderThread: [], gpu: [] };
+  const values = { gameThread: [], renderThread: [], gpu: [], lumenGpu: [], naniteFallback: [] };
   for (const line of lines.slice(1)) {
     const cells = splitCsv(line);
     for (const key of Object.keys(indexes)) {
@@ -81,11 +83,55 @@ function collectMetrics(outputDir) {
   const csv = listFiles(outputDir).filter((file) => file.toLowerCase().endsWith('.csv'));
   const parsed = csv.map(parseCsvMetrics).filter(Boolean);
   const aggregate = {};
-  for (const key of ['gameThread', 'renderThread', 'gpu']) {
+  for (const key of ['gameThread', 'renderThread', 'gpu', 'lumenGpu', 'naniteFallback']) {
     const values = parsed.flatMap((entry) => entry.values[key]);
     aggregate[key] = metricSummary(values);
   }
   return { files: parsed.map(({ file, metrics }) => ({ file, metrics })), aggregate };
+}
+function simulateMetrics(outputDir) {
+  const rows = ['Frame,Game Thread,Render Thread,GPU'];
+  for (let i = 1; i <= 20; i += 1) {
+    const game = i <= 18 ? 5.8 : i === 19 ? 7.1 : 7.8;
+    const render = i <= 18 ? 6.4 : i === 19 ? 7.6 : 8.0;
+    const gpu = i <= 18 ? 10.2 : i === 19 ? 12.8 : 14.4;
+    rows.push(`${i},${game},${render},${gpu}`);
+  }
+  fs.writeFileSync(path.join(outputDir, 'simulated-stat-unit.csv'), `${rows.join('\n')}\n`);
+}
+function evaluateAcceptance(replay, metrics) {
+  const acceptance = replay.acceptance ?? {};
+  const aggregate = metrics.aggregate;
+  const measured = {
+    gameThreadP95Ms: aggregate.gameThread.p95Ms,
+    renderThreadP95Ms: aggregate.renderThread.p95Ms,
+    gpuP95Ms: aggregate.gpu.p95Ms,
+    lumenGpuP95Ms: aggregate.lumenGpu.p95Ms,
+    naniteFallbackP95Percent: aggregate.naniteFallback.p95Ms,
+  };
+  const gates = {
+    gameThread: measured.gameThreadP95Ms != null && measured.gameThreadP95Ms <= acceptance.gameThreadP95Ms,
+    renderThread: measured.renderThreadP95Ms != null && measured.renderThreadP95Ms <= acceptance.renderThreadP95Ms,
+    gpu: measured.gpuP95Ms != null && measured.gpuP95Ms <= acceptance.gpuP95Ms,
+    lumenConfiguration: replay.features?.lumen === true && replay.capture?.gpuVisualizer === true,
+    naniteConfiguration: replay.features?.nanite === true && replay.capture?.statUnitGraph === true,
+    lumenGpu: measured.lumenGpuP95Ms == null ? null : measured.lumenGpuP95Ms <= acceptance.lumen.maxGpuP95Ms,
+    naniteFallback: measured.naniteFallbackP95Percent == null ? null : measured.naniteFallbackP95Percent <= acceptance.nanite.maxFallbackPercent,
+  };
+  return {
+    measured,
+    limits: {
+      gameThreadP95Ms: acceptance.gameThreadP95Ms ?? null,
+      renderThreadP95Ms: acceptance.renderThreadP95Ms ?? null,
+      gpuP95Ms: acceptance.gpuP95Ms ?? null,
+      lumenGpuP95Ms: acceptance.lumen?.maxGpuP95Ms ?? null,
+      naniteFallbackPercent: acceptance.nanite?.maxFallbackPercent ?? null,
+    },
+    gates,
+    configurationPass: gates.lumenConfiguration && gates.naniteConfiguration,
+    realRunnerPass: Object.values(gates).every((value) => value !== null && value === true),
+    note: 'Lumen e Nanite exigem captura real do runner UE5.8; configuração do manifesto não é evidência de GPU nem de fallback Nanite.',
+  };
 }
 function engineAvailable() {
   const root = process.env.UE5_ROOT;
@@ -108,11 +154,16 @@ function run() {
     dryRun: hasFlag('dry-run'),
   };
   fs.writeFileSync(path.join(outputDir, 'replay-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (hasFlag('simulate-metrics')) simulateMetrics(outputDir);
   if (hasFlag('dry-run') || !process.env.UE5_REPLAY_COMMAND) {
-    manifest.status = manifest.engine ? 'not_configured' : 'skipped_no_engine';
+    const simulated = hasFlag('simulate-metrics');
+    const metrics = simulated ? collectMetrics(outputDir) : null;
+    manifest.status = simulated ? 'dry_run_simulated' : manifest.engine ? 'not_configured' : 'skipped_no_engine';
     manifest.message = manifest.engine
       ? 'UE5.8 detectado, mas UE5_REPLAY_COMMAND não foi configurado.'
       : 'UE5.8/GPU não detectados; contrato do replay validado sem executar engine.';
+    if (simulated) manifest.acceptance = evaluateAcceptance(replay, metrics);
+    if (simulated) manifest.metrics = metrics;
     fs.writeFileSync(path.join(outputDir, 'replay-result.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(JSON.stringify(manifest, null, 2));
     return;
@@ -142,7 +193,7 @@ function run() {
     returnCode: result.status,
     error: result.error?.message ?? null,
     metrics,
-    acceptance: replay.acceptance,
+    acceptance: evaluateAcceptance(replay, metrics),
     command: command.replace(/(--token|TOKEN|PASSWORD)=\S+/gi, '$1=<redacted>'),
   };
   fs.writeFileSync(path.join(outputDir, 'replay-result.json'), `${JSON.stringify(final, null, 2)}\n`);
