@@ -12,6 +12,8 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
+- [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
 - [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
@@ -73,6 +75,46 @@
 | **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 | **Jornada Oficial do Jogador** | 🟡 Código de conta por email/senha versionado; alistamento e lançamento ainda pendentes | App passa a ter cadastro/login local com verificação por email e OIDC coexistente nesta entrega; criação de conta por email permanece indisponível até SMTP configurado. Taxa nominal de US$ 1, perfil/War’I após pagamento, Academia KR e marco de 1.000.000 continuam condicionados aos gates de cobrança, compliance e produção. |
+
+---
+
+## Vertical Slice de Personagens CIGKV
+
+O slice canônico de personagens para o CIGKV está versionado e pronto para execução em um runner com **Unreal Engine 5.8 licenciado e GPU**. Ele cobre um operador humano (`Kane`) e uma espécie não-humana (`Zheers Base`), normalização para altura canônica de 180 cm, origem nos pés, T-pose, retargeting Mixamo para `SK_Manny`/`SK_Gwen`, receitas master PBR para pele/tecido/cabelo e capturas nos perfis Low, Medium, High e Ultra.
+
+Arquivos principais:
+
+- [Manifesto canônico do slice](Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json)
+- [Receita master PBR e instâncias](Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json)
+- [Auditoria gráfica Free Fire/Call of Duty](docs/REVISAO_GRAFICA_PERSONAGENS_FREEFIRE_COD_2026-11.md)
+- [Normalizador Blender 4.x](scripts/ue5/normalize_cigkv_character_blender.py)
+- [Preparação engine-less e relatório de proveniência](scripts/ue5/prepare_cigkv_vertical_slice.py)
+- [Automação do Editor UE5.8](scripts/ue5_editor/cigkv_vertical_slice.py)
+- [Workflow de validação e captura](.github/workflows/cigkv-vertical-slice.yml)
+
+### Verificação
+
+O preflight local valida JSON, sintaxe Python, presença das fontes e gera um relatório sem alegar que assets binários foram criados:
+
+```bash
+python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
+python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
+python3 scripts/ue5/prepare_cigkv_vertical_slice.py
+```
+
+O job `recipe` do workflow pode terminar como `blocked_missing_source` quando uma fonte não estiver no checkout, mas ainda preserva o relatório e não fabrica evidência. A etapa `engine` só é habilitada manualmente com `run_engine=true`, `UE58_ENABLED=true` e um runner com labels `self-hosted`, `linux`, `gpu`, `ue5.8` e `x64`. Nesse runner, o Blender normaliza os arquivos para FBX; em seguida o Editor importa, aplica o retarget/material master e captura as oito evidências de screenshot. Até essa execução, `.uasset`, `.umap`, métricas de GPU e screenshots permanecem explicitamente como **não medidos** no sandbox.
+
+---
+
+## Qualidade de assets 3D CIGKV
+
+O ciclo pós-PR adiciona uma auditoria engine-less para distinguir fontes de prova de personagens de produção. O auditor mede contêiner, vértices, triângulos, UVs, materiais, texturas, skin/controllers e animações expostas pelo formato; fontes abaixo dos gates são classificadas como `proxy_source`, sem promoção automática para qualidade AAA.
+
+- [Auditoria automatizada de assets](scripts/ue5/audit_cigkv_character_assets.py)
+- [Contrato de qualidade e próximos gates de modelagem](docs/CIGKV_CHARACTER_ASSET_QUALITY.md)
+- [Workflow que publica o relatório](.github/workflows/cigkv-vertical-slice.yml)
+
+O resultado engine-less não substitui a revisão de silhueta, deformação, clipping, cabelo, roupa, sockets, LOD, PBR, Lumen, Nanite ou GPU. Esses itens continuam exigindo Blender 4.x e um runner UE5.8 licenciado.
 
 ---
 
