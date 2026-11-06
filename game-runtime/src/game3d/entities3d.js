@@ -20,6 +20,11 @@ import { applyMicroDetail, buildMicroDetailMaps } from './materials3d.js';
 import { RARITIES } from '../shared/weapons.js';
 // Fase 30 — anexos dos 4 sockets da AR-47 + skin mítica evolutiva
 import { applyAttachments, applyMythicSkin, registerMythic, unregisterMythic, mythicSkinFor } from './attachments3d.js';
+// Fase 50 — kit de construção canônica: cabeça esculpida por etnia (semelhança
+// canônica do catálogo), olhos 3D com piscar, cabelo/barba por estilo. API de
+// parts/pivôs/rig facial PRESERVADA — o rig facial agora vive no kit.
+import { buildCanonicalHead } from './heads3d.js';
+export { FACIAL_EXPRESSIONS, FACE_JAW, createFaceRig } from './heads3d.js';
 // Fase 30 (fix) — fábricas de loot dedicadas eram referenciadas sem import
 // (bug latente do main: createLootMesh explodia no 1º gear/caixa no navegador)
 import { buildGearMesh, createDeathBox, createSupplyDrop } from './gear3d.js';
@@ -112,7 +117,7 @@ function darken(hex, f = .55) {
 // ---------- Fase 7 — acessórios determinísticos por operativo ----------
 // `variant` (id do operativo / nome do bot) deriva, por hash, quais acessórios o
 // modelo carrega — cada operativo tem identidade visual própria e estável.
-function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM }) {
+function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM, hairM }) {
   // ---- Fase 26 — TALON (Hacker & Urban Runner): identidade FIXA, sem roll —
   // moicano azul + visor digital emissivo na testa + jaqueta techwear volumosa
   // de gola alta + tiras soltas (física de mola no animateOperative) + LEDs
@@ -120,17 +125,17 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   if (variant === 'OP_MALE_TALON') {
     const mohawkM = M('#1e40af', { rough: .85 });
     const mohawkM2 = M('#2563eb', { rough: .8 });
-    // moicano: crista central em 3 segmentos decrescentes (leitura de silhueta)
-    head.add(box(.05, .1, .1, mohawkM, 0, .17, .07));
-    head.add(box(.05, .12, .1, mohawkM2, 0, .19, -.02));
-    head.add(box(.05, .09, .1, mohawkM, 0, .16, -.11));
+    // moicano: crista central em 3 segmentos decrescentes (assenta no crânio F50)
+    head.add(box(.05, .085, .09, mohawkM, 0, .135, .06));
+    head.add(box(.05, .1, .09, mohawkM2, 0, .15, -.02));
+    head.add(box(.05, .075, .09, mohawkM, 0, .13, -.1));
     // laterais raspadas (contraste de volume)
-    head.add(box(.02, .07, .2, gearM, -.12, .1, 0));
-    head.add(box(.02, .07, .2, gearM, .12, .1, 0));
+    head.add(box(.02, .06, .18, gearM, -.112, .08, .0));
+    head.add(box(.02, .06, .18, gearM, .112, .08, .0));
     // visor digital na testa (self-illumination azul-ciano)
     const visorM = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#22d3ee', emissiveIntensity: 1.5, roughness: .25, metalness: .2 });
-    head.add(box(.19, .05, .025, visorM, 0, .085, -.125));
-    head.add(box(.21, .02, .03, gearM2, 0, .055, -.122)); // moldura inferior
+    head.add(box(.19, .05, .025, visorM, 0, .072, -.112));
+    head.add(box(.21, .02, .03, gearM2, 0, .045, -.108)); // moldura inferior
     // jaqueta volumosa: ombros largos + painéis laterais + gola alta
     const jacketM = M('#22262f', { rough: .92 });
     const jacketDarkM = M('#14171d', { rough: .95 });
@@ -165,27 +170,27 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   // ---- cabeça ----
   const headGear = roll(5, 'h');
   if (headGear === 0) {
-    // bandana no topo do crânio + nó
-    head.add(box(.27, .05, .27, M(bandColors[roll(5, 'b')], { rough: .8 }), 0, .16, 0));
-    head.add(box(.05, .05, .06, M(bandColors[roll(5, 'b')], { rough: .8 }), .1, .16, .14));
+    // bandana no topo do crânio + nó (F50: assenta no crânio esculpido)
+    head.add(box(.24, .05, .24, M(bandColors[roll(5, 'b')], { rough: .8 }), 0, .125, 0));
+    head.add(box(.05, .05, .06, M(bandColors[roll(5, 'b')], { rough: .8 }), .09, .125, .1));
   } else if (headGear === 1) {
     // lanterna de capacete (corpo + lente emissiva)
-    head.add(box(.06, .06, .1, gearM2, -.08, .24, .13));
-    head.add(box(.04, .04, .02, new THREE.MeshStandardMaterial({ color: '#fff7d6', emissive: '#ffe9a8', emissiveIntensity: 1.4, roughness: .3 }), -.08, .24, .18));
+    head.add(box(.06, .06, .1, gearM2, -.08, .16, .11));
+    head.add(box(.04, .04, .02, new THREE.MeshStandardMaterial({ color: '#fff7d6', emissive: '#ffe9a8', emissiveIntensity: 1.4, roughness: .3 }), -.08, .16, .165));
   } else if (headGear === 2) {
     // antena de comunicação curva atrás do capacete
-    const ant = cyl(.007, .007, .22, metalM, .12, .28, .1, 4);
+    const ant = cyl(.007, .007, .22, metalM, .12, .2, .09, 4);
     ant.rotation.x = -.5;
     head.add(ant);
-    head.add(box(.04, .04, .04, trimM, .12, .38, .03)); // topo emissivo
+    head.add(box(.04, .04, .04, trimM, .12, .3, .03)); // topo emissivo
   } else if (headGear === 3) {
     // meia-máscara de respiração sobre a boca
-    head.add(box(.18, .09, .06, M('#23262b', { rough: .6, metal: .3 }), 0, -.06, -.14));
-    head.add(box(.14, .03, .03, M('#3a3e45', { rough: .5, metal: .5 }), 0, -.02, -.15));
+    head.add(box(.17, .085, .06, M('#23262b', { rough: .6, metal: .3 }), 0, -.052, -.118));
+    head.add(box(.13, .03, .03, M('#3a3e45', { rough: .5, metal: .5 }), 0, -.012, -.126));
   }
   // óculos de sol empurrados (variação independente da bandana)
   if (roll(3, 'g') === 0) {
-    head.add(box(.2, .05, .03, M('#101114', { rough: .25, metal: .6 }), 0, .09, .13));
+    head.add(box(.19, .05, .03, M('#101114', { rough: .25, metal: .6 }), 0, .08, .11));
   }
 
   // ---- tronco/colete ----
@@ -222,6 +227,54 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
   if (roll(3, 'a') === 0) {
     torso.add(box(.15, .04, .18, M(bandColors[roll(5, 'b2')], { rough: .75 }), -.33, .12, 0));
   }
+
+  // ---- F49 — RABO DE CABELO (operatrizes) + CAPA (1 em 5 por variant) ----
+  // Movimento secundário “física de mola” no animateOperative (mesma família
+  // das tiras do Talon): onda viajante com fase SEMEADA em userData —
+  // determinística, cresce com speedNorm e com o ar, a ponta atrasa mais.
+  const hairTail = [];
+  if (/FEMALE/.test(variant || '')) {
+    const anchor = new THREE.Group();
+    anchor.position.set(0, -.01, .142);               // nuca (assenta no crânio F50, +z)
+    head.add(anchor);
+    const lens = [.15, .13, .11], ws = [.055, .047, .036];
+    let parent = anchor;
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Group();
+      seg.position.set(0, i === 0 ? .02 : -lens[i - 1] + .015, i === 0 ? 0 : .006);
+      const tuft = ball(ws[i], hairM, 0, -lens[i] * .5, 0, 6, 5, 1, 1.18 + i * .14, .78); // 6×5: orgânico e DENTRO do orçamento ≤6500
+      seg.add(tuft);
+      seg.userData.hairPhase = i * 1.15 + hashIdx(variant || 'hair', 97) * .063;
+      parent.add(seg);
+      hairTail.push(seg);
+      parent = seg;
+    }
+  }
+  let cape = null;
+  if (roll(5, 'cape') === 0) {
+    const anchor = new THREE.Group();
+    anchor.position.set(0, .3, .335);                 // atrás da mochila base (+z)
+    anchor.rotation.x = -.16;                         // capa nasce aberta do ombro (−x = abre p/ trás)
+    torso.add(anchor);
+    // fivela nos ombros (capa lê como vestimenta REAL, não pano colado)
+    torso.add(box(.05, .04, .045, gearM2, -.13, .27, .3));
+    torso.add(box(.05, .04, .045, gearM2, .13, .27, .3));
+    const lens = [.3, .3, .26], wds = [.5, .55, .58];
+    let parent = anchor;
+    cape = [];
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Group();
+      seg.position.set(0, i === 0 ? 0 : -lens[i - 1] + .035, 0);
+      const panel = box(wds[i], lens[i], .02, secM, 0, -lens[i] * .5, 0); // pano plano: custo mínimo, DENTRO do orçamento ≤6500
+      seg.add(panel);
+      if (i === 2) seg.add(box(wds[2] * .68, .03, .024, trimM, 0, -lens[2] + .04, 0)); // barra emissiva FF
+      seg.userData.capePhase = i * 1.35;
+      parent.add(seg);
+      cape.push(seg);
+      parent = seg;
+    }
+  }
+  return { hairTail, cape };
 }
 
 // ---------- operativo (Fase 6/7/9) ----------
@@ -230,47 +283,11 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
 // variant (Fase 7): string do operativo/bot — deriva acessórios determinísticos.
 // Fase 9: anatomia curva — mesmos pivôs (quadril .84, ombros 1.48, cabeça 1.68),
 // mesma API de parts; nenhuma dependência externa de rig.
-// ---------- Fase 12 — blendshapes faciais ----------
-// O rosto é textura pintada em calota esférica + mandíbula geométrica: cada
-// "blendshape" é um PAR (variante de textura, pose da mandíbula). O rig troca
-// o map quando o peso cruza .5 (crossfade real exigiria shader dedicado) e
-// blendA a mandíbula continuamente — barato, determinístico e sem estado GPU.
-export const FACIAL_EXPRESSIONS = ['neutral', 'blink', 'pain', 'shout', 'death', 'knocked'];
-export const FACE_JAW = { neutral: 0, blink: 0, pain: .32, shout: .72, death: .26, knocked: .12 };
-
-export function createFaceRig(face, jaw, { skin, eye, hair } = {}) {
-  const mats = new Map();                    // expressão → material clonado c/ map
-  const baseMat = face.material;
-  const matFor = (name) => {
-    if (!mats.has(name)) {
-      const m = baseMat.clone();
-      m.map = faceTexture(skin, eye, hair, name);
-      mats.set(name, m);
-    }
-    return mats.get(name);
-  };
-  const JAW0 = { y: jaw.position.y, z: jaw.position.z, sy: jaw.scale.y };
-  const rig = {
-    face, jaw,
-    expression: 'neutral',
-    weight: 0,
-    set(name, w = 1) {
-      if (!FACIAL_EXPRESSIONS.includes(name)) return false;
-      const weight = Math.max(0, Math.min(1, w));
-      const target = weight >= .5 ? name : 'neutral';
-      if (rig.expression !== target) face.material = matFor(target);
-      rig.expression = target;
-      rig.weight = weight;
-      const base = FACE_JAW[name] ?? 0;
-      jaw.position.y = JAW0.y - base * .028 * weight;   // mandíbula desce
-      jaw.scale.y = JAW0.sy + base * .38 * weight;      // boca abre (volume)
-      jaw.position.z = JAW0.z + base * .012 * weight;   // projeta p/ frente
-      return true;
-    },
-    reset() { rig.set('neutral', 0); jaw.position.y = JAW0.y; jaw.scale.y = JAW0.sy; jaw.position.z = JAW0.z; },
-  };
-  return rig;
-}
+// ---------- Fase 12 → Fase 50 — blendshapes faciais ----------
+// O rig facial (FACIAL_EXPRESSIONS / FACE_JAW / createFaceRig) migrou p/ o kit
+// canônico heads3d.js: expressões agora movem geometria REAL (mandíbula F12
+// preservada + sobrancelhas + pálpebras + lábios) e trocam o map de complexão.
+// Re-exportados acima para compatibilidade de import.
 
 // ---------- Fase 12 — morte direcional (ragdoll fake por torque) ----------
 // Queda ANALÍTICA (sem física): impulso de torque no sentido OPOSTO ao tiro,
@@ -396,14 +413,23 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const clavR = ball(.065, camo, .18, .24, 0, 8, 6, 1.15, .8, .9);
   const traps = ball(.085, camo, 0, .3, .025, 8, 6, 1.3, .75, .9);
   torso.add(clavL, clavR, traps);
-  const vestMesh = softBox(.5, .42, .33, vestM, .045, 0, .06, .01); // plate carrier anatômico, sem quinas de bloco
+  // Fase 51 — plate carrier ESCULPIDO: o colete encolhe p/ o painel do peitoral
+  // (não mais laje cobrindo o V-taper) — o cone torácico (.54 no peito → .45 na
+  // cintura) volta a ler na silhueta; pouches/radio/ribas abraçam o painel novo
+  const vestMesh = softBox(.4, .36, .28, vestM, .045, 0, .05, .01);
   torso.add(vestMesh);
   // pouches frontais de carregador (3) + porta-radio
-  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .16, -.04, -.185));
-  torso.add(box(.09, .13, .05, gearM, -.19, .12, -.17)); // radio
-  torso.add(cyl(.008, .008, .16, metalM, -.19, .22, -.16, 4)); // antena do radio
+  for (let i = -1; i <= 1; i++) torso.add(box(.12, .15, .07, vestDarkM, i * .125, -.04, -.15));
+  torso.add(box(.09, .13, .05, gearM, -.145, .12, -.135)); // radio
+  torso.add(cyl(.008, .008, .16, metalM, -.145, .22, -.125, 4)); // antena do radio
   // zipper + fivela central
-  torso.add(box(.03, .4, .02, gearM2, 0, .06, -.17));
+  torso.add(box(.03, .4, .02, gearM2, 0, .06, -.145));
+  // Fase 51 — alças do carrier sobre os ombros (frontal↔costas lêem como colete
+  // VESTIDO, não caixa flutuante); pago com o bedroll 8→6 e o bico da bota 8x6→7x5
+  const strapF = box(.07, .05, .3, vestDarkM, -.13, .28, -.02);
+  const strapB = box(.07, .05, .3, vestDarkM, .13, .28, -.02);
+  strapF.userData.basePack = strapB.userData.basePack = true;
+  torso.add(strapF, strapB);
   // mochila tática: corpo + straps + bedroll + faixa de equipe (BASE — a
   // Fase 28 substitui por níveis Nv1-3 quando o ator equipa mochila)
   const pack = softBox(.38, .42, .17, gearM2, .035, 0, .02, .22);
@@ -412,70 +438,28 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   const packLid = box(.3, .05, .19, vestDarkM, 0, .12, .23);
   packLid.userData.basePack = true;
   torso.add(packLid);
-  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 8);
+  const bedroll = cyl(.07, .07, .34, secM, 0, .27, .24, 6);
   bedroll.userData.basePack = true;
   torso.add(bedroll);
   const teamStripe = box(.34, .06, .02, trimM, 0, -.08, .305);
   teamStripe.userData.basePack = true;
   torso.add(teamStripe);
-  // costelas laterais do colete
-  torso.add(box(.03, .3, .28, vestDarkM, -.265, .06, 0));
-  torso.add(box(.03, .3, .28, vestDarkM, .265, .06, 0));
+  // costelas laterais do colete (Fase 51: abraçam o painel estreito)
+  torso.add(box(.03, .3, .22, vestDarkM, -.215, .06, 0));
+  torso.add(box(.03, .3, .22, vestDarkM, .215, .06, 0));
   g.add(torso);
 
-  // ---- CABEÇA (grupo — pitch de mira; Fase 9: crânio esférico + rosto curvo) ----
+  // ---- CABEÇA (grupo — pitch de mira) — Fase 50: KIT CANÔNICO ----
+  // Crânio ESCULPIDO pela etnia canônica do catálogo (semelhança: olhos 3D com
+  // pálpebra/piscar, sobrancelhas, nariz com asas, lábios com volume, cabelo e
+  // barba por estilo) + proporção ~8 cabeças (fim da leitura robótica). Mesmos
+  // pivôs e API: parts.head/rig facial intactos p/ câmera/animação/impacto.
   const head = new THREE.Group();
   head.position.set(0, .46, 0); // mundo ~1.68
-  const neck = cyl(.07, .08, .12, skinM, 0, -.14, 0, 8);
-  // crânio: esfera escalada (mais alto que largo) + queixo/mandíbula
-  const skull = ball(.125, skinM, 0, .01, 0, 14, 12, .95, 1.06, 1.0);
-  const jaw = ball(.07, skinM, 0, -.075, -.015, 10, 8, 1.05, .8, 1.1);
-  const earL = ball(.028, skinM, -.115, .005, .01, 8, 6, .5, 1, .8);
-  const earR = ball(.028, skinM, .115, .005, .01, 8, 6, .5, 1, .8);
-  const nose = ball(.024, skinM, 0, -.02, -.118, 8, 6, .7, .95, 1);
-  head.add(neck, skull, jaw, earL, earR, nose);
-  // rosto PINTADO em malha CURVA (calota esférica voltada p/ -z = frente):
-  // acompanha o volume do crânio em vez de máscara plana
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(skin, eye, hair), roughness: .55 });
-  const face = new THREE.Mesh(
-    geo('facePatch', () => new THREE.SphereGeometry(.129, 14, 10, Math.PI * 1.5 - .9, 1.8, 1.05, .95)),
-    faceMat
-  );
-  face.position.set(0, .012, 0);
-  head.add(face);
-  // Fase 12 — rig de blendshapes faciais (expressões + mandíbula articulada)
-  const faceRig = createFaceRig(face, jaw, { skin, eye, hair });
-  // franja/cabelo sob o capacete (nuca + laterais) — volume orgânico
-  if (!helmet) {
-    const hairBack = ball(.122, hairM, 0, .02, .035, 12, 10, .95, 1.0, 1.0);
-    hairBack.scale.set(.95, 1.02, .95);
-    head.add(hairBack);
-  }
-  // capacete tático OU boina (variedade) — gear rígido, boxes coerentes
-  // (Fase 28: marcados baseHeadGear — o gear Nv2+ os substitui)
-  if (helmet) {
-    const dome = ball(.145, gearM, 0, .1, .01, 12, 10, 1.05, .85, 1.12); // casco arredondado
-    const brim = box(.28, .04, .08, gearM, 0, .1, -.15);
-    const band = box(.305, .06, .325, goggleMaterial(), 0, .08, .01); // óculos contornam o rosto
-    dome.userData.baseHeadGear = brim.userData.baseHeadGear = band.userData.baseHeadGear = true;
-    head.add(dome, brim, band);
-    // F41 — jugular: tira sob o queixo amarra o casco (acessório lê como capacete
-    // REAL em close TPS, não como bolha flutuante)
-    const strapL = box(.016, .13, .02, gearM2, -.118, -.045, .04);
-    const strapR = box(.016, .13, .02, gearM2, .118, -.045, .04);
-    strapL.userData.baseHeadGear = strapR.userData.baseHeadGear = true;
-    head.add(strapL, strapR);
-    const railL = box(.02, .07, .16, gearM2, -.15, .15, .01); // trilhos laterais
-    const railR = box(.02, .07, .16, gearM2, .15, .15, .01);
-    const nvg = box(.05, .05, .05, metalM, .09, .21, .08);   // mount NVG
-    railL.userData.baseHeadGear = railR.userData.baseHeadGear = nvg.userData.baseHeadGear = true;
-    head.add(railL, railR, nvg);
-  } else {
-    const cap = box(.28, .1, .28, vestM, 0, .16, .01);
-    const brim = box(.24, .03, .12, vestM, 0, .12, -.16);
-    cap.userData.baseHeadGear = brim.userData.baseHeadGear = true;
-    head.add(cap, brim);
-  }
+  const canonHead = buildCanonicalHead({ variant, skin, eye, hair, helmet, skinM, hairM, gearM, gearM2, metalM, vestM });
+  head.add(canonHead.head);
+  const faceRig = canonHead.rig;
+  head.userData.canon = canonHead.canon;
   torso.add(head);
 
   // ---- pernas (Fase 9/16): coxa/canela em cápsula + joelho esférico + panturrilha
@@ -491,7 +475,7 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const pad = box(.15, .1, .17, gearM, 0, -.06, -.005);
     const foot = new THREE.Group(); foot.position.set(0, -.31, .01);
     const boot = softBox(.17, .12, .28, bootM, .028, 0, -.12, .05);
-    const toe = ball(.085, bootM, 0, -.13, -.07, 8, 6, 1, .7, 1.05); // bico arredondado
+    const toe = ball(.085, bootM, 0, -.13, -.07, 7, 5, 1, .7, 1.05); // bico arredondado (F51: 7×5 — orçamento)
     const sole = box(.18, .04, .3, M('#2a2b2f', { rough: .9 }), 0, -.19, .05);
     // F41 — cadarço de combate no peito do pé + colarinho do cano (bota lê como
     // calçado REAL em close, não como tijolo preto)
@@ -508,12 +492,12 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
     const deltoid = ball(.09, camo, 0, .01, 0, 10, 8, 1.1, .95, 1); // ombro curvo
     const biceps = ball(.05, camo, 0, -.09, -.015, 8, 6, .95, 1.2, .95); // Fase 16: volume do bíceps
     const upper = capsule(.062, .2, camo, 0, -.16, 0);
-    const pad = box(.15, .09, .16, gearM, 0, -.25, 0);
+    const pad = box(.115, .075, .125, gearM, 0, -.25, 0); // F51: menor — deltoide lê
     const stripe = box(.13, .05, .14, trimM, 0, -.05, 0);
     const elbow = new THREE.Group(); elbow.position.set(0, -.31, 0);
     const elbowCap = ball(.055, gearM, 0, -.01, .002, 8, 6);
     const lower = capsule(.054, .18, camo, 0, -.15, 0);
-    const glove = softBox(.12, .12, .13, gearM, .026, 0, -.31, 0);
+    const glove = softBox(.105, .11, .12, gearM, .026, 0, -.31, 0);
     const knuckles = ball(.05, gearM2, 0, -.31, -.05, 8, 6, 1, .8, .9); // dorso da mão
     const cuff = box(.125, .06, .14, secM, 0, -.24, 0);
     // F41 — dedos enrolando o grip + polegar oposto: a mão em 3ª pessoa lê como
@@ -530,9 +514,10 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
   torso.add(armR.shoulder, armL.shoulder);
 
   // Fase 7 — acessórios únicos por operativo (determinísticos via variant)
-  const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM });
+  // F49 — hairM entra p/ o rabo de cabelo com física de mola (FEMALE)
+  const acc = buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vestM, secM, gearM, gearM2, metalM, trimM, hairM });
 
-  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null };
+  const parts = { head, torso, legL, legR, armL, armR, shadow, face: faceRig, straps: acc?.straps ?? null, hairTail: acc?.hairTail?.length ? acc.hairTail : null, cape: acc?.cape ?? null };
   parts.userData = { vestColor: vest }; // Fase 28 — tinge o gear com a cor da equipe
   return { group: g, parts };
 }
@@ -574,6 +559,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   }
   if (dead) {
     parts.torso.scale.set(1, 1, 1);
+    // F49 — cabelo/capa assentam no chão (não congelam no último passo)
+    if (parts.hairTail) for (const seg of parts.hairTail) { seg.rotation.x = -.14; seg.rotation.z = 0; }
+    if (parts.cape) for (const seg of parts.cape) { seg.rotation.x = -.06; seg.rotation.z = 0; }
     parts.legL.hip.rotation.x *= .9; parts.legR.hip.rotation.x *= .9;
     parts.armL.shoulder.rotation.z = Math.min(.9, (parts.armL.shoulder.rotation.z || 0) + .02);
     parts.armR.shoulder.rotation.z = Math.max(-.9, (parts.armR.shoulder.rotation.z || 0) - .02);
@@ -614,6 +602,9 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
     if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
+    // F49 — cabelo arrasta no rastejo; capa comprimida sob o tronco
+    if (parts.hairTail) for (const seg of parts.hairTail) { seg.rotation.x = -.12; seg.rotation.z = Math.sin(t * 5.2) * .05; }
+    if (parts.cape) for (const seg of parts.cape) { seg.rotation.x = -.04; seg.rotation.z = 0; }
     return;
   }
   const idle = 1 - Math.min(1, speedNorm);
@@ -702,6 +693,40 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   // nivelada enquanto o corpo sobe/desce/rola (ergonomia humana de mirar).
   parts.head.position.y = .46 - (crouch ? 0 : bounce * .3);
   parts.head.position.x = -sway * .3;
+  // ---- F49 — movimento secundário de CABELO (rabo) e CAPA: onda viajante ----
+  // Fase por segmento SEMEADA em userData (determinística, como as tiras do
+  // Talon); amplitude cresce com speedNorm e no ar; a ponta atrasa mais
+  // (lag por segmento); acopla ao passo (PH), ao sway do tronco e ao pitch
+  // da cabeça — o cabelo segue o olhar com atraso, a capa voa na corrida.
+  if (parts.hairTail) {
+    const stepPulse = Math.abs(Math.sin(PH)) * .1 * speedNorm;  // pulso do passo
+    for (let i = 0; i < parts.hairTail.length; i++) {
+      const seg = parts.hairTail[i];
+      const ph = seg.userData.hairPhase || 0;
+      const lag = 1 + i * .55;                                  // ponta atrasa mais
+      const amp = .04 + .085 * speedNorm + Math.min(.16, air * .028);
+      const base = -.34 * (1 - i * .25);                        // drapeia SOBRE a mochila (decai por segmento)
+      seg.rotation.x = base - stepPulse * (1 + i * .3)
+        + Math.sin(t * 5.1 + ph) * amp * lag * .5
+        + pitch * .12 * (1 - i * .3);                           // ponta segue o olhar com atraso
+      seg.rotation.z = Math.sin(t * 3.7 + ph * 1.6) * amp * lag * .5
+        - sway * .35;                                           // vento lateral do tronco
+    }
+  }
+  if (parts.cape) {
+    const billow = .05 + speedNorm * .34 + Math.min(.5, air * .09); // abre ao correr/no ar
+    for (let i = 0; i < parts.cape.length; i++) {
+      const seg = parts.cape[i];
+      const ph = seg.userData.capePhase || 0;
+      const lag = 1 + i * .5;
+      const amp = .028 + .06 * speedNorm + Math.min(.12, air * .022);
+      seg.rotation.x = Math.sin(t * 4.6 + ph) * amp * lag * .5
+        - billow * (i * .3)
+        + pitch * .04 * (1 - i * .3);
+      seg.rotation.z = Math.sin(t * 3.1 + ph * 1.4) * amp * lag * .5
+        - sway * .45;                                           // capa reage ao roll da passada
+    }
+  }
   // ---- Fase 10 — reação de impacto: flinch direcional aditivo ----
   // Envelope: ataque rápido (~2 frames) + decaimento exponencial τ .17 s —
   // o corpo dobra PARA LONGE da bala, afunda e os braços abrem em sobressalto,

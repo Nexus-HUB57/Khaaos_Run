@@ -205,14 +205,15 @@ function headGearBoxes(head) {
 }
 test('capacete ganha jugular (2 tiras sob o queixo) — lê como capacete real', () => {
   const { parts } = createOperative({ variant: 'f41-cap', helmet: true });
-  const straps = headGearBoxes(parts.head).filter((o) => Math.abs(o.position.y + .045) < 1e-6 && Math.abs(o.position.x) === .118);
+  // F50: coords acompanham o crânio esculpido (mais estreito: x ±.095, y -.048)
+  const straps = headGearBoxes(parts.head).filter((o) => Math.abs(o.position.y + .048) < 1e-6 && Math.abs(o.position.x) === .095);
   assert.equal(straps.length, 2, 'duas tiras laterais simétricas');
   for (const s of straps) {
     assert.ok(s.userData.baseHeadGear, 'jugular é substituída pelo gear Nv2+ (contrato F28)');
   }
   // boina: sem jugular (o acessório é do capacete)
   const cap = createOperative({ variant: 'f41-cap', helmet: false });
-  const capStraps = headGearBoxes(cap.parts.head).filter((o) => Math.abs(o.position.y + .045) < 1e-6);
+  const capStraps = headGearBoxes(cap.parts.head).filter((o) => Math.abs(o.position.y + .048) < 1e-6);
   assert.equal(capStraps.length, 0, 'boina não recebe jugular');
 });
 

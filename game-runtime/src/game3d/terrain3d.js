@@ -74,15 +74,17 @@ export function terrainHeightAt(x, z, scenarioId = 'CIGKV') {
   return +Math.max(0, h).toFixed(3);
 }
 
-// ---- tinta por vértice (variação de solo por altitude, identidade por mundo) ----
-// multiplica o groundTint do cenário: baixo úmido → meio nativo → alto rocha
-// (neve em Barburhen, basalto em Ckesalth, musgo escuro em Priadus, cinza-astral).
+// ---- tinta por vértice (F49: modulador de altitude sobre a bioma da TEXTURA) ----
+// Antes os tints CARREGAVAM a bioma (multiplicavam a terra seca marrom comum aos
+// 5 mundos). Com texturas de bioma próprias (textures3d GROUND_BIOMES) viraram
+// um MODULADOR estreito ao redor de 1.0: mantém baixo úmido → cume rochoso sem
+// rebaptizar a textura (neve continua neve em ângulo raso).
 const TINTS = {
-  CIGKV:     { low: [.84, .78, .66], mid: [1, 1, 1],    high: [.52, .46, .40] },
-  Barburhen: { low: [.82, .86, .90], mid: [1, 1, 1],    high: [.96, .98, 1.0] }, // neve
-  Priadus:   { low: [.36, .50, .40], mid: [1, 1, 1],    high: [.48, .55, .50] }, // musgo escuro (W2)
-  Ckesalth:  { low: [.92, .87, .78], mid: [1, 1, 1],    high: [.30, .24, .22] }, // areia acinzentada (W3)
-  Arukheea:  { low: [.92, .89, .82], mid: [1, 1, 1],    high: [.55, .58, .64] }, // areia branca + falésia (W4)
+  CIGKV:     { low: [.9, .85, .78],  mid: [1, 1, 1],    high: [.7, .65, .58] },   // savana: baixo úmido → alto rocha
+  Barburhen: { low: [.9, .93, .99],  mid: [1, 1, 1],    high: [1.05, 1.07, 1.1] }, // neve: baixo gelo azulado → cume iluminado
+  Priadus:   { low: [.72, .8, .7],   mid: [1, 1, 1],    high: [.82, .9, .82] },   // pântano: baixo encharcado
+  Ckesalth:  { low: [1.0, .95, .9],  mid: [1, 1, 1],    high: [.6, .55, .52] },   // brasa: alto basalto negro
+  Arukheea:  { low: [1.04, 1.0, .95], mid: [1, 1, 1],   high: [.72, .74, .8] },   // areia: alto falésia cinza
 };
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
@@ -101,9 +103,10 @@ function terrainTint(h, x, z, scenarioId) {
 
 /**
  * Malha do terreno com relevo. Substitui o plano plano do buildScene:
- * mesma textura/tiling (groundMaterial 34×), mas vértices deslocados por
- * terrainHeightAt + vertex colors por altitude. receiveShadow preservado.
- * flag userData.terrain p/ inspeção e2e.
+ * textura de BIOMA do cenário (F49 — GROUND_BIOMES 34×, roughness/relevo
+ * próprios por mundo), vértices deslocados por terrainHeightAt + vertex
+ * colors por altitude (modulador F49). receiveShadow preservado.
+ * flag userData.terrain + userData.biome p/ inspeção e2e.
  */
 export function buildTerrain(scenario, { segments = 96 } = {}) {
   const geo = new THREE.PlaneGeometry(440, 440, segments, segments);
@@ -119,11 +122,15 @@ export function buildTerrain(scenario, { segments = 96 } = {}) {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const mat = groundMaterial(34, scenario.groundTint);
+  // F49 — a bioma vive na TEXTURA (canvas próprio por mundo); o groundTint do
+  // cenário NÃO multiplica mais o terreno (evita rebaptizar neve/areia) — ele
+  // segue alimentando o IBL/envmap (world3d) e o minimapa.
+  const mat = groundMaterial(34, null, scenario.id);
   mat.vertexColors = true;
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.name = 'terrain';
   mesh.userData.terrain = true;
+  mesh.userData.biome = scenario.id;
   return mesh;
 }

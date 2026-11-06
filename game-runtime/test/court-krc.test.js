@@ -210,7 +210,14 @@ test('clock: offset do pong e elapsed do trem (matemática pura da sincronia)', 
   assert.equal(estimateClockOffset({}), null);
   const offset = 5;
   const startedAt = 900;
-  assert.equal(serverElapsedMs(startedAt, offset), Date.now() + offset - startedAt);
+  // elapsed usa o Date.now() INTERNO da função — sob carga de CI dois
+  // Date.now() divergem ms e a igualdade estrita era FLAKE (14 ms vistos
+  // no run 42226348700); a borda real do relógio delimita o valor
+  const t0 = Date.now();
+  const elapsed = serverElapsedMs(startedAt, offset);
+  const t1 = Date.now();
+  assert.ok(elapsed >= t0 + offset - startedAt && elapsed <= t1 + offset - startedAt,
+    `elapsed dentro da borda real do relógio (${t0}..${t1}): ${elapsed}`);
   assert.equal(serverElapsedMs(null, offset), null);
   assert.equal(serverElapsedMs(startedAt, null), null);
 });
