@@ -156,7 +156,7 @@ Configuração exigida no **GitHub Environment `staging`** (adicionar os valores
 
 ### Retomada local após auditoria KRC — 2026-11-06
 
-**Correção da suíte KRC (base `7e30b37`, branch local `fix/test-krc-scenario-reward`):** a falha era uma asserção desatualizada, não um erro no crédito de produção. No cenário CIGKV, `krcMultiplier = 0,5`; com saldo inicial 250, a rodada concede 3 KRC pelo nocaute (`round(5 × 0,5)`) e 8 pelo abate final (`round(15 × 0,5)`), terminando em 261. O teste antes exigia pelo menos 265. A asserção agora valida os dois valores escalados, o saldo exato e os payloads `knock`/`kill`; nenhum código ou saldo de economia foi alterado.
+**Correção da suíte KRC (base `7e30b37`, commit `33c1cf6`, PR #301):** a falha era uma asserção desatualizada, não um erro no crédito de produção. No cenário CIGKV, `krcMultiplier = 0,5`; com saldo inicial 250, a rodada concede 3 KRC pelo nocaute (`round(5 × 0,5)`) e 8 pelo abate final (`round(15 × 0,5)`), terminando em 261. O teste antes exigia pelo menos 265. A asserção agora valida os dois valores escalados, o saldo exato e os payloads `knock`/`kill`; nenhum código ou saldo de economia foi alterado.
 
 **Suíte completa local:** `npm test` — 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. O teste KRC passou isoladamente; a suíte `room3d.test.js` passou 30/30 antes da adição das duas regressões MP-ZEX-10, que também passaram. `node --check test/room3d.test.js` e `git diff --check` passaram.
 
@@ -169,4 +169,4 @@ Configuração exigida no **GitHub Environment `staging`** (adicionar os valores
 **Limite da rodada:** secrets de `staging` não foram configurados e o usuário optou por prosseguir localmente; nenhum endpoint remoto foi acessado. MP-ZEX-08 continua pendente de execução em staging e permanece gate para aprovação multiplayer real. Os resultados desta seção são locais/sintéticos e não substituem os cenários reais MP-ZEX-08/09/11.
 
 
-**Atualização do baseline:** a falha KRC descrita na referência imediatamente anterior foi resolvida no teste local conforme esta auditoria; a contagem posterior é 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. As alterações permanecem apenas na branch de trabalho local, sem commit ou publicação.
+**Atualização do baseline:** a falha KRC descrita na referência imediatamente anterior foi resolvida no teste local conforme esta auditoria; a contagem posterior é 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. O commit `33c1cf6` está publicado na branch `fix/test-krc-scenario-reward` e submetido na [PR #301](https://github.com/Nexus-HUB57/Khaaos_Run/pull/301).
