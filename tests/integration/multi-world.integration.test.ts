@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 
 // ─── World & Rank Definitions ─────────────────────────────────────────────
 const WORLDS = [
-  { id: 'CIGKV',    players: 100,  requiredRank: 'RECRUTA',  order: 0 },
+  { id: 'CIGKV',    players: 50,   requiredRank: 'RECRUTA',  order: 0 },
   { id: 'Barburhen', players: 100, requiredRank: 'HURAN',   order: 1 },
   { id: 'Priadus',  players: 100,  requiredRank: 'VENEX',   order: 2 },
   { id: 'Ckesalth', players: 100,  requiredRank: 'SKEETW',  order: 3 },
@@ -83,7 +83,8 @@ describe('Multi-World Progression', () => {
     assert.equal(WORLDS[0].requiredRank, 'RECRUTA');
   });
 
-  it('all rings use the canonical player count (100)', () => {
-    WORLDS.forEach(w => assert.equal(w.players, 100));
+  it('CIGKV training is capped at 50 players; later rings retain 100', () => {
+    assert.equal(WORLDS[0].players, 50);
+    WORLDS.slice(1).forEach(w => assert.equal(w.players, 100));
   });
 });

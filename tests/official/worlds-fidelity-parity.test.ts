@@ -20,7 +20,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { KHAAOS_WORLDS, WORLD_OPERATIONAL_IDS, type WorldId } from "../../shared/worlds.ts";
+import {
+  KHAAOS_WORLDS,
+  WORLD_OPERATIONAL_IDS,
+  WORLD_MATCH_DURATION_SECONDS_BY_WORLD,
+  WORLD_RING_CAPACITY_OPERATORS_BY_WORLD,
+  WORLD_RING_DIMENSIONS,
+  type WorldId,
+} from "../../shared/worlds.ts";
 import { SCENARIOS } from "../../game-runtime/src/game3d/scenarios.js";
 
 const SCENARIO_KEY: Record<WorldId, keyof typeof SCENARIOS> = {
@@ -234,4 +241,15 @@ test("F47 — operationalId (W1..W4) consistente entre KHAAOS_WORLDS order e SCE
       );
     }
   }
+});
+
+test("CIGKV — capacidade de 50, batalha de 3 horas e Pulso a cada 10 minutos", () => {
+  const cigkv = KHAAOS_WORLDS.CIGKV;
+  assert.match(cigkv.recommendedPlayers, /^50 Operadores/);
+  assert.equal(WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.CIGKV, 50);
+  assert.equal(WORLD_RING_DIMENSIONS.CIGKV.operatorCapacity, 50);
+  assert.equal(cigkv.targetDurationMinutes, 180);
+  assert.equal(WORLD_MATCH_DURATION_SECONDS_BY_WORLD.CIGKV, 10_800);
+  assert.equal(cigkv.safeZonePhases.reduce((sum, phase) => sum + phase.durationSeconds, 0), 10_800);
+  assert.equal(cigkv.hazard.intervalSeconds, 600);
 });

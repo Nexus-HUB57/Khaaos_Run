@@ -6,6 +6,8 @@ import {
   WORLD_OPERATIONAL_IDS,
   WORLD_ORDER,
   WORLD_MATCH_DURATION_SECONDS,
+  WORLD_MATCH_DURATION_SECONDS_BY_WORLD,
+  WORLD_RING_CAPACITY_OPERATORS_BY_WORLD,
   toCanonicalWorldId,
   toOperationalWorldId,
 } from "../../shared/worlds.ts";
@@ -33,16 +35,20 @@ test("cada Mundo possui ameaça, POI e terminal ZEX para o Atlas e runtime", () 
   }
 });
 
-test("cada Ring usa 100 operadores e fecha em exatamente 10 minutos", () => {
+test("CIGKV usa 50 operadores e dura 3 horas; os demais rings mantêm 10 minutos", () => {
   assert.equal(WORLD_MATCH_DURATION_SECONDS, 600);
   for (const worldId of WORLD_ORDER) {
     const world = KHAAOS_WORLDS[worldId];
-    assert.match(world.recommendedPlayers, /^100 Operadores/);
-    assert.equal(world.targetDurationMinutes, 10);
+    const capacity = WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[worldId];
+    const durationSeconds = WORLD_MATCH_DURATION_SECONDS_BY_WORLD[worldId];
+    assert.match(world.recommendedPlayers, new RegExp(`^${capacity} Operadores`));
+    assert.equal(world.targetDurationMinutes, durationSeconds / 60);
     assert.equal(
       world.safeZonePhases.reduce((total, phase) => total + phase.durationSeconds, 0),
-      WORLD_MATCH_DURATION_SECONDS,
-      `${worldId}: fases do Ring devem somar 600 segundos`,
+      durationSeconds,
+      `${worldId}: fases do Ring devem somar a duração-alvo do mundo`,
     );
   }
+  assert.equal(WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.CIGKV, 50);
+  assert.equal(WORLD_MATCH_DURATION_SECONDS_BY_WORLD.CIGKV, 10_800);
 });

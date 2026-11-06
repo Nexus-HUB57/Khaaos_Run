@@ -12,7 +12,7 @@
  *   - RingStateManager (zone shrinking)
  *
  * Multi-World Pipeline:
- *   CIGKV(100p) → W1_Barburhen(100p) → W2_Priadus(100p) → W3_Ckesalth(100p) → W4_Arukheea(100p)
+ *   CIGKV(50p) → W1_Barburhen(100p) → W2_Priadus(100p) → W3_Ckesalth(100p) → W4_Arukheea(100p)
  *
  * Match phases:
  *   0: Initial safe zone
@@ -25,7 +25,13 @@ import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvival
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
 import { DBNO_CONTRACT } from "@shared/dbno";
-import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "@shared/worlds";
+import {
+  WORLD_MATCH_DURATION_SECONDS,
+  WORLD_MATCH_DURATION_SECONDS_BY_WORLD,
+  WORLD_RING_CAPACITY_OPERATORS,
+  WORLD_RING_CAPACITY_OPERATORS_BY_WORLD,
+  type WorldId,
+} from "@shared/worlds";
 import { worldKillerLabel } from "@shared/worldKillers";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -93,11 +99,11 @@ export interface MatchConfig {
 // ─── Default World Pipeline ─────────────────────────────────────────────────
 
 export const DEFAULT_WORLD_PIPELINE = [
-  { worldId: "cigkv",      worldName: "CIGKV",      capacity: WORLD_RING_CAPACITY_OPERATORS },
-  { worldId: "barburhen",  worldName: "Barburhen",  capacity: WORLD_RING_CAPACITY_OPERATORS },
-  { worldId: "priadus",    worldName: "Priadus",    capacity: WORLD_RING_CAPACITY_OPERATORS },
-  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: WORLD_RING_CAPACITY_OPERATORS },
-  { worldId: "arukheea",   worldName: "Arukheea",   capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "cigkv",      worldName: "CIGKV",      capacity: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.CIGKV },
+  { worldId: "barburhen",  worldName: "Barburhen",  capacity: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.Barburhen },
+  { worldId: "priadus",    worldName: "Priadus",    capacity: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.Priadus },
+  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.Ckesalth },
+  { worldId: "arukheea",   worldName: "Arukheea",   capacity: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD.Arukheea },
 ];
 
 // ─── Match Ring Phase Config ────────────────────────────────────────────────
@@ -111,6 +117,22 @@ const RING_PHASES = [
   { radiusStart: 50,  radiusEnd: 0,   durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 25 },
 ];
 
+function canonicalWorldId(worldId: string, worldName = worldId): WorldId | undefined {
+  const candidates = new Set([worldId.toLowerCase(), worldName.toLowerCase()]);
+  return (Object.keys(WORLD_MATCH_DURATION_SECONDS_BY_WORLD) as WorldId[]).find((id) =>
+    candidates.has(id.toLowerCase()),
+  );
+}
+
+export function getWorldMatchDurationSeconds(worldId: string, worldName = worldId): number {
+  const id = canonicalWorldId(worldId, worldName);
+  return id ? WORLD_MATCH_DURATION_SECONDS_BY_WORLD[id] : WORLD_MATCH_DURATION_SECONDS;
+}
+
+export function getWorldRingPhaseDurationSeconds(worldId: string, worldName = worldId): number {
+  return Math.floor(getWorldMatchDurationSeconds(worldId, worldName) / RING_PHASES.length);
+}
+
 // ─── MatchFlow Class ────────────────────────────────────────────────────────
 
 export class MatchFlow {
@@ -121,6 +143,7 @@ export class MatchFlow {
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private countdownTimer: ReturnType<typeof setTimeout> | null = null;
   private config: Required<MatchConfig>;
+  private phaseDurationOverride?: number;
   private tickListeners: Array<(state: MatchState) => void> = [];
   private eventLog: Array<{ type: string; data: Record<string, any>; timestamp: number }> = [];
 
@@ -135,10 +158,14 @@ export class MatchFlow {
       countdownSeconds: config.countdownSeconds ?? 30,
       tickIntervalMs: config.tickIntervalMs ?? 1000,
       worldPipeline: config.worldPipeline ?? DEFAULT_WORLD_PIPELINE,
-      maxPlayers: config.maxPlayers ?? WORLD_RING_CAPACITY_OPERATORS,
+      maxPlayers: Math.min(
+        config.maxPlayers ?? WORLD_RING_CAPACITY_OPERATORS,
+        (config.worldPipeline ?? DEFAULT_WORLD_PIPELINE)[0]?.capacity ?? WORLD_RING_CAPACITY_OPERATORS,
+      ),
       ringPhasesPerWorld: config.ringPhasesPerWorld ?? 5,
       phaseDurationSeconds: config.phaseDurationSeconds ?? RING_PHASE_DURATION_SECONDS,
     };
+    this.phaseDurationOverride = config.phaseDurationSeconds;
 
     this.economyBridge = economyBridge;
     this.spectatorPipeline = spectatorPipeline ?? null;
@@ -264,11 +291,6 @@ export class MatchFlow {
     // Apply zone damage to players outside safe zone
     this.applyZoneDamage(world);
 
-    // Check for phase survival rewards (every phaseDurationSeconds ticks)
-    if (this.state.tickCount % this.config.phaseDurationSeconds === 0) {
-      this.processPhaseSurvival(world);
-    }
-
     // Push spectator data
     this.pushSpectatorData();
 
@@ -286,7 +308,12 @@ export class MatchFlow {
    */
   private processRingTick(world: MatchWorld): void {
     const phaseIdx = Math.min(world.currentPhase, RING_PHASES.length - 1);
-    const phaseConfig = RING_PHASES[phaseIdx];
+    const phaseDurationSeconds = this.phaseDurationOverride ??
+      getWorldRingPhaseDurationSeconds(world.worldId, world.worldName);
+    const phaseConfig = {
+      ...RING_PHASES[phaseIdx],
+      durationS: phaseDurationSeconds,
+    };
 
     if (world.currentRadius > phaseConfig.radiusEnd) {
       // Shrink ring
@@ -294,19 +321,23 @@ export class MatchFlow {
       world.currentRadius = Math.max(phaseConfig.radiusEnd, world.currentRadius - shrinkPerTick);
       world.isShrinking = true;
       world.damagePerTick = phaseConfig.damagePerTick;
-    } else {
-      // Phase complete, advance to next phase
-      if (world.currentPhase < RING_PHASES.length - 1) {
-        world.currentPhase++;
-        world.isShrinking = false;
-        this.logEvent("RING_PHASE_ADVANCE", { worldId: world.worldId, newPhase: world.currentPhase });
+    }
 
-        // Notify Discord
-        this.discordBot?.sendRingPhase(world.worldId, world.currentPhase, world.damagePerTick);
-      } else {
-        // Final ring — check if all phases done → world transition
-        this.checkWorldTransition();
-      }
+    if (world.currentRadius > phaseConfig.radiusEnd) return;
+
+    // Credit survival at the boundary before incrementing the displayed phase.
+    if (this.state.tickCount % phaseDurationSeconds === 0) this.processPhaseSurvival(world);
+
+    if (world.currentPhase < RING_PHASES.length - 1) {
+      world.currentPhase++;
+      world.isShrinking = false;
+      this.logEvent("RING_PHASE_ADVANCE", { worldId: world.worldId, newPhase: world.currentPhase });
+
+      // Notify Discord
+      this.discordBot?.sendRingPhase(world.worldId, world.currentPhase, world.damagePerTick);
+    } else {
+      // Final ring — check if all phases done → world transition
+      this.checkWorldTransition();
     }
   }
 
@@ -617,7 +648,7 @@ export class MatchFlow {
         currentRadius: world.currentRadius,
         ringCenter: [0, 0, 0],
         isShrinking: world.isShrinking,
-        nextPhaseIn: this.config.phaseDurationSeconds,
+        nextPhaseIn: this.phaseDurationOverride ?? getWorldRingPhaseDurationSeconds(world.worldId, world.worldName),
       },
       events: this.toSpectatorEvents(),
     };

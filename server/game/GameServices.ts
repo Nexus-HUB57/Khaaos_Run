@@ -88,7 +88,7 @@ function registerMatchRoutes(app: Express): void {
     }
 
     const match = new MatchFlow(
-      { roomId: id, maxPlayers: maxPlayers || 100, worldPipeline },
+      { roomId: id, maxPlayers: typeof maxPlayers === "number" ? maxPlayers : undefined, worldPipeline },
       economyBridge!,
       spectatorPipeline ?? undefined,
       discordBot ?? undefined,

@@ -6,7 +6,7 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { MatchFlow, DEFAULT_WORLD_PIPELINE } from "../../server/game/MatchFlow.ts";
+import { MatchFlow, DEFAULT_WORLD_PIPELINE, getWorldMatchDurationSeconds, getWorldRingPhaseDurationSeconds } from "../../server/game/MatchFlow.ts";
 import { EconomyMatchBridge } from "../../server/game/EconomyMatchBridge.ts";
 
 describe("MatchFlow", () => {
@@ -16,7 +16,7 @@ describe("MatchFlow", () => {
   beforeEach(() => {
     economyBridge = new EconomyMatchBridge();
     matchFlow = new MatchFlow(
-      { roomId: "test_match", maxPlayers: 100, countdownSeconds: 5 },
+      { roomId: "test_match", countdownSeconds: 5 },
       economyBridge,
     );
   });
@@ -52,11 +52,48 @@ describe("MatchFlow", () => {
     });
 
     it("should have correct capacities", () => {
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 100);  // CIGKV
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 50);   // CIGKV
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[1].capacity, 100);  // Barburhen
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 100);  // Priadus
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 100);  // Ckesalth
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 100);  // Arukheea
+    });
+
+    it("should configure CIGKV for 3 hours without changing later worlds", () => {
+      assert.equal(getWorldMatchDurationSeconds("cigkv"), 10_800);
+      assert.equal(getWorldRingPhaseDurationSeconds("cigkv"), 2_160);
+      assert.equal(getWorldMatchDurationSeconds("barburhen"), 600);
+      assert.equal(getWorldRingPhaseDurationSeconds("barburhen"), 120);
+    });
+
+    it("should finish five ring phases on the exact configured duration", () => {
+      const exactTimingMatch = new MatchFlow({
+        roomId: "exact_timing",
+        maxPlayers: 2,
+        countdownSeconds: 10,
+        tickIntervalMs: 100_000,
+        phaseDurationSeconds: 1,
+        worldPipeline: [
+          { worldId: "cigkv", worldName: "CIGKV", capacity: 50 },
+          { worldId: "barburhen", worldName: "Barburhen", capacity: 100 },
+        ],
+      }, new EconomyMatchBridge());
+      const player = (id: string) => ({
+        id, displayName: id, species: "HURAN" as const, skinRarity: "COMUM",
+        posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      exactTimingMatch.joinPlayer(player("one"));
+      exactTimingMatch.joinPlayer(player("two"));
+      exactTimingMatch.startCountdown();
+      exactTimingMatch.startMatch();
+      const tickMatch = exactTimingMatch as unknown as { tick: () => void };
+      for (let tick = 0; tick < 4; tick++) {
+        tickMatch.tick();
+        assert.equal(exactTimingMatch.getState().currentWorldIndex, 0);
+      }
+      tickMatch.tick();
+      assert.equal(exactTimingMatch.getState().currentWorldIndex, 1);
+      exactTimingMatch.destroy();
     });
   });
 
@@ -122,6 +159,16 @@ describe("MatchFlow", () => {
       });
       assert.strictEqual(joined, false);
       smallMatch.destroy();
+    });
+
+    it("should cap the default CIGKV lobby at 50 players", () => {
+      const player = (id: string) => ({
+        id, displayName: id, species: "HURAN" as const, skinRarity: "COMUM",
+        posX: 50, posY: 50, inWaterZone: false, worldId: "cigkv",
+      });
+      for (let i = 0; i < 50; i++) assert.equal(matchFlow.joinPlayer(player(`p${i}`)), true);
+      assert.equal(matchFlow.joinPlayer(player("p50")), false);
+      assert.equal(matchFlow.getState().players.size, 50);
     });
   });
 

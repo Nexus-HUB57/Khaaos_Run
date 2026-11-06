@@ -111,7 +111,7 @@ Cada trilha lista objetivo, tarefas com prioridade, critério de aceite e depend
 | T4.1 | Credenciais EOS reais (Product/Sandbox/Deployment IDs) | P0 | Login/logout EOS funcional em staging |
 | T4.2 | Lobby + Matchmaking + Sessions com 100 jogadores | P0 | 100 players em lobby sem crash; matchmaking < 30 s p95 |
 | T4.3 | `KhaaosLoadTestManager` 100 bots no servidor compilado | P0 | JSON report: 0 crashes, RTT < 100 ms local |
-| T4.4 | Partida real assistida: CIGKV ring 100p, fluxo contínuo, Pulso Khaaos 10 min, ZEX + Forja + Bankhaoos ativos | P0 | Partida completa do drop à eliminação/vitória sem intervention manual |
+| T4.4 | Partida real assistida: CIGKV de treinamento com 50 jogadores por batalha de 3 h, Pulso Khaaos a cada 10 min, ZEX + Forja + Bankhaoos ativos | P0 | Partida completa do drop à eliminação/vitória sem intervenção manual |
 | T4.5 | Multi-region routing (SA/NA/EU) medido | P1 | Ping-based routing funcional; RTT regional registrado |
 | T4.6 | Stress 500/1000/2000 bots (`stress-test.yml`) | P1 | < 150 ms RTT p95, zero crashes em 8 h |
 
@@ -165,7 +165,7 @@ Sprint 1 (1.1–1.5)├───┤
 T1 Console/Pagamento   ├──────────┤ (sandbox) ──► (real pós-T5.3) ──► campanha
 T2 Build UE5.8         ├───────────┤            ► artefato GHCR
 T3 Mundos/Cook                 ├─────────────┤
-T4 EOS/Partida real                 ├─────────────┤  ► 100p real no CIGKV
+T4 EOS/Partida real                 ├─────────────┤  ► 50p, 3h no CIGKV
 T5 Economia/Compliance              ├───────┤ (2PC e2e) ► sign-off real
 T6 Infra/Observabilidade       ├───────┤
 T7 Segurança/EAC                        ├────────────┤
@@ -197,7 +197,7 @@ T8 Beta → GO LIVE                                ├────────�
 O produto só é declarado pronto quando **todos** os itens abaixo forem demonstrados (não versionados — demonstrados):
 
 1. Jogador real se alista no console canônico, paga U$1 via gateway real, recebe protocolo assinado e entra no Bankhaoos com bônus de boas-vindas — recibo conciliável.
-2. Partida real no CIGKV: 100 operadores no ring canônico de 16.000 m², Zu cinematográfico, Pulso Khaaos, ZEX/Forja com `TryPurchase` 2PC contra ledger de staging, extração ou eliminação.
+2. Partida real no CIGKV: até 50 operadores no ring canônico de 16.000 m², batalha de 3 horas, Zu cinematográfico, Pulso Khaaos a cada 10 minutos, ZEX/Forja com `TryPurchase` 2PC contra ledger de staging, extração ou eliminação.
 3. Binário do dedicated server compilado, publicado no GHCR, rodando no compose de produção com healthchecks verdes por 72 h.
 4. EOS Auth/Lobby/Matchmaking/Sessions/Cloud Save operacionais com credenciais reais.
 5. EAC ativo com kicks demonstrados; pentest sem críticos abertos.

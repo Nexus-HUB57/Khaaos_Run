@@ -5,7 +5,7 @@ import {
   WORLD_ORDER,
   WORLD_RING_DIMENSIONS,
   WORLD_RING_DIMENSIONS_LIST,
-  WORLD_RING_CAPACITY_OPERATORS,
+  WORLD_RING_CAPACITY_OPERATORS_BY_WORLD,
   toOperationalWorldId,
   type WorldId,
 } from "../../shared/worlds.ts";
@@ -14,7 +14,7 @@ import {
  * groundwork T3.3). Divergência de qualquer invariante = falha. */
 
 const EXPECTED = [
-  { id: "CIGKV", area: 16_000, w: 160, d: 100, perim: 520, density: 160, shape: "fortified_rectangle", op: "CIGKV" },
+  { id: "CIGKV", area: 16_000, w: 160, d: 100, perim: 520, density: 320, shape: "fortified_rectangle", op: "CIGKV" },
   { id: "Barburhen", area: 19_000, w: 190, d: 100, perim: 580, density: 190, shape: "urban_gridiron", op: "W1" },
   { id: "Priadus", area: 22_000, w: 220, d: 100, perim: 640, density: 220, shape: "organic_blob", op: "W2" },
   { id: "Ckesalth", area: 25_000, w: 250, d: 100, perim: 700, density: 250, shape: "desert_basin", op: "W3" },
@@ -39,12 +39,12 @@ for (const expected of EXPECTED) {
     assert.equal(dims.perimeterM, expected.perim);
     assert.equal(dims.densityM2PerOperator, expected.density);
     assert.equal(dims.shape, expected.shape);
-    assert.equal(dims.operatorCapacity, WORLD_RING_CAPACITY_OPERATORS);
+    assert.equal(dims.operatorCapacity, WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[expected.id as WorldId]);
     assert.equal(toOperationalWorldId(dims.worldId), expected.op);
   });
 }
 
-test("invariantes de paridade: área = w×d, perímetro = 2(w+d), densidade = área/100", () => {
+test("invariantes de paridade: área = w×d, perímetro = 2(w+d), densidade = área/capacidade", () => {
   for (const dims of WORLD_RING_DIMENSIONS_LIST) {
     const { widthM, depthM } = dims.boundingBoxM;
     assert.equal(
@@ -62,12 +62,16 @@ test("invariantes de paridade: área = w×d, perímetro = 2(w+d), densidade = á
       dims.areaM2 / dims.operatorCapacity,
       `${dims.worldId}: densidade deve ser areaM2 / operatorCapacity`,
     );
-    assert.equal(dims.operatorCapacity, 100, "capacidade canônica: 100 operadores/ring");
+    assert.equal(
+      dims.operatorCapacity,
+      WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[dims.worldId],
+      `${dims.worldId}: capacidade deve seguir o contrato por mundo`,
+    );
   }
 });
 
-test("faixa canônica do Descentralizador: 15.000–25.000 m² e 150–250 m²/jogador", () => {
-  for (const dims of WORLD_RING_DIMENSIONS_LIST) {
+test("faixa de densidade dos rings de combate W1–W4: 15.000–25.000 m² e 150–250 m²/jogador", () => {
+  for (const dims of WORLD_RING_DIMENSIONS_LIST.filter((world) => world.worldId !== "CIGKV")) {
     assert.ok(
       dims.areaM2 >= 15_000 && dims.areaM2 <= 25_000,
       `${dims.worldId}: área fora da faixa canônica`,

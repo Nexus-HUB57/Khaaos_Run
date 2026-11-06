@@ -160,8 +160,8 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
     biome: "Vila Militar Murada — Pátio de Armamento, Setor de Testes (Proving Grounds), Parque Abandonado e 15 Zonas de Extração de XP",
     dimensionsKm: "2.0 x 2.0 km",
     sizeMeters: 2000,
-    recommendedPlayers: "100 Operadores (especificação canônica do Descentralizador)",
-    targetDurationMinutes: 10,
+    recommendedPlayers: "50 Operadores (campo de treinamento CIGKV)",
+    targetDurationMinutes: 180,
     krcMultiplier: 0.5,
     xpMultiplier: 1.0,
     accentColor: "#00f0ff",
@@ -172,11 +172,11 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       description: "Desbloqueado por padrão para calibração neural e certificação tática."
     },
     safeZonePhases: [
-      { phaseIndex: 0, phaseName: "Calibração Inicial", durationSeconds: 120, radiusMeters: 1000, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 1, phaseName: "Compressão Alfa", durationSeconds: 120, radiusMeters: 700, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 2, phaseName: "Compressão Beta", durationSeconds: 120, radiusMeters: 450, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 3, phaseName: "Fechamento Crítico", durationSeconds: 120, radiusMeters: 220, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
-      { phaseIndex: 4, phaseName: "Colapso ZU", durationSeconds: 120, radiusMeters: 60, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 0, phaseName: "Calibração Inicial", durationSeconds: 2160, radiusMeters: 1000, damagePerSecond: 1.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 1, phaseName: "Compressão Alfa", durationSeconds: 2160, radiusMeters: 700, damagePerSecond: 2.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 2, phaseName: "Compressão Beta", durationSeconds: 2160, radiusMeters: 450, damagePerSecond: 5.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 3, phaseName: "Fechamento Crítico", durationSeconds: 2160, radiusMeters: 220, damagePerSecond: 10.0, center: { x: 0, y: 0, z: 100 } },
+      { phaseIndex: 4, phaseName: "Colapso ZU", durationSeconds: 2160, radiusMeters: 60, damagePerSecond: 20.0, center: { x: 0, y: 0, z: 100 } },
     ],
     pois: [
       {
@@ -224,7 +224,7 @@ export const KHAAOS_WORLDS: Record<WorldId, WorldDefinition> = {
       id: "HAZ_CIGKV_PULSO_KHAAOS",
       name: "Pulso Khaaos — Anomalia de Inversão Gravitacional",
       type: "KHAOS_GRAVITY",
-      intervalSeconds: 120,
+      intervalSeconds: 600,
       durationSeconds: 30,
       damagePerSecond: 12,
       gravityScale: 0.35,
@@ -730,8 +730,8 @@ export function evaluateWorldUnlocks(
 /* ────────────────────────────────────────────────────────────────────────────
  * Contrato de dimensões canônicas dos rings (especificação do Descentralizador)
  *
- * Faixa 15.000–25.000 m² · 100 operadores por ring · densidade 150–250 m²/jogador
- * (combate CQB estilo Free Fire). `areaM2` ≠ `perimeterM` de contorno — ambos são
+ * CIGKV: 50 operadores em 16.000 m²; W1–W4: 100 operadores, faixa de densidade
+ * 150–250 m²/jogador. `areaM2` ≠ `perimeterM` de contorno — ambos são
  * campos independentes do contrato e a paridade é verificada por
  * `tests/official/worlds-dimensions.test.ts`.
  *
@@ -757,16 +757,31 @@ export interface WorldRingDimensions {
   boundingBoxM: { widthM: number; depthM: number };
   /** Perímetro de contorno em metros (contrato independente da área). */
   perimeterM: number;
-  /** Capacidade fixa do Descentralizador: 100 operadores por ring. */
+  /** Capacidade canônica específica deste ring. */
   operatorCapacity: number;
   /** Densidade canônica em m² por operador (areaM2 / operatorCapacity). */
   densityM2PerOperator: number;
   shapeNote: string;
 }
 
+/** Capacidade legada para rings de combate; a capacidade canônica varia por mundo. */
 export const WORLD_RING_CAPACITY_OPERATORS = 100;
-/** Limite operacional canônico: cada partida/ring termina em 10 minutos. */
+export const WORLD_RING_CAPACITY_OPERATORS_BY_WORLD: Readonly<Record<WorldId, number>> = {
+  CIGKV: 50,
+  Barburhen: 100,
+  Priadus: 100,
+  Ckesalth: 100,
+  Arukheea: 100,
+};
+/** Duração legada de 10 minutos; o treinamento CIGKV dura 3 horas. */
 export const WORLD_MATCH_DURATION_SECONDS = 10 * 60;
+export const WORLD_MATCH_DURATION_SECONDS_BY_WORLD: Readonly<Record<WorldId, number>> = {
+  CIGKV: 3 * 60 * 60,
+  Barburhen: WORLD_MATCH_DURATION_SECONDS,
+  Priadus: WORLD_MATCH_DURATION_SECONDS,
+  Ckesalth: WORLD_MATCH_DURATION_SECONDS,
+  Arukheea: WORLD_MATCH_DURATION_SECONDS,
+};
 
 export const WORLD_RING_DIMENSIONS: Readonly<
   Record<WorldId, WorldRingDimensions>
@@ -778,8 +793,8 @@ export const WORLD_RING_DIMENSIONS: Readonly<
     areaM2: 16_000,
     boundingBoxM: { widthM: 160, depthM: 100 },
     perimeterM: 520,
-    operatorCapacity: 100,
-    densityM2PerOperator: 160,
+    operatorCapacity: 50,
+    densityM2PerOperator: 320,
     shapeNote: "Vila militar murada",
   },
   Barburhen: {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   KHAAOS_WORLDS,
   WORLD_RING_DIMENSIONS,
+  WORLD_RING_CAPACITY_OPERATORS_BY_WORLD,
   toOperationalWorldId,
   type WorldId,
 } from "@shared/worlds";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
  *
  * Spec canônica (README § Console Web): 5 formas orgânicas por bioma,
  * POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de
- * dropship bezier animada, cluster de 100 dots, pontos Zu, barra de escala
+ * dropship bezier animada, cluster proporcional à capacidade do mundo, pontos Zu, barra de escala
  * métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render
  * determinístico.
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -246,10 +247,10 @@ function deriveEntities(worldId: WorldId, geometry: RingGeometry): DerivedEntiti
     },
   }));
 
-  // Cluster de 100 operadores por amostragem de rejeição dentro do contorno
+  // Operadores pela capacidade do mundo, amostrados dentro do contorno
   const operators: Vec2[] = [];
   let guard = 0;
-  while (operators.length < 100 && guard < 20_000) {
+  while (operators.length < WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[worldId] && guard < 20_000) {
     guard += 1;
     const candidate: Vec2 = {
       x: bbox.minX + rng() * spanX,
@@ -452,7 +453,7 @@ export function WorldMapPreview({
       ctx.font = "8px ui-monospace, monospace";
       ctx.fillText("DROPSHIP", shipPos.x + 5, shipPos.y - 4);
 
-      // ── cluster de 100 operadores
+      // ── cluster com a capacidade canônica do mundo
       ctx.fillStyle = "rgba(255,255,255,0.82)";
       for (const op of entities.operators) {
         const q = toPx(op);
@@ -567,7 +568,7 @@ export function WorldMapPreview({
     };
   }, [animated, def, dims, entities, geometry, height, worldId]);
 
-  const ariaLabel = `Mapa tático do ring ${def.name} (${dims.shapeNote}) — área ${dims.areaM2} m², 100 operadores`;
+  const ariaLabel = `Mapa tático do ring ${def.name} (${dims.shapeNote}) — área ${dims.areaM2} m², ${WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[worldId]} operadores`;
 
   return (
     <div

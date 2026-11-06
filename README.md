@@ -277,8 +277,8 @@ Docs: `Docs/CIGKV_Barburhen/`
 
 ### Aba Mundos — especificação canônica do Descentralizador aplicada
 
-- **100 operadores por ring** nos 5 rings (CIGKV PRÉ + C1–C4), perímetros **15.000–25.000 m²**, densidade **150–250 m²/jogador** (CQB estilo Free Fire).
-- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, cluster de 100 dots, pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.
+- **CIGKV (treinamento): 50 operadores e 3 horas por batalha**; C1–C4 conservam as capacidades de 100 operadores. A área CIGKV é 16.000 m² (320 m²/operador); os quatro rings de combate ficam na faixa de 15.000–25.000 m² e 150–250 m²/operador.
+- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, marcadores na capacidade real do mundo (50 no CIGKV; 100 nos demais), pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.
 - Contrato de dimensões sincronizado console ↔ orquestração: `src/lib/game-constants.ts` (`WorldDef.dimensions`) espelha `shared/worlds.ts` do repo.
 - Render validado por análise visual (VLM) dos 5 cartões: formas não-quadradas, POIs rotulados, métricas m² legíveis, sem anomalias.
 
@@ -438,9 +438,9 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: pendente de reconciliação editorial: este README especifica 100 operadores por ring; o DOCX oficial `KhaaosRun-Mundos.docx` especifica limite de 50 jogadores para o ring CIGKV. Não tratar a capacidade como validada até a decisão do responsável pelo cânone.
-- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade de 160 m²/jogador (100 operadores) ou 320 m²/jogador (50 jogadores).
-- **Duração oficial**: 3 horas (Ring de Longa Duração). **Divergência de implementação aberta**: `shared/worlds.ts` e `WORLD_MATCH_DURATION_SECONDS` ainda configuram 10 minutos, e o runtime de preview comprime o ring. Não considerar a duração de 3 h implementada/validada até que o MatchFlow e a cadência do Pulso Khaaos sejam reconciliados e testados.
+- **Capacidade**: CIGKV de treinamento aceita 50 operadores; os rings W1–W4 mantêm capacidade de 100 operadores cada, conforme contrato e MatchFlow.
+- **Área canônica CIGKV**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade de 320 m² por operador para o limite de 50 jogadores.
+- **Duração oficial CIGKV**: 3 horas. O contrato declara 180 minutos e cinco fases que somam 10.800 segundos; o MatchFlow aplica a duração por mundo. O Pulso Khaaos mantém cadência de 10 minutos (600 segundos).
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
 - **Arsenal sem limites de patente**: Recruta pode testar equipamento de nível General — objetivo é coleta de dados de balanceamento.
@@ -460,9 +460,9 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 
 ## Mundos Oficiais (W1–W4)
 
-> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). O contrato vigente do repositório está em `shared/worlds.ts` (`WORLD_RING_DIMENSIONS`; `areaM2` é distinto do perímetro de contorno), com testes em `tests/official/worlds-dimensions.test.ts`. **Conflito ainda aberto:** o DOCX oficial `KhaaosRun-Mundos.docx` define limite de 50 jogadores para CIGKV, enquanto o README e o contrato de dimensões definem 100; requer decisão editorial antes da validação de capacidade.
+> **Dimensões canônicas:** CIGKV (campo de treinamento) comporta **50 operadores** e dura **3 horas por batalha**; W1–W4 comportam 100 operadores por ring. A faixa de densidade de 150–250 m²/jogador aplica-se aos rings W1–W4; CIGKV tem 16.000 m² (320 m² por operador). Contrato em `shared/worlds.ts` (`WORLD_RING_DIMENSIONS`; `areaM2` é distinto do perímetro), coberto por `tests/official/worlds-dimensions.test.ts`. Essa reconciliação alinha o README à especificação do DOCX e à decisão de produto para CIGKV.
 
-| Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
+| Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade por capacidade canônica | Shape/bioma |
 |------|---------------|--------------|------------------------|----------------------------|-------------|
 | CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 (100p) / 320 (50p) m²/jogador | Vila militar murada (`fortified_rectangle`) |
 | W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
@@ -1412,3 +1412,4 @@ TEST_DATABASE_URL="postgresql://test:test@127.0.0.1:54329/khaaos_test?max=1" \
 ---
 
 <sub>Khaaos Run · Plataforma Battle Royale multi-mundo · Nível Devs Ph.D · Equipe Nexus</sub>
+- `WorldMapPreview` (canvas 2D top-down, `src/components/world-map-preview.tsx`): 5 formas orgânicas por bioma (`fortified_rectangle`, `urban_gridiron`, `organic_blob`, `coastal_island`, `desert_basin`), POIs com tier T1–T3, anel de zona pulsante/contraindo, trajetória de dropship bezier animada, marcadores na capacidade real do mundo (50 no CIGKV; 100 nos demais), pontos Zu, barra de escala métrica e bússola; RNG seedado por id do mundo (FNV-1a + LCG) — render determinístico.

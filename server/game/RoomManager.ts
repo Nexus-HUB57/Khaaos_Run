@@ -44,6 +44,7 @@ import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type Wor
 import { distributedState } from "./DistributedState";
 import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
 import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
+import { WORLD_CANONICAL_IDS, WORLD_RING_CAPACITY_OPERATORS_BY_WORLD } from "@shared/worlds";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -708,7 +709,7 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: 100, // capacidade canônica: 100 operadores por ring
+      maxPlayers: WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[WORLD_CANONICAL_IDS[worldId]],
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),
@@ -1877,7 +1878,10 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: Math.min(100, Math.max(2, maxPlayers ?? 100)),
+      maxPlayers: Math.min(
+        WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[WORLD_CANONICAL_IDS[worldId]],
+        Math.max(2, maxPlayers ?? WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[WORLD_CANONICAL_IDS[worldId]]),
+      ),
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),
