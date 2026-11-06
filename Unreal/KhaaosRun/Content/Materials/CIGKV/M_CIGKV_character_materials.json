@@ -1,0 +1,91 @@
+{
+  "schema": "khaaos.cigkv.character-materials/v1",
+  "status": "editor_creation_required",
+  "master": {
+    "name": "M_CIGKV_Character_Master",
+    "shading_model": "Subsurface",
+    "blend_mode": "Opaque",
+    "two_sided": false,
+    "parameters": {
+      "BaseColor": "Texture2D",
+      "Normal": "Texture2D",
+      "ORM": "Texture2D",
+      "DetailNormal": "Texture2D",
+      "RoughnessMultiplier": {"default": 1.0, "min": 0.2, "max": 1.8},
+      "MetallicMultiplier": {"default": 1.0, "min": 0.0, "max": 1.0},
+      "AOIntensity": {"default": 1.0, "min": 0.0, "max": 1.0},
+      "SubsurfaceColor": "Vector3",
+      "SubsurfaceStrength": {"default": 0.0, "min": 0.0, "max": 1.0},
+      "ClearCoatStrength": {"default": 0.0, "min": 0.0, "max": 1.0},
+      "HairAnisotropy": {"default": 0.0, "min": 0.0, "max": 1.0},
+      "EmissiveColor": "Vector3",
+      "EmissiveIntensity": {"default": 0.0, "min": 0.0, "max": 8.0}
+    }
+  },
+  "instances": [
+    {
+      "name": "MI_CIGKV_Human_Skin",
+      "surface": "skin",
+      "subsurface_strength": 0.32,
+      "roughness_multiplier": 0.92,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.08,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "detail_normal_2k"]
+    },
+    {
+      "name": "MI_CIGKV_Human_Cloth",
+      "surface": "cloth",
+      "subsurface_strength": 0.0,
+      "roughness_multiplier": 1.18,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.0,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "fabric_detail_2k"]
+    },
+    {
+      "name": "MI_CIGKV_Human_Hair",
+      "surface": "hair",
+      "subsurface_strength": 0.05,
+      "roughness_multiplier": 0.72,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.12,
+      "hair_anisotropy": 0.72,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "hair_flow_2k"]
+    },
+    {
+      "name": "MI_CIGKV_Zheers_Skin",
+      "surface": "species_skin",
+      "subsurface_strength": 0.48,
+      "roughness_multiplier": 0.86,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.04,
+      "emissive_intensity": 0.35,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "species_detail_2k"]
+    },
+    {
+      "name": "MI_CIGKV_Zheers_Cloth",
+      "surface": "cloth",
+      "subsurface_strength": 0.0,
+      "roughness_multiplier": 1.12,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.0,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "fabric_detail_2k"]
+    },
+    {
+      "name": "MI_CIGKV_Zheers_Hair",
+      "surface": "hair",
+      "subsurface_strength": 0.08,
+      "roughness_multiplier": 0.76,
+      "metallic_multiplier": 0.0,
+      "clear_coat_strength": 0.08,
+      "hair_anisotropy": 0.64,
+      "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "hair_flow_2k"]
+    }
+  ],
+  "acceptance": {
+    "no_plastic_skin": true,
+    "no_emissive_masking_missing_detail": true,
+    "stable_under_day_night_interior": true,
+    "texture_min_dimension_px": 1024,
+    "target_dimension_px": 2048
+  }
+}

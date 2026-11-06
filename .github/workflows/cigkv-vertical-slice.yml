@@ -1,0 +1,85 @@
+name: CIGKV Character Vertical Slice
+
+on:
+  pull_request:
+    paths:
+      - 'Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/**'
+      - 'Unreal/KhaaosRun/Content/Materials/CIGKV/**'
+      - 'scripts/ue5/**'
+      - 'scripts/ue5_editor/**'
+      - '.github/workflows/cigkv-vertical-slice.yml'
+  workflow_dispatch:
+    inputs:
+      run_engine:
+        description: 'Executar importação, retarget e screenshots no runner UE5.8 licenciado'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  recipe:
+    name: Validate CIGKV slice recipe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON and Python scripts
+        run: |
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5_editor/cigkv_vertical_slice.py
+      - name: Prepare engine-less report
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          set +e
+          python3 scripts/ue5/prepare_cigkv_vertical_slice.py --output artifacts/cigkv-vertical-slice/prepare-report.json
+          code=$?
+          test "$code" -eq 0 || test "$code" -eq 2
+          test -s artifacts/cigkv-vertical-slice/prepare-report.json
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cigkv-vertical-slice-recipe
+          path: artifacts/cigkv-vertical-slice/prepare-report.json
+
+  engine:
+    name: UE5.8 import retarget and screenshots
+    needs: recipe
+    if: inputs.run_engine == true && vars.UE58_ENABLED == 'true'
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    timeout-minutes: 90
+    env:
+      UE5_ROOT: ${{ vars.UE5_ROOT || '/opt/UnrealEngine' }}
+      UPROJECT: ${{ github.workspace }}/Unreal/KhaaosRun/KhaaosRun.uproject
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Verify UE5.8 GPU runner
+        run: |
+          test -x "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd"
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+      - name: Normalize sources on the runner
+        run: |
+          mkdir -p Build/CIGKVVerticalSlice/Source artifacts/cigkv-vertical-slice
+          echo 'Execute scripts/ue5/normalize_cigkv_character_blender.py for each manifest source with Blender 4.x.'
+          test -f client/public/figures/glb/FIG_kane.glb
+          test -f mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae
+          test -f Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json
+      - name: Import, retarget and capture Low/Medium/High/Ultra
+        run: |
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
+            -unattended -nop4 -nosplash -nullrhi=false \
+            -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/cigkv_vertical_slice.py" \
+            -log
+      - name: Verify real captures
+        run: |
+          test -s artifacts/cigkv-vertical-slice/engine-report.json
+          test "$(find artifacts/cigkv-vertical-slice -name 'CIGKV_*.png' | wc -l)" -ge 8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cigkv-vertical-slice-ue58-${{ github.sha }}
+          path: artifacts/cigkv-vertical-slice
