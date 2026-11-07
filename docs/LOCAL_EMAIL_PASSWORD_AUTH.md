@@ -16,9 +16,11 @@ Sem a configuração SMTP, as rotas de cadastro, reenvio e recuperação respond
 
 - `SMTP_HOST`: hostname do provedor SMTP.
 - `SMTP_PORT`: porta SMTP, normalmente `587` para STARTTLS ou `465` para TLS implícito.
-- `SMTP_SECURE`: `false` para STARTTLS/587, `true` para TLS implícito/465; se omitido, a porta 465 ativa TLS implícito.
+- `SMTP_SECURE`: `false` para STARTTLS, `true` para TLS implícito; se omitido, a porta 465 ativa TLS implícito. Quando `false`, o transporte exige STARTTLS e falha fechado se o servidor não o oferecer.
 - `SMTP_USER` e `SMTP_PASSWORD`: ambos ou nenhum, conforme o provedor.
 - `SMTP_FROM`: remetente verificado e autorizado pelo provedor.
+
+Os testes locais do adaptador usam um transporte simulado para verificar configuração e conteúdo sem abrir conexão nem enviar mensagens. Isso não substitui o teste de entrega em caixa real no staging.
 
 Antes de disponibilizar o cadastro ao público, configurar um remetente verificado, confirmar entrega em caixa real e spam, validar SPF/DKIM/DMARC do domínio e monitorar rejeições/atrasos. Isso não foi executado nesta branch porque não há credenciais ou domínio de email fornecidos.
 
