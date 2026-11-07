@@ -19,6 +19,14 @@ const HAZARD_FOG = Object.freeze({
   saltSpray: 0x4d8192,
 });
 
+const HAZARD_LIGHT = Object.freeze({
+  ash: { sun: .72, hemi: 1.08, fill: .86, back: 1.12, tint: 0x8c789e },
+  acidRain: { sun: .78, hemi: .92, fill: 1.18, back: .9, tint: 0x86b86f },
+  spores: { sun: .84, hemi: 1.12, fill: 1.22, back: .96, tint: 0x5f9b60 },
+  dust: { sun: .74, hemi: .88, fill: 1.1, back: 1.06, tint: 0xc28a5e },
+  saltSpray: { sun: .8, hemi: 1.06, fill: .92, back: 1.14, tint: 0x73a7bd },
+});
+
 const clamp01 = (n) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
 
 function seedFor(id) {
@@ -49,6 +57,16 @@ function makeMaterial(profile, q) {
     : new THREE.PointsMaterial({ color: profile.color, size: profile.size * (q.isMobile ? .8 : 1), transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
 }
 
+function captureLights(lights) {
+  if (!lights) return null;
+  const snapshot = {};
+  for (const name of ['sun', 'hemi', 'fill', 'back']) {
+    const light = lights[name];
+    if (light) snapshot[name] = { intensity: light.intensity, color: light.color?.clone?.() ?? new THREE.Color(1, 1, 1) };
+  }
+  return snapshot;
+}
+
 /**
  * Add a decorative atmosphere layer. The returned registry follows the same
  * `{ id, kind, count, group, animators }` shape used by other world systems.
@@ -63,7 +81,7 @@ export function buildAtmosphere(scene, scenario, q = {}) {
   const group = new THREE.Group();
   group.name = `atmosphere-${base.kind}`;
   group.userData.decorative = true;
-  const hazardState = { active: false, kind: null, boost: 0, pulse: 0, gradeBase: null };
+  const hazardState = { active: false, kind: null, boost: 0, pulse: 0, gradeBase: null, lightBase: null };
   const grade = { color: new THREE.Color(), density: scene.fog?.density ?? null, baseColor: scene.fog?.color?.clone?.() ?? null };
   const material = makeMaterial(base, q);
   const positions = new Float32Array(base.kind === 'acidRain' ? count * 6 : count * 3);
@@ -88,6 +106,19 @@ export function buildAtmosphere(scene, scenario, q = {}) {
       scene.fog.color.copy(grade.color);
       if ('density' in scene.fog && hazardState.gradeBase.density != null) {
         scene.fog.density = hazardState.gradeBase.density * (1 + hazardState.boost * .42);
+      }
+    }
+    const lights = scene.userData.nightLights;
+    const lightProfile = HAZARD_LIGHT[base.kind];
+    if (lights && hazardState.lightBase && lightProfile) {
+      const tint = new THREE.Color(lightProfile.tint);
+      for (const name of ['sun', 'hemi', 'fill', 'back']) {
+        const light = lights[name];
+        const saved = hazardState.lightBase[name];
+        const multiplier = lightProfile[name];
+        if (!light || !saved || multiplier == null) continue;
+        light.intensity = saved.intensity * (1 + (multiplier - 1) * hazardState.boost);
+        if (light.color?.copy) light.color.copy(saved.color).lerp(tint, hazardState.boost * .22);
       }
     }
     const attr = geometry.getAttribute('position');
@@ -119,12 +150,14 @@ export function buildAtmosphere(scene, scenario, q = {}) {
     if (starts[type] && starts[type] === compatible) {
       hazardState.kind = starts[type]; hazardState.active = true;
       hazardState.gradeBase = { color: scene.fog?.color?.clone?.() ?? new THREE.Color(0), density: scene.fog?.density ?? null };
+      hazardState.lightBase = captureLights(scene.userData.nightLights);
       return;
     }
     if (ends[type] && ends[type] === compatible && hazardState.kind === ends[type]) { hazardState.active = false; return; }
     if (type === 'acidRain' && base.kind === 'acidRain') {
       hazardState.kind = 'acidRain'; hazardState.active = true; hazardState.pulse = 2.2;
       hazardState.gradeBase = { color: scene.fog?.color?.clone?.() ?? new THREE.Color(0), density: scene.fog?.density ?? null };
+      hazardState.lightBase = captureLights(scene.userData.nightLights);
     }
   };
   update(0, 0);

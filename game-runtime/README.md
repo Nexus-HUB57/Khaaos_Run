@@ -66,6 +66,18 @@ com a iluminação noturna. Eventos estrangeiros continuam ignorados por id-gati
 `test/atmosphere-f48.test.js` cobre os cinco grades, restauração de cor/densidade e
 isolamento de eventos.
 
+### Diretor cinematográfico de iluminação — Fase 49
+
+O diretor atmosférico também sincroniza temporariamente as quatro luzes do perfil
+noturno (`sun`, `hemi`, `fill`, `back`) com o hazard ativo. Cinzas, chuva ácida,
+esporos, poeira e spray salino têm multiplicadores de intensidade e tintas próprios,
+capturados por mundo no início do evento. O encerramento restaura exatamente as
+intensidades e cores capturadas, sem acumular estado entre hazards e sem alterar o
+contrato autoritativo da simulação.
+
+`test/atmosphere-f49.test.js` cobre os cinco perfis, restauração de intensidade/cor
+e isolamento contra eventos estrangeiros.
+
 **Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `G` granada FRAG · `F` Gloo Wall · `1`/`2` slots · `ESC` liberar mouse.
 **Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit, 💣 granada, 🧊 gloo) à direita.
 
