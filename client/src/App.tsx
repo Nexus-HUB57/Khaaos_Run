@@ -23,6 +23,7 @@ const Lobby = lazy(() => import("@/pages/lobby"));
 const Ranking = lazy(() => import("@/pages/ranking"));
 const Landing = lazy(() => import("@/pages/landing"));
 const AuthPage = lazy(() => import("@/pages/auth"));
+const TermsStatusPage = lazy(() => import("@/pages/terms-status"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 import { BattleRoomProvider } from "@/hooks/battle-room-context";
 import { MatchResultsModal } from "@/components/match-results-modal";
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/login" component={AuthPage} />
       <Route path="/cadastro" component={AuthPage} />
+      <Route path="/termos" component={TermsStatusPage} />
       <Route path="/" component={user ? () => <ProtectedRoute component={Dashboard} /> : Landing} />
       <Route path="/bank">
         <ProtectedRoute component={Bank} />

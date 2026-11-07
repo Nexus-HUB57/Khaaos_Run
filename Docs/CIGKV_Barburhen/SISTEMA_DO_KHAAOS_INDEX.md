@@ -9,7 +9,7 @@
 
 | Sistema (lore) | Onde vive no repo | Status |
 |---|---|---|
-| Jornada oficial do jogador — cadastro/login, taxa nominal US$ 1, Perfil/War’I, Academia KR e marco de 1.000.000 antes do CIGKV | `README.md` §Jornada Oficial do Jogador; gates em `docs/STRIPE_BRAZIL_CHECKOUT.md` e `docs/ROADMAP_DESENVOLVIMENTO_2026-11.md`; auditoria `docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md` | 📋 alvo documentado, não concluído; OIDC/preview KRC não equivalem a senha, pagamento BRL/live, gate pago, Academia ou agendamento de produção |
+| Jornada oficial do jogador — cadastro/login, taxa nominal US$ 1, Perfil/War’I, Academia KR e marco de 1.000.000 antes do CIGKV | `README.md` §Jornada Oficial do Jogador; gates em `docs/STRIPE_BRAZIL_CHECKOUT.md` e `docs/ROADMAP_DESENVOLVIMENTO_2026-11.md`; auditoria `docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md` | 📋 alvo documentado, não concluído; código de cadastro/login local por email/senha está em main (PR #287), mas SMTP/staging, pagamento BRL/live, gate pago, Academia e agendamento continuam pendentes |
 | Campo de Instrução de Guerra (perímetro 1: Pátio de Armamento 1/8 + Setor de Testes 3/8 + Parque Abandonado 4/8 + 15 ZEX) | `README.md` §Protocolo CIGKV; dados de mundo em `data_tables_csv/` e `Content/` | 🟡 regras/dados versionados; mapa UE5 pendente |
 | Protocolo de ingresso — 3 Zu por ring (cinto / saltar / máscara) | `Unreal/.../Game/CIGKV/Zu1–Zu3*.h/.cpp`; regras engine-less em `Game/World/Zu/ZuIngressRules` | ✅ implementado (Zu 1–3) com spec de automação |
 | Pop-up interativo de escolha | `Zu1ChoiceWidget` / `Zu2ChoiceWidget` / `Zu3ChoiceWidget` | ✅ implementado |
@@ -58,4 +58,4 @@
 4. **Load generator** dos perfis 100–2000 bots executado em staging
    (roadmap M3 — provisionamento pendente).
 5. **Zu 4** — extensão candidata (ver guia).
-6. **Jornada de cadastro e alistamento completa** — email/senha, cobrança fiduciária nominal de US$ 1 com cotação BRL aprovada, confirmação server-side, acesso à Academia KR e gatilho idempotente de 1.000.000 antes do agendamento do CIGKV. O fluxo-alvo está em `README.md` §Jornada Oficial do Jogador; checkout real e revisão de compliance continuam bloqueados. Gaps E2E e critérios de próxima entrega: `docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md`.
+6. **Jornada de cadastro e alistamento completa** — o código de email/senha está em main (PR #287); SMTP e aceite operacional ainda pendem. Cobrança fiduciária nominal de US$ 1 com cotação BRL aprovada, confirmação server-side, acesso à Academia KR e gatilho idempotente de 1.000.000 antes do agendamento do CIGKV ainda precisam ser ligados e validados. Checkout live e compliance permanecem bloqueados. Gaps E2E e critérios de próxima entrega: `docs/REVISAO_E2E_JORNADA_OFICIAL_2026-11-05.md`.
