@@ -11,6 +11,14 @@ const PROFILES = Object.freeze({
   Arukheea: Object.freeze({ kind: 'saltSpray', color: 0x8bd9e8, count: 110, spread: 198, height: 20, drift: 2.6, fall: .55, size: .07 }),
 });
 
+const HAZARD_FOG = Object.freeze({
+  ash: 0x62586e,
+  acidRain: 0x6f9b62,
+  spores: 0x3d6945,
+  dust: 0xa5744e,
+  saltSpray: 0x4d8192,
+});
+
 const clamp01 = (n) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
 
 function seedFor(id) {
@@ -55,7 +63,8 @@ export function buildAtmosphere(scene, scenario, q = {}) {
   const group = new THREE.Group();
   group.name = `atmosphere-${base.kind}`;
   group.userData.decorative = true;
-  const hazardState = { active: false, kind: null, boost: 0, pulse: 0 };
+  const hazardState = { active: false, kind: null, boost: 0, pulse: 0, gradeBase: null };
+  const grade = { color: new THREE.Color(), density: scene.fog?.density ?? null, baseColor: scene.fog?.color?.clone?.() ?? null };
   const material = makeMaterial(base, q);
   const positions = new Float32Array(base.kind === 'acidRain' ? count * 6 : count * 3);
   const geometry = new THREE.BufferGeometry();
@@ -72,6 +81,15 @@ export function buildAtmosphere(scene, scenario, q = {}) {
     if (base.kind === 'acidRain' && hazardState.pulse === 0 && hazardState.kind === 'acidRain') hazardState.active = false;
     const targetBoost = hazardState.active ? .9 : hazardState.pulse > 0 ? .7 : 0;
     hazardState.boost += (targetBoost - hazardState.boost) * Math.min(1, dt * 5);
+    if (scene.fog && hazardState.gradeBase) {
+      const baseFog = hazardState.gradeBase.color;
+      const tint = new THREE.Color(HAZARD_FOG[base.kind] ?? baseFog.getHex());
+      grade.color.copy(baseFog).lerp(tint, hazardState.boost * .58);
+      scene.fog.color.copy(grade.color);
+      if ('density' in scene.fog && hazardState.gradeBase.density != null) {
+        scene.fog.density = hazardState.gradeBase.density * (1 + hazardState.boost * .42);
+      }
+    }
     const attr = geometry.getAttribute('position');
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
@@ -98,10 +116,15 @@ export function buildAtmosphere(scene, scenario, q = {}) {
     const starts = { tsunamiStart: 'tsunami', sporeFogStart: 'spore', toxicSmokeStart: 'smoke', gravityAnomalyStart: 'gravity' };
     const ends = { tsunamiEnd: 'tsunami', sporeFogEnd: 'spore', toxicSmokeEnd: 'smoke', gravityAnomalyEnd: 'gravity' };
     const compatible = { ash: 'gravity', acidRain: 'acid', spores: 'spore', dust: 'smoke', saltSpray: 'tsunami' }[base.kind];
-    if (starts[type] && starts[type] === compatible) { hazardState.kind = starts[type]; hazardState.active = true; return; }
+    if (starts[type] && starts[type] === compatible) {
+      hazardState.kind = starts[type]; hazardState.active = true;
+      hazardState.gradeBase = { color: scene.fog?.color?.clone?.() ?? new THREE.Color(0), density: scene.fog?.density ?? null };
+      return;
+    }
     if (ends[type] && ends[type] === compatible && hazardState.kind === ends[type]) { hazardState.active = false; return; }
     if (type === 'acidRain' && base.kind === 'acidRain') {
       hazardState.kind = 'acidRain'; hazardState.active = true; hazardState.pulse = 2.2;
+      hazardState.gradeBase = { color: scene.fog?.color?.clone?.() ?? new THREE.Color(0), density: scene.fog?.density ?? null };
     }
   };
   update(0, 0);

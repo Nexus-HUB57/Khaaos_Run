@@ -54,6 +54,18 @@ eventos herdado de `Game3D`.
 `test/atmosphere-f47.test.js` cobre os cinco hazards canônicos, expiração do pulso
 ácido, buffers finitos e isolamento entre mundos.
 
+### Diretor cinematográfico de fog — Fase 48 (incremento 1)
+
+O registro atmosférico passou a dirigir também o `FogExp2` da cena. Durante cada
+hazard canônico, a leitura de distância é fechada suavemente e recebe uma tonalidade
+específica do Ring: cinza violeta no CIGKV, verde ácido em Barburhen, verde orgânico
+em Priadus, âmbar em Ckesalth e azul salino em Arukheea. Ao terminar o evento, cor e
+densidade retornam ao estado capturado no início, sem salto persistente e sem conflito
+com a iluminação noturna. Eventos estrangeiros continuam ignorados por id-gating.
+
+`test/atmosphere-f48.test.js` cobre os cinco grades, restauração de cor/densidade e
+isolamento de eventos.
+
 **Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `G` granada FRAG · `F` Gloo Wall · `1`/`2` slots · `ESC` liberar mouse.
 **Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit, 💣 granada, 🧊 gloo) à direita.
 
