@@ -3,7 +3,7 @@
 // dentro dos limites; tudo determinístico por seed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roadSegments, propPlacements, facadeDetails, canopyTint, naturalDressingPlacements } from '../src/game3d/detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, naturalDressingPlacements, trafficPlacements } from '../src/game3d/detail3d.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { SeededRng } from '../src/shared/rng.js';
 
@@ -94,6 +94,28 @@ test('determinismo: mesma seed => mesmas estradas/props/fachadas', () => {
   assert.deepEqual(roadSegments(l1), roadSegments(l2));
   assert.deepEqual(propPlacements(l1), propPlacements(l2));
   assert.deepEqual(facadeDetails(l1.structures[0]), facadeDetails(l2.structures[0]));
+});
+
+test('vias são específicas por cenário e a malha urbana conserva eixos cardinais', () => {
+  const training = getWorldLayout('surface-policy', 'CIGKV');
+  const barburhen = getWorldLayout('surface-policy', 'Barburhen');
+  assert.ok(roadSegments(training).some((segment) => segment.kind === 'radial'), 'CIGKV mantém acessos de treino');
+  assert.equal(roadSegments(training).some((segment) => segment.kind === 'ring'), false, 'CIGKV não recebe anel viário genérico');
+
+  const citySegments = roadSegments(barburhen);
+  assert.ok(citySegments.length > 0, 'Barburhen recebe malha urbana interrompida');
+  assert.ok(citySegments.every((segment) => segment.kind === 'urban-grid'), 'segmentos urbanos têm semântica própria');
+  assert.ok(citySegments.every((segment) => segment.x1 === segment.x2 || segment.z1 === segment.z2),
+    'malha alinhada aos eixos cardinais, sem diagonais aleatórias');
+  assert.deepEqual(citySegments, roadSegments(getWorldLayout('surface-policy', 'Barburhen')),
+    'mesma seed produz o mesmo traçado');
+
+  for (const scenarioId of ['Priadus', 'Ckesalth', 'Arukheea']) {
+    const layout = getWorldLayout(`surface-policy-${scenarioId}`, scenarioId);
+    assert.deepEqual(roadSegments(layout), [], `${scenarioId} não herda ruas pavimentadas`);
+    assert.deepEqual(trafficPlacements(layout), [], `${scenarioId} não recebe tráfego urbano`);
+  }
+  assert.deepEqual(trafficPlacements(training), [], 'o campo de treino não recebe carros urbanos abandonados');
 });
 
 test('canopyTint retorna paleta fechada e variada', () => {

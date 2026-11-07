@@ -45,10 +45,16 @@ function createWorldRng(worldId: WorldId): () => number {
 
 type Vec2 = { x: number; y: number };
 
+type SurfaceFeatureKind = "training-access" | "urban-street" | "dune-ridge";
+interface SurfaceFeature {
+  kind: SurfaceFeatureKind;
+  path: Vec2[];
+}
+
 /** Normaliza um polígono em coordenadas métricas (centro = 0,0) para o canvas. */
 interface RingGeometry {
   outline: Vec2[];
-  streets: Vec2[][];
+  surfaceFeatures: SurfaceFeature[];
   sizeMeters: number;
 }
 
@@ -93,19 +99,14 @@ function buildFortifiedRectangle(rng: () => number, widthM: number, depthM: numb
     { x: -hw, y: hd - bastion },
     { x: -hw, y: -hd + bastion },
   ];
-  // Ruas internas de guarnição (grade militar)
-  const streets: Vec2[][] = [];
-  const cols = 3;
-  const rows = 2;
-  for (let c = 1; c <= cols; c += 1) {
-    const x = -hw + (widthM * c) / (cols + 1);
-    streets.push([{ x, y: -hd + bastion * 0.4 }, { x, y: hd - bastion * 0.4 }]);
-  }
-  for (let r = 1; r <= rows; r += 1) {
-    const y = -hd + (depthM * r) / (rows + 1);
-    streets.push([{ x: -hw + bastion * 0.4, y }, { x: hw - bastion * 0.4, y }]);
-  }
-  return { outline, streets, sizeMeters: Math.max(widthM, depthM) };
+  // Acessos radiais esquemáticos ao campo; a documentação não fixa uma planta viária.
+  const surfaceFeatures: SurfaceFeature[] = [
+    { kind: "training-access", path: [{ x: 0, y: 0 }, { x: -hw * 0.58, y: -hd * 0.58 }] },
+    { kind: "training-access", path: [{ x: 0, y: 0 }, { x: hw * 0.58, y: -hd * 0.58 }] },
+    { kind: "training-access", path: [{ x: 0, y: 0 }, { x: -hw * 0.58, y: hd * 0.58 }] },
+    { kind: "training-access", path: [{ x: 0, y: 0 }, { x: hw * 0.58, y: hd * 0.58 }] },
+  ];
+  return { outline, surfaceFeatures, sizeMeters: Math.max(widthM, depthM) };
 }
 
 function buildUrbanGridiron(rng: () => number, widthM: number, depthM: number): RingGeometry {
@@ -123,18 +124,17 @@ function buildUrbanGridiron(rng: () => number, widthM: number, depthM: number): 
     const jitterY = (rng() - 0.5) * depthM * 0.05;
     outline.push({ x: rx + jitterX, y: ry + jitterY });
   }
-  const streets: Vec2[][] = [];
-  const cols = 4 + Math.floor(rng() * 2);
-  const rows = 2 + Math.floor(rng() * 2);
-  for (let c = 1; c <= cols; c += 1) {
-    const x = -hw + (widthM * c) / (cols + 1) + (rng() - 0.5) * widthM * 0.02;
-    streets.push([{ x, y: -hd * 0.92 }, { x, y: hd * 0.92 }]);
+  // A grade conserva os eixos cardinais e os intervalos; só o contorno fica irregular.
+  const surfaceFeatures: SurfaceFeature[] = [];
+  for (const ratio of [-0.62, -0.22, 0.22, 0.62]) {
+    const x = hw * ratio;
+    surfaceFeatures.push({ kind: "urban-street", path: [{ x, y: -hd * 0.92 }, { x, y: hd * 0.92 }] });
   }
-  for (let r = 1; r <= rows; r += 1) {
-    const y = -hd + (depthM * r) / (rows + 1) + (rng() - 0.5) * depthM * 0.03;
-    streets.push([{ x: -hw * 0.94, y }, { x: hw * 0.94, y }]);
+  for (const ratio of [-0.35, 0.35]) {
+    const y = hd * ratio;
+    surfaceFeatures.push({ kind: "urban-street", path: [{ x: -hw * 0.94, y }, { x: hw * 0.94, y }] });
   }
-  return { outline, streets, sizeMeters: Math.max(widthM, depthM) };
+  return { outline, surfaceFeatures, sizeMeters: Math.max(widthM, depthM) };
 }
 
 function buildRadialBlob(
@@ -159,7 +159,7 @@ function buildRadialBlob(
       y: hd * (1 + wave + cove) * Math.sin(angle),
     });
   }
-  return { outline, streets: [], sizeMeters: Math.max(widthM, depthM) };
+  return { outline, surfaceFeatures: [], sizeMeters: Math.max(widthM, depthM) };
 }
 
 function buildDesertBasin(rng: () => number, widthM: number, depthM: number): RingGeometry {
@@ -177,8 +177,8 @@ function buildDesertBasin(rng: () => number, widthM: number, depthM: number): Ri
       y: hd * (0.88 + dune) * Math.sin(angle) * 1.06,
     });
   }
-  // arcos de dunas internos
-  const streets: Vec2[][] = [];
+  // Cristas de dunas: linhas de relevo, explicitamente distintas de ruas.
+  const surfaceFeatures: SurfaceFeature[] = [];
   for (let d = 0; d < 4; d += 1) {
     const cy = -hd + (depthM * (d + 1)) / 5;
     const arc: Vec2[] = [];
@@ -186,9 +186,9 @@ function buildDesertBasin(rng: () => number, widthM: number, depthM: number): Ri
       const t = i / 14;
       arc.push({ x: -hw * 0.7 + t * widthM * 0.7, y: cy + Math.sin(t * Math.PI) * depthM * 0.05 });
     }
-    streets.push(arc);
+    surfaceFeatures.push({ kind: "dune-ridge", path: arc });
   }
-  return { outline, streets, sizeMeters: Math.max(widthM, depthM) };
+  return { outline, surfaceFeatures, sizeMeters: Math.max(widthM, depthM) };
 }
 
 function buildRingGeometry(worldId: WorldId): RingGeometry {
@@ -386,19 +386,33 @@ export function WorldMapPreview({
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // ── ruas internas
-      if (geometry.streets.length > 0) {
-        ctx.lineWidth = 0.7;
-        ctx.strokeStyle = "rgba(255,255,255,0.14)";
-        for (const street of geometry.streets) {
+      // ── camadas internas por bioma: acessos, ruas esquemáticas ou relevo
+      if (geometry.surfaceFeatures.length > 0) {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        for (const feature of geometry.surfaceFeatures) {
+          if (feature.kind === "training-access") {
+            ctx.lineWidth = 1.1;
+            ctx.strokeStyle = "rgba(96,202,255,0.32)";
+            ctx.setLineDash([]);
+          } else if (feature.kind === "urban-street") {
+            ctx.lineWidth = 0.9;
+            ctx.strokeStyle = "rgba(255,214,170,0.24)";
+            ctx.setLineDash([7, 3]);
+          } else {
+            ctx.lineWidth = 1.1;
+            ctx.strokeStyle = "rgba(217,166,104,0.34)";
+            ctx.setLineDash([2, 4]);
+          }
           ctx.beginPath();
-          street.forEach((p, i) => {
+          feature.path.forEach((p, i) => {
             const q = toPx(p);
             if (i === 0) ctx.moveTo(q.x, q.y);
             else ctx.lineTo(q.x, q.y);
           });
           ctx.stroke();
         }
+        ctx.setLineDash([]);
       }
 
       // ── anel de zona pulsante/contraindo (fases do contrato compartilhado)
@@ -568,7 +582,25 @@ export function WorldMapPreview({
     };
   }, [animated, def, dims, entities, geometry, height, worldId]);
 
-  const ariaLabel = `Mapa tático do ring ${def.name} (${dims.shapeNote}) — área ${dims.areaM2} m², ${WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[worldId]} operadores`;
+  const surfaceLabel = dims.shape === "fortified_rectangle"
+    ? "Acessos · esquema"
+    : dims.shape === "urban_gridiron"
+      ? "Malha · esquema"
+      : dims.shape === "desert_basin"
+        ? "Cristas = relevo"
+        : dims.shape === "coastal_island"
+          ? "Trilhas/ponte · sem planta"
+          : "Caminhos · sem planta";
+  const surfaceDescription = dims.shape === "fortified_rectangle"
+    ? "eixos de acesso ao campo, esquemáticos"
+    : dims.shape === "urban_gridiron"
+      ? "malha urbana ortogonal esquemática"
+      : dims.shape === "desert_basin"
+        ? "cristas de dunas, representadas como relevo e não como ruas"
+        : dims.shape === "coastal_island"
+          ? "caminhos de bosque, cavernas e ponte são referências narrativas; a geometria não está definida no preview"
+          : "sem planta georreferenciada de trilhas, passarelas e cursos d'água no preview";
+  const ariaLabel = `Mapa tático do ring ${def.name} (${dims.shapeNote}) — área ${dims.areaM2} m², ${WORLD_RING_CAPACITY_OPERATORS_BY_WORLD[worldId]} operadores; ${surfaceDescription}; norte para cima`;
 
   return (
     <div
@@ -577,6 +609,9 @@ export function WorldMapPreview({
       data-testid={`world-map-preview-${worldId}`}
     >
       <canvas ref={canvasRef} role="img" aria-label={ariaLabel} className="block" />
+      <div className="pointer-events-none absolute left-2 top-2 border border-border/50 bg-black/70 px-2 py-0.5 font-mono text-[9px] tracking-[0.12em] text-muted-foreground">
+        {surfaceLabel.toUpperCase()}
+      </div>
       <div className="pointer-events-none absolute right-2 top-2 border border-border/50 bg-black/70 px-2 py-0.5 font-mono text-[9px] tracking-[0.2em] text-muted-foreground">
         {dims.shape.toUpperCase()}
       </div>

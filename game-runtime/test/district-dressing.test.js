@@ -94,7 +94,7 @@ test('exclusividade cruzada: nenhum tipo assinatura vaza para outro cenário', (
   }
 });
 
-test('zero impacto em gameplay: bounds, praça, colliders, loot e estradas respeitados', () => {
+test('zero impacto em gameplay: bounds, terminal, colliders, loot e vias por cenário respeitados', () => {
   for (const id of IDS) {
     const scenario = resolveScenario(id);
     const layout = getWorldLayout(`DRESS-GP-${id}`, scenario.id);
@@ -111,9 +111,9 @@ test('zero impacto em gameplay: bounds, praça, colliders, loot e estradas respe
     for (const p of all) {
       // dentro da área jogável
       assert.ok(Math.abs(p.x) <= 195 && Math.abs(p.z) <= 195, `${id}: (${p.x},${p.z}) dentro dos bounds`);
-      // fora da praça central/terminal (monolito + asfalto r=34; folga p/ borda do patch)
+      // fora da área do terminal central (monolito + folga para a borda do patch)
       const pr = p.r ?? 0;
-      assert.ok(Math.hypot(p.x, p.z) >= 46 - pr - 0.5, `${id}: (${p.x},${p.z}) fora da praça central`);
+      assert.ok(Math.hypot(p.x, p.z) >= 46 - pr - 0.5, `${id}: (${p.x},${p.z}) fora do terminal central`);
       // livre de colliders (folga >= 1.2; placements usam >= 1.6)
       for (const c of layout.colliders) {
         const clear = p.x < c.minX - 1.2 || p.x > c.maxX + 1.2 || p.z < c.minZ - 1.2 || p.z > c.maxZ + 1.2;
@@ -126,7 +126,8 @@ test('zero impacto em gameplay: bounds, praça, colliders, loot e estradas respe
     }
     // itens fora do asfalto das estradas (distância ao EIXO da via > meia-largura)
     const roads = roadSegments(layout);
-    assert.ok(roads.length > 0, 'vias existem no layout');
+    if (scenario.roadPolicy === 'none') assert.equal(roads.length, 0, `${id}: sem vias pavimentadas genéricas`);
+    else assert.ok(roads.length > 0, `${id}: vias alinhadas ao perfil do cenário`);
     for (const p of items) {
       for (const seg of roads) {
         const d = distToSeg(p.x, p.z, seg);

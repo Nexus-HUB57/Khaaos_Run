@@ -153,6 +153,7 @@ export function buildWorldLayout(seed, scenarioId = 'CIGKV') {
 
   return {
     seed, scenarioId: scenario.id, size: 400, structures, colliders, districts, sectors: districts,
+    roadPolicy: scenario.roadPolicy,
     terminals, botSpawns, lootSpots, playerSpawn: { ...scenario.playerSpawn },
     quantumAnchors: (scenario.survival?.anchors ?? []).map((anchor) => ({ ...anchor, radius: scenario.survival.anchorRadius })),
   };

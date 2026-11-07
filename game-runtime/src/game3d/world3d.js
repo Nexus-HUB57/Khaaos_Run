@@ -22,7 +22,7 @@ import { NIGHT, nightSceneState } from './skyPhase.js';
 import {
   concreteMaterial, metalMaterial, groundMaterial, asphaltMaterial,
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
-  roadMaterial, sidewalkMaterial, crosswalkTexture, barrelMaterial,
+  roadMaterial, ruinedRoadMaterial, sidewalkMaterial, barrelMaterial,
   sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
@@ -221,12 +221,15 @@ function buildTraffic(scene, layout, q) {
   })));
 }
 
-// ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
+// ---------- Superfícies por cenário: não herdar rua urbana nos biomas naturais ----------
 function buildRoads(scene, layout) {
-  const road = roadMaterial();
-  const walk = sidewalkMaterial();
+  const roads = roadSegments(layout);
+  if (roads.length === 0) return;
+  const hasUrbanSidewalks = layout.roadPolicy === 'ruined-urban-grid';
+  const road = hasUrbanSidewalks ? ruinedRoadMaterial() : roadMaterial();
+  const walk = hasUrbanSidewalks ? sidewalkMaterial() : null;
   const group = new THREE.Group();
-  for (const seg of roadSegments(layout)) {
+  for (const seg of roads) {
     const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
     const len = Math.hypot(dx, dz);
     if (len < 2) continue;
@@ -238,24 +241,18 @@ function buildRoads(scene, layout) {
     m.receiveShadow = true;
     m.scale.y = len / 12; // tile de ~12m
     group.add(m);
-    // calçadas nas duas margens
-    const nx = -dz / len, nz = dx / len;
-    for (const s of [1, -1]) {
-      const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, len), walk);
-      w.rotation.set(-Math.PI / 2, 0, -ang);
-      w.position.set((seg.x1 + seg.x2) / 2 + nx * (seg.width / 2 + 1.3) * s, .03,
-        (seg.z1 + seg.z2) / 2 + nz * (seg.width / 2 + 1.3) * s);
-      w.receiveShadow = true;
-      w.scale.y = len / 8;
-      group.add(w);
-    }
-    // faixa de pedestre no início da radial (saída da praça)
-    if (seg.kind === 'radial') {
-      const cw = new THREE.Mesh(new THREE.PlaneGeometry(seg.width * .92, 2.4),
-        new THREE.MeshBasicMaterial({ map: crosswalkTexture(), transparent: true, depthWrite: false }));
-      cw.rotation.set(-Math.PI / 2, 0, -ang);
-      cw.position.set(seg.x1 + dx / len * 3.4, .075, seg.z1 + dz / len * 3.4);
-      group.add(cw);
+    // Calçadas pertencem ao perfil urbano de Barburhen, não ao campo de treino.
+    if (walk) {
+      const nx = -dz / len, nz = dx / len;
+      for (const s of [1, -1]) {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, len), walk);
+        w.rotation.set(-Math.PI / 2, 0, -ang);
+        w.position.set((seg.x1 + seg.x2) / 2 + nx * (seg.width / 2 + 1.3) * s, .03,
+          (seg.z1 + seg.z2) / 2 + nz * (seg.width / 2 + 1.3) * s);
+        w.receiveShadow = true;
+        w.scale.y = len / 8;
+        group.add(w);
+      }
     }
   }
   scene.add(group);
@@ -843,14 +840,16 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const ground = buildTerrain(scenario);
   scene.add(ground);
 
-  // praça central de asfalto
-  const plaza = new THREE.Mesh(
-    new THREE.CircleGeometry(34, 40),
-    asphaltMaterial(8)
-  );
-  plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
-  plaza.receiveShadow = true;
-  scene.add(plaza);
+  // Pátio de treino central exclusivo do CIGKV; não pavimenta os cinco cenários.
+  if (scenario.id === 'CIGKV') {
+    const plaza = new THREE.Mesh(
+      new THREE.CircleGeometry(34, 40),
+      asphaltMaterial(8)
+    );
+    plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
+    plaza.receiveShadow = true;
+    scene.add(plaza);
+  }
 
   // Fase 6 — viação (estradas/calçadas/faixas) por cima do terreno
   buildRoads(scene, layout);

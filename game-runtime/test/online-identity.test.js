@@ -401,8 +401,8 @@ test('fase8 anticheat: validateInput3D aceita ability booleano e rejeita tipos e
 });
 
 // ---------- tráfego urbano ----------
-test('fase8 trafego: determinístico, nas vias, sem colisões e com espaçamento', () => {
-  const layout = buildWorldLayout('TRAFEGO-1', 'CIGKV');
+test('fase8 trafego: determinístico em Barburhen, nas vias e sem colisões', () => {
+  const layout = buildWorldLayout('TRAFEGO-1', 'Barburhen');
   const t1 = trafficPlacements(layout, { density: 1 });
   const t2 = trafficPlacements(layout, { density: 1 });
   assert.deepEqual(t1, t2);

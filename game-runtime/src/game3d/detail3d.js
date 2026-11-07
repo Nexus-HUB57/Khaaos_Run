@@ -5,6 +5,17 @@
 import { SeededRng } from '../shared/rng.js';
 
 const MARGIN = 1.2; // folga padrão contra colliders
+const ROAD_POLICY_BY_SCENARIO = Object.freeze({
+  CIGKV: 'training-access',
+  Barburhen: 'ruined-urban-grid',
+  Priadus: 'none',
+  Ckesalth: 'none',
+  Arukheea: 'none',
+});
+
+function roadPolicyOf(layout) {
+  return layout.roadPolicy ?? ROAD_POLICY_BY_SCENARIO[layout.scenarioId] ?? 'none';
+}
 
 // distância ponto→segmento (para props acompanharem a estrada)
 function distToSeg(px, pz, x1, z1, x2, z2) {
@@ -50,58 +61,71 @@ function clearPath(x1, z1, x2, z2, w, colliders) {
   return [[x1, z1, x2, z2]]; // fallback: reta (caso patológico)
 }
 
-// um disco (ponto + raio) intersecta algum collider no chão?
-function discHitsCollider(px, pz, r, colliders, margin = MARGIN) {
-  for (const c of colliders) {
-    if (c.yMin > 0.5) continue;
-    if (px > c.minX - r - margin && px < c.maxX + r + margin && pz > c.minZ - r - margin && pz < c.maxZ + r + margin) return true;
+function ruinedUrbanGridSegments(layout, width) {
+  const limit = Math.max(80, Math.min(180, (layout.size ?? 400) / 2 - 20));
+  const offsets = [-0.3, 0, 0.3].map((ratio) => ratio * (layout.size ?? 400));
+  const step = 10;
+  const minRun = 18;
+  const segments = [];
+
+  const addGridLine = (axis, fixed) => {
+    let runStart = null;
+    let runEnd = null;
+    const flush = () => {
+      if (runStart && runEnd && Math.hypot(runEnd.x - runStart.x, runEnd.z - runStart.z) >= minRun) {
+        segments.push({ x1: runStart.x, z1: runStart.z, x2: runEnd.x, z2: runEnd.z, width, kind: 'urban-grid' });
+      }
+      runStart = null;
+      runEnd = null;
+    };
+
+    for (let cursor = -limit; cursor < limit; cursor += step) {
+      const next = Math.min(limit, cursor + step);
+      const a = axis === 'x' ? { x: cursor, z: fixed } : { x: fixed, z: cursor };
+      const b = axis === 'x' ? { x: next, z: fixed } : { x: fixed, z: next };
+      if (segHitsCollider(a.x, a.z, b.x, b.z, width, layout.colliders)) {
+        flush();
+        continue;
+      }
+      if (!runStart) runStart = a;
+      runEnd = b;
+    }
+    flush();
+  };
+
+  for (const offset of offsets) {
+    addGridLine('x', offset);
+    addGridLine('z', offset);
   }
-  return false;
+  return segments;
 }
 
 /**
- * Estradas de Khaoos Ville: 4 radiais (praça central → distrito) + anel de perímetro.
- * Cada distrito recebe um "ponto de aproximação": o primeiro ponto (varrendo direções
- * giradas ao redor do centro) de onde a praça enxerga em linha reta livre de
- * construções. Assim nenhuma estrada termina dentro de um galpão.
- * @returns [{ x1, z1, x2, z2, width, kind: 'radial'|'ring' }]
+ * Vias são decisão de implementação por cenário, não regra canônica. CIGKV recebe
+ * acessos radiais de campo; Barburhen recebe uma grade urbana fixa, interrompida
+ * apenas onde colide com estruturas. Priadus/Ckesalth/Arukheea não herdam asfalto.
+ * @returns [{ x1, z1, x2, z2, width, kind }]
  */
-export function roadSegments(layout, { width = 7.5 } = {}) {
+export function roadSegments(layout, { width = 6 } = {}) {
+  const policy = roadPolicyOf(layout);
+  if (policy === 'none') return [];
+  if (policy === 'ruined-urban-grid') return ruinedUrbanGridSegments(layout, width);
+  if (policy !== 'training-access') return [];
+
   const colliders = layout.colliders;
   const outer = layout.districts.slice(0, 4); // 4 distritos externos; [4] é a praça central
   const starts = outer.map((d) => {
     const L = Math.hypot(d.cx, d.cz) || 1;
-    return [(d.cx / L) * 30, (d.cz / L) * 30]; // borda da praça (evita monolito/terminal)
+    return [(d.cx / L) * 36, (d.cz / L) * 36]; // borda externa do pátio central
   });
-  const tips = outer.map((d, i) => {
-    const [sx, sz] = starts[i];
-    const bx = sx - d.cx, bz = sz - d.cz; // vetor centro→praça
-    const bl = Math.hypot(bx, bz) || 1;
-    const ux = bx / bl, uz = bz / bl;
-    for (const da of [0, .24, -.24, .48, -.48, .72, -.72, .96, -.96, 1.2, -1.2]) {
-      const c = Math.cos(da), s = Math.sin(da);
-      const rx = ux * c - uz * s, rz = ux * s + uz * c; // direção de aproximação girada
-      for (let back = 4; back <= 48; back += 4) {
-        const px = d.cx + rx * back, pz = d.cz + rz * back;
-        if (discHitsCollider(px, pz, width / 2, colliders)) continue;
-        if (!segHitsCollider(sx, sz, px, pz, width, colliders)) return [px, pz];
-      }
-    }
-    return [d.cx + ux * 50, d.cz + uz * 50]; // fallback: recuado para a praça
-  });
+  // Os destinos ficam sempre no mesmo eixo entre pátio e setor; só o joelho
+  // de segurança pode variar deterministicamente se uma estrutura bloquear a reta.
+  const tips = outer.map((d) => [d.cx * 0.55, d.cz * 0.55]);
   const segments = [];
   for (let i = 0; i < outer.length; i++) {
     const [tx, tz] = tips[i];
     for (const [ax, az, bx, bz] of clearPath(starts[i][0], starts[i][1], tx, tz, width, colliders)) {
       segments.push({ x1: ax, z1: az, x2: bx, z2: bz, width, kind: 'radial' });
-    }
-  }
-  // anel de perímetro entre aproximações adjacentes (0↔1, 1↔3, 3↔2, 2↔0)
-  const ringPairs = [[0, 1], [1, 3], [3, 2], [2, 0]];
-  for (const [a, b] of ringPairs) {
-    const [ax, az] = tips[a], [bx, bz] = tips[b];
-    for (const [cx, cz, dx2, dz2] of clearPath(ax, az, bx, bz, width * 0.85, colliders)) {
-      segments.push({ x1: cx, z1: cz, x2: dx2, z2: dz2, width: width * 0.85, kind: 'ring' });
     }
   }
   return segments;
@@ -298,6 +322,7 @@ function freeForNaturalDressing(x, z, colliders) {
  * @returns [{ type, x, z, rot, color }] — rot = yaw alinhado à via; color = índice de paleta.
  */
 export function trafficPlacements(layout, { seed = 'traffic', density = 1 } = {}) {
+  if (roadPolicyOf(layout) !== 'ruined-urban-grid') return [];
   const rng = new SeededRng(`${layout.seed}:${layout.scenarioId}:${seed}`);
   const roads = roadSegments(layout);
   const colliders = layout.colliders;

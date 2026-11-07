@@ -692,7 +692,7 @@ export function complexionTexture(skin = '#d9a06b', expression = 'neutral') {
 }
 
 // ---- estrada com faixas (central amarela tracejada + bordas brancas) ----
-function roadCanvas() {
+function roadCanvas({ markings = true } = {}) {
   const [c, x] = canvas(256);
   x.fillStyle = '#37383c'; x.fillRect(0, 0, 256, 256);
   // agregado
@@ -712,17 +712,22 @@ function roadCanvas() {
     for (let s = 0; s < 6; s++) { px += (random() - .5) * 50; py += (random() - .5) * 50; x.lineTo(px, py); }
     x.stroke();
   }
-  // bordas brancas contínuas (verticais no tile)
-  x.fillStyle = 'rgba(228,226,216,.75)';
-  x.fillRect(6, 0, 4, 256); x.fillRect(246, 0, 4, 256);
-  // faixa central amarela tracejada
-  x.fillStyle = 'rgba(214,178,52,.85)';
-  for (let y = 0; y < 256; y += 64) x.fillRect(124, y, 8, 36);
+  if (markings) {
+    // bordas brancas contínuas (verticais no tile)
+    x.fillStyle = 'rgba(228,226,216,.75)';
+    x.fillRect(6, 0, 4, 256); x.fillRect(246, 0, 4, 256);
+    // faixa central amarela tracejada
+    x.fillStyle = 'rgba(214,178,52,.85)';
+    for (let y = 0; y < 256; y += 64) x.fillRect(124, y, 8, 36);
+  }
   noise(x, 256, 0.06);
   return c;
 }
 export function roadMaterial() {
   return memo('road', () => pbr(roadCanvas(), { repeat: 1, rough: .88, strength: 1.5 }));
+}
+export function ruinedRoadMaterial() {
+  return memo('road-worn', () => pbr(roadCanvas({ markings: false }), { repeat: 1, rough: .94, strength: 1.6 }));
 }
 
 // ---- calçada (lajes de concreto com juntas) ----

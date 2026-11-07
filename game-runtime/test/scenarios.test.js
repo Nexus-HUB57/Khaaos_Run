@@ -75,3 +75,11 @@ test('os quatro Mundos competitivos possuem previews locais selecionáveis e ali
     assert.ok(sim.scenario.playerSpawn);
   }
 });
+
+test('política gráfica de vias não herda asfalto urbano para biomas naturais', () => {
+  assert.equal(resolveScenario('CIGKV').roadPolicy, 'training-access');
+  assert.equal(resolveScenario('Barburhen').roadPolicy, 'ruined-urban-grid');
+  for (const world of ['Priadus', 'Ckesalth', 'Arukheea']) {
+    assert.equal(resolveScenario(world).roadPolicy, 'none', `${world}: sem malha pavimentada genérica`);
+  }
+});

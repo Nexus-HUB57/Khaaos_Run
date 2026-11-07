@@ -15,6 +15,8 @@ export const SCENARIOS = Object.freeze({
     label: 'CIGKV — Campo de Instrução',
     shortLabel: 'CIGKV',
     mapLabel: 'Khaaos Ville', // F42 — README: "Khaaos Ville" (antes: typo 'Khaoos Ville')
+    // Política gráfica proposta: corredores de acesso de treino; não é planta canônica.
+    roadPolicy: 'training-access',
     // Ingresso canônico do campo: o esquadrão chega no trem do ZU, no solo.
     // O airdrop permanece somente como fixture legado explícito.
     zuIngress: Object.freeze({ protocol: 'zu_train_v1', eventProtocol: 'ZU_TRAIN_V1', mode: 'train', durationMs: 3400 }),
@@ -46,6 +48,8 @@ export const SCENARIOS = Object.freeze({
     label: 'Barburhen — O Mundo da Destruição',
     shortLabel: 'BARBURHEN / W1',
     mapLabel: 'Ruínas Urbanas de Barburhen',
+    // Política gráfica proposta: ruas ortogonais interrompidas, não geometria oficial.
+    roadPolicy: 'ruined-urban-grid',
     sectorNames: ['Área Urbana e Comercial', 'Setor Industrial', 'Parque Abandonado', 'Zona de Extração', 'Terminal ZEX'],
     playerSpawn: { x: 90, z: 150 },
     ringDamageMultiplier: 1.5,
@@ -62,6 +66,8 @@ export const SCENARIOS = Object.freeze({
     label: 'Priadus — A Floresta da Escuridão',
     shortLabel: 'PRIADUS / W2',
     mapLabel: 'Selva Hostil de Priadus',
+    // Sem malha pavimentada genérica; trilhas/passarelas exigem layout próprio.
+    roadPolicy: 'none',
     sectorNames: ['Área Pantanosa', 'Bosque', 'Área de Caça', 'Templo Antigo', 'Terminal ZEX'],
     playerSpawn: { x: -90, z: 150 },
     ringDamageMultiplier: 1.75,
@@ -81,6 +87,8 @@ export const SCENARIOS = Object.freeze({
     label: 'Ckesalth — O Deserto das Almas Esquecidas',
     shortLabel: 'CKESALTH / W3',
     mapLabel: 'Refinaria de Ckesalth',
+    // Sem ruas pavimentadas genéricas; linhas de dunas são relevo, não vias.
+    roadPolicy: 'none',
     sectorNames: ['Resort Abandonado', 'Vilarejo dos Beduínos', 'Refinaria de Petróleo', 'Areia Movediça', 'Terminal ZEX'],
     playerSpawn: { x: 150, z: -90 },
     ringDamageMultiplier: 2,
@@ -100,6 +108,8 @@ export const SCENARIOS = Object.freeze({
     label: 'Arukheea — A Ilha dos Gritos Calados',
     shortLabel: 'ARUKHEEA / W4',
     mapLabel: 'Ilha dos Gritos Calados', // F42 — README: "Ilha dos Gritos Calados" (antes: 'Ilha GriCa')
+    // Sem ruas urbanas; trilhas, cavernas e ponte ficam para layout insular próprio.
+    roadPolicy: 'none',
     sectorNames: ['Bosque dos Perdidos', 'Prisão do Sol da Noite', 'Fábrica / Cemitério das Baleias', 'Marina Fantasma', 'Terminal ZEX'],
     playerSpawn: { x: -150, z: -90 },
     ringDamageMultiplier: 2.25,
