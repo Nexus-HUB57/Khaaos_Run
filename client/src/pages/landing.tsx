@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Flame, Skull, Swords, Trophy } from "lucide-react";
+import { Link } from "wouter";
 
 export default function Landing() {
   return (
@@ -23,7 +24,7 @@ export default function Landing() {
         <div className="mb-10 animate-in fade-in duration-700">
           <div className="inline-flex items-center gap-2 border border-primary/30 bg-primary/5 px-4 py-1.5 mb-8 font-mono text-primary text-xs tracking-widest uppercase backdrop-blur">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_6px_hsla(25,95%,55%,0.9)]" />
-            SISTEMA: ONLINE // CICLO 01 ATIVO
+            PLATAFORMA EM DESENVOLVIMENTO // CICLO 01 PLANEJADO
           </div>
 
           {/* Main Title */}
@@ -55,15 +56,18 @@ export default function Landing() {
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto font-body font-light tracking-wide">
             Um Jogo … uma Chance … e um Legado.<br />
-            <span className="text-accent/80 font-semibold">U$1.000.000</span> — Um Milhão de Dólares.
+            <span className="text-accent/80 font-semibold">Possibilidade futura de recompensa de referência de até US$ 1.000.000.</span>
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            Não é oferta atual, promessa ou garantia. Nenhuma campanha de recompensa está ativa; eventual iniciativa dependerá de regulamento oficial e das aprovações aplicáveis.
           </p>
         </div>
 
         {/* Feature Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
           <Feature icon={Swords} title="WAR'I" desc="Armazém Bélico com seu Arsenal completo. Armas, equipamentos e recursos de batalha." color="text-primary" />
-          <Feature icon={Trophy} title="FORJA DO ARMEIRO" desc="Loja oficial do KR. Adquira equipamentos e acessórios exclusivos." color="text-accent" />
-          <Feature icon={Skull} title="BANKHAAOS" desc="Gestão financeira com Wallet KRC, Account KR e Fundo de Investimentos FBM." color="text-purple-400" />
+          <Feature icon={Trophy} title="FORJA DO ARMEIRO" desc="Equipamentos e receitas de jogo; compras externas não estão disponíveis neste preview." color="text-accent" />
+          <Feature icon={Skull} title="BANKHAAOS" desc="Economia virtual KRC para uso interno no jogo, sem saque ou conversão externa." color="text-purple-400" />
         </div>
 
         {/* CTA */}
@@ -84,6 +88,9 @@ export default function Landing() {
           <p className="text-xs font-mono text-muted-foreground tracking-widest">
             VOCÊ É UM(A) <span className="text-primary">ZHEERS</span> — SEU POSTO AGUARDA
           </p>
+          <Link href="/termos" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-primary">
+            Termos de Uso — aviso provisório
+          </Link>
         </div>
       </div>
 
