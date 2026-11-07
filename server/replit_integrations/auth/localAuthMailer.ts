@@ -2,39 +2,51 @@ import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import type { LocalAuthMailer, LocalAuthRecipient } from "./localAuthService";
 
-type MailConfig = {
+export type LocalAuthMailConfig = {
   host: string;
   port: number;
   secure: boolean;
+  requireTLS: boolean;
   user?: string;
   password?: string;
   from: string;
 };
 
-function readMailConfig(env: NodeJS.ProcessEnv): MailConfig | null {
+export type LocalAuthTransportFactory = (
+  config: LocalAuthMailConfig,
+) => Pick<Transporter, "sendMail">;
+
+function readMailConfig(env: NodeJS.ProcessEnv): LocalAuthMailConfig | null {
   const host = env.SMTP_HOST?.trim();
   const port = Number(env.SMTP_PORT);
   const from = env.SMTP_FROM?.trim();
   if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !from) return null;
+
   const secureSetting = env.SMTP_SECURE?.trim().toLowerCase();
   if (secureSetting && secureSetting !== "true" && secureSetting !== "false") return null;
   const user = env.SMTP_USER?.trim();
   const password = env.SMTP_PASSWORD;
   if (Boolean(user) !== Boolean(password)) return null;
+
+  const secure = secureSetting ? secureSetting === "true" : port === 465;
   return {
     host,
     port,
-    secure: secureSetting ? secureSetting === "true" : port === 465,
+    secure,
+    // Port 587 and other non-implicit-TLS transports must upgrade with STARTTLS;
+    // do not silently send account tokens over plaintext SMTP.
+    requireTLS: !secure,
     from,
     ...(user && password ? { user, password } : {}),
   };
 }
 
-function createTransport(config: MailConfig): Transporter {
+function createTransport(config: LocalAuthMailConfig): Transporter {
   return nodemailer.createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure,
+    requireTLS: config.requireTLS,
     ...(config.user && config.password ? { auth: { user: config.user, pass: config.password } } : {}),
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
@@ -52,10 +64,13 @@ function verificationContent(recipient: LocalAuthRecipient, url: string) {
 }
 
 export class SmtpLocalAuthMailer implements LocalAuthMailer {
-  private readonly transport: Transporter;
+  private readonly transport: Pick<Transporter, "sendMail">;
 
-  constructor(private readonly config: MailConfig) {
-    this.transport = createTransport(config);
+  constructor(
+    private readonly config: LocalAuthMailConfig,
+    transportFactory: LocalAuthTransportFactory = createTransport,
+  ) {
+    this.transport = transportFactory(config);
   }
 
   async sendVerificationEmail(recipient: LocalAuthRecipient, url: string): Promise<void> {
@@ -74,7 +89,10 @@ export class SmtpLocalAuthMailer implements LocalAuthMailer {
   }
 }
 
-export function createLocalAuthMailerFromEnv(env: NodeJS.ProcessEnv = process.env): LocalAuthMailer | null {
+export function createLocalAuthMailerFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  transportFactory: LocalAuthTransportFactory = createTransport,
+): LocalAuthMailer | null {
   const config = readMailConfig(env);
-  return config ? new SmtpLocalAuthMailer(config) : null;
+  return config ? new SmtpLocalAuthMailer(config, transportFactory) : null;
 }
