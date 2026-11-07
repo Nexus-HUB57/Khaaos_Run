@@ -40,11 +40,9 @@
 import { createHash } from "node:crypto";
 import Stripe from "stripe";
 import { and, eq } from "drizzle-orm";
-import { db } from "../db";
 import { paymentWebhookEvents } from "@shared/schema";
 import { ENROLLMENT_BONUS_KRC, ENROLLMENT_FEE_KRC, ENROLLMENT_FEE_USD_CENTS, type EnrollmentStore } from "../routes/enrollment";
 import { getStripeTestConfig } from "./stripeConfig";
-import { recordEnrollmentFeeLedger } from "../game/enrollmentLedger";
 
 export const ENROLLMENT_FEE_METADATA_KIND = "enrollment_fee";
 
@@ -158,13 +156,12 @@ export function createEnrollmentFeePaymentService(options: {
       idempotencyKey: string;
     }): Promise<{ feeRecorded: boolean; bonusRecorded: boolean }>;
   };
-  database?: typeof db;
+  database?: typeof import("../db").db;
 }) {
   const store = options.store;
-  const ledger = options.ledger ?? { recordEnrollmentFeeLedger };
-  const database = options.database ?? db;
 
   async function processEvent(event: Stripe.Event, payloadHash: string): Promise<EnrollmentFeeEventResult> {
+    const database = options.database ?? (await import("../db")).db;
     return database.transaction(async (tx) => {
       const [eventRow] = await tx
         .insert(paymentWebhookEvents)
@@ -267,7 +264,13 @@ export function createEnrollmentFeePaymentService(options: {
 
       // Ordem do guard financeiro do #252: ledger ANTES de marcar a sessão.
       try {
-        await ledger.recordEnrollmentFeeLedger({ userId, protocol, idempotencyKey: clientKey });
+        const ledgerInput = { userId, protocol, idempotencyKey: clientKey };
+        if (options.ledger) {
+          await options.ledger.recordEnrollmentFeeLedger(ledgerInput);
+        } else {
+          const { recordEnrollmentFeeLedger } = await import("../game/enrollmentLedger");
+          await recordEnrollmentFeeLedger(ledgerInput);
+        }
       } catch (error) {
         console.error("[enrollment-fee] ledger indisponível no webhook — evento ficará para re-entrega:", error);
         throw error;
