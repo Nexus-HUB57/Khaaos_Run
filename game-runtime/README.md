@@ -28,6 +28,19 @@ O desenvolvimento local e os testes unitários não exigem a configuração dos 
 | Efeitos/Áudio | `src/game3d/effects3d.js`, `audio3d.js` | Tracers, muzzle flash, impactos, sangue + SFX WebAudio 100% procedurais (tiro por arma, hitmarker, pulso, heartbeat). |
 | HUD | `src/game3d/hud3d.js` | Barras VL/VD, munição, minimapa com anel atual/alvo, killfeed, crosshair dinâmico, objetivos, modais ZU/Marechal, controles touch. |
 
+### Atmosfera por mundo — realismo visual Fase 46
+
+`src/game3d/atmosphere3d.js` acrescenta uma camada visual procedural, determinística e
+sem collider ao mesmo `buildScene` usado no offline, online e espectador. Cada mundo
+tem uma assinatura de leitura inspirada em shooters competitivos: **Barburhen** recebe
+chuva ácida inclinada; **Priadus**, esporos bioluminescentes; **Ckesalth**, poeira
+desértica; **Arukheea**, spray salino; e **CIGKV**, cinzas do campo de treino.
+
+O efeito usa um único buffer por cena, reduz densidade em Mobile/Low, atualiza pelo
+mesmo ticker determinístico e nunca altera colliders, loot, spawns ou regras da sim.
+O contrato headless está em `test/atmosphere-f46.test.js` (5 testes: presença,
+isolamento, determinismo, ticker finito e orçamento Mobile).
+
 **Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `G` granada FRAG · `F` Gloo Wall · `1`/`2` slots · `ESC` liberar mouse.
 **Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit, 💣 granada, 🧊 gloo) à direita.
 

@@ -871,6 +871,9 @@ function createSpectatorGame(Game3D) {
       // Fase 22 — cenários vivos na TRANSMISSÃO (mesmo padrão dos marcos)
       const dressingAnim = this.scene.userData.districtDressing?.animators;
       if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+      // Fase 46 — clima procedural também é reproduzido na transmissão
+      const atmosphereAnim = this.scene.userData.atmosphere?.animators;
+      if (atmosphereAnim) for (const fn of atmosphereAnim) fn(dt, this.animT);
       // Fase 23 — interiores na TRANSMISSÃO (flicker de lâmpadas/telas)
       const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

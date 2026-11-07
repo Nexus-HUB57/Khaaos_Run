@@ -23,6 +23,7 @@ import { SeededRng } from '../shared/rng.js';
 import { roadSegments } from './detail3d.js';
 import { frustumPrism } from './prisms3d.js';
 import { Emitter, getSharedParticles, bindParticleTicker } from './particles3d.js';
+import { createOilfireEmitters, createOilfireVisual } from './effects3d.js';
 import {
   mudMaterial, waterPoolMaterial, snowMaterial, lavaMaterial,
   runeMaterial, riftMaterial, awningMaterial, plankMaterial,
@@ -1135,11 +1136,12 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   // roda ANTES de buildWorldMarks em buildScene: quem cria, registra o tick).
   const particleRng = new SeededRng(`${layout.seed}:${layout.scenarioId}:dressing-particles`);
   const emitterAnimators = [];
+  const oilfireEmitters = [];
   const sharedSystem = getSharedParticles(scene);
   if (sharedSystem) {
     const emitters = [];
     const addEmitter = (origin, rate, params) => {
-      if (emitters.length >= 12) return; // teto de orçamento (pior caso ~90 vivos)
+      if (emitters.length >= 16) return; // teto de orçamento, incluindo chamas das lagoas
       emitters.push(new Emitter(sharedSystem, { origin, rate, params }));
     };
     for (const item of placements.items) {
@@ -1194,23 +1196,12 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
     }
     for (const p of placements.patches) {
       if (p.type === 'oilpool') {
-        // F43 — lagoas de petróleo EM CHAMAS: fagulhas baixas e quentes saltam
-        // do espelho de óleo (mesma gramática das brasas de lavapatch, menor).
-        addEmitter({ x: p.x, y: .12, z: p.z }, .8, () => ({
-          dx: (particleRng.next() - .5) * p.r * 1.1, dy: 0, dz: (particleRng.next() - .5) * p.r * 1.1,
-          vx: (particleRng.next() - .5) * 1.1, vy: 1.9 + particleRng.next() * 1.6, vz: (particleRng.next() - .5) * 1.1,
-          size: .14 + particleRng.next() * .16, growth: -.02, life: .6 + particleRng.next() * .55,
-          drag: .08, gravity: 2.2, alpha: .9,
-          color: [1, .64, .18], endColor: [.4, .09, .03],
-        }));
-        // fumaça fina do óleo queimando
-        addEmitter({ x: p.x, y: .3, z: p.z }, .4, () => ({
-          dx: (particleRng.next() - .5) * p.r * .8, dy: 0, dz: (particleRng.next() - .5) * p.r * .8,
-          vx: (particleRng.next() - .5) * .4, vy: .9 + particleRng.next() * .7, vz: (particleRng.next() - .5) * .4,
-          size: .5 + particleRng.next() * .5, growth: .7, life: 2.2 + particleRng.next() * 1.4,
-          drag: .4, gravity: -0.4, alpha: .2,
-          color: [.16, .15, .14], endColor: [.42, .4, .38],
-        }));
+        // Ambos usam o pool da cena; o ticker único deste builder os atualiza.
+        for (const emitter of createOilfireEmitters(sharedSystem, { x: p.x, y: .12, z: p.z }, p.r, particleRng)) {
+          if (emitters.length >= 16) break;
+          emitters.push(emitter);
+          oilfireEmitters.push(emitter);
+        }
       }
       if (p.type === 'lavapatch') {
         // Fase 26 — fendas de lava: brasas saltam da crosta + wisp de calor
@@ -1240,6 +1231,7 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
   const floaters = [];   // shards: { mesh, baseY, phase, speed }
   const flags = [];      // bandeiras: { mesh, baseRot, phase }
   const flames = [];     // fogo: { mesh, base, phase }
+  const layeredFires = []; // chamas de óleo em camadas: update(time) stateless
   const spinners = [];   // anéis quânticos / rotores: { obj, axis, speed, phase }
   const pulses = [];     // F43 — bioluminescência: { mesh, base, phase }
 
@@ -1273,24 +1265,13 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
       animators.push((dt, t) => { mat.opacity = .15 + (Math.sin(t * .55) * .5 + .5) * .17; });
     }
     if (type === 'oilpool') {
-      // F43 — README W3: "lagoas de petróleo EM CHAMAS" — cada lagoa ganha
-      // chamas reais (cones tremulando no animator de flames) + fagulhas no pool.
+      // F43 — línguas low-poly com núcleo amarelo, corpo laranja e borda rubra.
       for (const p of list) {
         const fireRng = new SeededRng(`${layout.seed}:oilfire:${p.x}:${p.z}`);
-        const fire = new THREE.Group();
-        fire.name = 'oilfire';
-        const n = 3;
-        for (let i = 0; i < n; i++) {
-          const cone = new THREE.Mesh(new THREE.ConeGeometry(.16 + fireRng.next() * .12, .5 + fireRng.next() * .4, 6), m.fire);
-          const a = fireRng.next() * Math.PI * 2;
-          const rr = fireRng.next() * p.r * .55;
-          cone.position.set(Math.cos(a) * rr, .18, Math.sin(a) * rr);
-          cone.castShadow = false;
-          fire.add(cone);
-          flames.push({ mesh: cone, base: cone.material.emissiveIntensity ?? 1.6, phase: fireRng.next() * 6.28 });
-        }
+        const fire = createOilfireVisual({ radius: p.r, rng: fireRng });
         fire.position.set(p.x, .02, p.z);
         dressing.add(fire);
+        layeredFires.push(fire);
       }
     }
   }
@@ -1353,6 +1334,9 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
       }
     });
   }
+  if (layeredFires.length) {
+    animators.push((dt, t) => { for (const fire of layeredFires) fire.userData.update(t); });
+  }
   if (spinners.length) {
     animators.push((dt, t) => {
       for (const s of spinners) s.obj.rotation[s.axis] = s.phase + t * s.speed;
@@ -1372,6 +1356,7 @@ export function buildDistrictDressing(scene, layout, scenario, q, { contactShado
     animators,
     placements,
     group: dressing,
+    oilfireEmitters,
   };
   scene.userData.districtDressing = registry;
   return registry;

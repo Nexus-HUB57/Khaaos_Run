@@ -6,6 +6,120 @@
 // intacto — zero quebra de contrato.
 import * as THREE from 'three';
 import { radialSprite } from './textures3d.js';
+import { Emitter } from './particles3d.js';
+
+let oilfireMaterials = null;
+function getOilfireMaterials() {
+  if (!oilfireMaterials) {
+    oilfireMaterials = {
+      outer: new THREE.MeshStandardMaterial({
+        color: '#a92c0c', emissive: '#76200a', emissiveIntensity: 1.25,
+        roughness: .72, transparent: true, opacity: .86, depthWrite: false,
+      }),
+      body: new THREE.MeshBasicMaterial({
+        color: '#ff5b16', transparent: true, opacity: .88,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+        side: THREE.DoubleSide, toneMapped: false,
+      }),
+      core: new THREE.MeshBasicMaterial({
+        color: '#ffd65a', transparent: true, opacity: .82,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+        side: THREE.DoubleSide, toneMapped: false,
+      }),
+    };
+  }
+  return oilfireMaterials;
+}
+
+/** Constrói um conjunto determinístico de chamas em três camadas para lagoas de óleo. */
+export function createOilfireVisual({ radius = 2, rng = Math.random } = {}) {
+  const random = typeof rng === 'function' ? rng : () => rng.next();
+  const materials = getOilfireMaterials();
+  const group = new THREE.Group();
+  group.name = 'oilfire';
+  const tongues = [];
+  const count = 5;
+  const spread = Math.max(.25, Math.min(1.8, radius * .34));
+
+  for (let i = 0; i < count; i++) {
+    const angle = random() * Math.PI * 2;
+    const distance = Math.sqrt(random()) * spread;
+    const height = i === 0 ? 1.05 + random() * .25 : .62 + random() * .42;
+    const width = .14 + random() * .07;
+    const tongue = new THREE.Group();
+    tongue.name = 'oilfire-tongue';
+    tongue.position.set(Math.cos(angle) * distance, .015, Math.sin(angle) * distance);
+    const baseTilt = (random() - .5) * .24;
+    tongue.rotation.z = baseTilt;
+    tongue.rotation.x = (random() - .5) * .18;
+    tongue.userData.baseTilt = baseTilt;
+    tongue.userData.phase = random() * Math.PI * 2;
+
+    const layers = [
+      { name: 'outer', radius: width, height, y: height * .5, material: materials.outer },
+      { name: 'body', radius: width * .68, height: height * .82, y: height * .415, material: materials.body },
+      { name: 'core', radius: width * .36, height: height * .56, y: height * .29, material: materials.core },
+    ];
+    for (const layer of layers) {
+      const mesh = new THREE.Mesh(new THREE.ConeGeometry(layer.radius, layer.height, 7), layer.material);
+      mesh.name = `oilfire-${layer.name}`;
+      mesh.position.y = layer.y;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
+      mesh.userData.fireLayer = layer.name;
+      tongue.add(mesh);
+    }
+    group.add(tongue);
+    tongues.push(tongue);
+  }
+
+  // Animação sem estado acumulado: mesma seed e instante produzem a mesma pose.
+  group.userData.update = (time) => {
+    for (const tongue of tongues) {
+      const phase = tongue.userData.phase;
+      const flicker = Math.sin(time * 10.5 + phase);
+      tongue.scale.set(1 + flicker * .07, .88 + Math.sin(time * 12 + phase * 1.7) * .18, 1 + flicker * .07);
+      tongue.rotation.z = tongue.userData.baseTilt + Math.sin(time * 7.2 + phase) * .11;
+      tongue.rotation.x = Math.cos(time * 8.1 + phase * .8) * .08;
+    }
+  };
+  group.userData.flameTongues = count;
+  return group;
+}
+
+/** Cria emissores de brasa e fumaça usando o pool de partículas já existente na cena. */
+export function createOilfireEmitters(system, origin, radius = 2, rng = Math.random) {
+  if (!system || typeof system.spawn !== 'function') return [];
+  const random = typeof rng === 'function' ? rng : () => rng.next();
+  const spread = Math.max(.4, radius);
+  const embers = new Emitter(system, {
+    origin: { x: origin.x, y: origin.y ?? .12, z: origin.z },
+    rate: 6,
+    params: () => ({
+      dx: (random() - .5) * spread * .7, dz: (random() - .5) * spread * .7,
+      vx: (random() - .5) * 1.4, vy: 2.2 + random() * 2.2, vz: (random() - .5) * 1.4,
+      size: .045 + random() * .055, growth: -.018, life: .65 + random() * .55,
+      drag: .08, gravity: 2.1, alpha: .96,
+      color: [1, .68 + random() * .16, .22], endColor: [.46, .1, .025],
+    }),
+  });
+  embers.kind = 'oilfire-embers';
+
+  const smoke = new Emitter(system, {
+    origin: { x: origin.x, y: (origin.y ?? .12) + .16, z: origin.z },
+    rate: 2.4,
+    params: () => ({
+      dx: (random() - .5) * spread * .5, dz: (random() - .5) * spread * .5,
+      vx: (random() - .5) * .5, vy: .8 + random() * .7, vz: (random() - .5) * .5,
+      size: .55 + random() * .5, growth: .48, life: 1.8 + random() * .9,
+      drag: .42, gravity: -.32, alpha: .24,
+      color: [.12, .11, .1], endColor: [.32, .3, .28],
+    }),
+  });
+  smoke.kind = 'oilfire-smoke';
+  return [embers, smoke];
+}
 
 export class Effects {
   #restoreMuzzleColor = 0;

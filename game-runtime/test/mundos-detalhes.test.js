@@ -167,17 +167,31 @@ test('F43 buildScene: Ckesalth — lagoas de óleo EM CHAMAS + areia movediça',
   const { scene } = buildScene(4242, 'Ckesalth', null, 'high');
   const reg = scene.userData.districtDressing;
   assert.ok((reg.counts.oilpool ?? 0) >= 2, `lagoas de óleo (${reg.counts.oilpool ?? 0})`);
-  // chamas reais: grupo 'oilfire' por lagoa, cones com material emissivo de fogo
-  let fires = 0, cones = 0;
+  // Cada lagoa tem cinco línguas independentes; cada língua tem borda, corpo e núcleo.
+  const fires = [];
   scene.traverse((o) => {
-    if (o.name === 'oilfire') fires++;
-    if (o.parent?.name === 'oilfire' && o.isMesh) cones++;
+    if (o.name === 'oilfire') fires.push(o);
   });
-  assert.equal(fires, reg.counts.oilpool, 'um grupo de fogo por lagoa de óleo');
-  assert.ok(cones >= fires * 3, `chamas por lagoa (${cones} cones)`);
-  // fagulhas/fumaça do óleo queimando: pool vivo após o tick
+  assert.equal(fires.length, reg.counts.oilpool, 'um grupo de fogo por lagoa de óleo');
+  for (const fire of fires) {
+    assert.equal(fire.userData.flameTongues, 5, 'cinco línguas por lagoa');
+    const tongues = fire.children.filter((o) => o.name === 'oilfire-tongue');
+    assert.equal(tongues.length, 5, 'grupos de chama separados para flicker independente');
+    const layerCounts = { outer: 0, body: 0, core: 0 };
+    fire.traverse((o) => { if (o.userData.fireLayer) layerCounts[o.userData.fireLayer]++; });
+    assert.deepEqual(layerCounts, { outer: 5, body: 5, core: 5 }, 'cada língua tem as três camadas de cor');
+    fire.userData.update(.47);
+    assert.ok(tongues.every((o) => Number.isFinite(o.scale.y)), 'flicker em estado finito');
+  }
+  assert.equal(reg.oilfireEmitters.length, fires.length * 2, 'um emissor de brasa e um de fumaça por lagoa');
+  assert.deepEqual(reg.oilfireEmitters.map((e) => e.kind).sort(),
+    fires.flatMap(() => ['oilfire-embers', 'oilfire-smoke']).sort(), 'os emissores são tipados por efeito');
+  // Avançar os animators e provar que cada emissor oilfire, não apenas outro
+  // efeito da cena, produziu partículas no pool compartilhado.
   const system = scene.userData.particles;
+  assert.ok(reg.oilfireEmitters.every((e) => e.system === system), 'todos os emissores reutilizam o mesmo pool da cena');
   for (let i = 0; i < 150; i++) for (const fn of reg.animators) fn(1 / 60, i / 60);
+  assert.ok(reg.oilfireEmitters.every((e) => e.emittedTotal > 0), 'brasa/fumaça emitidas por cada lagoa');
   assert.ok(system.activeCount > 0, `fogo do óleo vivo no pool (${system.activeCount})`);
   // areia movediça: patch com anéis concêntricos (map) no setor canônico
   assert.ok((reg.counts.quicksand ?? 0) >= 2, `areia movediça (${reg.counts.quicksand ?? 0})`);

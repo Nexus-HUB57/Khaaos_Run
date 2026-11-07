@@ -1906,6 +1906,9 @@ export class Game3D {
     // Fase 22 — cenários vivos: bob dos estilhaços, chamas, bandeiras, rotor
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, this.animT);
+    // Fase 46 — clima procedural por mundo (chuva/esporos/poeira/spray/cinzas)
+    const atmosphereAnim = this.scene.userData.atmosphere?.animators;
+    if (atmosphereAnim) for (const fn of atmosphereAnim) fn(dt, this.animT);
     // Fase 23 — interiores: flicker das lâmpadas e telas
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

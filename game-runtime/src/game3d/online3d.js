@@ -479,6 +479,9 @@ export class OnlineGame3D extends Game3D {
     // Fase 22 — cenários vivos no modo online
     const dressingAnim = this.scene.userData.districtDressing?.animators;
     if (dressingAnim) for (const fn of dressingAnim) fn(dt, performance.now() / 1000);
+    // Fase 46 — clima procedural por mundo permanece visual-only no online
+    const atmosphereAnim = this.scene.userData.atmosphere?.animators;
+    if (atmosphereAnim) for (const fn of atmosphereAnim) fn(dt, performance.now() / 1000);
     // Fase 23 — interiores no modo online (flicker de lâmpadas/telas)
     const shaftsAnim = this.scene.userData.lightshafts?.animators; // Fase 24
     if (shaftsAnim) for (const fn of shaftsAnim) fn(dt, this.animT);

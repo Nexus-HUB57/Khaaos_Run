@@ -16,6 +16,7 @@ import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenári
 import { buildInteriors, buildShellHost } from './interiors3d.js'; // Fase 23 — interiores reais
 import { buildTerrain, terrainHeightAt } from './terrain3d.js'; // Fase 23 — relevo do terreno
 import { buildLightShafts } from './lightshafts3d.js'; // Fase 24 — raios de luz pelas janelas
+import { buildAtmosphere } from './atmosphere3d.js'; // Fase 46 — clima procedural por mundo
 import { qualityTier } from './quality3d.js';
 import { loadGltfModel, cloneModel } from './assets3d.js';
 import { NIGHT, nightSceneState } from './skyPhase.js';
@@ -978,6 +979,11 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // Fase 24 — raios de luz pelas janelas (poça no piso, respiração suave;
   // 2 draw calls, gate por tier via q.lightFactor)
   buildLightShafts(scene, layout, scenario, interiors, q);
+
+  // Fase 46 — camada atmosférica decorativa, determinística e sem collider:
+  // chuva ácida W1, esporos W2, poeira W3, spray W4 e cinzas no CIGKV.
+  // O registro é consumido pelo ticker do cliente e permanece fora da sim.
+  buildAtmosphere(scene, scenario, q);
 
   // ---- grama em TUFOS com LOD de distância (Fase 31/32): 3 lâminas curvadas
   // por tufo, plantio em clumps (moitas) e vento por shader — mata de
