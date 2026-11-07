@@ -11,6 +11,7 @@ type WsTokenPayload = {
   jti: string;
   kid: string;
   iat: number;
+  authenticatedAtMs: number;
   exp: number;
   purpose: typeof TOKEN_PURPOSE;
 };
@@ -19,8 +20,16 @@ export type VerifiedWsToken = WsTokenPayload;
 
 function keys(): SigningKey[] { return getSigningKeys("WS_TOKEN_SECRET"); }
 
-export function createWsAccessToken(userId: string, nowSeconds = Math.floor(Date.now() / 1000), sessionId?: string) {
+export function createWsAccessToken(
+  userId: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  sessionId?: string,
+  authenticatedAtMs = nowSeconds * 1000,
+) {
   if (!userId || userId.length > 256) throw new Error("Invalid WebSocket subject");
+  if (!Number.isSafeInteger(authenticatedAtMs) || authenticatedAtMs <= 0 || authenticatedAtMs > nowSeconds * 1000 + 30_000) {
+    throw new Error("Invalid WebSocket authentication time");
+  }
   const [key] = keys();
   const payload: WsTokenPayload = {
     sub: userId,
@@ -28,6 +37,7 @@ export function createWsAccessToken(userId: string, nowSeconds = Math.floor(Date
     jti: randomUUID(),
     kid: key.kid,
     iat: nowSeconds,
+    authenticatedAtMs,
     exp: nowSeconds + TOKEN_LIFETIME_SECONDS,
     purpose: TOKEN_PURPOSE,
   };
@@ -48,6 +58,8 @@ export function verifyWsAccessTokenDetails(token: string, nowSeconds = Math.floo
       typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 256 ||
       typeof payload.jti !== "string" || !payload.jti || payload.jti.length > 128 ||
       payload.purpose !== TOKEN_PURPOSE || !Number.isInteger(payload.iat) || !Number.isInteger(payload.exp) ||
+      !Number.isSafeInteger(payload.authenticatedAtMs) || (payload.authenticatedAtMs as number) <= 0 ||
+      (payload.authenticatedAtMs as number) > (payload.iat as number) * 1000 + 30_000 ||
       (payload.iat as number) > nowSeconds + 30 || (payload.exp as number) <= nowSeconds ||
       (payload.exp as number) - (payload.iat as number) > TOKEN_LIFETIME_SECONDS
     ) return null;
@@ -63,7 +75,7 @@ export async function consumeWsAccessToken(token: string, origin?: string): Prom
   const payload = verifyWsAccessTokenDetails(token);
   if (!payload) return null;
   if (origin && process.env.PUBLIC_ORIGIN && origin !== new URL(process.env.PUBLIC_ORIGIN).origin) return null;
-  if (await distributedState.isUserRevoked(payload.sub)) return null;
+  if (await distributedState.isUserRevoked(payload.sub, payload.authenticatedAtMs)) return null;
   if (!(await distributedState.consumeOnce(`ws:${payload.jti}`, Math.max(1_000, (payload.exp - Math.floor(Date.now() / 1000)) * 1_000)))) return null;
   return payload;
 }

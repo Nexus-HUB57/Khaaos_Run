@@ -32,6 +32,7 @@ import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte 
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
 import { TACTICAL_HOTKEY } from './tacticalmap3d.js'; // Fase 40 — hotkey do mapa tático (fonte única)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
+import { refreshPojStrip, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — painel POJ também no modo local
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -66,6 +67,10 @@ export class Game3D {
     this.audio = new GameAudio();
     // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
     this.audio.setMix(loadAudioMix());
+    // Fase 43 — assinatura acústica por mundo (vento, chuva e piso padrão).
+    this.audio.setWorldAmbience(this.scenario.id, {
+      weather: ['Barburhen', 'Arukheea'].includes(this.scenario.id) ? 'rain' : 'clear',
+    });
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -119,9 +124,24 @@ export class Game3D {
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
     this.initGfxPanel(); // Fase 35 — painel de vídeo/performance (KR_GFX_*)
+    this.initPojPanel(); // Fase 9 (fix) — painel POJ do modal ZU também no modo local
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 9 (fix) — painel POJ do modal ZU no modo LOCAL ----------
+  // O regramento é público (/poj/state no mesmo origin) e o painel não pode
+  // ficar eternamente em "—" só porque o jogador não entrou em sala online.
+  // Em hospedagens estáticas (sem backend) o fetch falha e o painel permanece
+  // neutro — o jogo nunca quebra. No modo online o OnlineGame3D mantém o
+  // próprio ciclo de 15 s (sem duplicar timers: este método sai cedo lá).
+  initPojPanel() {
+    if (this.online) return;
+    if (!document.querySelector('#pojStrip')) return;
+    refreshPojStrip();
+    refreshPatenteChip();
+    this.pojTimer = setInterval(() => { refreshPojStrip(); refreshPatenteChip(); }, 15000);
   }
 
   // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
@@ -404,6 +424,14 @@ export class Game3D {
     }
     select.replaceChildren(...this.#operativeOptions());
     select.value = this.selectedOperative.id;
+    // Fase 11 (fix) — o rótulo "16 DISPONÍVEIS" era fixo no HTML e ficou
+    // desatualizado quando o catálogo cresceu (operativos + insígnias OCE).
+    // A contagem real vem das opções recém-montadas — nunca dessincroniza.
+    const operativeLabel = document.querySelector('label[for="operativeSelect"]');
+    if (operativeLabel && this.#selectableOperatives?.length) {
+      const total = this.#selectableOperatives.length;
+      operativeLabel.textContent = `OPERATIVO CANÔNICO · ${total} ${total === 1 ? 'DISPONÍVEL' : 'DISPONÍVEIS'}`;
+    }
     this.renderOperativeCard(this.selectedOperative);
     select.addEventListener('change', () => {
       if (this.sim.started) return;
@@ -984,7 +1012,7 @@ export class Game3D {
     this._gait ??= newGait();
     advanceGait(this._gait, { x: p.x, z: p.z, dt });
     if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
-      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0);
+      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
     }
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
@@ -1128,7 +1156,7 @@ export class Game3D {
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
-            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener);
+            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
           }
         }
       }
@@ -1425,12 +1453,17 @@ export class Game3D {
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
           break;
-        case 'revived':
-          this.hud.feed('SQUAD', `${e.by} reviveu ${e.targetName}.${e.target === 'player' ? ' De volta ao combate!' : ''}`, 'good');
+        case 'revived': {
+          const selfTarget = e.isSelf || e.target === 'player' || e.target === p.id;
+          const message = e.isSelf
+            ? 'Você se recuperou usando um medkit.'
+            : `${e.by} ${e.item === 'medkit' ? 'prestou primeiros socorros a' : 'reviveu'} ${selfTarget ? 'você' : e.targetName}.${selfTarget ? ' De volta ao combate!' : ''}`;
+          this.hud.feed(e.item === 'medkit' ? 'PRIMEIROS SOCORROS' : 'SQUAD', message, 'good');
           this.audio?.pickup?.();
           break;
+        }
         case 'knocked':
-          this.hud.feed('ZU', `Você está NOCAUTEADO${e.by ? ` por ${e.by}` : ''} — aliados podem reviver. Rasteje para cobertura.`, 'bad');
+          this.hud.feed('ZU', `NOCAUTEADO: até 7 s para usar H/✚ em si ou receber primeiros socorros; E canaliza o revive de um aliado. Rasteje para cobertura.`, 'bad');
           this.audio?.heartbeat?.();
           this.hud.damageFlash = .6;
           break;
@@ -1438,7 +1471,10 @@ export class Game3D {
           this.hud.killfeed(e.killer, e.victim, !!e.head, false, !!e.knock);
           break;
         case 'botKill':
-          this.hud.killfeed('RING', e.target, false, false);
+          // Wart B — a fonte letal chega em e.kind: morte pela ANOMALIA Khaaos
+          // (quantum, sim3d #drainQuantumShield) não é "RING" — o HUD nomeia a
+          // fonte real (mesmo rótulo do servidor: shared/worldKillers.ts).
+          this.hud.killfeed(e.kind === 'quantum' ? 'ANOMALIA' : 'RING', e.target, false, false);
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');

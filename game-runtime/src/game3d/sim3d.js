@@ -148,18 +148,17 @@ export const DEFAULT_INPUT = Object.freeze({
 // (padrão legado/testes) a morte encerra a partida imediatamente.
 export const SPECTATE_MIN_ALIVE = 2;
 
-// ---------- Fase 7 — Squad & DBNO (knockdown/revive, estilo FreeFire) ----------
-// No modo squad, dano letal NÃO elimina: o operativo cai NOCAUTEADO (knocked),
-// rasteja lentamente e sangra até o fim do contador. Um aliado do MESMO esquadrão,
-// vivo e de pé, que segure INTERAGIR por perto revive o companheiro. Dano recebido
-// já caído é letal (finalização). Companheiros caídos sangram mais rápido a cada
-// nocaute subsequente (bleedOutDecay).
+// ---------- Fase 7 — Squad & protocolo DBNO de 7 s ----------
+// O primeiro dano letal coloca o jogador em estado caído por no máximo sete
+// segundos. H/medkit pode recuperar o próprio jogador ou um aliado do squad;
+// E ainda canaliza o revive. Dano letal recebido já caído confirma eliminação.
 export const DBNO = {
-  bleedOutSeconds: 45,     // tempo de sangramento do 1º nocaute
-  bleedOutDecay: 0.72,     // multiplicador do contador a cada nocaute extra
+  bleedOutSeconds: 7,      // janela máxima para autocuidado ou socorro
+  bleedOutDecay: 1,        // cada novo nocaute conserva o prazo acordado de 7 s
   reviveSeconds: 3.2,      // canalização de revive (segure E)
   reviveDistance: 2.4,     // alcance do revive (m)
-  reviveLifeFraction: 0.4, // vida restaurada no revive
+  reviveLifeFraction: 0.3, // vida restaurada no revive — 30 HP fixos, acordo
+                           // UE5.8 (Heal(30.0f)) / raiz (@shared/dbno.reviveHealFlatHp)
   crawlSpeedMult: 0.42,    // velocidade rastejando
 };
 
@@ -184,8 +183,8 @@ export function knockActor(a, ownerId, kind = 'body') {
   return a;
 }
 
-// Melhor alvo de revive para `actor`: companheiro do MESMO esquadrão, caído,
-// vivo, dentro do alcance — o mais próximo.
+// Melhor alvo de revive: exige mesmo esquadrão quando o ator pertence a um;
+// sem squad (solo), permite qualquer jogador caído e vivo dentro do alcance.
 export function reviveTargetFor(actor, candidates) {
   let best = null, bestD = DBNO.reviveDistance;
   for (const c of candidates) {
@@ -291,13 +290,26 @@ export function circlePushAabb(px, pz, r, b) {
 }
 export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   let tmin = 0, tmax = maxT;
-  const axes = [[ox, dx, box.minX, box.maxX], [oy, dy, box.yMin, box.yMax], [oz, dz, box.minZ, box.maxZ]];
-  for (const [o, d, lo, hi] of axes) {
-    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
-    let t1 = (lo - o) / d, t2 = (hi - o) / d;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return null;
+  // Caminho quente: não criar arrays, destructuring ou pares temporários para
+  // cada raio. A forma escalar preserva o slab test original e reduz pressão
+  // no GC durante LOS, projéteis e explosões.
+  if (Math.abs(dx) < 1e-9) { if (ox < box.minX || ox > box.maxX) return null; }
+  else {
+    let t1 = (box.minX - ox) / dx, t2 = (box.maxX - ox) / dx;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dy) < 1e-9) { if (oy < box.yMin || oy > box.yMax) return null; }
+  else {
+    let t1 = (box.yMin - oy) / dy, t2 = (box.yMax - oy) / dy;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dz) < 1e-9) { if (oz < box.minZ || oz > box.maxZ) return null; }
+  else {
+    let t1 = (box.minZ - oz) / dz, t2 = (box.maxZ - oz) / dz;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
   }
   return tmin;
 }
@@ -316,7 +328,7 @@ export function windowPaneOnSegment(ox, oy, oz, tx, ty, tz, windows) {
   dx /= len; dy /= len; dz /= len;
   let best = null, bestT = Infinity;
   for (const p of windows ?? []) {
-    const box = windowBoxCollider({ ...p, destroyed: false }); // abertura persiste
+    const box = windowBoxCollider(p, true); // abertura persiste mesmo após estilhaçar
     if (!box) continue;
     const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
     if (t !== null && t < bestT) { best = p; bestT = t; }
@@ -640,7 +652,7 @@ export class KhaaosSim3D {
     // layout (ex.: testes que removem colliders) continuam valendo para
     // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
     // s.doors e re-sincronizam via syncPhysicsWorld()).
-    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    this.physicsWorld = { colliders: this.world.colliders, losColliders: this.world.colliders, losSource: this.world.colliders, floors: this.world.floors };
     // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
     this.syncPhysicsWorld();
   }
@@ -657,6 +669,10 @@ export class KhaaosSim3D {
     for (const w of this.windows) { if (!w.destroyed) { const box = windowBoxCollider(w); if (box) panes.push(box); } }
     const dyn = active.length || leafs.length || panes.length ? active.concat(leafs, panes) : [];
     this.physicsWorld.colliders = dyn.length ? this.world.colliders.concat(dyn) : this.world.colliders;
+    // Vidro é balístico, mas transparente para LOS. Evita testar cada painel
+    // em cada candidato de IA sem alterar a lista usada por movimento/balas.
+    this.physicsWorld.losColliders = this.physicsWorld.colliders.filter((box) => box.kind !== 'window' && !box.noBlock);
+    this.physicsWorld.losSource = this.physicsWorld.colliders;
   }
 
   // ---------- spawn ----------
@@ -1028,6 +1044,10 @@ export class KhaaosSim3D {
     return this.snapshot();
   }
 
+  #worldXp(base) {
+    return Math.round(base * (this.scenario.xpMultiplier ?? 1));
+  }
+
   // ---------- atores ----------
   #stepActor(a, input, dt, isPlayer) {
     a.cooldown = Math.max(0, a.cooldown - dt);
@@ -1050,10 +1070,14 @@ export class KhaaosSim3D {
     if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
-    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
-    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
-    if (this.squad && input.interact) this.#tryRevive(a, dt);
+    // Caído: rasteja e pode usar um medkit em si mesmo; não combate/coleta.
+    if (a.knocked) {
+      if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
+      if (isPlayer && input.medkit) this.#useMedkit(a);
+      return;
+    }
+    // Fase 7 — revive: aliado próximo segura INTERAGIR; em solo, sem squad lock.
+    if (input.interact) this.#tryRevive(a, dt);
     if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
       a.abilityState.distanceRemaining = a.abilityDistanceBudget;
       if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeTicks = 0;
@@ -1113,7 +1137,7 @@ export class KhaaosSim3D {
     terminal.channelProgress = 0;
     a.zexChannel = null;
     a.extracted++;
-    a.xp += EXTRACT_XP;
+    a.xp += this.#worldXp(EXTRACT_XP);
     this.emit('extract', { count: a.extracted, x: terminal.x, z: terminal.z });
   }
 
@@ -1427,11 +1451,13 @@ export class KhaaosSim3D {
     let dx = b.x - ox, dy = (b.y + 1.6) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
-    for (const box of this.physicsWorld.colliders) {
-      if (box.noBlock) continue;
-      // Fase 26 — vidro é TRANSPARENTE p/ visão (bots enxergam por janelas
-      // como na Fase 24); o bloqueio do vidro é só balístico (#stepBullets).
-      if (box.kind === 'window') continue;
+    const minX = Math.min(ox, b.x), maxX = Math.max(ox, b.x);
+    const minY = Math.min(oy, b.y + 1.6), maxY = Math.max(oy, b.y + 1.6);
+    const minZ = Math.min(oz, b.z), maxZ = Math.max(oz, b.z);
+    const colliders = this.physicsWorld.losSource === this.physicsWorld.colliders ? this.physicsWorld.losColliders : this.physicsWorld.colliders;
+    for (const box of colliders) {
+      if (box.noBlock || box.kind === 'window') continue;
+      if (box.maxX < minX || box.minX > maxX || box.maxZ < minZ || box.minZ > maxZ || box.yMax < minY || box.yMin > maxY) continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
     return true;
@@ -1630,9 +1656,13 @@ export class KhaaosSim3D {
       b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
+      const segMinX = Math.min(ox, b.x), segMaxX = Math.max(ox, b.x);
+      const segMinY = Math.min(oy, b.y), segMaxY = Math.max(oy, b.y);
+      const segMinZ = Math.min(oz, b.z), segMaxZ = Math.max(oz, b.z);
       let hitT = Infinity, hitBox = null;
       for (const box of this.physicsWorld.colliders) {
         if (box.noBlock) continue;
+        if (box.maxX < segMinX || box.minX > segMaxX || box.maxZ < segMinZ || box.minZ > segMaxZ || box.yMax < segMinY || box.yMin > segMaxY) continue;
         const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
         if (t !== null && t < hitT) { hitT = t; hitBox = box; }
       }
@@ -1814,10 +1844,16 @@ export class KhaaosSim3D {
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
     if (actor.life > 0) return;
-    // Fase 30 — morte AMBIENTAL canônica: a anomalia fura escudo/blindagem e
-    // mata DIRETO (sem DBNO), mas sai pelo MESMO #finalizeDeath das outras
-    // mortes — espólio onde caiu (Fase 28), killfeed/eliminado com colocação e
-    // atribuição via lastHitBy (paridade 1:1 com a trilha autoritativa).
+    if (actor.id === 'player') {
+      if (!actor.knocked) {
+        knockActor(actor, actor.lastHitBy ?? null, 'quantum');
+        this.emit('knocked', { by: null, kind: 'quantum', knockT: actor.knockT });
+      } else {
+        actor.life = 0; // dano contínuo não antecipa o prazo de recuperação
+      }
+      return;
+    }
+    // Bots sem DBNO de jogador continuam finalizados diretamente pela anomalia.
     this.#finalizeDeath(actor, null, 'quantum');
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
@@ -1830,9 +1866,9 @@ export class KhaaosSim3D {
       if (this.squad && !bot.knocked) {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
-          this.player.xp += head ? 60 : 40; this.player.krc += 5;
+          this.player.xp += this.#worldXp(head ? 60 : 40); this.player.krc += Math.round(5 * this.scenario.krcMultiplier);
           // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
-          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: this.#worldXp(head ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
@@ -1841,9 +1877,9 @@ export class KhaaosSim3D {
       this.#dropDeathBox(bot); // Fase 28 — onde o operativo cai, o espólio fica
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(head ? 180 : 120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — abate evolui a skin mítica
-        this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
+        this.emit('kill', { target: bot.name, head, xp: this.#worldXp(head ? 180 : 120), krc });
       } else this.emit('botKill', { target: bot.name });
     }
   }
@@ -1866,24 +1902,23 @@ export class KhaaosSim3D {
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {
-      // Fase 7 — squads: nocaute com chance de revive; dano já caído elimina
-      if (this.squad && !p.knocked) {
+      // Protocolo DBNO: todo jogador mantém a janela fixa mesmo sob dano contínuo.
+      if (!p.knocked) {
         knockActor(p, ownerId, kind);
         this.emit('knocked', { by: ownerId, kind, knockT: p.knockT });
         return;
       }
-      p.life = 0; p.alive = false; p.knocked = false;
-      this.#dropDeathBox(p); // Fase 28
-      // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
-      const placement = [this.player, ...this.bots].filter((a) => a.alive).length + 1;
-      this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
+      p.life = 0;
     }
   }
   // Fase 7 — morte final (sangramento no DBNO)
   #finalizeDeath(a, ownerId, kind) {
     if (a.zexChannel) this.#cancelZexChannel(a, 'death');
+    a.life = 0;
     a.alive = false;
     a.knocked = false;
+    a.knockT = 0;
+    a.reviveProgress = 0;
     this.#dropDeathBox(a); // Fase 28 — espólios na posição da morte
     if (a.id === 'player') {
       const placement = [this.player, ...this.bots].filter((x) => x.alive).length + 1;
@@ -1892,9 +1927,9 @@ export class KhaaosSim3D {
       const killerId = ownerId ?? a.lastHitBy ?? null;
       if (killerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — finalização também evolui
-        this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
+        this.emit('kill', { target: a.name, head: false, xp: this.#worldXp(120), krc, finish: true });
       } else this.emit('botKill', { target: a.name, kind });
     }
   }
@@ -1957,9 +1992,22 @@ export class KhaaosSim3D {
     } else a.ammoMag = this.#magCap(a, w);
   }
   #useMedkit(a) {
-    if (a.inventory.medkit <= 0 || a.life >= 100) return;
-    a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
-    this.emit('medkit', { life: a.life });
+    if ((a.inventory.medkit ?? 0) <= 0) return;
+    const target = a.knocked ? a : (reviveTargetFor(a, [this.player, ...this.bots]) ?? a);
+    if (!target.knocked && target.life >= 100) return;
+    a.inventory.medkit--;
+    if (target.knocked) {
+      target.knocked = false;
+      target.knockT = 0;
+      target.reviveProgress = 0;
+      target.lastReviveTick = -1;
+      target.life = 30;
+      this.emit('revived', {
+        by: a.name ?? a.id, target: target.id, targetName: target.name ?? target.id,
+        life: target.life, isSelf: target === a, item: 'medkit',
+      });
+    } else target.life = Math.min(100, target.life + 30);
+    this.emit('medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
   // ---------- Fase 32 — economia de sobrevivência dos bots ----------
   // Coleta por proximidade, cura fora de combate e utilitários no engajamento.

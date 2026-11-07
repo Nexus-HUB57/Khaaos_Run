@@ -73,8 +73,8 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Revive")
     EKhaaosReviveState GetReviveState(const FString& PlayerId) const;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Revive")
-    float DownedTimeLimit = 60.0f;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Revive")
+    float DownedTimeLimit = 7.0f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Khaaos|Revive")
     float ReviveInteractionTime = 5.0f;
@@ -115,7 +115,5 @@ protected:
     /** Server-side: sync ReplicatedPlayerStates from PlayerReviveStates map. */
     void SyncReplicatedPlayerStates();
 
-    TMap<FString, EKhaaosReviveState> PlayerReviveStates;
-
-    TMap<FString, float> DownedTimers;
+	TMap<FString, EKhaaosReviveState> PlayerReviveStates;
 };

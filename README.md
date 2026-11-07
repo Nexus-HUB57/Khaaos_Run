@@ -12,6 +12,10 @@
 ## Sumário
 
 - [Status do Projeto](#status-do-projeto)
+- [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
+- [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
+- [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
+- [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
 - [Desenvolvimento recente — Console Web + Mundos canônicos (2026-11-02)](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02)
 - [Desenvolvimento recente — Personagens (2026-11-02)](#desenvolvimento-recente--personagens-2026-11-02)
@@ -67,9 +71,134 @@
 | **Entrada dos Mundos (Zu)** | 🟡 Protocolo autoritativo implementado | `ZU_PORTAL_V1` mantém o jogador em spawn de solo, sincroniza a apresentação por relógio do servidor e elimina `Deploy → Parachute` do fluxo UE5; airdrop de suprimentos permanece separado do ingresso |
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
-| **Avatares & Operativos (16)** | ✅ 8♂ e 8♀ Representativos | 16 operativos canônicos com diversidade étnica/racial, 16 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON e Studio 4K |
+| **Avatares & Operativos (33)** | ✅ 16♂ e 16♀ + TALON | 16 operativos canônicos militares + Lote 4 (8 milícias MIL-01..08 + 8 gangues GNG-01..08, facção declarada) com diversidade étnica/racial; 33 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON, Studio 4K com filtro de facção e whitelist de seleção |
 | **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
+| **Jornada Oficial do Jogador** | 🟡 Código de conta por email/senha versionado; alistamento e lançamento ainda pendentes | App passa a ter cadastro/login local com verificação por email e OIDC coexistente nesta entrega; criação de conta por email permanece indisponível até SMTP configurado. Taxa nominal de US$ 1, perfil/War’I após pagamento, Academia KR e marco de 1.000.000 continuam condicionados aos gates de cobrança, compliance e produção. |
+
+---
+
+## Vertical Slice de Personagens CIGKV
+
+O slice canônico de personagens para o CIGKV está versionado e pronto para execução em um runner com **Unreal Engine 5.8 licenciado e GPU**. Ele cobre um operador humano (`Kane`) e uma espécie não-humana (`Zheers Base`), normalização para altura canônica de 180 cm, origem nos pés, T-pose, retargeting Mixamo para `SK_Manny`/`SK_Gwen`, receitas master PBR para pele/tecido/cabelo e capturas nos perfis Low, Medium, High e Ultra.
+
+Arquivos principais:
+
+- [Manifesto canônico do slice](Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json)
+- [Receita master PBR e instâncias](Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json)
+- [Auditoria gráfica Free Fire/Call of Duty](docs/REVISAO_GRAFICA_PERSONAGENS_FREEFIRE_COD_2026-11.md)
+- [Normalizador Blender 4.x](scripts/ue5/normalize_cigkv_character_blender.py)
+- [Preparação engine-less e relatório de proveniência](scripts/ue5/prepare_cigkv_vertical_slice.py)
+- [Automação do Editor UE5.8](scripts/ue5_editor/cigkv_vertical_slice.py)
+- [Workflow de validação e captura](.github/workflows/cigkv-vertical-slice.yml)
+
+### Verificação
+
+O preflight local valida JSON, sintaxe Python, presença das fontes e gera um relatório sem alegar que assets binários foram criados:
+
+```bash
+python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
+python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
+python3 scripts/ue5/prepare_cigkv_vertical_slice.py
+```
+
+O job `recipe` do workflow pode terminar como `blocked_missing_source` quando uma fonte não estiver no checkout, mas ainda preserva o relatório e não fabrica evidência. A etapa `engine` só é habilitada manualmente com `run_engine=true`, `UE58_ENABLED=true` e um runner com labels `self-hosted`, `linux`, `gpu`, `ue5.8` e `x64`. Nesse runner, o Blender normaliza os arquivos para FBX; em seguida o Editor importa, aplica o retarget/material master e captura as oito evidências de screenshot. Até essa execução, `.uasset`, `.umap`, métricas de GPU e screenshots permanecem explicitamente como **não medidos** no sandbox.
+
+---
+
+## Qualidade de assets 3D CIGKV
+
+O ciclo pós-PR adiciona uma auditoria engine-less para distinguir fontes de prova de personagens de produção. O auditor mede contêiner, vértices, triângulos, UVs, materiais, texturas, skin/controllers e animações expostas pelo formato; fontes abaixo dos gates são classificadas como `proxy_source`, sem promoção automática para qualidade AAA.
+
+- [Auditoria automatizada de assets](scripts/ue5/audit_cigkv_character_assets.py)
+- [Contrato de qualidade e próximos gates de modelagem](docs/CIGKV_CHARACTER_ASSET_QUALITY.md)
+- [Workflow que publica o relatório](.github/workflows/cigkv-vertical-slice.yml)
+
+O resultado engine-less não substitui a revisão de silhueta, deformação, clipping, cabelo, roupa, sockets, LOD, PBR, Lumen, Nanite ou GPU. Esses itens continuam exigindo Blender 4.x e um runner UE5.8 licenciado.
+
+---
+
+## Performance UE5.8 e FPS Live Action
+
+O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:
+
+| Métrica | Resultado |
+|----------|-----------|
+| Mundos | CIGKV, Barburhen, Priadus, Ckesalth e Arukheea |
+| Carga | 60 operadores por mundo; 300 no total |
+| Duração | 30 segundos; 900 ticks por mundo |
+| Gate da simulação | **PASS** — p95 agregado de 4,589 ms contra orçamento de 33,33 ms |
+| Pior mundo no p95 | Barburhen — 4,589 ms |
+| FPS gráfico UE5.8 | **Ainda não medido** — o sandbox não possui Unreal Engine 5.8 licenciado |
+
+O número de 217,91 FPS registrado no relatório é **server-equivalente do proxy determinístico da simulação**. Ele não é FPS de tela, não mede GPU e não aprova a renderização Live Action. A aprovação gráfica depende de captura no runner UE5.8 com frame time p95 de renderização igual ou inferior a 16,67 ms no perfil Medium.
+
+Documentação e evidências:
+
+- [Relatório de performance e FPS Live Action](docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md)
+- [Auditoria de gargalos e configuração UE5.8/CI-CD](docs/performance/UE58_PERFORMANCE_AUDIT_2026-11.md)
+- [Manifesto do replay fixo de 10 minutos](scripts/performance/ue58-fixed-replay.json)
+- [Executor do replay e captura Game/Render/GPU](scripts/performance/ue58_fixed_replay.mjs)
+- [Análise detalhada do dry-run, p50/p95 e gates Lumen/Nanite](docs/performance/UE58_FIXED_REPLAY_DRY_RUN_2026-11.md)
+- [Roteiro de apresentação dos resultados](docs/performance/ROTEIRO_APRESENTACAO_UE58_LIVE_ACTION.md)
+- [Resultado JSON do stress dos cinco mundos](artifacts/performance/ue58-all-worlds-stress.json)
+- [Workflow CI/CD UE5.8](.github/workflows/ue58-release-cd.yml)
+
+### Executar o stress localmente
+
+```bash
+node scripts/performance/ue58_all_world_stress.mjs \
+  --duration-seconds 30 \
+  --players-per-world 60 \
+  --run-engine \
+  --output artifacts/performance/ue58-all-worlds-stress.json \
+  --markdown docs/performance/UE58_LIVE_ACTION_FPS_REPORT.md
+```
+
+Sem `UE5_ROOT` ou `UnrealEditor-Cmd`, `--run-engine` registra `skipped_no_engine` e executa somente o proxy determinístico. Isso é intencional: o resultado não transforma uma simulação engine-less em uma alegação de FPS gráfico.
+
+### Pipeline de release UE5.8
+
+O workflow [`UE5.8 Release CI/CD`](.github/workflows/ue58-release-cd.yml) executa preflight, testes do runtime, stress dos cinco mundos, empacotamento reprodutível e publicação controlada. O build/cook/pak real é habilitado quando `run_engine=true` e `UE58_ENABLED=true` em um runner com as labels `self-hosted`, `linux`, `ue5.8` e `x64`.
+
+Para o soak gráfico, habilite também `run_graphics_soak=true`. O job usa um runner com GPU e labels `self-hosted`, `linux`, `gpu`, `ue5.8` e `x64`, executa o replay fixo por 10 minutos com Lumen e Virtual Shadow Maps e publica as métricas de Game Thread, Render Thread e GPU. A variável protegida `UE5_REPLAY_COMMAND` deve apontar para o AutomationTest cookado.
+
+O modo `--dry-run --simulate-metrics` valida o contrato e o parser com métricas sintéticas. Ele reporta `configurationPass=true`, mas mantém `realRunnerPass=false` enquanto não houver amostras específicas de custo Lumen e fallback Nanite capturadas no runner UE5.8.
+
+Configure `UE5_ROOT` e `UE5_WORLD_STRESS_COMMAND` como variáveis do GitHub Actions. A promoção para staging ou produção exige o secret protegido `KHAAOS_DEPLOY_COMMAND`, que recebe `KHAAOS_PACKAGE` e `KHAAOS_ENVIRONMENT`.
+
+### Critérios de go/no-go
+
+- Servidor: p95 do tick menor ou igual a 33,33 ms nos cinco mundos.
+- Cliente: p95 do frame time de renderização menor ou igual a 16,67 ms no perfil Medium.
+- Estabilidade: nenhum crash, hitch persistente ou crescimento de memória no soak test.
+- Qualidade: câmera de primeira pessoa, iluminação PBR/Lumen e feedback de combate preservados.
+
+---
+
+## Jornada Oficial do Jogador
+
+> **Escopo:** este é o fluxo-alvo de produto para cadastro, alistamento e abertura do CIGKV. Documentá-lo não ativa checkout, não autoriza cobrança live e não declara essas etapas implementadas. O estado executável continua limitado ao que está descrito em [Console Web — preview](#desenvolvimento-recente--console-web--mundos-canônicos-2026-11-02) e nos gates de [economia e compliance](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+
+| Etapa | Experiência do jogador | Regra de produto e autorização | Situação atual |
+|---|---|---|---|
+| 1. Cadastro | Informa nome, email, senha e confirmação de senha. | A confirmação é validada e descartada; nunca é armazenada como credencial. Email é normalizado e senha fica somente em hash scrypt. A confirmação do email é obrigatória para login. | Formulário, endpoints e persistência versionados; contas novas por email só podem ser criadas quando SMTP estiver configurado. OIDC continua separado e não há vinculação automática por email. |
+| 2. Login | Entra com email e senha ou continua com OIDC. | Login local só cria sessão após confirmação de email; limites por IP, Origin verificada e mensagens neutras para falhas/recuperação. A conta autenticada ainda não implica alistamento pago. | Login local e recuperação por token implementados no código e cobertos por testes locais; SMTP e staging não configurados nesta entrega. |
+| 3. Efetivação e pagamento | Paga uma taxa única nominal de **US$ 1,00** para efetivar o alistamento. | Para jogadores no Brasil, o checkout deve apresentar e cobrar o total em **BRL**, resolvido no servidor a partir de uma cotação aprovada e fixada na ordem. Fonte e horário do câmbio, validade da cotação, arredondamento, taxas e tributos precisam ser definidos antes do lançamento; o cliente não escolhe valor nem conversão. | Há gateway de teste opcional em USD; sem gateway a API falha fechado (`503`) e não credita. Conversão BRL e cobrança live não estão aprovadas nem habilitadas. |
+| 4. Confirmação e liberação | Recebe a confirmação do pagamento e passa a acessar a plataforma, incluindo Perfil e painel de controle War’I. | A liberação ocorre após confirmação final server-side do provedor e conciliação da ordem; retorno/redirect do navegador não prova pagamento. A operação é idempotente para impedir dupla cobrança ou dupla concessão. | Webhook de teste pode concluir a sessão, mas o gate pago transversal de Perfil/War’I ainda não existe; login OIDC não comprova pagamento. |
+| 5. Espera pelo marco | A plataforma mostra o progresso até **1.000.000 de alistamentos efetivados**. | A contagem é global e autoritativa no servidor. Definição operacional proposta: uma conta elegível por alistamento, com pagamento confirmado; sandbox, duplicatas, pagamentos pendentes/falhos e pagamentos revertidos não contam. O tratamento final de reembolsos/chargebacks e a regra de unicidade devem ser aprovados por Produto/Compliance antes do go-live. | Contador e gate global de Academia ainda não implementados na aplicação principal. |
+| 6. Academia KR | Ao atingir o marco, jogadores alistados recebem acesso à Academia KR: dicas, manual, estratégia de jogo, testes de armas e conteúdo de preparação. | O desbloqueio é concedido pelo servidor aos alistados elegíveis, em evento único e idempotente. A experiência não deve depender de contador enviado pelo cliente. | Conteúdo e automação de desbloqueio ainda precisam ser construídos e aprovados. |
+| 7. Confirmação do marco e CIGKV | Ao cruzar 1.000.000, recebe notificação de confirmação do alistamento e o cronograma de abertura do CIGKV. | Registrar o marco uma única vez; publicar data, hora, fuso, regras de acesso e capacidade. O alcance do número inicia o processo de comunicação/agendamento, não abre automaticamente uma partida ou ambiente sem os gates operacionais. Canal de notificação e janela de abertura ainda serão definidos. | Gatilho, notificações e agenda do CIGKV não estão conectados ao cadastro/pagamento atual. |
+
+### Separação de moedas e confirmação
+
+A taxa nominal de **US$ 1,00** é uma cobrança fiduciária de alistamento e não é uma conversão de KRC. KRC permanece moeda exclusivamente interna do jogo, sem paridade, saque ou resgate externo. Qualquer valor em BRL deve ser cotado e gravado server-side em unidades monetárias menores, com a moeda ISO e a regra de cotação aprovadas; não fixar uma taxa USD/BRL no cliente ou inferi-la a partir de KRC.
+
+O contador deve consumir somente eventos de alistamento confirmados pelo servidor e deduplicados. O evento de chegada ao marco precisa ser persistido de modo que retry de webhook, reload de página ou reprocessamento não duplique o desbloqueio da Academia, a notificação ou o agendamento.
+
+### Gates antes de qualquer lançamento com dinheiro real
+
+Permanecem obrigatórios: configurar e validar SMTP em staging, confirmar comportamento do email/OIDC já associado sem vínculo automático, aprovar cotação e preço exato em BRL, tributos e recibo; fechar política de reembolso, chargeback, suporte e proteção de dados; concluir a revisão jurídica/fiscal de T5.3; tornar tentativas de pagamento e fulfillment atômicos, duráveis e conciliáveis; habilitar provedor/webhooks apenas após testes; aplicar o gate pago; e definir a contagem elegível, conteúdo da Academia e agenda/capacidade do CIGKV. Até esses gates e autorização de rollout serem concluídos, a taxa de US$ 1,00 é requisito de produto documentado, não cobrança disponível. Ver [`docs/LOCAL_EMAIL_PASSWORD_AUTH.md`](docs/LOCAL_EMAIL_PASSWORD_AUTH.md) para status/configuração de auth e [`docs/ROADMAP_DESENVOLVIMENTO_2026-11.md`](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md) para os gates do restante da jornada.
 
 ---
 
@@ -134,17 +263,17 @@ Docs: `Docs/CIGKV_Barburhen/`
 
 > **Nota de status:** "validado E2E" abaixo significa evidência de execução em browser real no preview do console; não equivale a staging de produção, build UE5 ou go-live. Branch de trabalho do repo: **novo branch a partir de `main` atual (`9df772e`)** — `feat/e2e-phases-9-12` está 100% contido na `main` (232 commits atrás; congelar). Revisão E2E de 2026-11-02: `docs/REVISAO_E2E_2026-11-02.md`.
 
-### Console Web (preview Next.js) — alistamento end to end
+### Console Web (preview Next.js) — alistamento de teste, sem pagamento fiduciário
 
 | Item | Estado | Evidência |
 |------|--------|----------|
-| Fluxo de alistamento (ETAPA 1/3 inscrição → 2/3 taxa → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
-| Taxa de inscrição U$1 (= 100 KRC) server-authoritative | ✅ Liquidação + transações `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (2ª chamada → `alreadyPaid:true`, sem dupla cobrança) |
+| Fluxo de inscrição/alistamento do preview (ETAPA 1/3 inscrição → 2/3 taxa simulada → 3/3 alistamento) | ✅ Validado E2E em browser real | Usuário de teste: protocolo `KR-REG-*` gerado, `enrollmentPaid=true`, carteira 500 KRC |
+| Taxa simulada do preview (mapeamento interno de U$1 para 100 KRC) | ✅ Transações de jogo `ENROLLMENT_FEE` e `WELCOME_BONUS` persistidas | `POST /api/enrollment` idempotente (`alreadyPaid:true` no replay); não cria cobrança fiduciária |
 | Retomada de sessão | ✅ `GET /api/enrollment?username=` reconhece alistado após reload | Não repete inscrição |
 | Erro Prisma `Unknown argument enrollmentProtocol` | ✅ Resolvido | Causa: PrismaClient stale em memória (schema e SQLite já tinham as colunas); processo atualizado sem migração |
 
-- Contrato: `POST /api/enrollment` (liquida taxa, credita bônus de boas-vindas 500 KRC só após pagamento, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
-- Pagamento segue **economia de jogo** (KRC); habilitação de valor real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+- Contrato do preview: `POST /api/enrollment` (registra a taxa simulada em KRC, credita bônus de boas-vindas de 500 KRC só após a etapa de teste, protocolo `KR-REG-<base36>`), `GET /api/enrollment` (status para retomada).
+- O mapeamento de 100 KRC **não é** cotação de USD para BRL nem pagamento de US$ 1. Não há processador fiduciário nem confirmação bancária neste fluxo de preview. A jornada oficial-alvo está em [Jornada Oficial do Jogador](#jornada-oficial-do-jogador); cobrança real continua bloqueada pelos gates de compliance do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
 
 ### Aba Mundos — especificação canônica do Descentralizador aplicada
 
@@ -233,6 +362,7 @@ O roster jogável sai do nicho militar: 16 identidades irregulares recrutadas pe
 | 16 SVGs byte-idênticos | ✅ | `Content/Avatars/{male,female}/` ↔ `client/public/avatars/{male,female}/` (512×512, marca d'água do codinome, retrato paramétrico por hairstyle/headgear/paleta de facção); `avatar_catalog.json` (2 cópias idênticas) anota `faction` em todas as 33 entradas |
 | `Content/Assets/asset_manifest.json` | ✅ | +16 entradas `CHR_{clã}_{Sexo}_{Nome}` com `skeleton` por sexo (SK_Manny/SK_Gwen), `faction`, 4 mapas PBR canônicos, `priority: P1`, `status: avatar_generated` — zero resíduo `UE5_Mannequin` |
 | UI de perfil | ✅ | Grade OPERATIVO & AVATAR lista as 33 identidades com badge de facção (MILITAR/MILÍCIA/GANGUE/SUPLEMENTAR); seleção persistida via POST `/api/player/operative` sem mudança de contrato |
+| Estúdio de personagens (follow-up) | ✅ | `/studio` expõe o roster completo (32 arquétipos) com novo filtro de facção (TODAS/MILITAR/MILÍCIA/GANGUE, `data-testid` por botão), chips de facção nos cards e cópia sem resíduo `UE5_Mannequin` (exporta para os rigs Lyra `SK_Manny`/`SK_Gwen`); contrato `tests/official/character-prompt-studio.test.ts` (4 testes: roster combinado, filtro, cópia e matemática 32/16M/16F/16-8-8 com bundles válidos para todos) + smoke de browser `tests/e2e/studio-ui.spec.ts` (5 testes Playwright: 32 cards, filtro 16/8/8, interseção ♀×MILÍCIA = 4, dossiê do VULTO, busca PIXEL) |
 | Contrato automatizado | ✅ | `tests/official/militia-roster.test.ts` (5 testes): 16 operantes 8M/8F sem colisão com os militares; identidade completa (rank/spec/mundo, biomaecânica plausível, rig por sexo, prompt bundle); catálogo 33 com branch correto e whitelist rejeitando `OP_MIL_FAKE`/`OP_GNG_FAKE`; SVGs byte-idênticos; manifest com rig/faction/texturas. `character-studio.test.ts` atualizado para 33 no catálogo e paridade de manifest sobre o roster combinado |
 
 Distribuição de mundos: 7 em Barburhen (coração urbano pós-guerra), 7 no CIGKV (vilas e lajes), 1 em Priadus (posto avançado de floresta — CORUJA) e 1 em Ckesalth (entreposto — PIXEL). Espécie-clã no `ueAssetId`: Zheers×3, Skeetw×3, Venex×3, Khael×3, Onith×2, Huran×2. Raridades COMUM/RARO (equipamento irregular) — os militares mantêm EPICO/LENDÁRIO/MÍTICO.
@@ -254,7 +384,7 @@ O console **não possui um único mundo**. A Guerra do Khaaos é uma sequência 
 
 | Estágio | Identificador | Nome Canônico | Função Primária | Duração-alvo |
 |---------|---------------|---------------|-----------------|--------------|
-| Pré-lançamento | **CIGKV** | Khaaos Ville — Campo de Instrução de Guerra | Treinamento, coleta de dados, campanha de massa | Até 1.000.000 de alistamentos |
+| Pré-lançamento | **CIGKV** | Khaaos Ville — Campo de Instrução de Guerra | Treinamento, coleta de dados, campanha de massa | Batalhas de 3 h; etapa ativa até 1.000.000 de alistamentos |
 | Ciclo 1 | **W1/C1** | Barburhen — Mundo da Destruição | Brutalidade urbana pós-guerra | 7 dias (12 h/dia) |
 | Ciclo 2 | **W2/C2** | Priadus — Floresta da Escuridão | Sanidade sob invisibilidade e neblina | 7 dias |
 | Ciclo 3 | **W3/C3** | Ckesalth — Deserto das Almas Esquecidas | Fragilidade da vaidade / ambiente em extinção | 7 dias |
@@ -278,7 +408,7 @@ O desenho segue a doutrina do **Descentralizador**: cada mundo remove uma dimens
          ▼              ▼              ▼              ▼
    Protocolo CIGKV   Anel de       Emboscada      Tsunami /
    Ring 3 h          Conflito      Verde          Assassino
-   100 players       10 min        10 min         Silencioso
+   50/100 pendente   10 min        10 min         Silencioso
    Fluxo contínuo    Zona →        Zona →         Zona →
                      Parque        Templo         Prisão
 ```
@@ -308,9 +438,9 @@ O **CIGKV** (Campo de Instrução de Guerra Khaaos Ville) é o *spoiler experime
 
 ### Dinâmica de Ring
 
-- **Capacidade**: 100 jogadores (especificação canônica do Descentralizador — 100 operadores por ring em todos os 5 rings).
-- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade 160 m²/jogador (CQB).
-- **Duração**: 3 horas (Ring de Longa Duração).
+- **Capacidade**: pendente de reconciliação editorial: este README especifica 100 operadores por ring; o DOCX oficial `KhaaosRun-Mundos.docx` especifica limite de 50 jogadores para o ring CIGKV. Não tratar a capacidade como validada até a decisão do responsável pelo cânone.
+- **Área canônica**: 16.000 m² (160 m × 100 m; perímetro de contorno 520 m) • densidade de 160 m²/jogador (100 operadores) ou 320 m²/jogador (50 jogadores).
+- **Duração oficial**: 3 horas (Ring de Longa Duração). **Divergência de implementação aberta**: `shared/worlds.ts` e `WORLD_MATCH_DURATION_SECONDS` ainda configuram 10 minutos, e o runtime de preview comprime o ring. Não considerar a duração de 3 h implementada/validada até que o MatchFlow e a cadência do Pulso Khaaos sejam reconciliados e testados.
 - **Entrada em fluxo contínuo**: vaga aberta instantaneamente ao sair/eliminar; bloqueio nos últimos 5 minutos.
 - **Pulso Khaaos**: a cada 10 minutos, alteração climática ou drop de loot lendário.
 - **Arsenal sem limites de patente**: Recruta pode testar equipamento de nível General — objetivo é coleta de dados de balanceamento.
@@ -330,11 +460,11 @@ Os 1000 melhores pontuados do período experimental recebem persistência parcia
 
 ## Mundos Oficiais (W1–W4)
 
-> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). Contrato de dimensões definido no console (`src/lib/game-constants.ts`, `WorldDef.dimensions` — `areaM2` ≠ `perimeterM` de contorno); o port para `shared/worlds.ts` do repo está no item 1.1 do [Roadmap end to end](docs/ROADMAP_DESENVOLVIMENTO_2026-11.md).
+> **Dimensões canônicas (especificação do Descentralizador):** faixa de 15.000–25.000 m², 100 operadores por ring, densidade de 150–250 m²/jogador (combate CQB estilo Free Fire). O contrato vigente do repositório está em `shared/worlds.ts` (`WORLD_RING_DIMENSIONS`; `areaM2` é distinto do perímetro de contorno), com testes em `tests/official/worlds-dimensions.test.ts`. **Conflito ainda aberto:** o DOCX oficial `KhaaosRun-Mundos.docx` define limite de 50 jogadores para CIGKV, enquanto o README e o contrato de dimensões definem 100; requer decisão editorial antes da validação de capacidade.
 
 | Ring | Área canônica | Bounding box | Perímetro de contorno | Densidade (100 operadores) | Shape/bioma |
 |------|---------------|--------------|------------------------|----------------------------|-------------|
-| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 m²/jogador | Vila militar murada (`fortified_rectangle`) |
+| CIGKV (PRÉ) | 16.000 m² | 160 m × 100 m | 520 m | 160 (100p) / 320 (50p) m²/jogador | Vila militar murada (`fortified_rectangle`) |
 | W1/C1 Barburhen | 19.000 m² | 190 m × 100 m | 580 m | 190 m²/jogador | Grid urbano irregular (`urban_gridiron`) |
 | W2/C2 Priadus | 22.000 m² | 220 m × 100 m | 640 m | 220 m²/jogador | Blob orgânico radial (`organic_blob`) |
 | W3/C3 Ckesalth | 25.000 m² | 250 m × 100 m | 700 m | 250 m²/jogador | Bacia de dunas (`desert_basin`) |
@@ -420,14 +550,14 @@ O runtime offline (`KhaaosSim3D`) e o servidor online (`MatchRoom3D`) usam `zu_p
 
 ## Modelo Econômico e Persistência
 
-- **KRC** (Khaaos Run Coin) — criptomoeda de jogo. Adquirida por sobrevivência, eliminações, captura de Data Cores e ranking de convites.
-- **Bankhaoos** — conta bancária automática ao alistamento + endereço de depósito.
-- **Fundo de Investimentos KR** — acumula o prêmio de US$ 1.000.000 destinado ao(à) grande vencedor(a).
+- **KRC** (Khaaos Run Coin) — moeda virtual exclusivamente interna, adquirida por atividades do jogo; não é criptomoeda, não tem paridade ou valor externo e não permite saque/resgate.
+- **Bankhaoos** — representação de conta/saldo de jogo. Não é conta bancária, não cria endereço de depósito e não está conectada a instituição financeira.
+- **Meta/recompensa de US$ 1.000.000** — conceito de campanha/lore, não garantia de prêmio ou investimento. Qualquer premiação fiduciária depende de financiamento comprovado, regras publicadas e aprovação jurídica, fiscal e operacional antes de divulgação como oferta real.
 - **Forja do Armeiro** — marketplace de equipamentos e upgrades pagos em KRC.
 - **Persistência seletiva**: conquistas do CIGKV não migram integralmente; apenas Tokens de Veterano, packs e os 1000 melhores pontuados recebem transferência parcial para W1/C1.
 - **Zonas de extração de XP**: terminais no mapa que "salvam" progresso para o inventário War'I, desde que o jogador não seja eliminado antes.
 
-> **Atenção de engenharia**: a economia atual é de jogo. Antes de qualquer valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão de compliance.
+> **Atenção de engenharia**: a economia atual é de jogo. A taxa fiduciária nominal de alistamento descrita na jornada oficial é um fluxo separado e não está habilitada. Antes de qualquer cobrança ou prêmio em valor real, são obrigatórios ledger imutável, atomicidade, idempotência, prevenção de fraude e revisão jurídica/fiscal/compliance. Consulte [`docs/INTERNAL_CURRENCY_AND_PAYMENTS.md`](docs/INTERNAL_CURRENCY_AND_PAYMENTS.md) e [`docs/STRIPE_BRAZIL_CHECKOUT.md`](docs/STRIPE_BRAZIL_CHECKOUT.md).
 
 ---
 
@@ -1122,14 +1252,14 @@ A documentação oficial do Replit Auth não confirma suporte a hosting externo 
 | 3.7 | Prometheus + Grafana provisioning (auto-config) | P1 | Zero manual setup | ✅ datasources + dashboards |
 | 3.8 | Alpha deploy/verify/backup/restore scripts | P1 | Full deploy automation | ✅ `scripts/alpha/` |
 
-### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) 🟡 CÓDIGO/DADOS IMPLEMENTADOS; VALIDAÇÃO E COMPLIANCE PENDENTES
+### Fase 4 — Mapas W1–W4 & Economia Real (Semanas 15–22) 🟡 PROTÓTIPOS VERSIONADOS; FIDELIDADE E VALIDAÇÃO UE5 PENDENTES
 
 | # | Tarefa | Prioridade | Critério de Aceite | Status |
 |---|--------|------------|-------------------|--------|
-| 4.1 | Mapa W1/C1 — Barburhen (100p, seasons Verão/Inverno, Giants Challenge) | P0 | Zone + season system funcional | ✅ `KhaaosBarburhenLevel` (679 linhas) |
-| 4.2 | Mapa W2/C2 — Priadus (75p, aquatic zones, tsunami, nadando Zu) | P0 | Water zones + drowning funcional | ✅ `KhaaosPriadusLevel` (479 linhas) |
-| 4.3 | Mapa W3/C3 — Ckesalth (60p, altitude, thin air, escalando Zu) | P1 | Vertical combat + thin air funcional | ✅ `KhaaosCkesalthLevel` (210 linhas) |
-| 4.4 | Mapa W4/C4 — Arukheea (80p, desert, oasis, sandstorms, areia Zu) | P1 | Heat/oasis/sandstorm funcional | ✅ `KhaaosArukheeaLevel` (315 linhas) |
+| 4.1 | Mapa W1/C1 — Barburhen: cidade pós-guerra, setores urbano/industrial/parque e extração na estação ferroviária | P0 | Anel em direção ao Parque e chuva ácida conforme contrato canônico | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.2 | Mapa W2/C2 — Priadus: floresta/pântano, neblina alucinógena, flora carnívora e jacarés | P0 | Anel no Templo Antigo, perigos e extração no matadouro conforme contrato | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.3 | Mapa W3/C3 — Ckesalth: deserto, resort, vilarejo beduíno, refinaria e fumaça tóxica | P1 | Anel na Vila Sombria, setores e perigos conforme contrato canônico | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
+| 4.4 | Mapa W4/C4 — Arukheea: ilha isolada, Prisão do Sol da Noite, tsunami e tubarões | P1 | Anel na Prisão e extração final no heliporto da torre | 🟡 Protótipo versionado; fidelidade e validação em Editor/UE5 pendentes |
 | 4.5 | Ledger atômico para KRC (15 tx types, SHA256, escrow, 1B cap) | P0 | Zero double-spend em stress test | ✅ `KhaaosAtomicLedger` (460 linhas) |
 | 4.6 | Compliance Framework (KYC/AML/BCB/IRPF) | P0 | Legal sign-off ready | ✅ `KhaaosComplianceFramework` (373 linhas) |
 | 4.7 | Economy Bridge (UE5 ↔ Node.js HTTP) | P1 | Transfer/buy/sell funcional | ✅ `EconomyBridge` (428 linhas) |

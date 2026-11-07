@@ -231,7 +231,7 @@ export const OperativeAvatarBadge: FC<OperativeAvatarBadgeProps> = ({
           </>
         );
 
-      case "OP_FEMALE_DISRUPTOR_MENA": // Soraya Haddad (Levantina Libanesa)
+      case "OP_FEMALE_DISRUPTOR_MENA": // Soraya Hadd (Levantina Libanesa)
         return (
           <>
             {/* Wavy voluminous dark hair gathered in high functional bun */}

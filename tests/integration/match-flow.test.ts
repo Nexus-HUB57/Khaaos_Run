@@ -52,11 +52,11 @@ describe("MatchFlow", () => {
     });
 
     it("should have correct capacities", () => {
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 50);   // CIGKV
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 100);  // CIGKV
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[1].capacity, 100);  // Barburhen
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 75);   // Priadus
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 60);   // Ckesalth
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 80);   // Arukheea
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 100);  // Priadus
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 100);  // Ckesalth
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 100);  // Arukheea
     });
   });
 

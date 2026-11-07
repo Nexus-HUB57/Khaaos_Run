@@ -48,8 +48,8 @@ export interface MatchmakingConfig {
 }
 
 export const DEFAULT_MM_CONFIG: MatchmakingConfig = {
-  minPlayers: 2, // raise to 10–50 in production BR
-  maxPlayers: 50,
+  minPlayers: 2, // raise to 10–100 in production BR
+  maxPlayers: 100,
   initialDelta: 100,
   deltaGrowthPerSecond: 15,
   maxDelta: 600,

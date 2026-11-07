@@ -38,6 +38,7 @@ import { registerEconomy2PCRoutes } from "./routes/economy-2pc";
 import { createEnrollmentRouter } from "./routes/enrollment";
 import { createPostgresEnrollmentStore } from "./game/enrollmentStore.postgres";
 import { recordEnrollmentFeeLedger } from "./game/enrollmentLedger";
+import { createEnrollmentFeeGatewayFromEnv, createEnrollmentFeePaymentService, isEnrollmentFeeEvent } from "./payments/enrollmentFeePayment";
 import { registerMetricsRoutes } from "./routes/metrics";
 import { economy2pcService } from "./game/economy2pcService";
 
@@ -103,10 +104,25 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
   // Fase 47.1: persistência PostgreSQL (ENROLLMENT_STORE=postgres, migration
   // 0011) + ledger REAL da taxa (double-entry economy_ledger_entries +
   // bank_accounts) — o guard financeiro roda ANTES de marcar a sessão paga.
+  // Task 44 — store de alistamento compartilhada entre o router e o
+  // processador de webhook da taxa: o fulfillment precisa enxergar a MESMA
+  // sessão que o router criou. O protocolo único resolve o usuário no banco;
+  // o subject interno não é enviado à metadata Stripe. O gateway (test-only) exige
+  // store postgres — sem ela o webhook não sobreviveria a restart e a
+  // sessão poderia nunca concluir (fail-closed no boot).
+  const enrollmentStore = process.env.ENROLLMENT_STORE === "postgres" ? createPostgresEnrollmentStore() : undefined;
+  const enrollmentFeeGateway = createEnrollmentFeeGatewayFromEnv();
+  if (enrollmentFeeGateway && !enrollmentStore) {
+    console.error("[enrollment] ENROLLMENT_FEE_GATEWAY=stripe exige ENROLLMENT_STORE=postgres — gateway da taxa permanece DESLIGADO");
+  }
+  const enrollmentFeePaymentService = enrollmentFeeGateway && enrollmentStore
+    ? createEnrollmentFeePaymentService({ store: enrollmentStore })
+    : null;
   app.use(createEnrollmentRouter({
     authenticate: isAuthenticated,
-    ...(process.env.ENROLLMENT_STORE === "postgres" ? { store: createPostgresEnrollmentStore() } : {}),
+    ...(enrollmentStore ? { store: enrollmentStore } : {}),
     ledger: { recordEnrollmentFeeLedger },
+    ...(enrollmentFeeGateway && enrollmentStore ? { gateway: enrollmentFeeGateway } : {}),
   }));
 
   const requireAuth = isAuthenticated;
@@ -118,11 +134,13 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
 
   app.get("/api/auth/ws-token", isAuthenticated, (req, res) => {
     const userId = getUserId(req);
+    const sessionUser = req.user as { authenticatedAtMs?: number; claims?: { iat?: number } };
+    const authenticatedAtMs = sessionUser.authenticatedAtMs ?? (sessionUser.claims?.iat ? sessionUser.claims.iat * 1000 : Date.now());
     void distributedState.rateLimit(`auth:ws-token:${userId}:${req.ip}`, 20, 60_000).then((limit) => {
       if (!limit.allowed) return res.status(429).set("Retry-After", String(Math.ceil(limit.retryAfterMs / 1000))).json({ message: "Too many WebSocket token requests" });
       try {
         res.setHeader("Cache-Control", "no-store");
-        res.json(createWsAccessToken(userId, undefined, req.sessionID));
+        res.json(createWsAccessToken(userId, undefined, req.sessionID, authenticatedAtMs));
       } catch {
         res.status(503).json({ message: "Autenticação WebSocket indisponível" });
       }
@@ -180,7 +198,17 @@ export function registerApiRoutes(app: Express, options: { recoverPendingCouncil
     }
 
     try {
-      await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      // Task 44 — eventos da taxa de alistamento (metadata.kind =
+      // "enrollment_fee") NÃO são pedidos de pacote KRC: o processador de
+      // pacotes rejeitaria metadata sem orderId UUID. Roteia para o
+      // fulfillment dedicado, que deduplica na mesma payment_webhook_events.
+      // Sem o gateway ligado (default), eventos de taxa não existem —
+      // qualquer evento cai no processador de pacotes como antes.
+      if (enrollmentFeePaymentService && isEnrollmentFeeEvent(event)) {
+        await enrollmentFeePaymentService.processEvent(event, sha256Payload(rawBody));
+      } else {
+        await stripePaymentService.processEvent(event, sha256Payload(rawBody));
+      }
       return res.status(200).json({ received: true });
     } catch (error: any) {
       console.error("Stripe webhook processing failed", { name: error?.name, code: error?.code });

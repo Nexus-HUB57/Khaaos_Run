@@ -44,8 +44,10 @@ test('Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
     sim.step(DEFAULT_INPUT, 1 / 30);
   }
   assert.ok(barburhen.player.life < training.player.life);
-  assert.equal(training.scenario.krcMultiplier, 1);
-  assert.equal(barburhen.scenario.krcMultiplier, 1.5);
+  assert.equal(training.scenario.krcMultiplier, 0.5);
+  assert.equal(training.scenario.xpMultiplier, 1.0);
+  assert.equal(barburhen.scenario.krcMultiplier, 1.0);
+  assert.equal(barburhen.scenario.xpMultiplier, 1.25);
   assert.equal(barburhen.snapshot().scenarioId, 'Barburhen');
   assert.equal(barburhen.exportReplay().scenarioId, 'Barburhen');
 });
@@ -66,7 +68,8 @@ test('os quatro Mundos competitivos possuem previews locais selecionáveis e ali
     const scenario = resolveScenario(alias);
     assert.equal(scenario.id, canonical);
     assert.equal(scenario.sectorNames.length, 5);
-    assert.ok(scenario.krcMultiplier > 1);
+    assert.ok(scenario.krcMultiplier >= 1.5);
+    assert.ok(scenario.xpMultiplier >= 1.5);
     const sim = new KhaaosSim3D({ seed: `PREVIEW-${canonical}`, botCount: 0, scenarioId: canonical });
     assert.equal(sim.snapshot().scenarioId, canonical);
     assert.ok(sim.scenario.playerSpawn);

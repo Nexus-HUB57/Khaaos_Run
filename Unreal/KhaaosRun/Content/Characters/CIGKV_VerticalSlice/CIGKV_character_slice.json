@@ -1,0 +1,93 @@
+{
+  "schema": "khaaos.cigkv.character-vertical-slice/v1",
+  "status": "engine_runner_required",
+  "world": "CIGKV",
+  "map": "/Game/Maps/CIGKV/CIGKV_VerticalSlice",
+  "source_of_truth": "docs/fase4/VISUAL_PRODUCTION_PIPELINE.md",
+  "units": "centimeters",
+  "forward_axis": "+X",
+  "ground_axis": "Z",
+  "characters": [
+    {
+      "slot": "CIGKV_HUMAN_HERO_M01",
+      "kind": "human",
+      "species": "ZHEERS",
+      "sex": "MASCULINO",
+      "source": "client/public/figures/glb/FIG_kane.glb",
+      "source_sha256": "a56d86e958af14a989cf668899837f97ef558e86a7ee1e2250ce93d2d2128dcc",
+      "provenance": {"license_status": "unverified_internal_prototype", "commercial_use": false, "identity_review": "pending"},
+      "normalized_source": "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01.fbx",
+      "canonical_skeleton": "SK_Manny",
+      "canonical_height_cm": 180,
+      "bind_pose": "T-pose",
+      "retarget_profile": "RTG_Mixamo_To_SK_Manny",
+      "animation_set": ["idle", "walk", "run", "sprint", "crouch", "slide", "jump", "land", "reload", "ads", "fire", "hit_react", "dbno", "death"],
+      "materials": ["M_CIGKV_Character_Master", "MI_CIGKV_Human_Skin", "MI_CIGKV_Human_Cloth", "MI_CIGKV_Human_Hair"],
+      "status": "source_available_normalization_required"
+    },
+    {
+      "slot": "CIGKV_ZHEERS_NONHUMAN_M01",
+      "kind": "non_human",
+      "species": "ZHEERS",
+      "sex": "MASCULINO",
+      "source": "mvp_output/assets/characters/CHR_Zheers_Base/CHR_Zheers_Base.dae",
+      "source_sha256": "781b40efb7c2ea29777324da7a98679ed872a2f5a6a55fc786eb4eee44ad01f7",
+      "provenance": {"license_status": "unverified_internal_prototype", "commercial_use": false, "identity_review": "pending"},
+      "normalized_source": "Build/CIGKVVerticalSlice/Source/CIGKV_ZHEERS_NONHUMAN_M01.fbx",
+      "canonical_skeleton": "SK_Manny",
+      "canonical_height_cm": 180,
+      "bind_pose": "T-pose",
+      "retarget_profile": "RTG_Mixamo_To_SK_Manny",
+      "species_features": ["ear_point", "tattoo_pattern", "skin_subsurface", "species_emissive_accent"],
+      "animation_set": ["idle", "walk", "run", "sprint", "crouch", "slide", "jump", "land", "reload", "ads", "fire", "hit_react", "dbno", "death"],
+      "materials": ["M_CIGKV_Character_Master", "MI_CIGKV_Zheers_Skin", "MI_CIGKV_Zheers_Cloth", "MI_CIGKV_Zheers_Hair"],
+      "status": "source_available_normalization_required"
+    }
+  ],
+  "normalization": {
+    "target_pose": "T-pose",
+    "target_height_tolerance_cm": 0.5,
+    "origin": "feet_center",
+    "scale_application": "bake_into_mesh",
+    "rotation_degrees": [0, 0, 0],
+    "required_checks": ["ground_y_zero", "forward_plus_x", "uniform_scale_one", "single_bind_pose", "no_negative_scale"]
+  },
+  "asset_quality": {
+    "audit_script": "scripts/ue5/audit_cigkv_character_assets.py",
+    "classification": {
+      "production_candidate": "sem warning estrutural; requer aceite visual UE5.8",
+      "proxy_source": "fonte legível, mas abaixo de um ou mais gates de produção",
+      "blocked": "fonte ausente, formato inválido ou erro estrutural"
+    },
+    "minimum_source_gates": {
+      "vertices": 5000,
+      "triangles": 5000,
+      "uv_sets": 1,
+      "materials": 1,
+      "texture_images": 1,
+      "skeletal_skin_for_animated_character": true
+    },
+    "production_review": ["silhouette_at_20m", "facial_identity", "deformation_no_clipping", "hands_and_feet_ik", "hair_cards_or_groom", "cloth_layering", "weapon_socket_alignment", "lod_transition", "pbr_under_day_night_interior"]
+  },
+  "retarget": {
+    "source_rig": "Mixamo_23_joint",
+    "target_rigs": ["SK_Manny", "SK_Gwen"],
+    "ik_retargeter": "RTG_Mixamo_To_SK_Manny",
+    "chain_requirements": ["root", "pelvis", "spine", "head", "left_arm", "right_arm", "left_leg", "right_leg"],
+    "hand_ik": true,
+    "foot_ik": true,
+    "fingers_policy": "target_skeleton_fingers_required",
+    "twist_policy": "target_skeleton_twist_required",
+    "reject_on": ["foot_sliding", "weapon_clipping", "root_drift", "non_uniform_scale", "missing_target_chain"]
+  },
+  "acceptance": {
+    "required_profiles": ["Low", "Medium", "High", "Ultra"],
+    "required_screenshots_per_profile": 2,
+    "required_screenshots": ["third_person_combat", "first_person_ads"],
+    "required_metrics": ["game_thread_p95_ms", "render_thread_p95_ms", "gpu_p95_ms", "draw_calls", "vram_mb", "lod_pop_review", "shader_hitch_review"],
+    "render_target": "60_fps_medium",
+    "render_budget_ms": 16.67,
+    "engine_required": "UE5.8_licensed_gpu_runner",
+    "sandbox_result": "not_measured"
+  }
+}

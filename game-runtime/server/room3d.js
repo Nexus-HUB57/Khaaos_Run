@@ -119,6 +119,7 @@ export class MatchRoom3D {
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.scenario = resolveScenario(scenarioId);
+    this.worldXp = (base) => Math.round(base * (this.scenario.xpMultiplier ?? 1));
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
     this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
@@ -725,12 +726,17 @@ export class MatchRoom3D {
     }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
     if (a.zexChannel) this.#advanceZexChannel(a, dt);
-    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
+    // Caído: cancela channeling; permite apenas autocuidado com medkit.
+    if (a.knocked) {
+      if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
+      if (input.medkit) this.#useMedkit(a);
+      return;
+    }
     // Fase 8 — dash: devolve o orçamento remanescente ao estado e encerra ao esgotar
     this.#syncDashBudget(a);
-    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
-    if (this.squad && input.interact) this.#tryRevive(a, dt);
+    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído.
+    // Sem squad (solo), a seleção permite ajudar qualquer jogador próximo.
+    if (input.interact) this.#tryRevive(a, dt);
     if (!airborne) {
       const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
       if (input.reload) this.#tryReload(a);
@@ -1238,7 +1244,7 @@ export class MatchRoom3D {
     }
   }
 
-  // Fase 7 — canalização de revive (aliado de pé, mesmo esquadrão, no alcance)
+  // Fase 7 — canalização de revive; em solo, qualquer aliado próximo pode ajudar.
   #tryRevive(a, dt) {
     const mate = reviveTargetFor(a, this.#actors());
     if (!mate) return;
@@ -1661,11 +1667,19 @@ export class MatchRoom3D {
     // do funil #damage (poupa blindagem temporária/armor antes da vida), então
     // espelha aqui a VIDA perdida com kind 'quantum' (mesmo anel/rate-limit;
     // sem knocked: morte pela anomalia não passa pelo DBNO deste caminho).
-    if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', false);
+    if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', actor.life <= 0 && !actor.isBot && !actor.knocked);
     if (actor.life > 0) return;
-    // Fase 30 — morte AMBIENTAL canônica: killfeed/XP/eliminado pelo MESMO
-    // caminho de #finalizeDeath (a anomalia fura blindagem e mata DIRETO, sem
-    // DBNO; 'ANOMALIA' assume o rótulo ambiental ao lado de RING/CIGKV).
+    if (!actor.isBot) {
+      if (!actor.knocked) {
+        knockActor(actor, null, 'quantum');
+        this.#emitAll('killfeed', { killer: 'ANOMALIA', victim: patenteTag(actor), head: false, knock: true });
+        this.#emitTo(actor.id, 'knocked', { by: null, kind: 'quantum', knockT: actor.knockT });
+      } else {
+        actor.life = 0; // dano ambiental contínuo não antecipa o deadline humano
+      }
+      return;
+    }
+    // Bots continuam sujeitos à regra de eliminação ambiental já existente.
     this.#finalizeDeath(actor, null, 'quantum');
   }
   #damage(actor, dmg, ownerId, kind) {
@@ -1694,13 +1708,14 @@ export class MatchRoom3D {
     if (ownerId) actor.lastHitBy = ownerId;
     // Fase 28 — dano na TRANSMISSÃO: evento DAMAGE (número flutuante do
     // espectador FOLLOW).knocked = este dano nocauteou (popup NOCAUTE).
-    this.#logSpectatorDamage(actor, dmg, ownerId, kind, actor.life <= 0 && this.squad && !actor.knocked);
+    this.#logSpectatorDamage(actor, dmg, ownerId, kind,
+      actor.life <= 0 && !actor.knocked && (!actor.isBot || this.squad));
     if (!actor.isBot) {
       this.#emitTo(actor.id, 'hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, actor.life) });
     }
     if (actor.life <= 0) {
-      // Fase 7 — squads: primeiro dano letal NOCAUTEIA; dano já caído é letal
-      if (this.squad && !actor.knocked) {
+      // Jogadores sempre recebem a janela DBNO; bots só usam DBNO em squad.
+      if (!actor.knocked && (!actor.isBot || this.squad)) {
         knockActor(actor, ownerId, kind === 'headshot' ? 'headshot' : kind);
         const knocker = ownerId ? this.#actors().find((a) => a.id === ownerId) : null;
         this.#emitAll('killfeed', { killer: knocker ? patenteTag(knocker) : (kind === 'ring' ? 'RING' : 'CIGKV'), victim: patenteTag(actor), head: kind === 'headshot', knock: true });
@@ -1708,11 +1723,15 @@ export class MatchRoom3D {
           this.#emitTo(actor.id, 'knocked', { by: knocker?.name ?? null, kind, knockT: actor.knockT });
           // nocaute dá XP/KRC parcial ao caçador humano
           if (knocker && !knocker.isBot && knocker.id !== actor.id) {
-            knocker.xp += kind === 'headshot' ? 60 : 40;
-            knocker.krc += 5;
-            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: kind === 'headshot' ? 60 : 40, krc: 5 });
+            knocker.xp += this.worldXp(kind === 'headshot' ? 60 : 40);
+            knocker.krc += Math.round(5 * this.scenario.krcMultiplier);
+            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: this.worldXp(kind === 'headshot' ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
           }
         }
+        return;
+      }
+      if (!actor.isBot) {
+        actor.life = 0; // o prazo de 7 s continua contando após qualquer dano adicional
         return;
       }
       this.#finalizeDeath(actor, ownerId, kind);
@@ -1725,24 +1744,27 @@ export class MatchRoom3D {
     actor.life = 0;
     actor.alive = false;
     actor.knocked = false;
+    actor.knockT = 0;
+    actor.reviveProgress = 0;
+    const eliminationKind = kind === 'bleedout' ? (actor.lastKnockKind ?? kind) : kind;
     const killerId = ownerId ?? actor.lastHitBy ?? null;
     const killer = killerId ? this.#actors().find((a) => a.id === killerId) : null;
     if (killer && killer.id !== actor.id) {
       killer.kills++;
       if (!killer.isBot) {
-        const head = kind === 'headshot';
-        killer.xp += head ? KILL_XP_HEAD : KILL_XP;
-        killer.krc += KILL_KRC;
-        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC, finish: kind === 'bleedout' });
+        const head = eliminationKind === 'headshot';
+        killer.xp += this.worldXp(head ? KILL_XP_HEAD : KILL_XP);
+        killer.krc += Math.round(KILL_KRC * this.scenario.krcMultiplier);
+        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: this.worldXp(head ? KILL_XP_HEAD : KILL_XP), krc: Math.round(KILL_KRC * this.scenario.krcMultiplier), finish: kind === 'bleedout' });
       }
-      this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: kind === 'headshot' });
+      this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: eliminationKind === 'headshot' });
     } else {
-      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV', victim: patenteTag(actor), head: false });
+      this.#emitAll('killfeed', { killer: eliminationKind === 'ring' ? 'RING' : eliminationKind === 'quantum' ? 'ANOMALIA' : 'CIGKV', victim: patenteTag(actor), head: false });
     }
     // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
     if (!actor.isBot) {
       const placement = this.#actors().filter((a) => a.alive).length + 1;
-      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV') });
+      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (eliminationKind === 'ring' ? 'RING' : eliminationKind === 'quantum' ? 'ANOMALIA' : 'CIGKV') });
     }
   }
 
@@ -1764,9 +1786,22 @@ export class MatchRoom3D {
     this.#emitTo(a.id, 'reloaded', { weapon: w.name, mag: a.ammoMag });
   }
   #useMedkit(a) {
-    if (a.inventory.medkit <= 0 || a.life >= 100) return;
-    a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
-    if (!a.isBot) this.#emitTo(a.id, 'medkit', { life: a.life });
+    if ((a.inventory.medkit ?? 0) <= 0) return;
+    const target = a.knocked ? a : (reviveTargetFor(a, this.#actors()) ?? a);
+    if (!target.knocked && target.life >= 100) return;
+    a.inventory.medkit--;
+    if (target.knocked) {
+      target.knocked = false;
+      target.knockT = 0;
+      target.reviveProgress = 0;
+      target.lastReviveTick = -1;
+      target.life = 30;
+      this.#emitAll('revived', {
+        by: a.name ?? a.id, target: target.id, targetName: target.name ?? target.id,
+        life: target.life, isSelf: target === a, item: 'medkit',
+      });
+    } else target.life = Math.min(100, target.life + 30);
+    if (!a.isBot) this.#emitTo(a.id, 'medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
   // Fase 25 — interação CONTEXTUAL (estilo Free Fire): loot/terminal/porta —
   // vence o alvo mais próximo; latch por toque. Toggle é GLOBAL: todos os
@@ -1834,7 +1869,7 @@ export class MatchRoom3D {
     terminal.channelProgress = 0;
     actor.zexChannel = null;
     actor.extracted++;
-    actor.xp += EXTRACT_XP;
+    actor.xp += this.worldXp(EXTRACT_XP);
     if (!actor.isBot) this.#emitTo(actor.id, 'extract', { count: actor.extracted, x: terminal.x, z: terminal.z });
   }
 
@@ -1974,6 +2009,7 @@ export class MatchRoom3D {
         health: Math.max(0, Math.round(a.life ?? 0)),
         shield: Math.max(0, Math.round(a.armor ?? 0)),
         isDowned: !!a.knocked && !!a.alive,
+        knockT: a.knocked ? Math.max(0, a.knockT ?? 0) : 0,
         isEliminated: !a.alive,
         kills: a.kills ?? 0,
       })),
@@ -2026,7 +2062,7 @@ export class MatchRoom3D {
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, weaponSkin: a.weaponSkin ?? null, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
-      knocked: !!a.knocked, squad: a.squad ?? null,
+      knocked: !!a.knocked, knockT: a.knocked ? Math.max(0, a.knockT ?? 0) : 0, squad: a.squad ?? null,
       // Fase 8 — identidade do operativo + marca de recon p/ minimapa
       op: a.operativeId ?? null, revealed: (a.revealedTicks ?? 0) > 0,
       // Fase 10 — marca de Oficial de Classe Especial (render dourado + nametag)

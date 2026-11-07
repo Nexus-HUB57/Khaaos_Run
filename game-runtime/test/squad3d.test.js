@@ -38,7 +38,7 @@ test('fase7 dbno: assignSquads agrupa por ordem em grupos de 4', () => {
   assert.equal(squads.i, 'sq-3');
 });
 
-test('fase7 dbno: knockActor define sangramento com decay por nocaute extra', () => {
+test('fase7 dbno: knockActor aplica janela máxima de sete segundos em cada nocaute', () => {
   const a = { alive: true, life: -5, downedCount: 0, x: 0, z: 0 };
   knockActor(a, 'killer-1', 'body');
   assert.equal(a.knocked, true);
@@ -48,7 +48,7 @@ test('fase7 dbno: knockActor define sangramento com decay por nocaute extra', ()
   assert.ok(Math.abs(a.knockT - DBNO.bleedOutSeconds) < 0.01, 'primeiro nocaute usa o tempo cheio');
   assert.equal(a.lastHitBy, 'killer-1');
   knockActor(a, 'killer-2', 'body'); // segundo nocaute (após revive hipotético)
-  assert.ok(Math.abs(a.knockT - DBNO.bleedOutSeconds * DBNO.bleedOutDecay) < 0.01, 'segundo sangra mais rápido');
+  assert.ok(Math.abs(a.knockT - DBNO.bleedOutSeconds) < 0.01, 'cada janela preserva o prazo de sete segundos');
 });
 
 test('fase7 dbno: reviveTargetFor exige mesmo squad, caído e no alcance', () => {
@@ -117,16 +117,60 @@ test('fase7 sim: dano letal nocauteia em vez de eliminar (squad ativo)', () => {
   assert.ok(p.knockT > 0 && p.knockT <= DBNO.bleedOutSeconds);
 });
 
-test('fase7 sim: sem squad o dano letal elimina direto (comportamento legado)', () => {
-  const s = new KhaaosSim3D({ seed: 'F7-LEGACY', botCount: 2, spectate: true, airdrop: false });
+test('fase7 sim: sem squad o dano letal inicia a janela de recuperação de sete segundos', () => {
+  const s = new KhaaosSim3D({ seed: 'F7-LEGACY', botCount: 0, airdrop: false });
   s.start('belt');
   const p = s.player;
   p.armor = 0; p.life = 0.001;
   s.ring.radius = 10; s.ring.target = 10; s.ring.pulse = 60;
   p.x = 20; p.z = 0;
   s.step(idle(), STEP);
+  assert.equal(p.knocked, true, 'modo solo também entra em DBNO');
+  assert.equal(p.alive, true, 'a run não termina antes do prazo');
+  assert.ok(p.knockT > 0 && p.knockT <= 7);
+  assert.equal(s.over, false);
+});
+
+test('fase7 sim: jogador caído pode se recuperar consumindo o próprio medkit', () => {
+  const s = new KhaaosSim3D({ seed: 'F7-SELF-MEDKIT', botCount: 0, airdrop: false });
+  s.start('belt');
+  const p = knockPlayer(s);
+  p.inventory.medkit = 1;
+  s.ring.radius = 170; s.ring.target = 170; s.ring.pulse = 0;
+  s.step(idle({ medkit: true }), STEP);
+  const events = s.consumeEvents();
   assert.equal(p.knocked, false);
-  assert.equal(p.alive, false, 'modo solo mantém eliminação direta');
+  assert.equal(p.life, 30);
+  assert.equal(p.inventory.medkit, 0);
+  assert.ok(events.some((e) => e.type === 'revived' && e.isSelf && e.item === 'medkit'));
+  assert.equal(s.over, false);
+});
+
+test('fase7 sim: aliado pode usar medkit no jogador caído sem squad', () => {
+  const s = new KhaaosSim3D({ seed: 'F7-ALLY-SOLO-MED', botCount: 1, airdrop: false });
+  s.start('belt');
+  const medic = s.player, downed = s.bots[0];
+  medic.x = 60; medic.z = 60; medic.inventory.medkit = 1;
+  downed.x = 61; downed.z = 60;
+  knockActor(downed, null, 'body');
+  s.ring.radius = 170; s.ring.target = 170; s.ring.pulse = 0;
+  s.step(idle({ medkit: true }), STEP);
+  const events = s.consumeEvents();
+  assert.equal(downed.knocked, false);
+  assert.equal(downed.life, 30);
+  assert.equal(medic.inventory.medkit, 0);
+  assert.ok(events.some((e) => e.type === 'revived' && e.target === downed.id && !e.isSelf));
+});
+
+test('fase7 sim: vencimento dos sete segundos confirma Game Over local', () => {
+  const s = new KhaaosSim3D({ seed: 'F7-TIMEOUT', botCount: 0, airdrop: false });
+  s.start('belt');
+  const p = knockPlayer(s);
+  s.ring.radius = 170; s.ring.target = 170; s.ring.pulse = 0;
+  assert.equal(s.over, false);
+  for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / STEP) + 2 && p.alive; i++) s.step(idle(), STEP);
+  assert.equal(p.alive, false);
+  assert.equal(s.over, true, 'Game Over só ocorre após a confirmação de eliminação');
   assert.ok(s.consumeEvents().some((e) => e.type === 'eliminated'));
 });
 
@@ -190,16 +234,21 @@ test('fase7 sim: caído rasteja devagar e não atira/coleta', () => {
   assert.equal(s.consumeEvents().some((e) => e.type === 'shot'), false, 'caído não atira');
 });
 
-test('fase7 sim: dano em caído é letal (finalização)', () => {
+test('fase7 sim: dano adicional em caído não antecipa o prazo de sete segundos', () => {
   const s = new KhaaosSim3D({ seed: 'F7-FINISH', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
   const p = knockPlayer(s);
   assert.equal(p.knocked, true);
-  // dano letal de novo (ring pequeno) → morte final, sem segundo nocaute
+  const remainingBefore = p.knockT;
+  // Dano letal repetido não confirma a eliminação nem reinicia o timer.
   s.ring.radius = 10; s.ring.pulse = 60;
   p.x = 20; p.z = 0;
   s.step(idle(), STEP);
-  assert.equal(p.alive, false, 'caído que sofre dano letal morre');
+  assert.equal(p.alive, true, 'o jogador segue recuperável dentro da janela');
+  assert.equal(p.knocked, true);
+  assert.ok(p.knockT < remainingBefore, 'o deadline continua decrescendo');
+  for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / STEP) + 2 && p.alive; i++) s.step(idle(), STEP);
+  assert.equal(p.alive, false, 'a eliminação só ocorre quando o prazo expira');
   assert.equal(p.knocked, false);
 });
 
@@ -237,6 +286,92 @@ test('fase7 room: humano nocauteado recebe knocked e killfeed com marcador', () 
   assert.ok(evs1.some((e) => e.type === 'knocked'), 'vítima recebe knocked');
 });
 
+test('fase7 room: no modo solo, medkit próprio recupera o jogador caído antes do prazo', () => {
+  const room = new MatchRoom3D({ id: 'r-self-medkit', seed: 'F7R-SELF-MED', capacity: 16, botFill: 0, airdrop: false, squad: false });
+  room.addPlayer('p1', 'VITIMA'); room.addPlayer('p2', 'SOBREVIVENTE'); room.addPlayer('p3', 'SOBREVIVENTE-2');
+  room.start('p1', 'belt');
+  const p1 = room.humans.get('p1');
+  p1.armor = 0; p1.life = 0.001;
+  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  p1.x = 20; p1.z = 0;
+  room.tick(1 / 20);
+  assert.equal(p1.knocked, true);
+  assert.ok(p1.knockT > 0 && p1.knockT <= 7);
+  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  p1.inventory.medkit = 1;
+  room.input('p1', { seq: 101, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
+  room.tick(1 / 20);
+  assert.equal(p1.knocked, false);
+  assert.equal(p1.life, 30);
+  assert.equal(p1.inventory.medkit, 0);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'revived' && e.isSelf && e.item === 'medkit'));
+});
+
+test('fase7 room: aliado do squad usa medkit no companheiro caído', () => {
+  const room = new MatchRoom3D({ id: 'r-ally-medkit', seed: 'F7R-ALLY-MED', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
+  room.start('p1', 'belt');
+  const downed = room.humans.get('p1'), medic = room.humans.get('p2');
+  downed.armor = 0; downed.life = 0.001;
+  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  downed.x = 20; downed.z = 0;
+  room.tick(1 / 20);
+  assert.equal(downed.knocked, true);
+  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  downed.x = 60; downed.z = 60; medic.x = 61; medic.z = 60;
+  medic.inventory.medkit = 1;
+  room.input('p2', { seq: 102, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
+  room.tick(1 / 20);
+  assert.equal(downed.knocked, false);
+  assert.equal(downed.life, 30);
+  assert.equal(medic.inventory.medkit, 0);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'revived' && e.by === 'SOCORRISTA' && e.target === 'p1'));
+});
+
+test('fase7 room: aliado pode usar medkit no caído sem squad em modo solo', () => {
+  const room = new MatchRoom3D({ id: 'r-solo-ally-med', seed: 'F7R-SOLO-ALLY-MED', capacity: 16, botFill: 0, airdrop: false, squad: false });
+  room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
+  room.start('p1', 'belt');
+  const downed = room.humans.get('p1'), medic = room.humans.get('p2');
+  downed.armor = 0; downed.life = 0.001;
+  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  downed.x = 20; downed.z = 0;
+  room.tick(1 / 20);
+  assert.equal(downed.knocked, true);
+  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  downed.x = 60; downed.z = 60; medic.x = 61; medic.z = 60;
+  medic.inventory.medkit = 1;
+  room.input('p2', { seq: 103, medkit: true, fire: false, interact: false, dx: 0, dy: 0, yaw: 0, pitch: 0 });
+  room.tick(1 / 20);
+  assert.equal(downed.knocked, false);
+  assert.equal(downed.life, 30);
+  assert.equal(medic.inventory.medkit, 0);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'revived' && e.by === 'SOCORRISTA' && e.target === 'p1'));
+});
+
+test('fase7 room: timeout confirma Game Over só da vítima e mantém a partida ativa', () => {
+  const room = new MatchRoom3D({ id: 'r-timeout', seed: 'F7R-TIMEOUT', capacity: 16, botFill: 0, airdrop: false, squad: false });
+  room.addPlayer('p1', 'VITIMA'); room.addPlayer('p2', 'SOBREVIVENTE'); room.addPlayer('p3', 'SOBREVIVENTE-2');
+  room.start('p1', 'belt');
+  const victim = room.humans.get('p1');
+  victim.armor = 0; victim.life = 0.001;
+  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  victim.x = 20; victim.z = 0;
+  room.tick(1 / 20);
+  assert.equal(victim.knocked, true);
+  assert.ok(room.snapshot('p1').player.knockT > 0 && room.snapshot('p1').player.knockT <= 7);
+  room.drainEvents('p1');
+  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  const matchState = room.state;
+  for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / (1 / 20)) + 2 && victim.alive; i++) room.tick(1 / 20);
+  assert.equal(victim.alive, false);
+  assert.equal(victim.knocked, false);
+  assert.equal(room.state, matchState, 'a eliminação individual não fecha a sala com outros jogadores vivos');
+  assert.equal(room.humans.get('p2').alive, true);
+  assert.equal(room.humans.get('p3').alive, true);
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'eliminated'));
+});
+
 test('fase7 room: revive por input interagir canaliza e restaura vida', () => {
   const room = new MatchRoom3D({ id: 'r-rev', seed: 'F7R3', capacity: 16, botFill: 0, airdrop: false, squad: true });
   room.addPlayer('p1', 'CAIDO');
@@ -262,6 +397,29 @@ test('fase7 room: revive por input interagir canaliza e restaura vida', () => {
   assert.equal(v1.life, Math.round(100 * DBNO.reviveLifeFraction));
   const evs1 = room.drainEvents('p1');
   assert.ok(evs1.some((e) => e.type === 'revived'), 'vítima recebe revived');
+});
+
+test('fase7 room: aliado pode canalizar revive em sala solo sem squad', () => {
+  const room = new MatchRoom3D({ id: 'r-solo-rev', seed: 'F7R-SOLO-REV', capacity: 16, botFill: 0, airdrop: false, squad: false });
+  room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
+  room.start('p1', 'belt');
+  const downed = room.humans.get('p1'), medic = room.humans.get('p2');
+  downed.armor = 0; downed.life = 0.001;
+  room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
+  downed.x = 20; downed.z = 0;
+  room.tick(1 / 20);
+  assert.equal(downed.knocked, true);
+  room.ring.radius = 170; room.ring.target = 170; room.ring.pulse = 0;
+  downed.x = 60; downed.z = 60; medic.x = 61.5; medic.z = 60;
+  let seq = 2000;
+  const frames = Math.ceil((DBNO.reviveSeconds + 1) * 30);
+  for (let i = 0; i < frames && downed.knocked; i++) {
+    room.input('p2', { seq: seq++, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, interact: true });
+    room.tick(1 / 20);
+  }
+  assert.equal(downed.knocked, false);
+  assert.equal(downed.life, Math.round(100 * DBNO.reviveLifeFraction));
+  assert.ok(room.drainEvents('p1').some((e) => e.type === 'revived'));
 });
 
 test('fase7 room: snapshot carrega knocked/squad/weaponSkin e skin é aplicada no loot', () => {

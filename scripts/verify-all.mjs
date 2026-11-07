@@ -14,6 +14,7 @@ const checks = [
   { name: "App oficial · testes + coverage", cwd: root, args: ["run", "coverage:official"] },
   { name: "Qualidade BR · preflights Python", cwd: root, args: ["run", "test:python"] },
   { name: "UE5 · regras e contrato Zu (5 mundos)", cwd: root, args: ["run", "test:ue5:logic"] },
+  { name: "Dashboard · API FastAPI", cwd: root, args: ["run", "test:python:dashboard"] },
   { name: "Runtime · build", cwd: runtimeRoot, args: ["run", "build"] },
   { name: "Runtime · auditoria de fidelidade Mundos ↔ README", cwd: runtimeRoot, args: ["run", "audit:fidelity"] },
   { name: "Runtime · testes + coverage", cwd: runtimeRoot, args: ["run", "coverage"] },
@@ -33,20 +34,28 @@ const runCheck = ({ name, cwd, args }) => new Promise((resolve) => {
   });
 });
 
-console.log("Instalando dependências do runtime pelo lockfile antes da verificação...");
-const dependencyResult = await runCheck({
-  name: "Runtime · dependências",
-  cwd: runtimeRoot,
-  args: ["ci", "--no-audit", "--no-fund"],
-});
+console.log("Instalando dependências dos dois projetos pelos lockfiles antes da verificação...");
+const dependencyResults = await Promise.all([
+  runCheck({
+    name: "App oficial · dependências",
+    cwd: root,
+    args: ["ci", "--no-audit", "--no-fund"],
+  }),
+  runCheck({
+    name: "Runtime · dependências",
+    cwd: runtimeRoot,
+    args: ["ci", "--no-audit", "--no-fund"],
+  }),
+]);
+const dependencyFailures = dependencyResults.filter(({ code }) => code !== 0);
 
-if (dependencyResult.code !== 0) {
-  console.error("\nA instalação das dependências do runtime falhou; os gates foram interrompidos.");
+if (dependencyFailures.length > 0) {
+  console.error("\nA instalação de dependências falhou; os gates foram interrompidos.");
   process.exitCode = 1;
 } else {
   console.log("Verificando app oficial, regras UE5 portáveis e runtime do jogo em paralelo...");
   const results = await Promise.all(checks.map(runCheck));
-  const allResults = [dependencyResult, ...results];
+  const allResults = [...dependencyResults, ...results];
   const failures = allResults.filter(({ code }) => code !== 0);
 
   console.log("\nResumo:");

@@ -1,6 +1,6 @@
 # Stripe Checkout — Brasil (sandbox)
 
-**Atualizado:** 2026-11-01
+**Atualizado:** 2026-11-04
 
 **Decisão de produto recebida:** empresa estabelecida no Brasil; primeiro mercado Brasil; venda de pacotes fixos de KRC.
 
@@ -9,6 +9,17 @@
 **Estado da entrega:** o checkout test-only foi mesclado na `main` pelo [PR #82](https://github.com/Nexus-HUB57/Khaaos_Run/pull/82). O CI aplicou a migration 0005 em PostgreSQL efêmero e aprovou o teste de idempotência/fulfillment Stripe ([run de integração #41365466419](https://github.com/Nexus-HUB57/Khaaos_Run/actions/runs/41365466419)). Isso valida o código contra banco descartável, não credenciais ou configuração do titular.
 
 **Gate atual de staging:** o serviço Render mantém Auto-Deploy Off e o checkout está configurado para permanecer desativado. O último deploy aparece concluído, mas `GET /healthz.json` expirou sem resposta; uma tentativa anterior de inicialização indicou segredo de sessão efetivo menor que 32 bytes. Não houve leitura de valores de secrets, correção no serviço, login OIDC ou teste de compra em staging. Não habilite `KRC_CHECKOUT_ENABLED` até restaurar o health check e concluir o preflight abaixo.
+
+## Taxa de alistamento U$1 via Stripe (Task 44, 2026-11-04)
+
+A taxa de alistamento (U$1,00 = 100 KRC de preço canônico, fluxo do #252/Fase 47.1) agora tem caminho REAL atrás de gate fail-closed, em `server/payments/enrollmentFeePayment.ts`:
+
+- **Gate:** só liga com `ENROLLMENT_FEE_GATEWAY=stripe` **e** a mesma config test-only deste doc (`KRC_CHECKOUT_ENABLED=true`, `sk_test_`, `whsec_`, `PUBLIC_ORIGIN`) **e** `ENROLLMENT_STORE=postgres`. Sem qualquer um, o caminho simulado do #252 segue intacto (default).
+- **Fluxo:** `POST /api/enrollment/fee` cria Checkout Session test-only (moeda `usd`, 100 centavos, card-only) e devolve `feeStatus=GATEWAY_PENDING` — nada é marcado como pago. O webhook `checkout.session.completed` (mesmo endpoint, roteado por `metadata.kind=enrollment_fee`) grava o double-entry no SSOT e só então conclui a sessão (guard financeiro do #252: ledger antes do estado).
+- **Idempotência:** chave Stripe determinística por (protocolo, Idempotency-Key do cliente) + dedup de webhook por `(provider, event_id)` + unique do ledger por `(user_id, idempotency_key, line)` — replay nunca paga nem credita duas vezes.
+- **Deliberado:** moeda `usd`/card-only nesta entrega. Pix no Stripe é doméstico BRL — precificar a taxa em BRL/Pix exige decisão de produto do titular (mesma pendência de elegibilidade do §Pix).
+- **Reconciliação:** a auditoria do SSOT (docs/ECONOMY_LEDGER_SSOT.md) ganhou o cheque `paidEnrollmentSessionsWithoutLedger` — toda sessão `COMPLETED` precisa de evidência no ledger citando o protocolo.
+- **Pendência humana:** credenciais test do titular em staging + preflight do webhook antes de qualquer teste de cobrança real (mesmo em modo teste).
 
 ## Evidência oficial e requisitos
 

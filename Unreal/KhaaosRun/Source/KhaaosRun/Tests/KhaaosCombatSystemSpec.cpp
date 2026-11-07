@@ -300,6 +300,8 @@ bool FKhaaosReviveSystem_DownPlayer_EntersDownedState::RunTest(const FString& Pa
     TestNotNull(TEXT("ReviveSystem should be created"), ReviveSys);
     if (!ReviveSys) return false;
 
+    TestEqual(TEXT("Downed timeout should be seven seconds"), ReviveSys->DownedTimeLimit, 7.0f);
+
     const FString PlayerId = TEXT("DownTestPlayer");
 
     // Initially, player should be Alive (or unknown → Alive)

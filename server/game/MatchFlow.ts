@@ -12,7 +12,7 @@
  *   - RingStateManager (zone shrinking)
  *
  * Multi-World Pipeline:
- *   CIGKV(50p) → W1_Barburhen(100p) → W2_Priadus(75p) → W3_Ckesalth(60p) → W4_Arukheea(80p)
+ *   CIGKV(100p) → W1_Barburhen(100p) → W2_Priadus(100p) → W3_Ckesalth(100p) → W4_Arukheea(100p)
  *
  * Match phases:
  *   0: Initial safe zone
@@ -24,6 +24,9 @@
 import { EconomyMatchBridge, type SpeciesKey, type KillEvent, type PhaseSurvivalEvent, type WorldTransitionEvent } from "./EconomyMatchBridge";
 import { SpectatorDataPipeline, type SpectatorGameData, type SpectatorEvent } from "./SpectatorDataPipeline";
 import { DiscordBot } from "./DiscordBot";
+import { DBNO_CONTRACT } from "@shared/dbno";
+import { WORLD_MATCH_DURATION_SECONDS, WORLD_RING_CAPACITY_OPERATORS } from "@shared/worlds";
+import { worldKillerLabel } from "@shared/worldKillers";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -90,21 +93,22 @@ export interface MatchConfig {
 // ─── Default World Pipeline ─────────────────────────────────────────────────
 
 export const DEFAULT_WORLD_PIPELINE = [
-  { worldId: "cigkv",      worldName: "CIGKV",      capacity: 50  },
-  { worldId: "barburhen",  worldName: "Barburhen",  capacity: 100 },
-  { worldId: "priadus",    worldName: "Priadus",    capacity: 75  },
-  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: 60  },
-  { worldId: "arukheea",   worldName: "Arukheea",   capacity: 80  },
+  { worldId: "cigkv",      worldName: "CIGKV",      capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "barburhen",  worldName: "Barburhen",  capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "priadus",    worldName: "Priadus",    capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "ckesalth",   worldName: "Ckesalth",   capacity: WORLD_RING_CAPACITY_OPERATORS },
+  { worldId: "arukheea",   worldName: "Arukheea",   capacity: WORLD_RING_CAPACITY_OPERATORS },
 ];
 
 // ─── Match Ring Phase Config ────────────────────────────────────────────────
 
+const RING_PHASE_DURATION_SECONDS = WORLD_MATCH_DURATION_SECONDS / 5;
 const RING_PHASES = [
-  { radiusStart: 800, radiusEnd: 500, durationS: 120, damagePerTick: 1  },
-  { radiusStart: 500, radiusEnd: 300, durationS: 90,  damagePerTick: 3  },
-  { radiusStart: 300, radiusEnd: 150, durationS: 60,  damagePerTick: 5  },
-  { radiusStart: 150, radiusEnd: 50,  durationS: 45,  damagePerTick: 10 },
-  { radiusStart: 50,  radiusEnd: 0,   durationS: 30,  damagePerTick: 25 },
+  { radiusStart: 800, radiusEnd: 500, durationS: RING_PHASE_DURATION_SECONDS, damagePerTick: 1  },
+  { radiusStart: 500, radiusEnd: 300, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 3  },
+  { radiusStart: 300, radiusEnd: 150, durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 5  },
+  { radiusStart: 150, radiusEnd: 50,  durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 10 },
+  { radiusStart: 50,  radiusEnd: 0,   durationS: RING_PHASE_DURATION_SECONDS,  damagePerTick: 25 },
 ];
 
 // ─── MatchFlow Class ────────────────────────────────────────────────────────
@@ -131,9 +135,9 @@ export class MatchFlow {
       countdownSeconds: config.countdownSeconds ?? 30,
       tickIntervalMs: config.tickIntervalMs ?? 1000,
       worldPipeline: config.worldPipeline ?? DEFAULT_WORLD_PIPELINE,
-      maxPlayers: config.maxPlayers ?? 100,
+      maxPlayers: config.maxPlayers ?? WORLD_RING_CAPACITY_OPERATORS,
       ringPhasesPerWorld: config.ringPhasesPerWorld ?? 5,
-      phaseDurationSeconds: config.phaseDurationSeconds ?? 120,
+      phaseDurationSeconds: config.phaseDurationSeconds ?? RING_PHASE_DURATION_SECONDS,
     };
 
     this.economyBridge = economyBridge;
@@ -381,12 +385,17 @@ export class MatchFlow {
 
   /**
    * Process a kill event through the full pipeline:
-   *   Damage → Shield → Health → Downed(30s bleed-out) → Eliminate / Revive
+   *   Damage → Shield → Health → Downed(7s bleed-out) → Eliminate / Revive
    */
-  processKill(killerId: string, victimId: string, damage: number, weapon: string): void {
-    const killer = this.state.players.get(killerId);
+  processKill(killerId: string | null, victimId: string, damage: number, weapon: string): void {
+    // Wart B — killerId nulo = morte causada pelo MUNDO (anomalia Khaaos,
+    // anel, hazards). NÃO é descartada: segue pelo pipeline DBNO sem crédito
+    // de abate/economia/discord, e o feed do espectador nomeia a fonte real
+    // (worldKillerLabel → ANOMALIA/ANEL/…). Antes: `if (!killer) return`
+    // BYPASSAVA o killfeed inteiro para mortes sem autor jogador.
+    const killer = killerId ? this.state.players.get(killerId) : undefined;
     const victim = this.state.players.get(victimId);
-    if (!killer || !victim || victim.isEliminated) return;
+    if (!victim || victim.isEliminated) return;
 
     // If victim is already downed, this is a finish-off (eliminate immediately)
     if (victim.isDowned) {
@@ -406,58 +415,64 @@ export class MatchFlow {
 
     if (victim.health <= 0 && !victim.isDowned) {
       // Victim is downed — immediately credit killer and record economy
+      // (Wart B — sem killer NÃO há crédito/economia/discord: a morte é do mundo)
       victim.health = 0;
       victim.isDowned = true;
-      killer.kills++;
+      if (killer) killer.kills++;
       this.state.totalEliminations++;
-      this.logEvent("PLAYER_DOWNED", { victimId, killerId, weapon });
+      this.logEvent("PLAYER_DOWNED", { victimId, killerId: killerId ?? null, weapon });
 
-      // Record kill economy reward immediately (full reward, not downed modifier)
-      const killEvent: KillEvent = {
-        killerId,
-        victimId,
-        victimSpecies: victim.species,
-        victimSkinRarity: victim.skinRarity,
-        victimInWater: victim.inWaterZone,
-        victimWasDowned: false, // Fresh down, not a finish-off
-        timestamp: Date.now(),
-        worldId: this.getCurrentWorld().worldId,
-        phase: this.getCurrentWorld().currentPhase,
-      };
+      if (killer) {
+        // Record kill economy reward immediately (full reward, not downed modifier)
+        const killEvent: KillEvent = {
+          killerId: killerId as string, // killer existe ⇒ killerId era string
+          victimId,
+          victimSpecies: victim.species,
+          victimSkinRarity: victim.skinRarity,
+          victimInWater: victim.inWaterZone,
+          victimWasDowned: false, // Fresh down, not a finish-off
+          timestamp: Date.now(),
+          worldId: this.getCurrentWorld().worldId,
+          phase: this.getCurrentWorld().currentPhase,
+        };
 
-      const reward = this.economyBridge.calculateKillReward(killEvent);
-      this.economyBridge.recordReward(this.state.roomId, reward);
-      this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
-      killer.krcEarned += reward.krcAmount;
+        const reward = this.economyBridge.calculateKillReward(killEvent);
+        this.economyBridge.recordReward(this.state.roomId, reward);
+        this.economyBridge.broadcastEconomyEvent(this.state.roomId, reward);
+        killer.krcEarned += reward.krcAmount;
 
-      // Discord kill feed
-      this.discordBot?.sendKillFeed(
-        killer.displayName,
-        killer.species,
-        victim.displayName,
-        victim.species,
-        weapon
-      );
+        // Discord kill feed
+        this.discordBot?.sendKillFeed(
+          killer.displayName,
+          killer.species,
+          victim.displayName,
+          victim.species,
+          weapon
+        );
+      }
 
-      // Auto-eliminate after 30 seconds if not revived
+      // Auto-eliminate após a janela acordada do protocolo DBNO de 7 s
+      // (@shared/dbno — paridade com game-runtime sim3d.js e UE5.8
+      // DownedTimeLimitSeconds = 7.0f; gate tests/official/dbno-parity.test.ts).
       setTimeout(() => {
         if (victim.isDowned && !victim.isEliminated) {
           this.eliminatePlayer(killerId, victimId, weapon);
         }
-      }, 30_000);
+      }, DBNO_CONTRACT.bleedOutSeconds * 1000);
     }
   }
 
-  private eliminatePlayer(killerId: string, victimId: string, weapon: string): void {
+  private eliminatePlayer(killerId: string | null, victimId: string, weapon: string): void {
     const victim = this.state.players.get(victimId);
     if (!victim || victim.isEliminated) return;
 
     // If victim was already downed, kill credit and economy were already given in processKill.
     // This just transitions to full elimination (ragdoll state).
+    // (Wart B — killerId nulo = finalização pelo mundo; o log preserva null.)
     victim.isEliminated = true;
     victim.isDowned = false;
 
-    this.logEvent("PLAYER_ELIMINATED", { killerId, victimId, weapon });
+    this.logEvent("PLAYER_ELIMINATED", { killerId: killerId ?? null, victimId, weapon });
   }
 
   /**
@@ -468,7 +483,7 @@ export class MatchFlow {
     if (!player || !player.isDowned || player.isEliminated) return false;
 
     player.isDowned = false;
-    player.health = 30; // Revive with 30 HP
+    player.health = DBNO_CONTRACT.reviveHealFlatHp; // 30 HP — acordo UE5.8/raiz (@shared/dbno)
     this.logEvent("PLAYER_REVIVED", { playerId, reviverId });
     return true;
   }
@@ -622,11 +637,13 @@ export class MatchFlow {
     for (const e of this.eventLog.slice(-8)) {
       const d = e.data ?? {};
       switch (e.type) {
+        // Wart B — killerId nulo = morte pelo MUNDO: o feed nomeia a fonte real
+        // (ANOMALIA/ANEL/… via worldKillerLabel) em vez de '—' ou bypass.
         case "PLAYER_DOWNED":
-          out.push({ type: "ELIMINATION", data: { killer: nameOf(d.killerId), victim: nameOf(d.victimId), weapon: d.weapon, knock: true }, timestamp: e.timestamp });
+          out.push({ type: "ELIMINATION", data: { killer: d.killerId ? nameOf(d.killerId) : worldKillerLabel(d.weapon), victim: nameOf(d.victimId), weapon: d.weapon, knock: true }, timestamp: e.timestamp });
           break;
         case "PLAYER_ELIMINATED":
-          out.push({ type: "ELIMINATION", data: { killer: nameOf(d.killerId), victim: nameOf(d.victimId), weapon: d.weapon, knock: false }, timestamp: e.timestamp });
+          out.push({ type: "ELIMINATION", data: { killer: d.killerId ? nameOf(d.killerId) : worldKillerLabel(d.weapon), victim: nameOf(d.victimId), weapon: d.weapon, knock: false }, timestamp: e.timestamp });
           break;
         case "PLAYER_REVIVED":
           out.push({ type: "REVIVE", data: { by: nameOf(d.reviverId), victim: nameOf(d.playerId) }, timestamp: e.timestamp });

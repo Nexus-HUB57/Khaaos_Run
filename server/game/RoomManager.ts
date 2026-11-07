@@ -177,7 +177,7 @@ const clientMessageSchema = z.object({
   mode: z.enum(["solo", "duo", "squad"]).optional(),
   ready: z.boolean().optional(),
   private: z.boolean().optional(),
-  maxPlayers: z.number().int().min(2).max(50).optional(),
+  maxPlayers: z.number().int().min(2).max(100).optional(),
   code: z.string().trim().max(32).optional(),
   targetUserId: z.string().trim().min(1).max(256).optional(),
 }).strip();
@@ -251,6 +251,7 @@ class RoomManager {
   private nextLootId = 1;
   private matchmaking: MatchmakingService;
   private socketWorlds = new WeakMap<WebSocket, WorldId>();
+  private socketAuthenticatedAtMs = new WeakMap<WebSocket, number>();
   private networkLatencySamples = new Map<WorldId, NetworkLatencySample[]>();
   private socketsByUser = new Map<string, Set<WebSocket>>();
   /** M1: janela móvel de emissões de convite por host (quota anti-spam). */
@@ -402,7 +403,10 @@ class RoomManager {
           if (!verified) { done(false, 401, "Unauthorized"); return; }
           const identityLimit = await distributedState.rateLimit(`ws:identity:${verified.sub}`, 120, 60_000);
           if (!identityLimit.allowed) { done(false, 429, "Too Many Requests"); return; }
-          (req as typeof req & { khaaosUserId?: string }).khaaosUserId = verified.sub;
+          Object.assign(req, {
+            khaaosUserId: verified.sub,
+            khaaosAuthenticatedAtMs: verified.authenticatedAtMs,
+          });
           done(true);
         })().catch(() => done(false, 503, "Realtime authentication unavailable"));
       },
@@ -429,6 +433,12 @@ class RoomManager {
         ws.close(1008, "Unauthorized");
         return;
       }
+      const authenticatedAtMs = (req as typeof req & { khaaosAuthenticatedAtMs?: number }).khaaosAuthenticatedAtMs;
+      if (!Number.isSafeInteger(authenticatedAtMs)) {
+        ws.close(1008, "Unauthorized");
+        return;
+      }
+      this.socketAuthenticatedAtMs.set(ws, authenticatedAtMs as number);
       this.registerSocket(userId, ws);
       let displayName = "Operativo";
       let messagesThisSecond = 0;
@@ -463,7 +473,7 @@ class RoomManager {
 
       ws.on("message", async (raw) => {
         try {
-          if (await distributedState.isUserRevoked(userId)) {
+          if (await distributedState.isUserRevoked(userId, this.socketAuthenticatedAtMs.get(ws))) {
             ws.close(4001, "Session revoked");
             return;
           }
@@ -601,7 +611,7 @@ class RoomManager {
             if (this.gateway.openRelay(userId, displayName, ws, remote.nodeId, remote.id, remote.worldId)) return;
           }
         }
-        const roomId = msg.roomId || this.findOrCreateLobby(worldId);
+        const roomId = msg.roomId || await this.findOrCreateLobby(worldId);
         await this.joinRoom(userId, displayName, ws, roomId, worldId, relayContext?.relayInviteAuthorized === true);
         break;
       }
@@ -685,7 +695,7 @@ class RoomManager {
 
   // ─── Room Lifecycle ──────────────────────────────────────────────────────
 
-  private findOrCreateLobby(worldId: WorldId = "CIGKV"): string {
+  private async findOrCreateLobby(worldId: WorldId = "CIGKV"): Promise<string> {
     // Prefer an existing lobby with space
     for (const room of this.rooms.values()) {
       if (!room.isPrivate && room.worldId === worldId && room.status === "LOBBY" && room.players.size < room.maxPlayers) {
@@ -698,7 +708,7 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: 50, // scalable later
+      maxPlayers: 100, // capacidade canônica: 100 operadores por ring
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),
@@ -721,9 +731,15 @@ class RoomManager {
       minPlayersToStart: 2,
     };
     this.rooms.set(id, room);
-    void distributedState.setRoomOwner(id);
-    void distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
-    return id;
+    try {
+      const ownerAcquired = await distributedState.setRoomOwner(id);
+      if (!ownerAcquired) throw new Error("room ownership unavailable");
+      await distributedState.publishControl({ type: "room_created", roomId: id, status: room.status });
+      return id;
+    } catch (error) {
+      this.rollbackRoomCreation(room, "creation_failed");
+      throw error;
+    }
   }
 
   async joinRoom(
@@ -736,7 +752,7 @@ class RoomManager {
   ) {
     let room = this.rooms.get(roomId);
     if (!room) {
-      roomId = this.findOrCreateLobby(worldId);
+      roomId = await this.findOrCreateLobby(worldId);
       room = this.rooms.get(roomId)!;
     }
     if (room.isPrivate && !privateInviteAuthorized) {
@@ -857,7 +873,7 @@ class RoomManager {
     this.userToRoom.delete(userId);
 
     if (room.players.size === 0) {
-      if (room.countdownHandle) clearInterval(room.countdownHandle);
+      this.clearCountdown(room);
       this.destroyRoom(roomId);
     } else {
       if (wasHost) {
@@ -928,7 +944,7 @@ class RoomManager {
   }
 
   private beginCountdown(room: BattleRoom) {
-    if (room.countdownHandle) clearInterval(room.countdownHandle);
+    this.clearCountdown(room);
 
     room.status = "COUNTDOWN";
     room.countdownSeconds = 10;
@@ -939,18 +955,20 @@ class RoomManager {
       this.broadcast(room, { type: "countdown", seconds: room.countdownSeconds });
 
       if (room.countdownSeconds <= 0) {
-        if (room.countdownHandle) clearInterval(room.countdownHandle);
-        room.countdownHandle = null;
+        this.clearCountdown(room);
         this.beginMatch(room);
       }
     }, 1000);
   }
 
+  private clearCountdown(room: BattleRoom): void {
+    if (!room.countdownHandle) return;
+    clearInterval(room.countdownHandle);
+    room.countdownHandle = null;
+  }
+
   private cancelCountdown(room: BattleRoom) {
-    if (room.countdownHandle) {
-      clearInterval(room.countdownHandle);
-      room.countdownHandle = null;
-    }
+    this.clearCountdown(room);
     room.status = "LOBBY";
     room.countdownSeconds = 10;
     // Reset ready so players confirm again
@@ -1762,8 +1780,11 @@ class RoomManager {
   private destroyRoom(roomId: string, reason = "destroyed") {
     const room = this.rooms.get(roomId);
     if (!room) return;
-    if (room.tickHandle) clearInterval(room.tickHandle);
-    if (room.countdownHandle) clearInterval(room.countdownHandle);
+    if (room.tickHandle) {
+      clearInterval(room.tickHandle);
+      room.tickHandle = null;
+    }
+    this.clearCountdown(room);
     this.rooms.delete(roomId);
     void distributedState.releaseRoomOwner(roomId).catch(() => undefined);
     // Event Mesh: remove do índice distribuído e anuncia (fire-and-forget).
@@ -1856,7 +1877,7 @@ class RoomManager {
       id,
       worldId,
       status: "LOBBY",
-      maxPlayers: Math.min(50, Math.max(2, maxPlayers ?? 16)),
+      maxPlayers: Math.min(100, Math.max(2, maxPlayers ?? 100)),
       players: new Map(),
       currentPhase: 1,
       phaseStartedAt: Date.now(),
@@ -2108,7 +2129,8 @@ class RoomManager {
       throw error;
     }
 
-    for (const p of players) {
+    try {
+      for (const p of players) {
       // Seat without going through public join (already authenticated)
       if (this.userToRoom.has(p.userId)) {
         this.leaveRoom(p.userId);
@@ -2165,16 +2187,20 @@ class RoomManager {
       if (p.ws) {
         this.send(p.ws, { type: "welcome", userId: p.userId, roomId: id });
       }
-    }
+      }
 
-    this.broadcastRoomState(room);
+      this.broadcastRoomState(room);
 
     // Auto-start countdown when matchmaking fills a lobby
-    if (room.players.size >= 2) {
-      this.tryStartMatch(id, players[0].userId);
-    }
+      if (room.players.size >= 2) {
+        this.tryStartMatch(id, players[0].userId);
+      }
 
-    return id;
+      return id;
+    } catch (error) {
+      this.rollbackRoomCreation(room, "seating_failed");
+      throw error;
+    }
   }
 
   getMatchmakingStatus(userId: string) {

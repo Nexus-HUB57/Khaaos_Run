@@ -960,8 +960,8 @@ export const KHAAOS_OPERATIVE_ARCHETYPES: OperativeArchetype[] = [
   {
     id: "OP_FEMALE_DISRUPTOR_MENA",
     ueAssetId: "CHR_Huran_Female_Soraya",
-    codename: "SORAYA HADDAD",
-    fullName: "Soraya Haddad · Tempestade de Areia F-07",
+    codename: "SORAYA HADD",
+    fullName: "Soraya Hadd · Tempestade de Areia F-07",
     gender: "FEMININO",
     rank: "HURAN",
     specializationId: "ANTI_BOMBAS",

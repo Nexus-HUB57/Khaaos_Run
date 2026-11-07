@@ -14,6 +14,7 @@ import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
 import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
 import { spectateHref } from './spectator3d.js'; // Fase 14 — botão ASSISTIR (transmissão)
+import { refreshPojStrip as refreshPojStripShared, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — ponte DOM compartilhada do painel POJ
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
 
 const OFFLINE_RING = { x: 0, z: 0, radius: WORLD.ring.radius, target: WORLD.ring.radius, pulse: 0 };
@@ -273,52 +274,17 @@ export class OnlineGame3D extends Game3D {
   }
 
   // ---------- Fase 9 — painel POJ: estado do Protocolo de Ordem de Jogo ----------
+  // (fix) a ponte DOM virou módulo compartilhado (pojstrip.js) — o mesmo
+  // preenchimento agora alimenta o modal ZU do modo LOCAL. O ciclo de 15 s
+  // e o chip PATENTE do perfil autenticado permanecem responsabilidade daqui.
   async refreshPojStrip() {
-    const strip = document.querySelector('#pojStrip');
-    if (!strip) return;
-    try {
-      const res = await fetch('/poj/state', { cache: 'no-store' });
-      if (!res.ok) return;
-      const s = await res.json();
-      const set = (id, text, cls = '') => {
-        const node = document.querySelector('#' + id);
-        if (!node) return;
-        node.textContent = text;
-        node.className = cls;
-      };
-      const fases = {
-        alistamento: 'ALISTAMENTO', contagem_regressiva: 'CONTAGEM 24H', guerra: 'GUERRA',
-        julgamento: 'JULGAMENTO', encerrado: 'ENCERRADO',
-      };
-      set('pojFase', fases[s.phase] ?? String(s.phase ?? '—').toUpperCase(), s.phase === 'guerra' ? 'poj-live' : s.phase === 'contagem_regressiva' ? 'poj-warn' : '');
-      set('pojInscritos', (s.registrations ?? 0).toLocaleString('pt-BR'));
-      set('pojCigkv', s.cigkvOpen ? 'ABERTO' : (s.phase === 'alistamento' ? 'FECHADO' : 'ENCERRADO'), s.cigkvOpen ? 'poj-live' : '');
-      set('pojMundo', s.world ?? '—');
-      set('pojDia', s.day ? `${s.day}/7` : '—');
-      set('pojVivos', (s.phase === 'guerra' || s.phase === 'julgamento') ? String(s.survivorsCount ?? 0) : '—', s.phase === 'guerra' ? 'poj-live' : '');
-      // Fase 10 — patente do perfil (progressão KRC via /profile)
-      await this.refreshProfileChip();
-    } catch { /* servidor sem /poj — painel permanece neutro */ }
+    await refreshPojStripShared();
+    await this.refreshProfileChip();
   }
 
-  // Fase 10 — chip PATENTE: progressão KRC do perfil autenticado (1º critério
-  // de desempate do 11º artigo). Sem sessão → chip neutro.
+  // Fase 10 — patente do perfil (progressão KRC via /profile)
   async refreshProfileChip() {
-    const node = document.querySelector('#pojPatente');
-    if (!node) return;
-    try {
-      const token = localStorage.getItem('kr_token');
-      const res = await fetch('/profile', {
-        cache: 'no-store',
-        headers: token ? { authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) { node.textContent = '—'; return; }
-      const p = await res.json();
-      const pct = Math.round((p.progress ?? 0) * 100);
-      node.textContent = p.nextPatente
-        ? `${p.patente} · ${pct}% p/ ${p.nextPatente}`
-        : `${p.patente} · TOPO`;
-    } catch { node.textContent = '—'; }
+    await refreshPatenteChip();
   }
 
   // Fase 25 — colliders do preditor = estáticos + gloo ativas + portas ativas

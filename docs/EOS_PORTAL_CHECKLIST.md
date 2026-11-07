@@ -24,6 +24,66 @@
 | Secrets `EOS_*` no GitHub | ❌ ausentes | inventário: Render/Discord/UE5_INSTALL_DIR + `UNREAL_ENGINE_LOGIN` (28/10, ghcr **denied** — run #9 do ue-infra-smoke, linha 226; valor presente mas não autenticável) — diagnóstico com `node scripts/build/ue58_eac_unblock.mjs --probe-ghcr` |
 | `/eos/status` | ⏳ honesto | `mode:'unconfigured'` + `missing[]` até a Fase B deste checklist |
 
+### Re-auditoria 2026-11-05 (API autenticada — lados fora do repo)
+
+- **EULA GitHub↔Epic**: probe autenticado `GET /repos/EpicGames/UnrealEngine`
+  → **404** (binding conta GitHub ↔ conta Epic não feito; bloqueia o clone da
+  engine no runner — Fase A1).
+- **Secrets `EOS_*`**: 11 secrets no inventário, **nenhum** `EOS_*`
+  (Fase B pendente).
+- **Runners**: `actions/runners → total_count: 0` (runner UE5.8 pendente).
+  Variables já presentes: `UE58_ENABLED=true`, `UE5_ROOT=/opt/UnrealEngine`;
+  **`UE5_WORLD_STRESS_COMMAND` ausente** — sem ela "Build and cook UE5.8
+  package" permanece skipped no `m4-ue5-eos-acceptance.yml`.
+- Branch `feat/m4-runner-eos-unblock` (labels `ue5` no bootstrap + este
+  checklist): merged no main (`8a2a4e3` contido em `b55b0b5`); branch remota
+  removida por higiene (2026-11-05).
+
+### Execução de 2026-11-05 — passos 6–9 do §0.1 (lados executáveis do sandbox)
+
+- **Passo 6 ✅**: `UE5_WORLD_STRESS_COMMAND` criada via API com o valor
+  canônico do `bootstrap_ue58_runner.sh` (`UnrealEditor-Cmd … Automation
+  RunTests Khaaos.Worlds.Stress; Quit` + `-testexit="Automation Test Queue
+  Finished" -log`). Nota de API: `PUT /actions/variables/:name` retorna 404
+  para variável inexistente — usar `POST /actions/variables` (201) para
+  criar. Gate confirmado no workflow: `ue-build` exige
+  `inputs.run_engine == true && vars.UE58_ENABLED == 'true'`, logo a
+  variável pode existir sem risco de fila (só roda em dispatch manual).
+- **Passo 7 (Fase D sem credenciais Epic) ✅**: `eos-live-smoke.mjs` sem
+  creds → `EOS_LIVE_SMOKE_SKIPPED` (exit 0) e com `--strict` → exit 1
+  (go-live estrito, por design); `game-runtime` `npm test` → **1055 pass /
+  0 fail / 13 skipped** (regressão D-6 do mock confinado); `/eos/status` ao
+  vivo honesto (`mode:'unconfigured'`, `missing[]` com os 5 campos,
+  sdk 1.16.0); `POST /eos/sessions` sem auth → 403 `eos:operate`.
+  Evidências consolidadas em `artifacts/p0-steps-6-9/`.
+- **Passo 8 ✅ (web)**: `fase12-browser-check.sh` → `F12_BROWSER_OK`
+  (exit 0); sessão manual `agent-browser` com DOM evidenciado (6 seções,
+  12 comandos, Banco da Corte com caso `cm-2` pendente) e screenshots em
+  `artifacts/p0-steps-6-9/console-poj*.png`. Protocolo formalizado em
+  `docs/gfx-ux-perf.md` (neste PR) — substitui a versão da sessão anterior
+  que nunca foi commitada. O item de engine (grama impostor, catálogo
+  mítico, HUD por aura) segue no §Nível 3 do protocolo, para o host
+  licenciado.
+- **Passo 9 ⏳ host-side**: docker ausente no ambiente de automação
+  (`command not found`) — Cloud DDC/Lore permanece tarefa de host
+  autorizado (login Epic + `df -h` antes do pull).
+
+## 0.1 Ordem de execução das pendências humanas (P0 → fechamento do M4)
+
+Execução de cima para baixo; cada passo produz o sinal de sucesso indicado.
+
+| # | Pendência (dono: humano) | Ação concreta | Sinal de sucesso |
+|---|---|---|---|
+| 1 | Tokens vazados (PB-07) | `docs/TOKEN_ROTATION_RUNBOOK.md` na íntegra: revogar os 2 PATs clássicos expostos; emitir fine-grained (owner `Nexus-HUB57`, só `Khaaos_Run`; `Contents: RW`, `Actions: R`, `Pull requests: RW`; expiração ≤ 30 dias); distribuir via gerenciador de senhas; nunca colar em chat | antigo → HTTP 401 em `api.github.com/user`; `gh auth status` OK no novo |
+| 2 | Fase A — portal Epic (A1…A9) | seguir a tabela da Fase A abaixo; anotar valores só no gerenciador de senhas | probe EULA `404 → 200` |
+| 3 | Fase B — 7 secrets `EOS_*` | `gh secret set EOS_PRODUCT_ID/EOS_SANDBOX_ID/EOS_DEPLOYMENT_ID/EOS_CLIENT_ID/EOS_CLIENT_SECRET/EOS_ENCRYPTION_KEY/EOS_REGION --repo Nexus-HUB57/Khaaos_Run` (ENCRYPTION_KEY = `openssl rand -hex 32`; REGION = `sa1`) — valor colado só no prompt cifrado | `gh secret list` mostra os 7 nomes |
+| 4 | Fase C — gate anti-placeholder | `bash scripts/eos/inject_eos_credentials.sh --check` (local com envs ou via CI) | exit 0, sem `KHAOS_*` |
+| 5 | Runner UE5.8 | host ≥ 250 GB livres / 32 GB RAM; `RUNNER_TOKEN` da UI (Settings → Actions → Runners → New self-hosted runner, expira ~1 h); `sudo UE5_GITHUB_TOKEN=<novo PAT> RUNNER_URL=https://github.com/Nexus-HUB57/Khaaos_Run RUNNER_TOKEN=<runner token> bash scripts/build/bootstrap_ue58_runner.sh --all` | `actions/runners → total_count: 1`; labels `self-hosted, linux, x64, ue5.8, ue5` |
+| 6 | Variável de CI faltante | `gh variable set UE5_WORLD_STRESS_COMMAND --repo Nexus-HUB57/Khaaos_Run '<comando de stress dos mundos>'` | variable listada; job de cook deixa de ser skipped |
+| 7 | Fase D — validação E2E | `node scripts/eos/eos-live-smoke.mjs --strict` → depois `--full`; `/eos/status` `configured`; handshake + ciclo de sessão (201/200→404/409/403); 2 clientes com reconnect; regressão `eos-bridge.test.js`; rerun `m4-ue5-eos-acceptance.yml` (workflow_dispatch) | `EOS_LIVE_SMOKE_OK`; aceite M4 integral |
+| 8 | Validação em navegador real | no host licenciado: subir runtime e seguir o padrão de `game-runtime/scripts/fase12-browser-check.sh` (agent-browser); protocolo gráfico/UX completo a recriar no PR que reintroduz `docs/gfx-ux-perf.md` | evidências (snapshot/text) anexadas |
+| 9 | P1 — Cloud DDC/Lore | `docker login` com conta Epic vinculada; `df -h` (reservar ~2× o tamanho comprimido); `docker pull ghcr.io/epicgames/unreal-cloud-ddc:1.5.0_helm`; Lore via digest `042ab40c…` | imagens locais + disco OK |
+
 ## Fase A — Epic Developer Portal (dev.epicgames.com)
 
 Tudo nesta fase é manual, como dono da organização de produto. Criar o

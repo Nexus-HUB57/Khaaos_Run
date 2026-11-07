@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MatchRoom3D } from '../server/room3d.js';
 import { validateInput3D } from '../server/antiCheat.js';
-import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
+import { KhaaosSim3D, DEFAULT_INPUT, DBNO, knockActor } from '../src/game3d/sim3d.js';
 
 const STEP = 1 / 30;
 const DT = 1 / 20;
@@ -98,16 +98,15 @@ test('fase5 sim: bots engajam uns aos outros quando são os alvos mais próximos
 test('fase5 sim: com spectate a partida continua após a eliminação e termina com matchEnd', () => {
   const s = new KhaaosSim3D({ seed: 'P5-SPEC', botCount: 4, airdrop: false, spectate: true });
   s.start('belt');
-  // elimina o jogador pelo anel (determinístico): vida mínima, fora do raio seguro
-  s.player.armor = 0; s.player.life = 0.5;
-  s.player.x = 300; s.player.z = 0;
+  // Simula o primeiro dano do anel e confirma a eliminação só após o deadline.
+  knockActor(s.player, null, 'ring');
   let eliminated = null, steps = 0;
-  while (steps++ < 40) {
+  while (steps++ < Math.ceil(DBNO.bleedOutSeconds / STEP) + 2 && s.player.alive) {
     s.step({ ...idle(), seq: steps }, STEP);
     eliminated = s.consumeEvents().find((e) => e.type === 'eliminated') ?? eliminated;
     if (!s.player.alive) break;
   }
-  assert.equal(s.player.alive, false, 'jogador eliminado pelo anel');
+  assert.equal(s.player.alive, false, 'timeout do DBNO elimina o jogador atingido pelo anel');
   assert.ok(eliminated, 'evento eliminated emitido');
   assert.ok(eliminated.placement >= 2 && eliminated.placement <= 6, `posição coerente (#${eliminated.placement})`);
   assert.equal(s.over, false, 'partida NÃO termina na morte (modo espectador)');
@@ -124,14 +123,13 @@ test('fase5 sim: com spectate a partida continua após a eliminação e termina 
   assert.ok(matchEnd.placement >= 2, `matchEnd preserva a posição do jogador (#${matchEnd.placement})`);
 });
 
-test('fase5 sim: sem spectate (legado) a eliminação encerra a partida imediatamente', () => {
+test('fase5 sim: sem spectate, Game Over só encerra após o timeout DBNO', () => {
   const s = new KhaaosSim3D({ seed: 'P5-LEGACY', botCount: 2, airdrop: false });
   s.start('belt');
-  s.player.life = 0.5; s.player.armor = 0;
-  s.player.x = 300; s.player.z = 0; // fora do anel: dano de zona nos próximos passos
-  for (let i = 0; i < 30 && s.player.alive; i++) s.step({ ...idle(), seq: i + 1 }, STEP);
+  knockActor(s.player, null, 'ring');
+  for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / STEP) + 2 && s.player.alive; i++) s.step({ ...idle(), seq: i + 1 }, STEP);
   assert.equal(s.player.alive, false);
-  assert.equal(s.over, true, 'comportamento legado preservado');
+  assert.equal(s.over, true, 'Game Over é emitido depois da janela de recuperação');
 });
 
 // ---------- agachamento online (sala autoritativa + anti-cheat) ----------
@@ -175,11 +173,10 @@ test('fase5 room: humano eliminado permanece na sala e a partida segue até o ú
   const room = makeRoom({ humans: 1, botFill: 4 });
   room.start('p1', 'belt');
   const p1 = room.humans.get('p1');
-  // mata o humano pelo anel (determinístico): vida mínima + fora do raio seguro
-  p1.armor = 0; p1.life = 0.5;
-  p1.x = 320; p1.z = 0;
+  // Inicia DBNO e verifica a eliminação autoritativa e individual ao expirar.
+  knockActor(p1, null, 'ring');
   let seq = 1, eliminated = null;
-  for (let i = 0; i < 40 && p1.alive; i++) {
+  for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / DT) + 2 && p1.alive; i++) {
     room.input('p1', blank({ seq: seq++ }));
     room.tick(DT);
     eliminated = room.drainEvents('p1').find((e) => e.type === 'eliminated') ?? eliminated;

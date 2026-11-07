@@ -52,7 +52,7 @@ if (typeof globalThis.document === 'undefined') {
  * canônicos pinados. O teste de auto-verificação fidelity-audit.test.js já
  * cobre o caminho real (corrompe inputs e mostra os checks falhando).
  */
-function extractSharedWorldsLite(src) {
+export function extractSharedWorldsLite(src) {
   const WORLD_IDS = ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea'];
   const out = {};
 
@@ -129,6 +129,7 @@ export async function runFidelitySnapshot({
   const { getWorldLayout } = await import('../src/game3d/sim3d.js');
   const { districtDressing } = await import('../src/game3d/districts3d.js');
   const { buildScene, LIGHTING_PROFILES } = await import('../src/game3d/world3d.js');
+  const { WORLD_AUDIO_PROFILES, FOOTSTEP_PROFILES } = await import('../src/game3d/worldAudioProfiles.js');
   const { auditWorlds } = await import('./fidelity-audit-lib.mjs');
 
   const readme = readmeText ?? readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
@@ -184,6 +185,7 @@ export async function runFidelitySnapshot({
     simSource: sim,
     docs: docTexts,
     sharedWorlds,
+    audio: { worlds: WORLD_AUDIO_PROFILES, footsteps: FOOTSTEP_PROFILES },
   });
 
   return {
