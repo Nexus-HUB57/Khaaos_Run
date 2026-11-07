@@ -1354,6 +1354,9 @@ export class Game3D {
   handleEvents() {
     const p = this.sim.player;
     for (const e of this.sim.consumeEvents()) {
+      // Fase 47 — o clima reage ao mesmo evento autoritativo do SurvivalFX;
+      // permanece visual-only e não participa do dano nem da simulação.
+      this.scene.userData.atmosphere?.handleEvent?.(e);
       switch (e.type) {
         case 'shot': {
           const dist = e.owner === 'player' ? 0 : Math.hypot(e.x - p.x, e.z - p.z);

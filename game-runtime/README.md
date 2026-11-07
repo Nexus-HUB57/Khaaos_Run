@@ -41,6 +41,19 @@ mesmo ticker determinístico e nunca altera colliders, loot, spawns ou regras da
 O contrato headless está em `test/atmosphere-f46.test.js` (5 testes: presença,
 isolamento, determinismo, ticker finito e orçamento Mobile).
 
+### Atmosfera responsiva aos hazards — Fase 47
+
+O mesmo registro atmosférico agora recebe os eventos autoritativos consumidos por
+`SurvivalFX`: a chuva ácida pulsa e expira, a névoa de esporos e a fumaça ganham
+intensidade durante a subida, o spray de Arukheea reage ao tsunami e as cinzas do
+CIGKV respondem ao Pulso Khaaos. A compatibilidade é **id-gated por mundo** — um
+evento de outro Ring é ignorado — e nenhuma regra de dano, collider ou estado da
+simulação é alterada. Offline, online e espectador passam pelo mesmo roteador de
+eventos herdado de `Game3D`.
+
+`test/atmosphere-f47.test.js` cobre os cinco hazards canônicos, expiração do pulso
+ácido, buffers finitos e isolamento entre mundos.
+
 **Controles desktop:** `WASD` mover · `Mouse` mirar/atirar · `RMB` mira precisa (ADS) · `Shift` correr · `Espaço` saltar · `R` recarregar · `E` coletar/interagir · `Q` medkit · `G` granada FRAG · `F` Gloo Wall · `1`/`2` slots · `ESC` liberar mouse.
 **Controles touch:** joystick virtual à esquerda, botões de ação (fogo, ADS, salto, recarga, coleta, medkit, 💣 granada, 🧊 gloo) à direita.
 

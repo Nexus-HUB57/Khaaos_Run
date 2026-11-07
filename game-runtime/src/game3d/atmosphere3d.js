@@ -55,6 +55,7 @@ export function buildAtmosphere(scene, scenario, q = {}) {
   const group = new THREE.Group();
   group.name = `atmosphere-${base.kind}`;
   group.userData.decorative = true;
+  const hazardState = { active: false, kind: null, boost: 0, pulse: 0 };
   const material = makeMaterial(base, q);
   const positions = new Float32Array(base.kind === 'acidRain' ? count * 6 : count * 3);
   const geometry = new THREE.BufferGeometry();
@@ -66,13 +67,18 @@ export function buildAtmosphere(scene, scenario, q = {}) {
   scene.add(group);
 
   const update = (_dt, t = 0) => {
+    const dt = Number.isFinite(_dt) && _dt > 0 ? Math.min(_dt, .25) : 0;
+    if (hazardState.pulse > 0) hazardState.pulse = Math.max(0, hazardState.pulse - dt);
+    if (base.kind === 'acidRain' && hazardState.pulse === 0 && hazardState.kind === 'acidRain') hazardState.active = false;
+    const targetBoost = hazardState.active ? .9 : hazardState.pulse > 0 ? .7 : 0;
+    hazardState.boost += (targetBoost - hazardState.boost) * Math.min(1, dt * 5);
     const attr = geometry.getAttribute('position');
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       const phase = p.phase + t * p.speed;
       const x = p.x + Math.sin(phase * .7) * base.drift + t * base.drift * .08;
       const z = p.z + Math.cos(phase * .53) * base.drift * .4;
-      const y = .25 + ((p.y - t * base.fall * p.speed) % base.height + base.height) % base.height;
+      const y = .25 + ((p.y - t * base.fall * (1 + hazardState.boost * .8) * p.speed) % base.height + base.height) % base.height;
       if (base.kind === 'acidRain') {
         const j = i * 6;
         attr.array[j] = x; attr.array[j + 1] = y; attr.array[j + 2] = z;
@@ -83,10 +89,23 @@ export function buildAtmosphere(scene, scenario, q = {}) {
       }
     }
     attr.needsUpdate = true;
-    material.opacity = (base.kind === 'acidRain' ? .28 : .22) + (Math.sin(t * .7) * .5 + .5) * (base.kind === 'spores' ? .18 : .12);
+    material.opacity = (base.kind === 'acidRain' ? .28 : .22)
+      + (Math.sin(t * .7) * .5 + .5) * (base.kind === 'spores' ? .18 : .12)
+      + hazardState.boost * .16;
+  };
+  const handleEvent = (event = {}) => {
+    const type = event.type;
+    const starts = { tsunamiStart: 'tsunami', sporeFogStart: 'spore', toxicSmokeStart: 'smoke', gravityAnomalyStart: 'gravity' };
+    const ends = { tsunamiEnd: 'tsunami', sporeFogEnd: 'spore', toxicSmokeEnd: 'smoke', gravityAnomalyEnd: 'gravity' };
+    const compatible = { ash: 'gravity', acidRain: 'acid', spores: 'spore', dust: 'smoke', saltSpray: 'tsunami' }[base.kind];
+    if (starts[type] && starts[type] === compatible) { hazardState.kind = starts[type]; hazardState.active = true; return; }
+    if (ends[type] && ends[type] === compatible && hazardState.kind === ends[type]) { hazardState.active = false; return; }
+    if (type === 'acidRain' && base.kind === 'acidRain') {
+      hazardState.kind = 'acidRain'; hazardState.active = true; hazardState.pulse = 2.2;
+    }
   };
   update(0, 0);
-  const registry = { id, kind: base.kind, count, group, mesh, material, placements: points, animators: [update] };
+  const registry = { id, kind: base.kind, count, group, mesh, material, placements: points, hazardState, handleEvent, animators: [update] };
   scene.userData.atmosphere = registry;
   return registry;
 }
