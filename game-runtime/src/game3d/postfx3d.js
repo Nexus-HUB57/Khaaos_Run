@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { SAOPass } from 'three/examples/jsm/postprocessing/SAOPass.js';
 import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -84,6 +85,20 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const size = renderer.getSize(new THREE.Vector2());
+    const saoSize = new THREE.Vector2(
+      Math.max(320, Math.floor(size.x * plan.ssao.resolutionScale)),
+      Math.max(180, Math.floor(size.y * plan.ssao.resolutionScale)),
+    );
+    const sao = new SAOPass(scene, camera, saoSize);
+    sao.params.saoBias = plan.ssao.bias;
+    sao.params.saoIntensity = plan.ssao.intensity;
+    sao.params.saoScale = plan.ssao.scale;
+    sao.params.saoKernelRadius = plan.ssao.kernelRadius;
+    sao.params.saoMinResolution = plan.ssao.minResolution;
+    sao.params.saoBlur = true;
+    sao.params.saoBlurRadius = plan.ssao.blurRadius;
+    sao.params.saoBlurStdDev = plan.ssao.blurStdDev;
+    composer.addPass(sao);
     let ssr = null;
     // SSR é deliberadamente limitado ao tier alto e renderizado em resolução
     // reduzida: reflexos de asfalto molhado/metal permanecem convincentes sem
@@ -117,6 +132,7 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     let elapsed = 0;
     return {
       composer,
+      sao,
       ssr,
       bloom,
       grade,
@@ -128,6 +144,10 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
       setSize(w, h) {
         composer.setSize(w, h);
         grade.uniforms.uResolution.value.set(w, h);
+        sao.setSize(
+          Math.max(320, Math.floor(w * plan.ssao.resolutionScale)),
+          Math.max(180, Math.floor(h * plan.ssao.resolutionScale)),
+        );
         ssr?.setSize(Math.max(320, Math.floor(w * .72)), Math.max(180, Math.floor(h * .72)));
       },
     };
