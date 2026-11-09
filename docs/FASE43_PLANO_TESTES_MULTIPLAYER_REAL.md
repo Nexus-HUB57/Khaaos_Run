@@ -170,3 +170,55 @@ Configuração exigida no **GitHub Environment `staging`** (adicionar os valores
 
 
 **Atualização do baseline:** a falha KRC descrita na referência imediatamente anterior foi resolvida no teste local conforme esta auditoria; a contagem posterior é 1.093 testes, 1.080 aprovados, 0 falhas e 13 ignorados. O commit `33c1cf6` está publicado na branch `fix/test-krc-scenario-reward` e submetido na [PR #301](https://github.com/Nexus-HUB57/Khaaos_Run/pull/301).
+
+### MP-ZEX-09 em ambiente isolado — partida real com rede degradada (2026-11-09, PR em aberto)
+
+A pendência registrada acima ("cenário de rede degradada permanece pendente em
+ambiente isolado") está fechada: `game-runtime/scripts/run-mp-zex-09-degraded.mjs`
+executa o cenário completo contra um servidor autoritativo REAL, sem nenhum
+endpoint de debug/teleporte (mesma doutrina do MP-ZEX-08) e com os inputs
+limitados a gameplay. A degradação é aplicada a UM cliente (A) via
+`game-runtime/scripts/mp-zex-09-link.mjs`: RTT nominal de 130 ms (65 ms por
+sentido ± 30 ms de jitter) com "perda" de ~2% modelada como picos de
+retransmissão de +200–400 ms — WebSocket/TCP não descarta quadros; a perda se
+manifesta na aplicação exatamente como esses picos. O RTT medido (ping/pong
+ecoado pelo servidor, mediana de 7 amostras) é reportado no campo `rtt` do
+input, exercitando a lag compensation real da Fase 3.
+
+**Desenho das fases** (CIGKV tem 3 terminais em distritos; A fica no leste, B
+no oeste; o snapshot de terminais é global, então cada cliente observa o
+terminal do outro à distância):
+
+1. **B, rede normal** — interrupção: canaliza, a conexão cai, o terminal libera
+   sem XP e o resume preserva `extractCancelled/disconnect`; conclusão na
+   sequência → baseline D = +250 XP, canal de 3,97 s medido por estado do
+   servidor (progresso × `ZEX_CHANNEL_SECONDS`, sem relógio de cliente).
+2. **A, rede degradada** — interrupção: canaliza sob RTT mediano de ~130 ms, o
+   link morre com quadros em voo, e NENHUM quadro atrasado ressuscita o canal;
+   resume confirma zexChannel nulo, zero XP, zero extração.
+3. **A, rede degradada** — conclusão: XP degradada == D (+250, recompensa
+   única), extração +1, canal de ~3,7–4,0 s por estado do servidor, atraso
+   visual B→A (56–185 ms) dentro do bound p95 do link, nenhum input rejeitado,
+   e pós-`drain()` o estado de A converge com o de B (terminal, extrações, XP).
+
+**Ferramental novo:** `DegradedLink` (fila FIFO com timer serializado por
+direção — o jitter nunca reordena quadros, semântica TCP) com 4 regressões em
+`game-runtime/test/mp-zex-09-link.test.js`; workflow
+`.github/workflows/mp-zex-09-degraded.yml` executa o cenário em servidor local
+isolado (sala de capacidade 2 = zero bots, navegação determinística) a cada PR
+que tocar `room3d.js`/`server.js` ou o próprio cenário. Evidência completa em
+`artifacts/mp-zex-09/evidencia-e2e-completa.log`.
+
+**Achados de execução** (registrados como lições, nenhum contrato alterado):
+o heap de A* transcrito no rascunho do 08 perdeu a linha `heap[i] = tail` do
+sift-down e drenava a busca ("sem rota" fantasma) — substituído por MinHeap com
+trocas; eventos de jogo (`extract`/`extractCancelled`) não são mensagens WS,
+são drenados dentro de `snapshot.events` a cada tick; a sessão de resume só
+existe após o close da conexão anterior; e uma queda DURANTE o canal deixa o
+`interactLatch` do ator preso — a primeira tecla E pós-resume é engolida e o
+cliente precisa re-pressionar (comportamento registrado, não alterado).
+
+**Limite remanescente:** esta validação cobre o ambiente isolado exigido pelo
+plano; a repetição em staging com dois dispositivos reais (e o MP-ZEX-08 em
+staging, gate de release) permanece dependente dos secrets do environment
+`staging`, ainda não configurados.
