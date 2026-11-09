@@ -29,6 +29,7 @@ jobs:
       - name: Validate JSON and Python scripts
         run: |
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
+          python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_visual_lighting_test_matrix.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
           python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/generate_cigkv_pbr_textures.py scripts/ue5/validate_cigkv_pbr_textures.py scripts/ue5_editor/cigkv_vertical_slice.py
       - name: Validate PBR 2K texture sets
@@ -87,7 +88,7 @@ jobs:
       - name: Verify real captures
         run: |
           test -s artifacts/cigkv-vertical-slice/engine-report.json
-          test "$(find artifacts/cigkv-vertical-slice -name 'CIGKV_*.png' | wc -l)" -ge 8
+          test "$(find artifacts/cigkv-vertical-slice -name 'CIGKV_*.png' | wc -l)" -ge 24
       - uses: actions/upload-artifact@v4
         with:
           name: cigkv-vertical-slice-ue58-${{ github.sha }}

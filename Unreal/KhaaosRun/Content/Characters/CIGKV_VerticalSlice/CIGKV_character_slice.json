@@ -82,7 +82,10 @@
   },
   "acceptance": {
     "required_profiles": ["Low", "Medium", "High", "Ultra"],
-    "required_screenshots_per_profile": 2,
+    "visual_lighting_matrix": "Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_visual_lighting_test_matrix.json",
+    "required_lighting_scenarios": ["day_neutral", "golden_hour", "night_interior"],
+    "required_screenshots_per_profile": 6,
+    "required_screenshot_total": 24,
     "required_screenshots": ["third_person_combat", "first_person_ads"],
     "required_metrics": ["game_thread_p95_ms", "render_thread_p95_ms", "gpu_p95_ms", "draw_calls", "vram_mb", "lod_pop_review", "shader_hitch_review"],
     "render_target": "60_fps_medium",

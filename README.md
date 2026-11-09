@@ -14,6 +14,7 @@
 - [Status do Projeto](#status-do-projeto)
 - [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
 - [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
+- [Plano visual e iluminação UE5.8](#plano-visual-e-iluminação-ue58)
 - [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
@@ -115,6 +116,18 @@ O ciclo pós-PR adiciona uma auditoria engine-less para distinguir fontes de pro
 - [Workflow que publica o relatório](.github/workflows/cigkv-vertical-slice.yml)
 
 O resultado engine-less não substitui a revisão de silhueta, deformação, clipping, cabelo, roupa, sockets, LOD, PBR, Lumen, Nanite ou GPU. Esses itens continuam exigindo Blender 4.x e um runner UE5.8 licenciado.
+
+---
+
+## Plano visual e iluminação UE5.8
+
+O aceite visual do CIGKV agora exige 24 capturas reais: quatro presets (`Low`, `Medium`, `High`, `Ultra`), três cenários (`day_neutral`, `golden_hour`, `night_interior`) e duas câmeras (`third_person_combat`, `first_person_ads`). O master material inclui tuning explícito para Subsurface Profile, radius de pele, anisotropia/fluxo de cabelo e microdetalhe.
+
+- [Matriz visual e iluminação](Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_visual_lighting_test_matrix.json)
+- [Plano de testes UE5.8](docs/CIGKV_UE58_VISUAL_LIGHTING_TEST_PLAN.md)
+- [Receita de shader e tuning PBR](Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json)
+
+O sandbox validou o contrato, os mapas, hashes e scripts, mas não declara screenshots ou métricas de GPU sem runner UE5.8 licenciado.
 
 ---
 
