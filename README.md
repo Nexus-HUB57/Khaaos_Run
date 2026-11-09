@@ -881,7 +881,7 @@ Editor:  UnrealEd, EditorFramework, KhaaosRunEditor
 | **PR Automation** | `pr-automation.yml` | PR events | Checklist, labels e validações auxiliares de PR |
 | **UE5 CD** | `ue5-cd.yml` | Push/PR com paths de app/UE5 | Verificação e entrega da imagem da aplicação |
 | **UE5 CI** | `ue5-ci.yml` | Push/PR com paths UE5 | Estrutura `.uproject`, headers, naming, LFS e regras UE5 |
-| **UE5 Headless Compile** | `ue5-headless-compile.yml` | Push específico + manual | Compilação em runner self-hosted UE5.8; depende de runner e secret |
+| **UE5 Headless Compile** | `ue5-headless-compile.yml` | Push específico + manual | Build `KhaaosRunEditor`, teste de serialização e POST real do `FHttpModule` a mock loopback com retry 503→202; depende de runner UE5.8 |
 | **UE5 Dedicated Server Build** | `ue5-server-build.yml` | Push main em `Unreal/**` + manual | Build Linux dedicado e publicação opcional no GHCR |
 | **Auto Merge PR 48** | `Auto Merge PR 48` | Workflow histórico | Automação específica mantida no checkout; não contar como gate de produto |
 
@@ -1138,6 +1138,48 @@ Os workflows em `.github/workflows/` são acionados por push/PR conforme filtros
 - Validação de conventional commits
 - Review checklist UE5
 - Detecção de sobreposição com PRs de outros Devs
+
+### Smoke HTTP de telemetria Unreal → mock
+
+O workflow `ue5-headless-compile.yml` inicia um mock Python limitado a `127.0.0.1`, executa o Automation Test `Khaaos.Telemetry.HttpTransportIntegration` no `UnrealEditor-Cmd` e verifica a captura. O cenário do mock devolve `503` na primeira tentativa e `202` na segunda; o verificador exige o mesmo corpo e `Idempotency-Key` nas duas, schema `1`, autorização de teste válida, um evento e ausência do EOS ID bruto. A resposta 2xx também precisa ser observada pelo callback assíncrono do pipeline.
+
+Para validar somente o servidor mock e o contrato de captura sem instalar Unreal:
+
+```sh
+python3 -m unittest tests.python.test_telemetry_mock_backend -v
+```
+
+Para executar o smoke end-to-end localmente, compile primeiro o target Editor com UE 5.8 e defina `UE5_INSTALL_DIR`. Use apenas o token sintético abaixo; não passe credenciais de produção:
+
+```sh
+set -euo pipefail
+: "${UE5_INSTALL_DIR:?Defina o diretório do Unreal Engine 5.8}"
+MOCK_DIR="$(mktemp -d)"
+export KHAAOS_TELEMETRY_TOKEN="telemetry-integration-test-token"
+export KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE="$MOCK_DIR/capture.json"
+export KHAAOS_TELEMETRY_MOCK_READY_FILE="$MOCK_DIR/ready.json"
+export KHAAOS_TELEMETRY_MOCK_SCENARIO="retry-once"
+
+python3 scripts/telemetry_mock_backend.py > "$MOCK_DIR/server.log" 2>&1 &
+MOCK_PID=$!
+trap 'kill "$MOCK_PID" 2>/dev/null || true; rm -rf "$MOCK_DIR"' EXIT
+for _ in $(seq 1 50); do
+  [ -s "$KHAAOS_TELEMETRY_MOCK_READY_FILE" ] && break
+  sleep 0.2
+done
+export KHAAOS_TELEMETRY_TEST_URL="$(python3 -c 'import json,os; print(json.load(open(os.environ["KHAAOS_TELEMETRY_MOCK_READY_FILE"]))["url"])')"
+
+mkdir -p Unreal/KhaaosRun/Saved/AutomationReports
+"$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+  Unreal/KhaaosRun/KhaaosRun.uproject \
+  -NullRHI -unattended -nopause -nosplash \
+  -ExecCmds="Automation RunTest Khaaos.Telemetry.HttpTransportIntegration" \
+  -TestExit="Automation Test Queue Empty" \
+  -ReportExportPath="Unreal/KhaaosRun/Saved/AutomationReports" -log
+python3 scripts/verify_telemetry_mock_capture.py "$KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE"
+```
+
+O HTTP sem TLS e o bypass do requisito de dedicated server existem somente no caminho explícito `WITH_DEV_AUTOMATION_TESTS`, que recusa endpoints fora de `http://127.0.0.1:<porta>`. Builds de produção continuam exigindo HTTPS e dedicated server. O mock valida o contrato de transporte, não substitui uma rota backend real: a auditoria ainda não encontrou endpoint de ingestão de telemetria implementado no backend. O workflow publica o relatório Unreal e a captura sanitizada como artifacts; execução automática exige runner self-hosted com UE 5.8 e labels configuradas no workflow. Como o job executa código do checkout, configure runner efêmero/restrito, sem segredos de produção, e não use host persistente compartilhado para branches não confiáveis.
 
 **Limitações do gate atual:** `npm run test:coverage` gera cobertura localmente, mas ainda não é executado nem publicado como artefato pelo CI. O passo ESLint do workflow principal usa `|| true`, portanto o typecheck é bloqueante, mas o lint não é. Os workflows de compilação UE5 exigem runner self-hosted/UE5.8 ou infraestrutura equivalente; sua existência não comprova build executado.
 

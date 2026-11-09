@@ -186,6 +186,13 @@ public:
         UPROPERTY(BlueprintAssignable, Category = "Khaaos|Telemetry")
         FOnTelemetryFlushed OnTelemetryFlushed;
 
+#if WITH_DEV_AUTOMATION_TESTS
+        /** Enable a real FHttpModule request only to a validated 127.0.0.1 endpoint. */
+        bool EnableAutomationHttpTest(const FString& LoopbackEndpoint);
+        void DisableAutomationHttpTest(const FString& RestoreAnalyticsUrl);
+        int32 GetAutomationAcknowledgedEventCount() const { return AutomationAcknowledgedEventCount; }
+#endif
+
 private:
 
         /** Serialized batch retained until the backend acknowledges it. */
@@ -248,4 +255,9 @@ private:
 
         /** Prevent callbacks from creating new retries during subsystem teardown. */
         bool bIsShuttingDown = false;
+
+#if WITH_DEV_AUTOMATION_TESTS
+        bool bAutomationHttpTestEnabled = false;
+        int32 AutomationAcknowledgedEventCount = 0;
+#endif
 };
