@@ -2,6 +2,7 @@
 // ===============================================
 //   GET /metrics   → exposição Prometheus (text/plain; version=0.0.4)
 //   GET /healthz   → health check agregado (PostgreSQL + serviço 2PC)
+//   GET /readyz    → readiness dinâmica de PostgreSQL + Redis
 //
 // /metrics é consumido pelo Prometheus (job `khaaos-economy-api`,
 // monitoring/prometheus.yml) e alimenta os painéis 2PC do dashboard
@@ -10,8 +11,10 @@
 // /healthz cobre o diagnóstico "postgres/health": ping direto no PostgreSQL
 // (SELECT 1 com latência) + health do serviço 2PC (escrows por status).
 // Retorna 503 quando o banco está indisponível (pronto para probes k8s).
+// /readyz consulta PostgreSQL e Redis; retorna 503 se uma dependência obrigatória falhar.
 
 import type { Express } from "express";
+import { registerReadinessRoute } from "./readiness";
 import { pool } from "../db";
 import { economy2pcService } from "../game/economy2pcService";
 import {
@@ -157,10 +160,12 @@ async function checkEconomy2PC(): Promise<HealthzCheck> {
 }
 
 /**
- * Registra /metrics e /healthz. Deve ser chamado ANTES das demais rotas
+ * Registra /metrics, /healthz e /readyz. Deve ser chamado ANTES das demais rotas
  * (observability não depende de auth nem de sessão).
  */
 export function registerMetricsRoutes(app: Express): void {
+  registerReadinessRoute(app);
+
   app.get("/metrics", async (_req, res) => {
     // Gate herdado do M3 (staging SRE): KR_METRICS_ENABLED=0 desliga a
     // exposição pública inteira (econômica e HTTP/WS/DB juntas).

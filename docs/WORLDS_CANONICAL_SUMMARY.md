@@ -1,6 +1,6 @@
 # KHAAOS RUN — Resumo Canônico dos Mundos
 
-> Atualizado em 2026-11-05 após a reconciliação end-to-end do catálogo, servidor, console web e runtime 3D.
+> Atualizado em 2026-11-06 após a reconciliação end-to-end do catálogo, servidor, console web e runtime 3D.
 
 ## Regra operacional vigente
 
@@ -22,6 +22,18 @@ O contrato compartilhado está centralizado em `shared/worlds.ts`:
 | 2 | `Priadus` | `W2` | A Floresta da Escuridão | 100 | 10 min |
 | 3 | `Ckesalth` | `W3` | O Deserto das Almas Esquecidas | 100 | 10 min |
 | 4 | `Arukheea` | `W4` | A Ilha dos Gritos Calados | 100 | 10 min |
+
+### Multiplicadores de progressão
+
+Os cenários do runtime espelham `krcMultiplier` e `xpMultiplier` de `shared/worlds.ts`. KRC/XP base são multiplicados server-side tanto no simulador offline quanto na sala autoritativa online:
+
+| Mundo | KRC | XP |
+|---|---:|---:|
+| CIGKV | 0,50× | 1,00× |
+| Barburhen | 1,00× | 1,25× |
+| Priadus | 1,50× | 1,50× |
+| Ckesalth | 2,25× | 2,00× |
+| Arukheea | 3,50× | 3,00× |
 
 A progressão permanece sequencial: CIGKV é desbloqueado por padrão; Barburhen exige a conclusão inicial; Priadus, Ckesalth e Arukheea continuam sujeitos às regras de extração definidas no catálogo de `shared/worlds.ts`.
 

@@ -561,12 +561,17 @@ jobs:
           for attempt in $(seq 1 40); do
             body=$(curl --fail --silent --show-error --max-time 15 \
               "$service_url/healthz.json" 2>/dev/null || true)
+            readiness=$(curl --fail --silent --show-error --max-time 15 \
+              "$service_url/readyz" 2>/dev/null || true)
             if [[ -n "$body" ]] && jq -e --arg commit "$EXPECTED_COMMIT" \
-              '.status == "ok" and .commit == $commit' >/dev/null <<<"$body"; then
-              echo "Render is healthy on commit $EXPECTED_COMMIT (attempt $attempt)"
+              '.status == "ok" and .commit == $commit' >/dev/null <<<"$body" \
+              && [[ -n "$readiness" ]] && jq -e \
+              '.ready == true and .checks.postgres.status == "ok" and .checks.redis.status == "ok"' \
+              >/dev/null <<<"$readiness"; then
+              echo "Render is ready on commit $EXPECTED_COMMIT (PostgreSQL + Redis, attempt $attempt)"
               exit 0
             fi
-          echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
+            echo "Waiting for Render commit $EXPECTED_COMMIT and database/cache readiness (attempt $attempt/40)"
             sleep 15
           done
           echo "::error::Render did not become healthy on the expected commit within 10 minutes"

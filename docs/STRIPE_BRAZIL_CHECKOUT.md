@@ -12,9 +12,9 @@
 
 ## Taxa de alistamento U$1 via Stripe (Task 44, 2026-11-04)
 
-A taxa de alistamento (U$1,00 = 100 KRC de preço canônico, fluxo do #252/Fase 47.1) agora tem caminho REAL atrás de gate fail-closed, em `server/payments/enrollmentFeePayment.ts`:
+A taxa de alistamento proposta de US$ 1,00 (fluxo do #252/Fase 47.1) tem integração Stripe somente em modo de teste atrás de gates fail-closed, em `server/payments/enrollmentFeePayment.ts`:
 
-- **Gate:** só liga com `ENROLLMENT_FEE_GATEWAY=stripe` **e** a mesma config test-only deste doc (`KRC_CHECKOUT_ENABLED=true`, `sk_test_`, `whsec_`, `PUBLIC_ORIGIN`) **e** `ENROLLMENT_STORE=postgres`. Sem qualquer um, o caminho simulado do #252 segue intacto (default).
+- **Gate:** só liga com `ENROLLMENT_FEE_GATEWAY=stripe` **e** a mesma configuração test-only deste documento (`KRC_CHECKOUT_ENABLED=true`, `sk_test_`, `whsec_`, `PUBLIC_ORIGIN`) **e** `ENROLLMENT_STORE=postgres`. Sem configuração elegível, o endpoint falha fechado com `503 PAYMENT_PROVIDER_NOT_CONFIGURED`; não há simulação de pagamento por padrão. Confirmação sintética existe apenas em testes explicitamente opt-in e fora de `NODE_ENV=production`.
 - **Fluxo:** `POST /api/enrollment/fee` cria Checkout Session test-only (moeda `usd`, 100 centavos, card-only) e devolve `feeStatus=GATEWAY_PENDING` — nada é marcado como pago. O webhook `checkout.session.completed` (mesmo endpoint, roteado por `metadata.kind=enrollment_fee`) grava o double-entry no SSOT e só então conclui a sessão (guard financeiro do #252: ledger antes do estado).
 - **Idempotência:** chave Stripe determinística por (protocolo, Idempotency-Key do cliente) + dedup de webhook por `(provider, event_id)` + unique do ledger por `(user_id, idempotency_key, line)` — replay nunca paga nem credita duas vezes.
 - **Deliberado:** moeda `usd`/card-only nesta entrega. Pix no Stripe é doméstico BRL — precificar a taxa em BRL/Pix exige decisão de produto do titular (mesma pendência de elegibilidade do §Pix).

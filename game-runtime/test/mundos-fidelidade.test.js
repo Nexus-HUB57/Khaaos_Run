@@ -39,7 +39,7 @@ test('README 1:1 — setores canônicos por mundo', () => {
 test('README 1:1 — DINÂMICA ambiental de cada Ring', () => {
   // W1 "Água da Morte": chuva ácida (id-gated no sim) + multiplicadores do mundo
   assert.equal(SCENARIOS.BARBURHEN.survival, undefined);
-  assert.equal(SCENARIOS.BARBURHEN.krcMultiplier, 1.5);
+  assert.equal(SCENARIOS.BARBURHEN.krcMultiplier, 1.0);
   // W2 "Emboscada Verde": neblina com esporos tóxicos pune atraso (teto 90 m)
   assert.equal(SCENARIOS.PRIADUS.survival.type, 'SPORE_FOG');
   assert.equal(SCENARIOS.PRIADUS.survival.sporeTopY, 90);

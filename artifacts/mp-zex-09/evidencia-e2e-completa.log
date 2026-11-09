@@ -1,0 +1,76 @@
+[MP-ZEX-09] Servidor isolado local em :8842 (capacidade 2, zero bots).
+[MP-ZEX-09] Duas contas autenticadas.
+[MP-ZEX-09] Mesma sala ring3d-1; partida em andamento.
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] Ambos no alcance de interação dos seus terminais.
+[MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
+[MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 127 ms (117–171 ms).
+[MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
+[MP-ZEX-09] Fase 3: RTT medido 130–401 ms (média 195 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.72 s, atraso visual 40 ms (bound 530 ms), estado converge pós-drain.
+[MP-ZEX-09] RELATÓRIO: {
+  "link_fase2_interrupcao": {
+    "up": {
+      "frames": 9,
+      "spikes": 0,
+      "minMs": 42.6,
+      "avgMs": 71.1,
+      "p95Ms": 94.5,
+      "maxMs": 94.5
+    },
+    "down": {
+      "frames": 46,
+      "spikes": 1,
+      "minMs": 35.3,
+      "avgMs": 74,
+      "p95Ms": 91.6,
+      "maxMs": 292.7
+    },
+    "effectiveRttMs": 145.1
+  },
+  "link_fase3_conclusao": {
+    "up": {
+      "frames": 7,
+      "spikes": 0,
+      "minMs": 38.3,
+      "avgMs": 75.8,
+      "p95Ms": 94.8,
+      "maxMs": 94.8
+    },
+    "down": {
+      "frames": 139,
+      "spikes": 3,
+      "minMs": 35.3,
+      "avgMs": 87.3,
+      "p95Ms": 284.8,
+      "maxMs": 368
+    },
+    "effectiveRttMs": 163.2
+  },
+  "rtt_medido": {
+    "fase2": {
+      "minMs": 117,
+      "medianMs": 127,
+      "avgMs": 134,
+      "maxMs": 171
+    },
+    "fase3": {
+      "minMs": 130,
+      "medianMs": 146,
+      "avgMs": 195,
+      "maxMs": 401
+    }
+  },
+  "atraso_visual_B_para_A_ms": 40,
+  "canal_server_side_s": {
+    "fase1_normal": 3.97,
+    "fase3_degradada": 3.72
+  },
+  "xp_por_conclusao": {
+    "baseline_normal": 250,
+    "degradada": 250
+  },
+  "perda_modelada": "TCP não descarta quadros; ~2% modelados como picos de retransmissão +200–400 ms"
+}
+[MP-ZEX-09] MP-ZEX-09 PASS: autoridade do servidor, recompensa única, convergência pós-drain e interrupção limpa sob RTT/jitter/perda.
