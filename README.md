@@ -136,6 +136,8 @@ O próximo nível de qualidade está formalizado no perfil hero: pele em camadas
 
 O gate engine-less valida a estrutura e os parâmetros, mas não declara realismo visual. Topologia, morph targets, materiais de olhos/boca, deformação, LOD, screenshots e métricas GPU continuam exigindo o runner UE5.8 licenciado.
 
+O Editor pode criar/atualizar os `SubsurfaceProfile`, aplicar radius/strength de SSS e gravar anisotropia/fluxo de cabelo com [`configure_cigkv_sss_anisotropy.py`](scripts/ue5_editor/configure_cigkv_sss_anisotropy.py). O fluxo está detalhado no [guia de configuração UE5.8](docs/UE58_EDITOR_SSS_ANISOTROPY_CONFIGURATION.md).
+
 ## Performance UE5.8 e FPS Live Action
 
 O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:

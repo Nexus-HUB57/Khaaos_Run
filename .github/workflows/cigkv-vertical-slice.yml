@@ -33,7 +33,7 @@ jobs:
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
-          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/validate_cigkv_avatar_realism.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/validate_cigkv_avatar_realism.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py scripts/ue5_editor/configure_cigkv_sss_anisotropy.py
       - name: Validate hero avatar realism contract
         run: |
           mkdir -p artifacts/cigkv-vertical-slice
@@ -88,6 +88,11 @@ jobs:
       - name: Validate Subsurface Profiles and hair anisotropy in Editor
         run: |
           mkdir -p artifacts/cigkv-vertical-slice
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
+            -unattended -nop4 -nosplash -nullrhi=false \
+            -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/configure_cigkv_sss_anisotropy.py" \
+            -log
+          test -s artifacts/cigkv-vertical-slice/material-configuration-report.json
           "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
             -unattended -nop4 -nosplash -nullrhi=false \
             -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/validate_cigkv_materials.py" \

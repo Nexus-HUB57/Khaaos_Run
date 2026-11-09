@@ -35,6 +35,22 @@
       "EmissiveIntensity": {"default": 0.0, "min": 0.0, "max": 8.0}
     }
   },
+  "shader_tuning": {
+    "subsurface": {
+      "model": "SubsurfaceProfile",
+      "use_screen_space_sss": true,
+      "radius_units": "centimeters",
+      "human_skin": {"strength": 0.32, "radius": 1.15, "color": [1.0, 0.42, 0.32]},
+      "zheers_skin": {"strength": 0.48, "radius": 1.45, "color": [0.35, 0.62, 0.72]}
+    },
+    "hair": {
+      "model": "StrandsOrCardsAnisotropy",
+      "anisotropy_range": [0.55, 0.82],
+      "flow_texture_channel": "R",
+      "hair_flow_strength": 1.0
+    },
+    "microdetail": {"detail_normal_strength": 0.85, "roughness_variation": 0.13, "mip_bias": -0.5}
+  },
   "hero_realism": {
     "skin": {
       "maps": ["basecolor_2k", "normal_2k", "detail_normal_2k", "roughness_2k", "specular_2k", "subsurface_mask_2k", "micro_pore_2k"],
