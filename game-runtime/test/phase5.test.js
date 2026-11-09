@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { MatchRoom3D } from '../server/room3d.js';
 import { validateInput3D } from '../server/antiCheat.js';
 import { KhaaosSim3D, DEFAULT_INPUT, DBNO, knockActor } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const DT = 1 / 20;
@@ -35,6 +36,10 @@ test('fase5 sim: agachar reduz a velocidade à metade e aparece no estado do ato
   const a = new KhaaosSim3D({ seed: 'P5-CROUCH-A', botCount: 0, airdrop: false });
   const b = new KhaaosSim3D({ seed: 'P5-CROUCH-A', botCount: 0, airdrop: false });
   a.start('belt'); b.start('belt');
+  disembarcarSim(a); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(b); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(a); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(b); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(DEFAULT_INPUT.crouch, false, 'DEFAULT_INPUT expõe crouch desligado');
   const sx = a.player.x, sz = a.player.z;
   // mesmo yaw, terreno aberto: 60 passos andando de pé vs agachado
@@ -52,6 +57,7 @@ test('fase5 sim: agachar reduz a velocidade à metade e aparece no estado do ato
 test('fase5 sim: sprint é cancelado pelo agachamento (agachar tem prioridade)', () => {
   const s = new KhaaosSim3D({ seed: 'P5-SPRINT', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   s.step({ ...idle(), seq: 1, dy: -1, sprint: true, crouch: true }, STEP);
   assert.equal(s.player.sprinting, false, 'sprint não se aplica agachado');
   assert.equal(s.player.crouching, true);
@@ -63,11 +69,13 @@ test('fase5 sim: sprint é cancelado pelo agachamento (agachar tem prioridade)',
 test('fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)', () => {
   const s = new KhaaosSim3D({ seed: 'P5-AIR', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   // no salto, o salto prevalece: o ator sai do chão e o sprint/agachar não combinam
   s.step({ ...idle(), seq: 1, jump: true, crouch: true }, STEP);
   assert.ok(!s.player.onGround, 'ator no ar após o salto');
   const drop = new KhaaosSim3D({ seed: 'P5-AIR-DROP', botCount: 0, airdrop: true }); // airdrop legado explícito
   drop.start('belt');
+  disembarcarSim(drop); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(drop.player.dropPhase, 'sky');
   drop.step({ ...idle(), seq: 1, crouch: true }, STEP);
   assert.equal(drop.player.crouching, false, 'em queda não agacha (reset pela fase de queda)');
@@ -78,6 +86,7 @@ test('fase5 sim: agachamento não tem efeito na queda (airdrop reseta o estado)'
 test('fase5 sim: bots engajam uns aos outros quando são os alvos mais próximos', () => {
   const s = new KhaaosSim3D({ seed: 'P5-BVB', botCount: 3, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   // jogador longe (fora do alcance de visão) e bots 01/02 colados numa área aberta
   const spawn = s.world.playerSpawn;
   const x0 = spawn.x, z0 = spawn.z;
@@ -98,6 +107,7 @@ test('fase5 sim: bots engajam uns aos outros quando são os alvos mais próximos
 test('fase5 sim: com spectate a partida continua após a eliminação e termina com matchEnd', () => {
   const s = new KhaaosSim3D({ seed: 'P5-SPEC', botCount: 4, airdrop: false, spectate: true });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   // Simula o primeiro dano do anel e confirma a eliminação só após o deadline.
   knockActor(s.player, null, 'ring');
   let eliminated = null, steps = 0;
@@ -126,6 +136,7 @@ test('fase5 sim: com spectate a partida continua após a eliminação e termina 
 test('fase5 sim: sem spectate, Game Over só encerra após o timeout DBNO', () => {
   const s = new KhaaosSim3D({ seed: 'P5-LEGACY', botCount: 2, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   knockActor(s.player, null, 'ring');
   for (let i = 0; i < Math.ceil(DBNO.bleedOutSeconds / STEP) + 2 && s.player.alive; i++) s.step({ ...idle(), seq: i + 1 }, STEP);
   assert.equal(s.player.alive, false);
@@ -136,6 +147,7 @@ test('fase5 sim: sem spectate, Game Over só encerra após o timeout DBNO', () =
 test('fase5 room: input agachado move mais devagar e replica crouching nos snapshots', () => {
   const room = makeRoom({ humans: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   const x1 = p1.x, z1 = p1.z, x2 = p2.x, z2 = p2.z;
@@ -158,6 +170,7 @@ test('fase5 room: input agachado move mais devagar e replica crouching nos snaps
 test('fase5 room: bots replicam crouching=false e aceitam input crouch booleano no anti-cheat', () => {
   const room = makeRoom({ humans: 1, botFill: 3 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const snap = room.snapshot('p1');
   for (const o of snap.others) assert.equal(o.crouching, false);
   const prev = { seq: 0, yaw: 0, x: 0 };
@@ -172,6 +185,7 @@ test('fase5 room: bots replicam crouching=false e aceitam input crouch booleano 
 test('fase5 room: humano eliminado permanece na sala e a partida segue até o último vivo', () => {
   const room = makeRoom({ humans: 1, botFill: 4 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   // Inicia DBNO e verifica a eliminação autoritativa e individual ao expirar.
   knockActor(p1, null, 'ring');
@@ -206,6 +220,7 @@ test('fase5 room: humano eliminado permanece na sala e a partida segue até o ú
 test('fase5 room: sala vazia (todos desconectaram) encerra para liberar recursos', () => {
   const room = makeRoom({ humans: 2, botFill: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.removePlayer('p1');
   room.removePlayer('p2');
   room.tick(DT);

@@ -226,6 +226,13 @@ export class NetClient3D {
     this.socket.send(JSON.stringify({ type: 'start', entry }));
   }
 
+  // Task 53 — salto de porta do trem do ZU (entrada oficial): o servidor valida
+  // a janela das portas e aplica a pose pura compartilhada (zero confiança).
+  sendDoorJump() {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'door_jump' }));
+  }
+
   // Fase 7 — sala privada: cria sala squad e devolve código de convite
   createPrivate() {
     if (this.socket?.readyState !== WebSocket.OPEN) return;

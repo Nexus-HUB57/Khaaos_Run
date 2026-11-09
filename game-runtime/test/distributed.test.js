@@ -25,6 +25,7 @@ import {
 } from '../server/distributed.js';
 import { MatchRoom3D, AOI_ENTER_M, AOI_EXIT_M, AOI_PROJECTILE_M } from '../server/room3d.js';
 import { createDependencyHealth } from '../server/health.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -248,6 +249,7 @@ test('M3: AOI — snapshot por observador recorta por distância com histerese e
   room.addPlayer('p1', 'viewer');
   room.addPlayer('p2', 'far');
   room.start('p1');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p1.x = 0; p1.z = 0;

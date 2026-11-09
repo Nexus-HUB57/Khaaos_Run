@@ -23,6 +23,7 @@ import { RARITIES, WEAPONS, LOOT_POOLS, rollLoot, attachmentsForDrop } from '../
 import { deathBoxContents } from '../src/game3d/gear3d.js';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { SeededRng } from '../src/shared/rng.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // ---- shim de canvas 2D (padrão da suíte) — entidades procedurais em Node ----
 const ctx2d = {
@@ -235,6 +236,7 @@ test('F30 · caixa de morte herda a AR-47 com os anexos (matou, herdou TUDO)', (
 test('F30 · sim: AR-47 de série com anexos produz pente alongado (40 → 55)', () => {
   const s = new KhaaosSim3D({ seed: 'F30-MAG', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   // loot sintético: AR-47 LENDÁRIA com os 4 anexos de série (gramática do pool)
   s.loot.push({ id: 'ar47', kind: 'weapon', name: 'Fuzil de Assalto AR-47', rarity: 'LENDARIO',
@@ -257,6 +259,7 @@ test('F30 · sim: AR-47 de série com anexos produz pente alongado (40 → 55)',
 test('F30/31 · sim: anexo avulso instala na arma em mão; anexos seguem o jogador', () => {
   const s = new KhaaosSim3D({ seed: 'F30-ATT', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   // AR-47 nua via loot sintético (mesma gramática do #interact)
   s.loot.push({ id: 'ar47', kind: 'weapon', name: 'Fuzil de Assalto AR-47', rarity: 'RARO',
@@ -300,6 +303,7 @@ test('F30/31 · sim: anexo avulso instala na arma em mão; anexos seguem o jogad
 test('F31 · sim: M4 de série com mag estendida enche 45; pistola escala +8', () => {
   const s = new KhaaosSim3D({ seed: 'F31-M4MAG', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   s.loot.length = 0;  // isolamento: só o loot sintético existe no mundo
   s.loot.push({ id: 'm4', kind: 'weapon', name: 'Fuzil de Assalto M4', rarity: 'LENDARIO',
@@ -329,6 +333,7 @@ test('F31 · sim: M4 de série com mag estendida enche 45; pistola escala +8', (
 test('F30 · sim: abate com a skin MÍTICA evolui o estágio e emite evento', () => {
   const s = new KhaaosSim3D({ seed: 'F30-MIT', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   s.world.colliders.length = 0; s.doors.length = 0;
   s.physicsWorld.colliders = s.world.colliders;
@@ -457,6 +462,7 @@ test('F32 · applyAttachments monta raridades (array/mapa) nos sockets; sem rari
 test('F32 · sim: skin MÍTICA da M4 evolui por abate (evento carrega a arma)', () => {
   const s = new KhaaosSim3D({ seed: 'F32-MIT-M4', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   s.world.colliders.length = 0; s.doors.length = 0;
   s.physicsWorld.colliders = s.world.colliders;
@@ -487,6 +493,7 @@ test('F32 · sim: skin MÍTICA da M4 evolui por abate (evento carrega a arma)', 
 test('F32 · sim: kit de arma MÍTICA nasce dourado; troca/bolso/caixa preservam raridades', () => {
   const s = new KhaaosSim3D({ seed: 'F32-RAR', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   s.loot.length = 0; // isolamento: só o loot sintético existe no mundo
   s.loot.push({ id: 'm4', kind: 'weapon', name: 'Fuzil M4', rarity: 'MITICA',
@@ -639,6 +646,7 @@ test('F34 · sucata rola a tabela completa (COMUM..MÍTICA, sem piso artificial)
 test('F34 · sim: pulse MÍTICO em mãos evolui por abate (Prisma Soberano)', () => {
   const s = new KhaaosSim3D({ seed: 'F34-MIT-PULSE', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   s.world.colliders.length = 0; s.doors.length = 0;
   s.physicsWorld.colliders = s.world.colliders;
@@ -760,6 +768,7 @@ test('F36 · fábricas 3D: SG-12 com bomba de madeira, MG-6 com caixa/bipé — 
 test('F36 · sim: SG-12 dispara 7 projéteis com cone próprio (jogador e bot)', () => {
   const s = new KhaaosSim3D({ seed: 'F36-PELLETS', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   s.world.colliders.length = 0; s.doors.length = 0;
   p.weapon = 'shotgun';
@@ -777,6 +786,7 @@ test('F36 · sim: SG-12 dispara 7 projéteis com cone próprio (jogador e bot)',
   // determinismo: mesma seed → mesmas 7 direções
   const s2 = new KhaaosSim3D({ seed: 'F36-PELLETS', botCount: 1, airdrop: false });
   s2.start('belt');
+  disembarcarSim(s2); // Task 53 — protocolo do trem cumprido antes do teste
   const p2 = s2.player;
   s2.world.colliders.length = 0; s2.doors.length = 0;
   p2.weapon = 'shotgun'; p2.ammoMag = 6; p2.cooldown = 0; p2.reloadT = 0;
@@ -792,6 +802,7 @@ test('F36 · sim: SHELL entra no teto de munição e a recarga da escopeta conso
   assert.equal(AMMO_CAP.SHELL, 32, 'teto do cartucho SHELL');
   const s = new KhaaosSim3D({ seed: 'F36-SHELL', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   s.world.colliders.length = 0; s.doors.length = 0;
   p.weapon = 'shotgun';
@@ -812,6 +823,7 @@ test('F36 · bot: SG-12 é upgrade legítimo (dano de referência × pellets) na
   // vence g19 (22) e m4 (31); LMG 26 vence g19 mas perde para m4 (anti-rebaixamento)
   const s = new KhaaosSim3D({ seed: 'F36-WANTS', botCount: 2, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = s.bots[0];
   bot.weapon = 'g19';
   // coleta real: dropa shotgun ao lado do bot e roda o step de sobrevivência
@@ -833,6 +845,7 @@ test('F36 · bot: SG-12 é upgrade legítimo (dano de referência × pellets) na
 test('F36 · sim: bot com SG-12 dispara a salva completa (7 chumbos por gatilho)', () => {
   const s = new KhaaosSim3D({ seed: 'F36-BOT-SG', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = s.bots[0];
   s.world.colliders.length = 0; s.doors.length = 0;
   bot.weapon = 'shotgun';

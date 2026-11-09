@@ -17,6 +17,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT, AMMO_CAP, WEAPONS3D } from '../src/game3d/sim3d.js';
 import { WEAPONS } from '../src/shared/weapons.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const idle = (yaw = 0, pitch = 0) => ({ ...DEFAULT_INPUT, yaw, pitch });
@@ -71,6 +72,7 @@ test('F33 · nome: arma preserva o nome do catálogo; não-armas compostos tipo 
 test('F33 · pickup de INSTÂNCIA: arma vem pelo weaponId (nunca fallback g19)', () => {
   const s = new KhaaosSim3D({ seed: 'F33-PICK', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   const weapon = s.loot.find((i) => i.kind === 'weapon' && i.weaponId && i.weaponId !== 'g19');
   assert.ok(weapon, 'seed F33-PICK precisa de 1 arma ≠ g19 no chão');
@@ -84,6 +86,7 @@ test('F33 · pickup de INSTÂNCIA: arma vem pelo weaponId (nunca fallback g19)',
 test('F33 · pickup de munição por instância: inventário na chave do catálogo + teto AMMO_CAP', () => {
   const s = new KhaaosSim3D({ seed: 'F33-AMMO', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   const ammo = s.loot.find((i) => i.kind === 'ammo');
   assert.ok(ammo, 'seed precisa de 1 drop de munição');
@@ -111,6 +114,7 @@ test('F33 · loot INTERIOR/MEZANINO: mesmo contrato — arma interior NÃO vira 
   const wInt = interior.find((i) => i.kind === 'weapon');
   if (wInt) {
     s.start('belt');
+    disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
     const p = s.player;
     p.x = wInt.x - .4; p.z = wInt.z; p.y = wInt.y;
     s.step({ ...idle(), interact: true }, STEP);
@@ -122,6 +126,7 @@ test('F33 · loot INTERIOR/MEZANINO: mesmo contrato — arma interior NÃO vira 
 test('F33 · bundles crus (deathBox/supplyDrop) seguem pegáveis pelo fallback || item.id', () => {
   const s = new KhaaosSim3D({ seed: 'F33-BOX', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   // isola o interact (só a caixa ativa); g19 (22 dmg) fixa a regra anti-
   // rebaixamento do #grantBundle: bundle só troca se o dano SUBIR
@@ -148,6 +153,7 @@ test('F33 · drop DUPLICADO: 2 instâncias do mesmo drop mantêm ids distintos (
   // força 2 drops idênticos (mesmo catálogo) e verifica ids/refs independentes
   const s = new KhaaosSim3D({ seed: 'F33-DUP', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   for (const it of s.loot) it.active = false;        // isola as 2 instâncias
   const a1 = { id: 'loot-dup-1', kind: 'ammo', ammoId: '5.56', name: '5.56 ×30', amount: 30, x: p.x + .4, z: p.z, y: .55, active: true };

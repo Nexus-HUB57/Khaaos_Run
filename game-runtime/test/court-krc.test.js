@@ -8,6 +8,7 @@ import { createPojService, KRC_POR_VEREDITO } from '../server/poj.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { TRAIN_INTRO_DURATION_MS, estimateClockOffset, serverElapsedMs } from '../src/shared/clock.js';
 import { FASES, MOTIVOS_CORTE_MARCIAL, VEREDITOS_CORTE_MARCIAL } from '../src/game3d/poj.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const mkService = async ({ balance = 0, enlistmentTotal = 2, cigkvTrigger = 1 } = {}) => {
   const economy = new Economy({ store: new Ledger() });
@@ -167,6 +168,7 @@ test('room3d: start anuncia o trem (matchStart.train) e o snapshot carrega o an�
   assert.equal(lobby.train, null); // antes do start não há trem
   const before = Date.now();
   assert.ok(room.start('p1', 'belt'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const after = Date.now();
   const snap = room.snapshot('p2');
   const evt = snap.events.find((e) => e.type === 'matchStart');
@@ -184,6 +186,7 @@ test('room3d: emitExternal entrega evento externo (court_verdict) ao alvo no sna
   room.addPlayer('p1', 'ALFA');
   room.addPlayer('p2', 'BRAVO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.snapshot('p1'); room.snapshot('p2'); // drena eventos do start
   assert.equal(room.emitExternal('ghost', 'court_verdict', { caseId: 'cm-x' }), false);
   assert.equal(room.emitExternal('p2', 'court_verdict', { caseId: 'cm-1', veredito: 'honras_de_guerra', krcDelta: 200 }), true);

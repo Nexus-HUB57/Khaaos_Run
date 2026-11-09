@@ -7,6 +7,7 @@ import { validateInput3D } from '../server/antiCheat.js';
 import { chooseRoom } from '../server/matchmaking.js';
 import { MatchRoom } from '../server/room.js';
 import { PULSE_INTERVAL, WEAPONS3D, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
 
@@ -28,6 +29,7 @@ test('room3d: lobby → start preenche bots, aplica entrada e emite matchStart',
   assert.equal(before.state, 'LOBBY');
   assert.equal(before.player.name, 'JOGADOR-1');
   assert.ok(room.start('p1', 'belt'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const after = room.snapshot('p1');
   assert.equal(after.state, 'IN_PROGRESS');
   assert.equal(after.player.armor, 60);
@@ -39,18 +41,23 @@ test('room3d: lobby → start preenche bots, aplica entrada e emite matchStart',
   assert.ok(events.some((e) => e.type === 'matchStart'));
   // start repetido é ignorado (sala já iniciada)
   assert.equal(room.start('p2', 'rush'), false);
+  disembarcarSala(room, 'p2'); // Task 53 — protocolo do trem cumprido antes do teste
 });
 
 test('room3d: start exige entrada válida e sala em lobby', () => {
   const room = makeRoom({ humans: 1 });
   assert.equal(room.start('p1', 'teleport'), false);
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.start('ghost', 'belt'), false);
+  disembarcarSala(room, 'ghost'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.start('p1', 'rush'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
 });
 
 test('room3d: movimento com input do humano (frente = -Z com yaw 0)', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const z0 = room.humans.get('p1').z;
   for (let i = 0; i < 30; i++) {
     room.input('p1', blankInput({ seq: i + 1, dy: -1 }));
@@ -64,6 +71,7 @@ test('room3d: movimento com input do humano (frente = -Z com yaw 0)', () => {
 test('room3d: colisão mantém ator dentro do mundo e fora de colliders', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.x = 197; p.z = 197; // borda (limite = 198)
   for (let i = 0; i < 60; i++) {
@@ -76,6 +84,7 @@ test('room3d: colisão mantém ator dentro do mundo e fora de colliders', () => 
 test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
   const room = makeRoom({ humans: 3 }); // p3 observador do killfeed
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   const krcBefore = p1.krc;
@@ -108,6 +117,7 @@ test('room3d: tiro mata alvo com crédito, xp/krc, killfeed e eventos', () => {
 test('room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando alto', () => {
   const room = makeRoom({ humans: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p2.armor = 0;
@@ -126,6 +136,7 @@ test('room3d: headshot multiplicado (×1.75) — abate a queima-roupa mirando al
 test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.x = 195; p.z = 0; // fora do anel inicial (170)
   const r0 = room.ring.radius;
@@ -144,6 +155,7 @@ test('room3d: zona pulsa, encolhe e causa dano fora do anel', () => {
 test('room3d: coleta de loot e extração em terminal ZEX', () => {
   const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const item = room.loot.find((i) => i.active);
   p.x = item.x; p.z = item.z; p.y = 0;
@@ -172,6 +184,7 @@ test('room3d: coleta de loot e extração em terminal ZEX', () => {
 test('room3d: MP-ZEX-10 porta vence loot e terminal quando os alcances empatam', () => {
   const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1'), t = room.terminals[0];
   const item = room.loot.find((i) => i.active), door = room.doors[0];
   assert.ok(item && door, 'fixture precisa de loot e porta');
@@ -195,6 +208,7 @@ test('room3d: MP-ZEX-10 porta vence loot e terminal quando os alcances empatam',
 test('room3d: MP-ZEX-10 loot vence terminal quando os alcances empatam', () => {
   const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1'), t = room.terminals[0];
   const item = room.loot.find((i) => i.active);
   assert.ok(item, 'fixture precisa de loot');
@@ -217,6 +231,7 @@ test('room3d: MP-ZEX-10 loot vence terminal quando os alcances empatam', () => {
 test('room3d: terminal ZEX fica reservado, cancela por movimento e pode ser retomado', () => {
   const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (const item of room.loot) item.active = false;
   const t = room.terminals[0];
   const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
@@ -248,6 +263,7 @@ test('room3d: terminal ZEX fica reservado, cancela por movimento e pode ser reto
 test('room3d: dano recebido cancela canal ZEX sem conceder XP', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (const item of room.loot) item.active = false;
   const p = room.humans.get('p1'), t = room.terminals[0];
   p.x = t.x; p.z = t.z;
@@ -269,6 +285,7 @@ test('room3d: MP-ZEX-07 nocaute cancela o canal, libera o terminal e outro jogad
   room.addPlayer('p1', 'CAÇADOR');
   room.addPlayer('p2', 'RETAKE');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (const item of room.loot) item.active = false;
   const t = room.terminals[0];
   const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
@@ -313,6 +330,7 @@ test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal
   room.addPlayer('p1', 'VÍTIMA');
   room.addPlayer('p2', 'TESTEMUNHA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (const item of room.loot) item.active = false;
   const t = room.terminals[0];
   const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
@@ -351,6 +369,7 @@ test('room3d: MP-ZEX-07 ciclo nocaute→morte: um único cancelamento e terminal
 test('room3d: MP-ZEX-07 fim de partida cancela todos os canais sem XP nem reserva órfã', () => {
   const room = makeRoom({ humans: 2, botFill: 0 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (const item of room.loot) item.active = false;
   const t = room.terminals[0];
   const p1 = room.humans.get('p1');
@@ -374,6 +393,7 @@ test('room3d: MP-ZEX-07 fim de partida cancela todos os canais sem XP nem reserv
 test('room3d: recarga conserva munição de reserva', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   p.ammoMag = 0;
   room.input('p1', blankInput({ seq: 1, reload: true }));
@@ -391,6 +411,7 @@ test('room3d: recarga conserva munição de reserva', () => {
 test('room3d: bots se movem, engajam e atiram em humanos', () => {
   const room = makeRoom({ humans: 1, botFill: 6 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.bots.length, 6);
   const p = room.humans.get('p1');
   // coloca bot 1 ao lado do humano para engajamento rápido
@@ -410,6 +431,7 @@ test('room3d: bots se movem, engajam e atiram em humanos', () => {
 test('room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos drenados uma vez', () => {
   const room = makeRoom({ humans: 3, botFill: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const s1 = room.snapshot('p1');
   assert.equal(s1.mode, '3d');
   assert.equal(s1.roomId, 'ring3d-test');
@@ -424,6 +446,7 @@ test('room3d: snapshot filtrado — sem inventory/ai de terceiros e eventos dren
 test('room3d: remoção de jogador emite killfeed e limpa eventos', () => {
   const room = makeRoom({ humans: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.removePlayer('p2');
   assert.equal(room.humans.has('p2'), false);
   const events = room.drainEvents('p1');
@@ -433,6 +456,7 @@ test('room3d: remoção de jogador emite killfeed e limpa eventos', () => {
 test('room3d: vitória por tempo e encerramento da sala', () => {
   const room = makeRoom({ humans: 2, botFill: 2 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.time = 0.02;
   room.tick(DT);
   assert.equal(room.state, 'FINISHED');
@@ -445,6 +469,7 @@ test('room3d: vitória por tempo e encerramento da sala', () => {
 test('room3d: partida termina quando só resta um ator vivo', () => {
   const room = makeRoom({ humans: 1, botFill: 3 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   for (const b of room.bots) b.alive = false;
   room.tick(DT);
@@ -506,6 +531,7 @@ test('matchmaking: chooseRoom só agrupa clientes do mesmo modo', () => {
 test('room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (predição)', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const z0 = p.z;
   // 5 inputs enfileirados; 1º tick processa até 3
@@ -524,6 +550,7 @@ test('room3d: fila de inputs processa em ordem e snapshot expõe ackSeq (prediç
 test('room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorados', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p = room.humans.get('p1');
   const z0 = p.z;
   // rajada: 50 inputs de uma vez (spam de rede)
@@ -542,6 +569,7 @@ test('room3d: rajada de inputs é limitada (anti-speedhack) e duplicados ignorad
 test('room3d: rtt reportado no input é armazenado com clamp', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   room.input('p1', blankInput({ seq: 1, rtt: 180 }));
   room.tick(DT);
   assert.equal(room.humans.get('p1').rtt, 180);
@@ -553,6 +581,7 @@ test('room3d: rtt reportado no input é armazenado com clamp', () => {
 test('room3d: lag compensation acerta alvo na posição rebobinada que o atirador via', () => {
   const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-1' });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1'); // atirador (rtt alto)
   const p2 = room.humans.get('p2'); // vítima em movimento
   p1.cooldown = 0; p1.rtt = 400;             // 400ms de RTT → rewind ≈ 11 ticks
@@ -584,6 +613,7 @@ test('room3d: lag compensation NÃO acerta posição presente quando alvo já sa
   // vítima nunca esteve na linha de tiro: rewind = presente, nenhum hit
   const room = makeRoom({ humans: 2, botFill: 0, seed: 'LAGCOMP-2' });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p1.yaw = -Math.PI / 2; // mira leste
@@ -591,7 +621,9 @@ test('room3d: lag compensation NÃO acerta posição presente quando alvo já sa
   p2.x = p1.x + 4; p2.z = p1.z;
   for (let i = 0; i < 6; i++) { room.input('p1', blankInput({ seq: i + 1 })); room.tick(DT); }
   p2.x = p1.x + 4; p2.z = p1.z + 90; // vítima ao NORTE da linha leste
-  for (let i = 0; i < 8; i++) { room.input('p1', blankInput({ seq: 10 + i })); room.tick(DT); }
+  // Task 53 — 30 ticks: a linha leste SAI do buffer de rewind (26) — a intenção
+  // do teste (alvo fora do rewind) fica incontestável
+  for (let i = 0; i < 30; i++) { room.input('p1', blankInput({ seq: 10 + i })); room.tick(DT); }
   const life0 = p2.life;
   room.input('p1', blankInput({ seq: 50, yaw: -Math.PI / 2, fire: true }));
   room.tick(DT);

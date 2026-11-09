@@ -23,6 +23,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // Fase 42 — PULSO KHAAOS do CIGKV (Protocolo CIGKV do README): KHAOS_GRAVITY
 // interval 120 s, dano 12/s, âncoras raio 28 em
@@ -36,6 +37,7 @@ function exposedBotRoom(t) {
   const room = new MatchRoom3D({ id: `env-death-${t}`, seed: `ENV-DEATH-${t}`, capacity: 2, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   room.quantumTimer = 120; // dispara a anomalia no próximo tick
   return room;
 }
@@ -85,6 +87,7 @@ test('room3d: vítima HUMANA da anomalia recebe 7 s de DBNO antes de eliminated'
   assert.ok(room.addPlayer('v', 'VITIMA-QUANTUM'));
   assert.ok(room.addPlayer('w', 'SOBREVIVENTE'));
   assert.ok(room.start('v', 'belt'));
+  disembarcarSala(room, 'v'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.humans.get('v');
   victim.armor = 0; victim.temporaryArmor = 0; victim.life = 0.05;
   victim.x = 60; victim.z = 60;
@@ -121,6 +124,7 @@ test('room3d: caído (DBNO) dentro do campo é FINALIZADO pela anomalia', () => 
 test('sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)', () => {
   const sim = new KhaaosSim3D({ seed: 'ENV-BOT', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = sim.bots[0];
   bot.armor = 0; bot.temporaryArmor = 0; bot.life = 0.05;
   bot.x = 60; bot.z = 60;
@@ -138,6 +142,7 @@ test('sim offline: bot morto pela anomalia vira espólio + botKill (sem DBNO)', 
 test('sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador', () => {
   const sim = new KhaaosSim3D({ seed: 'ENV-CREDIT', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = sim.bots[0];
   bot.armor = 0; bot.temporaryArmor = 0; bot.life = 0.05;
   bot.x = 60; bot.z = 60;
@@ -155,6 +160,7 @@ test('sim offline: crédito via lastHitBy — kill + XP/KRC para o jogador', () 
 test('sim offline: PLAYER ferido pela anomalia mantém DBNO 7 s, depois eliminated + espólio', () => {
   const sim = new KhaaosSim3D({ seed: 'ENV-PLAYER', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const p = sim.player;
   p.armor = 0; p.temporaryArmor = 0; p.life = 0.05;
   p.x = 60; p.z = 60;
@@ -175,6 +181,7 @@ test('sim offline: PLAYER ferido pela anomalia mantém DBNO 7 s, depois eliminat
 test('sim offline: blindagem absorve e âncora protege — SEM morte espúria', () => {
   const sim = new KhaaosSim3D({ seed: 'ENV-SAFE', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const p = sim.player;
   p.temporaryArmor = 0; p.armor = 500; p.life = 100;
   p.x = 60; p.z = 60;
@@ -185,6 +192,7 @@ test('sim offline: blindagem absorve e âncora protege — SEM morte espúria', 
 
   const anchored = new KhaaosSim3D({ seed: 'ENV-ANCHOR', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   anchored.start('belt');
+  disembarcarSim(anchored); // Task 53 — protocolo do trem cumprido antes do teste
   anchored.player.armor = 0; anchored.player.temporaryArmor = 0; anchored.player.life = 0.05;
   anchored.player.x = 0; anchored.player.z = 0; // NEXUS, raio 28
   anchored.quantumTimer = 120;
