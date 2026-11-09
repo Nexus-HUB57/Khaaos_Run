@@ -1246,3 +1246,21 @@ Work Log:
 Stage Summary:
 - O killfeed da transmissão agora reconhece o MUNDO como fonte letal: a morte pela anomalia Khaaos (e por anel/hazards) percorre o protocolo DBNO de 7 s completo, aparece como 'ANOMALIA'/'ANEL' na plateia (online e offline) e NÃO paga crédito/economia/discord — a regra "jogador mata jogador" ganhou a terceira parte que faltava: "o mundo mata também"; abate por jogador 100% intocado (gate de regressão)
 - Estado: main `c9c952a` (base db240d1 + este PR) · CI de main 0 fail · root: oficial 0 falhas + integração 142/150 (6 env DB pré-existentes) · game-runtime 985/1013 (19 infra pré-existentes) · bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*; 0 runners; MP-ZEX-08/09/10/11)
+
+
+## Task ID: 52
+**Agent:** Main
+**Task:** "criar PR e atualizar repo" — MP-ZEX-09 em ambiente isolado (partida real sob RTT/jitter/perda em 1 cliente) end to end + re-sincronização do repo local
+
+Work Log:
+- RE-SINCRONIZAÇÃO: main local b55b0b5→22f9c5c (28 commits, PRs #288–#309); branch local docs/p0-human-revalidation-1105 apagada (conteúdo já merged via #288); remota já inexistente
+- AUDITORIA DA FILA: bloqueios humanos inalterados (EULA 404, 0 secrets EOS_*, 0 runners; environment "staging" SEM secrets — workflow do MP-ZEX-08 falha na validação desde #299, nunca executou de verdade); frente gráfica/UX web confirmada no main (F34–F40); item executável real da matriz MP-ZEX: o cenário de rede degradada do MP-ZEX-09, pendente "em ambiente isolado" conforme docs/FASE43
+- MP-ZEX-09 (scripts/run-mp-zex-09-degraded.mjs): servidor autoritativo REAL local (createAuthoritativeServer, sala capacidade 2 = 0 bots, navegação determinística), 2 clientes WS reais por inputs de gameplay (mesma doutrina do 08: zero debug/teleporte); DegradedLink (scripts/mp-zex-09-link.mjs) aplica RTT 130 ms nominal (65±30 por sentido) + perda ~2% modelada como picos de retransmissão +200–400 ms (TCP não descarta quadros) a UM cliente, com RTT medido (ping/pong, mediana) reportado no input → lag compensation real da Fase 3
+- 3 FASES: (1) B rede normal — interrupção limpa (terminal libera sem XP, extractCancelled preservado) + conclusão baseline D=+250 XP, canal 3,97 s medido por ESTADO do servidor; (2) A degradado — interrupção: link morre com quadros em voo, NADA ressuscita o canal, zero XP/extração; (3) A degradado — conclusão: XP == D (250, recompensa única), atraso visual B→A 56–185 ms dentro do bound p95, pós-drain estado de A converge com B
+- 4 BUGS CAÇADOS E CORRIGIDOS NO CAMINHO: (a) jitter+setTimeout fracionário furava a ordem FIFO (libuv trunca ms) → fila com timer serializado por direção; (b) heap de A* transcrito do 08 SEM a linha heap[i]=tail do sift-down drenava a busca ("sem rota" fantasma — o script do 08 nunca rodou de verdade, CI falha nos secrets) → MinHeap com trocas; (c) eventos de jogo (extract/extractCancelled) NÃO são mensagens WS: #emitTo enfileira por humano e o snapshot DRENA snapshot.events a cada tick; (d) resume exige close prévio (sessão gravada no handler de close) e queda DURANTE o canal deixa interactLatch preso — primeira tecla E pós-resume engolida (registrado, não alterado; o script re-pressiona como jogador real)
+- TESTES: game-runtime/test/mp-zex-09-link.test.js (4 regressões: ordem sob jitter, spike de perda contado, drain/pendências, close descarta); suíte completa game-runtime 1097/1084 pass/0 fail/13 skipped; E2E MP-ZEX-09 PASS ×4 consecutivos; evidência em artifacts/mp-zex-09/evidencia-e2e-completa.log
+- CI: .github/workflows/mp-zex-09-degraded.yml (PR paths room3d/server.js/cenário + dispatch; roda servidor isolado, SEM secrets — verde por construção, ao contrário do 08); docs/FASE43_PLANO_TESTES_MULTIPLAYER_REAL.md ganhou a seção "MP-ZEX-09 em ambiente isolado" com limites honestos (staging com 2 dispositivos reais segue pendente dos secrets)
+
+Stage Summary:
+- A matriz MP-ZEX avança: 08 automatizado contra staging (aguardando secrets) e 09 agora VALIDADO em ambiente isolado com partida real — autoridade do servidor, recompensa única e convergência pós-degradação provadas por E2E repetível no CI; bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*/staging; 0 runners)
+- Estado: base 22f9c5c · game-runtime 1097 testes 0 fail · link 4/4 · E2E 4× PASS · docs+worklog atualizados

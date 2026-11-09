@@ -171,6 +171,27 @@ test("F47 — campos F42 específicos (sporeTopY/smokeTopY/submergeBelowY/gravit
   }
 });
 
+test("F47 — multiplicadores de KRC e XP do runtime batem com o catálogo compartilhado", () => {
+  for (const id of Object.keys(KHAAOS_WORLDS) as WorldId[]) {
+    const world = KHAAOS_WORLDS[id];
+    const scenario = SCENARIOS[SCENARIO_KEY[id]] as typeof SCENARIOS[keyof typeof SCENARIOS] & {
+      krcMultiplier?: number;
+      xpMultiplier?: number;
+    };
+
+    assert.equal(
+      scenario.krcMultiplier,
+      world.krcMultiplier,
+      `${id}: runtime krcMultiplier deve seguir shared/worlds.ts`,
+    );
+    assert.equal(
+      scenario.xpMultiplier,
+      world.xpMultiplier,
+      `${id}: runtime xpMultiplier deve seguir shared/worlds.ts`,
+    );
+  }
+});
+
 test("F47 — CIGKV KHAOS_GRAVITY tem 4 âncoras canônicas (NEXUS/NORTH/EAST/WEST)", () => {
   const cigkv = KHAAOS_WORLDS.CIGKV.hazard;
   assert.ok(Array.isArray(cigkv.anchors), "CIGKV: hazard.anchors deve ser array");
