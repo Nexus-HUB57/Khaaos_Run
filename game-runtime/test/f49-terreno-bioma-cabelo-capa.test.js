@@ -206,3 +206,9 @@ test('orçamento de polígonos sobrevive ao cabelo/capa (≤ 6500 tris por ator)
     assert.ok(tris >= 2500, `${v}: ${tris} tris — detalhe anatômico presente`);
   }
 });
+
+test('margem de segurança do cabelo: SORO permanece ≥ 90 tris abaixo do gate', () => {
+  const { group } = createOperative({ vest: '#b3542e', variant: 'OP_MIL_FEMALE_SORO' });
+  const tris = Math.round(trisOf(group));
+  assert.ok(tris <= 6410, `SORO: ${tris} tris; margem esperada ≥ 90`);
+});

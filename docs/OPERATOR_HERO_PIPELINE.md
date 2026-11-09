@@ -4,6 +4,25 @@
 
 O asset gerado ainda não está disponível: a operação 3D exige 91 créditos e a conta possui 82. Nenhum crédito foi consumido e nenhum `.fbx` foi criado. O pipeline de integração já está preparado em `game-runtime/src/game3d/hero3d.js` e permanece opt-in; o personagem procedural continua sendo o fallback oficial.
 
+## Alinhamento com o documento canônico de modelagem
+
+Este pipeline segue o contrato de produção definido em `Epic Games/IMPLEMENTACAO_GRAFICA/KHAAOS_RUN_Modelagem_3D_Revisao_Tecnica.docx`, especialmente o fluxo **briefing aprovado → fonte DCC → validação → export intermediário → transformação por destino → validação pós-transformação → importação → validação in-engine → cook → teste em aparelho**. O `.blend` e as texturas de autoria continuam sendo a fonte-mestre; FBX/glTF são derivados versionados por `source_sha256`, receita, toolchain e perfil de destino.
+
+O documento canônico usa a escala de autoria como referência e recomenda budgets por erro projetado. Para o runtime Three.js atual, a ponte operacional é explícita: o hero DCC pode chegar a 120k triângulos, mas o asset de gameplay full permanece em **≤6.500 triângulos**, o proxy em **≤900** e a silhouette em **≤200**, com no máximo 12 draw calls no hero full. A escala ilustrativa do documento canônico (`24k → 12k → 6k → 3k`) é uma hipótese de produção e não substitui a medição do runtime; qualquer redução deve ser aprovada por silhueta, deformação, materiais, sockets e frame time.
+
+### Plano de implementação sincronizado — Operator Hero
+
+1. **Manifesto e fonte:** registrar `asset_id`, revisão, unidade `1 m`, eixos `+Y/-Z`, pivôs `hip=0.84` e `neck/head=1.68`, hashes da fonte DCC, receita de export, materiais, sockets e colisores.
+2. **Blockout humano:** validar proporções, sexo, idade, biotipo, centro de massa, mãos, pés, hitbox e leitura a 3 m/15 m/30 m antes de adicionar detalhe.
+3. **Sculpt e retopologia:** esculpir crânio, rosto, mãos e roupa; retopologizar com loops contínuos de pálpebra, nariz, boca, mandíbula, pescoço, ombro, cotovelo, punho, quadril, joelho e tornozelo.
+4. **UV e materiais:** criar UVs por região, atlas de pele/roupa/equipamento e mapas mipados por plataforma; detalhes menores que não alteram a silhueta devem migrar para normal, roughness, decalque ou máscara.
+5. **Rig e deformação:** aplicar o esqueleto humanoide do contrato, no máximo 4 influências no corpo e 2 em acessórios deformáveis, bind/T-pose, sockets estáveis, retarget por proporção e validação de pesos.
+6. **Cabelo e rosto:** produzir hair cards/groom com LOD, olhos com controles separados, blendshapes faciais básicos e corretivos de pálpebra, bochecha, lábio e pescoço.
+7. **Animação e IK:** integrar locomoção, mira, dano, queda, recuperação, foot planting, IK contextual e microexpressões; rejeitar foot sliding, joelho invertido, equipamento flutuante ou interseção.
+8. **Redução por destino:** gerar hero full, gameplay full, proxy e silhouette com redução por erro projetado; comparar o conjunto vestido, não somente o corpo isolado.
+9. **Integração opt-in:** carregar via `loadHeroOperative()`, manter o procedural como fallback e ativar o hero apenas após validação High/Medium/Low, 100 atores e smoke test de armas/câmera.
+10. **Aceite:** anexar evidências de round-trip, screenshots a 3/15/30 m, contagem de triângulos/draw calls, frame time, memória residente, testes de rede e checklist humano de semelhança.
+
 ## Contrato do asset-base
 
 - Arquivo esperado: `game-runtime/public/assets/models/operative_hero_base.fbx`
@@ -77,6 +96,32 @@ Militares, milícias, gangues e sobreviventes devem ser distinguíveis pela cons
 **Materiais e mapas PBR:** nylon laminado, tecidos elásticos, polímero reforçado, borracha de vedação, cerâmica fosca, metal anodizado e lentes com roughness controlada. Normal maps devem concentrar-se em trama, costuras, placas, trilhos, fechos e sensores; detalhes que não alteram a silhueta devem migrar para albedo, roughness ou decalque. Pequenas telas e indicadores não podem competir com o rosto nem iluminar o cenário de modo artificial.
 
 **Animação e leitura funcional:** movimentos de operadores especiais devem mostrar treinamento sem parecer robótico: transições rápidas, mas com desaceleração, transferência de peso, controle dos ombros e retorno do equipamento após cada ação. A pose de mira, corrida, queda e recuperação deve ser ajustada ao biotipo de cada avatar. Módulos rígidos seguem os bones de attachment; correias, tecidos e cabos usam deformação ou física limitada para evitar chicote visual e custo excessivo.
+
+## Especificação de shaders PBR — pele e cabelo
+
+### Pele do hero
+
+O material de pele deve usar um fluxo linear PBR com `metalness=0`, `ior≈1.40`, `specular` controlado por região e roughness não uniforme. O conjunto mínimo de texturas é `skin_albedo`, `skin_normal`, `skin_roughness`, `skin_subsurface` e `skin_cavity`; o canal alpha da máscara de subsurface pode reservar regiões para orelha, nariz, bochecha, lábio e ponta dos dedos. Albedo não deve carregar iluminação pintada, blush uniforme ou poros de alta frequência que virem ruído em baixa resolução.
+
+No hero full, aplicar normal de média frequência mais micro-normal procedural ou atlas, roughness na faixa aproximada de `0.38–0.72`, variação de oleosidade sutil na testa/nariz e máscara de espessura para orelhas, nariz e dedos. O subsurface deve ser uma aproximação móvel e limitada: diffuse wrap ou SSS de uma amostra com espessura, intensidade baixa e sem halo visível. No Three.js, implementar a variante hero por `onBeforeCompile`/shader patch sobre o material PBR existente; manter `MeshStandardMaterial` procedural como fallback seguro para tiers sem suporte.
+
+O shader deve calcular a luz em espaço linear, preservar normal maps em tangent space, usar a mesma exposição e tone mapping do mundo e receber `envMapIntensity` do perfil de iluminação. Sombras de contato e SSAO devem reforçar cavidades, não substituir o mapa de roughness. Pele molhada altera roughness e brilho especular por máscara ambiental temporária, mas não remove cicatrizes, manchas, poros ou desgaste persistente do albedo.
+
+### Cabelo
+
+O cabelo deve usar hair cards orientados por fluxo, textura de cor com alpha e normal/tangent coerentes. O material requer alpha test ou alpha hashed preferencialmente a blending transparente, `side=DoubleSide` somente quando necessário e `depthWrite` preservado no caminho hashed. A máscara deve ter borda suave sem transformar o penteado em uma placa cinza; cards próximos ao rosto recebem prioridade de densidade.
+
+No hero full, usar direção de fibra no tangent map, duas lobes especulares anisotrópicas aproximadas, roughness em torno de `0.35–0.60`, variação de cor por raiz/mecha e um mapa de `flow` para orientar o brilho. O valor de shift de anisotropia deve ser parametrizado por penteado, com destaque estreito para cabelo liso e mais quebrado para cabelo crespo/cacheado. Não usar transparência aditiva nem emissivo no cabelo.
+
+No proxy, reduzir cards, desligar a segunda lobe especular e usar uma única textura compartilhada por família de penteado. Na silhouette, substituir cards por volume opaco ou cor de silhueta. A troca de tier deve manter a massa visual do penteado, evitar popping e não gerar overdraw incompatível com 100 jogadores.
+
+### Contrato de implementação e validação
+
+- `skin_albedo`: sRGB, sem sombras baked; `normal`, `roughness`, `subsurface`, `cavity` e `flow`: linear.
+- Mipmaps obrigatórios; compressão deve preservar alpha de cabelo e canais de máscara; proibir 4K em assets comuns sem evidência de pixels projetados.
+- Hero full pode usar shader patch com SSS/anisotropia; Medium usa uma amostra de subsurface e uma lobe capilar; Low usa PBR padrão sem SSS e cabelo simplificado.
+- Validar pele seca, molhada, sombra, contra-luz, interior e iluminação colorida; validar cabelo contra céu, fumaça, chuva e movimento.
+- Rejeitar material com aspecto plástico, subsurface leitoso, cabelo com halo branco, alpha sorting instável, normal invertida, mudança de cor por espaço sRGB incorreto ou custo que retire o frame budget do combate.
 
 ## Movimentação, animação e microexpressões
 
