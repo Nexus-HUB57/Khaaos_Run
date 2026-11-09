@@ -6,6 +6,8 @@ on:
       - 'Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/**'
       - 'Unreal/KhaaosRun/Content/Materials/CIGKV/**'
       - 'scripts/ue5/**'
+      - 'scripts/build/provision_ue58_gpu_runner.sh'
+      - 'scripts/build/ue58_gpu_diagnostic.py'
       - 'scripts/ue5_editor/**'
       - '.github/workflows/cigkv-vertical-slice.yml'
   workflow_dispatch:
@@ -30,7 +32,7 @@ jobs:
         run: |
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_character_slice.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
-          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5_editor/cigkv_vertical_slice.py
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py
       - name: Audit source mesh quality and provenance
         run: |
           mkdir -p artifacts/cigkv-vertical-slice
@@ -68,6 +70,22 @@ jobs:
         run: |
           test -x "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd"
           nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+          test "${CIGKV_GPU_RUNNER:-1}" = "1"
+      - name: Write GPU/UE5.8/Blender diagnostic
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          python3 scripts/build/ue58_gpu_diagnostic.py \
+            --ue-root "$UE5_ROOT" \
+            --output artifacts/cigkv-vertical-slice/ue58-gpu-diagnostic.json \
+            --require-gpu
+      - name: Validate Subsurface Profiles and hair anisotropy in Editor
+        run: |
+          mkdir -p artifacts/cigkv-vertical-slice
+          "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$UPROJECT" \
+            -unattended -nop4 -nosplash -nullrhi=false \
+            -run=pythonscript -script="$GITHUB_WORKSPACE/scripts/ue5_editor/validate_cigkv_materials.py" \
+            -log
+          test -s artifacts/cigkv-vertical-slice/material-validation-report.json
       - name: Normalize sources on the runner
         run: |
           mkdir -p Build/CIGKVVerticalSlice/Source artifacts/cigkv-vertical-slice

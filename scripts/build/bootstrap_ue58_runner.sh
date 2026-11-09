@@ -38,7 +38,7 @@ UE_VERSION="${UE_VERSION:-5.8.0}"
 ENGINE_DIR="${UE_INSTALL_DIR:-/opt/UnrealEngine}"
 RUNNER_DIR="${RUNNER_DIR:-/opt/actions-runner}"
 RUNNER_URL="${RUNNER_URL:-https://github.com/Nexus-HUB57/Khaaos_Run}"
-RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,x64,ue5.8,ue5}"
+RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,x64,ue5.8,ue5,gpu}"
 MIN_FREE_GB=250
 
 log() { printf '\n\033[1;36m[ue58-bootstrap]\033[0m %s\n' "$*"; }
@@ -130,6 +130,11 @@ phase_check() {
   [ -d "${RUNNER_DIR}/bin" ] && log "✅ runner instalado: ${RUNNER_DIR}" || log "❌ runner ausente (fase --runner)"
   [ -f "${RUNNER_DIR}/.runner" ] && log "✅ runner registrado em ${RUNNER_URL}" || log "❌ runner não registrado (RUNNER_TOKEN)"
   command -v dotnet >/dev/null 2>&1 && log "✅ dotnet $(dotnet --version 2>/dev/null | head -1)" || log "❌ dotnet ausente (fase --prereqs)"
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    log "✅ NVIDIA: $(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | head -1)"
+  else
+    log "❌ nvidia-smi ausente — runner não pode executar capturas GPU UE5.8"
+  fi
   log "teste rápido de compilação: bash ${ENGINE_DIR}/Engine/Build/BatchFiles/Build.sh KhaaosRunServer Linux Development -project=$(pwd)/Unreal/KhaaosRun/KhaaosRun.uproject"
   cat <<'EOF'
 
