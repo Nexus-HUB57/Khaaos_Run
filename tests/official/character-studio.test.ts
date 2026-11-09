@@ -5,7 +5,10 @@ import {
   KHAAOS_MILITIA_ARCHETYPES,
   buildOperativePromptBundle,
 } from "../../shared/character-studio";
-import { OPERATIVE_AVATAR_OPTIONS } from "../../shared/operative-avatar-catalog";
+import {
+  OPERATIVE_AVATAR_OPTIONS,
+  getOperativeAvatarRuntime,
+} from "../../shared/operative-avatar-catalog";
 import { EP555_RANKS, SPECIALIZATION_IDS } from "../../shared/schema";
 import { WORLD_ORDER } from "../../shared/worlds";
 
@@ -170,4 +173,20 @@ test("Character Studio: 17 Arquivos SVG de Avatares gerados e sincronizados (Con
   assert.ok(base, "Manifest contains CHR_Zheers_Base");
   assert.equal(base.skeleton, "SK_Manny", "preview rig da espécie Zheers é SK_Manny");
   assert.ok(!JSON.stringify(manifest).includes("UE5_Mannequin"), "nenhum resíduo do placeholder UE5_Mannequin no manifest");
+});
+
+test("Avatar runtime: projeção server-side é determinística e usa o rig canônico por sexo", () => {
+  for (const option of OPERATIVE_AVATAR_OPTIONS) {
+    const runtime = getOperativeAvatarRuntime(option.id);
+    assert.equal(runtime.id, option.id);
+    assert.equal(runtime.avatarPath, option.avatarPath);
+    assert.equal(runtime.gender, option.gender);
+    assert.equal(runtime.skeleton, option.gender === "MASCULINO" ? "SK_Manny" : "SK_Gwen");
+    assert.equal(runtime.branch, option.branch);
+    assert.equal(runtime.ueAssetId, option.ueAssetId);
+  }
+
+  const fallback = getOperativeAvatarRuntime("unknown-client-value");
+  assert.equal(fallback.id, "OP_MALE_VANGUARD");
+  assert.equal(fallback.skeleton, "SK_Manny");
 });

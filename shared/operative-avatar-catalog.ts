@@ -6,6 +6,10 @@ export interface OperativeAvatarOption {
   fullName: string;
   gender: OperativeGender;
   rank: string;
+  /** Canonical UE character asset; supplemental avatars may be SVG-only. */
+  ueAssetId: string | null;
+  /** ADR-ESQUELETO-RIG-POR-SEXO runtime skeleton. */
+  skeleton: "SK_Manny" | "SK_Gwen";
   avatarPath: string;
   canonical: boolean;
   /** Facção declarada: militares canônicos, milícias e gangues urbanas (Lote 4). */
@@ -13,6 +17,19 @@ export interface OperativeAvatarOption {
 }
 
 type OperativeGender = "MASCULINO" | "FEMININO";
+
+export interface OperativeAvatarRuntime {
+  id: string;
+  codename: string;
+  fullName: string;
+  gender: OperativeGender;
+  rank: string;
+  ueAssetId: string | null;
+  skeleton: "SK_Manny" | "SK_Gwen";
+  avatarPath: string;
+  canonical: boolean;
+  branch: OperativeFaction;
+}
 
 function avatarPath(id: string, gender: OperativeGender): string {
   const folder = gender === "MASCULINO" ? "male" : "female";
@@ -31,6 +48,8 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     fullName: operative.fullName,
     gender: operative.gender,
     rank: operative.rank,
+    ueAssetId: operative.ueAssetId,
+    skeleton: operative.biomechanics.skeleton,
     avatarPath: avatarPath(operative.id, operative.gender),
     canonical: true,
     branch: "MILITAR" as const,
@@ -41,6 +60,8 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     fullName: "Talon · Corredor Urbano M-09",
     gender: "MASCULINO",
     rank: "ZHEERS",
+    ueAssetId: null,
+    skeleton: "SK_Manny",
     avatarPath: avatarPath("OP_MALE_TALON", "MASCULINO"),
     canonical: false,
     branch: "MILITAR" as const,
@@ -51,6 +72,8 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     fullName: operative.fullName,
     gender: operative.gender,
     rank: operative.rank,
+    ueAssetId: operative.ueAssetId,
+    skeleton: operative.biomechanics.skeleton,
     avatarPath: avatarPath(operative.id, operative.gender),
     canonical: true,
     branch: operative.faction ?? ("MILITAR" as const),
@@ -68,4 +91,9 @@ export function isOperativeAvatarId(value: unknown): value is string {
 export function getOperativeAvatarOption(value: unknown): OperativeAvatarOption {
   return OPERATIVE_AVATAR_OPTIONS.find(({ id }) => id === value)
     ?? OPERATIVE_AVATAR_OPTIONS.find(({ id }) => id === DEFAULT_OPERATIVE_AVATAR_ID)!;
+}
+
+/** Stable wire/runtime projection derived only from the trusted catalog. */
+export function getOperativeAvatarRuntime(value: unknown): OperativeAvatarRuntime {
+  return getOperativeAvatarOption(value);
 }
