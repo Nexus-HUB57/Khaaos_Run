@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Khaaos Run procedural human face and body generation",
+  "determinism": {
+    "seedInputs": ["operativeId", "seed"],
+    "subSeeds": ["face", "body", "hair", "skin", "wear", "motion"],
+    "rule": "hash(operativeId + seed + subSeed); never use global randomness"
+  },
+  "defaults": {
+    "profile": "regular_force",
+    "sexPresentation": "unspecified",
+    "ageRange": [25, 40],
+    "bodyType": "athletic_medium",
+    "heightCm": 175,
+    "massKg": 75,
+    "muscleDefinition": 0.55,
+    "bodyFat": 0.20,
+    "limbProportion": 0.50,
+    "faceShape": "oval-angular",
+    "skinTone": "natural_reference",
+    "skinFeatures": ["subtle_pores", "natural_asymmetry", "under_eye_variation"],
+    "expressionBaseline": "calm_alert",
+    "variationBudget": { "face": 0.70, "body": 0.55, "wear": 0.40 }
+  },
+  "allowedValues": {
+    "bodyType": ["slim", "athletic_light", "athletic_medium", "athletic_heavy", "stocky", "compact", "tall_lean"],
+    "profiles": ["regular_force", "special_operator", "militia", "gang"],
+    "expressionBaseline": ["neutral", "calm_alert", "focused", "tired"],
+    "ageRangeAdultOnly": true,
+    "heightCm": [140, 220],
+    "massKg": [40, 180],
+    "muscleDefinition": [0.0, 1.0],
+    "bodyFat": [0.05, 0.55]
+  },
+  "prompts": {
+    "face": "Retrato de personagem humano adulto para um jogo de ação realista, identidade única e natural, referência de ancestralidade {ANCESTRY_REFERENCES}, apresentação de sexo {SEX_PRESENTATION}, faixa etária {AGE_RANGE}. Formato facial {FACE_SHAPE}, pele {SKIN_TONE} com {SKIN_FEATURES}, cabelo {HAIR_STYLE} de densidade {HAIR_DENSITY}, barba {FACIAL_HAIR}. Assimetria facial sutil e humana, poros e variação de pele realistas, olhos alinhados, pálpebras com volume, nariz e lábios anatomicamente coerentes, expressão-base {EXPRESSION_BASELINE}, iluminação neutra de estúdio, vista frontal e três quartos consistentes, fundo simples, sem maquiagem exagerada, sem caricatura, sem estereótipos étnicos.",
+    "body": "Corpo humano adulto completo, biotipo {BODY_TYPE}, altura aproximada {HEIGHT_CM} cm, massa aproximada {MASS_KG} kg, definição muscular {MUSCLE_DEFINITION}, gordura corporal {BODY_FAT}, proporção de membros {LIMB_PROPORTION}. Anatomia realista e funcional para corrida, agachamento, mira, queda e recuperação; centro de massa plausível, ombros, quadril, joelhos, mãos e pés bem formados, volumes naturais sob a roupa, postura relaxada em T-pose simétrica para rig. Malha limpa, mãos com dedos separados, rosto e pescoço contínuos, sem acessórios, sem arma e sem equipamento.",
+    "regular_force": "Avatar humano adulto de força regular oficialmente treinada, biotipo {BODY_TYPE}, aparência individual {FACE_AND_HAIR_VARIATION}, postura disciplinada porém relaxada, musculatura funcional sem exagero, uniforme padronizado reservado para a etapa de vestuário. A identidade facial permanece humana e distinta; a unidade não altera etnia, sexo ou personalidade do personagem.",
+    "special_operator": "Avatar humano adulto de operador especial, biotipo {BODY_TYPE}, mobilidade e condicionamento funcional, rosto {FACE_AND_HAIR_VARIATION}, postura pronta mas não rígida, mãos e ombros preparados para animações de precisão. Aparência humana individual, equipamento modular será adicionado separadamente, sem armadura exagerada, sem tecnologia cobrindo o rosto e sem anatomia de super-herói.",
+    "militia_or_gang": "Avatar humano adulto de {PROFILE}, biotipo {BODY_TYPE}, identidade facial única, vestuário será aplicado em etapa separada. Preservar assimetria natural, idade, ancestralidade de referência e proporções humanas. A facção deve ser comunicada depois por roupas, materiais, desgaste e símbolos ficcionais, nunca por etnia, sexo, corpo ou caricatura."
+  },
+  "negativePrompt": "cartoon, chibi, doll face, beauty filter, plastic skin, exaggerated muscles, unrealistic thinness, childlike proportions, deformed anatomy, asymmetrical eyes, crossed eyes, broken eyelids, fused fingers, missing fingers, extra limbs, duplicated face, open mouth with malformed teeth, floating parts, disconnected neck, stretched textures, ethnicity stereotype, racist caricature, sexualized uniform, extremist insignia, real criminal insignia, weapon, armor, props, logo, text, watermark, low-poly artifact, non-manifold mesh",
+  "generationRequirements": {
+    "candidatesPerIdentity": 3,
+    "adultOnly": true,
+    "frontAndThreeQuarterViews": true,
+    "neutralLighting": true,
+    "cleanBackground": true,
+    "noWeaponsOrProps": true,
+    "continuousFacialTopology": true,
+    "separatedFingers": true
+  },
+  "rejectionThresholds": {
+    "fullTrianglesMax": 120000,
+    "proxyTrianglesMax": 900,
+    "fullDrawCallsMax": 12,
+    "frameMs100Max": 33.3,
+    "footSlidingCmMax": 2.5,
+    "handAlignmentErrorCmMax": 3.0,
+    "footContactErrorCmMax": 2.0,
+    "criticalIntersections": 0,
+    "pivots": { "hips": 0.84, "neck": 1.68 }
+  },
+  "reviewPolicy": {
+    "humanApprovalRequired": true,
+    "rejectIf": ["stereotype", "sexualization", "childlike_proportions", "inhuman_anatomy", "function_or_moral_trait_inferred_from_sensitive_attribute"],
+    "sensitiveAttributesNeverGameplaySignals": ["ethnicity", "sex", "age", "bodyType", "skinTone"]
+  }
+}
