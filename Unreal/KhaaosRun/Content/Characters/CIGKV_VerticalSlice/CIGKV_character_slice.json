@@ -13,8 +13,8 @@
       "kind": "human",
       "species": "ZHEERS",
       "sex": "MASCULINO",
-      "source": "client/public/figures/glb/FIG_kane.glb",
-      "source_sha256": "a56d86e958af14a989cf668899837f97ef558e86a7ee1e2250ce93d2d2128dcc",
+      "source": "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01_RIGGED.glb",
+      "source_sha256": "34ed644943ec76a1236ba77dbfe42699a01444bc903d4325885fabfe1e72164b",
       "provenance": {
         "license_status": "unverified_internal_prototype",
         "commercial_use": false,
