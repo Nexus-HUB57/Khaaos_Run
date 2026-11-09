@@ -4,6 +4,8 @@
 **Base:** `origin/main` após PR #282
 **Escopo:** cadastro/login, alistamento e pagamento, liberação de acesso, marco de 1.000.000, Academia KR e agendamento do CIGKV.
 
+**Atualização 2026-11-07:** o PR #287 (`feat(auth): add local email/password registration and login`) foi mesclado à `main` em 2026-11-05. O código local de cadastro/login agora está na branch principal; SMTP comprovado em caixa real/staging e operação pública continuam pendentes. As linhas abaixo registram o snapshot e as evidências da revisão original de 5/11.
+
 ## Resultado executivo
 
 A Jornada Oficial está especificada como alvo de produto, mas **não está implementada end-to-end nem pronta para lançamento**. Esta atualização implementa a conta própria por email/senha no código (migração, endpoints, interface e testes), mantendo OIDC; porém o cadastro local permanece fechado até configurar e provar a entrega SMTP em staging. Checkout ainda não é BRL/live, pagamento não funciona como gate transversal e não há contador/entitlement/outbox/agendamento global conectados ao marco EXCO.

@@ -2,7 +2,7 @@
 
 **Um Jogo · Uma Chance · Um Legado**
 
-> Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.
+> Plataforma Battle Royale multi-mundo com possibilidade futura de recompensa de referência de até **US$ 1.000.000**, condicionada a regras e aprovações próprias; não é oferta, promessa ou garantia atual.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
 > **Nível Devs Ph.D** — 97 PRs mesclados no GitHub (snapshot 2026-10-26) · 108 arquivos `.cpp` + 107 headers · 46.843 linhas no escopo-fonte UE5 · 16 workflows versionados · IaC Terraform · Fases 0–5 em estados distintos de implementação e aceite
@@ -14,6 +14,7 @@
 - [Status do Projeto](#status-do-projeto)
 - [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
 - [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
+- [Runner GPU UE5.8 e validação de materiais](#runner-gpu-ue58-e-validação-de-materiais)
 - [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
 - [Desenvolvimento recente — CIGKV + Barburhen](#desenvolvimento-recente--cigkv--barburhen-pr-45)
@@ -117,6 +118,12 @@ O ciclo pós-PR adiciona uma auditoria engine-less para distinguir fontes de pro
 O resultado engine-less não substitui a revisão de silhueta, deformação, clipping, cabelo, roupa, sockets, LOD, PBR, Lumen, Nanite ou GPU. Esses itens continuam exigindo Blender 4.x e um runner UE5.8 licenciado.
 
 ---
+
+## Runner GPU UE5.8 e validação de materiais
+
+O provisionamento está separado em diagnóstico, instalação e registro: `scripts/build/provision_ue58_gpu_runner.sh` exige `nvidia-smi` quando `GPU_REQUIRED=1`, usa os labels `ue5.8` e `gpu`, injeta `UE5_ROOT` no runner e não imprime tokens. `scripts/build/ue58_gpu_diagnostic.py` publica evidência JSON de GPU, UE5.8 e Blender 4.x.
+
+No Editor, `scripts/ue5_editor/validate_cigkv_materials.py` verifica o master material, parents, Subsurface Profiles, parâmetros de SSS, anisotropia e fluxo de cabelo antes da matriz de screenshots. Consulte o [guia do runner e da validação de materiais](docs/UE58_GPU_RUNNER_AND_MATERIAL_VALIDATION.md).
 
 ## Performance UE5.8 e FPS Live Action
 

@@ -1246,3 +1246,40 @@ Work Log:
 Stage Summary:
 - O killfeed da transmissão agora reconhece o MUNDO como fonte letal: a morte pela anomalia Khaaos (e por anel/hazards) percorre o protocolo DBNO de 7 s completo, aparece como 'ANOMALIA'/'ANEL' na plateia (online e offline) e NÃO paga crédito/economia/discord — a regra "jogador mata jogador" ganhou a terceira parte que faltava: "o mundo mata também"; abate por jogador 100% intocado (gate de regressão)
 - Estado: main `c9c952a` (base db240d1 + este PR) · CI de main 0 fail · root: oficial 0 falhas + integração 142/150 (6 env DB pré-existentes) · game-runtime 985/1013 (19 infra pré-existentes) · bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*; 0 runners; MP-ZEX-08/09/10/11)
+
+
+## Task ID: 52
+**Agent:** Main
+**Task:** "criar PR e atualizar repo" — MP-ZEX-09 em ambiente isolado (partida real sob RTT/jitter/perda em 1 cliente) end to end + re-sincronização do repo local
+
+Work Log:
+- RE-SINCRONIZAÇÃO: main local b55b0b5→22f9c5c (28 commits, PRs #288–#309); branch local docs/p0-human-revalidation-1105 apagada (conteúdo já merged via #288); remota já inexistente
+- AUDITORIA DA FILA: bloqueios humanos inalterados (EULA 404, 0 secrets EOS_*, 0 runners; environment "staging" SEM secrets — workflow do MP-ZEX-08 falha na validação desde #299, nunca executou de verdade); frente gráfica/UX web confirmada no main (F34–F40); item executável real da matriz MP-ZEX: o cenário de rede degradada do MP-ZEX-09, pendente "em ambiente isolado" conforme docs/FASE43
+- MP-ZEX-09 (scripts/run-mp-zex-09-degraded.mjs): servidor autoritativo REAL local (createAuthoritativeServer, sala capacidade 2 = 0 bots, navegação determinística), 2 clientes WS reais por inputs de gameplay (mesma doutrina do 08: zero debug/teleporte); DegradedLink (scripts/mp-zex-09-link.mjs) aplica RTT 130 ms nominal (65±30 por sentido) + perda ~2% modelada como picos de retransmissão +200–400 ms (TCP não descarta quadros) a UM cliente, com RTT medido (ping/pong, mediana) reportado no input → lag compensation real da Fase 3
+- 3 FASES: (1) B rede normal — interrupção limpa (terminal libera sem XP, extractCancelled preservado) + conclusão baseline D=+250 XP, canal 3,97 s medido por ESTADO do servidor; (2) A degradado — interrupção: link morre com quadros em voo, NADA ressuscita o canal, zero XP/extração; (3) A degradado — conclusão: XP == D (250, recompensa única), atraso visual B→A 56–185 ms dentro do bound p95, pós-drain estado de A converge com B
+- 4 BUGS CAÇADOS E CORRIGIDOS NO CAMINHO: (a) jitter+setTimeout fracionário furava a ordem FIFO (libuv trunca ms) → fila com timer serializado por direção; (b) heap de A* transcrito do 08 SEM a linha heap[i]=tail do sift-down drenava a busca ("sem rota" fantasma — o script do 08 nunca rodou de verdade, CI falha nos secrets) → MinHeap com trocas; (c) eventos de jogo (extract/extractCancelled) NÃO são mensagens WS: #emitTo enfileira por humano e o snapshot DRENA snapshot.events a cada tick; (d) resume exige close prévio (sessão gravada no handler de close) e queda DURANTE o canal deixa interactLatch preso — primeira tecla E pós-resume engolida (registrado, não alterado; o script re-pressiona como jogador real)
+- TESTES: game-runtime/test/mp-zex-09-link.test.js (4 regressões: ordem sob jitter, spike de perda contado, drain/pendências, close descarta); suíte completa game-runtime 1097/1084 pass/0 fail/13 skipped; E2E MP-ZEX-09 PASS ×4 consecutivos; evidência em artifacts/mp-zex-09/evidencia-e2e-completa.log
+- CI: .github/workflows/mp-zex-09-degraded.yml (PR paths room3d/server.js/cenário + dispatch; roda servidor isolado, SEM secrets — verde por construção, ao contrário do 08); docs/FASE43_PLANO_TESTES_MULTIPLAYER_REAL.md ganhou a seção "MP-ZEX-09 em ambiente isolado" com limites honestos (staging com 2 dispositivos reais segue pendente dos secrets)
+
+Stage Summary:
+- A matriz MP-ZEX avança: 08 automatizado contra staging (aguardando secrets) e 09 agora VALIDADO em ambiente isolado com partida real — autoridade do servidor, recompensa única e convergência pós-degradação provadas por E2E repetível no CI; bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*/staging; 0 runners)
+- Estado: base 22f9c5c · game-runtime 1097 testes 0 fail · link 4/4 · E2E 4× PASS · docs+worklog atualizados
+
+---
+Task ID: 53
+Agent: main (Z.ai)
+Task: P0 end-to-end — despacho único MP-ZEX 08+09 em staging (2 sessões reais) + automação das pendências humanas (portal Epic/EULA, 7 secrets EOS, secrets de staging, runner UE5.8)
+
+Work Log:
+- Recon: main avançou (b55b0b5→9076019: #313 asset quality gates, #312 MP-ZEX-09 isolado, #309 readiness probes); branch test/mp-zex-08-staging e docs/p0-human-revalidation-1105 sem PR aberto; MP-ZEX-08 staging JÁ está no main (entrado via outro PR) — cherry-pick redundante abortado; CI main 33 success/9 skipped/0 fail (1 queued transitório)
+- DESPACHO ÚNICO: .github/workflows/mp-zex-staging.yml substitui mp-zex-08-staging.yml — um workflow_dispatch roda 08 (run-mp-zex-08-staging.mjs) e depois 09 (run-mp-zex-09-degraded.mjs em MODO REMOTO via KR_ZEX09_BASE_URL=KR_STAGING_BASE_URL, DegradedLink no cliente A: 65/65 ms ±30 jitter, 2% spikes) contra o MESMO staging (environment "staging"); jobs seriais (concurrency mp-zex-staging, cancel-in-progress false); gate de secrets: dispatch sem secrets = erro com nomes exatos, PR sem secrets = skip limpo com resumo (CI verde por construção); evidências viram artefatos (14 d) + step summary
+- Lib compartilhada game-runtime/scripts/mpzex-staging-env.mjs (validação extraída do 08: secrets obrigatórios, HTTPS fora de loopback, host stage/staging, contas distintas) + 7 regressões (test/mpzex-staging-env.test.js 7/7)
+- ROBUSTEZ 08: A* travava em quina de ruína x[92,102] z[-6.8,1.2] (folga de 0,25 m) — segmentClear com margem 0,55 m (PLAYER_R+folga, amostragem 0,4 m) + unstick estilo jogador (sidestep alternado + hop, máx 10 tentativas) + logs de progresso (pos/waypoint/vida) a cada 2,5 s
+- SELFTEST: game-runtime/scripts/mpzex-staging-selftest.mjs ensaia o despacho INTEIRO localmente (servidor autoritativo real isolado, capacidade 2 = 0 bots): 08 staging-path via loopback + 09 modo remoto → MPZEX_STAGING_SELFTEST_OK (exit 0); evidência artifacts/mp-zex-staging/selftest-2026-11-09.log (MP-ZEX-08 PASS + MP-ZEX-09 PASS: RTT mediano 114–122 ms, atraso visual 204 ms ≤ bound, XP única, convergência pós-drain)
+- P0 GATE: scripts/eos/p0_gate.mjs — auditoria única da ordem de execução (checklist §0.1): [A] probe EULA (GET /repos/EpicGames/UnrealEngine 404→200), [B] 7 secrets EOS_*, [S] 5 KR_STAGING_* no environment staging, [R] runner com labels self-hosted/linux/x64/ue5.8/ue5, [V] UE58_ENABLED/UE5_ROOT/UE5_WORLD_STRESS_COMMAND, [C] placeholders KHAOS_* no DefaultEOS.ini, [D] despacho presente; --strict/--json; leitura APENAS de NOMES (API não expõe valores); retrato ao vivo: A 404, B/S/R pendentes, V ✔, C pendente
+- SETUP: scripts/eos/setup_eos_secrets.sh (Fase B: 7 secrets via gh com valores por STDIN/env, EOS_ENCRYPTION_KEY gerado localmente, verificação de nomes, zero eco de valor); scripts/staging/setup_staging_secrets.sh (cria environment staging, gera senhas openssl, grava os 5, valida HTTPS/rotulagem); scripts/build/finish_ue58_runner.sh (pós-bootstrap: valida labels do runner via API + grava as 3 variáveis — cook deixa de ser skipped)
+- DOCS: docs/MPZEX_STAGING_DISPATCH.md (protocolo completo do despacho: pré-requisitos, KR_USERS_JSON, inputs, contratos, evidências, falhas comuns); EOS_PORTAL_CHECKLIST §0.1 ganhou coluna "Automação" + item 6b (staging); FASE43 ganhou seção "MP-ZEX 08+09 em staging — despacho único" (superfície manual restante: só MP-ZEX-10/11)
+
+Stage Summary:
+- "MP-ZEX-08/09 sobem para dois dispositivos reais num despacho só" agora é mecânica pronta: falta SÓ o humano executar setup_staging_secrets.sh com a URL do staging + provisionar 2 contas + despachar; P0 inteiro tem script de setup e auditoria única (p0_gate)
+- Estado: game-runtime tests mpzex-env 7/7 + link 4/4; selftest 08+09 exit 0; node --check em todos os scripts; CI main verde antes da PR

@@ -1,0 +1,120 @@
+{
+  "schema": "khaaos.cigkv.pbr-texture-sets/v1",
+  "generator": "scripts/ue5/generate_cigkv_pbr_textures.py",
+  "seed": 20261106,
+  "resolution": [
+    2048,
+    2048
+  ],
+  "sets": [
+    {
+      "material_set": "human_skin",
+      "resolution": [
+        2048,
+        2048
+      ],
+      "channels": {
+        "basecolor": "RGB",
+        "normal": "RGB tangent-space",
+        "orm": "R=AO,G=Roughness,B=Metallic",
+        "detail": "grayscale in RGB"
+      },
+      "seed": 20261106,
+      "files": {
+        "basecolor": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/human_skin/T_CIGKV_human_skin_BaseColor_2K.png",
+        "normal": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/human_skin/T_CIGKV_human_skin_Normal_2K.png",
+        "orm": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/human_skin/T_CIGKV_human_skin_ORM_2K.png",
+        "detail": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/human_skin/T_CIGKV_human_skin_Detail_2K.png"
+      },
+      "sha256": {
+        "basecolor": "72783f72895fe13b8ae687be9fcf02e7eebf0748d79d83a60dd97f8aa7b2e9ed",
+        "normal": "56a127761e55ecc818ed8fc654335e5b1fe0e94a5af965791654526c4441ca85",
+        "orm": "8ac178fa45854a7c4820fe7a697402864c67c2dfdc159afb201fd69757fcd5b0",
+        "detail": "d5091345779c425f01eca32cbc5012bd47b7abcd8e188bfc618b26f57d11f2ae"
+      }
+    },
+    {
+      "material_set": "zheers_skin",
+      "resolution": [
+        2048,
+        2048
+      ],
+      "channels": {
+        "basecolor": "RGB",
+        "normal": "RGB tangent-space",
+        "orm": "R=AO,G=Roughness,B=Metallic",
+        "detail": "grayscale in RGB"
+      },
+      "seed": 20261106,
+      "files": {
+        "basecolor": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/zheers_skin/T_CIGKV_zheers_skin_BaseColor_2K.png",
+        "normal": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/zheers_skin/T_CIGKV_zheers_skin_Normal_2K.png",
+        "orm": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/zheers_skin/T_CIGKV_zheers_skin_ORM_2K.png",
+        "detail": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/zheers_skin/T_CIGKV_zheers_skin_Detail_2K.png"
+      },
+      "sha256": {
+        "basecolor": "2f3f4b8f6ed084fd94d631b786bc43a3a2270a612a4b9fc2baa1ebeda6fccf95",
+        "normal": "b237895e0638e91ab68ad40fcb5bb691bff3282eb331635fcbd68f2990b952c0",
+        "orm": "eff048ec63823ca09b69e74692eb8d6359ba616e906780e8cc22fcea68174794",
+        "detail": "ee87384e7c4355fa5a2cb1b8242b0aae85ea2a6801e678e690e2ee7f092b2580"
+      }
+    },
+    {
+      "material_set": "cloth",
+      "resolution": [
+        2048,
+        2048
+      ],
+      "channels": {
+        "basecolor": "RGB",
+        "normal": "RGB tangent-space",
+        "orm": "R=AO,G=Roughness,B=Metallic",
+        "detail": "grayscale in RGB"
+      },
+      "seed": 20261106,
+      "files": {
+        "basecolor": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/cloth/T_CIGKV_cloth_BaseColor_2K.png",
+        "normal": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/cloth/T_CIGKV_cloth_Normal_2K.png",
+        "orm": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/cloth/T_CIGKV_cloth_ORM_2K.png",
+        "detail": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/cloth/T_CIGKV_cloth_Detail_2K.png"
+      },
+      "sha256": {
+        "basecolor": "07a9c7b0f30342654013f5fd2b6ca0c4308dd2ea2bfcf9dac84f1fa577af3b18",
+        "normal": "59eb4d37806a57307f353b805f2ab5b366396fa74f0c5ff1d32f76ef94b05b74",
+        "orm": "1ac3a6da20df5c00a9ac5f884b985a8060f6cbfce045e4386bb0d44d3096f67e",
+        "detail": "e7cfe4d130d74abd8fabf1d5b3aa44d9a55024dd91acfaf4d8cc25c4cc20794f"
+      }
+    },
+    {
+      "material_set": "hair",
+      "resolution": [
+        2048,
+        2048
+      ],
+      "channels": {
+        "basecolor": "RGB",
+        "normal": "RGB tangent-space",
+        "orm": "R=AO,G=Roughness,B=Metallic",
+        "detail": "grayscale in RGB"
+      },
+      "seed": 20261106,
+      "files": {
+        "basecolor": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/hair/T_CIGKV_hair_BaseColor_2K.png",
+        "normal": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/hair/T_CIGKV_hair_Normal_2K.png",
+        "orm": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/hair/T_CIGKV_hair_ORM_2K.png",
+        "detail": "Unreal/KhaaosRun/Content/Materials/CIGKV/Textures/hair/T_CIGKV_hair_Detail_2K.png"
+      },
+      "sha256": {
+        "basecolor": "64d0a29b7c36882984a9f8ca00868fae358179462aa4afe3e2bcc2e0862806a2",
+        "normal": "265f42225e71ae79f14e3f2bf98ab4cb8ecae81d43a678c6049386bd792369ae",
+        "orm": "df30e72e7df81d8003c3774a105c44d1193a6a05b4c763e8be7699ceee470f49",
+        "detail": "b93ab59769549777a043a1401848ab8242deab70bdae8563b79df8a4c0974ffc"
+      }
+    }
+  ],
+  "limitations": [
+    "procedural technical starting maps; not scanned skin or final art direction",
+    "must be reviewed in UE5.8 under day/night/interior lighting",
+    "must be re-authored or replaced if commercial provenance is not approved"
+  ]
+}

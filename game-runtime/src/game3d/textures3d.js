@@ -167,6 +167,18 @@ export const GROUND_BIOMES = Object.freeze({
 });
 export function groundBiomeParams(id) { return GROUND_BIOMES[id] ?? GROUND_BIOMES.CIGKV; }
 
+// F50 — assinatura PBR por mundo: o chão já possui textura própria; este
+// registro estende a mesma lógica às superfícies construídas, evitando que
+// neve, pântano, deserto e basalto compartilhem o mesmo brilho plástico.
+export const BIOME_SURFACE_PROFILES = Object.freeze({
+  CIGKV: Object.freeze({ concrete: .9, metal: .52, metalness: .38, asphalt: .86, env: .42 }),
+  Barburhen: Object.freeze({ concrete: .78, metal: .46, metalness: .48, asphalt: .58, env: .62 }),
+  Priadus: Object.freeze({ concrete: .96, metal: .64, metalness: .28, asphalt: .9, env: .34 }),
+  Ckesalth: Object.freeze({ concrete: .84, metal: .57, metalness: .5, asphalt: .78, env: .46 }),
+  Arukheea: Object.freeze({ concrete: .74, metal: .4, metalness: .58, asphalt: .68, env: .7 }),
+});
+export function biomeSurfaceProfile(id) { return BIOME_SURFACE_PROFILES[id] ?? BIOME_SURFACE_PROFILES.CIGKV; }
+
 // neve compactada com gelo e tufos secos pontuando (W1 Barburhen)
 // NOTA F49: só métodos presentes nos stubs de canvas dos testes (arc/lineTo...)
 // — sem rotate/ellipse, que não existem em todos os stubs legados.
@@ -332,7 +344,9 @@ function asphaltCanvas() {
   return c;
 }
 export function asphaltTexture(repeat = 6) { return tex(asphaltCanvas(), { repeat }); }
-export function asphaltMaterial(repeat = 6) { return pbr(asphaltCanvas(), { repeat, rough: .9, strength: 1.7 }); }
+export function asphaltMaterial(repeat = 6, biome = null) {
+  return pbr(asphaltCanvas(), { repeat, rough: biomeSurfaceProfile(biome).asphalt, strength: 1.7 });
+}
 
 // ---- nuvem (sprite com alpha procedural) ----
 export function cloudTexture() {
