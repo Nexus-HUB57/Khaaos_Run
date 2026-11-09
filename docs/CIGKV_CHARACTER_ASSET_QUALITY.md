@@ -35,6 +35,17 @@ O mínimo estrutural é 5.000 vértices, 5.000 triângulos, UV, material, imagem
 5. Exportar FBX, retargetar para Manny/Gwen e validar dedos, twist, IK e ações de combate.
 6. Importar no UE5.8, criar Physics Asset/Animation Blueprint/IK Retargeter/Material Instances e executar a matriz Low/Medium/High/Ultra.
 
+## Pacote PBR 2K gerado
+
+O script `scripts/ue5/generate_cigkv_pbr_textures.py` gera quatro conjuntos determinísticos de 2048×2048:
+
+- `human_skin`: BaseColor, Normal, ORM e Detail;
+- `zheers_skin`: BaseColor, Normal, ORM e Detail;
+- `cloth`: BaseColor, Normal, ORM e Detail;
+- `hair`: BaseColor, Normal, ORM e Detail.
+
+Os metadados e hashes ficam em `Unreal/KhaaosRun/Content/Materials/CIGKV/cigkv_pbr_texture_sets.json`. O comando `scripts/ue5/validate_cigkv_pbr_textures.py` verifica 16 arquivos, resolução, modo RGB, hash e associação com as instâncias `MI_CIGKV_*`. A validação atual passou; a flag `engine_import_pending` permanece verdadeira até o Editor UE5.8 importar os PNGs e validar o resultado sob luz de dia, noite e interior.
+
 ## Limitações honestas
 
 O auditor não mede topologia visual, qualidade de deformação, clipping, foot sliding, shader response, Lumen, Nanite, draw calls ou GPU. Esses critérios permanecem bloqueados até um runner com Blender 4.x e Unreal Engine 5.8 licenciado. Nenhum `.uasset`, `.umap` ou screenshot é criado pelo auditor.

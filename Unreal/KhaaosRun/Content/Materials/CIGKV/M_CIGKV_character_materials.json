@@ -22,6 +22,32 @@
       "EmissiveIntensity": {"default": 0.0, "min": 0.0, "max": 8.0}
     }
   },
+  "texture_sets": {
+    "human_skin": {
+      "basecolor": "Textures/human_skin/T_CIGKV_human_skin_BaseColor_2K.png",
+      "normal": "Textures/human_skin/T_CIGKV_human_skin_Normal_2K.png",
+      "orm": "Textures/human_skin/T_CIGKV_human_skin_ORM_2K.png",
+      "detail": "Textures/human_skin/T_CIGKV_human_skin_Detail_2K.png"
+    },
+    "zheers_skin": {
+      "basecolor": "Textures/zheers_skin/T_CIGKV_zheers_skin_BaseColor_2K.png",
+      "normal": "Textures/zheers_skin/T_CIGKV_zheers_skin_Normal_2K.png",
+      "orm": "Textures/zheers_skin/T_CIGKV_zheers_skin_ORM_2K.png",
+      "detail": "Textures/zheers_skin/T_CIGKV_zheers_skin_Detail_2K.png"
+    },
+    "cloth": {
+      "basecolor": "Textures/cloth/T_CIGKV_cloth_BaseColor_2K.png",
+      "normal": "Textures/cloth/T_CIGKV_cloth_Normal_2K.png",
+      "orm": "Textures/cloth/T_CIGKV_cloth_ORM_2K.png",
+      "detail": "Textures/cloth/T_CIGKV_cloth_Detail_2K.png"
+    },
+    "hair": {
+      "basecolor": "Textures/hair/T_CIGKV_hair_BaseColor_2K.png",
+      "normal": "Textures/hair/T_CIGKV_hair_Normal_2K.png",
+      "orm": "Textures/hair/T_CIGKV_hair_ORM_2K.png",
+      "detail": "Textures/hair/T_CIGKV_hair_Detail_2K.png"
+    }
+  },
   "instances": [
     {
       "name": "MI_CIGKV_Human_Skin",
@@ -30,6 +56,7 @@
       "roughness_multiplier": 0.92,
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.08,
+      "texture_set": "human_skin",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "detail_normal_2k"]
     },
     {
@@ -39,6 +66,7 @@
       "roughness_multiplier": 1.18,
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.0,
+      "texture_set": "cloth",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "fabric_detail_2k"]
     },
     {
@@ -49,6 +77,7 @@
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.12,
       "hair_anisotropy": 0.72,
+      "texture_set": "hair",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "hair_flow_2k"]
     },
     {
@@ -59,6 +88,7 @@
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.04,
       "emissive_intensity": 0.35,
+      "texture_set": "zheers_skin",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "species_detail_2k"]
     },
     {
@@ -68,6 +98,7 @@
       "roughness_multiplier": 1.12,
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.0,
+      "texture_set": "cloth",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "fabric_detail_2k"]
     },
     {
@@ -78,6 +109,7 @@
       "metallic_multiplier": 0.0,
       "clear_coat_strength": 0.08,
       "hair_anisotropy": 0.64,
+      "texture_set": "hair",
       "required_maps": ["basecolor_2k", "normal_2k", "orm_2k", "hair_flow_2k"]
     }
   ],
