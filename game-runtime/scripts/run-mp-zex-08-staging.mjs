@@ -5,28 +5,9 @@ import { WebSocket } from 'ws';
 import { getWorldLayout, PLAYER_R } from '../src/game3d/sim3d.js';
 import { doorBoxCollider } from '../src/game3d/interiorsPlan.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import { resolveStagingConfig } from './mpzex-staging-env.mjs';
 
-const required = [
-  'KR_STAGING_BASE_URL',
-  'KR_STAGING_TEST_USER_A', 'KR_STAGING_TEST_PASSWORD_A',
-  'KR_STAGING_TEST_USER_B', 'KR_STAGING_TEST_PASSWORD_B',
-];
-const missing = required.filter((name) => !process.env[name]);
-if (missing.length) throw new Error(`Secrets ausentes no environment staging: ${missing.join(', ')}`);
-
-const base = new URL(process.env.KR_STAGING_BASE_URL);
-const hostIsLoopback = ['localhost', '127.0.0.1', '::1'].includes(base.hostname);
-const allowLocalHttp = hostIsLoopback && process.env.KR_STAGING_ALLOW_LOCAL_HTTP === '1';
-if (base.protocol !== 'https:' && !allowLocalHttp) {
-  throw new Error('Recusado: staging remoto deve usar HTTPS; HTTP só é permitido em loopback para teste local explícito.');
-}
-const hostIsClearlyStaging = /(^|[.-])(stage|staging)([.-]|$)/i.test(base.hostname);
-if (!hostIsLoopback && !hostIsClearlyStaging && process.env.KR_STAGING_ALLOW_CUSTOM_HOST !== 'true') {
-  throw new Error('Recusado: o host não identifica staging. Configure KR_STAGING_ALLOW_CUSTOM_HOST=true no environment apenas para um domínio de staging confirmado.');
-}
-if (process.env.KR_STAGING_TEST_USER_A === process.env.KR_STAGING_TEST_USER_B) {
-  throw new Error('As duas contas de teste precisam ser distintas.');
-}
+const { base } = resolveStagingConfig(process.env);
 
 const HTTP_BASE = base.origin;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -278,10 +259,19 @@ function findPath(start, terminal, snapshot, grid) {
 
 function segmentClear(a, b, grid) {
   const length = distance(a, b);
-  const samples = Math.max(1, Math.ceil(length / 0.65));
+  const samples = Math.max(1, Math.ceil(length / 0.4));
   for (let i = 1; i <= samples; i += 1) {
     const t = i / samples;
-    if (grid.isBlockedAt(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return false;
+    const x = a.x + (b.x - a.x) * t;
+    const z = a.z + (b.z - a.z) * t;
+    if (grid.isBlockedAt(x, z)) return false;
+    // margem extra para colisão de quina: rejeita segmentos que passam a
+    // menos de 0,55 m (raio do ator + folga) da borda de qualquer bloco.
+    for (const box of grid.blockers) {
+      const nearestX = Math.max(box.minX, Math.min(x, box.maxX));
+      const nearestZ = Math.max(box.minZ, Math.min(z, box.maxZ));
+      if (Math.hypot(x - nearestX, z - nearestZ) < PLAYER_R + 0.55) return false;
+    }
   }
   return true;
 }
@@ -312,6 +302,10 @@ async function navigateToTerminal(client, terminal, path, label) {
   let lastPosition = null;
   let bestDistance = Infinity;
   let lastProgressAt = Date.now();
+  let lastDebugAt = 0;
+  let unstickAttempts = 0;
+  let unstickUntil = 0;
+  let unstickSide = 1;
   while (Date.now() < deadline) {
     const snapshot = client.latestSnapshot;
     const player = snapshot?.player;
@@ -320,6 +314,25 @@ async function navigateToTerminal(client, terminal, path, label) {
     if (terminalDistance < 2.85) {
       sendInput(client);
       return;
+    }
+    if (Date.now() - lastDebugAt > 2_500) {
+      lastDebugAt = Date.now();
+      safeLog(`${label}: pos=(${player.x.toFixed(1)},${player.z.toFixed(1)}) d_terminal=${terminalDistance.toFixed(1)} waypoint=${waypointIndex}/${waypoints.length} vida=${player.life ?? '?'} medkit=${player.life < 75 && (player.inventory?.medkit ?? 0) > 0}`);
+    }
+    // Travou por >3 s (quina/micro-obstáculo imprevisto): manobra de jogador
+    // real — sidestep perpendicular alternado com hop; depois retoma a rota.
+    if (Date.now() - lastProgressAt > 3_000 && unstickAttempts < 10 && Date.now() > unstickUntil) {
+      unstickAttempts += 1;
+      unstickSide = -unstickSide;
+      unstickUntil = Date.now() + 1_000;
+      safeLog(`${label}: sem progresso — manobra de desimpedimento #${unstickAttempts} (sidestep ${unstickSide > 0 ? 'direita' : 'esquerda'} + hop)`);
+      const hop = unstickAttempts % 3 === 1;
+      for (let i = 0; i < 6; i += 1) {
+        sendInput(client, { dx: unstickSide, dy: 0, jump: hop && i < 2 });
+        await sleep(150);
+      }
+      lastProgressAt = Date.now();
+      continue;
     }
     while (waypointIndex < waypoints.length && distance(player, waypoints[waypointIndex]) < 1.2) waypointIndex += 1;
     const target = waypoints[Math.min(waypointIndex, waypoints.length - 1)] ?? terminal;
