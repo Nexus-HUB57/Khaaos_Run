@@ -20,6 +20,7 @@ running this script. This script does not create geometry or Unreal .uassets.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
@@ -76,6 +77,26 @@ def get_property_if_supported(obj: Any, property_name: str, default: Any = None)
         return default
 
 
+def property_matches(actual: Any, expected: Any) -> bool:
+    if isinstance(expected, float):
+        return (
+            isinstance(actual, (int, float))
+            and not isinstance(actual, bool)
+            and math.isclose(float(actual), expected, rel_tol=0.0, abs_tol=1e-4)
+        )
+    return actual == expected
+
+
+def set_and_verify_property(obj: Any, property_name: str, value: Any) -> None:
+    if not set_property_if_supported(obj, property_name, value):
+        raise LodConfigError(f"Não foi possível aplicar a propriedade obrigatória '{property_name}'.")
+    actual = get_property_if_supported(obj, property_name, None)
+    if actual is None or not property_matches(actual, value):
+        raise LodConfigError(
+            f"A propriedade '{property_name}' não confirmou o valor {value!r} após a gravação."
+        )
+
+
 def configure_lod_info(mesh: unreal.SkeletalMesh, apply: bool) -> int:
     """Configure LODInfo entries; return number of entries touched."""
     lod_info = get_property_if_supported(mesh, "lod_info")
@@ -103,13 +124,22 @@ def configure_lod_info(mesh: unreal.SkeletalMesh, apply: bool) -> int:
             f"Hysteresis {current_hysteresis} -> {hysteresis}"
         )
         if apply:
-            set_property_if_supported(info, "screen_size", screen_size)
-            set_property_if_supported(info, "lod_hysteresis", hysteresis)
+            set_and_verify_property(info, "screen_size", screen_size)
+            set_and_verify_property(info, "lod_hysteresis", hysteresis)
 
     if apply:
         # Reassign the array so UE versions that copy reflected arrays persist edits.
         if not set_property_if_supported(mesh, "lod_info", lod_info):
             raise LodConfigError("Não foi possível persistir SkeletalMesh.lod_info")
+        persisted_lod_info = get_property_if_supported(mesh, "lod_info", None)
+        if persisted_lod_info is None or len(persisted_lod_info) < target_count:
+            raise LodConfigError("SkeletalMesh.lod_info não reteve as entradas LOD após a gravação")
+        for index in range(target_count):
+            info = persisted_lod_info[index]
+            if not property_matches(get_property_if_supported(info, "screen_size"), LOD_SCREEN_SIZES[index]):
+                raise LodConfigError(f"LOD{index}.screen_size não persistiu o valor solicitado")
+            if not property_matches(get_property_if_supported(info, "lod_hysteresis"), LOD_HYSTERESIS[index]):
+                raise LodConfigError(f"LOD{index}.lod_hysteresis não persistiu o valor solicitado")
     return target_count
 
 
@@ -123,7 +153,7 @@ def configure_mesh_transition_flags(mesh: unreal.SkeletalMesh, apply: bool) -> N
         if supported:
             log(f"Mesh flag {property_name} -> {value}")
             if apply:
-                set_property_if_supported(mesh, property_name, value)
+                set_and_verify_property(mesh, property_name, value)
         else:
             # These fields differ between UE5 minor releases; not a fatal error.
             warn(f"Mesh flag opcional não exposta nesta versão: {property_name}")
@@ -140,16 +170,17 @@ def configure_material_dither(material: Any, apply: bool) -> bool:
         )
         return False
     log(f"Material {material.get_name()}: Dithered LOD Transition {current} -> True")
-    return set_property_if_supported(material, property_name, True) if apply else True
+    if apply:
+        set_and_verify_property(material, property_name, True)
+    return True
 
 
 def save_asset(asset: Any, apply: bool) -> None:
     if not apply:
         return
-    if not unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=True):
-        warn(f"Asset não foi salvo ou não estava dirty: {asset.get_name()}")
-    else:
-        log(f"Salvo: {asset.get_path_name()}")
+    if not unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=False):
+        raise LodConfigError(f"Asset não pôde ser salvo: {asset.get_name()}")
+    log(f"Salvo: {asset.get_path_name()}")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -189,9 +220,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         material = load_asset(material_path)
         if not material:
             continue
-        if configure_material_dither(material, apply):
-            material_count += 1
-            save_asset(material, apply)
+        try:
+            if configure_material_dither(material, apply):
+                material_count += 1
+                save_asset(material, apply)
+        except LodConfigError as exc:
+            warn(str(exc))
+            return 3
 
     log(
         f"Concluído: {touched} LOD(s) configurados; "
