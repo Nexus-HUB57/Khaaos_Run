@@ -75,6 +75,8 @@ Cada trilha lista objetivo, tarefas com prioridade, critério de aceite e depend
 
 **Dependências:** T1.2 exige decisão de compliance (ver T5) antes de valor real; sandbox pode avançar já.
 
+**Atualização 2026-11-07 — T1.8:** esta tranche endurece o SMTP para exigir STARTTLS quando não há TLS implícito e acrescenta cobertura automatizada do adaptador e dos fluxos de cadastro, confirmação e login na UI, sem enviar emails reais. Isso não comprova entrega: remetente verificado, credenciais SMTP, teste em caixa real e aceite em staging continuam pendentes; T1.8 não deve ser fechado.
+
 ### T2 — Build UE5.8 (caminho crítico global)
 
 **Objetivo:** primeiro binário compilado do projeto — desbloqueia T3, T4, T5 (cliente), T6, T7.

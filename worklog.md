@@ -357,7 +357,8 @@ Stage Summary:
 - PRs #210 (duplicata F22/23) e #181 (gráficos UE5 + economy 2PC) mergeadas com reconciliação semântica; main re-verificado
 - Infra UE5.8/EAC pronta para destravar no instante em que os valores humanos chegarem — nenhum outro edit necessário
 
-================================================================================
+=========================================================================
+---
 Task: Fase 32 — skins míticas evolutivas PARA O ARSENAL (não só AR-47) + variantes de anexos por raridade (visual gasto→dourado) + grama com LOD de distância
 
 Work Log:
@@ -378,7 +379,8 @@ Stage Summary:
 - Grama com LOD de distância em chunks: densa perto, rarefeita no meio, invisível longe — ~95% dos chunks ocultos na origem (189 → ~10 draw calls de grama)
 - Suite: 824 testes — 811 pass / 0 fail / 13 skipped; vite build OK
 
-================================================================================
+=========================================================================
+---
 Task: Fase 32 — VALIDAÇÃO END TO END (sessão de verificação, browser real)
 
 Work Log:
@@ -459,7 +461,8 @@ Stage Summary:
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
 
-================================================================================
+=========================================================================
+---
 Task: Fase 34 — faixa de IMPOSTORES da grama (58-110m) + arsenal MÍTICO completo (sucata/pulse) + badge sazonal por aura no HUD
 
 Work Log:
@@ -1286,3 +1289,23 @@ Work Log:
 Stage Summary:
 - A entrada nos Rings agora é o PROTOCOLO OFICIAL DO ZU ponta a ponta: o paraquedas deixou de existir como caminho, todos viajam juntos no trem, a única entrada é a porta (salto opcional) ou a chegada, e os ataques só abrem 15 s depois dela — sincronizados offline (sim) e online (autoridade epoch do servidor + relógio compartilhado), com o pulso do Ring respeitando o mesmo relógio
 - Estado: game-runtime 1031 testes (100% gameplay verde; 19 infra pré-existentes) · suíte nova 12/12 · e2e visual completo no preview com console limpo · worklog + evidências artifacts/f53
+
+---
+---
+Task ID: 53
+Agent: main (Z.ai)
+Task: P0 end-to-end — despacho único MP-ZEX 08+09 em staging (2 sessões reais) + automação das pendências humanas (portal Epic/EULA, 7 secrets EOS, secrets de staging, runner UE5.8)
+
+Work Log:
+- Recon: main avançou (b55b0b5→9076019: #313 asset quality gates, #312 MP-ZEX-09 isolado, #309 readiness probes); branch test/mp-zex-08-staging e docs/p0-human-revalidation-1105 sem PR aberto; MP-ZEX-08 staging JÁ está no main (entrado via outro PR) — cherry-pick redundante abortado; CI main 33 success/9 skipped/0 fail (1 queued transitório)
+- DESPACHO ÚNICO: .github/workflows/mp-zex-staging.yml substitui mp-zex-08-staging.yml — um workflow_dispatch roda 08 (run-mp-zex-08-staging.mjs) e depois 09 (run-mp-zex-09-degraded.mjs em MODO REMOTO via KR_ZEX09_BASE_URL=KR_STAGING_BASE_URL, DegradedLink no cliente A: 65/65 ms ±30 jitter, 2% spikes) contra o MESMO staging (environment "staging"); jobs seriais (concurrency mp-zex-staging, cancel-in-progress false); gate de secrets: dispatch sem secrets = erro com nomes exatos, PR sem secrets = skip limpo com resumo (CI verde por construção); evidências viram artefatos (14 d) + step summary
+- Lib compartilhada game-runtime/scripts/mpzex-staging-env.mjs (validação extraída do 08: secrets obrigatórios, HTTPS fora de loopback, host stage/staging, contas distintas) + 7 regressões (test/mpzex-staging-env.test.js 7/7)
+- ROBUSTEZ 08: A* travava em quina de ruína x[92,102] z[-6.8,1.2] (folga de 0,25 m) — segmentClear com margem 0,55 m (PLAYER_R+folga, amostragem 0,4 m) + unstick estilo jogador (sidestep alternado + hop, máx 10 tentativas) + logs de progresso (pos/waypoint/vida) a cada 2,5 s
+- SELFTEST: game-runtime/scripts/mpzex-staging-selftest.mjs ensaia o despacho INTEIRO localmente (servidor autoritativo real isolado, capacidade 2 = 0 bots): 08 staging-path via loopback + 09 modo remoto → MPZEX_STAGING_SELFTEST_OK (exit 0); evidência artifacts/mp-zex-staging/selftest-2026-11-09.log (MP-ZEX-08 PASS + MP-ZEX-09 PASS: RTT mediano 114–122 ms, atraso visual 204 ms ≤ bound, XP única, convergência pós-drain)
+- P0 GATE: scripts/eos/p0_gate.mjs — auditoria única da ordem de execução (checklist §0.1): [A] probe EULA (GET /repos/EpicGames/UnrealEngine 404→200), [B] 7 secrets EOS_*, [S] 5 KR_STAGING_* no environment staging, [R] runner com labels self-hosted/linux/x64/ue5.8/ue5, [V] UE58_ENABLED/UE5_ROOT/UE5_WORLD_STRESS_COMMAND, [C] placeholders KHAOS_* no DefaultEOS.ini, [D] despacho presente; --strict/--json; leitura APENAS de NOMES (API não expõe valores); retrato ao vivo: A 404, B/S/R pendentes, V ✔, C pendente
+- SETUP: scripts/eos/setup_eos_secrets.sh (Fase B: 7 secrets via gh com valores por STDIN/env, EOS_ENCRYPTION_KEY gerado localmente, verificação de nomes, zero eco de valor); scripts/staging/setup_staging_secrets.sh (cria environment staging, gera senhas openssl, grava os 5, valida HTTPS/rotulagem); scripts/build/finish_ue58_runner.sh (pós-bootstrap: valida labels do runner via API + grava as 3 variáveis — cook deixa de ser skipped)
+- DOCS: docs/MPZEX_STAGING_DISPATCH.md (protocolo completo do despacho: pré-requisitos, KR_USERS_JSON, inputs, contratos, evidências, falhas comuns); EOS_PORTAL_CHECKLIST §0.1 ganhou coluna "Automação" + item 6b (staging); FASE43 ganhou seção "MP-ZEX 08+09 em staging — despacho único" (superfície manual restante: só MP-ZEX-10/11)
+
+Stage Summary:
+- "MP-ZEX-08/09 sobem para dois dispositivos reais num despacho só" agora é mecânica pronta: falta SÓ o humano executar setup_staging_secrets.sh com a URL do staging + provisionar 2 contas + despachar; P0 inteiro tem script de setup e auditoria única (p0_gate)
+- Estado: game-runtime tests mpzex-env 7/7 + link 4/4; selftest 08+09 exit 0; node --check em todos os scripts; CI main verde antes da PR

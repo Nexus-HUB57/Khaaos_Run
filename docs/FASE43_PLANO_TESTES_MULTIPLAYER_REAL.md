@@ -222,3 +222,39 @@ cliente precisa re-pressionar (comportamento registrado, não alterado).
 plano; a repetição em staging com dois dispositivos reais (e o MP-ZEX-08 em
 staging, gate de release) permanece dependente dos secrets do environment
 `staging`, ainda não configurados.
+
+### MP-ZEX 08+09 em staging — despacho único (2026-11-09)
+
+O limite remanescente acima fica resolvido em mecânica: o workflow
+**"MP-ZEX 08+09 — Despacho único em staging"**
+(`.github/workflows/mp-zex-staging.yml`) executa, em UM `workflow_dispatch`
+e contra o MESMO staging real (environment `staging`):
+
+1. **MP-ZEX-08** (`run-mp-zex-08-staging.mjs`) — gate de release: duas contas
+   reais na mesma sala, navegação só com inputs de gameplay (A* com margem de
+   quina reforçada e manobra de desimpedimento estilo jogador — sidestep +
+   hop — quando o ator trava >3 s; logs de progresso a cada 2,5 s), queda
+   abrupta do socket, liberação para B e resume sem XP.
+2. **MP-ZEX-09** (`run-mp-zex-09-degraded.mjs` em modo remoto,
+   `KR_ZEX09_BASE_URL`) — o mesmo par de contas com o **DegradedLink** no
+   cliente A (RTT nominal 130 ms ± jitter, "perda" ~2% como picos de
+   retransmissão): interrupção degradada não ressuscita o canal, conclusão
+   degradada paga XP igual ao baseline, atraso visual B→A dentro do bound
+   p95 e convergência pós-drain.
+
+Os jobs são SERIAIS (uma partida de teste por vez no staging) e exigem os 5
+secrets `KR_STAGING_*` no environment `staging` — provisionados por
+`scripts/staging/setup_staging_secrets.sh`; protocolo completo em
+docs/MPZEX_STAGING_DISPATCH.md. A auditoria contínua do ambiente (secrets,
+runner, variáveis, EULA) é `node scripts/eos/p0_gate.mjs`.
+
+Ensaios locais idênticos aos contratos do despacho:
+`node game-runtime/scripts/mpzex-staging-selftest.mjs` →
+`MPZEX_STAGING_SELFTEST_OK` (servidor autoritativo real isolado; log de
+evidência em `artifacts/mp-zex-staging/`). A validação de env compartilhada
+(HTTPS fora do loopback, host de staging, contas distintas) ganhou regressões
+em `game-runtime/test/mpzex-staging-env.test.js`.
+
+**Superfície manual restante após este passo:** apenas MP-ZEX-10
+(prioridade de interação — decisão de balanceamento) e MP-ZEX-11
+(clientes mistos desktop/touch — hardware real).
