@@ -1,6 +1,7 @@
 // Khaaos Run — Unreal Automation coverage for exactly-once train handover.
 #include "CoreMinimal.h"
 #include "AutomationTest.h"
+#include "Game/Character/KhaaosAvatarSpawnAdapter.h"
 #include "Game/MatchFlow/KhaaosTrainHandover.h"
 
 namespace
@@ -92,5 +93,30 @@ bool FKhaaosTrainHandoverExactlyOnce::RunTest(const FString& Parameters)
     TestEqual(TEXT("First reason remains canonical"),
         Controller.GetIngress().CompletionReason,
         FString(TEXT("server_deadline")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FKhaaosTrainAvatarContract,
+    "Khaaos.Fase3.TrainHandover.AvatarContract",
+    EAutomationTestFlags::ApplicationContext | EAutomationTestFlags::ProductFilter)
+
+bool FKhaaosTrainAvatarContract::RunTest(const FString& Parameters)
+{
+    (void)Parameters;
+    using namespace KhaaosAvatarSpawn;
+
+    TestEqual(TEXT("Manny asset accepts Manny rig"),
+        static_cast<uint8>(Validate({"CHR_Zheers_Male_Vanguard", "SK_Manny"})),
+        static_cast<uint8>(EResult::Applied));
+    TestEqual(TEXT("Gwen asset accepts Gwen rig"),
+        static_cast<uint8>(Validate({"CHR_Zheers_Female_Valkyrie", "SK_Gwen"})),
+        static_cast<uint8>(EResult::Applied));
+    TestEqual(TEXT("Mismatched rig is rejected before spawn"),
+        static_cast<uint8>(Validate({"CHR_Zheers_Female_Valkyrie", "SK_Manny"})),
+        static_cast<uint8>(EResult::SkeletonMismatch));
+    TestEqual(TEXT("Client path traversal is rejected"),
+        static_cast<uint8>(Validate({"../ClientSuppliedMesh", "SK_Manny"})),
+        static_cast<uint8>(EResult::InvalidAssetId));
     return true;
 }

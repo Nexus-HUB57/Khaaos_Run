@@ -1,6 +1,7 @@
 // Khaaos Run — server-side bridge from GameMode to the train handover kernel.
 #include "Game/MatchFlow/KhaaosTrainIngressCoordinator.h"
 
+#include "Game/Character/KhaaosOperativeActor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameModeBase.h"
@@ -153,10 +154,27 @@ FString UKhaaosTrainIngressCoordinator::BeginIngress(
     const FString& PlayerId,
     const FString& MatchId,
     const FVector& SpawnLocation,
-    const FRotator& SpawnRotation)
+    const FRotator& SpawnRotation,
+    const FString& UeAssetId,
+    const FString& CanonicalSkeleton)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || PlayerId.IsEmpty() || MatchId.IsEmpty())
     {
+        return FString();
+    }
+
+    APlayerController* PC = FindController(PlayerId);
+    AKhaaosOperativeActor* Operative = PC ? Cast<AKhaaosOperativeActor>(PC->GetPawn()) : nullptr;
+    if (!Operative)
+    {
+        Emit(TEXT("barburhen_train_ingress_failed"), PlayerId, TEXT("operative_actor_not_found"));
+        return FString();
+    }
+
+    FString AvatarReason;
+    if (!Operative->ApplyAvatarSpawnIdentity(UeAssetId, CanonicalSkeleton, AvatarReason))
+    {
+        Emit(TEXT("barburhen_train_ingress_failed"), PlayerId, AvatarReason);
         return FString();
     }
 

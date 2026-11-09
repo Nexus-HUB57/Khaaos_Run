@@ -123,7 +123,22 @@ for (const relPath of trainHandoverFiles) {
 }
 console.log("PASS: ZU_TRAIN_V1 handover kernel and portable idempotency test are present");
 
-// 5. Source Files & AST Integrity Check
+// 5. Avatar spawn adapter source integrity. The native C++ path validates the
+// full manifest allowlist; this fallback still guarantees the adapter cannot
+// disappear from a compiler-less checkout.
+const avatarAdapterFiles = [
+  "Unreal/KhaaosRun/Source/KhaaosRun/Game/Character/KhaaosAvatarSpawnAdapter.h",
+  "Unreal/KhaaosRun/Source/KhaaosRun/Game/Character/KhaaosAvatarSpawnAdapter.cpp",
+  "tests/ue5/avatar_spawn_adapter_test.cpp",
+];
+for (const relPath of avatarAdapterFiles) {
+  const absPath = path.join(ROOT, relPath);
+  assert.equal(fs.existsSync(absPath), true, `Missing avatar adapter file ${relPath}`);
+  assert.ok(fs.readFileSync(absPath, "utf8").length > 100, `File ${relPath} is suspiciously small`);
+}
+console.log("PASS: Avatar spawn adapter kernel and portable test are present");
+
+// 6. Source Files & AST Integrity Check
 const cppFiles = [
   "Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/CIGKVLootRules.h",
   "Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/CIGKVLootRules.cpp",

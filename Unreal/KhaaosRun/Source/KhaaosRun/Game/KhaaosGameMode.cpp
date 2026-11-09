@@ -24,6 +24,7 @@
 #include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/MatchFlow/KhaaosMatchTimeline.h"
 #include "Game/MatchFlow/KhaaosTrainIngressCoordinator.h"
+#include "Game/Character/KhaaosOperativeActor.h"
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
 #include "AbilitySystemComponent.h"
 #include "Player/KhaaosCharacter.h"
@@ -719,11 +720,24 @@ void AKhaaosGameMode::TransitionToNextWorld()
                             const FString PlayerId = UniqueId.IsEmpty()
                                 ? KPS->GetPlayerName()
                                 : UniqueId;
-                            TrainIngressCoordinator->BeginIngress(
-                                PlayerId,
-                                MatchId,
-                                SP.Location,
-                                SP.Rotation);
+                            const AKhaaosOperativeActor* Operative =
+                                Cast<AKhaaosOperativeActor>(PC->GetPawn());
+                            if (Operative)
+                            {
+                                TrainIngressCoordinator->BeginIngress(
+                                    PlayerId,
+                                    MatchId,
+                                    SP.Location,
+                                    SP.Rotation,
+                                    Operative->AvatarRef,
+                                    Operative->Skeleton.ToString());
+                            }
+                            else
+                            {
+                                UE_LOG(LogKhaaosRun, Warning,
+                                    TEXT("Train ingress skipped: pawn for %s is not AKhaaosOperativeActor"),
+                                    *PlayerId);
+                            }
                             ++SpawnIdx;
                         }
                     }

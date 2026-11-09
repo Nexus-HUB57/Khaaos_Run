@@ -71,3 +71,12 @@ TRAIN_HANDOVER_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/MatchFlow"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${TRAIN_HANDOVER_INCLUDE_DIR}" \
     "${TRAIN_HANDOVER_TEST_SOURCE}" "${TRAIN_HANDOVER_SOURCE}" -o "${TEMP_DIR}/train-handover-idempotency-test"
 "${TEMP_DIR}/train-handover-idempotency-test"
+
+# Avatar spawn adapter — validates the shared CHR_* asset identity and its
+# canonical Manny/Gwen skeleton before the train handover can lock a player.
+AVATAR_ADAPTER_TEST_SOURCE="${ROOT_DIR}/tests/ue5/avatar_spawn_adapter_test.cpp"
+AVATAR_ADAPTER_SOURCE="${MODULE_INCLUDE_DIR}/Game/Character/KhaaosAvatarSpawnAdapter.cpp"
+AVATAR_ADAPTER_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/Character"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" -I"${AVATAR_ADAPTER_INCLUDE_DIR}" \
+    "${AVATAR_ADAPTER_TEST_SOURCE}" "${AVATAR_ADAPTER_SOURCE}" -o "${TEMP_DIR}/avatar-spawn-adapter-test"
+"${TEMP_DIR}/avatar-spawn-adapter-test"

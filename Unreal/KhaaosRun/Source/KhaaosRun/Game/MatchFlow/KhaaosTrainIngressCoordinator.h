@@ -25,7 +25,9 @@ public:
         const FString& PlayerId,
         const FString& MatchId,
         const FVector& SpawnLocation,
-        const FRotator& SpawnRotation);
+        const FRotator& SpawnRotation,
+        const FString& UeAssetId,
+        const FString& CanonicalSkeleton);
 
     /** Client visual-ready/deadline entry point; safe to call more than once. */
     UFUNCTION(BlueprintCallable, Category="Khaaos|TrainIngress")

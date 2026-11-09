@@ -28,6 +28,7 @@
  */
 class UAbilitySystemComponent;
 class UKhaaosAttributeSet;
+class USkeletalMesh;
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Khaaos, Operatives), meta = (DisplayName = "KhaaosOperativeActor"))
 class AKhaaosOperativeActor : public ACharacter, public IAbilitySystemInterface
@@ -80,6 +81,14 @@ public:
     /** Target skeleton asset name (SK_Manny or SK_Gwen). */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Operative|Identity")
     FName Skeleton;
+
+    /** Optional data-driven mesh catalog keyed by the shared ueAssetId (CHR_*). */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Operative|Identity")
+    TMap<FName, TSoftObjectPtr<USkeletalMesh>> AvatarMeshCatalog;
+
+    /** Apply the trusted avatar projection before a train handover. */
+    UFUNCTION(BlueprintCallable, Category = "Khaaos|TrainIngress")
+    bool ApplyAvatarSpawnIdentity(const FString& UeAssetId, const FString& CanonicalSkeleton, FString& OutReason);
 
     // ─── Species Traits ──────────────────────────────────────────────────
 
