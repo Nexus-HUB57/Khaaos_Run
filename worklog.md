@@ -1264,3 +1264,22 @@ Work Log:
 Stage Summary:
 - A matriz MP-ZEX avança: 08 automatizado contra staging (aguardando secrets) e 09 agora VALIDADO em ambiente isolado com partida real — autoridade do servidor, recompensa única e convergência pós-degradação provadas por E2E repetível no CI; bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*/staging; 0 runners)
 - Estado: base 22f9c5c · game-runtime 1097 testes 0 fail · link 4/4 · E2E 4× PASS · docs+worklog atualizados
+
+---
+Task ID: 53
+Agent: main (Z.ai)
+Task: P0 end-to-end — despacho único MP-ZEX 08+09 em staging (2 sessões reais) + automação das pendências humanas (portal Epic/EULA, 7 secrets EOS, secrets de staging, runner UE5.8)
+
+Work Log:
+- Recon: main avançou (b55b0b5→9076019: #313 asset quality gates, #312 MP-ZEX-09 isolado, #309 readiness probes); branch test/mp-zex-08-staging e docs/p0-human-revalidation-1105 sem PR aberto; MP-ZEX-08 staging JÁ está no main (entrado via outro PR) — cherry-pick redundante abortado; CI main 33 success/9 skipped/0 fail (1 queued transitório)
+- DESPACHO ÚNICO: .github/workflows/mp-zex-staging.yml substitui mp-zex-08-staging.yml — um workflow_dispatch roda 08 (run-mp-zex-08-staging.mjs) e depois 09 (run-mp-zex-09-degraded.mjs em MODO REMOTO via KR_ZEX09_BASE_URL=KR_STAGING_BASE_URL, DegradedLink no cliente A: 65/65 ms ±30 jitter, 2% spikes) contra o MESMO staging (environment "staging"); jobs seriais (concurrency mp-zex-staging, cancel-in-progress false); gate de secrets: dispatch sem secrets = erro com nomes exatos, PR sem secrets = skip limpo com resumo (CI verde por construção); evidências viram artefatos (14 d) + step summary
+- Lib compartilhada game-runtime/scripts/mpzex-staging-env.mjs (validação extraída do 08: secrets obrigatórios, HTTPS fora de loopback, host stage/staging, contas distintas) + 7 regressões (test/mpzex-staging-env.test.js 7/7)
+- ROBUSTEZ 08: A* travava em quina de ruína x[92,102] z[-6.8,1.2] (folga de 0,25 m) — segmentClear com margem 0,55 m (PLAYER_R+folga, amostragem 0,4 m) + unstick estilo jogador (sidestep alternado + hop, máx 10 tentativas) + logs de progresso (pos/waypoint/vida) a cada 2,5 s
+- SELFTEST: game-runtime/scripts/mpzex-staging-selftest.mjs ensaia o despacho INTEIRO localmente (servidor autoritativo real isolado, capacidade 2 = 0 bots): 08 staging-path via loopback + 09 modo remoto → MPZEX_STAGING_SELFTEST_OK (exit 0); evidência artifacts/mp-zex-staging/selftest-2026-11-09.log (MP-ZEX-08 PASS + MP-ZEX-09 PASS: RTT mediano 114–122 ms, atraso visual 204 ms ≤ bound, XP única, convergência pós-drain)
+- P0 GATE: scripts/eos/p0_gate.mjs — auditoria única da ordem de execução (checklist §0.1): [A] probe EULA (GET /repos/EpicGames/UnrealEngine 404→200), [B] 7 secrets EOS_*, [S] 5 KR_STAGING_* no environment staging, [R] runner com labels self-hosted/linux/x64/ue5.8/ue5, [V] UE58_ENABLED/UE5_ROOT/UE5_WORLD_STRESS_COMMAND, [C] placeholders KHAOS_* no DefaultEOS.ini, [D] despacho presente; --strict/--json; leitura APENAS de NOMES (API não expõe valores); retrato ao vivo: A 404, B/S/R pendentes, V ✔, C pendente
+- SETUP: scripts/eos/setup_eos_secrets.sh (Fase B: 7 secrets via gh com valores por STDIN/env, EOS_ENCRYPTION_KEY gerado localmente, verificação de nomes, zero eco de valor); scripts/staging/setup_staging_secrets.sh (cria environment staging, gera senhas openssl, grava os 5, valida HTTPS/rotulagem); scripts/build/finish_ue58_runner.sh (pós-bootstrap: valida labels do runner via API + grava as 3 variáveis — cook deixa de ser skipped)
+- DOCS: docs/MPZEX_STAGING_DISPATCH.md (protocolo completo do despacho: pré-requisitos, KR_USERS_JSON, inputs, contratos, evidências, falhas comuns); EOS_PORTAL_CHECKLIST §0.1 ganhou coluna "Automação" + item 6b (staging); FASE43 ganhou seção "MP-ZEX 08+09 em staging — despacho único" (superfície manual restante: só MP-ZEX-10/11)
+
+Stage Summary:
+- "MP-ZEX-08/09 sobem para dois dispositivos reais num despacho só" agora é mecânica pronta: falta SÓ o humano executar setup_staging_secrets.sh com a URL do staging + provisionar 2 contas + despachar; P0 inteiro tem script de setup e auditoria única (p0_gate)
+- Estado: game-runtime tests mpzex-env 7/7 + link 4/4; selftest 08+09 exit 0; node --check em todos os scripts; CI main verde antes da PR
