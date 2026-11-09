@@ -1044,6 +1044,10 @@ export class KhaaosSim3D {
     return this.snapshot();
   }
 
+  #worldXp(base) {
+    return Math.round(base * (this.scenario.xpMultiplier ?? 1));
+  }
+
   // ---------- atores ----------
   #stepActor(a, input, dt, isPlayer) {
     a.cooldown = Math.max(0, a.cooldown - dt);
@@ -1133,7 +1137,7 @@ export class KhaaosSim3D {
     terminal.channelProgress = 0;
     a.zexChannel = null;
     a.extracted++;
-    a.xp += EXTRACT_XP;
+    a.xp += this.#worldXp(EXTRACT_XP);
     this.emit('extract', { count: a.extracted, x: terminal.x, z: terminal.z });
   }
 
@@ -1862,9 +1866,9 @@ export class KhaaosSim3D {
       if (this.squad && !bot.knocked) {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
-          this.player.xp += head ? 60 : 40; this.player.krc += 5;
+          this.player.xp += this.#worldXp(head ? 60 : 40); this.player.krc += Math.round(5 * this.scenario.krcMultiplier);
           // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
-          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: this.#worldXp(head ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
@@ -1873,9 +1877,9 @@ export class KhaaosSim3D {
       this.#dropDeathBox(bot); // Fase 28 — onde o operativo cai, o espólio fica
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(head ? 180 : 120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — abate evolui a skin mítica
-        this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
+        this.emit('kill', { target: bot.name, head, xp: this.#worldXp(head ? 180 : 120), krc });
       } else this.emit('botKill', { target: bot.name });
     }
   }
@@ -1923,9 +1927,9 @@ export class KhaaosSim3D {
       const killerId = ownerId ?? a.lastHitBy ?? null;
       if (killerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — finalização também evolui
-        this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
+        this.emit('kill', { target: a.name, head: false, xp: this.#worldXp(120), krc, finish: true });
       } else this.emit('botKill', { target: a.name, kind });
     }
   }
