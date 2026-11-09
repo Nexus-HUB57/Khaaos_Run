@@ -35,11 +35,13 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
     throw new Error("TEST_DATABASE_URL precisa apontar para um banco descartável cujo nome termine em _test");
   }
 
-  const pool = new Pool({ connectionString: testDatabaseUrl, max: 6 });
-  const userId = `enroll-fee-test-${randomUUID()}`;
+    const pool = new Pool({ connectionString: testDatabaseUrl, max: 6 });
+    const userId = `enroll-fee-test-${randomUUID()}`;
+    // O banco isolado da suíte persiste entre execuções; evite colisão da chave UNIQUE.
+    const protocol = `KR-REG-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 
-  try {
-    // ─── Bootstrap: shapes mínimas fiéis às migrations 0003/0004/0011 ────
+    try {
+      // ─── Bootstrap: shapes mínimas fiéis às migrations 0003/0004/0011 ────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bank_accounts (
         id SERIAL PRIMARY KEY, user_id TEXT NOT NULL UNIQUE,
@@ -103,6 +105,14 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
       );
     `);
 
+    // A base derivada é exclusiva desta suíte, mas persiste entre execuções.
+    // Limpe os dados anteriores para a reconciliação global começar do zero.
+    await pool.query(`
+      TRUNCATE TABLE payment_webhook_events, economy_ledger_entries, bank_accounts,
+        transactions, economy_idempotency, economy_ledger_migration_state, enrollment_sessions
+      RESTART IDENTITY CASCADE
+    `);
+
     const { createPostgresEnrollmentStore } = await import("../../server/game/enrollmentStore.postgres.ts");
     const { createEnrollmentFeePaymentService } = await import("../../server/payments/enrollmentFeePayment.ts");
     const { createEconomyAuditReport } = await import("../../server/game/economyAudit.ts");
@@ -114,7 +124,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
 
     // sessão AWAITING_FEE real (store postgres)
     await store.put({
-      protocol: "KR-REG-4FEE0012",
+      protocol,
       userId,
       step: "AWAITING_FEE",
       data: { displayName: "Operador Fee", birthDate: "1991-02-02", country: "BR" },
@@ -142,7 +152,7 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
           payment_status: "paid",
           metadata: {
             kind: "enrollment_fee",
-            protocol: "KR-REG-4FEE0012",
+            protocol,
             clientIdempotencyKey: "idem-fee-postgres-0001",
           },
         },
@@ -210,11 +220,10 @@ test("taxa de alistamento via Stripe: fulfillment real, idempotência e reconcil
     assert.equal(driftReport.counts.paidEnrollmentSessionsWithoutLedger, 1);
     assert.deepEqual(
       driftReport.paidEnrollmentSessionsWithoutLedger.map((row) => row.protocol),
-      ["KR-REG-4FEE0012"],
+      [protocol],
     );
 
     // caso negativo 2: ΣDEBIT ≠ ΣCREDIT GLOBAL → ledgerGlobalDrift
-    const protocol = "KR-REG-4FEE0012";
     await pool.query(
       `INSERT INTO economy_ledger_entries (operation_id, idempotency_key, user_id, line_number, account_code, side, amount_krc, description)
        VALUES ($1, $2, $3, 1, 'system.item_sales', 'CREDIT', 100, 'Enrollment fee U$1.00 (' || $4 || ')')`,

@@ -54,7 +54,7 @@ const serviceConfigResponse = await renderRequest(
           buildCommand:
             "npm ci --include=dev --no-audit --no-fund && npm run build && node scripts/write-render-health.mjs",
         },
-        healthCheckPath: "/healthz.json",
+        healthCheckPath: "/readyz",
       },
     }),
   },

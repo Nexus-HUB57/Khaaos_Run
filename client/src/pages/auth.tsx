@@ -123,6 +123,7 @@ export default function AuthPage() {
               <h2 className="font-display text-2xl font-bold tracking-wide">{formCopy.title}</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{formCopy.subtitle}</p>
             </div>
+            {mode === "register" && <p className="mb-5 border border-amber-400/25 bg-amber-400/5 px-3 py-3 text-xs leading-relaxed text-muted-foreground">Os Termos de Uso estão em revisão e ainda não há versão final para aceite. <Link href="/termos" className="text-amber-200 underline underline-offset-4">Consulte o aviso de status</Link>. Esta página não registra concordância.</p>}
 
             <form className="space-y-4" onSubmit={submit}>
               {mode === "register" && <Field label="Nome" name="name" autoComplete="name" maxLength={80} required />}

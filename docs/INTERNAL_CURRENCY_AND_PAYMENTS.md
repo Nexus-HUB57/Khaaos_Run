@@ -2,7 +2,7 @@
 
 **Estado:** KRC interno; Stripe escolhido para uma primeira fase no Brasil; checkout implementado apenas para sandbox/teste e desligado por padrão.
 **Escopo:** compras opcionais de conteúdo/entitlements de jogo com meios de pagamento fiduciários.  
-**Fora de escopo:** token transferível, carteira cripto, depósito/saque on-chain, resgate de KRC, promessa de rendimento ou prêmio em dinheiro.
+**Fora de escopo deste subsistema:** token transferível, carteira cripto, depósito/saque on-chain, resgate de KRC, rendimento e liquidação de eventual recompensa externa. Qualquer possibilidade futura de prêmio é separada da moeda KRC e depende de regulamento e aprovação jurídica, fiscal, financeira e operacional próprios; este documento não cria nem promete prêmio.
 
 ## Decisões de produto
 

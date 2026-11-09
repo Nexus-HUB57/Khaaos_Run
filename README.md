@@ -2,7 +2,7 @@
 
 **Um Jogo · Uma Chance · Um Legado**
 
-> Plataforma Battle Royale multi-mundo com recompensa real de **US$ 1.000.000**.
+> Plataforma Battle Royale multi-mundo com possibilidade futura de recompensa de referência de até **US$ 1.000.000**, condicionada a regras e aprovações próprias; não é oferta, promessa ou garantia atual.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
 > **Nível Devs Ph.D** — 97 PRs mesclados no GitHub (snapshot 2026-10-26) · 108 arquivos `.cpp` + 107 headers · 46.843 linhas no escopo-fonte UE5 · 16 workflows versionados · IaC Terraform · Fases 0–5 em estados distintos de implementação e aceite
