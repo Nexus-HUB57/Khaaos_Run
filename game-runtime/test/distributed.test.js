@@ -145,6 +145,10 @@ test('M3: reconnect em réplica sem a sala → redirect ao dono; no dono a sess�
     // Ordem: inputs com seq crescente após o resume → ackSeq monotônico.
     again.send(JSON.stringify({ type: 'start' })); // sala retomada no LOBBY — abre o ring
     await wait(100);
+    // Task 53 — protocolo OFICIAL do trem: a bordo o servidor suspende a física
+    // (ackSeq só avança após o desembarque — chegada em 16 s). Fixture cumpre o
+    // protocolo (salto na janela das portas + chegada) e devolve o ator íntegro.
+    disembarcarSala(room, resumed.id);
     const acks = [];
     for (let seq = 1; seq <= 5; seq++) {
       again.send(JSON.stringify({ type: 'input', input: { seq, dx: 0, dy: 1, yaw: 0, pitch: 0, fire: false, interact: false } }));
