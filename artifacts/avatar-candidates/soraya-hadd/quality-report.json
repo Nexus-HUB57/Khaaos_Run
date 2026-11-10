@@ -1,0 +1,53 @@
+{
+  "schema": "khaaos.cigkv.character-asset-quality-report/v1",
+  "engineless": true,
+  "scope": "source_mesh_quality_not_ue5_acceptance",
+  "manifest": "artifacts/avatar-candidates/soraya-hadd/audit-manifest.json",
+  "assets": [
+    {
+      "slot": "SORAYA_HADD_REVIEW_ONLY",
+      "source": "artifacts/avatar-candidates/soraya-hadd/CHR_Huran_Female_Soraya_candidate.glb",
+      "exists": true,
+      "warnings": [
+        "proxy_or_low_detail_mesh_below_5000_triangles",
+        "no_skeletal_skin_detected"
+      ],
+      "errors": [],
+      "sha256": "00da99632f04cf849781dbbfabf0d5a98aceec3735f776bfabb42f93e21e0705",
+      "metrics": {
+        "format": "glb",
+        "bytes": 1830152,
+        "meshes": 1,
+        "primitives": 1,
+        "vertices": 7199,
+        "triangles": 4928,
+        "materials": 1,
+        "textures": 3,
+        "images": 3,
+        "skins": 0,
+        "animations": 0,
+        "uv_sets": 1,
+        "nodes": 1,
+        "joints": 0
+      },
+      "quality_class": "proxy_source"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "blocked": 0,
+    "proxy_source": 1,
+    "production_candidate": 0,
+    "warnings": 2
+  },
+  "limitations": [
+    "não mede silhueta, deformação, clipping, foot sliding, shader response ou GPU",
+    "não cria .uasset/.umap",
+    "aceite final requer Blender e UE5.8 licenciado"
+  ],
+  "next_actions": [
+    "substituir proxies por meshes hero com identidade canônica",
+    "normalizar e exportar FBX com skinning/UV/materials",
+    "validar retarget, sockets e screenshots no runner UE5.8"
+  ]
+}
