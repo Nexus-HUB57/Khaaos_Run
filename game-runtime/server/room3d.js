@@ -34,6 +34,9 @@ import { PATENTE_HIERARQUIA } from '../src/game3d/poj.js';
 import { doorBoxCollider, footprintHas, localPointToWorld, windowBoxCollider } from '../src/game3d/interiorsPlan.js';
 // Fase 12 — anúncio autoritativo do trem do ZU (duração canônica compartilhada)
 import { TRAIN_INTRO_DURATION_MS } from '../src/shared/clock.js';
+// Task 53 — protocolo OFICIAL de entrada ZU: trem, portas, grace de 15 s e
+// trava de combate — SSOT compartilhada entre sim offline e autoridade online.
+import { ZU_TRAIN, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, combatUnlockEpoch, seedHashOf } from '../src/shared/zuTrain.js';
 // Fase 11 — insígnias OCE jogáveis + patente no nametag (hierarquia canônica do POJ)
 const OFFICER_IDS = SPECIAL_CLASS_OFFICERS.map((o) => o.id);
 
@@ -119,6 +122,7 @@ export class MatchRoom3D {
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
     this.scenario = resolveScenario(scenarioId);
+    this.worldXp = (base) => Math.round(base * (this.scenario.xpMultiplier ?? 1));
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario?.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
     this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
@@ -145,6 +149,13 @@ export class MatchRoom3D {
     this.tickCount = 0; // contador público no snapshot (método tick(dt) avança a sala)
     this.time = MATCH_TIME;
     this.pulseTimer = 0;
+    // Task 53 — protocolo do trem: epoch de início da rota, trava de combate
+    // (chegada + 15 s) e rota pura compartilhada com o cliente (mesma pose).
+    this.trainStartedAtEpoch = null;
+    this.combatLockedUntil = 0;
+    this.trainRoutePts = null;
+    this.trainArrived = false;
+    this.combatUnlockedAnnounced = false;
     this.acidTimer = 0;
     this.tsunamiTimer = 0;
     this.tsunamiRemaining = 0;
@@ -474,6 +485,15 @@ export class MatchRoom3D {
       for (const b of this.bots) this.#airdropActor(b, idx++, this.world.lootSpots);
     } else {
       this.zuIngress.startedAt = Date.now();
+      // Task 53 — protocolo OFICIAL do trem (mode 'train'): TODOS a bordo;
+      // combate travado até CHEGADA + 15 s (grace global do ZU).
+      if (this.zuIngress.mode === 'train') {
+        this.trainStartedAtEpoch = Date.now();
+        this.combatLockedUntil = combatUnlockEpoch(this.trainStartedAtEpoch);
+        this.trainRoutePts = trainRoute(this.world.playerSpawn, seedHashOf(this.seed));
+        for (const h of this.humans.values()) h.trainOnboard = true;
+        for (const b of this.bots) b.trainOnboard = true;
+      }
       this.#emitAll('zuIngress', {
         protocol: this.zuIngress.eventProtocol,
         entryProtocol: this.entryProtocol,
@@ -482,13 +502,20 @@ export class MatchRoom3D {
         durationMs: this.zuIngress.durationMs,
         world: this.scenario.id,
         spawnCount: this.humans.size + this.bots.length,
+        // Task 53 — timeline oficial do trem (SSOT src/shared/zuTrain.js)
+        ...(this.zuIngress.mode === 'train' ? {
+          doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
+          arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
+          graceS: ZU_TRAIN.GRACE_S,
+          combatLockedUntil: this.combatLockedUntil,
+        } : {}),
       });
     }
     // Fase 12 — anúncio AUTORITATIVO do trem do ZU: startedAt é o relógio do
     // SERVIDOR; cada cliente reconstrói o mesmo frame da cinemática via offset
     // de relógio (ping/pong). Vai no matchStart e no snapshot (reconexão/late
     // join decidem tocar ou pular pelo elapsed).
-    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS };
+    this.trainAnnounce = { startedAt: Date.now(), durationMs: TRAIN_INTRO_DURATION_MS, ...(this.combatLockedUntil ? { doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS, arrivalAtMs: ZU_TRAIN.ARRIVAL_MS, graceS: ZU_TRAIN.GRACE_S, combatLockedUntil: this.combatLockedUntil } : {}) };
     for (const [pid, a] of this.humans) this.#emitTo(pid, 'matchStart', { seed: this.seed, entry, entryProtocol: this.entryProtocol, bots: this.bots.length, train: this.trainAnnounce });
     this.#emitAll('pulse', { pulse: 0, target: this.ring.target });
     this.lastActivity = Date.now();
@@ -581,10 +608,13 @@ export class MatchRoom3D {
   tick(dt = 1 / 20) {
     if (this.state !== ROOM_STATES.IN_PROGRESS) return;
     this.tickCount++;
-    this.time = Math.max(0, this.time - dt);
+    // Task 53 — relógio de PARTIDA e pulso do Ring só correm com o combate
+    // liberado (chegada + 15 s): a rota/grace não consomem tempo de jogo.
+    if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
+    if (this.trainStartedAtEpoch) this.#stepTrainProtocol();
 
     // --- zona segura (mesmas constantes da sim offline) ---
-    this.pulseTimer += dt;
+    if (!this.#combatLocked()) this.pulseTimer += dt;
     if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
       this.pulseTimer = 0;
       this.ring.pulse++;
@@ -601,7 +631,12 @@ export class MatchRoom3D {
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     for (const actor of this.#actors()) {
-      if (actor.alive && dist2d(actor.x, actor.z, this.ring.x, this.ring.z) > this.ring.radius) {
+      // Task 53 — passageiro A BORDO do trem dos Rings é protegido do ring (o
+      // "Cinto" da entrada ZU): a física está suspensa a bordo e o ator não
+      // pode se mover para escapar do anel — penalizar quem não pode agir é
+      // armadilha, não mecânica. Proteção vale até o desembarque (doorJump/
+      // trainArrived limpa trainOnboard). Paridade 1:1 com sim3d.
+      if (actor.alive && !actor.trainOnboard && dist2d(actor.x, actor.z, this.ring.x, this.ring.z) > this.ring.radius) {
         this.#damage(actor, (4 + this.ring.pulse * 1.4) * dt, null, 'ring');
       }
     }
@@ -619,6 +654,9 @@ export class MatchRoom3D {
     // --- atores: humanos (fila de inputs, até 3 por tick) + bots (IA) ---
     for (const actor of this.humans.values()) {
       if (!actor.alive) continue;
+      // Task 53 — a bordo do trem: sem física/ação (o salto de porta sai pela
+      // porta autoritativa room.doorJump(id) na janela das portas).
+      if (actor.trainOnboard) continue;
       const queue = actor.inputQueue;
       if (queue.length > 0) {
         const n = Math.min(MAX_INPUTS_PER_TICK, queue.length);
@@ -725,12 +763,17 @@ export class MatchRoom3D {
     }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
     if (a.zexChannel) this.#advanceZexChannel(a, dt);
-    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
+    // Caído: cancela channeling; permite apenas autocuidado com medkit.
+    if (a.knocked) {
+      if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
+      if (input.medkit) this.#useMedkit(a);
+      return;
+    }
     // Fase 8 — dash: devolve o orçamento remanescente ao estado e encerra ao esgotar
     this.#syncDashBudget(a);
-    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
-    if (this.squad && input.interact) this.#tryRevive(a, dt);
+    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído.
+    // Sem squad (solo), a seleção permite ajudar qualquer jogador próximo.
+    if (input.interact) this.#tryRevive(a, dt);
     if (!airborne) {
       const w = WEAPONS3D[a.weapon] ?? WEAPONS3D.g19;
       if (input.reload) this.#tryReload(a);
@@ -739,7 +782,9 @@ export class MatchRoom3D {
       if (input.throw) this.#throwFrag(a);
       if (input.gloo) this.#deployGloo(a);
       if (input.slot && a.slots[input.slot] && input.slot !== a.activeSlot) this.#switchSlot(a, input.slot);
-      if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
+      // Task 53 — protocolo ZU: nenhum ATAQUE antes do desbloqueio (paridade 1:1)
+      if (this.#combatLocked()) { /* sem ataque durante o grace */ }
+      else if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
       else if (input.fire) this.#fire(a, w);
       if (input.ability) this.#activateAbility(a); // Fase 8 — habilidade autoritativa
     }
@@ -1075,6 +1120,9 @@ export class MatchRoom3D {
 
   // ---------- IA dos bots (engajar → caçar → patrulhar) ----------
   #stepBot(b, dt) {
+    // Task 53 — a bordo do trem: bots não se movem/atacam (desembarcam na porta
+    // determinística ou na chegada — #stepTrainProtocol).
+    if (b.trainOnboard) { b.moving = false; return; }
     // Fase 8 — atordoado (Pulso de Desarme): bot congelado, sem mover/atirar
     if ((b.ai.stunT ?? 0) > 0) { b.ai.stunT -= dt; b.moving = false; return; }
     // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
@@ -1238,7 +1286,7 @@ export class MatchRoom3D {
     }
   }
 
-  // Fase 7 — canalização de revive (aliado de pé, mesmo esquadrão, no alcance)
+  // Fase 7 — canalização de revive; em solo, qualquer aliado próximo pode ajudar.
   #tryRevive(a, dt) {
     const mate = reviveTargetFor(a, this.#actors());
     if (!mate) return;
@@ -1306,6 +1354,7 @@ export class MatchRoom3D {
     return { x: a.x + fx * 0.55 + rx * 0.22, y: a.y + 1.42 + Math.sin(a.pitch ?? 0) * 0.3, z: a.z + fz * 0.55 + rz * 0.22 };
   }
   #fire(a, w) {
+    if (this.#combatLocked()) return false; // Task 53 — protocolo ZU: sem tiros no grace
     if (a.cooldown > 0 || a.reloadT > 0) return false;
     if (w.category === 'melee') return this.#meleeSwing(a, w);
     if (a.ammoMag <= 0) {
@@ -1661,15 +1710,26 @@ export class MatchRoom3D {
     // do funil #damage (poupa blindagem temporária/armor antes da vida), então
     // espelha aqui a VIDA perdida com kind 'quantum' (mesmo anel/rate-limit;
     // sem knocked: morte pela anomalia não passa pelo DBNO deste caminho).
-    if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', false);
+    if (remaining > 0) this.#logSpectatorDamage(actor, remaining, null, 'quantum', actor.life <= 0 && !actor.isBot && !actor.knocked);
     if (actor.life > 0) return;
-    // Fase 30 — morte AMBIENTAL canônica: killfeed/XP/eliminado pelo MESMO
-    // caminho de #finalizeDeath (a anomalia fura blindagem e mata DIRETO, sem
-    // DBNO; 'ANOMALIA' assume o rótulo ambiental ao lado de RING/CIGKV).
+    if (!actor.isBot) {
+      if (!actor.knocked) {
+        knockActor(actor, null, 'quantum');
+        this.#emitAll('killfeed', { killer: 'ANOMALIA', victim: patenteTag(actor), head: false, knock: true });
+        this.#emitTo(actor.id, 'knocked', { by: null, kind: 'quantum', knockT: actor.knockT });
+      } else {
+        actor.life = 0; // dano ambiental contínuo não antecipa o deadline humano
+      }
+      return;
+    }
+    // Bots continuam sujeitos à regra de eliminação ambiental já existente.
     this.#finalizeDeath(actor, null, 'quantum');
   }
   #damage(actor, dmg, ownerId, kind) {
     if (!actor.alive || dmg <= 0) return;
+    // Task 53 — grace global do trem: NENHUM ataque entre operativos antes do
+    // desbloqueio (chegada + 15 s). Ambiental (ownerId null) segue canônico.
+    if (ownerId && this.#combatLocked()) return;
     if (actor.zexChannel) this.#cancelZexChannel(actor, 'damage');
     // Fase 8 — mitigação por habilidade (espelha a sim offline): resistência ao Ring,
     // redução de dano direto e blindagem temporária (soak antes da armadura fixa).
@@ -1694,13 +1754,14 @@ export class MatchRoom3D {
     if (ownerId) actor.lastHitBy = ownerId;
     // Fase 28 — dano na TRANSMISSÃO: evento DAMAGE (número flutuante do
     // espectador FOLLOW).knocked = este dano nocauteou (popup NOCAUTE).
-    this.#logSpectatorDamage(actor, dmg, ownerId, kind, actor.life <= 0 && this.squad && !actor.knocked);
+    this.#logSpectatorDamage(actor, dmg, ownerId, kind,
+      actor.life <= 0 && !actor.knocked && (!actor.isBot || this.squad));
     if (!actor.isBot) {
       this.#emitTo(actor.id, 'hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, actor.life) });
     }
     if (actor.life <= 0) {
-      // Fase 7 — squads: primeiro dano letal NOCAUTEIA; dano já caído é letal
-      if (this.squad && !actor.knocked) {
+      // Jogadores sempre recebem a janela DBNO; bots só usam DBNO em squad.
+      if (!actor.knocked && (!actor.isBot || this.squad)) {
         knockActor(actor, ownerId, kind === 'headshot' ? 'headshot' : kind);
         const knocker = ownerId ? this.#actors().find((a) => a.id === ownerId) : null;
         this.#emitAll('killfeed', { killer: knocker ? patenteTag(knocker) : (kind === 'ring' ? 'RING' : 'CIGKV'), victim: patenteTag(actor), head: kind === 'headshot', knock: true });
@@ -1708,11 +1769,15 @@ export class MatchRoom3D {
           this.#emitTo(actor.id, 'knocked', { by: knocker?.name ?? null, kind, knockT: actor.knockT });
           // nocaute dá XP/KRC parcial ao caçador humano
           if (knocker && !knocker.isBot && knocker.id !== actor.id) {
-            knocker.xp += kind === 'headshot' ? 60 : 40;
-            knocker.krc += 5;
-            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: kind === 'headshot' ? 60 : 40, krc: 5 });
+            knocker.xp += this.worldXp(kind === 'headshot' ? 60 : 40);
+            knocker.krc += Math.round(5 * this.scenario.krcMultiplier);
+            this.#emitTo(knocker.id, 'knock', { target: actor.name, head: kind === 'headshot', xp: this.worldXp(kind === 'headshot' ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
           }
         }
+        return;
+      }
+      if (!actor.isBot) {
+        actor.life = 0; // o prazo de 7 s continua contando após qualquer dano adicional
         return;
       }
       this.#finalizeDeath(actor, ownerId, kind);
@@ -1725,24 +1790,27 @@ export class MatchRoom3D {
     actor.life = 0;
     actor.alive = false;
     actor.knocked = false;
+    actor.knockT = 0;
+    actor.reviveProgress = 0;
+    const eliminationKind = kind === 'bleedout' ? (actor.lastKnockKind ?? kind) : kind;
     const killerId = ownerId ?? actor.lastHitBy ?? null;
     const killer = killerId ? this.#actors().find((a) => a.id === killerId) : null;
     if (killer && killer.id !== actor.id) {
       killer.kills++;
       if (!killer.isBot) {
-        const head = kind === 'headshot';
-        killer.xp += head ? KILL_XP_HEAD : KILL_XP;
-        killer.krc += KILL_KRC;
-        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: head ? KILL_XP_HEAD : KILL_XP, krc: KILL_KRC, finish: kind === 'bleedout' });
+        const head = eliminationKind === 'headshot';
+        killer.xp += this.worldXp(head ? KILL_XP_HEAD : KILL_XP);
+        killer.krc += Math.round(KILL_KRC * this.scenario.krcMultiplier);
+        this.#emitTo(killer.id, 'kill', { target: actor.name, head, xp: this.worldXp(head ? KILL_XP_HEAD : KILL_XP), krc: Math.round(KILL_KRC * this.scenario.krcMultiplier), finish: kind === 'bleedout' });
       }
-      this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: kind === 'headshot' });
+      this.#emitAll('killfeed', { killer: killer ? patenteTag(killer) : 'CIGKV', victim: patenteTag(actor), head: eliminationKind === 'headshot' });
     } else {
-      this.#emitAll('killfeed', { killer: kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV', victim: patenteTag(actor), head: false });
+      this.#emitAll('killfeed', { killer: eliminationKind === 'ring' ? 'RING' : eliminationKind === 'quantum' ? 'ANOMALIA' : 'CIGKV', victim: patenteTag(actor), head: false });
     }
     // feedback imediato de eliminação para a vítima humana (o cliente entra em espectador)
     if (!actor.isBot) {
       const placement = this.#actors().filter((a) => a.alive).length + 1;
-      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (kind === 'ring' ? 'RING' : kind === 'quantum' ? 'ANOMALIA' : 'CIGKV') });
+      this.#emitTo(actor.id, 'eliminated', { kills: actor.kills, placement, by: killer && killer.id !== actor.id ? killer.name : (eliminationKind === 'ring' ? 'RING' : eliminationKind === 'quantum' ? 'ANOMALIA' : 'CIGKV') });
     }
   }
 
@@ -1764,9 +1832,22 @@ export class MatchRoom3D {
     this.#emitTo(a.id, 'reloaded', { weapon: w.name, mag: a.ammoMag });
   }
   #useMedkit(a) {
-    if (a.inventory.medkit <= 0 || a.life >= 100) return;
-    a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
-    if (!a.isBot) this.#emitTo(a.id, 'medkit', { life: a.life });
+    if ((a.inventory.medkit ?? 0) <= 0) return;
+    const target = a.knocked ? a : (reviveTargetFor(a, this.#actors()) ?? a);
+    if (!target.knocked && target.life >= 100) return;
+    a.inventory.medkit--;
+    if (target.knocked) {
+      target.knocked = false;
+      target.knockT = 0;
+      target.reviveProgress = 0;
+      target.lastReviveTick = -1;
+      target.life = 30;
+      this.#emitAll('revived', {
+        by: a.name ?? a.id, target: target.id, targetName: target.name ?? target.id,
+        life: target.life, isSelf: target === a, item: 'medkit',
+      });
+    } else target.life = Math.min(100, target.life + 30);
+    if (!a.isBot) this.#emitTo(a.id, 'medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
   // Fase 25 — interação CONTEXTUAL (estilo Free Fire): loot/terminal/porta —
   // vence o alvo mais próximo; latch por toque. Toggle é GLOBAL: todos os
@@ -1834,7 +1915,7 @@ export class MatchRoom3D {
     terminal.channelProgress = 0;
     actor.zexChannel = null;
     actor.extracted++;
-    actor.xp += EXTRACT_XP;
+    actor.xp += this.worldXp(EXTRACT_XP);
     if (!actor.isBot) this.#emitTo(actor.id, 'extract', { count: actor.extracted, x: terminal.x, z: terminal.z });
   }
 
@@ -1922,6 +2003,58 @@ export class MatchRoom3D {
     return { others, bullets: this.bullets.filter(near), grenades: this.grenades.filter(near) };
   }
 
+  // Task 53 — estado do protocolo do trem p/ HUD/câmera (contrato do snapshot).
+  #combatLocked() {
+    return this.trainStartedAtEpoch !== null && Date.now() < this.combatLockedUntil;
+  }
+  #trainElapsedMs() {
+    return this.trainStartedAtEpoch === null ? null : Date.now() - this.trainStartedAtEpoch;
+  }
+
+  // Task 53 — transições autoritativas do protocolo: saltos determinísticos dos
+  // bots (i % 3 === 0), chegada (desembarque obrigatório) e desbloqueio.
+  #stepTrainProtocol() {
+    const elapsedMs = this.#trainElapsedMs();
+    if (doorWindowOpen(elapsedMs)) {
+      for (let i = 0; i < this.bots.length; i++) {
+        const b = this.bots[i];
+        if (!b.alive || !b.trainOnboard || (i % 3) !== 0) continue;
+        const jumpAt = ZU_TRAIN.DOOR_OPEN_MS + ((i * 431) % 2400);
+        if (elapsedMs >= jumpAt) this.#applyDoorJump(b, elapsedMs);
+      }
+    }
+    if (!this.trainArrived && elapsedMs >= ZU_TRAIN.ARRIVAL_MS) {
+      this.trainArrived = true;
+      for (const a of this.#actors()) a.trainOnboard = false;
+      this.#emitAll('trainArrived', { graceS: ZU_TRAIN.GRACE_S });
+    }
+    if (!this.combatUnlockedAnnounced && Date.now() >= this.combatLockedUntil) {
+      this.combatUnlockedAnnounced = true;
+      this.#emitAll('combatUnlocked', { graceS: ZU_TRAIN.GRACE_S });
+    }
+  }
+
+  // Task 53 — salto de porta AUTORITATIVO (jogador via WS 'door_jump' ou bot
+  // determinístico): valida janela/a bordo e aplica a MESMA pose pura que o
+  // cliente prediz (trainDoorJumpPose — zero confiança no cliente).
+  #applyDoorJump(actor, elapsedMs) {
+    if (!actor.alive || !actor.trainOnboard || !this.trainRoutePts) return false;
+    if (!doorWindowOpen(elapsedMs)) return false;
+    const pose = trainDoorJumpPose(elapsedMs, this.trainRoutePts);
+    actor.x = pose.x; actor.z = pose.z; actor.y = pose.y; actor.yaw = pose.yaw;
+    actor.vy = 0; actor.onGround = false; actor.dropPhase = 'chute';
+    actor.trainOnboard = false;
+    this.#emitAll('doorJump', { id: actor.id, x: pose.x, z: pose.z, y: pose.y });
+    return true;
+  }
+
+  // Task 53 — pedido de salto de porta do jogador humano (WS 'door_jump').
+  doorJump(id) {
+    const actor = this.humans.get(id);
+    if (!actor || !actor.alive || !actor.trainOnboard || !this.started) return false;
+    return this.#applyDoorJump(actor, this.#trainElapsedMs());
+  }
+
   snapshot(forId) {
     const self = this.humans.get(forId) ?? null;
     const actors = this.#actors();
@@ -1949,6 +2082,19 @@ export class MatchRoom3D {
       // Fase 12 — anúncio autoritativo do trem (late join/reconexão sincronizam
       // ou pulam a cinemática pelo elapsed; null antes do primeiro start).
       train: this.trainAnnounce ?? null,
+      // Task 53 — protocolo do trem: estado consolidado (HUD: fase, janela das
+      // portas, countdown do grace a partir do relógio do SERVIDOR).
+      zuTrain: this.trainStartedAtEpoch === null ? null : {
+        startedAt: this.trainStartedAtEpoch,
+        phase: zuTrainPhase(this.#trainElapsedMs()),
+        doorOpen: doorWindowOpen(this.#trainElapsedMs()),
+        arrived: this.trainArrived,
+        combatLockedUntil: this.combatLockedUntil,
+        combatLocked: this.#combatLocked(),
+        doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
+        arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
+        graceS: ZU_TRAIN.GRACE_S,
+      },
       events: forId ? this.drainEvents(forId) : [],
       online: true,
     };
@@ -1974,6 +2120,7 @@ export class MatchRoom3D {
         health: Math.max(0, Math.round(a.life ?? 0)),
         shield: Math.max(0, Math.round(a.armor ?? 0)),
         isDowned: !!a.knocked && !!a.alive,
+        knockT: a.knocked ? Math.max(0, a.knockT ?? 0) : 0,
         isEliminated: !a.alive,
         kills: a.kills ?? 0,
       })),
@@ -2026,7 +2173,7 @@ export class MatchRoom3D {
       x: a.x, y: a.y, z: a.z, yaw: a.yaw, life: a.life,
       weapon: a.weapon, weaponSkin: a.weaponSkin ?? null, alive: a.alive, onGround: a.onGround,
       moving: a.moving, sprinting: a.sprinting, ads: a.ads, crouching: a.crouching, sliding: a.sliding, kills: a.kills,      dropPhase: a.dropPhase ?? null,
-      knocked: !!a.knocked, squad: a.squad ?? null,
+      knocked: !!a.knocked, knockT: a.knocked ? Math.max(0, a.knockT ?? 0) : 0, squad: a.squad ?? null,
       // Fase 8 — identidade do operativo + marca de recon p/ minimapa
       op: a.operativeId ?? null, revealed: (a.revealedTicks ?? 0) > 0,
       // Fase 10 — marca de Oficial de Classe Especial (render dourado + nametag)

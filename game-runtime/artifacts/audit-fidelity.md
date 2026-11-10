@@ -1,6 +1,6 @@
 # Auditoria de Fidelidade — Mundos ↔ README
 
-Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
+Veredito: **FIEL ✅** — 94 checks OK, 0 falhas
 
 | Check | Mundo | Verificação | Status | Detalhe |
 |---|---|---|---|---|
@@ -13,6 +13,9 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | B2 | CIGKV CIGKV | extras de cena (mar/fogo) construídos | ✅ | n/a (nenhum extra canônico) |
 | Q1 | CIGKV CIGKV | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['CIGKV'] próprio |
 | Q2 | CIGKV CIGKV | paleta completa (céu 3 bandas + fog + ground) | ✅ | #160f2e / #4a2a4e / #c65a2e |
+| AU2 | CIGKV CIGKV | rótulo acústico cita substantivo canônico do README | ✅ | label="pátio militar aberto" |
+| AU3 | CIGKV CIGKV | superfície de passos tem perfil de footstep (fecho) | ✅ | surface="concrete" ∈ FOOTSTEP_PROFILES |
+| AU4 | CIGKV CIGKV | chuva coerente com a dinâmica canônica (= 0) | ✅ | rain=0 |
 | S1 | W1 Barburhen | setores do README presentes no runtime | ✅ | 5 setores cobrem 4 âncoras do README |
 | S2 | W1 Barburhen | setores do runtime ancorados no README/matriz F42 (sem invenção) | ✅ | todos os setores têm âncora canônica |
 | D1 | W1 Barburhen | dinâmica canônica (ACID_RAIN_SIM) | ✅ | README: "**Dinâmica**: "Água da Morte" — anel de conflito fecha em 10 min em direção ao P…" |
@@ -23,6 +26,9 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | B2 | W1 Barburhen | extras de cena (mar/fogo) construídos | ✅ | n/a (nenhum extra canônico) |
 | Q1 | W1 Barburhen | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['Barburhen'] próprio |
 | Q2 | W1 Barburhen | paleta completa (céu 3 bandas + fog + ground) | ✅ | #4e5a64 / #8e958f / #d8b894 |
+| AU2 | W1 Barburhen | rótulo acústico cita substantivo canônico do README | ✅ | label="ruínas industriais sob chuva ácida" |
+| AU3 | W1 Barburhen | superfície de passos tem perfil de footstep (fecho) | ✅ | surface="metal" ∈ FOOTSTEP_PROFILES |
+| AU4 | W1 Barburhen | chuva coerente com a dinâmica canônica (≥ 0.5) | ✅ | rain=0.72 |
 | S1 | W2 Priadus | setores do README presentes no runtime | ✅ | 5 setores cobrem 5 âncoras do README |
 | S2 | W2 Priadus | setores do runtime ancorados no README/matriz F42 (sem invenção) | ✅ | todos os setores têm âncora canônica |
 | D1 | W2 Priadus | dinâmica canônica (SPORE_FOG) | ✅ | README: "**Dinâmica**: "Emboscada Verde" — anel fecha no templo; neblina com esporos tóxi…" |
@@ -33,6 +39,8 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | B2 | W2 Priadus | extras de cena (mar/fogo) construídos | ✅ | n/a (nenhum extra canônico) |
 | Q1 | W2 Priadus | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['Priadus'] próprio |
 | Q2 | W2 Priadus | paleta completa (céu 3 bandas + fog + ground) | ✅ | #0a0f1c / #252c44 / #7d9078 |
+| AU2 | W2 Priadus | rótulo acústico cita substantivo canônico do README | ✅ | label="selva úmida com esporos" |
+| AU3 | W2 Priadus | superfície de passos tem perfil de footstep (fecho) | ✅ | surface="mud" ∈ FOOTSTEP_PROFILES |
 | S1 | W3 Ckesalth | setores do README presentes no runtime | ✅ | 5 setores cobrem 4 âncoras do README |
 | S2 | W3 Ckesalth | setores do runtime ancorados no README/matriz F42 (sem invenção) | ✅ | todos os setores têm âncora canônica |
 | D1 | W3 Ckesalth | dinâmica canônica (TOXIC_SMOKE) | ✅ | README: "**Dinâmica**: "Assassino Silencioso" — a partir de 5 min o anel fecha na Vila So…" |
@@ -43,6 +51,9 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | B2 | W3 Ckesalth | extras de cena (mar/fogo) construídos | ✅ | oilfire≥2 na cena |
 | Q1 | W3 Ckesalth | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['Ckesalth'] próprio |
 | Q2 | W3 Ckesalth | paleta completa (céu 3 bandas + fog + ground) | ✅ | #241418 / #8a4a2a / #e8bd6e |
+| AU2 | W3 Ckesalth | rótulo acústico cita substantivo canônico do README | ✅ | label="bacia desértica com fumaça" |
+| AU3 | W3 Ckesalth | superfície de passos tem perfil de footstep (fecho) | ✅ | surface="sand" ∈ FOOTSTEP_PROFILES |
+| AU4 | W3 Ckesalth | chuva coerente com a dinâmica canônica (= 0) | ✅ | rain=0 |
 | S1 | W4 Arukheea | setores do README presentes no runtime | ✅ | 5 setores cobrem 4 âncoras do README |
 | S2 | W4 Arukheea | setores do runtime ancorados no README/matriz F42 (sem invenção) | ✅ | todos os setores têm âncora canônica |
 | D1 | W4 Arukheea | dinâmica canônica (TSUNAMI_WAVE) | ✅ | README: "**Dinâmica**: "Tsunami" — anel fecha na Prisão; quem não sobe no helicóptero tor…" |
@@ -53,6 +64,8 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | B2 | W4 Arukheea | extras de cena (mar/fogo) construídos | ✅ | sharkfin≥2 na cena |
 | Q1 | W4 Arukheea | perfil de luz dedicado (F41) | ✅ | LIGHTING_PROFILES['Arukheea'] próprio |
 | Q2 | W4 Arukheea | paleta completa (céu 3 bandas + fog + ground) | ✅ | #0e1526 / #2a4258 / #a8c3c9 |
+| AU2 | W4 Arukheea | rótulo acústico cita substantivo canônico do README | ✅ | label="ilha costeira e maré distante" |
+| AU3 | W4 Arukheea | superfície de passos tem perfil de footstep (fecho) | ✅ | surface="stone" ∈ FOOTSTEP_PROFILES |
 | W1 | CIGKV CIGKV | shared/worlds.ts hazard.type = KHAOS_GRAVITY | ✅ | type=KHAOS_GRAVITY |
 | W2 | CIGKV CIGKV | runtime survival.type paridade com shared/worlds.ts | ✅ | type=KHAOS_GRAVITY ↔ shared/worlds.ts |
 | W3 | CIGKV CIGKV | configRevision pinned em f42-2026-11-02 | ✅ | rev=f42-2026-11-02 |
@@ -80,6 +93,7 @@ Veredito: **FIEL ✅** — 80 checks OK, 0 falhas
 | W5 | Arukheea Arukheea | subtitle contém nome canônico do README | ✅ | "Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)" |
 | W6 | GLOBAL | nenhum hazard.type é VOLCANIC_LAVA ou SAFE_TRAINING (não-cânon F42) | ✅ | todos os 5 mundos usam hazards canônicos F42 |
 | W7 | GLOBAL | shared/worlds.ts cobre os 5 mundos canônicos | ✅ | 5/5 mundos |
+| AU1 | GLOBAL | perfis acústicos cobrem exatamente os 5 mundos canônicos | ✅ | 5/5 mundos com identidade sonora |
 | X1 | GLOBAL | erupção de lava não é cânon de nenhum mundo | ✅ | nenhum cenário com survival de lava |
 | X2 | GLOBAL | typo regressivo "Khaoos" erradicado | ✅ | mapLabel do CIGKV = "Khaaos Ville" |
 | DOC-F42 | GLOBAL | matriz de auditoria f42 cobre o escopo (5 mundos) | ✅ | 5/5 mundos citados |

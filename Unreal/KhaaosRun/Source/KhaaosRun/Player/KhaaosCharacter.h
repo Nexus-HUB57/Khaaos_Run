@@ -53,6 +53,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShieldChanged, float, NewShield,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnEnergyChanged, float, NewEnergy, float, Delta);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnStaminaChanged, float, NewStamina, float, Delta);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDeath);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCharacterDowned);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCharacterRevived);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSprintStart);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSprintEnd);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSlideStart);
@@ -226,11 +228,15 @@ public:
 
         /** Check if alive. */
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
-        bool IsAlive() const { return Health > 0.0f; }
+        bool IsAlive() const { return !bIsDead && (Health > 0.0f || bIsDowned); }
 
         /** Check if downed (for revive system). */
         UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
         bool IsDowned() const { return bIsDowned; }
+
+        /** Seconds remaining before a downed character is eliminated. */
+        UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Khaaos|Character|Combat")
+        float GetDownedTimeRemaining() const { return DownedTimeRemaining; }
 
         /** Handle death: set status, ragdoll, broadcast. */
         UFUNCTION(BlueprintCallable, Category = "Khaaos|Character|Combat")
@@ -271,6 +277,9 @@ public:
         UFUNCTION()
         void OnRep_Stamina(float OldStamina);
 
+        UFUNCTION()
+        void OnRep_Downed();
+
         // ─── Server RPCs ────────────────────────────────────────────────────────
 
         /** Server: request sprint state change. */
@@ -306,6 +315,14 @@ public:
         /** Broadcast on death. */
         UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character")
         FOnDeath OnDeath;
+
+        /** Broadcast when the character enters the 7-second recovery window. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Combat")
+        FOnCharacterDowned OnDowned;
+
+        /** Broadcast when healing recovers a downed character. */
+        UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Combat")
+        FOnCharacterRevived OnRevived;
 
         /** Broadcast when sprint starts. */
         UPROPERTY(BlueprintAssignable, Category = "Khaaos|Character|Movement")
@@ -441,9 +458,13 @@ public:
         UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Movement")
         uint8 bIsSliding : 1;
 
-        /** Is the character downed (awaiting revive)? */
-        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
+        /** Is the character downed (awaiting recovery before the fixed deadline)? */
+        UPROPERTY(ReplicatedUsing = OnRep_Downed, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
         uint8 bIsDowned : 1;
+
+        /** Replicated server-authoritative time left in the recovery window. */
+        UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
+        float DownedTimeRemaining;
 
         /** Is the character dead? */
         UPROPERTY(Replicated, BlueprintReadOnly, Category = "Khaaos|Character|Combat")
@@ -512,6 +533,7 @@ protected:
         const UKhaaosSpeciesDataAsset* AppliedSpeciesAsset = nullptr;
 
         // ─── Internal State ─────────────────────────────────────────────────────
+        static constexpr float DownedTimeLimitSeconds = 7.0f;
         float GlideTimeRemaining = 0.0f;
         bool bIsGliding = false;
         float DefaultGravityScale = 1.0f;
@@ -524,6 +546,9 @@ protected:
 
         /** Time since last damage taken (for out-of-combat regen). */
         float TimeSinceLastDamage = 0.0f;
+
+        /** Instigator retained for kill attribution if the recovery deadline expires. */
+        TWeakObjectPtr<AActor> DownedByActor;
 
         /** Cached pointer to owning player controller. */
         UPROPERTY()

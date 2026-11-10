@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10171b">
+  <meta name="description" content="Explore janelas temporais e sinergias modeladas das habilidades dos 16 operativos de Khaaos Run.">
+  <title>Khaaos Run — Operative Synergy Lab</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Khaaos Run Operative Synergy Lab">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <path d="M5 7h17L10 21l12 16H5L17 21 5 7Z" fill="none" stroke="currentColor" stroke-width="2.3"/>
+        <path d="M25 7h14M25 14h10M25 21h14M25 28h10M25 35h14" fill="none" stroke="currentColor" stroke-width="2.3"/>
+      </svg>
+      <span class="brand-copy"><strong>KHAAOS RUN</strong><small>OPERATIVE SYNERGY LAB</small></span>
+    </a>
+    <div class="topbar-status"><span class="live-dot" aria-hidden="true"></span><span>MODELO DETERMINÍSTICO</span><span class="build-tag">LOCAL / BOT AI</span></div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span>ANÁLISE DE HABILIDADES</span><span class="eyebrow-line"></span><span>16 OPERATIVOS</span></p>
+        <h1 id="page-title">Sincronize habilidades.<br><em>Leia as janelas.</em></h1>
+        <p class="hero-lede">Uma leitura temporal das habilidades — cooldown, efeito e coincidência em uma mesma linha de operação.</p>
+      </div>
+      <div class="hero-callout"><span class="callout-signal">!</span><p><strong>Overlap não é DPS.</strong><br>Este modelo compara tempos; não prevê dano ou vitória.</p></div>
+    </section>
+
+    <section class="control-deck" aria-label="Controles da simulação">
+      <div class="control-block horizon-control">
+        <label for="horizon-range">HORIZONTE <output id="horizon-value" for="horizon-range">180 s</output></label>
+        <div class="range-line"><input id="horizon-range" type="range" min="60" max="600" step="30" value="180" aria-label="Horizonte da simulação em segundos"><input id="horizon-number" type="number" min="60" max="600" step="30" value="180" aria-label="Horizonte da simulação em segundos"><span>s</span></div>
+      </div>
+      <div class="control-block view-control">
+        <label for="view-span">JANELA VISÍVEL</label>
+        <div class="view-tools"><select id="view-span" aria-label="Largura do intervalo visível"><option value="60">60 segundos</option><option value="120">120 segundos</option><option value="180">180 segundos</option><option value="300">300 segundos</option><option value="full" selected>Horizonte inteiro</option></select><button id="view-prev" class="icon-button" type="button" aria-label="Mover janela para trás">‹</button><button id="view-next" class="icon-button" type="button" aria-label="Mover janela para frente">›</button></div>
+      </div>
+      <div class="control-block filter-control">
+        <label for="operative-search">FILTRAR ROSTER</label>
+        <div class="filter-tools"><input id="operative-search" type="search" placeholder="Nome ou habilidade" autocomplete="off"><select id="effect-filter" aria-label="Filtrar por tipo de efeito"><option value="all">Todos os efeitos</option></select></div>
+      </div>
+      <button id="refresh-button" class="refresh-button" type="button"><span aria-hidden="true">↻</span> RECOMPUTAR</button>
+    </section>
+
+    <div id="app-status" class="status-line" role="status" aria-live="polite">Carregando o roster oficial…</div>
+
+    <section class="summary-strip" aria-label="Resumo da composição selecionada">
+      <article class="metric"><span class="metric-label">OPERATIVOS NA COMPOSIÇÃO</span><strong id="metric-operators">—</strong><small>máximo 4 por leitura</small></article>
+      <article class="metric"><span class="metric-label">JANELAS DE SINERGIA</span><strong id="metric-frequency">—</strong><small>ocorrências no horizonte</small></article>
+      <article class="metric"><span class="metric-label">TEMPO COBERTO</span><strong id="metric-covered">—</strong><small id="metric-coverage-note">ao menos um par modelado ativo</small></article>
+      <article class="metric metric-accent"><span class="metric-label">PAIR-SECONDS</span><strong id="metric-pair-seconds">—</strong><small>soma de overlap entre pares; pode contar instantes coincidentes mais de uma vez</small></article>
+    </section>
+
+    <section class="panel timeline-panel" aria-labelledby="timeline-heading">
+      <div class="panel-heading">
+        <div><p class="eyebrow">01 / AGENDAMENTO</p><h2 id="timeline-heading">Linha do tempo do roster</h2><p class="panel-subtitle">Selecione até quatro faixas para montar uma composição. O roster completo continua visível.</p></div>
+        <div class="panel-meta"><span id="roster-count">16 FAIXAS</span><span class="small-divider"></span><span id="visible-window">0—180 s</span></div>
+      </div>
+      <div class="selection-bar"><div><span class="selection-label">COMPOSIÇÃO</span><span id="lineup-chips" class="lineup-chips"></span></div><span id="lineup-count" class="selection-count">0 / 4 selecionados</span></div>
+      <div class="timeline-scroll" tabindex="0" aria-label="Linha do tempo horizontal; use as setas para navegar">
+        <div id="timeline-chart" class="timeline-chart"><div class="empty-state">Preparando faixas…</div></div>
+      </div>
+      <div class="timeline-navigation">
+        <label for="window-start">DESLOCAR INTERVALO <output id="window-start-value">0 s</output></label>
+        <input id="window-start" type="range" min="0" max="0" step="1" value="0" aria-label="Início do intervalo de tempo visível">
+        <label for="playhead">CURSOR DE LEITURA <output id="playhead-value">T+ 0 s</output></label>
+        <input id="playhead" type="range" min="0" max="180" step="1" value="0" aria-label="Posição do cursor na simulação">
+      </div>
+      <div class="legend" aria-label="Legenda da linha do tempo">
+        <span><i class="legend-effect"></i> janela efetiva</span><span><i class="legend-state"></i> estado restante</span><span><i class="legend-cooldown"></i> cooldown</span><span><i class="legend-signal"></i> sinal analítico (5 s)</span><span><i class="legend-event"></i> evento instantâneo</span>
+      </div>
+    </section>
+
+    <section class="analysis-layout">
+      <article class="panel matrix-panel" aria-labelledby="matrix-heading">
+        <div class="panel-heading compact-heading"><div><p class="eyebrow">02 / COMPATIBILIDADE</p><h2 id="matrix-heading">Mapa de sobreposição</h2><p class="panel-subtitle">As 120 duplas possíveis. Intensidade representa pair-seconds acumulados.</p></div><span class="all-pairs-tag">16 × 16</span></div>
+        <div class="matrix-scroll" tabindex="0" aria-label="Matriz de sobreposição; role horizontalmente para explorar as duplas">
+          <div id="pair-matrix" class="pair-matrix"><div class="empty-state">Aguardando simulação…</div></div>
+        </div>
+        <div class="matrix-legend"><span>SEM JANELA</span><span class="matrix-gradient" aria-hidden="true"></span><span>MAIOR OVERLAP</span></div>
+        <div id="focused-pair" class="focused-pair" aria-live="polite"><span class="focus-kicker">PAR EM FOCO</span><p>Selecione uma célula para inspecionar a combinação.</p></div>
+      </article>
+
+      <article class="panel composition-panel" aria-labelledby="composition-heading">
+        <div class="panel-heading compact-heading"><div><p class="eyebrow">03 / LEITURA TÁTICA</p><h2 id="composition-heading">Composição ativa</h2><p class="panel-subtitle">Resumo e pares selecionados no horizonte atual.</p></div></div>
+        <div id="composition-list" class="composition-list"><div class="empty-state">Selecione de 2 a 4 operativos.</div></div>
+        <div class="pair-list-header"><h3>JANELAS DE SINERGIA</h3><button id="pair-mode-toggle" class="text-button" type="button" aria-pressed="false">EXIBIR TODOS OS 120 PARES</button></div>
+        <div id="pair-list" class="pair-list" aria-live="polite"><div class="empty-state">Carregando pares…</div></div>
+      </article>
+    </section>
+
+    <details class="panel assumptions-panel" open>
+      <summary><span><span class="eyebrow">04 / MÉTODO</span><strong>Premissas, fórmula e limites</strong></span><span class="disclosure-icon" aria-hidden="true">＋</span></summary>
+      <div class="assumptions-content">
+        <div><h3>Agenda usada</h3><p>Para comparar composições, cada habilidade é considerada ativada em <code>t=0</code> e reutilizada quando o cooldown termina. Um jogador real pode guardar a habilidade e sincronizar a ativação de outro modo.</p></div>
+        <div><h3>Como o overlap é calculado</h3><p>Para cada regra de sinergia, o tempo é a interseção dos intervalos efetivos dos dois operativos: <code>max(0, min(fins) − max(inícios))</code>. “Coberto” é a união temporal dessas interseções; “pair-seconds” soma cada par e pode contar intervalos simultâneos mais de uma vez.</p></div>
+        <div><h3>Convenções e escopo</h3><p>Sinais instantâneos de Ring usam uma janela analítica de 5 s, não uma duração de gameplay. O Pulso de Desarme de Soraya Hadd tem estado de 2 s, mas só 1,5 s de stun efetivo. Reconhecimento, controle e furtividade aplicam-se a bots no runtime local; habilidades ainda não são sincronizadas no online.</p></div>
+      </div>
+      <p class="data-source">FONTE DO MODELO <code>scripts/operative-synergy-sim.py</code> · REPOSITÓRIO OFICIAL NEXUS-HUB57/KHAOOS_RUN</p>
+    </details>
+  </main>
+  <footer class="site-footer"><span>KHAAOS RUN // SYNERGY LAB</span><span>SIMULAÇÃO DE JANELAS · NÃO AUTORITATIVA</span></footer>
+</body>
+</html>

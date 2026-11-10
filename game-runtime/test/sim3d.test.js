@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KhaaosSim3D, getWorldLayout, WEAPONS3D, DEFAULT_INPUT, ZEX_CHANNEL_SECONDS, EXTRACT_XP } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const idle = (yaw = 0, pitch = 0) => ({ ...DEFAULT_INPUT, yaw, pitch });
@@ -18,6 +19,7 @@ test('mesma seed produz mundo, loot e spawns idênticos', () => {
 test('movimento respeita yaw e colisão com estruturas', () => {
   const s = new KhaaosSim3D({ seed: 'MOVE-1', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   // caminha para frente (yaw=PI => +Z inicial invertido: frente -Z com yaw 0)
   let last = { x: s.player.x, z: s.player.z };
   for (let i = 0; i < 60; i++) s.step({ ...idle(Math.PI), dy: 1 }, STEP);
@@ -26,6 +28,7 @@ test('movimento respeita yaw e colisão com estruturas', () => {
   // encosta numa parede e tenta atravessar: não atravessa
   const s2 = new KhaaosSim3D({ seed: 'WALL-1', botCount: 0, airdrop: false });
   s2.start('belt');
+  disembarcarSim(s2); // Task 53 — protocolo do trem cumprido antes do teste
   s2.player.x = 0; s2.player.z = 0;
   // monolith collider em (0,0) 10x10 — empurra para fora
   assert.equal(s2.world.colliders.some(c => c.minX <= 5.5 && c.maxX >= -5.5 && c.minZ <= 5.5 && c.maxZ >= -5.5), true);
@@ -34,6 +37,7 @@ test('movimento respeita yaw e colisão com estruturas', () => {
 test('disparo consome munição, aplica cooldown e mata bot com dano suficiente', () => {
   const s = new KhaaosSim3D({ seed: 'FIRE-1', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   const bot = s.bots[0];
   // linha de tiro unitária: remove estruturas para validar balística de forma determinística
@@ -61,6 +65,7 @@ test('disparo consome munição, aplica cooldown e mata bot com dano suficiente'
 test('headshot multiplica dano e rende XP bônus', () => {
   const s = new KhaaosSim3D({ seed: 'HS-1', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   // linha de tiro unitária: remove estruturas para validar balística de forma determinística
   // Fase 25 — o mundo físico é COMPOSTO (layout + folhas dinâmicas): limpa os dois
@@ -87,6 +92,7 @@ test('headshot multiplica dano e rende XP bônus', () => {
 test('zona encolhe em pulsos e causa dano fora do anel', () => {
   const s = new KhaaosSim3D({ seed: 'RING-1', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   s.player.x = 0; s.player.z = 0; // fica dentro do anel para a partida continuar
   const r0 = s.ring.radius;
   for (let i = 0; i < 30 * 100; i++) s.step(idle(), STEP); // ~100s => 2 pulsos
@@ -95,6 +101,7 @@ test('zona encolhe em pulsos e causa dano fora do anel', () => {
   // jogador fora do anel sofre dano
   const s2 = new KhaaosSim3D({ seed: 'RING-2', botCount: 0, airdrop: false });
   s2.start('belt');
+  disembarcarSim(s2); // Task 53 — protocolo do trem cumprido antes do teste
   s2.player.x = 190; s2.player.z = 190;
   const life0 = s2.player.life;
   for (let i = 0; i < 90; i++) s2.step(idle(), STEP);
@@ -104,6 +111,7 @@ test('zona encolhe em pulsos e causa dano fora do anel', () => {
 test('loot: coleta altera estado (arma, kit, armadura ou recurso)', () => {
   const s = new KhaaosSim3D({ seed: 'LOOT-3D', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const item = s.loot.find(i => i.kind !== 'resource') ?? s.loot[0];
   s.player.x = item.x; s.player.z = item.z; s.player.y = 0;
   const before = JSON.stringify({ w: s.player.weapon, mk: s.player.inventory.medkit, ar: s.player.armor, inv: s.player.inventory });
@@ -116,6 +124,7 @@ test('loot: coleta altera estado (arma, kit, armadura ou recurso)', () => {
 test('ZEX: canaliza por quatro segundos e concede XP uma única vez ao concluir', () => {
   const s = new KhaaosSim3D({ seed: 'ZEX-CHANNEL', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const t = s.terminals[0], p = s.player;
   for (const item of s.loot) item.active = false;
   s.doors = [];
@@ -138,6 +147,7 @@ test('ZEX: canaliza por quatro segundos e concede XP uma única vez ao concluir'
 test('ZEX: movimento ou dano cancela sem gastar o terminal nem conceder XP', () => {
   const s = new KhaaosSim3D({ seed: 'ZEX-CANCEL', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const t = s.terminals[0], p = s.player;
   for (const item of s.loot) item.active = false;
   s.doors = [];
@@ -160,9 +170,43 @@ test('ZEX: movimento ou dano cancela sem gastar o terminal nem conceder XP', () 
   assert.equal(p.xp, xp0);
 });
 
+test('ZEX MP-ZEX-04: girar a câmera sem transladar NÃO cancela o canal', () => {
+  const s = new KhaaosSim3D({ seed: 'ZEX-CAMERA', botCount: 0, airdrop: false });
+  s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
+  const t = s.terminals[0], p = s.player;
+  for (const item of s.loot) item.active = false;
+  s.doors = [];
+  p.x = t.x; p.z = t.z;
+  const xp0 = p.xp;
+  s.step({ ...idle(), interact: true }, STEP);
+  assert.ok(p.zexChannel, 'canal iniciado');
+
+  // rotação PURA por 2 s: yaw varre 0..2π, pitch oscila ±0.4 rad — SEM dx/dy
+  // (a mira gira; o personagem não sai do lugar — regra MP-ZEX-04)
+  const total = Math.round(ZEX_CHANNEL_SECONDS / STEP);
+  const half = Math.round(total / 2);
+  const turn = (i) => idle((i * 0.7) % (Math.PI * 2), Math.sin(i / 6) * 0.4);
+  for (let i = 0; i < half; i++) s.step(turn(i), STEP);
+
+  assert.ok(p.zexChannel, 'rotação de câmera não cancela a canalização');
+  assert.ok(p.zexChannel.progress > 0.4 && p.zexChannel.progress < 0.65,
+    `progresso ~50% no meio do canal (obtido ${(p.zexChannel.progress * 100).toFixed(1)}%)`);
+  assert.equal(Math.hypot(p.x - t.x, p.z - t.z), 0, 'câmera girou, personagem não transladou');
+
+  // conclui girando: terminal consumido, XP concedido EXATAMENTE uma vez
+  for (let i = half; i < total; i++) s.step(turn(i), STEP);
+  s.step(idle(), STEP);
+  assert.equal(t.active, false);
+  assert.equal(p.zexChannel, null);
+  assert.equal(p.extracted, 1);
+  assert.equal(p.xp, xp0 + EXTRACT_XP);
+});
+
 test('recarga respeita reserva e capacidade do pente', () => {
   const s = new KhaaosSim3D({ seed: 'RELOAD-1', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   p.ammoMag = 1; p.inventory.ammo['9MM'] = 45;
   s.step({ ...idle(), reload: true }, STEP);
@@ -175,6 +219,7 @@ test('recarga respeita reserva e capacidade do pente', () => {
 test('match completa: vitória por tempo ou eliminação por dano', () => {
   const s = new KhaaosSim3D({ seed: 'END-1', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   s.player.life = 5;
   const bot = { x: 0, z: 0 };
   s.player.x = 190; s.player.z = 190; // fora do anel
@@ -191,6 +236,7 @@ test('match completa: vitória por tempo ou eliminação por dano', () => {
 test('replay 3D reproduz estado final idêntico', () => {
   const mk = () => new KhaaosSim3D({ seed: 'REPLAY-3D-9', botCount: 3, airdrop: false });
   const a = mk(); a.start('rush');
+  disembarcarSim(a); // Task 53 — protocolo do trem cumprido antes do teste
   let t = 0;
   for (let i = 0; i < 300; i++) {
     const yaw = Math.PI / 3 + Math.sin(t) * 0.8;
@@ -200,6 +246,7 @@ test('replay 3D reproduz estado final idêntico', () => {
   const replay = a.exportReplay();
   assert.equal(replay.mode, '3d');
   const b = mk(); b.start('rush');
+  disembarcarSim(b); // Task 53 — protocolo do trem cumprido antes do teste
   for (const frame of replay.inputs) b.step(frame.input, STEP);
   assert.equal(b.player.x, a.player.x);
   assert.equal(b.player.z, a.player.z);
@@ -210,6 +257,7 @@ test('replay 3D reproduz estado final idêntico', () => {
 test('snapshot/applySnapshot roundtrip preserva estado', () => {
   const s = new KhaaosSim3D({ seed: 'SNAP-1', botCount: 2, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 30; i++) s.step({ ...idle(0.5), dy: 1, fire: i % 5 === 0 }, STEP);
   const snap = s.snapshot();
   const json = JSON.parse(JSON.stringify(snap));

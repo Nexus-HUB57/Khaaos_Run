@@ -153,7 +153,9 @@ function registerMatchRoutes(app: Express): void {
     if (!match) return res.status(404).json({ error: "Match not found" });
 
     const { killerId, victimId, damage, weapon } = req.body;
-    match.processKill(killerId, victimId, damage || 100, weapon || "Unknown");
+    // Wart B — killerId ausente/nulo = morte pelo MUNDO (anomalia/hazards):
+    // segue pelo pipeline DBNO sem crédito; o feed nomeia a fonte real.
+    match.processKill(killerId ?? null, victimId, damage || 100, weapon || "Unknown");
     res.json({ ok: true });
   });
 

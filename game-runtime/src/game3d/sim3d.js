@@ -24,6 +24,7 @@ import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './o
 import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
 // Fase 30/31/32 — anexos generalizados, skins míticas por arma e raridade dos anexos
 import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS, mythicSkinFor, attachmentRarityFor } from './attachments3d.js';
+import { ZU_TRAIN, COMBAT_UNLOCK_MS, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, seedHashOf } from '../shared/zuTrain.js'; // Task 53 — protocolo oficial de entrada ZU
 import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
@@ -148,18 +149,17 @@ export const DEFAULT_INPUT = Object.freeze({
 // (padrão legado/testes) a morte encerra a partida imediatamente.
 export const SPECTATE_MIN_ALIVE = 2;
 
-// ---------- Fase 7 — Squad & DBNO (knockdown/revive, estilo FreeFire) ----------
-// No modo squad, dano letal NÃO elimina: o operativo cai NOCAUTEADO (knocked),
-// rasteja lentamente e sangra até o fim do contador. Um aliado do MESMO esquadrão,
-// vivo e de pé, que segure INTERAGIR por perto revive o companheiro. Dano recebido
-// já caído é letal (finalização). Companheiros caídos sangram mais rápido a cada
-// nocaute subsequente (bleedOutDecay).
+// ---------- Fase 7 — Squad & protocolo DBNO de 7 s ----------
+// O primeiro dano letal coloca o jogador em estado caído por no máximo sete
+// segundos. H/medkit pode recuperar o próprio jogador ou um aliado do squad;
+// E ainda canaliza o revive. Dano letal recebido já caído confirma eliminação.
 export const DBNO = {
-  bleedOutSeconds: 45,     // tempo de sangramento do 1º nocaute
-  bleedOutDecay: 0.72,     // multiplicador do contador a cada nocaute extra
+  bleedOutSeconds: 7,      // janela máxima para autocuidado ou socorro
+  bleedOutDecay: 1,        // cada novo nocaute conserva o prazo acordado de 7 s
   reviveSeconds: 3.2,      // canalização de revive (segure E)
   reviveDistance: 2.4,     // alcance do revive (m)
-  reviveLifeFraction: 0.4, // vida restaurada no revive
+  reviveLifeFraction: 0.3, // vida restaurada no revive — 30 HP fixos, acordo
+                           // UE5.8 (Heal(30.0f)) / raiz (@shared/dbno.reviveHealFlatHp)
   crawlSpeedMult: 0.42,    // velocidade rastejando
 };
 
@@ -184,8 +184,8 @@ export function knockActor(a, ownerId, kind = 'body') {
   return a;
 }
 
-// Melhor alvo de revive para `actor`: companheiro do MESMO esquadrão, caído,
-// vivo, dentro do alcance — o mais próximo.
+// Melhor alvo de revive: exige mesmo esquadrão quando o ator pertence a um;
+// sem squad (solo), permite qualquer jogador caído e vivo dentro do alcance.
 export function reviveTargetFor(actor, candidates) {
   let best = null, bestD = DBNO.reviveDistance;
   for (const c of candidates) {
@@ -291,13 +291,26 @@ export function circlePushAabb(px, pz, r, b) {
 }
 export function rayAabb(ox, oy, oz, dx, dy, dz, box, maxT) {
   let tmin = 0, tmax = maxT;
-  const axes = [[ox, dx, box.minX, box.maxX], [oy, dy, box.yMin, box.yMax], [oz, dz, box.minZ, box.maxZ]];
-  for (const [o, d, lo, hi] of axes) {
-    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
-    let t1 = (lo - o) / d, t2 = (hi - o) / d;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return null;
+  // Caminho quente: não criar arrays, destructuring ou pares temporários para
+  // cada raio. A forma escalar preserva o slab test original e reduz pressão
+  // no GC durante LOS, projéteis e explosões.
+  if (Math.abs(dx) < 1e-9) { if (ox < box.minX || ox > box.maxX) return null; }
+  else {
+    let t1 = (box.minX - ox) / dx, t2 = (box.maxX - ox) / dx;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dy) < 1e-9) { if (oy < box.yMin || oy > box.yMax) return null; }
+  else {
+    let t1 = (box.yMin - oy) / dy, t2 = (box.yMax - oy) / dy;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
+  }
+  if (Math.abs(dz) < 1e-9) { if (oz < box.minZ || oz > box.maxZ) return null; }
+  else {
+    let t1 = (box.minZ - oz) / dz, t2 = (box.maxZ - oz) / dz;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) return null;
   }
   return tmin;
 }
@@ -316,7 +329,7 @@ export function windowPaneOnSegment(ox, oy, oz, tx, ty, tz, windows) {
   dx /= len; dy /= len; dz /= len;
   let best = null, bestT = Infinity;
   for (const p of windows ?? []) {
-    const box = windowBoxCollider({ ...p, destroyed: false }); // abertura persiste
+    const box = windowBoxCollider(p, true); // abertura persiste mesmo após estilhaçar
     if (!box) continue;
     const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
     if (t !== null && t < bestT) { best = p; bestT = t; }
@@ -591,7 +604,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 export class KhaaosSim3D {
   constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = false, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
     this.seed = String(seed);
-    this.seedHash = [...this.seed].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0; // Fase 28 — hash numérico p/ agendadores
+    this.seedHash = seedHashOf(this.seed); // Task 53 — paridade sim ↔ servidor (rota do trem)
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
@@ -600,6 +613,11 @@ export class KhaaosSim3D {
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
+    // Task 53 — protocolo do trem do ZU: elapsed desde o start (s), rota pura e
+    // trava global de combate (chegada + 15 s). `trainT === null` = entrada
+    // sem trem (portal/legacy) — nenhum gate ativo.
+    this.trainT = null; this.trainRoutePts = null; this.trainArrived = false;
+    this.combatLockedUntil = 0; this.combatUnlockedAnnounced = false;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
     this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
@@ -640,7 +658,7 @@ export class KhaaosSim3D {
     // layout (ex.: testes que removem colliders) continuam valendo para
     // balas/LOS/movimento (os testes unitários que zeram o mundo também zeram
     // s.doors e re-sincronizam via syncPhysicsWorld()).
-    this.physicsWorld = { colliders: this.world.colliders, floors: this.world.floors };
+    this.physicsWorld = { colliders: this.world.colliders, losColliders: this.world.colliders, losSource: this.world.colliders, floors: this.world.floors };
     // Fase 25 — folhas fechadas entram no mundo físico desde o 1º tick
     this.syncPhysicsWorld();
   }
@@ -657,6 +675,10 @@ export class KhaaosSim3D {
     for (const w of this.windows) { if (!w.destroyed) { const box = windowBoxCollider(w); if (box) panes.push(box); } }
     const dyn = active.length || leafs.length || panes.length ? active.concat(leafs, panes) : [];
     this.physicsWorld.colliders = dyn.length ? this.world.colliders.concat(dyn) : this.world.colliders;
+    // Vidro é balístico, mas transparente para LOS. Evita testar cada painel
+    // em cada candidato de IA sem alterar a lista usada por movimento/balas.
+    this.physicsWorld.losColliders = this.physicsWorld.colliders.filter((box) => box.kind !== 'window' && !box.noBlock);
+    this.physicsWorld.losSource = this.physicsWorld.colliders;
   }
 
   // ---------- spawn ----------
@@ -818,6 +840,16 @@ export class KhaaosSim3D {
       this.emit('airdrop', { altitude: DROP_START_Y, deprecated: true });
     } else {
       this.zuIngress.startedAt = this.time;
+      // Task 53 — protocolo OFICIAL do trem (mode 'train'): todos a bordo, combate
+      // travado até CHEGADA + 15 s (grace global). Portal (fallback fora do CIGKV)
+      // preserva o contrato canônico anterior.
+      if (this.zuIngress.mode === 'train') {
+        this.trainT = 0;
+        this.trainRoutePts = trainRoute(this.world.playerSpawn, this.seedHash);
+        this.player.trainOnboard = true;
+        for (const b of this.bots) b.trainOnboard = true;
+        this.combatLockedUntil = COMBAT_UNLOCK_MS / 1000;
+      }
       this.emit('zuIngress', {
         protocol: this.zuIngress.eventProtocol,
         entryProtocol: this.entryProtocol,
@@ -826,6 +858,13 @@ export class KhaaosSim3D {
         durationMs: this.zuIngress.durationMs,
         world: this.scenario.id,
         spawn: this.world.playerSpawn,
+        // Task 53 — timeline oficial do trem (SSOT src/shared/zuTrain.js)
+        ...(this.zuIngress.mode === 'train' ? {
+          doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
+          arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
+          graceS: ZU_TRAIN.GRACE_S,
+          combatLockedAfterS: COMBAT_UNLOCK_MS / 1000,
+        } : {}),
       });
     }
     this.emit('entry', { entry, entryProtocol: this.entryProtocol });
@@ -938,12 +977,17 @@ export class KhaaosSim3D {
     const input = { ...DEFAULT_INPUT, ...rawInput };
     this.record(input);
     if (this.over || !this.started) return this.snapshot();
-    this.tick++; this.time = Math.max(0, this.time - dt);
+    this.tick++;
+    // Task 53 — relógio de PARTIDA e pulso do Ring só correm com o combate
+    // liberado: rota/portas/grace não consomem tempo de jogo (o Ring começa a
+    // contar APÓS o desbloqueio — protocolo oficial do ZU).
+    if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
+    if (this.trainT !== null) { this.trainT += dt; this.#stepTrainProtocol(); }
     this.#advanceAbility();
-    if (input.ability) this.#activateAbility();
+    if (input.ability && !this.player.trainOnboard) this.#activateAbility();
 
     // --- zona segura ---
-    this.pulseTimer += dt;
+    if (!this.#combatLocked()) this.pulseTimer += dt;
     if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
       this.pulseTimer = 0;
       this.ring.pulse++;
@@ -961,7 +1005,10 @@ export class KhaaosSim3D {
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
-    if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
+    // Task 53 — a bordo do trem dos Rings: imune ao ring (o "Cinto" da entrada
+    // ZU protege quem não pode se mover; quem salta pela porta volta a responder
+    // ao anel). Paridade 1:1 com room3d (dano de ring server-side).
+    if (p.alive && !p.trainOnboard && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
@@ -983,7 +1030,9 @@ export class KhaaosSim3D {
     }
 
     // --- jogador ---
-    if (p.alive) this.#stepActor(p, input, dt, true);
+    // Task 53 — a bordo do trem: sem movimento/ação (a viagem é a entrada oficial;
+    // o salto de porta sai por sim.doorJump() na janela das portas).
+    if (p.alive && !p.trainOnboard) this.#stepActor(p, input, dt, true);
     // --- bots ---
     for (const b of this.bots) if (b.alive) this.#stepBot(b, dt);
     // --- Fase 10 — retirada dos oficiais ao fim da duração autorizada ---
@@ -1028,6 +1077,10 @@ export class KhaaosSim3D {
     return this.snapshot();
   }
 
+  #worldXp(base) {
+    return Math.round(base * (this.scenario.xpMultiplier ?? 1));
+  }
+
   // ---------- atores ----------
   #stepActor(a, input, dt, isPlayer) {
     a.cooldown = Math.max(0, a.cooldown - dt);
@@ -1050,10 +1103,14 @@ export class KhaaosSim3D {
     if (isPlayer && a.zexChannel) this.#advanceZexChannel(a, dt);
     if (a.landed) { a.landed = false; if (isPlayer) this.emit('land', { x: a.x, z: a.z }); }
     const airborne = !!a.dropPhase; // sem combate/coleta no ar (Fase 4)
-    // Fase 7 — caído: rasteja apenas (sem combate/coleta/revive)
-    if (a.knocked) { if (a.zexChannel) this.#cancelZexChannel(a, 'knocked'); return; }
-    // Fase 7 — revive: aliado de pé segura INTERAGIR perto de companheiro caído
-    if (this.squad && input.interact) this.#tryRevive(a, dt);
+    // Caído: rasteja e pode usar um medkit em si mesmo; não combate/coleta.
+    if (a.knocked) {
+      if (a.zexChannel) this.#cancelZexChannel(a, 'knocked');
+      if (isPlayer && input.medkit) this.#useMedkit(a);
+      return;
+    }
+    // Fase 7 — revive: aliado próximo segura INTERAGIR; em solo, sem squad lock.
+    if (input.interact) this.#tryRevive(a, dt);
     if (isPlayer && getOperativeAbility(a.operativeId).effect === 'dash' && a.abilityState.activeTicks > 0) {
       a.abilityState.distanceRemaining = a.abilityDistanceBudget;
       if (a.abilityState.distanceRemaining <= 0.001) a.abilityState.activeTicks = 0;
@@ -1067,7 +1124,10 @@ export class KhaaosSim3D {
         if (input.interact) this.#interact(a); else a.interactLatch = false; // Fase 25 — soltou E: rearma
         if (input.throw) this.#throwFrag(a);
         if (input.gloo) this.#deployGloo(a);
-        if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
+        // Task 53 — protocolo ZU: nenhum ATAQUE (tiro/corpo-a-corpo) antes do
+        // desbloqueio (chegada + 15 s) — o gatilho fica sem efeito.
+        if (this.#combatLocked()) { /* sem ataque durante o grace */ }
+        else if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
         else if (input.fire) this.#fire(a, w);
       }
     }
@@ -1113,7 +1173,7 @@ export class KhaaosSim3D {
     terminal.channelProgress = 0;
     a.zexChannel = null;
     a.extracted++;
-    a.xp += EXTRACT_XP;
+    a.xp += this.#worldXp(EXTRACT_XP);
     this.emit('extract', { count: a.extracted, x: terminal.x, z: terminal.z });
   }
 
@@ -1233,6 +1293,9 @@ export class KhaaosSim3D {
 
   #stepBot(b, dt) {
     const p = this.player;
+    // Task 53 — a bordo do trem: bots não se movem/atacam (desembarcam na porta
+    // determinística ou na chegada — #stepTrainProtocol).
+    if (b.trainOnboard) { b.moving = false; return; }
     // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
     if (b.knocked) {
       const ang = Math.atan2(b.x, b.z); // yaw apontando para o centro (frente = -Z)
@@ -1248,6 +1311,8 @@ export class KhaaosSim3D {
     for (const passKnocked of [false, true]) {
       for (const other of [p, ...this.bots]) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        // Task 53 — a bordo do trem: fora de seleção (grace global do ZU)
+        if (other.trainOnboard) continue;
         // Fase 9 — paraquedistas intocáveis: queda livre e chute alto fora da seleção
         if (!botCanEngage(other)) continue;
         if (this.squad && other.squad === b.squad) continue;
@@ -1427,11 +1492,13 @@ export class KhaaosSim3D {
     let dx = b.x - ox, dy = (b.y + 1.6) - oy, dz = b.z - oz;
     const len = Math.hypot(dx, dy, dz); if (len < 0.01) return true;
     dx /= len; dy /= len; dz /= len;
-    for (const box of this.physicsWorld.colliders) {
-      if (box.noBlock) continue;
-      // Fase 26 — vidro é TRANSPARENTE p/ visão (bots enxergam por janelas
-      // como na Fase 24); o bloqueio do vidro é só balístico (#stepBullets).
-      if (box.kind === 'window') continue;
+    const minX = Math.min(ox, b.x), maxX = Math.max(ox, b.x);
+    const minY = Math.min(oy, b.y + 1.6), maxY = Math.max(oy, b.y + 1.6);
+    const minZ = Math.min(oz, b.z), maxZ = Math.max(oz, b.z);
+    const colliders = this.physicsWorld.losSource === this.physicsWorld.colliders ? this.physicsWorld.losColliders : this.physicsWorld.colliders;
+    for (const box of colliders) {
+      if (box.noBlock || box.kind === 'window') continue;
+      if (box.maxX < minX || box.minX > maxX || box.maxZ < minZ || box.minZ > maxZ || box.yMax < minY || box.yMin > maxY) continue;
       if (rayAabb(ox, oy, oz, dx, dy, dz, box, len) !== null) return false;
     }
     return true;
@@ -1480,6 +1547,7 @@ export class KhaaosSim3D {
     return { x: a.x + fx * 0.55 + rx * 0.22, y: a.y + 1.42 + Math.sin(a.pitch ?? 0) * 0.3, z: a.z + fz * 0.55 + rz * 0.22 };
   }
   #fire(a, w) {
+    if (this.#combatLocked()) return false; // Task 53 — protocolo ZU: sem tiros no grace
     if (a.cooldown > 0 || a.reloadT > 0) return false;
     if (a.weapon === 'sucata') return this.#meleeSwing(a, w);
     const isPlayer = a.id === 'player';
@@ -1630,9 +1698,13 @@ export class KhaaosSim3D {
       b.distance = (b.distance ?? 0) + len;
       if (len <= 0) continue;
       const dx = (b.x - ox) / len, dy = (b.y - oy) / len, dz = (b.z - oz) / len;
+      const segMinX = Math.min(ox, b.x), segMaxX = Math.max(ox, b.x);
+      const segMinY = Math.min(oy, b.y), segMaxY = Math.max(oy, b.y);
+      const segMinZ = Math.min(oz, b.z), segMaxZ = Math.max(oz, b.z);
       let hitT = Infinity, hitBox = null;
       for (const box of this.physicsWorld.colliders) {
         if (box.noBlock) continue;
+        if (box.maxX < segMinX || box.minX > segMaxX || box.maxZ < segMinZ || box.minZ > segMaxZ || box.yMax < segMinY || box.yMin > segMaxY) continue;
         const t = rayAabb(ox, oy, oz, dx, dy, dz, box, len);
         if (t !== null && t < hitT) { hitT = t; hitBox = box; }
       }
@@ -1814,14 +1886,23 @@ export class KhaaosSim3D {
     if (remaining > 0) actor.life = Math.max(0, actor.life - remaining);
     if (actor.id === 'player') this.emit('shieldDrain', { amount, anchored: false, life: actor.life, armor: actor.armor });
     if (actor.life > 0) return;
-    // Fase 30 — morte AMBIENTAL canônica: a anomalia fura escudo/blindagem e
-    // mata DIRETO (sem DBNO), mas sai pelo MESMO #finalizeDeath das outras
-    // mortes — espólio onde caiu (Fase 28), killfeed/eliminado com colocação e
-    // atribuição via lastHitBy (paridade 1:1 com a trilha autoritativa).
+    if (actor.id === 'player') {
+      if (!actor.knocked) {
+        knockActor(actor, actor.lastHitBy ?? null, 'quantum');
+        this.emit('knocked', { by: null, kind: 'quantum', knockT: actor.knockT });
+      } else {
+        actor.life = 0; // dano contínuo não antecipa o prazo de recuperação
+      }
+      return;
+    }
+    // Bots sem DBNO de jogador continuam finalizados diretamente pela anomalia.
     this.#finalizeDeath(actor, null, 'quantum');
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
+    // Task 53 — grace global do trem: NENHUM ataque entre operativos antes do
+    // desbloqueio (chegada + 15 s). Dano ambiental (ownerId null) segue canônico.
+    if (ownerId && this.#combatLocked()) return;
     if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (ownerId) bot.lastHitBy = ownerId;
@@ -1830,9 +1911,9 @@ export class KhaaosSim3D {
       if (this.squad && !bot.knocked) {
         knockActor(bot, ownerId, head ? 'headshot' : kind);
         if (ownerId === 'player') {
-          this.player.xp += head ? 60 : 40; this.player.krc += 5;
+          this.player.xp += this.#worldXp(head ? 60 : 40); this.player.krc += Math.round(5 * this.scenario.krcMultiplier);
           // Fase 27 — `victim` (id) ancora o popup de NOCAUTE no mesmo ponto do hit
-          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: head ? 60 : 40, krc: 5 });
+          this.emit('botKnocked', { target: bot.name, victim: bot.id, head, xp: this.#worldXp(head ? 60 : 40), krc: Math.round(5 * this.scenario.krcMultiplier) });
         } else this.emit('botKnockFeed', { target: bot.name, by: ownerId });
         return;
       }
@@ -1841,15 +1922,17 @@ export class KhaaosSim3D {
       this.#dropDeathBox(bot); // Fase 28 — onde o operativo cai, o espólio fica
       if (ownerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += head ? 180 : 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(head ? 180 : 120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — abate evolui a skin mítica
-        this.emit('kill', { target: bot.name, head, xp: head ? 180 : 120, krc });
+        this.emit('kill', { target: bot.name, head, xp: this.#worldXp(head ? 180 : 120), krc });
       } else this.emit('botKill', { target: bot.name });
     }
   }
   #hurtPlayer(dmg, ownerId, kind) {
     const p = this.player;
     if (!p.alive) return;
+    // Task 53 — grace global do trem (mesmo contrato do #damageBot)
+    if (ownerId && this.#combatLocked()) return;
     if (dmg > 0 && p.zexChannel) this.#cancelZexChannel(p, 'damage');
     const ability = getOperativeAbility(p.operativeId);
     if (kind === 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'ringResistance') {
@@ -1866,24 +1949,23 @@ export class KhaaosSim3D {
     p.life -= dmg;
     this.emit('hurt', { amount: dmg, from: ownerId, kind, life: Math.max(0, p.life) });
     if (p.life <= 0) {
-      // Fase 7 — squads: nocaute com chance de revive; dano já caído elimina
-      if (this.squad && !p.knocked) {
+      // Protocolo DBNO: todo jogador mantém a janela fixa mesmo sob dano contínuo.
+      if (!p.knocked) {
         knockActor(p, ownerId, kind);
         this.emit('knocked', { by: ownerId, kind, knockT: p.knockT });
         return;
       }
-      p.life = 0; p.alive = false; p.knocked = false;
-      this.#dropDeathBox(p); // Fase 28
-      // Fase 5 — colocação: vivos restantes + 1 (posições dos operativos na partida)
-      const placement = [this.player, ...this.bots].filter((a) => a.alive).length + 1;
-      this.emit('eliminated', { kills: p.kills, by: ownerId, placement });
+      p.life = 0;
     }
   }
   // Fase 7 — morte final (sangramento no DBNO)
   #finalizeDeath(a, ownerId, kind) {
     if (a.zexChannel) this.#cancelZexChannel(a, 'death');
+    a.life = 0;
     a.alive = false;
     a.knocked = false;
+    a.knockT = 0;
+    a.reviveProgress = 0;
     this.#dropDeathBox(a); // Fase 28 — espólios na posição da morte
     if (a.id === 'player') {
       const placement = [this.player, ...this.bots].filter((x) => x.alive).length + 1;
@@ -1892,9 +1974,9 @@ export class KhaaosSim3D {
       const killerId = ownerId ?? a.lastHitBy ?? null;
       if (killerId === 'player') {
         const krc = Math.round(15 * this.scenario.krcMultiplier);
-        this.player.kills++; this.player.xp += 120; this.player.krc += krc;
+        this.player.kills++; this.player.xp += this.#worldXp(120); this.player.krc += krc;
         this.#creditMythic(this.player); // Fase 30 — finalização também evolui
-        this.emit('kill', { target: a.name, head: false, xp: 120, krc, finish: true });
+        this.emit('kill', { target: a.name, head: false, xp: this.#worldXp(120), krc, finish: true });
       } else this.emit('botKill', { target: a.name, kind });
     }
   }
@@ -1957,9 +2039,22 @@ export class KhaaosSim3D {
     } else a.ammoMag = this.#magCap(a, w);
   }
   #useMedkit(a) {
-    if (a.inventory.medkit <= 0 || a.life >= 100) return;
-    a.inventory.medkit--; a.life = Math.min(100, a.life + 30);
-    this.emit('medkit', { life: a.life });
+    if ((a.inventory.medkit ?? 0) <= 0) return;
+    const target = a.knocked ? a : (reviveTargetFor(a, [this.player, ...this.bots]) ?? a);
+    if (!target.knocked && target.life >= 100) return;
+    a.inventory.medkit--;
+    if (target.knocked) {
+      target.knocked = false;
+      target.knockT = 0;
+      target.reviveProgress = 0;
+      target.lastReviveTick = -1;
+      target.life = 30;
+      this.emit('revived', {
+        by: a.name ?? a.id, target: target.id, targetName: target.name ?? target.id,
+        life: target.life, isSelf: target === a, item: 'medkit',
+      });
+    } else target.life = Math.min(100, target.life + 30);
+    this.emit('medkit', { life: a.life, targetId: target.id, targetLife: target.life, isSelf: target === a });
   }
   // ---------- Fase 32 — economia de sobrevivência dos bots ----------
   // Coleta por proximidade, cura fora de combate e utilitários no engajamento.
@@ -2273,8 +2368,65 @@ export class KhaaosSim3D {
   }
 
   // ---------- snapshot / replay ----------
+  // Task 53 — protocolo do trem: estado consolidado p/ HUD/câmera/cliente.
+  #combatLocked() {
+    return this.trainT !== null && this.trainT < this.combatLockedUntil;
+  }
+
+  // Task 53 — salto de porta do jogador (entrada oficial): só a bordo e dentro
+  // da janela [DOOR_OPEN, ARRIVAL). Pose IDÊNTICA à validada pelo servidor
+  // (trainDoorJumpPose — pureza compartilhada).
+  doorJump() {
+    const p = this.player;
+    if (!this.started || this.over || !p.alive || !p.trainOnboard) return false;
+    if (this.trainT === null || !doorWindowOpen(this.trainT * 1000)) return false;
+    const pose = trainDoorJumpPose(this.trainT * 1000, this.trainRoutePts);
+    p.x = pose.x; p.z = pose.z; p.y = pose.y; p.yaw = pose.yaw; p.pitch = 0;
+    p.vy = 0; p.onGround = false; p.dropPhase = 'chute'; // pouso canônico da Fase 4
+    p.trainOnboard = false;
+    this.emit('doorJump', { x: p.x, z: p.z, y: p.y });
+    return true;
+  }
+
+  // Task 53 — transições do protocolo: saltos determinísticos dos bots, chegada
+  // (desembarque obrigatório) e desbloqueio de combate (chegada + 15 s).
+  #stepTrainProtocol() {
+    const elapsedMs = this.trainT * 1000;
+    if (doorWindowOpen(elapsedMs)) {
+      for (let i = 0; i < this.bots.length; i++) {
+        const b = this.bots[i];
+        if (!b.alive || !b.trainOnboard || (i % 3) !== 0) continue;
+        const jumpAt = ZU_TRAIN.DOOR_OPEN_MS + ((i * 431) % 2400);
+        if (elapsedMs >= jumpAt) {
+          const pose = trainDoorJumpPose(elapsedMs, this.trainRoutePts);
+          b.x = pose.x; b.z = pose.z; b.y = pose.y; b.yaw = pose.yaw;
+          b.vy = 0; b.onGround = false; b.dropPhase = 'chute';
+          b.trainOnboard = false;
+          b.dropTarget = { x: pose.x + Math.cos(b.yaw) * 6, z: pose.z + Math.sin(b.yaw) * 6 };
+          this.emit('botDoorJump', { id: b.id, x: b.x, z: b.z });
+        }
+      }
+    }
+    if (!this.trainArrived && elapsedMs >= ZU_TRAIN.ARRIVAL_MS) {
+      this.trainArrived = true;
+      this.player.trainOnboard = false;
+      for (const b of this.bots) b.trainOnboard = false;
+      this.emit('trainArrived', { x: this.world.playerSpawn.x, z: this.world.playerSpawn.z });
+    }
+    if (!this.combatUnlockedAnnounced && this.trainT >= this.combatLockedUntil) {
+      this.combatUnlockedAnnounced = true;
+      this.emit('combatUnlocked', { graceS: ZU_TRAIN.GRACE_S });
+    }
+  }
+
   snapshot() {
     return { seed: this.seed, scenarioId: this.scenario.id, tick: this.tick, time: this.time, over: this.over, started: this.started,
+      // Task 53 — protocolo do trem (HUD: fase da rota, countdown do grace)
+      train: this.trainT !== null ? {
+        phase: zuTrainPhase(this.trainT * 1000), elapsedS: this.trainT,
+        playerOnboard: !!this.player.trainOnboard, doorOpen: doorWindowOpen(this.trainT * 1000),
+        arrived: this.trainArrived, combatLockedRemainingS: Math.max(0, this.combatLockedUntil - this.trainT),
+      } : null,
       survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.sporeActive || this.smokeActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.sporeRemaining || this.smokeRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),

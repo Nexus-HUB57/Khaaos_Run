@@ -13,6 +13,8 @@ cd "$(dirname "$0")"
 PORT="${KR_STAGING_PORT:-8080}"
 BASE="http://127.0.0.1:${PORT}"
 EXPECTED_GATE="${KR_READY_MAX_CONNECTIONS:-2000}"
+REQUIRE_TWO_REPLICAS="${VERIFY_REQUIRE_TWO_REPLICAS:-0}"
+REQUIRE_REDIS_REPLICA="${VERIFY_REQUIRE_REDIS_REPLICA:-1}"
 
 fail() { echo "❌ $1"; exit 1; }
 
@@ -58,10 +60,14 @@ if docker compose ps --status running 2>/dev/null | grep -q redis-replica; then
   docker compose exec -T redis redis-cli SET "$PROBE_KEY" "$$" >/dev/null
   sleep 1
   SEEN=$(docker compose exec -T redis-replica redis-cli GET "$PROBE_KEY" 2>/dev/null || true)
+  docker compose exec -T redis redis-cli DEL "$PROBE_KEY" >/dev/null 2>&1 || true
   [ "$SEEN" = "$$" ] || fail "chave escrita no master não apareceu na réplica (probe=$SEEN)"
   echo "✅ réplica role:slave sincronizada — probe master→réplica replicada"
 else
-  fail "redis-replica não está em execução — topologia F17 (2 nós Redis reais) ausente do staging"
+  if [ "$REQUIRE_REDIS_REPLICA" = "1" ]; then
+    fail "redis-replica não está em execução — topologia F17 (2 nós Redis reais) ausente do staging"
+  fi
+  echo "ℹ️ redis-replica ausente — validação Redis HA opcional desativada"
 fi
 
 # ── M4 — modo distribuído (KR_DISTRIBUTED=1): 2 réplicas de app com camada ───
@@ -72,7 +78,9 @@ COMPOSE_2R="docker compose -f docker-compose.yml -f docker-compose.2replicas.yml
 # O estágio só se aplica quando as RÉPLICAS determinísticas (app-a/app-b) estão
 # EM PÉ — KR_DISTRIBUTED=1 sozinho é modo distribuído single-node válido
 # (ex.: job antigo do CI com .env.example) e NÃO deve exigir as portas 8081/8082.
-if $COMPOSE_2R ps --status running 2>/dev/null | grep -q app-a; then
+RUNNING_2R="$($COMPOSE_2R ps --status running 2>/dev/null || true)"
+if echo "$RUNNING_2R" | grep -q app-a; then
+  echo "$RUNNING_2R" | grep -q app-b || fail "MODO 2 réplicas: app-a está em execução, mas app-b não está"
   # Endpoints diretos por réplica (modo determinístico) — fallback: LB.
   HA_A=$(curl -fsS "http://127.0.0.1:${KR_APP_A_PORT:-8081}/healthz" 2>/dev/null || true)
   HA_B=$(curl -fsS "http://127.0.0.1:${KR_APP_B_PORT:-8082}/healthz" 2>/dev/null || true)
@@ -91,7 +99,10 @@ if $COMPOSE_2R ps --status running 2>/dev/null | grep -q app-a; then
   [ -n "$REG_B" ] || fail "réplica ${ID_B} ausente do registro kr:replica:* no Redis"
   echo "✅ modo distribuído ativo: ${ID_A} + ${ID_B} registradas no Redis (redirect cross-réplica pronto)"
 else
-  echo "ℹ️  KR_DISTRIBUTED não ativo no .env — single-node (assert de 2 réplicas pulado)"
+  if [ "$REQUIRE_TWO_REPLICAS" = "1" ]; then
+    fail "MODO 2 réplicas exigido, mas app-a/app-b determinísticos não estão em execução"
+  fi
+  echo "ℹ️  modo determinístico de 2 réplicas ausente — assert explícito pulado"
 fi
 
 echo ""

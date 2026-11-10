@@ -1,0 +1,49 @@
+name: "Staging — restart do game-runtime (limpa memória entre cenários)"
+
+# O servidor autoritativo mantém salas/terminais em memória. Entre cenários
+# MP-ZEX seriais no MESMO staging (ex.: 08 → 09), um restart garante estado
+# limpo (docs/MPZEX_STAGING_DISPATCH.md §5 — "staging compartilhado").
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-game-runtime-staging
+  cancel-in-progress: false
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RENDER_API: https://api.render.com/v1
+      SERVICE_ID: srv-db6183o473hc73co8n10
+    steps:
+      - name: Restart via API Render
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
+          http=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $API_KEY_RENDER" \
+            "$RENDER_API/services/$SERVICE_ID/restart")
+          [[ "$http" =~ ^2 ]] || { echo "::error::Restart recusado (HTTP $http)"; cat /tmp/r.json | cut -c1-300; exit 1; }
+          echo "restart aceito (HTTP $http)"
+
+      - name: Aguardar serviço responder /healthz com estado zerado
+        run: |
+          set -euo pipefail
+          url="https://khaaos-run-staging.onrender.com"
+          for i in $(seq 1 40); do
+            body=$(curl -s --max-time 10 "$url/healthz" || true)
+            if echo "$body" | jq -e '.status == "ok" and (.rooms // 99) == 0' >/dev/null 2>&1; then
+              echo "RESTART_OK estado zerado"
+              echo "## Restart concluído — /healthz ok com rooms=0" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Serviço não voltou limpo em tempo"; exit 1

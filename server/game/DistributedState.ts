@@ -47,6 +47,7 @@ export class DistributedState {
   private connecting: Promise<void> | null = null;
   private readonly prefix = process.env.REDIS_NAMESPACE || "khaaos";
   private readonly localExpirations = new Map<string, number>();
+  private readonly localRevocations = new Map<string, { revokedAtMs: number; expiresAtMs: number }>();
   private readonly localCounters = new Map<string, { count: number; expiresAt: number }>();
   private readonly roomOwnerTokens = new Map<string, string>();
   private readonly roomOwnerTimers = new Map<string, NodeJS.Timeout>();
@@ -264,16 +265,30 @@ export class DistributedState {
   async revokeUser(userId: string, ttlMs = 7 * 24 * 60 * 60 * 1000): Promise<void> {
     await this.connect();
     const key = this.key(`revoked:user:${userId}`);
-    if (this.client) await this.client.set(key, "1", { PX: ttlMs });
-    else this.localExpirations.set(key, Date.now() + ttlMs);
+    const revokedAtMs = Date.now();
+    if (this.client) await this.client.set(key, String(revokedAtMs), { PX: ttlMs });
+    else this.localRevocations.set(key, { revokedAtMs, expiresAtMs: revokedAtMs + ttlMs });
     await this.publishControl({ type: "auth:revoke", userId });
   }
 
-  async isUserRevoked(userId: string): Promise<boolean> {
+  async isUserRevoked(userId: string, authenticatedAtMs?: number): Promise<boolean> {
     await this.connect();
     const key = this.key(`revoked:user:${userId}`);
-    if (this.client) return (await this.client.exists(key)) === 1;
-    return (this.localExpirations.get(key) ?? 0) > Date.now();
+    let revokedAtMs: number | undefined;
+    if (this.client) {
+      const value = await this.client.get(key);
+      if (value !== null) revokedAtMs = Number(value);
+    } else {
+      const entry = this.localRevocations.get(key);
+      if (entry && entry.expiresAtMs > Date.now()) revokedAtMs = entry.revokedAtMs;
+      else if (entry) this.localRevocations.delete(key);
+    }
+    if (revokedAtMs === undefined) return false;
+    // Legacy sentinels and sessions without an issuance time fail closed. New
+    // sessions carry a server-stamped time and are not blocked by an older
+    // logout marker; older sessions stay revoked until the marker expires.
+    if (!Number.isFinite(authenticatedAtMs)) return true;
+    return (authenticatedAtMs as number) <= revokedAtMs;
   }
 
   async rateLimit(name: string, limit: number, windowMs: number): Promise<{ allowed: boolean; retryAfterMs: number }> {

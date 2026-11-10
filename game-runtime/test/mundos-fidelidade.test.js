@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT, getWorldLayout } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { SCENARIOS, resolveScenario } from '../src/game3d/scenarios.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const TICK = 0.02;
 
@@ -39,7 +40,7 @@ test('README 1:1 — setores canônicos por mundo', () => {
 test('README 1:1 — DINÂMICA ambiental de cada Ring', () => {
   // W1 "Água da Morte": chuva ácida (id-gated no sim) + multiplicadores do mundo
   assert.equal(SCENARIOS.BARBURHEN.survival, undefined);
-  assert.equal(SCENARIOS.BARBURHEN.krcMultiplier, 1.5);
+  assert.equal(SCENARIOS.BARBURHEN.krcMultiplier, 1.0);
   // W2 "Emboscada Verde": neblina com esporos tóxicos pune atraso (teto 90 m)
   assert.equal(SCENARIOS.PRIADUS.survival.type, 'SPORE_FOG');
   assert.equal(SCENARIOS.PRIADUS.survival.sporeTopY, 90);
@@ -77,6 +78,7 @@ test('README 1:1 — o anel FECHA sobre o setor canônico de cada mundo', () => 
 test('F42 — o centro do anel deriva em passos determinísticos até o setor canônico', () => {
   const sim = new KhaaosSim3D({ seed: 'RING-DRIFT', botCount: 0, airdrop: false, scenarioId: 'Arukheea' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(sim.ring.x, 0); assert.equal(sim.ring.z, 0);
   // 4 pulsos: 25% → 50% → 75% → 100% (PULSE_INTERVAL 45 s)
   for (let i = 1; i <= 4; i++) {
@@ -90,6 +92,7 @@ test('F42 — o centro do anel deriva em passos determinísticos até o setor ca
   // CIGKV sem ringFinal: centro fixo (protocolo de praça central)
   const cigkv = new KhaaosSim3D({ seed: 'RING-DRIFT-CIGKV', botCount: 0, airdrop: false, scenarioId: 'CIGKV' });
   cigkv.start('belt');
+  disembarcarSim(cigkv); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 4; i++) { cigkv.pulseTimer = 45; cigkv.step(DEFAULT_INPUT, TICK); }
   assert.equal(cigkv.ring.x, 0); assert.equal(cigkv.ring.z, 0);
   assert.equal(cigkv.events.filter((e) => e.type === 'pulse').every((e) => e.finalName == null), true);
@@ -98,6 +101,7 @@ test('F42 — o centro do anel deriva em passos determinísticos até o setor ca
 test('F42 — Emboscada Verde (W2): esporos ferem no baixo sem tocar blindagem', () => {
   const sim = new KhaaosSim3D({ seed: 'F42-SPORE', botCount: 1, airdrop: false, scenarioId: 'Priadus' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.bots[0].x = 60; sim.bots[0].z = 60; // longe de tudo
   const armorBefore = sim.bots[0].armor;
   const lifeBefore = sim.bots[0].life;
@@ -110,6 +114,7 @@ test('F42 — Emboscada Verde (W2): esporos ferem no baixo sem tocar blindagem',
   // refúgio no alto sobrevive (centro da arena: sem dano de ring nesta sonda)
   const refuge = new KhaaosSim3D({ seed: 'F42-SPORE-HIGH', botCount: 0, airdrop: false, scenarioId: 'Priadus' });
   refuge.start('belt');
+  disembarcarSim(refuge); // Task 53 — protocolo do trem cumprido antes do teste
   refuge.player.x = 0; refuge.player.z = 0;
   refuge.player.y = 100;
   refuge.sporeTimer = 149.99;
@@ -121,6 +126,7 @@ test('F42 — Emboscada Verde (W2): esporos ferem no baixo sem tocar blindagem',
 test('F42 — Assassino Silencioso (W3): fumaça inunda o baixo e termina sozinha', () => {
   const sim = new KhaaosSim3D({ seed: 'F42-SMOKE', botCount: 0, airdrop: false, scenarioId: 'Ckesalth' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.smokeTimer = 139.99;
   sim.step(DEFAULT_INPUT, TICK);
   assert.equal(sim.smokeActive, true);
@@ -136,25 +142,30 @@ test('F42 — Assassino Silencioso (W3): fumaça inunda o baixo e termina sozinh
   assert.ok(sim.events.some((e) => e.type === 'toxicSmokeEnd'));
 });
 
-test('F42 — Pulso Khaaos (CIGKV): dreno pula blindagem e mata DIRETO (Fase 30 preservada)', () => {
+test('F42 — Pulso Khaaos (CIGKV): dreno pula blindagem e confirma DBNO após 7 s', () => {
   const sim = new KhaaosSim3D({ seed: 'F42-PULSO', botCount: 1, airdrop: false, scenarioId: 'CIGKV' });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const p = sim.player;
   p.x = 60; p.z = 60; // fora das 4 âncoras (raio 28)
   p.armor = 0; p.temporaryArmor = 0; p.life = 0.05;
   sim.quantumTimer = 119.99;
   sim.step(DEFAULT_INPUT, TICK);
   assert.equal(sim.quantumActive, true);
-  assert.equal(p.alive, false, 'anomalia mata DIRETO, sem DBNO');
-  assert.equal(p.knocked, false);
+  assert.equal(p.alive, true, 'pulso letal inicia o prazo de recuperação');
+  assert.equal(p.knocked, true);
+  assert.ok(p.knockT > 0 && p.knockT <= 7);
+  for (let i = 0; i < Math.ceil(7 / TICK) + 2 && p.alive; i++) sim.step(DEFAULT_INPUT, TICK);
+  assert.equal(p.alive, false, 'só o timeout de sete segundos confirma a morte');
   assert.ok(sim.loot.some((l) => l.kind === 'deathBox' && l.victimName === p.name), 'espólio cai onde caiu');
   assert.ok(sim.events.some((e) => e.type === 'eliminated'), 'eliminated dispara (cliente entra em espectador)');
 });
 
 test('F42 — paridade autoritativa: sala do CIGKV replica o Pulso e a sala do Priadus replica os esporos', () => {
-  const room = new MatchRoom3D({ id: 'f42-paridade', seed: 'F42-ROOM', region: 'sa-east', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'CIGKV' });
+  const room = new MatchRoom3D({ id: 'f42-paridade', seed: 'F42-ROOM', region: 'sa-east', capacity: 2, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('v0', 'OPERADOR-0'));
   assert.ok(room.start('v0', 'belt'));
+  disembarcarSala(room, 'v0'); // Task 53 — protocolo do trem cumprido antes do teste
   room.humans.get('v0').x = 60; room.humans.get('v0').z = 60;
   room.quantumTimer = 119.99;
   room.tick(TICK);
@@ -162,9 +173,10 @@ test('F42 — paridade autoritativa: sala do CIGKV replica o Pulso e a sala do P
   assert.ok(evts.some((e) => e.type === 'gravityAnomalyStart'));
   assert.equal(room.snapshot('v0').survival.type, 'KHAOS_GRAVITY');
 
-  const spore = new MatchRoom3D({ id: 'f42-spore', seed: 'F42-SPORE-ROOM', region: 'sa-east', capacity: 2, botFill: 0, airdrop: false, scenarioId: 'Priadus' });
+  const spore = new MatchRoom3D({ id: 'f42-spore', seed: 'F42-SPORE-ROOM', region: 'sa-east', capacity: 2, botFill: 1, airdrop: false, scenarioId: 'Priadus' });
   assert.ok(spore.addPlayer('v0', 'OPERADOR-0'));
   assert.ok(spore.start('v0', 'belt'));
+  disembarcarSala(spore, 'v0'); // Task 53 — protocolo do trem cumprido antes do teste
   spore.humans.get('v0').y = 0;
   spore.sporeTimer = 149.99;
   spore.tick(TICK);

@@ -13,7 +13,7 @@ const MOCK_RING_CONFIG = {
     transition_trigger: "ring_close",
     transition_type: "portal_khaaos",
     CIGKV: {
-      name: "CIGKV Hub", capacity: 50, ring_phases: 2,
+      name: "CIGKV Hub", capacity: 100, ring_phases: 2,
       ring_config: {
         phase_1: { radius_start: 500, radius_end: 200, duration_s: 120, damage_per_tick: 1 },
         phase_2: { radius_start: 200, radius_end: 50, duration_s: 90, damage_per_tick: 3 }
@@ -50,7 +50,7 @@ describe("Ring System Integration", () => {
       const config = ringAPI.ringManager.getRingConfig("CIGKV");
       assert.notStrictEqual(config, undefined);
       assert.strictEqual(config!.worldName, "CIGKV Hub");
-      assert.strictEqual(config!.capacity, 50);
+      assert.strictEqual(config!.capacity, 100);
       assert.strictEqual(config!.ringPhases, 2);
     });
 

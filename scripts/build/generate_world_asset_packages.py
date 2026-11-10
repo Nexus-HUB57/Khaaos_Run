@@ -15,6 +15,20 @@ CONTENT = ROOT / "Unreal" / "KhaaosRun" / "Content"
 CONFIGS = ROOT / "components_dev" / "worlds"
 WORLDS = ["CIGKV", "Barburhen", "Priadus", "Ckesalth", "Arukheea"]
 
+# F42 cânon (shared/worlds.ts @ configRevision "f42-2026-11-02", reconciliado na
+# F47) — display_name do intake é GOVERNADO AQUI e não herdado dos WCFG legados
+# (WORLDS_AUDIT 2026-11-02 rec #7: os WCFG carregam lore pré-F42 — "Mundo
+# Aquatico", "Pantanos Vulcanicos" — e ficaram marcados como legados; o nome
+# de exibição do intake deve citar o nome canônico do README).
+CANON_DISPLAY_NAMES = {
+    "CIGKV": "CIGKV — Khaaos Ville (Campo de Instrução de Guerra)",
+    "Barburhen": "Barburhen — Mundo da Destruição (Ruínas Urbanas Pós-Guerra)",
+    "Priadus": "Priadus — Floresta da Escuridão (Selva Hostil, Pântanos, Neblina Alucinógena)",
+    "Ckesalth": "Ckesalth — Deserto das Almas Esquecidas (Petróleo em Chamas, Fumaça Tóxica)",
+    "Arukheea": "Arukheea — Ilha dos Gritos Calados (Prisão do Sol da Noite, Tsunami Iminente)",
+}
+CANON_CONFIG_REVISION = "f42-2026-11-02"
+
 
 def read_config(world: str) -> dict:
     if world == "CIGKV":
@@ -22,7 +36,7 @@ def read_config(world: str) -> dict:
         data = json.loads(source.read_text(encoding="utf-8"))
         return {
             "world_id": world,
-            "display_name": data.get("level_name", "CIGKV — Khaaos Ville"),
+            "display_name": CANON_DISPLAY_NAMES.get(world, data.get("level_name", "CIGKV — Khaaos Ville")),
             "map_bounds": 5000,
             "sector_count": len(data.get("sectors", [])) or 3,
             "biome": {"type": "urban_training", "colors": {"primary": "#53606B", "secondary": "#8A979A", "accent": "#C8FF3D", "fog": "#26313A"}},
@@ -31,7 +45,10 @@ def read_config(world: str) -> dict:
             "loot_points": data.get("loot_spawn_points", [])[:24],
         }
     source = CONFIGS / f"WCFG_{world}.json"
-    return json.loads(source.read_text(encoding="utf-8"))
+    cfg = json.loads(source.read_text(encoding="utf-8"))
+    # rec #7 — o WCFG é legado: o nome de exibição do intake vem do cânon F42.
+    cfg["display_name"] = CANON_DISPLAY_NAMES.get(world, cfg.get("display_name", world))
+    return cfg
 
 
 def norm_point(item: dict, index: int, scale: float) -> tuple[float, float, float]:
@@ -112,7 +129,8 @@ def main() -> None:
         write_gltf(folder / f"{world}_WorldBlockout.gltf", cfg)
         (folder / f"{world}_WorldBlockout.umap.json").write_text(json.dumps({
             "schema": "khaaos.ue5.umap-intake/v1", "world_id": world,
-            "display_name": cfg.get("display_name", world), "engine_target": "UE5.8",
+            "display_name": CANON_DISPLAY_NAMES.get(world, cfg.get("display_name", world)),
+            "canonical_config_revision": CANON_CONFIG_REVISION, "engine_target": "UE5.8",
             "source_config": f"components_dev/worlds/WCFG_{world}.json" if world != "CIGKV" else "Unreal/KhaaosRun/Content/Maps/CIGKV/CIGKV_level_data.json",
             "status": "source_intake_requires_editor_import", "poi_count": len(cfg.get("poi_markers", [])),
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

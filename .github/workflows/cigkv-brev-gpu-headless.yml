@@ -1,0 +1,51 @@
+name: CIGKV Brev GPU headless
+
+on:
+  workflow_dispatch:
+    inputs:
+      provision:
+        description: 'Criar instância GPU e executar o pipeline (pode gerar cobrança)'
+        required: true
+        default: false
+        type: boolean
+      gpu_name:
+        description: 'Filtro de GPU Brev'
+        required: true
+        default: 'A10G'
+        type: string
+      min_vram_gb:
+        description: 'VRAM mínima em GB'
+        required: true
+        default: '16'
+        type: string
+      min_disk_gb:
+        description: 'Disco mínimo em GB'
+        required: true
+        default: '150'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  brev-gpu:
+    name: Brev GPU dry-run/provisionamento
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      BREV_API_KEY: ${{ secrets.BREV_API_KEY }}
+      BREV_PROVISION: ${{ inputs.provision && '1' || '0' }}
+      BREV_GPU_NAME: ${{ inputs.gpu_name }}
+      BREV_MIN_VRAM_GB: ${{ inputs.min_vram_gb }}
+      BREV_MIN_DISK_GB: ${{ inputs.min_disk_gb }}
+      BREV_INSTANCE_NAME: khaaos-cigkv-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Validate Brev secret
+        run: test -n "$BREV_API_KEY"
+      - name: Dry-run or execute Brev GPU lifecycle
+        run: |
+          chmod +x scripts/build/brev_cigkv_gpu_lifecycle.sh
+          scripts/build/brev_cigkv_gpu_lifecycle.sh

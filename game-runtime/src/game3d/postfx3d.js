@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { SAOPass } from 'three/examples/jsm/postprocessing/SAOPass.js';
 import { SSRPass } from 'three/examples/jsm/postprocessing/SSRPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -22,6 +23,8 @@ const GradeShader = {
     uSaturation: { value: 1.045 },
     uContrast: { value: 1.035 },
     uHighlightRollOff: { value: 0.28 },
+    uSharpen: { value: 0.12 },
+    uResolution: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -31,7 +34,8 @@ const GradeShader = {
     }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff;
+    uniform float uTime, uGrain, uVignette, uSaturation, uContrast, uHighlightRollOff, uSharpen;
+    uniform vec2 uResolution;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uTime) * 43758.5453); }
     void main() {
@@ -48,6 +52,16 @@ const GradeShader = {
       float peak = max(max(c.rgb.r, c.rgb.g), c.rgb.b);
       float shoulder = max(peak - 0.78, 0.0) * uHighlightRollOff;
       c.rgb /= (1.0 + shoulder);
+      // Recupera microcontraste perdido na resolução dinâmica sem halo de
+      // oversharpen: a vizinhança é usada somente como detalhe de alta frequência.
+      vec2 px = 1.0 / max(uResolution, vec2(1.0));
+      vec3 neighborhood = (
+        texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb +
+        texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb +
+        texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb +
+        texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb
+      ) * 0.25;
+      c.rgb += (c.rgb - neighborhood) * uSharpen;
       // vinheta
       vec2 d = vUv - 0.5;
       float vig = 1.0 - uVignette * dot(d, d) * 1.9;
@@ -71,6 +85,20 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const size = renderer.getSize(new THREE.Vector2());
+    const saoSize = new THREE.Vector2(
+      Math.max(320, Math.floor(size.x * plan.ssao.resolutionScale)),
+      Math.max(180, Math.floor(size.y * plan.ssao.resolutionScale)),
+    );
+    const sao = new SAOPass(scene, camera, saoSize);
+    sao.params.saoBias = plan.ssao.bias;
+    sao.params.saoIntensity = plan.ssao.intensity;
+    sao.params.saoScale = plan.ssao.scale;
+    sao.params.saoKernelRadius = plan.ssao.kernelRadius;
+    sao.params.saoMinResolution = plan.ssao.minResolution;
+    sao.params.saoBlur = true;
+    sao.params.saoBlurRadius = plan.ssao.blurRadius;
+    sao.params.saoBlurStdDev = plan.ssao.blurStdDev;
+    composer.addPass(sao);
     let ssr = null;
     // SSR é deliberadamente limitado ao tier alto e renderizado em resolução
     // reduzida: reflexos de asfalto molhado/metal permanecem convincentes sem
@@ -97,11 +125,14 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
     composer.addPass(bloom);
     const grade = new ShaderPass(GradeShader);
     grade.uniforms.uGrain.value = plan.grain;
+    grade.uniforms.uSharpen.value = plan.sharpen;
+    grade.uniforms.uResolution.value.set(size.x, size.y);
     composer.addPass(grade);
     composer.addPass(new OutputPass());
     let elapsed = 0;
     return {
       composer,
+      sao,
       ssr,
       bloom,
       grade,
@@ -112,6 +143,11 @@ export function createPostFX(renderer, scene, camera, { quality = 'high' } = {})
       },
       setSize(w, h) {
         composer.setSize(w, h);
+        grade.uniforms.uResolution.value.set(w, h);
+        sao.setSize(
+          Math.max(320, Math.floor(w * plan.ssao.resolutionScale)),
+          Math.max(180, Math.floor(h * plan.ssao.resolutionScale)),
+        );
         ssr?.setSize(Math.max(320, Math.floor(w * .72)), Math.max(180, Math.floor(h * .72)));
       },
     };

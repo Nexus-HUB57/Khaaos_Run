@@ -1,0 +1,48 @@
+name: MP-ZEX-09 — Rede degradada (isolado)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'game-runtime/server/room3d.js'
+      - 'game-runtime/server/server.js'
+      - 'game-runtime/scripts/run-mp-zex-09-degraded.mjs'
+      - 'game-runtime/scripts/mp-zex-09-link.mjs'
+      - 'game-runtime/test/mp-zex-09-link.test.js'
+      - '.github/workflows/mp-zex-09-degraded.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Uma partida MP-ZEX-09 por vez; nunca cancela uma execução ativa, pois
+# cancelar sockets no meio do canal pode deixar a sala de teste aberta.
+concurrency:
+  group: mp-zex-09-degraded
+  cancel-in-progress: false
+
+jobs:
+  mp-zex-09:
+    name: MP-ZEX-09 em servidor isolado (RTT/jitter/perda em 1 cliente)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+
+      - name: Instalar dependências runtime
+        working-directory: game-runtime
+        run: npm ci --no-audit --no-fund
+
+      - name: Regressões do link degradado
+        working-directory: game-runtime
+        run: node --test test/mp-zex-09-link.test.js
+
+      - name: Executar MP-ZEX-09 (servidor local isolado, zero bots)
+        working-directory: game-runtime
+        run: node scripts/run-mp-zex-09-degraded.mjs

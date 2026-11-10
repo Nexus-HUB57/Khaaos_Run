@@ -1,0 +1,118 @@
+{
+  "$schema": "khaaos.readme-visual-slice/v1",
+  "world_id": "W2/C2",
+  "display_name": "Priadus — Floresta da Escuridão",
+  "canonical_sources": [
+    {
+      "path": "README.md",
+      "section": "W2/C2 — Priadus (Floresta da Escuridão)",
+      "lines": "226–237",
+      "authority": "fonte canônica para identidade, setores, frações e dinâmica narrativa"
+    }
+  ],
+  "status": "visual_reference_only_not_gameplay",
+  "preview_units": {
+    "width": 1000,
+    "height": 1000,
+    "unit": "normalized_preview_units",
+    "playable": false,
+    "description": "Unidades esquemáticas para composição visual; não representam escala, bounds, navegação ou espaço jogável."
+  },
+  "sectors": [
+    {
+      "id": "area_pantanosa",
+      "name": "Área Pantanosa",
+      "fraction": 0.25,
+      "fraction_label": "2/8",
+      "description": "Trecho de selva alagado e hostil, com pântanos, neblina e presença de jacarés."
+    },
+    {
+      "id": "bosque_desembarque",
+      "name": "Bosque (desembarque)",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Bosque denso que representa o setor de desembarque, envolto pela atmosfera opressiva da Floresta da Escuridão."
+    },
+    {
+      "id": "area_caca_templo_antigo",
+      "name": "Área de Caça + Templo Antigo",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Área de caça na selva articulada ao Templo Antigo, destino visual do anel de conflito."
+    },
+    {
+      "id": "zona_extracao",
+      "name": "Zona de Extração (matadouro)",
+      "fraction": null,
+      "fraction_label": null,
+      "description": "Ponto de extração associado ao matadouro; o README não atribui fração de área a este setor."
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "templo_antigo",
+      "sector_id": "area_caca_templo_antigo",
+      "name": "Templo Antigo",
+      "description": "Marco da Área de Caça e destino visual do anel de conflito."
+    },
+    {
+      "id": "matadouro",
+      "sector_id": "zona_extracao",
+      "name": "Matadouro",
+      "description": "Referência da Zona de Extração, sem posição espacial definida."
+    }
+  ],
+  "hazards": [
+    {
+      "id": "neblina_esporos",
+      "name": "Neblina alucinógena com esporos tóxicos",
+      "description": "Neblina alucinógena com esporos tóxicos, descrita como ameaça ambiental."
+    },
+    {
+      "id": "flora_carnivora",
+      "name": "Flora carnívora",
+      "description": "Flora hostil presente na selva."
+    },
+    {
+      "id": "jacares",
+      "name": "Jacarés",
+      "description": "Ameaça da região pantanosa."
+    },
+    {
+      "id": "emboscadas",
+      "name": "Emboscadas verdes",
+      "description": "Vegetação hostil e visibilidade limitada sustentam a identidade de emboscada; sem regra executável definida."
+    },
+    {
+      "id": "anel_templo",
+      "name": "Anel fecha no Templo Antigo",
+      "description": "A dinâmica Emboscada Verde fecha no templo; a neblina com esporos tóxicos pune o atraso."
+    }
+  ],
+  "fidelity_exclusions": [
+    {
+      "source": "Cumes de Vento, montanhas nevadas e arquipélago",
+      "reason": "Não pertencem à identidade narrativa de Priadus definida na seção W2/C2 do README."
+    },
+    {
+      "source": "WCFG, INI e C++ conflitantes",
+      "reason": "Dados técnicos conflitantes não substituem o cânone visual aprovado no README."
+    },
+    {
+      "source": "inferência de gameplay",
+      "reason": "Não definir dimensões, spawns, loot, coordenadas ou regras executáveis neste contrato visual."
+    }
+  ],
+  "unresolved_technical_data": [
+    {
+      "topic": "bounds e dimensões reais do mundo",
+      "status": "não resolvido",
+      "description": "As unidades normalizadas deste preview não determinam limites de gameplay."
+    },
+    {
+      "topic": "spawns, loot e dados de ZEX",
+      "status": "não resolvido",
+      "description": "Contagens e posições técnicas não foram reconciliadas nem selecionadas por este manifesto."
+    }
+  ]
+}

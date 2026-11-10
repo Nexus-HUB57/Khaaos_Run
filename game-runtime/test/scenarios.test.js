@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { KhaaosSim3D, getWorldLayout, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { resolveScenario } from '../src/game3d/scenarios.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 test('o seletor usa os operativos canônicos com dados visuais completos', () => {
   // Fase 26 — 16 canônicos + TALON (Agilidade e Informação) = 17 selecionáveis
@@ -36,7 +37,9 @@ test('Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
   const training = new KhaaosSim3D({ seed: 'ZONE-RULES', botCount: 0 });
   const barburhen = new KhaaosSim3D({ seed: 'ZONE-RULES', botCount: 0, scenarioId: 'Barburhen' });
   training.start('belt');
+  disembarcarSim(training); // Task 53 — protocolo do trem cumprido antes do teste
   barburhen.start('belt');
+  disembarcarSim(barburhen); // Task 53 — protocolo do trem cumprido antes do teste
   for (const sim of [training, barburhen]) {
     sim.player.x = 171;
     sim.player.z = 0;
@@ -44,8 +47,10 @@ test('Barburhen aplica dano de ring e KRC de acordo com o multiplicador do mundo
     sim.step(DEFAULT_INPUT, 1 / 30);
   }
   assert.ok(barburhen.player.life < training.player.life);
-  assert.equal(training.scenario.krcMultiplier, 1);
-  assert.equal(barburhen.scenario.krcMultiplier, 1.5);
+  assert.equal(training.scenario.krcMultiplier, 0.5);
+  assert.equal(training.scenario.xpMultiplier, 1.0);
+  assert.equal(barburhen.scenario.krcMultiplier, 1.0);
+  assert.equal(barburhen.scenario.xpMultiplier, 1.25);
   assert.equal(barburhen.snapshot().scenarioId, 'Barburhen');
   assert.equal(barburhen.exportReplay().scenarioId, 'Barburhen');
 });
@@ -66,7 +71,8 @@ test('os quatro Mundos competitivos possuem previews locais selecionáveis e ali
     const scenario = resolveScenario(alias);
     assert.equal(scenario.id, canonical);
     assert.equal(scenario.sectorNames.length, 5);
-    assert.ok(scenario.krcMultiplier > 1);
+    assert.ok(scenario.krcMultiplier >= 1.5);
+    assert.ok(scenario.xpMultiplier >= 1.5);
     const sim = new KhaaosSim3D({ seed: `PREVIEW-${canonical}`, botCount: 0, scenarioId: canonical });
     assert.equal(sim.snapshot().scenarioId, canonical);
     assert.ok(sim.scenario.playerSpawn);

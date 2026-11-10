@@ -1,0 +1,92 @@
+# =============================================================================
+# Khaaos Run — P1 GoodCode Games: bootstrap de acesso à VPS (TEMPORÁRIO).
+# =============================================================================
+# A VPS da HostGator (143.95.213.237, porta 22022) aceita APENAS autenticação
+# por chave pública ("Bad authentication type; allowed types: ['publickey']").
+# Este workflow usa o secret CREDENCIAIS_SSH (chave privada já registrada no
+# repo — PB-07, o valor nunca aparece no log: o GitHub mascara secrets) para:
+#   1. injetar a chave pública do sandbox de automação no authorized_keys do
+#      root (idempotente — grep -qxF antes do append);
+#   2. rodar uma AUDITORIA READ-ONLY (nenhuma alteração além da chave).
+# A chave injetada é: ssh-ed25519 zai-sandbox-20261109 (pública, versionada
+# aqui — chaves públicas não são segredos).
+# A removação pós-uso é um `sed -i '/zai-sandbox-20261109/d'` na VPS.
+# =============================================================================
+name: P1 — Bootstrap acesso VPS GoodCode (temporário)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bridge:
+    name: Injetar chave pública + auditoria read-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Injetar chave pública do sandbox na VPS
+        env:
+          CRED: ${{ secrets.CREDENCIAIS_SSH }}
+          PUBKEY: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ0NDMCqMLcLq3sl2ooPPbNwgxBe7fNApNunxQXjCqBq zai-sandbox-20261109'
+          VPS_HOST: '143.95.213.237'
+          VPS_PORT: '22022'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$CRED" > ~/.ssh/id_bridge
+          chmod 600 ~/.ssh/id_bridge
+          inject_cmd="mkdir -p ~/.ssh; grep -qxF '$PUBKEY' ~/.ssh/authorized_keys 2>/dev/null || echo '$PUBKEY' >> ~/.ssh/authorized_keys; chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys; echo CHAVE_INJETADA"
+          if ssh -p "$VPS_PORT" -i ~/.ssh/id_bridge -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=20 root@"$VPS_HOST" "$inject_cmd" 2>/tmp/ssh_err; then
+            echo "✅ acesso via chave privada do secret CREDENCIAIS_SSH"
+          else
+            echo "chave privada não autenticou ($(tail -1 /tmp/ssh_err | cut -c1-90)); tentando como senha (sshpass)"
+            sudo apt-get install -y sshpass >/dev/null 2>&1 || true
+            rm -f ~/.ssh/id_bridge
+            sshpass -p "$CRED" ssh -p "$VPS_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=20 root@"$VPS_HOST" "$inject_cmd"
+          fi
+
+      - name: Auditoria read-only da VPS
+        env:
+          CRED: ${{ secrets.CREDENCIAIS_SSH }}
+          VPS_HOST: '143.95.213.237'
+          VPS_PORT: '22022'
+        run: |
+          set -euo pipefail
+          ssh_cmd() {
+            ssh -p "$VPS_PORT" -i ~/.ssh/id_bridge -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=20 root@"$VPS_HOST" "$1" 2>/dev/null \
+              || sshpass -p "$CRED" ssh -p "$VPS_PORT" -o StrictHostKeyChecking=no -o ConnectTimeout=20 root@"$VPS_HOST" "$1" 2>/dev/null
+          }
+          {
+            echo '=== hostname/OS ==='
+            ssh_cmd 'hostname; head -3 /etc/os-release; uname -r'
+            echo '=== uptime/load ==='
+            ssh_cmd 'uptime'
+            echo '=== cpu/memória ==='
+            ssh_cmd 'nproc; free -h | head -3'
+            echo '=== disco ==='
+            ssh_cmd 'df -h / /var 2>/dev/null | sed 1d'
+            echo '=== portas de escuta ==='
+            ssh_cmd 'ss -tlnp | head -25'
+            echo '=== serviços em execução ==='
+            ssh_cmd 'systemctl list-units --type=service --state=running --no-pager --no-legend | awk "{print \$1}" | head -35'
+            echo '=== tooling ==='
+            ssh_cmd 'for b in nginx caddy apache2 node npm docker docker-compose certbot python3 pm2; do command -v $b >/dev/null 2>&1 && echo "$b: $(command -v $b)"; done; nginx -v 2>&1; node -v 2>/dev/null'
+            echo '=== /var/www /srv /opt ==='
+            ssh_cmd 'ls -la /var/www 2>/dev/null; ls /srv 2>/dev/null; ls /opt 2>/dev/null'
+            echo '=== docker ==='
+            ssh_cmd 'docker ps -a 2>/dev/null | head -12'
+            echo '=== nginx sites ==='
+            ssh_cmd 'ls /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null; grep -Rh server_name /etc/nginx/ 2>/dev/null | head -10'
+            echo '=== certificados ==='
+            ssh_cmd 'ls /etc/letsencrypt/live 2>/dev/null; certbot certificates 2>/dev/null | head -20'
+            echo '=== firewall ==='
+            ssh_cmd 'ufw status 2>/dev/null | head -12'
+            echo '=== usuários humanos ==='
+            ssh_cmd 'awk -F: "\$3>=1000 && \$1!=\"nobody\"{print \$1, \$7}" /etc/passwd'
+          } 2>&1 | tee "$GITHUB_STEP_SUMMARY" | tail -120

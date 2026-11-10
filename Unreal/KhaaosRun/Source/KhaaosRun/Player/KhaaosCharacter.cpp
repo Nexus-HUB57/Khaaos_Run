@@ -13,6 +13,7 @@
 
 #include "Player/KhaaosPlayerState.h"
 #include "Player/KhaaosPlayerController.h"
+#include "Game/KhaaosGameMode.h"
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
 #include "Game/AbilitySystem/KhaaosAbilityComponent.h"
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
@@ -129,6 +130,7 @@ AKhaaosCharacter::AKhaaosCharacter()
         bIsCrouching = false;
         bIsSliding = false;
         bIsDowned = false;
+        DownedTimeRemaining = 0.0f;
         bIsDead = false;
 
         // ── Camera Mode ──
@@ -170,6 +172,68 @@ void AKhaaosCharacter::Tick(float DeltaSeconds)
 
         if (bIsDead)
         {
+                return;
+        }
+
+        if (CachedPS && CachedPS->IsDowned())
+        {
+                if (!bIsDowned)
+                {
+                        bIsDowned = true;
+                        bIsSprinting = false;
+                        bIsSliding = false;
+                        OnDowned.Broadcast();
+                        if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+                        {
+                                MoveComp->StopMovementImmediately();
+                                MoveComp->DisableMovement();
+                        }
+                }
+                DownedTimeRemaining = CachedPS->GetDownedTimeRemaining();
+                return;
+        }
+
+        if (bIsDowned && CachedPS && CachedPS->PlayerStatus == EPlayerStatus::Vivo &&
+                (Health > 0.0f || CachedPS->Health > 0.0f))
+        {
+                bIsDowned = false;
+                DownedTimeRemaining = 0.0f;
+                DownedByActor.Reset();
+                if (Health <= 0.0f && CachedPS->Health > 0.0f)
+                {
+                        Health = CachedPS->Health;
+                        OnHealthChanged.Broadcast(Health, Health);
+                }
+                bIsCrouching = false;
+                if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+                {
+                        MoveComp->SetMovementMode(MOVE_Walking);
+                }
+                UpdateMovementSpeed();
+                OnRevived.Broadcast();
+        }
+
+        // PlayerState is the sole deadline authority whenever it exists. The Character only
+        // mirrors its timer and transitions to the final visual death after elimination.
+        if (bIsDowned)
+        {
+                if (CachedPS)
+                {
+                        if (CachedPS->PlayerStatus == EPlayerStatus::Vivo && !CachedPS->IsDowned())
+                        {
+                                CachedPS->StartDownedWindow(DownedByActor.Get());
+                        }
+                        DownedTimeRemaining = CachedPS->GetDownedTimeRemaining();
+                        if (CachedPS->PlayerStatus != EPlayerStatus::Vivo && HasAuthority())
+                        {
+                                Die(DownedByActor.Get());
+                        }
+                }
+                else if (HasAuthority())
+                {
+                        DownedTimeRemaining = FMath::Max(0.0f, DownedTimeRemaining - DeltaSeconds);
+                        if (DownedTimeRemaining <= 0.0f) Die(DownedByActor.Get());
+                }
                 return;
         }
 
@@ -726,7 +790,7 @@ void AKhaaosCharacter::ApplySpecies(const UKhaaosSpeciesDataAsset* SpeciesAsset)
 
 float AKhaaosCharacter::ApplyDamage(float DamageAmount, AActor* DamageInstigator, const FGameplayTag& DamageType)
 {
-        if (!HasAuthority() || bIsDead || DamageAmount <= 0.0f)
+        if (!HasAuthority() || bIsDead || bIsDowned || DamageAmount <= 0.0f)
         {
                 return 0.0f;
         }
@@ -751,10 +815,28 @@ float AKhaaosCharacter::ApplyDamage(float DamageAmount, AActor* DamageInstigator
 
         float ActualDamage = InternalApplyDamage(DamageAmount, DamageInstigator);
 
-        // Check for death
+        // Enter the recoverable 7-second window at zero health. Only timeout eliminates.
         if (Health <= 0.0f && !bIsDead)
         {
-                Die(DamageInstigator);
+                if (!bIsDowned)
+                {
+                        bIsDowned = true;
+                        DownedTimeRemaining = DownedTimeLimitSeconds;
+                        DownedByActor = DamageInstigator;
+                        bIsSprinting = false;
+                        bIsSliding = false;
+                        OnDowned.Broadcast();
+                        if (CachedPS)
+                        {
+                                CachedPS->StartDownedWindow(DamageInstigator);
+                        }
+
+                        if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+                        {
+                                MoveComp->StopMovementImmediately();
+                                MoveComp->DisableMovement();
+                        }
+                }
         }
 
 	return ActualDamage;
@@ -822,6 +904,26 @@ float AKhaaosCharacter::Heal(float HealAmount)
         float OldHealth = Health;
         Health = FMath::Clamp(Health + HealAmount, 0.0f, MaxHealth);
         float ActualHeal = Health - OldHealth;
+		if (CachedPS && CachedPS->IsDowned())
+		{
+			CachedPS->Heal(HealAmount);
+		}
+
+        if (bIsDowned && Health > 0.0f)
+        {
+                bIsDowned = false;
+                DownedTimeRemaining = 0.0f;
+                DownedByActor.Reset();
+                bIsCrouching = false;
+                bIsSliding = false;
+
+                if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+                {
+                        MoveComp->SetMovementMode(MOVE_Walking);
+                }
+                UpdateMovementSpeed();
+                OnRevived.Broadcast();
+        }
 
         OnHealthChanged.Broadcast(Health, ActualHeal);
         UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosCharacter: Healed %.1f (Health=%.1f)"), ActualHeal, Health);
@@ -864,6 +966,9 @@ void AKhaaosCharacter::EnterDeadState(AActor* Killer, bool bUpdatePlayerState)
 	}
 
 	bIsDead = true;
+	bIsDowned = false;
+	DownedTimeRemaining = 0.0f;
+	DownedByActor.Reset();
 	bIsSprinting = false;
 	bIsCrouching = false;
 	bIsSliding = false;
@@ -871,7 +976,31 @@ void AKhaaosCharacter::EnterDeadState(AActor* Killer, bool bUpdatePlayerState)
 
 	if (bUpdatePlayerState && CachedPS)
 	{
-		CachedPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+		if (CachedPS->PlayerStatus != EPlayerStatus::Eliminado)
+		{
+			APlayerState* Eliminator = Cast<APlayerState>(Killer);
+			if (!Eliminator)
+			{
+				if (APawn* KillerPawn = Cast<APawn>(Killer))
+				{
+					Eliminator = KillerPawn->GetPlayerState();
+				}
+			}
+
+			const FString Cause = Eliminator ? TEXT("PVP") : TEXT("QUEDA");
+			if (UWorld* World = GetWorld())
+			{
+				if (AKhaaosGameMode* GameMode = World->GetAuthGameMode<AKhaaosGameMode>())
+				{
+					GameMode->EliminatePlayer(CachedPS, Eliminator, Cause);
+				}
+			}
+
+			if (CachedPS->PlayerStatus != EPlayerStatus::Eliminado)
+			{
+				CachedPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+			}
+		}
 		if (Killer)
 		{
 			CachedPS->EliminatorId = Killer->GetUniqueID().ToString();
@@ -919,6 +1048,18 @@ void AKhaaosCharacter::OnRep_Stamina(float OldStamina)
 {
         float Delta = Stamina - OldStamina;
         OnStaminaChanged.Broadcast(Stamina, Delta);
+}
+
+void AKhaaosCharacter::OnRep_Downed()
+{
+        if (bIsDowned)
+        {
+                OnDowned.Broadcast();
+        }
+        else if (!bIsDead && Health > 0.0f)
+        {
+                OnRevived.Broadcast();
+        }
 }
 
 void AKhaaosCharacter::OnRep_CameraMode()
@@ -1153,6 +1294,7 @@ void AKhaaosCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
         DOREPLIFETIME(AKhaaosCharacter, bIsCrouching);
         DOREPLIFETIME(AKhaaosCharacter, bIsSliding);
         DOREPLIFETIME(AKhaaosCharacter, bIsDowned);
+        DOREPLIFETIME(AKhaaosCharacter, DownedTimeRemaining);
         DOREPLIFETIME(AKhaaosCharacter, bIsDead);
 
         // Camera & movement state

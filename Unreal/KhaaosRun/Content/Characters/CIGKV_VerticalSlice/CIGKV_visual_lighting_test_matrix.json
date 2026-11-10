@@ -1,0 +1,21 @@
+{
+  "schema": "khaaos.cigkv.visual-lighting-test-matrix/v1",
+  "engine": "UE5.8",
+  "profiles": {
+    "Low": {"view_distance": 0, "shadow": 0, "post_process": 0, "texture_quality": 0, "lumen": false, "nanite": false},
+    "Medium": {"view_distance": 1, "shadow": 1, "post_process": 1, "texture_quality": 1, "lumen": true, "nanite": true},
+    "High": {"view_distance": 2, "shadow": 2, "post_process": 2, "texture_quality": 2, "lumen": true, "nanite": true},
+    "Ultra": {"view_distance": 3, "shadow": 3, "post_process": 3, "texture_quality": 3, "lumen": true, "nanite": true}
+  },
+  "lighting_scenarios": [
+    {"id": "day_neutral", "console_commands": ["r.Lumen.Reflections.Allow 1", "r.Lumen.ScreenProbeGather 1", "r.Shadow.Virtual.Enable 1", "r.Exposure.Offset 0"]},
+    {"id": "golden_hour", "console_commands": ["r.Lumen.Reflections.Allow 1", "r.Lumen.ScreenProbeGather 1", "r.Shadow.Virtual.Enable 1", "r.Exposure.Offset -0.25"]},
+    {"id": "night_interior", "console_commands": ["r.Lumen.Reflections.Allow 1", "r.Lumen.ScreenProbeGather 1", "r.Shadow.Virtual.Enable 1", "r.Exposure.Offset 0.75"]}
+  ],
+  "views": [
+    {"id": "third_person_combat", "camera_tag": "CIGKV_Camera_ThirdPerson"},
+    {"id": "first_person_ads", "camera_tag": "CIGKV_Camera_FirstPersonADS"}
+  ],
+  "expected_captures": 24,
+  "acceptance": {"minimum_png_width": 1920, "minimum_png_height": 1080, "medium_gpu_p95_ms_max": 16.67, "reject": ["plastic_skin", "hair_flat_highlight", "lumen_flicker", "lod_pop", "weapon_clipping"]}
+}

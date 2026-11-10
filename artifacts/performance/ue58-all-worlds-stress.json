@@ -1,6 +1,6 @@
 {
   "schema": "khaaos.ue58.all-world-stress/v1",
-  "generatedAt": "2026-10-27T12:27:40.683Z",
+  "generatedAt": "2026-11-05T15:39:36.120Z",
   "worlds": [
     "CIGKV",
     "Barburhen",
@@ -9,9 +9,8 @@
     "Arukheea"
   ],
   "engine": {
-    "status": "skipped_no_engine",
-    "engine": null,
-    "message": "UnrealEditor-Cmd/UE5_ROOT ausente neste ambiente; o resultado usa o proxy determinístico da simulação."
+    "status": "not_requested",
+    "message": "Use --run-engine em runner UE5.8 para acionar UE5_WORLD_STRESS_COMMAND."
   },
   "proxy": {
     "mode": "deterministic_runtime_proxy",
@@ -19,108 +18,108 @@
     "playersPerWorld": 60,
     "totalPlayers": 300,
     "worldCount": 5,
-    "totalWallMs": 1593.114,
-    "aggregateProxyFps": 941.62,
+    "totalWallMs": 8731.195,
+    "aggregateProxyFps": 217.91,
     "worlds": [
       {
         "world": "CIGKV",
         "players": 60,
         "simulatedSeconds": 30,
         "ticks": 900,
-        "wallMs": 320.909,
+        "wallMs": 1751.728,
         "frameMs": {
-          "p50": 0.154,
-          "p95": 0.999,
-          "p99": 1.629,
-          "max": 9.645
+          "p50": 1.405,
+          "p95": 4.155,
+          "p99": 5.211,
+          "max": 23.289
         },
-        "proxyServerFps": 1001.32,
+        "proxyServerFps": 240.7,
         "targetServerFps": 30,
         "targetFrameMs": 33.333,
         "budgetPass": true,
         "renderFps": null,
         "renderFpsStatus": "not_measured_without_ue5",
-        "events": 953
+        "events": 1278
       },
       {
         "world": "Barburhen",
         "players": 60,
         "simulatedSeconds": 30,
         "ticks": 900,
-        "wallMs": 336.709,
+        "wallMs": 1896.248,
         "frameMs": {
-          "p50": 0.181,
-          "p95": 1.062,
-          "p99": 1.732,
-          "max": 5.479
+          "p50": 1.401,
+          "p95": 4.589,
+          "p99": 6.453,
+          "max": 16.421
         },
-        "proxyServerFps": 941.91,
+        "proxyServerFps": 217.93,
         "targetServerFps": 30,
         "targetFrameMs": 33.333,
         "budgetPass": true,
         "renderFps": null,
         "renderFpsStatus": "not_measured_without_ue5",
-        "events": 1464
+        "events": 2031
       },
       {
         "world": "Priadus",
         "players": 60,
         "simulatedSeconds": 30,
         "ticks": 900,
-        "wallMs": 319.416,
+        "wallMs": 1714.985,
         "frameMs": {
-          "p50": 0.174,
-          "p95": 1.043,
-          "p99": 1.708,
-          "max": 3.537
+          "p50": 1.428,
+          "p95": 4.096,
+          "p99": 5.597,
+          "max": 10.479
         },
-        "proxyServerFps": 958.67,
+        "proxyServerFps": 244.12,
         "targetServerFps": 30,
         "targetFrameMs": 33.333,
         "budgetPass": true,
         "renderFps": null,
         "renderFpsStatus": "not_measured_without_ue5",
-        "events": 1396
+        "events": 2017
       },
       {
         "world": "Ckesalth",
         "players": 60,
         "simulatedSeconds": 30,
         "ticks": 900,
-        "wallMs": 327.882,
+        "wallMs": 1762.284,
         "frameMs": {
-          "p50": 0.231,
-          "p95": 0.998,
-          "p99": 1.599,
-          "max": 6.27
+          "p50": 1.422,
+          "p95": 4.135,
+          "p99": 5.172,
+          "max": 8.671
         },
-        "proxyServerFps": 1002.46,
+        "proxyServerFps": 241.82,
         "targetServerFps": 30,
         "targetFrameMs": 33.333,
         "budgetPass": true,
         "renderFps": null,
         "renderFpsStatus": "not_measured_without_ue5",
-        "events": 1398
+        "events": 1957
       },
       {
         "world": "Arukheea",
         "players": 60,
         "simulatedSeconds": 30,
         "ticks": 900,
-        "wallMs": 285.804,
+        "wallMs": 1599.236,
         "frameMs": {
-          "p50": 0.138,
-          "p95": 0.984,
-          "p99": 1.48,
-          "max": 2.907
+          "p50": 1.263,
+          "p95": 3.976,
+          "p99": 4.937,
+          "max": 11.69
         },
-        "proxyServerFps": 1016.48,
+        "proxyServerFps": 251.49,
         "targetServerFps": 30,
         "targetFrameMs": 33.333,
         "budgetPass": true,
         "renderFps": null,
         "renderFpsStatus": "not_measured_without_ue5",
-        "events": 1215
+        "events": 1799
       }
     ],
     "pass": true,

@@ -1,0 +1,57 @@
+{
+  "schema": "khaaos.ue58.fixed-replay/v1",
+  "name": "five-worlds-live-action-60-operators",
+  "seed": "UE58-FIVE-WORLDS-FIXED-REPLAY-2026-11",
+  "durationSeconds": 600,
+  "tickRate": 30,
+  "playersPerWorld": 60,
+  "worlds": [
+    "CIGKV",
+    "Barburhen",
+    "Priadus",
+    "Ckesalth",
+    "Arukheea"
+  ],
+  "renderProfile": "Medium",
+  "features": {
+    "lumen": true,
+    "virtualShadowMaps": true,
+    "nanite": true,
+    "taau": true,
+    "dynamicResolution": false
+  },
+  "capture": {
+    "statUnit": true,
+    "statUnitGraph": true,
+    "gpuVisualizer": true,
+    "csv": true,
+    "insightsTrace": true,
+    "shaderPipelineCache": true
+  },
+  "acceptance": {
+    "serverTickP95Ms": 33.33,
+    "gameThreadP95Ms": 8.33,
+    "renderThreadP95Ms": 8.33,
+    "clientRenderP95Ms": 16.67,
+    "gpuP95Ms": 16.67,
+    "maxMemoryGrowthMb": 512,
+    "persistentHitchMs": 100,
+    "lumen": {
+      "enabled": true,
+      "requiredCapture": "gpuVisualizer",
+      "maxGpuP95Ms": 8.33,
+      "status": "configured_until_real_runner_capture"
+    },
+    "nanite": {
+      "enabled": true,
+      "requiredCapture": "statUnitGraph",
+      "maxFallbackPercent": 5,
+      "status": "configured_until_real_runner_capture"
+    }
+  },
+  "notes": [
+    "Este arquivo define o replay e o perfil; o runner UE5.8 deve apontar UE5_REPLAY_COMMAND para o AutomationTest cookado.",
+    "Os resultados de GPU só são válidos quando capturados por UnrealEditor-Cmd em hardware de homologação.",
+    "A ordem dos mundos, seed, população e duração não deve ser alterada entre execuções comparáveis."
+  ]
+}

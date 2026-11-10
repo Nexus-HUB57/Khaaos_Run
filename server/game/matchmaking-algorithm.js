@@ -38,7 +38,7 @@
 /** @type {MatchmakingConfig} */
 const DEFAULT_CONFIG = {
   minPlayers: 2,
-  maxPlayers: 50,
+  maxPlayers:  100,
   initialDelta: 100,
   deltaGrowthPerSecond: 15,
   maxDelta: 600,

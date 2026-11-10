@@ -17,6 +17,7 @@ import {
 } from '../src/game3d/damageNumbers3d.js';
 import { KhaaosSim3D } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const DT = 1 / 20;
@@ -209,6 +210,7 @@ test('fase27 headless-safe: sem document o pool é no-op de DOM e nunca explode'
 test('fase27 sim: hit de bala do JOGADOR traz owner=player, dano inteiro e head booleano', () => {
   const s = groundSim('F27-BALA', 1);
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   bot.x = p.x; bot.z = p.z - 3; bot.armor = 0; // encostado à frente (frente = -Z)
   s.step({ ...idle(0), fire: true }, STEP);
@@ -225,6 +227,7 @@ test('fase27 sim: hit de bala do JOGADOR traz owner=player, dano inteiro e head 
 test('fase27 sim: granada do jogador emite hit kind explosion com owner (número de explosão)', () => {
   const s = groundSim('F27-FRAG', 1);
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   bot.x = p.x; bot.z = p.z - 4; bot.armor = 0;
   s.step({ ...idle(0), throw: true }, STEP);
@@ -248,6 +251,7 @@ test('fase27 sim: granada do jogador emite hit kind explosion com owner (número
 test('fase27 sim: botKnocked do jogador traz victim (id) — popup ancora no hit letal', () => {
   const s = groundSim('F27-KNOCK', 1, { squad: true });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   // Fase 32 — economia de sobrevivência: sem o kit zerado o bot se CURA no
   // step (life 1 → 31) e o cenário "qualquer hit nocauteia" deixa de valer.
@@ -268,6 +272,7 @@ test('fase27 room: explosão entrega hit kind explosion SÓ ao dono da granada',
   const room = new MatchRoom3D({ id: 'ring3d-f27', seed: 'F27-ROOM', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1'); room.addPlayer('p2', 'JOGADOR-2');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
   p2.armor = 0;
   room.input('p1', blank({ seq: 1, throw: true })); room.tick(DT);
@@ -294,6 +299,7 @@ test('fase27 room: hit de bala autoritativa continua com owner (contrato já exi
   const room = new MatchRoom3D({ id: 'ring3d-f27b', seed: 'F27-ROOM-B', region: 'sa-east', capacity: 16, botFill: 0, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1'); room.addPlayer('p2', 'JOGADOR-2');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1'), p2 = room.humans.get('p2');
   p1.cooldown = 0; p2.armor = 0;
   p1.yaw = -Math.PI / 2; // frente = +X

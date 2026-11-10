@@ -1,0 +1,243 @@
+[mpzex-selftest] servidor isolado em http://127.0.0.1:8846 (capacidade 2, zero bots)
+[MP-ZEX-08] Readiness do staging aprovada.
+[MP-ZEX-08] Duas contas de staging autenticadas.
+[MP-ZEX-08] A e B estão na mesma sala de staging.
+[MP-ZEX-08] Navegando A e B por inputs de gameplay até ZEX // CENTRO.
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #2 (sidestep direita + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #2 (sidestep direita + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #3 (sidestep esquerda + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #3 (sidestep esquerda + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #4 (sidestep direita + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #4 (sidestep direita + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,2.0) d_terminal=93.5 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-104.8,0.6) d_terminal=112.8 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #5 (sidestep esquerda + hop)
+[MP-ZEX-08] B: pos=(-95.3,0.1) d_terminal=103.3 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,5.9) d_terminal=93.7 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-85.6,0.0) d_terminal=93.6 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(95.2,2.6) d_terminal=87.2 waypoint=6/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-76.9,0.0) d_terminal=84.9 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(86.1,2.1) d_terminal=78.1 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-68.3,0.0) d_terminal=76.3 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(75.8,2.1) d_terminal=67.9 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-59.6,0.0) d_terminal=67.6 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(66.9,2.1) d_terminal=59.0 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-50.7,0.0) d_terminal=58.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(58.1,2.0) d_terminal=50.1 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-42.1,0.0) d_terminal=50.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(49.4,2.0) d_terminal=41.5 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-33.4,0.0) d_terminal=41.4 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(40.7,2.0) d_terminal=32.8 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-24.7,0.0) d_terminal=32.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(32.1,2.0) d_terminal=24.2 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-16.6,2.3) d_terminal=24.7 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(23.4,2.0) d_terminal=15.5 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-8.2,5.2) d_terminal=17.0 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(14.6,1.0) d_terminal=6.7 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] A chegou ao alcance de interação.
+[MP-ZEX-08] B: pos=(0.2,5.8) d_terminal=9.7 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(7.1,3.1) d_terminal=3.2 waypoint=6/7 vida=100 medkit=false
+[MP-ZEX-08] B chegou ao alcance de interação.
+[MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
+[MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
+[MP-ZEX-08] B reservou o mesmo terminal após a desconexão de A.
+[MP-ZEX-08] MP-ZEX-08 PASS: sem XP/extração para A; resume preservado; B canalizando o terminal.
+[MP-ZEX-09] Servidor remoto configurado via KR_ZEX09_BASE_URL.
+[MP-ZEX-09] Duas contas autenticadas.
+[MP-ZEX-09] Mesma sala ring3d-2; partida em andamento.
+[MP-ZEX-09] Sala ring3d-2 aceita na tentativa 1/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-3; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.3,37.0) vida=100 d_terminal=3.1m
+[MP-ZEX-09] Sala ring3d-3 aceita na tentativa 2/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-4; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.1,36.5) vida=100 d_terminal=3.6m
+[MP-ZEX-09] Sala ring3d-4 aceita na tentativa 3/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (22 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(121.0,0.0) vida=100 d_terminal=40.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(121.1,4.2) vida=100 d_terminal=35.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(121.2,9.1) vida=100 d_terminal=30.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(121.4,14.0) vida=100 d_terminal=26.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(121.5,18.9) vida=100 d_terminal=21.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-5; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(121.6,23.9) vida=100 d_terminal=16.2m
+[MP-ZEX-09] [nav] A: pos=(121.8,27.4) vida=100 d_terminal=12.7m
+[MP-ZEX-09] [nav] A: pos=(121.9,30.9) vida=100 d_terminal=9.3m
+[MP-ZEX-09] [nav] A: pos=(122.0,34.3) vida=100 d_terminal=6.0m
+[MP-ZEX-09] [nav] A: pos=(120.6,37.1) vida=100 d_terminal=2.9m
+[MP-ZEX-09] Sala ring3d-5 aceita na tentativa 4/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-6; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.1,36.5) vida=100 d_terminal=3.6m
+[MP-ZEX-09] Sala ring3d-6 aceita na tentativa 5/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-7; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.1,36.7) vida=100 d_terminal=3.4m
+[MP-ZEX-09] Sala ring3d-7 aceita na tentativa 6/6 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.9) vida=100 d_terminal=6.4m
+[MP-ZEX-09] [nav] A: pos=(119.2,36.7) vida=100 d_terminal=3.4m
+[MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 153 ms (109–481 ms).
+[MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
+[MP-ZEX-09] Fase 3: RTT medido 132–468 ms (média 256 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.72 s, atraso visual 50 ms (bound 635 ms), estado converge pós-drain.
+[MP-ZEX-09] RELATÓRIO: {
+  "link_fase2_interrupcao": {
+    "up": {
+      "frames": 9,
+      "spikes": 1,
+      "minMs": 39.2,
+      "avgMs": 106.6,
+      "p95Ms": 429.3,
+      "maxMs": 429.3
+    },
+    "down": {
+      "frames": 53,
+      "spikes": 0,
+      "minMs": 36.2,
+      "avgMs": 67,
+      "p95Ms": 91.2,
+      "maxMs": 92.9
+    },
+    "effectiveRttMs": 173.6
+  },
+  "link_fase3_conclusao": {
+    "up": {
+      "frames": 7,
+      "spikes": 1,
+      "minMs": 37.4,
+      "avgMs": 106.3,
+      "p95Ms": 391.3,
+      "maxMs": 391.3
+    },
+    "down": {
+      "frames": 139,
+      "spikes": 1,
+      "minMs": 36.7,
+      "avgMs": 73.3,
+      "p95Ms": 93.8,
+      "maxMs": 305.3
+    },
+    "effectiveRttMs": 179.6
+  },
+  "rtt_medido": {
+    "fase2": {
+      "minMs": 109,
+      "medianMs": 153,
+      "avgMs": 188,
+      "maxMs": 481
+    },
+    "fase3": {
+      "minMs": 132,
+      "medianMs": 171,
+      "avgMs": 256,
+      "maxMs": 468
+    }
+  },
+  "atraso_visual_B_para_A_ms": 50,
+  "canal_server_side_s": {
+    "fase1_normal": 3.97,
+    "fase3_degradada": 3.72
+  },
+  "xp_por_conclusao": {
+    "baseline_normal": 250,
+    "degradada": 250
+  },
+  "perda_modelada": "TCP não descarta quadros; ~2% modelados como picos de retransmissão +200–400 ms"
+}
+[MP-ZEX-09] MP-ZEX-09 PASS: autoridade do servidor, recompensa única, convergência pós-drain e interrupção limpa sob RTT/jitter/perda.
+MPZEX_STAGING_SELFTEST_OK

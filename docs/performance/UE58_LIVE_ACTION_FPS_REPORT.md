@@ -1,14 +1,14 @@
 # Khaaos Run — Stress integrado UE5.8 e relatório FPS
 
-**Gerado:** 2026-10-27T12:27:40.683Z
+**Gerado:** 2026-11-05T15:39:36.120Z
 
 ## Resultado executivo
 
 - Mundos simultâneos: **CIGKV, Barburhen, Priadus, Ckesalth, Arukheea**
 - Carga do proxy: **300 operadores** (60 por mundo)
-- Proxy da simulação: **941.62 FPS server-equivalentes no p95 agregado**
+- Proxy da simulação: **217.91 FPS server-equivalentes no p95 agregado**
 - Gate de frame time de simulação: **PASS** (p95 ≤ 33.33 ms)
-- Renderização UE5.8: **SKIPPED_NO_ENGINE** — UnrealEditor-Cmd/UE5_ROOT ausente neste ambiente; o resultado usa o proxy determinístico da simulação.
+- Renderização UE5.8: **NOT_REQUESTED** — Use --run-engine em runner UE5.8 para acionar UE5_WORLD_STRESS_COMMAND.
 
 > Limitação importante: o sandbox não possui Unreal Engine 5.8 licenciado. Portanto, os números de renderização são marcados como não medidos; o relatório não converte o proxy em uma alegação de FPS gráfico real.
 
@@ -16,11 +16,11 @@
 
 | Mundo | Jogadores | p50 ms | p95 ms | p99 ms | FPS server-equivalente | Gate |
 |---|---:|---:|---:|---:|---:|---|
-| CIGKV | 60 | 0.154 | 0.999 | 1.629 | 1001.32 | PASS |
-| Barburhen | 60 | 0.181 | 1.062 | 1.732 | 941.91 | PASS |
-| Priadus | 60 | 0.174 | 1.043 | 1.708 | 958.67 | PASS |
-| Ckesalth | 60 | 0.231 | 0.998 | 1.599 | 1002.46 | PASS |
-| Arukheea | 60 | 0.138 | 0.984 | 1.48 | 1016.48 | PASS |
+| CIGKV | 60 | 1.405 | 4.155 | 5.211 | 240.7 | PASS |
+| Barburhen | 60 | 1.401 | 4.589 | 6.453 | 217.93 | PASS |
+| Priadus | 60 | 1.428 | 4.096 | 5.597 | 244.12 | PASS |
+| Ckesalth | 60 | 1.422 | 4.135 | 5.172 | 241.82 | PASS |
+| Arukheea | 60 | 1.263 | 3.976 | 4.937 | 251.49 | PASS |
 
 ## Gate visual live action / primeira pessoa
 

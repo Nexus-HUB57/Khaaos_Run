@@ -1,0 +1,243 @@
+<!doctype html>
+<!-- Fase 49 — vitrine dev (evidência visual): TERRENO POR BIOMA (GROUND_BIOMES
+     REAIS do textures3d: neve/musgo/basalto/areia trocam AO VIVO com o perfil
+     de luz F41) + CABELO/CAPA com física de mola (createOperative + animateOperative
+     REAIS: rabo das operatrizes + capa do roll — onda viajante acoplada ao passo,
+     ao sway, ao pitch e ao ar). Serve via `npm run dev` em /scripts/f49-showcase.html
+     — módulos REAIS do jogo. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F49 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 660px; }
+  #hud b { color: #ffb52e; }
+  #readout { position: fixed; left: 12px; bottom: 12px; z-index: 5; color: #e8e3d5; font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre; }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 122px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 700px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #side {
+    position: fixed; right: 12px; top: 12px; z-index: 6; display: flex; flex-direction: column; gap: 10px;
+    width: 250px;
+  }
+  #side .panel {
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px;
+  }
+  #side h3 { margin: 0 0 4px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #side .note { font: 10px/1.5 monospace; color: #8d8598; margin-bottom: 8px; }
+  .btnrow { display: flex; gap: 5px; flex-wrap: wrap; }
+  .btnrow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: transparent; border: 1px solid rgba(122,90,158,.5); border-radius: 3px;
+    padding: 4px 7px; cursor: pointer;
+  }
+  .btnrow button.on { border-color: #c8ff3d; color: #c8ff3d; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 49</b><br />
+  <b>TERRENO POR BIOMA</b> (neve/musgo/basalto/areia — textura própria por mundo com
+  roughness/relevo físicos) + <b>CABELO/CAPA COM FÍSICA DE MOLA</b> (rabo das operatrizes +
+  capa por roll — onda viajante acoplada ao passo/sway/pitch/ar, como as tiras do Talon)
+</div>
+<div id="readout"></div>
+<div id="rail"></div>
+<div id="side">
+  <div class="panel">
+    <h3>BIOMA DO SOLO · W0–W4</h3>
+    <div class="note" id="bioNote">GROUND_BIOMES reais — trocam terreno + perfil de luz</div>
+    <div class="btnrow" id="bioRow"></div>
+  </div>
+  <div class="panel">
+    <h3>REGIME · CABELO/CAPA</h3>
+    <div class="note" id="moNote">onda viajante: ponta atrasa mais (lag por segmento)</div>
+    <div class="btnrow" id="moRow"></div>
+  </div>
+  <div class="panel">
+    <h3>CÂMERA</h3>
+    <div class="note" id="camNote">close da capa/hair + terreno em ângulo raso</div>
+    <div class="btnrow" id="camRow"></div>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createOperative, animateOperative } from '../src/game3d/entities3d.js';
+import { LIGHTING_PROFILES } from '../src/game3d/world3d.js';
+import { GROUND_BIOMES, groundBiomeParams, groundMaterial } from '../src/game3d/textures3d.js';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2('#10161c', .0035);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#ffc98f', 2.35);
+sun.position.set(-18, 24, -12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 2; sun.shadow.camera.far = 90;
+sun.shadow.camera.left = -16; sun.shadow.camera.right = 16;
+sun.shadow.camera.top = 16; sun.shadow.camera.bottom = -16;
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight('#8f74b4', '#4a3d2e', 1.18);
+scene.add(hemi);
+const fill = new THREE.DirectionalLight('#6a5aa0', .72);
+fill.position.set(14, 8, 18);
+scene.add(fill);
+const back = new THREE.DirectionalLight('#a8885e', .55);
+back.position.set(6, 5, 24);
+scene.add(back);
+
+// terreno da BIOMA (groundMaterial REAL — troca ao vivo)
+let ground = null;
+function setGround(biome) {
+  if (ground) { scene.remove(ground); ground.geometry.dispose(); ground.material.dispose(); }
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300, 48, 48), groundMaterial(34, null, biome));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  ground.userData.biome = biome;
+  scene.add(ground);
+}
+
+// ------------------------- OPERATRIZES REAIS (createOperative F49) ----
+// SORO: roll da capa ATIVO (determinístico) + rabo; SNIPER: só rabo.
+const soro = createOperative({ skin: '#8a5a3b', vest: '#b3542e', hair: '#7a4a26', variant: 'OP_MIL_FEMALE_SORO' });
+const soroPos = new THREE.Vector3(-.9, 0, 0);
+soro.group.position.copy(soroPos);
+scene.add(soro.group);
+const sniper = createOperative({ skin: '#d9a06b', vest: '#3f6a2a', variant: 'OP_FEMALE_SNIPER' });
+sniper.group.position.set(.95, 0, .4);
+sniper.group.rotation.y = -.5;
+scene.add(sniper.group);
+
+// --------------------------------------------------- estado da vitrine ----
+const state = {
+  t: 0, speedNorm: .9, air: 0, pitch: 0,
+  cam: 'corpo',        // corpo | capa | hair | chao
+  biome: 'Arukheea',
+  profile: 'Arukheea',
+};
+const MOVES = { parado: { speedNorm: 0, air: 0 }, andar: { speedNorm: .35, air: 0 }, correr: { speedNorm: .9, air: 0 }, ar: { speedNorm: .6, air: 3 } };
+
+function applyBiome(id) {
+  const biome = GROUND_BIOMES[id] ? id : 'Arukheea';
+  state.biome = biome;
+  state.profile = biome;
+  const lp = LIGHTING_PROFILES[biome] ?? LIGHTING_PROFILES.CIGKV;
+  sun.color.set(lp.sunColor); sun.intensity = lp.sunIntensity;
+  sun.shadow.bias = lp.shadowBias; sun.shadow.normalBias = lp.shadowNormalBias;
+  hemi.color.set(lp.hemiSky); hemi.groundColor.set(lp.hemiGround); hemi.intensity = lp.hemiIntensity;
+  fill.color.set(lp.fillColor); fill.intensity = lp.fillIntensity;
+  back.color.set(lp.backColor); back.intensity = lp.backIntensity;
+  renderer.toneMappingExposure = lp.exposure;
+  setGround(biome);
+  const p = groundBiomeParams(biome);
+  for (const b of bioRow.children) b.classList.toggle('on', b.dataset.id === biome);
+  bioNote.textContent = `${biome} · ${p.label} · rough ${p.rough} · relevo ${p.strength} · sol ${lp.sunColor} @${lp.sunIntensity} · exp ${lp.exposure}`;
+}
+
+// ------------------------------------------------------------- UI rail ----
+const bioRow = document.querySelector('#bioRow');
+for (const id of Object.keys(GROUND_BIOMES)) {
+  const b = document.createElement('button');
+  b.textContent = id === 'CIGKV' ? 'W0 CIGKV' : id;
+  b.dataset.id = id;
+  b.onclick = () => applyBiome(id);
+  bioRow.appendChild(b);
+}
+const moRow = document.querySelector('#moRow');
+for (const [label, key] of [['PARADO', 'parado'], ['ANDAR', 'andar'], ['CORRER', 'correr'], ['NO AR', 'ar']]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.id = key;
+  b.onclick = () => {
+    Object.assign(state, MOVES[key]);
+    for (const o of moRow.children) o.classList.toggle('on', o === b);
+  };
+  if (key === 'correr') b.classList.add('on');
+  moRow.appendChild(b);
+}
+const camRow = document.querySelector('#camRow');
+for (const [label, id] of [['CORPO', 'corpo'], ['CAPA', 'capa'], ['CABELO', 'hair'], ['CHÃO RASO', 'chao']]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.id = id;
+  b.onclick = () => {
+    state.cam = id;
+    for (const o of camRow.children) o.classList.toggle('on', o === b);
+  };
+  if (id === 'corpo') b.classList.add('on');
+  camRow.appendChild(b);
+}
+
+// ------------------------------------------------------------- loop 3D ----
+const CAMS = {
+  corpo: { pos: [2.6, 1.8, 3.4], look: [0, 1.05, 0] },
+  capa: { pos: [.5, 1.75, 2.5], look: [-.9, 1.15, 0] },      // costas da SORO (+z)
+  hair: { pos: [-.75, 2.3, .75], look: [-.9, 1.32, .25] },   // nuca/rabo da SORO (de cima)
+  chao: { pos: [2.8, .75, 3.2], look: [0, .2, 0] },          // textura em ângulo raso
+};
+const clock = new THREE.Clock();
+let animT = 0;
+function tick() {
+  const dt = Math.min(.1, clock.getDelta());
+  animT += dt;
+  state.t = animT;
+  animateOperative(soro.parts, { t: animT, speedNorm: state.speedNorm, air: state.air });
+  animateOperative(sniper.parts, { t: animT + 1.7, speedNorm: state.speedNorm * .8, air: state.air });
+  const c = CAMS[state.cam];
+  if (!state.hold) {
+    camera.position.set(...c.pos);
+    camera.lookAt(...c.look);
+  }
+  sun.target.position.set(0, 0, 0);
+  sun.position.set(-18, 24, -12);
+  renderer.render(scene, camera);
+  // readout: física de mola AO VIVO (capa da SORO + rabo) + bioma
+  const cape = soro.parts.cape[2].rotation.x;
+  const hair = soro.parts.hairTail[2].rotation.x;
+  const p = groundBiomeParams(state.biome);
+  readout.innerHTML =
+    `bioma <b>${state.biome}</b> (${p.label}) · rough <b>${p.rough}</b> · relevo <b>${p.strength}</b> · perfil de luz F41 <b>${state.profile}</b> exp ${renderer.toneMappingExposure}\n` +
+    `regime <b>${state.speedNorm === 0 ? 'parado' : state.air ? 'ar' : state.speedNorm > .5 ? 'corrida' : 'andar'}</b> · speedNorm ${state.speedNorm.toFixed(2)} · air ${state.air}\n` +
+    `mola CAPA (ponta rot.x) <b>${cape >= 0 ? '+' : ''}${cape.toFixed(4)}</b> · mola CABELO (ponta rot.x) <b>${hair >= 0 ? '+' : ''}${hair.toFixed(4)}</b>`;
+  requestAnimationFrame(tick);
+}
+applyBiome('Arukheea');
+tick();
+
+// hook de smoke (evidências): __f49.shot([cx,cy,cz],[lx,ly,lz]) → PNG baixa direto
+window.__f49 = {
+  state,
+  soro: soro.parts, sniper: sniper.parts,
+  applyBiome,
+  shot(camPos, lookAt) {
+    state.hold = Array.isArray(camPos) || Array.isArray(lookAt);   // segura o enquadramento
+    if (Array.isArray(camPos)) camera.position.set(...camPos);
+    if (Array.isArray(lookAt)) camera.lookAt(...lookAt);
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/png');
+  },
+  biome: () => state.biome,
+  exposure: () => renderer.toneMappingExposure,
+};
+</script>
+</body>
+</html>

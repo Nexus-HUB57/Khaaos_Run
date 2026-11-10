@@ -30,6 +30,7 @@ class UKhaaosPerformanceBudgetComponent;
 class UKhaaosLODStrategyComponent;
 class UKhaaosReplicationBudgetComponent;
 class UKhaaosMatchTimelineComponent;
+class UKhaaosTrainIngressCoordinator;
 class APlayerController;
 
 // ─── E2E Phases 5-8 Forward Declarations ───────────────────────────────────────────
@@ -472,6 +473,10 @@ protected:
     /** Match timeline recorder (event log, match summary, JSON serialize). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosMatchTimelineComponent* MatchTimeline;
+
+    /** Server-authoritative ZU_TRAIN_V1 handovers for world transitions. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    TObjectPtr<UKhaaosTrainIngressCoordinator> TrainIngressCoordinator;
 
     // ─── Internal Methods ───────────────────────────────────────────────────
 

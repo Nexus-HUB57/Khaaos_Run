@@ -27,12 +27,13 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { playTacticalSfx } from "@/lib/tactical-sfx";
 import {
-  KHAAOS_OPERATIVE_ARCHETYPES,
+  ALL_KHAAOS_OPERATIVE_ARCHETYPES,
   WORLD_BACKDROP_PROMPTS,
   FRAMING_MODES,
   SYNCED_HIGH_TECH_TOOLS,
   CANONICAL_BASE_PROMPTS,
   buildOperativePromptBundle,
+  type OperativeFaction,
   type OperativeGender,
   type CameraFramingMode,
   type SkinRarityTier,
@@ -55,6 +56,7 @@ const FRAMING_KEYS: CameraFramingMode[] = [
 export function CharacterPromptStudio() {
   const { toast } = useToast();
   const [genderFilter, setGenderFilter] = useState<"ALL" | OperativeGender>("ALL");
+  const [factionFilter, setFactionFilter] = useState<"ALL" | OperativeFaction>("ALL");
   const [selectedArchetypeId, setSelectedArchetypeId] = useState<string>("OP_MALE_VANGUARD");
   const [worldId, setWorldId] = useState<WorldId>("CIGKV");
   const [framing, setFraming] = useState<CameraFramingMode>("PORTRAIT_35MM");
@@ -101,19 +103,37 @@ export function CharacterPromptStudio() {
     return () => window.clearInterval(timer);
   }, [isPlayingTimeline]);
 
+  /** Facção efetiva: militares canônicos não declaram o campo (undefined = MILITAR). */
+  const factionOf = (op: (typeof ALL_KHAAOS_OPERATIVE_ARCHETYPES)[number]): OperativeFaction =>
+    op.faction ?? "MILITAR";
+
   const maleCount = useMemo(
-    () => KHAAOS_OPERATIVE_ARCHETYPES.filter((op) => op.gender === "MASCULINO").length,
+    () => ALL_KHAAOS_OPERATIVE_ARCHETYPES.filter((op) => op.gender === "MASCULINO").length,
     [],
   );
   const femaleCount = useMemo(
-    () => KHAAOS_OPERATIVE_ARCHETYPES.filter((op) => op.gender === "FEMININO").length,
+    () => ALL_KHAAOS_OPERATIVE_ARCHETYPES.filter((op) => op.gender === "FEMININO").length,
     [],
   );
+  const factionCounts = useMemo(() => {
+    const counts: Record<OperativeFaction, number> = {
+      MILITAR: 0,
+      MILICIA_URBANA: 0,
+      GANGUE_URBANA: 0,
+    };
+    for (const op of ALL_KHAAOS_OPERATIVE_ARCHETYPES) {
+      counts[factionOf(op)] += 1;
+    }
+    return counts;
+  }, []);
 
   const filteredArchetypes = useMemo(() => {
-    let list = KHAAOS_OPERATIVE_ARCHETYPES;
+    let list = ALL_KHAAOS_OPERATIVE_ARCHETYPES;
     if (genderFilter !== "ALL") {
       list = list.filter((op) => op.gender === genderFilter);
+    }
+    if (factionFilter !== "ALL") {
+      list = list.filter((op) => factionOf(op) === factionFilter);
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
@@ -126,7 +146,7 @@ export function CharacterPromptStudio() {
       );
     }
     return list;
-  }, [genderFilter, searchTerm]);
+  }, [genderFilter, factionFilter, searchTerm]);
 
   const bundle = useMemo(
     () =>
@@ -151,7 +171,7 @@ export function CharacterPromptStudio() {
   const activeKeyframe = bundle.timelineKeyframes[activeKeyframeIndex];
 
   const handleSelectArchetype = (id: string) => {
-    const found = KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.id === id);
+    const found = ALL_KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.id === id);
     setSelectedArchetypeId(id);
     if (found) {
       setWorldId(found.defaultWorldId);
@@ -214,8 +234,9 @@ export function CharacterPromptStudio() {
               ARQUITETURA DE OPERADORES MASCULINOS & FEMININOS (IMAGEM + VÍDEO 10S + RIG 3D)
             </h2>
             <p className="text-xs font-mono text-muted-foreground mt-1 max-w-3xl">
-              Prompts paramétricos fotorrealistas com biomecânica plausível, disciplina de gatilho, atrito físico real e
-              exportação direta para <span className="text-primary">UE5_Mannequin (SK_Zheers_Base)</span>,{" "}
+              Roster completo — {ALL_KHAAOS_OPERATIVE_ARCHETYPES.length} operativos: militares canônicos, milícias e
+              gangues urbanas. Prompts paramétricos fotorrealistas com biomecânica plausível, disciplina de gatilho,
+              atrito físico real e exportação direta para <span className="text-primary">rigs Lyra SK_Manny/SK_Gwen</span>,{" "}
               <span className="text-cyan-300">Blender FBX/DAE</span>, <span className="text-purple-300">Image-to-3D PBR</span> e{" "}
               <span className="text-amber-300">Image-to-Video (Single Continuous Shot)</span>.
             </p>
@@ -245,13 +266,13 @@ export function CharacterPromptStudio() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                TODOS ({KHAAOS_OPERATIVE_ARCHETYPES.length})
+                TODOS ({ALL_KHAAOS_OPERATIVE_ARCHETYPES.length})
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setGenderFilter("MASCULINO");
-                  const firstMale = KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.gender === "MASCULINO");
+                  const firstMale = ALL_KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.gender === "MASCULINO");
                   if (firstMale) handleSelectArchetype(firstMale.id);
                 }}
                 data-testid="filter-gender-male"
@@ -267,7 +288,7 @@ export function CharacterPromptStudio() {
                 type="button"
                 onClick={() => {
                   setGenderFilter("FEMININO");
-                  const firstFemale = KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.gender === "FEMININO");
+                  const firstFemale = ALL_KHAAOS_OPERATIVE_ARCHETYPES.find((a) => a.gender === "FEMININO");
                   if (firstFemale) handleSelectArchetype(firstFemale.id);
                 }}
                 data-testid="filter-gender-female"
@@ -280,14 +301,71 @@ export function CharacterPromptStudio() {
                 ♀ FEMININOS ({femaleCount})
               </button>
             </div>
+
+            <div className="flex items-center gap-1 bg-black/60 p-1 border border-border/50">
+              <button
+                type="button"
+                onClick={() => setFactionFilter("ALL")}
+                data-testid="filter-faction-all"
+                className={`px-2.5 py-1 text-[10px] font-mono tracking-widest transition-all ${
+                  factionFilter === "ALL"
+                    ? "bg-primary text-black font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                TODAS AS FACÇÕES ({ALL_KHAAOS_OPERATIVE_ARCHETYPES.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFactionFilter("MILITAR")}
+                data-testid="filter-faction-militar"
+                className={`px-2.5 py-1 text-[10px] font-mono tracking-widest transition-all ${
+                  factionFilter === "MILITAR"
+                    ? "bg-slate-300 text-black font-bold"
+                    : "text-muted-foreground hover:text-slate-200"
+                }`}
+              >
+                MILITAR ({factionCounts.MILITAR})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFactionFilter("MILICIA_URBANA")}
+                data-testid="filter-faction-milicia"
+                className={`px-2.5 py-1 text-[10px] font-mono tracking-widest transition-all ${
+                  factionFilter === "MILICIA_URBANA"
+                    ? "bg-amber-500 text-black font-bold"
+                    : "text-muted-foreground hover:text-amber-300"
+                }`}
+              >
+                MILÍCIA ({factionCounts.MILICIA_URBANA})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFactionFilter("GANGUE_URBANA")}
+                data-testid="filter-faction-gangue"
+                className={`px-2.5 py-1 text-[10px] font-mono tracking-widest transition-all ${
+                  factionFilter === "GANGUE_URBANA"
+                    ? "bg-rose-500 text-black font-bold"
+                    : "text-muted-foreground hover:text-rose-300"
+                }`}
+              >
+                GANGUE ({factionCounts.GANGUE_URBANA})
+              </button>
+            </div>
           </div>
         </div>
       </CyberCard>
 
-      {/* Operative Archetypes Grid (8 Male & 8 Female with Bespoke SVG Avatars & Ethnicities) */}
+      {/* Operative Archetypes Grid — roster completo (militares canônicos + milícias e gangues) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {filteredArchetypes.map((op) => {
           const isSelected = op.id === bundle.operative.id;
+          const factionChip =
+            op.faction === "MILICIA_URBANA"
+              ? { label: "MILÍCIA", cls: "border-amber-500/40 bg-amber-500/10 text-amber-300" }
+              : op.faction === "GANGUE_URBANA"
+              ? { label: "GANGUE", cls: "border-rose-500/40 bg-rose-500/10 text-rose-300" }
+              : { label: "MILITAR", cls: "border-slate-400/40 bg-slate-400/10 text-slate-300" };
           return (
             <button
               key={op.id}
@@ -309,14 +387,19 @@ export function CharacterPromptStudio() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span
-                      className={`text-[8px] font-mono px-1.5 py-0.2 border ${
-                        op.gender === "FEMININO"
-                          ? "border-purple-500/40 bg-purple-500/10 text-purple-300"
-                          : "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
-                      }`}
-                    >
-                      {op.gender === "FEMININO" ? "♀ FEM" : "♂ MASC"}
+                    <span className="flex items-center gap-1">
+                      <span
+                        className={`text-[8px] font-mono px-1.5 py-0.2 border ${
+                          op.gender === "FEMININO"
+                            ? "border-purple-500/40 bg-purple-500/10 text-purple-300"
+                            : "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+                        }`}
+                      >
+                        {op.gender === "FEMININO" ? "♀ FEM" : "♂ MASC"}
+                      </span>
+                      <span className={`text-[8px] font-mono px-1.5 py-0.2 border ${factionChip.cls}`}>
+                        {factionChip.label}
+                      </span>
                     </span>
                     <span className="text-[8px] font-mono text-amber-300 tracking-wider">
                       {op.rank}

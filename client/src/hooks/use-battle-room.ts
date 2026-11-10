@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
 import { api } from "@shared/routes";
 import type { WarIActionItem } from "@shared/war-i";
+import type { OperativeAvatarRuntime } from "@shared/operative-avatar-catalog";
 
 export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 
@@ -15,6 +16,7 @@ export interface BattlePlayer {
   userId: string;
   displayName: string;
   selectedOperativeId?: string;
+  avatar?: OperativeAvatarRuntime;
   posX: number;
   posY: number;
   carryCapacity?: number;

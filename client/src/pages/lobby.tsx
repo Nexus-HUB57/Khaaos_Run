@@ -242,8 +242,8 @@ export default function LobbyPage() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <img
-                      src={getOperativeAvatarOption(p.selectedOperativeId).avatarPath}
-                      alt={`Avatar ${getOperativeAvatarOption(p.selectedOperativeId).codename}`}
+                      src={p.avatar?.avatarPath ?? getOperativeAvatarOption(p.selectedOperativeId).avatarPath}
+                      alt={`Avatar ${p.avatar?.codename ?? getOperativeAvatarOption(p.selectedOperativeId).codename}`}
                       className="h-10 w-10 shrink-0 rounded border border-cyan-500/30 object-cover"
                     />
                     {p.isHost && <Crown className="w-4 h-4 text-amber-400 shrink-0" />}
@@ -255,7 +255,7 @@ export default function LobbyPage() {
                         )}
                       </span>
                       <span className="block text-[9px] font-mono text-cyan-300 truncate">
-                        {getOperativeAvatarOption(p.selectedOperativeId).codename} · ELO {p.rating ?? 1000}
+                        {p.avatar?.codename ?? getOperativeAvatarOption(p.selectedOperativeId).codename} · ELO {p.rating ?? 1000}
                       </span>
                     </div>
                     {!p.isConnected && (

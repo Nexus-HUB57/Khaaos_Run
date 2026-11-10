@@ -11,6 +11,7 @@ import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
+import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
@@ -27,11 +28,16 @@ import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
+// Task 53 — TREM OFICIAL DO ZU: viagem a bordo + SSOT do protocolo (fases/grace)
+import { TrainRide } from './trainRide3d.js';
+import { zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
+import { buildWorldLayout as getWorldLayoutForTrain } from './layout3d.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
 import { TACTICAL_HOTKEY } from './tacticalmap3d.js'; // Fase 40 — hotkey do mapa tático (fonte única)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
+import { refreshPojStrip, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — painel POJ também no modo local
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -49,6 +55,13 @@ export class Game3D {
     const urlParams = new URLSearchParams(location.search);
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
+    // Fase 56 — avatar GLB real no corpo do herói (?avatar=<id> da biblioteca).
+    // Contrato do pipeline: QUALQUER falha de carga mantém o corpo procedural.
+    this.avatarOverrideId = avatarById(urlParams.get('avatar') ?? '')?.id ?? null;
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+    this.avatarShowcase = null;        // vitrine de rigs no menu
+    this.avatarShowcaseMixer = null;
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
     // Fase 35 — settings gráficas do jogador (KR_GFX_*): override manual de tier
     // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
@@ -66,6 +79,10 @@ export class Game3D {
     this.audio = new GameAudio();
     // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
     this.audio.setMix(loadAudioMix());
+    // Fase 43 — assinatura acústica por mundo (vento, chuva e piso padrão).
+    this.audio.setWorldAmbience(this.scenario.id, {
+      weather: ['Barburhen', 'Arukheea'].includes(this.scenario.id) ? 'rain' : 'clear',
+    });
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -76,6 +93,7 @@ export class Game3D {
     this.animT = 0;
     this.zuOpen = true;
     this.ended = false;
+    if (typeof window !== 'undefined') window.__kr = this; // probe de debug/e2e (console)
     // modo online (OnlineGame3D injeta o NetClient3D e substitui this.sim pela view)
     this.net = net;
     this.online = !!net;
@@ -119,9 +137,24 @@ export class Game3D {
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
     this.initGfxPanel(); // Fase 35 — painel de vídeo/performance (KR_GFX_*)
+    this.initPojPanel(); // Fase 9 (fix) — painel POJ do modal ZU também no modo local
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 9 (fix) — painel POJ do modal ZU no modo LOCAL ----------
+  // O regramento é público (/poj/state no mesmo origin) e o painel não pode
+  // ficar eternamente em "—" só porque o jogador não entrou em sala online.
+  // Em hospedagens estáticas (sem backend) o fetch falha e o painel permanece
+  // neutro — o jogo nunca quebra. No modo online o OnlineGame3D mantém o
+  // próprio ciclo de 15 s (sem duplicar timers: este método sai cedo lá).
+  initPojPanel() {
+    if (this.online) return;
+    if (!document.querySelector('#pojStrip')) return;
+    refreshPojStrip();
+    refreshPatenteChip();
+    this.pojTimer = setInterval(() => { refreshPojStrip(); refreshPatenteChip(); }, 15000);
   }
 
   // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
@@ -339,6 +372,7 @@ export class Game3D {
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
     this.playerOp.group.visible = this.viewMode !== 'fps';
+    this.#applyAvatarOverride(); // Fase 56 — corpo GLB real se ?avatar= válido; senão procedural
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
@@ -389,6 +423,9 @@ export class Game3D {
     if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
     const selectionStatus = document.querySelector('#contentSelectionStatus');
     if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. A habilidade individual é acionada com Q; o modo online ainda não a sincroniza.';
+    // Fase 56 — vitrine de avatares GLB no menu (rigs reais, animação ao vivo)
+    const avatarBarHost = document.querySelector('.content-selection');
+    if (avatarBarHost) this.#initAvatarVitrine(avatarBarHost);
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
@@ -404,6 +441,14 @@ export class Game3D {
     }
     select.replaceChildren(...this.#operativeOptions());
     select.value = this.selectedOperative.id;
+    // Fase 11 (fix) — o rótulo "16 DISPONÍVEIS" era fixo no HTML e ficou
+    // desatualizado quando o catálogo cresceu (operativos + insígnias OCE).
+    // A contagem real vem das opções recém-montadas — nunca dessincroniza.
+    const operativeLabel = document.querySelector('label[for="operativeSelect"]');
+    if (operativeLabel && this.#selectableOperatives?.length) {
+      const total = this.#selectableOperatives.length;
+      operativeLabel.textContent = `OPERATIVO CANÔNICO · ${total} ${total === 1 ? 'DISPONÍVEL' : 'DISPONÍVEIS'}`;
+    }
     this.renderOperativeCard(this.selectedOperative);
     select.addEventListener('change', () => {
       if (this.sim.started) return;
@@ -426,6 +471,7 @@ export class Game3D {
         : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      this.#applyAvatarOverride(); // Fase 56 — recoloca o corpo GLB no novo playerOp
       this.firstPersonRig?.traverse((node) => {
         // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
         if (node.isMesh && node.userData?.tintable && node.material?.color) node.material.color.set(operative.colors.primary);
@@ -577,9 +623,132 @@ export class Game3D {
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
 
   // ---------- fluxo ----------
+  // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
+  // Contrato (hero3d/avatars3d): asset OPCIONAL — qualquer falha mantém o
+  // corpo procedural de createOperative(); nada aqui pode quebrar o boot.
+  #removeAvatarModel() {
+    if (this.avatarRoot?.parent) this.avatarRoot.parent.remove(this.avatarRoot);
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+  }
+
+  #setProceduralBodyVisible(visible) {
+    const g = this.playerOp?.group;
+    if (!g) return;
+    const keep = new Set();
+    const wr = g.userData?.weaponRig?.group; // arma continua viva sobre o corpo GLB
+    if (wr) wr.traverse((o) => keep.add(o));
+    const shadow = this.playerOp?.parts?.shadow; // sombra de contato canônica
+    if (shadow) shadow.traverse((o) => keep.add(o));
+    g.traverse((o) => {
+      if (o === this.avatarRoot || keep.has(o) || o.userData?.avatarAsset) return;
+      if (o.isMesh || o.isSkinnedMesh) o.visible = visible;
+    });
+  }
+
+  async #applyAvatarOverride() {
+    this.#removeAvatarModel();
+    const id = this.avatarOverrideId;
+    if (!id) return;
+    const a = await loadAvatarGlb(id);
+    const g = this.playerOp?.group;
+    if (!a?.root || !g) { this.#setProceduralBodyVisible(true); return; }
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    this.avatarRoot = a.root;
+    this.#setProceduralBodyVisible(false); // corpo procedural dorme; GLB assume
+    g.add(a.root);
+    if (a.clips?.length) {
+      this.avatarMixer = new THREE.AnimationMixer(a.root);
+      this.avatarMixer.clipAction(a.clips[0]).play();
+    }
+  }
+
+  #initAvatarVitrine(host) {
+    const bar = document.createElement('div');
+    bar.className = 'avatar-glb-bar';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'AVATARES GLB // RIGS REAIS (FASE 56)';
+    const strip = document.createElement('div');
+    strip.className = 'avatar-glb-strip';
+    for (const a of AVATAR_GLB_LIBRARY) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'avatar-glb-chip';
+      chip.dataset.avatarId = a.id;
+      chip.textContent = `${a.tier === 'animated' ? '▶ ' : a.tier === 'rigged' ? '◆ ' : '○ '}${a.id}`;
+      chip.title = `Pré-visualizar ${a.id} (${a.tier === 'animated' ? 'animação embutida' : a.tier === 'rigged' ? 'rig real' : 'estático'})`;
+      chip.addEventListener('click', () => this.#showAvatarShowcase(a.id, chip));
+      strip.appendChild(chip);
+    }
+    const hint = document.createElement('small');
+    hint.className = 'avatar-glb-hint';
+    hint.id = 'avatarGlbHint';
+    hint.textContent = 'Clique para pré-visualizar girando · para JOGAR com o corpo real: ?avatar=<id>';
+    bar.append(label, strip, hint);
+    host.appendChild(bar);
+  }
+
+  async #showAvatarShowcase(id, chip = null) {
+    const a = await loadAvatarGlb(id);
+    if (!a?.root) {
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `avatar ${id} indisponível — o corpo procedural segue no jogo`;
+      return;
+    }
+    this.#removeAvatarShowcase();
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    a.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = false; o.receiveShadow = false; } }); // vitrine não suja sombra do mundo
+    // palco próprio: container giratório com key/fill lights + pedestal — o
+    // menu é noturno e o GLB não pode depender das luzes do mundo para ler
+    const stage = new THREE.Group();
+    stage.name = 'avatar_glb_stage';
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(.85, .95, .06, 28),
+      new THREE.MeshStandardMaterial({ color: 0x1a1420, roughness: .8, metalness: .3, emissive: 0x2a1f33, emissiveIntensity: .35 }),
+    );
+    pedestal.position.y = .03;
+    stage.add(pedestal);
+    const key = new THREE.DirectionalLight(0xfff2dd, 2.4); key.position.set(1.8, 3.4, 2.2); stage.add(key);
+    const fill = new THREE.DirectionalLight(0x7d9dff, .9); fill.position.set(-2.2, 1.6, 1.4); stage.add(fill);
+    const rim = new THREE.DirectionalLight(0xffd27d, 1.2); rim.position.set(0, 2.2, -2.6); stage.add(rim);
+    stage.add(a.root);
+    a.root.position.y = .06; // sobre o pedestal
+    this.avatarShowcase = stage;
+    this.scene.add(stage);
+    // palco: na frente da câmera do menu e DESLOCADO À DIREITA (fora do painel
+    // DOM — o rig fica visível na área livre da tela), pés ~0.9 m abaixo do olho
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const pos = this.camera.position.clone().add(dir.multiplyScalar(3.0)).add(right.multiplyScalar(1.35));
+    pos.y -= 0.92;
+    stage.position.copy(pos); // o PALCO viaja para frente da câmera (a.root vive dentro dele)
+    if (a.clips?.length) {
+      this.avatarShowcaseMixer = new THREE.AnimationMixer(a.root);
+      this.avatarShowcaseMixer.clipAction(a.clips[0]).play();
+    }
+    if (chip) {
+      for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `pré-visualizando ${id} — para jogar com este corpo: ?avatar=${id}`;
+    }
+  }
+
+  #removeAvatarShowcase() {
+    if (this.avatarShowcase?.parent) this.scene.remove(this.avatarShowcase);
+    this.avatarShowcase = null;
+    this.avatarShowcaseMixer = null;
+    for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+  }
+
   startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
+    this.#removeAvatarShowcase(); // Fase 56 — vitrine de rigs sai quando a partida começa
     this.damageNumbers?.clear(); // Fase 27 — partida nova, tela limpa
     this.zuOpen = false;
     this.hud.hideZu();
@@ -589,7 +758,10 @@ export class Game3D {
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, this.sim.player.weapon);
     // Fase 11 — ZU: o trem cruza a zona e o desembarque aéreo começa (só câmera;
     // a sim continua autoritativa — nenhum input é bloqueado).
-    this.startTrainIntro();
+    // Task 53 — protocolo OFICIAL: a entrada é a VIAGEM a bordo (embarque → rota
+    // → portas → chegada → grace 15 s). A cinemática curta permanece p/ o QTE
+    // de descarrilamento (suite zu-derail-qte) — não é mais a entrada.
+    this.startTrainRide();
   }
 
   // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
@@ -610,6 +782,74 @@ export class Game3D {
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
     } catch { /* cinematic é best-effort — nunca bloqueia a partida */ }
+  }
+
+  // Task 53 — TREM OFICIAL DO ZU: câmera a bordo do vagão (protocolo completo:
+  // embarque → rota → portas → chegada). Só apresentação — regras na SSOT/autoridade.
+  startTrainRide(startAt = 0) {
+    if (this.sim.trainT === null && !this.online) return; // entrada sem trem (portal)
+    try {
+      const spawn = this.sim.world?.playerSpawn
+        ?? getWorldLayoutForTrain(this.seed, this.scenario?.id ?? 'CIGKV').playerSpawn;
+      this.trainRide = new TrainRide({
+        scene: this.scene,
+        route: this.sim.trainRoutePts ?? trainRoute(spawn, seedHashOf(this.seed)),
+        startAt,
+        onDone: (reason) => this.#endTrainRide(reason),
+        onPhase: (phase) => this.#onTrainPhase(phase),
+      });
+    } catch { /* visual best-effort — o protocolo segue autoritativo */ }
+  }
+
+  // Task 53 — fases do protocolo no HUD/rádio ZU (a bordo).
+  #onTrainPhase(phase) {
+    if (phase === 'embarque') this.hud.feed('ZU', 'EMBARQUE — todos os operativos a bordo. Portas fechando.', 'warn');
+    else if (phase === 'em_rota') {
+      this.hud.setMatchStatus('TREM EM ROTA // PORTAS FECHADAS');
+      this.hud.feed('ZU', 'Em rota ao Ring — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
+    } else if (phase === 'portas') {
+      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTAR');
+      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta (entrada oficial). Seguir até o destino também é oficial.', 'warn');
+    }
+  }
+
+  // Task 53 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  #requestDoorJump() {
+    const p = this.sim.player;
+    if (!p?.trainOnboard || this.ended) return;
+    if (this.online) { this.net?.sendDoorJump?.(); return; }
+    if (this.sim.doorJump?.()) {
+      this.audio?.wind?.(true, 0.2);
+      this.hud.feed('ZU', 'Salto de porta executado — entrada oficial registrada no protocolo.', 'warn');
+    }
+  }
+
+  // Task 53 — handover da câmera (salto ou chegada) + limpeza do vagão.
+  #endTrainRide(reason) {
+    if (!this.trainRide) return;
+    this.trainRide.dispose();
+    this.trainRide = null;
+    if (reason === 'arrived') this.hud.feed('ZU', 'CHEGADA — desembarque concluído no Ring.', 'warn');
+  }
+
+  // Task 53 — HUD do protocolo por frame (countdown do grace + fases a bordo).
+  updateTrainHud() {
+    const info = this.online
+      ? this._zuTrainView ?? null
+      : (Number.isFinite(this.sim.trainT) ? {
+          phase: zuTrainPhase(this.sim.trainT * 1000),
+          playerOnboard: !!this.sim.player?.trainOnboard,
+          combatLockedRemainingS: Math.max(0, this.sim.combatLockedUntil - this.sim.trainT),
+        } : null);
+    if (!info) return;
+    if (info.phase === 'grace') {
+      const s = Math.ceil(info.combatLockedRemainingS ?? 0);
+      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s`);
+    } else if (info.phase === 'combate' && !this._combatStatusSet) {
+      this._combatStatusSet = true;
+      this.hud.setMatchStatus('COMBATE LIVRE // RING');
+      this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+    }
   }
 
   // Fase 26 — consequências do QTE do trem (APENAS offline: a sim local é
@@ -984,7 +1224,7 @@ export class Game3D {
     this._gait ??= newGait();
     advanceGait(this._gait, { x: p.x, z: p.z, dt });
     if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
-      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0);
+      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
     }
     const airborne = !!p.dropPhase;
     animateOperative(this.playerOp.parts, {
@@ -1002,6 +1242,10 @@ export class Game3D {
       this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
+    // Fase 56 — mixers dos avatares GLB (herói com corpo real + vitrine do menu)
+    if (this.avatarMixer) this.avatarMixer.update(dt);
+    if (this.avatarShowcaseMixer) this.avatarShowcaseMixer.update(dt);
+    if (this.avatarShowcase) this.avatarShowcase.rotation.y += dt * 0.6;
     // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
     // Fase 30 — anexos dos 4 sockets + estágio evolutivo mítico também reconstroem
     // Fase 32 — skin mítica POR ARMA (cor/fit do catálogo) + raridade dos anexos
@@ -1128,7 +1372,7 @@ export class Game3D {
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
-            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener);
+            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
           }
         }
       }
@@ -1186,6 +1430,16 @@ export class Game3D {
   }
 
   updateCamera(dt) {
+    // Task 53 — TREM OFICIAL: câmera a bordo do vagão até o salto/chegada
+    if (this.trainRide && !this.trainRide.done) {
+      this.trainRide.update(dt);
+      this.trainRide.cameraPose(this.camera);
+      // salto (jogador saiu) ou chegada encerram a viagem — handover imediato
+      if (this.sim.player && !this.sim.player.trainOnboard) {
+        this.trainRide.end(this.trainRide.elapsedS() >= 16 ? 'arrived' : 'jumped');
+      }
+      return;
+    }
     // Fase 11 — cinemática do trem do ZU captura a câmera até o handover
     if (this.trainIntro && !this.trainIntro.done) {
       this.trainIntro.update(dt);
@@ -1321,7 +1575,16 @@ export class Game3D {
     // Fase 26 — atordoamento pós-QTE do trem: trava movimento/ação, mantém olhar
     const trainStunned = this.trainStunUntil && performance.now() < this.trainStunUntil;
     if (trainStunned) { dx = 0; dy = 0; }
+    // Task 53 — a bordo do trem: viagem é a entrada oficial — sem mover/atirar;
+    // o salto sai pela janela das portas (borda de ESPAÇO, offline e online).
+    const onboard = !!this.sim.player?.trainOnboard;
+    if (onboard) { dx = 0; dy = 0; }
     const touch = this.hud.touchState ?? {};
+    if (onboard && !this._doorJumpLatch && (k.has(' ') || !!touch.jump)) {
+      this._doorJumpLatch = true;
+      this.#requestDoorJump();
+    }
+    if (!k.has(' ') && !touch.jump) this._doorJumpLatch = false;
     const abilityTouch = !!touch.ability;
     const abilityTouchPressed = abilityTouch && !this.abilityTouchDown;
     this.abilityTouchDown = abilityTouch;
@@ -1329,18 +1592,18 @@ export class Game3D {
       ...this.input,
       seq: this.sim.tick + 1,
       dx, dy,
-      sprint: !trainStunned && (k.has('shift') || !!touch.sprint),
+      sprint: !trainStunned && !onboard && (k.has('shift') || !!touch.sprint),
       crouch: k.has('c') || !!touch.crouch,
-      jump: !trainStunned && (k.has(' ') || !!touch.jump),
-      fire: !trainStunned && (this.input.fire || !!touch.fire),
+      jump: !trainStunned && !onboard && (k.has(' ') || !!touch.jump),
+      fire: !trainStunned && !onboard && (this.input.fire || !!touch.fire),
       ads: this.input.ads || !!touch.ads,
       crouch: !!(this.input.crouch || touch.crouch), // Fase 5 — C alterna; touch segura
-      reload: !trainStunned && (this.input.reload || !!touch.reload),
-      interact: !trainStunned && (this.input.interact || !!touch.interact),
-      medkit: !trainStunned && (this.input.medkit || !!touch.medkit),
-      throw: !trainStunned && (this.input.throw || !!touch.throw),
-      gloo: !trainStunned && (this.input.gloo || !!touch.gloo),
-      ability: !trainStunned && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
+      reload: !trainStunned && !onboard && (this.input.reload || !!touch.reload),
+      interact: !trainStunned && !onboard && (this.input.interact || !!touch.interact),
+      medkit: !trainStunned && !onboard && (this.input.medkit || !!touch.medkit),
+      throw: !trainStunned && !onboard && (this.input.throw || !!touch.throw),
+      gloo: !trainStunned && !onboard && (this.input.gloo || !!touch.gloo),
+      ability: !trainStunned && !onboard && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
@@ -1425,12 +1688,17 @@ export class Game3D {
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
           break;
-        case 'revived':
-          this.hud.feed('SQUAD', `${e.by} reviveu ${e.targetName}.${e.target === 'player' ? ' De volta ao combate!' : ''}`, 'good');
+        case 'revived': {
+          const selfTarget = e.isSelf || e.target === 'player' || e.target === p.id;
+          const message = e.isSelf
+            ? 'Você se recuperou usando um medkit.'
+            : `${e.by} ${e.item === 'medkit' ? 'prestou primeiros socorros a' : 'reviveu'} ${selfTarget ? 'você' : e.targetName}.${selfTarget ? ' De volta ao combate!' : ''}`;
+          this.hud.feed(e.item === 'medkit' ? 'PRIMEIROS SOCORROS' : 'SQUAD', message, 'good');
           this.audio?.pickup?.();
           break;
+        }
         case 'knocked':
-          this.hud.feed('ZU', `Você está NOCAUTEADO${e.by ? ` por ${e.by}` : ''} — aliados podem reviver. Rasteje para cobertura.`, 'bad');
+          this.hud.feed('ZU', `NOCAUTEADO: até 7 s para usar H/✚ em si ou receber primeiros socorros; E canaliza o revive de um aliado. Rasteje para cobertura.`, 'bad');
           this.audio?.heartbeat?.();
           this.hud.damageFlash = .6;
           break;
@@ -1438,7 +1706,10 @@ export class Game3D {
           this.hud.killfeed(e.killer, e.victim, !!e.head, false, !!e.knock);
           break;
         case 'botKill':
-          this.hud.killfeed('RING', e.target, false, false);
+          // Wart B — a fonte letal chega em e.kind: morte pela ANOMALIA Khaaos
+          // (quantum, sim3d #drainQuantumShield) não é "RING" — o HUD nomeia a
+          // fonte real (mesmo rótulo do servidor: shared/worldKillers.ts).
+          this.hud.killfeed(e.kind === 'quantum' ? 'ANOMALIA' : 'RING', e.target, false, false);
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
@@ -1446,6 +1717,19 @@ export class Game3D {
           // sincronizado pelo startedAt do servidor). O iniciador local já
           // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
           this.onMatchStartEvent?.(e);
+          break;
+        // Task 53 — protocolo do trem: chegada e desbloqueio de combate (offline
+        // emite da sim; online chega pelos eventos da sala autoritativa).
+        case 'trainArrived':
+          this.hud.feed('ZU', `CHEGADA — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
+          this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${e.graceS ?? 15}s`);
+          break;
+        case 'combatUnlocked':
+          this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+          this.hud.setMatchStatus('COMBATE LIVRE // RING');
+          break;
+        case 'botDoorJump':
+          this.hud.feed('ZU', 'Operativo saltou pela porta na rota (entrada oficial).', '');
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1873,6 +2157,7 @@ export class Game3D {
       }
       this.handleEvents();
     }
+    this.updateTrainHud(); // Task 53 — fases do trem + countdown do grace no HUD
     this.syncLoot();
     this.syncDoors(); // Fase 25/26 — folhas de porta + vidro seguem o estado autoritativo
     this.syncEntities(dt);
