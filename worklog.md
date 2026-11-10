@@ -1338,6 +1338,7 @@ Work Log:
 - PR #342 (chore/ue58-replay-dry-run-audit — pipeline headless GPU/Brev, 13 arquivos, +504/-8): único PR aberto; sem conflito (mergeable true), bloqueado apenas pelo re-run geral de CI disparado 21:40; run CI #829 completed/success com PR Validation Gate success no head b280e658bf → MERGEADO 2e378d9d (merge commit, proteção do main = gate único + strict up-to-date respeitados)
 - PROTOCOLO ZU revalidado no main novo (2e378d9): zu-train-protocol 12/12 + zu-entry/train-intro 13/13, zero falhas — trem/portas/grace 15 s permanecem canônicos
 - SYNC: main local 4971354→2e378d9 (Task 54 paralela mergeou #305/#306/#311/#318 — fila anterior zerada por outra sessão)
+- FLAKE REAL CAÇADO NO CI (Game Runtime Tests, run 42908681548): "room3d: salto de porta autoritativo" comparava a pose aplicada pela SALA (elapsed lido por #trainElapsedMs() → Date.now() interno) com a pose recalculada pelo TESTE com OUTRO Date.now() — dois Δ divergentes × derivada do arco do salto (0,3–0,5 m/s) estouravam a tolerância 1e-6 m sob c8/CI carregado (12 ms de teste, 1 falha em 1108); CORREÇÃO determinística SÓ NO TESTE: relógio congelado (Date.now stub + try/finally) na janela das portas — sala e teste leem O MESMO instante, paridade 1e-6 vira igualdade exata; zero mudança em produção; validado 12/12 SEM e COM c8 local
 - DÍVIDA VIGENTE (registrada na Task 54, fora do escopo desta rodada): "Deploy Render Staging" + MP-ZEX-09 staging falham no main desde antes — infra de staging pede sessão própria
 
 Stage Summary:

@@ -213,17 +213,27 @@ test('room3d: salto de porta autoritativo — rejeita fora da janela, aplica na 
   room.addPlayer('human');
   room.start('human', 'belt');
   assert.equal(room.doorJump('human'), false); // portas fechadas (< 8 s)
-  // simula relógio dentro da janela das portas (9 s após o início da rota)
-  room.trainStartedAtEpoch = Date.now() - 9000;
-  const me = room.humans.get('human');
-  assert.equal(room.doorJump('human'), true);
-  const elapsed = Date.now() - room.trainStartedAtEpoch;
-  const pose = trainDoorJumpPose(elapsed, room.trainRoutePts);
-  assert.ok(Math.abs(me.x - pose.x) < 1e-6);
-  assert.ok(Math.abs(me.z - pose.z) < 1e-6);
-  assert.equal(me.dropPhase, 'chute');
-  assert.equal(me.trainOnboard, false);
-  assert.equal(room.doorJump('human'), false); // segunda tentativa: já fora do trem
+  // RELÓGIO CONGELADO dentro da janela das portas (9 s após o início da rota):
+  // #trainElapsedMs() (sala) e a verificação do SSOT (teste) leem O MESMO
+  // instante — elimina a corrida de Date.now() entre sala e teste, que sob c8/
+  // CI carregado fazia a pose do arco divergir além da tolerância de 1e-6 m
+  const nowReal = Date.now;
+  const FROZEN = nowReal();
+  Date.now = () => FROZEN;
+  try {
+    room.trainStartedAtEpoch = FROZEN - 9000;
+    const me = room.humans.get('human');
+    assert.equal(room.doorJump('human'), true);
+    const elapsed = Date.now() - room.trainStartedAtEpoch; // = 9000 exato
+    const pose = trainDoorJumpPose(elapsed, room.trainRoutePts);
+    assert.ok(Math.abs(me.x - pose.x) < 1e-6);
+    assert.ok(Math.abs(me.z - pose.z) < 1e-6);
+    assert.equal(me.dropPhase, 'chute');
+    assert.equal(me.trainOnboard, false);
+    assert.equal(room.doorJump('human'), false); // segunda tentativa: já fora do trem
+  } finally {
+    Date.now = nowReal; // restaura o relógio real para os testes seguintes
+  }
 });
 
 test('room3d: chegada desembarca todos e o pulso do Ring só corre após o unlock', () => {
