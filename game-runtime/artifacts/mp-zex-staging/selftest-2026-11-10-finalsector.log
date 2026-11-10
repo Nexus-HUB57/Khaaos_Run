@@ -1,0 +1,298 @@
+[mpzex-selftest] servidor isolado em http://127.0.0.1:8846 (capacidade 2, zero bots)
+[MP-ZEX-08] Readiness do staging aprovada.
+[MP-ZEX-08] Duas contas de staging autenticadas.
+[MP-ZEX-08] A e B estão na mesma sala de staging.
+[MP-ZEX-08] Navegando A e B por inputs de gameplay até ZEX // CENTRO.
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #2 (sidestep direita + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #2 (sidestep direita + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #3 (sidestep esquerda + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #3 (sidestep esquerda + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #4 (sidestep direita + hop)
+[MP-ZEX-08] B: sem progresso — manobra de desimpedimento #4 (sidestep direita + hop)
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,2.0) d_terminal=93.5 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-104.9,0.6) d_terminal=112.9 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #5 (sidestep esquerda + hop)
+[MP-ZEX-08] B: pos=(-95.6,0.1) d_terminal=103.6 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,6.2) d_terminal=93.7 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-86.9,0.0) d_terminal=94.9 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(95.4,2.6) d_terminal=87.4 waypoint=6/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-78.3,0.0) d_terminal=86.3 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(87.2,2.2) d_terminal=79.3 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-69.6,0.0) d_terminal=77.6 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(78.6,2.1) d_terminal=70.6 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-60.9,0.0) d_terminal=68.9 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(69.9,2.1) d_terminal=61.9 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-52.3,0.0) d_terminal=60.3 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(61.2,2.0) d_terminal=53.3 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-43.6,0.0) d_terminal=51.6 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(52.6,2.0) d_terminal=44.6 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-34.9,0.0) d_terminal=42.9 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(43.9,2.0) d_terminal=36.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-26.3,0.0) d_terminal=34.3 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(35.2,2.0) d_terminal=27.3 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-18.1,1.8) d_terminal=26.1 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(26.6,2.0) d_terminal=18.7 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-9.9,4.6) d_terminal=18.5 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(17.9,1.7) d_terminal=10.1 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] A chegou ao alcance de interação.
+[MP-ZEX-08] B: pos=(-1.0,5.8) d_terminal=10.7 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(6.5,3.9) d_terminal=4.2 waypoint=6/7 vida=100 medkit=false
+[MP-ZEX-08] B chegou ao alcance de interação.
+[MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
+[MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
+[MP-ZEX-08] B reservou o mesmo terminal após a desconexão de A.
+[MP-ZEX-08] MP-ZEX-08 PASS: sem XP/extração para A; resume preservado; B canalizando o terminal.
+[MP-ZEX-09] Servidor remoto configurado via KR_ZEX09_BASE_URL.
+[MP-ZEX-09] Duas contas autenticadas.
+[MP-ZEX-09] Mesma sala ring3d-2; partida em andamento.
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-2 aceita na tentativa 1/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.3) vida=100 d_terminal=32.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.7) vida=100 d_terminal=20.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.6) vida=100 d_terminal=27.5m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.6) vida=100 d_terminal=15.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,18.2) vida=100 d_terminal=21.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.6) vida=100 d_terminal=10.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,24.2) vida=100 d_terminal=15.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.9) vida=100 d_terminal=5.1m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-3; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,28.7) vida=100 d_terminal=11.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.5) vida=100 d_terminal=6.8m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-3 aceita na tentativa 2/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-4; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.1,36.5) vida=100 d_terminal=3.6m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-4 aceita na tentativa 3/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (22 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(121.0,0.0) vida=100 d_terminal=40.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(121.1,4.2) vida=100 d_terminal=35.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(121.2,9.1) vida=100 d_terminal=30.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(121.4,14.0) vida=100 d_terminal=26.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(121.5,18.9) vida=100 d_terminal=21.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-5; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(121.6,23.9) vida=100 d_terminal=16.2m
+[MP-ZEX-09] [nav] A: pos=(121.8,27.4) vida=100 d_terminal=12.7m
+[MP-ZEX-09] [nav] A: pos=(121.9,30.9) vida=100 d_terminal=9.3m
+[MP-ZEX-09] [nav] A: pos=(122.0,34.4) vida=100 d_terminal=5.9m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-5 aceita na tentativa 4/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-6; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.1,36.5) vida=100 d_terminal=3.6m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-6 aceita na tentativa 5/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-5.0) vida=100 d_terminal=25.0m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-10.0) vida=100 d_terminal=20.0m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.9) vida=100 d_terminal=15.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.8) vida=100 d_terminal=10.2m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.7) vida=100 d_terminal=5.3m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-7; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.6) vida=100 d_terminal=6.7m
+[MP-ZEX-09] [nav] A: pos=(119.2,36.8) vida=100 d_terminal=3.3m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-7 aceita na tentativa 6/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-8; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.1) vida=100 d_terminal=10.1m
+[MP-ZEX-09] [nav] A: pos=(118.0,33.7) vida=100 d_terminal=6.6m
+[MP-ZEX-09] [nav] A: pos=(119.3,37.0) vida=100 d_terminal=3.1m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-8 aceita na tentativa 7/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.2) vida=100 d_terminal=37.8m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.7) vida=100 d_terminal=25.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,7.1) vida=100 d_terminal=32.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.6) vida=100 d_terminal=20.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,12.1) vida=100 d_terminal=28.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.5) vida=100 d_terminal=15.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,17.0) vida=100 d_terminal=23.1m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.4) vida=100 d_terminal=10.6m
+[MP-ZEX-09] [nav] A: pos=(118.0,21.9) vida=100 d_terminal=18.2m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.4) vida=100 d_terminal=5.6m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Mesma sala ring3d-9; partida em andamento.
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,30.8) vida=100 d_terminal=9.5m
+[MP-ZEX-09] [nav] A: pos=(118.0,35.0) vida=100 d_terminal=5.4m
+[MP-ZEX-09] pós-desembarque A: vida=100 knocked=false medkit=1 pos=(118.0,0.0)
+[MP-ZEX-09] pós-desembarque B: vida=100 knocked=false medkit=1 pos=(-130.0,0.0)
+[MP-ZEX-09] Cenário CIGKV — anel final em (—,—) 'sem setor' (dano ring ×1).
+[MP-ZEX-09] Sala ring3d-9 aceita na tentativa 8/8 (par navegável ≤ 64 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] [nav] A: pos=(118.0,2.7) vida=100 d_terminal=37.3m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-4.8) vida=100 d_terminal=25.2m
+[MP-ZEX-09] [nav] A: pos=(118.0,9.1) vida=100 d_terminal=31.0m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-9.7) vida=100 d_terminal=20.3m
+[MP-ZEX-09] [nav] A: pos=(118.0,15.1) vida=100 d_terminal=24.9m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-14.6) vida=100 d_terminal=15.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,20.4) vida=100 d_terminal=19.7m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-19.6) vida=100 d_terminal=10.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,26.7) vida=100 d_terminal=13.5m
+[MP-ZEX-09] [nav] B: pos=(-130.0,-24.5) vida=100 d_terminal=5.5m
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
+[MP-ZEX-09] [nav] A: pos=(118.0,30.8) vida=100 d_terminal=9.4m
+[MP-ZEX-09] [nav] A: pos=(118.0,34.3) vida=100 d_terminal=6.0m
+[MP-ZEX-09] [nav] A: pos=(119.4,37.1) vida=100 d_terminal=3.0m
+[MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.92 s, extração +1.
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 141 ms (99–449 ms).
+[MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
+[MP-ZEX-09] Fase 3: RTT medido 93–165 ms (média 122 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.67 s, atraso visual 62 ms (bound 328 ms), estado converge pós-drain.
+[MP-ZEX-09] RELATÓRIO: {
+  "link_fase2_interrupcao": {
+    "up": {
+      "frames": 9,
+      "spikes": 1,
+      "minMs": 45.8,
+      "avgMs": 102.4,
+      "p95Ms": 377,
+      "maxMs": 377
+    },
+    "down": {
+      "frames": 52,
+      "spikes": 0,
+      "minMs": 38.5,
+      "avgMs": 70.6,
+      "p95Ms": 94.2,
+      "maxMs": 94.9
+    },
+    "effectiveRttMs": 173
+  },
+  "link_fase3_conclusao": {
+    "up": {
+      "frames": 7,
+      "spikes": 0,
+      "minMs": 35.9,
+      "avgMs": 55.6,
+      "p95Ms": 83.7,
+      "maxMs": 83.7
+    },
+    "down": {
+      "frames": 127,
+      "spikes": 1,
+      "minMs": 35.3,
+      "avgMs": 72.4,
+      "p95Ms": 94.1,
+      "maxMs": 304
+    },
+    "effectiveRttMs": 128
+  },
+  "rtt_medido": {
+    "fase2": {
+      "minMs": 99,
+      "medianMs": 141,
+      "avgMs": 180,
+      "maxMs": 449
+    },
+    "fase3": {
+      "minMs": 93,
+      "medianMs": 117,
+      "avgMs": 122,
+      "maxMs": 165
+    }
+  },
+  "atraso_visual_B_para_A_ms": 62,
+  "canal_server_side_s": {
+    "fase1_normal": 3.92,
+    "fase3_degradada": 3.67
+  },
+  "xp_por_conclusao": {
+    "baseline_normal": 250,
+    "degradada": 250
+  },
+  "perda_modelada": "TCP não descarta quadros; ~2% modelados como picos de retransmissão +200–400 ms"
+}
+[MP-ZEX-09] MP-ZEX-09 PASS: autoridade do servidor, recompensa única, convergência pós-drain e interrupção limpa sob RTT/jitter/perda.
+MPZEX_STAGING_SELFTEST_OK
