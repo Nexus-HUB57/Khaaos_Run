@@ -47,6 +47,7 @@
 import { WebSocket } from 'ws';
 import { DegradedLink } from './mp-zex-09-link.mjs';
 import { getWorldLayout, PLAYER_R, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { resolveScenario } from '../src/game3d/scenarios.js';
 import { doorBoxCollider } from '../src/game3d/interiorsPlan.js';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -217,6 +218,23 @@ function send(client, payload) {
   } else client.ws.send(raw);
 }
 
+/** Mantém o cliente "vivo" no servidor enquanto o PAR navega: inputs vazios
+ *  (gameplay legítimo — jogador parado) + medkit se ferido. Sem isso, o
+ *  cliente que chega PRIMEIRO fica ~15 s sem input enquanto o outro navega
+ *  rota longa e o servidor o expira por inatividade — o canal ZEX seguinte
+ *  não ativa (run 42819040066, staging real). */
+function holdPosition(client) {
+  client.hold = setInterval(() => {
+    try {
+      if (client.ws.readyState !== 1) { clearInterval(client.hold); client.hold = null; return; }
+      const p = client.latestSnapshot?.player;
+      sendInput(client, { medkit: Boolean(p && p.life < 75 && (p.inventory?.medkit ?? 0) > 0) });
+    } catch { clearInterval(client.hold); client.hold = null; }
+  }, 1_500);
+}
+function releaseHold(client) {
+  if (client.hold) { clearInterval(client.hold); client.hold = null; }
+}
 function sendInput(client, over = {}) {
   client.seq += 1;
   const input = {
@@ -435,10 +453,40 @@ function smoothPath(path, grid) {
   return out;
 }
 
+/** Rejeição de sala NO retry: pousos com dano ambiental (knock/morte entre
+ *  pouso e desembarque) re-entram em nova sala em vez de falhar o cenário —
+ *  o cenário só é honesto quando testado numa sala jogável. */
+class RoomRetry extends Error {}
+
+/** Dentro do anel FINAL previsto do cenário (setor canônico ringFinal + margem). */
+const insideFinalRing = (p, fin, reach) => !fin || Math.hypot(p.x - fin.x, p.z - fin.z) <= reach;
+
 async function waitForLand(client, label) {
   const snapshot = await waitSnapshot(client, (s) => s.state === 'IN_PROGRESS' && s.player && !s.player.dropPhase && s.player.onGround, `pouso de ${label}`, 90_000);
-  if (!snapshot.player.alive || snapshot.player.knocked) throw new Error(`Conta ${label} foi eliminada/derrubada antes do teste.`);
+  if (!snapshot.player.alive) throw new RoomRetry(`Conta ${label} eliminada no pouso (não recuperável)`);
+  if (snapshot.player.knocked) {
+    // Capotamento do trem dos Rings (Task 53) derruba passageiros — knock é
+    // design; o medkit de spawn reergue (autocuidado caído). Só rejeita a sala
+    // se o ator não tiver como se reerguer.
+    if ((snapshot.player.inventory?.medkit ?? 0) > 0) {
+      safeLog(`${label}: knocked no pouso (capotamento?) — seguirá com autocuidado (medkit reergue).`);
+      return snapshot;
+    }
+    throw new RoomRetry(`Conta ${label} knocked no pouso sem medkit (dano ambiental do layout)`);
+  }
   return snapshot;
+}
+
+/** Task 53 — protocolo OFICIAL de entrada ZU (trem dos Rings): enquanto a
+ *  bordo, o servidor suspende a física do ator — nenhum input move até o
+ *  salto de porta (janela 8–16 s) ou até a CHEGADA (16 s, desembarque
+ *  obrigatório de quem ficou). O cenário só inicia a navegação após o
+ *  'trainArrived'; em fixtures sem o protocolo (airdrop legado) o timeout é
+ *  engolido e o fluxo original segue intacto. */
+async function waitTrainDisembark(client, label) {
+  try {
+    await waitMessage(client, (m) => m.type === 'trainArrived', `desembarque do trem de ${label}`, 30_000);
+  } catch { /* sem protocolo do trem (airdrop legado): navega direto */ }
 }
 
 async function navigateToTerminal(client, terminal, waypoints, label) {
@@ -448,10 +496,24 @@ async function navigateToTerminal(client, terminal, waypoints, label) {
   let bestDistance = Infinity;
   let lastProgressAt = Date.now();
   const progressFloorMs = client.link ? 14_000 : 8_000; // link degradado observa com atraso
+  let stepCount = 0;
   while (Date.now() < deadline) {
     const snapshot = client.latestSnapshot;
     const player = snapshot?.player;
-    if (!player || !player.alive || player.knocked) throw new Error(`Conta ${label} não sobreviveu à navegação até ZEX.`);
+    if (!player) throw new Error(`Conta ${label} sem snapshot durante a navegação.`);
+    if (!player.alive) throw new Error(`Conta ${label} eliminada durante a navegação (vida zero — exposição ao ring em rota longa).`);
+    if (player.knocked) {
+      // O servidor permite autocuidado CAÍDO: #useMedkit reergue o ator com 30
+      // de vida (room3d.js — "Caído: ... permite apenas autocuidado com medkit").
+      if ((player.inventory?.medkit ?? 0) > 0) {
+        sendInput(client, { medkit: true });
+        await sleep(client.link ? 200 : 120);
+        continue;
+      }
+      throw new RoomRetry(`Conta ${label} knocked na navegação sem medkit (exposição prolongada fora do ring)`);
+    }
+    stepCount += 1;
+    if (stepCount % 20 === 0) safeLog(`[nav] ${label}: pos=(${Number(player.x).toFixed(1)},${Number(player.z).toFixed(1)}) vida=${player.life} d_terminal=${Math.hypot(player.x - terminal.x, player.z - terminal.z).toFixed(1)}m`);
     const terminalDistance = Math.hypot(player.x - terminal.x, player.z - terminal.z);
     if (terminalDistance < 2.85) {
       sendInput(client);
@@ -553,8 +615,20 @@ async function main() {
     if (!user || !pass) throw new Error(`Credenciais ausentes para o cliente ${key.toUpperCase()}.`);
   }
 
-  const ready = await httpJson('/readyz');
-  if (!ready.response.ok) throw new Error(`Servidor não está pronto (readyz HTTP ${ready.response.status}).`);
+  // Mesmo pacientismo do 08: staging Render free hiberna (cold start > 12 s de
+  // REQUEST_TIMEOUT_MS) — acordar por até 3 min antes de autenticar.
+  const READY_MAX_WAIT_MS = 180_000;
+  const readyDeadline = Date.now() + READY_MAX_WAIT_MS;
+  let ready = null;
+  while (Date.now() < readyDeadline) {
+    try {
+      ready = await httpJson('/readyz');
+      if (ready.response.ok) break;
+    } catch { /* cold start/timeout — continuar tentando */ }
+    safeLog(`Servidor remoto acordando (cold start)… ${Math.ceil((readyDeadline - Date.now()) / 1000)}s restantes`);
+    await sleep(15_000);
+  }
+  if (!ready || !ready.response.ok) throw new Error(`Servidor não acordou dentro de ${READY_MAX_WAIT_MS / 1000} s (readyz).`);
   if (REMOTE_BASE && ready.data?.status && ready.data.status !== 'ready') throw new Error('Staging respondeu readyz, mas não declarou status=ready.');
 
   const [tokenA, tokenB] = await Promise.all([
@@ -566,48 +640,137 @@ async function main() {
   let linkA2 = null;
   let linkA3 = null;
   try {
-    // ── Setup: mesma sala, partida iniciada, ambos pousados ──
-    const a = await openClient(tokenA, { label: 'A' }); clients.push(a);
-    const foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
-    const b = await openClient(tokenB, { label: 'B' }); clients.push(b);
-    const foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
-    if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
-    if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
-    if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
-    send(a, { type: 'start', entry: 'belt' });
-    await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
-    await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
-    const [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
-    safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
+    // ── Setup com RETRY DE SALA: o layout varia por partida (seed + scenarioId
+    // por sala) e nem toda sala oferece DOIS terminais navegáveis e
+    // sobrevivíveis (rota ≤ MAX_ROUTE_STEPS — rotas longas sob chuva ácida
+    // matam o ator antes do canal). Fecha e re-entra (nova sala = novo layout)
+    // até 6 vezes; falha honesta se nenhuma servir.
+    // Calibragem 2026-11-10: despachos reais ao staging (runs #8/#9/#10) mediram
+    // pares navegáveis com rota mínima de 55 trechos em TODAS as salas — o
+    // limite anterior (40) estava atrás do tamanho dos mundos após a Task 53
+    // (protocolo do trem) e os gates de assets (#313). O MP-ZEX-08 navega e
+    // sobrevive com o MESMO grid (sim3d) — 64 trechos mantém folga de ~16% sem
+    // abrir para rotas cross-map inviáveis.
+    const MAX_ROUTE_STEPS = 64;
+    const ROOM_ATTEMPTS = 8;
+    let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
+    let navigated = false, planA = null, planB = null, terminalA = null, terminalB = null, navA = null;
+    for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
+      try {
+      a = await openClient(tokenA, { label: 'A' }); clients.push(a);
+      foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
+      b = await openClient(tokenB, { label: 'B' }); clients.push(b);
+      foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
+      if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
+      if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
+      if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
+      send(a, { type: 'start', entry: 'belt' });
+      await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
+      await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
+      [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
+      safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
+      // Task 53 — respeita o protocolo OFICIAL do trem: navegação só após o
+      // desembarque (a bordo o servidor ignora inputs — progresso zero dispararia
+      // o cão de guarda antes da chegada em 16 s; floor do link degradado é 14 s).
+      await Promise.all([waitTrainDisembark(a, 'A'), waitTrainDisembark(b, 'B')]);
 
-    // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
-    // navegação cross-map: os distritos do CIGKV são separados por estruturas).
-    const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
-    const grid = makeObstacleGrid(layout);
-    a.grid = grid; b.grid = grid;
-    const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
-      && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-    const candidate = (landed, pathOf) => {
-      let best = null;
-      for (const terminal of safeTerminals) {
-        const path = pathOf(landed.player, terminal);
-        if (path && (!best || path.length < best.path.length)) best = { terminal, path };
+      // Sobrevivência pós-desembarque (run #11/#14): dano ambiental/capotamento
+      // entre o pouso e a navegação derruba o ator — knocked COM medkit segue
+      // (a navegação reergue); só rejeita sem meio de reerguer. Log completo
+      // para diagnóstico (run #14 rejeitou 6 salas em silêncio).
+      for (const [entry, label] of [[a, 'A'], [b, 'B']]) {
+        const s = entry.latestSnapshot;
+        if (!s?.player) throw new RoomRetry(`Conta ${label} sem snapshot pós-desembarque`);
+        safeLog(`pós-desembarque ${label}: vida=${s.player.life} knocked=${!!s.player.knocked} medkit=${s.player.inventory?.medkit ?? 0} pos=(${Number(s.player.x).toFixed(1)},${Number(s.player.z).toFixed(1)})`);
+        if (!s.player.alive) throw new RoomRetry(`Conta ${label} eliminada pós-desembarque (não é knock recuperável)`);
+        if (s.player.knocked && (s.player.inventory?.medkit ?? 0) <= 0) {
+          throw new RoomRetry(`Conta ${label} knocked pós-desembarque sem medkit`);
+        }
       }
-      return best;
-    };
-    const planA = candidate(landedA, (p, t) => findPath(p, t, grid));
-    const planB = candidate(landedB, (p, t) => findPath(p, t, grid));
-    if (!planA || !planB) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
-    if (planA.terminal.id === planB.terminal.id) throw new Error('A e B caíram no mesmo terminal; cenário exige terminais distintos.');
-    const { terminal: terminalA } = planA;
-    const { terminal: terminalB } = planB;
-    safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
 
-    await Promise.all([
-      approach(a, terminalA, planA.path, 'A'),
-      approach(b, terminalB, planB.path, 'B'),
-    ]);
-    safeLog('Ambos no alcance de interação dos seus terminais.');
+      // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
+      // navegação cross-map: os distritos do CIGKV são separados por estruturas).
+      const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
+      const grid = makeObstacleGrid(layout);
+      a.grid = grid; b.grid = grid;
+      // Anel final determinístico (Fase 42): o anel FECHA sobre o setor canônico
+      // do mundo (scenarios.ringFinal, paridade room3d/sim3d) e o dano fora dele
+      // é multiplicado pelo cenário (ringDamageMultiplier 1–2.25). Terminal fora
+      // do setor canônico é sentença de morte no fechamento — o par só é
+      // sobrevivível se AMBOS os terminais estiverem dentro do anel final
+      // previsto (raio final 42 + margem de interação).
+      const scenario = resolveScenario(landedA.scenarioId);
+      const fin = scenario?.ringFinal ?? null;
+      const RING_FINAL_REACH = 50; // raio final (42) + margem de interação (8)
+      const distToFin = (p) => (fin ? Math.hypot(p.x - fin.x, p.z - fin.z) : 0);
+      safeLog(`Cenário ${scenario?.id ?? landedA.scenarioId} — anel final em (${fin?.x ?? '—'},${fin?.z ?? '—'}) '${fin?.name ?? 'sem setor'}' (dano ring ×${scenario?.ringDamageMultiplier ?? 1}).`);
+      const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
+        && insideFinalRing(terminal, fin, RING_FINAL_REACH)
+        && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
+      if (fin) {
+        const terminaisInfo = (landedA.terminals ?? [])
+          .map((t) => `${t.label}${t.active ? '' : ' (inativo)'} d_fin=${distToFin(t).toFixed(0)}m${insideFinalRing(t, fin, RING_FINAL_REACH) ? ' ✓' : ' ✗'}`)
+          .join('; ');
+        safeLog(`Terminais vs anel final: ${terminaisInfo}.`);
+      }
+      // Par (A,B) de terminais distintos com MENOR soma de rotas navegáveis —
+      // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
+      // distante demais (spawns próximos no staging → B morre na navegação).
+      const pathsOf = (landed) => (landed.terminals ?? [])
+        .filter((t) => safeTerminals.some((s) => s.id === t.id))
+        .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
+        .filter((p) => p.path);
+      planPair = null;
+      let bestScore = null;
+      for (const pa of pathsOf(landedA)) {
+        for (const pb of pathsOf(landedB)) {
+          if (pa.terminal.id === pb.terminal.id) continue;
+          // Par (A,B) por MINIMAX: minimiza o MAIOR dos dois caminhos e desempata
+          // pela soma. O staging real aplica dano de ring (room3d.js, kind
+          // 'ring') de ~4–5,4 HP/s fora da zona — o critério anterior (soma
+          // mínima) aceitou 55/5 na run #12: A fora do ring por ~21+ s até o
+          // knock. O minimax equilibra a exposição dos dois atores.
+          const score = [Math.max(pa.path.length, pb.path.length), pa.path.length + pb.path.length];
+          if (!planPair || score[0] < bestScore[0] || (score[0] === bestScore[0] && score[1] < bestScore[1])) {
+            planPair = { a: pa, b: pb };
+            bestScore = score;
+          }
+        }
+      }
+      const maxSteps = planPair ? Math.max(planPair.a.path.length, planPair.b.path.length) : Infinity;
+      if (!planPair || maxSteps > MAX_ROUTE_STEPS) {
+        safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+        throw new RoomRetry(`rota mínima do par ${maxSteps === Infinity ? 'sem rota' : `= ${maxSteps} trechos`} (limite ${MAX_ROUTE_STEPS})`);
+      }
+      safeLog(`Sala ${foundA.roomId} aceita na tentativa ${roomAttempt}/${ROOM_ATTEMPTS} (par navegável ≤ ${MAX_ROUTE_STEPS} trechos).`);
+      planA = planPair.a;
+      planB = planPair.b;
+      ({ terminal: terminalA } = planA);
+      ({ terminal: terminalB } = planB);
+      safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
+
+      // B chega e canaliza IMEDIATAMENTE — o canal de B não depende da posição
+      // de A; o approach de A (rota longa) roda em PARALELO com inputs contínuos
+      // (cliente parado sem input era expirado pelo servidor: run 42819040066).
+      // A navegação fica DENTRO do retry de sala (run #12: navA rejeitado fora
+      // de qualquer handler derrubou o processo sem FAIL logado).
+      navA = approach(a, terminalA, planA.path, 'A');
+      navA.catch(() => {}); // suprime unhandledRejection até o await pós-fase 1
+      await approach(b, terminalB, planB.path, 'B');
+      safeLog('B no alcance do seu terminal; canal imediato (A navega em paralelo).');
+      navigated = true;
+    } catch (err) {
+      if (!(err instanceof RoomRetry)) throw err;
+      // Visibilidade total da rejeição (run #14: 6 salas rejeitadas sem motivo logado).
+      safeLog(`Sala ${foundA?.roomId ?? '?'} rejeitada: ${err.message} (tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+      planPair = null; landedA = null; landedB = null;
+      if (a?.ws) a.ws.close();
+      if (b?.ws) b.ws.close();
+      await Promise.race([a?.closed, sleep(800)]);
+      await Promise.race([b?.closed, sleep(800)]);
+    }
+    }
+    if (!navigated) throw new Error(`Nenhuma sala jogável (par navegável + navegação sobrevivível) em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
 
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
@@ -648,9 +811,19 @@ async function main() {
     }
     safeLog(`Fase 1 (normal, conclusão): XP +${BASELINE_XP} (baseline D), canal server-side ${elapsedServer1.toFixed(2)} s, extração +1.`);
 
+    // A conclui a navegação (continuou com inputs contínuos em paralelo) e
+    // então fica em hold de posição para as fases 2–3.
+    try {
+      await navA;
+    } catch (err) {
+      throw new Error(`A não completou a navegação até o seu terminal (${err.message}); fases degradadas interrompidas honestamente.`);
+    }
+    holdPosition(a);
+
     // ══ FASE 2 — A, rede DEGRADADA: interrupção (quadros em voo não ressuscitam) ══
     // A sessão de resume só existe DEPOIS do close da conexão anterior —
     // o servidor grava o token no handler de close (janela de 15 s).
+    releaseHold(a);
     a.ws.close();
     await Promise.race([a.closed, sleep(1_000)]);
     await sleep(400);

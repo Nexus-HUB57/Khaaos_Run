@@ -1,0 +1,120 @@
+[mpzex-selftest] servidor isolado em http://127.0.0.1:8846 (capacidade 2, zero bots)
+[MP-ZEX-08] Readiness do staging aprovada.
+[MP-ZEX-08] Duas contas de staging autenticadas.
+[MP-ZEX-08] A e B estão na mesma sala de staging.
+[MP-ZEX-08] Navegando A e B por inputs de gameplay até ZEX // CENTRO.
+[MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(106.9,1.6) d_terminal=98.9 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-118.8,0.0) d_terminal=126.8 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,2.0) d_terminal=93.5 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-106.1,0.0) d_terminal=114.1 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
+[MP-ZEX-08] A: pos=(101.5,5.9) d_terminal=93.7 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-95.3,0.0) d_terminal=103.3 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(94.8,2.6) d_terminal=86.8 waypoint=7/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-85.8,0.0) d_terminal=93.8 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(86.4,2.2) d_terminal=78.5 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-77.1,0.0) d_terminal=85.1 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(77.8,2.1) d_terminal=69.8 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-68.5,-0.0) d_terminal=76.5 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(69.1,2.1) d_terminal=61.1 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-59.8,-0.0) d_terminal=67.8 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(60.4,2.0) d_terminal=52.5 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-51.1,0.0) d_terminal=59.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(51.8,2.0) d_terminal=43.8 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-42.5,0.0) d_terminal=50.5 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(43.0,2.0) d_terminal=35.1 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-33.7,0.0) d_terminal=41.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(33.9,2.0) d_terminal=26.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-25.1,0.0) d_terminal=33.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(24.9,2.0) d_terminal=17.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-16.9,2.1) d_terminal=25.0 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(16.1,1.3) d_terminal=8.2 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-8.8,5.0) d_terminal=17.5 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A chegou ao alcance de interação.
+[MP-ZEX-08] B: pos=(-0.4,5.8) d_terminal=10.2 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(6.8,3.6) d_terminal=3.9 waypoint=6/7 vida=100 medkit=false
+[MP-ZEX-08] B chegou ao alcance de interação.
+[MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
+[MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
+[MP-ZEX-08] B reservou o mesmo terminal após a desconexão de A.
+[MP-ZEX-08] MP-ZEX-08 PASS: sem XP/extração para A; resume preservado; B canalizando o terminal.
+[MP-ZEX-09] Servidor remoto configurado via KR_ZEX09_BASE_URL.
+[MP-ZEX-09] Duas contas autenticadas.
+[MP-ZEX-09] Mesma sala ring3d-2; partida em andamento.
+[MP-ZEX-09] Sala ring3d-2 aceita na tentativa 1/4 (par navegável ≤ 40 trechos).
+[MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
+[MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
+[MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
+[MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 124 ms (84–532 ms).
+[MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
+[MP-ZEX-09] Fase 3: RTT medido 107–152 ms (média 133 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.67 s, atraso visual 426 ms (bound 615 ms), estado converge pós-drain.
+[MP-ZEX-09] RELATÓRIO: {
+  "link_fase2_interrupcao": {
+    "up": {
+      "frames": 9,
+      "spikes": 0,
+      "minMs": 39.1,
+      "avgMs": 54.9,
+      "p95Ms": 86.1,
+      "maxMs": 86.1
+    },
+    "down": {
+      "frames": 52,
+      "spikes": 2,
+      "minMs": 35.1,
+      "avgMs": 113.4,
+      "p95Ms": 439.6,
+      "maxMs": 460.9
+    },
+    "effectiveRttMs": 168.3
+  },
+  "link_fase3_conclusao": {
+    "up": {
+      "frames": 7,
+      "spikes": 0,
+      "minMs": 42.4,
+      "avgMs": 62.4,
+      "p95Ms": 83.6,
+      "maxMs": 83.6
+    },
+    "down": {
+      "frames": 131,
+      "spikes": 4,
+      "minMs": 36.2,
+      "avgMs": 113.5,
+      "p95Ms": 378,
+      "maxMs": 472.4
+    },
+    "effectiveRttMs": 175.9
+  },
+  "rtt_medido": {
+    "fase2": {
+      "minMs": 84,
+      "medianMs": 124,
+      "avgMs": 175,
+      "maxMs": 532
+    },
+    "fase3": {
+      "minMs": 107,
+      "medianMs": 139,
+      "avgMs": 133,
+      "maxMs": 152
+    }
+  },
+  "atraso_visual_B_para_A_ms": 426,
+  "canal_server_side_s": {
+    "fase1_normal": 3.97,
+    "fase3_degradada": 3.67
+  },
+  "xp_por_conclusao": {
+    "baseline_normal": 250,
+    "degradada": 250
+  },
+  "perda_modelada": "TCP não descarta quadros; ~2% modelados como picos de retransmissão +200–400 ms"
+}
+[MP-ZEX-09] MP-ZEX-09 PASS: autoridade do servidor, recompensa única, convergência pós-drain e interrupção limpa sob RTT/jitter/perda.
+MPZEX_STAGING_SELFTEST_OK

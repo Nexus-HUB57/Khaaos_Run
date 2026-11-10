@@ -24,7 +24,7 @@ if (typeof globalThis.document === 'undefined') {
 }
 
 const { createOperative, animateOperative } = await import('../src/game3d/entities3d.js');
-const { GROUND_BIOMES, groundBiomeParams, groundMaterial } = await import('../src/game3d/textures3d.js');
+const { GROUND_BIOMES, groundBiomeParams, groundMaterial, BIOME_SURFACE_PROFILES, biomeSurfaceProfile, asphaltMaterial } = await import('../src/game3d/textures3d.js');
 const { buildTerrain } = await import('../src/game3d/terrain3d.js');
 
 const trisOf = (g) => {
@@ -71,6 +71,21 @@ test('groundMaterial por bioma: roughness/relevo do registro + par PBR (map+norm
   const tinted = groundMaterial(2, '#886644', 'CIGKV');
   assert.ok(tinted.color, 'tint externo ainda aceito (IBL/legado)');
   assert.equal(groundMaterial(2, null, 'X-99').roughness, GROUND_BIOMES.CIGKV.rough, 'bioma desconhecido → savana');
+});
+
+test('BIOME_SURFACE_PROFILES: construções e asfalto mudam de resposta PBR por mundo', () => {
+  assert.equal(Object.keys(BIOME_SURFACE_PROFILES).length, 5, 'um perfil de superfície por mundo');
+  for (const id of WORLDS) {
+    const p = biomeSurfaceProfile(id);
+    assert.ok(p.concrete >= .7 && p.concrete <= 1, `${id}: concreto plausível`);
+    assert.ok(p.metal >= .35 && p.metal <= .7, `${id}: metal plausível`);
+    assert.ok(p.metalness >= .2 && p.metalness <= .7, `${id}: metalness plausível`);
+    assert.ok(p.asphalt >= .5 && p.asphalt <= 1, `${id}: asfalto plausível`);
+    assert.ok(p.env > 0, `${id}: ambiente PBR presente`);
+    assert.equal(asphaltMaterial(4, id).roughness, p.asphalt, `${id}: asfalto usa o perfil`);
+  }
+  assert.notEqual(BIOME_SURFACE_PROFILES.Barburhen.asphalt, BIOME_SURFACE_PROFILES.Arukheea.asphalt, 'neve molhada e areia não compartilham brilho');
+  assert.equal(biomeSurfaceProfile('futuro'), BIOME_SURFACE_PROFILES.CIGKV, 'fallback visual seguro');
 });
 
 test('buildTerrain: material da bioma do cenário + userData.biome p/ e2e', () => {
@@ -190,4 +205,10 @@ test('orçamento de polígonos sobrevive ao cabelo/capa (≤ 6500 tris por ator)
     assert.ok(tris <= 6500, `${v}: ${tris} tris dentro do orçamento`);
     assert.ok(tris >= 2500, `${v}: ${tris} tris — detalhe anatômico presente`);
   }
+});
+
+test('margem de segurança do cabelo: SORO permanece ≥ 90 tris abaixo do gate', () => {
+  const { group } = createOperative({ vest: '#b3542e', variant: 'OP_MIL_FEMALE_SORO' });
+  const tris = Math.round(trisOf(group));
+  assert.ok(tris <= 6410, `SORO: ${tris} tris; margem esperada ≥ 90`);
 });

@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT, windowPaneOnSegment } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { WINDOW } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const input = (o = {}) => ({ ...DEFAULT_INPUT, ...o });
 const DT = 1 / 30;
@@ -115,6 +116,7 @@ test('room3d: MESMA leitura — bot estilhaça o vidro e fere pelo vão (autorit
   const room = new MatchRoom3D({ id: 'f31-win', seed: 'F31-ROOM', capacity: 4, botFill: 2, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const win = room.windows.find((w) => Math.abs(w.y0 - 1.55) < 0.01) ?? room.windows[0];
   assert.ok(win, 'cenário com janela térrea');
   const [shooter, victim] = room.bots;

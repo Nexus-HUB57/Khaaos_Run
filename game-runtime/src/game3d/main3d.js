@@ -27,6 +27,10 @@ import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
+// Task 53 — TREM OFICIAL DO ZU: viagem a bordo + SSOT do protocolo (fases/grace)
+import { TrainRide } from './trainRide3d.js';
+import { zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
+import { buildWorldLayout as getWorldLayoutForTrain } from './layout3d.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
@@ -81,6 +85,7 @@ export class Game3D {
     this.animT = 0;
     this.zuOpen = true;
     this.ended = false;
+    if (typeof window !== 'undefined') window.__kr = this; // probe de debug/e2e (console)
     // modo online (OnlineGame3D injeta o NetClient3D e substitui this.sim pela view)
     this.net = net;
     this.online = !!net;
@@ -617,7 +622,10 @@ export class Game3D {
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, this.sim.player.weapon);
     // Fase 11 — ZU: o trem cruza a zona e o desembarque aéreo começa (só câmera;
     // a sim continua autoritativa — nenhum input é bloqueado).
-    this.startTrainIntro();
+    // Task 53 — protocolo OFICIAL: a entrada é a VIAGEM a bordo (embarque → rota
+    // → portas → chegada → grace 15 s). A cinemática curta permanece p/ o QTE
+    // de descarrilamento (suite zu-derail-qte) — não é mais a entrada.
+    this.startTrainRide();
   }
 
   // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
@@ -638,6 +646,74 @@ export class Game3D {
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
     } catch { /* cinematic é best-effort — nunca bloqueia a partida */ }
+  }
+
+  // Task 53 — TREM OFICIAL DO ZU: câmera a bordo do vagão (protocolo completo:
+  // embarque → rota → portas → chegada). Só apresentação — regras na SSOT/autoridade.
+  startTrainRide(startAt = 0) {
+    if (this.sim.trainT === null && !this.online) return; // entrada sem trem (portal)
+    try {
+      const spawn = this.sim.world?.playerSpawn
+        ?? getWorldLayoutForTrain(this.seed, this.scenario?.id ?? 'CIGKV').playerSpawn;
+      this.trainRide = new TrainRide({
+        scene: this.scene,
+        route: this.sim.trainRoutePts ?? trainRoute(spawn, seedHashOf(this.seed)),
+        startAt,
+        onDone: (reason) => this.#endTrainRide(reason),
+        onPhase: (phase) => this.#onTrainPhase(phase),
+      });
+    } catch { /* visual best-effort — o protocolo segue autoritativo */ }
+  }
+
+  // Task 53 — fases do protocolo no HUD/rádio ZU (a bordo).
+  #onTrainPhase(phase) {
+    if (phase === 'embarque') this.hud.feed('ZU', 'EMBARQUE — todos os operativos a bordo. Portas fechando.', 'warn');
+    else if (phase === 'em_rota') {
+      this.hud.setMatchStatus('TREM EM ROTA // PORTAS FECHADAS');
+      this.hud.feed('ZU', 'Em rota ao Ring — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
+    } else if (phase === 'portas') {
+      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTAR');
+      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta (entrada oficial). Seguir até o destino também é oficial.', 'warn');
+    }
+  }
+
+  // Task 53 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  #requestDoorJump() {
+    const p = this.sim.player;
+    if (!p?.trainOnboard || this.ended) return;
+    if (this.online) { this.net?.sendDoorJump?.(); return; }
+    if (this.sim.doorJump?.()) {
+      this.audio?.wind?.(true, 0.2);
+      this.hud.feed('ZU', 'Salto de porta executado — entrada oficial registrada no protocolo.', 'warn');
+    }
+  }
+
+  // Task 53 — handover da câmera (salto ou chegada) + limpeza do vagão.
+  #endTrainRide(reason) {
+    if (!this.trainRide) return;
+    this.trainRide.dispose();
+    this.trainRide = null;
+    if (reason === 'arrived') this.hud.feed('ZU', 'CHEGADA — desembarque concluído no Ring.', 'warn');
+  }
+
+  // Task 53 — HUD do protocolo por frame (countdown do grace + fases a bordo).
+  updateTrainHud() {
+    const info = this.online
+      ? this._zuTrainView ?? null
+      : (Number.isFinite(this.sim.trainT) ? {
+          phase: zuTrainPhase(this.sim.trainT * 1000),
+          playerOnboard: !!this.sim.player?.trainOnboard,
+          combatLockedRemainingS: Math.max(0, this.sim.combatLockedUntil - this.sim.trainT),
+        } : null);
+    if (!info) return;
+    if (info.phase === 'grace') {
+      const s = Math.ceil(info.combatLockedRemainingS ?? 0);
+      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s`);
+    } else if (info.phase === 'combate' && !this._combatStatusSet) {
+      this._combatStatusSet = true;
+      this.hud.setMatchStatus('COMBATE LIVRE // RING');
+      this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+    }
   }
 
   // Fase 26 — consequências do QTE do trem (APENAS offline: a sim local é
@@ -1214,6 +1290,16 @@ export class Game3D {
   }
 
   updateCamera(dt) {
+    // Task 53 — TREM OFICIAL: câmera a bordo do vagão até o salto/chegada
+    if (this.trainRide && !this.trainRide.done) {
+      this.trainRide.update(dt);
+      this.trainRide.cameraPose(this.camera);
+      // salto (jogador saiu) ou chegada encerram a viagem — handover imediato
+      if (this.sim.player && !this.sim.player.trainOnboard) {
+        this.trainRide.end(this.trainRide.elapsedS() >= 16 ? 'arrived' : 'jumped');
+      }
+      return;
+    }
     // Fase 11 — cinemática do trem do ZU captura a câmera até o handover
     if (this.trainIntro && !this.trainIntro.done) {
       this.trainIntro.update(dt);
@@ -1349,7 +1435,16 @@ export class Game3D {
     // Fase 26 — atordoamento pós-QTE do trem: trava movimento/ação, mantém olhar
     const trainStunned = this.trainStunUntil && performance.now() < this.trainStunUntil;
     if (trainStunned) { dx = 0; dy = 0; }
+    // Task 53 — a bordo do trem: viagem é a entrada oficial — sem mover/atirar;
+    // o salto sai pela janela das portas (borda de ESPAÇO, offline e online).
+    const onboard = !!this.sim.player?.trainOnboard;
+    if (onboard) { dx = 0; dy = 0; }
     const touch = this.hud.touchState ?? {};
+    if (onboard && !this._doorJumpLatch && (k.has(' ') || !!touch.jump)) {
+      this._doorJumpLatch = true;
+      this.#requestDoorJump();
+    }
+    if (!k.has(' ') && !touch.jump) this._doorJumpLatch = false;
     const abilityTouch = !!touch.ability;
     const abilityTouchPressed = abilityTouch && !this.abilityTouchDown;
     this.abilityTouchDown = abilityTouch;
@@ -1357,18 +1452,18 @@ export class Game3D {
       ...this.input,
       seq: this.sim.tick + 1,
       dx, dy,
-      sprint: !trainStunned && (k.has('shift') || !!touch.sprint),
+      sprint: !trainStunned && !onboard && (k.has('shift') || !!touch.sprint),
       crouch: k.has('c') || !!touch.crouch,
-      jump: !trainStunned && (k.has(' ') || !!touch.jump),
-      fire: !trainStunned && (this.input.fire || !!touch.fire),
+      jump: !trainStunned && !onboard && (k.has(' ') || !!touch.jump),
+      fire: !trainStunned && !onboard && (this.input.fire || !!touch.fire),
       ads: this.input.ads || !!touch.ads,
       crouch: !!(this.input.crouch || touch.crouch), // Fase 5 — C alterna; touch segura
-      reload: !trainStunned && (this.input.reload || !!touch.reload),
-      interact: !trainStunned && (this.input.interact || !!touch.interact),
-      medkit: !trainStunned && (this.input.medkit || !!touch.medkit),
-      throw: !trainStunned && (this.input.throw || !!touch.throw),
-      gloo: !trainStunned && (this.input.gloo || !!touch.gloo),
-      ability: !trainStunned && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
+      reload: !trainStunned && !onboard && (this.input.reload || !!touch.reload),
+      interact: !trainStunned && !onboard && (this.input.interact || !!touch.interact),
+      medkit: !trainStunned && !onboard && (this.input.medkit || !!touch.medkit),
+      throw: !trainStunned && !onboard && (this.input.throw || !!touch.throw),
+      gloo: !trainStunned && !onboard && (this.input.gloo || !!touch.gloo),
+      ability: !trainStunned && !onboard && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
@@ -1482,6 +1577,19 @@ export class Game3D {
           // sincronizado pelo startedAt do servidor). O iniciador local já
           // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
           this.onMatchStartEvent?.(e);
+          break;
+        // Task 53 — protocolo do trem: chegada e desbloqueio de combate (offline
+        // emite da sim; online chega pelos eventos da sala autoritativa).
+        case 'trainArrived':
+          this.hud.feed('ZU', `CHEGADA — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
+          this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${e.graceS ?? 15}s`);
+          break;
+        case 'combatUnlocked':
+          this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+          this.hud.setMatchStatus('COMBATE LIVRE // RING');
+          break;
+        case 'botDoorJump':
+          this.hud.feed('ZU', 'Operativo saltou pela porta na rota (entrada oficial).', '');
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1909,6 +2017,7 @@ export class Game3D {
       }
       this.handleEvents();
     }
+    this.updateTrainHud(); // Task 53 — fases do trem + countdown do grace no HUD
     this.syncLoot();
     this.syncDoors(); // Fase 25/26 — folhas de porta + vidro seguem o estado autoritativo
     this.syncEntities(dt);

@@ -1,6 +1,6 @@
 # ==============================================================================
-# KHAAOS RUN — UE5.8 Editor Headless Build & Automation
-# Compila o target Editor e executa o Automation Test de serialização de telemetria.
+# KHAAOS RUN — UE5.8 Editor Headless Build & Telemetry Integration
+# Compila o target Editor e valida serialização + POST/retry contra mock loopback.
 # Requer runner self-hosted com labels compatíveis e Unreal Engine 5.8 instalado.
 # ==============================================================================
 name: UE5 Editor Headless Build & Telemetry Test
@@ -11,6 +11,9 @@ on:
     paths:
       - "Unreal/KhaaosRun/Source/**"
       - "Unreal/KhaaosRun/KhaaosRun.uproject"
+      - "scripts/telemetry_mock_backend.py"
+      - "scripts/verify_telemetry_mock_capture.py"
+      - "tests/python/test_telemetry_mock_backend.py"
       - ".github/workflows/ue5-headless-compile.yml"
   workflow_dispatch:
     inputs:
@@ -32,6 +35,7 @@ jobs:
     name: UE5.8 Editor Build + Telemetry Automation
     # Compilação e automação usam -NullRHI; GPU não é necessária. Benchmarks
     # gráficos permanecem no workflow ue58-release-cd.yml com label GPU.
+    # Este job executa código do checkout: use runner efêmero/restrito, sem segredos de produção.
     runs-on: [self-hosted, linux, ue5.8, x64]
     timeout-minutes: 180
     steps:
@@ -107,6 +111,40 @@ jobs:
             -LogCmds="LogKhaaosRun Verbose"
           echo "Capturas e relatório de validação LUT gerados."
 
+      - name: Start loopback telemetry mock (503 then 202)
+        id: telemetry_mock_start
+        shell: bash
+        run: |
+          set -euo pipefail
+          MOCK_DIR="$RUNNER_TEMP/khaaos-telemetry-mock"
+          CAPTURE_FILE="$MOCK_DIR/capture.json"
+          READY_FILE="$MOCK_DIR/ready.json"
+          mkdir -p "$MOCK_DIR"
+          rm -f "$CAPTURE_FILE" "$READY_FILE" "$MOCK_DIR/server.pid"
+
+          KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE="$CAPTURE_FILE" \
+          KHAAOS_TELEMETRY_MOCK_READY_FILE="$READY_FILE" \
+          KHAAOS_TELEMETRY_MOCK_SCENARIO="retry-once" \
+          KHAAOS_TELEMETRY_TOKEN="telemetry-integration-test-token" \
+            nohup python3 scripts/telemetry_mock_backend.py > "$MOCK_DIR/server.log" 2>&1 &
+          echo "$!" > "$MOCK_DIR/server.pid"
+
+          for _ in $(seq 1 50); do
+            if [ -s "$READY_FILE" ]; then break; fi
+            sleep 0.2
+          done
+          if [ ! -s "$READY_FILE" ]; then
+            cat "$MOCK_DIR/server.log"
+            echo "Mock de telemetria não ficou pronto no prazo."
+            exit 1
+          fi
+
+          MOCK_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["url"])' "$READY_FILE")"
+          printf 'KHAAOS_TELEMETRY_TEST_URL=%s\n' "$MOCK_URL" >> "$GITHUB_ENV"
+          printf 'KHAAOS_TELEMETRY_TOKEN=%s\n' "telemetry-integration-test-token" >> "$GITHUB_ENV"
+          printf 'KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE=%s\n' "$CAPTURE_FILE" >> "$GITHUB_ENV"
+          echo "Loopback mock pronto; o bearer token é sintético e descartável."
+
       - name: Run UE5 Telemetry and Combat/DBNO Automation Tests
         shell: bash
         run: |
@@ -119,11 +157,59 @@ jobs:
             -unattended \
             -nopause \
             -nosplash \
-            -ExecCmds="Automation RunTest Khaaos.Telemetry.JsonSerialization;Automation RunTests Khaaos.Combat;Quit" \
+            -ExecCmds="Automation RunTest Khaaos.Telemetry.JsonSerialization;Automation RunTests Khaaos.Combat" \
+            -TestExit="Automation Test Queue Empty" \
             -ReportExportPath="$REPORT_DIR" \
             -log \
             -LogCmds="LogKhaaosRun Verbose"
           echo "Testes de automação Telemetry e Khaaos.Combat (inclui Revive/DBNO) executados."
+
+      - name: Run Khaaos Telemetry HTTP Transport Integration Test
+        id: telemetry_http_test
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT_DIR="$GITHUB_WORKSPACE/Unreal/KhaaosRun/Saved/AutomationReports"
+          mkdir -p "$REPORT_DIR"
+          "$UE5_INSTALL_DIR/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+            "$GITHUB_WORKSPACE/$UE5_PROJECT" \
+            -NullRHI \
+            -unattended \
+            -nopause \
+            -nosplash \
+            -ExecCmds="Automation RunTest Khaaos.Telemetry.HttpTransportIntegration" \
+            -TestExit="Automation Test Queue Empty" \
+            -ReportExportPath="$REPORT_DIR" \
+            -log \
+            -LogCmds="LogKhaaosRun Verbose"
+          echo "Automation Test Khaaos.Telemetry.HttpTransportIntegration executado."
+
+      - name: Verify mock received the retried Unreal batch
+        if: always() && steps.telemetry_mock_start.outcome == 'success' && steps.telemetry_http_test.outcome != 'skipped'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s "$KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE" ]; then
+            echo "O mock não capturou requisições do Unreal."
+            exit 1
+          fi
+          python3 scripts/verify_telemetry_mock_capture.py "$KHAAOS_TELEMETRY_MOCK_CAPTURE_FILE"
+
+      - name: Stop loopback telemetry mock
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          MOCK_DIR="$RUNNER_TEMP/khaaos-telemetry-mock"
+          if [ -s "$MOCK_DIR/server.pid" ]; then
+            MOCK_PID="$(cat "$MOCK_DIR/server.pid")"
+            kill "$MOCK_PID" 2>/dev/null || true
+            for _ in $(seq 1 25); do
+              if ! kill -0 "$MOCK_PID" 2>/dev/null; then break; fi
+              sleep 0.2
+            done
+            kill -9 "$MOCK_PID" 2>/dev/null || true
+          fi
 
       - name: Upload Unreal Automation Report
         if: always()
@@ -131,6 +217,17 @@ jobs:
         with:
           name: ue5-automation-report-${{ github.sha }}
           path: Unreal/KhaaosRun/Saved/AutomationReports/**
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload telemetry mock capture and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-mock-e2e-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/khaaos-telemetry-mock/capture.json
+            ${{ runner.temp }}/khaaos-telemetry-mock/server.log
           retention-days: 30
           if-no-files-found: warn
 
@@ -169,7 +266,7 @@ jobs:
             echo "- **Branch**: $SUMMARY_BRANCH"
             echo "- **Commit**: $SUMMARY_COMMIT"
             echo "- **Target**: KhaaosRunEditor Linux Development"
-            echo "- **Automation Tests**: telemetry + Khaaos.Combat (inclui DBNO/revive)"
+            echo "- **Automation Tests**: telemetry (serialização + HTTP mock) + Khaaos.Combat (inclui DBNO/revive)"
             echo "- **Runner labels**: self-hosted, linux, ue5.8, x64"
             echo "- **Job status**: $SUMMARY_JOB_STATUS"
           } >> "$GITHUB_STEP_SUMMARY"

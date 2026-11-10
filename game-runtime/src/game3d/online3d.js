@@ -13,6 +13,7 @@ import { LocalPredictor } from './predict3d.js';
 import { attachWeapon } from './entities3d.js';
 import { officerCatalogEntries } from './officers.js';
 import { TRAIN_INTRO_DURATION_MS, TRAIN_INTRO_GRACE_MS } from '../shared/clock.js';
+import { ZU_TRAIN } from '../shared/zuTrain.js'; // Task 53 — protocolo oficial do trem
 import { spectateHref } from './spectator3d.js'; // Fase 14 — botão ASSISTIR (transmissão)
 import { refreshPojStrip as refreshPojStripShared, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — ponte DOM compartilhada do painel POJ
 import operativeCatalog from '../../../Content/Avatars/avatar_catalog.json';
@@ -364,17 +365,19 @@ export class OnlineGame3D extends Game3D {
   }
 
   // Trem do ZU sincronizado: elapsed = relógio do servidor − train.startedAt.
-  // Todos os remotos reconstruem o MESMO frame da cinemática; quem chega atraso
-  // (rede lenta, aba em background) entra no fim da timeline ou pula direto.
+  // Todos os remotos reconstruem o MESMO frame; quem chega atraso (rede lenta,
+  // aba em background) entra no fim da timeline ou pula direto.
+  // Task 53 — a entrada oficial agora é a VIAGEM a bordo (protocolo completo:
+  // embarque → rota → portas → chegada) — a cinemática curta não é mais a entrada.
   syncTrainWithServer(train) {
-    if (!train || this.trainIntro) return;
+    if (!train || this.trainRide || this.trainIntro) return;
     const key = `${train.startedAt}`;
     if (this._trainSyncedFor === key) return; // um trem por partida (anúncio único)
     this._trainSyncedFor = key;
-    const duration = Number(train.durationMs) || TRAIN_INTRO_DURATION_MS;
     const elapsed = this.net?.serverElapsed?.(train.startedAt);
-    if (!Number.isFinite(elapsed) || elapsed > duration + TRAIN_INTRO_GRACE_MS || elapsed < -500) return;
-    this.startTrainIntro(Math.max(0, elapsed) / 1000);
+    if (!Number.isFinite(elapsed) || elapsed < -500) return;
+    if (elapsed > ZU_TRAIN.ARRIVAL_MS + ZU_TRAIN.GRACE_S * 1000) return; // protocolo já concluído
+    this.startTrainRide(Math.max(0, elapsed) / 1000);
   }
 
   loop() {
@@ -391,6 +394,14 @@ export class OnlineGame3D extends Game3D {
     // estado autoritativo interpolado
     const view = this.net?.interpolate();
     if (view) {
+      // Task 53 — protocolo do trem: estado autoritativo p/ HUD/countdown e
+      // start tardio da viagem (late join/reconexão pelo relógio do servidor).
+      if (view.zuTrain) {
+        this._zuTrainView = view.zuTrain;
+        if (!this.trainRide && !this.trainIntro && view.player?.trainOnboard) {
+          this.syncTrainWithServer({ startedAt: view.zuTrain.startedAt });
+        }
+      }
       this.view.applySnapshot(view);
       const serverPlayer = this.view.player;
       if (serverPlayer) {

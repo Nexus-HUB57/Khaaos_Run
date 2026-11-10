@@ -1185,6 +1185,13 @@ export function createAuthoritativeServer({
             room?.start(client.id, message.entry || 'belt');
             return;
           }
+          // Task 53 — salto de porta do trem do ZU (entrada oficial): o servidor
+          // valida janela/a bordo e aplica a pose pura compartilhada (SSOT).
+          if (message.type === 'door_jump') {
+            const room = getRoom(client);
+            if (room?.is3d && room.started) room.doorJump(client.id);
+            return;
+          }
           if (message.type !== 'input') return;
           const room = getRoom(client);
           if (room?.is3d) {

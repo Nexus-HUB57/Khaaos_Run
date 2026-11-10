@@ -23,6 +23,7 @@ import {
 import { WEAPONS, LOOT_POOLS, rollLoot } from '../src/shared/weapons.js';
 import { KhaaosSim3D, AMMO_CAP } from '../src/game3d/sim3d.js';
 import { SeededRng } from '../src/shared/rng.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // ---- shim de canvas 2D (padrão character-realism) — entities3d usa
 // camoMaterial/skinMaterial que exigem document; sem isso o THREE puro
@@ -240,7 +241,7 @@ test('F28 · caixa de airdrop: paraquedas, sinalizador e blindagem', () => {
 });
 
 // ---------------------------------------------------------------- 5 ----
-const groundSim = (seed, botCount = 2, extra = {}) => { const s = new KhaaosSim3D({ seed, botCount, airdrop: false, ...extra }); s.start('belt'); return s; };
+const groundSim = (seed, botCount = 2, extra = {}) => { const s = new KhaaosSim3D({ seed, botCount, airdrop: false, ...extra }); s.start('belt'); disembarcarSim(s); return s; }; // Task 53 — desembarque canônico dentro da factory
 const muteWorldLoot = (s) => { for (const i of s.loot) i.active = false; };
 const blank = (over = {}) => ({
   seq: 1, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false,

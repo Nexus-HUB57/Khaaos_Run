@@ -10,6 +10,7 @@ import { WebSocket } from 'ws';
 import { createAuthoritativeServer } from '../server/server.js';
 import { DurableJsonStore } from '../server/store.js';
 import { SharedMemoryRateStore } from '../server/rateLimit.js';
+import { disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
 
@@ -97,6 +98,10 @@ test('server 3D end-to-end: login → matchmaking → partida → snapshots → 
     assert.equal(inProgress.started, true);
     assert.equal(inProgress.player.armor, 60);
     assert.ok(inProgress.others.filter((o) => o.isBot).length >= 14, 'bots preenchem o ring');
+    // Task 53 — protocolo OFICIAL do trem: a bordo o servidor suspende a física
+    // (movimento/inputs só após o desembarque). Fixture cumpre o protocolo —
+    // salto na janela das portas + chegada — e devolve o ator íntegro no spawn.
+    disembarcarSala(app.rooms.get(found.roomId), found.id);
 
     // ---- movimento via inputs: jogador se desloca ----
     const z0 = inProgress.player.z;
@@ -180,6 +185,7 @@ test('server 3D: MP-ZEX-08 cancela canal na desconexão e preserva resume', asyn
     await waitFor(() => a.state.snapshots.find((snapshot) => snapshot.state === 'IN_PROGRESS'));
     const actorA = room.humans.get(foundA.id), actorB = room.humans.get(foundB.id);
     assert.ok(actorA && actorB);
+    disembarcarSala(room, foundA.id); // Task 53 — protocolo do trem cumprido antes do canal
     const terminal = room.terminals.find((t) => !room.doors.some((d) => !d.destroyed && Math.hypot(d.x - t.x, d.z - t.z) < 2.6));
     assert.ok(terminal, 'deve haver um terminal sem porta concorrente para o teste');
     for (const item of room.loot) item.active = false;

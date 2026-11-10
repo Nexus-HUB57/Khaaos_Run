@@ -242,7 +242,10 @@ function buildAccessories(head, torso, g, { variant, vest, sec, skin, trim, vest
     for (let i = 0; i < 3; i++) {
       const seg = new THREE.Group();
       seg.position.set(0, i === 0 ? .02 : -lens[i - 1] + .015, i === 0 ? 0 : .006);
-      const tuft = ball(ws[i], hairM, 0, -lens[i] * .5, 0, 6, 5, 1, 1.18 + i * .14, .78); // 6×5: orgânico e DENTRO do orçamento ≤6500
+      // 5×4 preserva a silhueta do rabo em gameplay e libera 54 tris por
+      // operadora feminina (3 tufos × 18 tris), criando margem para acessórios
+      // futuros sem tocar na cabeça, nas mãos, nos pivôs ou na animação.
+      const tuft = ball(ws[i], hairM, 0, -lens[i] * .5, 0, 5, 4, 1, 1.18 + i * .14, .78);
       seg.add(tuft);
       seg.userData.hairPhase = i * 1.15 + hashIdx(variant || 'hair', 97) * .063;
       parent.add(seg);

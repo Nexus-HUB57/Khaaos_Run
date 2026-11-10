@@ -24,6 +24,7 @@ import { SPECIAL_CLASS_OFFICERS, officerCombatParams, shouldWithdraw } from './o
 import { GEAR_LIMITS, GEAR_NAMES, GEAR_ARMOR_BONUS, gearFromArmor, deathBoxContents, supplyDropEvent, SUPPLY_DROP } from './gear3d.js';
 // Fase 30/31/32 — anexos generalizados, skins míticas por arma e raridade dos anexos
 import { attachmentStats, mythicStageFromKills, MYTHIC_STAGE_NAMES, ATTACHMENTS, mythicSkinFor, attachmentRarityFor } from './attachments3d.js';
+import { ZU_TRAIN, COMBAT_UNLOCK_MS, zuTrainPhase, doorWindowOpen, trainRoute, trainDoorJumpPose, seedHashOf } from '../shared/zuTrain.js'; // Task 53 — protocolo oficial de entrada ZU
 import { attachmentsForDrop } from '../shared/weapons.js';
 
 export const WORLD = { size: 400, ring: { x: 0, z: 0, radius: 170 }, gravity: -22, jumpVel: 7.4 };
@@ -603,7 +604,7 @@ export function getWorldLayout(seed, scenarioId = 'CIGKV') {
 export class KhaaosSim3D {
   constructor({ seed = 'CIGKV-3D', botCount = 12, tickRate = 30, airdrop = false, scenarioId = 'CIGKV', spectate = false, squad = false, officers = false } = {}) {
     this.seed = String(seed);
-    this.seedHash = [...this.seed].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0; // Fase 28 — hash numérico p/ agendadores
+    this.seedHash = seedHashOf(this.seed); // Task 53 — paridade sim ↔ servidor (rota do trem)
     this.scenario = resolveScenario(scenarioId);
     this.rng = new SeededRng(`${this.seed}:sim`);
     this.tickRate = tickRate; this.tick = 0; this.time = MATCH_TIME; this.pulseTimer = 0; this.acidTimer = 0;
@@ -612,6 +613,11 @@ export class KhaaosSim3D {
     this.smokeTimer = 0; this.smokeRemaining = 0; this.smokeActive = false;
     this.quantumTimer = 0; this.quantumRemaining = 0; this.quantumActive = false;
     this.events = []; this.replay = []; this.over = false; this.started = false;
+    // Task 53 — protocolo do trem do ZU: elapsed desde o start (s), rota pura e
+    // trava global de combate (chegada + 15 s). `trainT === null` = entrada
+    // sem trem (portal/legacy) — nenhum gate ativo.
+    this.trainT = null; this.trainRoutePts = null; this.trainArrived = false;
+    this.combatLockedUntil = 0; this.combatUnlockedAnnounced = false;
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
     const zuIngress = this.scenario.zuIngress ?? { protocol: 'zu_portal_v1', eventProtocol: 'ZU_PORTAL_V1', mode: 'portal', durationMs: 2200 };
     this.entryProtocol = this.airdrop ? 'legacy_airdrop' : zuIngress.protocol;
@@ -834,6 +840,16 @@ export class KhaaosSim3D {
       this.emit('airdrop', { altitude: DROP_START_Y, deprecated: true });
     } else {
       this.zuIngress.startedAt = this.time;
+      // Task 53 — protocolo OFICIAL do trem (mode 'train'): todos a bordo, combate
+      // travado até CHEGADA + 15 s (grace global). Portal (fallback fora do CIGKV)
+      // preserva o contrato canônico anterior.
+      if (this.zuIngress.mode === 'train') {
+        this.trainT = 0;
+        this.trainRoutePts = trainRoute(this.world.playerSpawn, this.seedHash);
+        this.player.trainOnboard = true;
+        for (const b of this.bots) b.trainOnboard = true;
+        this.combatLockedUntil = COMBAT_UNLOCK_MS / 1000;
+      }
       this.emit('zuIngress', {
         protocol: this.zuIngress.eventProtocol,
         entryProtocol: this.entryProtocol,
@@ -842,6 +858,13 @@ export class KhaaosSim3D {
         durationMs: this.zuIngress.durationMs,
         world: this.scenario.id,
         spawn: this.world.playerSpawn,
+        // Task 53 — timeline oficial do trem (SSOT src/shared/zuTrain.js)
+        ...(this.zuIngress.mode === 'train' ? {
+          doorOpenAtMs: ZU_TRAIN.DOOR_OPEN_MS,
+          arrivalAtMs: ZU_TRAIN.ARRIVAL_MS,
+          graceS: ZU_TRAIN.GRACE_S,
+          combatLockedAfterS: COMBAT_UNLOCK_MS / 1000,
+        } : {}),
       });
     }
     this.emit('entry', { entry, entryProtocol: this.entryProtocol });
@@ -954,12 +977,17 @@ export class KhaaosSim3D {
     const input = { ...DEFAULT_INPUT, ...rawInput };
     this.record(input);
     if (this.over || !this.started) return this.snapshot();
-    this.tick++; this.time = Math.max(0, this.time - dt);
+    this.tick++;
+    // Task 53 — relógio de PARTIDA e pulso do Ring só correm com o combate
+    // liberado: rota/portas/grace não consomem tempo de jogo (o Ring começa a
+    // contar APÓS o desbloqueio — protocolo oficial do ZU).
+    if (!this.#combatLocked()) this.time = Math.max(0, this.time - dt);
+    if (this.trainT !== null) { this.trainT += dt; this.#stepTrainProtocol(); }
     this.#advanceAbility();
-    if (input.ability) this.#activateAbility();
+    if (input.ability && !this.player.trainOnboard) this.#activateAbility();
 
     // --- zona segura ---
-    this.pulseTimer += dt;
+    if (!this.#combatLocked()) this.pulseTimer += dt;
     if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
       this.pulseTimer = 0;
       this.ring.pulse++;
@@ -977,7 +1005,10 @@ export class KhaaosSim3D {
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
-    if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
+    // Task 53 — a bordo do trem dos Rings: imune ao ring (o "Cinto" da entrada
+    // ZU protege quem não pode se mover; quem salta pela porta volta a responder
+    // ao anel). Paridade 1:1 com room3d (dano de ring server-side).
+    if (p.alive && !p.trainOnboard && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
@@ -999,7 +1030,9 @@ export class KhaaosSim3D {
     }
 
     // --- jogador ---
-    if (p.alive) this.#stepActor(p, input, dt, true);
+    // Task 53 — a bordo do trem: sem movimento/ação (a viagem é a entrada oficial;
+    // o salto de porta sai por sim.doorJump() na janela das portas).
+    if (p.alive && !p.trainOnboard) this.#stepActor(p, input, dt, true);
     // --- bots ---
     for (const b of this.bots) if (b.alive) this.#stepBot(b, dt);
     // --- Fase 10 — retirada dos oficiais ao fim da duração autorizada ---
@@ -1091,7 +1124,10 @@ export class KhaaosSim3D {
         if (input.interact) this.#interact(a); else a.interactLatch = false; // Fase 25 — soltou E: rearma
         if (input.throw) this.#throwFrag(a);
         if (input.gloo) this.#deployGloo(a);
-        if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
+        // Task 53 — protocolo ZU: nenhum ATAQUE (tiro/corpo-a-corpo) antes do
+        // desbloqueio (chegada + 15 s) — o gatilho fica sem efeito.
+        if (this.#combatLocked()) { /* sem ataque durante o grace */ }
+        else if (input.fire && w.category === 'melee') this.#meleeSwing(a, w);
         else if (input.fire) this.#fire(a, w);
       }
     }
@@ -1257,6 +1293,9 @@ export class KhaaosSim3D {
 
   #stepBot(b, dt) {
     const p = this.player;
+    // Task 53 — a bordo do trem: bots não se movem/atacam (desembarcam na porta
+    // determinística ou na chegada — #stepTrainProtocol).
+    if (b.trainOnboard) { b.moving = false; return; }
     // Fase 7 — caído: rasteja rumo ao centro do anel, sem combate
     if (b.knocked) {
       const ang = Math.atan2(b.x, b.z); // yaw apontando para o centro (frente = -Z)
@@ -1272,6 +1311,8 @@ export class KhaaosSim3D {
     for (const passKnocked of [false, true]) {
       for (const other of [p, ...this.bots]) {
         if (other === b || !other.alive || !!other.knocked !== passKnocked) continue;
+        // Task 53 — a bordo do trem: fora de seleção (grace global do ZU)
+        if (other.trainOnboard) continue;
         // Fase 9 — paraquedistas intocáveis: queda livre e chute alto fora da seleção
         if (!botCanEngage(other)) continue;
         if (this.squad && other.squad === b.squad) continue;
@@ -1506,6 +1547,7 @@ export class KhaaosSim3D {
     return { x: a.x + fx * 0.55 + rx * 0.22, y: a.y + 1.42 + Math.sin(a.pitch ?? 0) * 0.3, z: a.z + fz * 0.55 + rz * 0.22 };
   }
   #fire(a, w) {
+    if (this.#combatLocked()) return false; // Task 53 — protocolo ZU: sem tiros no grace
     if (a.cooldown > 0 || a.reloadT > 0) return false;
     if (a.weapon === 'sucata') return this.#meleeSwing(a, w);
     const isPlayer = a.id === 'player';
@@ -1858,6 +1900,9 @@ export class KhaaosSim3D {
   }
   #damageBot(bot, dmg, ownerId, head, kind = 'flesh') {
     if (!bot.alive) return;
+    // Task 53 — grace global do trem: NENHUM ataque entre operativos antes do
+    // desbloqueio (chegada + 15 s). Dano ambiental (ownerId null) segue canônico.
+    if (ownerId && this.#combatLocked()) return;
     if (bot.armor > 0 && kind !== 'acid' && kind !== 'tsunami' && kind !== 'spore' && kind !== 'smoke') { const soak = Math.min(bot.armor, dmg * 0.6); bot.armor -= soak; dmg -= soak; }
     bot.life -= dmg;
     if (ownerId) bot.lastHitBy = ownerId;
@@ -1886,6 +1931,8 @@ export class KhaaosSim3D {
   #hurtPlayer(dmg, ownerId, kind) {
     const p = this.player;
     if (!p.alive) return;
+    // Task 53 — grace global do trem (mesmo contrato do #damageBot)
+    if (ownerId && this.#combatLocked()) return;
     if (dmg > 0 && p.zexChannel) this.#cancelZexChannel(p, 'damage');
     const ability = getOperativeAbility(p.operativeId);
     if (kind === 'ring' && p.abilityState.activeTicks > 0 && ability.effect === 'ringResistance') {
@@ -2321,8 +2368,65 @@ export class KhaaosSim3D {
   }
 
   // ---------- snapshot / replay ----------
+  // Task 53 — protocolo do trem: estado consolidado p/ HUD/câmera/cliente.
+  #combatLocked() {
+    return this.trainT !== null && this.trainT < this.combatLockedUntil;
+  }
+
+  // Task 53 — salto de porta do jogador (entrada oficial): só a bordo e dentro
+  // da janela [DOOR_OPEN, ARRIVAL). Pose IDÊNTICA à validada pelo servidor
+  // (trainDoorJumpPose — pureza compartilhada).
+  doorJump() {
+    const p = this.player;
+    if (!this.started || this.over || !p.alive || !p.trainOnboard) return false;
+    if (this.trainT === null || !doorWindowOpen(this.trainT * 1000)) return false;
+    const pose = trainDoorJumpPose(this.trainT * 1000, this.trainRoutePts);
+    p.x = pose.x; p.z = pose.z; p.y = pose.y; p.yaw = pose.yaw; p.pitch = 0;
+    p.vy = 0; p.onGround = false; p.dropPhase = 'chute'; // pouso canônico da Fase 4
+    p.trainOnboard = false;
+    this.emit('doorJump', { x: p.x, z: p.z, y: p.y });
+    return true;
+  }
+
+  // Task 53 — transições do protocolo: saltos determinísticos dos bots, chegada
+  // (desembarque obrigatório) e desbloqueio de combate (chegada + 15 s).
+  #stepTrainProtocol() {
+    const elapsedMs = this.trainT * 1000;
+    if (doorWindowOpen(elapsedMs)) {
+      for (let i = 0; i < this.bots.length; i++) {
+        const b = this.bots[i];
+        if (!b.alive || !b.trainOnboard || (i % 3) !== 0) continue;
+        const jumpAt = ZU_TRAIN.DOOR_OPEN_MS + ((i * 431) % 2400);
+        if (elapsedMs >= jumpAt) {
+          const pose = trainDoorJumpPose(elapsedMs, this.trainRoutePts);
+          b.x = pose.x; b.z = pose.z; b.y = pose.y; b.yaw = pose.yaw;
+          b.vy = 0; b.onGround = false; b.dropPhase = 'chute';
+          b.trainOnboard = false;
+          b.dropTarget = { x: pose.x + Math.cos(b.yaw) * 6, z: pose.z + Math.sin(b.yaw) * 6 };
+          this.emit('botDoorJump', { id: b.id, x: b.x, z: b.z });
+        }
+      }
+    }
+    if (!this.trainArrived && elapsedMs >= ZU_TRAIN.ARRIVAL_MS) {
+      this.trainArrived = true;
+      this.player.trainOnboard = false;
+      for (const b of this.bots) b.trainOnboard = false;
+      this.emit('trainArrived', { x: this.world.playerSpawn.x, z: this.world.playerSpawn.z });
+    }
+    if (!this.combatUnlockedAnnounced && this.trainT >= this.combatLockedUntil) {
+      this.combatUnlockedAnnounced = true;
+      this.emit('combatUnlocked', { graceS: ZU_TRAIN.GRACE_S });
+    }
+  }
+
   snapshot() {
     return { seed: this.seed, scenarioId: this.scenario.id, tick: this.tick, time: this.time, over: this.over, started: this.started,
+      // Task 53 — protocolo do trem (HUD: fase da rota, countdown do grace)
+      train: this.trainT !== null ? {
+        phase: zuTrainPhase(this.trainT * 1000), elapsedS: this.trainT,
+        playerOnboard: !!this.player.trainOnboard, doorOpen: doorWindowOpen(this.trainT * 1000),
+        arrived: this.trainArrived, combatLockedRemainingS: Math.max(0, this.combatLockedUntil - this.trainT),
+      } : null,
       survival: { type: this.scenario.survival?.type ?? null, active: this.quantumActive || this.tsunamiActive || this.sporeActive || this.smokeActive, remaining: this.quantumRemaining || this.tsunamiRemaining || this.sporeRemaining || this.smokeRemaining, anchors: this.world.quantumAnchors ?? [] },
       ring: { ...this.ring }, player: structuredClone(this.player),
       bots: this.bots.map(b => { const { ai, ...rest } = b; return rest; }),

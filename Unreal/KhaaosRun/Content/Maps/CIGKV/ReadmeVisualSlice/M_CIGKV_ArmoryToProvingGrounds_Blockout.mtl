@@ -1,0 +1,30 @@
+# Source PBR approximations for UE material authoring; no textures included.
+newmtl M_CIGKV_Concrete_Wet
+Kd 0.3200 0.3400 0.3600
+Pm 0.0000
+Pr 0.5800
+illum 2
+
+newmtl M_CIGKV_Steel_Rusted
+Kd 0.2000 0.1500 0.1100
+Pm 0.7200
+Pr 0.6200
+illum 2
+
+newmtl M_CIGKV_Asphalt_Damp
+Kd 0.0800 0.0900 0.1000
+Pm 0.0000
+Pr 0.6800
+illum 2
+
+newmtl M_CIGKV_Glass_Dirty
+Kd 0.1200 0.1900 0.2200
+Pm 0.0500
+Pr 0.2800
+illum 2
+
+newmtl M_CIGKV_Dirt_Weathered
+Kd 0.2200 0.2000 0.1600
+Pm 0.0000
+Pr 0.9200
+illum 2

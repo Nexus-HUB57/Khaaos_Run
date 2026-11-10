@@ -69,6 +69,53 @@ test("Eixo III: DAG dos 5 mundos soma perímetros 8/8 (1 inteiro), possui 3 vari
   }
 });
 
+test("Eixo III: eventos e ações Zu da hierarquia coincidem com a tabela canônica do README", () => {
+  const readme = readFileSync(new URL("../../README.md", import.meta.url), "utf8");
+  const zuSection = readme.slice(readme.indexOf("## Protocolos de Ingresso (Zu)"));
+  const canonicalRows = zuSection.split("\n").filter((line) => /^\|\s*\*\*/.test(line));
+  const canonicalWorldIds: Record<string, string> = {
+    CIGKV: "CIGKV",
+    "W1/C1": "Barburhen",
+    "W2/C2": "Priadus",
+    "W3/C3": "Ckesalth",
+    "W4/C4": "Arukheea",
+  };
+  const byWorld = new Map<string, string[]>();
+
+  for (const row of canonicalRows) {
+    const cells = row.split("|").map((cell) => cell.trim());
+    const stage = cells[1]?.replaceAll("*", "");
+    const worldId = canonicalWorldIds[stage];
+    if (!worldId) continue;
+    byWorld.set(worldId, cells.slice(2, 5));
+  }
+
+  assert.equal(byWorld.size, 5, "README deve fornecer a linha canônica dos cinco mundos");
+  for (const world of WORLD_HIERARCHY_DAG) {
+    const cells = byWorld.get(world.worldId);
+    assert.ok(cells, `README deve conter ${world.worldId}`);
+    assert.equal(cells.length, 3, `${world.worldId} deve ter três células Zu`);
+
+    for (let i = 0; i < 3; i += 1) {
+      const [event, action] = cells[i].split("→").map((part) => part.trim());
+      const protocol = world.zuProtocols[i];
+      const expectedAction = /cinto/i.test(action)
+        ? "APERTAR_CINTO"
+        : /saltar/i.test(action)
+          ? "SALTAR_AGORA"
+          : /máscara|mascara/i.test(action)
+            ? "ATIVAR_MASCARA_O2"
+            : null;
+
+      assert.equal(protocol.cinematicEvent, event, `${world.worldId} ${protocol.variantId} deve conservar o evento do README`);
+      assert.equal(protocol.requiredAction, expectedAction, `${world.worldId} ${protocol.variantId} deve conservar a ação do README`);
+      assert.equal(protocol.failurePenaltyPct, 30, `${world.worldId} ${protocol.variantId} não pode ultrapassar o teto canônico`);
+      assert.match(protocol.successOutcome, /0% dano/, `${world.worldId} ${protocol.variantId} deve preservar dano zero na decisão correta`);
+      assert.match(protocol.successOutcome, /5–7 s/, `${world.worldId} ${protocol.variantId} deve conservar a janela de efeito documentada`);
+    }
+  }
+});
+
 test("Eixo IV & V: Submundo KR preserva executable: false para agentes ficcionais sob Policy Engine (1000)", () => {
   const serverNode = SUBMUNDO_KR_AUTHORITY_HIERARCHY.find((n) => n.id === "server-policy-engine");
   assert.ok(serverNode);

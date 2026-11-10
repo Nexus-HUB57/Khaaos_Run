@@ -1,0 +1,148 @@
+name: Deploy Render Staging after CI
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, 'feat/**']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy-staging:
+    name: Deploy tested commit to shared Render Staging
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          (github.event.workflow_run.head_branch == 'main' ||
+           startsWith(github.event.workflow_run.head_branch, 'feat/')) &&
+          vars.RENDER_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    concurrency:
+      group: render-shared-staging
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # This workflow is loaded from the default branch. Do not checkout or
+      # download artifacts from the completed CI run: only consume its metadata.
+      # Store RENDER_DEPLOY_HOOK_URL as an environment secret and restrict the
+      # staging environment to the default branch to keep it out of feat runs.
+      - name: Validate trusted CI event and Render configuration
+        env:
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          SOURCE_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
+          GITHUB_API_BASE: ${{ github.api_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ "$SOURCE_EVENT" != "push" ]]; then
+            echo "::error::Only successful push runs may deploy to shared staging"
+            exit 1
+          fi
+          if [[ "$SOURCE_REPOSITORY" != "$TARGET_REPOSITORY" ]]; then
+            echo "::error::The completed CI run did not originate from this repository"
+            exit 1
+          fi
+          case "$SOURCE_BRANCH" in
+            main|feat/*) ;;
+            *) echo "::error::Branch is not allowed to deploy to staging"; exit 1 ;;
+          esac
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The completed CI run did not provide a valid full commit SHA"
+            exit 1
+          fi
+          trusted_workflow=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_BASE/repos/$TARGET_REPOSITORY/actions/workflows/ci.yml")
+          trusted_workflow_id=$(jq -r '.id // empty' <<<"$trusted_workflow")
+          trusted_workflow_path=$(jq -r '.path // empty' <<<"$trusted_workflow")
+          if [[ "$SOURCE_WORKFLOW_ID" != "$trusted_workflow_id" || \
+                "$trusted_workflow_path" != ".github/workflows/ci.yml" ]]; then
+            echo "::error::The successful run was not produced by the canonical ci.yml workflow"
+            exit 1
+          fi
+          source_ci=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_BASE/repos/$TARGET_REPOSITORY/contents/.github/workflows/ci.yml?ref=$EXPECTED_COMMIT")
+          trusted_ci=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_BASE/repos/$TARGET_REPOSITORY/contents/.github/workflows/ci.yml?ref=$TRUSTED_WORKFLOW_SHA")
+          source_ci_blob=$(jq -r '.sha // empty' <<<"$source_ci")
+          trusted_ci_blob=$(jq -r '.sha // empty' <<<"$trusted_ci")
+          if [[ -z "$source_ci_blob" || "$source_ci_blob" != "$trusted_ci_blob" ]]; then
+            echo "::error::Feature branch CI differs from the trusted default-branch ci.yml; sync the branch before deploy"
+            exit 1
+          fi
+          if [[ -z "$RENDER_DEPLOY_HOOK_URL" ]]; then
+            echo "::error::Missing staging deploy hook — configure o environment secret RENDER_DEPLOY_HOOK_URL (preferencial) ou o repo secret RENDER_DEPLOY_HOOK"
+            exit 1
+          fi
+          if [[ "$RENDER_SERVICE_URL" != https://* ]]; then
+            echo "::error::Set Actions variable RENDER_SERVICE_URL to the public HTTPS origin"
+            exit 1
+          fi
+          echo "Trusted CI completed successfully for ${SOURCE_BRANCH} (${EXPECTED_COMMIT})"
+
+      # Render's specific-commit hook pins the tested SHA and disables Render
+      # auto-deploys; this workflow remains the deployment authority for staging.
+      - name: Deploy exact tested commit to Render Staging
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK }}
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Refusing to deploy an invalid commit SHA"
+            exit 1
+          fi
+          separator='?'
+          if [[ "$RENDER_DEPLOY_HOOK_URL" == *\?* ]]; then
+            separator='&'
+          fi
+          deploy_url="${RENDER_DEPLOY_HOOK_URL}${separator}ref=${EXPECTED_COMMIT}"
+          status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --max-time 30 --request POST "$deploy_url")
+          if [[ ! "$status" =~ ^2[0-9]{2}$ ]]; then
+            echo "::error::Render rejected the staging deploy (HTTP $status)"
+            exit 1
+          fi
+          echo "Render accepted deploy for tested commit $EXPECTED_COMMIT (HTTP $status)"
+
+      - name: Wait for the tested commit to become healthy
+        env:
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          service_url="${RENDER_SERVICE_URL%/}"
+          for attempt in $(seq 1 40); do
+            body=$(curl --fail --silent --show-error --max-time 5 \
+              "$service_url/healthz.json" 2>/dev/null || true)
+            if [[ -n "$body" ]] && jq -e --arg commit "$EXPECTED_COMMIT" \
+              '.status == "ok" and .commit == $commit' >/dev/null <<<"$body"; then
+              echo "Render Staging is healthy on tested commit $EXPECTED_COMMIT (attempt $attempt)"
+              exit 0
+            fi
+            echo "Waiting for Render commit $EXPECTED_COMMIT (attempt $attempt/40)"
+            sleep 10
+          done
+          echo "::error::Render Staging did not become healthy on the tested commit within 10 minutes"
+          exit 1

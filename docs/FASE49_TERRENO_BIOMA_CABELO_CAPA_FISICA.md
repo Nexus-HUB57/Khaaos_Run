@@ -55,7 +55,7 @@
 
 - **Rabo de cabelo (FEMALE)**: operatrizes (`/FEMALE/` no variant — OP_FEMALE_*,
   OP_MIL_FEMALE_*, OP_GNG_FEMALE_*) ganham cadeia de 3 segmentos ancorada na
-  nuca (fora do casco, z .168) com tufos esféricos `hairM` (6×5 segmentos —
+  nuca (fora do casco, z .168) com tufos esféricos `hairM` (5×4 segmentos —
   dentro do orçamento), fase SEMEADA em `userData.hairPhase` (hash do variant —
   determinística como `talonPhase` F26). Homens e Talon não ganham (identidade
   preservada — fixado em teste).
@@ -77,9 +77,10 @@
 - **Morte/rastejo assentam**: morto — cabelo −.14 e capa −.06 com z zerado (não
   congelam no último passo); rastejo — cabelo arrasta (−.12 + esforço do
   arrasto em z), capa comprimida (−.04).
-- **Orçamento de polígonos**: rabo 3×~120 tris + capa ~130 tris —
-  OP_MIL_FEMALE_SORO (rabo+capa) 6454 tris, SNIPER 6334, TALON 6370 — TODOS ≤
-  6500 (gate de teste estendido para a variante com rabo+capa).
+- **Orçamento de polígonos**: rabo 3×~72 tris + capa ~130 tris —
+  OP_MIL_FEMALE_SORO (rabo+capa) 6402 tris, SNIPER 6282, TALON 6344 — TODOS ≤
+  6500, com margem mínima de 98 tris para SORO (gate de teste estendido para a
+  variante com rabo+capa).
 
 ### 1.3 Vitrine de evidências — `scripts/f49-showcase.html` (novo)
 

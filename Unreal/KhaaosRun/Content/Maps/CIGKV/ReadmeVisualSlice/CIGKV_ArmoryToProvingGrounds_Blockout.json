@@ -1,0 +1,138 @@
+{
+  "schema": "khaaos.cigkv-vertical-slice/v1",
+  "world_id": "CIGKV",
+  "slice": "Armory Hub to Proving Grounds",
+  "asset_name": "SM_CIGKV_ArmoryToProvingGrounds_Blockout",
+  "engine_target": "UE5.8",
+  "status": "generated_source_visual_blockout",
+  "source_contract": "Unreal/KhaaosRun/Content/Maps/CIGKV/ReadmeVisualSlice/scene_manifest.json",
+  "units": "glTF meters; normalized preview magnitudes, not approved gameplay dimensions",
+  "coordinate_conversion": {
+    "source_basis": "right-handed; +X east, +Y north, +Z height",
+    "gltf_basis": "right-handed; +Y up, +Z forward",
+    "root_rotation_xyzw": [
+      0.0,
+      0.7071067811865476,
+      0.7071067811865476,
+      0.0
+    ],
+    "verified": true
+  },
+  "not_a_gameplay_map": true,
+  "not_a_uasset_or_umap": true,
+  "proportion": {
+    "armory_hub_world_fraction": 0.125,
+    "proving_grounds_world_fraction": 0.375,
+    "selected_world_fraction": 0.5,
+    "armory_share_of_slice": 0.25,
+    "proving_grounds_share_of_slice": 0.75,
+    "excluded_sector_ids": [
+      "abandoned_park"
+    ]
+  },
+  "illustrative_choices": {
+    "building_count": 10,
+    "building_floors": [
+      2,
+      3,
+      4,
+      3,
+      2,
+      3,
+      2,
+      4,
+      3,
+      2
+    ],
+    "tunnel_proxy_count": 3,
+    "armory_rack_proxy_count": 8,
+    "armory_station_proxy_count": 4,
+    "choice_status": "visual-only sample values; not gameplay specifications"
+  },
+  "pbr_materials": [
+    {
+      "name": "M_CIGKV_Concrete_Wet",
+      "color": [
+        0.32,
+        0.34,
+        0.36,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.58
+    },
+    {
+      "name": "M_CIGKV_Steel_Rusted",
+      "color": [
+        0.2,
+        0.15,
+        0.11,
+        1.0
+      ],
+      "metallic": 0.72,
+      "roughness": 0.62
+    },
+    {
+      "name": "M_CIGKV_Asphalt_Damp",
+      "color": [
+        0.08,
+        0.09,
+        0.1,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.68
+    },
+    {
+      "name": "M_CIGKV_Glass_Dirty",
+      "color": [
+        0.12,
+        0.19,
+        0.22,
+        1.0
+      ],
+      "metallic": 0.05,
+      "roughness": 0.28
+    },
+    {
+      "name": "M_CIGKV_Dirt_Weathered",
+      "color": [
+        0.22,
+        0.2,
+        0.16,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.92
+    }
+  ],
+  "artifacts": {
+    "glb": "SM_CIGKV_ArmoryToProvingGrounds_Blockout.glb",
+    "obj": "SM_CIGKV_ArmoryToProvingGrounds_Blockout.obj",
+    "mtl": "M_CIGKV_ArmoryToProvingGrounds_Blockout.mtl",
+    "top_down_svg": "T_CIGKV_ArmoryToProvingGrounds_TopDown.svg"
+  },
+  "glb_validation": {
+    "bytes": 144084,
+    "version": 2,
+    "mesh_count": 1,
+    "primitive_count": 5,
+    "material_count": 5,
+    "axis_conversion_valid": true,
+    "units": "normalized_preview_coordinates_encoded_as_glTF_meters"
+  },
+  "obj_validation": {
+    "vertex_count": 4632,
+    "normal_count": 4632,
+    "face_count": 2316,
+    "used_material_count": 5,
+    "mtl_file": "M_CIGKV_ArmoryToProvingGrounds_Blockout.mtl",
+    "material_links_valid": true
+  },
+  "editor_follow_up": [
+    "Import the GLB in UE5.8 Editor as a source blockout and confirm the Y-up conversion in the preview.",
+    "Replace flat PBR factors with licensed high-resolution material textures and calibrated instances.",
+    "Resolve canonical gameplay bounds, scale, collision, navigation, destruction and streaming with the game team before making the level playable.",
+    "Create .uasset/.umap and run Editor cook/playtest; this sandbox has no UE5.8 Editor installation."
+  ]
+}

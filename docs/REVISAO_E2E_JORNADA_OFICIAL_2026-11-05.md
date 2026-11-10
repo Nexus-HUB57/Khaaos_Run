@@ -1,6 +1,6 @@
 # Revisão E2E — Jornada Oficial do Jogador
 
-**Data:** 2026-11-05  
+**Data:** 2026-11-05
 **Base:** `origin/main` após PR #282
 **Escopo:** cadastro/login, alistamento e pagamento, liberação de acesso, marco de 1.000.000, Academia KR e agendamento do CIGKV.
 
