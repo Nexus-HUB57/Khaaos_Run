@@ -1309,3 +1309,20 @@ Work Log:
 Stage Summary:
 - "MP-ZEX-08/09 sobem para dois dispositivos reais num despacho só" agora é mecânica pronta: falta SÓ o humano executar setup_staging_secrets.sh com a URL do staging + provisionar 2 contas + despachar; P0 inteiro tem script de setup e auditoria única (p0_gate)
 - Estado: game-runtime tests mpzex-env 7/7 + link 4/4; selftest 08+09 exit 0; node --check em todos os scripts; CI main verde antes da PR
+
+---
+Task ID: 54
+Agent: main (Z.ai)
+Task: Revisão end to end dos PRs em aberto — conflitos resolvidos e 4 PRs margemados (#305, #306, #311, #318) com main revalidado
+
+Work Log:
+- Recon: 4 PRs abertos (#318 ZU trem Task 53, #311 telemetria mock, #306 protocolos avatar/Khael, #305 mundos canônicos); main local sintético (histórico órfão do sandbox, commits-UUID) descartado — origin/main como fonte da verdade; proteção do main: "PR Validation Gate" + strict up-to-date → todo PR exige merge de main + CI fresco antes do merge
+- #305/#311/#306 atualizados com o main (fixes MP-ZEX-09 #335–#339): gates verdes; #311/#306 exigiram 1–2 ciclos extras (o main avançava a cada merge — #340 entrou no meio); conflito add/add do #306 em .github/workflows/diagnose-gcodegames.yml resolvido pela versão do main (secrets granulares já consolidados em CREDENCIAIS_SSH)
+- MERGES: #305 d27a80a, #311 737ea05, #306 9f9b0c2, #318 172284d; fila de CI do #318 destravada — 2 runs zumbis in_progress desde 14:11 seguravam a concurrency ci-<ref> (queue:max, cancel-in-progress:false); 7 runs obsoletos cancelados para o gate rodar no sha atual
+- REGRESSÃO REAL achada na revisão do #318: sob o ingresso 'train' (CIGKV) o servidor suspende a física dos atores a bordo (room3d trainOnboard) — nenhum input move até o desembarque (chegada 16 s): (1) MP-ZEX-09 isolado morria em 8 s ("Conta A não progride pela rota", run 42838634561); (2) server3d.test.js pendurava o suite em CI (waitFor 8 s + promise pendente, step 11 >50 min); (3) distributed.test.js falhava (ackSeq=0 pós-resume)
+- CORREÇÕES (2 commits no #318): harness MP-ZEX-09 aguarda 'trainArrived' antes de planejar rotas/navegar (waitTrainDisembark — no-op em fixtures sem trem); testes online aplicam a fixture canônica disembarcarSala() (salto na janela das portas + chegada, ator íntegro no spawn) nos 3 pontos afetados: movimento autoritativo, canal MP-ZEX-08 e ackSeq pós-resume
+- VALIDAÇÃO: suite completa game-runtime 1108 pass / 0 fail / 97 s (local, pós-fix); MP-ZEX-09 isolado PASS no main pós-merge (servidor :8842, zero bots); CI do main 172284d verde nas suítes — falhas restantes (Deploy Render Staging + MP-ZEX-09 staging) são PRÉ-EXISTENTES (falham no main desde 12:49, 4 runs antes deste merge — infra de staging, fora do escopo desta rodada)
+
+Stage Summary:
+- Fila de PRs zerada: 4/4 margemados com gate verde e main revalidado (local + CI); o protocolo oficial do trem (Task 53) agora é cumprido por harness e suíte — nenhum teste finge física durante a viagem
+- Dívida registrada: staging Render + MP-ZEX-09 staging falham no main desde antes desta rodada (deploy de infraestrutura) — pede sessão própria de infra
