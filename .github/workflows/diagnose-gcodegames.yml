@@ -3,31 +3,6 @@ name: Diagnose gcodegames.top
 on:
   workflow_dispatch:
     inputs:
-      ssh_host_secret:
-        description: "Nome do Secret com o host/IP SSH"
-        required: true
-        default: GCODEGAMES_SSH_HOST
-        type: string
-      ssh_user_secret:
-        description: "Nome do Secret com o usuário SSH"
-        required: true
-        default: GCODEGAMES_SSH_USER
-        type: string
-      ssh_private_key_secret:
-        description: "Nome do Secret com a chave privada SSH"
-        required: true
-        default: GCODEGAMES_SSH_PRIVATE_KEY
-        type: string
-      ssh_port_secret:
-        description: "Nome do Secret com a porta SSH"
-        required: true
-        default: GCODEGAMES_SSH_PORT
-        type: string
-      remote_path_secret:
-        description: "Nome do Secret com o caminho do checkout remoto"
-        required: true
-        default: GCODEGAMES_REMOTE_PATH
-        type: string
       expected_commit:
         description: "Commit esperado no servidor; vazio apenas informa o commit remoto"
         required: false
@@ -47,142 +22,198 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SSH_HOST: ${{ secrets[inputs.ssh_host_secret] }}
-      SSH_USER: ${{ secrets[inputs.ssh_user_secret] }}
-      SSH_PRIVATE_KEY: ${{ secrets[inputs.ssh_private_key_secret] }}
-      SSH_PORT: ${{ secrets[inputs.ssh_port_secret] }}
-      REMOTE_PATH: ${{ secrets[inputs.remote_path_secret] }}
+      CREDENCIAIS_SSH: ${{ secrets.CREDENCIAIS_SSH }}
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
     steps:
-      - name: Validate required secret presence without printing values
+      - name: Parse and validate SSH secret without printing values
         shell: bash
         run: |
           set -euo pipefail
-          missing=0
-          for name in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_PORT REMOTE_PATH; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error::Secret resolvido para $name está vazio ou não existe."
-              missing=1
-            fi
-          done
-          if [[ "$missing" -ne 0 ]]; then
-            echo "Configure os Secrets indicados nos inputs do workflow e execute novamente."
-            exit 1
-          fi
-          if ! [[ "$SSH_PORT" =~ ^[0-9]+$ ]] || (( SSH_PORT < 1 || SSH_PORT > 65535 )); then
-            echo "::error::SSH_PORT não é uma porta TCP válida."
-            exit 1
-          fi
-          echo "Credenciais presentes; valores não serão exibidos."
+          raw="$RUNNER_TEMP/credenciais_ssh.env"
+          printf '%s\n' "$CREDENCIAIS_SSH" > "$raw"
+          chmod 600 "$raw"
+          python3 - "$raw" "$GITHUB_ENV" <<'PY'
+          import re, sys
+          from pathlib import Path
 
-      - name: Configure SSH without persisting credentials
+          src = Path(sys.argv[1]).read_text()
+          out = Path(sys.argv[2])
+          pairs = {}
+          current = None
+          for line in src.splitlines():
+              m = re.match(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$', line)
+              if m:
+                  key, value = m.group(1), m.group(2)
+                  pairs[key] = value.strip().strip('"').strip("'")
+                  current = key
+                  continue
+              m = re.match(r'^\s*(HostName|User|Port|IdentityFile)\s+(.+)\s*$', line, re.I)
+              if m:
+                  pairs[m.group(1)] = m.group(2).strip()
+                  current = m.group(1)
+              elif current in {'SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'SSH_HOST_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE', 'IDENTITY_FILE', 'IdentityFile'}:
+                  if line.strip() and not line.lstrip().startswith('#'):
+                      pairs[current] += '\n' + line
+
+          def first(*names):
+              for name in names:
+                  value = pairs.get(name, '')
+                  if value:
+                      return value
+              return ''
+
+          def by_key(patterns, exclude=()):
+              for key, value in pairs.items():
+                  low = key.lower()
+                  if any(re.search(pattern, low) for pattern in patterns) and not any(re.search(pattern, low) for pattern in exclude):
+                      if value:
+                          return value
+              return ''
+
+          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE', 'IDENTITY_FILE', 'IdentityFile', 'PRIVATE_KEY_B64', 'SSH_KEY_B64')
+          if not key_value:
+              for key, value in pairs.items():
+                  low = key.lower()
+                  if (re.search(r'key|chave|privat|privad|identity', low) and (len(value) > 100 or 'BEGIN' in value)) or ('BEGIN ' in value and 'PRIVATE KEY' in value):
+                      key_value = value
+                      break
+          if key_value and re.search(r'(b64|base64|encoded)', next((k for k, v in pairs.items() if v == key_value), ''), re.I) and 'PRIVATE KEY' not in key_value:
+              import base64
+              try:
+                  decoded = base64.b64decode(key_value).decode()
+                  if 'PRIVATE KEY' in decoded:
+                      key_value = decoded
+              except Exception:
+                  pass
+          key_value = key_value.replace('\\n', '\n')
+
+          target = first('SSH_TARGET', 'REMOTE_TARGET', 'SSH_DESTINATION')
+          target_user = target_host = ''
+          if target and '@' in target:
+              target_user, target_host = target.rsplit('@', 1)
+
+          values = {
+              'SSH_HOST': first('SSH_HOST', 'HOST', 'REMOTE_HOST', 'SSH_SERVER', 'SERVER_HOST', 'SSH_IP', 'SERVER_IP', 'SERVIDOR', 'ENDERECO', 'ENDEREÇO', 'IP_SERVIDOR') or target_host or by_key((r'host', r'server', r'servidor', r'maquina', r'máquina', r'endpoint', r'address', r'endereco', r'endereço', r'(^|_)ip($|_)'), (r'user', r'usuario', r'usuário', r'path', r'caminho', r'key', r'chave')),
+              'SSH_USER': first('SSH_USER', 'USER', 'SSH_USERNAME', 'USERNAME', 'REMOTE_USER', 'SSH_LOGIN', 'USUARIO', 'USUÁRIO', 'UTILIZADOR') or target_user or by_key((r'user', r'username', r'usuario', r'usuário', r'utilizador', r'login', r'account'), (r'path', r'caminho', r'key', r'chave')),
+              'SSH_PORT': first('SSH_PORT', 'PORT', 'REMOTE_PORT', 'PORTA') or by_key((r'port', r'porta'), ()) or '22',
+              'SSH_PRIVATE_KEY': key_value,
+              'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH', 'PROJECT_DIR', 'REPO_PATH', 'APP_PATH', 'CAMINHO', 'CAMINHO_PROJETO', 'DIRETORIO', 'DIRETÓRIO', 'PASTA', 'REPOSITORIO', 'REPOSITÓRIO') or by_key((r'path', r'caminho', r'dir', r'diretorio', r'diretório', r'pasta', r'directory', r'project', r'projeto', r'checkout', r'repo', r'repositorio', r'repositório', r'root'), (r'key', r'chave', r'private', r'privad')),
+          }
+          print('discovered_variable_names=' + ','.join(sorted(pairs)))
+          missing = [k for k, v in values.items() if not v]
+          if missing:
+              raise SystemExit('CREDENCIAIS_SSH ausente/incompleto: ' + ', '.join(missing))
+          if not values['SSH_PORT'].isdigit() or not 1 <= int(values['SSH_PORT']) <= 65535:
+              raise SystemExit('SSH_PORT inválida')
+          if 'PRIVATE KEY' not in values['SSH_PRIVATE_KEY']:
+              raise SystemExit('SSH_PRIVATE_KEY não parece ser uma chave PEM/OpenSSH')
+
+          with out.open('a') as f:
+              for key, value in values.items():
+                  f.write(f'{key}<<KR_ENV_EOF\n{value}\nKR_ENV_EOF\n')
+          print('Credenciais presentes e formato validado; valores omitidos.')
+          PY
+
+      - name: Configure ephemeral SSH client
         shell: bash
         run: |
           set -euo pipefail
           install -d -m 700 "$RUNNER_TEMP/ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ssh/id_ed25519"
-          chmod 600 "$RUNNER_TEMP/ssh/id_ed25519"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ssh/id_key"
+          chmod 600 "$RUNNER_TEMP/ssh/id_key"
           ssh-keyscan -T 10 -p "$SSH_PORT" -H "$SSH_HOST" > "$RUNNER_TEMP/ssh/known_hosts" 2>"$RUNNER_TEMP/ssh/keyscan.err" || {
             echo "::error::Não foi possível obter a chave SSH do host configurado."
             sed -n '1,5p' "$RUNNER_TEMP/ssh/keyscan.err"
             exit 1
           }
           chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
-          {
-            echo "SSH_HOST=$SSH_HOST"
-            echo "SSH_PORT=$SSH_PORT"
-            echo "SSH_USER=$SSH_USER"
-            echo "REMOTE_PATH=$REMOTE_PATH"
-          } >> "$GITHUB_ENV"
 
       - name: Run read-only remote diagnostics
         shell: bash
         run: |
           set -euo pipefail
           report="$RUNNER_TEMP/gcodegames-diagnostic.txt"
-          ssh_cmd=(ssh -i "$RUNNER_TEMP/ssh/id_ed25519" -p "$SSH_PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" "$SSH_USER@$SSH_HOST")
-          remote_command="REMOTE_PATH=$(printf '%q' "$REMOTE_PATH") bash -s"
-          remote_script=$(cat <<'REMOTE_SCRIPT'
+          ssh_cmd=(ssh -i "$RUNNER_TEMP/ssh/id_key" -p "$SSH_PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" "$SSH_USER@$SSH_HOST")
+          "${ssh_cmd[@]}" bash -s -- "$REMOTE_PATH" > "$report" 2>&1 <<'REMOTE_SCRIPT'
           set +e
+          root="$1"
           section() { printf '\n===== %s =====\n' "$1"; }
-          section "identity"
+          redact() { sed -E 's/(password|token|secret|authorization|KR_USERS_JSON)[^[:space:]]*/\1=<redacted>/Ig'; }
+
+          section identity
           hostname 2>&1
           date -u 2>&1
           uptime 2>&1
           uname -a 2>&1
           id 2>&1
 
-          section "disk-and-memory"
+          section disk-and-memory
           df -h 2>&1
           free -h 2>&1 || true
 
-          section "listeners"
+          section listeners
           ss -lntp 2>&1 || netstat -lntp 2>&1 || true
 
-          section "web-processes"
-          ps -eo user,pid,ppid,stat,lstart,cmd --sort=-%cpu 2>&1 | sed -n '1,80p'
-
-          section "systemd-failures"
-          systemctl --failed --no-pager 2>&1 || true
+          section services
           for unit in nginx apache2 httpd docker; do
             printf '\n-- %s --\n' "$unit"
             systemctl is-active "$unit" 2>&1 || true
             systemctl is-enabled "$unit" 2>&1 || true
           done
 
-          section "containers"
+          section containers
           if command -v docker >/dev/null 2>&1; then
-            docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>&1
-            docker compose ps 2>&1 || true
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>&1
+            (cd "$root" && docker compose ps 2>&1) || true
           else
-            echo "docker not installed"
+            echo 'docker not installed'
           fi
 
-          section "tls-and-local-http"
-          for url in http://127.0.0.1/ https://127.0.0.1/; do
+          section compose-validation
+          if [ -d "$root" ] && command -v docker >/dev/null 2>&1; then
+            (cd "$root" && docker compose config --quiet) 2>&1
+            echo "compose_config_exit=$?"
+          fi
+
+          section container-logs
+          if [ -d "$root" ] && command -v docker >/dev/null 2>&1; then
+            (cd "$root" && docker compose logs --tail=160 --timestamps --no-color 2>&1) | redact | tail -n 240
+          fi
+
+          section local-health
+          for url in http://127.0.0.1/readyz http://127.0.0.1/healthz.json http://127.0.0.1:8080/readyz http://127.0.0.1:3000/readyz; do
             echo "-- $url --"
-            curl -k -sS -I --max-time 10 "$url" 2>&1 | sed -n '1,20p' || true
+            curl -sS -i --max-time 8 "$url" 2>&1 | sed -n '1,24p' || true
           done
-          if command -v nginx >/dev/null 2>&1; then
-            nginx -t 2>&1 || true
-          fi
+          command -v nginx >/dev/null 2>&1 && nginx -t 2>&1 || true
 
-          section "repository"
-          if [[ -d "$REMOTE_PATH/.git" ]]; then
-            cd "$REMOTE_PATH"
+          section repository
+          if [ -d "$root/.git" ]; then
+            cd "$root"
             printf 'path='; pwd
             printf 'branch='; git branch --show-current 2>&1
             printf 'head='; git rev-parse HEAD 2>&1
             printf 'describe='; git describe --always --dirty 2>&1
             printf 'status=\n'; git status --short 2>&1
-            printf 'origin=\n'; git remote -v 2>&1 | sed -E 's#(https?://)[^/@]+:[^/@]+@#\1***:***@#g'
           else
-            echo "REMOTE_PATH não contém .git: $REMOTE_PATH"
+            echo "REMOTE_PATH não contém .git: $root"
           fi
           REMOTE_SCRIPT
-          )
-          "${ssh_cmd[@]}" "$remote_command" > "$report" 2>&1 <<EOF
-          $remote_script
-          EOF
 
           cat "$report"
           {
-            echo "\n===== local-comparison ====="
-            echo "expected_commit=${EXPECTED_COMMIT:-<not-provided>}"
+            printf '\n===== local-comparison =====\n'
+            printf 'expected_commit=%s\n' "${EXPECTED_COMMIT:-<not-provided>}"
             if [[ -n "${EXPECTED_COMMIT:-}" ]] && grep -q "^head=${EXPECTED_COMMIT}$" "$report"; then
-              echo "commit_match=true"
+              echo 'commit_match=true'
             elif [[ -n "${EXPECTED_COMMIT:-}" ]]; then
-              echo "commit_match=false"
+              echo 'commit_match=false'
             else
-              echo "commit_match=not-requested"
+              echo 'commit_match=not-requested'
             fi
           } >> "$report"
 
-          if [[ -n "${EXPECTED_COMMIT:-}" ]] && ! grep -q "^head=${EXPECTED_COMMIT}$" "$report"; then
-            echo "::warning::O commit remoto não corresponde ao commit esperado; isso não falha o diagnóstico."
-          fi
-
-      - name: Upload diagnostic report
+      - name: Upload sanitized diagnostic report
         if: always()
         uses: actions/upload-artifact@v4
         with:
