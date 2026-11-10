@@ -217,6 +217,23 @@ function send(client, payload) {
   } else client.ws.send(raw);
 }
 
+/** Mantém o cliente "vivo" no servidor enquanto o PAR navega: inputs vazios
+ *  (gameplay legítimo — jogador parado) + medkit se ferido. Sem isso, o
+ *  cliente que chega PRIMEIRO fica ~15 s sem input enquanto o outro navega
+ *  rota longa e o servidor o expira por inatividade — o canal ZEX seguinte
+ *  não ativa (run 42819040066, staging real). */
+function holdPosition(client) {
+  client.hold = setInterval(() => {
+    try {
+      if (client.ws.readyState !== 1) { clearInterval(client.hold); client.hold = null; return; }
+      const p = client.latestSnapshot?.player;
+      sendInput(client, { medkit: Boolean(p && p.life < 75 && (p.inventory?.medkit ?? 0) > 0) });
+    } catch { clearInterval(client.hold); client.hold = null; }
+  }, 1_500);
+}
+function releaseHold(client) {
+  if (client.hold) { clearInterval(client.hold); client.hold = null; }
+}
 function sendInput(client, over = {}) {
   client.seq += 1;
   const input = {
@@ -615,11 +632,13 @@ async function main() {
       approach(a, terminalA, planA.path, 'A'),
       approach(b, terminalB, planB.path, 'B'),
     ]);
+    holdPosition(a); holdPosition(b); // parado ≠ inativo: inputs de gameplay contínuos
     safeLog('Ambos no alcance de interação dos seus terminais.');
 
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
     await startChannel(b, terminalB);
+    releaseHold(b);
     b.ws.terminate();
     await Promise.race([b.closed, sleep(1_000)]);
     const released1 = await waitSnapshot(a, (s) => {
@@ -659,6 +678,7 @@ async function main() {
     // ══ FASE 2 — A, rede DEGRADADA: interrupção (quadros em voo não ressuscitam) ══
     // A sessão de resume só existe DEPOIS do close da conexão anterior —
     // o servidor grava o token no handler de close (janela de 15 s).
+    releaseHold(a);
     a.ws.close();
     await Promise.race([a.closed, sleep(1_000)]);
     await sleep(400);

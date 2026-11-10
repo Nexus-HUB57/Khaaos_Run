@@ -18,23 +18,23 @@
 [MP-ZEX-08] A: pos=(87.2,2.2) d_terminal=79.3 waypoint=9/12 vida=100 medkit=false
 [MP-ZEX-08] B: pos=(-71.1,0.0) d_terminal=79.1 waypoint=2/7 vida=100 medkit=false
 [MP-ZEX-08] A: pos=(78.6,2.1) d_terminal=70.6 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-62.4,0.0) d_terminal=70.4 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(69.9,2.1) d_terminal=61.9 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-53.7,-0.0) d_terminal=61.7 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(61.2,2.0) d_terminal=53.3 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-45.1,-0.0) d_terminal=53.1 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(52.6,2.0) d_terminal=44.6 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-36.4,0.0) d_terminal=44.4 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(43.9,2.0) d_terminal=36.0 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-27.7,0.0) d_terminal=35.7 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(35.2,2.0) d_terminal=27.3 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-19.2,1.3) d_terminal=27.3 waypoint=4/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(26.3,2.0) d_terminal=18.4 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-11.0,4.2) d_terminal=19.5 waypoint=4/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(17.7,1.7) d_terminal=9.8 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-62.2,0.0) d_terminal=70.2 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(69.6,2.1) d_terminal=61.7 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-53.5,0.0) d_terminal=61.5 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(61.0,2.0) d_terminal=53.0 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-44.8,-0.0) d_terminal=52.8 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(52.3,2.0) d_terminal=44.4 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-36.2,-0.0) d_terminal=44.2 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(43.6,2.0) d_terminal=35.7 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-27.5,-0.0) d_terminal=35.5 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(35.0,2.0) d_terminal=27.1 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-19.1,1.4) d_terminal=27.2 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(25.5,2.0) d_terminal=17.6 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-10.8,4.3) d_terminal=19.3 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(16.9,1.5) d_terminal=9.0 waypoint=11/12 vida=100 medkit=false
 [MP-ZEX-08] A chegou ao alcance de interação.
-[MP-ZEX-08] B: pos=(-2.8,5.7) d_terminal=12.2 waypoint=5/7 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(5.2,5.4) d_terminal=6.1 waypoint=6/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-2.5,5.8) d_terminal=12.0 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(5.4,5.3) d_terminal=5.9 waypoint=6/7 vida=100 medkit=false
 [MP-ZEX-08] B chegou ao alcance de interação.
 [MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
 [MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
@@ -47,67 +47,67 @@
 [MP-ZEX-09] Ambos no alcance de interação dos seus terminais.
 [MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
 [MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
-[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 125 ms (87–189 ms).
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 145 ms (137–350 ms).
 [MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
-[MP-ZEX-09] Fase 3: RTT medido 112–171 ms (média 139 ms).
-[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.67 s, atraso visual 60 ms (bound 418 ms), estado converge pós-drain.
+[MP-ZEX-09] Fase 3: RTT medido 115–169 ms (média 142 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.77 s, atraso visual 50 ms (bound 410 ms), estado converge pós-drain.
 [MP-ZEX-09] RELATÓRIO: {
   "link_fase2_interrupcao": {
     "up": {
       "frames": 9,
       "spikes": 0,
-      "minMs": 37,
-      "avgMs": 66.1,
-      "p95Ms": 93.4,
-      "maxMs": 93.4
+      "minMs": 40.5,
+      "avgMs": 67,
+      "p95Ms": 93.5,
+      "maxMs": 93.5
     },
     "down": {
-      "frames": 46,
-      "spikes": 0,
-      "minMs": 35.7,
-      "avgMs": 63.3,
-      "p95Ms": 92.6,
-      "maxMs": 94.4
+      "frames": 52,
+      "spikes": 2,
+      "minMs": 38.9,
+      "avgMs": 109,
+      "p95Ms": 312.3,
+      "maxMs": 412.8
     },
-    "effectiveRttMs": 129.4
+    "effectiveRttMs": 176
   },
   "link_fase3_conclusao": {
     "up": {
       "frames": 7,
       "spikes": 0,
-      "minMs": 42,
-      "avgMs": 66.5,
-      "p95Ms": 91.8,
-      "maxMs": 91.8
+      "minMs": 41.7,
+      "avgMs": 77.7,
+      "p95Ms": 91.3,
+      "maxMs": 91.3
     },
     "down": {
-      "frames": 125,
-      "spikes": 1,
-      "minMs": 35.3,
-      "avgMs": 76.2,
-      "p95Ms": 125.6,
-      "maxMs": 426.1
+      "frames": 137,
+      "spikes": 2,
+      "minMs": 38.6,
+      "avgMs": 83.5,
+      "p95Ms": 240.1,
+      "maxMs": 420.3
     },
-    "effectiveRttMs": 142.7
+    "effectiveRttMs": 161.2
   },
   "rtt_medido": {
     "fase2": {
-      "minMs": 87,
-      "medianMs": 125,
-      "avgMs": 129,
-      "maxMs": 189
+      "minMs": 137,
+      "medianMs": 145,
+      "avgMs": 174,
+      "maxMs": 350
     },
     "fase3": {
-      "minMs": 112,
+      "minMs": 115,
       "medianMs": 134,
-      "avgMs": 139,
-      "maxMs": 171
+      "avgMs": 142,
+      "maxMs": 169
     }
   },
-  "atraso_visual_B_para_A_ms": 60,
+  "atraso_visual_B_para_A_ms": 50,
   "canal_server_side_s": {
     "fase1_normal": 3.97,
-    "fase3_degradada": 3.67
+    "fase3_degradada": 3.77
   },
   "xp_por_conclusao": {
     "baseline_normal": 250,
