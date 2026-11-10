@@ -29,6 +29,12 @@ ZU_RULES_SOURCE="${MODULE_INCLUDE_DIR}/Game/World/CIGKV/CIGKVZuRules.cpp"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" "${ZU_RULES_TEST_SOURCE}" "${ZU_RULES_SOURCE}" -o "${TEMP_DIR}/cigkv-zu-rules-test"
 "${TEMP_DIR}/cigkv-zu-rules-test"
 
+ZU_INGRESS_CONTRACT_TEST_SOURCE="${ROOT_DIR}/tests/ue5/zu_ingress_contract_test.cpp"
+ZU_INGRESS_RULES_SOURCE="${MODULE_INCLUDE_DIR}/Game/World/Zu/ZuIngressRules.cpp"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
+    "${ZU_INGRESS_CONTRACT_TEST_SOURCE}" "${ZU_INGRESS_RULES_SOURCE}" -o "${TEMP_DIR}/zu-ingress-contract-test"
+"${TEMP_DIR}/zu-ingress-contract-test"
+
 MAP_DATA_TEST_SOURCE="${ROOT_DIR}/tests/ue5/cigkv_map_data_integration_test.cpp"
 MAP_DATA_SOURCE="${ROOT_DIR}/Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/KhaaosCIGKVMapData.cpp"
 TEST_STUB_DIR="${ROOT_DIR}/tests/ue5/stubs"
@@ -63,3 +69,11 @@ DISTMATCH_TEST_SOURCE="${ROOT_DIR}/tests/ue5/distance_match_test.cpp"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
     "${DISTMATCH_TEST_SOURCE}" "${NATLOCO_CORE_SOURCE}" -o "${TEMP_DIR}/distance-match-test"
 "${TEMP_DIR}/distance-match-test"
+
+# Fase 3 — ZU_TRAIN_V1: handover server-authoritative and exactly-once.
+TRAIN_HANDOVER_TEST_SOURCE="${ROOT_DIR}/tests/ue5/train_handover_idempotency_test.cpp"
+TRAIN_HANDOVER_SOURCE="${MODULE_INCLUDE_DIR}/Game/MatchFlow/KhaaosTrainHandover.cpp"
+TRAIN_HANDOVER_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/MatchFlow"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${TRAIN_HANDOVER_INCLUDE_DIR}" \
+    "${TRAIN_HANDOVER_TEST_SOURCE}" "${TRAIN_HANDOVER_SOURCE}" -o "${TEMP_DIR}/train-handover-idempotency-test"
+"${TEMP_DIR}/train-handover-idempotency-test"

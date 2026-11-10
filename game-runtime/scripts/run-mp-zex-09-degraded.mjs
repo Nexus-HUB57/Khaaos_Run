@@ -217,6 +217,23 @@ function send(client, payload) {
   } else client.ws.send(raw);
 }
 
+/** Mantém o cliente "vivo" no servidor enquanto o PAR navega: inputs vazios
+ *  (gameplay legítimo — jogador parado) + medkit se ferido. Sem isso, o
+ *  cliente que chega PRIMEIRO fica ~15 s sem input enquanto o outro navega
+ *  rota longa e o servidor o expira por inatividade — o canal ZEX seguinte
+ *  não ativa (run 42819040066, staging real). */
+function holdPosition(client) {
+  client.hold = setInterval(() => {
+    try {
+      if (client.ws.readyState !== 1) { clearInterval(client.hold); client.hold = null; return; }
+      const p = client.latestSnapshot?.player;
+      sendInput(client, { medkit: Boolean(p && p.life < 75 && (p.inventory?.medkit ?? 0) > 0) });
+    } catch { clearInterval(client.hold); client.hold = null; }
+  }, 1_500);
+}
+function releaseHold(client) {
+  if (client.hold) { clearInterval(client.hold); client.hold = null; }
+}
 function sendInput(client, over = {}) {
   client.seq += 1;
   const input = {
@@ -566,48 +583,75 @@ async function main() {
   let linkA2 = null;
   let linkA3 = null;
   try {
-    // ── Setup: mesma sala, partida iniciada, ambos pousados ──
-    const a = await openClient(tokenA, { label: 'A' }); clients.push(a);
-    const foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
-    const b = await openClient(tokenB, { label: 'B' }); clients.push(b);
-    const foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
-    if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
-    if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
-    if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
-    send(a, { type: 'start', entry: 'belt' });
-    await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
-    await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
-    const [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
-    safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
+    // ── Setup com RETRY DE SALA: o layout varia por partida (seed + scenarioId
+    // por sala) e nem toda sala oferece DOIS terminais navegáveis e
+    // sobrevivíveis (rota ≤ MAX_ROUTE_STEPS — rotas longas sob chuva ácida
+    // matam o ator antes do canal). Fecha e re-entra (nova sala = novo layout)
+    // até 4 vezes; falha honesta se nenhuma servir.
+    const MAX_ROUTE_STEPS = 40;
+    const ROOM_ATTEMPTS = 4;
+    let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
+    for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
+      a = await openClient(tokenA, { label: 'A' }); clients.push(a);
+      foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
+      b = await openClient(tokenB, { label: 'B' }); clients.push(b);
+      foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
+      if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
+      if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
+      if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
+      send(a, { type: 'start', entry: 'belt' });
+      await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
+      await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
+      [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
+      safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
 
-    // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
-    // navegação cross-map: os distritos do CIGKV são separados por estruturas).
-    const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
-    const grid = makeObstacleGrid(layout);
-    a.grid = grid; b.grid = grid;
-    const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
-      && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-    const candidate = (landed, pathOf) => {
-      let best = null;
-      for (const terminal of safeTerminals) {
-        const path = pathOf(landed.player, terminal);
-        if (path && (!best || path.length < best.path.length)) best = { terminal, path };
+      // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
+      // navegação cross-map: os distritos do CIGKV são separados por estruturas).
+      const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
+      const grid = makeObstacleGrid(layout);
+      a.grid = grid; b.grid = grid;
+      const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
+        && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
+      // Par (A,B) de terminais distintos com MENOR soma de rotas navegáveis —
+      // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
+      // distante demais (spawns próximos no staging → B morre na navegação).
+      const pathsOf = (landed) => (landed.terminals ?? [])
+        .filter((t) => safeTerminals.some((s) => s.id === t.id))
+        .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
+        .filter((p) => p.path);
+      planPair = null;
+      for (const pa of pathsOf(landedA)) {
+        for (const pb of pathsOf(landedB)) {
+          if (pa.terminal.id === pb.terminal.id) continue;
+          if (!planPair || pa.path.length + pb.path.length < planPair.a.path.length + planPair.b.path.length) {
+            planPair = { a: pa, b: pb };
+          }
+        }
       }
-      return best;
-    };
-    const planA = candidate(landedA, (p, t) => findPath(p, t, grid));
-    const planB = candidate(landedB, (p, t) => findPath(p, t, grid));
-    if (!planA || !planB) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
-    if (planA.terminal.id === planB.terminal.id) throw new Error('A e B caíram no mesmo terminal; cenário exige terminais distintos.');
+      const maxSteps = planPair ? Math.max(planPair.a.path.length, planPair.b.path.length) : Infinity;
+      if (planPair && maxSteps <= MAX_ROUTE_STEPS) {
+        safeLog(`Sala ${foundA.roomId} aceita na tentativa ${roomAttempt}/${ROOM_ATTEMPTS} (par navegável ≤ ${MAX_ROUTE_STEPS} trechos).`);
+        break;
+      }
+      safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+      planPair = null; landedA = null; landedB = null;
+      a.ws.close(); b.ws.close();
+      await Promise.race([a.closed, sleep(800)]);
+      await Promise.race([b.closed, sleep(800)]);
+    }
+    if (!planPair) throw new Error(`Nenhuma sala com dois terminais navegáveis e sobrevivíveis em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
+    const planA = planPair.a;
+    const planB = planPair.b;
     const { terminal: terminalA } = planA;
     const { terminal: terminalB } = planB;
     safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
 
-    await Promise.all([
-      approach(a, terminalA, planA.path, 'A'),
-      approach(b, terminalB, planB.path, 'B'),
-    ]);
-    safeLog('Ambos no alcance de interação dos seus terminais.');
+    // B chega e canaliza IMEDIATAMENTE — o canal de B não depende da posição
+    // de A; o approach de A (rota longa) roda em PARALELO com inputs contínuos
+    // (cliente parado sem input era expirado pelo servidor: run 42819040066).
+    const navA = approach(a, terminalA, planA.path, 'A');
+    await approach(b, terminalB, planB.path, 'B');
+    safeLog('B no alcance do seu terminal; canal imediato (A navega em paralelo).');
 
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
@@ -648,9 +692,15 @@ async function main() {
     }
     safeLog(`Fase 1 (normal, conclusão): XP +${BASELINE_XP} (baseline D), canal server-side ${elapsedServer1.toFixed(2)} s, extração +1.`);
 
+    // A conclui a navegação (continuou com inputs contínuos em paralelo) e
+    // então fica em hold de posição para as fases 2–3.
+    await navA;
+    holdPosition(a);
+
     // ══ FASE 2 — A, rede DEGRADADA: interrupção (quadros em voo não ressuscitam) ══
     // A sessão de resume só existe DEPOIS do close da conexão anterior —
     // o servidor grava o token no handler de close (janela de 15 s).
+    releaseHold(a);
     a.ws.close();
     await Promise.race([a.closed, sleep(1_000)]);
     await sleep(400);

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Khaaos Run — Verificador local do CI e deploy</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2c; --panel2:#18233a; --text:#edf2ff; --muted:#aebbd3; --line:#2b3854; --accent:#8ab4ff; --ok:#36d399; --bad:#ff707a; --warn:#ffcf70; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at 15% 0,#172544 0,var(--bg) 42rem); color:var(--text); font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(980px,calc(100% - 32px)); margin:42px auto; }
+    header { margin-bottom:22px; }
+    .eyebrow { color:var(--accent); font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:.78rem; }
+    h1 { margin:8px 0; font-size:clamp(1.8rem,4vw,2.6rem); line-height:1.15; }
+    h2 { margin-top:0; }
+    p { color:var(--muted); margin:8px 0; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; margin:18px 0; box-shadow:0 18px 50px #0003; }
+    .notice { border-left:4px solid var(--warn); background:var(--panel2); padding:14px 16px; border-radius:8px; }
+    .notice strong { color:var(--warn); }
+    .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px; }
+    label { display:grid; gap:7px; color:var(--text); font-weight:650; }
+    input[type=file] { width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); color:var(--text); font:inherit; font-size:.9rem; }
+    .controls { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+    button { border:0; border-radius:10px; padding:11px 16px; font:inherit; font-weight:700; color:#08101f; background:var(--accent); cursor:pointer; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    button.secondary { background:transparent; border:1px solid var(--line); color:var(--text); }
+    #fileNames { color:var(--muted); font-size:.92rem; overflow-wrap:anywhere; margin-top:10px; }
+    #summary { display:none; margin-bottom:16px; padding:15px 17px; border-radius:12px; font-weight:700; }
+    #summary.pass { display:block; color:#b8ffe5; background:#0c352a; border:1px solid #1d7558; }
+    #summary.fail { display:block; color:#ffd1d4; background:#421d28; border:1px solid #93404d; }
+    #results { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+    .result { display:grid; grid-template-columns:86px 1fr; gap:12px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+    .badge { font-weight:800; font-size:.78rem; letter-spacing:.04em; align-self:start; }
+    .badge.pass { color:var(--ok); } .badge.fail { color:var(--bad); }
+    .result-title { font-weight:700; } .result-detail { color:var(--muted); font-size:.92rem; margin-top:3px; }
+    code { color:#d4e1ff; background:#0b1325; border-radius:5px; padding:1px 5px; }
+    footer { color:var(--muted); font-size:.9rem; margin:24px 0 42px; }
+    @media(max-width:620px) { main{width:min(100% - 20px,980px);margin:24px auto}.panel{padding:16px}.fields{grid-template-columns:1fr}.result{grid-template-columns:1fr;gap:3px} }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Khaaos Run · Ferramenta local</div>
+      <h1>Verificador de CI e deploy</h1>
+      <p>Selecione os dois workflows para verificar o caminho <code>feat/** → CI → Render Staging</code> e se o segredo do Render fica fora do workflow executado pela branch.</p>
+    </header>
+
+    <section class="panel" aria-labelledby="inputTitle">
+      <h2 id="inputTitle">Arquivos YAML</h2>
+      <p>Os arquivos são lidos somente neste navegador; nada é enviado para rede ou serviço externo.</p>
+      <div class="fields">
+        <label for="ciFile">CI: .github/workflows/ci.yml
+          <input id="ciFile" type="file" accept=".yml,.yaml,text/yaml">
+        </label>
+        <label for="deployFile">Deploy confiável: .github/workflows/deploy-feature-staging.yml
+          <input id="deployFile" type="file" accept=".yml,.yaml,text/yaml">
+        </label>
+      </div>
+      <div class="controls">
+        <button id="runCheck" type="button" disabled>Validar workflows</button>
+        <button id="clear" class="secondary" type="button">Limpar</button>
+      </div>
+      <div id="fileNames" aria-live="polite">Selecione os dois arquivos YAML.</div>
+    </section>
+
+    <section class="notice" role="note">
+      <strong>Limite importante:</strong> esta página valida contratos estáticos por texto, não interpreta toda a gramática YAML e não executa GitHub Actions. Use <code>actionlint</code> para lint completo; <code>act</code> com Docker pode simular parte dos jobs. O deploy real, secrets e environments só podem ser comprovados numa execução autorizada no GitHub. O workflow baseado em <code>workflow_run</code> só passa a escutar quando estiver presente na branch padrão.
+    </section>
+
+    <section class="panel" aria-labelledby="resultsTitle">
+      <h2 id="resultsTitle">Resultados</h2>
+      <div id="summary" role="status" aria-live="polite"></div>
+      <ul id="results" aria-live="polite"></ul>
+    </section>
+
+    <footer>
+      Depois de selecionar os dois arquivos, clique em “Validar workflows”. A página verifica os filtros de branch, o gate, o isolamento do segredo, a conclusão bem-sucedida do CI, o SHA fixado no deploy hook e a validação de saúde. Ela é um auxiliar estático e não substitui o PR, o gate de branch nem a validação ao vivo do Render.
+    </footer>
+  </main>
+
+  <script>
+    "use strict";
+
+    function extractJobBlock(source, jobId) {
+      const start = source.search(new RegExp(`^  ${jobId}:\\s*$`, "m"));
+      if (start < 0) return "";
+      const tail = source.slice(start);
+      const next = tail.slice(1).search(/^  [A-Za-z0-9_-]+:\s*$/m);
+      return next < 0 ? tail : tail.slice(0, next + 1);
+    }
+
+    function checkWorkflows(ciSource, deploySource) {
+      const triggerPrefix = ciSource.split(/^jobs:\s*$/m, 1)[0] || ciSource;
+      const pushMatch = triggerPrefix.match(/^  push:\s*\n([\s\S]*?)(?=^  [A-Za-z0-9_-]+:\s*$|^permissions:|$)/m);
+      const pushBlock = pushMatch ? pushMatch[1] : "";
+      const gate = extractJobBlock(ciSource, "pr-validation-gate");
+      const deploy = extractJobBlock(deploySource, "deploy-staging");
+      return [
+        { title:"Pushes feat/** iniciam o CI", detail:"O filtro de branches do evento push inclui feat/**.", pass:/['\"]feat\/\*\*['\"]/.test(pushBlock) },
+        { title:"Gate bloqueador roda em push feat/**", detail:"O PR Validation Gate executa nesses pushes e verifica os checks necessários.", pass:/github\.event_name == ['\"]push['\"][\s\S]*?startsWith\(github\.ref, ['\"]refs\/heads\/feat\//.test(gate) && ["lint","test-unit","test-game","build-server","docker-build","ue5-validate","ue5-logic","economy-check","security"].every(id=>new RegExp(`\\b${id}\\b`).test(gate)) },
+        { title:"Deploy escuta o término do workflow CI", detail:"A fonte é o workflow chamado CI, somente no evento completed e em main/feat/**.", pass:/workflow_run:\s*\n\s+workflows:\s*\[CI\]/.test(deploySource) && /types:\s*\[completed\]/.test(deploySource) && /branches:\s*\[main, ['\"]feat\/\*\*['\"]\]/.test(deploySource) },
+        { title:"Somente push aprovado do próprio repositório pode implantar", detail:"Exige conclusão success, event push, mesmo repositório e branch main ou feat/.", pass:/workflow_run\.conclusion == ['\"]success['\"]/.test(deploySource) && /workflow_run\.event == ['\"]push['\"]/.test(deploySource) && /head_repository\.full_name == github\.repository/.test(deploySource) && /head_branch == ['\"]main['\"]/.test(deploySource) && /startsWith\(github\.event\.workflow_run\.head_branch, ['\"]feat\//.test(deploySource) },
+        { title:"Workflow privilegiado não executa código da branch", detail:"Não faz checkout da branch nem baixa artifacts do run que terminou.", pass:!(/uses:\s*actions\/checkout@/.test(deploySource)) && !(/uses:\s*actions\/download-artifact@/.test(deploySource)) },
+        { title:"Identidade e configuração do CI são confiáveis", detail:"Confere workflow_id/path e exige o mesmo blob de ci.yml da branch padrão.", pass:/SOURCE_WORKFLOW_ID/.test(deploySource) && /actions\/workflows\/ci\.yml/.test(deploySource) && /source_ci_blob/.test(deploySource) && /trusted_ci_blob/.test(deploySource) && /source_ci_blob\"\s*!=\s*\"\$trusted_ci_blob/.test(deploySource) },
+        { title:"Segredo Render está isolado do CI de feature", detail:"O Render hook secret aparece no deploy trusted, mas não em ci.yml.", pass:!(/secrets\.RENDER_DEPLOY_HOOK_URL/.test(ciSource)) && /secrets\.RENDER_DEPLOY_HOOK_URL/.test(deploySource) },
+        { title:"Staging compartilhado usa fila serializada", detail:"O job usa environment staging e o grupo compartilhado com queue: max.", pass:/environment:\s*staging/.test(deploy) && /group:\s*render-shared-staging/.test(deploy) && /cancel-in-progress:\s*false/.test(deploy) && /queue:\s*max/.test(deploy) },
+        { title:"Deploy fixa o SHA validado pelo CI", detail:"O commit vem de workflow_run.head_sha e é passado em ref= ao Render.", pass:/EXPECTED_COMMIT:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/.test(deploy) && /ref=\$\{EXPECTED_COMMIT\}/.test(deploy) && /\^\[0-9a-f\]\{40\}\$/.test(deploy) },
+        { title:"Health check exige o SHA implantado", detail:"/healthz.json precisa retornar status=ok e commit igual ao SHA esperado.", pass:/\.status == [\"']ok[\"'] and \.commit == \$commit/.test(deploy) },
+        { title:"Falha fechado sem segredo/URL de serviço", detail:"Valida RENDER_DEPLOY_HOOK_URL e a origem HTTPS do serviço.", pass:/Missing Actions secret RENDER_DEPLOY_HOOK_URL/.test(deploy) && /vars\.RENDER_SERVICE_URL/.test(deploy) && /https:\/\//.test(deploy) }
+      ];
+    }
+
+    window.__checkWorkflows = checkWorkflows;
+    const ciInput = document.getElementById("ciFile");
+    const deployInput = document.getElementById("deployFile");
+    const runButton = document.getElementById("runCheck");
+    const clearButton = document.getElementById("clear");
+    const fileNames = document.getElementById("fileNames");
+    const summary = document.getElementById("summary");
+    const results = document.getElementById("results");
+    let ciFile = null;
+    let deployFile = null;
+
+    function refreshSelection() {
+      runButton.disabled = !(ciFile && deployFile);
+      fileNames.textContent = `CI: ${ciFile ? ciFile.name : "não selecionado"} · Deploy: ${deployFile ? deployFile.name : "não selecionado"}`;
+      summary.className = "";
+      summary.textContent = "";
+      results.replaceChildren();
+    }
+    ciInput.addEventListener("change", () => { ciFile = ciInput.files && ciInput.files[0] || null; refreshSelection(); });
+    deployInput.addEventListener("change", () => { deployFile = deployInput.files && deployInput.files[0] || null; refreshSelection(); });
+
+    runButton.addEventListener("click", async () => {
+      if (!(ciFile && deployFile)) return;
+      runButton.disabled = true;
+      runButton.textContent = "Validando…";
+      try {
+        const [ciSource, deploySource] = await Promise.all([ciFile.text(), deployFile.text()]);
+        const checks = checkWorkflows(ciSource, deploySource);
+        const passed = checks.filter(c => c.pass).length;
+        const failed = checks.length - passed;
+        summary.className = failed === 0 ? "pass" : "fail";
+        summary.textContent = failed === 0 ? `Contrato estático aprovado: ${passed}/${checks.length} verificações passaram.` : `Contrato estático reprovado: ${failed} de ${checks.length} verificações precisam de atenção.`;
+        results.replaceChildren();
+        for (const check of checks) {
+          const item = document.createElement("li"); item.className = "result";
+          const badge = document.createElement("span"); badge.className = `badge ${check.pass ? "pass" : "fail"}`; badge.textContent = check.pass ? "PASSOU" : "FALHOU";
+          const body = document.createElement("div");
+          const title = document.createElement("div"); title.className = "result-title"; title.textContent = check.title;
+          const detail = document.createElement("div"); detail.className = "result-detail"; detail.textContent = check.detail;
+          body.append(title, detail); item.append(badge, body); results.append(item);
+        }
+      } catch (error) {
+        summary.className = "fail"; summary.textContent = `Não foi possível ler os arquivos: ${error.message}`;
+      } finally { runButton.disabled = !(ciFile && deployFile); runButton.textContent = "Validar workflows"; }
+    });
+
+    clearButton.addEventListener("click", () => {
+      ciInput.value = ""; deployInput.value = ""; ciFile = null; deployFile = null;
+      refreshSelection();
+      const item = document.createElement("li"); item.className = "result";
+      const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "AGUARDANDO";
+      const body = document.createElement("div"); const title = document.createElement("div"); title.className = "result-title"; title.textContent = "Selecione os dois workflows";
+      const detail = document.createElement("div"); detail.className = "result-detail"; detail.textContent = "As verificações aparecerão aqui.";
+      body.append(title, detail); item.append(badge, body); results.append(item);
+    });
+  </script>
+</body>
+</html>

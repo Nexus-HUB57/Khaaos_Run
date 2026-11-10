@@ -24,6 +24,7 @@ import {
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
   roadMaterial, sidewalkMaterial, crosswalkTexture, barrelMaterial,
   sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
+  biomeSurfaceProfile,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 // Fase 31 — vegetação de produção: árvores por arquétipo de mundo, arbustos
@@ -222,9 +223,14 @@ function buildTraffic(scene, layout, q) {
 }
 
 // ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
-function buildRoads(scene, layout) {
+function buildRoads(scene, layout, scenarioId = 'CIGKV') {
   const road = roadMaterial();
+  const surface = biomeSurfaceProfile(scenarioId);
+  road.roughness = surface.asphalt;
+  road.envMapIntensity = surface.env;
   const walk = sidewalkMaterial();
+  walk.roughness = Math.min(1, surface.concrete + .06);
+  walk.envMapIntensity = surface.env;
   const group = new THREE.Group();
   for (const seg of roadSegments(layout)) {
     const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
@@ -846,22 +852,27 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // praça central de asfalto
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(34, 40),
-    asphaltMaterial(8)
+    asphaltMaterial(8, scenario.id)
   );
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
   plaza.receiveShadow = true;
   scene.add(plaza);
 
   // Fase 6 — viação (estradas/calçadas/faixas) por cima do terreno
-  buildRoads(scene, layout);
+  buildRoads(scene, layout, scenario.id);
 
   // ---- estruturas ----
+  const surface = biomeSurfaceProfile(scenario.id);
   const concrete = concreteMaterial(2.2);
   const concrete2 = concreteMaterial(1.4);
   const metalRust = metalMaterial('#7a4a2b');
   const metalBlue = metalMaterial('#31556b');
   const metalGreen = metalMaterial('#3d5a3a');
   const metalGray = metalMaterial('#4c4f55');
+  for (const m of [concrete, concrete2]) { m.roughness = surface.concrete; m.envMapIntensity = surface.env; }
+  for (const m of [metalRust, metalBlue, metalGreen, metalGray]) {
+    m.roughness = surface.metal; m.metalness = surface.metalness; m.envMapIntensity = surface.env;
+  }
   const winTex = windowsTexture();
   const crateTex = crateTexture();
 

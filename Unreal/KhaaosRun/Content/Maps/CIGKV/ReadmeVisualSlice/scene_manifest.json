@@ -1,0 +1,122 @@
+{
+  "$schema": "khaaos.readme-visual-slice/v1",
+  "world_id": "CIGKV",
+  "display_name": "CIGKV — Campo de Instrução de Guerra Khaaos Ville",
+  "canonical_sources": [
+    {
+      "path": "README.md",
+      "section": "Protocolo CIGKV — Campo de Treinamento",
+      "lines": "177–196",
+      "authority": "fonte canônica para identidade e composição visual"
+    },
+    {
+      "path": "docs/fase0/CIGKV_MAP_GUIDE.md",
+      "sections": ["Arquitetura do Mapa", "Build the Geometry"],
+      "authority": "complementar apenas quando compatível com o README"
+    }
+  ],
+  "status": "visual_reference_only_not_gameplay",
+  "preview_units": {
+    "width": 1000,
+    "height": 1000,
+    "unit": "normalized_preview_units",
+    "playable": false,
+    "description": "Composição visual normalizada; não define escala, bounds ou espaço jogável."
+  },
+  "sectors": [
+    {
+      "id": "armory_hub",
+      "name": "Pátio de Armamento (Armory Hub)",
+      "fraction": 0.125,
+      "fraction_label": "1/8",
+      "description": "Zona neutra de loadout sem restrição de patente; grande salão de armaria com racks e estações de equipamento."
+    },
+    {
+      "id": "proving_grounds",
+      "name": "Setor de Testes (Proving Grounds)",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Área urbana densa com edifícios destrutíveis e túneis; referência visual complementar: 8–12 edifícios de 2–4 pisos e 2–3 passagens conectadas."
+    },
+    {
+      "id": "abandoned_park",
+      "name": "Parque Abandonado",
+      "fraction": 0.5,
+      "fraction_label": "4/8",
+      "description": "Vegetação, áreas abertas, riachos e composição visual que sugere emboscadas; incluir pavilhões e gazebos abandonados."
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "armory_hall",
+      "sector_id": "armory_hub",
+      "name": "Salão de armaria",
+      "description": "Grande salão neutro com racks de armas e estações de loadout; não define inventário funcional."
+    },
+    {
+      "id": "urban_building_blocks",
+      "sector_id": "proving_grounds",
+      "name": "Blocos urbanos",
+      "count": "8–12 edifícios, 2–4 pisos",
+      "description": "Edifícios densos com fachadas visualmente destrutíveis; não especifica simulação de destruição."
+    },
+    {
+      "id": "underground_passages",
+      "sector_id": "proving_grounds",
+      "name": "Passagens subterrâneas",
+      "count": "2–3 passagens conectadas",
+      "description": "Conexões visuais entre partes do setor urbano; sem navegação ou colisão definida."
+    },
+    {
+      "id": "park_pavilions",
+      "sector_id": "abandoned_park",
+      "name": "Pavilhões e gazebos abandonados",
+      "description": "Estruturas dispersas entre vegetação e riachos."
+    },
+    {
+      "id": "zex_points",
+      "sector_id": "abandoned_park",
+      "name": "Zonas de Extração de XP (ZEX)",
+      "count": 15,
+      "description": "Quinze referências visuais dispersas; o manifesto não atribui coordenadas nem comportamento de jogo."
+    }
+  ],
+  "hazards": [
+    {
+      "id": "ambush_sightlines",
+      "name": "Composição de emboscada",
+      "description": "Vegetação densa e cobertura natural podem sugerir emboscadas; recurso apenas visual."
+    },
+    {
+      "id": "creeks",
+      "name": "Riachos",
+      "description": "Riachos atravessam visualmente o Parque Abandonado."
+    }
+  ],
+  "fidelity_exclusions": [
+    {
+      "source": "WCFG, INI, C++ e JSON intake conflitantes",
+      "reason": "Não usar esses valores para substituir a identidade e as frações canônicas do README."
+    },
+    {
+      "source": "docs/fase0/CIGKV_MAP_GUIDE.md",
+      "reason": "Dimensões mencionadas no guia não são bounds de gameplay nem escala desta referência."
+    },
+    {
+      "source": "interpretação de gameplay",
+      "reason": "Não inferir combate, interatividade, destruição funcional, dano, navegação, persistência, spawns ou posicionamentos a partir da composição visual."
+    }
+  ],
+  "unresolved_technical_data": [
+    {
+      "topic": "bounds e dimensões jogáveis",
+      "status": "divergente; não resolvido",
+      "description": "Fontes técnicas apresentam valores divergentes. Nenhum valor de gameplay foi selecionado; resolver por fonte técnica aprovada antes da implementação jogável."
+    },
+    {
+      "topic": "coordenadas de landmarks, ZEX, spawns e loot",
+      "status": "não especificado por este contrato visual",
+      "description": "Este manifesto fixa identidade e composição, não coordenadas ou comportamento executável."
+    }
+  ]
+}

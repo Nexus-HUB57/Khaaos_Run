@@ -1,0 +1,94 @@
+{
+  "schema": "khaaos.character-3d-provenance/v1",
+  "asset_id": "CHR_Zheers_Male_Vanguard",
+  "operator": "Khael Vance",
+  "slot": "CIGKV_HUMAN_HERO_M01",
+  "world": "CIGKV",
+  "generation": {
+    "model": "text/P1-20260311",
+    "reference": "job_m_9a6df389093d589df2ed",
+    "prompt": "Original realistic battle-royale human male operator Khael Vance, Afro-Latino Brazilian, athletic natural proportions, 26 years old, 182 cm target. One coherent symmetrical biped, isolated full body, clean neutral T-pose for rigging: arms horizontal, legs apart, straight separated fingers, grounded feet. Dark brown skin with subtle pores and dust, focused amber eyes, short black buzz-cut fade, small right eyebrow scar. Original Khaaos Run tactical wardrobe: matte charcoal plate carrier, ripstop cargo pants, fingerless gloves, simple compact backpack frame, carbon knee pads, heavy combat boots, subtle volcanic orange and deep violet trims, small gold emblem. Economical game-ready topology, clean UVs, standard-quality PBR textures, realistic roughness, separate readable zones for skin, cloth, metal and hair. Empty open hands, no weapons or held props, no cartoon style.",
+    "negative_prompt": "extra limbs, fused fingers, deformed hands, A-pose, action pose, weapons, props, broken topology, cartoon, anime, plastic skin, blurry, text, logos, watermark",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard",
+    "face_limit": 20000
+  },
+  "rigging": {
+    "reference": "job_m_d2c6de076efe7df88bce",
+    "model": "rig/v1.0-20240301",
+    "rig_type": "biped",
+    "spec": "mixamo",
+    "assessment": {
+      "reference": "job_m_90b25508e0c556db6792",
+      "riggable": true,
+      "recommended_rig_type": "biped"
+    }
+  },
+  "files": {
+    "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01.glb": {
+      "bytes": 4089304,
+      "sha256": "e670ff1c6f9ea3f3a9a192e5fd6487112d019ba672f3184a594c2aa7084d3ce9",
+      "meshes": 1,
+      "materials": 1,
+      "images": 3,
+      "textures": 3,
+      "skins": 0,
+      "animations": 0,
+      "nodes": 1,
+      "joints": 0,
+      "primitives": [
+        {
+          "vertices": 25755,
+          "triangles": 18432,
+          "attributes": [
+            "NORMAL",
+            "POSITION",
+            "TEXCOORD_0"
+          ]
+        }
+      ]
+    },
+    "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01_RIGGED.glb": {
+      "bytes": 4620388,
+      "sha256": "34ed644943ec76a1236ba77dbfe42699a01444bc903d4325885fabfe1e72164b",
+      "meshes": 1,
+      "materials": 1,
+      "images": 3,
+      "textures": 3,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 25,
+      "joints": 23,
+      "primitives": [
+        {
+          "vertices": 25910,
+          "triangles": 18432,
+          "attributes": [
+            "JOINTS_0",
+            "NORMAL",
+            "POSITION",
+            "TEXCOORD_0",
+            "WEIGHTS_0"
+          ]
+        }
+      ]
+    }
+  },
+  "integration": {
+    "canonical_skeleton": "SK_Manny",
+    "retarget_profile": "RTG_Mixamo_To_SK_Manny",
+    "target_height_cm": 182,
+    "bind_pose": "T-pose",
+    "forward_axis": "+X",
+    "origin": "feet_center",
+    "license_status": "unverified_internal_prototype",
+    "commercial_use": false,
+    "next_steps": [
+      "normalize scale and feet origin",
+      "validate finger/twist chains",
+      "create LOD0-LOD3",
+      "import into licensed Unreal Engine 5.8"
+    ]
+  }
+}
