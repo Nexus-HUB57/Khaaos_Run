@@ -601,8 +601,20 @@ async function main() {
     if (!user || !pass) throw new Error(`Credenciais ausentes para o cliente ${key.toUpperCase()}.`);
   }
 
-  const ready = await httpJson('/readyz');
-  if (!ready.response.ok) throw new Error(`Servidor não está pronto (readyz HTTP ${ready.response.status}).`);
+  // Mesmo pacientismo do 08: staging Render free hiberna (cold start > 12 s de
+  // REQUEST_TIMEOUT_MS) — acordar por até 3 min antes de autenticar.
+  const READY_MAX_WAIT_MS = 180_000;
+  const readyDeadline = Date.now() + READY_MAX_WAIT_MS;
+  let ready = null;
+  while (Date.now() < readyDeadline) {
+    try {
+      ready = await httpJson('/readyz');
+      if (ready.response.ok) break;
+    } catch { /* cold start/timeout — continuar tentando */ }
+    safeLog(`Servidor remoto acordando (cold start)… ${Math.ceil((readyDeadline - Date.now()) / 1000)}s restantes`);
+    await sleep(15_000);
+  }
+  if (!ready || !ready.response.ok) throw new Error(`Servidor não acordou dentro de ${READY_MAX_WAIT_MS / 1000} s (readyz).`);
   if (REMOTE_BASE && ready.data?.status && ready.data.status !== 'ready') throw new Error('Staging respondeu readyz, mas não declarou status=ready.');
 
   const [tokenA, tokenB] = await Promise.all([

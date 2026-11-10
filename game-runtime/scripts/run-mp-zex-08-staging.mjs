@@ -372,8 +372,21 @@ async function approachPair(a, b, terminal, paths) {
 }
 
 async function main() {
-  const ready = await httpJson('/readyz');
-  if (!ready.response.ok) throw new Error(`Staging não está pronto (readyz HTTP ${ready.response.status}).`);
+  // Staging em Render free hiberna após ~15 min de inatividade (cold start
+  // ~50–80 s > REQUEST_TIMEOUT_MS de 12 s — run #13: readiness abortada por
+  // timeout). O readiness é PACIENTE: tenta acordar o serviço por até 3 min.
+  const READY_MAX_WAIT_MS = 180_000;
+  const readyDeadline = Date.now() + READY_MAX_WAIT_MS;
+  let ready = null;
+  while (Date.now() < readyDeadline) {
+    try {
+      ready = await httpJson('/readyz');
+      if (ready.response.ok) break;
+    } catch { /* cold start/timeout — continuar tentando */ }
+    safeLog(`Staging acordando (cold start)… ${Math.ceil((readyDeadline - Date.now()) / 1000)}s restantes`);
+    await sleep(15_000);
+  }
+  if (!ready || !ready.response.ok) throw new Error(`Staging não acordou dentro de ${READY_MAX_WAIT_MS / 1000} s (readyz).`);
   if (ready.data?.status && ready.data.status !== 'ready') throw new Error('Staging respondeu readyz, mas não declarou status=ready.');
   safeLog('Readiness do staging aprovada.');
 
