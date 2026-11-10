@@ -1,0 +1,112 @@
+{
+  "$schema": "khaaos.readme-visual-slice/v1",
+  "world_id": "W4/C4",
+  "display_name": "Arukheea — Ilha dos Gritos Calados",
+  "canonical_sources": [
+    {
+      "path": "README.md",
+      "section": "W4/C4 — Arukheea (Ilha dos Gritos Calados)",
+      "lines": "252–263",
+      "authority": "fonte canônica para identidade, setores, frações e dinâmica narrativa"
+    }
+  ],
+  "status": "visual_reference_only_not_gameplay",
+  "preview_units": {
+    "width": 1000,
+    "height": 1000,
+    "unit": "normalized_preview_units",
+    "playable": false,
+    "description": "Composição normalizada exclusivamente visual; não representa escala, dimensões, coordenadas, navegação, limites ou gameplay."
+  },
+  "sectors": [
+    {
+      "id": "bosque_dos_perdidos",
+      "name": "Bosque dos Perdidos",
+      "fraction": 0.5,
+      "fraction_label": "4/8",
+      "description": "Setor florestal da ilha isolada, correspondente a metade da composição visual canônica."
+    },
+    {
+      "id": "prisao_sol_da_noite",
+      "name": "Prisão do Sol da Noite",
+      "fraction": 0.375,
+      "fraction_label": "3/8",
+      "description": "Prisão sob luz perpétua; setor associado ao fechamento do anel na dinâmica Tsunami."
+    },
+    {
+      "id": "fabrica_cemiterio_baleias",
+      "name": "Fábrica / Cemitério das Baleias",
+      "fraction": 0.125,
+      "fraction_label": "1/8",
+      "description": "Setor fabril e cemitério das baleias, representado como uma única área visual."
+    },
+    {
+      "id": "extracao_final",
+      "name": "Extração final (heliporto da torre)",
+      "fraction": null,
+      "fraction_label": null,
+      "description": "Ponto de extração final no heliporto da torre; a tabela canônica não atribui fração de área."
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "heliporto_torre",
+      "name": "Heliporto da torre",
+      "description": "Ponto de extração final no topo da torre; referência de composição, sem coordenada de gameplay definida."
+    },
+    {
+      "id": "ilha_isolada",
+      "name": "Ilha isolada",
+      "description": "Contexto geográfico dos setores de Arukheea e da ameaça do tsunami iminente."
+    }
+  ],
+  "hazards": [
+    {
+      "id": "tsunami",
+      "name": "Tsunami iminente",
+      "description": "Ameaça central da dinâmica Tsunami; o anel fecha na Prisão do Sol da Noite."
+    },
+    {
+      "id": "tubaroes",
+      "name": "Tubarões",
+      "description": "Perigo presente nas águas ao redor da ilha."
+    },
+    {
+      "id": "pressao_hidraulica_claustrofobia",
+      "name": "Pressão hidráulica e claustrofobia em céu aberto",
+      "description": "Tensão ambiental canônica que combina pressão hidráulica e claustrofobia mesmo em espaços abertos."
+    },
+    {
+      "id": "anel_prisao",
+      "name": "Anel fecha na Prisão",
+      "description": "Na dinâmica Tsunami, a zona fecha na Prisão do Sol da Noite; a extração final ocorre no heliporto da torre."
+    }
+  ],
+  "fidelity_exclusions": [
+    {
+      "source": "Cânions, deserto e tempestades de areia",
+      "reason": "Não pertencem à identidade narrativa de Arukheea; excluir esses biomas e perigos."
+    },
+    {
+      "source": "Forja e estética hellscape de WCFG, INI ou C++ conflitantes",
+      "reason": "Fontes técnicas conflitantes não substituem o cânone narrativo aprovado no README."
+    }
+  ],
+  "unresolved_technical_data": [
+    {
+      "topic": "bounds, dimensões e limites espaciais",
+      "status": "não resolvido",
+      "description": "Bounds e dimensões divergentes entre fontes técnicas não são resolvidos por este contrato visual."
+    },
+    {
+      "topic": "contagens e posições de pontos de interesse",
+      "status": "não resolvido",
+      "description": "Contagens e localizações técnicas divergentes não são selecionadas nem reconciliadas neste manifesto."
+    },
+    {
+      "topic": "valores de gameplay",
+      "status": "não resolvido",
+      "description": "Não inferir nem escolher valores executáveis a partir da referência visual."
+    }
+  ]
+}
