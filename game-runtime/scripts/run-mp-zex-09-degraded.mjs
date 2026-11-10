@@ -599,9 +599,15 @@ async function main() {
     // por sala) e nem toda sala oferece DOIS terminais navegáveis e
     // sobrevivíveis (rota ≤ MAX_ROUTE_STEPS — rotas longas sob chuva ácida
     // matam o ator antes do canal). Fecha e re-entra (nova sala = novo layout)
-    // até 4 vezes; falha honesta se nenhuma servir.
-    const MAX_ROUTE_STEPS = 40;
-    const ROOM_ATTEMPTS = 4;
+    // até 6 vezes; falha honesta se nenhuma servir.
+    // Calibragem 2026-11-10: despachos reais ao staging (runs #8/#9/#10) mediram
+    // pares navegáveis com rota mínima de 55 trechos em TODAS as salas — o
+    // limite anterior (40) estava atrás do tamanho dos mundos após a Task 53
+    // (protocolo do trem) e os gates de assets (#313). O MP-ZEX-08 navega e
+    // sobrevive com o MESMO grid (sim3d) — 64 trechos mantém folga de ~16% sem
+    // abrir para rotas cross-map inviáveis.
+    const MAX_ROUTE_STEPS = 64;
+    const ROOM_ATTEMPTS = 6;
     let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
     for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
       a = await openClient(tokenA, { label: 'A' }); clients.push(a);
