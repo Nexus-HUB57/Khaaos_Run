@@ -33,63 +33,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Descobrir owner e serviço (cria se ausente)
+      - name: Probe read-only da API Render (diagnóstico)
         id: svc
         env:
           API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
         run: |
           set -euo pipefail
-          code=$(curl -s -o /tmp/owners.json -w '%{http_code}' -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/owners")
-          echo "GET /owners → HTTP $code"
-          head -c 400 /tmp/owners.json; echo
-          [[ "$code" == "200" ]] || { echo "::error::owners indisponível"; exit 1; }
-          owner_id=$(jq -r '.[0].id' /tmp/owners.json)
-          echo "owner_id=$owner_id" >> "$GITHUB_OUTPUT"
-          code=$(curl -s -o /tmp/services.json -w '%{http_code}' -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services?limit=50")
-          echo "GET /services → HTTP $code"
-          [[ "$code" == "200" ]] || { head -c 400 /tmp/services.json; echo; exit 1; }
-          existing=$(jq -r --arg n "$SERVICE_NAME" '.[] | select(.service.name == $n) | .service.id' /tmp/services.json | head -1)
-          if [[ -n "$existing" ]]; then
-            echo "service_id=$existing" >> "$GITHUB_OUTPUT"
-            echo "Serviço $SERVICE_NAME já existe ($existing)"
-          else
-            auth_secret=$(openssl rand -hex 32)
-            admin_token=$(openssl rand -hex 32)
-            plan_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/plans?type=web&limit=50" \
-              | jq -r '[.[] | select((.price.amount // 999999) == 0)][0].id // empty')
-            echo "plan free: ${plan_id:-<nenhum — omitindo planId>}"
-            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" --arg plan "$plan_id" '{
-              type: "web",
-              name: $name,
-              ownerId: $owner,
-              repo: "https://github.com/Nexus-HUB57/Khaaos_Run",
-              branch: "main",
-              autoDeploy: "no",
-              envVars: [
-                {key: "PORT", value: "8787"},
-                {key: "NODE_ENV", value: "production"},
-                {key: "AUTH_SECRET", value: $auth},
-                {key: "ADMIN_TOKEN", value: $adm}
-              ],
-              serviceDetails: {
-                env: "docker",
-                dockerfilePath: "game-runtime/Dockerfile",
-                dockerContext: ".",
-                healthCheckPath: "/healthz"
-              }
-            } + (if $plan != "" then {planId: $plan} else {} end)')
-            resp=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
-              -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services")
-            http_code=$(echo "$resp" | tail -1)
-            service_id=$(echo "$resp" | head -n -1 | jq -r '.id // empty')
-            if [[ -z "$service_id" ]]; then
-              echo "::error::Falha ao criar o serviço no Render (HTTP $http_code)"
-              echo "$resp" | head -n -1 | cut -c1-600
-              exit 1
-            fi
-            echo "service_id=$service_id" >> "$GITHUB_OUTPUT"
-            echo "Serviço $SERVICE_NAME criado ($service_id)"
-          fi
+          for ep in "owners" "services?limit=20" "plans?provider=render" "plans?type=web" "plans"; do
+            code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/$ep")
+            echo "### GET /$ep → HTTP $code"
+            head -c 700 /tmp/r.json; echo; echo "---"
+          done
+          echo "PROBE_OK (nenhuma criação nesta passada)"
 
       - name: Alinhar KR_USERS_JSON (hash local, senhas só do environment)
         env:
