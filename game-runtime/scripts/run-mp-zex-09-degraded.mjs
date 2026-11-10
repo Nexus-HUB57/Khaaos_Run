@@ -459,7 +459,17 @@ class RoomRetry extends Error {}
 
 async function waitForLand(client, label) {
   const snapshot = await waitSnapshot(client, (s) => s.state === 'IN_PROGRESS' && s.player && !s.player.dropPhase && s.player.onGround, `pouso de ${label}`, 90_000);
-  if (!snapshot.player.alive || snapshot.player.knocked) throw new RoomRetry(`Conta ${label} eliminada/derrubada no pouso (dano ambiental do layout)`);
+  if (!snapshot.player.alive) throw new RoomRetry(`Conta ${label} eliminada no pouso (não recuperável)`);
+  if (snapshot.player.knocked) {
+    // Capotamento do trem dos Rings (Task 53) derruba passageiros — knock é
+    // design; o medkit de spawn reergue (autocuidado caído). Só rejeita a sala
+    // se o ator não tiver como se reerguer.
+    if ((snapshot.player.inventory?.medkit ?? 0) > 0) {
+      safeLog(`${label}: knocked no pouso (capotamento?) — seguirá com autocuidado (medkit reergue).`);
+      return snapshot;
+    }
+    throw new RoomRetry(`Conta ${label} knocked no pouso sem medkit (dano ambiental do layout)`);
+  }
   return snapshot;
 }
 
@@ -638,7 +648,7 @@ async function main() {
     // sobrevive com o MESMO grid (sim3d) — 64 trechos mantém folga de ~16% sem
     // abrir para rotas cross-map inviáveis.
     const MAX_ROUTE_STEPS = 64;
-    const ROOM_ATTEMPTS = 6;
+    const ROOM_ATTEMPTS = 8;
     let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
     let navigated = false, planA = null, planB = null, terminalA = null, terminalB = null, navA = null;
     for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
@@ -660,14 +670,17 @@ async function main() {
       // o cão de guarda antes da chegada em 16 s; floor do link degradado é 14 s).
       await Promise.all([waitTrainDisembark(a, 'A'), waitTrainDisembark(b, 'B')]);
 
-      // Sobrevivência pós-desembarque (run #11 do despacho único): dano
-      // ambiental entre o pouso e o início da navegação (ator parado aguardando
-      // o trem/chegada) derruba o ator mesmo com rota curta — re-entrar em nova
-      // sala em vez de falhar o cenário; o teste só é honesto numa sala jogável.
+      // Sobrevivência pós-desembarque (run #11/#14): dano ambiental/capotamento
+      // entre o pouso e a navegação derruba o ator — knocked COM medkit segue
+      // (a navegação reergue); só rejeita sem meio de reerguer. Log completo
+      // para diagnóstico (run #14 rejeitou 6 salas em silêncio).
       for (const [entry, label] of [[a, 'A'], [b, 'B']]) {
         const s = entry.latestSnapshot;
-        if (!s?.player?.alive || s?.player?.knocked) {
-          throw new RoomRetry(`Conta ${label} knocked/eliminada entre o desembarque e a navegação (dano ambiental)`);
+        if (!s?.player) throw new RoomRetry(`Conta ${label} sem snapshot pós-desembarque`);
+        safeLog(`pós-desembarque ${label}: vida=${s.player.life} knocked=${!!s.player.knocked} medkit=${s.player.inventory?.medkit ?? 0} pos=(${Number(s.player.x).toFixed(1)},${Number(s.player.z).toFixed(1)})`);
+        if (!s.player.alive) throw new RoomRetry(`Conta ${label} eliminada pós-desembarque (não é knock recuperável)`);
+        if (s.player.knocked && (s.player.inventory?.medkit ?? 0) <= 0) {
+          throw new RoomRetry(`Conta ${label} knocked pós-desembarque sem medkit`);
         }
       }
 
@@ -726,6 +739,8 @@ async function main() {
       navigated = true;
     } catch (err) {
       if (!(err instanceof RoomRetry)) throw err;
+      // Visibilidade total da rejeição (run #14: 6 salas rejeitadas sem motivo logado).
+      safeLog(`Sala ${foundA?.roomId ?? '?'} rejeitada: ${err.message} (tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
       planPair = null; landedA = null; landedB = null;
       if (a?.ws) a.ws.close();
       if (b?.ws) b.ws.close();
