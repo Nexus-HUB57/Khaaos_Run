@@ -115,7 +115,7 @@ jobs:
           url="https://khaaos-run-staging.onrender.com"
           for i in $(seq 1 20); do
             body=$(curl -s --max-time 10 "$url/healthz" || true)
-            if echo "$body" | jq -e '.ok == true' >/dev/null 2>&1; then
+            if echo "$body" | jq -e '.status == "ok"' >/dev/null 2>&1; then
               echo "HEALTH_OK $url"
               {
                 echo "## Game runtime no ar (temporário)"
