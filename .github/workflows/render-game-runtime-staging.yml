@@ -39,9 +39,16 @@ jobs:
           API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
         run: |
           set -euo pipefail
-          owner_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/owners" | jq -r '.[0].id')
+          code=$(curl -s -o /tmp/owners.json -w '%{http_code}' -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/owners")
+          echo "GET /owners → HTTP $code"
+          head -c 400 /tmp/owners.json; echo
+          [[ "$code" == "200" ]] || { echo "::error::owners indisponível"; exit 1; }
+          owner_id=$(jq -r '.[0].id' /tmp/owners.json)
           echo "owner_id=$owner_id" >> "$GITHUB_OUTPUT"
-          existing=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services?limit=50" | jq -r --arg n "$SERVICE_NAME" '.[] | select(.service.name == $n) | .service.id' | head -1)
+          code=$(curl -s -o /tmp/services.json -w '%{http_code}' -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services?limit=50")
+          echo "GET /services → HTTP $code"
+          [[ "$code" == "200" ]] || { head -c 400 /tmp/services.json; echo; exit 1; }
+          existing=$(jq -r --arg n "$SERVICE_NAME" '.[] | select(.service.name == $n) | .service.id' /tmp/services.json | head -1)
           if [[ -n "$existing" ]]; then
             echo "service_id=$existing" >> "$GITHUB_OUTPUT"
             echo "Serviço $SERVICE_NAME já existe ($existing)"
