@@ -47,6 +47,7 @@
 import { WebSocket } from 'ws';
 import { DegradedLink } from './mp-zex-09-link.mjs';
 import { getWorldLayout, PLAYER_R, ZEX_CHANNEL_SECONDS } from '../src/game3d/sim3d.js';
+import { resolveScenario } from '../src/game3d/scenarios.js';
 import { doorBoxCollider } from '../src/game3d/interiorsPlan.js';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -457,6 +458,9 @@ function smoothPath(path, grid) {
  *  o cenário só é honesto quando testado numa sala jogável. */
 class RoomRetry extends Error {}
 
+/** Dentro do anel FINAL previsto do cenário (setor canônico ringFinal + margem). */
+const insideFinalRing = (p, fin, reach) => !fin || Math.hypot(p.x - fin.x, p.z - fin.z) <= reach;
+
 async function waitForLand(client, label) {
   const snapshot = await waitSnapshot(client, (s) => s.state === 'IN_PROGRESS' && s.player && !s.player.dropPhase && s.player.onGround, `pouso de ${label}`, 90_000);
   if (!snapshot.player.alive) throw new RoomRetry(`Conta ${label} eliminada no pouso (não recuperável)`);
@@ -689,8 +693,26 @@ async function main() {
       const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
       const grid = makeObstacleGrid(layout);
       a.grid = grid; b.grid = grid;
+      // Anel final determinístico (Fase 42): o anel FECHA sobre o setor canônico
+      // do mundo (scenarios.ringFinal, paridade room3d/sim3d) e o dano fora dele
+      // é multiplicado pelo cenário (ringDamageMultiplier 1–2.25). Terminal fora
+      // do setor canônico é sentença de morte no fechamento — o par só é
+      // sobrevivível se AMBOS os terminais estiverem dentro do anel final
+      // previsto (raio final 42 + margem de interação).
+      const scenario = resolveScenario(landedA.scenarioId);
+      const fin = scenario?.ringFinal ?? null;
+      const RING_FINAL_REACH = 50; // raio final (42) + margem de interação (8)
+      const distToFin = (p) => (fin ? Math.hypot(p.x - fin.x, p.z - fin.z) : 0);
+      safeLog(`Cenário ${scenario?.id ?? landedA.scenarioId} — anel final em (${fin?.x ?? '—'},${fin?.z ?? '—'}) '${fin?.name ?? 'sem setor'}' (dano ring ×${scenario?.ringDamageMultiplier ?? 1}).`);
       const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
+        && insideFinalRing(terminal, fin, RING_FINAL_REACH)
         && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
+      if (fin) {
+        const terminaisInfo = (landedA.terminals ?? [])
+          .map((t) => `${t.label}${t.active ? '' : ' (inativo)'} d_fin=${distToFin(t).toFixed(0)}m${insideFinalRing(t, fin, RING_FINAL_REACH) ? ' ✓' : ' ✗'}`)
+          .join('; ');
+        safeLog(`Terminais vs anel final: ${terminaisInfo}.`);
+      }
       // Par (A,B) de terminais distintos com MENOR soma de rotas navegáveis —
       // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
       // distante demais (spawns próximos no staging → B morre na navegação).
