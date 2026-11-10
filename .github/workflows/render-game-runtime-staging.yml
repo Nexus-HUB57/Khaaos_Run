@@ -48,9 +48,10 @@ jobs:
           else
             auth_secret=$(openssl rand -hex 32)
             admin_token=$(openssl rand -hex 32)
-            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" '{
+            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" '{
               type: "web",
               name: $name,
+              ownerId: $owner,
               repo: "https://github.com/Nexus-HUB57/Khaaos_Run",
               branch: "main",
               autoDeploy: "no",
@@ -67,10 +68,13 @@ jobs:
                 healthCheckPath: "/healthz"
               }
             }')
-            service_id=$(curl -s -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
-              -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services" | jq -r '.id // empty')
+            resp=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
+              -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services")
+            http_code=$(echo "$resp" | tail -1)
+            service_id=$(echo "$resp" | head -n -1 | jq -r '.id // empty')
             if [[ -z "$service_id" ]]; then
-              echo "::error::Falha ao criar o serviço no Render (verificar plano/limites da conta)"
+              echo "::error::Falha ao criar o serviço no Render (HTTP $http_code)"
+              echo "$resp" | head -n -1 | jq -c '{message, detail: (.details // empty)}' | head -5
               exit 1
             fi
             echo "service_id=$service_id" >> "$GITHUB_OUTPUT"
