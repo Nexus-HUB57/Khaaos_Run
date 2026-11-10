@@ -14,6 +14,7 @@
 - [Status do Projeto](#status-do-projeto)
 - [Vertical Slice de Personagens CIGKV](#vertical-slice-de-personagens-cigkv)
 - [Qualidade de assets 3D CIGKV](#qualidade-de-assets-3d-cigkv)
+- [Realismo máximo dos avatares CIGKV](#realismo-máximo-dos-avatares-cigkv)
 - [Runner GPU UE5.8 e validação de materiais](#runner-gpu-ue58-e-validação-de-materiais)
 - [Performance UE5.8 e FPS Live Action](#performance-ue58-e-fps-live-action)
 - [Jornada Oficial do Jogador](#jornada-oficial-do-jogador)
@@ -124,6 +125,20 @@ O resultado engine-less não substitui a revisão de silhueta, deformação, cli
 O provisionamento está separado em diagnóstico, instalação e registro: `scripts/build/provision_ue58_gpu_runner.sh` exige `nvidia-smi` quando `GPU_REQUIRED=1`, usa os labels `ue5.8` e `gpu`, injeta `UE5_ROOT` no runner e não imprime tokens. `scripts/build/ue58_gpu_diagnostic.py` publica evidência JSON de GPU, UE5.8 e Blender 4.x.
 
 No Editor, `scripts/ue5_editor/validate_cigkv_materials.py` verifica o master material, parents, Subsurface Profiles, parâmetros de SSS, anisotropia e fluxo de cabelo antes da matriz de screenshots. Consulte o [guia do runner e da validação de materiais](docs/UE58_GPU_RUNNER_AND_MATERIAL_VALIDATION.md).
+
+## Realismo máximo dos avatares CIGKV
+
+O próximo nível de qualidade está formalizado no perfil hero: pele em camadas com micro poros e roughness variável, córnea/íris/esclera/tearline, cabelo Groom ou cards direcionais com fluxo, boca com dentes/língua/cavidade, no mínimo 52 blendshapes e testes de deformação sem clipping.
+
+- [Perfil canônico de realismo hero](Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json)
+- [Validador engine-less do contrato](scripts/ue5/validate_cigkv_avatar_realism.py)
+- [Guia de realismo dos avatares](docs/CIGKV_HERO_AVATAR_REALISM.md)
+
+O gate engine-less valida a estrutura e os parâmetros, mas não declara realismo visual. Topologia, morph targets, materiais de olhos/boca, deformação, LOD, screenshots e métricas GPU continuam exigindo o runner UE5.8 licenciado.
+
+O Editor pode criar/atualizar os `SubsurfaceProfile`, aplicar radius/strength de SSS e gravar anisotropia/fluxo de cabelo com [`configure_cigkv_sss_anisotropy.py`](scripts/ue5_editor/configure_cigkv_sss_anisotropy.py). O fluxo está detalhado no [guia de configuração UE5.8](docs/UE58_EDITOR_SSS_ANISOTROPY_CONFIGURATION.md).
+
+Após a configuração, o Editor captura 24 combinações de preset, iluminação e câmera. O [pipeline de captura e análise](docs/CIGKV_SCREENSHOT_CAPTURE_AND_REPORT_ANALYSIS.md) bloqueia a captura quando `material-configuration-report.json` está ausente ou não está em `status=pass`.
 
 ## Performance UE5.8 e FPS Live Action
 

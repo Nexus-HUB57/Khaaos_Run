@@ -121,6 +121,8 @@
   },
   "asset_quality": {
     "audit_script": "scripts/ue5/audit_cigkv_character_assets.py",
+    "hero_realism_profile": "Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json",
+    "hero_realism_validator": "scripts/ue5/validate_cigkv_avatar_realism.py",
     "classification": {
       "production_candidate": "sem warning estrutural; requer aceite visual UE5.8",
       "proxy_source": "fonte legível, mas abaixo de um ou mais gates de produção",
@@ -134,17 +136,7 @@
       "texture_images": 1,
       "skeletal_skin_for_animated_character": true
     },
-    "production_review": [
-      "silhouette_at_20m",
-      "facial_identity",
-      "deformation_no_clipping",
-      "hands_and_feet_ik",
-      "hair_cards_or_groom",
-      "cloth_layering",
-      "weapon_socket_alignment",
-      "lod_transition",
-      "pbr_under_day_night_interior"
-    ]
+    "production_review": ["silhouette_at_20m", "facial_identity", "deformation_no_clipping", "hands_and_feet_ik", "hair_cards_or_groom", "cloth_layering", "weapon_socket_alignment", "lod_transition", "pbr_under_day_night_interior", "cornea_tearline_iris", "teeth_tongue_oral_cavity", "skin_micro_pore_roughness", "facial_blendshape_correctives"]
   },
   "retarget": {
     "source_rig": "Mixamo_23_joint",
@@ -178,12 +170,11 @@
     "source_asset": "Build/CIGKVVerticalSlice/Source/CIGKV_HUMAN_HERO_M01_RIGGED.glb"
   },
   "acceptance": {
-    "required_profiles": [
-      "Low",
-      "Medium",
-      "High",
-      "Ultra"
-    ],
+    "avatar_realism_profile": "Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json",
+    "hero_mesh_lod0_triangles_min": 80000,
+    "facial_blendshape_count_min": 52,
+    "required_deformation_tests": ["idle", "run", "crouch", "ads", "reload", "hit_react", "jaw_open", "blink", "facial_anger"],
+    "required_profiles": ["Low", "Medium", "High", "Ultra"],
     "required_screenshots_per_profile": 2,
     "required_screenshots": [
       "third_person_combat",
