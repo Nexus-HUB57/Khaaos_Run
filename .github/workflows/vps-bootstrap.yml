@@ -1,0 +1,59 @@
+name: VPS Bootstrap Bridge (temporário)
+
+# Ponte administrativa ÚNICA: usa o secret CREDENCIAIS_SSH para abrir SSH na
+# VPS de staging e injetar uma chave pública de acesso operacional. Após o uso
+# contínuo, remover a chave injetada e este workflow (runbook em
+# docs/VPS_BRIDGE_RUNBOOK.md). Nenhum valor de segredo é impresso: o GitHub
+# mascara automaticamente, e o script só escreve a chave em arquivo temporário.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bridge:
+    name: Injetar chave + auditoria read-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Injetar chave de acesso e auditar VPS
+        env:
+          CREDENCIAIS_SSH: ${{ secrets.CREDENCIAIS_SSH }}
+          PUBKEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ0NDMCqMLcLq3sl2ooPPbNwgxBe7fNApNunxQXjCqBq zai-sandbox-20261109"
+          VPS_HOST: "143.95.213.237"
+          VPS_PORT: "22022"
+          VPS_USER: "root"
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null 2>&1 || true
+          sudo apt-get install -y -qq sshpass >/dev/null 2>&1 || true
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          SSHOPTS=(-p "$VPS_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=25)
+
+          remote_exec() {
+            # $1 = comando remoto
+            if [[ "${CREDENCIAIS_SSH:-}" == *"PRIVATE KEY"* ]]; then
+              printf '%s\n' "$CREDENCIAIS_SSH" > "$HOME/.ssh/bridge_key"
+              chmod 600 "$HOME/.ssh/bridge_key"
+              ssh "${SSHOPTS[@]}" -i "$HOME/.ssh/bridge_key" -o IdentitiesOnly=yes \
+                "$VPS_USER@$VPS_HOST" "$1"
+            else
+              sshpass -p "$CREDENCIAIS_SSH" ssh "${SSHOPTS[@]}" \
+                -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+                "$VPS_USER@$VPS_HOST" "$1"
+            fi
+          }
+
+          echo "## Injetando chave de acesso operacional" >> "$GITHUB_STEP_SUMMARY"
+          remote_exec "mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && grep -qxF '$PUBKEY' ~/.ssh/authorized_keys || echo '$PUBKEY' >> ~/.ssh/authorized_keys; chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys; echo CHAVE_INJETADA" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          echo "## Auditoria read-only da VPS" >> "$GITHUB_STEP_SUMMARY"
+          remote_exec 'hostname; head -3 /etc/os-release; echo "---"; uptime; nproc; free -h | head -2; df -h / | sed 1d; echo "--- portas:"; ss -tlnp | head -20; echo "--- serviços:"; systemctl list-units --type=service --state=running --no-legend | head -25; echo "--- tooling:"; for b in nginx caddy docker node npm python3 certbot; do command -v $b >/dev/null 2>&1 && echo "$b OK"; done; echo "--- docker:"; docker ps -a 2>/dev/null | head -8 || echo "sem docker"; echo "--- dirs:"; ls /var/www /srv /opt 2>/dev/null; echo "--- ufw:"; ufw status 2>/dev/null | head -10' | tee -a "$GITHUB_STEP_SUMMARY"
+
+          echo "BRIDGE_OK" >> "$GITHUB_STEP_SUMMARY"
