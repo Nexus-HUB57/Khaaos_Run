@@ -458,6 +458,18 @@ async function waitForLand(client, label) {
   return snapshot;
 }
 
+/** Task 53 — protocolo OFICIAL de entrada ZU (trem dos Rings): enquanto a
+ *  bordo, o servidor suspende a física do ator — nenhum input move até o
+ *  salto de porta (janela 8–16 s) ou até a CHEGADA (16 s, desembarque
+ *  obrigatório de quem ficou). O cenário só inicia a navegação após o
+ *  'trainArrived'; em fixtures sem o protocolo (airdrop legado) o timeout é
+ *  engolido e o fluxo original segue intacto. */
+async function waitTrainDisembark(client, label) {
+  try {
+    await waitMessage(client, (m) => m.type === 'trainArrived', `desembarque do trem de ${label}`, 30_000);
+  } catch { /* sem protocolo do trem (airdrop legado): navega direto */ }
+}
+
 async function navigateToTerminal(client, terminal, waypoints, label) {
   const deadline = Date.now() + TEST_TIMEOUT_MS;
   let waypointIndex = 1;
@@ -604,6 +616,10 @@ async function main() {
       await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
       [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
       safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
+      // Task 53 — respeita o protocolo OFICIAL do trem: navegação só após o
+      // desembarque (a bordo o servidor ignora inputs — progresso zero dispararia
+      // o cão de guarda antes da chegada em 16 s; floor do link degradado é 14 s).
+      await Promise.all([waitTrainDisembark(a, 'A'), waitTrainDisembark(b, 'B')]);
 
       // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
       // navegação cross-map: os distritos do CIGKV são separados por estruturas).
