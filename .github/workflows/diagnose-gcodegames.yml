@@ -41,7 +41,7 @@ jobs:
           pairs = {}
           current = None
           for line in src.splitlines():
-              m = re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$', line)
+              m = re.match(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$', line)
               if m:
                   key, value = m.group(1), m.group(2)
                   pairs[key] = value.strip().strip('"').strip("'")
@@ -65,12 +65,14 @@ jobs:
                           return value
               return ''
 
-          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY')
+          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE')
           if not key_value:
-              for value in pairs.values():
-                  if 'PRIVATE KEY' in value:
+              for key, value in pairs.items():
+                  low = key.lower()
+                  if re.search(r'key|chave|privat|privad', low) and (len(value) > 100 or 'BEGIN' in value):
                       key_value = value
                       break
+          key_value = key_value.replace('\\n', '\n')
 
           target = first('SSH_TARGET', 'REMOTE_TARGET', 'SSH_DESTINATION')
           target_user = target_host = ''
@@ -78,11 +80,11 @@ jobs:
               target_user, target_host = target.rsplit('@', 1)
 
           values = {
-              'SSH_HOST': first('SSH_HOST', 'HOST', 'REMOTE_HOST', 'SSH_SERVER', 'SERVER_HOST', 'SSH_IP', 'SERVER_IP') or target_host or by_key((r'host', r'server', r'endpoint', r'address', r'(^|_)ip($|_)'), (r'user', r'path', r'key')),
-              'SSH_USER': first('SSH_USER', 'USER', 'SSH_USERNAME', 'USERNAME', 'REMOTE_USER', 'SSH_LOGIN') or target_user or by_key((r'user', r'username', r'login', r'account'), (r'path', r'key')),
-              'SSH_PORT': first('SSH_PORT', 'PORT', 'REMOTE_PORT') or by_key((r'port',), ()) or '22',
+              'SSH_HOST': first('SSH_HOST', 'HOST', 'REMOTE_HOST', 'SSH_SERVER', 'SERVER_HOST', 'SSH_IP', 'SERVER_IP', 'SERVIDOR', 'ENDERECO', 'ENDEREÇO', 'IP_SERVIDOR') or target_host or by_key((r'host', r'server', r'servidor', r'maquina', r'máquina', r'endpoint', r'address', r'endereco', r'endereço', r'(^|_)ip($|_)'), (r'user', r'usuario', r'usuário', r'path', r'caminho', r'key', r'chave')),
+              'SSH_USER': first('SSH_USER', 'USER', 'SSH_USERNAME', 'USERNAME', 'REMOTE_USER', 'SSH_LOGIN', 'USUARIO', 'USUÁRIO', 'UTILIZADOR') or target_user or by_key((r'user', r'username', r'usuario', r'usuário', r'utilizador', r'login', r'account'), (r'path', r'caminho', r'key', r'chave')),
+              'SSH_PORT': first('SSH_PORT', 'PORT', 'REMOTE_PORT', 'PORTA') or by_key((r'port', r'porta'), ()) or '22',
               'SSH_PRIVATE_KEY': key_value,
-              'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH', 'PROJECT_DIR', 'REPO_PATH', 'APP_PATH') or by_key((r'path', r'dir', r'directory', r'project', r'checkout', r'repo', r'root'), (r'key', r'private')),
+              'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH', 'PROJECT_DIR', 'REPO_PATH', 'APP_PATH', 'CAMINHO', 'CAMINHO_PROJETO', 'DIRETORIO', 'DIRETÓRIO', 'PASTA', 'REPOSITORIO', 'REPOSITÓRIO') or by_key((r'path', r'caminho', r'dir', r'diretorio', r'diretório', r'pasta', r'directory', r'project', r'projeto', r'checkout', r'repo', r'repositorio', r'repositório', r'root'), (r'key', r'chave', r'private', r'privad')),
           }
           missing = [k for k, v in values.items() if not v]
           if missing:
