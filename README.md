@@ -140,6 +140,12 @@ O Editor pode criar/atualizar os `SubsurfaceProfile`, aplicar radius/strength de
 
 Após a configuração, o Editor captura 24 combinações de preset, iluminação e câmera. O [pipeline de captura e análise](docs/CIGKV_SCREENSHOT_CAPTURE_AND_REPORT_ANALYSIS.md) bloqueia a captura quando `material-configuration-report.json` está ausente ou não está em `status=pass`.
 
+O fluxo completo de [renderização headless GPU e pre-bake](docs/CIGKV_HEADLESS_GPU_BAKE_PIPELINE.md) aquece caches, solicita o bake antes da captura e rejeita explicitamente Virtio/CPU-only. O runner precisa expor NVIDIA física/vGPU, UE5.8 licenciado e memória suficiente; o VPS atualmente auditado não atende esse contrato.
+
+O [guia de migração para NVIDIA e mock local](docs/CIGKV_GPU_MIGRATION_AND_MOCK_RUN.md) documenta o pedido ao provedor e o teste `python3 scripts/build/simulate_cigkv_headless_gpu.py`, que valida a orquestração sem declarar screenshots ou aceite visual.
+
+O [workflow Brev GPU](docs/CIGKV_BREV_GPU_PROVISIONING.md) foi preparado com dry-run padrão, secret `BREV_API_KEY` e provisionamento manual explícito. `provision=true` pode gerar cobrança e deve ser usado somente após revisar GPU, disponibilidade, créditos e custo.
+
 ## Performance UE5.8 e FPS Live Action
 
 O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:
