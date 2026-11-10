@@ -28,8 +28,12 @@
     "test:game:stress": "npm --prefix game-runtime run test:stress",
     "coverage:official": "c8 --all --include='server/**/*.ts' --include='shared/**/*.ts' --include='client/src/**/*.ts' --include='client/src/**/*.tsx' --exclude='**/*.d.ts' --reporter=text --reporter=lcov --reporter=json-summary --reports-dir=coverage/official node scripts/coverage-official.mjs",
     "coverage:all": "npm run coverage:official && npm --prefix game-runtime run coverage",
+    "build:cigkv:vertical-slice": "python3 scripts/build/generate_cigkv_vertical_slice.py",
     "test:python:dashboard": "python3 -m unittest discover -s tools/operative-synergy-dashboard/tests -v",
     "verify:all": "node scripts/verify-all.mjs",
+    "verify:cigkv:vertical-slice": "python3 scripts/build/generate_cigkv_vertical_slice.py --check",
+    "verify:cigkv:ue-import": "python3 scripts/test_cigkv_unreal_import_mock.py && python3 scripts/import_cigkv_blockout_in_unreal.py --dry-run",
+    "verify:world-manifests": "python3 scripts/validate_readme_visual_slices.py",
     "test:e2e:war-i": "playwright test --config=playwright.config.ts",
     "prepare": "husky || true"
   },
