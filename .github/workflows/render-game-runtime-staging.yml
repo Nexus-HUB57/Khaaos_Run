@@ -52,7 +52,7 @@ jobs:
             auth_secret=$(openssl rand -hex 32)
             admin_token=$(openssl rand -hex 32)
             payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" --arg plan "$plan_id" '{
-              type: "web",
+              type: "web_service",
               name: $name,
               ownerId: $owner,
               repo: "https://github.com/Nexus-HUB57/Khaaos_Run",
