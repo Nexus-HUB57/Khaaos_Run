@@ -62,7 +62,7 @@
 | **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado com 5 serviços e 1 rede; build/execução operacional pendentes |
 | **Anti-Cheat** | 🟡 Validações implementadas | Movement validation e 3-strike; binário/SDK EAC e build UE5 pendentes |
 | **Economia (KRC)** | 🟡 Código de jogo | AtomicLedger e Compliance versionados; runtime com ledger idempotente e recompensas de partida; não habilitar valor real sem auditoria e aceite |
-| **Mundos W1-W4** | 🟡 Regras/dados + intake visual | Lógica e dados versionados; pacotes source `.obj`/`.gltf`/`.umap.json`/DataTables/SVG gerados para CIGKV + W1-W4; cook `.umap` requer UE Editor |
+| **Mundos W1-W4** | 🟡 Regras/dados + intake visual | Contratos visuais README-validáveis; catálogo narrativo Zu sincronizado em C++/TypeScript e 15 variantes cobertas no gate portátil; integração de cada cinematic/decisão com chegada ao Ring, `.uasset`/`.umap`, cook e playtest ainda pendem validação no UE5.8; [status Zu](Unreal/KhaaosRun/Docs/Worlds/ZuIngress_Status.md) e [pipeline visual](Unreal/KhaaosRun/Docs/Worlds/README.md) |
 | **Load Testing** | 🟡 Perfis implementados | 4 profiles (100–2000 bots), 3 ramp strategies; execução e relatório de aceite pendentes |
 | **Beta → Go Live** | 🟡 Código/documentação | BetaCampaign e StreamingIntegration versionados; go-live depende dos gates restantes |
 | **Infraestrutura (IaC)** | 🟡 Configurado | Terraform/monitoramento versionados; deploy, failover e evidência multi-região pendentes |
