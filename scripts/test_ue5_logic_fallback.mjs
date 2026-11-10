@@ -108,7 +108,22 @@ assert.equal(mapByte(2), "Zu3_Mascara");
 assert.equal(mapByte(99), "Zu1_Cinto");
 console.log("PASS: CIGKV Zu Cinematic Variant mapping verified");
 
-// 4. Source Files & AST Integrity Check
+// 4. ZU_TRAIN_V1 handover source integrity. The behavioral proof runs in the
+// native C++ path; this fallback fails closed if the production kernel or its
+// portable idempotency test disappears from a compiler-less checkout.
+const trainHandoverFiles = [
+  "Unreal/KhaaosRun/Source/KhaaosRun/Game/MatchFlow/KhaaosTrainHandover.h",
+  "Unreal/KhaaosRun/Source/KhaaosRun/Game/MatchFlow/KhaaosTrainHandover.cpp",
+  "tests/ue5/train_handover_idempotency_test.cpp",
+];
+for (const relPath of trainHandoverFiles) {
+  const absPath = path.join(ROOT, relPath);
+  assert.equal(fs.existsSync(absPath), true, `Missing train handover file ${relPath}`);
+  assert.ok(fs.readFileSync(absPath, "utf8").length > 100, `File ${relPath} is suspiciously small`);
+}
+console.log("PASS: ZU_TRAIN_V1 handover kernel and portable idempotency test are present");
+
+// 5. Source Files & AST Integrity Check
 const cppFiles = [
   "Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/CIGKVLootRules.h",
   "Unreal/KhaaosRun/Source/KhaaosRun/Game/World/CIGKV/CIGKVLootRules.cpp",

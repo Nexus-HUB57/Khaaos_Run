@@ -43,7 +43,11 @@ import type { WorldId } from "./orchestration";
 import { aggregateWorldTelemetry, isWorldId, type NetworkLatencySample, type WorldTelemetrySnapshot, type WorldRoomSample } from "./worldTelemetry";
 import { distributedState } from "./DistributedState";
 import { RoomEventMesh, type RoomInviteRecord, type RoomMeshRecord } from "./RoomEventMesh";
-import { getOperativeAvatarOption } from "@shared/operative-avatar-catalog";
+import {
+  getOperativeAvatarOption,
+  getOperativeAvatarRuntime,
+  type OperativeAvatarRuntime,
+} from "@shared/operative-avatar-catalog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -207,6 +211,8 @@ interface SerializedPlayer {
   userId: string;
   displayName: string;
   selectedOperativeId: string;
+  /** Trusted visual projection; clients cannot submit or override these fields. */
+  avatar: OperativeAvatarRuntime;
   posX: number;
   posY: number;
   carryCapacity?: number;
@@ -1324,6 +1330,7 @@ class RoomManager {
       userId: p.userId,
       displayName: p.displayName,
       selectedOperativeId: getOperativeAvatarOption(p.selectedOperativeId).id,
+      avatar: getOperativeAvatarRuntime(p.selectedOperativeId),
       posX: p.posX,
       posY: p.posY,
       ...(p.userId === observer.userId ? {
@@ -1641,6 +1648,7 @@ class RoomManager {
       userId: p.userId,
       displayName: p.displayName,
       selectedOperativeId: getOperativeAvatarOption(p.selectedOperativeId).id,
+      avatar: getOperativeAvatarRuntime(p.selectedOperativeId),
       posX: p.posX,
       posY: p.posY,
       ...(p.userId === viewerUserId ? {

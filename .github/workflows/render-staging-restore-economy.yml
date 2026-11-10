@@ -1,0 +1,86 @@
+name: "Staging — restaurar economy (main)"
+
+# Devolve o serviço khaaos-run-staging à função original (API economy + SPA)
+# já na branch main — configuração capturada pelo
+# render-game-runtime-staging.yml no summary antes do reapontamento.
+# A economia de staging sai de fix/cigkv-50-players-3h (estacionada) e passa a
+# seguir o main, mantendo Auto-Deploy Off (deploy gated pelo workflow do CI).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-game-runtime-staging
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RENDER_API: https://api.render.com/v1
+      SERVICE_ID: srv-db6183o473hc73co8n10
+    steps:
+      - name: Restaurar configuração economy (branch main)
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
+          payload=$(jq -n '{
+            autoDeploy: "no",
+            branch: "main",
+            serviceDetails: {
+              env: "node",
+              healthCheckPath: "/readyz",
+              envSpecificDetails: {
+                buildCommand: "npm ci --include=dev --no-audit --no-fund && npm run build && node scripts/write-render-health.mjs",
+                startCommand: "npm start"
+              }
+            }
+          }')
+          http=$(curl -s -o /tmp/upd.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer $API_KEY_RENDER" -H "Content-Type: application/json" \
+            -d "$payload" "$RENDER_API/services/$SERVICE_ID")
+          [[ "$http" =~ ^2 ]] || { echo "::error::Falha ao restaurar serviço (HTTP $http)"; cat /tmp/upd.json | cut -c1-400; exit 1; }
+          echo "Serviço restaurado para economy/branch main"
+
+      - name: Deploy e aguardar live
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
+          deploy_id=$(curl -s -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
+            -H "Content-Type: application/json" -d '{"clearCache": "clear"}' \
+            "$RENDER_API/services/$SERVICE_ID/deploys" | jq -r '.id // empty')
+          [[ -n "$deploy_id" ]] || { echo "::error::Render não aceitou o deploy"; exit 1; }
+          for i in $(seq 1 60); do
+            status=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" \
+              "$RENDER_API/services/$SERVICE_ID/deploys/$deploy_id" | jq -r '.status')
+            echo "deploy → $status (tentativa $i)"
+            case "$status" in
+              live) exit 0 ;;
+              deploy_failed|build_failed|canceled|deactivated)
+                echo "::error::Deploy terminou com status $status"; exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::Timeout aguardando deploy live"; exit 1
+
+      - name: Healthcheck (healthz.json + readyz)
+        run: |
+          set -euo pipefail
+          url="https://khaaos-run-staging.onrender.com"
+          for i in $(seq 1 20); do
+            hz=$(curl -s --max-time 10 "$url/healthz.json" || true)
+            if echo "$hz" | jq -e '.status == "ok"' >/dev/null 2>&1; then
+              commit=$(echo "$hz" | jq -r '.commit')
+              echo "RESTAURADO $url (commit $commit)"
+              echo "## Staging economy restaurado — commit $commit" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::healthz.json não respondeu ok"; exit 1

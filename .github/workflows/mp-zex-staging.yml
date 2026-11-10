@@ -73,6 +73,7 @@ jobs:
   config:
     name: Gate — secrets do environment staging (nomes apenas)
     runs-on: ubuntu-latest
+    environment: staging
     outputs:
       has_secrets: ${{ steps.gate.outputs.has_secrets }}
       run_08: ${{ steps.gate.outputs.run_08 }}
