@@ -46,7 +46,7 @@ jobs:
           TRUSTED_WORKFLOW_SHA: ${{ github.sha }}
           GITHUB_API_BASE: ${{ github.api_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK }}
           RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
         run: |
           set -euo pipefail
@@ -92,7 +92,7 @@ jobs:
             exit 1
           fi
           if [[ -z "$RENDER_DEPLOY_HOOK_URL" ]]; then
-            echo "::error::Missing Actions secret RENDER_DEPLOY_HOOK_URL"
+            echo "::error::Missing staging deploy hook — configure o environment secret RENDER_DEPLOY_HOOK_URL (preferencial) ou o repo secret RENDER_DEPLOY_HOOK"
             exit 1
           fi
           if [[ "$RENDER_SERVICE_URL" != https://* ]]; then
@@ -105,7 +105,7 @@ jobs:
       # auto-deploys; this workflow remains the deployment authority for staging.
       - name: Deploy exact tested commit to Render Staging
         env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK }}
           EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
