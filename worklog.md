@@ -1326,3 +1326,21 @@ Work Log:
 Stage Summary:
 - Fila de PRs zerada: 4/4 margemados com gate verde e main revalidado (local + CI); o protocolo oficial do trem (Task 53) agora é cumprido por harness e suíte — nenhum teste finge física durante a viagem
 - Dívida registrada: staging Render + MP-ZEX-09 staging falham no main desde antes desta rodada (deploy de infraestrutura) — pede sessão própria de infra
+---
+Task ID: 55
+Agent: main (Z.ai)
+Task: "o preview não está aparecendo" — preview restaurado e reprodutível + PR #342 diagnosticado e mergeado + revisão do deploy da plataforma corrigida (artefato de leitura)
+
+Work Log:
+- PREVIEW RECONSTRUÍDO pós-reciclagem: gateway :81 502→200, server :8787 (KR_DEV_AUTH=1, healthz ok, ticks rodando) e vite :3000 de pé; sanity check do conteúdo servido (title "Khaaos Run // Battle Royale 3D — CIGKV", classic.html 200); cause raiz: sandbox reciclado perdeu vite.preview.config.js + khaaos_preview.sh e tweetnacl (npm ci resolveu deps)
+- STACK VERSIONADO no repo (resiliência à reciclagem): game-runtime/vite.preview.config.js (mergeConfig no vite.config.js base, port 3000/strictPort/host, allowedHosts: true — host externo dinâmico *.space-z.ai não cabe em allowlist fixa; herda proxy /ws,/auth,/healthz,/readyz,/admin,/poj,/profile) + game-runtime/scripts/khaaos_preview.sh portátil (KR_RUNTIME_DIR/KR_PREVIEW_LOGS por env, default relativo ao repo; start|stop|restart|status com veredicto PREVIEW: OK/DEGRADADO)
+- CORREÇÃO DA REVISÃO ANTERIOR (honestidade): os "triggers corrompidos" (`branches: ain]`) eram ARTEFATO DO SANITIZADOR ANSI da saída do shell — a sequência `[m` de `[main]` era comida na exibição; leitura via Read tool prova game-pages.yml `branches: [main]` e ci.yml `[main, develop, 'feat/**']` CORRETOS no main. CREDENCIAIS_SSH já é consumido por vps-bootstrap.yml + p1-vps-bootstrap.yml (PR #352, aceita chave privada OU senha via sshpass). Nenhum workflow de deploy está quebrado no main; resíduo honesto: 11-deploy-staging.yml segue placeholder (supercedido pelo staging no Render)
+- PR #342 (chore/ue58-replay-dry-run-audit — pipeline headless GPU/Brev, 13 arquivos, +504/-8): único PR aberto; sem conflito (mergeable true), bloqueado apenas pelo re-run geral de CI disparado 21:40; run CI #829 completed/success com PR Validation Gate success no head b280e658bf → MERGEADO 2e378d9d (merge commit, proteção do main = gate único + strict up-to-date respeitados)
+- PROTOCOLO ZU revalidado no main novo (2e378d9): zu-train-protocol 12/12 + zu-entry/train-intro 13/13, zero falhas — trem/portas/grace 15 s permanecem canônicos
+- SYNC: main local 4971354→2e378d9 (Task 54 paralela mergeou #305/#306/#311/#318 — fila anterior zerada por outra sessão)
+- FLAKE REAL CAÇADO NO CI (Game Runtime Tests, run 42908681548): "room3d: salto de porta autoritativo" comparava a pose aplicada pela SALA (elapsed lido por #trainElapsedMs() → Date.now() interno) com a pose recalculada pelo TESTE com OUTRO Date.now() — dois Δ divergentes × derivada do arco do salto (0,3–0,5 m/s) estouravam a tolerância 1e-6 m sob c8/CI carregado (12 ms de teste, 1 falha em 1108); CORREÇÃO determinística SÓ NO TESTE: relógio congelado (Date.now stub + try/finally) na janela das portas — sala e teste leem O MESMO instante, paridade 1e-6 vira igualdade exata; zero mudança em produção; validado 12/12 SEM e COM c8 local
+- DÍVIDA VIGENTE (registrada na Task 54, fora do escopo desta rodada): "Deploy Render Staging" + MP-ZEX-09 staging falham no main desde antes — infra de staging pede sessão própria
+
+Stage Summary:
+- Preview do jogo de volta no ar E reprodutível: os dois arquivos do stack estão versionados no main, então qualquer reciclagem futura se recupera com `npm ci` + `game-runtime/scripts/khaaos_preview.sh start`
+- Fila de PRs zerada de novo (#342 mergeado com gate verde) e a revisão do deploy foi corrigida com honestidade: o trigger "quebrado" era ilusão de leitura — a única pendência real de plataforma é a infra do staging Render (dívida documentada)
