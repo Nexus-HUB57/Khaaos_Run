@@ -958,3 +958,16 @@ body.spectating #hitmarker { display: none !important; }
 #spectatorHud .spec-btn.active {
   border-color: rgba(200,255,61,.7); color: var(--acid); background: rgba(200,255,61,.1);
 }
+
+/* ─── Fase 56 — vitrine de avatares GLB (rigs reais) no menu ─── */
+.avatar-glb-bar { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(200,255,61,.18); }
+.avatar-glb-strip { display: flex; flex-wrap: wrap; gap: 5px; }
+.avatar-glb-chip {
+  font: 9px var(--font-mono); letter-spacing: .5px; color: var(--muted);
+  background: rgba(200,255,61,.06); border: 1px solid rgba(200,255,61,.22);
+  border-radius: 3px; padding: 3px 7px; cursor: pointer; text-transform: lowercase;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.avatar-glb-chip:hover { color: var(--acid); border-color: rgba(200,255,61,.55); }
+.avatar-glb-chip.is-active { color: var(--acid); border-color: var(--acid); background: rgba(200,255,61,.12); }
+.avatar-glb-hint { color: var(--muted); font: 9px var(--font-mono); letter-spacing: .4px; opacity: .85; }

@@ -11,6 +11,7 @@ import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
+import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
@@ -54,6 +55,13 @@ export class Game3D {
     const urlParams = new URLSearchParams(location.search);
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
+    // Fase 56 — avatar GLB real no corpo do herói (?avatar=<id> da biblioteca).
+    // Contrato do pipeline: QUALQUER falha de carga mantém o corpo procedural.
+    this.avatarOverrideId = avatarById(urlParams.get('avatar') ?? '')?.id ?? null;
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+    this.avatarShowcase = null;        // vitrine de rigs no menu
+    this.avatarShowcaseMixer = null;
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
     // Fase 35 — settings gráficas do jogador (KR_GFX_*): override manual de tier
     // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
@@ -364,6 +372,7 @@ export class Game3D {
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
     this.playerOp.group.visible = this.viewMode !== 'fps';
+    this.#applyAvatarOverride(); // Fase 56 — corpo GLB real se ?avatar= válido; senão procedural
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
@@ -414,6 +423,9 @@ export class Game3D {
     if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
     const selectionStatus = document.querySelector('#contentSelectionStatus');
     if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. A habilidade individual é acionada com Q; o modo online ainda não a sincroniza.';
+    // Fase 56 — vitrine de avatares GLB no menu (rigs reais, animação ao vivo)
+    const avatarBarHost = document.querySelector('.content-selection');
+    if (avatarBarHost) this.#initAvatarVitrine(avatarBarHost);
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
@@ -459,6 +471,7 @@ export class Game3D {
         : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      this.#applyAvatarOverride(); // Fase 56 — recoloca o corpo GLB no novo playerOp
       this.firstPersonRig?.traverse((node) => {
         // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
         if (node.isMesh && node.userData?.tintable && node.material?.color) node.material.color.set(operative.colors.primary);
@@ -610,9 +623,132 @@ export class Game3D {
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
 
   // ---------- fluxo ----------
+  // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
+  // Contrato (hero3d/avatars3d): asset OPCIONAL — qualquer falha mantém o
+  // corpo procedural de createOperative(); nada aqui pode quebrar o boot.
+  #removeAvatarModel() {
+    if (this.avatarRoot?.parent) this.avatarRoot.parent.remove(this.avatarRoot);
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+  }
+
+  #setProceduralBodyVisible(visible) {
+    const g = this.playerOp?.group;
+    if (!g) return;
+    const keep = new Set();
+    const wr = g.userData?.weaponRig?.group; // arma continua viva sobre o corpo GLB
+    if (wr) wr.traverse((o) => keep.add(o));
+    const shadow = this.playerOp?.parts?.shadow; // sombra de contato canônica
+    if (shadow) shadow.traverse((o) => keep.add(o));
+    g.traverse((o) => {
+      if (o === this.avatarRoot || keep.has(o) || o.userData?.avatarAsset) return;
+      if (o.isMesh || o.isSkinnedMesh) o.visible = visible;
+    });
+  }
+
+  async #applyAvatarOverride() {
+    this.#removeAvatarModel();
+    const id = this.avatarOverrideId;
+    if (!id) return;
+    const a = await loadAvatarGlb(id);
+    const g = this.playerOp?.group;
+    if (!a?.root || !g) { this.#setProceduralBodyVisible(true); return; }
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    this.avatarRoot = a.root;
+    this.#setProceduralBodyVisible(false); // corpo procedural dorme; GLB assume
+    g.add(a.root);
+    if (a.clips?.length) {
+      this.avatarMixer = new THREE.AnimationMixer(a.root);
+      this.avatarMixer.clipAction(a.clips[0]).play();
+    }
+  }
+
+  #initAvatarVitrine(host) {
+    const bar = document.createElement('div');
+    bar.className = 'avatar-glb-bar';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'AVATARES GLB // RIGS REAIS (FASE 56)';
+    const strip = document.createElement('div');
+    strip.className = 'avatar-glb-strip';
+    for (const a of AVATAR_GLB_LIBRARY) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'avatar-glb-chip';
+      chip.dataset.avatarId = a.id;
+      chip.textContent = `${a.tier === 'animated' ? '▶ ' : a.tier === 'rigged' ? '◆ ' : '○ '}${a.id}`;
+      chip.title = `Pré-visualizar ${a.id} (${a.tier === 'animated' ? 'animação embutida' : a.tier === 'rigged' ? 'rig real' : 'estático'})`;
+      chip.addEventListener('click', () => this.#showAvatarShowcase(a.id, chip));
+      strip.appendChild(chip);
+    }
+    const hint = document.createElement('small');
+    hint.className = 'avatar-glb-hint';
+    hint.id = 'avatarGlbHint';
+    hint.textContent = 'Clique para pré-visualizar girando · para JOGAR com o corpo real: ?avatar=<id>';
+    bar.append(label, strip, hint);
+    host.appendChild(bar);
+  }
+
+  async #showAvatarShowcase(id, chip = null) {
+    const a = await loadAvatarGlb(id);
+    if (!a?.root) {
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `avatar ${id} indisponível — o corpo procedural segue no jogo`;
+      return;
+    }
+    this.#removeAvatarShowcase();
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    a.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = false; o.receiveShadow = false; } }); // vitrine não suja sombra do mundo
+    // palco próprio: container giratório com key/fill lights + pedestal — o
+    // menu é noturno e o GLB não pode depender das luzes do mundo para ler
+    const stage = new THREE.Group();
+    stage.name = 'avatar_glb_stage';
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(.85, .95, .06, 28),
+      new THREE.MeshStandardMaterial({ color: 0x1a1420, roughness: .8, metalness: .3, emissive: 0x2a1f33, emissiveIntensity: .35 }),
+    );
+    pedestal.position.y = .03;
+    stage.add(pedestal);
+    const key = new THREE.DirectionalLight(0xfff2dd, 2.4); key.position.set(1.8, 3.4, 2.2); stage.add(key);
+    const fill = new THREE.DirectionalLight(0x7d9dff, .9); fill.position.set(-2.2, 1.6, 1.4); stage.add(fill);
+    const rim = new THREE.DirectionalLight(0xffd27d, 1.2); rim.position.set(0, 2.2, -2.6); stage.add(rim);
+    stage.add(a.root);
+    a.root.position.y = .06; // sobre o pedestal
+    this.avatarShowcase = stage;
+    this.scene.add(stage);
+    // palco: na frente da câmera do menu e DESLOCADO À DIREITA (fora do painel
+    // DOM — o rig fica visível na área livre da tela), pés ~0.9 m abaixo do olho
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const pos = this.camera.position.clone().add(dir.multiplyScalar(3.0)).add(right.multiplyScalar(1.35));
+    pos.y -= 0.92;
+    stage.position.copy(pos); // o PALCO viaja para frente da câmera (a.root vive dentro dele)
+    if (a.clips?.length) {
+      this.avatarShowcaseMixer = new THREE.AnimationMixer(a.root);
+      this.avatarShowcaseMixer.clipAction(a.clips[0]).play();
+    }
+    if (chip) {
+      for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `pré-visualizando ${id} — para jogar com este corpo: ?avatar=${id}`;
+    }
+  }
+
+  #removeAvatarShowcase() {
+    if (this.avatarShowcase?.parent) this.scene.remove(this.avatarShowcase);
+    this.avatarShowcase = null;
+    this.avatarShowcaseMixer = null;
+    for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+  }
+
   startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
+    this.#removeAvatarShowcase(); // Fase 56 — vitrine de rigs sai quando a partida começa
     this.damageNumbers?.clear(); // Fase 27 — partida nova, tela limpa
     this.zuOpen = false;
     this.hud.hideZu();
@@ -1106,6 +1242,10 @@ export class Game3D {
       this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
+    // Fase 56 — mixers dos avatares GLB (herói com corpo real + vitrine do menu)
+    if (this.avatarMixer) this.avatarMixer.update(dt);
+    if (this.avatarShowcaseMixer) this.avatarShowcaseMixer.update(dt);
+    if (this.avatarShowcase) this.avatarShowcase.rotation.y += dt * 0.6;
     // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
     // Fase 30 — anexos dos 4 sockets + estágio evolutivo mítico também reconstroem
     // Fase 32 — skin mítica POR ARMA (cor/fit do catálogo) + raridade dos anexos
