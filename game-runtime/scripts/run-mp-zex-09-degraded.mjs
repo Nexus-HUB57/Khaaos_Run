@@ -587,16 +587,20 @@ async function main() {
     a.grid = grid; b.grid = grid;
     const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
       && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-    const candidate = (landed, pathOf) => {
+    const candidate = (landed, pathOf, excludeId = null) => {
       let best = null;
       for (const terminal of safeTerminals) {
+        if (excludeId && terminal.id === excludeId) continue;
         const path = pathOf(landed.player, terminal);
         if (path && (!best || path.length < best.path.length)) best = { terminal, path };
       }
       return best;
     };
+    // Desempate determinístico: o cenário exige terminais distintos. A escolhe
+    // o mais próximo; B escolhe o melhor terminal EXCLUINDO o de A (spawns
+    // próximos no staging podem fazer ambos adotarem o mesmo terminal).
     const planA = candidate(landedA, (p, t) => findPath(p, t, grid));
-    const planB = candidate(landedB, (p, t) => findPath(p, t, grid));
+    const planB = candidate(landedB, (p, t) => findPath(p, t, grid), planA?.terminal.id ?? null);
     if (!planA || !planB) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
     if (planA.terminal.id === planB.terminal.id) throw new Error('A e B caíram no mesmo terminal; cenário exige terminais distintos.');
     const { terminal: terminalA } = planA;
