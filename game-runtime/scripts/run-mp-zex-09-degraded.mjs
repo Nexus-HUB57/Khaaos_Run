@@ -482,10 +482,24 @@ async function navigateToTerminal(client, terminal, waypoints, label) {
   let bestDistance = Infinity;
   let lastProgressAt = Date.now();
   const progressFloorMs = client.link ? 14_000 : 8_000; // link degradado observa com atraso
+  let stepCount = 0;
   while (Date.now() < deadline) {
     const snapshot = client.latestSnapshot;
     const player = snapshot?.player;
-    if (!player || !player.alive || player.knocked) throw new Error(`Conta ${label} não sobreviveu à navegação até ZEX.`);
+    if (!player) throw new Error(`Conta ${label} sem snapshot durante a navegação.`);
+    if (!player.alive) throw new Error(`Conta ${label} eliminada durante a navegação (vida zero — exposição ao ring em rota longa).`);
+    if (player.knocked) {
+      // O servidor permite autocuidado CAÍDO: #useMedkit reergue o ator com 30
+      // de vida (room3d.js — "Caído: ... permite apenas autocuidado com medkit").
+      if ((player.inventory?.medkit ?? 0) > 0) {
+        sendInput(client, { medkit: true });
+        await sleep(client.link ? 200 : 120);
+        continue;
+      }
+      throw new RoomRetry(`Conta ${label} knocked na navegação sem medkit (exposição prolongada fora do ring)`);
+    }
+    stepCount += 1;
+    if (stepCount % 20 === 0) safeLog(`[nav] ${label}: pos=(${Number(player.x).toFixed(1)},${Number(player.z).toFixed(1)}) vida=${player.life} d_terminal=${Math.hypot(player.x - terminal.x, player.z - terminal.z).toFixed(1)}m`);
     const terminalDistance = Math.hypot(player.x - terminal.x, player.z - terminal.z);
     if (terminalDistance < 2.85) {
       sendInput(client);
@@ -614,6 +628,7 @@ async function main() {
     const MAX_ROUTE_STEPS = 64;
     const ROOM_ATTEMPTS = 6;
     let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
+    let navigated = false, planA = null, planB = null, terminalA = null, terminalB = null, navA = null;
     for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
       try {
       a = await openClient(tokenA, { label: 'A' }); clients.push(a);
@@ -659,21 +674,44 @@ async function main() {
         .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
         .filter((p) => p.path);
       planPair = null;
+      let bestScore = null;
       for (const pa of pathsOf(landedA)) {
         for (const pb of pathsOf(landedB)) {
           if (pa.terminal.id === pb.terminal.id) continue;
-          if (!planPair || pa.path.length + pb.path.length < planPair.a.path.length + planPair.b.path.length) {
+          // Par (A,B) por MINIMAX: minimiza o MAIOR dos dois caminhos e desempata
+          // pela soma. O staging real aplica dano de ring (room3d.js, kind
+          // 'ring') de ~4–5,4 HP/s fora da zona — o critério anterior (soma
+          // mínima) aceitou 55/5 na run #12: A fora do ring por ~21+ s até o
+          // knock. O minimax equilibra a exposição dos dois atores.
+          const score = [Math.max(pa.path.length, pb.path.length), pa.path.length + pb.path.length];
+          if (!planPair || score[0] < bestScore[0] || (score[0] === bestScore[0] && score[1] < bestScore[1])) {
             planPair = { a: pa, b: pb };
+            bestScore = score;
           }
         }
       }
       const maxSteps = planPair ? Math.max(planPair.a.path.length, planPair.b.path.length) : Infinity;
-      if (planPair && maxSteps <= MAX_ROUTE_STEPS) {
-        safeLog(`Sala ${foundA.roomId} aceita na tentativa ${roomAttempt}/${ROOM_ATTEMPTS} (par navegável ≤ ${MAX_ROUTE_STEPS} trechos).`);
-        break;
+      if (!planPair || maxSteps > MAX_ROUTE_STEPS) {
+        safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+        throw new RoomRetry(`rota mínima do par ${maxSteps === Infinity ? 'sem rota' : `= ${maxSteps} trechos`} (limite ${MAX_ROUTE_STEPS})`);
       }
-      safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
-      throw new RoomRetry(`rota mínima do par ${maxSteps === Infinity ? 'sem rota' : `= ${maxSteps} trechos`} (limite ${MAX_ROUTE_STEPS})`);
+      safeLog(`Sala ${foundA.roomId} aceita na tentativa ${roomAttempt}/${ROOM_ATTEMPTS} (par navegável ≤ ${MAX_ROUTE_STEPS} trechos).`);
+      planA = planPair.a;
+      planB = planPair.b;
+      ({ terminal: terminalA } = planA);
+      ({ terminal: terminalB } = planB);
+      safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
+
+      // B chega e canaliza IMEDIATAMENTE — o canal de B não depende da posição
+      // de A; o approach de A (rota longa) roda em PARALELO com inputs contínuos
+      // (cliente parado sem input era expirado pelo servidor: run 42819040066).
+      // A navegação fica DENTRO do retry de sala (run #12: navA rejeitado fora
+      // de qualquer handler derrubou o processo sem FAIL logado).
+      navA = approach(a, terminalA, planA.path, 'A');
+      navA.catch(() => {}); // suprime unhandledRejection até o await pós-fase 1
+      await approach(b, terminalB, planB.path, 'B');
+      safeLog('B no alcance do seu terminal; canal imediato (A navega em paralelo).');
+      navigated = true;
     } catch (err) {
       if (!(err instanceof RoomRetry)) throw err;
       planPair = null; landedA = null; landedB = null;
@@ -683,19 +721,7 @@ async function main() {
       await Promise.race([b?.closed, sleep(800)]);
     }
     }
-    if (!planPair) throw new Error(`Nenhuma sala com dois terminais navegáveis e sobrevivíveis em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
-    const planA = planPair.a;
-    const planB = planPair.b;
-    const { terminal: terminalA } = planA;
-    const { terminal: terminalB } = planB;
-    safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
-
-    // B chega e canaliza IMEDIATAMENTE — o canal de B não depende da posição
-    // de A; o approach de A (rota longa) roda em PARALELO com inputs contínuos
-    // (cliente parado sem input era expirado pelo servidor: run 42819040066).
-    const navA = approach(a, terminalA, planA.path, 'A');
-    await approach(b, terminalB, planB.path, 'B');
-    safeLog('B no alcance do seu terminal; canal imediato (A navega em paralelo).');
+    if (!navigated) throw new Error(`Nenhuma sala jogável (par navegável + navegação sobrevivível) em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
 
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
@@ -738,7 +764,11 @@ async function main() {
 
     // A conclui a navegação (continuou com inputs contínuos em paralelo) e
     // então fica em hold de posição para as fases 2–3.
-    await navA;
+    try {
+      await navA;
+    } catch (err) {
+      throw new Error(`A não completou a navegação até o seu terminal (${err.message}); fases degradadas interrompidas honestamente.`);
+    }
     holdPosition(a);
 
     // ══ FASE 2 — A, rede DEGRADADA: interrupção (quadros em voo não ressuscitam) ══
