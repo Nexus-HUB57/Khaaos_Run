@@ -1005,7 +1005,10 @@ export class KhaaosSim3D {
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     const p = this.player;
-    if (p.alive && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
+    // Task 53 — a bordo do trem dos Rings: imune ao ring (o "Cinto" da entrada
+    // ZU protege quem não pode se mover; quem salta pela porta volta a responder
+    // ao anel). Paridade 1:1 com room3d (dano de ring server-side).
+    if (p.alive && !p.trainOnboard && dist2d(p.x, p.z, this.ring.x, this.ring.z) > this.ring.radius) {
       this.#hurtPlayer((4 + this.ring.pulse * 1.4) * this.scenario.ringDamageMultiplier * dt, null, 'ring');
     }
     if (this.scenario.id === 'Barburhen') this.#stepAcidRain(dt);
