@@ -583,45 +583,63 @@ async function main() {
   let linkA2 = null;
   let linkA3 = null;
   try {
-    // ── Setup: mesma sala, partida iniciada, ambos pousados ──
-    const a = await openClient(tokenA, { label: 'A' }); clients.push(a);
-    const foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
-    const b = await openClient(tokenB, { label: 'B' }); clients.push(b);
-    const foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
-    if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
-    if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
-    if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
-    send(a, { type: 'start', entry: 'belt' });
-    await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
-    await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
-    const [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
-    safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
+    // ── Setup com RETRY DE SALA: o layout varia por partida (seed + scenarioId
+    // por sala) e nem toda sala oferece DOIS terminais navegáveis e
+    // sobrevivíveis (rota ≤ MAX_ROUTE_STEPS — rotas longas sob chuva ácida
+    // matam o ator antes do canal). Fecha e re-entra (nova sala = novo layout)
+    // até 4 vezes; falha honesta se nenhuma servir.
+    const MAX_ROUTE_STEPS = 40;
+    const ROOM_ATTEMPTS = 4;
+    let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
+    for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
+      a = await openClient(tokenA, { label: 'A' }); clients.push(a);
+      foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
+      b = await openClient(tokenB, { label: 'B' }); clients.push(b);
+      foundB = await waitMessage(b, (m) => m.type === 'match_found', 'match_found de B', 30_000);
+      if (foundA.roomId !== foundB.roomId) throw new Error('As duas contas caíram em salas distintas.');
+      if (!foundA.resumeToken) throw new Error('Servidor não enviou resumeToken para A.');
+      if (!foundB.resumeToken) throw new Error('Servidor não enviou resumeToken para B.');
+      send(a, { type: 'start', entry: 'belt' });
+      await waitSnapshot(a, (s) => s.state === 'IN_PROGRESS', 'partida iniciada', 30_000);
+      await waitSnapshot(b, (s) => s.state === 'IN_PROGRESS', 'partida de B iniciada', 30_000);
+      [landedA, landedB] = await Promise.all([waitForLand(a, 'A'), waitForLand(b, 'B')]);
+      safeLog(`Mesma sala ${foundA.roomId}; partida em andamento.`);
 
-    // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
-    // navegação cross-map: os distritos do CIGKV são separados por estruturas).
-    const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
-    const grid = makeObstacleGrid(layout);
-    a.grid = grid; b.grid = grid;
-    const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
-      && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-    // Desempate determinístico por PAR: o cenário exige terminais distintos.
-    // Escolhe o par (A,B) de terminais com MENOR soma de rotas navegáveis —
-    // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
-    // distante demais (spawns próximos no staging → B morre na navegação).
-    const pathsOf = (landed) => (landed.terminals ?? [])
-      .filter((t) => safeTerminals.some((s) => s.id === t.id))
-      .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
-      .filter((p) => p.path);
-    let planPair = null;
-    for (const pa of pathsOf(landedA)) {
-      for (const pb of pathsOf(landedB)) {
-        if (pa.terminal.id === pb.terminal.id) continue;
-        if (!planPair || pa.path.length + pb.path.length < planPair.a.path.length + planPair.b.path.length) {
-          planPair = { a: pa, b: pb };
+      // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
+      // navegação cross-map: os distritos do CIGKV são separados por estruturas).
+      const layout = getWorldLayout(landedA.seed, landedA.scenarioId);
+      const grid = makeObstacleGrid(layout);
+      a.grid = grid; b.grid = grid;
+      const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
+        && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
+      // Par (A,B) de terminais distintos com MENOR soma de rotas navegáveis —
+      // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
+      // distante demais (spawns próximos no staging → B morre na navegação).
+      const pathsOf = (landed) => (landed.terminals ?? [])
+        .filter((t) => safeTerminals.some((s) => s.id === t.id))
+        .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
+        .filter((p) => p.path);
+      planPair = null;
+      for (const pa of pathsOf(landedA)) {
+        for (const pb of pathsOf(landedB)) {
+          if (pa.terminal.id === pb.terminal.id) continue;
+          if (!planPair || pa.path.length + pb.path.length < planPair.a.path.length + planPair.b.path.length) {
+            planPair = { a: pa, b: pb };
+          }
         }
       }
+      const maxSteps = planPair ? Math.max(planPair.a.path.length, planPair.b.path.length) : Infinity;
+      if (planPair && maxSteps <= MAX_ROUTE_STEPS) {
+        safeLog(`Sala ${foundA.roomId} aceita na tentativa ${roomAttempt}/${ROOM_ATTEMPTS} (par navegável ≤ ${MAX_ROUTE_STEPS} trechos).`);
+        break;
+      }
+      safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+      planPair = null; landedA = null; landedB = null;
+      a.ws.close(); b.ws.close();
+      await Promise.race([a.closed, sleep(800)]);
+      await Promise.race([b.closed, sleep(800)]);
     }
-    if (!planPair) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
+    if (!planPair) throw new Error(`Nenhuma sala com dois terminais navegáveis e sobrevivíveis em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
     const planA = planPair.a;
     const planB = planPair.b;
     const { terminal: terminalA } = planA;
