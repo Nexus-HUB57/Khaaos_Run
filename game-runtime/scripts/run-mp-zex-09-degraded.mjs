@@ -628,17 +628,16 @@ async function main() {
     const { terminal: terminalB } = planB;
     safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);
 
-    await Promise.all([
-      approach(a, terminalA, planA.path, 'A'),
-      approach(b, terminalB, planB.path, 'B'),
-    ]);
-    holdPosition(a); holdPosition(b); // parado ≠ inativo: inputs de gameplay contínuos
-    safeLog('Ambos no alcance de interação dos seus terminais.');
+    // B chega e canaliza IMEDIATAMENTE — o canal de B não depende da posição
+    // de A; o approach de A (rota longa) roda em PARALELO com inputs contínuos
+    // (cliente parado sem input era expirado pelo servidor: run 42819040066).
+    const navA = approach(a, terminalA, planA.path, 'A');
+    await approach(b, terminalB, planB.path, 'B');
+    safeLog('B no alcance do seu terminal; canal imediato (A navega em paralelo).');
 
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
     await startChannel(b, terminalB);
-    releaseHold(b);
     b.ws.terminate();
     await Promise.race([b.closed, sleep(1_000)]);
     const released1 = await waitSnapshot(a, (s) => {
@@ -674,6 +673,11 @@ async function main() {
       throw new Error(`Fase 1: relógio do canal por estado do servidor fora do esperado (${elapsedServer1.toFixed(2)} s vs ${ZEX_CHANNEL_SECONDS} s).`);
     }
     safeLog(`Fase 1 (normal, conclusão): XP +${BASELINE_XP} (baseline D), canal server-side ${elapsedServer1.toFixed(2)} s, extração +1.`);
+
+    // A conclui a navegação (continuou com inputs contínuos em paralelo) e
+    // então fica em hold de posição para as fases 2–3.
+    await navA;
+    holdPosition(a);
 
     // ══ FASE 2 — A, rede DEGRADADA: interrupção (quadros em voo não ressuscitam) ══
     // A sessão de resume só existe DEPOIS do close da conexão anterior —
