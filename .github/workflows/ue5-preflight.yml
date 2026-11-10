@@ -27,6 +27,7 @@ on:
       - 'scripts/build/export_barburhen_obj.py'
       - 'scripts/build/bake_barburhen_colliders.py'
       - 'scripts/build/import_barburhen_map.py'
+      - 'scripts/build/audit_mobile_environment_assets.py'
       - '.github/workflows/ue5-preflight.yml'
   push:
     branches: [main]
@@ -44,6 +45,7 @@ on:
       - 'scripts/build/export_barburhen_obj.py'
       - 'scripts/build/bake_barburhen_colliders.py'
       - 'scripts/build/import_barburhen_map.py'
+      - 'scripts/build/audit_mobile_environment_assets.py'
       - '.github/workflows/ue5-preflight.yml'
 
 concurrency:
@@ -95,6 +97,22 @@ jobs:
           python3 scripts/build/bake_barburhen_colliders.py mvp_output/assets/worlds/Barburhen_Map.obj mvp_output/assets/worlds/Barburhen_colliders.json
           ls -la mvp_output/assets/worlds/
 
+      - name: Mobile environment assets — edifícios, pontes e veículos
+        # Inventário engine-less publica blockers sem converter ausência em PASS de cook/FPS.
+        run: |
+          python3 scripts/build/audit_mobile_environment_assets.py --self-test
+          python3 scripts/build/audit_mobile_environment_assets.py --output "$RUNNER_TEMP/mobile-environment-asset-audit.json"
+          python3 - <<'PY'
+          import json, os
+          report = json.load(open(os.path.join(os.environ['RUNNER_TEMP'], 'mobile-environment-asset-audit.json')))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### Mobile environment asset audit\n\n')
+              summary.write(f"Overall: `{report['overall_status']}`; native Unreal assets: `{report['native_unreal_asset_count']}`.\n\n")
+              for category, record in report['categories'].items():
+                  summary.write(f"- {category}: `{record['status']}`; source packs={record['source_asset_count']}; named objects={record['named_object_count']}.\n")
+              summary.write('\nNo editor import, cook, or physical-device FPS is asserted by this engine-less audit.\n')
+          PY
+
       - name: Selftest do relatório UE5.8/EAC unblock (relatório + sonda ghcr)
         # Fase 31+ — contrato do relatório de bloqueios (ue58_eac_unblock.mjs)
         # e da sonda ghcr de 2 camadas, 100% offline (APIs mockadas).
@@ -114,6 +132,7 @@ jobs:
             echo "| EngineAssociation 5.8 | $(node scripts/build/ue58_preflight.mjs Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Guard UE1021 (fix_ue1021_includes) | $(python3 scripts/build/fix_ue1021_includes.py check Unreal/KhaaosRun >/dev/null 2>&1 && echo OK || echo VIOLAÇÃO) |"
             echo "| Fase 1 — Barburhen OBJ + colliders | $(python3 scripts/build/export_barburhen_obj.py --selftest >/dev/null 2>&1 && python3 scripts/build/bake_barburhen_colliders.py --selftest >/dev/null 2>&1 && echo OK || echo ERROS) |"
+            echo "| Mobile env assets audit | $(python3 scripts/build/audit_mobile_environment_assets.py --self-test >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Unblock UE5.8/EAC (relatório + sonda ghcr) | $(node scripts/build/ue58_eac_unblock_selftest.mjs >/dev/null 2>&1 && echo OK || echo ERROS) |"
             echo "| Fidelidade Mundos ↔ README (F44) | $(cd game-runtime && npm run audit:fidelity >/dev/null 2>&1 && echo '✅ FIEL' || echo '❌ DERIVA') |"
             echo "| Game/Editor/Server targets | ✅ validados no preflight |"
