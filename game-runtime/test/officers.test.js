@@ -9,6 +9,7 @@ import {
   SPECIAL_CLASS_OFFICERS, OFFICER_COMBAT, officerCombatParams,
   officerDeployment, shouldWithdraw, officerDeployFeed,
 } from '../src/game3d/officers.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const blankInput = (over = {}) => ({ seq: 0, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, interact: false, reload: false, medkit: false, throw: false, gloo: false, ability: false, slot: 0, ...over });
 
@@ -79,6 +80,7 @@ test('fase10 room: plano autorizado implanta 3 oficiais acima do botFill com fla
   });
   room.addPlayer('p1', 'HUMANO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.bots.filter((b) => b.officer).length, 3, '3 oficiais implantados');
   assert.equal(room.bots.length, 7, '4 bots regulares + 3 oficiais (acima do botFill)');
   const officers = room.bots.filter((b) => b.officer);
@@ -109,6 +111,7 @@ test('fase10 room: sem plano (ou negado) nenhuma sala ganha oficiais — default
   const room = new MatchRoom3D({ id: 'r-nooce', seed: 'F10R2', capacity: 8, botFill: 3, airdrop: false });
   room.addPlayer('p1', 'HUMANO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.bots.filter((b) => b.officer).length, 0);
   const denied = new MatchRoom3D({
     id: 'r-nooce2', seed: 'F10R3', capacity: 8, botFill: 2, airdrop: false,
@@ -116,6 +119,7 @@ test('fase10 room: sem plano (ou negado) nenhuma sala ganha oficiais — default
   });
   denied.addPlayer('p1', 'HUMANO');
   denied.start('p1', 'belt');
+  disembarcarSala(denied, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(denied.bots.filter((b) => b.officer).length, 0);
   assert.equal(denied.officerMeta, null);
 });
@@ -127,6 +131,7 @@ test('fase10 room: oficiais se RETIRAM ao fim da duração autorizada — sem cr
   });
   room.addPlayer('p1', 'HUMANO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.bots.filter((b) => b.officer).length, 3);
   room.drainEvents('p1');
   // 20 ticks × 0.25 s = 5 s > 3 s autorizados
@@ -147,6 +152,7 @@ test('fase10 room: oficiais caídos em combate são removidos na retirada junto 
   });
   room.addPlayer('p1', 'HUMANO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   // oficial abatido durante a operação (corpóreo na cena)
   room.bots.find((b) => b.officer).alive = false;
   for (let i = 0; i < 20; i++) room.tick(0.25);
@@ -160,6 +166,7 @@ test('fase10 room: oficiais respeitam a proteção de paraquedistas (mesma curva
   });
   room.addPlayer('p1', 'HUMANO');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const officer = room.bots.find((b) => b.officer);
   assert.ok(officer.dropPhase, 'oficiais entram na infiltração aérea');
 });
@@ -174,6 +181,7 @@ test('fase10 sim offline: ?officers=1 implanta 3 oficiais com combate de elite e
   assert.ok(officer.armor >= 50);
   // partida segue; duração comprimida p/ teste (3 s) e 10 passos × 0,5 s = 5 s
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.officerMeta.deploySeconds = 3;
   for (let i = 0; i < 10; i++) sim.step(blankInput(), 0.5);
   assert.equal(sim.bots.filter((b) => b.officer).length, 0, 'oficiais se retiraram offline');
@@ -187,6 +195,7 @@ test('fase10 sim offline: default SEM oficiais — zero mudança de comportament
   assert.equal(sim.bots.filter((b) => b.officer).length, 0);
   assert.equal(sim.officerMeta, null);
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.step(blankInput(), 1);
   assert.equal(sim.bots.length, 3);
 });

@@ -10,6 +10,7 @@ import {
   eventToFeed, worldHazardFeedLine, WORLD_HAZARD_INFO,
   SpectatorRemote, SpectatorView, SpectatorHUD, spectatorViewModel,
 } from '../src/game3d/spectator3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // ───server: espelho do hazard autoritativo para a transmissão───────────────
 
@@ -17,6 +18,7 @@ test('room3d: tsunami autoritativo (Arukheea — W4 do README) vira WORLD_HAZARD
   const room = new MatchRoom3D({ id: 'ring3d-hz1', seed: 'HZ-TSUNAMI', region: 'sa-east', capacity: 4, botFill: 3, airdrop: false, scenarioId: 'Arukheea' });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 380 && !room.spectatorLog.some((e) => e.type === 'WORLD_HAZARD' && e.data.hazard === 'tsunami'); i++) room.tick(0.5);
   const haz = room.spectatorLog.find((e) => e.type === 'WORLD_HAZARD' && e.data.hazard === 'tsunami' && e.data.phase === 'start');
   assert.ok(haz, 'WORLD_HAZARD tsunami:start presente no log');
@@ -30,6 +32,7 @@ test('room3d: acidRain (Barburhen — chuva ácida do mundo) vira WORLD_HAZARD p
   const room = new MatchRoom3D({ id: 'ring3d-hz2', seed: 'HZ-ACID', region: 'sa-east', capacity: 4, botFill: 3, airdrop: false, scenarioId: 'Barburhen' });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 30 && !room.spectatorLog.some((e) => e.type === 'WORLD_HAZARD'); i++) room.tick(0.5); // ácido a cada 10 s
   const acid = room.spectatorLog.find((e) => e.type === 'WORLD_HAZARD' && e.data.hazard === 'acid' && e.data.phase === 'pulse');
   assert.ok(acid, 'WORLD_HAZARD acid:pulse presente');
@@ -39,6 +42,7 @@ test('room3d: mirror não vaza eventos privados (killfeed/pulse mantêm contrato
   const room = new MatchRoom3D({ id: 'ring3d-hz3', seed: 'HZ-MIX', region: 'sa-east', capacity: 4, botFill: 3, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 3; i++) room.tick(0.5); // pulse dispara no 1º tick (PULSE_INTERVAL)
   const types = room.spectatorLog.map((e) => e.type);
   assert.ok(types.includes('RING_PHASE'), 'RING_PHASE preservado');

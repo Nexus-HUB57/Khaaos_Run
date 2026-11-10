@@ -9,6 +9,7 @@ import {
 import { MatchRoom3D } from '../server/room3d.js';
 import { makeInviteCode, normalizeInviteCode, findRoomByCode, chooseRoom } from '../server/matchmaking.js';
 import { QUALITY_TIERS, resolveQuality, qualityTier } from '../src/game3d/quality3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const idle = (over = {}) => ({ ...DEFAULT_INPUT, ...over });
@@ -92,6 +93,7 @@ test('fase7 bots: dano por distância decai de 0.55 até 0.34', () => {
 test('fase7 bots: tempo de reação impede tiro no tick de aquisição do alvo', () => {
   const s = new KhaaosSim3D({ seed: 'F7-REACT', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const b = s.bots[0];
   b.x = s.player.x + 8; b.z = s.player.z; b.cooldown = 0;
   s.step(idle(), STEP);
@@ -111,6 +113,7 @@ test('fase7 sim: squads determinísticos com jogador liderando o sq-1', () => {
 test('fase7 sim: dano letal nocauteia em vez de eliminar (squad ativo)', () => {
   const s = new KhaaosSim3D({ seed: 'F7-KNOCK', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   assert.equal(p.knocked, true, 'caiu nocauteado');
   assert.equal(p.alive, true, 'ainda vivo (DBNO)');
@@ -120,6 +123,7 @@ test('fase7 sim: dano letal nocauteia em vez de eliminar (squad ativo)', () => {
 test('fase7 sim: sem squad o dano letal inicia a janela de recuperação de sete segundos', () => {
   const s = new KhaaosSim3D({ seed: 'F7-LEGACY', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   p.armor = 0; p.life = 0.001;
   s.ring.radius = 10; s.ring.target = 10; s.ring.pulse = 60;
@@ -134,6 +138,7 @@ test('fase7 sim: sem squad o dano letal inicia a janela de recuperação de sete
 test('fase7 sim: jogador caído pode se recuperar consumindo o próprio medkit', () => {
   const s = new KhaaosSim3D({ seed: 'F7-SELF-MEDKIT', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   p.inventory.medkit = 1;
   s.ring.radius = 170; s.ring.target = 170; s.ring.pulse = 0;
@@ -149,6 +154,7 @@ test('fase7 sim: jogador caído pode se recuperar consumindo o próprio medkit',
 test('fase7 sim: aliado pode usar medkit no jogador caído sem squad', () => {
   const s = new KhaaosSim3D({ seed: 'F7-ALLY-SOLO-MED', botCount: 1, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const medic = s.player, downed = s.bots[0];
   medic.x = 60; medic.z = 60; medic.inventory.medkit = 1;
   downed.x = 61; downed.z = 60;
@@ -165,6 +171,7 @@ test('fase7 sim: aliado pode usar medkit no jogador caído sem squad', () => {
 test('fase7 sim: vencimento dos sete segundos confirma Game Over local', () => {
   const s = new KhaaosSim3D({ seed: 'F7-TIMEOUT', botCount: 0, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   s.ring.radius = 170; s.ring.target = 170; s.ring.pulse = 0;
   assert.equal(s.over, false);
@@ -177,6 +184,7 @@ test('fase7 sim: vencimento dos sete segundos confirma Game Over local', () => {
 test('fase7 sim: sangramento até o fim elimina com placement', () => {
   const s = new KhaaosSim3D({ seed: 'F7-BLEED', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   assert.equal(p.knocked, true);
   const frames = Math.ceil((DBNO.bleedOutSeconds + 2) / STEP);
@@ -195,6 +203,7 @@ test('fase7 sim: sangramento até o fim elimina com placement', () => {
 test('fase7 sim: aliado bot resgata e revive o jogador caído', () => {
   const s = new KhaaosSim3D({ seed: 'F7-RESCUE', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   assert.equal(p.knocked, true);
   // cenário controlado: jogador dentro do anel, aliado colado, inimigos longe
@@ -219,6 +228,7 @@ test('fase7 sim: aliado bot resgata e revive o jogador caído', () => {
 test('fase7 sim: caído rasteja devagar e não atira/coleta', () => {
   const s = new KhaaosSim3D({ seed: 'F7-CRAWL', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   assert.equal(p.knocked, true);
   s.ring.radius = 170; s.ring.pulse = 0;
@@ -237,6 +247,7 @@ test('fase7 sim: caído rasteja devagar e não atira/coleta', () => {
 test('fase7 sim: dano adicional em caído não antecipa o prazo de sete segundos', () => {
   const s = new KhaaosSim3D({ seed: 'F7-FINISH', botCount: 4, squad: true, spectate: true, airdrop: false });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = knockPlayer(s);
   assert.equal(p.knocked, true);
   const remainingBefore = p.knockT;
@@ -264,6 +275,7 @@ test('fase7 room: sala squad agrupa humanos por ordem e bots em sqE', () => {
   assert.equal(room.humans.get('p4').squad, 'sq-1');
   assert.equal(room.humans.get('p5').squad, 'sq-2');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.bots.every((b) => b.squad?.startsWith('sqE-')), 'bots em esquadrões inimigos próprios');
   assert.ok(room.bots.every((b) => b.squad !== room.humans.get('p1').squad));
 });
@@ -273,6 +285,7 @@ test('fase7 room: humano nocauteado recebe knocked e killfeed com marcador', () 
   room.addPlayer('p1', 'VITIMA');
   room.addPlayer('p2', 'CAÇADOR');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const v = room.humans.get('p1');
   v.armor = 0; v.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -290,6 +303,7 @@ test('fase7 room: no modo solo, medkit próprio recupera o jogador caído antes 
   const room = new MatchRoom3D({ id: 'r-self-medkit', seed: 'F7R-SELF-MED', capacity: 16, botFill: 0, airdrop: false, squad: false });
   room.addPlayer('p1', 'VITIMA'); room.addPlayer('p2', 'SOBREVIVENTE'); room.addPlayer('p3', 'SOBREVIVENTE-2');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   p1.armor = 0; p1.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -311,6 +325,7 @@ test('fase7 room: aliado do squad usa medkit no companheiro caído', () => {
   const room = new MatchRoom3D({ id: 'r-ally-medkit', seed: 'F7R-ALLY-MED', capacity: 16, botFill: 0, airdrop: false, squad: true });
   room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -332,6 +347,7 @@ test('fase7 room: aliado pode usar medkit no caído sem squad em modo solo', () 
   const room = new MatchRoom3D({ id: 'r-solo-ally-med', seed: 'F7R-SOLO-ALLY-MED', capacity: 16, botFill: 0, airdrop: false, squad: false });
   room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -353,6 +369,7 @@ test('fase7 room: timeout confirma Game Over só da vítima e mantém a partida 
   const room = new MatchRoom3D({ id: 'r-timeout', seed: 'F7R-TIMEOUT', capacity: 16, botFill: 0, airdrop: false, squad: false });
   room.addPlayer('p1', 'VITIMA'); room.addPlayer('p2', 'SOBREVIVENTE'); room.addPlayer('p3', 'SOBREVIVENTE-2');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.humans.get('p1');
   victim.armor = 0; victim.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -377,6 +394,7 @@ test('fase7 room: revive por input interagir canaliza e restaura vida', () => {
   room.addPlayer('p1', 'CAIDO');
   room.addPlayer('p2', 'SOCORRISTA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const v1 = room.humans.get('p1'), v2 = room.humans.get('p2');
   v1.armor = 0; v1.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -403,6 +421,7 @@ test('fase7 room: aliado pode canalizar revive em sala solo sem squad', () => {
   const room = new MatchRoom3D({ id: 'r-solo-rev', seed: 'F7R-SOLO-REV', capacity: 16, botFill: 0, airdrop: false, squad: false });
   room.addPlayer('p1', 'CAIDO'); room.addPlayer('p2', 'SOCORRISTA');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const downed = room.humans.get('p1'), medic = room.humans.get('p2');
   downed.armor = 0; downed.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -427,6 +446,7 @@ test('fase7 room: snapshot carrega knocked/squad/weaponSkin e skin é aplicada n
   room.addPlayer('p1', 'A');
   room.addPlayer('p2', 'B');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   // pega um weapon loot perto (teleporta no loot)
   const weapon = room.loot.find((i) => i.active && i.kind === 'weapon');
   assert.ok(weapon, 'cenario tem arma no chao');
@@ -444,9 +464,10 @@ test('fase7 room: snapshot carrega knocked/squad/weaponSkin e skin é aplicada n
 });
 
 test('fase7 room: caído não atira mesmo com input fire', () => {
-  const room = new MatchRoom3D({ id: 'r-nofire', seed: 'F7R5', capacity: 16, botFill: 0, airdrop: false, squad: true });
+  const room = new MatchRoom3D({ id: 'r-nofire', seed: 'F7R5', capacity: 16, botFill: 1, airdrop: false, squad: true }) // Task 53 — 1 ator encerra a sala no 1º tick;
   room.addPlayer('p1', 'A');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   p1.armor = 0; p1.life = 0.001;
   room.ring.radius = 10; room.ring.target = 10; room.ring.pulse = 60;
@@ -459,7 +480,7 @@ test('fase7 room: caído não atira mesmo com input fire', () => {
   for (let i = 0; i < 40; i++) {
     room.input('p1', { seq: seq++, dx: 0, dy: 0, yaw: 0, pitch: 0, fire: true, interact: false });
     room.tick(1 / 20);
-    shots += room.drainEvents('p1').filter((e) => e.type === 'shot').length;
+    shots += room.drainEvents('p1').filter((e) => e.type === 'shot' && e.owner === 'p1').length;
   }
   assert.equal(shots, 0, 'caído não dispara');
 });

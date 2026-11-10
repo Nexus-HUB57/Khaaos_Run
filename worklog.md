@@ -357,7 +357,8 @@ Stage Summary:
 - PRs #210 (duplicata F22/23) e #181 (gráficos UE5 + economy 2PC) mergeadas com reconciliação semântica; main re-verificado
 - Infra UE5.8/EAC pronta para destravar no instante em que os valores humanos chegarem — nenhum outro edit necessário
 
-================================================================================
+=========================================================================
+---
 Task: Fase 32 — skins míticas evolutivas PARA O ARSENAL (não só AR-47) + variantes de anexos por raridade (visual gasto→dourado) + grama com LOD de distância
 
 Work Log:
@@ -378,7 +379,8 @@ Stage Summary:
 - Grama com LOD de distância em chunks: densa perto, rarefeita no meio, invisível longe — ~95% dos chunks ocultos na origem (189 → ~10 draw calls de grama)
 - Suite: 824 testes — 811 pass / 0 fail / 13 skipped; vite build OK
 
-================================================================================
+=========================================================================
+---
 Task: Fase 32 — VALIDAÇÃO END TO END (sessão de verificação, browser real)
 
 Work Log:
@@ -459,7 +461,8 @@ Stage Summary:
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
 
-================================================================================
+=========================================================================
+---
 Task: Fase 34 — faixa de IMPOSTORES da grama (58-110m) + arsenal MÍTICO completo (sucata/pulse) + badge sazonal por aura no HUD
 
 Work Log:
@@ -1265,6 +1268,29 @@ Stage Summary:
 - A matriz MP-ZEX avança: 08 automatizado contra staging (aguardando secrets) e 09 agora VALIDADO em ambiente isolado com partida real — autoridade do servidor, recompensa única e convergência pós-degradação provadas por E2E repetível no CI; bloqueios humanos inalterados (EULA 404; 0 secrets EOS_*/staging; 0 runners)
 - Estado: base 22f9c5c · game-runtime 1097 testes 0 fail · link 4/4 · E2E 4× PASS · docs+worklog atualizados
 
+
+## Task ID: 53
+**Agent:** Main
+**Task:** "Prosseguir 1 a 6 end to end" + "prosseguir e mostrar preview do desenvolvimento para testes" + "Prosseguir end to end e gerar link do preview" — PROTOCOLO OFICIAL DE ENTRADA ZU: o trem dos Rings (paraquedas erradicado, embarque conjunto, portas, chegada e grace de 15 s)
+
+Work Log:
+- DESIGN EXECUTADO (fases 1–6 do protocolo): EMBARQUE (todos os operativos a bordo) → EM ROTA (câmera no vagão, portas fechadas, combate travado) → PORTAS ABERTAS (salto opcional = entrada oficial; seguir até o destino também é oficial) → CHEGADA (desembarque obrigatório) → GRACE 15 s (NENHUM ataque entre operativos — inclui quem saltou cedo) → COMBATE LIVRE. O pulso do Ring só começa a contar APÓS o desbloqueio; rota/grace não consomem MATCH_TIME
+- SSOT NOVA `game-runtime/src/shared/zuTrain.js`: ZU_TRAIN {EMBARQUE_MS 3400 (contrato Fase 11/12 preservado), DOOR_OPEN_MS 8000, ARRIVAL_MS 16000, GRACE_S 15, JUMP_HEIGHT 5.5, JUMP_LATERAL 2.6}; COMBAT_UNLOCK_MS 31000; funções PURAS zuTrainPhase/canAttackAt/doorWindowOpen/combatUnlockEpoch/zuTrainAnnouncement/trainRoute/trainPoseAt/trainDoorJumpPose/seedHashOf — cliente e servidor chegam à MESMA pose do trem no MESMO elapsed (zero confiança no cliente)
+- SIM OFFLINE (sim3d.js): start() embarca TODOS (trainOnboard) + trava global (combatLockedUntil); step() avança trainT e #stepTrainProtocol (saltos determinísticos dos bots i%3===0 com jitter (i*431)%2400, chegada desembarca todos + evento trainArrived, desbloqueio + evento combatUnlocked); #combatLocked() gateia dano jogador↔jogador (#damageBot/#hurtPlayer ownerId≠null), DISPARO (#fire — o gatilho fica sem efeito no grace), MATCH_TIME, pulseTimer do Ring e habilidade a bordo; doorJump() pública valida janela [8,16)s e aplica a pose pura; player a bordo não passa por #stepActor (sem mover/atirar); snapshot carrega `train` (fase/onboard/doorOpen/combatLockedRemainingS)
+- AUTORIDADE ONLINE (room3d.js + server.js): start() fixa trainStartedAtEpoch + combatLockedUntil = chegada+15s (epoch), zuIngress ganha doorOpenAtMs/arrivalAtMs/graceS/combatLockedUntil, matchStart.train estendido; tick() gateia time/pulseTimer/ataques (paridade 1:1 com a sim) e roda #stepTrainProtocol; NOVO WS `door_jump` → room.doorJump(id) valida janela/a bordo e aplica trainDoorJumpPose (idêntica à predição do cliente); snapshot carrega `zuTrain` (phase/doorOpen/arrived/combatLocked/combatLockedUntil); eventos trainArrived/combatUnlocked/doorJump/botDoorJump broadcast
+- CLIENTE 3D NOVO `trainRide3d.js` (TrainRide): vagão real sobre viaduto (piso 4,2 m — o salto nasce a 5,5 m e pousa pelo contrato canônico 'chute' da Fase 4), 7 operativos a bordo nos bancos, folhas de porta deslizantes (âmbar ZU) animadas na janela, bogies + locomotiva + viaduto com pilares, câmera de bordo (janela na EM ROTA, porta na PORTAS) com balanço de via, pose pela função PURA compartilhada; main3d substitui startTrainIntro por startTrainRide no startMatch (a cinemática curta segue intacta para o QTE de descarrilamento — suite zu-derail-qte preservada); buildSimInput trava movimento/ação a bordo e detecta a BORDA de ESPAÇO p/ o salto (offline: sim.doorJump; online: WS door_jump); updateCamera captura a câmera até o salto/chegada; handleEvents alimenta o rádio ZU (chegada/combate livre/saltos); updateTrainHud desenha o countdown do grace por frame; online3d sincroniza a viagem pelo relógio do SERVIDOR (matchStart + snapshot.zuTrain, late join/reconexão incluídos)
+- REGRESSÃO DE SUÍTES (protocolo agora canônico): fixture canônica test/helpers/zuProtocolo.js (disembarcarSim/disembarcarSala — cumprem o protocolo: saltam pela porta na janela, chegam ao estado pós-protocolo canônico: ator íntegro no SEU spawn de origem, bots nos spawns com IA calma e integridade restaurada, grace encerrado, replay intacto, _dmgLogAt limpo) + injector programático (scripts/inject_zu_train_helpers.mjs — reconhece vars diretas E factories makeRoom/createSim, idempotente por linha); suítes ajustadas pontualmente onde o fixture não cobre (botFill 0→1/2 nos testes de sala com 1 ator — a partida encerrava no 1º tick; north-phase do lag-comp 8→30 ticks — linha leste sai do buffer de rewind de 26; shots do caído filtrados por owner; F36 groundSim desembarca dentro da factory)
+- TESTE NOVO test/zu-train-protocol.test.js (12): fases canônicas + unlock 31000ms; pureza da rota/pose (paridade servidor↔cliente) + anúncio serializável; embarque integral + contrato do zuIngress; rota/grace NÃO consomem partida nem pulso; salto rejeitado fora da janela; salto na janela aplica pose SSOT e pousa; bots determinísticos + chegada + desbloqueio único; NENHUM dano no grace e dano aplicado após 31 s (via input público de fogo); sem tiros a bordo; contrato do snapshot da sala; door_jump autoritativo (rejeita fora, aplica na janela, segunda tentativa rejeitada); chegada desembarca todos e o pulso só corre pós-unlock
+- VALIDAÇÃO: game-runtime 1031 testes — 1003 pass / 19 fail = EXATAMENTE o baseline de infra (pg/redis ausentes: crossreplica, distributed, economy, eos-bridge, fault-injection, fidelity-gate, health-autoscale, infrastructure, multiinstance, observability, poj-server, rbac, security, server3d, soak, spectator-pipeline-server, stress, ue58-admin-unblock, ws-upgrade-routing); 100% dos testes de gameplay verdes; suítes do protocolo 12/12 + zu-entry 3/3 + train-intro 7/7 + zu-derail-qte 31/31 + court-krc 5/5 + drop-engagement 12/12 + doors 22/22
+- E2E NO PREVIEW (browser real, gateway :81 → Vite :3000 → server :8787): golden path filmado em 7 screenshots (artifacts/f53/ + download/preview-khaaos/): menu → APERTAR CINTO → rádio "ZU // EMBARQUE — todos os operativos a bordo" → EM ROTA a bordo (câmera no vagão com operativos sentados) → PORTAS ABERTAS (HUD "PORTAS ABERTAS // ESPAÇO = SALTAR", rádio da escolha oficial, câmera na porta com o exterior visível) → ESPAÇO: salto de porta executado (pose da rota, pouso canônico, rádios "Operativo saltou pela porta" ×2 dos bots + "Aterrissagem confirmada") → GRACE (HUD "GRACE ZU // COMBATE EM 14s" contando, rádio "CHEGADA… grace global") → COMBATE LIVRE (HUD troca, disparos funcionam — munição 15→13). Console limpo o percurso todo
+- PROBE DE E2E: window.__kr (Game3D) exposto no console p/ inspeção de estado — usado para alinhar a timeline no browser headless (rAF throttled ~1 FPS), o jogo em janela real não precisa
+- RESÍDUO HONESTO: branch docs/f52-validacao-graficos-render (Task 52, @0c5a8ea) PERDIDA na reciclagem do sandbox — o trabalho da 52 está no main (uSharpen/postfx em produção, provado no preview) e o push/PR da evidência não foi refeito; push/PR desta task feitos com o token fornecido pelo usuário
+
+Stage Summary:
+- A entrada nos Rings agora é o PROTOCOLO OFICIAL DO ZU ponta a ponta: o paraquedas deixou de existir como caminho, todos viajam juntos no trem, a única entrada é a porta (salto opcional) ou a chegada, e os ataques só abrem 15 s depois dela — sincronizados offline (sim) e online (autoridade epoch do servidor + relógio compartilhado), com o pulso do Ring respeitando o mesmo relógio
+- Estado: game-runtime 1031 testes (100% gameplay verde; 19 infra pré-existentes) · suíte nova 12/12 · e2e visual completo no preview com console limpo · worklog + evidências artifacts/f53
+
+---
 ---
 Task ID: 53
 Agent: main (Z.ai)

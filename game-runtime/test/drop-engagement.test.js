@@ -8,6 +8,7 @@ import {
   DROP_ENGAGEMENT, botCanEngage, botTargetModifiers, botDamageScale, rayAabb,
 } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const idle = (over = {}) => ({ ...DEFAULT_INPUT, ...over });
@@ -69,6 +70,7 @@ test('fase9 drop: botTargetModifiers aplica erro/dano reduzidos no ar e no pouso
 function landedBotScenario(seed, playerState, opts = {}) {
   const sim = new KhaaosSim3D({ seed, botCount: 1, airdrop: true });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.consumeEvents();
   const { ax, az, bx, bz } = clearLosPair(sim, opts);
   const p = sim.player, b = sim.bots[0];
@@ -127,6 +129,7 @@ test('fase9 drop: chute baixo é engajado com dano teto-reduzido (nunca letal de
 test('fase9 drop: aterrissagem abre janela de graça (landGraceT) que decai até zero', () => {
   const sim = new KhaaosSim3D({ seed: 'DROP-GRACE-F9', botCount: 0, airdrop: true });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.consumeEvents();
   let guard = 0;
   while (sim.player.dropPhase !== null && guard++ < 30 * 60) sim.step(idle(), STEP);
@@ -141,6 +144,7 @@ test('fase9 drop: aterrissagem abre janela de graça (landGraceT) que decai até
 test('fase9 drop: dano recebido dentro da janela de pouso é reduzido', () => {
   const sim = new KhaaosSim3D({ seed: 'DROP-GRACE-DMG-F9', botCount: 1, airdrop: true });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.consumeEvents();
   const { ax, az, bx, bz } = clearLosPair(sim, { hiY: 0 });
   const p = sim.player, b = sim.bots[0];
@@ -163,11 +167,22 @@ test('fase9 drop: dano recebido dentro da janela de pouso é reduzido', () => {
 });
 
 // ---------- habilidade: posição no evento (VFX/SFX p/ remotos) ----------
+// Task 53 — a entrada canônica é o trem: os testes de habilidade desembarcam
+// pela porta (janela oficial) antes de exercitar a mecânica — a bordo a ação
+// é bloqueada pelo protocolo do ZU.
+function desembarcaPelaPorta(sim) {
+  for (let i = 0; i < 30 * 20 && !sim.doorJump(); i++) sim.step(idle(), STEP); // janela abre em 8 s
+  for (let i = 0; i < 30 * 3; i++) sim.step(idle(), STEP); // pousa
+}
+
 test('fase9 fx: evento ability offline carrega posição do caster e isSelf', () => {
   const sim = new KhaaosSim3D({ seed: 'FX-OFF-F9', botCount: 0, airdrop: false });
   sim.player.life = 50;
   sim.player.operativeId = 'OP_MALE_MEDIC_AFRICAN';
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
+  desembarcaPelaPorta(sim);
+  sim.consumeEvents();
   sim.step({ ...DEFAULT_INPUT, ability: true }, STEP);
   const ev = sim.consumeEvents().find((e) => e.type === 'ability');
   assert.ok(ev, 'evento emitido');
@@ -182,6 +197,7 @@ test('fase9 fx: evento ability online alcança humano próximo com posição e i
   room.addPlayer('p1', 'ALFA', 'OP_FEMALE_SNIPER');
   room.addPlayer('p2', 'BRAVO', 'OP_MALE_MEDIC_AFRICAN');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem: chegada desembarca TODOS (p1 e p2)
   const h1 = room.humans.get('p1'), h2 = room.humans.get('p2');
   h2.life = 50;
   h2.x = h1.x + 5; h2.z = h1.z; // perto: dentro do raio de 90m do feedback
@@ -199,6 +215,7 @@ test('fase9 fx: evento ability online alcança humano próximo com posição e i
 test('fase9 fx: paridade offline/online — habilidade bloqueada no ar e caído', () => {
   const sim = new KhaaosSim3D({ seed: 'FX-AIR-F9', botCount: 0, airdrop: true });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.consumeEvents();
   sim.player.dropPhase = 'sky';
   sim.step({ ...DEFAULT_INPUT, ability: true }, STEP);
@@ -211,6 +228,7 @@ test('fase9 room: bot online não dispara contra humano em queda livre', () => {
   const room = new MatchRoom3D({ id: 'f9-sky', seed: 'DROP-ROOM-F9', capacity: 4, botFill: 1, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const h = room.humans.get('p1');
   const b = room.bots[0];
   h.x = 0; h.z = 145; h.y = 100; h.dropPhase = 'sky'; h.vy = -30; h.onGround = false;
@@ -229,6 +247,11 @@ test('fase9 room: bot online engaja chute baixo com modificadores da tabela comp
   const room = new MatchRoom3D({ id: 'f9-chute', seed: 'DROP-ROOM2-F9', capacity: 4, botFill: 1, airdrop: false });
   room.addPlayer('p1', 'JOGADOR-1');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
+  // Task 53 — chegada do trem desembarca o bot (protocolo ZU) antes do engajamento
+  room.trainStartedAtEpoch = Date.now() - 16100;
+  room.combatLockedUntil = Date.now() - 1; // engajamento já liberado
+  room.tick(1 / 20);
   const h = room.humans.get('p1');
   const b = room.bots[0];
   h.x = 0; h.z = 145; h.y = 10; h.dropPhase = 'chute'; h.vy = -9; h.onGround = false;
