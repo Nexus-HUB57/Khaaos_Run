@@ -9,6 +9,8 @@ on:
       - 'scripts/build/provision_ue58_gpu_runner.sh'
       - 'scripts/build/ue58_gpu_diagnostic.py'
       - 'scripts/build/run_cigkv_headless_gpu_pipeline.sh'
+      - 'scripts/build/simulate_cigkv_headless_gpu.py'
+      - 'scripts/build/prepare_nvidia_gpu_guest.sh'
       - 'scripts/ue5_editor/cigkv_headless_bake.py'
       - 'scripts/ue5_editor/**'
       - '.github/workflows/cigkv-vertical-slice.yml'
@@ -37,7 +39,13 @@ jobs:
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_headless_render_bake.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_avatar_realism_profile.json >/dev/null
           python3 -m json.tool Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_character_materials.json >/dev/null
-          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/validate_cigkv_avatar_realism.py scripts/ue5/analyze_cigkv_material_configuration.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py scripts/ue5_editor/configure_cigkv_sss_anisotropy.py scripts/ue5_editor/cigkv_headless_bake.py
+          python3 -m py_compile scripts/ue5/prepare_cigkv_vertical_slice.py scripts/ue5/normalize_cigkv_character_blender.py scripts/ue5/audit_cigkv_character_assets.py scripts/ue5/validate_cigkv_avatar_realism.py scripts/ue5/analyze_cigkv_material_configuration.py scripts/build/simulate_cigkv_headless_gpu.py scripts/ue5_editor/cigkv_vertical_slice.py scripts/ue5_editor/validate_cigkv_materials.py scripts/ue5_editor/configure_cigkv_sss_anisotropy.py scripts/ue5_editor/cigkv_headless_bake.py
+          bash -n scripts/build/run_cigkv_headless_gpu_pipeline.sh scripts/build/prepare_nvidia_gpu_guest.sh
+      - name: Run local mock GPU orchestration
+        run: |
+          python3 scripts/build/simulate_cigkv_headless_gpu.py \
+            --output artifacts/cigkv-vertical-slice/mock-headless
+          test -s artifacts/cigkv-vertical-slice/mock-headless/mock-headless-pipeline-report.json
       - name: Validate hero avatar realism contract
         run: |
           mkdir -p artifacts/cigkv-vertical-slice

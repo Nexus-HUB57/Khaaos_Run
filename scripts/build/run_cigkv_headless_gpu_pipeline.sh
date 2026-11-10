@@ -9,6 +9,10 @@ ARTIFACTS="$ROOT/artifacts/cigkv-vertical-slice"
 PY_BAKE="$ROOT/scripts/ue5_editor/cigkv_headless_bake.py"
 PY_RENDER="$ROOT/scripts/ue5_editor/cigkv_vertical_slice.py"
 
+if [ "${CIGKV_GPU_MOCK:-0}" = "1" ]; then
+  exec python3 "$ROOT/scripts/build/simulate_cigkv_headless_gpu.py"
+fi
+
 fail() { echo "[CIGKV_HEADLESS] ERROR: $*" >&2; exit 2; }
 mkdir -p "$ARTIFACTS"
 
