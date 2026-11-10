@@ -63,3 +63,11 @@ DISTMATCH_TEST_SOURCE="${ROOT_DIR}/tests/ue5/distance_match_test.cpp"
 "${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${MODULE_INCLUDE_DIR}" \
     "${DISTMATCH_TEST_SOURCE}" "${NATLOCO_CORE_SOURCE}" -o "${TEMP_DIR}/distance-match-test"
 "${TEMP_DIR}/distance-match-test"
+
+# Fase 3 — ZU_TRAIN_V1: handover server-authoritative and exactly-once.
+TRAIN_HANDOVER_TEST_SOURCE="${ROOT_DIR}/tests/ue5/train_handover_idempotency_test.cpp"
+TRAIN_HANDOVER_SOURCE="${MODULE_INCLUDE_DIR}/Game/MatchFlow/KhaaosTrainHandover.cpp"
+TRAIN_HANDOVER_INCLUDE_DIR="${MODULE_INCLUDE_DIR}/Game/MatchFlow"
+"${CXX}" -std=c++20 -Wall -Wextra -Werror -pedantic -I"${TEST_STUB_DIR}" -I"${MODULE_INCLUDE_DIR}" -I"${TRAIN_HANDOVER_INCLUDE_DIR}" \
+    "${TRAIN_HANDOVER_TEST_SOURCE}" "${TRAIN_HANDOVER_SOURCE}" -o "${TEMP_DIR}/train-handover-idempotency-test"
+"${TEMP_DIR}/train-handover-idempotency-test"
