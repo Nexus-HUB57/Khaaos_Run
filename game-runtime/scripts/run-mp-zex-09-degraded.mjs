@@ -452,9 +452,14 @@ function smoothPath(path, grid) {
   return out;
 }
 
+/** Rejeição de sala NO retry: pousos com dano ambiental (knock/morte entre
+ *  pouso e desembarque) re-entram em nova sala em vez de falhar o cenário —
+ *  o cenário só é honesto quando testado numa sala jogável. */
+class RoomRetry extends Error {}
+
 async function waitForLand(client, label) {
   const snapshot = await waitSnapshot(client, (s) => s.state === 'IN_PROGRESS' && s.player && !s.player.dropPhase && s.player.onGround, `pouso de ${label}`, 90_000);
-  if (!snapshot.player.alive || snapshot.player.knocked) throw new Error(`Conta ${label} foi eliminada/derrubada antes do teste.`);
+  if (!snapshot.player.alive || snapshot.player.knocked) throw new RoomRetry(`Conta ${label} eliminada/derrubada no pouso (dano ambiental do layout)`);
   return snapshot;
 }
 
@@ -610,6 +615,7 @@ async function main() {
     const ROOM_ATTEMPTS = 6;
     let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
     for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
+      try {
       a = await openClient(tokenA, { label: 'A' }); clients.push(a);
       foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
       b = await openClient(tokenB, { label: 'B' }); clients.push(b);
@@ -626,6 +632,17 @@ async function main() {
       // desembarque (a bordo o servidor ignora inputs — progresso zero dispararia
       // o cão de guarda antes da chegada em 16 s; floor do link degradado é 14 s).
       await Promise.all([waitTrainDisembark(a, 'A'), waitTrainDisembark(b, 'B')]);
+
+      // Sobrevivência pós-desembarque (run #11 do despacho único): dano
+      // ambiental entre o pouso e o início da navegação (ator parado aguardando
+      // o trem/chegada) derruba o ator mesmo com rota curta — re-entrar em nova
+      // sala em vez de falhar o cenário; o teste só é honesto numa sala jogável.
+      for (const [entry, label] of [[a, 'A'], [b, 'B']]) {
+        const s = entry.latestSnapshot;
+        if (!s?.player?.alive || s?.player?.knocked) {
+          throw new RoomRetry(`Conta ${label} knocked/eliminada entre o desembarque e a navegação (dano ambiental)`);
+        }
+      }
 
       // Cada cliente adota o terminal mais próximo COM rota real (regional — sem
       // navegação cross-map: os distritos do CIGKV são separados por estruturas).
@@ -656,10 +673,15 @@ async function main() {
         break;
       }
       safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
+      throw new RoomRetry(`rota mínima do par ${maxSteps === Infinity ? 'sem rota' : `= ${maxSteps} trechos`} (limite ${MAX_ROUTE_STEPS})`);
+    } catch (err) {
+      if (!(err instanceof RoomRetry)) throw err;
       planPair = null; landedA = null; landedB = null;
-      a.ws.close(); b.ws.close();
-      await Promise.race([a.closed, sleep(800)]);
-      await Promise.race([b.closed, sleep(800)]);
+      if (a?.ws) a.ws.close();
+      if (b?.ws) b.ws.close();
+      await Promise.race([a?.closed, sleep(800)]);
+      await Promise.race([b?.closed, sleep(800)]);
+    }
     }
     if (!planPair) throw new Error(`Nenhuma sala com dois terminais navegáveis e sobrevivíveis em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
     const planA = planPair.a;
