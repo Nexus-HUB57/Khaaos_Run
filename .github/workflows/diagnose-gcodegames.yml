@@ -46,7 +46,12 @@ jobs:
                   key, value = m.group(1), m.group(2)
                   pairs[key] = value.strip().strip('"').strip("'")
                   current = key
-              elif current in {'SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'SSH_HOST_KEY'}:
+                  continue
+              m = re.match(r'^\s*(HostName|User|Port|IdentityFile)\s+(.+)\s*$', line, re.I)
+              if m:
+                  pairs[m.group(1)] = m.group(2).strip()
+                  current = m.group(1)
+              elif current in {'SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'SSH_HOST_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE', 'IDENTITY_FILE', 'IdentityFile'}:
                   if line.strip() and not line.lstrip().startswith('#'):
                       pairs[current] += '\n' + line
 
@@ -65,13 +70,21 @@ jobs:
                           return value
               return ''
 
-          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE')
+          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY', 'CHAVE_PRIVADA', 'CHAVE_SSH', 'CHAVE', 'IDENTITY_FILE', 'IdentityFile', 'PRIVATE_KEY_B64', 'SSH_KEY_B64')
           if not key_value:
               for key, value in pairs.items():
                   low = key.lower()
-                  if re.search(r'key|chave|privat|privad', low) and (len(value) > 100 or 'BEGIN' in value):
+                  if (re.search(r'key|chave|privat|privad|identity', low) and (len(value) > 100 or 'BEGIN' in value)) or ('BEGIN ' in value and 'PRIVATE KEY' in value):
                       key_value = value
                       break
+          if key_value and re.search(r'(b64|base64|encoded)', next((k for k, v in pairs.items() if v == key_value), ''), re.I) and 'PRIVATE KEY' not in key_value:
+              import base64
+              try:
+                  decoded = base64.b64decode(key_value).decode()
+                  if 'PRIVATE KEY' in decoded:
+                      key_value = decoded
+              except Exception:
+                  pass
           key_value = key_value.replace('\\n', '\n')
 
           target = first('SSH_TARGET', 'REMOTE_TARGET', 'SSH_DESTINATION')
@@ -86,6 +99,7 @@ jobs:
               'SSH_PRIVATE_KEY': key_value,
               'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH', 'PROJECT_DIR', 'REPO_PATH', 'APP_PATH', 'CAMINHO', 'CAMINHO_PROJETO', 'DIRETORIO', 'DIRETÓRIO', 'PASTA', 'REPOSITORIO', 'REPOSITÓRIO') or by_key((r'path', r'caminho', r'dir', r'diretorio', r'diretório', r'pasta', r'directory', r'project', r'projeto', r'checkout', r'repo', r'repositorio', r'repositório', r'root'), (r'key', r'chave', r'private', r'privad')),
           }
+          print('discovered_variable_names=' + ','.join(sorted(pairs)))
           missing = [k for k, v in values.items() if not v]
           if missing:
               raise SystemExit('CREDENCIAIS_SSH ausente/incompleto: ' + ', '.join(missing))
