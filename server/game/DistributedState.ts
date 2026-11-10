@@ -166,6 +166,7 @@ export class DistributedState {
     await this.connect();
     const token = `${this.nodeId}:${randomUUID()}`;
     if (!this.client) {
+      if (this.roomOwnerTokens.has(roomId)) return null;
       this.roomOwnerTokens.set(roomId, token);
       this.scheduleRoomOwnerRenewal(roomId, token, ttlMs);
       return token;

@@ -5,6 +5,8 @@ import { createServer } from "http";
 import { initializeGameServices, shutdownGameServices } from "./game/GameServices";
 import { randomUUID } from "node:crypto";
 import { metrics, normalizeRoute } from "./game/metrics";
+import { cieScheduler } from "./game/cieScheduler";
+import { stopCampaignOutboxWorker } from "./game/campaignOutboxRuntime";
 
 const app = express();
 const httpServer = createServer(app);
@@ -92,11 +94,15 @@ metrics.gaugeSampler("khaaos_http_active_connections", {}, () => activeHttpConne
   // ── Graceful shutdown ──
   process.on("SIGTERM", async () => {
     log("SIGTERM received, shutting down game services...");
+    await stopCampaignOutboxWorker();
+    await cieScheduler.stop();
     await shutdownGameServices();
     process.exit(0);
   });
   process.on("SIGINT", async () => {
     log("SIGINT received, shutting down game services...");
+    await stopCampaignOutboxWorker();
+    await cieScheduler.stop();
     await shutdownGameServices();
     process.exit(0);
   });

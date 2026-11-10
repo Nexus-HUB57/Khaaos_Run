@@ -92,6 +92,34 @@
       "when": 1793625493962,
       "tag": "0012_operative-selection",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793661067241,
+      "tag": "0013_cie_event_persistence",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793846778816,
+      "tag": "0014_campaign_intake_persistence",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793849390790,
+      "tag": "0015_campaign_outbox_worker_leases",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794351392446,
+      "tag": "0016_campaign_ring_tiebreak",
+      "breakpoints": true
     }
   ]
 }

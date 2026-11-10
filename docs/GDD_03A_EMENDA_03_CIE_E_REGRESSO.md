@@ -2,14 +2,14 @@
 
 **Versão:** 0.1 — 1º de novembro de 2026<br>
 **Documento-base:** GDD-03A e Emenda 02 — Ring de 100 participantes<br>
-**Status:** a composição de vagas 90/até 10 foi definida pelo criador; gatilhos, seleção online e critérios de retorno abaixo são uma proposta técnica para validar em playtest antes de produção.<br>
+**Status:** o criador aprovou: (1) vagas de eliminados não usadas ficam vazias; (2) eliminado retorna ao terminar no top 10 ou sobreviver com o Selo de Retorno; e (3) sobrevivente ativo morto na CIE é eliminado da campanha. Os parâmetros operacionais do scheduler e o balanceamento restante continuam sujeitos a testes antes de produção.<br>
 **Código de domínio:** `server/game/specialIncursion.ts`; testes: `tests/official/special-incursion.test.ts`.
 
 ## 1. Regra de composição definida pelo criador
 
 Uma CIE pode reunir até 100 participantes: **90 vagas reservadas exclusivamente a sobreviventes ativos** e **até 10 vagas para jogadores já eliminados**. Eliminados nunca podem ocupar uma das 90 vagas reservadas a sobreviventes; sobreviventes não podem ocupar as vagas reservadas a eliminados. Se houver menos de dez eliminados elegíveis, as vagas restantes ficam vazias: a CIE começa com 91 a 99 participantes quando houver de um a nove retornantes. Esta política mantém a divisão sem deslocar nenhum grupo.
 
-Uma CIE com retorno só abre quando há pelo menos 90 sobreviventes ativos e online e pelo menos um eliminado online elegível. Sem esse quórum, não se forma um Ring parcial com menos de 90 sobreviventes e não se auto-selecionam usuários offline.
+**Regra aprovada:** vagas de eliminados não preenchidas permanecem vazias; sobreviventes adicionais não ocupam esses lugares. Uma CIE com retorno só abre quando há pelo menos 90 sobreviventes ativos e online e pelo menos um eliminado online elegível. Sem esse quórum, não se forma um Ring parcial com menos de 90 sobreviventes e não se auto-selecionam usuários offline.
 
 ## 2. Gatilhos técnicos para abrir uma CIE surpresa
 
@@ -36,9 +36,9 @@ Quando as condições são atendidas, o servidor anuncia a abertura aos jogadore
 - Uma vez registrada, a inscrição não pode ser cancelada pelo jogador. CIE não usa preenchimento automático de offline nem modifica a composição 90/até10.
 - O roster não consome a tentativa diária regular do sobrevivente. A CIE usa instância/ID próprios e não altera placement ou recompensas do Ring regular.
 
-## 4. Resolução e retorno dos eliminados — proposta
+## 4. Resolução e retorno dos eliminados — regra aprovada
 
-Cada CIE usa o combate de Battle Royale do servidor, com fim quando resta um sobrevivente ou no limite de 10 minutos. A colocação final é autoritativa. Um jogador eliminado só retorna à campanha atual se ainda não tiver usado retorno, a CIE ocorrer nos Dias 1–6 e cumprir **uma** destas condições:
+Cada CIE usa o combate de Battle Royale do servidor, com fim quando resta um sobrevivente ou no limite de 10 minutos. A colocação final é autoritativa. Um jogador eliminado só retorna à campanha atual se ainda não tiver usado retorno, a CIE ocorrer nos Dias 1–6 e cumprir **uma** destas condições (aprovado pelo criador):
 
 1. **Resultado:** terminar entre as dez primeiras posições gerais da CIE; ou
 2. **Item de evento:** carregar o item vinculado e intransferível `SELO_RETORNO_CIE` no encerramento **e sobreviver** até o fim do evento.
@@ -49,9 +49,9 @@ O retorno ocorre **para a próxima etapa regular**, não para o Ring já encerra
 
 CIEs após a conclusão do Dia 7 podem existir como eventos pós-campanha, mas não reabrem a disputa encerrada nem alteram elegibilidade para o prêmio da campanha concluída. Retorno por CIE não constitui por si só promessa, garantia ou pagamento dos “U$1 milhão”. Não habilitar transferência, saque ou recompensa em dinheiro real.
 
-### Risco dos sobreviventes ativos
+### Risco dos sobreviventes ativos — regra aprovada
 
-Proposta para manter o caráter de combate e a aposta da CIE: sobrevivente ativo que morrer na CIE passa a `ELIMINATED` na campanha; se sobreviver, mantém seu progresso/etapa e segue para a próxima incursão regular. A CIE não concede avanço extra. Esta consequência é uma decisão de design proposta e deve ser confirmada, pois o criador ainda não especificou se participar da CIE põe em risco o legado regular.
+Sobrevivente ativo que morrer na CIE passa a `ELIMINATED` na campanha; se sobreviver, mantém o progresso e segue para a próxima incursão regular. A CIE não concede avanço extra. O criador aprovou explicitamente que a participação põe em risco a continuidade da campanha regular.
 
 ## 5. Persistência e segurança necessárias
 
@@ -64,10 +64,10 @@ Os resultados de CIE têm chave própria e não podem sobrescrever `match_result
 - Uma CIE de retorno por dia, no máximo, em dias 1–6.
 - Disparo secreto pós-janela regular; janela de inscrição de 3 minutos.
 - Reavaliação de gates por 30 minutos, a cada 30 segundos; se não houver quórum, expira sem custo.
-- Top 10 geral ou Selo + sobrevivência como caminhos de retorno; no máximo um retorno por pessoa na campanha.
-- Morte de sobrevivente ativo na CIE o elimina da campanha regular.
+- Top 10 geral ou Selo + sobrevivência como caminhos de retorno; no máximo um retorno por pessoa na campanha (aprovado).
+- Morte de sobrevivente ativo na CIE o elimina da campanha regular (aprovado).
 - Selo de retorno vinculado, sem transferência ou valor monetário.
-- Vagas de eliminados não usadas ficam vazias; não se aumenta a cota sobrevivente além das 90 vagas reservadas.
+- Vagas de eliminados não usadas ficam vazias; não se aumenta a cota sobrevivente além das 90 vagas reservadas (aprovado).
 
 Esses parâmetros estão no protótipo de domínio, mas não ativam eventos no jogo. Validar em playtest a frequência real, o valor do retorno e o impacto de uma CIE de 91–100 participantes antes de conectar ao matchmaking e à economia.
 
