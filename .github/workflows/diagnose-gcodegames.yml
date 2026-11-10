@@ -57,12 +57,32 @@ jobs:
                       return value
               return ''
 
+          def by_key(patterns, exclude=()):
+              for key, value in pairs.items():
+                  low = key.lower()
+                  if any(re.search(pattern, low) for pattern in patterns) and not any(re.search(pattern, low) for pattern in exclude):
+                      if value:
+                          return value
+              return ''
+
+          key_value = first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY')
+          if not key_value:
+              for value in pairs.values():
+                  if 'PRIVATE KEY' in value:
+                      key_value = value
+                      break
+
+          target = first('SSH_TARGET', 'REMOTE_TARGET', 'SSH_DESTINATION')
+          target_user = target_host = ''
+          if target and '@' in target:
+              target_user, target_host = target.rsplit('@', 1)
+
           values = {
-              'SSH_HOST': first('SSH_HOST', 'HOST', 'REMOTE_HOST'),
-              'SSH_USER': first('SSH_USER', 'USER', 'SSH_USERNAME'),
-              'SSH_PORT': first('SSH_PORT', 'PORT') or '22',
-              'SSH_PRIVATE_KEY': first('SSH_PRIVATE_KEY', 'PRIVATE_KEY', 'SSH_KEY'),
-              'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH'),
+              'SSH_HOST': first('SSH_HOST', 'HOST', 'REMOTE_HOST', 'SSH_SERVER', 'SERVER_HOST', 'SSH_IP', 'SERVER_IP') or target_host or by_key((r'host', r'server', r'endpoint', r'address', r'(^|_)ip($|_)'), (r'user', r'path', r'key')),
+              'SSH_USER': first('SSH_USER', 'USER', 'SSH_USERNAME', 'USERNAME', 'REMOTE_USER', 'SSH_LOGIN') or target_user or by_key((r'user', r'username', r'login', r'account'), (r'path', r'key')),
+              'SSH_PORT': first('SSH_PORT', 'PORT', 'REMOTE_PORT') or by_key((r'port',), ()) or '22',
+              'SSH_PRIVATE_KEY': key_value,
+              'REMOTE_PATH': first('REMOTE_PATH', 'PROJECT_PATH', 'CHECKOUT_PATH', 'REMOTE_PROJECT_PATH', 'PROJECT_DIR', 'REPO_PATH', 'APP_PATH') or by_key((r'path', r'dir', r'directory', r'project', r'checkout', r'repo', r'root'), (r'key', r'private')),
           }
           missing = [k for k, v in values.items() if not v]
           if missing:
