@@ -631,7 +631,12 @@ export class MatchRoom3D {
     }
     if (this.ring.radius > this.ring.target) this.ring.radius = Math.max(this.ring.target, this.ring.radius - dt * 1.15);
     for (const actor of this.#actors()) {
-      if (actor.alive && dist2d(actor.x, actor.z, this.ring.x, this.ring.z) > this.ring.radius) {
+      // Task 53 — passageiro A BORDO do trem dos Rings é protegido do ring (o
+      // "Cinto" da entrada ZU): a física está suspensa a bordo e o ator não
+      // pode se mover para escapar do anel — penalizar quem não pode agir é
+      // armadilha, não mecânica. Proteção vale até o desembarque (doorJump/
+      // trainArrived limpa trainOnboard). Paridade 1:1 com sim3d.
+      if (actor.alive && !actor.trainOnboard && dist2d(actor.x, actor.z, this.ring.x, this.ring.z) > this.ring.radius) {
         this.#damage(actor, (4 + this.ring.pulse * 1.4) * dt, null, 'ring');
       }
     }
