@@ -17,6 +17,7 @@ MATERIAL_PATH = ROOT / "Unreal/KhaaosRun/Content/Materials/CIGKV/M_CIGKV_charact
 MATRIX_PATH = ROOT / "Unreal/KhaaosRun/Content/Characters/CIGKV_VerticalSlice/CIGKV_visual_lighting_test_matrix.json"
 CONFIG_REPORT = ROOT / "artifacts/cigkv-vertical-slice/material-configuration-report.json"
 OUT = ROOT / "artifacts/cigkv-vertical-slice"
+CAPTURE_OUT = ROOT / os.environ.get("CIGKV_CAPTURE_DIR", "artifacts/cigkv-vertical-slice/headless-render")
 
 
 def require_file(path: Path):
@@ -75,7 +76,7 @@ def find_camera(tag: str):
 
 
 def capture_matrix(matrix: dict, map_path: str):
-    OUT.mkdir(parents=True, exist_ok=True)
+    CAPTURE_OUT.mkdir(parents=True, exist_ok=True)
     captures = []
     for profile, settings in matrix["profiles"].items():
         apply_profile(settings)
@@ -87,7 +88,7 @@ def capture_matrix(matrix: dict, map_path: str):
                 camera = find_camera(view["camera_tag"])
                 if hasattr(unreal.EditorLevelLibrary, "pilot_level_actor"):
                     unreal.EditorLevelLibrary.pilot_level_actor(camera)
-                filename = OUT / f"CIGKV_{profile}_{lighting['id']}_{view['id']}.png"
+                filename = CAPTURE_OUT / f"CIGKV_{profile}_{lighting['id']}_{view['id']}.png"
                 unreal.AutomationLibrary.take_high_res_screenshot(1920, 1080, str(filename), None, False)
                 if hasattr(unreal.EditorLevelLibrary, "eject_pilot_level_actor"):
                     unreal.EditorLevelLibrary.eject_pilot_level_actor()

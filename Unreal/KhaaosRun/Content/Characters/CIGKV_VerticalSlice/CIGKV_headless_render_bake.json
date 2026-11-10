@@ -1,0 +1,41 @@
+{
+  "schema": "khaaos.cigkv.headless-render-bake/v1",
+  "engine": "UE5.8",
+  "requires": {
+    "gpu": "NVIDIA_CUDA_VISIBLE",
+    "minimum_vram_mb": 8192,
+    "minimum_ram_mb": 16384,
+    "minimum_free_disk_gb": 80,
+    "rhi": "dx12_or_vulkan_hardware",
+    "null_rhi_forbidden": true
+  },
+  "bake": {
+    "mode": "precompute_before_render",
+    "derived_data_cache": true,
+    "shader_pipeline_cache": true,
+    "nanite_streaming": true,
+    "lumen_surface_cache_warmup": true,
+    "virtual_shadow_map_cache_warmup": true,
+    "save_packages": true,
+    "report": "artifacts/cigkv-vertical-slice/headless-bake-report.json"
+  },
+  "render": {
+    "map": "/Game/Maps/CIGKV/CIGKV_Main",
+    "resolution": [1920, 1080],
+    "output_dir": "artifacts/cigkv-vertical-slice/headless-render",
+    "profiles": ["Low", "Medium", "High", "Ultra"],
+    "lighting_scenarios": ["day_neutral", "golden_hour", "night_interior"],
+    "views": ["third_person_combat", "first_person_ads"],
+    "expected_frames": 24,
+    "capture_format": "png",
+    "metrics": ["gpu_ms", "gpu_p95_ms", "vram_mb", "draw_calls", "shader_hitches"],
+    "report": "artifacts/cigkv-vertical-slice/headless-render-report.json"
+  },
+  "acceptance": {
+    "bake_must_finish": true,
+    "render_must_use_gpu": true,
+    "minimum_frames": 24,
+    "medium_gpu_p95_ms_max": 16.67,
+    "visual_acceptance": "requires_human_review_of_captures"
+  }
+}
