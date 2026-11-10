@@ -48,7 +48,10 @@ jobs:
           else
             auth_secret=$(openssl rand -hex 32)
             admin_token=$(openssl rand -hex 32)
-            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" '{
+            plan_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/plans?type=web&limit=50" \
+              | jq -r '[.[] | select((.price.amount // 999999) == 0)][0].id // empty')
+            echo "plan free: ${plan_id:-<nenhum — omitindo planId>}"
+            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" --arg plan "$plan_id" '{
               type: "web",
               name: $name,
               ownerId: $owner,
@@ -67,14 +70,14 @@ jobs:
                 dockerContext: ".",
                 healthCheckPath: "/healthz"
               }
-            }')
+            } + (if $plan != "" then {planId: $plan} else {} end)')
             resp=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
               -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services")
             http_code=$(echo "$resp" | tail -1)
             service_id=$(echo "$resp" | head -n -1 | jq -r '.id // empty')
             if [[ -z "$service_id" ]]; then
               echo "::error::Falha ao criar o serviço no Render (HTTP $http_code)"
-              echo "$resp" | head -n -1 | jq -c '{message, detail: (.details // empty)}' | head -5
+              echo "$resp" | head -n -1 | cut -c1-600
               exit 1
             fi
             echo "service_id=$service_id" >> "$GITHUB_OUTPUT"
