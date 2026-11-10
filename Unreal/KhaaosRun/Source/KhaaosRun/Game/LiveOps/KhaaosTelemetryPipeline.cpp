@@ -2,6 +2,7 @@
 
 #include "Game/LiveOps/KhaaosTelemetryPipeline.h"
 #include "KhaaosRun.h"
+#include "Engine/Engine.h"
 
 #include "Misc/DateTime.h"
 #include "Serialization/JsonSerializer.h"
@@ -22,6 +23,31 @@
 
 namespace
 {
+#if WITH_DEV_AUTOMATION_TESTS
+bool IsAllowedAutomationLoopbackEndpoint(const FString& Endpoint)
+{
+	const FString Prefix = TEXT("http://127.0.0.1:");
+	if (!Endpoint.StartsWith(Prefix, ESearchCase::IgnoreCase))
+	{
+		return false;
+	}
+
+	FString PortText = Endpoint.Mid(Prefix.Len());
+	int32 PathStart = INDEX_NONE;
+	if (PortText.FindChar(TEXT('/'), PathStart))
+	{
+		PortText.LeftInline(PathStart, EAllowShrinking::No);
+	}
+	if (!PortText.IsNumeric())
+	{
+		return false;
+	}
+
+	const int32 Port = FCString::Atoi(*PortText);
+	return Port > 0 && Port <= 65535;
+}
+#endif
+
 TSharedRef<FJsonObject> MakeTelemetryEventJson(
 	const FKhaaosTelemetryEvent& Event,
 	const TArray<FString>& ActiveExperiments)
@@ -131,6 +157,160 @@ bool FKhaaosTelemetryJsonSerializationTest::RunTest(const FString& Parameters)
 	return true;
 }
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+#if WITH_DEV_AUTOMATION_TESTS
+namespace
+{
+class FKhaaosTelemetryWaitForHttpAckCommand final : public IAutomationLatentCommand
+{
+public:
+	FKhaaosTelemetryWaitForHttpAckCommand(
+		FAutomationTestBase* InTest,
+		UKhaaosTelemetryPipeline* InPipeline,
+		int32 InExpectedAcknowledgedEvents,
+		FString InPreviousAnalyticsUrl,
+		double InTimeoutSeconds)
+		: Test(InTest)
+		, Pipeline(InPipeline)
+		, ExpectedAcknowledgedEvents(InExpectedAcknowledgedEvents)
+		, PreviousAnalyticsUrl(MoveTemp(InPreviousAnalyticsUrl))
+		, DeadlineSeconds(FPlatformTime::Seconds() + InTimeoutSeconds)
+	{
+	}
+
+	virtual bool Update() override
+	{
+		UKhaaosTelemetryPipeline* StrongPipeline = Pipeline.Get();
+		if (StrongPipeline == nullptr)
+		{
+			Test->AddError(TEXT("Telemetry subsystem was destroyed before the HTTP acknowledgement."));
+			return true;
+		}
+
+		const int32 AcknowledgedEvents = StrongPipeline->GetAutomationAcknowledgedEventCount();
+		if (AcknowledgedEvents >= ExpectedAcknowledgedEvents)
+		{
+			if (AcknowledgedEvents != ExpectedAcknowledgedEvents)
+			{
+				Test->AddError(FString::Printf(
+					TEXT("Expected %d acknowledged events, received %d."),
+					ExpectedAcknowledgedEvents,
+					AcknowledgedEvents));
+			}
+			StrongPipeline->DisableAutomationHttpTest(PreviousAnalyticsUrl);
+			return true;
+		}
+
+		if (FPlatformTime::Seconds() >= DeadlineSeconds)
+		{
+			Test->AddError(FString::Printf(
+				TEXT("Timed out waiting for telemetry HTTP acknowledgement (acknowledged %d of %d events)."),
+				AcknowledgedEvents,
+				ExpectedAcknowledgedEvents));
+			StrongPipeline->DisableAutomationHttpTest(PreviousAnalyticsUrl);
+			return true;
+		}
+
+		return false;
+	}
+
+private:
+	FAutomationTestBase* Test;
+	TWeakObjectPtr<UKhaaosTelemetryPipeline> Pipeline;
+	int32 ExpectedAcknowledgedEvents;
+	FString PreviousAnalyticsUrl;
+	double DeadlineSeconds;
+};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FKhaaosTelemetryHttpTransportIntegrationTest,
+	"Khaaos.Telemetry.HttpTransportIntegration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FKhaaosTelemetryHttpTransportIntegrationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+	const FString Endpoint = FPlatformMisc::GetEnvironmentVariable(TEXT("KHAAOS_TELEMETRY_TEST_URL"));
+	if (Endpoint.IsEmpty())
+	{
+		AddError(TEXT("KHAAOS_TELEMETRY_TEST_URL must point to the loopback mock backend."));
+		return false;
+	}
+
+	if (GEngine == nullptr)
+	{
+		AddError(TEXT("GEngine is unavailable; cannot resolve the telemetry subsystem."));
+		return false;
+	}
+
+	UKhaaosTelemetryPipeline* Pipeline = GEngine->GetEngineSubsystem<UKhaaosTelemetryPipeline>();
+	if (Pipeline == nullptr)
+	{
+		AddError(TEXT("Khaaos telemetry engine subsystem is unavailable."));
+		return false;
+	}
+
+	TestFalse(
+		TEXT("Automation HTTP mode rejects non-loopback hosts"),
+		Pipeline->EnableAutomationHttpTest(TEXT("http://localhost.example:43171/api/v1/telemetry/batch")));
+	TestFalse(
+		TEXT("Automation HTTP mode rejects malformed ports"),
+		Pipeline->EnableAutomationHttpTest(TEXT("http://127.0.0.1:not-a-port/api/v1/telemetry/batch")));
+
+	const FString PreviousAnalyticsUrl = Pipeline->AnalyticsUrl;
+	if (!Pipeline->EnableAutomationHttpTest(Endpoint))
+	{
+		AddError(TEXT("Automation HTTP test endpoint must be http://127.0.0.1:<port>/... ."));
+		return false;
+	}
+
+	FKhaaosTelemetryEvent Event;
+	Event.EventType = EKhaaosTelemetryEvent::MatchStart;
+	Event.EventName = TEXT("telemetry.integration_test");
+	Event.PlayerEosId = TEXT("eos-player-secret-integration-sentinel");
+	Event.MatchId = TEXT("match-integration-test");
+	Event.Value = 7.5;
+	Event.Metadata = TEXT("{\"test\":\"http-retry\"}");
+	Event.Platform = TEXT("linux");
+
+	Pipeline->RecordEvent(Event);
+	TestEqual(TEXT("The deterministic MatchStart event enters the pending queue"), Pipeline->GetPendingEventCount(), 1);
+	Pipeline->Flush();
+
+	ADD_LATENT_AUTOMATION_COMMAND(FKhaaosTelemetryWaitForHttpAckCommand(
+		this,
+		Pipeline,
+		1,
+		PreviousAnalyticsUrl,
+		20.0));
+	return true;
+}
+#endif // WITH_DEV_AUTOMATION_TESTS
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool UKhaaosTelemetryPipeline::EnableAutomationHttpTest(const FString& LoopbackEndpoint)
+{
+	const FString NormalizedEndpoint = LoopbackEndpoint.TrimStartAndEnd();
+	if (!IsAllowedAutomationLoopbackEndpoint(NormalizedEndpoint))
+	{
+		return false;
+	}
+
+	AnalyticsUrl = NormalizedEndpoint;
+	bAutomationHttpTestEnabled = true;
+	AutomationAcknowledgedEventCount = 0;
+	return true;
+}
+
+void UKhaaosTelemetryPipeline::DisableAutomationHttpTest(const FString& RestoreAnalyticsUrl)
+{
+	bAutomationHttpTestEnabled = false;
+	AnalyticsUrl = RestoreAnalyticsUrl;
+	PendingBatches.Empty();
+	PendingEvents.Empty();
+}
+#endif
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────────
 
@@ -314,7 +494,11 @@ void UKhaaosTelemetryPipeline::ShipBatch(const TArray<FKhaaosTelemetryEvent>& Ba
 		return;
 	}
 
+#if WITH_DEV_AUTOMATION_TESTS
+	if (!IsRunningDedicatedServer() && !bAutomationHttpTestEnabled)
+#else
 	if (!IsRunningDedicatedServer())
+#endif
 	{
 		UE_LOG(LogKhaaosRun, Verbose,
 			TEXT("KhaaosTelemetryPipeline: HTTP delivery is restricted to dedicated servers"));
@@ -368,7 +552,14 @@ void UKhaaosTelemetryPipeline::SendPendingBatch(const FString& BatchId)
 	PendingBatch->bRetryScheduled = false;
 
 	const FString Endpoint = AnalyticsUrl.TrimStartAndEnd();
-	if (!Endpoint.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase))
+	const bool bSecureEndpoint = Endpoint.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase);
+#if WITH_DEV_AUTOMATION_TESTS
+	const bool bAllowedAutomationEndpoint = bAutomationHttpTestEnabled &&
+		IsAllowedAutomationLoopbackEndpoint(Endpoint);
+#else
+	const bool bAllowedAutomationEndpoint = false;
+#endif
+	if (!bSecureEndpoint && !bAllowedAutomationEndpoint)
 	{
 		UE_LOG(LogKhaaosRun, Error,
 			TEXT("KhaaosTelemetryPipeline: AnalyticsUrl must use HTTPS; batch %s will not be sent"), *BatchId);
@@ -445,6 +636,12 @@ void UKhaaosTelemetryPipeline::HandleBatchResponse(
 	{
 		const int32 DeliveredEventCount = PendingBatch->EventCount;
 		PendingBatches.Remove(BatchId);
+#if WITH_DEV_AUTOMATION_TESTS
+		if (bAutomationHttpTestEnabled)
+		{
+			AutomationAcknowledgedEventCount += DeliveredEventCount;
+		}
+#endif
 		OnTelemetryFlushed.Broadcast(DeliveredEventCount);
 		UE_LOG(LogKhaaosRun, Verbose,
 			TEXT("KhaaosTelemetryPipeline: Backend acknowledged batch %s (%d events)"),
