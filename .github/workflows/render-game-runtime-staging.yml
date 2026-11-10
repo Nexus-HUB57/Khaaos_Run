@@ -1,0 +1,158 @@
+name: "Game Runtime — staging no Render (serviço + deploy + health)"
+
+# Subiu o servidor autoritativo do jogo (game-runtime: /auth/login, /ws) como
+# Web Service Docker no Render, usando o secret API_KEY_RENDER dentro do CI
+# (nunca no chat). O host do serviço contém "staging", satisfazendo a rotulagem
+# exigida por scripts/game-runtime/scripts/mpzex-staging-env.mjs.
+# Depois deste workflow: atualizar KR_STAGING_BASE_URL no environment staging
+# para a URL impressa e despachar "MP-ZEX 08+09 — Despacho único em staging".
+
+on:
+  workflow_dispatch:
+    inputs:
+      clear_cache:
+        description: "Limpar cache de build do Render"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-game-runtime-staging
+  cancel-in-progress: false
+
+jobs:
+  provision-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      RENDER_API: https://api.render.com/v1
+      SERVICE_NAME: khaaos-run-game-staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descobrir owner e serviço (cria se ausente)
+        id: svc
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
+          owner_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/owners" | jq -r '.[0].id')
+          echo "owner_id=$owner_id" >> "$GITHUB_OUTPUT"
+          existing=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services?limit=50" | jq -r --arg n "$SERVICE_NAME" '.[] | select(.service.name == $n) | .service.id' | head -1)
+          if [[ -n "$existing" ]]; then
+            echo "service_id=$existing" >> "$GITHUB_OUTPUT"
+            echo "Serviço $SERVICE_NAME já existe ($existing)"
+          else
+            auth_secret=$(openssl rand -hex 32)
+            admin_token=$(openssl rand -hex 32)
+            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" '{
+              type: "web",
+              name: $name,
+              repo: "https://github.com/Nexus-HUB57/Khaaos_Run",
+              branch: "main",
+              autoDeploy: "no",
+              envVars: [
+                {key: "PORT", value: "8787"},
+                {key: "NODE_ENV", value: "production"},
+                {key: "AUTH_SECRET", value: $auth},
+                {key: "ADMIN_TOKEN", value: $adm}
+              ],
+              serviceDetails: {
+                env: "docker",
+                dockerfilePath: "game-runtime/Dockerfile",
+                dockerContext: ".",
+                healthCheckPath: "/healthz"
+              }
+            }')
+            service_id=$(curl -s -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
+              -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services" | jq -r '.id // empty')
+            if [[ -z "$service_id" ]]; then
+              echo "::error::Falha ao criar o serviço no Render (verificar plano/limites da conta)"
+              exit 1
+            fi
+            echo "service_id=$service_id" >> "$GITHUB_OUTPUT"
+            echo "Serviço $SERVICE_NAME criado ($service_id)"
+          fi
+
+      - name: Alinhar KR_USERS_JSON (hash local, senhas só do environment)
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
+          KR_STAGING_TEST_USER_A: ${{ secrets.KR_STAGING_TEST_USER_A }}
+          KR_STAGING_TEST_PASSWORD_A: ${{ secrets.KR_STAGING_TEST_PASSWORD_A }}
+          KR_STAGING_TEST_USER_B: ${{ secrets.KR_STAGING_TEST_USER_B }}
+          KR_STAGING_TEST_PASSWORD_B: ${{ secrets.KR_STAGING_TEST_PASSWORD_B }}
+        run: |
+          set -euo pipefail
+          users_json=$(node --input-type=module -e '
+            const { hashPassword } = await import("./game-runtime/server/auth.js");
+            const j = (u, p) => ({ id: u, username: u, role: "player", region: "sa-east", passwordHash: hashPassword(p) });
+            process.stdout.write(JSON.stringify([
+              j(process.env.KR_STAGING_TEST_USER_A, process.env.KR_STAGING_TEST_PASSWORD_A),
+              j(process.env.KR_STAGING_TEST_USER_B, process.env.KR_STAGING_TEST_PASSWORD_B),
+            ]));
+          ')
+          http=$(curl -s -o /tmp/put.json -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $API_KEY_RENDER" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg v "$users_json" '{value: $v}')" \
+            "$RENDER_API/services/$SERVICE_ID/env-vars/KR_USERS_JSON")
+          if [[ ! "$http" =~ ^2 ]]; then
+            echo "::error::Falha ao gravar KR_USERS_JSON no serviço (HTTP $http)"
+            exit 1
+          fi
+          echo "KR_USERS_JSON alinhado (2 contas, hash apenas — plaintext nunca sai do environment)"
+
+      - name: Deploy (Render API) e aguardar live
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
+        run: |
+          set -euo pipefail
+          cache="clear"
+          if [[ "${{ inputs.clear_cache }}" != "true" ]]; then cache="no_clear"; fi
+          deploy_id=$(curl -s -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
+            -H "Content-Type: application/json" -d "{\"clearCache\": \"$cache\"}" \
+            "$RENDER_API/services/$SERVICE_ID/deploy" | jq -r '.id // empty')
+          [[ -n "$deploy_id" ]] || { echo "::error::Render não aceitou o deploy"; exit 1; }
+          for i in $(seq 1 60); do
+            status=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" \
+              "$RENDER_API/services/$SERVICE_ID/deploys/$deploy_id" | jq -r '.status')
+            echo "deploy $deploy_id → $status (tentativa $i)"
+            case "$status" in
+              live) echo "DEPLOY_LIVE"; exit 0 ;;
+              deploy_failed|build_failed|canceled|deactivated)
+                echo "::error::Deploy terminou com status $status"; exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::Timeout aguardando deploy live"
+          exit 1
+
+      - name: Healthcheck público (/healthz) e resumo
+        env:
+          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
+          name=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services/$SERVICE_ID" | jq -r '.name // .service.name // empty')
+          url="https://${name}.onrender.com"
+          for i in $(seq 1 20); do
+            body=$(curl -s --max-time 10 "$url/healthz" || true)
+            if echo "$body" | jq -e '.ok == true' >/dev/null 2>&1; then
+              echo "HEALTH_OK $url"
+              {
+                echo "## Game Runtime staging"
+                echo "- URL: $url"
+                echo "- /healthz: ok"
+                echo ""
+                echo "Próximos passos: atualizar \`KR_STAGING_BASE_URL\` no environment staging para \`$url\` e despachar **MP-ZEX 08+09 — Despacho único em staging**."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::/healthz não respondeu ok em $url"
+          exit 1
