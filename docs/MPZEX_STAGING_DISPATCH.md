@@ -116,5 +116,6 @@ a única superfície manual — exige hardware/navegador touch real.
 | `Recusado: o host não identifica staging` | domínio sem rótulo | variável `KR_STAGING_ALLOW_CUSTOM_HOST=true` (confirmar destino antes) |
 | `Login da conta A falhou` | contas não provisionadas | §1.2 (`KR_USERS_JSON` + restart) |
 | `As duas contas caíram em salas distintas` | staging com tráfego paralelo | rodar em staging isolado; re-despachar |
+| `A e B caíram no mesmo terminal` | spawns próximos no staging fazem ambos adotarem o mesmo terminal | **resolvido no #335**: B desempata excluindo o terminal de A (rota real de gameplay); em caso de colisão remanescente, restart do staging (Actions → "Staging — restart") e re-despachar |
 | `não progride pela rota` | mapa/obstáculo novo | log agora imprime pos/waypoint; o unstick cobre quinas — investigar layout se >10 manobras |
 | Sala com bots interferindo | staging compartilhado | usar instância de staging dedicada ao teste |
