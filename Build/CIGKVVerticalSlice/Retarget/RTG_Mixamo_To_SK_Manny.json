@@ -1,0 +1,69 @@
+{
+  "schema": "khaaos.ue5.retarget-package/v1",
+  "status": "prepared_pending_ue5_editor",
+  "character_slot": "CIGKV_HUMAN_HERO_M01",
+  "asset_id": "CHR_Zheers_Male_Vanguard",
+  "source_model": "../Source/CIGKV_HUMAN_HERO_M01_RIGGED.glb",
+  "source_rig": {
+    "type": "biped",
+    "spec": "mixamo",
+    "joint_count": 23,
+    "reference": "job_m_d2c6de076efe7df88bce"
+  },
+  "target": {
+    "engine": "Unreal Engine 5.8",
+    "skeleton_asset": "SK_Manny",
+    "derived_from": "SKM_Manny",
+    "retargeter_asset": "/Game/Characters/CIGKV/Retarget/RTG_Mixamo_To_SK_Manny",
+    "output_mesh_asset": "/Game/Characters/CIGKV/Mesh/SK_CIGKV_Human_Hero_M01",
+    "animation_blueprint": "/Game/Characters/CIGKV/Anim/ABP_CIGKV_Human_Hero"
+  },
+  "chain_mapping": {
+    "root": ["mixamorig:Hips", "pelvis"],
+    "pelvis": ["mixamorig:Hips", "pelvis"],
+    "spine": ["mixamorig:Spine", "spine_01"],
+    "spine_02": ["mixamorig:Spine1", "spine_02"],
+    "chest": ["mixamorig:Spine2", "spine_03"],
+    "neck": ["mixamorig:Neck", "neck_01"],
+    "head": ["mixamorig:Head", "head"],
+    "left_clavicle": ["mixamorig:LeftShoulder", "clavicle_l"],
+    "left_arm": ["mixamorig:LeftArm", "upperarm_l"],
+    "left_forearm": ["mixamorig:LeftForeArm", "lowerarm_l"],
+    "left_hand": ["mixamorig:LeftHand", "hand_l"],
+    "right_clavicle": ["mixamorig:RightShoulder", "clavicle_r"],
+    "right_arm": ["mixamorig:RightArm", "upperarm_r"],
+    "right_forearm": ["mixamorig:RightForeArm", "lowerarm_r"],
+    "right_hand": ["mixamorig:RightHand", "hand_r"],
+    "left_leg": ["mixamorig:LeftUpLeg", "thigh_l"],
+    "left_calf": ["mixamorig:LeftLeg", "calf_l"],
+    "left_foot": ["mixamorig:LeftFoot", "foot_l"],
+    "left_toe": ["mixamorig:LeftToeBase", "ball_l"],
+    "right_leg": ["mixamorig:RightUpLeg", "thigh_r"],
+    "right_calf": ["mixamorig:RightLeg", "calf_r"],
+    "right_foot": ["mixamorig:RightFoot", "foot_r"],
+    "right_toe": ["mixamorig:RightToeBase", "ball_r"]
+  },
+  "retarget_settings": {
+    "rotation_mode": "globally_scaled",
+    "translation_mode": "none_except_root",
+    "root_motion": "preserve_from_source_root",
+    "pelvis_height_adjustment": "calibrate_in_editor",
+    "source_pose": "T-pose",
+    "target_pose": "T-pose",
+    "hand_ik": true,
+    "foot_ik": true,
+    "finger_policy": "target_skeleton_fingers_required",
+    "twist_policy": "target_skeleton_twist_required"
+  },
+  "acceptance": {
+    "required_animations": ["idle", "walk", "run", "sprint", "crouch", "slide", "jump", "land", "reload", "ads", "fire", "hit_react", "dbno", "death"],
+    "reject_on": ["foot_sliding", "weapon_clipping", "root_drift", "non_uniform_scale", "missing_target_chain", "pelvis_pop", "shoulder_rollover"],
+    "editor_validation_required": true,
+    "runner_requirement": "UE5.8_licensed_gpu_runner"
+  },
+  "provenance": {
+    "license_status": "unverified_internal_prototype",
+    "commercial_use": false,
+    "source_provenance": "artifacts/cigkv-vertical-slice/khael-vance-provenance.json"
+  }
+}
