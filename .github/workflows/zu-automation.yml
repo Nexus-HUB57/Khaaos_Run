@@ -1,0 +1,51 @@
+name: Zu Unreal Automation
+
+on:
+  push:
+    branches: [main, 'feat/**']
+    paths:
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Game/World/Zu/**'
+      - 'Unreal/KhaaosRun/Source/KhaaosRun/Tests/ZuIngress*.cpp'
+      - 'Unreal/KhaaosRun/Source/KhaaosRunEditor.Target.cs'
+      - 'Unreal/KhaaosRun/KhaaosRun.uproject'
+      - 'scripts/ci/**'
+      - '.github/workflows/zu-automation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zu-automation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run-zu-automation:
+    name: UE5.8 Zu Automation Tests
+    # Reuses the project's registered licensed UE runner labels.
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    timeout-minutes: 120
+    env:
+      UE_ROOT: ${{ vars.UE5_INSTALL_DIR || secrets.UE5_INSTALL_DIR || '/opt/unreal-engine/5.8' }}
+      UE_PLATFORM: Linux
+      UE_CONFIGURATION: Development
+      UE_EDITOR_TARGET: KhaaosRunEditor
+      UE_PROJECT: Unreal/KhaaosRun/KhaaosRun.uproject
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build Editor and run Zu Automation suite
+        run: bash scripts/ci/run-zu-automation.sh
+
+      - name: Upload Unreal Automation report and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zu-automation-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/zu-automation-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
+          retention-days: 14

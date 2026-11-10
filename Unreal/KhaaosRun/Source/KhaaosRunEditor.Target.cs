@@ -48,5 +48,12 @@ public class KhaaosRunEditorTarget : TargetRules
 
         // ── Development Aids ───────────────────────────────────────────────
         bWithLiveCoding = true;    // Live coding for rapid iteration
+
+        // The Zu Automation suite is run by CI against the Development Editor target.
+        // Keep these tests out of Test/Shipping distribution configurations.
+        if (Target.Configuration == UnrealTargetConfiguration.Development)
+        {
+            bForceCompileDevelopmentAutomationTests = true;
+        }
     }
 }
