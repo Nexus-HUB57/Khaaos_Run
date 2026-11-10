@@ -138,6 +138,8 @@ O gate engine-less valida a estrutura e os parâmetros, mas não declara realism
 
 O Editor pode criar/atualizar os `SubsurfaceProfile`, aplicar radius/strength de SSS e gravar anisotropia/fluxo de cabelo com [`configure_cigkv_sss_anisotropy.py`](scripts/ue5_editor/configure_cigkv_sss_anisotropy.py). O fluxo está detalhado no [guia de configuração UE5.8](docs/UE58_EDITOR_SSS_ANISOTROPY_CONFIGURATION.md).
 
+Após a configuração, o Editor captura 24 combinações de preset, iluminação e câmera. O [pipeline de captura e análise](docs/CIGKV_SCREENSHOT_CAPTURE_AND_REPORT_ANALYSIS.md) bloqueia a captura quando `material-configuration-report.json` está ausente ou não está em `status=pass`.
+
 ## Performance UE5.8 e FPS Live Action
 
 O ciclo de 05/11/2026 validou a simulação autoritativa dos cinco mundos em execução simultânea, após a otimização dos hotspots de ray casting e LOS:
