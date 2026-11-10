@@ -587,22 +587,26 @@ async function main() {
     a.grid = grid; b.grid = grid;
     const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
       && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-    const candidate = (landed, pathOf, excludeId = null) => {
-      let best = null;
-      for (const terminal of safeTerminals) {
-        if (excludeId && terminal.id === excludeId) continue;
-        const path = pathOf(landed.player, terminal);
-        if (path && (!best || path.length < best.path.length)) best = { terminal, path };
+    // Desempate determinístico por PAR: o cenário exige terminais distintos.
+    // Escolhe o par (A,B) de terminais com MENOR soma de rotas navegáveis —
+    // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
+    // distante demais (spawns próximos no staging → B morre na navegação).
+    const pathsOf = (landed) => (landed.terminals ?? [])
+      .filter((t) => safeTerminals.some((s) => s.id === t.id))
+      .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
+      .filter((p) => p.path);
+    let planPair = null;
+    for (const pa of pathsOf(landedA)) {
+      for (const pb of pathsOf(landedB)) {
+        if (pa.terminal.id === pb.terminal.id) continue;
+        if (!planPair || pa.path.length + pb.path.length < planPair.a.path.length + planPair.b.path.length) {
+          planPair = { a: pa, b: pb };
+        }
       }
-      return best;
-    };
-    // Desempate determinístico: o cenário exige terminais distintos. A escolhe
-    // o mais próximo; B escolhe o melhor terminal EXCLUINDO o de A (spawns
-    // próximos no staging podem fazer ambos adotarem o mesmo terminal).
-    const planA = candidate(landedA, (p, t) => findPath(p, t, grid));
-    const planB = candidate(landedB, (p, t) => findPath(p, t, grid), planA?.terminal.id ?? null);
-    if (!planA || !planB) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
-    if (planA.terminal.id === planB.terminal.id) throw new Error('A e B caíram no mesmo terminal; cenário exige terminais distintos.');
+    }
+    if (!planPair) throw new Error('Sem rota navegável de gameplay para nenhum terminal.');
+    const planA = planPair.a;
+    const planB = planPair.b;
     const { terminal: terminalA } = planA;
     const { terminal: terminalB } = planB;
     safeLog(`Terminais: A → ${terminalA.label} (${planA.path.length} trechos), B → ${terminalB.label} (${planB.path.length} trechos).`);

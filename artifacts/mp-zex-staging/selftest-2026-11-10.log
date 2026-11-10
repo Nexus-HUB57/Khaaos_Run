@@ -15,24 +15,26 @@
 [MP-ZEX-08] B: pos=(-88.4,0.0) d_terminal=96.4 waypoint=2/7 vida=100 medkit=false
 [MP-ZEX-08] A: pos=(95.4,2.6) d_terminal=87.4 waypoint=6/12 vida=100 medkit=false
 [MP-ZEX-08] B: pos=(-79.7,0.0) d_terminal=87.7 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(87.0,2.2) d_terminal=79.0 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-70.6,0.0) d_terminal=78.6 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(75.5,2.1) d_terminal=67.5 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-61.9,0.0) d_terminal=69.9 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(63.7,2.1) d_terminal=55.7 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-52.9,0.0) d_terminal=60.9 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(54.1,2.0) d_terminal=46.2 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-42.2,-0.0) d_terminal=50.2 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(45.3,2.0) d_terminal=37.3 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-31.0,0.0) d_terminal=39.0 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(36.6,2.0) d_terminal=28.7 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-21.9,0.3) d_terminal=29.9 waypoint=4/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(27.1,2.0) d_terminal=19.2 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-13.7,3.2) d_terminal=22.0 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(87.2,2.2) d_terminal=79.3 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-71.1,0.0) d_terminal=79.1 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(78.6,2.1) d_terminal=70.6 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-62.4,0.0) d_terminal=70.4 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(69.9,2.1) d_terminal=61.9 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-53.7,-0.0) d_terminal=61.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(61.2,2.0) d_terminal=53.3 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-45.1,-0.0) d_terminal=53.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(52.6,2.0) d_terminal=44.6 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-36.4,0.0) d_terminal=44.4 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(43.9,2.0) d_terminal=36.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-27.7,0.0) d_terminal=35.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(35.2,2.0) d_terminal=27.3 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-19.2,1.3) d_terminal=27.3 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(26.3,2.0) d_terminal=18.4 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-11.0,4.2) d_terminal=19.5 waypoint=4/7 vida=100 medkit=false
 [MP-ZEX-08] A: pos=(17.7,1.7) d_terminal=9.8 waypoint=11/12 vida=100 medkit=false
 [MP-ZEX-08] A chegou ao alcance de interação.
-[MP-ZEX-08] B: pos=(-5.7,5.7) d_terminal=14.8 waypoint=5/7 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(3.3,5.9) d_terminal=7.6 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-2.8,5.7) d_terminal=12.2 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(5.2,5.4) d_terminal=6.1 waypoint=6/7 vida=100 medkit=false
 [MP-ZEX-08] B chegou ao alcance de interação.
 [MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
 [MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
@@ -45,67 +47,67 @@
 [MP-ZEX-09] Ambos no alcance de interação dos seus terminais.
 [MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
 [MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
-[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 125 ms (81–245 ms).
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 125 ms (87–189 ms).
 [MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
-[MP-ZEX-09] Fase 3: RTT medido 96–336 ms (média 160 ms).
-[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.92 s, atraso visual 42 ms (bound 725 ms), estado converge pós-drain.
+[MP-ZEX-09] Fase 3: RTT medido 112–171 ms (média 139 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.67 s, atraso visual 60 ms (bound 418 ms), estado converge pós-drain.
 [MP-ZEX-09] RELATÓRIO: {
   "link_fase2_interrupcao": {
     "up": {
       "frames": 9,
       "spikes": 0,
-      "minMs": 40,
-      "avgMs": 51.8,
-      "p95Ms": 94.2,
-      "maxMs": 94.2
+      "minMs": 37,
+      "avgMs": 66.1,
+      "p95Ms": 93.4,
+      "maxMs": 93.4
     },
     "down": {
-      "frames": 47,
-      "spikes": 2,
-      "minMs": 35.1,
-      "avgMs": 109.5,
-      "p95Ms": 310.4,
-      "maxMs": 360.8
+      "frames": 46,
+      "spikes": 0,
+      "minMs": 35.7,
+      "avgMs": 63.3,
+      "p95Ms": 92.6,
+      "maxMs": 94.4
     },
-    "effectiveRttMs": 161.3
+    "effectiveRttMs": 129.4
   },
   "link_fase3_conclusao": {
     "up": {
       "frames": 7,
-      "spikes": 1,
-      "minMs": 39.9,
-      "avgMs": 88.6,
-      "p95Ms": 281.4,
-      "maxMs": 281.4
+      "spikes": 0,
+      "minMs": 42,
+      "avgMs": 66.5,
+      "p95Ms": 91.8,
+      "maxMs": 91.8
     },
     "down": {
-      "frames": 167,
-      "spikes": 6,
-      "minMs": 35,
-      "avgMs": 95.2,
-      "p95Ms": 293.7,
-      "maxMs": 394
+      "frames": 125,
+      "spikes": 1,
+      "minMs": 35.3,
+      "avgMs": 76.2,
+      "p95Ms": 125.6,
+      "maxMs": 426.1
     },
-    "effectiveRttMs": 183.8
+    "effectiveRttMs": 142.7
   },
   "rtt_medido": {
     "fase2": {
-      "minMs": 81,
+      "minMs": 87,
       "medianMs": 125,
-      "avgMs": 147,
-      "maxMs": 245
+      "avgMs": 129,
+      "maxMs": 189
     },
     "fase3": {
-      "minMs": 96,
-      "medianMs": 118,
-      "avgMs": 160,
-      "maxMs": 336
+      "minMs": 112,
+      "medianMs": 134,
+      "avgMs": 139,
+      "maxMs": 171
     }
   },
-  "atraso_visual_B_para_A_ms": 42,
+  "atraso_visual_B_para_A_ms": 60,
   "canal_server_side_s": {
     "fase1_normal": 3.97,
-    "fase3_degradada": 3.92
+    "fase3_degradada": 3.67
   },
   "xp_por_conclusao": {
     "baseline_normal": 250,
