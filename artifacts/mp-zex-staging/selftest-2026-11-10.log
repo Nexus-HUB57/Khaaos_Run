@@ -5,36 +5,36 @@
 [MP-ZEX-08] Navegando A e B por inputs de gameplay até ZEX // CENTRO.
 [MP-ZEX-08] A: pos=(118.0,0.0) d_terminal=110.0 waypoint=1/12 vida=100 medkit=false
 [MP-ZEX-08] B: pos=(-130.0,0.0) d_terminal=138.0 waypoint=1/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(107.0,1.6) d_terminal=99.0 waypoint=1/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-118.9,0.0) d_terminal=126.9 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(106.9,1.6) d_terminal=98.9 waypoint=1/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-118.8,0.0) d_terminal=126.8 waypoint=1/7 vida=100 medkit=false
 [MP-ZEX-08] A: pos=(101.5,2.0) d_terminal=93.5 waypoint=3/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-106.6,0.0) d_terminal=114.6 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-106.1,0.0) d_terminal=114.1 waypoint=1/7 vida=100 medkit=false
 [MP-ZEX-08] A: sem progresso — manobra de desimpedimento #1 (sidestep esquerda + hop)
-[MP-ZEX-08] B: pos=(-97.1,0.0) d_terminal=105.1 waypoint=1/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(101.5,6.2) d_terminal=93.7 waypoint=3/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-88.4,0.0) d_terminal=96.4 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(95.4,2.6) d_terminal=87.4 waypoint=6/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-79.7,0.0) d_terminal=87.7 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(87.2,2.2) d_terminal=79.3 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-71.1,0.0) d_terminal=79.1 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(78.6,2.1) d_terminal=70.6 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-62.4,0.0) d_terminal=70.4 waypoint=2/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(69.9,2.1) d_terminal=61.9 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-53.7,-0.0) d_terminal=61.7 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(61.2,2.0) d_terminal=53.3 waypoint=9/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-45.1,-0.0) d_terminal=53.1 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(52.6,2.0) d_terminal=44.6 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-36.4,0.0) d_terminal=44.4 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(43.9,2.0) d_terminal=36.0 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-27.7,0.0) d_terminal=35.7 waypoint=3/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(35.2,2.0) d_terminal=27.3 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-19.5,1.3) d_terminal=27.5 waypoint=4/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(26.6,2.0) d_terminal=18.7 waypoint=10/12 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(-11.3,4.1) d_terminal=19.7 waypoint=4/7 vida=100 medkit=false
-[MP-ZEX-08] A: pos=(17.9,1.7) d_terminal=10.1 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(101.5,5.9) d_terminal=93.7 waypoint=3/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-95.3,0.0) d_terminal=103.3 waypoint=1/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(94.8,2.6) d_terminal=86.8 waypoint=7/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-85.8,0.0) d_terminal=93.8 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(86.4,2.2) d_terminal=78.5 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-77.1,0.0) d_terminal=85.1 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(77.8,2.1) d_terminal=69.8 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-68.5,-0.0) d_terminal=76.5 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(69.1,2.1) d_terminal=61.1 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-59.8,-0.0) d_terminal=67.8 waypoint=2/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(60.4,2.0) d_terminal=52.5 waypoint=9/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-51.1,0.0) d_terminal=59.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(51.8,2.0) d_terminal=43.8 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-42.5,0.0) d_terminal=50.5 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(43.0,2.0) d_terminal=35.1 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-33.7,0.0) d_terminal=41.7 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(33.9,2.0) d_terminal=26.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-25.1,0.0) d_terminal=33.1 waypoint=3/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(24.9,2.0) d_terminal=17.0 waypoint=10/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-16.9,2.1) d_terminal=25.0 waypoint=4/7 vida=100 medkit=false
+[MP-ZEX-08] A: pos=(16.1,1.3) d_terminal=8.2 waypoint=11/12 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-8.8,5.0) d_terminal=17.5 waypoint=4/7 vida=100 medkit=false
 [MP-ZEX-08] A chegou ao alcance de interação.
-[MP-ZEX-08] B: pos=(-3.1,5.7) d_terminal=12.5 waypoint=5/7 vida=100 medkit=false
-[MP-ZEX-08] B: pos=(5.1,5.8) d_terminal=6.5 waypoint=6/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(-0.4,5.8) d_terminal=10.2 waypoint=5/7 vida=100 medkit=false
+[MP-ZEX-08] B: pos=(6.8,3.6) d_terminal=3.9 waypoint=6/7 vida=100 medkit=false
 [MP-ZEX-08] B chegou ao alcance de interação.
 [MP-ZEX-08] Canal ZEX de A começou e avançou antes do close.
 [MP-ZEX-08] MP-ZEX-08: desconexão liberou o terminal sem consumi-lo.
@@ -43,71 +43,72 @@
 [MP-ZEX-09] Servidor remoto configurado via KR_ZEX09_BASE_URL.
 [MP-ZEX-09] Duas contas autenticadas.
 [MP-ZEX-09] Mesma sala ring3d-2; partida em andamento.
+[MP-ZEX-09] Sala ring3d-2 aceita na tentativa 1/4 (par navegável ≤ 40 trechos).
 [MP-ZEX-09] Terminais: A → ZEX // LESTE (20 trechos), B → ZEX // OESTE (15 trechos).
 [MP-ZEX-09] B no alcance do seu terminal; canal imediato (A navega em paralelo).
 [MP-ZEX-09] Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.
 [MP-ZEX-09] Fase 1 (normal, conclusão): XP +250 (baseline D), canal server-side 3.97 s, extração +1.
-[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 142 ms (110–165 ms).
+[MP-ZEX-09] Fase 2: link degradado ativo em A — RTT mediano 124 ms (84–532 ms).
 [MP-ZEX-09] Fase 2 (degradada, interrupção): canal não ressuscitou; sem XP/extração; terminal liberado para B observar.
-[MP-ZEX-09] Fase 3: RTT medido 129–162 ms (média 150 ms).
-[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.72 s, atraso visual 91 ms (bound 402 ms), estado converge pós-drain.
+[MP-ZEX-09] Fase 3: RTT medido 107–152 ms (média 133 ms).
+[MP-ZEX-09] Fase 3 (degradada, conclusão): XP +250 == baseline, canal server-side 3.67 s, atraso visual 426 ms (bound 615 ms), estado converge pós-drain.
 [MP-ZEX-09] RELATÓRIO: {
   "link_fase2_interrupcao": {
     "up": {
       "frames": 9,
       "spikes": 0,
-      "minMs": 36.1,
-      "avgMs": 66.8,
-      "p95Ms": 92.3,
-      "maxMs": 92.3
+      "minMs": 39.1,
+      "avgMs": 54.9,
+      "p95Ms": 86.1,
+      "maxMs": 86.1
     },
     "down": {
-      "frames": 46,
-      "spikes": 1,
-      "minMs": 38.8,
-      "avgMs": 91.3,
-      "p95Ms": 265.7,
-      "maxMs": 365.7
+      "frames": 52,
+      "spikes": 2,
+      "minMs": 35.1,
+      "avgMs": 113.4,
+      "p95Ms": 439.6,
+      "maxMs": 460.9
     },
-    "effectiveRttMs": 158
+    "effectiveRttMs": 168.3
   },
   "link_fase3_conclusao": {
     "up": {
       "frames": 7,
       "spikes": 0,
-      "minMs": 46.8,
-      "avgMs": 79.5,
-      "p95Ms": 94.9,
-      "maxMs": 94.9
+      "minMs": 42.4,
+      "avgMs": 62.4,
+      "p95Ms": 83.6,
+      "maxMs": 83.6
     },
     "down": {
-      "frames": 136,
-      "spikes": 1,
-      "minMs": 35.7,
-      "avgMs": 76.9,
-      "p95Ms": 107.2,
-      "maxMs": 407.8
+      "frames": 131,
+      "spikes": 4,
+      "minMs": 36.2,
+      "avgMs": 113.5,
+      "p95Ms": 378,
+      "maxMs": 472.4
     },
-    "effectiveRttMs": 156.4
+    "effectiveRttMs": 175.9
   },
   "rtt_medido": {
     "fase2": {
-      "minMs": 110,
-      "medianMs": 142,
-      "avgMs": 137,
-      "maxMs": 165
+      "minMs": 84,
+      "medianMs": 124,
+      "avgMs": 175,
+      "maxMs": 532
     },
     "fase3": {
-      "minMs": 129,
-      "medianMs": 153,
-      "avgMs": 150,
-      "maxMs": 162
+      "minMs": 107,
+      "medianMs": 139,
+      "avgMs": 133,
+      "maxMs": 152
     }
   },
-  "atraso_visual_B_para_A_ms": 91,
+  "atraso_visual_B_para_A_ms": 426,
   "canal_server_side_s": {
     "fase1_normal": 3.97,
-    "fase3_degradada": 3.72
+    "fase3_degradada": 3.67
   },
   "xp_por_conclusao": {
     "baseline_normal": 250,
