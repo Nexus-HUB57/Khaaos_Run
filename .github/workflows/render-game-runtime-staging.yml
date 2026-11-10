@@ -1,19 +1,15 @@
-name: "Game Runtime — staging no Render (serviço + deploy + health)"
+name: "Game Runtime — reaproveitar serviço staging Render (temporário)"
 
-# Subiu o servidor autoritativo do jogo (game-runtime: /auth/login, /ws) como
-# Web Service Docker no Render, usando o secret API_KEY_RENDER dentro do CI
-# (nunca no chat). O host do serviço contém "staging", satisfazendo a rotulagem
-# exigida por scripts/game-runtime/scripts/mpzex-staging-env.mjs.
-# Depois deste workflow: atualizar KR_STAGING_BASE_URL no environment staging
-# para a URL impressa e despachar "MP-ZEX 08+09 — Despacho único em staging".
+# O Render exige cartão para NOVOS serviços (HTTP 402 na conta). Este workflow
+# REAPROVEITA o serviço existente khaaos-run-staging para rodar o servidor
+# autoritativo do jogo (game-runtime: /auth/login, /ws) necessário ao despacho
+# único MP-ZEX 08+09. Após o despacho, execute
+# "Staging — restaurar economy (main)" para devolver o serviço à API economy
+# no main — restauração coberta por render-staging-restore-economy.yml.
+# A configuração original é impressa no step summary antes de qualquer mudança.
 
 on:
-  workflow_dispatch:
-    inputs:
-      clear_cache:
-        description: "Limpar cache de build do Render"
-        type: boolean
-        default: false
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -23,71 +19,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  provision-and-deploy:
+  repurpose:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
     env:
       RENDER_API: https://api.render.com/v1
-      SERVICE_NAME: khaaos-run-game-staging
+      SERVICE_ID: srv-db6183o473hc73co8n10
     steps:
       - uses: actions/checkout@v4
 
-      - name: Descobrir owner e serviço (cria se ausente)
-        id: svc
+      - name: Capturar e publicar configuração original
         env:
           API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
         run: |
           set -euo pipefail
-          owner_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/owners" | jq -r '.[0].owner.id')
-          echo "owner: $owner_id"
-          existing=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services?limit=50" | jq -r --arg n "$SERVICE_NAME" '.[] | select(.service.name == $n) | .service.id' | head -1)
-          if [[ -n "$existing" ]]; then
-            echo "service_id=$existing" >> "$GITHUB_OUTPUT"
-            echo "Serviço $SERVICE_NAME já existe ($existing)"
-          else
-            # planId do serviço Free existente (o endpoint /v1/plans não está disponível nesta conta)
-            plan_id=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services/srv-db6183o473hc73co8n10" | jq -r '.planId // empty')
-            echo "plan herdado do serviço free existente: $plan_id"
-            auth_secret=$(openssl rand -hex 32)
-            admin_token=$(openssl rand -hex 32)
-            payload=$(jq -n --arg name "$SERVICE_NAME" --arg auth "$auth_secret" --arg adm "$admin_token" --arg owner "$owner_id" --arg plan "$plan_id" '{
-              type: "web_service",
-              name: $name,
-              ownerId: $owner,
-              repo: "https://github.com/Nexus-HUB57/Khaaos_Run",
-              branch: "main",
-              autoDeploy: "no",
-              envVars: [
-                {key: "PORT", value: "8787"},
-                {key: "NODE_ENV", value: "production"},
-                {key: "AUTH_SECRET", value: $auth},
-                {key: "ADMIN_TOKEN", value: $adm}
-              ],
-              serviceDetails: {
-                env: "docker",
-                dockerfilePath: "game-runtime/Dockerfile",
-                dockerContext: ".",
-                healthCheckPath: "/healthz"
-              }
-            } + (if $plan != "" then {planId: $plan} else {} end)')
-            resp=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
-              -H "Content-Type: application/json" -d "$payload" "$RENDER_API/services")
-            http_code=$(echo "$resp" | tail -1)
-            service_id=$(echo "$resp" | head -n -1 | jq -r '.id // empty')
-            if [[ -z "$service_id" ]]; then
-              echo "::error::Falha ao criar o serviço no Render (HTTP $http_code)"
-              echo "$resp" | head -n -1 | cut -c1-600
-              exit 1
-            fi
-            echo "service_id=$service_id" >> "$GITHUB_OUTPUT"
-            echo "Serviço $SERVICE_NAME criado ($service_id)"
-          fi
+          curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services/$SERVICE_ID" > /tmp/svc.json
+          {
+            echo "## Configuração original (restaurável via render-staging-restore-economy.yml)"
+            jq '{name, branch, autoDeploy, serviceDetails: {env: .serviceDetails.env, buildPlan: .serviceDetails.buildPlan, healthCheckPath: .serviceDetails.healthCheckPath, buildCommand: .serviceDetails.envSpecificDetails.buildCommand, startCommand: .serviceDetails.envSpecificDetails.startCommand}}' /tmp/svc.json
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Alinhar KR_USERS_JSON (hash local, senhas só do environment)
         env:
           API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
-          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
           KR_STAGING_TEST_USER_A: ${{ secrets.KR_STAGING_TEST_USER_A }}
           KR_STAGING_TEST_PASSWORD_A: ${{ secrets.KR_STAGING_TEST_PASSWORD_A }}
           KR_STAGING_TEST_USER_B: ${{ secrets.KR_STAGING_TEST_USER_B }}
@@ -106,60 +61,70 @@ jobs:
             -H "Authorization: Bearer $API_KEY_RENDER" -H "Content-Type: application/json" \
             -d "$(jq -n --arg v "$users_json" '{value: $v}')" \
             "$RENDER_API/services/$SERVICE_ID/env-vars/KR_USERS_JSON")
-          if [[ ! "$http" =~ ^2 ]]; then
-            echo "::error::Falha ao gravar KR_USERS_JSON no serviço (HTTP $http)"
-            exit 1
-          fi
-          echo "KR_USERS_JSON alinhado (2 contas, hash apenas — plaintext nunca sai do environment)"
+          [[ "$http" =~ ^2 ]] || { echo "::error::Falha ao gravar KR_USERS_JSON (HTTP $http)"; exit 1; }
+          echo "KR_USERS_JSON alinhado (2 contas, hash apenas)"
 
-      - name: Deploy (Render API) e aguardar live
+      - name: Reapontar serviço para game-runtime (branch main)
         env:
           API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
-          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
         run: |
           set -euo pipefail
-          cache="clear"
-          if [[ "${{ inputs.clear_cache }}" != "true" ]]; then cache="no_clear"; fi
+          payload=$(jq -n '{
+            autoDeploy: "no",
+            branch: "main",
+            serviceDetails: {
+              env: "node",
+              healthCheckPath: "/healthz",
+              envSpecificDetails: {
+                buildCommand: "cd game-runtime && npm ci --omit=dev",
+                startCommand: "cd game-runtime && node server/server.js"
+              }
+            }
+          }')
+          http=$(curl -s -o /tmp/upd.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer $API_KEY_RENDER" -H "Content-Type: application/json" \
+            -d "$payload" "$RENDER_API/services/$SERVICE_ID")
+          [[ "$http" =~ ^2 ]] || { echo "::error::Falha ao reapontar serviço (HTTP $http)"; cat /tmp/upd.json | cut -c1-400; exit 1; }
+          echo "Serviço reapontado para game-runtime (branch main)"
+
+      - name: Deploy e aguardar live
+        env:
+          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+        run: |
+          set -euo pipefail
           deploy_id=$(curl -s -X POST -H "Authorization: Bearer $API_KEY_RENDER" \
-            -H "Content-Type: application/json" -d "{\"clearCache\": \"$cache\"}" \
-            "$RENDER_API/services/$SERVICE_ID/deploy" | jq -r '.id // empty')
+            -H "Content-Type: application/json" -d '{"clearCache": "clear"}' \
+            "$RENDER_API/services/$SERVICE_ID/deploys" | jq -r '.id // empty')
           [[ -n "$deploy_id" ]] || { echo "::error::Render não aceitou o deploy"; exit 1; }
           for i in $(seq 1 60); do
             status=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" \
               "$RENDER_API/services/$SERVICE_ID/deploys/$deploy_id" | jq -r '.status')
-            echo "deploy $deploy_id → $status (tentativa $i)"
+            echo "deploy → $status (tentativa $i)"
             case "$status" in
-              live) echo "DEPLOY_LIVE"; exit 0 ;;
+              live) exit 0 ;;
               deploy_failed|build_failed|canceled|deactivated)
                 echo "::error::Deploy terminou com status $status"; exit 1 ;;
             esac
             sleep 20
           done
-          echo "::error::Timeout aguardando deploy live"
-          exit 1
+          echo "::error::Timeout aguardando deploy live"; exit 1
 
-      - name: Healthcheck público (/healthz) e resumo
-        env:
-          SERVICE_ID: ${{ steps.svc.outputs.service_id }}
-          API_KEY_RENDER: ${{ secrets.API_KEY_RENDER }}
+      - name: Healthcheck público (/healthz)
         run: |
           set -euo pipefail
-          name=$(curl -s -H "Authorization: Bearer $API_KEY_RENDER" "$RENDER_API/services/$SERVICE_ID" | jq -r '.name // .service.name // empty')
-          url="https://${name}.onrender.com"
+          url="https://khaaos-run-staging.onrender.com"
           for i in $(seq 1 20); do
             body=$(curl -s --max-time 10 "$url/healthz" || true)
             if echo "$body" | jq -e '.ok == true' >/dev/null 2>&1; then
               echo "HEALTH_OK $url"
               {
-                echo "## Game Runtime staging"
-                echo "- URL: $url"
-                echo "- /healthz: ok"
-                echo ""
-                echo "Próximos passos: atualizar \`KR_STAGING_BASE_URL\` no environment staging para \`$url\` e despachar **MP-ZEX 08+09 — Despacho único em staging**."
+                echo "## Game runtime no ar (temporário)"
+                echo "- URL: $url (host rotulado staging ✓)"
+                echo "Próximo passo: despachar **MP-ZEX 08+09 — Despacho único em staging**"
+                echo "Depois: Actions → **Staging — restaurar economy (main)**"
               } >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 15
           done
-          echo "::error::/healthz não respondeu ok em $url"
-          exit 1
+          echo "::error::/healthz não respondeu ok"; exit 1
