@@ -1,7 +1,7 @@
 # Lote 5 — Retratos realistas no lobby
 
 **Branch:** `feat/lote5-realistic-lobby-roster`
-**Dependência:** PR #365 / `feat/lote4-avatars-realistas` (catálogo, arte e integração de perfil/Studio).
+**Dependência resolvida:** PR #365 integrada em `main` (`67aad5f`); Lote 5 publicado na PR #366.
 **Escopo:** fechar a jornada do retrato selecionado até a lista de operativos da sala, sem introduzir personagens, alterar IDs ou mexer em assets 3D.
 
 ## Diagnóstico
