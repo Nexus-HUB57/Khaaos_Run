@@ -6,6 +6,7 @@ import { getWorldLayout, PLAYER_R } from '../src/game3d/sim3d.js';
 import { doorBoxCollider } from '../src/game3d/interiorsPlan.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveStagingConfig } from './mpzex-staging-env.mjs';
+import { resolveScenario } from '../src/game3d/scenarios.js';
 
 const { base } = resolveStagingConfig(process.env);
 
@@ -357,13 +358,46 @@ async function navigateToTerminal(client, terminal, path, label) {
   throw new Error(`Timeout navegando com inputs normais até ZEX (${label}).`);
 }
 
-async function approachPair(a, b, terminal, paths) {
+/** Pós-parada: momentum/queda pode arrastar o ator para fora do alcance do
+ *  terminal (evento impact no servidor — deslize físico, não perda de pos).
+ *  Estabiliza com inputs nulos de gameplay e, se necessário, re-navega a
+ *  partir da posição atual. Sem teleporte, sem debug — doutrina MP-ZEX. */
+async function settleAndReapproach(client, terminal, landed, grid, label) {
+  const distance = () => {
+    const p = client.latestSnapshot?.player;
+    return p ? Math.hypot(p.x - terminal.x, p.z - terminal.z) : Infinity;
+  };
+  for (let attempt = 0; attempt <= 3; attempt += 1) {
+    const samples = [];
+    for (let i = 0; i < 20; i += 1) {
+      sendInput(client);
+      await sleep(200);
+      const p = client.latestSnapshot?.player;
+      if (!p) continue;
+      samples.push([p.x, p.z]);
+      if (samples.length > 3) samples.shift();
+      if (samples.length === 3 && Math.hypot(samples[2][0] - samples[0][0], samples[2][1] - samples[0][1]) < 0.12) break;
+    }
+    if (distance() < 3.1) return;
+    const p0 = client.latestSnapshot?.player;
+    if (!p0 || !p0.alive) throw new Error(`${label} sem ator vivo para re-approach do terminal.`);
+    safeLog(`${label}: ator deslizou pós-parada (d=${distance().toFixed(1)}) — re-navegando ao terminal por gameplay.`);
+    const path = findPath(p0, terminal, landed, grid);
+    if (!path) throw new Error(`${label}: sem rota de retorno ao terminal após deslize.`);
+    await navigateToTerminal(client, terminal, path, label);
+  }
+  throw new Error(`${label} não se estabilizou no alcance ZEX (3 re-approachs esgotados).`);
+}
+
+async function approachPair(a, b, terminal, paths, landedA, landedB) {
   a.grid = paths.grid; b.grid = paths.grid;
   safeLog(`Navegando A e B por inputs de gameplay até ${terminal.label ?? terminal.id}.`);
   await Promise.all([
     navigateToTerminal(a, terminal, paths.a, 'A').then(() => safeLog('A chegou ao alcance de interação.')),
     navigateToTerminal(b, terminal, paths.b, 'B').then(() => safeLog('B chegou ao alcance de interação.')),
   ]);
+  await settleAndReapproach(a, terminal, landedA, paths.grid, 'A');
+  await settleAndReapproach(b, terminal, landedB, paths.grid, 'B');
   const sa = a.latestSnapshot;
   const sb = b.latestSnapshot;
   if (!sa?.player || Math.hypot(sa.player.x - terminal.x, sa.player.z - terminal.z) >= 3.1) throw new Error('A não está mais no alcance ZEX após a navegação.');
@@ -422,10 +456,15 @@ async function main() {
       const pathB = findPath(landedB.player, terminal, landedB, grid);
       if (pathA && pathB) plans.push({ terminal, pathA, pathB, score: pathA.length + pathB.length });
     }
-    plans.sort((x, y) => x.score - y.score);
+    // Prioriza terminais dentro do anel FINAL (setor canônico; sem ringFinal o
+    // servidor fecha o anel sobre o centro do mundo — dano ring contínuo fora
+    // dele cancela a canalização: room3d #damage → cancel 'damage').
+    const fin08 = resolveScenario(landedA.scenarioId)?.ringFinal ?? { x: 0, z: 0 };
+    const inRing08 = (t) => Math.hypot(t.x - fin08.x, t.z - fin08.z) <= 50;
+    plans.sort((x, y) => (Number(inRing08(y.terminal)) - Number(inRing08(x.terminal))) || (x.score - y.score));
     const plan = plans[0];
     if (!plan) throw new Error('Nenhum terminal tem rota navegável para ambas as contas sem competir com loot/porta.');
-    await approachPair(a, b, plan.terminal, { grid, a: plan.pathA, b: plan.pathB });
+    await approachPair(a, b, plan.terminal, { grid, a: plan.pathA, b: plan.pathB }, landedA, landedB);
     const aAtChannelStart = a.latestSnapshot;
     const bAtChannelStart = b.latestSnapshot;
     const extractedBeforeA = aAtChannelStart?.player?.extracted ?? 0;
