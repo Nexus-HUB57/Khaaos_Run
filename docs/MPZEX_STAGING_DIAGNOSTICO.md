@@ -95,3 +95,34 @@ do gameplay — as correções pertencem ao mundo, não ao cliente de teste.
   anel × terminais (§4) sem tocar gameplay canônico.
 - Depois do merge: atualizar o `room3d.js` do staging no VPS, reiniciar
   `khaaos-staging` e re-despachar (cenários `08,09`).
+
+## Cadeia causal da Fase 2 (resolvida com evidência local — 2026-11-11, noite)
+
+Reprodução local com RTT sintético (selftest + `KR_ZEX09_UP_MS=350 KR_ZEX09_DOWN_MS=350`
+≈ RTT 700 ms, o mesmo patamar runner↔VPS real). Três defeitos independentes, cada um
+com evidência de instrumentação (`[DBG-CH]` no servidor, observador B1 no cliente):
+
+1. **Ressurreição do canal por input em voo** (causa-raiz da Fase 2):
+   `cancelZexChannelForDisconnect` cancelava o canal, mas os inputs já enfileirados
+   (`actor.inputQueue`) e o `actor.lastInput` (fallback do tick quando a fila esvazia)
+   continuavam sendo processados — um `interact=true` pré-queda reabria o canal 11
+   ticks depois do cancelamento (`start → cancel → start → COMPLETOU`, mesmo ator).
+   O canal zumbi completava e extraía — exatamente o que a Fase 2 existe para proibir.
+   **Fix (server)**: morte de transporte marca o ator (`transportDead`), esvazia a
+   fila, neutraliza `lastInput`; o resume reativa (`reviveTransport`, chamado no
+   caminho de resume do `server.js`).
+2. **Laço de sala sem `break`** (script 09): após `navigated = true` o `for` de
+   tentativas continuava — 8 salas aceitas com partidas vivas simultâneas no staging
+   (evidência: 8× "aceita na tentativa K/8" + 8× "B no alcance" + zero "rejeitada").
+   **Fix (script)**: `if (navigated) break;`.
+3. **`drain()` sem teto** (script 09, Fase 3): a bomba de input por cliente
+   (`client.hold`, 20 Hz) realimenta a fila de subida do link degradado — com RTT
+   sintético a fila nunca esvazia e `await linkA3.drain()` pendurava a fase
+   (evidência: servidor completou o canal no tick 1519; script sem progresso até o
+   timeout global). **Fix (script)**: `Promise.race([drain, sleep(2_500)])` — o
+   intent (assentar quadros atrasados) é preservado; a convergência é provada
+   pelas asserções seguintes.
+
+Validação local: selftest 08 PASS + 09 Fases 1/2/3 PASS + `MPZEX_STAGING_SELFTEST_OK`
+(exit 0); 24/24 nos testes sensíveis (zu-train-protocol, world-survival-load,
+environmental-death).
