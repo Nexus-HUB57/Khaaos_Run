@@ -56,7 +56,7 @@ const cookieValue = (req, name) => {
 export function createAuthoritativeServer({
   port = Number(process.env.PORT || 8787),
   adminToken = process.env.ADMIN_TOKEN || 'change-me',
-  roomCapacity = 16,
+  roomCapacity = Number(process.env.KR_ROOM_CAPACITY || 16),
   auth,
   economy,
   store,
@@ -328,7 +328,7 @@ export function createAuthoritativeServer({
       const roomId = `${roomPrefix}ring3d-${nextRoom++}`;
       const lease = await safeAcquire(roomId); // M3 — posse ANTES da primeira mutação
       room = client.mode === '3d'
-        ? new MatchRoom3D({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled })
+        ? new MatchRoom3D({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-3D-${nextRoom}`, region: client.region, capacity: roomCapacity, botFill: Number.isFinite(Number(process.env.KR_BOT_FILL)) ? Number(process.env.KR_BOT_FILL) : roomCapacity - 1, onMatchEnd: handleMatchEnd, officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled })
         : new MatchRoom({ id: roomId, seed: `${process.env.MATCH_SEED || 'CIGKV'}-${nextRoom}`, region: client.region, capacity: roomCapacity });
       room.fence = lease.fence ?? 0;
       rooms.set(room.id, room);
@@ -1115,7 +1115,7 @@ export function createAuthoritativeServer({
             const room = new MatchRoom3D({
               id: roomId,
               seed: `${process.env.MATCH_SEED || 'CIGKV'}-PRIV-${nextRoom}`,
-              region: client.region, capacity: roomCapacity, botFill: roomCapacity - 1,
+              region: client.region, capacity: roomCapacity, botFill: Number.isFinite(Number(process.env.KR_BOT_FILL)) ? Number(process.env.KR_BOT_FILL) : roomCapacity - 1,
               squad: true, isPrivate: true, inviteCode: makeInviteCode(rngCrypto), onMatchEnd: handleMatchEnd,
               officerPlanFn: () => pojService.officerPlan(), aoi: aoiEnabled,
             });

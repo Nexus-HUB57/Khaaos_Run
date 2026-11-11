@@ -458,8 +458,15 @@ function smoothPath(path, grid) {
  *  o cenário só é honesto quando testado numa sala jogável. */
 class RoomRetry extends Error {}
 
-/** Dentro do anel FINAL previsto do cenário (setor canônico ringFinal + margem). */
-const insideFinalRing = (p, fin, reach) => !fin || Math.hypot(p.x - fin.x, p.z - fin.z) <= reach;
+/** Dentro do anel FINAL previsto do cenário (setor canônico ringFinal + margem).
+ *  Cenário SEM ringFinal: o servidor mantém o centro do anel em (0,0) e fecha
+ *  para raio 42 — o par precisa estar dentro desse círculo também (o dano ring
+ *  contínuo cancela canalização fora dele: room3d #damage → cancel 'damage'). */
+const insideFinalRing = (p, fin, reach) => {
+  const cx = fin?.x ?? 0;
+  const cz = fin?.z ?? 0;
+  return Math.hypot(p.x - cx, p.z - cz) <= reach;
+};
 
 async function waitForLand(client, label) {
   const snapshot = await waitSnapshot(client, (s) => s.state === 'IN_PROGRESS' && s.player && !s.player.dropPhase && s.player.onGround, `pouso de ${label}`, 90_000);
@@ -542,9 +549,43 @@ async function navigateToTerminal(client, terminal, waypoints, label) {
   throw new Error(`Timeout navegando com inputs normais até ZEX (${label}).`);
 }
 
+/** Pós-parada/pós-resume: momentum/queda pode arrastar o ator para fora do
+ *  alcance do terminal (evento impact — deslize físico, não perda de pos).
+ *  Estabiliza com inputs nulos de gameplay e re-navega se necessário.
+ *  Sem teleporte, sem debug — doutrina MP-ZEX (inputs de gameplay apenas). */
+async function settleAndReapproach(client, terminal, label) {
+  const distance = () => {
+    const p = client.latestSnapshot?.player;
+    return p ? Math.hypot(p.x - terminal.x, p.z - terminal.z) : Infinity;
+  };
+  for (let attempt = 0; attempt <= 3; attempt += 1) {
+    if (attempt > 0 || distance() >= 3.1) {
+      const samples = [];
+      for (let i = 0; i < 20; i += 1) {
+        sendInput(client);
+        await sleep(client.link ? 260 : 200);
+        const p = client.latestSnapshot?.player;
+        if (!p) continue;
+        samples.push([p.x, p.z]);
+        if (samples.length > 3) samples.shift();
+        if (samples.length === 3 && Math.hypot(samples[2][0] - samples[0][0], samples[2][1] - samples[0][1]) < 0.12) break;
+      }
+    }
+    if (distance() < 3.1) return;
+    const p0 = client.latestSnapshot?.player;
+    if (!p0 || !p0.alive) throw new Error(`${label} sem ator vivo para re-approach do terminal.`);
+    safeLog(`${label}: ator deslizou pós-parada (d=${distance().toFixed(1)}) — re-navegando ao terminal por gameplay.`);
+    const path = findPath(p0, terminal, client.grid);
+    if (!path) throw new Error(`${label}: sem rota de retorno ao terminal após deslize.`);
+    await navigateToTerminal(client, terminal, smoothPath(path, client.grid), label);
+  }
+  throw new Error(`${label} não se estabilizou no alcance ZEX (3 re-approachs esgotados).`);
+}
+
 async function approach(client, terminal, path, label) {
   const waypoints = smoothPath(path, client.grid);
   await navigateToTerminal(client, terminal, waypoints, label);
+  await settleAndReapproach(client, terminal, label);
   const snapshot = client.latestSnapshot;
   if (!snapshot?.player || Math.hypot(snapshot.player.x - terminal.x, snapshot.player.z - terminal.z) >= 3.1) {
     throw new Error(`${label} não está mais no alcance ZEX após a navegação.`);
@@ -571,14 +612,22 @@ async function startChannel(client, terminal) {
 
 /** Conclusão observada pelo ESTADO do servidor: progresso chega a 1, terminal
  *  consumido e evento extract no log de eventos (drenado pelos snapshots). */
-async function awaitCompletion(client, terminal, { timeoutMs = 20_000 } = {}) {
+async function awaitCompletion(client, terminal, { timeoutMs = 25_000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let snapshot = null;
+  let rechann = 0;
   while (Date.now() < deadline) {
     snapshot = client.latestSnapshot;
     const t = snapshot?.terminals?.find((x) => x.id === terminal.id);
     const extract = client.eventsLog.find((e) => e.type === 'extract' && e.count >= 1);
     if (t && t.active === false && extract) return { snapshot, extract };
+    // Canal cancelado por deslize/queda (física do servidor): re-canaliza por
+    // gameplay (settle + interact) — o jogador real faria o mesmo.
+    if (t && t.active === true && !t.channeling && snapshot?.player && !snapshot.player.zexChannel && rechann < 3) {
+      rechann += 1;
+      await settleAndReapproach(client, terminal, client.label);
+      await startChannel(client, terminal);
+    }
     await sleep(25);
   }
   throw new Error(`Timeout esperando conclusão do terminal (estado + evento extract) em ${client.label}.`);
@@ -702,41 +751,42 @@ async function main() {
       const scenario = resolveScenario(landedA.scenarioId);
       const fin = scenario?.ringFinal ?? null;
       const RING_FINAL_REACH = 50; // raio final (42) + margem de interação (8)
-      const distToFin = (p) => (fin ? Math.hypot(p.x - fin.x, p.z - fin.z) : 0);
-      safeLog(`Cenário ${scenario?.id ?? landedA.scenarioId} — anel final em (${fin?.x ?? '—'},${fin?.z ?? '—'}) '${fin?.name ?? 'sem setor'}' (dano ring ×${scenario?.ringDamageMultiplier ?? 1}).`);
-      const safeTerminals = (landedA.terminals ?? []).filter((terminal) => terminal.active
-        && insideFinalRing(terminal, fin, RING_FINAL_REACH)
+      const distToFin = (p) => Math.hypot(p.x - (fin?.x ?? 0), p.z - (fin?.z ?? 0));
+      safeLog(`Cenário ${scenario?.id ?? landedA.scenarioId} — anel final em (${fin?.x ?? 0},${fin?.z ?? 0}) '${fin?.name ?? 'centro do mundo'}' (dano ring ×${scenario?.ringDamageMultiplier ?? 1}).`);
+      const terminalsLive = (landedA.terminals ?? []).filter((terminal) => terminal.active
         && !(layout.doors ?? []).some((door) => Math.hypot(door.x - terminal.x, door.z - terminal.z) < 2.6));
-      if (fin) {
+      {
         const terminaisInfo = (landedA.terminals ?? [])
           .map((t) => `${t.label}${t.active ? '' : ' (inativo)'} d_fin=${distToFin(t).toFixed(0)}m${insideFinalRing(t, fin, RING_FINAL_REACH) ? ' ✓' : ' ✗'}`)
           .join('; ');
         safeLog(`Terminais vs anel final: ${terminaisInfo}.`);
       }
-      // Par (A,B) de terminais distintos com MENOR soma de rotas navegáveis —
-      // desempatar só para B ("exclui o de A") pode empurrar B para um terminal
-      // distante demais (spawns próximos no staging → B morre na navegação).
-      const pathsOf = (landed) => (landed.terminals ?? [])
-        .filter((t) => safeTerminals.some((s) => s.id === t.id))
+      // Papéis ASSIMÉTRICOS (o anel fecha sobre o setor canônico e o dano ring
+      // contínuo cancela canalização fora dele — room3d #damage → 'damage'):
+      //   A conclui nas fases 2/3 (TARDE)  → terminal DENTRO do anel FINAL
+      //     (setor canônico; sem ringFinal o servidor fecha sobre o centro do
+      //     mundo) — sempre seguro após o fechamento;
+      //   B conclui na fase 1 (CEDO)      → terminal distinto do A com MAIOR
+      //     janela do anel ATUAL (radius - dist ao centro), rotas curtas em
+      //     empate — a fase 1 roda nos primeiros ~35 s da partida.
+      const pathsTo = (landed, pool) => pool
         .map((t) => ({ terminal: t, path: findPath(landed.player, t, grid) }))
         .filter((p) => p.path);
-      planPair = null;
-      let bestScore = null;
-      for (const pa of pathsOf(landedA)) {
-        for (const pb of pathsOf(landedB)) {
-          if (pa.terminal.id === pb.terminal.id) continue;
-          // Par (A,B) por MINIMAX: minimiza o MAIOR dos dois caminhos e desempata
-          // pela soma. O staging real aplica dano de ring (room3d.js, kind
-          // 'ring') de ~4–5,4 HP/s fora da zona — o critério anterior (soma
-          // mínima) aceitou 55/5 na run #12: A fora do ring por ~21+ s até o
-          // knock. O minimax equilibra a exposição dos dois atores.
-          const score = [Math.max(pa.path.length, pb.path.length), pa.path.length + pb.path.length];
-          if (!planPair || score[0] < bestScore[0] || (score[0] === bestScore[0] && score[1] < bestScore[1])) {
-            planPair = { a: pa, b: pb };
-            bestScore = score;
-          }
-        }
-      }
+      const aCandidates = pathsTo(landedA, terminalsLive)
+        .filter((p) => insideFinalRing(p.terminal, fin, RING_FINAL_REACH))
+        .sort((x, y) => distToFin(x.terminal) - distToFin(y.terminal) || x.path.length - y.path.length);
+      const ringNow = landedA.ring ?? { x: 0, z: 0, radius: 168 };
+      const windowOf = (t) => (ringNow.radius ?? 168) - Math.hypot(t.x - (ringNow.x ?? 0), t.z - (ringNow.z ?? 0));
+      const bPool = aCandidates.length
+        ? terminalsLive.filter((t) => t.id !== aCandidates[0].terminal.id)
+        : terminalsLive;
+      const bCandidates = pathsTo(landedB, bPool)
+        // A rota do B tem de CABER na janela do anel (navegação ~1 s/trecho +
+        // interrupção/resume/canal ~16 s) — janela maior que o gasto previsto;
+        // no empate (ou impossibilidade), a MENOR rota vence.
+        .filter((p) => windowOf(p.terminal) > p.path.length + 16)
+        .sort((x, y) => x.path.length - y.path.length || windowOf(y.terminal) - windowOf(x.terminal));
+      planPair = aCandidates[0] && bCandidates[0] ? { a: aCandidates[0], b: bCandidates[0] } : null;
       const maxSteps = planPair ? Math.max(planPair.a.path.length, planPair.b.path.length) : Infinity;
       if (!planPair || maxSteps > MAX_ROUTE_STEPS) {
         safeLog(`Sala ${foundA.roomId} sem par sobrevivível (rota máx ${maxSteps === Infinity ? 'sem rota' : maxSteps} trechos, tentativa ${roomAttempt}/${ROOM_ATTEMPTS}) — re-entrando em nova sala (layout por partida).`);
@@ -794,11 +844,11 @@ async function main() {
     }
     if ((resumedMessage1.snapshot.player?.xp ?? 0) !== xpBeforeB) throw new Error('Fase 1: interrupção em rede normal concedeu XP.');
     safeLog('Fase 1 (normal, interrupção): terminal liberado sem XP; extractCancelled preservado.');
-    // B ainda está no alcance (servidor preservou a posição do ator) → conclusão normal
+    // O resume preserva a posição do ATOR no servidor; o deslize físico pós-
+    // parada (momentum/queda) é resolvido por gameplay: settle + re-navegação.
     const b1Start = resumedMessage1.snapshot;
-    if (Math.hypot(b1Start.player.x - terminalB.x, b1Start.player.z - terminalB.z) >= 3.1) {
-      throw new Error('Fase 1: B retomou fora do alcance do terminal; navegação pós-resume fora do escenso.');
-    }
+    b1.grid = b.grid;
+    await settleAndReapproach(b1, terminalB, 'B(resume)');
     const channelStart1 = await startChannel(b1, terminalB);
     const firstProgress1 = channelStart1.player.zexChannel.progress;
     const { snapshot: done1 } = await awaitCompletion(b1, terminalB);
@@ -871,9 +921,8 @@ async function main() {
     clients.push(a3);
     const resumedMessage3 = await waitMessage(a3, (m) => m.type === 'resumed', 'resume degradado 3 de A', 8_000);
     const a3Start = resumedMessage3.snapshot;
-    if (Math.hypot(a3Start.player.x - terminalA.x, a3Start.player.z - terminalA.z) >= 3.1) {
-      throw new Error('Fase 3: A retomou fora do alcance do terminal.');
-    }
+    a3.grid = a.grid;
+    await settleAndReapproach(a3, terminalA, 'A(degradado-3)');
     const rtt3 = await measureRtt(a3, 5);
     safeLog(`Fase 3: RTT medido ${rtt3.minMs}–${rtt3.maxMs} ms (média ${rtt3.avgMs} ms).`);
     const xpBeforeA3 = a3Start.player.xp;
