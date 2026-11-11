@@ -455,8 +455,8 @@ export function windowPanelsOf(layout, dressing) {
  * Vidro NUNCA entra no caminho da LOS — os consumidores (sim3d/room3d
  * #hasLos) pulam colliders kind === 'window' explicitamente.
  */
-export function windowBoxCollider(win) {
-  if (!win || win.destroyed) return null;
+export function windowBoxCollider(win, ignoreDestroyed = false) {
+  if (!win || (win.destroyed && !ignoreDestroyed)) return null;
   const c = Math.abs(Math.cos(win.rot ?? 0)), s = Math.abs(Math.sin(win.rot ?? 0));
   const ax = win.horizontal ? c : s;
   const az = win.horizontal ? s : c;

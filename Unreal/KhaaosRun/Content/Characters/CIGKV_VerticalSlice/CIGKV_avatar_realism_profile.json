@@ -1,0 +1,73 @@
+{
+  "schema": "khaaos.cigkv.avatar-realism-profile/v1",
+  "goal": "hero_avatar_realtime_realism",
+  "scope": ["CIGKV_HUMAN_HERO_M01", "CIGKV_ZHEERS_NONHUMAN_M01"],
+  "targets": {
+    "hero_mesh": {
+      "triangles_lod0_min": 80000,
+      "triangles_lod1_min": 45000,
+      "triangles_lod2_min": 18000,
+      "uv_sets_min": 2,
+      "material_slots_min": 4,
+      "skin_weights_max_influences": 8,
+      "tangent_basis": "mikktspace",
+      "nanite": true
+    },
+    "face": {
+      "blendshape_count_min": 52,
+      "expression_sets": ["neutral", "phoneme", "blink", "jaw", "brow", "pain", "effort"],
+      "corrective_shapes_required": ["jaw_open", "smile_left", "smile_right", "blink_left", "blink_right", "brow_compress"],
+      "facial_identity_review": true,
+      "no_texture_only_expression": true
+    },
+    "skin": {
+      "maps_required": ["basecolor_2k", "normal_2k", "detail_normal_2k", "roughness_2k", "specular_2k", "subsurface_mask_2k", "micro_pore_2k"],
+      "subsurface_profile_required": true,
+      "subsurface_radius_cm": [0.8, 1.8],
+      "roughness_range": [0.28, 0.78],
+      "microdetail_scale_mm": [0.15, 1.2],
+      "reject": ["uniform_roughness", "plastic_highlight", "subsurface_halo", "pore_tiling"]
+    },
+    "eyes": {
+      "materials_required": ["cornea", "iris", "sclera", "tearline"],
+      "cornea_ior": 1.376,
+      "refraction_enabled": true,
+      "wetness_mask_required": true,
+      "iris_detail_map_required": true,
+      "parallax_depth_required": true,
+      "reject": ["dead_eye", "opaque_cornea", "floating_iris", "missing_tearline"]
+    },
+    "hair": {
+      "representation": "groom_or_directional_cards",
+      "flow_map_required": true,
+      "anisotropy_range": [0.55, 0.82],
+      "strand_width_mm": [0.03, 0.09],
+      "lod0_card_or_groom_density_min": 12000,
+      "reject": ["flat_highlight", "inverted_flow", "specular_aliasing", "hard_card_silhouette"]
+    },
+    "mouth": {
+      "materials_required": ["teeth", "tongue", "oral_cavity", "lip_wetline"],
+      "teeth_roughness_range": [0.22, 0.48],
+      "lip_subsurface_required": true,
+      "reject": ["flat_teeth", "black_mouth", "lip_seam_gap"]
+    },
+    "deformation": {
+      "tests_required": ["idle", "run", "crouch", "ads", "reload", "hit_react", "jaw_open", "blink", "facial_anger"],
+      "max_visible_clipping_frames": 0,
+      "max_foot_slide_cm": 2.0,
+      "weapon_socket_alignment_cm": 0.5
+    },
+    "performance": {
+      "target_fps": 60,
+      "medium_gpu_p95_ms_max": 16.67,
+      "vram_budget_mb_max": 2048,
+      "shader_hitch_count_max": 0
+    }
+  },
+  "acceptance": {
+    "engine_required": "UE5.8_licensed_gpu_runner",
+    "screenshots_required": 24,
+    "metrics_required": ["gpu_p95_ms", "vram_mb", "draw_calls", "shader_hitch_count", "lod_pop_review", "deformation_clipping_review"],
+    "sandbox_status": "contract_only_no_visual_acceptance"
+  }
+}

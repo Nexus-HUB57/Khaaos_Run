@@ -13,8 +13,8 @@
 //   1. Header `x-2pc-node-secret` === ECONOMY_2PC_NODE_SECRET (env) → nó confiável;
 //      pode atuar em nome de `userId` (texto) do body.
 //   2. Sessão web autenticada (req.user.claims.sub) → ator é o usuário.
-//   3. Nenhum dos dois → ator sintético "ue5-player-<playerId>" (modo dev).
-//      Quando ECONOMY_2PC_NODE_SECRET está definido, o modo dev é RECUSADO (401).
+//   3. Nenhum dos dois → ator sintético "ue5-player-<playerId>" somente fora de produção.
+//      Em produção, a ausência de segredo e sessão é sempre recusada (401).
 //
 // Respostas compatíveis com o parser UE5:
 //   prepare → { prepared: boolean, ... }   (cliente lê GetBoolField("prepared"))
@@ -72,6 +72,10 @@ export function resolve2PCActor(req: Request): TwoPCActor | { error: { status: n
   const body = (req.body ?? {}) as Record<string, unknown>;
   const nodeSecret = process.env[NODE_SECRET_ENV];
   const sessionClaims = (req.user as { claims?: { sub?: unknown } } | undefined)?.claims;
+  const playerId = typeof body.playerId === "number" && Number.isSafeInteger(body.playerId)
+    ? Math.max(0, Math.floor(body.playerId))
+    : 0;
+  const syntheticActorId = `ue5-player-${playerId}`;
 
   if (nodeSecret) {
     const provided = req.get("x-2pc-node-secret");
@@ -90,6 +94,8 @@ export function resolve2PCActor(req: Request): TwoPCActor | { error: { status: n
     if (typeof body.userId === "string" && body.userId.trim()) {
       return { actorId: body.userId.trim().slice(0, 128), trusted: true };
     }
+    // UE5's trusted node protocol identifies players by numeric playerId.
+    return { actorId: syntheticActorId, trusted: true };
   }
 
   // 2) Sessão web autenticada.
@@ -98,19 +104,26 @@ export function resolve2PCActor(req: Request): TwoPCActor | { error: { status: n
     return { actorId: sessionUser.trim(), trusted: true };
   }
 
-  // 3) Modo dev (sem segredo configurado): ator sintético por playerId.
-  const playerId = typeof body.playerId === "number" && Number.isSafeInteger(body.playerId)
-    ? Math.max(0, Math.floor(body.playerId))
-    : 0;
-  return { actorId: `ue5-player-${playerId}`, trusted: false };
+  // 3) Nunca aceitar a identidade previsível por playerId em produção.
+  if (process.env.NODE_ENV === "production") {
+    return {
+      error: {
+        status: 401,
+        body: { message: "Autenticação 2PC obrigatória" },
+      },
+    };
+  }
+
+  // 4) Fallback local de desenvolvimento/teste (sem segredo configurado).
+  return { actorId: syntheticActorId, trusted: false };
 }
 
 function parseBody(req: Request, res: any, schema: z.ZodTypeAny): Record<string, unknown> | null {
   const parsed = schema.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({
-      message: parsed.error.errors[0]?.message ?? "Payload inválido",
-      issues: parsed.error.errors.map((e) => ({ path: e.path.join("."), message: e.message })),
+      message: parsed.error.issues[0]?.message ?? "Payload inválido",
+      issues: parsed.error.issues.map((e) => ({ path: e.path.join("."), message: e.message })),
     });
     return null;
   }
@@ -130,10 +143,7 @@ function sendFinancialError(res: any, err: unknown): void {
   res.status(500).json({ message: "Erro interno do serviço 2PC" });
 }
 
-/**
- * Registra as rotas 2PC. Deve ser chamado ANTES de registerApiRoutes para que
- * as respostas 401/400 ownadas não dependam da sessão OIDC.
- */
+/** Registra as rotas 2PC após os middlewares globais /api de CSRF e rate limit. */
 export function registerEconomy2PCRoutes(app: Express): void {
   const service = economy2pcService;
 
@@ -189,6 +199,8 @@ export function registerEconomy2PCRoutes(app: Express): void {
 
   app.get("/api/economy/2pc/health", async (_req: Request, res: any) => {
     try {
+      const actor = resolve2PCActor(_req);
+      if ("error" in actor) return res.status(actor.error.status).json(actor.error.body);
       const health = await service.health();
       return res.status(200).json(health);
     } catch (err) {

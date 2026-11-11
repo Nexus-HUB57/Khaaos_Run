@@ -14,7 +14,7 @@
     "health": 120,
     "energy": 80,
     "speed": 0.9,
-    "stamina": 130,
+    "stamina": 120,
     "armor_base": 15,
     "shield_capacity": 0,
     "regen_health_per_sec": 0.8,
@@ -86,7 +86,12 @@
         "tail_sheathe",
         "shoulder_spikes"
       ]
-    }
+    },
+    "rig_by_sex": {
+      "masculino": "SK_Manny",
+      "feminino": "SK_Gwen"
+    },
+    "skeleton_note": "Preview rig da espécie para estúdio/proofs; no runtime o rig base é por sexo (rig_by_sex) com variantes de mesh/morphs/ABP por espécie — ADR-ESQUELETO-RIG-POR-SEXO"
   },
   "passive": {
     "name": "Escamas Refletivas",
@@ -403,5 +408,98 @@
     "design_tier": "PhD",
     "balance_version": "2.0",
     "designer": "Nexus-HUB57"
+  },
+  "ue5_kit": {
+    "header": "Game/AbilitySystem/Species/KhaaosAbility_OnithAbilities.h",
+    "abilities": [
+      {
+        "name": "VenomSpit",
+        "tag": "Ability.Species.Onith.VenomSpit",
+        "cooldown": 3.0,
+        "energy": 10.0,
+        "damage": 25.0,
+        "range": 2000.0,
+        "duration": 4.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "NoxiousGas",
+        "tag": "Ability.Species.Onith.NoxiousGas",
+        "cooldown": 12.0,
+        "energy": 20.0,
+        "damage": 3.0,
+        "range": 600.0,
+        "duration": 6.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "PlagueTouch",
+        "tag": "Ability.Species.Onith.PlagueTouch",
+        "cooldown": 4.0,
+        "energy": 15.0,
+        "damage": 40.0,
+        "range": 150.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "ToxicHusk",
+        "tag": "Ability.Species.Onith.ToxicHusk",
+        "cooldown": 18.0,
+        "energy": 25.0,
+        "damage": 10.0,
+        "range": 0.0,
+        "duration": 8.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Contaminate",
+        "tag": "Ability.Species.Onith.Contaminate",
+        "cooldown": 15.0,
+        "energy": 25.0,
+        "damage": 8.0,
+        "range": 400.0,
+        "duration": 5.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "ParasiteDrain",
+        "tag": "Ability.Species.Onith.ParasiteDrain",
+        "cooldown": 10.0,
+        "energy": 20.0,
+        "damage": 30.0,
+        "range": 800.0,
+        "duration": 1.5,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "BioMimic",
+        "tag": "Ability.Species.Onith.BioMimic",
+        "cooldown": 20.0,
+        "energy": 30.0,
+        "damage": 25.0,
+        "range": 400.0,
+        "duration": 3.0,
+        "is_ultimate": false,
+        "is_toggle": false
+      },
+      {
+        "name": "Pandemic",
+        "tag": "Ability.Species.Onith.Pandemic",
+        "cooldown": 120.0,
+        "energy": 80.0,
+        "damage": 15.0,
+        "range": 1000.0,
+        "duration": 5.0,
+        "is_ultimate": true,
+        "is_toggle": false
+      }
+    ]
   }
 }

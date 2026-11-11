@@ -19,12 +19,23 @@ export function useItems() {
   });
 }
 
-export function usePurchaseItem() {
+export function useArmorerMaterials() {
+  return useQuery({
+    queryKey: [api.items.materials.path],
+    queryFn: async () => {
+      const res = await fetch(api.items.materials.path, { credentials: "include" });
+      if (!res.ok) throw new Error(await apiErrorMessage(res, "Não foi possível carregar os materiais."));
+      return api.items.materials.responses[200].parse(await res.json());
+    },
+  });
+}
+
+export function useCraftItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { type: string, name: string }) => {
-      const validated = api.items.purchase.input.parse(data);
-      const res = await idempotentFetch(api.items.purchase.path, {
+    mutationFn: async (data: { catalogId: string }) => {
+      const validated = api.items.craft.input.parse(data);
+      const res = await idempotentFetch(api.items.craft.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),
@@ -33,14 +44,21 @@ export function usePurchaseItem() {
       if (!res.ok) {
         if (res.status === 402) {
           const error = errorSchemas.insufficientFunds.parse(await res.json());
-          throw new Error(error.message);
+          throw new Error(`Saldo insuficiente para o serviço do Armeiro: ${error.message}`);
         }
-        throw new Error(await apiErrorMessage(res, "Não foi possível concluir a compra."));
+        throw new Error(await apiErrorMessage(res, "Não foi possível fabricar este item."));
       }
-      return api.items.purchase.responses[201].parse(await res.json());
+      return api.items.craft.responses[201].parse(await res.json());
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
+    onSuccess: (purchasedItem) => {
+      queryClient.setQueryData<Item[]>([api.items.list.path], (current = []) => {
+        const alreadyPresent = current.some((item) => item.id === purchasedItem.id);
+        return alreadyPresent
+          ? current.map((item) => item.id === purchasedItem.id ? purchasedItem : item)
+          : [...current, purchasedItem];
+      });
+      void queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
+      void queryClient.invalidateQueries({ queryKey: [api.items.materials.path] });
       queryClient.invalidateQueries({ queryKey: [api.bank.get.path] });
     },
   });

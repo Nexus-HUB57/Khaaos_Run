@@ -26,7 +26,7 @@ const {
   sanitizeDirectorReport,
   aggregateDirectorReports,
 } = await import('../server/spectator.js');
-const { SpectatorRemote } = await import('../src/game3d/spectator3d.js');
+const { SpectatorRemote, DIRECTOR_TUNING_LIMITS } = await import('../src/game3d/spectator3d.js');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -284,6 +284,7 @@ describe('SpectatorPipeline — DIRECTOR_METRICS end to end', () => {
         manual: { followSelects: 0, cycles: 0 },
         toggles: { on: 0, off: 0 },
         tuning: null, // Fase 26 — sem relatório, sem afinação
+        globalTuning: null, globalTuningActions: [], globalTuningAt: undefined, // Fase 39
       }, 'sem relatório: agregado zerado');
       ws.close();
     });
@@ -344,5 +345,131 @@ describe('SpectatorPipeline — DIRECTOR_METRICS end to end', () => {
       ws.close();
       await once(ws, 'close');
     });
+  });
+});
+
+// ---------- 4. Fase 39 — calibração POPULACIONAL (servidor → clientes) ----------
+
+// relatório twitchy: 50% de escalada (≥45%) → margem sobe um passo
+const twitchy = (over = {}) => report({
+  cuts: { total: 20, byReason: { 'hazard-start': 10, 'hazard-escalation': 10 }, byHazard: { tsunami: 20 } },
+  manual: { followSelects: 0, cycles: 0 },
+  ...over,
+});
+
+async function collectMessages(ws, ms, filter) {
+  const got = [];
+  const onMsg = (raw) => {
+    try { const m = JSON.parse(raw.toString()); if (!filter || filter(m)) got.push(m); } catch { /* lixo */ }
+  };
+  ws.on('message', onMsg);
+  await wait(ms);
+  ws.off('message', onMsg);
+  return got;
+}
+
+describe('SpectatorPipeline — calibração POPULACIONAL (Fase 39)', () => {
+  test('plateia twitchy agregada → DIRECTOR_TUNING difundido p/ TODOS com margem +5', async () => {
+    await withServer(new SpectatorPipeline({ calibrationIntervalMs: 30 }), async (port, pipeline) => {
+      const a = await openSpectator(port, 'roomId=sala-pop-a');
+      await a.firstMessage;
+      const b = await openSpectator(port, 'roomId=sala-pop-b');
+      await b.firstMessage;
+      a.ws.send(JSON.stringify({ type: 'DIRECTOR_METRICS', metrics: twitchy() }));
+      b.ws.send(JSON.stringify({ type: 'DIRECTOR_METRICS', metrics: twitchy({ cuts: { total: 20, byReason: { 'hazard-start': 12, 'hazard-escalation': 8 }, byHazard: { lava: 20 } } }) }));
+      // coleta CONCORRENTE nas duas conexões (o broadcast é único — quem
+      // escutar depois perde o frame; estado estável não reenvia)
+      const [framesA, framesB] = await Promise.all([
+        collectMessages(a.ws, 220, (m) => m.type === 'DIRECTOR_TUNING'),
+        collectMessages(b.ws, 220, (m) => m.type === 'DIRECTOR_TUNING'),
+      ]);
+      assert.ok(framesA.length >= 1, 'espectador A recebeu afinação da população');
+      assert.ok(framesB.length >= 1, 'espectador B (outra sala) TAMBÉM recebeu');
+      const f = framesA[0];
+      assert.equal(f.source, 'population');
+      assert.equal(f.sampleCuts, 40, 'amostra = soma dos cortes de TODA a plateia');
+      assert.equal(f.tuning.margin, 30, 'primeiro frame: 25 → 30 (twitchy 50% escalada)');
+      assert.deepEqual(f.actions, ['margin-up:twitchy']);
+      // laço contínuo: a plateia CONTINUA twitchy → ticks seguintes sobem a
+      // margem um passo por tick ATÉ o teto da banda (comportamento canônico)
+      const global = pipeline.metrics().director.globalTuning;
+      assert.ok(global.margin >= 30 && global.margin <= DIRECTOR_TUNING_LIMITS.margin.max,
+        `margem global na banda (${global.margin})`);
+      a.ws.close(); b.ws.close();
+    });
+  });
+
+  test('amostra insuficiente (< 8 cortes agregados) → NENHUM frame de população', async () => {
+    await withServer(new SpectatorPipeline({ calibrationIntervalMs: 30 }), async (port, pipeline) => {
+      const { ws, firstMessage } = await openSpectator(port, 'roomId=sala-ruim');
+      await firstMessage;
+      ws.send(JSON.stringify({ type: 'DIRECTOR_METRICS', metrics: twitchy({ cuts: { total: 7, byReason: { 'hazard-escalation': 7 }, byHazard: { tsunami: 7 } } }) }));
+      const frames = await collectMessages(ws, 140, (m) => m.type === 'DIRECTOR_TUNING');
+      assert.equal(frames.length, 0, 'ruído de 1 espectador não dirige o node');
+      assert.equal(pipeline.metrics().director.globalTuning, null);
+      ws.close();
+    });
+  });
+
+  test('tick sem mudança = zero tráfego (sem reenvio da mesma afinação)', async () => {
+    await withServer(new SpectatorPipeline({ calibrationIntervalMs: 30 }), async (port) => {
+      const { ws, firstMessage } = await openSpectator(port, 'roomId=sala-eco');
+      await firstMessage;
+      ws.send(JSON.stringify({ type: 'DIRECTOR_METRICS', metrics: twitchy() }));
+      const first = await collectMessages(ws, 220, (m) => m.type === 'DIRECTOR_TUNING');
+      assert.ok(first.length >= 1, '1ª calibração difunde');
+      assert.equal(first.at(-1).tuning.margin, DIRECTOR_TUNING_LIMITS.margin.max, 'janela longa esgota a banda (teto 45)');
+      const second = await collectMessages(ws, 120, (m) => m.type === 'DIRECTOR_TUNING');
+      assert.equal(second.length, 0, 'estado estável no TETO não reenvia');
+      ws.close();
+    });
+  });
+
+  test('cliente adota a afinação POPULACIONAL e o heartbeat local para de recalibrar', async () => {
+    const r = new SpectatorRemote({ url: 'ws://t', socketFactory: () => new FakeSocket(), metricsIntervalMs: 15 });
+    r.connect();
+    const ws = FakeSocket.last;
+    ws.open();
+    ws.message({ type: 'SPECTATOR_WELCOME', spectatorId: 's', delayMs: 1 });
+    // gera cortes locais twitchy (o heartbeat LOCAL subiria a margem)
+    ws.message(batch([player({ id: 'seguido', health: 100 })], [tsunamiStart()]));
+    for (let i = 0; i < 14; i++) {
+      ws.message(batch([player({ id: 'seguido', health: 100 }), player({ id: 'pior', isDowned: true, posX: 900, health: 20 })]));
+      ws.message(batch([player({ id: 'seguido', health: 100 })]));
+    }
+    assert.equal(r.getMetrics().tuningSource, 'local', 'antes do frame: fonte local');
+    // frame POPULACIONAL do servidor (margem DESCE — direção oposta à local)
+    ws.message({ type: 'DIRECTOR_TUNING', tuning: { margin: 20, weights: { knocked: 43, hazardDamage: 38, anchorZone: 32, outsideRing: 22, recentDamage: 15, lowHealth: 10 } }, source: 'population', actions: ['margin-down:starved'] });
+    assert.equal(r.tuningSource, 'population');
+    assert.equal(r.getMetrics().tuning.margin, 20);
+    assert.deepEqual(r.getMetrics().tuning.weights.knocked, 43);
+    assert.deepEqual(r.tuningActions, ['margin-down:starved']);
+    // heartbeat rodando com cortes twitchy locais — NÃO recalibra mais
+    await new Promise((res) => setTimeout(res, 60));
+    assert.equal(r.getMetrics().tuning.margin, 20, 'população vence o heartbeat local');
+    assert.equal(r.getMetrics().tuningSource, 'population');
+    r.dispose();
+  });
+
+  test('frame populacional HOSTIL é ignorado (afinação vigente permanece)', () => {
+    const r = new SpectatorRemote({ url: 'ws://t', socketFactory: () => new FakeSocket(), metricsIntervalMs: 0 });
+    r.connect();
+    const ws = FakeSocket.last;
+    ws.open();
+    ws.message({ type: 'SPECTATOR_WELCOME', spectatorId: 's', delayMs: 1 });
+    const before = { ...r.getMetrics().tuning };
+    for (const bad of [
+      { type: 'DIRECTOR_TUNING', tuning: null },
+      { type: 'DIRECTOR_TUNING', tuning: { margin: 999 } }, // sem pesos
+      { type: 'DIRECTOR_TUNING', tuning: { margin: 'x', weights: {} } },
+      { type: 'DIRECTOR_TUNING', tuning: { margin: 30, weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: 15 } } }, // PARCIAL (contrato: 6 sinais)
+      { type: 'DIRECTOR_TUNING', tuning: { margin: 30, weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: 15, lowHealth: 'x' } } },
+      'tuning', 42, // lixo
+    ]) {
+      ws.message(bad); // NENHUM pode derrubar/alterar a afinação
+    }
+    assert.equal(r.tuningSource, 'local', 'nenhum frame hostil foi adotado');
+    assert.deepEqual(r.getMetrics().tuning, before);
+    r.dispose();
   });
 });

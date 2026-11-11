@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { MatchRoom3D } from '../server/room3d.js';
 import { validateInput3D } from '../server/antiCheat.js';
 import { KhaaosSim3D } from '../src/game3d/sim3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const STEP = 1 / 30;
 const DT = 1 / 20;
@@ -24,9 +25,10 @@ function makeRoom({ humans = 3, botFill = 0, seed = 'P4-3D' } = {}) {
 }
 
 // ---------- infiltração aérea (sim offline) ----------
-test('fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em tempo finito', () => {
-  const s = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2 }); // airdrop ON por padrão
+test('fase4 sim: airdrop legado explícito inicia no céu, proíbe combate no ar e aterrissa em tempo finito', () => {
+  const s = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2, airdrop: true });
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(s.player.dropPhase, 'sky');
   assert.ok(s.player.y >= 130, `altitude inicial ${s.player.y}`);
   assert.equal(s.player.onGround, false);
@@ -54,19 +56,22 @@ test('fase4 sim: airdrop inicia no céu, proíbe combate no ar e aterrissa em te
   const events = s.consumeEvents();
   assert.ok(events.some((e) => e.type === 'land'), 'evento land esperado');
   // airdrop determinístico: mesma seed → mesma posição de aterrissagem
-  const s2 = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2 });
+  const s2 = new KhaaosSim3D({ seed: 'DROP-1', botCount: 2, airdrop: true });
   s2.start('belt');
+  disembarcarSim(s2); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 30 * 12; i++) s2.step(idle(), STEP);
   assert.equal(Math.abs(s2.player.x - s.player.x) < 1e-9, true);
   assert.equal(Math.abs(s2.player.z - s.player.z) < 1e-9, true);
 });
 
 test('fase4 sim: controle de deriva direciona a queda (input afeta o destino)', () => {
-  const a = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0 });
+  const a = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0, airdrop: true });
   a.start('belt');
+  disembarcarSim(a); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 120; i++) a.step({ ...idle(0), dy: -1 }, STEP); // deriva para frente
-  const b = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0 });
+  const b = new KhaaosSim3D({ seed: 'DRIFT-A', botCount: 0, airdrop: true });
   b.start('belt');
+  disembarcarSim(b); // Task 53 — protocolo do trem cumprido antes do teste
   for (let i = 0; i < 120; i++) b.step(idle(), STEP); // cai quase parado
   const drift = Math.hypot(a.player.x - b.player.x, a.player.z - b.player.z);
   assert.ok(drift > 8, `deriva deve mudar o destino (>8m): ${drift.toFixed(1)}m`);
@@ -76,6 +81,7 @@ test('fase4 sim: controle de deriva direciona a queda (input afeta o destino)', 
 test('fase4 sim: granada consome inventário, detona no pavio e mata bot no epicentro', () => {
   const s = groundSim('FRAG-1', 1);
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player, bot = s.bots[0];
   s.world.colliders.length = 0;
   // Fase 25 — painéis fora da linha unitária (dinâmico). HOTFIX pós-merge
@@ -102,6 +108,7 @@ test('fase4 sim: granada consome inventário, detona no pavio e mata bot no epic
 test('fase4 sim: granada sem estoque não lança', () => {
   const s = groundSim('FRAG-2', 0);
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   s.player.inventory.frag = 0;
   s.step({ ...idle(0), throw: true }, STEP);
   assert.equal(s.grenades.length, 0, 'sem frag não há lançamento');
@@ -133,6 +140,7 @@ test('fase4 unit: explosionDamage — dano cheio no epicentro, decai e atenua at
 test('fase4 sim: gloo deploy bloqueia movimento e balas; expira após a duração', () => {
   const s = groundSim('GLOO-1', 0); // sem bots: isola a parede
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   // Fase 25 — mundo físico COMPOSTO (layout + folhas): limpa os dois p/ isolar a gloo
   s.world.colliders.length = 0;
@@ -184,6 +192,7 @@ test('fase4 sim: gloo deploy bloqueia movimento e balas; expira após a duraçã
 test('fase4 sim: gloo não empilha dentro de estrutura e loot frag/gloo é coletável', () => {
   const s = groundSim('GLOO-2', 0);
   s.start('belt');
+  disembarcarSim(s); // Task 53 — protocolo do trem cumprido antes do teste
   const p = s.player;
   // jogador dentro do monolito (collider central) → deploy rejeitado por sobreposição
   p.x = 0; p.z = 0; p.yaw = 0;
@@ -215,6 +224,7 @@ test('fase4 sim: gloo não empilha dentro de estrutura e loot frag/gloo é colet
 test('fase4 room: airdrop autoritativo — atores caem, aterrissam e recebem land', () => {
   const room = makeRoom({ humans: 2, botFill: 3 });
   assert.ok(room.start('p1', 'belt'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.equal(room.humans.get('p1').dropPhase, 'sky');
   assert.equal(room.bots[0].dropPhase, 'sky');
   let landed = false;
@@ -238,6 +248,7 @@ test('fase4 room: airdrop autoritativo — atores caem, aterrissam e recebem lan
 test('fase4 room: throw/gloo autoritativos — snapshot replica grenades/walls', () => {
   const room = makeRoom({ humans: 1, botFill: 1 });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   // aterrissa primeiro
   for (let i = 0; i < 30 * 12 && room.humans.get('p1').dropPhase; i++) {
     room.input('p1', blank({ seq: i + 1 }));
@@ -287,6 +298,7 @@ test('fase4 room: anticheat rejeita throw/gloo não-booleanos e granada respeita
   // estoque: consumiu a única gloo, segundo deploy não cria parede
   const room = makeRoom({ humans: 1, botFill: 1, seed: 'P4-STOCK' });
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   let seq = 1;
   for (let i = 0; i < 30 * 12 && room.humans.get('p1').dropPhase; i++) {
     room.input('p1', blank({ seq: seq++ }));

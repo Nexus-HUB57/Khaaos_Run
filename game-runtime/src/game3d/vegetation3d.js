@@ -102,6 +102,33 @@ function deformOrganic(geo, { amp = .22, seed = 0, minY = null, yFade = 1 } = {}
   return geo;
 }
 
+// Variação de superfície por vértice: quebra o aspecto de cor chapada sem
+// texturas externas, mantendo a geração determinística e compatível com Node.
+function addSurfaceMottle(geo, seed, surface = 'foliage') {
+  const p = geo.attributes.position, n = geo.attributes.normal;
+  const box = new THREE.Box3().setFromBufferAttribute(p);
+  const spanY = Math.max(.001, box.max.y - box.min.y);
+  const colors = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const h = THREE.MathUtils.clamp((y - box.min.y) / spanY, 0, 1);
+    const grain = hash2(i, seed);
+    let r, g, b;
+    if (surface === 'bark') {
+      const rib = Math.sin(Math.atan2(z, x) * 10 + y * 2.4 + seed * .013);
+      const v = THREE.MathUtils.clamp(.82 + grain * .16 + rib * .045 - (1 - h) * .035, .68, 1.04);
+      r = v * 1.04; g = v * .98; b = v * .88;
+    } else {
+      const dapple = Math.sin(x * 5.2 + z * 4.1 + y * 3.2 + seed * .17) * .035;
+      const v = THREE.MathUtils.clamp(.78 + grain * .20 + Math.max(0, n.getY(i)) * .05 + (h - .45) * .04 + dapple, .68, 1.04);
+      r = v * .95; g = v; b = v * .88;
+    }
+    colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
 // ------------------------------------------------------- arquétipos ----
 // Cada arquétipo descreve: altura do tronco, raio base/topo, número de
 // galhos primários, blob do dossel (raio, achatamento, contagem, espalhamento
@@ -198,8 +225,8 @@ export function buildTreeGeometries({ archetype = 'temperate', seed = 1 } = {}) 
     });
     canopyParts.push(blob);
   }
-  const trunk = mergeGeoms(barkParts);
-  const canopy = mergeGeoms(canopyParts);
+  const trunk = addSurfaceMottle(mergeGeoms(barkParts), seed, 'bark');
+  const canopy = addSurfaceMottle(mergeGeoms(canopyParts), seed + 101, 'foliage');
   return { trunk, canopy, height: A.trunkH + A.blobR * A.squash };
 }
 
@@ -294,8 +321,8 @@ export function tickVegetationWind(scene, t) {
 // (tronco+raízes+galhos | dossel) com tint por instância e vento ativo.
 export function buildTreeField({ archetype = 'temperate', seed = 1, spots = [], swayStrength = .045 } = {}) {
   const { trunk, canopy } = buildTreeGeometries({ archetype, seed });
-  const trunkMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .95, metalness: .02 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .88, metalness: 0, flatShading: true });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .96, metalness: 0, vertexColors: true });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .92, metalness: 0, flatShading: true, vertexColors: true });
   patchSway(canopyMat, { strength: swayStrength, freq: 1.45, yScale: .2 });
   const trunks = new THREE.InstancedMesh(trunk, trunkMat, Math.max(1, spots.length));
   const canopies = new THREE.InstancedMesh(canopy, canopyMat, Math.max(1, spots.length));
@@ -303,9 +330,10 @@ export function buildTreeField({ archetype = 'temperate', seed = 1, spots = [], 
   canopies.castShadow = canopies.receiveShadow = true;
   const dummy = new THREE.Object3D();
   spots.forEach((sp, i) => {
-    dummy.position.set(sp.x, 0, sp.z);
+    const s = sp.s ?? 1;
+    dummy.position.set(sp.x, sp.y ?? 0, sp.z);
     dummy.rotation.set((sp.tiltX ?? 0), sp.rot ?? 0, sp.tilt ?? 0);
-    dummy.scale.setScalar(sp.s ?? 1);
+    dummy.scale.set(s * (sp.sx ?? 1), s * (sp.sy ?? 1), s * (sp.sz ?? 1));
     dummy.updateMatrix();
     trunks.setMatrixAt(i, dummy.matrix);
     canopies.setMatrixAt(i, dummy.matrix);
@@ -328,7 +356,7 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
   bushes.castShadow = bushes.receiveShadow = true;
   const dummy = new THREE.Object3D();
   spots.forEach((sp, i) => {
-    dummy.position.set(sp.x, 0, sp.z);
+    dummy.position.set(sp.x, sp.y ?? 0, sp.z);
     dummy.rotation.set(0, sp.rot ?? 0, 0);
     dummy.scale.set(sp.sx ?? sp.s ?? 1, sp.s ?? 1, sp.sz ?? sp.s ?? 1);
     dummy.updateMatrix();
@@ -341,18 +369,113 @@ export function buildBushField({ seed = 1, spots = [], swayStrength = .06 } = {}
   return bushes;
 }
 
+// F45 — elementos naturais do chão: malhas de detalhe geradas uma vez e
+// instanciadas por família para manter o custo de draw calls previsível.
+function buildFallenLogGeometry(seed) {
+  const trunk = new THREE.CylinderGeometry(.15, .22, 2.25, 8, 3);
+  xform(trunk, { rz: Math.PI / 2 }); // eixo longitudinal no chão (X)
+  const branchA = new THREE.CylinderGeometry(.035, .075, .62, 6, 2);
+  xform(branchA, { x: -.42, y: .18, z: .02, rz: .78 });
+  const branchB = new THREE.CylinderGeometry(.03, .065, .48, 6, 2);
+  xform(branchB, { x: .38, y: .13, z: -.03, rz: -.9 });
+  return addSurfaceMottle(mergeGeoms([trunk, branchA, branchB]), seed, 'bark');
+}
+
+function buildStumpGeometry(seed) {
+  const body = new THREE.CylinderGeometry(.22, .34, .58, 9, 2);
+  xform(body, { y: .29 });
+  const top = new THREE.CircleGeometry(.22, 9);
+  xform(top, { rx: -Math.PI / 2, y: .58 });
+  const ringA = new THREE.TorusGeometry(.15, .009, 4, 14);
+  xform(ringA, { rx: -Math.PI / 2, y: .585 });
+  const ringB = new THREE.TorusGeometry(.08, .006, 4, 12);
+  xform(ringB, { rx: -Math.PI / 2, y: .586 });
+  return addSurfaceMottle(mergeGeoms([body, top, ringA, ringB]), seed, 'bark');
+}
+
+function buildFernGeometry(seed) {
+  const rng = vegRng(seed), blades = [];
+  for (let i = 0; i < 7; i++) {
+    const h = .62 + rng() * .38;
+    const blade = new THREE.PlaneGeometry(.22 + rng() * .08, h, 1, 4);
+    const p = blade.attributes.position;
+    for (let v = 0; v < p.count; v++) {
+      const t = THREE.MathUtils.clamp((p.getY(v) + h / 2) / h, 0, 1);
+      p.setX(v, p.getX(v) * (1 - .72 * t));
+      p.setZ(v, Math.sin(t * Math.PI / 2) * .12);
+    }
+    blade.translate(0, h / 2, 0);
+    xform(blade, { ry: (i / 7) * Math.PI * 2 + (rng() - .5) * .25 });
+    blades.push(blade);
+  }
+  const geo = mergeGeoms(blades);
+  geo.computeVertexNormals();
+  return addSurfaceMottle(geo, seed, 'foliage');
+}
+
+export function buildNaturalDressingField({ placements = [], seed = 1 } = {}) {
+  const group = new THREE.Group();
+  group.name = 'naturalGroundDressing';
+  const definitions = {
+    stone: {
+      geometry: () => {
+        const geo = new THREE.IcosahedronGeometry(.52, 0);
+        deformOrganic(geo, { amp: .12, seed });
+        return addSurfaceMottle(geo, seed + 1, 'bark');
+      }, roughness: .97, shadow: true, offset: .20,
+    },
+    fallenLog: { geometry: () => buildFallenLogGeometry(seed + 2), roughness: .96, shadow: true, offset: .17 },
+    stump: { geometry: () => buildStumpGeometry(seed + 3), roughness: .95, shadow: true, offset: 0 },
+    fern: { geometry: () => buildFernGeometry(seed + 4), roughness: .9, shadow: false, offset: 0 },
+  };
+  const meshes = [];
+  const dummy = new THREE.Object3D();
+  for (const [type, spec] of Object.entries(definitions)) {
+    const list = placements.filter((p) => p.type === type);
+    if (!list.length) continue;
+    const material = new THREE.MeshStandardMaterial({
+      color: '#ffffff', roughness: spec.roughness, metalness: 0,
+      vertexColors: true, flatShading: type !== 'fern',
+      side: type === 'fern' ? THREE.DoubleSide : THREE.FrontSide,
+    });
+    const mesh = new THREE.InstancedMesh(spec.geometry(), material, list.length);
+    mesh.name = `groundDressing:${type}`;
+    mesh.castShadow = spec.shadow;
+    mesh.receiveShadow = spec.shadow;
+    list.forEach((p, i) => {
+      const s = p.scale ?? 1;
+      dummy.position.set(p.x, (p.y ?? 0) + spec.offset * s, p.z);
+      dummy.rotation.set(type === 'fallenLog' ? (p.tilt ?? 0) : 0, p.rot ?? 0, type === 'fallenLog' ? (p.tilt ?? 0) : 0);
+      dummy.scale.setScalar(s);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      if (p.tint) mesh.setColorAt(i, new THREE.Color(p.tint));
+    });
+    mesh.count = list.length;
+    mesh.computeBoundingSphere?.();
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    group.add(mesh);
+    meshes.push(mesh);
+  }
+  return { group, meshes, counts: Object.fromEntries(meshes.map((m) => [m.name.split(':')[1], m.count])) };
+}
+
 // ------------------------------------------- grama com LOD de distância ----
 // Fase 32 — a grama é o ativo mais CARO do cenário (milhares de tufos com
 // alpha-test e overdraw) e não precisa de detalhe longe. O campo é dividido
-// em CHUNKS (células da grade) e cada chunk assume 1 de 3 tiers pela
+// em CHUNKS (células da grade) e cada chunk assume 1 de 4 tiers pela
 // distância da CÂMERA ao centro do chunk:
-//   full   (< nearDist)  — todos os tufos do chunk;
-//   sparse (< midDist)   — fração sparseKeep dos tufos (ceil), ordem de
-//                          plantio estável — o "desbaste" não tremula ao andar;
-//   hidden (>= midDist)  — chunk invisível (visible=false, custo de render 0).
-// Custo por frame: 1 hipotenusa por chunk (dezenas) + troca de visible/count.
-// Sem reescrita de matrizes, sem duplicação de geometria, e os chunks ocultos
-// não geram draw call (frustum culling + visible=false).
+//   full     (< nearDist)     — todos os tufos do chunk;
+//   sparse   (< midDist)      — fração sparseKeep dos tufos (ceil), ordem de
+//                               plantio estável — o "desbaste" não tremula ao andar;
+//   impostor (< impostorDist) — Fase 34 — 1 só QUAD cruzado por chunk (no
+//                               campo global de impostores): lê como mancha
+//                               de capim no horizonte por ~2 triângulos;
+//   hidden   (>= impostorDist)— chunk invisível (custo de render 0).
+// Custo por frame: 1 hipotenusa por chunk (dezenas) + troca de visible/count
+// (tufos) + empacotamento de matrizes só da FAIXA de impostores visível
+// (poucas células). Sem reescrita de matrizes dos tufos, sem duplicação de
+// geometria; chunks ocultos não geram draw call.
 
 // Divide spots em células da grade (PURO e determinístico — ordenado por
 // chave da célula). Cada chunk carrega o CENTRO médio dos membros, usado no
@@ -377,21 +500,233 @@ export function grassChunkify(spots, { chunkSize = 25 } = {}) {
   return chunks;
 }
 
-// Tier do chunk pela distância (PURO): 'full' | 'sparse' | 'hidden'.
-export function grassChunkTier(dist, { nearDist = 28, midDist = 58 } = {}) {
+// Tier do chunk pela distância (PURO): 'full' | 'sparse' | 'impostor' | 'hidden'.
+// Fase 34 — impostorDist <= midDist desliga a faixa (comportamento F32: hidden
+// já em midDist) — retrocompatível com chamadas antigas.
+export function grassChunkTier(dist, { nearDist = 28, midDist = 58, impostorDist = 110 } = {}) {
   if (dist < nearDist) return 'full';
   if (dist < midDist) return 'sparse';
+  if (impostorDist > midDist && dist < impostorDist) return 'impostor';
   return 'hidden';
 }
 
+// Fase 34 — geometria do impostor: 2 quads cruzados (X) que leem como moita
+// ao longe — silhueta dupla evita o "flipse" de plano único com a câmera.
+// Sem textura (cor chapada por instância), sem alpha-test — custo mínimo.
+export function grassImpostorGeometry({ height = 1.15, width = 3.2 } = {}) {
+  const h = Math.max(.3, height), w = Math.max(.5, width);
+  const a = new THREE.PlaneGeometry(w, h);
+  a.translate(0, h / 2, 0);
+  const b = new THREE.PlaneGeometry(w, h);
+  b.translate(0, h / 2, 0);
+  xform(b, { ry: Math.PI / 2 });
+  return mergeGeoms([a, b]);
+}
+
+// Fase 37 — FADE SUAVE na entrada/saída da banda de impostores (PURO).
+// A F34 acendia o impostor em degrau (alpha fixo .55 na entrada em midDist e
+// corte seco na saída em impostorDist). Aqui a opacidade POR INSTÂNCIA faz a
+// transição: rampa smoothstep subindo em [midDist, midDist+zone] e descendo
+// em [impostorDist-zone, impostorDist] — a mancha "nasce" do desbaste e
+// "morre" dissolvendo no bake outdoor (F36), sem pop visível em nenhum bordo.
+//   zone = min(fadeZone, (impostorDist - midDist) / 2) — as duas rampas nunca
+//   se sobrepõem (sempre existe plateau no meio da banda).
+// Banda desligada (impostorDist <= midDist, retrocompat F32): 0 em qualquer
+// distância — nenhum impostor nasce.
+export function grassImpostorFade(dist, { midDist = 58, impostorDist = 110, fadeZone = 14, preRoll = 0 } = {}) {
+  if (!(impostorDist > midDist)) return 0;                    // banda desligada
+  const zone = Math.max(.5, Math.min(fadeZone, (impostorDist - midDist) / 2));
+  // F38 — pre-roll: a rampa de ENTRADA começa ANTES de midDist (cross-fade
+  // com o desbaste do tier sparse — a mancha cresce sob os tufos que raleiam).
+  // Opt-in (default 0 = contrato F37 intocado) e CAPADO pela própria zone —
+  // o fadeIn nunca alcança o tier full nem invade a rampa de saída.
+  const pre = Math.max(0, Math.min(preRoll ?? 0, zone));
+  const enter = midDist - pre;
+  if (!(dist >= enter) || !(dist <= impostorDist)) return 0; // fora da banda
+  const fadeIn = smoothStep(enter, enter + zone, dist);
+  const fadeOut = 1 - smoothStep(impostorDist - zone, impostorDist, dist);
+  return fadeIn * fadeOut;                                    // 0..1
+}
+
+// F38 — DESBASTE GRADUAL do tier sparse (PURO): a F32 raleava em DEGRAU
+// (count saltava de fullCount p/ ceil(fullCount×sparseKeep) na entrada e
+// morria seco em midDist). Aqui o count É o fade:
+//   entrada [nearDist, nearDist+entryZone] — fullCount → plateau (smoothstep);
+//   plateau (meio da banda) — MESMO contrato F32: max(1, ceil(n×sparseKeep));
+//   saída [midDist−exitZone, midDist] — plateau → 0 (raléia até sumir).
+// As zonas são capadas a 45% da banda cada (sempre resta plateau ≥ 10%);
+// banda degenerada (midDist ≤ nearDist) vira degrau puro retrocompatível.
+// A ordem de plantio é estável — reduzir count nunca troca QUAIS tufos
+// aparecem (mesmo contrato anti-tremedeira da F32).
+export function grassSparseCount(dist, {
+  fullCount = 0, nearDist = 28, midDist = 58, sparseKeep = .4,
+  entryZone = 10, exitZone = 12,
+} = {}) {
+  const n = Math.max(0, fullCount | 0);
+  if (n === 0) return 0;
+  if (dist < nearDist) return n;                              // tier full
+  if (dist >= midDist) return 0;                              // impostor/hidden
+  const plateau = Math.max(1, Math.ceil(n * Math.max(0, Math.min(1, sparseKeep))));
+  const span = midDist - nearDist;
+  const ez = Math.max(0, Math.min(entryZone ?? 0, span * .45));
+  const xz = Math.max(0, Math.min(exitZone ?? 0, span * .45));
+  const thinIn = smoothStep(nearDist, nearDist + ez, dist);   // 0 → 1 (raleia)
+  const thinOut = 1 - smoothStep(midDist - xz, midDist, dist); // 1 → 0 (morre)
+  const base = n - (n - plateau) * thinIn;                    // full → plateau
+  return Math.round(base * thinOut);                          // plateau → 0
+}
+
+// F38 — entradas de SOMBRA DE CONTATO para os ARBUSTOS (PURO): árvores,
+// pedras e o mato rasteiro de Barburhen já ancoravam no chão via
+// buildContactShadows (F7) — os arbustos em cluster (F31) ficaram fora.
+// 1 entrada por arbusto: disco de tamanho proporcional à escala plantada
+// (diâmetro do cluster ~2.1m × s), sem rotação (disco radial). Determinístico.
+export function bushShadowEntries(bushSpots = [], { sizeFactor = 2.1 } = {}) {
+  const f = Math.max(0, sizeFactor);
+  return bushSpots.map((sp) => ({ x: sp.x, z: sp.z, rot: 0, size: f * (sp.s ?? 1) }));
+}
+
+// F39 — BANDA DE DISTÂNCIA da sombra de contato do SCRUB (PURO). Os discos
+// do mato rasteiro (F7, ~1.05m) ancoravam o scrub à custa de RUÍDO longe:
+// discos escuros minúsculos viram moiré/sujeira no horizonte e pagam overdraw
+// sem ganho de leitura. Aqui o alpha POR INSTÂNCIA segue bandas — o mesmo
+// vocabulário do capim (F32/F37/F38):
+//   cheio   (dist ≤ nearDist) — âncora plena (silhueta grudada no chão);
+//   raleio  (nearDist→farDist) — smoothstep descendo até 0 (some ANTES do
+//             fog comer a vegetação — nunca some DEPOIS, sem sombra fantasma);
+//   fora    (dist ≥ farDist) — 0 (nem empacota: alpha 0 não custa draw).
+// Banda degenerada (farDist ≤ nearDist) vira degrau retrocompatível (1|0) —
+// mesmo guard da F38 (largura 0 = degrau, sem NaN). dist suja → 0 (sombra
+// nunca nasce de lixo numérico).
+export function scrubShadowBand(dist, { nearDist = 30, farDist = 90 } = {}) {
+  const near = Math.max(0, nearDist);
+  const far = Math.max(near, farDist);
+  if (!(dist >= 0)) return 0;                     // NaN/negativo → sem sombra
+  if (dist <= near) return 1;                     // cheio (banda degenerada: near=0 → nunca)
+  if (dist >= far) return 0;                      // fora da banda
+  if (!(far > near)) return dist < near ? 1 : 0;  // degrau (far ≤ near)
+  return 1 - smoothStep(near, far, dist);         // raleio suave
+}
+
+// Fase 37 — ALPHA POR INSTÂNCIA via onBeforeCompile (mesmo contrato do
+// patchSway: string de shader, INERTE sem renderer — headless nunca compila).
+// A InstancedMesh ganha um InstancedBufferAttribute 'instanceAlpha' (itemSize
+// 1) e o material multiplica diffuseColor.a por ele no fragmento — transição
+// de opacidade por chunk SEM duplicar materiais nem recompilar por instância.
+export function patchInstanceAlpha(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', ['#include <common>', 'attribute float instanceAlpha;', 'varying float vInstAlpha;'].join('\n'))
+      .replace('#include <begin_vertex>', ['#include <begin_vertex>', 'vInstAlpha = instanceAlpha;'].join('\n'));
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', ['#include <common>', 'varying float vInstAlpha;'].join('\n'))
+      .replace('#include <color_fragment>', ['#include <color_fragment>', 'diffuseColor.a *= vInstAlpha;'].join('\n'));
+    material.userData.instanceAlphaShader = shader;
+  };
+  material.customProgramCacheKey = () => 'inst-alpha';
+  return material;
+}
+
+// Fase 37 — SOMBRAS DE CONTATO FALSAS sob os impostores: disco RADIAL com
+// gradiente de alpha por VÉRTICE (centro escuro → borda transparente, itemSize
+// 4 — three r125+ detecta RGBA). Nada de textura/canvas (contrato headless):
+// o gradiente vive na geometria, o material só multiplica. Deitada no chão
+// (rotação -90° em X), a instância ancora no MESMO relevo dos tufos (ch.y —
+// média das alturas de plantio) com lift fino anti-z-fight.
+export function grassShadowGeometry({ segments = 14 } = {}) {
+  const seg = Math.max(6, segments | 0);
+  const geo = new THREE.CircleGeometry(1, seg);
+  xform(geo, { rx: -Math.PI / 2 });               // deita no plano XZ
+  const pos = geo.attributes.position;
+  const n = pos.count;
+  const colors = new Float32Array(n * 4);          // RGBA por vértice
+  for (let i = 0; i < n; i++) {
+    // centro (0,0) → alpha cheio; borda r=1 → alpha 0 (smoothstep sem banda)
+    const r = Math.hypot(pos.getX(i), pos.getZ(i));
+    const a = 1 - smoothStep(0, 1, r);
+    colors[i * 4] = 0; colors[i * 4 + 1] = 0; colors[i * 4 + 2] = 0;
+    colors[i * 4 + 3] = a;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+  return geo;
+}
+
+// ---------------------------------- F36 — OUTDOOR IMPOSTOR (tier hidden) ----
+// Evolução do tier `hidden` (≥ impostorDist): o chunk continua INVISÍVEL
+// (custo de render 0 — contrato F32/F34 intocado), mas a identidade do capim
+// é COZIDA nas vertex colors do terreno UMA vez no build. O horizonte lê
+// "campo" pela cor do próprio chão: 0 draw calls extras, 0 matrizes por
+// frame, 0 update no loop — o impostor outdoor é literalmente grátis.
+// `grassOutdoorBake` é PURA: 1 contribuição por chunk (centro + família de
+// tint pelo MESMO módulo POSITIVO dos impostores — kx/kz negativos seguros).
+export function grassOutdoorBake(chunks = [], tintFamilies = ['#5a6b33']) {
+  const cols = tintFamilies.map((c) => new THREE.Color(c));
+  return chunks.map((ch) => {
+    const c = cols[((ch.kx + ch.kz) % cols.length + cols.length) % cols.length];
+    return { x: ch.x, z: ch.z, r: c.r, g: c.g, b: c.b };
+  });
+}
+
+// Aplica o bake nas vertex colors do terreno (MUTA o atributo color uma vez):
+// cada contribuição pinta um disco suave de raio `radius` — plateau no centro
+// e queda smoothstep na borda (sem "bola" e sem banda). Fora do raio: byte a
+// byte intacto. Custo ONE-SHOT no build (O(verts do disco) por chunk); sem
+// terreno (headless sem buildScene) é no-op seguro.
+export function applyOutdoorTint(terrainMesh, bake = [], { radius = 25, strength = .3 } = {}) {
+  const geo = terrainMesh?.geometry;
+  const color = geo?.attributes?.color;
+  if (!geo || !color) return null;
+  const R = Math.max(1, radius);
+  const st = Math.max(0, Math.min(1, strength));
+  const pos = geo.attributes.position;
+  let touched = 0;
+  for (const b of bake) {
+    // janela grosseira por chunk antes do teste radial (evita varrer 9k verts
+    // por contribuição — o disco cabe numa bbox de lado 2R)
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vz = pos.getZ(i);
+      const dx = vx - b.x, dz = vz - b.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= R * R) continue;
+      const d = Math.sqrt(d2);
+      // kernel: 1 no núcleo (d < R/3), smoothstep até 0 na borda
+      const k = d < R / 3 ? 1 : 1 - smoothStep(R / 3, R, d);
+      const a = st * k;
+      if (a <= 0) continue;
+      color.setXYZ(i,
+        color.getX(i) + (b.r - color.getX(i)) * a,
+        color.getY(i) + (b.g - color.getY(i)) * a,
+        color.getZ(i) + (b.b - color.getZ(i)) * a);
+      touched++;
+    }
+  }
+  color.needsUpdate = true;
+  return { touched, radius: R, strength: st };
+}
+
+function smoothStep(a, b, v) {
+  if (!(b > a)) return v >= b ? 1 : 0;   // F38 — banda de largura 0 = degrau (sem NaN)
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
 // Campo de grama com LOD: 1 InstancedMesh por chunk (tinta por instância,
-// vento por shader nos materiais das famílias de tint). Retorna { group,
-// chunks, mats, update(camX, camZ) } — update só mexe em visible/count e é
+// vento por shader nos materiais das famílias de tint) + Fase 34: UM campo
+// GLOBAL de impostores (1 InstancedMesh, 1 instância por chunk) para a faixa
+// intermediária-distante — update empacota as matrizes dos chunks visíveis
+// nessa faixa (matrizes ESCREVIDAS só ali; os tufos nunca são reescritos).
+// Retorna { group, chunks, mats, impostors, update(camX, camZ) } — update é
 // idempotente (mesma câmera → mesmo estado). Contrato headless: funciona em
 // Node (InstancedMesh sem renderer), update é determinístico.
 export function buildGrassFieldLOD({
   spots = [], seed = 1, texture = null, tintFamilies = ['#5a6b33'], alphaTest = .42,
   chunkSize = 25, nearDist = 28, midDist = 58, sparseKeep = .4, sway = null,
+  impostorDist = 110, impostorHeight = 1.15, impostorWidth = 3.2, impostorOpacity = .55,
+  // Fase 37 — fade de entrada/saída da banda + sombra de contato ancorada
+  impostorFadeZone = 14, impostorShadow = true, impostorShadowOpacity = .5,
+  impostorShadowRadius = 1.9, impostorShadowLift = .05,
+  // Fase 38 — desbaste GRADUAL do sparse + cross-fade (pre-roll) do impostor
+  sparseEntryZone = 10, sparseExitZone = 12, impostorPreRoll = 0,
 } = {}) {
   const cells = grassChunkify(spots, { chunkSize });
   const group = new THREE.Group();
@@ -412,8 +747,10 @@ export function buildGrassFieldLOD({
   cells.forEach((cell, ci) => {
     const mesh = new THREE.InstancedMesh(geo, mats[ci % mats.length], Math.max(1, cell.indices.length));
     mesh.castShadow = false; mesh.receiveShadow = true;
+    let sy = 0;
     cell.indices.forEach((si, li) => {
       const sp = spots[si];
+      sy += sp.y ?? 0;
       dummy.position.set(sp.x, sp.y ?? 0, sp.z);
       dummy.rotation.set(0, sp.rot ?? 0, 0);
       const s = sp.s ?? 1;
@@ -431,18 +768,139 @@ export function buildGrassFieldLOD({
     mesh.computeBoundingSphere?.();
     mesh.visible = false;                       // update() acende o tier certo
     group.add(mesh);
-    chunks.push({ mesh, fullCount: cell.indices.length, x: cell.x, z: cell.z });
+    // Fase 34 — chunk carrega kx/kz (fase do tint/impostor) e a ALTURA MÉDIA
+    // dos membros (impostor acompanha o relevo sem re-testar o terreno).
+    chunks.push({ kx: cell.kx, kz: cell.kz, mesh, fullCount: cell.indices.length, x: cell.x, z: cell.z, y: sy / cell.indices.length });
   });
+
+  // Fase 34 — campo GLOBAL de impostores: 1 InstancedMesh com capacidade de
+  // 1 instância por chunk; update() empacota na frente as matrizes dos chunks
+  // na faixa impostor (escrita O(faixa), tipicamente dezenas) e define count.
+  // Cor por instância herda a família de tint do chunk — mancha coerente com
+  // o capim próximo. F37: opacidade POR INSTÂNCIA (fade suave nas duas bordas
+  // da banda) + sombras de contato falsas ancoradas no relevo (abaixo).
+  const impGeo = grassImpostorGeometry({ height: impostorHeight, width: impostorWidth });
+  const impMat = new THREE.MeshStandardMaterial({
+    color: '#ffffff', roughness: 1, metalness: 0, flatShading: true,
+    transparent: true, opacity: Math.max(.08, Math.min(1, impostorOpacity)),
+    depthWrite: true, side: THREE.DoubleSide,
+  });
+  if (sway) patchSway(impMat, { ...sway, strength: (sway.strength ?? .07) * .5, yScale: .5 });
+  patchInstanceAlpha(impMat);                   // F37 — fade por instância
+  // F37 — alpha por instância (1 slot por chunk; update() escreve o fade da
+  // banda — smoothstep nas duas bordas; slots fora da faixa ficam em 0)
+  const impAlpha = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, chunks.length)), 1);
+  impAlpha.setUsage(THREE.DynamicDrawUsage);
+  impGeo.setAttribute('instanceAlpha', impAlpha);
+  const impostors = new THREE.InstancedMesh(impGeo, impMat, Math.max(1, chunks.length));
+  impostors.name = 'grassImpostors';
+  impostors.castShadow = false; impostors.receiveShadow = true;
+  impostors.count = 0;                          // update() acende a faixa
+  impostors.visible = false;
+  group.add(impostors);
+  const impColor = new THREE.Color();
+  const impDummy = new THREE.Object3D();
+
+  // F37 — campo de SOMBRAS DE CONTATO: 1 InstancedMesh espelho dos impostores
+  // (1 disco por chunk na banda), mesma varredura de update — a sombra nasce,
+  // acompanha e morre COM a mancha (mesmo alpha por instância). Ancoragem no
+  // relevo: a instância usa o MESMO ch.y dos tufos do chunk (média das alturas
+  // de plantio — o terreno sob o capim) com lift fino anti-z-fight. Material
+  // transparente sem depthWrite (só escurece), polygonOffset empurra contra
+  // o terreno; zero custo quando a banda está vazia.
+  const shMat = new THREE.MeshBasicMaterial({
+    color: '#000000', vertexColors: true, transparent: true,
+    opacity: Math.max(.05, Math.min(1, impostorShadowOpacity)),
+    depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  patchInstanceAlpha(shMat);                    // mesma dança de fade da mancha
+  const shGeo = grassShadowGeometry();
+  const shAlpha = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, chunks.length)), 1);
+  shAlpha.setUsage(THREE.DynamicDrawUsage);
+  shGeo.setAttribute('instanceAlpha', shAlpha);
+  const impostorShadows = new THREE.InstancedMesh(shGeo, shMat, Math.max(1, chunks.length));
+  impostorShadows.name = 'grassImpostorShadows';
+  impostorShadows.castShadow = false; impostorShadows.receiveShadow = false;
+  impostorShadows.renderOrder = 1;              // depois do terreno, antes do impostor
+  impostorShadows.count = 0;
+  impostorShadows.visible = false;
+  group.add(impostorShadows);
+  const shDummy = new THREE.Object3D();
+  const useShadow = !!impostorShadow && impostorDist > midDist;
+
   return {
-    group, chunks, mats, nearDist, midDist, sparseKeep,
+    group, chunks, mats, impostors, impostorMats: [impMat], nearDist, midDist, sparseKeep, impostorDist,
+    // F37 — fade da banda + sombras de contato (espeixo do campo de impostores)
+    impostorFadeZone, impostorShadows, impostorShadowMats: [shMat],
+    impostorShadowRadius, impostorShadowLift,
+    // F38 — desbaste gradual do sparse + pre-roll do cross-fade (inspeção/teste)
+    sparseEntryZone, sparseExitZone, impostorPreRoll,
     update(camX = 0, camZ = 0) {
+      let imp = 0;
+      const hasImpostor = impostorDist > midDist;
+      // F38 — empacotamento do impostor EXTRAÍDO: o cross-fade acende a mancha
+      // também na SAÍDA do sparse (pre-roll), não só no tier impostor
+      const packImpostor = (ch, fade) => {
+        impDummy.position.set(ch.x, ch.y ?? 0, ch.z);
+        impDummy.rotation.set(0, (ch.kx * 7 + ch.kz * 13) % 6, 0);
+        impDummy.scale.setScalar(1);
+        impDummy.updateMatrix();
+        impostors.setMatrixAt(imp, impDummy.matrix);
+        impAlpha.setX(imp, fade);               // F37/F38 — opacidade por distância
+        // sombra de contato: mesmo ancoramento no relevo (ch.y + lift),
+        // disco de raio fixo cobrindo a base do quad cruzado
+        if (useShadow) {
+          shDummy.position.set(ch.x, (ch.y ?? 0) + impostorShadowLift, ch.z);
+          shDummy.rotation.set(0, 0, 0);        // disco é radial — sem rotação
+          shDummy.scale.setScalar(impostorShadowRadius);
+          shDummy.updateMatrix();
+          impostorShadows.setMatrixAt(imp, shDummy.matrix);
+          shAlpha.setX(imp, fade);              // sombra acompanha o fade
+        }
+        // tint médio das famílias (mesma rotação determinística dos tufos);
+        // módulo positivo — kx/kz podem ser NEGATIVOS (chunks a oeste/norte)
+        impColor.copy(tintCols[((ch.kx + ch.kz) % tintCols.length + tintCols.length) % tintCols.length]);
+        impostors.setColorAt(imp, impColor);
+        imp++;
+      };
       for (const ch of chunks) {
         const d = Math.hypot(ch.x - camX, ch.z - camZ);
-        const tier = grassChunkTier(d, { nearDist, midDist });
+        const tier = grassChunkTier(d, { nearDist, midDist, impostorDist });
         if (tier === 'hidden') { ch.mesh.visible = false; continue; }
-        ch.mesh.visible = true;
-        ch.mesh.count = tier === 'full' ? ch.fullCount : Math.max(1, Math.ceil(ch.fullCount * sparseKeep));
+        // F37/F38 — fade SUAVE (alpha 0 nas bordas → nem empacota: custo de
+        // draw 0). Com preRoll > 0 a rampa de entrada começa DENTRO do
+        // desbaste sparse — a mancha cresce sob os tufos que raleiam.
+        const fade = hasImpostor
+          ? grassImpostorFade(d, { midDist, impostorDist, fadeZone: impostorFadeZone, preRoll: impostorPreRoll })
+          : 0;
+        if (tier === 'impostor') {
+          ch.mesh.visible = false;
+          if (fade > 0.002) packImpostor(ch, fade);
+          continue;
+        }
+        // F38 — full | sparse: desbaste GRADUAL (o count É o fade — entrada
+        // rampa full→plateau, plateau = contrato F32, saída raleia até 0).
+        // count 0 → mesh invisível (custo de draw 0, como o tier hidden).
+        const count = tier === 'full'
+          ? ch.fullCount
+          : grassSparseCount(d, {
+              fullCount: ch.fullCount, nearDist, midDist, sparseKeep,
+              entryZone: sparseEntryZone, exitZone: sparseExitZone,
+            });
+        ch.mesh.visible = count > 0;
+        ch.mesh.count = count;
+        if (fade > 0.002) packImpostor(ch, fade);   // cross-fade na saída do sparse
       }
+      impostors.count = imp;
+      impostors.visible = imp > 0;
+      if (impostors.instanceColor) impostors.instanceColor.needsUpdate = true;
+      impostors.computeBoundingSphere?.();
+      impostorShadows.count = useShadow ? imp : 0;   // F37 — espelho da banda
+      impostorShadows.visible = useShadow && imp > 0;
+      impAlpha.needsUpdate = true;                   // alphas escritos neste frame
+      shAlpha.needsUpdate = true;
+      impostorShadows.computeBoundingSphere?.();
       return this;
     },
   };

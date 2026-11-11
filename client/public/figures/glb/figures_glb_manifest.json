@@ -1,0 +1,148 @@
+{
+  "manifest_version": "1.0.0",
+  "source": "shared/figures.ts",
+  "unit": "metro (glTF padrão; UE5 converte para cm no import)",
+  "pose": "A-pose (placeholder de rig/retopo — substituível sem trocar nome de asset)",
+  "format": "glTF 2.0 binário (GLB) com COLOR_0 por vértice",
+  "generated": "2026-11-02T14:30:27.467767+00:00",
+  "figures": [
+    {
+      "id": "kane",
+      "name": "Idris Kane",
+      "sex": "m",
+      "age": 31,
+      "origin": "Afro-brasileiro",
+      "file": "FIG_kane.glb",
+      "bytes": 18232,
+      "sha256": "a56d86e958af14a989cf668899837f97ef558e86a7ee1e2250ce93d2d2128dcc",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.79,
+      "bbox_m": {
+        "x": 1.191,
+        "y": 1.79,
+        "z": 0.344
+      },
+      "palette": {
+        "skin": "#724C30",
+        "suit": "#282D38",
+        "accent": "#D88C19"
+      }
+    },
+    {
+      "id": "puri",
+      "name": "Yara Puri",
+      "sex": "f",
+      "age": 27,
+      "origin": "Indígena amazônica",
+      "file": "FIG_puri.glb",
+      "bytes": 18232,
+      "sha256": "37705e783fb95e7908849fc39f85686e4cf55af602a73985ca234658778198d9",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.676,
+      "bbox_m": {
+        "x": 1.032,
+        "y": 1.676,
+        "z": 0.333
+      },
+      "palette": {
+        "skin": "#845938",
+        "suit": "#214C3D",
+        "accent": "#33BFB2"
+      }
+    },
+    {
+      "id": "voss",
+      "name": "Leandro Voss",
+      "sex": "m",
+      "age": 34,
+      "origin": "Levantina",
+      "file": "FIG_voss.glb",
+      "bytes": 18232,
+      "sha256": "8ca6500f56ff9b1b6564c46edd750c5e35eae5a042b1cbb78c5aa109eb2bc210",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.771,
+      "bbox_m": {
+        "x": 1.176,
+        "y": 1.771,
+        "z": 0.342
+      },
+      "palette": {
+        "skin": "#9E7A56",
+        "suit": "#3F4751",
+        "accent": "#BF723F"
+      }
+    },
+    {
+      "id": "okada",
+      "name": "Mei Okada",
+      "sex": "f",
+      "age": 26,
+      "origin": "Nikkei",
+      "file": "FIG_okada.glb",
+      "bytes": 18236,
+      "sha256": "5bcc4510fb1aeeaee4ae74b86fb35a266d986ad00ca19794e2130c2d4aa388c4",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.657,
+      "bbox_m": {
+        "x": 1.017,
+        "y": 1.657,
+        "z": 0.331
+      },
+      "palette": {
+        "skin": "#C69E7A",
+        "suit": "#2D3372",
+        "accent": "#D83F8C"
+      }
+    },
+    {
+      "id": "hald",
+      "name": "Soren Hald",
+      "sex": "m",
+      "age": 29,
+      "origin": "Norte-europeia",
+      "file": "FIG_hald.glb",
+      "bytes": 18232,
+      "sha256": "d65d8ac6083774ec0e7bd4ad5eafef766bea04aeabe1997d928a4df590791e2e",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.762,
+      "bbox_m": {
+        "x": 1.163,
+        "y": 1.762,
+        "z": 0.341
+      },
+      "palette": {
+        "skin": "#D8AD8C",
+        "suit": "#8C99A5",
+        "accent": "#33B2D8"
+      }
+    },
+    {
+      "id": "okonkwo",
+      "name": "Nia Okonkwo",
+      "sex": "f",
+      "age": 33,
+      "origin": "África Ocidental",
+      "file": "FIG_okonkwo.glb",
+      "bytes": 18244,
+      "sha256": "34cd9278882af645235af956e2abbe7435996c9e06abd2e03e3958ca34161b93",
+      "vertices": 280,
+      "triangles": 488,
+      "height_m": 1.695,
+      "bbox_m": {
+        "x": 1.038,
+        "y": 1.695,
+        "z": 0.335
+      },
+      "palette": {
+        "skin": "#603D26",
+        "suit": "#232328",
+        "accent": "#B266D8"
+      }
+    }
+  ]
+}

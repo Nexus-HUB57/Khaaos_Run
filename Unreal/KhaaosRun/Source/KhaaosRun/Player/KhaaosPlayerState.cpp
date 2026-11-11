@@ -1,6 +1,7 @@
 // Khaaos Run - Devs Ph.D | UE5.8 | Copyright Nexus-HUB57
 
 #include "Player/KhaaosPlayerState.h"
+#include "Player/KhaaosCharacter.h"
 #include "KhaaosRun.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbility.h"
@@ -8,11 +9,14 @@
 #include "Game/AbilitySystem/KhaaosGameplayTags.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
 #include "Game/KhaaosGameMode.h"
+#include "Game/WorldGen/KhaaosEnvironmentalDamagePolicy.h"
 #include "Game/UI/KhaaosHUD.h"
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
+#include "Game/Player/KhaaosVitalityComponent.h"
 #include "Game/Zone/KhaaosSafeZone.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 
@@ -33,6 +37,7 @@ const TArray<TPair<EPatenteRank, int32>> AKhaaosPlayerState::RankXpThresholds = 
 
 AKhaaosPlayerState::AKhaaosPlayerState()
 {
+	PrimaryActorTick.bCanEverTick = true;
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
@@ -51,6 +56,8 @@ AKhaaosPlayerState::AKhaaosPlayerState()
 
         // ── Player status ──
         PlayerStatus = EPlayerStatus::Vivo;
+        bIsDowned = false;
+        DownedTimeRemaining = 0.0f;
         Patente      = EPatenteRank::Zheers;
         XP           = 0;
         Rating       = 1000;
@@ -185,6 +192,10 @@ void AKhaaosPlayerState::HandleAttributeChanged(
 		const float PreviousHealth = Health;
 		Health = NewValue;
 		OnHealthChanged.Broadcast(Health, Health - PreviousHealth);
+		if (bIsDowned && Health > 0.0f)
+		{
+			ClearDownedWindow(true);
+		}
 	}
 	else if (AttributeName == TEXT("MaxHealth"))
 	{
@@ -197,6 +208,28 @@ void AKhaaosPlayerState::HandleAttributeChanged(
 	else if (AttributeName == TEXT("MaxEnergy"))
 	{
 		MaxEnergy = NewValue;
+	}
+
+	if (AttributeName == TEXT("Health") || AttributeName == TEXT("MaxHealth") ||
+		AttributeName == TEXT("Shield") || AttributeName == TEXT("MaxShield"))
+	{
+		if (APawn* Pawn = GetPawn())
+		{
+			if (AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(Pawn))
+			{
+				Character->SyncHealthAndShieldFromPlayerState(
+					Health, MaxHealth,
+					KhaaosAttributeSet ? KhaaosAttributeSet->GetShield() : 0.0f,
+					KhaaosAttributeSet ? KhaaosAttributeSet->GetMaxShield() : 0.0f);
+			}
+			if (AttributeName == TEXT("Health") || AttributeName == TEXT("MaxHealth"))
+			{
+				if (UKhaaosVitalityComponent* Vitality = Pawn->FindComponentByClass<UKhaaosVitalityComponent>())
+				{
+					Vitality->InitializeFromASC(AbilitySystemComponent);
+				}
+			}
+		}
 	}
 }
 
@@ -211,17 +244,95 @@ void AKhaaosPlayerState::HandleOutOfHealth(
 		return;
 	}
 
-	const bool bKilledByZone = Cast<AKhaaosSafeZone>(EffectCauser) != nullptr;
-	APlayerState* Eliminator = bKilledByZone ? nullptr : Cast<APlayerState>(EffectCauser);
-	const FString Cause = bKilledByZone ? TEXT("ZONA") : (Eliminator ? TEXT("PVP") : TEXT("QUEDA"));
+	StartDownedWindow(EffectCauser);
+}
 
+
+void AKhaaosPlayerState::StartDownedWindow(AActor* EffectCauser)
+{
+	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo || bIsDowned)
+	{
+		return;
+	}
+
+	const bool bKilledByZone = Cast<AKhaaosSafeZone>(EffectCauser) != nullptr;
+	const bool bKilledByEnvironment = bApplyingWorldEnvironmentalDamage;
+	APlayerState* CauserPlayerState = Cast<APlayerState>(EffectCauser);
+	if (!CauserPlayerState && EffectCauser)
+	{
+		APawn* CauserPawn = Cast<APawn>(EffectCauser);
+		if (!CauserPawn)
+		{
+			CauserPawn = EffectCauser->GetInstigator();
+		}
+		CauserPlayerState = CauserPawn ? CauserPawn->GetPlayerState() : nullptr;
+	}
+	DownedBy = CauserPlayerState;
+	if (bKilledByZone || bKilledByEnvironment)
+	{
+		DownedBy.Reset();
+	}
+	DownedCause = bKilledByZone ? TEXT("ZONA") :
+		(bKilledByEnvironment ? TEXT("AMBIENTE") : (DownedBy.IsValid() ? TEXT("PVP") : TEXT("QUEDA")));
+	bIsDowned = true;
+	DownedTimeRemaining = DownedTimeLimitSeconds;
+	OnPlayerDowned.Broadcast();
+	UE_LOG(LogKhaaosRun, Log, TEXT("PlayerState: %s downed (%.0fs recovery window)"),
+		*GetPlayerName(), DownedTimeRemaining);
+}
+
+void AKhaaosPlayerState::ClearDownedWindow(bool bWasRevived)
+{
+	if (!bIsDowned)
+	{
+		return;
+	}
+
+	bIsDowned = false;
+	DownedTimeRemaining = 0.0f;
+	DownedBy.Reset();
+	DownedCause = TEXT("QUEDA");
+	if (bWasRevived)
+	{
+		OnPlayerRevived.Broadcast();
+	}
+}
+
+void AKhaaosPlayerState::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!HasAuthority() || !bIsDowned)
+	{
+		return;
+	}
+
+	DownedTimeRemaining = FMath::Max(0.0f, DownedTimeRemaining - DeltaSeconds);
+	if (DownedTimeRemaining <= 0.0f)
+	{
+		FinalizeDownedTimeout();
+	}
+}
+
+
+void AKhaaosPlayerState::FinalizeDownedTimeout()
+{
+	if (!HasAuthority() || !bIsDowned || DownedTimeRemaining > 0.0f)
+	{
+		return;
+	}
+
+	APlayerState* Eliminator = DownedBy.Get();
+	const FString Cause = DownedCause;
+	ClearDownedWindow(false);
 	if (UWorld* World = GetWorld())
 	{
 		if (AKhaaosGameMode* GameMode = World->GetAuthGameMode<AKhaaosGameMode>())
 		{
 			GameMode->EliminatePlayer(this, Eliminator, Cause);
+			return;
 		}
 	}
+	SetPlayerStatus(EPlayerStatus::Eliminado);
 }
 
 void AKhaaosPlayerState::OnRep_Credits()
@@ -263,6 +374,18 @@ void AKhaaosPlayerState::OnRep_PlayerStatus()
 	}
 }
 
+void AKhaaosPlayerState::OnRep_DownedState()
+{
+	if (bIsDowned)
+	{
+		OnPlayerDowned.Broadcast();
+	}
+	else if (PlayerStatus == EPlayerStatus::Vivo && Health > 0.0f)
+	{
+		OnPlayerRevived.Broadcast();
+	}
+}
+
 // ─── Server Authority Methods ───────────────────────────────────────────────────
 
 float AKhaaosPlayerState::ApplyDamage(float DamageAmount, APlayerState* Instigator)
@@ -277,7 +400,7 @@ float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayT
 		return 0.0f;
 	}
 
-        if (PlayerStatus != EPlayerStatus::Vivo || DamageAmount <= 0.0f)
+        if (PlayerStatus != EPlayerStatus::Vivo || bIsDowned || DamageAmount <= 0.0f)
         {
                 return 0.0f;
         }
@@ -286,7 +409,8 @@ float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayT
 		DamageAmount,
 		DamageType,
 		KhaaosAttributeSet->GetOnithProjectileDamageReduction(),
-		KhaaosAttributeSet->GetOnithExplosionDamageReduction());
+		KhaaosAttributeSet->GetOnithExplosionDamageReduction(),
+		KhaaosAttributeSet->GetZheersEnvironmentalDamageReduction());
 	if (MitigatedDamage <= 0.0f)
 	{
 		return 0.0f;
@@ -308,6 +432,28 @@ float AKhaaosPlayerState::ApplyDamageOfType(float DamageAmount, const FGameplayT
 
 	const float ActualDamage = FMath::Max(0.0f, OldHealth - KhaaosAttributeSet->GetHealth());
 	DamageDealt += ActualDamage;
+	return ActualDamage;
+}
+
+float AKhaaosPlayerState::ApplyWorldEnvironmentalDamage(float DamageAmount, AActor* DamageCauser, FName SourceWorldId)
+{
+	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo || !KhaaosAttributeSet || DamageAmount <= 0.0f ||
+		!KhaaosEnvironmentalDamagePolicy::IsSourceWorldActive(GetWorld(), SourceWorldId))
+	{
+		return 0.0f;
+	}
+
+	const FGameplayTag EnvironmentDamageTag = FKhaaosGameplayTags::Get().Effect_Damage_Environment;
+	if (!EnvironmentDamageTag.IsValid())
+	{
+		return 0.0f;
+	}
+
+	const bool bWasApplyingEnvironmentDamage = bApplyingWorldEnvironmentalDamage;
+	bApplyingWorldEnvironmentalDamage = true;
+	const float ActualDamage = KhaaosAttributeSet->ApplyDamageOfType(
+		DamageAmount, DamageCauser, EnvironmentDamageTag);
+	bApplyingWorldEnvironmentalDamage = bWasApplyingEnvironmentDamage;
 	return ActualDamage;
 }
 
@@ -354,7 +500,7 @@ void AKhaaosPlayerState::SetSpeciesPassiveAbility(
 
 float AKhaaosPlayerState::ApplyZoneDamage(float DamageAmount, AActor* EffectCauser)
 {
-	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo ||
+	if (!HasAuthority() || PlayerStatus != EPlayerStatus::Vivo || bIsDowned ||
 		DamageAmount <= 0.0f || !AbilitySystemComponent || !KhaaosAttributeSet || !EffectCauser)
 	{
 		return 0.0f;
@@ -393,6 +539,10 @@ float AKhaaosPlayerState::Heal(float HealAmount)
 	const float OldHealth = KhaaosAttributeSet->GetHealth();
 	KhaaosAttributeSet->Heal(HealAmount);
 	const float ActualHeal = FMath::Max(0.0f, KhaaosAttributeSet->GetHealth() - OldHealth);
+	if (bIsDowned && KhaaosAttributeSet->GetHealth() > 0.0f)
+	{
+		ClearDownedWindow(true);
+	}
 	return ActualHeal;
 }
 
@@ -415,6 +565,11 @@ void AKhaaosPlayerState::SetPlayerStatus(EPlayerStatus NewStatus)
         {
                 return;
         }
+
+	if (NewStatus != EPlayerStatus::Vivo && bIsDowned)
+	{
+		ClearDownedWindow(false);
+	}
 
         EPlayerStatus OldStatus = PlayerStatus;
         PlayerStatus = NewStatus;
@@ -470,6 +625,8 @@ void AKhaaosPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 
         // Player status
         DOREPLIFETIME_CONDITION_NOTIFY(AKhaaosPlayerState, PlayerStatus, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME(AKhaaosPlayerState, bIsDowned);
+	DOREPLIFETIME(AKhaaosPlayerState, DownedTimeRemaining);
         DOREPLIFETIME(AKhaaosPlayerState, Patente);
         DOREPLIFETIME(AKhaaosPlayerState, XP);
         DOREPLIFETIME(AKhaaosPlayerState, Rating);

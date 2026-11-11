@@ -1,0 +1,1089 @@
+Scripts de otimização de cenários 3D
+
+Khaaos Run · Three.js · Guia de implementação
+
+Documento técnico em Word | 29 de outubro de 2026
+
+Três módulos JavaScript completos, uma suíte de regressão e instruções de integração para a modelagem procedural dos cenários.
+
+Base inspecionada
+
+Nexus-HUB57/Khaaos_RunCommit: 537ac13fae2e64e6c47d7b9a6ed25e746ef95b1c
+
+Escopo: malha visual do terreno, agrupamento espacial de decoração estática e auditoria de recursos. Não altera colisões, servidor, rede, loot ou regras de gameplay.
+
+Estado de validação
+
+18 testes automatizados aprovados em Node.js 22.23.4 com Three.js 0.169.0, usando as funções reais do terreno do runtime em cópia isolada. Não houve execução do jogo em GPU, benchmark de FPS, teste visual no navegador, push ou pull request.
+
+Importante: os códigos são propostas novas. A pasta Epic Games contém um pacote gráfico separado; seus arquivos não devem ser tratados como se já estivessem aplicados ao runtime.
+
+
+
+Sumário
+
+
+
+Contratos que permanecem intactos
+
+2. Preparação e plano de arquivos
+
+Sequência recomendada
+
+3. Script A — malha do terreno por perfil
+
+Integração mínima em terrain3d.js
+
+Integração em world3d.js
+
+Redução estrutural verificada
+
+4. Script B — decoração instanciada por célula
+
+Exemplo de adoção em uma família nova
+
+Descarte e propriedade dos recursos
+
+5. Script C — auditoria e frametimes
+
+Exemplo de inventário
+
+Coleta no loop existente de main3d.js
+
+6. Suíte de regressão completa
+
+Execução no projeto
+
+7. Validação visual, aceitação e reversão
+
+Protocolo A/B reproduzível
+
+Critérios de aceite
+
+Reversão segura
+
+Fora do escopo
+
+
+
+
+
+1. Diagnóstico do repositório
+
+A pasta indicada pelo usuário foi inspecionada junto com os pontos de integração do jogo. O manifest de Epic Games/IMPLEMENTACAO_GRAFICA declara escopo Three.js e ausência de alterações em UE5. O package.json de game-runtime declara Three.js ^0.169.0 e Vite ^6.1.0.
+
+
+
+
+
+
+
+Arquivo ou módulo
+
+
+
+Constatação e consequência
+
+
+
+
+
+src/game3d/terrain3d.js
+
+
+
+Terreno de 440 × 440; grade padrão de 96 segmentos por eixo; terrainHeightAt exportada; terrainTint privada no runtime.
+
+
+
+
+
+src/game3d/world3d.js
+
+
+
+buildScene(seed, scenarioId, renderer, quality) chama buildTerrain(scenario); props e sombras de contato já usam instâncias.
+
+
+
+
+
+src/game3d/main3d.js
+
+
+
+Desenha por post.render(dt) ou renderer.render(scene, camera). A telemetria deve ficar depois desse bloco.
+
+
+
+
+
+src/game3d/perf3d.js
+
+
+
+Já existe controle adaptativo de resolução e auto-tier. Não adicionar outro controlador concorrente.
+
+
+
+
+
+Epic Games/IMPLEMENTACAO_GRAFICA
+
+
+
+Pacote proposto com cópias e patch; terrainTint é exportada nessa cópia, mas não no runtime inspecionado.
+
+
+
+Contratos que permanecem intactos
+
+Cenários: CIGKV, Barburhen, Priadus, Ckesalth e Arukheea; mesmas funções de altura, cor e identificação.
+
+A função atual retorna altura zero para max(|x|, |z|) ≤ 197. O clamp da simulação citado no código é ±198: a faixa 197–198 já é uma transição visual, não deve ser declarada plana.
+
+A nova grade insere linhas em ±197, ±198 e ±211. A fronteira plana não fica no interior de triângulos com vértices elevados; a função de altura original não é modificada.
+
+Não converter personagens, loot, portas, hitboxes ou objetos animados em decoração estática.
+
+
+
+2. Preparação e plano de arquivos
+
+Execute em uma cópia de trabalho limpa. O comando gh exige GitHub CLI configurada; a alternativa usa Git diretamente. Nenhum comando abaixo publica mudanças.
+
+gh repo clone Nexus-HUB57/Khaaos_Run
+
+# Alternativa ao comando acima:
+
+# git clone https://github.com/Nexus-HUB57/Khaaos_Run.git
+
+cd Khaaos_Run
+
+git switch -c feat/scenario-model-optimization
+
+cd game-runtime
+
+npm ci
+
+
+
+Salve cada bloco de código com o nome indicado, em texto UTF-8. Não inclua títulos, números de página nem linhas do cabeçalho do Word nos arquivos. Preserve aspas retas e a indentação do JavaScript.
+
+
+
+
+
+
+
+Destino relativo a game-runtime
+
+
+
+Uso
+
+
+
+
+
+src/game3d/terrain-optimized.mjs
+
+
+
+Nova malha visual por perfil
+
+
+
+
+
+src/game3d/prop-batches.mjs
+
+
+
+Instâncias estáticas agrupadas por célula
+
+
+
+
+
+src/game3d/scene-audit.mjs
+
+
+
+Inventário de buffers e resumo de frametimes
+
+
+
+
+
+test/scenario-optimization.test.mjs
+
+
+
+Regressão dos três módulos
+
+
+
+Mantenha o package-lock.json existente. Os módulos usam apenas a dependência three já declarada; node:test é nativo. Os comandos de shell são para terminal com Git e Node; ajuste somente caminhos locais se necessário.
+
+O clone emitiu aviso de dois DLLs que deveriam ser ponteiros LFS: DSETUP.dll e dsetup32.dll. Não os inclua nesta alteração e evite git add .; faça staging somente dos arquivos aprovados.
+
+Sequência recomendada
+
+Aplicar apenas a malha do terreno e executar a regressão.
+
+Comparar os cinco mundos em low, medium e high, inclusive queda livre.
+
+Migrar uma única família decorativa para batches e avaliar draw calls.
+
+Adicionar a auditoria em modo de desenvolvimento e medir em hardware-alvo.
+
+
+
+3. Script A — malha do terreno por perfil
+
+Arquivo: src/game3d/terrain-optimized.mjs. Gera índices, UVs, cores, normais e bounds; usa as funções originais por injeção. O material mantém repetição 34 e receiveShadow. Não há simplificação de colisão nem LOD dinâmico: o perfil é escolhido na construção do cenário.
+
+A amostragem mais espaçada modifica interpolação, silhueta periférica, normais e cores entre vértices. Mesmo high requer aprovação visual. O custo de construção e a memória temporária não foram perfilados.
+
+import * as THREE from 'three';
+
+ 
+
+// Apenas geometria visual; nao modifica a simulacao.
+
+export function buildOptimizedTerrain(scenario, {
+
+  quality = 'high', heightAt, tintAt, materialFactory
+
+} = {}) {
+
+  for (const fn of [heightAt, tintAt, materialFactory]) {
+
+    if (typeof fn !== 'function') throw new TypeError('Dependencia ausente');
+
+  }
+
+  const segments = { low: 24, medium: 48, high: 80 }[quality];
+
+  if (!segments) throw new RangeError('Qualidade invalida');
+
+  // Linhas explicitas impedem triangulos de atravessar a borda plana.
+
+  const axis = [...new Set([
+
+    ...Array.from({ length: segments + 1 },
+
+      (_, i) => -220 + 440 * i / segments),
+
+    -211, -198, -197, 197, 198, 211
+
+  ])].sort((a, b) => a - b);
+
+  const n = axis.length;
+
+  const positions = [], colors = [], uvs = [], indices = [];
+
+  for (const z of axis) for (const x of axis) {
+
+    const h = heightAt(x, z, scenario.id);
+
+    positions.push(x, h, z);
+
+    colors.push(...tintAt(h, x, z, scenario.id));
+
+    uvs.push((x + 220) / 440, (220 - z) / 440);
+
+  }
+
+  for (let j = 0; j < n - 1; j++) {
+
+    for (let i = 0; i < n - 1; i++) {
+
+      const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+
+      indices.push(a, c, b, b, c, d);
+
+    }
+
+  }
+
+  const geo = new THREE.BufferGeometry();
+
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  geo.setIndex(indices);
+
+  geo.computeVertexNormals();
+
+  geo.computeBoundingBox();
+
+  geo.computeBoundingSphere();
+
+  const material = materialFactory(34, scenario.groundTint);
+
+  material.vertexColors = true;
+
+  const mesh = new THREE.Mesh(geo, material);
+
+  mesh.name = 'terrain';
+
+  mesh.receiveShadow = true;
+
+  mesh.userData.terrain = true;
+
+  mesh.userData.optimizedTerrain = quality;
+
+  return mesh;
+
+}
+
+
+
+Integração mínima em terrain3d.js
+
+No runtime inspecionado, mude apenas a declaração abaixo. Não substitua a implementação de terrainTint pela cópia do pacote gráfico.
+
+// Antes:
+
+function terrainTint(h, x, z, scenarioId) {
+
+// Depois (mantenha todo o corpo original):
+
+export function terrainTint(h, x, z, scenarioId) {
+
+
+
+Integração em world3d.js
+
+Amplie o import existente de terrain3d.js, adicione os imports abaixo e substitua somente a linha que cria ground. Preserve demais imports de textures3d.js: se já houver um, acrescente groundMaterial nele em vez de duplicar o identificador.
+
+import { buildTerrain, terrainHeightAt, terrainTint } from './terrain3d.js';
+
+import { groundMaterial } from './textures3d.js';
+
+import { buildOptimizedTerrain } from './terrain-optimized.mjs';
+
+ 
+
+// Dentro de buildScene, no lugar de:
+
+// const ground = buildTerrain(scenario);
+
+const ground = buildOptimizedTerrain(scenario, {
+
+  quality,
+
+  heightAt: terrainHeightAt,
+
+  tintAt: terrainTint,
+
+  materialFactory: groundMaterial
+
+});
+
+scene.add(ground); // mantenha uma unica chamada
+
+
+
+Deixe buildTerrain importada durante a comparação A/B e a reversão. quality é a string original do argumento de buildScene, não o objeto q. Um auto-tier aplicado apenas ao renderer não reconstrói a malha: um novo perfil de terreno só entra na próxima construção do mundo.
+
+Redução estrutural verificada
+
+Contagem de triângulos da malha do solo, não do cenário inteiro. A base é 2 × 96² = 18.432. As linhas extras de fronteira já estão incluídas nos valores abaixo.
+
+
+
+
+
+
+
+Configuração
+
+
+
+Triângulos
+
+
+
+Redução sobre a base
+
+
+
+
+
+Original
+
+
+
+18.432
+
+
+
+—
+
+
+
+
+
+low
+
+
+
+1.800
+
+
+
+90,2%
+
+
+
+
+
+medium
+
+
+
+5.832
+
+
+
+68,4%
+
+
+
+
+
+high
+
+
+
+14.112
+
+
+
+23,4%
+
+
+
+
+
+
+
+Menos triângulos não garante FPS maior: o gargalo pode estar em sombras, fill-rate, pós-processamento, CPU ou transparências. A malha do solo continua sendo um objeto; este script não promete reduzir draw calls do solo.
+
+
+
+4. Script B — decoração instanciada por célula
+
+Arquivo: src/game3d/prop-batches.mjs. Agrupa transformações de uma família homogênea em células XZ, permitindo frustum culling por batch. Use em uma família ainda não instanciada, ou refatore conscientemente um batch grande existente. Células menores podem aumentar draw calls em relação a uma única instância global.
+
+Contrato obrigatório: mesmo BufferGeometry e mesmo material opaco; matrizes locais ao grupo; objetos estáticos; sem morphs, shader de vento, callbacks por objeto, cores individuais, picking por identidade ou sombras com configurações distintas. A API rejeita algumas entradas incompatíveis, mas não consegue detectar todas as dependências de gameplay.
+
+import * as THREE from 'three';
+
+ 
+
+// Construir no lugar de objetos individuais, nunca por cima deles.
+
+// Contrato: decoracao estatica, opaca, sem interacao nem animacao.
+
+// Matrizes em coordenadas LOCAIS do grupo retornado.
+
+export function createPropBatches({
+
+  geometry, material, matrices, cellSize = 64,
+
+  castShadow = false, receiveShadow = true
+
+}) {
+
+  if (!geometry?.isBufferGeometry || !material?.isMaterial ||
+
+      Array.isArray(material) || material.transparent ||
+
+      material.opacity < 1 || material.transmission > 0 ||
+
+      geometry.morphAttributes.position?.length) {
+
+    throw new TypeError('Use geometria simples e material opaco unico');
+
+  }
+
+  if (!Number.isFinite(cellSize) || cellSize <= 0) {
+
+    throw new RangeError('cellSize deve ser positivo');
+
+  }
+
+  const cells = new Map();
+
+  for (const matrix of matrices) {
+
+    if (!matrix?.isMatrix4 ||
+
+        !matrix.elements.every(Number.isFinite) ||
+
+        matrix.determinant() <= 0) {
+
+      throw new TypeError('Matriz invalida, singular ou espelhada');
+
+    }
+
+    const e = matrix.elements;
+
+    const key = `${Math.floor(e[12] / cellSize)},${Math.floor(e[14] / cellSize)}`;
+
+    if (!cells.has(key)) cells.set(key, []);
+
+    cells.get(key).push(matrix);
+
+  }
+
+  const group = new THREE.Group();
+
+  group.name = 'static-prop-batches';
+
+  for (const [key, list] of cells) {
+
+    const batch = new THREE.InstancedMesh(geometry, material, list.length);
+
+    batch.name = `props:${key}`;
+
+    list.forEach((m, i) => batch.setMatrixAt(i, m));
+
+    batch.instanceMatrix.needsUpdate = true;
+
+    batch.castShadow = castShadow;
+
+    batch.receiveShadow = receiveShadow;
+
+    batch.computeBoundingBox();
+
+    batch.computeBoundingSphere();
+
+    batch.frustumCulled = true;
+
+    group.add(batch);
+
+  }
+
+  return group;
+
+}
+
+ 
+
+// Nao libera geometry/material: podem pertencer a outros objetos.
+
+export function disposePropBatches(group) {
+
+  for (const child of [...group.children]) {
+
+    if (!child.isInstancedMesh) continue;
+
+    child.dispose();
+
+    group.remove(child);
+
+  }
+
+  group.removeFromParent();
+
+}
+
+
+
+Exemplo de adoção em uma família nova
+
+import * as THREE from 'three';
+
+import { createPropBatches } from './prop-batches.mjs';
+
+ 
+
+// Exemplo didatico: substitua por decoracao real aprovada.
+
+const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+
+const material = new THREE.MeshStandardMaterial({ color: '#706b64' });
+
+const positions = [[10, 0.75, 10], [15, 0.75, 12], [90, 0.75, 80]];
+
+const matrices = positions.map(([x, y, z]) =>
+
+  new THREE.Matrix4().makeTranslation(x, y, z));
+
+const decor = createPropBatches({ geometry, material, matrices });
+
+scene.add(decor);
+
+
+
+Em uma migração, gere as matrizes no construtor da família e deixe de criar os meshes individuais. Não acrescente o batch mantendo os originais: isso duplica geometria. Não reúna todos os props do mapa com materiais diferentes em uma única chamada.
+
+As matrizes devem ser afins, com escala positiva, sem cisalhamento, e produzidas preferencialmente por Matrix4.compose. O código não verifica todas essas propriedades; determinante positivo não exclui toda transformação inadequada. Teste bounds e orientação ao integrar transformações externas.
+
+Descarte e propriedade dos recursos
+
+import { disposePropBatches } from './prop-batches.mjs';
+
+disposePropBatches(decor);
+
+// Somente quando nao houver outros usuarios destes recursos:
+
+geometry.dispose();
+
+material.dispose();
+
+// Texturas compartilhadas exigem seu proprio controle de propriedade.
+
+
+
+disposePropBatches libera os recursos específicos de instâncias e destaca o grupo. Geometria e material pertencem ao chamador. Quando o grupo estiver sob um pai transformado, mantenha as matrizes no espaço local desse grupo; não misture matrixWorld com transformações locais.
+
+
+
+5. Script C — auditoria e frametimes
+
+Arquivo: src/game3d/scene-audit.mjs. O inventário percorre a cena inteira, inclusive objetos invisíveis, e deduplica recursos compartilhados por identidade. cpuBufferBytes soma ArrayBuffers alcançados: não mede VRAM, texturas comprimidas, render targets, bytes realmente usados de cada view ou custo de shader.
+
+// Inventario de recursos na CPU; nao representa VRAM real.
+
+export function auditScene(root, renderer = null) {
+
+  const geometries = new Set(), materials = new Set(), textures = new Set();
+
+  const buffers = new Set();
+
+  let meshes = 0, instances = 0, geometryBytes = 0;
+
+  function addAttribute(attribute) {
+
+    const array = attribute?.isInterleavedBufferAttribute
+
+      ? attribute.data.array : attribute?.array;
+
+    if (array && !buffers.has(array.buffer)) {
+
+      buffers.add(array.buffer);
+
+      geometryBytes += array.buffer.byteLength;
+
+    }
+
+  }
+
+  root.traverse(object => {
+
+    if (!object.isMesh) return;
+
+    meshes++;
+
+    if (object.isInstancedMesh) {
+
+      instances += object.count;
+
+      addAttribute(object.instanceMatrix);
+
+      addAttribute(object.instanceColor);
+
+    }
+
+    if (object.geometry) geometries.add(object.geometry);
+
+    for (const mat of [object.material].flat()) {
+
+      if (mat) materials.add(mat);
+
+    }
+
+  });
+
+  for (const geo of geometries) {
+
+    Object.values(geo.attributes).forEach(addAttribute);
+
+    Object.values(geo.morphAttributes).flat().forEach(addAttribute);
+
+    addAttribute(geo.index);
+
+  }
+
+  for (const mat of materials) {
+
+    for (const value of Object.values(mat)) {
+
+      if (value?.isTexture) textures.add(value);
+
+    }
+
+  }
+
+  return {
+
+    meshes, instances, geometries: geometries.size,
+
+    materials: materials.size, directTextures: textures.size,
+
+    cpuBufferBytes: geometryBytes,
+
+    render: renderer ? { ...renderer.info.render } : null
+
+  };
+
+}
+
+ 
+
+export function summarizeFrameTimes(samplesMs) {
+
+  const values = samplesMs.filter(v => Number.isFinite(v) && v > 0)
+
+    .sort((a, b) => a - b);
+
+  if (!values.length) throw new RangeError('Sem amostras validas');
+
+  const percentile = p => values[Math.ceil(values.length * p) - 1];
+
+  return { samples: values.length, medianMs: percentile(0.5),
+
+    p95Ms: percentile(0.95), p99Ms: percentile(0.99) };
+
+}
+
+
+
+Exemplo de inventário
+
+import { auditScene } from './scene-audit.mjs';
+
+// Rode sob demanda no modo de desenvolvimento, nao a cada frame.
+
+console.table(auditScene(this.scene, this.renderer));
+
+
+
+directTextures conta propriedades de textura diretamente no material. Não inclui uniforms aninhados de ShaderMaterial, scene.environment, scene.background ou recursos internos de pós-FX. geometries é a quantidade de geometrias únicas, não chamadas de desenho.
+
+Coleta no loop existente de main3d.js
+
+Adicione o import e, depois do bloco post.render/renderer.render, o trecho abaixo. Não crie outro requestAnimationFrame. O exemplo só coleta em desenvolvimento, ignora 120 intervalos de aquecimento e imprime uma janela de 600 amostras.
+
+import { summarizeFrameTimes } from './scene-audit.mjs';
+
+ 
+
+// Depois do render existente, dentro do metodo de frame:
+
+if (import.meta.env.DEV) {
+
+  const now = performance.now();
+
+  const perf = this.scenarioPerf ??= {
+
+    previous: now, warmup: 120, values: [], done: false
+
+  };
+
+  const elapsed = now - perf.previous;
+
+  perf.previous = now;
+
+  if (document.hidden || elapsed > 500) {
+
+    perf.warmup = 120;
+
+    perf.values = [];
+
+  } else if (perf.warmup > 0) {
+
+    perf.warmup--;
+
+  } else if (!perf.done && elapsed > 0) {
+
+    perf.values.push(elapsed);
+
+    if (perf.values.length === 600) {
+
+      console.table(summarizeFrameTimes(perf.values));
+
+      perf.done = true;
+
+    }
+
+  }
+
+}
+
+
+
+Para uma nova coleta, execute this.scenarioPerf = undefined no ponto de controle de diagnóstico ou reinicie a sessão. Mantenha rota de câmera, cenário, seed, resolução e configuração comparáveis. A medição é intervalo entre frames, não tempo GPU; VSync e limitação do navegador afetam o resultado.
+
+renderer.info.render normalmente reinicia em cada render. Com pós-FX multipass, a leitura pode representar apenas a última passagem. Para um experimento multipass, preserve info.autoReset, defina false, invoque info.reset() imediatamente antes do primeiro passe do frame, leia depois do último e restaure ao encerrar. Não misture protocolos A/B nem altere o controle adaptativo de perf3d.js para a versão de produção.
+
+
+
+6. Suíte de regressão completa
+
+Arquivo: test/scenario-optimization.test.mjs. O código abaixo já usa os imports de destino do projeto. A execução verificada foi isolada, com os mesmos módulos e funções reais de terrain3d.js/textures3d.js e somente a exportação de terrainTint na cópia de teste; o material canvas foi substituído por MeshStandardMaterial para permitir Node sem DOM.
+
+import test from 'node:test';
+
+import assert from 'node:assert/strict';
+
+import * as THREE from 'three';
+
+import { terrainHeightAt, terrainTint } from '../src/game3d/terrain3d.js';
+
+import { buildOptimizedTerrain } from '../src/game3d/terrain-optimized.mjs';
+
+import { createPropBatches, disposePropBatches } from '../src/game3d/prop-batches.mjs';
+
+import { auditScene, summarizeFrameTimes } from '../src/game3d/scene-audit.mjs';
+
+ 
+
+for (const id of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+
+  for (const quality of ['low', 'medium', 'high']) {
+
+    test(`terreno ${id}/${quality}`, () => {
+
+      const mesh = buildOptimizedTerrain({ id, groundTint: '#ffffff' }, {
+
+        quality, heightAt: terrainHeightAt, tintAt: terrainTint,
+
+        materialFactory: () => new THREE.MeshStandardMaterial()
+
+      });
+
+      const g = mesh.geometry, p = g.attributes.position;
+
+      const triangles = g.index.count / 3;
+
+      assert.ok(triangles < 18432);
+
+      for (let i = 0; i < p.count; i++) {
+
+        const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
+
+        assert.ok(Number.isFinite(y));
+
+        if (Math.max(Math.abs(x), Math.abs(z)) <= 197) assert.equal(y, 0);
+
+        assert.ok(Math.abs(y - terrainHeightAt(x, z, id)) < 0.0001);
+
+      }
+
+      for (const a of Object.values(g.attributes)) {
+
+        assert.ok(a.array.every(Number.isFinite));
+
+      }
+
+      // Amostra dentro de cada triangulo: nao basta testar vertices.
+
+      for (let i = 0; i < g.index.count; i += 3) {
+
+        const ids = [0, 1, 2].map(k => g.index.getX(i + k));
+
+        const x = ids.reduce((s, k) => s + p.getX(k), 0) / 3;
+
+        const z = ids.reduce((s, k) => s + p.getZ(k), 0) / 3;
+
+        if (Math.max(Math.abs(x), Math.abs(z)) <= 197) {
+
+          assert.ok(ids.every(k => p.getY(k) === 0));
+
+        }
+
+      }
+
+      assert.ok(mesh.receiveShadow && mesh.userData.terrain);
+
+      console.log(id, quality, triangles);
+
+      g.dispose(); mesh.material.dispose();
+
+    });
+
+  }
+
+}
+
+ 
+
+test('instancias por celula, bounds e descarte', () => {
+
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+  const material = new THREE.MeshStandardMaterial();
+
+  const matrices = [0, 5, 100].map(x => new THREE.Matrix4().makeTranslation(x, 0, 0));
+
+  const group = createPropBatches({ geometry, material, matrices });
+
+  assert.equal(group.children.length, 2);
+
+  assert.equal(group.children.reduce((n, m) => n + m.count, 0), 3);
+
+  assert.ok(group.children.every(m => m.boundingSphere.radius > 0));
+
+  const audit = auditScene(group);
+
+  assert.equal(audit.geometries, 1);
+
+  assert.equal(audit.materials, 1);
+
+  assert.equal(audit.instances, 3);
+
+  assert.ok(audit.cpuBufferBytes > 0);
+
+  let disposed = false;
+
+  geometry.addEventListener('dispose', () => { disposed = true; });
+
+  disposePropBatches(group);
+
+  assert.equal(group.children.length, 0);
+
+  assert.equal(disposed, false);
+
+  geometry.dispose(); material.dispose();
+
+});
+
+ 
+
+test('rejeita transparencia, escala negativa e celula invalida', () => {
+
+  const geometry = new THREE.BoxGeometry();
+
+  const material = new THREE.MeshBasicMaterial({ transparent: true });
+
+  assert.throws(() => createPropBatches({ geometry, material, matrices: [] }));
+
+  material.transparent = false;
+
+  assert.throws(() => createPropBatches({ geometry, material, matrices: [], cellSize: 0 }));
+
+  assert.throws(() => createPropBatches({ geometry, material,
+
+    matrices: [new THREE.Matrix4().makeScale(-1, 1, 1)] }));
+
+  geometry.dispose(); material.dispose();
+
+});
+
+ 
+
+test('percentis e amostras invalidas', () => {
+
+  assert.deepEqual(summarizeFrameTimes([1, 2, 3, 4, 5, NaN, -1]),
+
+    { samples: 5, medianMs: 3, p95Ms: 5, p99Ms: 5 });
+
+  assert.throws(() => summarizeFrameTimes([]));
+
+});
+
+
+
+Execução no projeto
+
+# A partir de game-runtime, depois de salvar os arquivos:
+
+node --test test/scenario-optimization.test.mjs
+
+npm test
+
+npm run build
+
+
+
+O npm test atual usa test/*.test.js e, por isso, não inclui automaticamente o novo arquivo .test.mjs. Execute a linha explícita acima ou acrescente ambos os padrões ao script de teste, após validar a compatibilidade do shell usado pela CI.
+
+Resultado observado: 18 testes; 18 aprovados; zero falhas. Os 15 casos de terreno cobrem cinco cenários × três perfis; os outros três cobrem instâncias/descarte, entradas incompatíveis e percentis. A suíte integral do jogo e o build não foram executados nesta entrega.
+
+Os testes verificam invariantes numéricos e estruturais, não o resultado rasterizado. Não demonstram fidelidade visual, melhoria de FPS, colisão correta na faixa 197–198 ou ausência de vazamentos GPU ao longo de uma sessão real.
+
+
+
+7. Validação visual, aceitação e reversão
+
+Protocolo A/B reproduzível
+
+Escolha uma máquina e navegador-alvo. Registre GPU, resolução, DPR, cenário, seed, tier, estado do pós-FX e versão do código.
+
+Compare buildTerrain original e buildOptimizedTerrain sem mudar simultaneamente vegetação, texturas, DRS ou famílias de props. Use uma configuração de qualidade estável para isolar o efeito; depois repita com o modo adaptativo normal.
+
+Execute a mesma rota: câmera aérea/queda livre, horizonte, deslocamento no chão, limite do mapa e área com muita decoração. Compare capturas dos cinco mundos nos três perfis.
+
+Após aquecimento, capture a janela de frametimes em sessões equivalentes. Repita ao menos três vezes por variante; não compare uma execução fria com outra já aquecida.
+
+Migre uma família decorativa por vez. Registre batches visíveis, chamadas de desenho pelo mesmo protocolo de passes e custo de sombras. Se a célula de 64 unidades piorar o caso real, ajuste-a e meça novamente.
+
+Ao descarregar/recarregar o mundo, observe renderer.info.memory e ferramentas do navegador. A auditoria de ArrayBuffers não substitui uma investigação de memória GPU.
+
+Critérios de aceite
+
+Regressão nova aprovada; suíte existente e build do projeto aprovados na máquina de integração.
+
+Plano visual interno preservado até 197; sem costuras visíveis, UVs invertidas, buracos, desaparecimento prematuro ou objetos duplicados.
+
+Aprovação visual das silhuetas periféricas, sombras e coloração em cada cenário; atenção especial às cristas de Ckesalth e à neve de Barburhen.
+
+Sem regressão de p95/p99 de frametime no protocolo A/B e sem aumento persistente de memória após repetidas trocas de mundo. Defina a tolerância com a equipe antes da medição; não há meta universal de FPS nesta entrega.
+
+Nenhuma alteração de colisões, entidades interativas, determinismo da simulação, persistência ou rede.
+
+Reversão segura
+
+Reponha const ground = buildTerrain(scenario) e remova apenas os imports da alternativa. Reverta a migração da família decorativa ao construtor anterior. Remova a instrumentação e as referências aos novos módulos; só depois remova os arquivos, se desejado. Retirar export de terrainTint é opcional, mas exige remover todos os imports dela primeiro.
+
+Faça a reversão por commit dedicado em revisão, preferencialmente git revert <hash-do-commit>. Não use git reset --hard nem git clean -fd em uma árvore com trabalho não salvo. O guia não aplica patch nem faz commit automaticamente.
+
+Fora do escopo
+
+Não inclui scripts Python/Editor Utility de Unreal, Nanite, geração de HLOD UE5, decimação Blender, bake de texturas, atlas, conversão glTF ou compressão Draco/KTX2. Tais pipelines exigem confirmação dos assets-fonte e da cadeia de importação; não foram inferidos do nome Epic Games.
+
+
+
+8. Referências e rastreabilidade
+
+Fontes de implementação inspecionadas no commit identificado. Os links fixados abaixo evitam depender de mudanças futuras em main.
+
+Pasta solicitada
+
+Epic%20Games
+
+Manifest do pacote gráfico
+
+Epic%20Games/IMPLEMENTACAO_GRAFICA/manifest.json
+
+Dependências e comandos
+
+game-runtime/package.json
+
+Terreno original
+
+game-runtime/src/game3d/terrain3d.js
+
+Construção dos mundos
+
+game-runtime/src/game3d/world3d.js
+
+Loop de renderização
+
+game-runtime/src/game3d/main3d.js
+
+Controle adaptativo existente
+
+game-runtime/src/game3d/perf3d.js
+
+Scripts novos: terrain-optimized.mjs, prop-batches.mjs e scene-audit.mjs. Dependências das provas: three@0.169.0 e módulos nativos node:test/node:assert. A única adaptação de fonte original nos testes foi tornar terrainTint exportada; seu corpo foi preservado.

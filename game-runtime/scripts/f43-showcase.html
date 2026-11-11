@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- Fase 43 — vitrine dev (evidência visual): DETALHES FIEIS AO README por
+     mundo — skeleton/collapse (W1 construções inacabadas + desabamentos),
+     carnplant/mist (W2 flora carnívora + neblina alucinógena), oilfire/
+     quicksand (W3 lagoas de petróleo EM CHAMAS + areia movediça) e sharkfin
+     (W4 tubarões patrulhando). Usa o buildScene REAL do jogo (cenário completo:
+     marcos, dressing dos distritos, perfis de luz F41) com câmera dev. Serve
+     via `npm run dev` em /scripts/f43-showcase.html -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F43 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; }
+  #hud b { color: #ffb52e; }
+  #rail { position: fixed; left: 12px; bottom: 12px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 900px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 43</b><br />
+  <b>DETALHES FIEIS AO README</b> — W1 esqueleto/desabamento · W2 flora carnívora/névoa alucinógena ·
+  W3 óleo em chamas/areia movediça · W4 tubarões (cena REAL do jogo, animators rodando)
+</div>
+<div id="rail"></div>
+<script type="module">
+import * as THREE from 'three';
+import { buildScene } from '../src/game3d/world3d.js';
+import { resolveScenario } from '../src/game3d/scenarios.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .05, 900);
+let current = null;
+let pose = null;           // { target: (t)=>THREE.Vector3|Vector3, cam: Vector3 }
+const clock = new THREE.Clock();
+
+function loadWorld(id, shotName) {
+  if (current) { renderer.domElement.remove(); document.body.appendChild(renderer.domElement); }
+  const { scene } = buildScene(4242, id, renderer, 'high');
+  current = { id, scene, dressing: scene.userData.districtDressing };
+  // céu do mundo (buildScene popula background/fog)
+  pose = null;
+  document.querySelectorAll('#rail button').forEach((b) => b.classList.toggle('on', b.dataset.shot === shotName));
+  return scene;
+}
+
+function findFirst(scene, name) {
+  let found = null;
+  scene.traverse((o) => { if (!found && o.name === name) found = o; });
+  return found;
+}
+
+const SHOTS = {
+  // W1 — construção inacabada + desabamento (o desabamento logo ao lado)
+  'barburhen-skeleton': { world: 'Barburhen', target: (s) => findFirst(s, 'skeleton')?.position ?? new THREE.Vector3(-117, 0, -121), cam: (t) => new THREE.Vector3(t.x - 8, 5.2, t.z + 3), look: 2.4 },
+  'barburhen-collapse': { world: 'Barburhen', target: (s) => findFirst(s, 'collapse')?.position ?? new THREE.Vector3(-117, 0, -121), cam: (t) => new THREE.Vector3(t.x - 5, 2.6, t.z + 4), look: 1 },
+  // W2 — flora carnívora com névoa alucinógena ao redor
+  'priadus-carnplant': { world: 'Priadus', target: (s) => findFirst(s, 'carnplant')?.position ?? new THREE.Vector3(), cam: (t) => new THREE.Vector3(t.x + 3.4, 1.5, t.z + 3.4), look: .6 },
+  // W3 — lagoa de óleo EM CHAMAS
+  'ckesalth-oilfire': { world: 'Ckesalth', target: (s) => findFirst(s, 'oilfire')?.position ?? new THREE.Vector3(), cam: (t) => new THREE.Vector3(t.x + 6, 2.6, t.z + 6), look: .7 },
+  // W4 — barbatana patrulhando (câmera segue o alvo por frame)
+  'arukheea-sharkfin': { world: 'Arukheea', live: true, target: (s) => findFirst(s, 'sharkfin')?.position ?? new THREE.Vector3(), cam: (t) => new THREE.Vector3(t.x + 5, 2.6, t.z + 5), look: .35 },
+};
+
+function goShot(name) {
+  const spec = SHOTS[name];
+  loadWorld(spec.world, name);
+  const target = spec.target(current.scene);
+  if (!spec.live) {
+    const camPos = spec.cam(target);
+    camera.position.copy(camPos);
+    camera.lookAt(target.x, spec.look, target.z);
+  }
+  return { world: spec.world, target: [+target.x.toFixed(1), +target.z.toFixed(1)] };
+}
+
+const rail = document.querySelector('#rail');
+for (const [name, spec] of Object.entries(SHOTS)) {
+  const b = document.createElement('button');
+  b.textContent = `${spec.world}: ${name.split('-')[1]}`;
+  b.dataset.shot = name;
+  b.onclick = () => goShot(name);
+  rail.appendChild(b);
+}
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(.05, clock.getDelta());
+  const t = clock.elapsedTime;
+  if (current) {
+    for (const fn of current.dressing?.animators ?? []) fn(dt, t);
+    const spec = SHOTS[document.querySelector('#rail button.on')?.dataset.shot];
+    if (spec?.live) {
+      const target = spec.target(current.scene);
+      camera.position.copy(spec.cam(target));
+      camera.lookAt(target.x, spec.look, target.z);
+    }
+    renderer.render(current.scene, camera);
+  }
+});
+
+// hook dev: __f43.info() → estado; goShot via UI
+window.__f43 = {
+  info: () => ({
+    world: current?.id,
+    counts: current?.dressing?.counts,
+    animators: current?.dressing?.animators?.length,
+    cam: camera.position.toArray().map((v) => +v.toFixed(2)),
+  }),
+  goto: (name) => goShot(name),
+};
+
+goShot('barburhen-skeleton');
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ import {
 import { getWorldLayout, KhaaosSim3D, WINDOW, DOOR, doorHpFor, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { resolveScenario } from '../src/game3d/scenarios.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // stub de canvas p/ texturas procedurais headless (mesmo padrão das demais fases)
 const ctx2d = {
@@ -160,6 +161,7 @@ test('sim offline: EXPLOSÃO estilhaça o vidro no raio (mesma regra da porta)',
 test('sim offline: MELEE estilhaça o vidro no 1º golpe (mult 4,0× do WINDOW)', () => {
   const sim = new KhaaosSim3D({ seed: 'F26-M1', botCount: 0, airdrop: false });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const win = sim.windows.find((w) => w.horizontal && !w.destroyed);
   assert.ok(win, 'CIGKV tem vidro horizontal');
   // sucata 24 dmg × 4.0 = 96 ≫ 30 hp — SEMPRE 1 golpe (qualquer arma melee)
@@ -252,6 +254,7 @@ test('MatchRoom3D: vidro autoritativo — bala do humano racha, snapshot carrega
   const room = new MatchRoom3D({ id: 'r-win1', seed: 'F26-R1', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   room.addPlayer('p1', 'A');
   room.start('p1', 'belt');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.windows.length >= 10, `sala tem vidros (${room.windows.length})`);
   const win = room.windows.find((w) => w.horizontal);
   assert.ok(win, 'sala tem vidro horizontal');

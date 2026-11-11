@@ -11,7 +11,8 @@ No multiplayer, capacidade/carga e o temporizador/multiplicador de Adrenalina s�
 | `POST /api/loans` | empréstimo, saldo e ledger | usuário autenticado; empréstimo do próprio usuário | input Zod limitado; mutação ainda não transacional (0.2) |
 | `POST /api/loans/:id/pay` | empréstimo, saldo e ledger | proprietário do empréstimo | leitura e update usam ID + userId; débito/update ainda precisam de transação atômica (0.2) |
 | `POST /api/items/:id/equip` | loadout | proprietário do item no `UPDATE` | escopo SQL por ID + userId |
-| `POST /api/items/purchase` | saldo, item e ledger | usuário autenticado; item criado para o próprio usuário | input Zod limitado; mutação ainda não transacional (0.2) |
+| `GET /api/armorer/materials` | estoque de matérias-primas | usuário autenticado; retorna apenas o estoque do próprio usuário | catálogo canônico de materiais; quantidades vêm de coleta de loot e são empilhadas por jogador/material |
+| `POST /api/items/craft` | materiais, saldo KRC, item e ledger | usuário autenticado; item criado para o próprio usuário | aceita apenas `catalogId` canônico; receita, atributos e fee vêm de `shared/armorer-catalog.ts`; estoque, saldo, item, transação e ledger são persistidos atomicamente e com idempotência |
 | `POST /api/items/:id/use` | durabilidade e vida | proprietário do item e stats do servidor | durabilidade consumida com ID + userId; durante match só WebSocket autoritativo |
 | `POST /api/items/:id/repair` | saldo, durabilidade e ledger | proprietário do item | update SQL por ID + userId; coordenação saldo/item ainda não transacional (0.2) |
 | `POST /api/player/daily-salary` | salário/saldo/ledger | usuário autenticado, aplicado ao próprio perfil | janela de 24h ainda vulnerável a concorrência; transação/idempotência em 0.2 |
@@ -23,6 +24,11 @@ No multiplayer, capacidade/carga e o temporizador/multiplicador de Adrenalina s�
 | `POST /api/player/respawn` | estado do jogador | usuário autenticado, próprio userId | não altera outro jogador; revisar política/cooldown de respawn |
 | `POST /api/economy/loan-preview` | cálculo efêmero | usuário autenticado | input limitado; sem escrita |
 | `POST /api/economy/simulate`, `POST /api/economy/simulate-batch` | cálculo efêmero | usuário autenticado | dimensões limitadas para conter custo; sem escrita |
+| `POST /api/economy/2pc/prepare|commit|abort` | escrow, saldo e ledger | nó dedicado com `x-2pc-node-secret` ou usuário com sessão | schema Zod; identidade sintética por `playerId` é recusada em produção |
+| `GET /api/economy/2pc/transactions/:id` | estado do escrow | nó dedicado ou sessão; consulta filtrada pelo ator | ID validado pelo serviço; sem dados de outro ator |
+| `GET /api/economy/2pc/health` | diagnóstico global de escrow | nó dedicado ou sessão | auth obrigatória em produção; resposta operacional não é pública |
+
+O segredo `ECONOMY_2PC_NODE_SECRET` deve existir somente no ambiente do serviço API e do processo UE5 dedicated server confiável. O bridge lê a variável em runtime e envia o header apenas quando `IsRunningDedicatedServer()`; nunca incluir o valor em código, config versionada ou build de cliente. Em produção, segredo e sessão ausentes resultam em HTTP 401.
 
 ## Leitura com efeito colateral conhecido
 

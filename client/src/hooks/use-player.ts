@@ -57,3 +57,23 @@ export function useSelectSpecialization() {
     },
   });
 }
+
+export function useSelectOperative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (operativeId: string) => {
+      const res = await fetch(api.player.operative.path, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operativeId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Não foi possível selecionar o operativo");
+      return api.player.operative.responses[200].parse(body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.player.me.path] });
+    },
+  });
+}

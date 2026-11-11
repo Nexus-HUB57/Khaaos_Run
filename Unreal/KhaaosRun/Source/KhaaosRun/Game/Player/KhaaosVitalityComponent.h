@@ -106,6 +106,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Vitality")
 	void ApplyPercentageDamage(float Percent, AActor* DamageCauser = nullptr);
 
+	/** Server-only environmental damage; validates the source against the active world before mitigation. */
+	float ApplyWorldEnvironmentalPercentageDamage(float Percent, AActor* DamageCauser, FName SourceWorldId);
+
 	/** Aplica dano absoluto */
 	UFUNCTION(BlueprintCallable, Category = "Vitality")
 	void ApplyDamage(float Amount, AActor* DamageCauser = nullptr);

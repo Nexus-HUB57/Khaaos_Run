@@ -18,12 +18,12 @@
 #include "Game/Revive/KhaaosReviveSystem.h"
 #include "Game/MatchFlow/KhaaosMatchFlowStateMachine.h"
 #include "Game/Airdrop/KhaaosAirdropSystem.h"
-#include "Game/Deploy/KhaaosDeploySystem.h"
 #include "Game/UI/KhaaosCirclePrediction.h"
 #include "Game/Performance/KhaaosPerformanceBudget.h"
 #include "Game/Performance/KhaaosLODStrategy.h"
 #include "Game/Network/KhaaosReplicationBudget.h"
 #include "Game/MatchFlow/KhaaosMatchTimeline.h"
+#include "Game/MatchFlow/KhaaosTrainIngressCoordinator.h"
 #include "Game/AbilitySystem/KhaaosAbility_SpeciesPassives.h"
 #include "AbilitySystemComponent.h"
 #include "Player/KhaaosCharacter.h"
@@ -100,6 +100,7 @@ AKhaaosGameMode::AKhaaosGameMode()
     SpatialGrid         = nullptr;
     SafeZone            = nullptr;
     KhaaosGameState     = nullptr;
+    TrainIngressCoordinator = CreateDefaultSubobject<UKhaaosTrainIngressCoordinator>(TEXT("TrainIngressCoordinator"));
 
     ActivePulso.bIsActive = false;
 
@@ -295,13 +296,7 @@ void AKhaaosGameMode::InitializePhDSubsystems()
         UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - AirdropSystem initialized"));
     }
 
-    // Deploy System: Parachute deployment
-    DeploySystem = NewObject<UKhaaosDeploySystemComponent>(this, UKhaaosDeploySystemComponent::StaticClass());
-    if (DeploySystem)
-    {
-        DeploySystem->RegisterComponent();
-        UE_LOG(LogKhaaosRun, Log, TEXT("GameMode::InitializePhDSubsystems - DeploySystem initialized"));
-    }
+    // Player entry is handled by the server-authoritative Zu portal protocol.
 
     // Circle Prediction: Minimap UI white circle (Fortnite-style)
     CirclePrediction = NewObject<UKhaaosCirclePredictionComponent>(this, UKhaaosCirclePredictionComponent::StaticClass());
@@ -687,11 +682,13 @@ void AKhaaosGameMode::TransitionToNextWorld()
             // Load new world level dynamically
             ULevelStreamingDynamic* StreamedLevel = ULevelStreamingDynamic::LoadLevelInstance(
                 World, LevelName, FVector::ZeroVector, FRotator::ZeroRotator);
+            bool bDestinationStreamingRequested = false;
 
             if (StreamedLevel)
             {
                 StreamedLevel->SetShouldBeLoaded(true);
                 StreamedLevel->SetShouldBeVisible(true);
+                bDestinationStreamingRequested = true;
                 UE_LOG(LogKhaaosRun, Log, TEXT("Level streaming SUCCESS: %s"), *LevelName);
             }
             else
@@ -699,24 +696,35 @@ void AKhaaosGameMode::TransitionToNextWorld()
                 UE_LOG(LogKhaaosRun, Warning, TEXT("Level streaming FAILED: %s"), *LevelName);
             }
 
-            // Teleport alive players to new world spawn points
-            if (NextConfig->SpawnPoints.Num() > 0)
+            // Start server-authoritative ZU_TRAIN_V1 ingress for alive players.
+            // The coordinator owns the 3.4s deadline and deduplicates callbacks
+            // from the client, the deadline and the watchdog by IngressId.
+            if (bDestinationStreamingRequested && NextConfig->SpawnPoints.Num() > 0)
             {
                 int32 SpawnIdx = 0;
+                const FString MatchId = FString::Printf(
+                    TEXT("%s-world-%d"),
+                    *World->GetMapName(),
+                    CurrentWorldIndex);
                 for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
                 {
                     if (APlayerController* PC = It->Get())
                     {
-                        if (APawn* Pawn = PC->GetPawn())
+                        AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
+                        if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo && TrainIngressCoordinator)
                         {
-                            AKhaaosPlayerState* KPS = Cast<AKhaaosPlayerState>(PC->PlayerState);
-                            if (KPS && KPS->PlayerStatus == EPlayerStatus::Vivo)
-                            {
-                                const FKhaaosSpawnPoint& SP = NextConfig->SpawnPoints[
-                                    SpawnIdx % NextConfig->SpawnPoints.Num()];
-                                Pawn->SetActorLocation(FVector(SP.Location.X, SP.Location.Y, 0.0f));
-                                SpawnIdx++;
-                            }
+                            const FKhaaosSpawnPoint& SP = NextConfig->SpawnPoints[
+                                SpawnIdx % NextConfig->SpawnPoints.Num()];
+                            const FString UniqueId = KPS->GetUniqueId().ToString();
+                            const FString PlayerId = UniqueId.IsEmpty()
+                                ? KPS->GetPlayerName()
+                                : UniqueId;
+                            TrainIngressCoordinator->BeginIngress(
+                                PlayerId,
+                                MatchId,
+                                SP.Location,
+                                SP.Rotation);
+                            ++SpawnIdx;
                         }
                     }
                 }
@@ -1148,6 +1156,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
     {
         VictimPS->EliminationCause = EEliminationCause::PvP;
     }
+    else if (Cause == TEXT("AMBIENTE"))
+    {
+        VictimPS->EliminationCause = EEliminationCause::Ambiente;
+    }
     else
     {
         VictimPS->EliminationCause = EEliminationCause::Queda;
@@ -1171,6 +1183,10 @@ void AKhaaosGameMode::EliminatePlayer(APlayerState* Victim, APlayerState* Elimin
     }
 
     VictimPS->SetPlayerStatus(EPlayerStatus::Eliminado);
+	if (AKhaaosCharacter* VictimCharacter = Cast<AKhaaosCharacter>(VictimPS->GetPawn()))
+	{
+		VictimCharacter->FinalizeDeathFromPlayerState();
+	}
 
     if (KhaaosGameState)
     {

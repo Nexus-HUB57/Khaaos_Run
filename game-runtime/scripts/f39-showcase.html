@@ -1,0 +1,375 @@
+<!doctype html>
+<!-- Fase 39 — vitrine dev (evidência visual): KILLFEED + NÚMEROS DE DANO no
+     festival sazonal por aura (killfeedVars/damageVars + CSS de produção),
+     SOMBRA DE CONTATO do SCRUB de Barburhen em BANDAS DE DISTÂNCIA
+     (buildBandContactShadows REAL do world3d — cheio perto, raleio suave,
+     zero no horizonte) e MINIMAPA com TINT SAZONAL POR ESTAÇÃO
+     (minimapTintFor + moldura .seasonal). Serve via `npm run dev` em
+     /scripts/f39-showcase.html — módulos REAIS do jogo. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F39 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 640px; }
+  #hud b { color: #ffb52e; }
+  #readout { position: fixed; left: 12px; bottom: 190px; z-index: 5; color: #e8e3d5; font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre; }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 12px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 700px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #side {
+    position: fixed; right: 12px; top: 12px; z-index: 6; display: flex; flex-direction: column; gap: 10px;
+    width: 232px;
+  }
+  #side .panel {
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px;
+  }
+  #side h3 { margin: 0 0 4px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #side .note { font: 10px/1.5 monospace; color: #8d8598; margin-bottom: 8px; }
+  .btnrow { display: flex; gap: 5px; flex-wrap: wrap; }
+  .btnrow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: transparent; border: 1px solid rgba(122,90,158,.5); border-radius: 3px;
+    padding: 4px 7px; cursor: pointer;
+  }
+  .btnrow button.on { border-color: #c8ff3d; color: #c8ff3d; }
+  #killfeed { position: static; }
+  #minimap { width: 196px; height: 196px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 39</b><br />
+  <b>KILLFEED + NÚMEROS DE DANO</b> no festival sazonal por aura (só a eli do PRÓPRIO jogador celebra —
+  hazard/NOCAUTE mantêm o semáforo) + <b>SOMBRA DE CONTATO DO SCRUB</b> de Barburhen em
+  <b>BANDAS DE DISTÂNCIA</b> (cheio ≤30m · raleio 30–90m · zero ≥90m) +
+  <b>MINIMAPA COM TINT SAZONAL</b> por estação (calendário — semáforos do radar intactos)
+</div>
+<div id="readout"></div>
+<div id="rail"></div>
+<div id="side">
+  <div class="panel">
+    <h3>MINIMAPA · TINT POR ESTAÇÃO</h3>
+    <div class="note" id="mmNote">calendário (hemisfério sul) — moldura .seasonal</div>
+    <div class="minimap-frame"><canvas id="minimap" width="196" height="196"></canvas><span class="compass">N</span></div>
+    <div class="btnrow" id="seasonRow" style="margin-top:8px"></div>
+  </div>
+  <div class="panel">
+    <h3>KILLFEED · FESTIVAL POR AURA</h3>
+    <div class="note" id="kfNote"></div>
+    <div class="btnrow" id="kfRow"></div>
+  </div>
+  <div class="panel">
+    <h3>DANO · FESTIVAL POR AURA</h3>
+    <div class="note" id="dgNote"></div>
+    <div class="btnrow" id="dgRow"></div>
+  </div>
+</div>
+<div id="killfeed"></div>
+<div id="damageNumbers"></div>
+<script type="module">
+import * as THREE from 'three';
+import { scrubShadowBand, tickVegetationWind } from '../src/game3d/vegetation3d.js';
+import { buildBandContactShadows } from '../src/game3d/world3d.js';
+import { buildBushField, patchSway } from '../src/game3d/vegetation3d.js';
+import { grassBladeTexture } from '../src/game3d/textures3d.js';
+import { hudAuraFor, killfeedVars, damageVars, seasonIndexFor, minimapTintFor } from '../src/game3d/aura3d.js';
+import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
+import { DamageNumbers3D } from '../src/game3d/damageNumbers3d.js';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#10161c');
+scene.fog = new THREE.Fog('#10161c', 60, 220);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#f0c7a2', 2.0);
+sun.position.set(18, 30, 12);
+scene.add(sun, new THREE.AmbientLight('#9fb6c8', .9));
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600, 96, 96),
+  new THREE.MeshStandardMaterial({ color: '#79857d', roughness: 1 })); // concreto-frio Barburhen
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+
+// --------------------------------- SCRUB + sombras em BANDAS (F39, REAL) ----
+// clusters ao longo de +x: 16m (cheio), 55m (raleio), 95m (fora) — as sombras
+// vêm do buildBandContactShadows REAL do world3d (mesma textura/material F7,
+// alpha por instância dirigido por scrubShadowBand, banda canônica 30→90m).
+const scrubTex = grassBladeTexture();
+const scrubGeo = new THREE.PlaneGeometry(.9, 1.35);
+const scrubMat = new THREE.MeshStandardMaterial({
+  map: scrubTex, alphaTest: .42, side: THREE.DoubleSide, roughness: 1, color: '#82958a',
+});
+patchSway(scrubMat, { strength: .055, freq: 2.0, yScale: .75 });
+const clusters = [
+  { cx: 16, cz: 0 }, { cx: 55, cz: -6 }, { cx: 95, cz: 5 },
+];
+const scrubSpots = [];
+const scrubDummy = new THREE.Object3D();
+const scrubMesh = new THREE.InstancedMesh(scrubGeo, scrubMat, 54);
+let si = 0;
+for (const c of clusters) {
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2 + c.cx, r = 1.6 + (k % 5) * .9;
+    const x = c.cx + Math.cos(a) * r, z = c.cz + Math.sin(a) * r * .7;
+    const s = .55 + (k % 6) * .13;
+    scrubDummy.position.set(x, .68 * s, z);
+    scrubDummy.scale.set(s, s, s);
+    scrubDummy.rotation.set(0, a, (k % 3 - 1) * .05);
+    scrubDummy.updateMatrix(); scrubMesh.setMatrixAt(si++, scrubDummy.matrix);
+    scrubSpots.push({ x, z, rot: 0, size: 1.05 * s, y: .012 });   // relevo plano: lift 12mm
+  }
+}
+scrubMesh.count = si; scrubMesh.castShadow = true; scrubMesh.receiveShadow = true;
+scene.add(scrubMesh);
+// arbustos em cluster perto (referência visual do F38 — sombra estática F7/ bushShadowEntries)
+const bushSpots = [];
+for (let i = 0; i < 8; i++) {
+  const a = (i / 8) * Math.PI * 2;
+  bushSpots.push({ x: 9 + Math.cos(a) * 4.5, z: Math.sin(a) * 4, s: .9, rot: a, tint: '#3f4f3a' });
+}
+scene.add(buildBushField({ seed: 33, spots: bushSpots }));
+
+// CAMPO REAL em bandas (decisão REAL scrubShadowBand, banda canônica 30→90)
+const band = buildBandContactShadows(scene, scrubSpots, { opacity: .55, nearDist: 30, farDist: 90 });
+
+// ------------------------------------------------------- rail de paradas ----
+const STOPS = [
+  { id: 'cheio',  label: 'CHEIO (d=0 · âncora plena)', d: 0 },
+  { id: 'raleio', label: 'RALEIO (d=25 · smoothstep)', d: 25 },
+  { id: 'borda',  label: 'BORDA (d=88 · alpha ~0.01)', d: 88 },
+  { id: 'fora',   label: 'FORA (d=110 · zero draw)',   d: 110 },
+];
+let stopIdx = 1;
+const rail = document.getElementById('rail');
+const readout = document.getElementById('readout');
+
+function clusterAlpha(i) {
+  const c = clusters[i];
+  const d = Math.hypot(c.cx - camX, c.cz - camZ);
+  return { d: +d.toFixed(1), a: +scrubShadowBand(d, { nearDist: 30, farDist: 90 }).toFixed(3) };
+}
+let camX = 0, camZ = 0;
+function place(idx) {
+  stopIdx = (idx + STOPS.length) % STOPS.length;
+  const s = STOPS[stopIdx];
+  camX = s.d; camZ = 0;
+  camera.position.set(camX, 5.2, camZ + 14);
+  camera.lookAt(16, .8, 0);
+  camera.updateProjectionMatrix();
+  band.update(camX, camZ);
+  const lit = [...band.alpha.array].filter((a) => a > 0.002).length;
+  const [c0, c1, c2] = [clusterAlpha(0), clusterAlpha(1), clusterAlpha(2)];
+  readout.innerHTML =
+    `parada: <b>${s.label}</b>\n` +
+    `clusters d/α — perto: <b>${c0.d}m/${c0.a}</b> · médio: <b>${c1.d}m/${c1.a}</b> · longe: <b>${c2.d}m/${c2.a}</b>\n` +
+    `campo: sombras na banda=<b>${lit}/${scrubSpots.length}</b> · mesh visível=<b>${band.mesh.visible}</b> · scrubShadowBand REAL (banda 30→90m)\n` +
+    `[${STOPS.map((x, i) => i === stopIdx ? '▸' + x.id : x.id).join(' · ')}]`;
+  [...rail.children].forEach((b, i) => b.classList.toggle('on', i === stopIdx));
+  return { stop: s.id, c0, c1, c2, lit, visible: band.mesh.visible };
+}
+STOPS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.label;
+  b.onclick = () => place(i);
+  rail.appendChild(b);
+});
+
+// --------------------------------- killfeed + dano + minimapa (DOM REAL) ----
+const SEASONS = [
+  { id: 'verao',     date: new Date(2026, 0, 10) },
+  { id: 'outono',    date: new Date(2026, 3, 20) },
+  { id: 'inverno',   date: new Date(2026, 6, 15) },
+  { id: 'primavera', date: new Date(2026, 9, 5) },
+];
+let seasonIdx = 2, skinIdx = 0; // inverno (data canônica) · skin M4
+let auraVars = null;
+
+// aura corrente: MESMA decisão do hud3d (hudAuraFor + killfeedVars/damageVars)
+function applySeason() {
+  const season = SEASONS[seasonIdx];
+  const wid = ['m4', 'mp5', 'barrett', 'g19', 'ar47'][skinIdx];
+  const def = MYTHIC_SKINS[wid];
+  const aura = hudAuraFor({ weaponId: wid, weaponSkin: 'MITICA', mythicStage: 4, now: season.date });
+  const kf = killfeedVars(aura, def?.aura);
+  const dg = damageVars(aura, def?.aura);
+  auraVars = (kf && dg) ? { aura: kf.aura, season: kf.season, dur: kf.dur } : null;
+  pool.setAuraVars(auraVars);   // mesmo wiring do main3d (1×/frame no jogo real)
+  if (auraVars) {
+    document.body.dataset.aura = def.aura;
+    document.body.dataset.auraSeason = aura.season;
+  } else {
+    delete document.body.dataset.aura;
+    delete document.body.dataset.auraSeason;
+  }
+  document.getElementById('kfNote').textContent =
+    `skin: ${def?.name ?? wid} · ${season.id} · ${auraVars ? `${auraVars.aura} → ${auraVars.season} ×${auraVars.dur}` : '—'}`;
+  document.getElementById('dgNote').textContent = 'hazard/NOCAUTE ficam neutros (semáforo de combate)';
+  [...seasonRow.children].forEach((b, i) => b.classList.toggle('on', i === seasonIdx));
+  [...skinRow.children].forEach((b, i) => b.classList.toggle('on', i === skinIdx));
+  drawMinimap();
+  return auraVars;
+}
+
+// KILLFEED — markup e injeção de variáveis IDÊNTICOS ao hud3d.killfeed
+function pushKill(mine, head, knock) {
+  const el = document.createElement('div');
+  el.className = `kill-entry ${mine ? 'mine' : ''}`;
+  el.innerHTML = `<span>${mine ? 'VOCÊ' : 'BOT_07'}</span><i>${knock ? '◌ NOCAUTE' : head ? '☠ HEADSHOT' : '✕'}</i><span>${mine ? 'BOT_04' : 'BOT_11'}</span>`;
+  if (mine && auraVars) {
+    el.classList.add('mythic');
+    el.style.setProperty('--kf-aura', auraVars.aura);
+    el.style.setProperty('--kf-season', auraVars.season);
+    el.style.setProperty('--kf-dur', auraVars.dur);
+  }
+  const list = document.getElementById('killfeed');
+  list.prepend(el);
+  while (list.children.length > 4) list.lastChild.remove();
+}
+const kfRow = document.getElementById('kfRow');
+[['ELI MÍTICA', () => pushKill(true, false, false)],
+ ['HEADSHOT', () => pushKill(true, true, false)],
+ ['NOCAUTE', () => pushKill(true, false, true)],
+ ['NEUTRA (bots)', () => pushKill(false, false, false)]].forEach(([label, fn]) => {
+  const b = document.createElement('button');
+  b.textContent = label; b.onclick = fn; kfRow.appendChild(b);
+});
+
+// DANO — pool REAL DamageNumbers3D (spawn em posições de mundo à frente da câmera)
+const pool = new DamageNumbers3D({ container: document.getElementById('damageNumbers') });
+function spawnDmg(kind) {
+  const at = { x: camX + 10, y: 1.4, z: camZ + 6 };
+  if (kind === 'head') pool.spawn({ ...at, damage: 62, head: true, victim: 'bot-01' });
+  else if (kind === 'hazard') pool.spawn({ ...at, damage: 9, hazard: true, kind: 'acid', victim: 'x' });
+  else pool.spawn({ ...at, damage: 23, victim: 'bot-02' });
+}
+const dgRow = document.getElementById('dgRow');
+[['DANO', () => spawnDmg('body')], ['HEADSHOT', () => spawnDmg('head')], ['HAZARD', () => spawnDmg('hazard')]].forEach(([label, fn]) => {
+  const b = document.createElement('button');
+  b.textContent = label; b.onclick = fn; dgRow.appendChild(b);
+});
+
+// MINIMAPA — MESMA sequência de hud3d.#drawMinimap (bg, grade da estação,
+// véu, anéis, terminais, jogador) + moldura .seasonal com --mm-edge REAL
+const mmCanvas = document.getElementById('minimap');
+const mmCtx = mmCanvas.getContext('2d');
+function drawMinimap() {
+  const size = mmCanvas.width;
+  const tint = minimapTintFor(seasonIdx);      // decisão REAL por estação
+  const frame = mmCanvas.parentElement;
+  frame.classList.add('seasonal');
+  frame.style.setProperty('--mm-edge', tint.edge);
+  const scale = size / 420;
+  mmCtx.clearRect(0, 0, size, size);
+  mmCtx.save();
+  mmCtx.translate(size / 2, size / 2);
+  mmCtx.fillStyle = 'rgba(10,10,16,.72)';
+  mmCtx.fillRect(-size / 2, -size / 2, size, size);
+  mmCtx.strokeStyle = tint.grid; mmCtx.lineWidth = 1;
+  for (let g = -200; g <= 200; g += 50) {
+    mmCtx.beginPath(); mmCtx.moveTo(g * scale, -size / 2); mmCtx.lineTo(g * scale, size / 2); mmCtx.stroke();
+    mmCtx.beginPath(); mmCtx.moveTo(-size / 2, g * scale); mmCtx.lineTo(size / 2, g * scale); mmCtx.stroke();
+  }
+  mmCtx.fillStyle = tint.overlay;
+  mmCtx.fillRect(-size / 2, -size / 2, size, size);
+  // anéis do Ring (semáforos intactos)
+  mmCtx.setLineDash([4, 4]);
+  mmCtx.strokeStyle = 'rgba(255,107,44,.75)';
+  mmCtx.beginPath(); mmCtx.arc(20 * scale, 10 * scale, 60 * scale, 0, 7); mmCtx.stroke();
+  mmCtx.setLineDash([]);
+  mmCtx.strokeStyle = 'rgba(200,255,61,.9)'; mmCtx.lineWidth = 2;
+  mmCtx.beginPath(); mmCtx.arc(20 * scale, 10 * scale, 34 * scale, 0, 7); mmCtx.stroke();
+  // terminal + loot + jogador
+  mmCtx.fillStyle = '#39ff88';
+  mmCtx.fillRect(-30 * scale - 2.5, -40 * scale - 2.5, 5, 5);
+  mmCtx.fillStyle = 'rgba(66,217,222,.8)';
+  mmCtx.fillRect(10 * scale - 1, -20 * scale - 1, 2, 2);
+  mmCtx.save();
+  mmCtx.translate(0, 0);
+  mmCtx.rotate(Math.PI);
+  mmCtx.fillStyle = '#ffd28a';
+  mmCtx.beginPath();
+  mmCtx.moveTo(0, -6); mmCtx.lineTo(4.5, 5); mmCtx.lineTo(0, 2.5); mmCtx.lineTo(-4.5, 5);
+  mmCtx.closePath(); mmCtx.fill();
+  mmCtx.restore();
+  mmCtx.restore();
+  document.getElementById('mmNote').textContent =
+    `estação: ${tint.id} · véu ${tint.overlay} · borda ${tint.edge} — calendário real (seasonIndexFor)`;
+}
+const seasonRow = document.getElementById('seasonRow');
+SEASONS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.id.toUpperCase();
+  b.onclick = () => { seasonIdx = i; applySeason(); };
+  seasonRow.appendChild(b);
+});
+const skinRow = document.createElement('div');
+skinRow.className = 'btnrow'; skinRow.style.marginTop = '6px';
+seasonRow.parentElement.appendChild(skinRow);
+['M4', 'MP5', 'BARRETT', 'G19', 'AR-47'].forEach((name, i) => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => { skinIdx = i; applySeason(); };
+  skinRow.appendChild(b);
+});
+
+// ------------------------------------------------------------ loop/hook ----
+let animT = 0;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000);
+  last = now;
+  animT += dt;
+  tickVegetationWind(scene, animT);
+  pool.update(dt, { camera, width: innerWidth, height: innerHeight });
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+place(stopIdx);
+applySeason();
+requestAnimationFrame(frame);
+
+window.__f39 = {
+  place, applySeason, pushKill, spawnDmg,
+  state: () => ({
+    stop: STOPS[stopIdx].id,
+    clusters: [clusterAlpha(0), clusterAlpha(1), clusterAlpha(2)],
+    lit: [...band.alpha.array].filter((a) => a > 0.002).length,
+    fieldVisible: band.mesh.visible,
+    scrubEntries: scrubSpots.length,
+    killfeed: {
+      mine: !!document.querySelector('#killfeed .kill-entry.mine.mythic'),
+      vars: auraVars,
+    },
+    damage: {
+      poolSize: pool.size,
+      mythicEls: [...document.querySelectorAll('#damageNumbers .dmg-num.mythic')].length,
+      neutralEls: [...document.querySelectorAll('#damageNumbers .dmg-num:not(.mythic)')].length,
+    },
+    minimap: {
+      seasonal: !!document.querySelector('.minimap-frame.seasonal'),
+      edge: document.querySelector('.minimap-frame')?.style.getPropertyValue('--mm-edge'),
+      season: SEASONS[seasonIdx].id,
+    },
+  }),
+};
+</script>
+</body>
+</html>

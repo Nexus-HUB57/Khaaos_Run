@@ -1,7 +1,8 @@
-// Task 56 — locomoção humana: blender determinístico + fase de passada integrada.
-// Fecha o último tell do "movimento robótico": trocar andar↔sprint NÃO pode
-// teleportar a pose (fase da passada é integrada, não derivada do relógio) e o
-// sprint ABAIXA a arma (low-ready) sem violar o regime de tiro em andar.
+// Task 59 (sessão 56) / Fase 58 — corpo em 1ª pessoa + low-ready + pouso.
+// Continuidade ponta a ponta é provada ATRAVÉS do gait.js (F42, fonte canônica
+// da fase de passada): mesmo com a velocidade alvo trocando bruscamente, as
+// juntas não saltam. Contratos: andar (≤1) mantém o braço na mira; sprint com
+// sprintK suavizado abaixa a arma; ADS cancela; poseWeaponSprint idempotente.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -22,92 +23,56 @@ if (typeof globalThis.document === 'undefined') {
   globalThis.document = { createElement() { return { width: 0, height: 0, getContext: () => ctx2d }; } };
 }
 
-const { createLocomotionBlend, strideFrequency, STRIDE } = await import('../src/game3d/locomotion3d.js');
-const { animateOperative, createOperative, poseWeaponSprint } = await import('../src/game3d/entities3d.js');
+const { newGait, advanceGait } = await import('../src/game3d/gait.js');
+const { animateOperative, createOperative, poseWeaponSprint, createFirstPersonRig } = await import('../src/game3d/entities3d.js');
 
-test('strideFrequency: contínua, monotônica e clampada ao teto do sprint', () => {
-  assert.equal(strideFrequency(0), STRIDE.baseW, 'repouso = cadência base (contrato Fase 16)');
-  assert.equal(strideFrequency(1.2), STRIDE.baseW + STRIDE.sprintGain * 1.2);
-  assert.equal(strideFrequency(9), strideFrequency(STRIDE.maxSn), 'clamp no teto');
-  assert.equal(strideFrequency(-3), STRIDE.baseW, 'negativo → repouso');
-  let prev = strideFrequency(0);
-  for (let s = 0; s <= 1.4; s += .05) {
-    const f = strideFrequency(s);
-    assert.ok(f >= prev - 1e-9, `monotônica em s=${s.toFixed(2)}`);
-    prev = f;
-  }
-});
+// suavizador de sprintK idêntico ao do main3d (constante de tempo do corpo)
+function smoothSprint(sk, target, dt) {
+  const t = target ? 1 : 0;
+  const next = sk + (t - sk) * (1 - Math.exp(-(t > sk ? 5.5 : 7) * dt));
+  return next < 1e-4 ? 0 : next;
+}
 
-test('blender: determinístico e simétrico entre instâncias', () => {
-  const run = () => {
-    const b = createLocomotionBlend();
-    const out = [];
-    const seq = [0, 0, .8, .8, .8, 1.2, 1.2, 1.2, 0, 0, 0];
-    for (const tgt of seq) out.push(b.update(1 / 30, tgt));
-    return out;
-  };
-  const a = run(), c = run();
-  assert.deepEqual(a, c, 'mesma sequência → mesmos outputs (sem Math.random)');
-  assert.equal(a[0].speedNorm, 0);
-  assert.ok(a[5].speedNorm > .3 && a[5].speedNorm < 1.2, 'acelerando entre estados (suavizado, não snappa)');
-});
-
-test('blender: aceleração mais rápida que frenagem (peso do corpo)', () => {
-  const up = createLocomotionBlend();
-  for (let i = 0; i < 30; i++) up.update(1 / 30, 1.2);        // 1 s subindo
-  const down = createLocomotionBlend();
-  for (let i = 0; i < 15; i++) down.update(1 / 30, 1.2);
-  for (let i = 0; i < 15; i++) down.update(1 / 30, 0);        // .5 s caindo
-  const tUp = up.update(1 / 30, 1.2).speedNorm;
-  const tDown = down.update(1 / 30, 0).speedNorm;
-  assert.ok(tUp > 1.1, `aceleração cobre o sprint em ~1 s (${tUp.toFixed(3)})`);
-  assert.ok(tDown < .35, `frenagem assenta rápido (${tDown.toFixed(3)})`);
-  assert.ok(tDown > 0, 'frenagem é contínua, não snappa a zero');
-});
-
-test('blender: fase CONGELA parado e integra contínua em movimento', () => {
-  const b = createLocomotionBlend();
-  const p0 = b.update(1 / 60, 0).phase;
-  for (let i = 0; i < 60; i++) b.update(1 / 60, 0);           // 1 s parado
-  assert.equal(b.update(1 / 60, 0).phase, p0, 'parado não deriva fase (sem passos fantasmas)');
-  let last = p0;
-  let backward = false;
-  for (let i = 0; i < 180; i++) {                              // 3 s: anda → sprint → para
-    const tgt = i < 60 ? .8 : (i < 120 ? 1.2 : 0);
-    const { phase } = b.update(1 / 60, tgt);
-    if (phase < last - 1e-9) backward = true;
-    last = phase;
-  }
-  assert.ok(!backward, 'fase nunca anda para trás (nem salta) ao trocar de estado');
-  assert.ok(last > 20, `fase integrou ao longo do movimento (${last.toFixed(1)} rad — parado seria 0)`);
-});
-
-test('sem salto de junta: troca brusca 0→1.2→0 pelo blender mantém continuidade (< .28 rad/frame @30 Hz)', () => {
-  const op = createOperative({ variant: 'LOCO_CONT' });
+test('continuidade ponta a ponta: gait.js × animateOperative sem salto de junta na troca brusca 0→sprint→0', () => {
+  const op = createOperative({ variant: 'TASK59_CONT' });
   const joints = [op.parts.legL.hip, op.parts.legR.hip, op.parts.legL.knee, op.parts.legR.knee,
     op.parts.armL.shoulder, op.parts.armR.shoulder, op.parts.armL.elbow, op.parts.armR.elbow];
-  const blend = createLocomotionBlend();
+  const gait = newGait();
   const DT = 1 / 30;
-  for (let i = 0; i < 30; i++) {                              // warm-up ANIMADO: sai da pose de repouso
-    const { speedNorm, phase } = blend.update(DT, 0);
-    animateOperative(op.parts, { t: i * DT, speedNorm, phase });
+  // trilha de posições: parado → anda → sprint → freia bruscamente (metros reais)
+  let x = 0, v = 0;
+  const warm = [];
+  for (let i = 0; i < 30; i++) warm.push(0);
+  const seq = [...Array(45).fill(5.2 * .8), ...Array(45).fill(5.2 * 1.42), ...Array(60).fill(0)];
+  for (const target of warm) { // warm-up ANIMADO (sai da pose de repouso)
+    advanceGait(gait, { x, z: 0, dt: DT });
+    animateOperative(op.parts, { t: 0, phase: gait.phase, speedNorm: target });
   }
   const prev = joints.map((j) => j.rotation.x);
-  for (let i = 0; i < 150; i++) {
-    const tgt = i < 60 ? 1.2 : 0;                              // sprint → freia BRUSCAMENTE
-    const { speedNorm, phase, sprintK } = blend.update(DT, tgt);
-    animateOperative(op.parts, { t: i * DT, speedNorm, phase, sprintK });
+  let t = 0;
+  // limiar consciente da cadência: em sprint a passada é LEGITIMAMENTE rápida
+  // (gait F42: até ~12,9 rad/s = ~.36 rad/frame @30 Hz contínuos e suaves);
+  // o defeito que este teste caça é o TELEPORTE de fase (saltos > .5 rad em
+  // direção arbitrária), não o movimento rápido contínuo.
+  const LIMIT = .45;
+  for (const target of seq) {
+    t += DT;
+    v += (target - v) * .25;                    // corpo responde em ~4 frames
+    x += v * DT;
+    advanceGait(gait, { x, z: 0, dt: DT });
+    animateOperative(op.parts, { t, phase: gait.phase, speedNorm: Math.max(.12, gait.speed) });
     joints.forEach((j, k) => {
       const d = Math.abs(j.rotation.x - prev[k]);
       assert.ok(Number.isFinite(d), 'rotação finita');
-      assert.ok(d < .28, `Δ${k} por frame ${d.toFixed(4)} < .28 (junta idx ${k}, frame ${i})`);
+      assert.ok(d < LIMIT, `Δ${k} por frame ${d.toFixed(4)} < ${LIMIT} (junta ${k}, t=${t.toFixed(2)})`);
       prev[k] = j.rotation.x;
     });
   }
+  assert.ok(gait.phase > 20, `fase integrou pelos metros (${gait.phase.toFixed(1)} rad)`);
 });
 
 test('contrato de andar preservado: speedNorm ≤ 1 mantém braço na mira (sprintK = 0)', () => {
-  const op = createOperative({ variant: 'LOCO_WALK' });
+  const op = createOperative({ variant: 'TASK59_WALK' });
   for (let i = 0; i < 40; i++) {
     const ret = animateOperative(op.parts, { t: i / 30, speedNorm: 1 });
     assert.equal(ret.sprintK, 0, `sprintK 0 em andar (frame ${i})`);
@@ -117,22 +82,26 @@ test('contrato de andar preservado: speedNorm ≤ 1 mantém braço na mira (spri
   assert.ok(Math.abs(op.parts.armL.shoulder.rotation.x - (aim + .34)) < .32, 'esquerdo preso ao regime de tiro');
 });
 
-test('sprint abaixa a arma: speedNorm 1.2 (steady pelo blender) → low-ready visível', () => {
-  const op = createOperative({ variant: 'LOCO_SPRINT' });
-  const blend = createLocomotionBlend();
-  for (let i = 0; i < 90; i++) {
-    const { speedNorm, phase } = blend.update(1 / 30, 1.2);
-    animateOperative(op.parts, { t: i / 30, speedNorm, phase });
+test('sprint abaixa a arma: sprintK suavizado satura, braço sai da mira e ADS cancela', () => {
+  const op = createOperative({ variant: 'TASK59_SPRINT' });
+  let sk = 0;
+  for (let i = 0; i < 90; i++) {                // 3 s de sprint
+    sk = smoothSprint(sk, 1, 1 / 30);
+    animateOperative(op.parts, { t: i / 30, speedNorm: 1.2, phase: i / 30 * 11, sprintK: sk });
   }
-  const ret = animateOperative(op.parts, { t: 3, speedNorm: blend.speed, phase: blend.phase, sprintK: blend.sprintK });
-  assert.ok(ret.sprintK > .9, `sprintK saturado no sprint (${ret.sprintK.toFixed(3)})`);
+  assert.ok(sk > .95, `sprintK saturou no sprint (${sk.toFixed(3)})`);
   const aim = -Math.PI / 2;
   assert.ok(op.parts.armR.shoulder.rotation.x > aim + .18 + .5, 'braço direito abaixou (low-ready)');
   assert.ok(op.parts.armL.elbow.rotation.x > -.85 + .2, 'cotovelo de suporte dobra mais');
-  // ADS cancela o low-ready mesmo em sprint
-  const retAds = animateOperative(op.parts, { t: 3.1, speedNorm: 1.2, phase: blend.phase, sprintK: blend.sprintK, ads: true });
+  // ADS cancela o low-ready mesmo com sprintK alto
+  const retAds = animateOperative(op.parts, { t: 3.1, speedNorm: 1.2, phase: 34, sprintK: sk, ads: true });
   assert.equal(retAds.sprintK, 0, 'ADS força regime de tiro');
   assert.ok(Math.abs(op.parts.armR.shoulder.rotation.x - (aim + .18)) < .35, 'braço volta à mira no ADS');
+  // frenagem: sprintK desce com tempo de corpo (não snappa) — braço volta suave
+  let prev = op.parts.armR.shoulder.rotation.x;
+  animateOperative(op.parts, { t: 3.2, speedNorm: 1.2, phase: 35, sprintK: sk });
+  const after = op.parts.armR.shoulder.rotation.x;
+  assert.ok(Math.abs(after - prev) < .9, `sem teleporte de braço (${(after - prev).toFixed(3)})`);
 });
 
 test('poseWeaponSprint: arma acompanha o low-ready e restaura a base (idempotente)', () => {
@@ -152,8 +121,7 @@ test('poseWeaponSprint: arma acompanha o low-ready e restaura a base (idempotent
   poseWeaponSprint(null, 1); // não explode
 });
 
-test('rig FP orgânico: braços em cápsula com base gravada, mãos intactas e tintable preservado', async () => {
-  const { createFirstPersonRig } = await import('../src/game3d/entities3d.js');
+test('rig FP orgânico: braços em cápsula com base gravada, mãos intactas e tintable preservado', () => {
   const rig = createFirstPersonRig({});
   for (const side of ['armL', 'armR']) {
     const arm = rig.userData.arms[side];

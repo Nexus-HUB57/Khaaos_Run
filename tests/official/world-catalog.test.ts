@@ -5,6 +5,7 @@ import {
   WORLD_CANONICAL_IDS,
   WORLD_OPERATIONAL_IDS,
   WORLD_ORDER,
+  WORLD_MATCH_DURATION_SECONDS,
   toCanonicalWorldId,
   toOperationalWorldId,
 } from "../../shared/worlds.ts";
@@ -29,5 +30,19 @@ test("cada Mundo possui ameaça, POI e terminal ZEX para o Atlas e runtime", () 
     assert.ok(world.pois.length >= 3);
     assert.ok(world.zexNodes.length >= 3);
     assert.ok(world.safeZonePhases.length >= 3);
+  }
+});
+
+test("cada Ring usa 100 operadores e fecha em exatamente 10 minutos", () => {
+  assert.equal(WORLD_MATCH_DURATION_SECONDS, 600);
+  for (const worldId of WORLD_ORDER) {
+    const world = KHAAOS_WORLDS[worldId];
+    assert.match(world.recommendedPlayers, /^100 Operadores/);
+    assert.equal(world.targetDurationMinutes, 10);
+    assert.equal(
+      world.safeZonePhases.reduce((total, phase) => total + phase.durationSeconds, 0),
+      WORLD_MATCH_DURATION_SECONDS,
+      `${worldId}: fases do Ring devem somar 600 segundos`,
+    );
   }
 });

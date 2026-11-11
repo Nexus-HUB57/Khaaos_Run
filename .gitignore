@@ -4,6 +4,8 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+__pycache__/
+*.py[cod]
 .env
 .env.*
 !.env.example
@@ -11,7 +13,8 @@ vite.config.ts.*
 game-runtime/.data/
 coverage/
 game-runtime/coverage/
-.nyc_output
+playwright-report/
+test-results/
 
 # runtime session store (qualquer profundidade)
 .data/
@@ -23,3 +26,6 @@ artifacts/release/
 
 # M2 DR: dumps binários são efêmeros; evidências JSON sim ficam
 artifacts/dr/*.dump
+
+# Fontes locais volumosas dos retratos realistas (os derivados WebP são versionados)
+.generated/lote4/*.png

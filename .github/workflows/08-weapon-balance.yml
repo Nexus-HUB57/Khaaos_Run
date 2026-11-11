@@ -3,7 +3,12 @@
   "on": {
     "push": {
       "paths": [
-        "components_dev/weapons/**"
+        "components_dev/weapons/**",
+        "components_dev/weapon_balance_report.json",
+        "scripts/validate_weapon_balance.py",
+        "tests/python/**",
+        "Unreal/KhaaosRun/Source/KhaaosRun/Game/Data/KhaaosWeaponDataAsset.h",
+        ".github/workflows/08-weapon-balance.yml"
       ]
     }
   },
@@ -15,8 +20,12 @@
           "uses": "actions/checkout@v4"
         },
         {
+          "name": "Test quality preflights",
+          "run": "python3 -m unittest discover -s tests/python -p 'test_*.py'"
+        },
+        {
           "name": "Validate Weapon Balance",
-          "run": "python3 scripts/validate_weapon_balance.py 2>/dev/null || echo 'Balance report in components_dev/weapon_balance_report.json'"
+          "run": "python3 scripts/validate_weapon_balance.py --check"
         }
       ]
     }

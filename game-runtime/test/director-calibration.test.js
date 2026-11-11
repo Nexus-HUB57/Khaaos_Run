@@ -23,6 +23,7 @@ const {
   DANGER_WEIGHTS,
   AUTO_RETARGET_MARGIN,
   dangerScore,
+  sanitizePopulationTuning, // Fase 39 — frame DIRECTOR_TUNING do servidor
 } = await import('../src/game3d/spectator3d.js');
 
 const T = CALIBRATION_THRESHOLDS;
@@ -238,5 +239,73 @@ describe('SpectatorRemote — afinação calibrada no heartbeat', () => {
     const frame = directorMsgs(ws).at(-1).metrics;
     assert.equal(frame.tuning.margin, r.tuning.margin, 'frame DIRECTOR_METRICS carrega a afinação');
     r.dispose();
+  });
+});
+
+// ─── Fase 39 — sanitizePopulationTuning (frame DIRECTOR_TUNING do servidor) ─
+
+describe('sanitizePopulationTuning — Fase 39 (defesa em profundidade)', () => {
+  // frame canônico emitido pelo servidor (calibrateDirector sobre o agregado)
+  const populationFrame = (over = {}) => ({
+    margin: 30,
+    weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: 15, lowHealth: 10 },
+    ...over,
+  });
+
+  test('frame válido da população é adotado byte a byte', () => {
+    const out = sanitizePopulationTuning(populationFrame());
+    assert.deepEqual(out, { margin: 30, weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: 15, lowHealth: 10 } });
+  });
+
+  test('clamp das bandas: fora dos limites vira borda', () => {
+    const out = sanitizePopulationTuning(populationFrame({
+      margin: 999,
+      weights: { knocked: 999, hazardDamage: 999, anchorZone: 999, outsideRing: 999, recentDamage: 999, lowHealth: 999 },
+    }));
+    assert.equal(out.margin, DIRECTOR_TUNING_LIMITS.margin.max, 'margem no teto 45');
+    // hierarquia preservada mesmo com tudo estourando: cada peso ≤ anterior − 1
+    const w = out.weights;
+    assert.ok(w.knocked > w.hazardDamage && w.hazardDamage > w.anchorZone
+      && w.anchorZone > w.outsideRing && w.outsideRing > w.recentDamage && w.recentDamage > w.lowHealth,
+      `hierarquia intacta: ${JSON.stringify(w)}`);
+    assert.equal(w.knocked, DIRECTOR_TUNING_LIMITS.weights.knocked.max, 'knocked no teto 55');
+  });
+
+  test('hierarquia HOSTIL invertida é reordenada — nunca desmonta a Fase 19', () => {
+    const out = sanitizePopulationTuning(populationFrame({
+      weights: { knocked: 1, hazardDamage: 55, anchorZone: 40, outsideRing: 39, recentDamage: 38, lowHealth: 37 },
+    }));
+    const w = out.weights;
+    assert.ok(w.knocked > w.hazardDamage, `knocked ${w.knocked} > hazardDamage ${w.hazardDamage}`);
+    assert.ok(w.hazardDamage > w.anchorZone && w.anchorZone > w.outsideRing
+      && w.outsideRing > w.recentDamage && w.recentDamage > w.lowHealth, `ordem: ${JSON.stringify(w)}`);
+  });
+
+  test('lixo/hostil → null (cliente IGNORA e mantém a afinação vigente)', () => {
+    for (const bad of [
+      null, undefined, 'tuning', 42, [], {}, // sem margem/pesos
+      { margin: NaN, weights: {} },
+      { margin: '30', weights: {} },           // margem string
+      { margin: 30, weights: null },           // pesos ausentes
+      { margin: 30 },                           // pesos ausentes
+      { margin: 30, weights: { knocked: 40 } }, // parcial (contrato: os 6 obrigatórios)
+      { margin: 30, weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: '15', lowHealth: 10 } }, // peso string
+    ]) {
+      assert.equal(sanitizePopulationTuning(bad), null, JSON.stringify(bad));
+    }
+  });
+
+  test('decimais são arredondados (margem/pesos inteiros) e args NÃO mutados', () => {
+    const raw = populationFrame({ margin: 30.6, weights: { knocked: 40.4, hazardDamage: 35.5, anchorZone: 30.2, outsideRing: 20.9, recentDamage: 15.1, lowHealth: 10.8 } });
+    const copy = JSON.parse(JSON.stringify(raw));
+    const out = sanitizePopulationTuning(raw);
+    assert.deepEqual(raw, copy, 'entrada intacta');
+    assert.ok([out.margin, ...Object.values(out.weights)].every((v) => Number.isInteger(v)), 'tudo inteiro');
+  });
+
+  test('determinismo: mesmo input → mesmo output', () => {
+    const a = sanitizePopulationTuning(populationFrame());
+    const b = sanitizePopulationTuning(populationFrame());
+    assert.deepEqual(a, b);
   });
 });

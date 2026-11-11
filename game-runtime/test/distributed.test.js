@@ -25,6 +25,7 @@ import {
 } from '../server/distributed.js';
 import { MatchRoom3D, AOI_ENTER_M, AOI_EXIT_M, AOI_PROJECTILE_M } from '../server/room3d.js';
 import { createDependencyHealth } from '../server/health.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -144,6 +145,10 @@ test('M3: reconnect em réplica sem a sala → redirect ao dono; no dono a sess�
     // Ordem: inputs com seq crescente após o resume → ackSeq monotônico.
     again.send(JSON.stringify({ type: 'start' })); // sala retomada no LOBBY — abre o ring
     await wait(100);
+    // Task 53 — protocolo OFICIAL do trem: a bordo o servidor suspende a física
+    // (ackSeq só avança após o desembarque — chegada em 16 s). Fixture cumpre o
+    // protocolo (salto na janela das portas + chegada) e devolve o ator íntegro.
+    disembarcarSala(room, resumed.id);
     const acks = [];
     for (let seq = 1; seq <= 5; seq++) {
       again.send(JSON.stringify({ type: 'input', input: { seq, dx: 0, dy: 1, yaw: 0, pitch: 0, fire: false, interact: false } }));
@@ -248,6 +253,7 @@ test('M3: AOI — snapshot por observador recorta por distância com histerese e
   room.addPlayer('p1', 'viewer');
   room.addPlayer('p2', 'far');
   room.start('p1');
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   const p1 = room.humans.get('p1');
   const p2 = room.humans.get('p2');
   p1.x = 0; p1.z = 0;

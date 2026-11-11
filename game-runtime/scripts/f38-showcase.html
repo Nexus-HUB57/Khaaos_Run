@@ -1,0 +1,314 @@
+<!doctype html>
+<!-- Fase 38 — vitrine dev (evidência visual): DESBASTE GRADUAL do tier sparse
+     (o count É o fade — entrada rampa, plateau F32, saída raleia a 0) +
+     CROSS-FADE com pre-roll (a mancha nasce DENTRO da saída do sparse) +
+     SOMBRAS DE CONTATO nos ARBUSTOS (bushShadowEntries) + MIRA/CROSSHAIR no
+     festival sazonal por aura (crosshairVars + styles3d.css de produção).
+     Serve via `npm run dev` em /scripts/f38-showcase.html — módulos REAIS do
+     jogo (vegetation3d/aura3d/attachments3d + styles3d.css). Bandas ESCALADAS
+     (10/22/38m vs 28/58/110m) para leitura próxima — MESMO código. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F38 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 620px; }
+  #hud b { color: #ffb52e; }
+  #readout {
+    position: fixed; left: 12px; bottom: 178px; z-index: 5; color: #e8e3d5;
+    font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre;
+  }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 12px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 700px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #chPanel {
+    position: fixed; right: 12px; bottom: 12px; z-index: 6;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px; max-width: 430px;
+  }
+  #chPanel h3 { margin: 0 0 2px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #chPanel .note { font: 10px/1.5 monospace; color: #8d8598; margin-bottom: 8px; max-width: 400px; }
+  #auraRow, #seasonRow { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+  #seasonRow { margin-top: 7px; }
+  #auraRow button, #seasonRow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: transparent; border: 1px solid rgba(122,90,158,.5); border-radius: 3px;
+    padding: 4px 7px; cursor: pointer;
+  }
+  #auraRow button.on, #seasonRow button.on { border-color: #c8ff3d; color: #c8ff3d; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 38</b><br />
+  tier sparse com <b>DESBASTE GRADUAL</b> (o count É o fade: entrada rampa → plateau F32 → saída raleia a 0) +
+  <b>CROSS-FADE</b> com pre-roll (a mancha nasce dentro da saída do sparse) +
+  <b>SOMBRAS DE CONTATO NOS ARBUSTOS</b> + <b>MIRA SAZONAL</b> por aura<br />
+  bandas ESCALADAS p/ leitura: full &lt;10m · sparse 10–22m (zonas 5/5m) · impostor 22–38m (fade 6m, pre-roll 4m) · hidden ≥38m
+</div>
+<div id="readout"></div>
+<div id="rail"></div>
+<div id="chPanel">
+  <h3>MIRA · FESTIVAL SAZONAL POR AURA</h3>
+  <div class="note" id="chNote"></div>
+  <div id="auraRow"></div>
+  <div id="seasonRow"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {
+  buildGrassFieldLOD, tickVegetationWind, grassOutdoorBake, applyOutdoorTint,
+  grassImpostorFade, grassSparseCount, grassShadowGeometry,
+  buildBushField, bushShadowEntries,
+} from '../src/game3d/vegetation3d.js';
+import { hudAuraFor, crosshairVars, seasonIndexFor } from '../src/game3d/aura3d.js';
+import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#141a20');
+scene.fog = new THREE.Fog('#141a20', 70, 240);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#fff3e0', 2.2);
+sun.position.set(18, 30, 12);
+scene.add(sun, new THREE.AmbientLight('#9fb6c8', .9));
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600, 96, 96),
+  new THREE.MeshStandardMaterial({ color: '#8a7f6a', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+ground.geometry.setAttribute('color', new THREE.BufferAttribute(
+  new Float32Array(ground.geometry.attributes.position.count * 3).fill(1), 3));
+ground.material.vertexColors = true;
+ground.name = 'terrain';
+scene.add(ground);
+
+// bandas ESCALADAS: full <10 · sparse 10-22 (zonas 5/5) · impostor 22-38
+// (fade 6m, pre-roll 4m — cross-fade) · hidden >=38 — MESMO código do world3d
+const BAND = {
+  nearDist: 10, midDist: 22, impostorDist: 38,
+  sparseEntryZone: 5, sparseExitZone: 5, impostorFadeZone: 6, impostorPreRoll: 4,
+};
+const spots = [];
+for (let i = 0; i < 3200; i++) {
+  const x = (Math.sin(i * 12.9898) * 43758.5453) % 1, z = (Math.cos(i * 78.233) * 12345.6789) % 1;
+  spots.push({ x: x * 90, z: z * 90, y: .02, rot: i % 6, s: .8 + (i % 5) * .12, sy: 1, tintJitter: (i % 10) / 10 });
+}
+const grassLOD = buildGrassFieldLOD({
+  spots, seed: 77, tintFamilies: ['#5a6b33', '#7a8443'],
+  chunkSize: 12, sparseKeep: .4, impostorOpacity: .55,
+  nearDist: BAND.nearDist, midDist: BAND.midDist, impostorDist: BAND.impostorDist,
+  sparseEntryZone: BAND.sparseEntryZone, sparseExitZone: BAND.sparseExitZone,
+  impostorFadeZone: BAND.impostorFadeZone, impostorPreRoll: BAND.impostorPreRoll,
+  impostorHeight: 1.15, impostorWidth: 3.2,
+  impostorShadow: true, impostorShadowOpacity: .55, impostorShadowRadius: 1.9,
+  sway: { strength: .07, freq: 2.1, yScale: 1.1 },
+});
+scene.add(grassLOD.group);
+scene.userData.swayMats = [...grassLOD.mats, ...grassLOD.impostorMats];
+const bake = grassOutdoorBake(grassLOD.chunks, ['#5a6b33', '#7a8443']);
+applyOutdoorTint(ground, bake, { radius: 12, strength: .45 });
+
+// chunk ALVO da rail: o mais cheio perto da origem (rail anda no eixo x)
+const target = [...grassLOD.chunks].sort((a, b) => b.fullCount - a.fullCount)[0];
+
+// --------------------------------- arbustos com SOMBRAS DE CONTATO (F38) ----
+// spots em anel ao redor do alvo (visíveis em todas as paradas); as ENTRADAS
+// de sombra vêm da função REAL bushShadowEntries; o disco usa a geometria
+// REAL grassShadowGeometry (gradiente radial por vértice, mesmo contrato)
+const bushSpots = [];
+for (let i = 0; i < 14; i++) {
+  const a = (i / 14) * Math.PI * 2 + .3;
+  const r = 4.5 + (i % 4) * 2.3;
+  bushSpots.push({
+    x: target.x + Math.cos(a) * r, z: target.z + Math.sin(a) * r * .8,
+    s: .8 + (i % 5) * .18, rot: a, tint: ['#45542c', '#546434', '#3e4d27'][i % 3],
+  });
+}
+const bushes = buildBushField({ seed: 33, spots: bushSpots });
+scene.add(bushes);
+scene.userData.swayMats.push(bushes.material);
+const bushShadows = bushShadowEntries(bushSpots);           // F38 — decisão REAL
+const shGeo = grassShadowGeometry({ segments: 16 });        // disco radial REAL
+const shMat = new THREE.MeshBasicMaterial({
+  color: '#000000', vertexColors: true, transparent: true, opacity: .5,
+  depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+  polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+});
+const bushShadowMesh = new THREE.InstancedMesh(shGeo, shMat, bushShadows.length);
+const shDummy = new THREE.Object3D();
+bushShadows.forEach((e, i) => {
+  shDummy.position.set(e.x, .012 + i * .0006, e.z);
+  shDummy.rotation.set(-Math.PI / 2, 0, e.rot);
+  shDummy.scale.setScalar(e.size / 2);       // círculo raio 1 → diâmetro size
+  shDummy.updateMatrix();
+  bushShadowMesh.setMatrixAt(i, shDummy.matrix);
+});
+bushShadowMesh.renderOrder = 1;
+scene.add(bushShadowMesh);
+
+// ------------------------------------------------------- rail de paradas ----
+const STOPS = [
+  { id: 'full',    label: 'FULL (count cheio)',            d: 6 },
+  { id: 'entrada', label: 'SPARSE · ENTRADA (rampa)',      d: 12 },
+  { id: 'plateau', label: 'SPARSE · PLATEAU (F32)',        d: 16 },
+  { id: 'saida',   label: 'SPARSE · SAÍDA (cross-fade)',   d: 19 },
+  { id: 'borda',   label: 'BORDA 22m (tufos 0, mancha ~74%)', d: 22 },
+  { id: 'impostor',label: 'IMPOSTOR (mancha cheia)',       d: 30 },
+  { id: 'hidden',  label: 'HIDDEN (só o bake)',            d: 41 },
+];
+let stopIdx = 3; // saída (cross-fade)
+const rail = document.getElementById('rail');
+const readout = document.getElementById('readout');
+
+function place(idx) {
+  stopIdx = (idx + STOPS.length) % STOPS.length;
+  const s = STOPS[stopIdx];
+  const camX = target.x + s.d, camZ = target.z;
+  camera.fov = 42; camera.updateProjectionMatrix();
+  camera.position.set(camX, target.y + 6.2, camZ);
+  camera.lookAt(target.x, target.y + .4, target.z);
+  grassLOD.update(camX, camZ);
+  const count = target.mesh.visible ? target.mesh.count : 0;
+  const expect = grassSparseCount(s.d, {
+    fullCount: target.fullCount, nearDist: BAND.nearDist, midDist: BAND.midDist,
+    sparseKeep: .4, entryZone: BAND.sparseEntryZone, exitZone: BAND.sparseExitZone,
+  });
+  const fade = grassImpostorFade(s.d, {
+    midDist: BAND.midDist, impostorDist: BAND.impostorDist,
+    fadeZone: BAND.impostorFadeZone, preRoll: BAND.impostorPreRoll,
+  });
+  readout.innerHTML =
+    `parada: <b>${s.label}</b> — d=<b>${s.d}m</b>\n` +
+    `chunk alvo: fullCount=<b>${target.fullCount}</b> · tufos visíveis=<b>${count}</b> (esperado ${expect})\n` +
+    `fade do impostor (com pre-roll): <b>${fade.toFixed(3)}</b> · manchas: <b>${grassLOD.impostors.count}</b> · sombras: <b>${grassLOD.impostorShadows.count}</b> · arbustos c/ sombra: <b>${bushShadowMesh.count}</b>\n` +
+    `[${STOPS.map((x, i) => i === stopIdx ? '▸' + x.id : x.id).join(' · ')}]`;
+  [...rail.children].forEach((b, i) => b.classList.toggle('on', i === stopIdx));
+  return { stop: s.id, d: s.d, count, expect, fade: +fade.toFixed(4), imp: grassLOD.impostors.count, sh: grassLOD.impostorShadows.count };
+}
+STOPS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.label;
+  b.onclick = () => place(i);
+  rail.appendChild(b);
+});
+
+// ----------------------------------------------- mira sazonal (DOM real) ----
+// MESMO markup do index.html: #crosshair com 5 <i class="ch"> — o CSS de
+// produção (styles3d.css #crosshair.mythic) pinta braços/ponto/anel; a
+// decisão é a REAL crosshairVars(aura, hex) — mesma fonte do badge/ícone.
+const crosshair = document.createElement('div');
+crosshair.id = 'crosshair';
+crosshair.innerHTML = '<i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="ch dot"></i>';
+document.body.appendChild(crosshair);
+
+const SEASONS = [
+  { id: 'verao',     date: new Date(2026, 0, 10) },
+  { id: 'outono',    date: new Date(2026, 3, 20) },
+  { id: 'inverno',   date: new Date(2026, 6, 15) },
+  { id: 'primavera', date: new Date(2026, 9, 5) },
+];
+const SKINS = ['m4', 'mp5', 'barrett', 'g19', 'ar47'];   // 5 auras do catálogo
+let seasonIdx = 3, skinIdx = 0;
+const chNote = document.getElementById('chNote');
+const auraRow = document.getElementById('auraRow');
+const seasonRow = document.getElementById('seasonRow');
+
+function applyCrosshair() {
+  const season = SEASONS[seasonIdx];
+  const wid = SKINS[skinIdx];
+  const def = MYTHIC_SKINS[wid];
+  const aura = hudAuraFor({ weaponId: wid, weaponSkin: 'MITICA', mythicStage: 4, now: season.date });
+  const vars = crosshairVars(aura, def?.aura);
+  if (vars) {
+    crosshair.classList.add('mythic');
+    crosshair.style.setProperty('--ch-aura', vars.aura);
+    crosshair.style.setProperty('--ch-season', vars.season);
+    crosshair.style.setProperty('--ch-dur', vars.dur);
+    document.body.dataset.aura = def.aura;
+    document.body.dataset.auraSeason = aura.season;
+  } else {
+    crosshair.classList.remove('mythic');
+    delete document.body.dataset.aura;
+    delete document.body.dataset.auraSeason;
+  }
+  chNote.textContent =
+    `skin: ${def?.name ?? wid} · estação: ${season.id} · vars: ${vars ? `${vars.aura} → ${vars.season} ×${vars.dur}` : '—'}\n` +
+    `decisão REAL de aura3d.crosshairVars + CSS #crosshair.mythic de styles3d.css`;
+  [...auraRow.children].forEach((b, i) => b.classList.toggle('on', i === skinIdx));
+  [...seasonRow.children].forEach((b, i) => b.classList.toggle('on', i === seasonIdx));
+  return vars ? { ...vars } : null;
+}
+SKINS.forEach((wid, i) => {
+  const b = document.createElement('button');
+  b.textContent = (MYTHIC_SKINS[wid]?.name ?? wid).toUpperCase();
+  b.onclick = () => { skinIdx = i; applyCrosshair(); };
+  auraRow.appendChild(b);
+});
+SEASONS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.id.toUpperCase();
+  b.onclick = () => { seasonIdx = i; applyCrosshair(); };
+  seasonRow.appendChild(b);
+});
+
+// ------------------------------------------------------------ loop/hook ----
+let animT = 0;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000);
+  last = now;
+  animT += dt;
+  tickVegetationWind(scene, animT);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+place(stopIdx);
+applyCrosshair();
+requestAnimationFrame(frame);
+
+window.__f38 = {
+  place, applyCrosshair,
+  state: () => {
+    const attr = grassLOD.impostors.geometry.attributes.instanceAlpha;
+    const alphas = [];
+    for (let i = 0; i < grassLOD.impostors.count; i++) alphas.push(+attr.array[i].toFixed(3));
+    const shm = bushShadowMesh.instanceMatrix;
+    const bushAnchors = [];
+    for (let i = 0; i < Math.min(4, bushShadowMesh.count); i++) {
+      bushAnchors.push([+shm.array[i * 16 + 12].toFixed(2), +shm.array[i * 16 + 13].toFixed(3), +shm.array[i * 16 + 14].toFixed(2)]);
+    }
+    return {
+      stop: STOPS[stopIdx].id, d: STOPS[stopIdx].d,
+      targetCount: target.mesh.visible ? target.mesh.count : 0,
+      fullCount: target.fullCount,
+      imp: grassLOD.impostors.count, sh: grassLOD.impostorShadows.count,
+      bushShadows: bushShadowMesh.count, bushAnchors,
+      alphas,
+      crosshair: {
+        mythic: crosshair.classList.contains('mythic'),
+        aura: crosshair.style.getPropertyValue('--ch-aura'),
+        season: crosshair.style.getPropertyValue('--ch-season'),
+        dur: crosshair.style.getPropertyValue('--ch-dur'),
+      },
+    };
+  },
+};
+</script>
+</body>
+</html>

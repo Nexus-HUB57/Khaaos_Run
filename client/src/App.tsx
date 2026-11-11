@@ -14,6 +14,7 @@ const Bank = lazy(() => import("@/pages/bank"));
 const Inventory = lazy(() => import("@/pages/inventory"));
 const Market = lazy(() => import("@/pages/market"));
 const Profile = lazy(() => import("@/pages/profile"));
+const Studio = lazy(() => import("@/pages/studio"));
 const Mundos = lazy(() => import("@/pages/mundos"));
 const Zona = lazy(() => import("@/pages/zona"));
 const Loot = lazy(() => import("@/pages/loot"));
@@ -21,6 +22,8 @@ const Batalha = lazy(() => import("@/pages/batalha"));
 const Lobby = lazy(() => import("@/pages/lobby"));
 const Ranking = lazy(() => import("@/pages/ranking"));
 const Landing = lazy(() => import("@/pages/landing"));
+const AuthPage = lazy(() => import("@/pages/auth"));
+const TermsStatusPage = lazy(() => import("@/pages/terms-status"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 import { BattleRoomProvider } from "@/hooks/battle-room-context";
 import { MatchResultsModal } from "@/components/match-results-modal";
@@ -60,6 +63,10 @@ function Router() {
       </div>
     }>
     <Switch>
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/login" component={AuthPage} />
+      <Route path="/cadastro" component={AuthPage} />
+      <Route path="/termos" component={TermsStatusPage} />
       <Route path="/" component={user ? () => <ProtectedRoute component={Dashboard} /> : Landing} />
       <Route path="/bank">
         <ProtectedRoute component={Bank} />
@@ -72,6 +79,9 @@ function Router() {
       </Route>
       <Route path="/profile">
         <ProtectedRoute component={Profile} />
+      </Route>
+      <Route path="/studio">
+        <ProtectedRoute component={Studio} />
       </Route>
       <Route path="/marshal-console">
         <ProtectedRoute component={MarshalConsole} />

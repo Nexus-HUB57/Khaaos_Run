@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { items, loans, transactions, bankAccounts, playerStats, SPECIALIZATION_IDS } from './schema';
 import { fromMinorUnits, toMinorUnits } from './money';
+import { ARMORER_CATALOG_IDS } from './armorer-catalog';
+import { isOperativeAvatarId } from './operative-avatar-catalog';
 
 const moneyAmountInput = (minimum: bigint, maximum: bigint) => z.union([
   z.number().finite(),
@@ -201,16 +203,21 @@ export const api = {
         200: z.array(z.custom<typeof items.$inferSelect>()),
       },
     },
-    purchase: {
+    materials: {
+      method: 'GET' as const,
+      path: '/api/armorer/materials',
+      responses: {
+        200: z.array(z.object({ materialId: z.string(), quantity: z.number().int().nonnegative() })),
+      },
+    },
+    craft: {
       method: 'POST' as const,
-      path: '/api/items/purchase',
-      input: z.object({
-        type: z.enum(['ARMA', 'DEFESA', 'CURATIVO', 'UTILIDADE']),
-        name: z.string().trim().min(1).max(64),
-      }).strict(),
+      path: '/api/items/craft',
+      input: z.object({ catalogId: z.enum(ARMORER_CATALOG_IDS) }).strict(),
       responses: {
         201: z.object({ operationId: z.string().uuid() }).passthrough().and(z.custom<typeof items.$inferSelect>()),
         402: errorSchemas.insufficientFunds,
+        409: z.object({ message: z.string(), missingMaterials: z.array(z.object({ materialId: z.string(), required: z.number().int(), available: z.number().int() })).optional() }),
       },
     },
     equip: {
@@ -289,6 +296,17 @@ export const api = {
         200: z.object({ specializationId: z.string() }),
         400: errorSchemas.validation,
         403: errorSchemas.validation,
+      },
+    },
+    operative: {
+      method: 'POST' as const,
+      path: '/api/player/operative',
+      input: z.object({
+        operativeId: z.string().refine(isOperativeAvatarId, 'Operativo inválido'),
+      }).strict(),
+      responses: {
+        200: z.object({ selectedOperativeId: z.string() }).strict(),
+        400: errorSchemas.validation,
       },
     },
   },

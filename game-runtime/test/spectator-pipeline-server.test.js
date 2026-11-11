@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import WebSocket from 'ws';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const { SpectatorPipeline, SpectatorConfig } = await import('../server/spectator.js');
 const { createAuthoritativeServer } = await import('../server/server.js');
@@ -139,6 +140,7 @@ test('room3d.spectatorView: nomes reais, ring no contrato e eventos espelhados (
   const room = new MatchRoom3D({ id: 'tv-room', seed: 'tv-seed-1', region: 'sa-east', capacity: 16, botFill: 5, airdrop: false });
   room.addPlayer('h1', 'Sargento HURAN-01');
   assert.ok(room.start('h1', 'belt'), 'sala iniciada com bots nominais');
+  disembarcarSala(room, 'h1'); // Task 53 — protocolo do trem cumprido antes do teste
 
   const view = room.spectatorView();
   assert.equal(view.type, 'ROOM_TICK');

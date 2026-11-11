@@ -11,6 +11,17 @@ export interface WarIActionItem {
   stats: Record<string, number>;
 }
 
+/** Mirrors the server's battle-entry rule for items selected in the PackBack. */
+export function hasValidWarIDurability(durability: unknown, maxDurability: unknown): boolean {
+  const current = Number(durability);
+  const maximum = Number(maxDurability);
+  return Number.isFinite(current)
+    && Number.isFinite(maximum)
+    && current > 0
+    && maximum > 0
+    && current <= maximum;
+}
+
 const CATEGORY_BY_ITEM_TYPE: Record<string, WarICategory> = {
   ARMA: "ARMAMENTO",
   DEFESA: "DEFESA",

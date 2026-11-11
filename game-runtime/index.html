@@ -13,9 +13,13 @@
     <!-- vignette de dano -->
     <div id="damageVignette"></div>
 
+    <!-- F36 — vinheta SAZONAL da aura: borda da tela tinge com a cor da skin
+         mítica equipada (var --aura-season), ritmo por estação (body[data-aura]) -->
+    <div id="auraVignette" aria-hidden="true"></div>
+
     <!-- barra superior -->
     <header class="topbar3d">
-      <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small id="scenarioName">CIGKV // KHAOOS VILLE</small></div></div>
+      <div class="brand"><span class="brand-mark">KR</span><div><strong>KHAAOS RUN</strong><small id="scenarioName">CIGKV // Khaaos Ville</small></div></div>
       <div class="match-state">
         <span class="live-dot"></span><span id="matchStatus">AGUARDANDO ZU</span>
         <b id="matchClock">10:00</b>
@@ -24,6 +28,8 @@
       </div>
       <div class="seed-box"><label>SEED</label><input id="seedInput" title="Seed da partida" /></div>
       <button id="audioBtn" class="audio-toggle" type="button" title="Mixagem de volume (KR_AUDIO_*): geral, efeitos, mundo e interface">♪ MIX</button>
+      <button id="gfxBtn" class="audio-toggle" type="button" title="Vídeo e performance (KR_GFX_*): qualidade, pós-FX, resolução dinâmica, telemetria, tremor e sensibilidade">⚙ GFX</button>
+      <button id="mapBtn" class="audio-toggle" type="button" title="Mapa tático (M): distritos, anéis do Ring, terminais ZEX e contatos revelados">🗺 MAPA</button>
       <div id="operativeDisplay" class="operator-chip">OPERATIVO // KHAEL VANCE</div>
     </header>
 
@@ -76,6 +82,26 @@
       <div id="killfeed"></div>
     </div>
 
+    <!-- Fase 40 — mapa tático em tela cheia (tecla M / botão MAPA) -->
+    <div id="tacticalMap" class="hidden" aria-hidden="true">
+      <div class="tactical-frame" id="tacticalFrame">
+        <div class="tactical-head">
+          <b>MAPA TÁTICO</b>
+          <span id="tacticalSub" class="tactical-sub">—</span>
+          <span class="tactical-close">[M] FECHAR</span>
+        </div>
+        <canvas id="tacticalCanvas" width="720" height="720"></canvas>
+        <div class="tactical-legend">
+          <span class="lg lg-ring">ring atual</span>
+          <span class="lg lg-target">próximo pulso</span>
+          <span class="lg lg-terminal">terminal ZEX</span>
+          <span class="lg lg-loot">loot</span>
+          <span class="lg lg-recon">contato revelado</span>
+          <span class="lg lg-player">você</span>
+        </div>
+      </div>
+    </div>
+
     <!-- status do jogador (canto inferior esquerdo) -->
     <div class="vitals">
       <div class="stat-strip">
@@ -91,6 +117,22 @@
     <!-- arma e munição (canto inferior direito) -->
     <div class="weapon-panel">
       <div id="reloadHint">RECARREGANDO…</div>
+      <!-- Fase 37 — ícone da arma no inventário: silhueta por categoria
+           (rifle/sniper/shotgun/lmg/smg/sidearm/energy/melee) e, com skin
+           mítica equipada, FESTIVAL SAZONAL por aura (--aura/--aura-season/
+           --aura-dur decididos por aura3d.weaponIconVars via hud3d). -->
+      <div id="weaponIcon" class="weapon-icon" data-cat="sidearm" aria-hidden="true">
+        <svg viewBox="0 0 64 28" xmlns="http://www.w3.org/2000/svg">
+          <path data-cat="rifle"    d="M2 13h6l2-3h22v-2h5v2h18l7 2-7 2H38v3l-4 1v3h-5v-4l-6-1H10l-3 3H2z"/>
+          <path data-cat="sniper"   d="M1 14h8l2-2h24v-3h6v3h20l3 2-3 2H40v4l-5 2v2h-5v-3l-8-1H12l-2 3H1zM33 6h10v3H33z"/>
+          <path data-cat="shotgun"  d="M2 12h8l3-3h14v-2h6v2h27l2 2-2 2H33v3h14l8 1-8 1H33l-5 3h-6l2-3H11l-3 2H2z"/>
+          <path data-cat="lmg"      d="M3 11h7V8h8v3h40l3 2-3 2H30v4l-4 1v3h-5v-4l-5-1H12l-2 3H3zM18 19h9v5h-9z"/>
+          <path data-cat="smg"      d="M4 12h6l2-3h14v-2h5v2h20l4 2-4 2H32v4l-4 1v3h-5v-4l-5-1H10l-2 3H4zM28 19h6v4h-6z"/>
+          <path data-cat="sidearm"  d="M8 5h30l6 3-2 3H24l-1 4 6 1-1 7-9-1-3-10-8-1z"/>
+          <path data-cat="energy"   d="M2 13h6l2-3h20v-2h6v2h16l8 2-8 2H38v3l-4 1v3h-5v-4l-5-1H10l-3 3H2zM23 4h4l-1 5h-4zM23 18h4l-1 5h-4z"/>
+          <path data-cat="melee"    d="M6 22c8-2 16-8 24-16l4-4 6 4-4 4c-8 8-14 16-16 24l-6 1c1-6 0-10-3-11z"/>
+        </svg>
+      </div>
       <div class="ammo-row"><b id="ammoMag">15</b><span id="ammoReserve">/ 45</span></div>
       <div class="weapon-name" id="weaponName">PISTOLA 9MM</div>
       <div id="attachStrip" class="attach-strip" title="Anexos da AR-47"></div>
@@ -176,14 +218,14 @@
           <span class="poj-chip"><small>SOBREVIVENTES</small><strong id="pojVivos">—</strong></span>
           <span class="poj-chip poj-chip-rank" title="Patente do perfil — progressão KRC (1º critério de desempate do 11º artigo)"><small>PATENTE</small><strong id="pojPatente">—</strong></span>
         </div>
-        <p>Escolha o teatro de operações, selecione seu operativo e defina como entrar no ring. A arena CIGKV permanece como treino; Barburhen abre um protótipo local do Setor Industrial.</p>
+        <p>Escolha o teatro de operações entre os cinco mundos da Guerra do Khaaos, selecione seu operativo e defina como entrar no ring. A arena CIGKV permanece como treino; Barburhen, Priadus, Ckesalth e Arukheea são os mundos oficiais da campanha.</p>
         <div class="content-selection">
           <label for="scenarioSelect">TEATRO DE OPERAÇÕES</label>
           <select id="scenarioSelect" aria-label="Selecionar cenário">
             <option value="cigkv">CIGKV — Campo de Instrução</option>
             <option value="barburhen">Barburhen — Protótipo Setor Industrial</option>
           </select>
-          <label for="operativeSelect">OPERATIVO CANÔNICO · 16 DISPONÍVEIS</label>
+          <label for="operativeSelect">OPERATIVO CANÔNICO · CARREGANDO…</label>
           <select id="operativeSelect" aria-label="Selecionar operativo"></select>
           <div class="operative-card" aria-live="polite">
             <div id="operativeSigil" class="operative-sigil">KV</div>
@@ -230,12 +272,13 @@
     <!-- overlay de nocaute (DBNO) -->
     <div id="knockOverlay" class="hidden">
       <div class="knock-title">NOCAUTEADO</div>
+      <div id="knockCountdown" class="knock-countdown" role="timer" aria-live="off" aria-label="Tempo para recuperação">7 s</div>
       <div class="knock-bar"><div id="knockFill"></div></div>
       <div id="reviveWrap" class="revive-wrap hidden">
         <div class="revive-label">REVIVENDO…</div>
         <div class="revive-bar"><div id="reviveFill"></div></div>
       </div>
-      <div class="knock-hint">Aliados podem reviver — segure <kbd>E</kbd> perto de um companheiro caído para revivê-lo</div>
+      <div class="knock-hint">Prazo máximo: 7 s. Use <kbd>H</kbd>/✚ para se tratar ou aplicar primeiros socorros a um aliado caído; segure <kbd>E</kbd> perto de um aliado para reviver.</div>
     </div>
 
     <!-- modal fim -->
@@ -274,6 +317,26 @@
       <label><span>INTERFACE</span><input type="range" min="0" max="100" step="1" data-channel="ui" aria-label="Volume da interface e avisos" /><b data-out="ui">100%</b></label>
       <small class="audio-mixer-hint">salvo automaticamente (KR_AUDIO_*)</small>
     </div>
+
+    <div id="gfxPanel" class="audio-mixer hidden">
+      <div class="section-label">VÍDEO // PERFORMANCE</div>
+      <label><span>QUALIDADE</span>
+        <select id="gfxTier" data-gfx="tier" aria-label="Perfil gráfico">
+          <option value="auto">AUTO · ADAPTATIVO</option>
+          <option value="low">BAIXO</option>
+          <option value="medium">MÉDIO</option>
+          <option value="high">ALTO</option>
+        </select>
+      </label>
+      <label><span>PÓS-FX</span><input type="checkbox" data-gfx="postfx" aria-label="Pós-processamento (bloom + grade)" /></label>
+      <label><span>RES. DINÂMICA</span><input type="checkbox" data-gfx="drs" aria-label="Resolução dinâmica (DRS)" /></label>
+      <label><span>TELEMETRIA FPS</span><input type="checkbox" data-gfx="fps" aria-label="Mostrar FPS e escala de resolução" /></label>
+      <label><span>TREMOR CÂM.</span><input type="range" min="0" max="100" step="5" data-gfx="shake" aria-label="Intensidade do tremor de câmera (0 reduz movimento)" /><b data-out="shake">100%</b></label>
+      <label><span>SENSIBILIDADE</span><input type="range" min="30" max="250" step="5" data-gfx="sens" aria-label="Sensibilidade do mouse" /><b data-out="sens">100%</b></label>
+      <small class="audio-mixer-hint">salvo automaticamente (KR_GFX_*)</small>
+    </div>
+
+    <div id="perfReadout" class="perf-readout hidden" role="status"></div>
 
     <script type="module" src="/src/game3d/main3d.js"></script>
   </body>

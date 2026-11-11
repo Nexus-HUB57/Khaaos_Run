@@ -127,7 +127,8 @@ jobs:
         if: hashFiles('game-runtime/Dockerfile') != ''
         uses: docker/build-push-action@v5
         with:
-          context: ./game-runtime
+          context: .
+          file: ./game-runtime/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/nexus-hub57/khaaos-game:${{ github.sha }}
@@ -171,17 +172,19 @@ jobs:
         run: |
           echo "=== Staging Health Check ==="
           for i in $(seq 1 10); do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://khaaos-run-staging.onrender.com/healthz.json" 2>/dev/null || echo "000")
+            BODY=$(curl --fail --silent --show-error --max-time 15 \
+              "https://khaaos-run-staging.onrender.com/readyz" 2>/dev/null || true)
 
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "  ✅ Staging healthy (attempt $i)"
+            if [ -n "$BODY" ] && jq -e \
+              '.ready == true and .checks.postgres.status == "ok" and .checks.redis.status == "ok"' \
+              <<<"$BODY" >/dev/null; then
+              echo "  ✅ Staging dependencies ready (attempt $i)"
               exit 0
             fi
-            echo "  ⏳ Waiting... (attempt $i, HTTP $HTTP_CODE)"
+            echo "  ⏳ Waiting for PostgreSQL and Redis readiness (attempt $i)"
             sleep 30
           done
-          echo "  ❌ Staging health check failed after 10 attempts"
+          echo "  ❌ Staging dependencies were not ready after 10 attempts"
           exit 1
 
   # ─── Job 4: Deploy to Production (Multi-Region) ───────────────

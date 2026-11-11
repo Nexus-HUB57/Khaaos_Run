@@ -1,0 +1,92 @@
+{
+  "annotations": { "list": [] },
+  "description": "Game-runtime: saúde das réplicas, ownership/fencing e relay Redis Streams entre nós.",
+  "editable": true,
+  "id": null,
+  "panels": [
+    {
+      "title": "Réplicas do game-runtime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "count(khaaos_runtime_replica_info)", "legendFormat": "réplicas" }],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 2 }] } } }
+    },
+    {
+      "title": "Redis relay disponível",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "min(khaaos_runtime_redis_pubsub_up)", "legendFormat": "Redis" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }] } }
+    },
+    {
+      "title": "Salas por réplica",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "khaaos_runtime_distributed_held_rooms", "legendFormat": "{{replica_id}} held" },
+        { "expr": "khaaos_runtime_distributed_frozen_rooms", "legendFormat": "{{replica_id}} frozen" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "title": "Publicações do relay Redis",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (job, result) (rate(khaaos_runtime_redis_pubsub_publish_total[5m]))", "legendFormat": "{{job}} {{result}}/s" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Gaps, duplicatas e erros de leitura",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum by (job) (rate(khaaos_runtime_redis_pubsub_mirror_gaps_total[5m]))", "legendFormat": "gaps {{job}}" },
+        { "expr": "sum by (job) (rate(khaaos_runtime_redis_pubsub_mirror_duplicates_total[5m]))", "legendFormat": "duplicatas {{job}}" },
+        { "expr": "sum by (job) (rate(khaaos_runtime_redis_pubsub_read_errors_total[5m]))", "legendFormat": "erros leitura {{job}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Fencing e perda de ownership",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "sum by (job) (rate(khaaos_runtime_distributed_fence_violations_total[5m]))", "legendFormat": "fence violations {{job}}" },
+        { "expr": "sum by (job) (rate(khaaos_runtime_distributed_lost_total[5m]))", "legendFormat": "leases perdidos {{job}}" },
+        { "expr": "sum by (job) (rate(khaaos_runtime_distributed_redirects_total[5m]))", "legendFormat": "redirects {{job}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Conexões e backpressure",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "sum by (job) (khaaos_runtime_ws_connections)", "legendFormat": "conexões {{job}}" },
+        { "expr": "sum by (job) (khaaos_runtime_matchmaking_queue)", "legendFormat": "fila {{job}}" },
+        { "expr": "sum by (job) (rate(khaaos_runtime_backpressure_total[5m]))", "legendFormat": "backpressure {{job}}/s" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "title": "Memória por nó",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "khaaos_runtime_process_resident_memory_bytes", "legendFormat": "RSS {{job}}/{{instance}}" },
+        { "expr": "khaaos_runtime_process_heap_used_bytes", "legendFormat": "heap {{job}}/{{instance}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["khaaos", "game-runtime", "redis", "distributed"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Khaaos Run — Game Runtime Distributed",
+  "uid": "khaaos-runtime-distributed",
+  "version": 1
+}

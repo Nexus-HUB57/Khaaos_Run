@@ -1,0 +1,54 @@
+{
+  "environment": "Chromium headless / SwiftShader (não é benchmark mobile)",
+  "results": [
+    {
+      "scenario": "CIGKV",
+      "initial": 1440,
+      "drsWidth": 792,
+      "expected": 792,
+      "passes": 5,
+      "aa": true
+    },
+    {
+      "scenario": "Barburhen",
+      "initial": 1440,
+      "drsWidth": 792,
+      "expected": 792,
+      "passes": 5,
+      "aa": true
+    },
+    {
+      "scenario": "Priadus",
+      "initial": 1440,
+      "drsWidth": 792,
+      "expected": 792,
+      "passes": 5,
+      "aa": true
+    },
+    {
+      "scenario": "Ckesalth",
+      "initial": 1440,
+      "drsWidth": 792,
+      "expected": 792,
+      "passes": 5,
+      "aa": true
+    },
+    {
+      "scenario": "Arukheea",
+      "initial": 1440,
+      "drsWidth": 792,
+      "expected": 792,
+      "passes": 5,
+      "aa": true
+    }
+  ],
+  "lifecycle": {
+    "disposed": 5,
+    "ssrSize": {
+      "width": 570,
+      "height": 320
+    },
+    "lowDirect": true
+  },
+  "errors": []
+}

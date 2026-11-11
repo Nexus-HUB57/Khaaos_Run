@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // ---- stub de Canvas2D (mesmo padrão de character-realism.test.js): as
 // texturas procedurais desenham em <canvas>; em node são no-ops ----
@@ -31,6 +32,7 @@ const createSim = (options = {}) => new KhaaosSim3D({ airdrop: false, ...options
 const activate = (sim, operativeId) => {
   sim.player.operativeId = operativeId;
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   sim.step({ ...DEFAULT_INPUT, ability: true }, 1 / sim.tickRate);
   return sim.consumeEvents().find((event) => event.type === 'ability');
 };
@@ -83,6 +85,7 @@ test('vault +15%: multiplicador ativo apenas no ar enquanto o pulso vive', () =>
   const sim = createSim({ seed: 'TALON-VAULT', botCount: 0 });
   sim.player.operativeId = 'OP_MALE_TALON';
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   // no chão: multiplicador neutro
   sim.step(DEFAULT_INPUT, 1 / sim.tickRate);
   assert.equal(sim.player.abilitySpeedMultiplier ?? 1, 1);

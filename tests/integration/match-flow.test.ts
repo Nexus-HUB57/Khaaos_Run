@@ -52,11 +52,11 @@ describe("MatchFlow", () => {
     });
 
     it("should have correct capacities", () => {
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 50);   // CIGKV
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[0].capacity, 100);  // CIGKV
       assert.strictEqual(DEFAULT_WORLD_PIPELINE[1].capacity, 100);  // Barburhen
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 75);   // Priadus
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 60);   // Ckesalth
-      assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 80);   // Arukheea
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[2].capacity, 100);  // Priadus
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[3].capacity, 100);  // Ckesalth
+      assert.strictEqual(DEFAULT_WORLD_PIPELINE[4].capacity, 100);  // Arukheea
     });
   });
 
@@ -136,6 +136,28 @@ describe("MatchFlow", () => {
       matchFlow.startCountdown();
       assert.strictEqual(matchFlow.getState().status, "COUNTDOWN");
       matchFlow.destroy();
+    });
+
+    it("should cancel countdown explicitly and restore lobby state", () => {
+      matchFlow.startCountdown();
+      assert.equal(matchFlow.cancelCountdown(), true);
+      assert.equal(matchFlow.getState().status, "LOBBY");
+      assert.equal(matchFlow.cancelCountdown(), false);
+      matchFlow.destroy();
+    });
+
+    it("should not start a destroyed match after its countdown timeout", async () => {
+      const shortMatch = new MatchFlow({ roomId: "destroyed_countdown", countdownSeconds: 0.02 }, economyBridge);
+      let started = false;
+      const originalStartMatch = shortMatch.startMatch.bind(shortMatch);
+      shortMatch.startMatch = () => {
+        started = true;
+        originalStartMatch();
+      };
+      shortMatch.startCountdown();
+      shortMatch.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(started, false);
     });
 
     it("should not start countdown if not in LOBBY", () => {

@@ -25,6 +25,7 @@
 #include "Game/Combat/KhaaosADSComponent.h"
 #include "Game/AntiCheat/KhaaosMovementValidator.h"
 #include "Game/Level/KhaaosCIGKVLevel.h"
+#include "Game/Network/KhaaosMobileFirePolicy.h"
 #include "Game/UI/Widgets/KhaaosHUDWidget.h"
 #include "Game/UI/Widgets/KhaaosMobileControlsWidget.h"
 #include "Game/World/CIGKV/KhaaosZuCinematicComponent.h"
@@ -88,8 +89,8 @@ void AKhaaosPlayerController::Tick(float DeltaSeconds)
 		const double Now = GetWorld()->GetTimeSeconds();
 		if (Now >= NextFireHeartbeatTimestamp)
 		{
-			ServerSetFireHeld(true);
-			NextFireHeartbeatTimestamp = Now + 0.25; // 4 Hz; do not enqueue an RPC every frame.
+			ServerFireHeartbeat(LocalFirePressToken);
+			NextFireHeartbeatTimestamp = Now + KhaaosMobileFirePolicy::HeartbeatIntervalSeconds;
 		}
 	}
 
@@ -97,7 +98,8 @@ void AKhaaosPlayerController::Tick(float DeltaSeconds)
 	if (HasAuthority())
 	{
 		const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-		if (bServerFireButtonDown && (Now - LastFireInputTimestamp) > 2.0)
+		if (KhaaosMobileFirePolicy::HasFireLeaseExpired(
+			bServerFireButtonDown, Now, LastFireInputTimestamp))
 		{
 			// A suspended mobile app or dead connection may never deliver release.
 			bServerFireHeld = false;
@@ -294,15 +296,26 @@ void AKhaaosPlayerController::HandleFire(const FInputActionValue& Value)
 	{
 		return;
 	}
+	if (bLocalFireHeld)
+	{
+		return;
+	}
 	bLocalFireHeld = true;
-	NextFireHeartbeatTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() + 0.25 : 0.0;
-	ServerSetFireHeld(true);
+	++LocalFirePressToken;
+	if (LocalFirePressToken == 0)
+	{
+		++LocalFirePressToken;
+	}
+	NextFireHeartbeatTimestamp = GetWorld()
+		? GetWorld()->GetTimeSeconds() + KhaaosMobileFirePolicy::HeartbeatIntervalSeconds
+		: KhaaosMobileFirePolicy::HeartbeatIntervalSeconds;
+	ServerSetFireHeld(true, LocalFirePressToken);
 }
 
 void AKhaaosPlayerController::HandleStopFire(const FInputActionValue& Value)
 {
 	bLocalFireHeld = false;
-	ServerStopFire();
+	ServerStopFire(LocalFirePressToken);
 }
 
 void AKhaaosPlayerController::HandleReload(const FInputActionValue& Value)
@@ -495,16 +508,25 @@ bool AKhaaosPlayerController::ServerFire_Validate()
 	return true;
 }
 
-void AKhaaosPlayerController::ServerSetFireHeld_Implementation(bool bHeld)
+void AKhaaosPlayerController::ServerSetFireHeld_Implementation(bool bHeld, uint32 PressToken)
 {
+	if (PressToken == 0)
+	{
+		return;
+	}
 	if (!bHeld)
 	{
+		if (PressToken != ServerFirePressToken)
+		{
+			return;
+		}
 		bServerFireHeld = false;
 		bServerFireButtonDown = false;
 		return;
 	}
 
-	const bool bWasButtonDown = bServerFireButtonDown;
+	const bool bWasButtonDown = bServerFireButtonDown && PressToken == ServerFirePressToken;
+	ServerFirePressToken = PressToken;
 	bServerFireButtonDown = true;
 	LastFireInputTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	if (!bWasButtonDown)
@@ -525,9 +547,42 @@ void AKhaaosPlayerController::ServerSetFireHeld_Implementation(bool bHeld)
 	}
 }
 
-bool AKhaaosPlayerController::ServerSetFireHeld_Validate(bool bHeld)
+bool AKhaaosPlayerController::ServerSetFireHeld_Validate(bool bHeld, uint32 PressToken)
 {
-	return true;
+	return PressToken != 0;
+}
+
+void AKhaaosPlayerController::ServerFireHeartbeat_Implementation(uint32 PressToken)
+{
+	if (!KhaaosMobileFirePolicy::IsCurrentFireHeartbeat(
+		bServerFireButtonDown, ServerFirePressToken, PressToken))
+	{
+		return;
+	}
+
+	LastFireInputTimestamp = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	AKhaaosCharacter* Character = Cast<AKhaaosCharacter>(GetPawn());
+	if (!Character || Character->bIsDead)
+	{
+		bServerFireHeld = false;
+		bServerFireButtonDown = false;
+		return;
+	}
+	if (!bServerFireHeld && GetPawn())
+	{
+		UKhaaosWeaponComponent* WeaponComponent = Character->GetWeaponComponent();
+		if (WeaponComponent
+			&& WeaponComponent->GetActiveFireMode() == EWeaponFireMode::Auto
+			&& WeaponComponent->CanFire())
+		{
+			bServerFireHeld = true;
+		}
+	}
+}
+
+bool AKhaaosPlayerController::ServerFireHeartbeat_Validate(uint32 PressToken)
+{
+	return PressToken != 0;
 }
 
 void AKhaaosPlayerController::TryServerFireShot()
@@ -548,8 +603,8 @@ void AKhaaosPlayerController::TryServerFireShot()
 	}
 
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	const double MinimumInterval = 60.0 / static_cast<double>(FMath::Max(WeaponData->FireRate, 1));
-	if (bHasServerFired && (Now - LastServerFireTimestamp) + KINDA_SMALL_NUMBER < MinimumInterval)
+	if (!KhaaosMobileFirePolicy::IsShotCadenceReady(
+		bHasServerFired, Now, LastServerFireTimestamp, WeaponData->FireRate))
 	{
 		return;
 	}
@@ -571,16 +626,20 @@ void AKhaaosPlayerController::TryServerFireShot()
 		&& WeaponComponent->GetActiveFireMode() == EWeaponFireMode::Auto;
 }
 
-void AKhaaosPlayerController::ServerStopFire_Implementation()
+void AKhaaosPlayerController::ServerStopFire_Implementation(uint32 PressToken)
 {
+	if (PressToken != ServerFirePressToken)
+	{
+		return;
+	}
 	bServerFireHeld = false;
 	bServerFireButtonDown = false;
 	UE_LOG(LogKhaaosRun, Verbose, TEXT("KhaaosPlayerController: ServerStopFire"));
 }
 
-bool AKhaaosPlayerController::ServerStopFire_Validate()
+bool AKhaaosPlayerController::ServerStopFire_Validate(uint32 PressToken)
 {
-	return true;
+	return PressToken != 0;
 }
 
 void AKhaaosPlayerController::ServerReload_Implementation()

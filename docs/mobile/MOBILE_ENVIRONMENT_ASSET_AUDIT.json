@@ -1,0 +1,759 @@
+{
+  "schema": "khaaos.mobile-environment-asset-audit/v1",
+  "engine_target": "Unreal Engine 5.8",
+  "render_target": "Mobile Forward; baked/static lighting; no Nanite/Lumen requirement",
+  "audit_mode": "engine_less_source_audit",
+  "overall_status": "BLOCKED_SOURCE_ASSETS_MISSING",
+  "optimization_claimed": false,
+  "cook_performed": false,
+  "device_fps_measured": false,
+  "native_unreal_asset_count": 0,
+  "native_unreal_assets": [],
+  "source_roots": [
+    "Unreal/KhaaosRun/Content",
+    "mvp_output/assets",
+    "Content/Assets"
+  ],
+  "categories": {
+    "building": {
+      "source_asset_count": 5,
+      "named_object_count": 56,
+      "status": "SOURCE_ASSETS_FOUND_EDITOR_VALIDATION_REQUIRED",
+      "sources": [
+        {
+          "path": "mvp_output/assets/worlds/Arukheea_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 36679,
+          "metrics_status": "measured_source",
+          "vertices": 804,
+          "faces": 936,
+          "triangles": 936,
+          "bounds_source_units": [
+            50400.0,
+            50400.0,
+            22400.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "astral_spire",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "spire_crown",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "spire_step_00",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "spire_step_01",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "spire_step_02",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "spire_step_03",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "void_sanctum_altar",
+              "vertices": 24,
+              "faces": 24,
+              "triangles": 24
+            },
+            {
+              "name": "void_sanctum_cube_00",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "void_sanctum_cube_01",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "void_sanctum_cube_02",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "void_sanctum_cube_03",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            }
+          ]
+        },
+        {
+          "path": "mvp_output/assets/worlds/Barburhen_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 35611,
+          "metrics_status": "measured_source",
+          "vertices": 752,
+          "faces": 936,
+          "triangles": 936,
+          "bounds_source_units": [
+            50400.0,
+            50400.0,
+            10000.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "extraction_crane_arm",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "extraction_crane_tower",
+              "vertices": 24,
+              "faces": 24,
+              "triangles": 24
+            },
+            {
+              "name": "extraction_warehouse",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_ne_warehouse_0",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_ne_warehouse_1",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_ne_warehouse_2",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_sw_warehouse_0",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_sw_warehouse_1",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "ind_sw_warehouse_2",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "park_pavilion_a",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "park_pavilion_b",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            }
+          ]
+        },
+        {
+          "path": "mvp_output/assets/worlds/CIGKV_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 40750,
+          "metrics_status": "measured_source",
+          "vertices": 880,
+          "faces": 1120,
+          "triangles": 1120,
+          "bounds_source_units": [
+            12300.0,
+            12300.0,
+            2400.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "poi_arukheea_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_barburhen_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_cigarra_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_ckesalth_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_iguassu_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_priadus_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "poi_vaalnor_dome",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            },
+            {
+              "name": "training_dome_00",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "training_dome_01",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "training_dome_02",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "training_dome_03",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "zentrum_tower_base",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "zentrum_tower_mid",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "zentrum_tower_top",
+              "vertices": 16,
+              "faces": 16,
+              "triangles": 16
+            }
+          ]
+        },
+        {
+          "path": "mvp_output/assets/worlds/Ckesalth_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 36038,
+          "metrics_status": "measured_source",
+          "vertices": 796,
+          "faces": 892,
+          "triangles": 892,
+          "bounds_source_units": [
+            50400.0,
+            50400.0,
+            8400.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "forge_hall_00",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "forge_hall_01",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "forge_hall_02",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_obelisk_00",
+              "vertices": 12,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_obelisk_01",
+              "vertices": 12,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_obelisk_02",
+              "vertices": 12,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_obelisk_03",
+              "vertices": 12,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_step_0",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_step_1",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "obsidian_temple_step_2",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            }
+          ]
+        },
+        {
+          "path": "mvp_output/assets/worlds/Priadus_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 51862,
+          "metrics_status": "measured_source",
+          "vertices": 1164,
+          "faces": 1260,
+          "triangles": 1260,
+          "bounds_source_units": [
+            50400.0,
+            50400.0,
+            18000.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "atoll_tower",
+              "vertices": 24,
+              "faces": 24,
+              "triangles": 24
+            },
+            {
+              "name": "coral_lab_dome_00",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "coral_lab_dome_01",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "coral_lab_dome_main",
+              "vertices": 20,
+              "faces": 20,
+              "triangles": 20
+            },
+            {
+              "name": "lighthouse_breakwater_00",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "lighthouse_breakwater_01",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "lighthouse_breakwater_02",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "lighthouse_dock",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            },
+            {
+              "name": "lighthouse_gallery",
+              "vertices": 24,
+              "faces": 24,
+              "triangles": 24
+            },
+            {
+              "name": "lighthouse_tower",
+              "vertices": 24,
+              "faces": 24,
+              "triangles": 24
+            }
+          ]
+        }
+      ],
+      "mobile_policy": {
+        "lod_triangle_fraction_targets": {
+          "LOD0": 1.0,
+          "LOD1": 0.6,
+          "LOD2": 0.25,
+          "LOD3": 0.1
+        },
+        "authoring": [
+          "Separate reusable wall, roof, stair and trim modules from unique landmarks; use ISM/HISM for repeated static modules with matching mesh/material.",
+          "Use static lighting/lightmaps and rough mobile material variants; keep windows opaque or masked only where silhouette requires it.",
+          "Create per-cell HLOD proxies for distant static, non-interactive clusters; keep doors, loot, destructibles and gameplay cover out of merges.",
+          "Use simple convex collision for movement; reserve complex collision for explicitly approved static traces."
+        ],
+        "gameplay_invariants": [
+          "Preserve cover silhouette and line-of-sight semantics across device tiers.",
+          "Do not merge interactive or destructible actors into static HLOD."
+        ]
+      }
+    },
+    "bridge": {
+      "source_asset_count": 1,
+      "named_object_count": 1,
+      "status": "SOURCE_ASSETS_FOUND_EDITOR_VALIDATION_REQUIRED",
+      "sources": [
+        {
+          "path": "mvp_output/assets/worlds/Arukheea_Map.obj",
+          "format": ".obj",
+          "file_size_bytes": 36679,
+          "metrics_status": "measured_source",
+          "vertices": 804,
+          "faces": 936,
+          "triangles": 936,
+          "bounds_source_units": [
+            50400.0,
+            50400.0,
+            22400.0
+          ],
+          "matched_named_objects": [
+            {
+              "name": "void_sanctum_bridge",
+              "vertices": 8,
+              "faces": 12,
+              "triangles": 12
+            }
+          ]
+        }
+      ],
+      "mobile_policy": {
+        "lod_triangle_fraction_targets": {
+          "LOD0": 1.0,
+          "LOD1": 0.65,
+          "LOD2": 0.3,
+          "LOD3": 0.12
+        },
+        "authoring": [
+          "Split deck, supports, rails and attached gameplay props so distant LODs can remove small structural detail without changing the deck silhouette.",
+          "Use separate simple collision volumes for the walkable deck, rails and supports; collision and navigation must remain independent of render LOD.",
+          "Use HLOD only for distant static scenery; retain a non-merged interactive/collision source for any traversable bridge.",
+          "Bake static illumination; avoid translucent glass and dynamic shadow casting on decorative underside details."
+        ],
+        "gameplay_invariants": [
+          "Keep traversal width, height clearance, collision, navmesh connectivity and jump/fall edges identical across quality tiers.",
+          "Never simplify authoritative collision based solely on render LOD."
+        ]
+      }
+    },
+    "vehicle": {
+      "source_asset_count": 0,
+      "named_object_count": 0,
+      "status": "BLOCKED_NO_NAMED_SOURCE_ASSETS",
+      "sources": [],
+      "mobile_policy": {
+        "lod_triangle_fraction_targets": {
+          "LOD0": 1.0,
+          "LOD1": 0.5,
+          "LOD2": 0.2,
+          "LOD3": 0.08
+        },
+        "authoring": [
+          "Use Static Mesh LODs for parked props and Skeletal Mesh LODs for moving/wheel-articulated vehicles; validate transition and silhouette from chase and combat cameras.",
+          "Reduce material slots and texture samples at distance; use a mobile master material with baked/static lighting assumptions and no expensive per-pixel effects.",
+          "Prioritize wheel hubs, suspension pivots and any gameplay-visible articulated section when generating skeletal LODs; remove non-functional interior detail at distance.",
+          "Use stable simple physics collision shapes independent of render LOD; use a static proxy/HLOD only for parked, non-interactive vehicles."
+        ],
+        "gameplay_invariants": [
+          "Do not alter physics, collision, seat/interaction sockets, server authority, replication cadence or hitboxes in a rendering optimization.",
+          "Moving vehicles remain separate from static HLOD clusters."
+        ]
+      }
+    }
+  },
+  "world_blockout_sources": [
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Arukheea/Arukheea_WorldBlockout.gltf",
+      "format": ".gltf",
+      "file_size_bytes": 535,
+      "metrics_status": "measured_source",
+      "mesh_count": 1,
+      "primitive_count": 0,
+      "vertices": null,
+      "triangles": null,
+      "materials": 0,
+      "images": 0,
+      "has_geometry_accessors": false,
+      "objects": [
+        {
+          "name": "SM_Arukheea_WorldBlockout",
+          "vertices": null,
+          "faces": null,
+          "triangles": null
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Arukheea/Arukheea_WorldBlockout.obj",
+      "format": ".obj",
+      "file_size_bytes": 799,
+      "metrics_status": "measured_source",
+      "vertices": 24,
+      "faces": 12,
+      "triangles": 12,
+      "bounds_source_units": [
+        5600.0,
+        5600.0,
+        110.0
+      ],
+      "objects": [
+        {
+          "name": "SM_Arukheea_WorldBlockout",
+          "vertices": 24,
+          "faces": 12,
+          "triangles": 12
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Barburhen/Barburhen_WorldBlockout.gltf",
+      "format": ".gltf",
+      "file_size_bytes": 539,
+      "metrics_status": "measured_source",
+      "mesh_count": 1,
+      "primitive_count": 0,
+      "vertices": null,
+      "triangles": null,
+      "materials": 0,
+      "images": 0,
+      "has_geometry_accessors": false,
+      "objects": [
+        {
+          "name": "SM_Barburhen_WorldBlockout",
+          "vertices": null,
+          "faces": null,
+          "triangles": null
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Barburhen/Barburhen_WorldBlockout.obj",
+      "format": ".obj",
+      "file_size_bytes": 811,
+      "metrics_status": "measured_source",
+      "vertices": 24,
+      "faces": 12,
+      "triangles": 12,
+      "bounds_source_units": [
+        6000.0,
+        6000.0,
+        25.0
+      ],
+      "objects": [
+        {
+          "name": "SM_Barburhen_WorldBlockout",
+          "vertices": 24,
+          "faces": 12,
+          "triangles": 12
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/CIGKV/CIGKV_WorldBlockout.gltf",
+      "format": ".gltf",
+      "file_size_bytes": 523,
+      "metrics_status": "measured_source",
+      "mesh_count": 1,
+      "primitive_count": 0,
+      "vertices": null,
+      "triangles": null,
+      "materials": 0,
+      "images": 0,
+      "has_geometry_accessors": false,
+      "objects": [
+        {
+          "name": "SM_CIGKV_WorldBlockout",
+          "vertices": null,
+          "faces": null,
+          "triangles": null
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/CIGKV/CIGKV_WorldBlockout.obj",
+      "format": ".obj",
+      "file_size_bytes": 191,
+      "metrics_status": "measured_source",
+      "vertices": 4,
+      "faces": 2,
+      "triangles": 2,
+      "bounds_source_units": [
+        10000.0,
+        10000.0,
+        0.0
+      ],
+      "objects": [
+        {
+          "name": "SM_CIGKV_WorldBlockout",
+          "vertices": 4,
+          "faces": 2,
+          "triangles": 2
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Ckesalth/Ckesalth_WorldBlockout.gltf",
+      "format": ".gltf",
+      "file_size_bytes": 535,
+      "metrics_status": "measured_source",
+      "mesh_count": 1,
+      "primitive_count": 0,
+      "vertices": null,
+      "triangles": null,
+      "materials": 0,
+      "images": 0,
+      "has_geometry_accessors": false,
+      "objects": [
+        {
+          "name": "SM_Ckesalth_WorldBlockout",
+          "vertices": null,
+          "faces": null,
+          "triangles": null
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Ckesalth/Ckesalth_WorldBlockout.obj",
+      "format": ".obj",
+      "file_size_bytes": 811,
+      "metrics_status": "measured_source",
+      "vertices": 24,
+      "faces": 12,
+      "triangles": 12,
+      "bounds_source_units": [
+        4400.0,
+        4400.0,
+        32.0
+      ],
+      "objects": [
+        {
+          "name": "SM_Ckesalth_WorldBlockout",
+          "vertices": 24,
+          "faces": 12,
+          "triangles": 12
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Priadus/Priadus_WorldBlockout.gltf",
+      "format": ".gltf",
+      "file_size_bytes": 531,
+      "metrics_status": "measured_source",
+      "mesh_count": 1,
+      "primitive_count": 0,
+      "vertices": null,
+      "triangles": null,
+      "materials": 0,
+      "images": 0,
+      "has_geometry_accessors": false,
+      "objects": [
+        {
+          "name": "SM_Priadus_WorldBlockout",
+          "vertices": null,
+          "faces": null,
+          "triangles": null
+        }
+      ]
+    },
+    {
+      "path": "Unreal/KhaaosRun/Content/Maps/Priadus/Priadus_WorldBlockout.obj",
+      "format": ".obj",
+      "file_size_bytes": 821,
+      "metrics_status": "measured_source",
+      "vertices": 24,
+      "faces": 12,
+      "triangles": 12,
+      "bounds_source_units": [
+        5000.0,
+        5000.0,
+        500.0
+      ],
+      "objects": [
+        {
+          "name": "SM_Priadus_WorldBlockout",
+          "vertices": 24,
+          "faces": 12,
+          "triangles": 12
+        }
+      ]
+    }
+  ],
+  "missing_source_categories": [
+    "vehicle"
+  ],
+  "required_gates": {
+    "source_audit": "At least one named source asset for each category; source geometry metrics recorded.",
+    "editor_asset_gate": "UE5.8 Editor import; per-LOD triangle/material-slot/collision checks; no placeholder JSON treated as a binary asset.",
+    "cook_gate": "Android ASTC cook and iOS cook on supported x64 UE5.8 runners.",
+    "device_gate": "Profile in fixed camera/movement captures on midrange Android Adreno and Mali plus supported iOS device; record GPU/Render/Game p50/p95/p99, draw calls, triangles, memory and thermal behavior.",
+    "performance_target": "60 FPS is the design target (16.67 ms frame budget), not a pass until physical-device captures meet the project gate.",
+    "gameplay_gate": "Compare cover visibility, bridge traversability/nav, vehicle collision and replication across all quality tiers."
+  }
+}

@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
-import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements } from './detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements, naturalDressingPlacements } from './detail3d.js';
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
@@ -24,15 +24,79 @@ import {
   windowsTexture, crateTexture, grassBladeTexture, cloudTexture,
   roadMaterial, sidewalkMaterial, crosswalkTexture, barrelMaterial,
   sandbagMaterial, palletMaterial, signTexture, mountainTexture, contactShadowTexture,
+  biomeSurfaceProfile,
 } from './textures3d.js';
 import { createLootMesh, createTerminalMesh } from './entities3d.js';
 // Fase 31 — vegetação de produção: árvores por arquétipo de mundo, arbustos
 // em cluster, tufos de grama curvados e vento por shader (vegetation3d).
 import {
-  treeArchetypeFor, buildTreeField, buildBushField,
+  treeArchetypeFor, buildTreeField, buildBushField, buildNaturalDressingField,
   buildGrassFieldLOD, patchSway, tickVegetationWind,   // Fase 32 — grama com LOD
+  grassOutdoorBake, applyOutdoorTint,                  // F36 — impostor outdoor (bake no terreno)
+  bushShadowEntries,                                   // F38 — sombra de contato dos arbustos
+  scrubShadowBand, patchInstanceAlpha,                 // F39 — banda de distância da sombra do scrub
 } from './vegetation3d.js';
 export { tickVegetationWind }; // re-export p/ o main3d (tick único do vento)
+
+// ---------- F41 — PERFIS DE LUZ POR CENÁRIO (reconfiguração de parâmetros) ----------
+// Antes: TODOS os cenários não-Barburhen recebiam a MESMA régua de luz quente
+// (ternário inline) — céu de deserto iluminado igual a céu de noite gélida.
+// Agora cada cenário tem um perfil físico-motivado: temperatura do sol, balanço
+// hemisférico, fills frios/quentes, exposição ACES e intensidade do IBL — e o
+// nightBase (skyPhase) captura o perfil automaticamente, então o anoitecer
+// continua interpolando a partir do ponto de partida do próprio mundo.
+// shadowNormalBias entra no lugar do "bias negativo puro": mata acne nas
+// cápsulas curvas dos personagens sem peter-panning nas bases.
+const BASELINE_CIGKV = Object.freeze({ // crepúsculo violeta (baseline histórica preservada)
+  sunColor: '#ffc98f', sunIntensity: 2.35,
+  hemiSky: '#8f74b4', hemiGround: '#4a3d2e', hemiIntensity: 1.18,
+  fillColor: '#6a5aa0', fillIntensity: 0.72,
+  backColor: '#a8885e', backIntensity: 0.55,
+  exposure: 1.24, envIntensity: .45,
+  shadowBias: -0.00028, shadowNormalBias: .018,
+});
+export const LIGHTING_PROFILES = Object.freeze({
+  CIGKV: BASELINE_CIGKV,     // baseline violeta — id canônico do mundo-patria
+  default: BASELINE_CIGKV,   // desconhecidos herdam a baseline (mesmo objeto)
+  Barburhen: Object.freeze({ // golden hour urbano — valores F7 recalibrados preservados
+    sunColor: '#f0c7a2', sunIntensity: 2.05,
+    hemiSky: '#c5d5dc', hemiGround: '#4e5a61', hemiIntensity: 1.04,
+    fillColor: '#7898b6', fillIntensity: 0.5,
+    backColor: '#b98263', backIntensity: 0.42,
+    exposure: 1.18, envIntensity: .5,
+    shadowBias: -0.00022, shadowNormalBias: .022,
+  }),
+  Priadus: Object.freeze({ // noite gélida — sol frio e baixo, sombras azuladas
+    sunColor: '#b8c4e8', sunIntensity: 2.1,
+    hemiSky: '#7a8ab8', hemiGround: '#2c3138', hemiIntensity: 1.05,
+    fillColor: '#4a5a88', fillIntensity: 0.6,
+    backColor: '#8a7a5e', backIntensity: 0.45,
+    exposure: 1.12, envIntensity: .42,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+  Ckesalth: Object.freeze({ // terra de brasa — sol laranja duro, quente nas sombras
+    sunColor: '#ffb27a', sunIntensity: 2.45,
+    hemiSky: '#a06a58', hemiGround: '#4a3228', hemiIntensity: 1.12,
+    fillColor: '#8a5a68', fillIntensity: 0.62,
+    backColor: '#c88a4a', backIntensity: 0.5,
+    exposure: 1.28, envIntensity: .5,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+  Arukheea: Object.freeze({ // pôr do sol de deserto — sol alto e quente, rebatida de areia
+    sunColor: '#ffd9a0', sunIntensity: 2.55,
+    hemiSky: '#d8b894', hemiGround: '#6a4a30', hemiIntensity: 1.15,
+    fillColor: '#e8a86a', fillIntensity: 0.68,
+    backColor: '#b8785a', backIntensity: 0.5,
+    exposure: 1.3, envIntensity: .52,
+    shadowBias: -0.00022, shadowNormalBias: .02,
+  }),
+});
+
+// Perfil puro e determinístico: cenário conhecido → perfil próprio;
+// desconhecido/alias futuro → baseline violeta (nunca explode).
+export function lightingProfile(scenarioId = '') {
+  return LIGHTING_PROFILES[scenarioId] ?? LIGHTING_PROFILES.default;
+}
 
 // ---------- céu ----------
 function createSky(scenario) {
@@ -159,9 +223,14 @@ function buildTraffic(scene, layout, q) {
 }
 
 // ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
-function buildRoads(scene, layout) {
+function buildRoads(scene, layout, scenarioId = 'CIGKV') {
   const road = roadMaterial();
+  const surface = biomeSurfaceProfile(scenarioId);
+  road.roughness = surface.asphalt;
+  road.envMapIntensity = surface.env;
   const walk = sidewalkMaterial();
+  walk.roughness = Math.min(1, surface.concrete + .06);
+  walk.envMapIntensity = surface.env;
   const group = new THREE.Group();
   for (const seg of roadSegments(layout)) {
     const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
@@ -295,7 +364,7 @@ const CONTACT_SHADOW_SIZES = {
   barrierprop: 2.9, crate: 1.25, cone: 0.62, rubble: 1.15, rubbleSlab: 1.35,
 };
 export function buildContactShadows(scene, entries) {
-  if (!entries.length) return;
+  if (!entries.length) return null;
   const tex = contactShadowTexture();
   const mat = new THREE.MeshBasicMaterial({
     map: tex, transparent: true, depthWrite: false, opacity: 1,
@@ -305,7 +374,46 @@ export function buildContactShadows(scene, entries) {
   const im = new THREE.InstancedMesh(geo, mat, entries.length);
   const dummy = new THREE.Object3D();
   entries.forEach((e, i) => {
-    dummy.position.set(e.x, 0.012 + i * 0.0006, e.z); // stagger evita z-fighting entre blobs
+    dummy.position.set(e.x, (e.y ?? 0) + 0.012 + (i % 24) * 0.00015, e.z); // segue relevo; stagger limitado a 3,5mm
+    dummy.rotation.set(-Math.PI / 2, 0, e.rot ?? 0);
+    dummy.scale.set(e.sizeX ?? e.size ?? 1, e.sizeZ ?? e.size ?? 1, 1);
+    dummy.updateMatrix();
+    im.setMatrixAt(i, dummy.matrix);
+  });
+  im.renderOrder = 1;
+  im.receiveShadow = false;
+  im.castShadow = false;
+  scene.add(im);
+  return im;   // F38 — retorno p/ o chamador registrar/inspecionar (testes)
+}
+
+// ---------- F39 — sombras de contato em BANDAS DE DISTÂNCIA (scrub) ----------
+// Os discos do mato rasteiro de Barburhen (F7) eram ESTÁTICOS: opacidade cheia
+// a 200 m virava moiré escuro no horizonte. Aqui o MESMO disco radial ganha
+// alpha POR INSTÂNCIA dirigido por scrubShadowBand (vegetation3d — cheio
+// perto, raleio smoothstep, zero longe): main3d chama update(camX, camZ)
+// 1×/frame (O(scrub), tipicamente 150 hipotenusa + 150 floats — nada).
+// Mesma textura/material do F7 (consistência visual), material transparente
+// sem depthWrite + polygonOffset contra o terreno; y ancora no RELEVO (entry.y
+// com lift embutido — no plano jogável o terreno é 0, na margem acompanha).
+export function buildBandContactShadows(scene, entries, {
+  opacity = .55, nearDist = 30, farDist = 90,
+} = {}) {
+  if (!entries.length) return null;
+  const tex = contactShadowTexture();
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false, opacity: Math.max(.05, Math.min(1, opacity)),
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  patchInstanceAlpha(mat);                       // F39 — alpha por instância (F37)
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const alpha = new THREE.InstancedBufferAttribute(new Float32Array(entries.length), 1);
+  alpha.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('instanceAlpha', alpha);
+  const im = new THREE.InstancedMesh(geo, mat, entries.length);
+  const dummy = new THREE.Object3D();
+  entries.forEach((e, i) => {
+    dummy.position.set(e.x, e.y ?? (0.012 + i * 0.0006), e.z);
     dummy.rotation.set(-Math.PI / 2, 0, e.rot ?? 0);
     dummy.scale.setScalar(e.size ?? 1);
     dummy.updateMatrix();
@@ -314,7 +422,25 @@ export function buildContactShadows(scene, entries) {
   im.renderOrder = 1;
   im.receiveShadow = false;
   im.castShadow = false;
+  im.count = entries.length;
+  im.visible = false;                            // update() acende com a banda
+  im.computeBoundingSphere?.();
   scene.add(im);
+  return {
+    mesh: im, entries, alpha, nearDist, farDist,
+    update(camX = 0, camZ = 0) {
+      let lit = 0;
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const a = scrubShadowBand(Math.hypot(e.x - camX, e.z - camZ), { nearDist, farDist });
+        alpha.setX(i, a);
+        if (a > 0.002) lit++;
+      }
+      alpha.needsUpdate = true;
+      im.visible = lit > 0;                      // banda vazia → 0 draw calls
+      return this;
+    },
+  };
 }
 
 // ---------- Fase 6 — props instanciados (postes, barris, pneus, sacos, paletes) ----------
@@ -501,7 +627,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   const districtClear = (x, z, pad = 8) => layout.districts.every(d => Math.hypot(x - d.cx, z - d.cz) > d.r + pad);
 
   // ---- árvores (arquétipo por mundo — identidade W1-W4) ----
-  const TREES = Math.max(8, Math.round(52 * q.treeFactor));
+  const TREES = Math.max(8, Math.round(64 * q.treeFactor));
   const shadowSpots = []; // Fase 7 — sombras de contato da natureza
   const seedBase = `${scenario?.id ?? 'CIGKV'}`.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const archetype = treeArchetypeFor(scenario?.id ?? 'CIGKV');
@@ -509,11 +635,13 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   let ti = 0, guard = 0;
   while (ti < TREES && guard++ < 600) {
     const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
-    if (!free(x, z) || !districtClear(x, z)) continue;
+    if (!free(x, z) || !districtClear(x, z) || treeSpots.some((p) => Math.hypot(x - p.x, z - p.z) < 5.5)) continue;
     const s = .8 + rng.next() * .7;
-    shadowSpots.push({ x, z, size: 3.1 * s });
+    shadowSpots.push({ x, y: terrainHeightAt(x, z, scenario?.id), z, sizeX: 3.1 * s, sizeZ: 2.35 * s });
     treeSpots.push({
-      x, z, s, rot: rng.next() * Math.PI * 2, tilt: (rng.next() - .5) * .1,
+      x, y: terrainHeightAt(x, z, scenario?.id), z, s,
+      sx: .87 + rng.next() * .26, sy: .92 + rng.next() * .20, sz: .87 + rng.next() * .26,
+      rot: rng.next() * Math.PI * 2, tilt: (rng.next() - .5) * .1,
       tint: scenario ? scenarioCanopyTint(scenario, rng) : canopyTint(rng),
       trunkTint: rng.next() < .5 ? '#6b5433' : '#7a6140',
     });
@@ -521,6 +649,7 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   }
   const field = buildTreeField({ archetype, seed: seedBase + 1, spots: treeSpots });
   scene.add(field.trunks, field.canopies);
+  scene.userData.treeSpotCount = treeSpots.length;
 
   // ---- arbustos (clusters de 5 blobs — Fase 31; tint por instância) ----
   const BUSH = Math.max(6, Math.round(40 * q.bushFactor));
@@ -533,15 +662,39 @@ function buildNature(scene, layout, rng, q, scenario = null) {
       ? '#' + new THREE.Color(scenarioCanopyTint(scenario, rng)).multiplyScalar(.78).getHexString()
       : '#45542c';
     bushSpots.push({
-      x, z, s: .75 + rng.next() * .6, rot: rng.next() * Math.PI * 2, tint: tintHex,
+      x, y: terrainHeightAt(x, z, scenario?.id), z,
+      s: .75 + rng.next() * .6, rot: rng.next() * Math.PI * 2, tint: tintHex,
     });
     bi++;
   }
   const bushes = buildBushField({ seed: seedBase + 2, spots: bushSpots });
   scene.add(bushes);
+  const groundDressingSpots = naturalDressingPlacements(layout, {
+    seed: `${scenario?.id ?? 'CIGKV'}:ground`, density: q.rockFactor,
+    avoidSpots: [...treeSpots, ...bushSpots],
+  }).map((p) => ({ ...p, y: terrainHeightAt(p.x, p.z, scenario?.id) }));
+  const groundDressing = buildNaturalDressingField({ placements: groundDressingSpots, seed: seedBase + 3 });
+  scene.add(groundDressing.group);
+  scene.userData.groundDressingSpots = groundDressingSpots;
+  scene.userData.groundDressingMeshes = groundDressing.meshes;
+  scene.userData.groundDressingCounts = groundDressing.counts;
+  shadowSpots.push(...groundDressingSpots.filter((p) => p.type !== 'fern').map((p) => {
+    const length = (p.type === 'fallenLog' ? 2.5 : 1.55) * p.scale;
+    const width = (p.type === 'fallenLog' ? .82 : 1.2) * p.scale;
+    return { x: p.x, y: p.y, z: p.z, rot: p.rot, sizeX: length, sizeZ: width };
+  }));
   scene.userData.swayMats = [
     field.canopies.material, bushes.material,
   ];
+  // Fase 38 — ARBUSTOS entram no registry de sombras de contato (F7): antes
+  // só árvores/pedras/scrub ancoravam no chão — o cluster de blobs "flutuava"
+  // sobre o solo liso. 1 disco por arbusto (bushShadowEntries, PURO), mesmo
+  // InstancedMesh/estagger das demais sombras de natureza.
+  const bushShadows = bushShadowEntries(bushSpots).map((p) => ({
+    ...p, y: terrainHeightAt(p.x, p.z, scenario?.id), sizeX: p.size * 1.1, sizeZ: p.size * .85,
+  }));
+  shadowSpots.push(...bushShadows);
+  scene.userData.bushShadowSpots = bushShadows;   // inspeção/teste (padrão propPlacements)
 
   // Barburhen — vegetação baixa fria, crescendo entre concreto e pátios.
   // Planos cruzados com vento por shader mantêm a silhueta orgânica.
@@ -559,12 +712,21 @@ function buildNature(scene, layout, rng, q, scenario = null) {
     });
     const scrubDummy = new THREE.Object3D();
     const scrubMeshes = scrubMats.map((mat) => new THREE.InstancedMesh(scrubGeo, mat, SCRUB));
+    // F39 — sombras do scrub saem do lote ESTÁTICO (shadowSpots) e ganham o
+    // próprio campo em BANDAS DE DISTÂNCIA: cheio perto, raleio suave, zero
+    // no horizonte (o disco a 200 m era moiré — agora morre antes do fog).
+    const scrubShadowSpots = [];
     let si = 0; guard = 0;
     while (si < SCRUB && guard++ < SCRUB * 14) {
       const x = (rng.next() - .5) * 392, z = (rng.next() - .5) * 392;
       if (!free(x, z, 1.8) || !districtClear(x, z, 4)) continue;
       const s = .55 + rng.next() * .8;
-      shadowSpots.push({ x, z, size: 1.05 * s });
+      scrubShadowSpots.push({
+        x, z, rot: 0, size: 1.05 * s,
+        // ancoragem no RELEVO (contrato F37 do capim): lift 12mm embutido —
+        // no plano jogável o terreno é 0; na margem o disco acompanha.
+        y: terrainHeightAt(x, z, scenario.id) + .012,
+      });
       scrubDummy.position.set(x, .68 * s, z);
       scrubDummy.scale.set(s, s, s);
       scrubDummy.rotation.set(0, rng.next() * Math.PI * 2, (rng.next() - .5) * .12);
@@ -574,10 +736,19 @@ function buildNature(scene, layout, rng, q, scenario = null) {
       si++;
     }
     scrubMeshes.forEach((mesh) => { mesh.count = si; mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); });
+    if (q.contactShadows && scrubShadowSpots.length) {
+      // F39 — banda canônica 30→90m: dentro do full do capim (28m) a âncora
+      // é plena; o raleio termina a 90m, ANTES do fim da banda de impostores
+      // (110m) — a sombra nunca sobrevive à vegetação que ela ancora.
+      scene.userData.scrubBandShadows = buildBandContactShadows(scene, scrubShadowSpots, {
+        opacity: .55, nearDist: 30, farDist: 90,
+      });
+      scene.userData.scrubShadowEntries = scrubShadowSpots.length;   // inspeção/teste
+    }
   }
 
   // ---- pedras ----
-  const ROCKS = Math.max(6, Math.round(30 * q.rockFactor));
+  const ROCKS = Math.max(6, Math.round(40 * q.rockFactor));
   const rockGeo = new THREE.DodecahedronGeometry(.9, 0);
   const rockMat = new THREE.MeshStandardMaterial({ color: '#7d766c', roughness: .92, flatShading: true });
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, ROCKS);
@@ -588,9 +759,11 @@ function buildNature(scene, layout, rng, q, scenario = null) {
     const x = (rng.next() - .5) * 390, z = (rng.next() - .5) * 390;
     if (!free(x, z, 3) || !districtClear(x, z, 2)) continue;
     const rs = .5 + rng.next() * .9;
-    shadowSpots.push({ x, z, size: 1.5 * rs });
-    rockDummy.position.set(x, .25 + rng.next() * .2, z);
-    rockDummy.scale.set(rs, .35 + rng.next() * .5, .5 + rng.next() * .9);
+    const groundY = terrainHeightAt(x, z, scenario?.id);
+    const rockYScale = .35 + rng.next() * .5;
+    shadowSpots.push({ x, y: groundY, z, sizeX: 1.5 * rs, sizeZ: 1.25 * rs });
+    rockDummy.position.set(x, groundY + .9 * rockYScale, z);
+    rockDummy.scale.set(rs, rockYScale, .5 + rng.next() * .9);
     rockDummy.rotation.set(rng.next() * .4, rng.next() * Math.PI * 2, rng.next() * .4);
     rockDummy.updateMatrix();
     rocks.setMatrixAt(ri++, rockDummy.matrix);
@@ -598,8 +771,13 @@ function buildNature(scene, layout, rng, q, scenario = null) {
   rocks.count = ri;
   scene.add(rocks);
 
-  // Fase 7 — sombras de contato sob árvores e pedras (ancoragem no chão)
-  if (q.contactShadows && shadowSpots.length) buildContactShadows(scene, shadowSpots);
+  // Fase 7 — sombras de contato sob árvores/pedras/scrub; F38 — + arbustos
+  // (ancoragem no relevo do chão: y=0 na zona plana do jogo, stagger anti-z-fight)
+  if (q.contactShadows && shadowSpots.length) {
+    const natureShadows = buildContactShadows(scene, shadowSpots);
+    scene.userData.natureContactShadows = natureShadows;        // F38 — inspeção/teste
+    scene.userData.natureShadowEntries = shadowSpots.length;    // F38 — registro do total
+  }
 
   // ---- nuvens de crepúsculo ----
   const cloudTex = cloudTexture();
@@ -637,10 +815,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
 
   scene.add(createSky(scenario));
 
-  // Fase 7 — luz recalibrada: sol menos saturado, fill mais suave (contraste
-  // cinematográfico sem lavar as sombras); hemisfério amarra o chão ao céu.
-  const isBarburhen = scenario.id === 'Barburhen';
-  const sun = new THREE.DirectionalLight(isBarburhen ? '#f0c7a2' : '#ffc98f', isBarburhen ? 2.05 : 2.35);
+  // F41 — perfil de luz POR CENÁRIO (lightingProfile): sol/hemisfério/fills
+  // calibrados pelo mood de cada mundo; os valores F7 de Barburhen e a baseline
+  // CIGKV ficam preservados nos respectivos perfis. Exposição e IBL vão no
+  // userData p/ o main3d (ACES) e o nightBase capturar.
+  const lp = lightingProfile(scenario.id);
+  scene.userData.lighting = lp;
+  const sun = new THREE.DirectionalLight(lp.sunColor, lp.sunIntensity);
   sun.position.set(-160, 60, -240);
   sun.castShadow = true;
   sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
@@ -648,15 +829,18 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const S = 150;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
-  sun.shadow.bias = -0.0004;
+  // F41 — normalBias mata acne nas cápsulas curvas dos personagens; o bias
+  // negativo cai pela metade (peter-panning menor nas bases dos props).
+  sun.shadow.bias = lp.shadowBias;
+  sun.shadow.normalBias = lp.shadowNormalBias;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(isBarburhen ? '#c5d5dc' : '#8f74b4', isBarburhen ? '#4e5a61' : '#4a3d2e', isBarburhen ? 1.04 : 1.18);
+  const hemi = new THREE.HemisphereLight(lp.hemiSky, lp.hemiGround, lp.hemiIntensity);
   scene.add(hemi);
-  const fill = new THREE.DirectionalLight(isBarburhen ? '#7898b6' : '#6a5aa0', isBarburhen ? 0.5 : 0.72);
+  const fill = new THREE.DirectionalLight(lp.fillColor, lp.fillIntensity);
   fill.position.set(140, 80, 180);
   scene.add(fill);
-  const back = new THREE.DirectionalLight(isBarburhen ? '#b98263' : '#a8885e', isBarburhen ? 0.42 : 0.55);
+  const back = new THREE.DirectionalLight(lp.backColor, lp.backIntensity);
   back.position.set(60, 50, 240);
   scene.add(back);
 
@@ -668,22 +852,27 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   // praça central de asfalto
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(34, 40),
-    asphaltMaterial(8)
+    asphaltMaterial(8, scenario.id)
   );
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
   plaza.receiveShadow = true;
   scene.add(plaza);
 
   // Fase 6 — viação (estradas/calçadas/faixas) por cima do terreno
-  buildRoads(scene, layout);
+  buildRoads(scene, layout, scenario.id);
 
   // ---- estruturas ----
+  const surface = biomeSurfaceProfile(scenario.id);
   const concrete = concreteMaterial(2.2);
   const concrete2 = concreteMaterial(1.4);
   const metalRust = metalMaterial('#7a4a2b');
   const metalBlue = metalMaterial('#31556b');
   const metalGreen = metalMaterial('#3d5a3a');
   const metalGray = metalMaterial('#4c4f55');
+  for (const m of [concrete, concrete2]) { m.roughness = surface.concrete; m.envMapIntensity = surface.env; }
+  for (const m of [metalRust, metalBlue, metalGreen, metalGray]) {
+    m.roughness = surface.metal; m.metalness = surface.metalness; m.envMapIntensity = surface.env;
+  }
   const winTex = windowsTexture();
   const crateTex = crateTexture();
 
@@ -716,7 +905,7 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
       envGround.rotation.x = -Math.PI / 2; envGround.position.y = -4;
       envScene.add(envGround);
       scene.environment = pmrem.fromScene(envScene, .04).texture;
-      scene.environmentIntensity = .45;
+      scene.environmentIntensity = lp.envIntensity; // F41 — IBL por cenário (antes .45 fixo)
       pmrem.dispose();
     } catch { /* fallback: materiais seguem sem envmap */ }
   }
@@ -726,8 +915,24 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   buildMountains(scene, scenario);
   buildProps(scene, layout, q);
   // Fase 22 — cenários vivos: kits por distrito DENTRO da arena (zero colliders)
+  // F40 — as sombras do dressing entram nas BANDAS DE DISTÂNCIA (buildBandContactShadows,
+  // F39): mesma textura F7, alpha por instância — o disco a 200m era moiré.
+  // Lista acumulada em scene.userData.dressingBandShadows (main3d chama
+  // update() 1×/frame por handle); ancoragem no relevo (terreno + 12mm).
   buildDistrictDressing(scene, layout, scenario, q, {
     contactShadows: (entries) => buildContactShadows(scene, entries),
+    bandContactShadows: (entries) => {
+      const band = buildBandContactShadows(
+        scene,
+        entries.map((e) => ({ ...e, y: terrainHeightAt(e.x, e.z, scenario.id) + .012 })),
+        { opacity: .5, nearDist: 30, farDist: 90 },
+      );
+      if (band) {
+        (scene.userData.dressingBandShadows ??= []).push(band);
+        scene.userData.dressingShadowEntries = (scene.userData.dressingShadowEntries ?? 0) + entries.length;
+      }
+      return band;
+    },
   });
   // Fase 8/16 — tráfego urbano estático (silhueta automotiva real)
   buildTraffic(scene, layout, q);
@@ -823,12 +1028,35 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const grassLOD = buildGrassFieldLOD({
     spots: grassSpots, seed: 77, texture: bladeTex, tintFamilies: grassTints,
     chunkSize: 25, nearDist: 28, midDist: 58, sparseKeep: .4,
+    // Fase 34 — faixa de IMPOSTORES entre sparse e hidden: cada chunk a 58-110m
+    // vira 1 quad cruzado (mancha de capim no horizonte por ~2 triângulos);
+    // além de 110m render 0. Fase 37 — FADE SUAVE por instância nas duas
+    // bordas da banda (nasce do desbaste em 58m, dissolve no bake outdoor em
+    // 110m) + SOMBRA DE CONTATO FALSA ancorada no relevo (disco radial na
+    // média dos tufos do chunk, lift anti-z-fight). Leitura contínua:
+    // tufos → desbaste → mancha com sombra → campo eterno até o fog.
+    impostorDist: 110, impostorHeight: 1.15, impostorWidth: 3.2, impostorOpacity: .55,
+    impostorFadeZone: 14, impostorShadowOpacity: .5, impostorShadowRadius: 1.9,
+    // Fase 38 — desbaste GRADUAL do sparse (zonas canônicas 10/12) + pre-roll
+    // de 9m do impostor: a mancha nasce DENTRO da saída do desbaste (49→58m)
+    // e chega a ~70% de alpha quando os últimos tufos somem — cross-fade sem
+    // buraco de densidade na fronteira 58m.
+    sparseEntryZone: 10, sparseExitZone: 12, impostorPreRoll: 9,
     // vento na grama: amplitude maior, frequência alta — capim vivo ao vento
     sway: { strength: .07, freq: 2.1, yScale: 1.1 },
   });
   scene.add(grassLOD.group);
-  (scene.userData.swayMats ??= []).push(...grassLOD.mats);
+  (scene.userData.swayMats ??= []).push(...grassLOD.mats, ...grassLOD.impostorMats); // Fase 34 — impostor balança
   scene.userData.grassLOD = grassLOD; // main3d chama update(camX, camZ) 1×/frame
+
+  // F36 — OUTDOOR IMPOSTOR: além da faixa de impostores (≥110m) o chunk segue
+  // INVISÍVEL (render 0), mas a identidade do capim é cozida nas vertex colors
+  // do terreno UMA vez aqui — o horizonte lê "campo" com custo ZERO por frame
+  // (0 draw calls, 0 matrizes; o chão em si é o impostor).
+  const terrainMesh = scene.getObjectByName('terrain');
+  const outdoorBake = grassOutdoorBake(grassLOD.chunks, grassTints);
+  if (terrainMesh) applyOutdoorTint(terrainMesh, outdoorBake, { radius: 25, strength: .3 });
+  scene.userData.grassOutdoorBake = { chunks: outdoorBake.length, radius: 25, strength: .3 };
 
   // ---- loot visual ----
   const lootGroup = new THREE.Group();
@@ -852,11 +1080,13 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   scene.userData.nightBase = {
     sky: { ...scenario.sky },
     fogColor: scenario.fogColor,
-    sunColor: isBarburhen ? '#f0c7a2' : '#ffc98f',
-    sunIntensity: isBarburhen ? 2.05 : 2.35,
-    hemiIntensity: isBarburhen ? 1.04 : 1.18,
-    fillIntensity: isBarburhen ? 0.5 : 0.72,
-    backIntensity: isBarburhen ? 0.42 : 0.55,
+    // F41 — anoitecer captura o PERFIL do cenário como base (antes: ternário
+    // fixo — todo mundo não-Barburhen escurecia a partir da mesma régua quente)
+    sunColor: lp.sunColor,
+    sunIntensity: lp.sunIntensity,
+    hemiIntensity: lp.hemiIntensity,
+    fillIntensity: lp.fillIntensity,
+    backIntensity: lp.backIntensity,
     buildingMat: mats.building ?? null,
     buildingEmissive: 0.55,
   };

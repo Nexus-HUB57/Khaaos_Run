@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +29,7 @@ function main() {
   const inputConfig = read("Unreal/KhaaosRun/Config/DefaultInput.ini");
   const profiles = read("Unreal/KhaaosRun/Config/DefaultDeviceProfiles.ini");
   const packaging = read("Unreal/KhaaosRun/Config/DefaultGame.ini");
+  const androidSetup = read("scripts/build/setup_android_ue58.sh");
 
   for (const [platform, ini] of [["Android", android], ["iOS", ios]]) {
     assertIniValue(ini, "r.DynamicGlobalIlluminationMethod", "0", platform);
@@ -50,6 +52,33 @@ function main() {
     assert.match(profile, /Group=TEXTUREGROUP_Effects,[^\n]*MaxLODSize=1024/);
     assert.match(profile, /Group=TEXTUREGROUP_UI,[^\n]*MaxLODSize=2048/);
   }
+  const androidLowGpu = sectionBody(profiles, "KhaaosAndroidLowGPU DeviceProfile");
+  const androidBalanced = sectionBody(profiles, "KhaaosAndroidBalanced DeviceProfile");
+  const iosLowGpu = sectionBody(profiles, "KhaaosIOSLowGPU DeviceProfile");
+  assert.match(androidLowGpu, /sg\.ResolutionQuality=65/);
+  assert.match(androidLowGpu, /sg\.ViewDistanceQuality=0/);
+  assert.match(androidLowGpu, /sg\.ShadowQuality=0/);
+  assert.match(androidBalanced, /sg\.ResolutionQuality=85/);
+  assert.match(iosLowGpu, /sg\.ResolutionQuality=65/);
+  assert.match(androidSetup, /NDK_VERSION="27\.2\.12479018"/);
+  assert.match(androidSetup, /HOST_ARCH_BLOCKED/);
+  assert.match(androidSetup, /--install --accept-licenses/);
+  assert.match(androidSetup, /platforms;android-\$\{ANDROID_API\}/);
+  const sdkRootWithSpaces = "/tmp/Khaaos Android SDK Test";
+  const emitEnvCheck = spawnSync(
+    "bash",
+    ["-c", 'source <(bash "$SETUP_SCRIPT" --emit-env); [[ "$ANDROID_SDK_ROOT" == "$EXPECTED_SDK_ROOT" && "$NDKROOT" == "$EXPECTED_SDK_ROOT/ndk/27.2.12479018" ]]'],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ANDROID_SDK_ROOT: sdkRootWithSpaces,
+        EXPECTED_SDK_ROOT: sdkRootWithSpaces,
+        SETUP_SCRIPT: resolve(repoRoot, "scripts/build/setup_android_ue58.sh"),
+      },
+    },
+  );
+  assert.equal(emitEnvCheck.status, 0, `Android --emit-env must safely preserve spaces: ${emitEnvCheck.stderr}`);
   assert.match(packaging, /bShareMaterialShaderCode=True/);
   assert.match(packaging, /bSharedMaterialNativeLibraries=True/);
 
@@ -64,26 +93,35 @@ function main() {
   const touchHeader = read("Unreal/KhaaosRun/Source/KhaaosRun/Game/UI/Widgets/KhaaosMobileControlsWidget.h");
   const touchSource = read("Unreal/KhaaosRun/Source/KhaaosRun/Game/UI/Widgets/KhaaosMobileControlsWidget.cpp");
   const eacBuild = read("Unreal/KhaaosRun/Source/KhaaosEAC/KhaaosEAC.Build.cs");
+  const firePolicy = read("Unreal/KhaaosRun/Source/KhaaosRun/Game/Network/KhaaosMobileFirePolicy.h");
 
   assert.match(controller, /#if PLATFORM_ANDROID \|\| PLATFORM_IOS[\s\S]{0,120}MobileTouchControlsClass/);
   assert.match(controller, /HandleMove\(FInputActionValue\(MobileTouchMoveAxis\)\)/);
   assert.match(controller, /BindAction\(IT\.Shoot, ETriggerEvent::Started/);
-  assert.match(controller, /ServerSetFireHeld\(true\)/);
-  assert.match(controller, /NextFireHeartbeatTimestamp = Now \+ 0\.25/);
-  assert.match(controller, /LastFireInputTimestamp\) > 2\.0/);
-  assert.match(controller, /if \(HasAuthority\(\)\)\s*\{\s*const double Now = GetWorld\(\) \? GetWorld\(\)->GetTimeSeconds\(\) : 0\.0;\s*if \(bServerFireButtonDown/);
+  assert.match(controller, /ServerSetFireHeld\(true, LocalFirePressToken\)/);
+  assert.match(controller, /ServerFireHeartbeat\(LocalFirePressToken\)/);
+  assert.match(controller, /NextFireHeartbeatTimestamp = Now \+ KhaaosMobileFirePolicy::HeartbeatIntervalSeconds/);
+  assert.match(controller, /KhaaosMobileFirePolicy::HasFireLeaseExpired/);
+  assert.match(controller, /KhaaosMobileFirePolicy::IsCurrentFireHeartbeat/);
   assert.match(controller, /else if \(bServerFireHeld && GetPawn\(\)\)/);
   assert.match(controller, /TryServerFireShot\(\)/);
-  assert.match(controller, /60\.0\s*\/\s*static_cast<double>\(FMath::Max\(WeaponData->FireRate, 1\)\)/);
+  assert.match(controller, /KhaaosMobileFirePolicy::IsShotCadenceReady/);
+  assert.match(controllerHeader, /UFUNCTION\(Server, Unreliable, WithValidation\)\s*void ServerFireHeartbeat\(uint32 PressToken\)/);
+  assert.match(controllerHeader, /void ServerStopFire\(uint32 PressToken\)/);
+  assert.match(firePolicy, /HeartbeatIntervalSeconds = 0\.25/);
+  assert.match(firePolicy, /FireInputLeaseSeconds = 2\.0/);
+  assert.match(firePolicy, /MinimumShotIntervalSeconds/);
+  assert.match(firePolicy, /IsCurrentFireHeartbeat/);
   assert.match(controllerHeader, /TSubclassOf<UKhaaosMobileControlsWidget> MobileTouchControlsClass/);
-  assert.match(controllerHeader, /void ServerSetFireHeld\(bool bHeld\)/);
+  assert.match(controllerHeader, /void ServerSetFireHeld\(bool bHeld, uint32 PressToken\)/);
   assert.match(touchHeader, /UFUNCTION\(BlueprintCallable[\s\S]*?SetMoveAxis/);
   assert.match(touchHeader, /SetActionPressed\(EKhaaosTouchAction Action, int32 TouchPointerId, bool bPressed\)/);
   assert.match(touchSource, /PressedPointers\.FindOrAdd\(Action\)/);
   assert.match(touchSource, /DispatchReleased\(Entry\.Key, Controller\)/);
   assert.match(eacBuild, /bool isEacSupportedPlatform[\s\S]{0,180}UnrealTargetPlatform\.Win64[\s\S]{0,100}UnrealTargetPlatform\.Linux/);
   console.log("[mobile-selftest] ok: touch HUD usa handlers existentes e libera ações/pointers");
-  console.log("[mobile-selftest] ok: fogo usa start/stop e intervalo autoritativo FireRate no servidor");
+  console.log("[mobile-selftest] ok: política de heartbeat/lease/cadência é compartilhada com teste nativo");
+  console.log("[mobile-selftest] ok: profiles low-GPU/balanced reduzem resolução e escalabilidade sem Lumen/Nanite");
 
   const project = JSON.parse(read("Unreal/KhaaosRun/KhaaosRun.uproject"));
   const runtimeModule = project.Modules.find((module) => module.Name === "KhaaosRun");

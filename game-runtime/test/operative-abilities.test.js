@@ -3,20 +3,25 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { OPERATIVE_ABILITIES, getOperativeAbility } from '../src/game3d/operativeAbilities.js';
+import { disembarcarSim } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const roster = JSON.parse(readFileSync(new URL('../../Content/Avatars/avatar_catalog.json', import.meta.url), 'utf8'));
 const createSim = (options = {}) => new KhaaosSim3D({ airdrop: false, ...options });
 const activate = (sim, operativeId) => {
   sim.player.operativeId = operativeId;
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes da habilidade
   sim.step({ ...DEFAULT_INPUT, ability: true }, 1 / sim.tickRate);
   return sim.consumeEvents().find((event) => event.type === 'ability');
 };
 
-test('existe uma habilidade definida e identificável para cada operativo canônico', () => {
+test('existe uma habilidade definida e identificável para cada operativo do catálogo', () => {
   // Fase 26 — catálogo com 17 operativos: os 16 canônicos + TALON (Hacker &
   // Urban Runner). As 3 insígnias OCE estendem a tabela além do catálogo.
-  assert.equal(roster.length, 17);
+  // Lote 4 — +16 não-militares (milícias MIL-01..08 + gangues GNG-01..08) = 33;
+  // habilidades irregulares reaproveitam os mesmos efeitos autoritativos.
+  assert.equal(roster.length, 33);
   const oceIds = ['OCE_01', 'OCE_02', 'OCE_03'];
   const abilityIds = Object.keys(OPERATIVE_ABILITIES);
   for (const id of oceIds) assert.ok(abilityIds.includes(id), `${id} presente na tabela de habilidades`);
@@ -30,7 +35,7 @@ test('existe uma habilidade definida e identificável para cada operativo canôn
   }
 });
 
-test('cada um dos 16 operativos ativa sua habilidade correspondente no simulador', () => {
+test('cada um dos 33 operativos do catálogo ativa sua habilidade correspondente no simulador', () => {
   for (const operative of roster) {
     const sim = createSim({ seed: `ABILITY-${operative.id}`, botCount: 0 });
     sim.player.life = 50;
@@ -63,6 +68,8 @@ test('Coágulo de Campo cura até o máximo e não consome cooldown com vida che
   const full = createSim({ seed: 'ABILITY-HEAL-FULL', botCount: 0 });
   full.player.operativeId = 'OP_MALE_MEDIC_AFRICAN';
   full.start();
+  disembarcarSim(full); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(full); // Task 53
   full.step({ ...DEFAULT_INPUT, ability: true });
   assert.equal(full.player.abilityState.cooldownTicks, 0);
   assert.ok(full.consumeEvents().some((item) => item.type === 'abilityUnavailable'));
@@ -82,6 +89,8 @@ test('redução de dano, resistência ao Ring e blindagem temporária têm escop
   const directPair = ['OP_MALE_BREACHER', 'OP_MALE_VANGUARD'].map((operativeId) => {
     const sim = createSim({ seed: 'ABILITY-DAMAGE', botCount: 0 });
     sim.player.operativeId = operativeId; sim.player.armor = 0; sim.start();
+    disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
+    disembarcarSim(sim); // Task 53
     if (operativeId === 'OP_MALE_BREACHER') sim.step({ ...DEFAULT_INPUT, ability: true });
     const p = sim.player;
     sim.bullets.push({ id: 999, x: p.x, y: 1, z: p.z - 2, vx: 0, vy: 0, vz: 120, owner: 'test', damage: 20, life: 1, weapon: 'test' });
@@ -93,6 +102,8 @@ test('redução de dano, resistência ao Ring e blindagem temporária têm escop
   const ringPair = ['OP_FEMALE_SURVIVOR_INDIGENOUS', 'OP_MALE_VANGUARD'].map((operativeId) => {
     const sim = createSim({ seed: 'ABILITY-RING', botCount: 0 });
     sim.player.operativeId = operativeId; sim.player.armor = 0; sim.start();
+    disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
+    disembarcarSim(sim); // Task 53
     if (operativeId === 'OP_FEMALE_SURVIVOR_INDIGENOUS') sim.step({ ...DEFAULT_INPUT, ability: true });
     sim.player.x = 171; sim.ring.radius = 170;
     const before = sim.player.life;
@@ -126,6 +137,8 @@ test('pulso de desarme paralisa sem dano e o scan marca o terminal ZEX mais pró
 test('impulso de Khael nunca ultrapassa 8 metros, mesmo com corrida', () => {
   const sim = createSim({ seed: 'ABILITY-DASH', botCount: 0 });
   sim.player.operativeId = 'OP_MALE_VANGUARD'; sim.start();
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
+  disembarcarSim(sim); // Task 53
   sim.step({ ...DEFAULT_INPUT, ability: true, dx: 1, sprint: true });
   const startX = sim.player.x;
   for (let i = 0; i < 80 && sim.player.abilityState.activeTicks > 0; i++) {

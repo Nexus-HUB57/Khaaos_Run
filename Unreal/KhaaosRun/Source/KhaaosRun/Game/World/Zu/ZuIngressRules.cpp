@@ -22,29 +22,29 @@ const FCopy& CopyFor(ERing Ring, int Variant)
 {
 	static const FCopy Table[5][3] = {
 		{
-			{"Risco de Colisao - Apertar os Cintos S/N", "O caminhao perde o controle depois de atropelar uma manada de bois.", "Khaaos Ville"},
-			{"Area com Alto Risco de Desmoronamento - Saltar do Caminhao S/N", "Uma rocha gigante atinge o caminhao e o faz capotar.", "Khaaos Ville"},
-			{"Ponte Antiga / Risco de Queda - Usar Mascara de Oxigenio S/N", "O trilho da ponte quebra. O caminhao cai e submerge.", "Khaaos Ville"},
+			{"Caminhão atropela bois - Apertar o cinto S/N", "Caminhão atropela bois", "Khaaos Ville"},
+			{"Capota com rocha - Saltar S/N", "Capota com rocha", "Khaaos Ville"},
+			{"Cai da ponte - Usar máscara O₂ S/N", "Cai da ponte", "Khaaos Ville"},
 		},
 		{
-			{"Risco de Descarrilamento - Apertar os Cintos S/N", "O trem descarrila numa curva fechada de Barburhen.", "Barburhen"},
-			{"Colisao Frontal - Saltar do Trem S/N", "O trem colide de frente com outro trem.", "Barburhen"},
-			{"Incendio no Vagao - Usar Mascara de Oxigenio S/N", "Pane eletrica. O incendio enche os vagoes de fumaca.", "Barburhen"},
+			{"Trem descarrila - Apertar o cinto S/N", "Trem descarrila", "Barburhen"},
+			{"Colisão frontal - Saltar S/N", "Colisão frontal", "Barburhen"},
+			{"Incêndio elétrico - Usar máscara S/N", "Incêndio elétrico", "Barburhen"},
 		},
 		{
-			{"Fim de Trilho - Apertar os Cintos S/N", "O trem muda de trilho, o trilho acaba e bate numa armacao de ferro.", "Priadus"},
-			{"Homens-Bomba - Saltar do Trem S/N", "Terroristas homens-bomba invadem os vagoes.", "Priadus"},
-			{"Neblina Toxica - Usar Mascara de Oxigenio S/N", "Neblina toxica toma os vagoes depois que o motorista freia.", "Priadus"},
+			{"Fim de trilho - Apertar o cinto S/N", "Fim de trilho", "Priadus"},
+			{"Homens-bomba - Saltar S/N", "Homens-bomba", "Priadus"},
+			{"Neblina tóxica - Usar máscara S/N", "Neblina tóxica", "Priadus"},
 		},
 		{
-			{"Tempestade de Areia - Apertar os Cintos S/N", "A tempestade de areia empilha no trilho e o trem para bruto.", "Ckesalth"},
-			{"Explosao no Tunel - Saltar e Correr S/N", "No meio do tunel, o trem ao lado explode em chamas.", "Ckesalth"},
-			{"Fumaca Negra - Usar Mascara de Oxigenio S/N", "Um caminhao-tanque em chamas cai nos trilhos. A fumaca negra entra.", "Ckesalth"},
+			{"Tempestade de areia - Apertar o cinto S/N", "Tempestade de areia", "Ckesalth"},
+			{"Explosão no túnel - Saltar S/N", "Explosão no túnel", "Ckesalth"},
+			{"Caminhão-tanque em chamas - Usar máscara S/N", "Caminhão-tanque em chamas", "Ckesalth"},
 		},
 		{
-			{"Trilho Desmorona - Apertar os Cintos S/N", "O trilho desmorona. O trem cai no bosque de palmeiras.", "Arukheea"},
-			{"Trem-Tanque - Saltar no Mar S/N", "Um trem-tanque vem na direcao contraria. A colisao explode.", "Arukheea"},
-			{"Gas de Drone - Usar Mascara de Oxigenio S/N", "Drones lancam gas nos vagoes. O ar fica irrespiravel.", "Arukheea"},
+			{"Trilho desmorona - Apertar o cinto S/N", "Trilho desmorona", "Arukheea"},
+			{"Colisão com tanque - Saltar no mar S/N", "Colisão com tanque", "Arukheea"},
+			{"Bombas de gás por drones - Usar máscara S/N", "Bombas de gás por drones", "Arukheea"},
 		},
 	};
 	return Table[static_cast<int>(Ring)][Variant - 1];

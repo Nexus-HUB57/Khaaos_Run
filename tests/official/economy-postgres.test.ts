@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { createEconomyAuditReport } from "../../server/game/economyAudit";
 import { pruneEconomyIdempotencyClaims } from "../../server/game/economyRetention";
+import { ARMORER_CATALOG } from "../../shared/armorer-catalog";
 
 let testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (testDatabaseUrl) {
@@ -26,8 +27,8 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
   }
 
   const pool = new Pool({ connectionString: testDatabaseUrl, max: 8 });
-  const userIds = Array.from({ length: 8 }, () => `economy-test-${randomUUID()}`);
-  const [transferUser, purchaseUser, payLoanUser, salaryUser, rollbackUser, loanCapUser, legacyUser, repairUser] = userIds;
+  const userIds = Array.from({ length: 12 }, () => `economy-test-${randomUUID()}`);
+  const [transferUser, purchaseUser, payLoanUser, salaryUser, rollbackUser, loanCapUser, legacyUser, repairUser, rarePurchaseUser, catalogPurchaseUser, replayCraftUser, missingMaterialsUser] = userIds;
 
   try {
     await pool.query(`
@@ -58,6 +59,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
       CREATE TABLE IF NOT EXISTS player_stats (
         id SERIAL PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, rank TEXT NOT NULL DEFAULT 'ZHEERS',
         specialization_id TEXT,
+        selected_operative_id TEXT NOT NULL DEFAULT 'OP_MALE_VANGUARD',
         xp INTEGER NOT NULL DEFAULT 0, health INTEGER NOT NULL DEFAULT 100,
         max_health INTEGER NOT NULL DEFAULT 100, energy INTEGER NOT NULL DEFAULT 100,
         max_energy INTEGER NOT NULL DEFAULT 100, status TEXT NOT NULL DEFAULT 'VIVO',
@@ -72,6 +74,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await pool.query(`
       DROP TABLE IF EXISTS economy_ledger_entries CASCADE;
       DROP TABLE IF EXISTS economy_ledger_migration_state CASCADE;
+      DROP TABLE IF EXISTS player_materials CASCADE;
       ALTER TABLE economy_idempotency DROP COLUMN IF EXISTS operation_id CASCADE;
       ALTER TABLE transactions DROP COLUMN IF EXISTS operation_id CASCADE;
       DROP FUNCTION IF EXISTS reject_economy_ledger_mutation();
@@ -115,8 +118,9 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await pool.query(`
       INSERT INTO bank_accounts (user_id, weapons_balance, bonus_balance, fbm_balance) VALUES
         ($1, 100, 0, 0), ($2, 500, 0, 0), ($3, 100, 0, 0),
-        ($4, 0, 0, 0), ($5, 0, 0, 0), ($6, 500, 0, 0), ($7, 50, 0, 0)
-    `, [transferUser, purchaseUser, payLoanUser, salaryUser, loanCapUser, rollbackUser, repairUser]);
+        ($4, 0, 0, 0), ($5, 0, 0, 0), ($6, 500, 0, 0), ($7, 50, 0, 0), ($8, 1200, 0, 0),
+        ($9, 10000, 0, 0), ($10, 500, 0, 0), ($11, 500, 0, 0)
+    `, [transferUser, purchaseUser, payLoanUser, salaryUser, loanCapUser, rollbackUser, repairUser, rarePurchaseUser, catalogPurchaseUser, replayCraftUser, missingMaterialsUser]);
     const legacySuccessKey = `legacy-success-${randomUUID()}`;
     await pool.query(`
       INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
@@ -125,6 +129,25 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
 
     const ledgerMigration = await readFile(new URL("../../migrations/0004_correlated_append_only_ledger.sql", import.meta.url), "utf8");
     await pool.query(ledgerMigration);
+    const armorerMigration = await readFile(new URL("../../migrations/0010_aspiring_captain_midlands.sql", import.meta.url), "utf8");
+    await pool.query(armorerMigration);
+    const seedRecipeStock = async (userId: string, productIds: string[]) => {
+      const totals = new Map<string, number>();
+      for (const productId of productIds) {
+        const product = ARMORER_CATALOG.find((candidate) => candidate.id === productId);
+        assert.ok(product, `missing fixture recipe ${productId}`);
+        for (const ingredient of product.recipe) totals.set(ingredient.materialId, (totals.get(ingredient.materialId) ?? 0) + ingredient.quantity);
+      }
+      for (const [materialId, quantity] of totals) {
+        await pool.query("INSERT INTO player_materials (user_id, material_id, quantity) VALUES ($1, $2, $3)", [userId, materialId, quantity]);
+      }
+    };
+    await seedRecipeStock(transferUser, ["lamina-nano"]);
+    await seedRecipeStock(purchaseUser, ["lamina-nano"]);
+    await seedRecipeStock(rarePurchaseUser, ["rifle-de-plasma"]);
+    await seedRecipeStock(catalogPurchaseUser, ARMORER_CATALOG.map((product) => product.id));
+    await seedRecipeStock(replayCraftUser, ["lamina-nano"]);
+    await seedRecipeStock(rollbackUser, ["lamina-nano"]);
     const openingSnapshot = await pool.query(
       "SELECT account_code, side, amount_krc::text FROM economy_ledger_entries WHERE user_id = $1",
       [legacyUser],
@@ -180,20 +203,118 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await assert.rejects(pool.query("TRUNCATE economy_ledger_entries"), /append-only/);
     const conflictingReplay = await service.transfer(transferUser, transferKey, "11.00", "fbm");
     assert.equal(conflictingReplay.status, 409);
-    const purchases = await Promise.all([
-      service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra A" }),
-      service.purchaseItem(purchaseUser, randomUUID(), { type: "ARMA", name: "Compra B" }),
+    const insufficientFee = await service.craftItem(transferUser, randomUUID(), { catalogId: "lamina-nano" });
+    assert.equal(insufficientFee.status, 402, "o material não substitui o pagamento pelo trabalho do Armeiro");
+    const preservedStock = await pool.query("SELECT quantity FROM player_materials WHERE user_id = $1 AND material_id = 'metal'", [transferUser]);
+    assert.equal(preservedStock.rows[0].quantity, 3, "saldo insuficiente não consome receita");
+    const missingMaterialsKey = randomUUID();
+    const missingMaterialsResult = await service.craftItem(missingMaterialsUser, missingMaterialsKey, { catalogId: "lamina-nano" });
+    assert.equal(missingMaterialsResult.status, 409);
+    assert.deepEqual(missingMaterialsResult.body.missingMaterials, [
+      { materialId: "madeira", required: 2, available: 0 },
+      { materialId: "metal", required: 3, available: 0 },
+      { materialId: "polimero", required: 1, available: 0 },
     ]);
-    assert.deepEqual(purchases.map((result) => result.status).sort(), [201, 402]);
+    const missingMaterialsState = await pool.query(`
+      SELECT b.weapons_balance::text AS balance,
+        (SELECT count(*)::int FROM items WHERE user_id = $1) AS items,
+        (SELECT count(*)::int FROM transactions WHERE user_id = $1 AND type = 'FABRICACAO') AS crafts
+      FROM bank_accounts b WHERE b.user_id = $1
+    `, [missingMaterialsUser]);
+    assert.deepEqual(missingMaterialsState.rows[0], { balance: "500", items: 0, crafts: 0 }, "receita incompleta não pode debitar KRC nem criar item");
+    const missingMaterialsReplay = await service.craftItem(missingMaterialsUser, missingMaterialsKey, { catalogId: "lamina-nano" });
+    assert.equal(missingMaterialsReplay.status, 409);
+    assert.equal(missingMaterialsReplay.replayed, true, "rejeição de regra deve ser estável em replay idempotente");
+
+    const craftReplayKey = randomUUID();
+    const firstCraft = await service.craftItem(replayCraftUser, craftReplayKey, { catalogId: "lamina-nano" });
+    const replayCraft = await service.craftItem(replayCraftUser, craftReplayKey, { catalogId: "lamina-nano" });
+    assert.equal(firstCraft.status, 201);
+    assert.equal(replayCraft.status, 201);
+    assert.equal(replayCraft.replayed, true);
+    assert.equal(replayCraft.body.operationId, firstCraft.body.operationId);
+    const replayCraftState = await pool.query(`
+      SELECT b.weapons_balance::text AS balance,
+        (SELECT count(*)::int FROM items WHERE user_id = $1) AS items,
+        (SELECT count(*)::int FROM transactions WHERE user_id = $1 AND type = 'FABRICACAO') AS crafts,
+        (SELECT quantity FROM player_materials WHERE user_id = $1 AND material_id = 'metal') AS remaining_metal
+      FROM bank_accounts b WHERE b.user_id = $1
+    `, [replayCraftUser]);
+    assert.deepEqual(replayCraftState.rows[0], { balance: "380.00", items: 1, crafts: 1, remaining_metal: 0 }, "replay não duplica cobrança, item nem consumo de material");
+    const conflictingCraftReplay = await service.craftItem(replayCraftUser, craftReplayKey, { catalogId: "colete-de-kevlar" });
+    assert.equal(conflictingCraftReplay.status, 409, "mesma chave com receita diferente deve ser recusada");
+
+    const crafts = await Promise.all([
+      service.craftItem(purchaseUser, randomUUID(), { catalogId: "lamina-nano" }),
+      service.craftItem(purchaseUser, randomUUID(), { catalogId: "lamina-nano" }),
+    ]);
+    assert.deepEqual(crafts.map((result) => result.status).sort(), [201, 409]);
     const purchaseState = await pool.query(`
       SELECT b.weapons_balance::text AS balance,
         (SELECT count(*)::int FROM items WHERE user_id = $1) AS items,
-        (SELECT count(*)::int FROM transactions WHERE user_id = $1 AND type = 'COMPRA') AS ledger
+        (SELECT count(*)::int FROM transactions WHERE user_id = $1 AND type = 'FABRICACAO') AS ledger,
+        (SELECT quantity FROM player_materials WHERE user_id = $1 AND material_id = 'metal') AS remaining_metal
       FROM bank_accounts b WHERE b.user_id = $1
     `, [purchaseUser]);
-    assert.equal(purchaseState.rows[0].balance, "0.00");
+    assert.equal(purchaseState.rows[0].balance, "380.00");
     assert.equal(purchaseState.rows[0].items, 1);
     assert.equal(purchaseState.rows[0].ledger, 1);
+    assert.equal(purchaseState.rows[0].remaining_metal, 0);
+    const purchasedItem = await pool.query(
+      "SELECT name, type, rarity, durability::text, max_durability::text, is_equipped, stats FROM items WHERE user_id = $1",
+      [purchaseUser],
+    );
+    assert.deepEqual(purchasedItem.rows[0], {
+      name: "Lâmina Nano",
+      type: "ARMA",
+      rarity: "COMUM",
+      durability: "100",
+      max_durability: "100",
+      is_equipped: false,
+      stats: { damage: 18, range: 6 },
+    });
+    const rarePurchase = await service.craftItem(rarePurchaseUser, randomUUID(), { catalogId: "rifle-de-plasma" });
+    assert.equal(rarePurchase.status, 201);
+    const rarePurchaseState = await pool.query(`
+      SELECT b.weapons_balance::text AS balance,
+        (SELECT name FROM items WHERE user_id = $1) AS name,
+        (SELECT rarity FROM items WHERE user_id = $1) AS rarity
+      FROM bank_accounts b WHERE b.user_id = $1
+    `, [rarePurchaseUser]);
+    assert.deepEqual(rarePurchaseState.rows[0], { balance: "700.00", name: "Rifle de Plasma", rarity: "RARO" });
+
+    for (const product of ARMORER_CATALOG) {
+      const result = await service.craftItem(catalogPurchaseUser, randomUUID(), { catalogId: product.id });
+      assert.equal(result.status, 201, `${product.id} deve ser fabricado pela receita e fee anunciadas`);
+    }
+    const expectedCatalogCost = ARMORER_CATALOG.reduce((total, product) => total + product.armorerFeeKrc, 0);
+    const catalogAccount = await pool.query("SELECT weapons_balance::text AS balance FROM bank_accounts WHERE user_id = $1", [catalogPurchaseUser]);
+    assert.equal(catalogAccount.rows[0].balance, (10000 - expectedCatalogCost).toFixed(2));
+    const catalogLedger = await pool.query(
+      "SELECT amount_krc::text AS amount, description FROM transactions WHERE user_id = $1 AND type = 'FABRICACAO' ORDER BY id",
+      [catalogPurchaseUser],
+    );
+    assert.deepEqual(catalogLedger.rows, ARMORER_CATALOG.map((product) => ({
+      amount: product.armorerFeeKrc.toFixed(2),
+      description: `Armorer crafted ${product.name}`,
+    })));
+    const catalogItems = await pool.query(
+      "SELECT name, type, rarity, durability::text AS durability, max_durability::text AS max_durability, is_equipped, stats FROM items WHERE user_id = $1",
+      [catalogPurchaseUser],
+    );
+    assert.equal(catalogItems.rowCount, ARMORER_CATALOG.length);
+    const catalogItemByName = new Map(catalogItems.rows.map((item) => [item.name, item]));
+    for (const product of ARMORER_CATALOG) {
+      assert.deepEqual(catalogItemByName.get(product.name), {
+        name: product.name,
+        type: product.type,
+        rarity: product.rarity,
+        durability: String(product.maxDurability),
+        max_durability: String(product.maxDurability),
+        is_equipped: false,
+        stats: { ...product.stats },
+      }, `${product.id} deve chegar íntegro ao War’I`);
+    }
 
     const [repairableItem] = (await pool.query(
       "INSERT INTO items (user_id, name, type, durability, max_durability) VALUES ($1, 'Item para reparar', 'ARMA', 50, 100) RETURNING id",
@@ -314,7 +435,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await pool.query(`
       CREATE OR REPLACE FUNCTION fail_test_purchase_ledger() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN
-        IF NEW.user_id = '${rollbackUser}' AND NEW.type = 'COMPRA' THEN RAISE EXCEPTION 'injected ledger failure'; END IF;
+        IF NEW.user_id = '${rollbackUser}' AND NEW.type = 'FABRICACAO' THEN RAISE EXCEPTION 'injected ledger failure'; END IF;
         RETURN NEW;
       END $$;
       DROP TRIGGER IF EXISTS fail_test_purchase_ledger_trigger ON transactions;
@@ -323,7 +444,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     `);
     const rollbackKey = randomUUID();
     await assert.rejects(
-      service.purchaseItem(rollbackUser, rollbackKey, { type: "ARMA", name: "Falha injetada" }),
+      service.craftItem(rollbackUser, rollbackKey, { catalogId: "lamina-nano" }),
       (error: any) => /injected ledger failure/.test(`${error?.message ?? ""} ${error?.cause?.message ?? ""}`),
     );
     const rollbackState = await pool.query(`
@@ -337,6 +458,8 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(rollbackState.rows[0].items, 0);
     assert.equal(rollbackState.rows[0].key_records, 0);
     assert.equal(rollbackState.rows[0].ledger_entries, 0);
+    const rollbackMaterials = await pool.query("SELECT material_id, quantity FROM player_materials WHERE user_id = $1 ORDER BY material_id", [rollbackUser]);
+    assert.deepEqual(rollbackMaterials.rows.map(({ material_id, quantity }) => [material_id, quantity]), [["madeira", 2], ["metal", 3], ["polimero", 1]]);
 
     for (const [table, constraint] of [
       ["bank_accounts", "bank_weapons_nonnegative"],
@@ -365,7 +488,16 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(cleanAudit.counts.transactionsWithoutLedger, 0);
     assert.equal(cleanAudit.counts.successfulClaimsWithoutLedger, 0);
     assert.equal(cleanAudit.counts.incompleteIdempotencyClaims, 0);
+    // Task 44 — seções novas da reconciliação SSOT
+    assert.equal(cleanAudit.counts.ledgerGlobalDrift, 0);
+    assert.equal(cleanAudit.counts.paidEnrollmentSessionsWithoutLedger, 0);
+    assert.equal(Number(cleanAudit.ledgerGlobalConservation?.difference_krc ?? 0), 0);
 
+    const holdCandidateKey = `hold-candidate-${randomUUID()}`;
+    await pool.query(`
+      INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
+      VALUES ($1, $2, $3, 400, '{"message":"expired candidate"}'::jsonb, TIMESTAMP '2000-01-01')
+    `, [salaryUser, holdCandidateKey, "e".repeat(64)]);
     await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance + 1 WHERE user_id = $1", [salaryUser]);
     const [orphanEvent] = (await pool.query(`
       INSERT INTO transactions (user_id, type, amount_krc, operation_id, description)
@@ -385,10 +517,26 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(driftAudit.counts.successfulClaimsWithoutLedger, 1);
     const stillDrifted = await pool.query("SELECT bonus_balance::text FROM bank_accounts WHERE user_id = $1", [salaryUser]);
     assert.equal(stillDrifted.rows[0].bonus_balance, "101.00", "audit reports drift without silently changing balances");
+    const driftPreview = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1 });
+    assert.equal(driftPreview.mode, "dry_run");
+    assert.equal(driftPreview.auditStatus, "needs_attention");
+    assert.equal(driftPreview.auditFindings.walletDrifts, 1);
+    assert.equal(driftPreview.deletedClaims, 0, "dry-run with drift never deletes claims");
+    const heldPrune = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
+    assert.equal(heldPrune.mode, "held_for_drift");
+    assert.equal(heldPrune.auditStatus, "needs_attention");
+    assert.equal(heldPrune.auditFindings.walletDrifts, 1);
+    assert.equal(heldPrune.deletedClaims, 0, "drift must hold pruning before any delete");
+    const heldCandidate = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [holdCandidateKey],
+    );
+    assert.equal(heldCandidate.rows[0].count, 1, "the hold preserves otherwise-eligible claims");
     await pool.query("DELETE FROM transactions WHERE id = $1", [orphanEvent.id]);
     await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [orphanClaimKey]);
     await pool.query("UPDATE bank_accounts SET bonus_balance = bonus_balance - 1 WHERE user_id = $1", [salaryUser]);
     assert.equal((await createEconomyAuditReport(pool)).status, "clean");
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [holdCandidateKey]);
 
     await pool.query("UPDATE economy_idempotency SET created_at = TIMESTAMP '2000-01-01' WHERE user_id = $1 AND idempotency_key = $2", [transferUser, transferKey]);
     const completeExpiredKey = `retention-complete-${randomUUID()}`;
@@ -396,7 +544,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     await pool.query(`
       INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
       VALUES ($1, $2, $3, 400, '{"message":"rejected"}'::jsonb, TIMESTAMP '2000-01-01')
-    `, [salaryUser, completeExpiredKey, "a".repeat(64)]);
+    `, [transferUser, completeExpiredKey, "a".repeat(64)]);
     await pool.query(`
       INSERT INTO economy_idempotency (user_id, idempotency_key, request_hash, response_status, response_body, created_at)
       VALUES ($1, $2, $3, NULL, NULL, TIMESTAMP '2000-01-01')
@@ -408,14 +556,26 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
     assert.equal(dryRun.incompleteClaimsNotDeleted, 1);
     assert.equal(dryRun.successfulClaimsWithoutLedgerNotDeleted, 1);
     assert.equal(dryRun.deletedClaims, 0);
+    assert.equal(dryRun.auditStatus, "needs_attention");
     const eligibleAfterDryRun = await pool.query(`
       SELECT count(*)::int AS count FROM economy_idempotency
       WHERE created_at < TIMESTAMP '2025-01-01' AND response_status IS NOT NULL AND response_body IS NOT NULL
         AND idempotency_key IN ($1, $2)
     `, [transferKey, completeExpiredKey]);
     assert.equal(eligibleAfterDryRun.rows[0].count, 2, "dry-run must not delete eligible claims");
+    const incompleteHold = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
+    assert.equal(incompleteHold.mode, "held_for_drift");
+    assert.equal(incompleteHold.auditFindings.incompleteIdempotencyClaims, 1);
+    assert.equal(incompleteHold.deletedClaims, 0, "incomplete claims hold all pruning until reviewed");
+    const preservedIncomplete = await pool.query(
+      "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
+      [incompleteExpiredKey],
+    );
+    assert.equal(preservedIncomplete.rows[0].count, 1);
+    await pool.query("DELETE FROM economy_idempotency WHERE idempotency_key = $1", [incompleteExpiredKey]);
     const pruned = await pruneEconomyIdempotencyClaims(pool, { retentionDays: 365, batchSize: 1, execute: true });
     assert.equal(pruned.mode, "executed");
+    assert.equal(pruned.auditStatus, "clean");
     assert.equal(pruned.deletedClaims, 2);
     assert.equal(pruned.batches, 2);
     assert.equal(pruned.successfulClaimsWithoutLedgerNotDeleted, 1);
@@ -423,7 +583,7 @@ test("economia PostgreSQL: concorrência, replay idempotente e rollback integral
       "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
       [incompleteExpiredKey],
     );
-    assert.equal(remainingIncomplete.rows[0].count, 1, "incomplete claims are never deleted by retention cleanup");
+    assert.equal(remainingIncomplete.rows[0].count, 0, "the reviewed incomplete fixture was manually removed before the clean pruning run");
     const remainingLegacySuccess = await pool.query(
       "SELECT count(*)::int AS count FROM economy_idempotency WHERE idempotency_key = $1",
       [legacySuccessKey],

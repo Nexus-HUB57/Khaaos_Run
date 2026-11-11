@@ -138,6 +138,107 @@ export const OPERATIVE_ABILITIES = Object.freeze({
       Object.freeze({ level: 6, radius: 25, durationSeconds: 7, cooldownSeconds: 55 }),
     ]),
   }),
+  // Lote 4 — Milícias e Gangues Urbanas (16 operantes não-militares).
+  // Habilidades irregulares de território: reaproveitam EXATAMENTE os efeitos
+  // autoritativos já resolvidos pela simulação (dash/recon/heal/stun/speed/
+  // concealment/temporaryArmor/ringResistance/damageReduction/terminalScan/
+  // fieldScan) — nenhum efeito novo, mesmo caminho de validação dos canônicos.
+  OP_MIL_MALE_VULTO: Object.freeze({
+    operativeId: 'OP_MIL_MALE_VULTO', name: 'Perímetro Fechado', effect: 'damageReduction',
+    cooldownSeconds: 55, durationSeconds: 6,
+    parameters: Object.freeze({ damageReduction: 0.25 }),
+    description: 'Disciplina de bloco: reduz em 25% o dano direto recebido por 6 segundos, sem conceder invulnerabilidade.',
+  }),
+  OP_MIL_MALE_ECO: Object.freeze({
+    operativeId: 'OP_MIL_MALE_ECO', name: 'Rede das Lajes', effect: 'recon',
+    cooldownSeconds: 60, durationSeconds: 3,
+    parameters: Object.freeze({ radius: 30, revealSeconds: 3 }),
+    description: 'Rádio-peão: marca no minimapa inimigos vivos num raio de 30 metros por 3 segundos.',
+  }),
+  OP_MIL_MALE_FERRAZ: Object.freeze({
+    operativeId: 'OP_MIL_MALE_FERRAZ', name: 'Lacre de Bancada', effect: 'temporaryArmor',
+    cooldownSeconds: 60, durationSeconds: 6,
+    parameters: Object.freeze({ armor: 15 }),
+    description: 'Armeiro de quintal: gera até 15 pontos de blindagem improvisada por 6 segundos; o restante expira.',
+  }),
+  OP_MIL_MALE_GRAU: Object.freeze({
+    operativeId: 'OP_MIL_MALE_GRAU', name: 'Atalho de Esquina', effect: 'speed',
+    cooldownSeconds: 55, durationSeconds: 3,
+    parameters: Object.freeze({ speedMultiplier: 1.45 }),
+    description: 'Fuga de moto pela calçada: aumenta a velocidade de movimento em 45% por 3 segundos.',
+  }),
+  OP_MIL_FEMALE_NOTA: Object.freeze({
+    operativeId: 'OP_MIL_FEMALE_NOTA', name: 'Conferência de Caderneta', effect: 'terminalScan',
+    cooldownSeconds: 60, durationSeconds: 4,
+    parameters: Object.freeze({}),
+    description: 'Cobradora: marca no minimapa o terminal ZEX ativo mais próximo por 4 segundos.',
+  }),
+  OP_MIL_FEMALE_SIRENE: Object.freeze({
+    operativeId: 'OP_MIL_FEMALE_SIRENE', name: 'Alto-Falante da Laje', effect: 'stun',
+    cooldownSeconds: 55, durationSeconds: 2,
+    parameters: Object.freeze({ radius: 10, stunSeconds: 1.5 }),
+    description: 'Aviso de curfew no alto-falante: interrompe sem dano os bots vivos a até 10 metros por 1,5 segundo.',
+  }),
+  OP_MIL_FEMALE_SORO: Object.freeze({
+    operativeId: 'OP_MIL_FEMALE_SORO', name: 'Soro de Clínica', effect: 'heal',
+    cooldownSeconds: 55, durationSeconds: 0,
+    parameters: Object.freeze({ heal: 22 }),
+    description: 'Estabilização improvisada: recupera até 22 pontos de vida instantaneamente; não excede o máximo.',
+  }),
+  OP_MIL_FEMALE_CORUJA: Object.freeze({
+    operativeId: 'OP_MIL_FEMALE_CORUJA', name: 'Vigília Noturna', effect: 'concealment',
+    cooldownSeconds: 58, durationSeconds: 4,
+    parameters: Object.freeze({}),
+    description: 'Silêncio de vigia: interrompe a detecção visual dos bots por 4 segundos; não concede invulnerabilidade.',
+  }),
+  OP_GNG_MALE_SPRAY: Object.freeze({
+    operativeId: 'OP_GNG_MALE_SPRAY', name: 'Tag de Território', effect: 'recon',
+    cooldownSeconds: 60, durationSeconds: 3,
+    parameters: Object.freeze({ radius: 26, revealSeconds: 3 }),
+    description: 'Marcação invisível sob luz negra: inimigos vivos num raio de 26 metros aparecem no minimapa por 3 segundos.',
+  }),
+  OP_GNG_MALE_VENTANIA: Object.freeze({
+    operativeId: 'OP_GNG_MALE_VENTANIA', name: 'Corrida de Galho', effect: 'speed',
+    cooldownSeconds: 55, durationSeconds: 3,
+    parameters: Object.freeze({ speedMultiplier: 1.5 }),
+    description: 'Laje, muro e varal sem derrubar prega: aumenta a velocidade de movimento em 50% por 3 segundos.',
+  }),
+  OP_GNG_MALE_CORTA: Object.freeze({
+    operativeId: 'OP_GNG_MALE_CORTA', name: 'Pressão de Facção', effect: 'dash',
+    cooldownSeconds: 55, durationSeconds: 2,
+    parameters: Object.freeze({ speedMultiplier: 1.6, maxDistance: 8 }),
+    description: 'Arranque de pressão de rua, limitado a 8 metros ou 2 segundos; para em colisões.',
+  }),
+  OP_GNG_MALE_BAILE: Object.freeze({
+    operativeId: 'OP_GNG_MALE_BAILE', name: 'Aviso pelo Som', effect: 'stun',
+    cooldownSeconds: 58, durationSeconds: 2,
+    parameters: Object.freeze({ radius: 9, stunSeconds: 1.5 }),
+    description: 'A batida avisa a quadra: interrompe sem dano os bots vivos a até 9 metros por 1,5 segundo.',
+  }),
+  OP_GNG_FEMALE_ROTA: Object.freeze({
+    operativeId: 'OP_GNG_FEMALE_ROTA', name: 'Rota Livre', effect: 'ringResistance',
+    cooldownSeconds: 55, durationSeconds: 5,
+    parameters: Object.freeze({ ringDamageReduction: 0.4 }),
+    description: 'Atalho de entregadora: reduz em 40% o dano do Ring recebido por 5 segundos; não afeta dano de armas.',
+  }),
+  OP_GNG_FEMALE_COTOVELA: Object.freeze({
+    operativeId: 'OP_GNG_FEMALE_COTOVELA', name: 'Encaixe de Ringue', effect: 'damageReduction',
+    cooldownSeconds: 55, durationSeconds: 6,
+    parameters: Object.freeze({ damageReduction: 0.2 }),
+    description: 'Guarda de campeã do galpão: reduz em 20% o dano direto recebido por 6 segundos, sem conceder invulnerabilidade.',
+  }),
+  OP_GNG_FEMALE_SOMBRA: Object.freeze({
+    operativeId: 'OP_GNG_FEMALE_SOMBRA', name: 'Passo Fantasma', effect: 'concealment',
+    cooldownSeconds: 60, durationSeconds: 5,
+    parameters: Object.freeze({}),
+    description: 'Nunca vista duas vezes no mesmo ponto: interrompe a detecção visual dos bots por 5 segundos.',
+  }),
+  OP_GNG_FEMALE_PIXEL: Object.freeze({
+    operativeId: 'OP_GNG_FEMALE_PIXEL', name: 'Clonagem de Sinal', effect: 'fieldScan',
+    cooldownSeconds: 65, durationSeconds: 6,
+    parameters: Object.freeze({ radius: 18, revealSeconds: 3, vaultSpeedMultiplier: 1.1 }),
+    description: 'Pulso de clonagem em raio de 18 m por 6 s: rivais atrás de cobertura ganham silhueta por 3 s; escala 10% mais rápida enquanto ativo.',
+  }),
 });
 
 export function getOperativeAbility(operativeId) {

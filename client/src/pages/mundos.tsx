@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { CyberCard } from "@/components/cyber-card";
 import { cn } from "@/lib/utils";
-import { KHAAOS_WORLDS, WORLD_ORDER, type WorldId } from "@shared/worlds";
+import { KHAAOS_WORLDS, WORLD_ORDER, WORLD_RING_DIMENSIONS, type WorldId } from "@shared/worlds";
+import { WorldMapPreview } from "@/components/world-map-preview";
 import {
   Sword, Shield, TreePine, Target, Truck, Zap, Clock, Users, Map,
   ChevronDown, ChevronUp, AlertTriangle, Star, Trophy, Radio,
@@ -68,11 +69,11 @@ const ENVIRONMENTS = [
 const ZU_MODES = [
   {
     id: 1,
-    title: "Zu 1 — Colisão com a Manada",
-    question: "Risco de Colisão — Apertar os Cintos? S/N",
-    desc: "O caminhão perde o controle ao atropelar uma manada de bois. Escolha apertar o cinto ou continuar sem cinto.",
-    loot: ["20× Facas", "10× Pistola 9MM", "20× Munições 9MM", "20× Kits de Primeiros Socorros", "5× Fuzil Barrett MRAD (MK22)", "20× Munições Barrett"],
-    choice: { safe: "Apertar o Cinto", risk: "Ficar Solto", safeOutcome: "0% de dano na entrada", unsafeOutcome: "30% da vida máxima" },
+    title: "Zu 1 — Caminhão atropela bois",
+    question: "Caminhão atropela bois — apertar o cinto? S/N",
+    desc: "Caminhão atropela bois.",
+    loot: ["Caixote de armamento no perímetro — 1 item por jogador"],
+    choice: { safe: "Apertar o cinto", risk: "Não apertar o cinto", safeOutcome: "0% de dano; possível atordoamento/visão embaçada (5–7 s)", unsafeOutcome: "Até 30% de dano à vitalidade" },
     icon: Truck,
     color: "text-amber-400",
     border: "border-amber-500/30",
@@ -80,11 +81,11 @@ const ZU_MODES = [
   },
   {
     id: 2,
-    title: "Zu 2 — Desmoronamento",
-    question: "Alto Risco de Desmoronamento — Saltar do Caminhão? S/N",
-    desc: "Uma rocha gigante atinge o caminhão, que capota. Escolha saltar ou permanecer dentro.",
-    loot: ["15× Granadas", "10× SMG", "30× Munições SMG", "10× Kits Médicos", "3× Sniper L115A3", "15× Munições Sniper"],
-    choice: { safe: "Saltar do Caminhão", risk: "Permanecer Dentro", safeOutcome: "0% de dano na entrada", unsafeOutcome: "25% da vida máxima" },
+    title: "Zu 2 — Capota com rocha",
+    question: "Capota com rocha — saltar? S/N",
+    desc: "Capota com rocha.",
+    loot: ["Caixote de armamento no perímetro — 1 item por jogador"],
+    choice: { safe: "Saltar", risk: "Não saltar", safeOutcome: "0% de dano; possível atordoamento/visão embaçada (5–7 s)", unsafeOutcome: "Até 30% de dano à vitalidade" },
     icon: AlertTriangle,
     color: "text-orange-400",
     border: "border-orange-500/30",
@@ -92,11 +93,11 @@ const ZU_MODES = [
   },
   {
     id: 3,
-    title: "Zu 3 — Queda na Ponte",
-    question: "Ponte com Trilho Quebrado — Usar Máscara de Oxigênio? S/N",
-    desc: "O caminhão cai da ponte devido ao trilho quebrado e submerge na água. Escolha usar máscara de oxigênio ou continuar sem máscara.",
-    loot: ["10× Facas de Combate", "8× Pistola .44 Magnum", "25× Munições .44", "15× Antídotos", "2× Rifle Anti-Material", "10× Munições Anti-Material"],
-    choice: { safe: "Usar Máscara O₂", risk: "Sem Máscara", safeOutcome: "0% de dano na entrada", unsafeOutcome: "30% da vida máxima" },
+    title: "Zu 3 — Cai da ponte",
+    question: "Cai da ponte — usar máscara O₂? S/N",
+    desc: "Cai da ponte.",
+    loot: ["Caixote de armamento no perímetro — 1 item por jogador"],
+    choice: { safe: "Usar máscara O₂", risk: "Não usar máscara", safeOutcome: "0% de dano; possível atordoamento/visão embaçada (5–7 s)", unsafeOutcome: "Até 30% de dano à vitalidade" },
     icon: Droplets,
     color: "text-blue-400",
     border: "border-blue-500/30",
@@ -222,6 +223,8 @@ export default function Mundos() {
               <WorldMetric label="DURAÇÃO-ALVO" value={`${world.targetDurationMinutes} min`} />
               <WorldMetric label="ESCALA" value={world.dimensionsKm} />
               <WorldMetric label="ZEX" value={`${world.zexNodes.length} nós`} />
+              <WorldMetric label="RING CANÔNICO" value={`${WORLD_RING_DIMENSIONS[world.id].areaM2.toLocaleString("pt-BR")} m²`} />
+              <WorldMetric label="DENSIDADE" value={`${WORLD_RING_DIMENSIONS[world.id].densityM2PerOperator} m²/op`} />
             </div>
             <div className="mt-4 border-t border-border/30 pt-4">
               <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-foreground">
@@ -232,6 +235,14 @@ export default function Mundos() {
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground"><span className="text-foreground">Acesso:</span> {world.unlockRule.description}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── MAPA TÁTICO DO RING (WorldMapPreview — canvas orgânico) ── */}
+      <div>
+        <SectionHeader label="MAPA TÁTICO DO RING" sub={`CONTRATO CANÔNICO · ${WORLD_RING_DIMENSIONS[selectedWorld].shape.toUpperCase()} · ${WORLD_RING_DIMENSIONS[selectedWorld].boundingBoxM.widthM}×${WORLD_RING_DIMENSIONS[selectedWorld].boundingBoxM.depthM} m · PERÍMETRO ${WORLD_RING_DIMENSIONS[selectedWorld].perimeterM} m`} />
+        <div className="mt-4">
+          <WorldMapPreview worldId={selectedWorld} height={340} />
         </div>
       </div>
 
@@ -505,7 +516,7 @@ function ZuCard({ zu, expanded, onToggle }: { zu: typeof ZU_MODES[0]; expanded: 
 
           {/* Loot */}
           <div>
-            <p className="text-[10px] font-mono tracking-widest text-muted-foreground mb-2">LOOT INICIAL — 1 ITEM POR PLAYER</p>
+            <p className="text-[10px] font-mono tracking-widest text-muted-foreground mb-2">CAIXOTES DE ARMAMENTO NO PERÍMETRO — 1 ITEM POR JOGADOR</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {zu.loot.map(l => (
                 <div key={l} className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground p-2 border border-border/30 bg-black/30">

@@ -8,16 +8,24 @@
 # PRÉ-REQUISITO (único passo manual, feito uma vez):
 #   1. Conta GitHub vinculada à Epic Games (aceitar a EULA da UE e vincular em
 #      https://epicgames.com/account/connected).
-#   2. PAT clássico dessa conta com escopo `read:packages`, ou o segredo
-#      `UNREAL_ENGINE_LOGIN` com acesso equivalente à imagem Epic no GHCR.
+#   2. PAT clássico dessa conta com escopo `read:packages`.
 #   3. Settings → Secrets and variables → Actions:
-#        - Secret  UE_CONTAINER_PAT ou UNREAL_ENGINE_LOGIN = credencial do GHCR
+#        - Secret  UE_CONTAINER_PAT (preferido) ou UNREAL_ENGINE_LOGIN
 #        - Variable UE_CONTAINER_IMAGE = tag da imagem (opcional; confira as
 #          tags publicadas em github.com/orgs/epicgames/packages — ex.
 #          dev-slim-5.8.0; o default abaixo assume dev-slim-5.8)
-#   Sem o secret o job de build é PULADO com resumo explicativo — a CI nunca
-#   falha por falta de engine: estrutura é validada no ue5-preflight.yml e a
-#   compilação exige o binário licenciado (container ou self-hosted).
+#        - Variable UE_CONTAINER_USER (opcional) = usuário da credencial ghcr
+#
+# CONTRATO DE CREDENCIAL (validação FUNCIONAL desde Fase 31+):
+#   O gate faz `docker login ghcr.io` com a MESMA combinação que o job de
+#   build consumirá (password = valor do secret VERBATIM; username =
+#   UE_CONTAINER_USER > prefixo de UNREAL_ENGINE_LOGIN "user:token" > actor).
+#   Credencial ausente ou INVÁLIDA (ghcr "denied") => build PULADO com
+#   diagnóstico completo no $GITHUB_STEP_SUMMARY — a CI NUNCA fica vermelha
+#   por credencial de engine (estrutura é validada no ue5-preflight.yml).
+#   Diagnóstico de referência: run #9 do ue-infra-smoke (2026-10-28, linha
+#   226) registrou UNREAL_ENGINE_LOGIN com "denied" — valor presente mas
+#   não autenticável; com este gate o build nem inicia nesse estado.
 # Referência: https://unrealcontainers.com/docs/obtaining-images/epic
 # =============================================================================
 
@@ -48,35 +56,114 @@ concurrency:
 
 jobs:
   gate:
-    name: Engine image gate (UE_CONTAINER_PAT)
+    name: Engine image gate (ghcr validado funcionalmente)
     runs-on: ubuntu-latest
     outputs:
-      has_pat: ${{ steps.check.outputs.has_pat }}
+      has_pat: ${{ steps.validate.outputs.has_pat }}
+      login_user: ${{ steps.validate.outputs.login_user }}
     steps:
-      - name: Check Epic container credential
-        id: check
+      - name: Validação funcional da credencial ghcr (UE_CONTAINER_PAT || UNREAL_ENGINE_LOGIN)
+        id: validate
         env:
           UE_CONTAINER_PAT: ${{ secrets.UE_CONTAINER_PAT }}
           UE_LOGIN: ${{ secrets.UNREAL_ENGINE_LOGIN }}
+          UE_CONTAINER_USER: ${{ vars.UE_CONTAINER_USER }}
+          ACTOR: ${{ github.actor }}
         run: |
-          # Fase 31 — UNREAL_ENGINE_LOGIN (ghcr, validado pelo ue-infra-smoke)
-          # serve como credencial ALTERNATIVA: o segredo precisa AUTENTICAR no
-          # ghcr e a conta precisa ter acesso ao pacote epicgames/unreal-engine
-          # (EULA aceito + read:packages) — o mesmo requisito do PAT.
+          {
+            echo "### UE5.8 Container Build — gate de credencial"
+            echo ""
+          } > "$GITHUB_STEP_SUMMARY"
+
+          # Resolução IDÊNTICA ao job de build: password = valor do secret
+          # VERBATIM (UE_CONTAINER_PAT || UNREAL_ENGINE_LOGIN).
+          CRED=""; CRED_KIND="none"
           if [ -n "$UE_CONTAINER_PAT" ]; then
-            echo "has_pat=true" >> $GITHUB_OUTPUT
-            echo "✅ UE_CONTAINER_PAT configurado — build de engine habilitado"
+            CRED="$UE_CONTAINER_PAT"; CRED_KIND="UE_CONTAINER_PAT"
           elif [ -n "$UE_LOGIN" ]; then
-            echo "has_pat=true" >> $GITHUB_OUTPUT
-            echo "✅ UNREAL_ENGINE_LOGIN presente — credencial alternativa do container (fallback do UE_CONTAINER_PAT)"
-            echo "   ⚠️ o login ghcr PRECISA autenticar E ter acesso ao pacote epicgames/unreal-engine;"
-            echo "   o ue-infra-smoke valida o login a cada execução (ghcr denied = revisar valor/escopo)."
-          else
-            echo "has_pat=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ UE_CONTAINER_PAT/UNREAL_ENGINE_LOGIN ausentes — build de engine PULADO (não é falha)."
-            echo "   Configure o PAT de conta vinculada à Epic; veja o cabeçalho"
-            echo "   deste workflow ou scripts/build/bootstrap_ue58_runner.sh (self-hosted)."
+            CRED="$UE_LOGIN"; CRED_KIND="UNREAL_ENGINE_LOGIN"
           fi
+
+          if [ -z "$CRED" ]; then
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "**PULADO** — nenhuma credencial ghcr (UE_CONTAINER_PAT / UNREAL_ENGINE_LOGIN). Não é falha de CI:"
+              echo "estrutura é validada no ue5-preflight.yml; a compilação exige o binário licenciado."
+              echo ""
+              echo "**Destravar (1x):** PAT de conta vinculada à Epic (EULA + read:packages) → `gh secret set UE_CONTAINER_PAT`"
+              echo "(alternativa: `UNREAL_ENGINE_LOGIN` com o token — ver contrato no cabeçalho deste workflow)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ℹ️ sem credencial ghcr — build de engine PULADO (não é falha)."
+            exit 0
+          fi
+
+          # Username candidato: var UE_CONTAINER_USER > prefixo "user:" do
+          # UNREAL_ENGINE_LOGIN (formato user:token) > github.actor.
+          RAW_VALUE="$CRED"
+          SPLIT_USER=""; SPLIT_TOKEN=""
+          if [ "$CRED_KIND" = "UNREAL_ENGINE_LOGIN" ] && [[ "$CRED" == *:* ]]; then
+            SPLIT_USER="${CRED%%:*}"; SPLIT_TOKEN="${CRED#*:}"
+          fi
+          LOGIN_USER="${UE_CONTAINER_USER:-}"
+          [ -z "$LOGIN_USER" ] && [ -n "$SPLIT_USER" ] && LOGIN_USER="$SPLIT_USER"
+          LOGIN_USER="${LOGIN_USER:-$ACTOR}"
+
+          LOGIN_ERR="$(mktemp)"
+          # O job de build usa password = RAW_VALUE VERBATIM. PATs do GitHub
+          # NUNCA contêm ':', então um valor "user:token" não funciona
+          # verbatim como senha — nesse caso validamos o token dividido SÓ
+          # para diagnóstico e apontamos a correção exata (build-fiel).
+          if [ -n "$SPLIT_TOKEN" ]; then
+            if echo "$SPLIT_TOKEN" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin 2>"$LOGIN_ERR"; then
+              echo "has_pat=false" >> "$GITHUB_OUTPUT"
+              {
+                echo "- 🟡 **token VÁLIDO detectado no formato \`user:token\`** (usuário \`$LOGIN_USER\`) — MAS o build usa o valor do secret VERBATIM como senha, e um valor com \`:\` nunca autentica."
+                echo ""
+                echo "**Correção exata (1 linha):** re-grave o secret com SÓ o token (sem o prefixo \`\$LOGIN_USER:\`) → \`gh secret set UNREAL_ENGINE_LOGIN\`, ou use o secret \`UE_CONTAINER_PAT\`. Depois re-executar este workflow."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::token válido em formato user:token — o build container exige SÓ o token (ver summary)"
+            else
+              echo "has_pat=false" >> "$GITHUB_OUTPUT"
+              {
+                echo "- ❌ **\`$CRED_KIND\` NÃO autentica no ghcr** (usuário \`$LOGIN_USER\`, formato \`user:token\`) — build SKIPPED (a CI NÃO falha por isso)."
+                echo ""
+                echo '```'
+                grep -i -m 3 'denied\|unauthorized\|error' "$LOGIN_ERR" || head -3 "$LOGIN_ERR"
+                echo '```'
+                echo ""
+                echo "**Correção exata (valide cada camada):**"
+                echo "1. conta GitHub **vinculada à Epic Games** com EULA aceito (epicgames.com/account/connected);"
+                echo "2. PAT clássico com escopo \`read:packages\`;"
+                echo "3. `gh secret set UE_CONTAINER_PAT` (preferido) ou `UNREAL_ENGINE_LOGIN` = SÓ o token;"
+                echo "4. re-executar este workflow — o gate revalida antes de entrar no container."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::$CRED_KIND presente mas NÃO autentica no ghcr — build pulado com diagnóstico no summary"
+            fi
+          elif echo "$RAW_VALUE" | docker login ghcr.io --username "$LOGIN_USER" --password-stdin 2>"$LOGIN_ERR"; then
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+            echo "login_user=$LOGIN_USER" >> "$GITHUB_OUTPUT"
+            {
+              echo "- ✅ **\`$CRED_KIND\` autentica no ghcr** (usuário \`$LOGIN_USER\`) — build de engine habilitado."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ credencial ghcr VÁLIDA ($CRED_KIND, usuário $LOGIN_USER) — build habilitado"
+          else
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "- ❌ **\`$CRED_KIND\` NÃO autentica no ghcr** (usuário \`$LOGIN_USER\`) — build SKIPPED (a CI NÃO falha por isso)."
+              echo ""
+              echo '```'
+              grep -i -m 3 'denied\|unauthorized\|error' "$LOGIN_ERR" || head -3 "$LOGIN_ERR"
+              echo '```'
+              echo ""
+              echo "**Correção exata (valide cada camada):**"
+              echo "1. conta GitHub **vinculada à Epic Games** com EULA aceito (epicgames.com/account/connected);"
+              echo "2. PAT clássico com escopo \`read:packages\`;"
+              echo "3. `gh secret set UE_CONTAINER_PAT` (preferido) ou `UNREAL_ENGINE_LOGIN` = SÓ o token;"
+              echo "4. re-executar este workflow — o gate revalida antes de entrar no container."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::$CRED_KIND presente mas NÃO autentica no ghcr — build pulado com diagnóstico no summary"
+          fi
+          rm -f "$LOGIN_ERR"
 
   build:
     name: UBT Build (${{ github.event.inputs.target || 'KhaaosRunServer' }} / ${{ github.event.inputs.configuration || 'Development' }})
@@ -87,7 +174,9 @@ jobs:
     container:
       image: ${{ vars.UE_CONTAINER_IMAGE || 'ghcr.io/epicgames/unreal-engine:dev-slim-5.8' }}
       credentials:
-        username: ${{ github.actor }}
+        # username resolvido e VALIDADO funcionalmente pelo gate (var
+        # UE_CONTAINER_USER > prefixo de UNREAL_ENGINE_LOGIN > actor).
+        username: ${{ needs.gate.outputs.login_user || github.actor }}
         password: ${{ secrets.UE_CONTAINER_PAT || secrets.UNREAL_ENGINE_LOGIN }}
       options: --user root
     steps:

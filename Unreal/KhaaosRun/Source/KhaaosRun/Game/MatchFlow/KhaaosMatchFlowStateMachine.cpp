@@ -14,7 +14,7 @@ UKhaaosMatchFlowStateMachine::UKhaaosMatchFlowStateMachine()
     StateTimeElapsed   = 0.0f;
     PlayersAlive       = 0;
     LastLandingTimestamp = 0.0f;
-    bAllPlayersLanded  = false;
+    bZuIngressComplete  = false;
     bFirstShotFired    = false;
 
     EndgamePlayerThreshold   = 10;
@@ -30,36 +30,25 @@ void UKhaaosMatchFlowStateMachine::InitializeDefaultTransitions()
 {
     Transitions.Empty(7);
 
-    // Lobby → Deploy: requires minimum players
+    // Lobby → ZuIngress: requires minimum players
     {
         FKhaaosMatchFlowTransition T;
         T.FromState     = EKhaaosMatchFlowState::Lobby;
-        T.ToState       = EKhaaosMatchFlowState::Deploy;
+        T.ToState       = EKhaaosMatchFlowState::ZuIngress;
         T.Condition     = FName("MinPlayersReady");
         T.MinPlayers    = MinPlayersToStart;
         T.MaxTimeSeconds = 300.0f; // 5 min lobby timeout
         Transitions.Add(T);
     }
 
-    // Deploy → Parachute: players enter the aircraft
+    // ZuIngress → Looting: portal entry is complete
     {
         FKhaaosMatchFlowTransition T;
-        T.FromState     = EKhaaosMatchFlowState::Deploy;
-        T.ToState       = EKhaaosMatchFlowState::Parachute;
-        T.Condition     = FName("DeployComplete");
-        T.MinPlayers    = 1;
-        T.MaxTimeSeconds = 30.0f; // 30s deploy window
-        Transitions.Add(T);
-    }
-
-    // Parachute → Looting: all players have landed
-    {
-        FKhaaosMatchFlowTransition T;
-        T.FromState     = EKhaaosMatchFlowState::Parachute;
+        T.FromState     = EKhaaosMatchFlowState::ZuIngress;
         T.ToState       = EKhaaosMatchFlowState::Looting;
-        T.Condition     = FName("AllPlayersLanded");
+        T.Condition     = FName("ZuIngressComplete");
         T.MinPlayers    = 1;
-        T.MaxTimeSeconds = 180.0f; // 3 min max parachute time
+        T.MaxTimeSeconds = 180.0f; // 3 min max portal entry time
         Transitions.Add(T);
     }
 
@@ -120,17 +109,10 @@ void UKhaaosMatchFlowStateMachine::InitializeDefaultTransitions()
     }
     {
         FKhaaosMatchFlowStateConfig C;
-        C.DisplayName = TEXT("Deploy");
-        C.DurationSeconds = 15.0f; // 15s deploy cinematic
+        C.DisplayName = TEXT("ZuIngress");
+        C.DurationSeconds = 2.2f; // Relogio sincronizado do portal
         C.bAutoAdvanceOnTimeout = true;
-        StateConfigs.Add(EKhaaosMatchFlowState::Deploy, C);
-    }
-    {
-        FKhaaosMatchFlowStateConfig C;
-        C.DisplayName = TEXT("Parachute");
-        C.DurationSeconds = 0.0f; // Waits for all players to land
-        C.bAutoAdvanceOnTimeout = false;
-        StateConfigs.Add(EKhaaosMatchFlowState::Parachute, C);
+        StateConfigs.Add(EKhaaosMatchFlowState::ZuIngress, C);
     }
     {
         FKhaaosMatchFlowStateConfig C;
@@ -189,11 +171,11 @@ void UKhaaosMatchFlowStateMachine::NotifyEvent(FName EventName)
         bFirstShotFired = true;
         UE_LOG(LogKhaaosRun, Log, TEXT("MatchFlowStateMachine::NotifyEvent - FirstShotFired"));
     }
-    else if (EventName == FName("AllPlayersLanded"))
+    else if (EventName == FName("ZuIngressComplete"))
     {
-        bAllPlayersLanded = true;
+        bZuIngressComplete = true;
         LastLandingTimestamp = StateTimeElapsed;
-        UE_LOG(LogKhaaosRun, Log, TEXT("MatchFlowStateMachine::NotifyEvent - AllPlayersLanded at elapsed=%.2f"), StateTimeElapsed);
+        UE_LOG(LogKhaaosRun, Log, TEXT("MatchFlowStateMachine::NotifyEvent - ZuIngressComplete at elapsed=%.2f"), StateTimeElapsed);
     }
     else if (EventName == FName("WorldTransitionComplete"))
     {
@@ -353,34 +335,23 @@ void UKhaaosMatchFlowStateMachine::EvaluateAutoTransitions()
     {
         case EKhaaosMatchFlowState::Lobby:
         {
-            // Auto-transition Lobby → Deploy when min players ready
+            // Auto-transition Lobby → ZuIngress when min players ready
             if (PlayersAlive >= MinPlayersToStart)
             {
                 // Check if a resolver exists; otherwise use player count alone
                 const TFunction<bool()>* Resolver = ConditionResolvers.Find(FName("MinPlayersReady"));
                 if (!Resolver || (Resolver && *Resolver && (*Resolver)()))
                 {
-                    TransitionTo(EKhaaosMatchFlowState::Deploy);
+                    TransitionTo(EKhaaosMatchFlowState::ZuIngress);
                 }
             }
             break;
         }
 
-        case EKhaaosMatchFlowState::Deploy:
+        case EKhaaosMatchFlowState::ZuIngress:
         {
-            // Deploy auto-advances on timeout (handled in TickComponent via StateConfig)
-            // Also check explicit event
-            if (FiredEvents.Contains(FName("DeployComplete")))
-            {
-                TransitionTo(EKhaaosMatchFlowState::Parachute);
-            }
-            break;
-        }
-
-        case EKhaaosMatchFlowState::Parachute:
-        {
-            // All players landed → Looting
-            if (bAllPlayersLanded || FiredEvents.Contains(FName("AllPlayersLanded")))
+            // Zu entry complete → Looting
+            if (bZuIngressComplete || FiredEvents.Contains(FName("ZuIngressComplete")))
             {
                 TransitionTo(EKhaaosMatchFlowState::Looting);
             }
@@ -389,12 +360,12 @@ void UKhaaosMatchFlowStateMachine::EvaluateAutoTransitions()
 
         case EKhaaosMatchFlowState::Looting:
         {
-            // Looting → Combat: first shot fired OR grace period after landing
+            // Looting → Combat: first shot fired OR grace period after Zu entry
             if (bFirstShotFired || FiredEvents.Contains(FName("FirstShotFired")))
             {
                 TransitionTo(EKhaaosMatchFlowState::Combat);
             }
-            else if (bAllPlayersLanded && (StateTimeElapsed - LastLandingTimestamp) >= LootingToCombatGraceSeconds)
+            else if (bZuIngressComplete && (StateTimeElapsed - LastLandingTimestamp) >= LootingToCombatGraceSeconds)
             {
                 UE_LOG(LogKhaaosRun, Log, TEXT("MatchFlowStateMachine - Looting→Combat: grace period expired (%.1fs)"),
                     LootingToCombatGraceSeconds);
@@ -530,8 +501,7 @@ FString UKhaaosMatchFlowStateMachine::GetStateDisplayName(EKhaaosMatchFlowState 
     switch (State)
     {
         case EKhaaosMatchFlowState::Lobby:           return TEXT("Lobby");
-        case EKhaaosMatchFlowState::Deploy:          return TEXT("Deploy");
-        case EKhaaosMatchFlowState::Parachute:       return TEXT("Parachute");
+        case EKhaaosMatchFlowState::ZuIngress:       return TEXT("ZuIngress");
         case EKhaaosMatchFlowState::Looting:         return TEXT("Looting");
         case EKhaaosMatchFlowState::Combat:          return TEXT("Combat");
         case EKhaaosMatchFlowState::Endgame:         return TEXT("Endgame");

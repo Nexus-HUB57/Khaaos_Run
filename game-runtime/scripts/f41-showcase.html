@@ -1,0 +1,256 @@
+<!doctype html>
+<!-- Fase 41 — vitrine dev (evidência visual): PERFIS DE LUZ POR CENÁRIO
+     (LIGHTING_PROFILES REAIS do world3d aplicados AO VIVO: sol/hemisfério/fills/
+     exposição ACES/IBL por mundo), PERSONAGEM ERGONÔMICO (createOperative +
+     animateOperative REAIS: estabilização vestibular do olhar, ombros contra-
+     rolam a passada, micro-balço ADS) e ACESSÓRIOS PBR (jugular do capacete,
+     dedos+polegar na luva 3ª pessoa, cadarço/colarinho da bota, micro-detalle
+     no vestuário inteiro). Serve via `npm run dev` em /scripts/f41-showcase.html
+     — módulos REAIS do jogo. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F41 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 640px; }
+  #hud b { color: #ffb52e; }
+  #readout { position: fixed; left: 12px; bottom: 12px; z-index: 5; color: #e8e3d5; font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre; }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 118px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; max-width: 700px; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #side {
+    position: fixed; right: 12px; top: 12px; z-index: 6; display: flex; flex-direction: column; gap: 10px;
+    width: 240px;
+  }
+  #side .panel {
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px;
+  }
+  #side h3 { margin: 0 0 4px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #side .note { font: 10px/1.5 monospace; color: #8d8598; margin-bottom: 8px; }
+  .btnrow { display: flex; gap: 5px; flex-wrap: wrap; }
+  .btnrow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: transparent; border: 1px solid rgba(122,90,158,.5); border-radius: 3px;
+    padding: 4px 7px; cursor: pointer;
+  }
+  .btnrow button.on { border-color: #c8ff3d; color: #c8ff3d; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 41</b><br />
+  <b>PERFIS DE LUZ POR CENÁRIO</b> (reconfiguração de parâmetros — cada mundo com sol/hemisfério/
+  fills/exposição/IBL próprios) + <b>PERSONAGEM ERGONÔMICO</b> (estabilização vestibular do olhar,
+  ombros contra-rolam a passada, micro-balço ADS) + <b>ACESSÓRIOS PBR</b> (jugular, dedos na luva,
+  cadarço na bota, micro-detalle no vestuário)
+</div>
+<div id="readout"></div>
+<div id="rail"></div>
+<div id="side">
+  <div class="panel">
+    <h3>PERFIL DE LUZ · W1–W4</h3>
+    <div class="note" id="lpNote">LIGHTING_PROFILES reais — sol+fills+exposição trocam ao vivo</div>
+    <div class="btnrow" id="lpRow"></div>
+  </div>
+  <div class="panel">
+    <h3>ERGONOMIA · LOCOMOÇÃO</h3>
+    <div class="note" id="erNote">estabilização de olhar + contra-rolagem de ombros</div>
+    <div class="btnrow" id="erRow"></div>
+  </div>
+  <div class="panel">
+    <h3>ACESSÓRIOS · CLOSE</h3>
+    <div class="note" id="acNote">jugular / luva / bota — 3ª pessoa</div>
+    <div class="btnrow" id="acRow"></div>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createOperative, animateOperative, createWeaponModel, attachWeapon } from '../src/game3d/entities3d.js';
+import { LIGHTING_PROFILES } from '../src/game3d/world3d.js';
+import { groundTexture } from '../src/game3d/textures3d.js';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2('#10161c', .003);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#ffc98f', 2.35);
+sun.position.set(-18, 24, -12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 2; sun.shadow.camera.far = 90;
+sun.shadow.camera.left = -16; sun.shadow.camera.right = 16;
+sun.shadow.camera.top = 16; sun.shadow.camera.bottom = -16;
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight('#8f74b4', '#4a3d2e', 1.18);
+scene.add(hemi);
+const fill = new THREE.DirectionalLight('#6a5aa0', .72);
+fill.position.set(14, 8, 18);
+scene.add(fill);
+const back = new THREE.DirectionalLight('#a8885e', .55);
+back.position.set(6, 5, 24);
+scene.add(back);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600),
+  new THREE.MeshStandardMaterial({ map: groundTexture(28), roughness: .92 })); // anisotropia 8 F41
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+
+// prop de referência: cubo com sombra dura para ler o normalBias do sol
+const block = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2),
+  new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: .9 }));
+block.position.set(3.2, .6, -2.4); block.castShadow = block.receiveShadow = true;
+scene.add(block);
+
+// --------------------------------- OPERATIVO REAL (createOperative F41) ----
+const { group: operative, parts } = createOperative({
+  skin: '#d9a06b', vest: '#c8622e', variant: 'OP_MALE_ONITH', helmet: true,
+});
+scene.add(operative);
+attachWeapon(parts, operative, 'g19', null, {});
+operative.userData.weaponRig?.group?.position.set(.3, 1.4, -.25);
+
+// --------------------------------------------------- estado da vitrine ----
+const state = {
+  t: 0, speedNorm: .9, ads: false, stabilize: true,
+  cam: 'corpo',        // corpo | cabeca | luva | bota
+  profile: 'CIGKV',
+};
+const ergo = { lastBounce: 0, lastHead: 0 };
+
+function applyProfile(id) {
+  const lp = LIGHTING_PROFILES[id] ?? LIGHTING_PROFILES.CIGKV;
+  state.profile = LIGHTING_PROFILES[id] ? id : 'CIGKV';
+  sun.color.set(lp.sunColor); sun.intensity = lp.sunIntensity;
+  sun.shadow.bias = lp.shadowBias; sun.shadow.normalBias = lp.shadowNormalBias;
+  hemi.color.set(lp.hemiSky); hemi.groundColor.set(lp.hemiGround); hemi.intensity = lp.hemiIntensity;
+  fill.color.set(lp.fillColor); fill.intensity = lp.fillIntensity;
+  back.color.set(lp.backColor); back.intensity = lp.backIntensity;
+  renderer.toneMappingExposure = lp.exposure;
+  for (const b of lpRow.children) b.classList.toggle('on', b.dataset.id === state.profile);
+  lpNote.textContent = `${state.profile} · sol ${lp.sunColor} @${lp.sunIntensity} · exp ${lp.exposure} · IBL ${lp.envIntensity} · nBias ${lp.shadowNormalBias}`;
+}
+
+// ------------------------------------------------------------- UI rail ----
+const lpRow = document.querySelector('#lpRow');
+for (const id of ['CIGKV', 'Barburhen', 'Priadus', 'Ckesalth', 'Arukheea']) {
+  const b = document.createElement('button');
+  b.textContent = id === 'CIGKV' ? 'W0 CIGKV' : id;
+  b.dataset.id = id;
+  b.onclick = () => applyProfile(id);
+  lpRow.appendChild(b);
+}
+const erRow = document.querySelector('#erRow');
+for (const [label, key, vals] of [
+  ['ANDAR', 'speedNorm', [.35]], ['CORRER', 'speedNorm', [.9]], ['PARADO', 'speedNorm', [0]], ['ADS', 'ads', [true]], ['HIP', 'ads', [false]],
+]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.key = key; b.dataset.val = vals[0];
+  b.onclick = () => {
+    state[key] = vals[0];
+    for (const o of erRow.children) if (o.dataset.key === key) o.classList.toggle('on', o === b);
+  };
+  if ((key === 'speedNorm' && state.speedNorm === vals[0]) || (key === 'ads' && state.ads === vals[0])) b.classList.add('on');
+  erRow.appendChild(b);
+}
+// toggle de estabilização (mostra o ANTES: cabeça presa ao tronco)
+const stab = document.createElement('button');
+stab.textContent = 'OLHAR: ON'; stab.classList.add('on');
+stab.onclick = () => {
+  state.stabilize = !state.stabilize;
+  stab.classList.toggle('on', state.stabilize);
+  stab.textContent = `OLHAR: ${state.stabilize ? 'ON' : 'OFF'}`;
+};
+erRow.appendChild(stab);
+
+const acRow = document.querySelector('#acRow');
+for (const [label, id, pos, look] of [
+  ['CORPO', 'corpo', [2.1, 1.7, 2.9], [0, 1.05, 0]],
+  ['CABEÇA', 'cabeca', [.9, 1.75, 1.35], [0, 1.55, 0]],
+  ['LUVA', 'luva', [.55, 1.32, .8], [.22, 1.22, -.2]],
+  ['BOTA', 'bota', [.8, .55, 1.1], [0, .18, 0]],
+]) {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.cam = id;
+  b.onclick = () => {
+    state.cam = id;
+    for (const o of acRow.children) o.classList.toggle('on', o === b);
+  };
+  if (id === 'corpo') b.classList.add('on');
+  acRow.appendChild(b);
+}
+
+// ------------------------------------------------------------- loop 3D ----
+const CAMS = {
+  corpo: { pos: [2.1, 1.7, 2.9], look: [0, 1.05, 0] },
+  cabeca: { pos: [.9, 1.75, 1.35], look: [0, 1.55, 0] },
+  luva: { pos: [.85, 1.58, -.7], look: [.28, 1.33, -.28] },  // mãos no regime de mira (vista frente-direita)
+  bota: { pos: [.8, .55, 1.1], look: [0, .18, 0] },
+};
+const clock = new THREE.Clock();
+let animT = 0;
+function tick() {
+  const dt = Math.min(.1, clock.getDelta());
+  animT += dt;
+  state.t = animT;
+  animateOperative(parts, { t: animT, speedNorm: state.speedNorm, ads: state.ads });
+  if (!state.stabilize) { // ANTES: cabeça sem contra-movimento (colada ao bounce)
+    parts.head.position.y = .46;
+    parts.head.position.x = 0;
+  }
+  const c = CAMS[state.cam];
+  camera.position.set(...c.pos);
+  camera.lookAt(...c.look);
+  sun.target.position.set(0, 0, 0);
+  sun.position.set(-18, 24, -12);
+  renderer.render(scene, camera);
+  // readout: bounce do tronco vs contra-movimento do olhar + regime
+  const bounce = parts.torso.position.y - 1.22;
+  ergo.lastBounce = bounce; ergo.lastHead = parts.head.position.y - .46;
+  readout.innerHTML =
+    `perfil <b>${state.profile}</b> · câm <b>${state.cam}</b> · speedNorm ${state.speedNorm} · ${state.ads ? 'ADS' : 'HIP'}\n` +
+    `bounce tronco <b>${bounce >= 0 ? '+' : ''}${bounce.toFixed(4)}</b> · olhar contra-move <b>${ergo.lastHead >= 0 ? '+' : ''}${ergo.lastHead.toFixed(4)}</b> (${state.stabilize ? 'vestibular ON' : 'colado'})\n` +
+    `ombros contra-rolam: zR ${parts.armR.shoulder.rotation.z.toFixed(4)} · zL ${parts.armL.shoulder.rotation.z.toFixed(4)}`;
+  requestAnimationFrame(tick);
+}
+applyProfile('Arukheea');
+acRow.children[0].classList.add('on');
+tick();
+
+// hook de smoke (evidências): __f41.shot([cx,cy,cz],[lx,ly,lz]) → PNG baixa direto
+window.__f41 = {
+  state,
+  parts,
+  applyProfile,
+  shot(camPos, lookAt) {
+    if (Array.isArray(camPos)) camera.position.set(...camPos);
+    if (Array.isArray(lookAt)) camera.lookAt(...lookAt);
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/png');
+  },
+  profile: () => state.profile,
+  exposure: () => renderer.toneMappingExposure,
+};
+</script>
+</body>
+</html>

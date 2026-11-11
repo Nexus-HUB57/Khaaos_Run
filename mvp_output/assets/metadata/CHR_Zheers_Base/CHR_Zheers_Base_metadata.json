@@ -4,7 +4,7 @@
   "category": "character",
   "subcategory": "humanoid",
   "priority": "P0",
-  "description": "Base humanoid character, 180cm, T-pose. Skeletal mesh for UE5 Mannequin skeleton.",
+  "description": "Base humanoid character, 180cm, T-pose. Skeletal mesh for SK_Manny skeleton (rig base por sexo, ADR-ESQUELETO-RIG-POR-SEXO).",
   "version": "1.0.0",
   "author": "Khaaos Run MVP Pipeline",
   "generated_at": "2026-10-12T21:11:26Z",

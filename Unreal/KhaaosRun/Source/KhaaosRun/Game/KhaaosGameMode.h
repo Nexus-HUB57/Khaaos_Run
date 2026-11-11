@@ -25,12 +25,12 @@ class UKhaaosKillFeedComponent;
 class UKhaaosReviveSystemComponent;
 class UKhaaosMatchFlowStateMachineComponent;
 class UKhaaosAirdropSystemComponent;
-class UKhaaosDeploySystemComponent;
 class UKhaaosCirclePredictionComponent;
 class UKhaaosPerformanceBudgetComponent;
 class UKhaaosLODStrategyComponent;
 class UKhaaosReplicationBudgetComponent;
 class UKhaaosMatchTimelineComponent;
+class UKhaaosTrainIngressCoordinator;
 class APlayerController;
 
 // ─── E2E Phases 5-8 Forward Declarations ───────────────────────────────────────────
@@ -454,10 +454,6 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosAirdropSystemComponent* AirdropSystem;
 
-    /** Deploy/parachute system. */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
-    UKhaaosDeploySystemComponent* DeploySystem;
-
     /** Circle prediction for minimap UI (Fortnite white circle). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosCirclePredictionComponent* CirclePrediction;
@@ -477,6 +473,10 @@ protected:
     /** Match timeline recorder (event log, match summary, JSON serialize). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
     UKhaaosMatchTimelineComponent* MatchTimeline;
+
+    /** Server-authoritative ZU_TRAIN_V1 handovers for world transitions. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Khaaos|Systems")
+    TObjectPtr<UKhaaosTrainIngressCoordinator> TrainIngressCoordinator;
 
     // ─── Internal Methods ───────────────────────────────────────────────────
 

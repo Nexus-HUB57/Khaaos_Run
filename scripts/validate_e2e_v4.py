@@ -333,11 +333,11 @@ def main():
     for w in worlds:
         v.file_contains(cat, f"World {w} in pipeline", mf, w)
 
-    v.file_contains(cat, "CIGKV capacity 50", mf, "50")
+    v.file_contains(cat, "CIGKV capacity 100", mf, "100")
     v.file_contains(cat, "Barburhen capacity 100", mf, "100")
-    v.file_contains(cat, "Priadus capacity 75", mf, "75")
-    v.file_contains(cat, "Ckesalth capacity 60", mf, "60")
-    v.file_contains(cat, "Arukheea capacity 80", mf, "80")
+    v.file_contains(cat, "Priadus capacity 100", mf, "100")
+    v.file_contains(cat, "Ckesalth capacity 100", mf, "100")
+    v.file_contains(cat, "Arukheea capacity 100", mf, "100")
     v.file_contains(cat, "World transition check", mf, "checkWorldTransition")
     v.file_contains(cat, "World transition cost (50K RC)", emb, "50_000")
 

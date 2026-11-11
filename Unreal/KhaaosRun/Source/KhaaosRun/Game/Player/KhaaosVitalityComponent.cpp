@@ -3,6 +3,7 @@
 #include "Game/Player/KhaaosVitalityComponent.h"
 #include "Game/AbilitySystem/KhaaosAbilityComponent.h"
 #include "Game/Attributes/KhaaosAttributeSet.h"
+#include "Player/KhaaosPlayerState.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Character.h"
@@ -77,7 +78,6 @@ void UKhaaosVitalityComponent::InitializeFromASC(UAbilitySystemComponent* ASC)
 		}
 	}
 }
-}
 
 void UKhaaosVitalityComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
@@ -126,6 +126,44 @@ void UKhaaosVitalityComponent::ApplyPercentageDamage(float Percent, AActor* Dama
 
 	const float Amount = MaxVitality * Percent * Multiplier;
 	ApplyDamage(Amount, DamageCauser);
+}
+
+float UKhaaosVitalityComponent::ApplyWorldEnvironmentalPercentageDamage(
+	float Percent,
+	AActor* DamageCauser,
+	FName SourceWorldId)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || Percent <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	AKhaaosPlayerState* PlayerState = Pawn ? Cast<AKhaaosPlayerState>(Pawn->GetPlayerState()) : nullptr;
+	if (!PlayerState || !PlayerState->KhaaosAttributeSet)
+	{
+		return 0.0f;
+	}
+
+	MaxVitality = PlayerState->KhaaosAttributeSet->GetMaxHealth();
+	CurrentVitality = PlayerState->KhaaosAttributeSet->GetHealth();
+	if (MaxVitality <= 0.0f || CurrentVitality <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const float StarvationMultiplier = (Hunger > 70.0f || Thirst > 70.0f) ? StarvationDamageMultiplier : 1.0f;
+	const float RequestedDamage = MaxVitality * Percent * StarvationMultiplier;
+	const float ActualDamage = PlayerState->ApplyWorldEnvironmentalDamage(RequestedDamage, DamageCauser, SourceWorldId);
+
+	CurrentVitality = PlayerState->KhaaosAttributeSet->GetHealth();
+	NotifyVitalityChanged();
+	if (CurrentVitality <= 0.0f)
+	{
+		HandleDeath();
+	}
+
+	return ActualDamage;
 }
 
 void UKhaaosVitalityComponent::ApplyDamage(float Amount, AActor* DamageCauser)

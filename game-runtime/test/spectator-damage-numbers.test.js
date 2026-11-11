@@ -9,7 +9,7 @@
 //   2. SIM OFFLINE (sim3d): 'melee' com o mesmo contrato (owner filtra quem vê);
 //   3. CLIENTE (spectator3d): specDamageSpawn é PURO — número só no FOLLOW
 //      envolvendo o seguido; SpectatorView ingere/drena DAMAGE.
-//   4. Fase 29: kinds AMBIENTAIS (tsunami/eruption/ring/acid/quantum) chegam
+//   4. Fase 29/42: kinds AMBIENTAIS (tsunami/spore/smoke/ring/acid/quantum) chegam
 //      com a identidade do golpe — specDamageSpawn marca `hazard` e o pool
 //      rende o tier `dmg-hazard hz-*` (paleta do banner). A anomalia Khaaos
 //      (quantum) passa a espelhar a VIDA perdida no DAMAGE (o drain pousa
@@ -20,6 +20,7 @@ import { KhaaosSim3D, DEFAULT_INPUT } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
 import { SpectatorView, specDamageSpawn } from '../src/game3d/spectator3d.js';
 import { DamageNumbers3D, damageTier, HAZARD_TIER_CLASSES } from '../src/game3d/damageNumbers3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 // ─── 1. specDamageSpawn (puro — gramática do FOLLOW) ────────────────────────
 
@@ -77,6 +78,7 @@ test('room3d: dano do ring vira evento DAMAGE no spectatorView com rate-limit po
   const room = new MatchRoom3D({ id: 'tv-dmg-1', seed: 'TV-DMG-1', capacity: 4, botFill: 2, airdrop: false });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.bots[0];
   victim.x = room.ring.x + room.ring.radius + 50; // fora do cerco: dano garantido
   victim.z = room.ring.z;
@@ -104,6 +106,7 @@ test('room3d: melee autoritativo entrega o contrato do número ao ATACANTE e DAM
   const room = new MatchRoom3D({ id: 'tv-melee-1', seed: 'TV-MELEE-1', capacity: 4, botFill: 1, airdrop: false });
   assert.ok(room.addPlayer('p0', 'ATACANTE'));
   assert.ok(room.start('p0', 'belt'));
+  disembarcarSala(room, 'p0'); // Task 53 — protocolo do trem cumprido antes do teste
   const a = room.humans.get('p0');
   const b = room.bots[0];
   // sucata = arma melee canônica; alvo colado e de frente (yaw = π olha +x)
@@ -132,6 +135,7 @@ test('room3d: anel do DAMAGE tem teto 10 e timestamps estritamente crescentes', 
   const room = new MatchRoom3D({ id: 'tv-cap-1', seed: 'TV-CAP-1', capacity: 4, botFill: 3, airdrop: false });
   assert.ok(room.addPlayer('p0', 'ATACANTE'));
   assert.ok(room.start('p0', 'belt'));
+  disembarcarSala(room, 'p0'); // Task 53 — protocolo do trem cumprido antes do teste
   const a = room.humans.get('p0');
   a.weapon = 'sucata'; a.cooldown = 0;
   // várias vítimas em sequência (cada uma com rate-limit próprio) enchem o anel
@@ -172,7 +176,7 @@ function withFakeDoc(fn) {
 test('specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard false', () => {
   const follow = 'h_aaa';
   // cada kind de hazard → hazard true com kind preservado
-  for (const kind of ['tsunami', 'eruption', 'ring', 'acid', 'quantum']) {
+  for (const kind of ['tsunami', 'spore', 'smoke', 'ring', 'acid', 'quantum']) {
     const s = specDamageSpawn({ x: 5, y: 1, z: 6, damage: 12, victim: follow, kind }, follow, 'FOLLOW_PLAYER');
     assert.ok(s, `kind ${kind} gera spawn`);
     assert.equal(s.kind, kind);
@@ -201,7 +205,8 @@ test('specDamageSpawn: kinds ambientais marcam hazard; tiro/melee mantêm hazard
 test('damageTier: hazard ganha tier próprio com cor por kind (paleta do banner)', () => {
   // cada kind de hazard → classe canônica
   assert.equal(damageTier({ hazard: true, kind: 'tsunami' }).cls, 'dmg-hazard hz-tsunami');
-  assert.equal(damageTier({ hazard: true, kind: 'eruption' }).cls, 'dmg-hazard hz-lava');
+  assert.equal(damageTier({ hazard: true, kind: 'spore' }).cls, 'dmg-hazard hz-spore');
+  assert.equal(damageTier({ hazard: true, kind: 'smoke' }).cls, 'dmg-hazard hz-smoke');
   assert.equal(damageTier({ hazard: true, kind: 'quantum' }).cls, 'dmg-hazard hz-gravity');
   assert.equal(damageTier({ hazard: true, kind: 'acid' }).cls, 'dmg-hazard hz-acid');
   assert.equal(damageTier({ hazard: true, kind: 'ring' }).cls, 'dmg-hazard hz-ring');
@@ -235,16 +240,17 @@ test('pool: spawn de hazard rende nó dmg-hazard com a classe do kind e o dano c
 });
 
 test('room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind quantum', () => {
-  const room = new MatchRoom3D({ id: 'tv-quantum-29', seed: 'TV-QUANTUM-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: 'tv-quantum-29', seed: 'TV-QUANTUM-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.bots[0];
   // sem blindagem: a VIDA perdida é o número (armor drena sem número)
   victim.armor = 0;
   victim.temporaryArmor = 0;
   victim.x = 60; victim.z = 60; // longe dos 4 pilões (raio 28)
   const lifeBefore = victim.life;
-  room.quantumTimer = 120; // intervalSeconds do Arukheea — dispara no próximo tick
+  room.quantumTimer = 120; // intervalSeconds do Pulso Khaaos (CIGKV) — dispara no próximo tick
   room.tick(0.02);
   assert.equal(room.quantumActive, true, 'anomalia ativa no tick disparado');
   assert.ok(victim.life < lifeBefore, 'vida caiu com a anomalia');
@@ -257,9 +263,10 @@ test('room3d: ANOMALIA Khaaos (quantum) espelha a vida perdida como DAMAGE kind 
 });
 
 test('room3d: drain com blindagem NÃO vira número — só vida perdida é informação', () => {
-  const room = new MatchRoom3D({ id: 'tv-quantum-armor', seed: 'TV-QUANTUM-AR', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
+  const room = new MatchRoom3D({ id: 'tv-quantum-armor', seed: 'TV-QUANTUM-AR', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const shielded = room.bots[0];
   shielded.temporaryArmor = 0;
   shielded.armor = 500; // absorve MUITO mais que um tick de dreno
@@ -273,12 +280,14 @@ test('room3d: drain com blindagem NÃO vira número — só vida perdida é info
 });
 
 test('room3d: TSUNAMI vira DAMAGE kind tsunami e atravessa o pipeline até o número do FOLLOW', () => {
-  const room = new MatchRoom3D({ id: 'tv-tsunami-29', seed: 'TV-TSUNAMI-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Priadus' });
+  // Fase 42 — o tsunami canônico (README W4) mora no Arukheea
+  const room = new MatchRoom3D({ id: 'tv-tsunami-29', seed: 'TV-TSUNAMI-29', capacity: 4, botFill: 1, airdrop: false, scenarioId: 'Arukheea' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const victim = room.bots[0];
   victim.y = 0; // nível do mar: submergeBelowY = 90 → dano garantido
-  room.tsunamiTimer = 180; // intervalSeconds do Priadus — dispara no próximo tick
+  room.tsunamiTimer = 180; // intervalSeconds do Arukheea — dispara no próximo tick
   room.tick(0.02);
   const ev = room.spectatorView().events.find((e) => e.type === 'DAMAGE' && e.data.kind === 'tsunami' && e.data.victim === victim.id);
   assert.ok(ev, 'DAMAGE kind tsunami na transmissão');
@@ -303,6 +312,7 @@ test('room3d: TSUNAMI vira DAMAGE kind tsunami e atravessa o pipeline até o nú
 test('sim offline: melee do jogador emite evento com owner/victim/damage/posição', () => {
   const sim = new KhaaosSim3D({ seed: 'MELEE-OFFLINE-28', botCount: 1, airdrop: false });
   sim.start('belt');
+  disembarcarSim(sim); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = sim.bots[0];
   sim.player.weapon = 'sucata';
   sim.player.cooldown = 0;

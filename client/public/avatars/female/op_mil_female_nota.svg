@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg-OP_MIL_FEMALE_NOTA" cx="50%" cy="34%" r="68%">
+      <stop offset="0%" stop-color="#DC26266b"/>
+      <stop offset="58%" stop-color="#0a0a10" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="skin-OP_MIL_FEMALE_NOTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5c3a21"/>
+      <stop offset="100%" stop-color="#3f2716"/>
+    </linearGradient>
+    <linearGradient id="cloth-OP_MIL_FEMALE_NOTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#666671"/>
+      <stop offset="100%" stop-color="#2d2d32"/>
+    </linearGradient>
+    <linearGradient id="accent-OP_MIL_FEMALE_NOTA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff2d2d"/>
+      <stop offset="55%" stop-color="#DC2626"/>
+      <stop offset="100%" stop-color="#9e1b1b"/>
+    </linearGradient>
+    <linearGradient id="hairg-OP_MIL_FEMALE_NOTA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#151515"/>
+      <stop offset="100%" stop-color="#0b0b0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg-OP_MIL_FEMALE_NOTA)"/>
+  <g stroke="#DC2626ff" stroke-opacity="0.35" stroke-width="3" fill="none"><path d="M40 470 H200 M240 480 H470 M60 60 H180 M320 40 H470"/></g>
+  <!-- tronco: jaqueta de facção -->
+  <path d="M148 512 L160 366 Q166 326 206 312 L306 312 Q346 326 352 366 L364 512 Z" fill="url(#cloth-OP_MIL_FEMALE_NOTA)"/>
+  <path d="M170 352 L342 352" stroke="#DC2626" stroke-opacity="0.6" stroke-width="4"/>
+  <path d="M176 386 L336 386" stroke="#DC2626" stroke-opacity="0.32" stroke-width="3"/>
+  <path d="M256 312 L256 470" stroke="#202024" stroke-width="5" stroke-opacity="0.8"/>
+  <path d="M212 318 L218 282 Q256 268 294 282 L300 318 Q256 336 212 318 Z" fill="#39393f"/>
+  <path d="M218 282 Q256 268 294 282" stroke="#DC2626" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="#DC2626" opacity="0.92"/>
+  <rect x="158" y="392" width="30" height="58" rx="6" fill="none" stroke="#00000066" stroke-width="2"/>
+  <rect x="166" y="408" width="14" height="26" rx="3" fill="#0b0b0f" opacity="0.75"/>
+  <path d="M232 268 L280 268 L280 314 Q256 326 232 314 Z" fill="url(#skin-OP_MIL_FEMALE_NOTA)"/>
+  <path d="M232 268 L280 268 L280 288 Q256 298 232 288 Z" fill="#00000030"/>
+  <ellipse cx="176" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_FEMALE_NOTA)"/>
+  <ellipse cx="336" cy="212" rx="10" ry="16" fill="url(#skin-OP_MIL_FEMALE_NOTA)"/>
+  <path d="M199 138 Q204 210 188.39999999999998 248" stroke="url(#hairg-OP_MIL_FEMALE_NOTA)" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="188.39999999999998" cy="250" r="3.4" fill="#e5e7eb" opacity="0.9"/>
+  <path d="M225 138 Q230 210 222.2 248" stroke="url(#hairg-OP_MIL_FEMALE_NOTA)" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="222.2" cy="250" r="3.4" fill="#e5e7eb" opacity="0.9"/>
+  <path d="M251 138 Q256 210 256.0 248" stroke="url(#hairg-OP_MIL_FEMALE_NOTA)" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="256.0" cy="250" r="3.4" fill="#e5e7eb" opacity="0.9"/>
+  <path d="M277 138 Q282 210 289.8 248" stroke="url(#hairg-OP_MIL_FEMALE_NOTA)" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="289.8" cy="250" r="3.4" fill="#e5e7eb" opacity="0.9"/>
+  <path d="M303 138 Q308 210 323.6 248" stroke="url(#hairg-OP_MIL_FEMALE_NOTA)" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="323.6" cy="250" r="3.4" fill="#e5e7eb" opacity="0.9"/>
+  <path d="M188 190 Q188 128 256 122 Q324 128 324 190 Q324 238 298 268 Q278 290 256 290 Q234 290 214 268 Q188 238 188 190 Z" fill="url(#skin-OP_MIL_FEMALE_NOTA)"/>
+  <path d="M196 168 Q256 148 316 168" stroke="#00000022" stroke-width="4" fill="none"/>
+  <path d="M206 196 Q226 188 244 194" stroke="#0e0e0e" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M268 194 Q286 188 306 196" stroke="#0e0e0e" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="225" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="225" cy="212" r="6.4" fill="#e879f9"/>
+  <circle cx="225" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="223" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="287" cy="212" rx="15" ry="9" fill="#f8fafc" opacity="0.94"/>
+  <circle cx="287" cy="212" r="6.4" fill="#e879f9"/>
+  <circle cx="287" cy="212" r="2.6" fill="#0b0b0e"/>
+  <circle cx="285" cy="209.6" r="1.5" fill="#ffffff" opacity="0.9"/>
+  <path d="M256 220 Q252 238 250 244 Q254 248 258 244 Q256 238 256 220" stroke="#00000040" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M238 264 Q256 272 274 264 Q256 280 238 264 Z" fill="#bb2020"/>
+  <path d="M238 264 Q256 270 274 264" stroke="#00000040" stroke-width="2" fill="none"/>
+  <path d="M184 192 Q184 122 256 118 Q328 122 328 192 Q324 142 294 132 Q256 124 218 132 Q188 142 184 192 Z" fill="url(#hairg-OP_MIL_FEMALE_NOTA)"/>
+  <path d="M192 170 Q256 138 320 170" stroke="#ffffff" stroke-opacity="0.08" stroke-width="5" fill="none"/>
+  <path d="M226 300 Q256 316 286 300 L286 316 Q256 332 226 316 Z" fill="#DC2626"/>
+  <path d="M284 308 L306 324 L296 328 Z" fill="#DC2626"/>
+  <circle cx="322" cy="212" r="7" fill="none" stroke="#EAB308" stroke-width="3"/>
+  <circle cx="256" cy="216" r="176" fill="none" stroke="#DC2626" stroke-opacity="0.2" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="256" cy="216" r="206" fill="none" stroke="#72727f" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="500" text-anchor="middle" font-family="system-ui,sans-serif" font-size="26" font-weight="700" fill="#eaf6ff" opacity="0.85" letter-spacing="6">NOTA</text>
+</svg>

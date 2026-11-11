@@ -4,20 +4,22 @@
 // C agacha (toggle), R recarrega, E coleta, Q habilidade local, H medkit, G granada,
 // F gloo, 1..2 slots. Espectador: ←/→ trocam operative acompanhado. Touch: joystick + botões.
 import * as THREE from 'three';
-import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, doorHpFor, windowPaneOnSegment } from './sim3d.js';
+import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW, ZEX_CHANNEL_SECONDS, EXTRACT_XP, doorHpFor, windowPaneOnSegment } from './sim3d.js';
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
 import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, poseWeaponSprint, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
-// Task 56 — locomoção humana: blender determinístico de velocidade + fase de passada
-import { createLocomotionBlend } from './locomotion3d.js';
+import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
+import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
 import { deathFall } from './entities3d.js';
 import { Effects } from './effects3d.js';
 import { GameAudio } from './audio3d.js';
 import { loadAudioMix, saveAudioMix } from './audiomix.js'; // Fase 19 — mixagem KR_AUDIO_*
+import { FrametimeMonitor, drsDecision, tierDecision, budgetFor, RateLimiter, DRS_MIN, DRS_MAX, postFxPlanFor } from './perf3d.js'; // Fase 35 — DRS + auto-tier
+import { loadGfxSettings, saveGfxSettings, effectiveBaseTier } from './gfxsettings.js'; // Fase 35 — settings KR_GFX_*
 import { HUD } from './hud3d.js';
 import { createPostFX } from './postfx3d.js';
 import { resolveQuality, qualityTier } from './quality3d.js';
@@ -26,10 +28,16 @@ import { officerCatalogEntries } from './officers.js';
 import { SCENARIOS, resolveScenario } from './scenarios.js';
 import { getOperativeAbility } from './operativeAbilities.js';
 import { TrainIntro } from './trainIntro.js';
+// Task 53 — TREM OFICIAL DO ZU: viagem a bordo + SSOT do protocolo (fases/grace)
+import { TrainRide } from './trainRide3d.js';
+import { zuTrainPhase, trainRoute, seedHashOf } from '../shared/zuTrain.js';
+import { buildWorldLayout as getWorldLayoutForTrain } from './layout3d.js';
 import { SurvivalFX } from './survivalfx3d.js';
 import { DeathDecalSystem } from './decals3d.js'; // Fase 20 — decal de morte direcional (LOD/decals)
 import { DamageNumbers3D } from './damageNumbers3d.js'; // Fase 27 — números de dano flutuantes
+import { TACTICAL_HOTKEY } from './tacticalmap3d.js'; // Fase 40 — hotkey do mapa tático (fonte única)
 import { SeededRng } from '../shared/rng.js'; // Fase 18 — rng determinístico do FX de combate
+import { refreshPojStrip, refreshPatenteChip } from './pojstrip.js'; // Fase 9 (fix) — painel POJ também no modo local
 import './styles3d.css';
 
 const SIM_DT = 1 / 30;
@@ -47,11 +55,34 @@ export class Game3D {
     const urlParams = new URLSearchParams(location.search);
     this.squadMode = urlParams.get('squad') === '1';
     this.officersMode = urlParams.get('officers') === '1';
+    // Fase 56 — avatar GLB real no corpo do herói (?avatar=<id> da biblioteca).
+    // Contrato do pipeline: QUALQUER falha de carga mantém o corpo procedural.
+    this.avatarOverrideId = avatarById(urlParams.get('avatar') ?? '')?.id ?? null;
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+    this.avatarShowcase = null;        // vitrine de rigs no menu
+    this.avatarShowcaseMixer = null;
     this.quality = resolveQuality({ query: urlParams.get('q'), isTouch: matchMedia('(pointer: coarse)').matches, deviceMemory: navigator.deviceMemory ?? null });
+    // Fase 35 — settings gráficas do jogador (KR_GFX_*): override manual de tier
+    // vence o auto-detect; DRS/auto-tier assumem a partir do tier base efetivo.
+    this.gfx = loadGfxSettings();
+    this.quality = effectiveBaseTier(this.quality, this.gfx);
+    // Fase 35 — laço de performance: EMA de frametime + estado do DRS/tier
+    this.perfMon = new FrametimeMonitor();
+    this.drsState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: Infinity };
+    this.drsScale = 1;
+    this.tierState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: Infinity };
+    this.applyThrottle = new RateLimiter(150);   // aplicações de escala ≥150 ms
+    this.perfHudThrottle = new RateLimiter(500); // telemetria HUD 2 Hz
+    this.basePixelRatio = 1;
     this.sim = new KhaaosSim3D({ seed, botCount: 12, scenarioId: this.scenario.id, spectate: true, squad: this.squadMode, officers: this.officersMode });
     this.audio = new GameAudio();
     // Fase 19 — mixagem persistida (KR_AUDIO_*) aplicada ANTES do primeiro som
     this.audio.setMix(loadAudioMix());
+    // Fase 43 — assinatura acústica por mundo (vento, chuva e piso padrão).
+    this.audio.setWorldAmbience(this.scenario.id, {
+      weather: ['Barburhen', 'Arukheea'].includes(this.scenario.id) ? 'rain' : 'clear',
+    });
     this.input = { ...DEFAULT_INPUT, yaw: 0, pitch: 0 };
     this.keys = new Set();
     this.abilityPending = false;
@@ -60,9 +91,9 @@ export class Game3D {
     this.accumulator = 0;
     this.clock = new THREE.Clock();
     this.animT = 0;
-    this.fpsSprintK = 0;   // Task 56 — suavização do low-ready em 1ª pessoa
     this.zuOpen = true;
     this.ended = false;
+    if (typeof window !== 'undefined') window.__kr = this; // probe de debug/e2e (console)
     // modo online (OnlineGame3D injeta o NetClient3D e substitui this.sim pela view)
     this.net = net;
     this.online = !!net;
@@ -105,9 +136,25 @@ export class Game3D {
     this.initContentSelectors();
     this.initSpectatorUI();
     this.initAudioMixer(); // Fase 19 — painel de mixagem (jogador + espectador)
+    this.initGfxPanel(); // Fase 35 — painel de vídeo/performance (KR_GFX_*)
+    this.initPojPanel(); // Fase 9 (fix) — painel POJ do modal ZU também no modo local
 
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
+  }
+
+  // ---------- Fase 9 (fix) — painel POJ do modal ZU no modo LOCAL ----------
+  // O regramento é público (/poj/state no mesmo origin) e o painel não pode
+  // ficar eternamente em "—" só porque o jogador não entrou em sala online.
+  // Em hospedagens estáticas (sem backend) o fetch falha e o painel permanece
+  // neutro — o jogo nunca quebra. No modo online o OnlineGame3D mantém o
+  // próprio ciclo de 15 s (sem duplicar timers: este método sai cedo lá).
+  initPojPanel() {
+    if (this.online) return;
+    if (!document.querySelector('#pojStrip')) return;
+    refreshPojStrip();
+    refreshPatenteChip();
+    this.pojTimer = setInterval(() => { refreshPojStrip(); refreshPatenteChip(); }, 15000);
   }
 
   // ---------- Fase 19 — painel de mixagem de volume (KR_AUDIO_*) ----------
@@ -137,11 +184,64 @@ export class Game3D {
     }
   }
 
+  // ---------- Fase 35 — painel de vídeo/performance (KR_GFX_*) ----------
+  // Espelha o painel de áudio: toggle + controles → saveGfxSettings imediato.
+  // Trocas que mexem no pipeline (tier/postfx) reconstroem o composer na hora;
+  // sens/shake/fps/drs são lidos a cada frame/uso — nada a reaplicar.
+  // Headless-safe: tudo atrás da existência do DOM.
+  initGfxPanel() {
+    const btn = document.querySelector('#gfxBtn');
+    const panel = document.querySelector('#gfxPanel');
+    if (!btn || !panel) return;
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+      this.audio?.ui?.();
+    });
+    const tierSel = panel.querySelector('[data-gfx="tier"]');
+    const checks = ['postfx', 'drs', 'fps'].map((k) => panel.querySelector(`[data-gfx="${k}"]`));
+    const shake = panel.querySelector('[data-gfx="shake"]');
+    const sens = panel.querySelector('[data-gfx="sens"]');
+    const out = (k) => panel.querySelector(`[data-out="${k}"]`);
+    const sync = () => {
+      if (tierSel) tierSel.value = this.gfx.tier;
+      for (const [i, k] of ['postfx', 'drs', 'fps'].entries()) {
+        const c = checks[i];
+        if (c) c.checked = !!this.gfx[k];
+      }
+      if (shake) shake.value = String(Math.round(this.gfx.shake * 100));
+      if (sens) sens.value = String(Math.round(this.gfx.sens * 100));
+      const so = out('shake'); if (so) so.textContent = `${shake?.value ?? 100}%`;
+      const po = out('sens'); if (po) po.textContent = `${sens?.value ?? 100}%`;
+    };
+    sync();
+    const commit = (partial) => {
+      this.gfx = saveGfxSettings(partial);
+      sync();
+      if ('tier' in partial && this.renderer) {
+        // override manual: cancela degraus do auto-tier e aplica o tier pedido
+        this.tierState = { overloadHold: 0, recoverHold: 0, lastChangeAgo: 0 };
+        this.applyTierRuntime(effectiveBaseTier(this.quality, this.gfx));
+      }
+      if ('postfx' in partial && this.renderer) this.rebuildPost();
+      this.audio?.ui?.();
+    };
+    tierSel?.addEventListener('change', () => commit({ tier: tierSel.value }));
+    for (const [i, k] of ['postfx', 'drs', 'fps'].entries()) {
+      checks[i]?.addEventListener('change', () => commit({ [k]: checks[i].checked }));
+    }
+    shake?.addEventListener('input', () => commit({ shake: Number(shake.value) / 100 }));
+    sens?.addEventListener('input', () => commit({ sens: Number(sens.value) / 100 }));
+  }
+
   // ---------- infra (protegidos: reusados pelo OnlineGame3D) ----------
   initRenderer() {
     this.renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#arena3d'), antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(innerWidth, innerHeight);
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio));
+    // Fase 35 — pixelRatio BASE do tier (cap); a escala DRS multiplicada é
+    // aplicada por applyRenderScale() (inicia em 1.0 = comportamento antigo).
+    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(this.quality).pixelRatio);
+    this.renderer.setPixelRatio(this.basePixelRatio);
+    this.drsScale = 1;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -155,17 +255,88 @@ export class Game3D {
     });
   }
 
-  // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback render direto)
+  // pós-processamento Live Action (bloom + grade); ?fx=0 desliga (fallback direto).
+  // Fase 35 — o plano vem do TIER real (perf3d.postFxPlanFor): SSR só no high;
+  // a setting KR_GFX postfx desliga o composer inteiro (achado G2 corrigido —
+  // antes o tier médio pagava SSR completo via quality:'high' hardcoded).
   initPost() {
     const fxOff = new URLSearchParams(location.search).get('fx') === '0';
-    if (fxOff || !qualityTier(this.quality).bloom) { this.post = null; return; }
-    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: 'high' });
+    if (fxOff || !this.gfx.postfx || !postFxPlanFor(this.quality)) { this.post = null; return; }
+    this.post = createPostFX(this.renderer, this.scene, this.camera, { quality: this.quality });
+  }
+
+  // Fase 35 — reconstrói o composer pós troca de tier/setting (alvo raro:
+  // dwell de 10 s entre tiers; toggle de setting é ação do usuário).
+  rebuildPost() {
+    const old = this.post;
+    this.initPost();
+    if (this.post) this.post.setSize(innerWidth, innerHeight);
+    old?.composer?.dispose?.();
+  }
+
+  // Fase 35 — aplica a escala DRS ao pipeline (throttle 150 ms; muda pixelRatio
+  // e propaga p/ os render targets do composer — a UI DOM fica nítida, só o 3D
+  // é renderizado na escala reduzida).
+  applyRenderScale() {
+    if (!this.renderer) return;
+    const pr = this.basePixelRatio * this.drsScale;
+    if (Math.abs(this.renderer.getPixelRatio() - pr) < 0.01) return;
+    this.renderer.setPixelRatio(pr);
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.post?.setSize(innerWidth, innerHeight);
+  }
+
+  // Fase 35 — troca ESTRUTURAL de tier em runtime: cap de pixelRatio, resolução
+  // do shadow map do sol (dispose do alvo antigo) e plano de pós-FX.
+  applyTierRuntime(tier) {
+    if (!this.renderer) return;
+    this.quality = tier;
+    this.basePixelRatio = Math.min(devicePixelRatio, qualityTier(tier).pixelRatio);
+    const q = qualityTier(tier);
+    if (this.sun) {
+      const size = q.shadowMapSize;
+      if (this.sun.shadow.mapSize.width !== size) {
+        this.sun.shadow.mapSize.set(size, size);
+        if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+      }
+    }
+    this.rebuildPost();
+    this.applyRenderScale();
+    this.hud?.feed('Sistemas', `Perfil gráfico: ${tier.toUpperCase()} (adaptativo).`);
+  }
+
+  // Fase 35 — laço de performance por frame: mede dt (custo do frame ANTERIOR),
+  // decide DRS e, se o piso não bastou, degrau de tier. Com gfx.drs off, o
+  // monitor continua (telemetria), mas nenhuma decisão altera o pipeline.
+  updatePerf(dt) {
+    const budget = budgetFor(this.quality);
+    const ema = this.perfMon.push(dt, budget);
+    if (!this.perfMon.warmed) return;
+    if (this.gfx.drs) {
+      const d = drsDecision({ emaMs: ema, budgetMs: budget, scale: this.drsScale, state: this.drsState, dt });
+      this.drsState = d.state;
+      this.drsScale = d.scale;
+      if (d.changed && this.applyThrottle.ready()) this.applyRenderScale();
+    }
+    if (this.gfx.tier === 'auto') {
+      const t = tierDecision({ emaMs: ema, budgetMs: budget, tier: this.quality, drsScale: this.gfx.drs ? this.drsScale : 1, state: this.tierState, dt });
+      this.tierState = t.state;
+      if (t.changed) { this.perfMon.reset(); this.applyTierRuntime(t.tier); }
+    }
+    if (this.gfx.fps && this.perfHudThrottle.ready()) {
+      this.hud?.setPerf(this.perfMon.fps(), this.gfx.drs ? this.drsScale : 1, this.quality);
+    }
   }
 
   initWorld() {
     const { scene, sun } = buildScene(this.seed, this.scenario.id, this.renderer, this.quality); // cenário + envmap PBR (renderer)
     this.scene = scene;
     this.sun = sun;
+    // F41 — exposição ACES POR CENÁRIO: o perfil de luz (world3d.lightingProfile)
+    // traz a exposição do mood de cada mundo (noite gélida 1.12 … deserto 1.30);
+    // 1.24 permanece como fallback se o perfil não chegar (cenário sem perfil).
+    const lpExposure = scene.userData?.lighting?.exposure;
+    if (Number.isFinite(lpExposure) && lpExposure > 0) this.renderer.toneMappingExposure = lpExposure;
     this.ringWall = createRingWall();
     scene.add(this.ringWall);
     this.effects = new Effects(scene, {
@@ -201,6 +372,7 @@ export class Game3D {
     this.playerOp = createOperative({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary, variant: this.selectedOperative.id });
     this.scene.add(this.playerOp.group);
     this.playerOp.group.visible = this.viewMode !== 'fps';
+    this.#applyAvatarOverride(); // Fase 56 — corpo GLB real se ?avatar= válido; senão procedural
     this.firstPersonRig = createFirstPersonRig({ skin: this.selectedOperative.colors.skinTone, vest: this.selectedOperative.colors.primary });
     this.firstPersonRig.visible = this.viewMode === 'fps';
     this.playerWeapon = null;
@@ -223,7 +395,7 @@ export class Game3D {
         );
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally, loco: createLocomotionBlend() });
+        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
       });
     }
     // loot
@@ -251,6 +423,9 @@ export class Game3D {
     if (scenarioName) scenarioName.textContent = `${this.scenario.shortLabel} // ${this.scenario.mapLabel}`;
     const selectionStatus = document.querySelector('#contentSelectionStatus');
     if (selectionStatus) selectionStatus.textContent = 'Aplicado no modo local. A habilidade individual é acionada com Q; o modo online ainda não a sincroniza.';
+    // Fase 56 — vitrine de avatares GLB no menu (rigs reais, animação ao vivo)
+    const avatarBarHost = document.querySelector('.content-selection');
+    if (avatarBarHost) this.#initAvatarVitrine(avatarBarHost);
 
     const select = document.querySelector('#operativeSelect');
     if (!select) return;
@@ -266,6 +441,14 @@ export class Game3D {
     }
     select.replaceChildren(...this.#operativeOptions());
     select.value = this.selectedOperative.id;
+    // Fase 11 (fix) — o rótulo "16 DISPONÍVEIS" era fixo no HTML e ficou
+    // desatualizado quando o catálogo cresceu (operativos + insígnias OCE).
+    // A contagem real vem das opções recém-montadas — nunca dessincroniza.
+    const operativeLabel = document.querySelector('label[for="operativeSelect"]');
+    if (operativeLabel && this.#selectableOperatives?.length) {
+      const total = this.#selectableOperatives.length;
+      operativeLabel.textContent = `OPERATIVO CANÔNICO · ${total} ${total === 1 ? 'DISPONÍVEL' : 'DISPONÍVEIS'}`;
+    }
     this.renderOperativeCard(this.selectedOperative);
     select.addEventListener('change', () => {
       if (this.sim.started) return;
@@ -288,6 +471,7 @@ export class Game3D {
         : { skin: operative.colors.skinTone, vest: operative.colors.primary });
       this.playerOp.group.visible = this.viewMode !== 'fps';
       this.scene.add(this.playerOp.group);
+      this.#applyAvatarOverride(); // Fase 56 — recoloca o corpo GLB no novo playerOp
       this.firstPersonRig?.traverse((node) => {
         // Fase 10 — recolor alcança apenas manga/colete (tintable); pele/luva/dedos mantêm cor
         if (node.isMesh && node.userData?.tintable && node.material?.color) node.material.color.set(operative.colors.primary);
@@ -369,12 +553,12 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
-    // Task 56 — FIX-RAIZ do "personagem quadrado/sem corpo": o rig de 1ª pessoa
-    // (braços orgânicos + arma) é FILHO DA CÂMERA, e a câmera nunca foi add() à
-    // cena — filhos de nó fora do grafo NUNCA renderizam. O jogador via só a
-    // mira flutuando (zero corpo) desde sempre.
+    // Task 59 (sessão 56) — FIX-RAIZ do "personagem quadrado/sem corpo": o rig
+    // de 1ª pessoa (braços orgânicos + arma) é FILHO DA CÂMERA, e a câmera
+    // nunca foi add() à cena — filhos de nó fora do grafo NUNCA renderizam. O
+    // jogador via só a mira flutuando (zero corpo) desde sempre.
     this.scene.add(this.camera);
-    // Task 56 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
+    // Task 59 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
     // curto (~3 m) — ilumina só braços/arma (o sol da cena bate nas costas do
     // rig e o deixava uma silhueta preta ilegível).
     const vmLight = new THREE.PointLight('#fff2df', .9, 3.2, 2);
@@ -384,8 +568,8 @@ export class Game3D {
       this.camera.add(this.firstPersonRig);
       this.firstPersonWeapon = createWeaponModel(this.sim.player.weapon);
       this.firstPersonRig.add(this.firstPersonWeapon.group);
-      // Task 56 — viewmodel canônico: arma à DIREITA da mira e angulada p/ dentro
-      // (antes: x=0 — o fuzil de costas cobria a mira no centro da tela)
+      // Task 59 — viewmodel canônico: arma à DIREITA da mira e angulada p/ dentro
+      // (antes: x=0 — a arma de costas cobria a mira no centro da tela)
       this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
       this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
     }
@@ -404,7 +588,9 @@ export class Game3D {
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.pointerLocked) return;
-      const sens = this.input.ads ? .0011 : .0021;
+      // Fase 35 — sensibilidade do jogador (KR_GFX_*, 0.3..2.5×); ADS mantém a
+      // razão antiga (~0.52× do hip fire).
+      const sens = (this.input.ads ? .0011 : .0021) * (this.gfx?.sens ?? 1);
       this.input.yaw -= e.movementX * sens;
       this.input.pitch -= e.movementY * sens;
       this.input.pitch = Math.max(-1.35, Math.min(1.35, this.input.pitch));
@@ -433,6 +619,8 @@ export class Game3D {
       if (k === 'c') this.input.crouch = true;
       if (k === 'g') this.input.throw = true;      // Fase 4 — granada FRAG
       if (k === 'f') this.input.gloo = true;       // Fase 4 — Gloo Wall
+      // Fase 40 — mapa tático em tela cheia (toggle; a partida NUNCA pausa)
+      if (k === TACTICAL_HOTKEY && !e.repeat) this.hud?.toggleMap();
       if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
       // Fase 5 — espectador: troca o operativo acompanhado
       if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
@@ -440,7 +628,7 @@ export class Game3D {
       // troca de slot: offline aplica na sim; online agenda no próximo input
       if (k === '1') this.sim.switchSlot(1);
       if (k === '2') this.sim.switchSlot(2);
-      if (k === 'escape' && this.pointerLocked) document.exitPointerLock();
+      if (k === 'escape') { if (this.pointerLocked) document.exitPointerLock(); this.hud?.closeMap(); } // F40 — Esc fecha o mapa
     });
     document.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
   }
@@ -448,9 +636,132 @@ export class Game3D {
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
 
   // ---------- fluxo ----------
+  // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
+  // Contrato (hero3d/avatars3d): asset OPCIONAL — qualquer falha mantém o
+  // corpo procedural de createOperative(); nada aqui pode quebrar o boot.
+  #removeAvatarModel() {
+    if (this.avatarRoot?.parent) this.avatarRoot.parent.remove(this.avatarRoot);
+    this.avatarRoot = null;
+    this.avatarMixer = null;
+  }
+
+  #setProceduralBodyVisible(visible) {
+    const g = this.playerOp?.group;
+    if (!g) return;
+    const keep = new Set();
+    const wr = g.userData?.weaponRig?.group; // arma continua viva sobre o corpo GLB
+    if (wr) wr.traverse((o) => keep.add(o));
+    const shadow = this.playerOp?.parts?.shadow; // sombra de contato canônica
+    if (shadow) shadow.traverse((o) => keep.add(o));
+    g.traverse((o) => {
+      if (o === this.avatarRoot || keep.has(o) || o.userData?.avatarAsset) return;
+      if (o.isMesh || o.isSkinnedMesh) o.visible = visible;
+    });
+  }
+
+  async #applyAvatarOverride() {
+    this.#removeAvatarModel();
+    const id = this.avatarOverrideId;
+    if (!id) return;
+    const a = await loadAvatarGlb(id);
+    const g = this.playerOp?.group;
+    if (!a?.root || !g) { this.#setProceduralBodyVisible(true); return; }
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    this.avatarRoot = a.root;
+    this.#setProceduralBodyVisible(false); // corpo procedural dorme; GLB assume
+    g.add(a.root);
+    if (a.clips?.length) {
+      this.avatarMixer = new THREE.AnimationMixer(a.root);
+      this.avatarMixer.clipAction(a.clips[0]).play();
+    }
+  }
+
+  #initAvatarVitrine(host) {
+    const bar = document.createElement('div');
+    bar.className = 'avatar-glb-bar';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'AVATARES GLB // RIGS REAIS (FASE 56)';
+    const strip = document.createElement('div');
+    strip.className = 'avatar-glb-strip';
+    for (const a of AVATAR_GLB_LIBRARY) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'avatar-glb-chip';
+      chip.dataset.avatarId = a.id;
+      chip.textContent = `${a.tier === 'animated' ? '▶ ' : a.tier === 'rigged' ? '◆ ' : '○ '}${a.id}`;
+      chip.title = `Pré-visualizar ${a.id} (${a.tier === 'animated' ? 'animação embutida' : a.tier === 'rigged' ? 'rig real' : 'estático'})`;
+      chip.addEventListener('click', () => this.#showAvatarShowcase(a.id, chip));
+      strip.appendChild(chip);
+    }
+    const hint = document.createElement('small');
+    hint.className = 'avatar-glb-hint';
+    hint.id = 'avatarGlbHint';
+    hint.textContent = 'Clique para pré-visualizar girando · para JOGAR com o corpo real: ?avatar=<id>';
+    bar.append(label, strip, hint);
+    host.appendChild(bar);
+  }
+
+  async #showAvatarShowcase(id, chip = null) {
+    const a = await loadAvatarGlb(id);
+    if (!a?.root) {
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `avatar ${id} indisponível — o corpo procedural segue no jogo`;
+      return;
+    }
+    this.#removeAvatarShowcase();
+    normalizeAvatarScale(a.root);
+    fitAvatarToGround(a.root);
+    a.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = false; o.receiveShadow = false; } }); // vitrine não suja sombra do mundo
+    // palco próprio: container giratório com key/fill lights + pedestal — o
+    // menu é noturno e o GLB não pode depender das luzes do mundo para ler
+    const stage = new THREE.Group();
+    stage.name = 'avatar_glb_stage';
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(.85, .95, .06, 28),
+      new THREE.MeshStandardMaterial({ color: 0x1a1420, roughness: .8, metalness: .3, emissive: 0x2a1f33, emissiveIntensity: .35 }),
+    );
+    pedestal.position.y = .03;
+    stage.add(pedestal);
+    const key = new THREE.DirectionalLight(0xfff2dd, 2.4); key.position.set(1.8, 3.4, 2.2); stage.add(key);
+    const fill = new THREE.DirectionalLight(0x7d9dff, .9); fill.position.set(-2.2, 1.6, 1.4); stage.add(fill);
+    const rim = new THREE.DirectionalLight(0xffd27d, 1.2); rim.position.set(0, 2.2, -2.6); stage.add(rim);
+    stage.add(a.root);
+    a.root.position.y = .06; // sobre o pedestal
+    this.avatarShowcase = stage;
+    this.scene.add(stage);
+    // palco: na frente da câmera do menu e DESLOCADO À DIREITA (fora do painel
+    // DOM — o rig fica visível na área livre da tela), pés ~0.9 m abaixo do olho
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const pos = this.camera.position.clone().add(dir.multiplyScalar(3.0)).add(right.multiplyScalar(1.35));
+    pos.y -= 0.92;
+    stage.position.copy(pos); // o PALCO viaja para frente da câmera (a.root vive dentro dele)
+    if (a.clips?.length) {
+      this.avatarShowcaseMixer = new THREE.AnimationMixer(a.root);
+      this.avatarShowcaseMixer.clipAction(a.clips[0]).play();
+    }
+    if (chip) {
+      for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      const h = document.querySelector('#avatarGlbHint');
+      if (h) h.textContent = `pré-visualizando ${id} — para jogar com este corpo: ?avatar=${id}`;
+    }
+  }
+
+  #removeAvatarShowcase() {
+    if (this.avatarShowcase?.parent) this.scene.remove(this.avatarShowcase);
+    this.avatarShowcase = null;
+    this.avatarShowcaseMixer = null;
+    for (const c of document.querySelectorAll('.avatar-glb-chip.is-active')) c.classList.remove('is-active');
+  }
+
   startMatch(entry) {
     this.audio.init(); this.audio.resume();
     this.sim.start(entry);
+    this.#removeAvatarShowcase(); // Fase 56 — vitrine de rigs sai quando a partida começa
     this.damageNumbers?.clear(); // Fase 27 — partida nova, tela limpa
     this.zuOpen = false;
     this.hud.hideZu();
@@ -460,7 +771,10 @@ export class Game3D {
     this.playerWeapon = attachWeapon(this.playerOp.parts, this.playerOp.group, this.sim.player.weapon);
     // Fase 11 — ZU: o trem cruza a zona e o desembarque aéreo começa (só câmera;
     // a sim continua autoritativa — nenhum input é bloqueado).
-    this.startTrainIntro();
+    // Task 53 — protocolo OFICIAL: a entrada é a VIAGEM a bordo (embarque → rota
+    // → portas → chegada → grace 15 s). A cinemática curta permanece p/ o QTE
+    // de descarrilamento (suite zu-derail-qte) — não é mais a entrada.
+    this.startTrainRide();
   }
 
   // Fase 11 — cinemática do trem do ZU (offline e online; skippable).
@@ -481,6 +795,74 @@ export class Game3D {
       });
       this.hud.feed('ZU', 'Trem de infiltração chegando — desembarque no Ring autorizado.', 'warn');
     } catch { /* cinematic é best-effort — nunca bloqueia a partida */ }
+  }
+
+  // Task 53 — TREM OFICIAL DO ZU: câmera a bordo do vagão (protocolo completo:
+  // embarque → rota → portas → chegada). Só apresentação — regras na SSOT/autoridade.
+  startTrainRide(startAt = 0) {
+    if (this.sim.trainT === null && !this.online) return; // entrada sem trem (portal)
+    try {
+      const spawn = this.sim.world?.playerSpawn
+        ?? getWorldLayoutForTrain(this.seed, this.scenario?.id ?? 'CIGKV').playerSpawn;
+      this.trainRide = new TrainRide({
+        scene: this.scene,
+        route: this.sim.trainRoutePts ?? trainRoute(spawn, seedHashOf(this.seed)),
+        startAt,
+        onDone: (reason) => this.#endTrainRide(reason),
+        onPhase: (phase) => this.#onTrainPhase(phase),
+      });
+    } catch { /* visual best-effort — o protocolo segue autoritativo */ }
+  }
+
+  // Task 53 — fases do protocolo no HUD/rádio ZU (a bordo).
+  #onTrainPhase(phase) {
+    if (phase === 'embarque') this.hud.feed('ZU', 'EMBARQUE — todos os operativos a bordo. Portas fechando.', 'warn');
+    else if (phase === 'em_rota') {
+      this.hud.setMatchStatus('TREM EM ROTA // PORTAS FECHADAS');
+      this.hud.feed('ZU', 'Em rota ao Ring — ataques liberados apenas 15 s APÓS a chegada.', 'warn');
+    } else if (phase === 'portas') {
+      this.hud.setMatchStatus('PORTAS ABERTAS // ESPAÇO = SALTAR');
+      this.hud.feed('ZU', 'PORTAS ABERTAS — ESPAÇO salta (entrada oficial). Seguir até o destino também é oficial.', 'warn');
+    }
+  }
+
+  // Task 53 — pedido de salto de porta (borda de ESPAÇO na janela das portas).
+  #requestDoorJump() {
+    const p = this.sim.player;
+    if (!p?.trainOnboard || this.ended) return;
+    if (this.online) { this.net?.sendDoorJump?.(); return; }
+    if (this.sim.doorJump?.()) {
+      this.audio?.wind?.(true, 0.2);
+      this.hud.feed('ZU', 'Salto de porta executado — entrada oficial registrada no protocolo.', 'warn');
+    }
+  }
+
+  // Task 53 — handover da câmera (salto ou chegada) + limpeza do vagão.
+  #endTrainRide(reason) {
+    if (!this.trainRide) return;
+    this.trainRide.dispose();
+    this.trainRide = null;
+    if (reason === 'arrived') this.hud.feed('ZU', 'CHEGADA — desembarque concluído no Ring.', 'warn');
+  }
+
+  // Task 53 — HUD do protocolo por frame (countdown do grace + fases a bordo).
+  updateTrainHud() {
+    const info = this.online
+      ? this._zuTrainView ?? null
+      : (Number.isFinite(this.sim.trainT) ? {
+          phase: zuTrainPhase(this.sim.trainT * 1000),
+          playerOnboard: !!this.sim.player?.trainOnboard,
+          combatLockedRemainingS: Math.max(0, this.sim.combatLockedUntil - this.sim.trainT),
+        } : null);
+    if (!info) return;
+    if (info.phase === 'grace') {
+      const s = Math.ceil(info.combatLockedRemainingS ?? 0);
+      this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${s}s`);
+    } else if (info.phase === 'combate' && !this._combatStatusSet) {
+      this._combatStatusSet = true;
+      this.hud.setMatchStatus('COMBATE LIVRE // RING');
+      this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+    }
   }
 
   // Fase 26 — consequências do QTE do trem (APENAS offline: a sim local é
@@ -627,8 +1009,10 @@ export class Game3D {
     this.camera.position.lerp(finalPos, Math.min(1, dt * 5));
     this.camera.lookAt(t.x, t.y + 1.35, t.z);
     if (this.shake > 0.001) {
-      this.camera.position.x += (Math.random() - .5) * this.shake;
-      this.camera.position.y += (Math.random() - .5) * this.shake;
+      // Fase 35 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      const amp = this.shake * (this.gfx?.shake ?? 1);
+      this.camera.position.x += (Math.random() - .5) * amp;
+      this.camera.position.y += (Math.random() - .5) * amp;
       this.shake *= Math.exp(-dt * 6.5);
     }
     const targetFov = 62;
@@ -846,28 +1230,42 @@ export class Game3D {
     }
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
+    // Fase 42 — passada do jogador LOCAL travada em DISTÂNCIA PREDITA: a fase
+    // avança pelos metros percorridos (não pelo relógio) → os pés aterrisam
+    // onde o corpo chega (zero patinação) e os heel strikes viram o relógio
+    // físico do áudio de passos.
+    this._gait ??= newGait();
+    advanceGait(this._gait, { x: p.x, z: p.z, dt });
+    if (p.alive && !p.dropPhase && !p.knocked && this.audio) {
+      for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
+    }
     const airborne = !!p.dropPhase;
-    // Task 56 — LOCOMOÇÃO HUMANA: o alvo binário da sim (0/.8/1.2) passa pelo
-    // blender por ator (aceleração/frenagem exponenciais) e a fase da passada é
-    // INTEGRADA — trocar andar↔sprint ajusta a cadência, nunca teleporta a pose.
-    const loco = (this.playerLoco ??= { blend: createLocomotionBlend(), dip: 0, wasGround: !!p.onGround, fallV: 0 });
+    // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA: sprintK com CONSTANTE DE
+    // TEMPO PRÓPRIA por ator (peso do corpo — banda instantânea de speedNorm
+    // atravessava em ~1 frame na frenagem exponencial); ADS/crouch/fire
+    // erguem na hora (hint false).
+    const skT = (!p.alive || p.knocked || p.ads || p.crouching || !p.sprinting) ? 0 : 1;
+    this._sk ??= 0;
+    this._sk += (skT - this._sk) * (1 - Math.exp(-(skT > this._sk ? 5.5 : 7) * dt));
+    if (this._sk < 1e-4) this._sk = 0;
+    // Task 59 — DIP DE POUSO: pico de vy na transição ar→chão vira absorção
+    // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
+    this._dip ??= { v: 0, wasGround: !!p.onGround, fallV: 0 };
+    const groundedNow = !!p.onGround;
+    if (groundedNow && !this._dip.wasGround) this._dip.v = Math.min(.12, Math.max(0, -(this._dip.fallV ?? 0)) * .016);
+    this._dip.wasGround = groundedNow;
+    this._dip.fallV = groundedNow ? 0 : (p.vy ?? 0);
+    this._dip.v *= Math.exp(-dt * 6.5);
     const pFx = animateOperative(this.playerOp.parts, {
-      t: this.animT,
-      ...loco.blend.update(dt, (!p.alive || p.knocked) ? 0 : (p.moving ? (p.sprinting ? 1.2 : .8) : 0), { sprint: !!(p.alive && p.sprinting && !p.ads && !p.crouching) }),
+      t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
+      sprintK: this._sk, // Task 59 — low-ready do sprint (suavizado por ator)
     });
-    // Task 56 — DIP DE POUSO: pico de vy na transição ar→chão vira absorção
-    // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
-    const groundedNow = !!p.onGround;
-    if (groundedNow && !loco.wasGround) loco.dip = Math.min(.12, Math.max(0, -(loco.fallV ?? 0)) * .016);
-    loco.wasGround = groundedNow;
-    loco.fallV = groundedNow ? 0 : (p.vy ?? 0);
-    loco.dip *= Math.exp(-dt * 6.5);
-    // Task 56 — arma em 3ª pessoa acompanha o low-ready do sprint
+    // Task 59 — arma em 3ª pessoa acompanha o low-ready do sprint
     poseWeaponSprint(this.playerOp.group.userData.weaponRig, pFx?.sprintK ?? 0);
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
@@ -876,6 +1274,10 @@ export class Game3D {
       this.playerOp.parts.legL.hip.rotation.x = .5 + flap * .25;
       this.playerOp.parts.legR.hip.rotation.x = .35 - flap * .25;
     }
+    // Fase 56 — mixers dos avatares GLB (herói com corpo real + vitrine do menu)
+    if (this.avatarMixer) this.avatarMixer.update(dt);
+    if (this.avatarShowcaseMixer) this.avatarShowcaseMixer.update(dt);
+    if (this.avatarShowcase) this.avatarShowcase.rotation.y += dt * 0.6;
     // troca de arma visual (Fase 7 — skin por raridade acompanha a troca)
     // Fase 30 — anexos dos 4 sockets + estágio evolutivo mítico também reconstroem
     // Fase 32 — skin mítica POR ARMA (cor/fit do catálogo) + raridade dos anexos
@@ -929,7 +1331,7 @@ export class Game3D {
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null, loco: createLocomotionBlend() };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
         this.botOps.set(b.id, entry);
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
@@ -989,16 +1391,30 @@ export class Game3D {
       // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
       // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      // Task 56 — bots atravessam o MESMO blender (fase integrada por ator);
-      // idle de verdade a 0 — respiração/transferência de peso do idle animam.
-      const bloco = (entry.loco ??= createLocomotionBlend());
-      const bL = bloco.update(dt, (!b.alive || b.knocked || b.dropPhase) ? 0 : (b.moving ? .9 : 0));
-      const bFx = (parts && !entry.frozen)
-        ? animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), ...bL, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) })
-        : null;
-      // Task 56 — arma em 3ª pessoa acompanha o low-ready (bots ficam no regime
-      // de patrulha: sprintK 0 — hook pronto para oficiais em sprint)
-      poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
+      // Fase 42 — passada dos REMOTOS travada em DISTÂNCIA INTERPOLADA:
+      // fase avança pelos metros que o ator realmente percorreu (Δ do snapshot
+      // interpolado) e speedNorm é o EWMA da velocidade real (0..1.25) — o
+      // binário .9/.15 (patinação + "rotor") foi aposentado. Heel strikes a
+      // menos de 22 m do ouvinte viram passos audíveis com atenuação.
+      if (parts && !entry.frozen) {
+        entry.gait ??= newGait();
+        advanceGait(entry.gait, { x: b.x, z: b.z, dt });
+        const gsn = Math.max(b.moving ? .12 : 0, entry.gait.speed);
+        // Task 59 — low-ready dos remotos: só oficiais sprintam (hook); estado
+        // por ator com a mesma constante de tempo do jogador.
+        const bSkT = (b.sprinting && !b.ads && !b.crouching) ? 1 : 0;
+        entry.sk ??= 0;
+        entry.sk += (bSkT - entry.sk) * (1 - Math.exp(-(bSkT > entry.sk ? 5.5 : 7) * dt));
+        if (entry.sk < 1e-4) entry.sk = 0;
+        const bFx = animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
+        poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
+        if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
+          const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
+          if (dListener < 22) {
+            for (const _strike of entry.gait.events) this.audio.step(.2 + .5 * entry.gait.speed, dListener, this.audio.worldAmbience.surface);
+          }
+        }
+      }
       // Fase 26 — silhueta LARANJA do fieldScan (revelado atrás de cobertura):
       // offline revela por revealedTicks; online pelo flag revealed do snapshot.
       this.#setBotRevealGlow(entry, !!(b.revealedTicks > 0 || b.revealed));
@@ -1053,6 +1469,16 @@ export class Game3D {
   }
 
   updateCamera(dt) {
+    // Task 53 — TREM OFICIAL: câmera a bordo do vagão até o salto/chegada
+    if (this.trainRide && !this.trainRide.done) {
+      this.trainRide.update(dt);
+      this.trainRide.cameraPose(this.camera);
+      // salto (jogador saiu) ou chegada encerram a viagem — handover imediato
+      if (this.sim.player && !this.sim.player.trainOnboard) {
+        this.trainRide.end(this.trainRide.elapsedS() >= 16 ? 'arrived' : 'jumped');
+      }
+      return;
+    }
     // Fase 11 — cinemática do trem do ZU captura a câmera até o handover
     if (this.trainIntro && !this.trainIntro.done) {
       this.trainIntro.update(dt);
@@ -1071,11 +1497,10 @@ export class Game3D {
       this.camera.position.lerp(eye, Math.min(1, dt * 18));
       this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
       this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
-      // Task 56 — câmera VIVA: bob vertical (contrato Fase 5) + balanço lateral
+      // Task 59 — câmera VIVA: bob vertical (contrato Fase 5) + balanço lateral
       // ELÍPTICO em espaço local da câmera + dip de pouso vindo do syncEntities.
       const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
-      const loco = this.playerLoco;
-      const dip = loco?.dip ?? 0;
+      const dip = this._dip?.v ?? 0;
       const bobX = (p.alive && !p.dropPhase && p.moving) ? Math.cos(this.cameraSway * .5) * (p.sprinting ? .014 : .006) : 0;
       this.camera.position.y += bob - dip;
       this.camera.translateX(bobX);
@@ -1085,29 +1510,27 @@ export class Game3D {
       // Fase 10 — mãos articuladas: grip + indicador no gatilho + micro-vida;
       // flinch da própria câmera quando o jogador é atingido (roll + recuo)
       poseFirstPersonHands(this.firstPersonRig, { curl: .8 + this.camKick * 2.2, trigger: this.input.fire ? 1 : 0, breathe: Math.sin(this.animT * 2.1) * .03 });
-      // Task 56 — SPRINT em 1ª pessoa: arma e braços abaixam (low-ready) e
+      // Task 59 — SPRINT em 1ª pessoa: arma e braços abaixam (low-ready) e
       // voltam à mira ao atirar/mirar; pose ABSOLUTA a partir da base gravada
       // no rig (sem drift acumulado entre frames).
-      // sprintK já sai SUAVIZADO do blender (constante de tempo do corpo);
-      // fire/ADS erguem a arma na hora (gate local).
-      const sprintRaw = (!p.ads && !this.input.fire) ? (loco?.blend.sprintK ?? 0) : 0;
-      this.fpsSprintK += (sprintRaw - this.fpsSprintK) * Math.min(1, dt * 10);
-      const sk = this.fpsSprintK;
+      const sprintRaw = (!p.ads && !this.input.fire) ? (this._sk ?? 0) : 0;
+      this.fpsSprintK = (this.fpsSprintK ?? 0) + (sprintRaw - (this.fpsSprintK ?? 0)) * Math.min(1, dt * 10);
+      const skF = this.fpsSprintK;
       const arms = this.firstPersonRig.userData.arms;
       if (arms) {
         const bL = arms.armL.userData.base, bR = arms.armR.userData.base;
-        arms.armL.rotation.x = bL.x + sk * .3;
-        arms.armR.rotation.x = bR.x + sk * .34;
-        arms.armR.rotation.y = bR.y - sk * .18;
-        arms.armL.rotation.y = bL.y + sk * .1;
+        arms.armL.rotation.x = bL.x + skF * .3;
+        arms.armR.rotation.x = bR.x + skF * .34;
+        arms.armR.rotation.y = bR.y - skF * .18;
+        arms.armL.rotation.y = bL.y + skF * .1;
       }
       if (this.firstPersonWeapon) {
         const wg = this.firstPersonWeapon.group;
         const wb = (wg.userData.sprintBase ??= { rx: wg.rotation.x, py: wg.position.y, pz: wg.position.z });
-        wg.rotation.x = wb.rx - sk * .42;
-        wg.rotation.y = sk * .26;
-        wg.position.y = wb.py - sk * .07;
-        wg.position.z = wb.pz + sk * .05;
+        wg.rotation.x = wb.rx - skF * .42;
+        wg.rotation.y = skF * .26;
+        wg.position.y = wb.py - skF * .07;
+        wg.position.z = wb.pz + skF * .05;
       }
       const hf = this.hitFX.get('player');
       if (hf) {
@@ -1166,9 +1589,11 @@ export class Game3D {
     this.camera.lookAt(lookTarget);
     // Fase 4 — tremor de explosão (só câmera; mira intacta)
     if (this.shake > 0.001) {
-      this.camera.position.x += (Math.random() - .5) * this.shake;
-      this.camera.position.y += (Math.random() - .5) * this.shake;
-      this.camera.position.z += (Math.random() - .5) * this.shake;
+      // Fase 35 — multiplicador de tremor do jogador (KR_GFX_*, 0 = movimento reduzido)
+      const amp = this.shake * (this.gfx?.shake ?? 1);
+      this.camera.position.x += (Math.random() - .5) * amp;
+      this.camera.position.y += (Math.random() - .5) * amp;
+      this.camera.position.z += (Math.random() - .5) * amp;
       this.shake *= Math.exp(-dt * 6.5);
     }
     // FOV dinâmico
@@ -1216,7 +1641,16 @@ export class Game3D {
     // Fase 26 — atordoamento pós-QTE do trem: trava movimento/ação, mantém olhar
     const trainStunned = this.trainStunUntil && performance.now() < this.trainStunUntil;
     if (trainStunned) { dx = 0; dy = 0; }
+    // Task 53 — a bordo do trem: viagem é a entrada oficial — sem mover/atirar;
+    // o salto sai pela janela das portas (borda de ESPAÇO, offline e online).
+    const onboard = !!this.sim.player?.trainOnboard;
+    if (onboard) { dx = 0; dy = 0; }
     const touch = this.hud.touchState ?? {};
+    if (onboard && !this._doorJumpLatch && (k.has(' ') || !!touch.jump)) {
+      this._doorJumpLatch = true;
+      this.#requestDoorJump();
+    }
+    if (!k.has(' ') && !touch.jump) this._doorJumpLatch = false;
     const abilityTouch = !!touch.ability;
     const abilityTouchPressed = abilityTouch && !this.abilityTouchDown;
     this.abilityTouchDown = abilityTouch;
@@ -1224,18 +1658,18 @@ export class Game3D {
       ...this.input,
       seq: this.sim.tick + 1,
       dx, dy,
-      sprint: !trainStunned && (k.has('shift') || !!touch.sprint),
+      sprint: !trainStunned && !onboard && (k.has('shift') || !!touch.sprint),
       crouch: k.has('c') || !!touch.crouch,
-      jump: !trainStunned && (k.has(' ') || !!touch.jump),
-      fire: !trainStunned && (this.input.fire || !!touch.fire),
+      jump: !trainStunned && !onboard && (k.has(' ') || !!touch.jump),
+      fire: !trainStunned && !onboard && (this.input.fire || !!touch.fire),
       ads: this.input.ads || !!touch.ads,
       crouch: !!(this.input.crouch || touch.crouch), // Fase 5 — C alterna; touch segura
-      reload: !trainStunned && (this.input.reload || !!touch.reload),
-      interact: !trainStunned && (this.input.interact || !!touch.interact),
-      medkit: !trainStunned && (this.input.medkit || !!touch.medkit),
-      throw: !trainStunned && (this.input.throw || !!touch.throw),
-      gloo: !trainStunned && (this.input.gloo || !!touch.gloo),
-      ability: !trainStunned && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
+      reload: !trainStunned && !onboard && (this.input.reload || !!touch.reload),
+      interact: !trainStunned && !onboard && (this.input.interact || !!touch.interact),
+      medkit: !trainStunned && !onboard && (this.input.medkit || !!touch.medkit),
+      throw: !trainStunned && !onboard && (this.input.throw || !!touch.throw),
+      gloo: !trainStunned && !onboard && (this.input.gloo || !!touch.gloo),
+      ability: !trainStunned && !onboard && (this.abilityPending || abilityTouchPressed), // Fase 8 — online autoritativa
       slot: this.pendingSlot ?? 0,
     };
     // consome one-shots
@@ -1320,12 +1754,17 @@ export class Game3D {
         case 'botKnockFeed':
           this.hud.killfeed(e.by === 'player' ? 'VOCÊ' : 'RING', e.target, false, e.by === 'player');
           break;
-        case 'revived':
-          this.hud.feed('SQUAD', `${e.by} reviveu ${e.targetName}.${e.target === 'player' ? ' De volta ao combate!' : ''}`, 'good');
+        case 'revived': {
+          const selfTarget = e.isSelf || e.target === 'player' || e.target === p.id;
+          const message = e.isSelf
+            ? 'Você se recuperou usando um medkit.'
+            : `${e.by} ${e.item === 'medkit' ? 'prestou primeiros socorros a' : 'reviveu'} ${selfTarget ? 'você' : e.targetName}.${selfTarget ? ' De volta ao combate!' : ''}`;
+          this.hud.feed(e.item === 'medkit' ? 'PRIMEIROS SOCORROS' : 'SQUAD', message, 'good');
           this.audio?.pickup?.();
           break;
+        }
         case 'knocked':
-          this.hud.feed('ZU', `Você está NOCAUTEADO${e.by ? ` por ${e.by}` : ''} — aliados podem reviver. Rasteje para cobertura.`, 'bad');
+          this.hud.feed('ZU', `NOCAUTEADO: até 7 s para usar H/✚ em si ou receber primeiros socorros; E canaliza o revive de um aliado. Rasteje para cobertura.`, 'bad');
           this.audio?.heartbeat?.();
           this.hud.damageFlash = .6;
           break;
@@ -1333,7 +1772,10 @@ export class Game3D {
           this.hud.killfeed(e.killer, e.victim, !!e.head, false, !!e.knock);
           break;
         case 'botKill':
-          this.hud.killfeed('RING', e.target, false, false);
+          // Wart B — a fonte letal chega em e.kind: morte pela ANOMALIA Khaaos
+          // (quantum, sim3d #drainQuantumShield) não é "RING" — o HUD nomeia a
+          // fonte real (mesmo rótulo do servidor: shared/worldKillers.ts).
+          this.hud.killfeed(e.kind === 'quantum' ? 'ANOMALIA' : 'RING', e.target, false, false);
           break;
         case 'matchStart':
           this.hud.feed('ZU', `Partida iniciada. Seed ${e.seed}. Bots no ring: ${e.bots}.`, 'warn');
@@ -1341,6 +1783,19 @@ export class Game3D {
           // sincronizado pelo startedAt do servidor). O iniciador local já
           // fechou o ZU — hook é no-op para ele exceto pelo sync do trem.
           this.onMatchStartEvent?.(e);
+          break;
+        // Task 53 — protocolo do trem: chegada e desbloqueio de combate (offline
+        // emite da sim; online chega pelos eventos da sala autoritativa).
+        case 'trainArrived':
+          this.hud.feed('ZU', `CHEGADA — desembarque concluído. Combate liberado em ${e.graceS ?? 15}s (grace global).`, 'warn');
+          this.hud.setMatchStatus(`GRACE ZU // COMBATE EM ${e.graceS ?? 15}s`);
+          break;
+        case 'combatUnlocked':
+          this.hud.feed('ZU', 'COMBATE LIVRE — protocolo oficial do trem cumprido.', 'good');
+          this.hud.setMatchStatus('COMBATE LIVRE // RING');
+          break;
+        case 'botDoorJump':
+          this.hud.feed('ZU', 'Operativo saltou pela porta na rota (entrada oficial).', '');
           break;
         case 'hurt':
           if (e.kind === 'ring') {
@@ -1353,10 +1808,14 @@ export class Game3D {
             if (p.alive && !p.knocked) this.hitFX.set('player', { angle: 0, power: .3, age: 0 });
           }
           break;
-        case 'pulse':
-          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.`, 'warn');
+        case 'pulse': {
+          // Fase 42 — README (Mundos W1–W4): o anel FECHA sobre o setor canônico
+          // do mundo — a leitura nomeia o destino (Templo/Vila Sombria/Prisão/Parque).
+          const destino = e.finalName ? ` O anel fecha em direção ao ${e.finalName}.` : '';
+          this.hud.feed('PULSO', `Anel recalibrado. Setor seguro: ${Math.round(e.target)}m.${destino}`, 'warn');
           this.audio.ringWarn();
           break;
+        }
         case 'ringDamage':
           if (!this._ringWarned || performance.now() - this._ringWarned > 4000) {
             this._ringWarned = performance.now();
@@ -1391,8 +1850,17 @@ export class Game3D {
           this.audio.ringWarn(); // alarme tático (mesma família de avisos do Ring)
           this.shake = Math.max(this.shake, .08);
           break;
+        case 'extractStarted':
+          this.hud.feed('ZEX', `Canalização iniciada — permaneça imóvel e evite dano por ${ZEX_CHANNEL_SECONDS} s.`, 'warn');
+          break;
+        case 'extractCancelled':
+          this.hud.feed('ZEX', 'Canalização interrompida. O terminal continua disponível.', 'bad');
+          break;
+        case 'extractUnavailable':
+          this.hud.feed('ZEX', 'Terminal ocupado por outro operativo.', 'warn');
+          break;
         case 'extract':
-          this.hud.feed('ZEX', `Extração confirmada. Terminal ${e.count}/3. +250 XP.`, 'good');
+          this.hud.feed('ZEX', `Extração confirmada. Terminal ${e.count}/3. +${EXTRACT_XP} XP.`, 'good');
           break;
         case 'mythic': {
           // Fase 30/32 — evolução da skin mítica (4 estágios; nome/aura por arma)
@@ -1478,28 +1946,40 @@ export class Game3D {
           this.audio?.survival?.('tsunami', false);
           this.hud.feed('SOBREVIVÊNCIA', 'Nível do mar recuando. Área baixa liberada.', 'good');
           break;
-        case 'eruptionStart':
+        case 'sporeFogStart': // Fase 42 — W2 "Emboscada Verde" (README)
           this.survivalFX?.handleEvent(e);
-          this.shake = Math.max(this.shake, .3);
-          this.audio?.survival?.('lava', true);
-          this.audio?.hazardStinger?.('lava');
-          this.hud.feed('SOBREVIVÊNCIA', `ERUPÇÃO: lava subindo até ${Math.round(e.lavaBelowY ?? 180)}m — as mesas são a única salvação (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          this.shake = Math.max(this.shake, .18);
+          this.audio?.survival?.('spore', true);
+          this.audio?.hazardStinger?.('spore');
+          this.hud.feed('SOBREVIVÊNCIA', `EMBOSCADA VERDE: neblina com esporos tóxicos sobe até ${Math.round(e.sporeTopY ?? 90)}m — não fique no terreno baixo (${Math.round(e.durationSeconds ?? 45)}s).`, 'bad');
           break;
-        case 'eruptionEnd':
+        case 'sporeFogEnd':
           this.survivalFX?.handleEvent(e);
-          this.audio?.survival?.('lava', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Lava recuando para as fendas.', 'good');
+          this.audio?.survival?.('spore', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A neblina de esporos se dissipa. Terreno baixo liberado.', 'good');
           break;
-        case 'gravityAnomalyStart':
+        case 'toxicSmokeStart': // Fase 42 — W3 "Assassino Silencioso" (README)
+          this.survivalFX?.handleEvent(e);
+          this.shake = Math.max(this.shake, .22);
+          this.audio?.survival?.('smoke', true);
+          this.audio?.hazardStinger?.('smoke');
+          this.hud.feed('SOBREVIVÊNCIA', `ASSASSINO SILENCIOSO: fumaça tóxica inunda o terreno baixo até ${Math.round(e.smokeTopY ?? 180)}m — suba ou pereça (${Math.round(e.durationSeconds ?? 35)}s).`, 'bad');
+          break;
+        case 'toxicSmokeEnd':
+          this.survivalFX?.handleEvent(e);
+          this.audio?.survival?.('smoke', false);
+          this.hud.feed('SOBREVIVÊNCIA', 'A fumaça tóxica se assenta. Área baixa liberada.', 'good');
+          break;
+        case 'gravityAnomalyStart': // Fase 42 — Pulso Khaaos do CIGKV (README, Protocolo CIGKV)
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', true);
           this.audio?.hazardStinger?.('gravity');
-          this.hud.feed('SOBREVIVÊNCIA', `ANOMALIA KHAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
+          this.hud.feed('SOBREVIVÊNCIA', `PULSO KHAAOS: gravidade ${e.gravityScale ?? .35}× — domos de contenção ativos nos pilões (drenam escudo fora deles).`, 'warn');
           break;
         case 'gravityAnomalyEnd':
           this.survivalFX?.handleEvent(e);
           this.audio?.survival?.('gravity', false);
-          this.hud.feed('SOBREVIVÊNCIA', 'Anomalia dissipada. Gravidade restaurada.', 'good');
+          this.hud.feed('SOBREVIVÊNCIA', 'Pulso Khaaos dissipado. Gravidade restaurada.', 'good');
           break;
         case 'acidRain':
           this.survivalFX?.handleEvent(e);
@@ -1638,6 +2118,12 @@ export class Game3D {
         return;
       }
     }
+    if (p.zexChannel) {
+      const pct = Math.min(100, Math.round((p.zexChannel.progress ?? 0) * 100));
+      this.hud.prompt(`ZEX — canalizando ${pct}% · não se mova`);
+      this.hud.target(null);
+      return;
+    }
     let text = null, textD = Infinity;
     for (const i of this.sim.loot) {
       if (!i.active) continue;
@@ -1647,7 +2133,10 @@ export class Game3D {
     if (!text) {
       for (const t of this.sim.terminals) {
         if (!t.active) continue;
-        if (Math.hypot(t.x - p.x, t.z - p.z) < 3.4) { text = `[E] Extrair dados no ${t.label || 'terminal ZEX'}`; break; }
+        if (Math.hypot(t.x - p.x, t.z - p.z) < 3.4) {
+          text = t.channeling ? `[ZEX] Em uso — ${Math.round((t.channelProgress ?? 0) * 100)}%` : `[E] Iniciar extração no ${t.label || 'terminal ZEX'} — ${ZEX_CHANNEL_SECONDS} s`;
+          break;
+        }
       }
     }
     // Fase 25 — porta no alcance (estilo Free Fire): mostra se for o alvo MAIS
@@ -1721,6 +2210,7 @@ export class Game3D {
     requestAnimationFrame(this.loop);
     const dt = Math.min(.1, this.clock.getDelta());
     this.animT += dt;
+    this.updatePerf(dt); // Fase 35 — DRS + auto-tier + telemetria (laço fechado de performance)
 
     // passo fixo da simulação
     if (!this.zuOpen && !this.ended) {
@@ -1733,6 +2223,7 @@ export class Game3D {
       }
       this.handleEvents();
     }
+    this.updateTrainHud(); // Task 53 — fases do trem + countdown do grace no HUD
     this.syncLoot();
     this.syncDoors(); // Fase 25/26 — folhas de porta + vidro seguem o estado autoritativo
     this.syncEntities(dt);
@@ -1743,6 +2234,20 @@ export class Game3D {
     // posição da CÂMERA (1 teste por chunk — custo O(chunks) por frame)
     if (this.scene.userData.grassLOD && this.camera?.position) {
       this.scene.userData.grassLOD.update(this.camera.position.x, this.camera.position.z);
+    }
+    // Fase 39 — sombras de contato do SCRUB de Barburhen em BANDAS DE
+    // DISTÂNCIA: alpha por instância pela distância da câmera (cheio perto,
+    // raleia suave e morre antes do fog — mesmo vocabulário de bandas do
+    // capim). Custo O(scrub) por frame, zero quando o mundo não tem scrub.
+    if (this.scene.userData.scrubBandShadows && this.camera?.position) {
+      this.scene.userData.scrubBandShadows.update(this.camera.position.x, this.camera.position.z);
+    }
+    // Fase 40 — sombras em banda dos PROPS DOS DISTRITOS (dressing F22):
+    // mesmo alpha por instância, campo por cenário (lista — um handle por
+    // build). Custo O(dressing), zero quando a banda está vazia.
+    const dressingShadows = this.scene.userData.dressingBandShadows;
+    if (dressingShadows?.length && this.camera?.position) {
+      for (const f of dressingShadows) f.update(this.camera.position.x, this.camera.position.z);
     }
     this.updateRing();
     this.updateSkyPhase(dt); // Fase 8 — céu dinâmico por pulso do Ring
@@ -1762,6 +2267,10 @@ export class Game3D {
     this.updateCamera(dt);
     this.effects.update(dt);
     this.deathDecals?.update(dt, this.camera.position); // Fase 20 — fade + LOD dos decals pela câmera
+    // F39 — números de dano no festival sazonal: as variáveis da temporada
+    // (hud.auraCombat — decisão PURA de aura3d) entram no pool ANTES do
+    // update; spawn dos eventos do frame seguinte já nasce decorado.
+    this.damageNumbers?.setAuraVars?.(this.hud?.auraCombat ?? null);
     // Fase 27 — números de dano: re-projeta âncoras, sobe e some (determinístico)
     this.damageNumbers?.update(dt, { camera: this.camera, width: innerWidth, height: innerHeight });
     this.updateDropFX(dt);

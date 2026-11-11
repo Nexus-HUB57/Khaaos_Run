@@ -3,7 +3,7 @@ import { Strategy, type VerifyFunction } from "openid-client/passport";
 
 import passport from "passport";
 import session from "express-session";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler, Response, NextFunction } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
@@ -38,7 +38,7 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
-  return session({
+  const sessionMiddleware = session({
     secret: previousIsValid ? [currentSecret, previousSecret!] : currentSecret,
     store: sessionStore,
     resave: false,
@@ -46,21 +46,34 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: sessionTtl,
     },
   });
+  // HTTPS preview may be embedded cross-site; HTTP local development must
+  // still work. Resolve from Express's trusted proxy-aware request protocol,
+  // never from NODE_ENV.
+  const adaptiveSessionMiddleware: RequestHandler = (req: Request, res: Response, next: NextFunction) => sessionMiddleware(req, res, (error) => {
+    if (error) return next(error);
+    if (req.session?.cookie) {
+      const isHttps = Boolean(req.secure);
+      req.session.cookie.secure = isHttps;
+      req.session.cookie.sameSite = isHttps ? "none" : "lax";
+    }
+    next();
+  });
+  return adaptiveSessionMiddleware;
 }
 
-function getPublicOrigin(req: { hostname: string; protocol: string }): string {
+export function getPublicOrigin(req: { hostname: string; protocol: string; get?: (name: string) => string | undefined }): string {
   const configured = process.env.PUBLIC_ORIGIN;
   if (configured) {
     const origin = new URL(configured);
     if (origin.protocol !== "https:" && process.env.NODE_ENV === "production") {
       throw new Error("PUBLIC_ORIGIN must use HTTPS in production");
     }
-    const requestHost = req.hostname.toLowerCase();
-    if (origin.hostname.toLowerCase() !== requestHost) {
+    const requestHostname = req.hostname.toLowerCase();
+    if (origin.hostname.toLowerCase() !== requestHostname) {
       throw new Error("Untrusted request host");
     }
     return origin.origin;
@@ -68,7 +81,8 @@ function getPublicOrigin(req: { hostname: string; protocol: string }): string {
   if (process.env.NODE_ENV === "production") {
     throw new Error("PUBLIC_ORIGIN must be configured in production");
   }
-  return `${req.protocol}://${req.hostname}`;
+  const forwardedHost = req.get?.("x-forwarded-host")?.split(",")[0]?.trim();
+  return `${req.protocol}://${forwardedHost || req.get?.("host") || req.hostname}`;
 }
 
 function updateUserSession(
@@ -138,8 +152,9 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
-    const user = {};
+    const user: Record<string, any> = {};
     updateUserSession(user, tokens);
+    user.authenticatedAtMs = Date.now();
     await (options.upsertUser ?? upsertUser)(tokens.claims());
     verified(null, user);
   };
@@ -221,11 +236,12 @@ export async function setupAuth(app: Express, options: AuthSetupOptions = {}) {
     if (req.get("origin") !== origin || req.get("sec-fetch-site") === "cross-site") {
       return res.status(403).json({ message: "Origin not allowed" });
     }
+    const isLocalAuth = Boolean(req.user?.localAuth);
     const userId = req.user?.claims?.sub;
     const revoke = userId ? distributedState.revokeUser(userId) : Promise.resolve();
     revoke.then(() => req.logout(() => {
       req.session?.destroy(() => undefined);
-      if (!config) {
+      if (isLocalAuth || !config) {
         // Modo degradado: encerra só a sessão local (sem end-session do IdP).
         res.redirect(origin);
         return;
@@ -250,7 +266,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  if (user.claims?.sub && await distributedState.isUserRevoked(user.claims.sub)) {
+  if (user.claims?.sub && await distributedState.isUserRevoked(user.claims.sub, user.authenticatedAtMs)) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 

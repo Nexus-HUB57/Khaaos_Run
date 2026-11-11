@@ -1,4 +1,5 @@
 import type { Item } from "@shared/schema";
+import { hasValidWarIDurability } from "@shared/war-i";
 
 export interface CombatLoadout {
   itemIds: number[];
@@ -32,13 +33,7 @@ function positiveStat(item: Item, key: string): number {
 }
 
 export function hasValidDurability(item: Pick<Item, "durability" | "maxDurability">): boolean {
-  const durability = Number(item.durability);
-  const maxDurability = Number(item.maxDurability);
-  return Number.isFinite(durability)
-    && Number.isFinite(maxDurability)
-    && durability > 0
-    && maxDurability > 0
-    && durability <= maxDurability;
+  return hasValidWarIDurability(item.durability, item.maxDurability);
 }
 
 function isReadyForBattle(item: Item): boolean {

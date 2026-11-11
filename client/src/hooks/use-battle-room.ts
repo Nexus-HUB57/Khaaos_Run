@@ -8,12 +8,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
 import { api } from "@shared/routes";
 import type { WarIActionItem } from "@shared/war-i";
+import type { OperativeAvatarRuntime } from "@shared/operative-avatar-catalog";
 
 export type RoomStatus = "LOBBY" | "COUNTDOWN" | "IN_PROGRESS" | "FINISHED";
 
 export interface BattlePlayer {
   userId: string;
   displayName: string;
+  selectedOperativeId?: string;
+  avatar?: OperativeAvatarRuntime;
   posX: number;
   posY: number;
   carryCapacity?: number;
@@ -81,6 +84,7 @@ type ServerMessage =
   | { type: "zone_tick"; zone: ZoneStatus; players: BattlePlayer[] }
   | { type: "player_eliminated"; userId: string; cause: string; eliminatorId?: string }
   | { type: "loot_picked"; lootId: number; by: string }
+  | { type: "loot_material_collected"; materialId: string; quantity: number; totalQuantity: number }
   | { type: "damage_dealt"; attackerId: string; targetId: string; damage: number; targetHealth: number }
   | { type: "packback_ready"; items: WarIActionItem[] }
   | { type: "packback_item_used"; itemId: number; name: string; durability: string; message: string }
@@ -173,6 +177,9 @@ export function useBattleRoom() {
   const [lastPackbackUse, setLastPackbackUse] = useState<PackBackUseResult | null>(null);
   const [packbackScan, setPackbackScan] = useState<PackBackScan | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingPackbackItemId, setPendingPackbackItemId] = useState<number | null>(null);
+  const pendingPackbackItemIdRef = useRef<number | null>(null);
+  const packbackUseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [inQueue, setInQueue] = useState(false);
   const [queueInfo, setQueueInfo] = useState<{
     position: number;
@@ -190,6 +197,13 @@ export function useBattleRoom() {
     }
     setLastError("Sem conexão com a partida. Reconectando; a ação ainda não foi enviada.");
     return false;
+  }, []);
+
+  const clearPendingPackbackUse = useCallback(() => {
+    if (packbackUseTimeoutRef.current) clearTimeout(packbackUseTimeoutRef.current);
+    packbackUseTimeoutRef.current = null;
+    pendingPackbackItemIdRef.current = null;
+    setPendingPackbackItemId(null);
   }, []);
 
   const connect = useCallback(async () => {
@@ -273,6 +287,9 @@ export function useBattleRoom() {
                 : prev,
             );
             break;
+          case "loot_material_collected":
+            void queryClient.invalidateQueries({ queryKey: [api.items.materials.path] });
+            break;
           case "damage_dealt":
             setPlayers((prev) =>
               prev.map((p) =>
@@ -290,15 +307,18 @@ export function useBattleRoom() {
             setRoom((prev) => (prev ? { ...prev, loot: msg.loot } : prev));
             break;
           case "packback_ready":
+            clearPendingPackbackUse();
             setPackbackItems(msg.items);
             setLastPackbackUse(null);
             setPackbackScan(null);
             break;
           case "packback_item_used":
+            if (pendingPackbackItemIdRef.current === msg.itemId) clearPendingPackbackUse();
             setPackbackItems((current) => current.map((item) =>
               item.id === msg.itemId ? { ...item, durability: msg.durability } : item,
             ));
             setLastPackbackUse(msg);
+            setLastError(null);
             void queryClient.invalidateQueries({ queryKey: [api.items.list.path] });
             break;
           case "packback_scan": {
@@ -315,6 +335,7 @@ export function useBattleRoom() {
             break;
           }
           case "match_finished":
+            clearPendingPackbackUse();
             saveRoomId(userId, null);
             setWinnerId(msg.winnerId);
             setRoom((prev) => (prev ? { ...prev, status: "FINISHED", winnerId: msg.winnerId } : prev));
@@ -365,6 +386,7 @@ export function useBattleRoom() {
             });
             break;
           case "error":
+            if (pendingPackbackItemIdRef.current !== null) clearPendingPackbackUse();
             setLastError(msg.message);
             if (msg.code === "ROOM_RESUME_UNAVAILABLE") {
               saveRoomId(userId, null);
@@ -380,6 +402,7 @@ export function useBattleRoom() {
     };
 
     ws.onclose = () => {
+      clearPendingPackbackUse();
       if (wsRef.current === ws) {
         wsRef.current = null;
         setConnected(false);
@@ -393,7 +416,7 @@ export function useBattleRoom() {
     ws.onerror = () => {
       setLastError("WebSocket error");
     };
-  }, [user, userId, queryClient]);
+  }, [user, userId, queryClient, clearPendingPackbackUse]);
 
   useEffect(() => {
     activeRef.current = !!user;
@@ -405,6 +428,7 @@ export function useBattleRoom() {
       reconnectTimerRef.current = null;
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
       scanTimerRef.current = null;
+      clearPendingPackbackUse();
       wsRef.current?.close();
       wsRef.current = null;
     };
@@ -434,7 +458,19 @@ export function useBattleRoom() {
   );
 
   const usePackBackItem = useCallback(
-    (itemId: number) => send({ type: "use_packback_item", itemId }),
+    (itemId: number) => {
+      if (pendingPackbackItemIdRef.current !== null) return false;
+      if (!send({ type: "use_packback_item", itemId })) return false;
+      pendingPackbackItemIdRef.current = itemId;
+      setPendingPackbackItemId(itemId);
+      packbackUseTimeoutRef.current = setTimeout(() => {
+        packbackUseTimeoutRef.current = null;
+        pendingPackbackItemIdRef.current = null;
+        setPendingPackbackItemId(null);
+        setLastError("A PackBack não foi confirmada pelo servidor. Verifique a conexão antes de tentar novamente.");
+      }, 12_000);
+      return true;
+    },
     [send],
   );
 
@@ -496,6 +532,7 @@ export function useBattleRoom() {
     attack,
     usePackBackItem,
     packbackItems,
+    pendingPackbackItemId,
     lastPackbackUse,
     packbackScan,
     joinQueue,

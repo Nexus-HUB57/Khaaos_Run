@@ -1,0 +1,10 @@
+{
+  "schema": "khaaos.avatar-candidate-audit/v1",
+  "characters": [
+    {
+      "slot": "SORAYA_HADD_RIGGED_REVIEW_ONLY",
+      "source": "artifacts/avatar-candidates/soraya-hadd/CHR_Huran_Female_Soraya_rigged.glb",
+      "source_sha256": "b0334941c56e483ef8b5dfff179729f781fe74a6a4f07a21da5b176fcea794af"
+    }
+  ]
+}

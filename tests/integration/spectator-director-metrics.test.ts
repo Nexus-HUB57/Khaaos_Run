@@ -266,3 +266,135 @@ describe("SpectatorDataPipeline — DIRECTOR_METRICS end to end (WS real)", () =
     }
   });
 });
+
+// ─── Fase 39 — calibração POPULACIONAL: paridade JS↔TS + tick do pipeline ──
+
+describe("Fase 39 — calibração POPULACIONAL do diretor", () => {
+  it("PARIDADE byte a byte: calibrateDirector JS === TS em corpus determinístico", async () => {
+    const { calibrateDirector: jsCalibrate } = await import("../../game-runtime/src/game3d/directorCalibration.js");
+    const { calibrateDirector: tsCalibrate, DANGER_WEIGHTS: TS_WEIGHTS, DIRECTOR_TUNING_LIMITS: TS_LIMITS } = await import("../../server/game/SpectatorDataPipeline.ts");
+    const { DANGER_WEIGHTS: JS_WEIGHTS, DIRECTOR_TUNING_LIMITS: JS_LIMITS } = await import("../../game-runtime/src/game3d/directorCalibration.js");
+
+    // constantes canônicas idênticas nas duas trilhas
+    assert.deepEqual(TS_WEIGHTS, JS_WEIGHTS, "DANGER_WEIGHTS idêntico");
+    assert.deepEqual(TS_LIMITS, JS_LIMITS, "bandas idênticas");
+
+    // corpus: PRNG determinístico (xorshift) — 400 amostras de (métricas, afinação)
+    let s = 0x9e3779b9;
+    const rnd = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 0xffffffff; };
+    const pick = <T,>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)];
+    const int = (lo: number, hi: number) => lo + Math.floor(rnd() * (hi - lo + 1));
+
+    for (let i = 0; i < 400; i++) {
+      const total = int(0, 40);
+      const esc = int(0, total);
+      const metrics = {
+        cuts: {
+          total,
+          byReason: {
+            "hazard-start": total - esc,
+            "hazard-escalation": esc,
+            "target-lost": int(0, 3),
+          } as Record<string, number>,
+        },
+        manual: { followSelects: int(0, 30), cycles: int(0, 10) },
+        toggles: { on: int(0, 15), off: int(0, 15) },
+      };
+      const current = {
+        margin: pick([undefined, 10, 25, 45, int(10, 45)] as (number | undefined)[]),
+        weights: rnd() < .5 ? undefined : {
+          knocked: int(30, 55), hazardDamage: int(25, 45), anchorZone: int(20, 40),
+          outsideRing: int(12, 30), recentDamage: int(8, 24), lowHealth: int(5, 16),
+        },
+      };
+      const js = jsCalibrate(metrics as any, current as any);
+      const ts = tsCalibrate(metrics as any, current as any);
+      assert.deepEqual(
+        { margin: ts.margin, weights: ts.weights, actions: ts.actions },
+        { margin: js.margin, weights: js.weights, actions: js.actions },
+        `amostra ${i}: total=${total} esc=${esc} margin=${current.margin}`,
+      );
+    }
+  });
+
+  it("PARIDADE byte a byte: sanitizePopulationTuning em corpus hostil", async () => {
+    const { sanitizePopulationTuning: jsSan } = await import("../../game-runtime/src/game3d/directorCalibration.js");
+    const { sanitizePopulationTuning: tsSan } = await import("../../server/game/SpectatorDataPipeline.ts");
+
+    const hostile: unknown[] = [
+      null, undefined, 42, "tuning", {}, [],
+      { margin: 30 },
+      { margin: NaN, weights: {} },
+      { margin: "30", weights: {} },
+      { margin: 999, weights: { knocked: 999, hazardDamage: 999, anchorZone: 999, outsideRing: 999, recentDamage: 999, lowHealth: 999 } },
+      { margin: 30, weights: { knocked: 1, hazardDamage: 55, anchorZone: 40, outsideRing: 39, recentDamage: 38, lowHealth: 37 } },
+      { margin: 30, weights: { knocked: 40, hazardDamage: 35, anchorZone: 30, outsideRing: 20, recentDamage: 15, lowHealth: "x" } },
+      { margin: 30.7, weights: { knocked: 40.4, hazardDamage: 35.5, anchorZone: 30.2, outsideRing: 20.9, recentDamage: 15.1, lowHealth: 10.8 } },
+      { margin: 20, weights: { knocked: 43, hazardDamage: 38, anchorZone: 32, outsideRing: 22, recentDamage: 15, lowHealth: 10 } },
+    ];
+    for (const raw of hostile) {
+      assert.deepEqual(tsSan(raw), jsSan(raw as any), `hostil: ${JSON.stringify(raw)}`);
+    }
+  });
+
+  it("pipeline TS: tick público calibra com o AGREGADO e difunde DIRECTOR_TUNING", async () => {
+    const server = http.createServer((_req, res) => { res.writeHead(200); res.end(); });
+    const pipeline = new SpectatorDataPipeline();
+    pipeline.startCalibration(); // sem attach: intervalo só roda com config > 0; tick manual abaixo
+    pipeline.stopCalibration();  // testes dirigem o tick MANUALMENTE (determinístico)
+    pipeline.attach(server);
+    pipeline.stopCalibration(); // attach religou — garante tick manual apenas
+    server.listen(0);
+    await once(server, "listening");
+    const port = (server.address() as { port: number }).port;
+
+    try {
+      const { ws, firstMessage } = await openSpectator(port, "roomId=sala-ts39");
+      await firstMessage;
+
+      // amostra insuficiente: tick não difunde
+      ws.send(JSON.stringify({ type: "DIRECTOR_METRICS", metrics: { enabled: true, cuts: { total: 7, byReason: { "hazard-escalation": 7 } } } }));
+      await wait(40);
+      pipeline.calibrationTick();
+      assert.equal(pipeline.getMetrics().director.globalTuning, null, "amostra insuficiente: sem afinação global");
+
+      // plateia twitchy: 20+20 cortes, 10+10 escaladas (50% ≥45%) → margem 25→30
+      const twitchy = { enabled: true, cuts: { total: 20, byReason: { "hazard-start": 10, "hazard-escalation": 10 }, byHazard: { tsunami: 20 } }, manual: { followSelects: 0, cycles: 0 }, toggles: { on: 1, off: 0 } };
+      const b = await openSpectator(port, "roomId=sala-ts39-b");
+      await b.firstMessage;
+      ws.send(JSON.stringify({ type: "DIRECTOR_METRICS", metrics: twitchy }));
+      b.ws.send(JSON.stringify({ type: "DIRECTOR_METRICS", metrics: twitchy }));
+      await wait(40);
+
+      const tuningFrames: any[] = [];
+      const onMsg = (raw: Buffer) => { try { const m = JSON.parse(raw.toString()); if (m.type === "DIRECTOR_TUNING") tuningFrames.push(m); } catch { /* lixo */ } };
+      ws.on("message", onMsg);
+      pipeline.calibrationTick();
+      await wait(30);
+      ws.off("message", onMsg);
+
+      assert.ok(tuningFrames.length >= 1, "frame DIRECTOR_TUNING difundido");
+      assert.equal(tuningFrames[0].source, "population");
+      assert.equal(tuningFrames[0].sampleCuts, 40);
+      assert.equal(tuningFrames[0].tuning.margin, 30);
+      assert.deepEqual(tuningFrames[0].actions, ["margin-up:twitchy"]);
+
+      // /admin: getMetrics().director expõe a afinação global
+      const m = pipeline.getMetrics();
+      assert.equal(m.director.globalTuning?.margin, 30);
+      assert.deepEqual(m.director.globalTuningActions, ["margin-up:twitchy"]);
+
+      // tick sem mudança = zero tráfego
+      const before = tuningFrames.length;
+      pipeline.calibrationTick();
+      await wait(30);
+      assert.equal(tuningFrames.length, before, "estado estável não reenvia");
+
+      ws.close(); b.ws.close();
+    } finally {
+      pipeline.destroy();
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});

@@ -1,0 +1,57 @@
+{
+  "schema": "khaaos.mobile-environment-asset-policy/v1",
+  "engine_target": "Unreal Engine 5.8",
+  "render_target": "Mobile Forward; baked/static lighting; no Nanite/Lumen requirement",
+  "status": "authoring_contract_not_asset_validation",
+  "source_extensions": [".fbx", ".obj", ".gltf", ".glb"],
+  "exclude_patterns": ["*WorldBlockout*"],
+  "categories": {
+    "building": {
+      "name_tokens": ["building", "structure", "house", "ruin", "tower", "warehouse", "hall", "pavilion", "temple", "lighthouse", "dome", "spire", "sanctum", "crane", "edificio", "edificação", "ruina", "ruína"],
+      "lod_triangle_fraction_targets": {"LOD0": 1.0, "LOD1": 0.6, "LOD2": 0.25, "LOD3": 0.1},
+      "authoring": [
+        "Separate reusable wall, roof, stair and trim modules from unique landmarks; use ISM/HISM for repeated static modules with matching mesh/material.",
+        "Use static lighting/lightmaps and rough mobile material variants; keep windows opaque or masked only where silhouette requires it.",
+        "Create per-cell HLOD proxies for distant static, non-interactive clusters; keep doors, loot, destructibles and gameplay cover out of merges.",
+        "Use simple convex collision for movement; reserve complex collision for explicitly approved static traces."
+      ],
+      "gameplay_invariants": ["Preserve cover silhouette and line-of-sight semantics across device tiers.", "Do not merge interactive or destructible actors into static HLOD."]
+    },
+    "bridge": {
+      "name_tokens": ["bridge", "viaduct", "overpass", "ponte", "pontes", "passarela"],
+      "lod_triangle_fraction_targets": {"LOD0": 1.0, "LOD1": 0.65, "LOD2": 0.3, "LOD3": 0.12},
+      "authoring": [
+        "Split deck, supports, rails and attached gameplay props so distant LODs can remove small structural detail without changing the deck silhouette.",
+        "Use separate simple collision volumes for the walkable deck, rails and supports; collision and navigation must remain independent of render LOD.",
+        "Use HLOD only for distant static scenery; retain a non-merged interactive/collision source for any traversable bridge.",
+        "Bake static illumination; avoid translucent glass and dynamic shadow casting on decorative underside details."
+      ],
+      "gameplay_invariants": ["Keep traversal width, height clearance, collision, navmesh connectivity and jump/fall edges identical across quality tiers.", "Never simplify authoritative collision based solely on render LOD."]
+    },
+    "vehicle": {
+      "name_tokens": ["vehicle", "car", "truck", "bus", "jeep", "motorcycle", "buggy", "veiculo", "veículo", "caminhao", "caminhão", "moto"],
+      "lod_triangle_fraction_targets": {"LOD0": 1.0, "LOD1": 0.5, "LOD2": 0.2, "LOD3": 0.08},
+      "authoring": [
+        "Use Static Mesh LODs for parked props and Skeletal Mesh LODs for moving/wheel-articulated vehicles; validate transition and silhouette from chase and combat cameras.",
+        "Reduce material slots and texture samples at distance; use a mobile master material with baked/static lighting assumptions and no expensive per-pixel effects.",
+        "Prioritize wheel hubs, suspension pivots and any gameplay-visible articulated section when generating skeletal LODs; remove non-functional interior detail at distance.",
+        "Use stable simple physics collision shapes independent of render LOD; use a static proxy/HLOD only for parked, non-interactive vehicles."
+      ],
+      "gameplay_invariants": ["Do not alter physics, collision, seat/interaction sockets, server authority, replication cadence or hitboxes in a rendering optimization.", "Moving vehicles remain separate from static HLOD clusters."]
+    }
+  },
+  "validation_gates": {
+    "source_audit": "At least one named source asset for each category; source geometry metrics recorded.",
+    "editor_asset_gate": "UE5.8 Editor import; per-LOD triangle/material-slot/collision checks; no placeholder JSON treated as a binary asset.",
+    "cook_gate": "Android ASTC cook and iOS cook on supported x64 UE5.8 runners.",
+    "device_gate": "Profile in fixed camera/movement captures on midrange Android Adreno and Mali plus supported iOS device; record GPU/Render/Game p50/p95/p99, draw calls, triangles, memory and thermal behavior.",
+    "performance_target": "60 FPS is the design target (16.67 ms frame budget), not a pass until physical-device captures meet the project gate.",
+    "gameplay_gate": "Compare cover visibility, bridge traversability/nav, vehicle collision and replication across all quality tiers."
+  },
+  "references": {
+    "static_mesh_lods": "https://dev.epicgames.com/documentation/unreal-engine/creating-and-using-lods-in-unreal-engine",
+    "world_partition_hlod": "https://dev.epicgames.com/documentation/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine",
+    "skeletal_mesh_lods": "https://dev.epicgames.com/documentation/unreal-engine/skeletal-mesh-lods-in-unreal-engine",
+    "mobile_performance": "https://dev.epicgames.com/documentation/unreal-engine/performance-guidelines-for-mobile-devices-in-unreal-engine"
+  }
+}

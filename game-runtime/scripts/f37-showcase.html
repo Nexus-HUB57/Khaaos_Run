@@ -1,0 +1,266 @@
+<!doctype html>
+<!-- Fase 37 — vitrine dev (evidência visual): FADE DE OPACIDADE por distância
+     na entrada/saída da banda de impostores + SOMBRAS DE CONTATO FALSAS
+     ancoradas no relevo + ÍCONE DA ARMA no inventário com FESTIVAL SAZONAL
+     por aura. Serve via `npm run dev` em /scripts/f37-showcase.html — usa os
+     módulos REAIS do jogo (vegetation3d/aura3d/attachments3d + styles3d.css
+     de produção). As bandas de LOD são ESCALADAS (10/18/34m vs 28/58/110m)
+     para leitura próxima — MESMO código, parâmetros menores, rotulado aqui. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khaaos Run · F37 Showcase</title>
+<link rel="stylesheet" href="../src/game3d/styles3d.css" />
+<style>
+  /* layout da vitrine (o CSS do ícone vem DE styles3d.css — produção) */
+  html, body { margin: 0; height: 100%; background: #0b0814; overflow: hidden; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: 12px; color: #e8e3d5; font: 12px/1.5 monospace; z-index: 5; text-shadow: 0 1px 2px #000; max-width: 560px; }
+  #hud b { color: #ffb52e; }
+  #readout {
+    position: fixed; left: 12px; bottom: 178px; z-index: 5; color: #e8e3d5;
+    font: 12px/1.6 monospace; text-shadow: 0 1px 2px #000; white-space: pre;
+  }
+  #readout b { color: #42d9de; }
+  #rail { position: fixed; left: 12px; bottom: 12px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; }
+  #rail button {
+    font: 700 11px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 4px; padding: 7px 10px; cursor: pointer;
+  }
+  #rail button.on { border-color: #42d9de; color: #42d9de; }
+  #iconsPanel {
+    position: fixed; right: 12px; bottom: 12px; z-index: 6;
+    background: rgba(16,12,26,.85); border: 1px solid rgba(122,90,158,.5);
+    border-radius: 6px; padding: 10px 12px; max-width: 620px;
+  }
+  #iconsPanel h3 { margin: 0 0 2px; font: 700 11px/1.4 monospace; letter-spacing: 1.5px; color: #ffb52e; }
+  #iconsPanel .seasonNote { font: 11px/1.4 monospace; color: #8d8598; margin-bottom: 8px; }
+  #iconRow { display: flex; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+  .iconCell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .iconCell small { font: 9px/1.2 monospace; color: #8d8598; text-align: center; max-width: 86px; }
+  #seasonRow { display: flex; gap: 5px; margin-top: 8px; justify-content: flex-end; }
+  #seasonRow button {
+    font: 700 10px/1 monospace; letter-spacing: 1px; color: #e8e3d5;
+    background: transparent; border: 1px solid rgba(122,90,158,.5); border-radius: 3px;
+    padding: 4px 7px; cursor: pointer;
+  }
+  #seasonRow button.on { border-color: #c8ff3d; color: #c8ff3d; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>KHAAOS RUN — Fase 37</b><br />
+  banda de impostores com <b>FADE por distância</b> (rampa na entrada e na saída — sem pop) +
+  <b>SOMBRAS DE CONTATO</b> ancoradas no relevo (disco radial no ch.y dos tufos)<br />
+  bandas ESCALADAS p/ leitura próxima: full &lt;10m · sparse 10–18m · impostor 18–34m (fade 5m) · hidden ≥34m<br />
+  ícone da arma no inventário com <b>FESTIVAL SAZONAL</b> por aura (styles3d.css de produção)
+</div>
+<div id="readout"></div>
+<div id="rail"></div>
+<div id="iconsPanel">
+  <h3>ÍCONE DA ARMA · INVENTÁRIO · 9 SKINS MÍTICAS</h3>
+  <div class="seasonNote" id="seasonNote"></div>
+  <div id="iconRow"></div>
+  <div id="seasonRow"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {
+  buildGrassFieldLOD, tickVegetationWind, grassOutdoorBake, applyOutdoorTint,
+  grassImpostorFade,
+} from '../src/game3d/vegetation3d.js';
+import { hudAuraFor, weaponIconVars } from '../src/game3d/aura3d.js';
+import { MYTHIC_SKINS } from '../src/game3d/attachments3d.js';
+
+// ------------------------------------------------------------- cena 3D ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#141a20');
+scene.fog = new THREE.Fog('#141a20', 70, 240);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .05, 600);
+
+const sun = new THREE.DirectionalLight('#fff3e0', 2.2);
+sun.position.set(18, 30, 12);
+scene.add(sun, new THREE.AmbientLight('#9fb6c8', .9));
+
+// chão com vertex colors (mesmo caminho do terreno de produção) p/ o bake
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600, 96, 96),
+  new THREE.MeshStandardMaterial({ color: '#8a7f6a', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+ground.geometry.setAttribute('color', new THREE.BufferAttribute(
+  new Float32Array(ground.geometry.attributes.position.count * 3).fill(1), 3));
+ground.material.vertexColors = true;
+ground.name = 'terrain';
+scene.add(ground);
+
+// campo com bandas ESCALADAS: full <10 · sparse 10-18 · IMPOSTOR 18-34
+// (fade 5m nas duas bordas) · hidden >=34 — mesmo código do world3d
+const BAND = { nearDist: 10, midDist: 18, impostorDist: 34, fadeZone: 5 };
+const spots = [];
+for (let i = 0; i < 3200; i++) {
+  const x = (Math.sin(i * 12.9898) * 43758.5453) % 1, z = (Math.cos(i * 78.233) * 12345.6789) % 1;
+  spots.push({ x: x * 90, z: z * 90, y: .02, rot: i % 6, s: .8 + (i % 5) * .12, sy: 1, tintJitter: (i % 10) / 10 });
+}
+const grassLOD = buildGrassFieldLOD({
+  spots, seed: 77, tintFamilies: ['#5a6b33', '#7a8443'],
+  chunkSize: 12, sparseKeep: .4, impostorOpacity: .55,
+  ...BAND, impostorHeight: 1.15, impostorWidth: 3.2,
+  impostorShadow: true, impostorShadowOpacity: .55, impostorShadowRadius: 1.9,
+  sway: { strength: .07, freq: 2.1, yScale: 1.1 },
+});
+scene.add(grassLOD.group);
+scene.userData.swayMats = [...grassLOD.mats, ...grassLOD.impostorMats];
+const bake = grassOutdoorBake(grassLOD.chunks, ['#5a6b33', '#7a8443']);
+applyOutdoorTint(ground, bake, { radius: 12, strength: .45 });
+
+// chunk ALVO da rail: o mais cheio perto da origem (rail anda no eixo x)
+const target = [...grassLOD.chunks].sort((a, b) => b.fullCount - a.fullCount)[0];
+
+// ------------------------------------------------------- rail de paradas ----
+// d = distância da CÂMERA ao chunk alvo; alpha teórico = grassImpostorFade(d)
+const STOPS = [
+  { id: 'sparse',  label: 'SPARSE (tufos reais)',   d: 14 },
+  { id: 'entrada', label: 'ENTRADA (fade in)',      d: 19.5 },
+  { id: 'plateau', label: 'PLATEAU (mancha cheia)', d: 26 },
+  { id: 'saida',   label: 'SAÍDA (fade out→bake)',  d: 32.5 },
+  { id: 'hidden',  label: 'HIDDEN (só o bake)',     d: 38 },
+];
+let stopIdx = 2; // plateau
+const rail = document.getElementById('rail');
+const readout = document.getElementById('readout');
+
+function place(idx) {
+  stopIdx = (idx + STOPS.length) % STOPS.length;
+  const s = STOPS[stopIdx];
+  const camX = target.x + s.d, camZ = target.z;
+  camera.fov = 42; camera.updateProjectionMatrix();
+  camera.position.set(camX, target.y + 6.2, camZ);
+  camera.lookAt(target.x, target.y + .4, target.z);
+  grassLOD.update(camX, camZ);
+  const attr = grassLOD.impostors.geometry.attributes.instanceAlpha;
+  const alphas = [];
+  for (let i = 0; i < grassLOD.impostors.count; i++) alphas.push(+attr.array[i].toFixed(3));
+  const fade = grassImpostorFade(s.d, BAND);
+  readout.innerHTML =
+    `parada: <b>${s.label}</b> — d=<b>${s.d}m</b> (banda impostor 18–34m)\n` +
+    `fade teórico do alvo: <b>${fade.toFixed(3)}</b> · impostores: <b>${grassLOD.impostors.count}</b> · sombras: <b>${grassLOD.impostorShadows.count}</b>\n` +
+    `alphas da banda: [${alphas.join(', ')}]\n` +
+    `[${STOPS.map((x, i) => i === stopIdx ? '▸' + x.id : x.id).join(' · ')}]`;
+  [...rail.children].forEach((b, i) => b.classList.toggle('on', i === stopIdx));
+  return { stop: s.id, d: s.d, fade: +fade.toFixed(4), imp: grassLOD.impostors.count, sh: grassLOD.impostorShadows.count, alphas };
+}
+STOPS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.label;
+  b.onclick = () => place(i);
+  rail.appendChild(b);
+});
+
+// ------------------------------------------------- ícones sazonais (DOM) ----
+// silhuetas por categoria — MESMO svg do index.html (inventário de produção)
+const ICON_SVG = `<svg viewBox="0 0 64 28" xmlns="http://www.w3.org/2000/svg">
+  <path data-cat="rifle"    d="M2 13h6l2-3h22v-2h5v2h18l7 2-7 2H38v3l-4 1v3h-5v-4l-6-1H10l-3 3H2z"/>
+  <path data-cat="sniper"   d="M1 14h8l2-2h24v-3h6v3h20l3 2-3 2H40v4l-5 2v2h-5v-3l-8-1H12l-2 3H1zM33 6h10v3H33z"/>
+  <path data-cat="shotgun"  d="M2 12h8l3-3h14v-2h6v2h27l2 2-2 2H33v3h14l8 1-8 1H33l-5 3h-6l2-3H11l-3 2H2z"/>
+  <path data-cat="lmg"      d="M3 11h7V8h8v3h40l3 2-3 2H30v4l-4 1v3h-5v-4l-5-1H12l-2 3H3zM18 19h9v5h-9z"/>
+  <path data-cat="smg"      d="M4 12h6l2-3h14v-2h5v2h20l4 2-4 2H32v4l-4 1v3h-5v-4l-5-1H10l-2 3H4zM28 19h6v4h-6z"/>
+  <path data-cat="sidearm"  d="M8 5h30l6 3-2 3H24l-1 4 6 1-1 7-9-1-3-10-8-1z"/>
+  <path data-cat="energy"   d="M2 13h6l2-3h20v-2h6v2h16l8 2-8 2H38v3l-4 1v3h-5v-4l-5-1H10l-3 3H2zM23 4h4l-1 5h-4zM23 18h4l-1 5h-4z"/>
+  <path data-cat="melee"    d="M6 22c8-2 16-8 24-16l4-4 6 4-4 4c-8 8-14 16-16 24l-6 1c1-6 0-10-3-11z"/>
+</svg>`;
+// categoria por arma (fonte de produção: WEAPONS3D[id].category no hud3d)
+const CATS = { m4: 'rifle', ar47: 'rifle', mp5: 'smg', barrett: 'sniper', g19: 'sidearm', sucata: 'melee', pulse: 'energy', shotgun: 'shotgun', lmg: 'lmg' };
+
+const SEASONS = [
+  { id: 'verao',     date: new Date(2026, 0, 10) },
+  { id: 'outono',    date: new Date(2026, 3, 20) },
+  { id: 'inverno',   date: new Date(2026, 6, 15) },
+  { id: 'primavera', date: new Date(2026, 9, 5) },
+];
+let seasonIdx = 3; // primavera
+const iconRow = document.getElementById('iconRow');
+const seasonNote = document.getElementById('seasonNote');
+const seasonRow = document.getElementById('seasonRow');
+const cells = [];
+
+function buildIcons() {
+  iconRow.innerHTML = '';
+  cells.length = 0;
+  const season = SEASONS[seasonIdx];
+  for (const [wid, def] of Object.entries(MYTHIC_SKINS)) {
+    const aura = hudAuraFor({ weaponId: wid, weaponSkin: 'MITICA', mythicStage: 4, now: season.date });
+    const vars = weaponIconVars(aura, def.aura);
+    const cell = document.createElement('div');
+    cell.className = 'iconCell';
+    const icon = document.createElement('div');
+    icon.className = 'weapon-icon mythic';
+    icon.dataset.cat = CATS[wid] ?? 'rifle';
+    icon.innerHTML = ICON_SVG;
+    if (vars) {
+      icon.style.setProperty('--aura', vars.aura);
+      icon.style.setProperty('--aura-season', vars.season);
+      icon.style.setProperty('--aura-dur', vars.dur);
+    }
+    const lbl = document.createElement('small');
+    lbl.textContent = `${def.name ?? wid}\n${vars ? vars.season : '—'}`;
+    cell.append(icon, lbl);
+    iconRow.appendChild(cell);
+    cells.push({ wid, vars });
+  }
+  seasonNote.textContent =
+    `estação: ${SEASONS[seasonIdx].id} (data injetada) — decisão REAL de aura3d.hudAuraFor + weaponIconVars; ` +
+    `CSS de produção (styles3d.css)`;
+  [...seasonRow.children].forEach((b, i) => b.classList.toggle('on', i === seasonIdx));
+}
+SEASONS.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.textContent = s.id.toUpperCase();
+  b.onclick = () => { seasonIdx = i; buildIcons(); };
+  seasonRow.appendChild(b);
+});
+buildIcons();
+
+// ------------------------------------------------------------ loop/hook ----
+let animT = 0;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000);
+  last = now;
+  animT += dt;
+  tickVegetationWind(scene, animT);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+place(stopIdx);
+requestAnimationFrame(frame);
+
+window.__f37 = {
+  place,
+  state: () => {
+    const attr = grassLOD.impostors.geometry.attributes.instanceAlpha;
+    const alphas = [];
+    for (let i = 0; i < grassLOD.impostors.count; i++) alphas.push(+attr.array[i].toFixed(3));
+    const sh = grassLOD.impostorShadows;
+    const shm = sh.instanceMatrix;
+    const anchors = [];
+    for (let i = 0; i < Math.min(3, sh.count); i++) {
+      anchors.push([+shm.array[i * 16 + 12].toFixed(2), +shm.array[i * 16 + 13].toFixed(3), +shm.array[i * 16 + 14].toFixed(2)]);
+    }
+    return {
+      stop: STOPS[stopIdx].id, d: STOPS[stopIdx].d,
+      imp: grassLOD.impostors.count, sh: sh.count,
+      shVisible: sh.visible, alphas, anchors,
+      icons: cells,
+    };
+  },
+};
+</script>
+</body>
+</html>

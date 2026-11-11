@@ -26,6 +26,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_graphics_soak:
+        description: 'Executar replay fixo de 10 min com Lumen/VSM no runner GPU'
+        required: true
+        default: false
+        type: boolean
       publish:
         description: 'Publicar o pacote como GitHub Release'
         required: true
@@ -158,10 +163,52 @@ jobs:
           path: Build/Staging
           retention-days: 30
 
+  graphics_soak:
+    name: UE5.8 fixed replay graphics soak
+    needs: [validate, stress, ue-build]
+    if: always() && inputs.run_engine == true && inputs.run_graphics_soak == true && vars.UE58_ENABLED == 'true' && needs.ue-build.result == 'success'
+    runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      UE5_ROOT: ${{ vars.UE5_ROOT || '/opt/UnrealEngine' }}
+      UE5_REPLAY_COMMAND: ${{ vars.UE5_REPLAY_COMMAND }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download cooked package
+        uses: actions/download-artifact@v4
+        with:
+          name: ue58-cooked-${{ github.sha }}
+          path: Build/Staging
+      - name: Verify GPU/UE5.8/replay contract
+        run: |
+          test -x "$UE5_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd"
+          test -n "$UE5_REPLAY_COMMAND"
+          test -f scripts/performance/ue58-fixed-replay.json
+          nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+      - name: Run fixed 10-minute Lumen/VSM soak
+        run: |
+          mkdir -p artifacts/performance/ue58-fixed-replay
+          node scripts/performance/ue58_fixed_replay.mjs \
+            --replay scripts/performance/ue58-fixed-replay.json \
+            --output-dir artifacts/performance/ue58-fixed-replay
+      - name: Upload Game/Render/GPU metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ue58-fixed-replay-${{ github.sha }}
+          path: artifacts/performance/ue58-fixed-replay
+          retention-days: 30
+
   package:
     name: Package final release
-    needs: [validate, stress, ue-build]
-    if: always() && needs.validate.result == 'success' && needs.stress.result == 'success' && (needs.ue-build.result == 'success' || needs.ue-build.result == 'skipped')
+    needs: [validate, stress, ue-build, graphics_soak]
+    if: always() && needs.validate.result == 'success' && needs.stress.result == 'success' && (needs.ue-build.result == 'success' || needs.ue-build.result == 'skipped') && (needs.graphics_soak.result == 'success' || needs.graphics_soak.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

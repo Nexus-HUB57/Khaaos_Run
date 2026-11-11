@@ -1,0 +1,29 @@
+{
+  "currency": "USD",
+  "assumptions": {
+    "instances": 2,
+    "hourlyRate": 0.09,
+    "redisInstances": 1,
+    "redisHourlyRate": 0.09,
+    "hoursPerDay": 24,
+    "days": 30,
+    "storageGb": 0,
+    "storageRatePerGbMonth": 0,
+    "egressGb": 0,
+    "egressRatePerGb": 0,
+    "fixedMonthly": 0,
+    "budget": 500
+  },
+  "lineItems": {
+    "appCompute": 129.6,
+    "redisCompute": 64.8,
+    "compute": 194.4,
+    "storage": 0,
+    "egress": 0,
+    "fixedMonthlyProrated": 0
+  },
+  "total": 194.4,
+  "budget": 500,
+  "budgetStatus": "within-budget",
+  "liveBillingContacted": false
+}

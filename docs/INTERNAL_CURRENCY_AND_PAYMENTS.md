@@ -2,7 +2,7 @@
 
 **Estado:** KRC interno; Stripe escolhido para uma primeira fase no Brasil; checkout implementado apenas para sandbox/teste e desligado por padrão.
 **Escopo:** compras opcionais de conteúdo/entitlements de jogo com meios de pagamento fiduciários.  
-**Fora de escopo:** token transferível, carteira cripto, depósito/saque on-chain, resgate de KRC, promessa de rendimento ou prêmio em dinheiro.
+**Fora de escopo deste subsistema:** token transferível, carteira cripto, depósito/saque on-chain, resgate de KRC, rendimento e liquidação de eventual recompensa externa. Qualquer possibilidade futura de prêmio é separada da moeda KRC e depende de regulamento e aprovação jurídica, fiscal, financeira e operacional próprios; este documento não cria nem promete prêmio.
 
 ## Decisões de produto
 
@@ -68,6 +68,10 @@ Começar em sandbox; depois canary limitado por feature flag, país e pacote, co
 - Pendentes antes de um desenho live resiliente: `payment_outbox` para processamento assíncrono/retries e `payment_adjustments` append-only para refunds/disputes correlacionados ao pedido/evento/operação do ledger.
 
 Valores são inteiros em minor units e moedas ISO 4217; nunca `float` para dinheiro. Persistir apenas os dados pessoais estritamente necessários. Não gravar PAN, CVV, segredo de webhook, client secret ou tokens de pagamento no ledger nem nos logs.
+
+## Progressão competitiva e partidas de participante único
+
+XP e Rating são progressão competitiva autoritativa, separada do settlement de KRC. `applyMatchRankings` só aplica resultados quando há **pelo menos dois participantes**; uma sala de treino/partida de jogador único não grava `match_results` nem altera XP, Rating, rank ou contadores derivados de ranking. Isso não desativa a fila `mode="solo"` quando há dois ou mais concorrentes humanos. O settlement de KRC é um pipeline distinto; esta regra não altera seus pagamentos.
 
 ## Aceite obrigatório antes de live
 

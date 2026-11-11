@@ -207,13 +207,32 @@ Prioridade recomendada: RoomEventMesh e dano/kills primeiro, depois sagas de lob
 - [x] Ownership de sala passou a usar token único por aquisição.
 - [x] Rollback de matchmaking protegido contra sobrescrita de enqueue posterior.
 - [x] Dequeue e reconciliação de snapshots stale iniciados.
-- [x] Migration e transação idempotente do ranking (`0007_concurrency_fencing.sql`).
+- [x] Migration e transação idempotente do ranking (`0009_concurrency_fencing.sql`).
 - [x] Migration e fencing token do Marshal Council (`attempt_id` + `lease_expires_at`).
-- [ ] Testes de integração Redis com servidor efêmero.
+- [x] Testes de integração Redis com servidor efêmero (`tests/integration/redis-locks.test.ts`, 2/2).
 - [x] Varredura focada dos módulos backend restantes.
 - [x] Dano de zona/eliminação transacional e sem dupla contagem.
 - [x] Cura de jogador/loot com `LEAST(max_health, health + amount)` atômico.
 - [x] Incremento de kills com expressão SQL, sem lost update.
 - [x] Remoção do RoomEventMesh protegida por compare-and-delete Lua.
-- [ ] Lifecycle de renovação e perda de ownership integrado ao `RoomManager`.
-- [ ] Sagas compensatórias de criação de lobby e cleanup do countdown.
+- [x] Lifecycle de ownership integrado: heartbeat em 2/3 do TTL, perda cancela o timer e `destroyRoom` libera por CAS.
+- [x] Cleanup de countdown do `MatchFlow`: handle explícito, cancelamento idempotente e teardown não inicia partida destruída.
+- [x] Rollback de criação de lobby cobre falha de ownership/publicação e libera jogadores, índice local e lease.
+- [ ] Saga completa para falha no meio do seating de matchmaking e cleanup integrado do countdown no `RoomManager`.
+
+## 11. Evidência de desempenho Redis/Lua
+
+Benchmark reproduzível: `npm run bench:redis-locks`, contra Redis 7 local, com
+`BENCH_ROUNDS=5000` e `BENCH_CONCURRENCY=128`.
+
+- Contenção em uma chave: 1.280.000 operações, 5.000 aquisições vencedoras,
+  531.480 ops/s; p50 0,349 ms, p95 0,650 ms, p99 0,994 ms, máximo 4,040 ms.
+- Chaves independentes: 10.000 operações, 232.504 ops/s; p50 0,789 ms,
+  p95 2,769 ms, p99 7,102 ms, máximo 7,140 ms.
+- Segurança de owner obsoleto: release tardio e renew tardio retornaram rejeição
+  e preservaram o token do owner B.
+
+Esses números são baseline de uma instância local, não SLO de produção. O
+benchmark deve ser repetido em staging com latência de rede, Redis configurado
+com persistência e carga concorrente das demais operações da aplicação antes de
+alterar TTLs ou limites.

@@ -26,6 +26,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KhaaosSim3D, DEFAULT_INPUT, BOT_SURVIVAL, WEAPONS3D, rayAabb, windowPaneOnSegment } from '../src/game3d/sim3d.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 30;
 const input = (o = {}) => ({ ...DEFAULT_INPUT, ...o });
@@ -200,6 +201,7 @@ test('fase32 room3d: MESMA economia — bot coleta arma melhor e se cura fora de
   const room = new MatchRoom3D({ id: 'f32-room', seed: 'F32-ROOM', capacity: 2, botFill: 1, airdrop: false, scenarioId: 'CIGKV' });
   assert.ok(room.addPlayer('viewer0', 'OPERADOR-0'));
   assert.ok(room.start('viewer0', 'belt'));
+  disembarcarSala(room, 'viewer0'); // Task 53 — protocolo do trem cumprido antes do teste
   const bot = room.bots[0];
   const viewer = room.humans.get('viewer0');
   viewer.x = bot.x + 200; viewer.z = bot.z; // fora do alcance de visão

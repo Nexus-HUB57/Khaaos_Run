@@ -108,6 +108,12 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_OnithExplosionDamageReduction, Category = "Khaaos|Attributes|Species")
 	FGameplayAttributeData OnithExplosionDamageReduction;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, OnithExplosionDamageReduction)
+
+	/** Zheers passive reduction against typed environmental world damage. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_ZheersEnvironmentalDamageReduction, Category = "Khaaos|Attributes|Species")
+	FGameplayAttributeData ZheersEnvironmentalDamageReduction;
+	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, ZheersEnvironmentalDamageReduction)
+
 	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData AirSpeedBonus;
 	KHAOOS_ATTRIBUTE_ACCESSORS(UKhaaosAttributeSet, AirSpeedBonus)
 	UPROPERTY(BlueprintReadOnly, Category = "Khaaos|Attributes|Species") FGameplayAttributeData WaterRegenPerSecond;
@@ -141,7 +147,8 @@ public:
 		float DamageAmount,
 		const FGameplayTag& DamageType,
 		float ProjectileReduction,
-		float ExplosionReduction);
+		float ExplosionReduction,
+		float EnvironmentReduction = 0.0f);
 
 	/**
 	 * Heal Health by amount. Clamps to MaxHealth.
@@ -231,6 +238,9 @@ public:
 
 	UFUNCTION()
 	void OnRep_OnithExplosionDamageReduction(const FGameplayAttributeData& OldReduction);
+
+	UFUNCTION()
+	void OnRep_ZheersEnvironmentalDamageReduction(const FGameplayAttributeData& OldReduction);
 
 protected:
 

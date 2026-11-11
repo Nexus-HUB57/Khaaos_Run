@@ -261,6 +261,31 @@ UGameplayEffect* UKhaaosGameplayEffects::CreateOnithPassiveEffect(float Reductio
 	return Effect;
 }
 
+UGameplayEffect* UKhaaosGameplayEffects::CreateZheersPassiveEffect(float Reduction)
+{
+	UGameplayEffect* Effect = CreateBaseEffect(TEXT("GE_Species_Zheers_Adaptabilidade"));
+	if (!Effect)
+	{
+		return nullptr;
+	}
+
+	Effect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+	const FKhaaosGameplayTags& Tags = FKhaaosGameplayTags::Get();
+	FGameplayTagContainer GrantedTags;
+	if (Tags.Species_Zheers.IsValid())
+	{
+		GrantedTags.AddTag(Tags.Species_Zheers);
+	}
+	Effect->GrantedTags = GrantedTags;
+
+	FGameplayModifierInfo EnvironmentReduction;
+	EnvironmentReduction.Attribute = UKhaaosAttributeSet::GetZheersEnvironmentalDamageReductionAttribute();
+	EnvironmentReduction.ModifierOp = EGameplayModOp::Additive;
+	EnvironmentReduction.ModifierMagnitude = FScalableFloat(FMath::Clamp(Reduction, 0.0f, 1.0f));
+	Effect->Modifiers.Add(EnvironmentReduction);
+	return Effect;
+}
+
 // ─── CreateZoneDamageEffect ──────────────────────────────────────────────────
 
 

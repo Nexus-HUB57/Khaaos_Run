@@ -26,6 +26,8 @@ test("entrada econômica aceita somente centavos exatos e rejeita destinos inexi
   assert.equal(api.bank.transfer.input.safeParse({ amountKrc: 2.25, destination: "weapons" }).success, false);
   assert.equal(api.bank.transfer.input.safeParse({ amountKrc: 1.005, destination: "fbm" }).success, false);
   assert.equal(api.items.repair.input.safeParse({ amountKrc: 1.001 }).success, false);
+  assert.equal(api.items.craft.input.safeParse({ catalogId: "rifle-de-plasma" }).success, true);
+  assert.equal(api.items.craft.input.safeParse({ catalogId: "rifle-inventado" }).success, false);
 });
 
 test("respostas econômicas preservam correlação e depósito sem pagamento permanece indisponível", () => {
@@ -37,7 +39,8 @@ test("respostas econômicas preservam correlação e depósito sem pagamento per
   assert.equal(api.bank.transfer.responses[200].parse({ message: "ok", newBalance: "9.00", operationId }).operationId, operationId);
   assert.equal(api.loans.request.responses[201].parse({ id: 2, operationId }).operationId, operationId);
   assert.equal(api.loans.pay.responses[200].parse({ message: "ok", operationId }).operationId, operationId);
-  assert.equal(api.items.purchase.responses[201].parse({ id: 3, operationId }).operationId, operationId);
+  assert.equal(api.items.craft.responses[201].parse({ id: 3, operationId }).operationId, operationId);
+  assert.deepEqual(api.items.materials.responses[200].parse([{ materialId: "metal", quantity: 3 }]), [{ materialId: "metal", quantity: 3 }]);
   assert.equal(api.items.repair.responses[200].parse({ message: "ok", newDurability: "100", operationId }).operationId, operationId);
   assert.equal(api.player.daily.responses[200].parse({ message: "ok", amount: "100.00", operationId }).operationId, operationId);
   assert.equal(api.bank.deposit.responses[503].safeParse({ code: "PAYMENTS_NOT_CONFIGURED", message: "aguardando" }).success, true);

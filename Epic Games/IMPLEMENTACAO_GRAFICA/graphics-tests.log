@@ -1,0 +1,256 @@
+TAP version 13
+# Subtest: [gfx] defaults completos e imutáveis
+ok 1 - [gfx] defaults completos e imutáveis
+  ---
+  duration_ms: 1.227035
+  type: 'test'
+  ...
+# Subtest: [gfx] storage vazio → defaults
+ok 2 - [gfx] storage vazio → defaults
+  ---
+  duration_ms: 1.338799
+  type: 'test'
+  ...
+# Subtest: [gfx] round-trip: save parcial → load devolve merge sanitizado
+ok 3 - [gfx] round-trip: save parcial → load devolve merge sanitizado
+  ---
+  duration_ms: 0.391639
+  type: 'test'
+  ...
+# Subtest: [gfx] sanitização: tier inválido descartado; números clampados ao domínio
+ok 4 - [gfx] sanitização: tier inválido descartado; números clampados ao domínio
+  ---
+  duration_ms: 0.19026
+  type: 'test'
+  ...
+# Subtest: [gfx] blob corrompido no storage → defaults (nunca lança)
+ok 5 - [gfx] blob corrompido no storage → defaults (nunca lança)
+  ---
+  duration_ms: 0.24832
+  type: 'test'
+  ...
+# Subtest: [gfx] storage sem setItem (modo privado) não quebra o save
+ok 6 - [gfx] storage sem setItem (modo privado) não quebra o save
+  ---
+  duration_ms: 0.162401
+  type: 'test'
+  ...
+# Subtest: [gfx] effectiveBaseTier: override manual vence; auto preserva o auto-detect
+ok 7 - [gfx] effectiveBaseTier: override manual vence; auto preserva o auto-detect
+  ---
+  duration_ms: 0.172518
+  type: 'test'
+  ...
+# Subtest: buffers: DPR nativo, DRS fracionário e SSR proporcional
+ok 8 - buffers: DPR nativo, DRS fracionário e SSR proporcional
+  ---
+  duration_ms: 1.4296
+  type: 'test'
+  ...
+# Subtest: DRS sincroniza composer, SSR e inverso da resolução FXAA
+ok 9 - DRS sincroniza composer, SSR e inverso da resolução FXAA
+  ---
+  duration_ms: 0.520199
+  type: 'test'
+  ...
+# Subtest: resolução não realoca DPR se inalterado; passes opcionais
+ok 10 - resolução não realoca DPR se inalterado; passes opcionais
+  ---
+  duration_ms: 0.227087
+  type: 'test'
+  ...
+# Subtest: descarte libera cada passe e composer mesmo com erro intermediário
+ok 11 - descarte libera cada passe e composer mesmo com erro intermediário
+  ---
+  duration_ms: 0.247621
+  type: 'test'
+  ...
+# Subtest: macrovariação: cinco mundos, determinismo e componentes limitados
+ok 12 - macrovariação: cinco mundos, determinismo e componentes limitados
+  ---
+  duration_ms: 1.624774
+  type: 'test'
+  ...
+# Subtest: terreno: plano jogável permanece EXATAMENTE em y=0 (contrato de gameplay)
+ok 13 - terreno: plano jogável permanece EXATAMENTE em y=0 (contrato de gameplay)
+  ---
+  duration_ms: 6.854912
+  type: 'test'
+  ...
+# Subtest: terreno: relevo existe além da borda em TODOS os cenários + determinismo
+ok 14 - terreno: relevo existe além da borda em TODOS os cenários + determinismo
+  ---
+  duration_ms: 0.784316
+  type: 'test'
+  ...
+# Subtest: terreno: contínuo (sem degraus) na rampa da borda
+ok 15 - terreno: contínuo (sem degraus) na rampa da borda
+  ---
+  duration_ms: 0.230137
+  type: 'test'
+  ...
+# Subtest: terreno: perfis por mundo (Ckesalth dunes ≫ Barburhen planície; cantos mais altos)
+ok 16 - terreno: perfis por mundo (Ckesalth dunes ≫ Barburhen planície; cantos mais altos)
+  ---
+  duration_ms: 7.62155
+  type: 'test'
+  ...
+# Subtest: buildScene: malha de terreno com relevo + vertex colors + centro plano
+ok 17 - buildScene: malha de terreno com relevo + vertex colors + centro plano
+  ---
+  duration_ms: 553.577129
+  type: 'test'
+  ...
+# Subtest: interiores: determinismo (mesma seed+cenário => placements idênticos)
+ok 18 - interiores: determinismo (mesma seed+cenário => placements idênticos)
+  ---
+  duration_ms: 22.803403
+  type: 'test'
+  ...
+# Subtest: interiores: kit por tipo de estrutura + acento por mundo
+ok 19 - interiores: kit por tipo de estrutura + acento por mundo
+  ---
+  duration_ms: 30.923447
+  type: 'test'
+  ...
+# Subtest: interiores: ZERO impacto em gameplay — layout intacto, mobília dentro da pegada, porta na face da fachada e corredor livre
+ok 20 - interiores: ZERO impacto em gameplay — layout intacto, mobília dentro da pegada, porta na face da fachada e corredor livre
+  ---
+  duration_ms: 9.360736
+  type: 'test'
+  ...
+# Subtest: interiores: densidade responde ao tier (interiorFactor)
+ok 21 - interiores: densidade responde ao tier (interiorFactor)
+  ---
+  duration_ms: 2.032695
+  type: 'test'
+  ...
+# Subtest: buildShellHost: casca tem piso, paredes com vão, teto e mobília (malha real)
+ok 22 - buildShellHost: casca tem piso, paredes com vão, teto e mobília (malha real)
+  ---
+  duration_ms: 453.318041
+  type: 'test'
+  ...
+# Subtest: integração buildScene: registro interiors completo nos 5 cenários + idempotência
+ok 23 - integração buildScene: registro interiors completo nos 5 cenários + idempotência
+  ---
+  duration_ms: 1961.014329
+  type: 'test'
+  ...
+# Subtest: cascas substituem a caixa sólida: sem box duplicado, sem cap, collider intocado
+ok 24 - cascas substituem a caixa sólida: sem box duplicado, sem cap, collider intocado
+  ---
+  duration_ms: 292.08679
+  type: 'test'
+  ...
+# Subtest: cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)
+ok 25 - cenários preservados: SCENARIOS intactos pela Fase 23 (contrato de gameplay)
+  ---
+  duration_ms: 0.133338
+  type: 'test'
+  ...
+# Subtest: [perf] EMA converge para o frametime real (constante de tempo, não de frames)
+ok 26 - [perf] EMA converge para o frametime real (constante de tempo, não de frames)
+  ---
+  duration_ms: 1.999887
+  type: 'test'
+  ...
+# Subtest: [perf] EMA descarta hitches de aba (dt > 0.5 s) sem contaminar a média
+ok 27 - [perf] EMA descarta hitches de aba (dt > 0.5 s) sem contaminar a média
+  ---
+  duration_ms: 0.237681
+  type: 'test'
+  ...
+# Subtest: [perf] warmup: 30 amostras válidas antes de decidir
+ok 28 - [perf] warmup: 30 amostras válidas antes de decidir
+  ---
+  duration_ms: 0.147646
+  type: 'test'
+  ...
+# Subtest: [perf] DRS: não reage antes da sustentação (0.6 s de overload)
+ok 29 - [perf] DRS: não reage antes da sustentação (0.6 s de overload)
+  ---
+  duration_ms: 0.395085
+  type: 'test'
+  ...
+# Subtest: [perf] DRS: piso 0.55 e teto 1.0 nunca são ultrapassados
+ok 30 - [perf] DRS: piso 0.55 e teto 1.0 nunca são ultrapassados
+  ---
+  duration_ms: 1.552496
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: carga sustentada converge SEM oscilar (≤8 mudanças em 600 frames)
+ok 31 - [perf] DRS simulador: carga sustentada converge SEM oscilar (≤8 mudanças em 600 frames)
+  ---
+  duration_ms: 0.624911
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: carga leve mantém escala máxima (zero mudanças)
+ok 32 - [perf] DRS simulador: carga leve mantém escala máxima (zero mudanças)
+  ---
+  duration_ms: 0.876446
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: stall único de ~96 ms não cruza o limiar (escala intocada)
+ok 33 - [perf] DRS simulador: stall único de ~96 ms não cruza o limiar (escala intocada)
+  ---
+  duration_ms: 0.680664
+  type: 'test'
+  ...
+# Subtest: [perf] DRS simulador: recuperação sobe de volta ao teto quando a carga cessa
+ok 34 - [perf] DRS simulador: recuperação sobe de volta ao teto quando a carga cessa
+  ---
+  duration_ms: 3.077519
+  type: 'test'
+  ...
+# Subtest: [perf] tier: NÃO desce com DRS fora do piso (a alternativa estrutural é o último recurso)
+ok 35 - [perf] tier: NÃO desce com DRS fora do piso (a alternativa estrutural é o último recurso)
+  ---
+  duration_ms: 1.414692
+  type: 'test'
+  ...
+# Subtest: [perf] tier: desce high→medium com overload sustentado NO PISO do DRS
+ok 36 - [perf] tier: desce high→medium com overload sustentado NO PISO do DRS
+  ---
+  duration_ms: 0.442667
+  type: 'test'
+  ...
+# Subtest: [perf] tier: upgrade exige folga LONGA no teto (anti ping-pong em carga senoidal)
+ok 37 - [perf] tier: upgrade exige folga LONGA no teto (anti ping-pong em carga senoidal)
+  ---
+  duration_ms: 2.172751
+  type: 'test'
+  ...
+# Subtest: [perf] tier: upgrade medium→high após 20 s de folga no teto
+ok 38 - [perf] tier: upgrade medium→high após 20 s de folga no teto
+  ---
+  duration_ms: 1.06676
+  type: 'test'
+  ...
+# Subtest: [perf] budgetFor: high/medium 15 ms, low 22 ms; tier desconhecido cai no high
+ok 39 - [perf] budgetFor: high/medium 15 ms, low 22 ms; tier desconhecido cai no high
+  ---
+  duration_ms: 0.119634
+  type: 'test'
+  ...
+# Subtest: [perf] RateLimiter: intervalo mínimo respeitado (~30 passes/s a 33 ms)
+ok 40 - [perf] RateLimiter: intervalo mínimo respeitado (~30 passes/s a 33 ms)
+  ---
+  duration_ms: 0.246194
+  type: 'test'
+  ...
+# Subtest: [perf] postFxPlanFor: SSR exclusivo do high; low não tem composer
+ok 41 - [perf] postFxPlanFor: SSR exclusivo do high; low não tem composer
+  ---
+  duration_ms: 0.318889
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 41
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3693.772287

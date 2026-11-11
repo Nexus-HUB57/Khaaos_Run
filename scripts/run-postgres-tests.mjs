@@ -32,7 +32,10 @@ const testFiles = readdirSync(integrationDir)
   .sort()
   .map((file) => join("tests", "integration", file));
 
-const result = spawnSync(process.execPath, ["--import", "tsx", "--test", ...testFiles], {
+// Todos os arquivos apontam para a mesma base *_test. Executar seus hooks de
+// migração em paralelo pode aplicar o mesmo DDL simultaneamente e falhar com
+// constraints duplicadas; a ordem por arquivo preserva isolamento previsível.
+const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", ...testFiles], {
   stdio: "inherit",
   env: {
     ...process.env,

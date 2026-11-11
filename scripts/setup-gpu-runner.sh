@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Khaaos Run — Setup do Runner GPU Self-Hosted (ue5-headless-compile)
+# Khaaos Run — Setup do Runner UE5 Self-Hosted (ue5-headless-compile)
 # =============================================================================
-# Registra um runner self-hosted Linux x64 com os labels EXATOS que o workflow
+# Registra um runner self-hosted Linux x64 com as labels que o workflow
 # .github/workflows/ue5-headless-compile.yml exige:
 #
-#     runs-on: [self-hosted, linux, gpu, ue5.8, x64]
+#     runs-on: [self-hosted, linux, ue5.8, x64]
 #
 # Uso rápido (interativo):
 #   bash scripts/setup-gpu-runner.sh
@@ -35,7 +35,7 @@ REPO_URL="${REPO_URL:-https://github.com/Nexus-HUB57/Khaaos_Run}"
 RUNNER_VERSION="${RUNNER_VERSION:-}"            # vazio = busca a latest da API
 RUNNER_DIR="${RUNNER_DIR:-$HOME/actions-runner}"
 RUNNER_NAME="${RUNNER_NAME:-gpu-runner-$(hostname -s 2>/dev/null || echo 01)}"
-RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,gpu,ue5.8,x64}"   # deve bater com runs-on do ue5-headless-compile.yml
+RUNNER_LABELS="${RUNNER_LABELS:-self-hosted,linux,ue5.8,x64}"   # deve bater com runs-on do ue5-headless-compile.yml
 RUNNER_GROUP="${RUNNER_GROUP:-Default}"
 RUNNER_WORKDIR="${RUNNER_WORKDIR:-$HOME/runner-work}"
 UE5_INSTALL_DIR="${UE5_INSTALL_DIR:-/opt/UnrealEngine}"
@@ -106,7 +106,8 @@ RAM_GB=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 / 1024 ))
 DISK_GB="$(df --output=avail -BG "$(dirname "${UE5_INSTALL_DIR}")" | tail -1 | tr -dc '0-9')"
 [[ ${DISK_GB:-0} -ge 60 ]] || warn "Disco: ${DISK_GB} GB livres — compilar UE5 precisa de ~60-100 GB"
 
-# GPU (label "GPU runner"): driver NVIDIA presente?
+# GPU é opcional para compilação/automação headless (-NullRHI); só os
+# benchmarks gráficos e Pixel Streaming dependem do driver NVIDIA.
 if command -v nvidia-smi >/dev/null 2>&1; then
   log "GPU: $(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)"
 else

@@ -10,6 +10,7 @@ import { computeMatchRewards, grantMatchRewards, rewardsEnabled, REWARD_RULES, r
 import { Economy, Ledger } from '../server/economy.js';
 import { AuditLog } from '../server/audit.js';
 import { MatchRoom3D } from '../server/room3d.js';
+import { disembarcarSim, disembarcarSala } from './helpers/zuProtocolo.js'; // Task 53 — fixture do protocolo do trem
 
 const DT = 1 / 20;
 
@@ -68,6 +69,7 @@ test('rewards: fim de partida real da MatchRoom3D dispara callback único e conc
   });
   room.addPlayer('p1', 'JOGADOR-1');
   assert.ok(room.start('p1', 'belt'));
+  disembarcarSala(room, 'p1'); // Task 53 — protocolo do trem cumprido antes do teste
   assert.ok(room.matchId.startsWith('ring3d-test#'), `matchId derivado da sala: ${room.matchId}`);
   // Força fim por tempo com humano vivo (survived=true).
   room.time = 0;
