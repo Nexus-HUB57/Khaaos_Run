@@ -1,4 +1,4 @@
-import { type FC } from "react";
+import { type FC, useState } from "react";
 import type { OperativeArchetype } from "@shared/character-studio";
 
 interface OperativeAvatarBadgeProps {
@@ -31,6 +31,10 @@ export const OperativeAvatarBadge: FC<OperativeAvatarBadgeProps> = ({
   const hair = operative.avatarVisual?.hairColorHex ?? "#1a1a1a";
   const eyes = operative.avatarVisual?.eyeColorHex ?? "#00f0ff";
   const isFemale = operative.gender === "FEMININO";
+  const realisticAvatarPath = operative.faction && operative.faction !== "MILITAR"
+    ? `/avatars/realistic/${operative.id.toLowerCase()}.webp`
+    : undefined;
+  const [realisticLoaded, setRealisticLoaded] = useState(false);
 
   // Unique facial, hairstyle, and headgear paths based on character id
   const renderFeatures = () => {
@@ -286,11 +290,25 @@ export const OperativeAvatarBadge: FC<OperativeAvatarBadgeProps> = ({
         <line x1="50" y1="0" x2="50" y2="100" stroke={primaryHex} strokeWidth="0.4" />
       </svg>
 
+      {realisticAvatarPath && (
+        <img
+          src={realisticAvatarPath}
+          alt={`Retrato de ${operative.codename}`}
+          className="absolute inset-0 h-full w-full object-cover"
+          onLoad={() => setRealisticLoaded(true)}
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+            setRealisticLoaded(false);
+          }}
+        />
+      )}
+
       {/* Operative Vector Portrait */}
       <svg
         viewBox="0 0 100 100"
         className="relative w-full h-full"
         xmlns="http://www.w3.org/2000/svg"
+        style={{ opacity: realisticLoaded ? 0 : 1 }}
       >
         <defs>
           <linearGradient id={`skinGrad-${operative.id}`} x1="0" y1="0" x2="1" y2="1">

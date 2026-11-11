@@ -11,6 +11,8 @@ export interface OperativeAvatarOption {
   /** ADR-ESQUELETO-RIG-POR-SEXO runtime skeleton. */
   skeleton: "SK_Manny" | "SK_Gwen";
   avatarPath: string;
+  /** Retrato fotorrealista local opcional; o SVG permanece o fallback canônico. */
+  realisticAvatarPath?: string;
   canonical: boolean;
   /** Facção declarada: militares canônicos, milícias e gangues urbanas (Lote 4). */
   branch: OperativeFaction;
@@ -34,6 +36,11 @@ export interface OperativeAvatarRuntime {
 function avatarPath(id: string, gender: OperativeGender): string {
   const folder = gender === "MASCULINO" ? "male" : "female";
   return `/avatars/${folder}/${id.toLowerCase()}.svg`;
+}
+
+function realisticAvatarPath(id: string, branch: OperativeFaction): string | undefined {
+  if (branch === "MILITAR") return undefined;
+  return `/avatars/realistic/${id.toLowerCase()}.webp`;
 }
 
 /**
@@ -75,6 +82,7 @@ export const OPERATIVE_AVATAR_OPTIONS: readonly OperativeAvatarOption[] = [
     ueAssetId: operative.ueAssetId,
     skeleton: operative.biomechanics.skeleton,
     avatarPath: avatarPath(operative.id, operative.gender),
+    realisticAvatarPath: realisticAvatarPath(operative.id, operative.faction ?? "MILITAR"),
     canonical: true,
     branch: operative.faction ?? ("MILITAR" as const),
   })),

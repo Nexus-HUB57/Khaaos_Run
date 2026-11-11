@@ -240,3 +240,42 @@ test("Lote 4: asset_manifest.json com 16 entradas novas, rig por sexo e sem UE5_
     "nenhum resíduo de placeholder no manifest",
   );
 });
+
+test("Lote 4: pacote realista WebP com 16 retratos, proveniência e fallback SVG", async () => {
+  const fs = await import("node:fs");
+  const crypto = await import("node:crypto");
+  const manifestPath = path.resolve("client/public/avatars/realistic/avatar_catalog.json");
+  assert.ok(fs.existsSync(manifestPath), "manifest do pacote realista existe");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as AnyRecord;
+  const assets = manifest.assets as AnyRecord[];
+  assert.equal(assets.length, 16, "há exatamente 16 retratos realistas do Lote 4");
+  assert.equal(manifest.conversion.format, "WebP");
+  for (const op of MILITIA) {
+    const option = OPERATIVE_AVATAR_OPTIONS.find((candidate) => candidate.id === op.id);
+    assert.ok(option?.realisticAvatarPath, `${op.id} tem caminho realista`);
+    assert.equal(option.realisticAvatarPath, `/avatars/realistic/${op.id.toLowerCase()}.webp`);
+    const record = assets.find((asset) => asset.operative_id === op.id);
+    assert.ok(record, `manifest contém ${op.id}`);
+    assert.equal(record.codename, op.codename);
+    assert.equal(record.faction, op.faction);
+    assert.equal(record.client_path, option.realisticAvatarPath);
+    assert.equal(record.width, 768);
+    assert.equal(record.height, 768);
+    assert.equal(record.runtime_status, "2D portrait only; not a rigged or UE5-ready character mesh");
+    assert.equal(record.commercial_use, "requires separate rights/license approval");
+    const imagePath = path.resolve(`client/public${option.realisticAvatarPath}`);
+    assert.ok(fs.existsSync(imagePath), `${op.id}: WebP estático existe`);
+    const bytes = fs.readFileSync(imagePath);
+    assert.equal(bytes.subarray(0, 4).toString("ascii"), "RIFF", `${op.id}: container RIFF`);
+    assert.equal(bytes.subarray(8, 12).toString("ascii"), "WEBP", `${op.id}: formato WebP`);
+    assert.ok(bytes.length < 750_000, `${op.id}: thumbnail leve (${bytes.length} bytes)`);
+    const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+    assert.equal(record.client_sha256, digest, `${op.id}: SHA-256 do artefato confere`);
+    assert.ok(record.source_sha256?.length === 64, `${op.id}: SHA-256 da fonte registrado`);
+  }
+  assert.ok(
+    OPERATIVE_AVATAR_OPTIONS.filter((option) => option.branch === "MILITAR")
+      .every((option) => option.realisticAvatarPath === undefined),
+    "os 16 militares canônicos e TALON continuam com o SVG original",
+  );
+});
