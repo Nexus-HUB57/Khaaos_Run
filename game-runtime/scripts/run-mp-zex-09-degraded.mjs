@@ -58,7 +58,7 @@ const LOSS_P = Number(process.env.KR_ZEX09_LOSS_P ?? 0.02);
 
 const REMOTE_BASE = process.env.KR_ZEX09_BASE_URL;
 const REQUEST_TIMEOUT_MS = 12_000;
-const TEST_TIMEOUT_MS = 420_000;
+const TEST_TIMEOUT_MS = 600_000;
 const sleep = (ms) => delay(ms);
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const safeLog = (message) => console.log(`[MP-ZEX-09] ${message}`);
@@ -822,6 +822,14 @@ async function main() {
     }
     if (!navigated) throw new Error(`Nenhuma sala jogável (par navegável + navegação sobrevivível) em ${ROOM_ATTEMPTS} tentativas (layout por partida).`);
 
+    // RTT BASE runner↔staging (sem link): escala timeouts de “liberação”
+    // imediata — runners intercontinentais (VPS em SP) têm base de ~700 ms e
+    // os timeouts fixos de loopback estouram antes da liberação chegar.
+    let rttBaseMs = 0;
+    try {
+      rttBaseMs = (await measureRtt(a, 3)).medianMs;
+    } catch { /* sem base medida: timeouts default */ }
+
     // ══ FASE 1 — B, rede NORMAL: interrupção + conclusão (baseline D) ══
     const xpBeforeB = b.latestSnapshot.player.xp;
     await startChannel(b, terminalB);
@@ -830,7 +838,7 @@ async function main() {
     const released1 = await waitSnapshot(a, (s) => {
       const t = (s.terminals ?? []).find((x) => x.id === terminalB.id);
       return t?.active === true && t.channeling === false && (t.channelProgress ?? 0) === 0;
-    }, 'liberação imediata do terminal oeste após queda', 3_000);
+    }, 'liberação imediata do terminal oeste após queda', rttBaseMs ? Math.max(3_000, rttBaseMs * 6) : 3_000);
     if ((released1.player?.extracted ?? 0) !== (a.latestSnapshot.player.extracted ?? 0)) {
       throw new Error('Fase 1: queda alterou extrações do observador.');
     }
@@ -904,7 +912,7 @@ async function main() {
     const released2 = await waitSnapshot(b1, (s) => {
       const t = (s.terminals ?? []).find((x) => x.id === terminalA.id);
       return t?.active === true && t.channeling === false && (t.channelProgress ?? 0) === 0;
-    }, 'liberação do terminal leste após queda degradada', 4_000);
+    }, 'liberação do terminal leste após queda degradada', Math.max(4_000, rtt2.medianMs * 8));
     const a2r = await openClient(tokenA, { label: 'A(resume-2)', resumeToken: foundA.resumeToken, seqStart: a2.seq });
     clients.push(a2r);
     const resumedMessage2 = await waitMessage(a2r, (m) => m.type === 'resumed', 'resume 2 de A', 8_000);
