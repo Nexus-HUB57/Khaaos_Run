@@ -13,6 +13,7 @@ import {
   OPERATIVE_AVATAR_OPTIONS,
   DEFAULT_OPERATIVE_AVATAR_ID,
   getOperativeAvatarOption,
+  getOperativeAvatarRuntime,
   isOperativeAvatarId,
 } from "../../shared/operative-avatar-catalog";
 import { EP555_RANKS, SPECIALIZATION_IDS } from "../../shared/schema";
@@ -278,4 +279,21 @@ test("Lote 4: pacote realista WebP com 16 retratos, proveniência e fallback SVG
       .every((option) => option.realisticAvatarPath === undefined),
     "os 16 militares canônicos e TALON continuam com o SVG original",
   );
+});
+
+test("Lote 5: runtime do lobby envia retrato realista local com fallback SVG", () => {
+  for (const op of MILITIA) {
+    const runtime = getOperativeAvatarRuntime(op.id);
+    assert.equal(runtime.id, op.id);
+    assert.equal(runtime.realisticAvatarPath, `/avatars/realistic/${op.id.toLowerCase()}.webp`);
+    assert.equal(runtime.avatarPath, getOperativeAvatarOption(op.id).avatarPath);
+    assert.ok(runtime.realisticAvatarPath?.startsWith("/avatars/"));
+    assert.ok(!runtime.realisticAvatarPath?.startsWith("http"), "o cliente usa path local confiável");
+  }
+  for (const option of OPERATIVE_AVATAR_OPTIONS.filter((item) => item.branch === "MILITAR")) {
+    const runtime = getOperativeAvatarRuntime(option.id);
+    assert.equal(runtime.realisticAvatarPath, undefined, `${option.id}: sem retrato Lote 4`);
+    assert.equal(runtime.avatarPath, option.avatarPath, `${option.id}: mantém SVG canônico`);
+  }
+  assert.equal(getOperativeAvatarRuntime("__proto__").id, DEFAULT_OPERATIVE_AVATAR_ID);
 });
