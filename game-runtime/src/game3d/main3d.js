@@ -8,7 +8,9 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW,
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
-import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, poseWeaponSprint, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+// Task 56 — locomoção humana: blender determinístico de velocidade + fase de passada
+import { createLocomotionBlend } from './locomotion3d.js';
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { tickMythicWeapons, unregisterMythic, MYTHIC_SKIN, MYTHIC_SKINS, mythicSkinFor } from './attachments3d.js'; // Fase 30/32 — anexos + míticas por arma
 import { createCharacterLOD, buildOperativeProxy, buildOperativeSilhouette, createFrustumGate } from './lod3d.js';
@@ -58,6 +60,7 @@ export class Game3D {
     this.accumulator = 0;
     this.clock = new THREE.Clock();
     this.animT = 0;
+    this.fpsSprintK = 0;   // Task 56 — suavização do low-ready em 1ª pessoa
     this.zuOpen = true;
     this.ended = false;
     // modo online (OnlineGame3D injeta o NetClient3D e substitui this.sim pela view)
@@ -220,7 +223,7 @@ export class Game3D {
         );
         this.scene.add(op.group);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally });
+        this.botOps.set(b.id, { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name: this.makeNameTag(b.name, i, ally, !!b.officer), ally, loco: createLocomotionBlend() });
       });
     }
     // loot
@@ -366,12 +369,25 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
+    // Task 56 — FIX-RAIZ do "personagem quadrado/sem corpo": o rig de 1ª pessoa
+    // (braços orgânicos + arma) é FILHO DA CÂMERA, e a câmera nunca foi add() à
+    // cena — filhos de nó fora do grafo NUNCA renderizam. O jogador via só a
+    // mira flutuando (zero corpo) desde sempre.
+    this.scene.add(this.camera);
+    // Task 56 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
+    // curto (~3 m) — ilumina só braços/arma (o sol da cena bate nas costas do
+    // rig e o deixava uma silhueta preta ilegível).
+    const vmLight = new THREE.PointLight('#fff2df', .9, 3.2, 2);
+    vmLight.position.set(.1, -.05, -.15);
+    this.camera.add(vmLight);
     if (this.firstPersonRig) {
       this.camera.add(this.firstPersonRig);
       this.firstPersonWeapon = createWeaponModel(this.sim.player.weapon);
       this.firstPersonRig.add(this.firstPersonWeapon.group);
-      this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-      this.firstPersonWeapon.group.rotation.x = -.08;
+      // Task 56 — viewmodel canônico: arma à DIREITA da mira e angulada p/ dentro
+      // (antes: x=0 — o fuzil de costas cobria a mira no centro da tela)
+      this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+      this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
     }
     this.camKick = 0; // recuo visual do disparo (só câmera, não afeta a mira)
     this.initPost();
@@ -831,14 +847,28 @@ export class Game3D {
     // Fase 4 — pose de queda: braços abertos, pernas colhendo ar
     // Fase 9 — `air` esvanece a sombra de contato com a altitude
     const airborne = !!p.dropPhase;
-    animateOperative(this.playerOp.parts, {
-      t: this.animT, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
+    // Task 56 — LOCOMOÇÃO HUMANA: o alvo binário da sim (0/.8/1.2) passa pelo
+    // blender por ator (aceleração/frenagem exponenciais) e a fase da passada é
+    // INTEGRADA — trocar andar↔sprint ajusta a cadência, nunca teleporta a pose.
+    const loco = (this.playerLoco ??= { blend: createLocomotionBlend(), dip: 0, wasGround: !!p.onGround, fallV: 0 });
+    const pFx = animateOperative(this.playerOp.parts, {
+      t: this.animT,
+      ...loco.blend.update(dt, (!p.alive || p.knocked) ? 0 : (p.moving ? (p.sprinting ? 1.2 : .8) : 0), { sprint: !!(p.alive && p.sprinting && !p.ads && !p.crouching) }),
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
     });
+    // Task 56 — DIP DE POUSO: pico de vy na transição ar→chão vira absorção
+    // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
+    const groundedNow = !!p.onGround;
+    if (groundedNow && !loco.wasGround) loco.dip = Math.min(.12, Math.max(0, -(loco.fallV ?? 0)) * .016);
+    loco.wasGround = groundedNow;
+    loco.fallV = groundedNow ? 0 : (p.vy ?? 0);
+    loco.dip *= Math.exp(-dt * 6.5);
+    // Task 56 — arma em 3ª pessoa acompanha o low-ready do sprint
+    poseWeaponSprint(this.playerOp.group.userData.weaponRig, pFx?.sprintK ?? 0);
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
@@ -865,8 +895,8 @@ export class Game3D {
         this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
         this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin, { attachments: p.weaponAttachments ?? [], attachmentRarities: p.attachmentRarities ?? [], mythicStage: pStage, mythicColor: pSkinDef?.aura });
         this.firstPersonRig.add(this.firstPersonWeapon.group);
-        this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-        this.firstPersonWeapon.group.rotation.x = -.08;
+        this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+        this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
       }
     }
     // bots
@@ -899,7 +929,7 @@ export class Game3D {
         const name = this.makeNameTag(b.name, 0, ally, !!b.officer, b.patente ?? null);
         op.group.add(name);
         attachWeapon(op.parts, op.group, b.weapon, b.weaponSkin);
-        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null };
+        entry = { op, weapon: b.weapon, skin: b.weaponSkin ?? null, name, ally, patente: b.patente ?? null, officer: !!b.officer, frustum: null, loco: createLocomotionBlend() };
         this.botOps.set(b.id, entry);
       } else if ((entry.patente ?? null) !== (b.patente ?? null) || entry.officer !== !!b.officer) {
         // Fase 11 — patente/insígnia chegou depois do spawn (resolvida async): troca o sprite
@@ -959,7 +989,16 @@ export class Game3D {
       // Fase 13 — fora do frustum a pose CONGELA (posições/rotações da raiz seguem
       // — o ator não some do mundo, só para de gastar CPU de animação)
       const parts = entry.op.activeParts();
-      if (parts && !entry.frozen) animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), speedNorm: b.moving ? .9 : .15, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+      // Task 56 — bots atravessam o MESMO blender (fase integrada por ator);
+      // idle de verdade a 0 — respiração/transferência de peso do idle animam.
+      const bloco = (entry.loco ??= createLocomotionBlend());
+      const bL = bloco.update(dt, (!b.alive || b.knocked || b.dropPhase) ? 0 : (b.moving ? .9 : 0));
+      const bFx = (parts && !entry.frozen)
+        ? animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), ...bL, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) })
+        : null;
+      // Task 56 — arma em 3ª pessoa acompanha o low-ready (bots ficam no regime
+      // de patrulha: sprintK 0 — hook pronto para oficiais em sprint)
+      poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
       // Fase 26 — silhueta LARANJA do fieldScan (revelado atrás de cobertura):
       // offline revela por revealedTicks; online pelo flag revealed do snapshot.
       this.#setBotRevealGlow(entry, !!(b.revealedTicks > 0 || b.revealed));
@@ -1032,14 +1071,44 @@ export class Game3D {
       this.camera.position.lerp(eye, Math.min(1, dt * 18));
       this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
       this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
+      // Task 56 — câmera VIVA: bob vertical (contrato Fase 5) + balanço lateral
+      // ELÍPTICO em espaço local da câmera + dip de pouso vindo do syncEntities.
       const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
-      this.camera.position.y += bob;
+      const loco = this.playerLoco;
+      const dip = loco?.dip ?? 0;
+      const bobX = (p.alive && !p.dropPhase && p.moving) ? Math.cos(this.cameraSway * .5) * (p.sprinting ? .014 : .006) : 0;
+      this.camera.position.y += bob - dip;
+      this.camera.translateX(bobX);
       this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
-      this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
+      this.firstPersonRig.position.y += (bob - dip * .6 - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
       this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
       // Fase 10 — mãos articuladas: grip + indicador no gatilho + micro-vida;
       // flinch da própria câmera quando o jogador é atingido (roll + recuo)
       poseFirstPersonHands(this.firstPersonRig, { curl: .8 + this.camKick * 2.2, trigger: this.input.fire ? 1 : 0, breathe: Math.sin(this.animT * 2.1) * .03 });
+      // Task 56 — SPRINT em 1ª pessoa: arma e braços abaixam (low-ready) e
+      // voltam à mira ao atirar/mirar; pose ABSOLUTA a partir da base gravada
+      // no rig (sem drift acumulado entre frames).
+      // sprintK já sai SUAVIZADO do blender (constante de tempo do corpo);
+      // fire/ADS erguem a arma na hora (gate local).
+      const sprintRaw = (!p.ads && !this.input.fire) ? (loco?.blend.sprintK ?? 0) : 0;
+      this.fpsSprintK += (sprintRaw - this.fpsSprintK) * Math.min(1, dt * 10);
+      const sk = this.fpsSprintK;
+      const arms = this.firstPersonRig.userData.arms;
+      if (arms) {
+        const bL = arms.armL.userData.base, bR = arms.armR.userData.base;
+        arms.armL.rotation.x = bL.x + sk * .3;
+        arms.armR.rotation.x = bR.x + sk * .34;
+        arms.armR.rotation.y = bR.y - sk * .18;
+        arms.armL.rotation.y = bL.y + sk * .1;
+      }
+      if (this.firstPersonWeapon) {
+        const wg = this.firstPersonWeapon.group;
+        const wb = (wg.userData.sprintBase ??= { rx: wg.rotation.x, py: wg.position.y, pz: wg.position.z });
+        wg.rotation.x = wb.rx - sk * .42;
+        wg.rotation.y = sk * .26;
+        wg.position.y = wb.py - sk * .07;
+        wg.position.z = wb.pz + sk * .05;
+      }
       const hf = this.hitFX.get('player');
       if (hf) {
         const env = (hf.age < .06 ? hf.age / .06 : Math.exp(-(hf.age - .06) / .17)) * hf.power;

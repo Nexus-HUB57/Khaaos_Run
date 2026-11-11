@@ -485,13 +485,20 @@ export function createOperative({ skin = SKIN_TONES[0], vest = VEST_COLORS[0], s
 // roll de passada, contra-rotação de cabeça e fade da sombra de contato por
 // `air` (altitude na infiltração). Frequências dessintonizadas evitam loop
 // mecânico; tudo determinístico (sem Math.random).
+// Task 56: `phase` = FASE DA PASSADA INTEGRADA (rad) vinda do blender por ator
+// (locomotion3d.js) — mudar a velocidade altera só a cadência futura, nunca a
+// fase atual (fim do salto de pose ao trocar andar↔sprint). Fallback canônico
+// (contrato Fase 16 preservado em testes): phase = t*W. speedNorm > 1.02 (sprint)
+// ABAIXA a arma (low-ready) com o corpo livre — andar mantém o braço preso à
+// mira; a função retorna { sprintK } para a arma de 3ª pessoa acompanhar
+// (poseWeaponSprint).
 // Fase 10: `hit` = reação de impacto direcional { angle, power, age } — flinch
 // ADITIVO sobre a pose base (não a substitui): ângulo em espaço do personagem
 // (0 = frente, +π/2 = lado +x, π = costas), power 0..1 e age em segundos.
 // Fase 12: `death` = { angle, power, age, seed } — agonia direcional aditiva
 // (membros abrem pelo envelope do fall); rosto reage via rig de blendshapes
 // (dor no impacto, morte, careta no DBNO, piscar automático dessincronizado).
-export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null } = {}) {
+export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead = false, ads = false, crouch = false, knocked = false, air = 0, hit = null, death = null, phase = null, sprintK = null } = {}) {
   let hitEnv = 0;                                            // acopla rosto à dor
   // Fase 26 — Talon: física de mola SIMPLES das tiras da jaqueta (determinística:
   // fase semeada no userData; amplitude cresce com velocidade e no ar).
@@ -527,7 +534,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
       parts.legR.hip.rotation.x = Math.max(-1.2, parts.legR.hip.rotation.x - j.legR);
       parts.head.rotation.y += j.head;
     }
-    return;
+    return { sprintK: 0 };
   }
   if (knocked) {
     // rastejar: tronco deitado, cotoveladas alternadas arrastando o corpo
@@ -552,7 +559,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.head.rotation.y = Math.sin(t * 1.3) * .18;       // observa ao rastejar
     parts.head.rotation.z = 0;
     if (parts.face) parts.face.set('knocked', 1);          // careta + dentes cerrados
-    return;
+    return { sprintK: 0 };
   }
   const idle = 1 - Math.min(1, speedNorm);
   const breathe = Math.sin(t * 2.1);                       // respiração
@@ -561,8 +568,14 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   // pelve gira contra o tronco, tornozelos rolam calcanhar→ponta e o corpo
   // inclina PARA DENTRO do sprint. Frequência base preservada em repouso. ----
   const W = 8.6 + 2.2 * speedNorm;                          // rad/s da passada
-  const swing = Math.sin(t * W) * .62 * speedNorm + Math.sin(t * W + 1.9) * .05 * speedNorm;
-  const swing2 = Math.cos(t * W) * .5 * speedNorm;
+  // Task 56 — FASE INTEGRADA: `phase` externo (rad) quando o ator usa blender
+  // (locomotion3d); fallback canônico t*W preserva o contrato Fase 16. A
+  // amplitude estica no sprint com TETO — derivada por frame nunca passa do
+  // limiar de continuidade (.28 rad/frame @30 Hz) do teste de realismo.
+  const ph = (phase != null) ? phase : t * W;
+  const amp = Math.min(.70, .62 * speedNorm + .18 * Math.max(0, speedNorm - 1));
+  const swing = Math.sin(ph) * amp + Math.sin(ph + 1.9) * .03 * speedNorm;
+  const swing2 = Math.cos(ph) * .5 * speedNorm;
   if (crouch) {
     parts.legL.hip.rotation.x = 1.15 + swing * .15;
     parts.legR.hip.rotation.x = 1.15 - swing * .15;
@@ -578,16 +591,16 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
     parts.legL.knee.rotation.x = Math.max(0, swing2) * kneeAmp;
     parts.legR.knee.rotation.x = Math.max(0, -swing2) * kneeAmp;
     // Fase 9: leve rotação lateral do quadril na passada (transferência de peso)
-    parts.legL.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
-    parts.legR.hip.rotation.z = Math.sin(t * W) * .035 * speedNorm;
+    parts.legL.hip.rotation.z = Math.sin(ph) * .035 * speedNorm;
+    parts.legR.hip.rotation.z = Math.sin(ph) * .035 * speedNorm;
     // Fase 16: pelve gira CONTRA o tronco (anatomia real: torção transversal —
     // quando o tórax roda +sway, a pelve roda em contrafase)
-    parts.legL.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
-    parts.legR.hip.rotation.y = -Math.sin(t * W) * .05 * speedNorm;
+    parts.legL.hip.rotation.y = -Math.sin(ph) * .05 * speedNorm;
+    parts.legR.hip.rotation.y = -Math.sin(ph) * .05 * speedNorm;
     // Fase 16: rolagem do tornozelo — +x = ponta pra cima (calcanhar toca
     // primeiro quando a perna alcança à frente), -x = impulso da ponta atrás
     if (parts.legL.foot) {
-      const sL = Math.sin(t * W), sR = -sL;
+      const sL = Math.sin(ph), sR = -sL;
       parts.legL.foot.rotation.x = (Math.max(0, sL) * .25 - Math.max(0, -sL) * .45) * speedNorm;
       parts.legR.foot.rotation.x = (Math.max(0, sR) * .25 - Math.max(0, -sR) * .45) * speedNorm;
       parts.legL.foot.rotation.z = Math.sin(t * .7) * .03 * idle;   // peso no idle
@@ -596,25 +609,35 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
   }
   const aim = -Math.PI / 2 + pitch;
   // braços seguram a arma — swing macro proibido; micro-oscilação do passo
-  const armStep = Math.cos(t * W) * .045 * speedNorm;
-  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022;
-  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022;
-  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6;
-  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6;
+  const armStep = Math.cos(ph) * .045 * speedNorm;
+  // Task 56 — SPRINT ABAIXA A ARMA (low-ready): acima do teto de andar
+  // (speedNorm > 1.02) e só com o corpo livre (sem ADS/crouch/knocked).
+  // Andar (≤1) mantém o contrato Fase 10 — braço nunca abandona a pose de tiro.
+  // `sprintK` EXPLÍCITO (do blender por ator) tem constante de tempo própria —
+  // fallback = banda instantânea de speedNorm (chamadores sem blender).
+  const sprintRaw = (sprintK != null)
+    ? Math.max(0, Math.min(1, sprintK))
+    : Math.max(0, Math.min(1, (speedNorm - 1.02) / .18));
+  const sk = (!ads && !crouch && !knocked) ? sprintRaw : 0;
+  parts.armR.shoulder.rotation.x = aim + .18 - armStep + breathe * .022 + sk * .78;
+  parts.armL.shoulder.rotation.x = aim + .34 + armStep + breathe * .022 + sk * .5;
+  parts.armR.elbow.rotation.x = (ads ? -.28 : -.5) + armStep * .6 + sk * .18;
+  parts.armL.elbow.rotation.x = (ads ? -.62 : -.85) + armStep * .6 + sk * .38;
   // ---- tronco: sway + roll de passada + inclinação de corrida + respiração ----
-  const sway = Math.sin(t * W) * .07 * speedNorm;
+  const sway = Math.sin(ph) * .07 * speedNorm;
   parts.torso.rotation.y = sway;
   // Fase 16: inclinação PARA DENTRO do sprint (aceleração sobre o quadril)
   parts.torso.rotation.x = speedNorm * .1 + speedNorm * speedNorm * .09 + breathe * .014 * idle;
-  parts.torso.rotation.z = Math.sin(t * W + .4) * .05 * speedNorm   // roll de passada
+  parts.torso.rotation.z = Math.sin(ph + .4) * .05 * speedNorm   // roll de passada
     + Math.sin(t * .7) * .028 * idle;                                // transferência de peso parado
   parts.torso.position.x = Math.sin(t * .7) * .02 * idle;            // quadril desloca no idle
   // Fase 16: dupla pancada por ciclo (um bounce POR apoie) — amp cresce com a velocidade
-  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(t * W)) * (.045 + .02 * speedNorm) * speedNorm;
+  parts.torso.position.y = crouch ? .88 : 1.22 + Math.abs(Math.sin(ph)) * (.045 + .02 * speedNorm) * speedNorm;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
-  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
-  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
+  // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle + olhar
+  // sobe um pouco no sprint (tronco inclinado compensa) ----
+  parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05 - sk * .1;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
   parts.head.rotation.z = -parts.torso.rotation.z * .5;
   // ---- Fase 10 — reação de impacto: flinch direcional aditivo ----
@@ -650,6 +673,7 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, pitch = 0, dead 
       if (bp < .11) face.set('blink', 1); else face.set('neutral', 0);
     }
   }
+  return { sprintK: sk };                        // arma de 3ª pessoa acompanha o low-ready
 }
 
 // ---------- arsenal (Fase 6/7 — silhuetas ricas + skins por raridade) ----------
@@ -868,6 +892,26 @@ export function attachWeapon(opParts, operativeGroup, weaponId, skin = null, opt
   return model;
 }
 
+// Task 56 — pose de SPRINT da arma em 3ª pessoa: acompanha o low-ready dos
+// braços (animateOperative retorna { sprintK }); k=0 restaura a postura base.
+// Determinística e idempotente (base capturada uma vez em userData) — pode ser
+// chamada todo frame sem drift.
+export function poseWeaponSprint(weaponRig, k = 0) {
+  const g = weaponRig?.group;
+  if (!g) return;
+  const kk = Math.max(0, Math.min(1, Number.isFinite(k) ? k : 0));
+  const b = (g.userData.sprintBase ??= { py: g.position.y, pz: g.position.z });
+  if (kk === 0) {                              // postura base exata (sem -0/drift)
+    g.rotation.x = 0; g.rotation.y = 0;
+    g.position.y = b.py; g.position.z = b.pz;
+    return;
+  }
+  g.rotation.x = -kk * .48;                    // cano abaixa
+  g.rotation.y = kk * .3;                      // cruzada no peito
+  g.position.y = b.py - kk * .07;
+  g.position.z = b.pz + kk * .06;              // puxada para o corpo
+}
+
 // Rig enxuto de primeira pessoa (Fase 6): mãos ENLUVADAS agarrando a arma,
 // mangas camufladas, peitoral do colete à vista. Materiais por instância —
 // o recolor do seletor de operativo não vaza para os demais personagens.
@@ -881,6 +925,13 @@ function fgeo(r, l) {
   const key = `f${r}:${l}`;
   if (!_fgeo.has(key)) _fgeo.set(key, new THREE.CapsuleGeometry(r, l, 2, 6));
   return _fgeo.get(key);
+}
+// Task 56 — cápsula de braço em 1ª pessoa (cache compartilhado entre rigs)
+function fpcap(r, l, mat, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(fgeo(r, l), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return m;
 }
 
 // constrói uma mão articulada; side = +1 (direita) | -1 (esquerda).
@@ -965,21 +1016,32 @@ export function createFirstPersonRig({ skin = SKIN_TONES[0], vest = VEST_COLORS[
     const arm = new THREE.Group();
     arm.position.set(side * .2, -.26, -.4);
     arm.rotation.set(-.4, side * .14, side * .2);
-    const sleeve = box(.16, .42, .16, camoM, 0, -.18, 0);    // manga
-    const cuff = box(.17, .07, .17, secM, 0, -.34, 0);       // punho
-    const glove = box(.14, .16, .15, gloveM, 0, -.46, -.01); // luva
-    sleeve.userData.tintable = true;
-    arm.add(sleeve, cuff, glove);
+    arm.userData.base = { x: -.4, y: side * .14, z: side * .2 }; // Task 56 — base absoluta p/ pose de sprint (sem drift)
+    // Task 56 — braço ORGÂNICO (fim do braço de CAIXA em 1ª pessoa): ombro
+    // esférico + bíceps/antebraço em cápsula com cotovelo — a MESMA gramática
+    // anatômica do operativo em 3ª pessoa; a mão articulada continua presa no
+    // MESMO pivô (local y -.545) para não deslocar o grip da arma.
+    const shoulder = ball(.075, camoM, 0, -.02, 0, 7, 5);
+    const upper = fpcap(.062, .16, camoM, 0, -.15, 0);
+    const elbow = ball(.06, camoM, 0, -.3, 0, 7, 5);
+    const forearm = fpcap(.055, .18, camoM, 0, -.4, 0);
+    const cuff = fpcap(.058, .04, secM, 0, -.5, 0);
+    upper.userData.tintable = true;      // manga tintable (contrato do recolor)
+    elbow.userData.tintable = true;
     const hand = buildArticulatedHand({ side, skinM, gloveM });
-    arm.add(hand.group);
+    arm.add(shoulder, upper, elbow, forearm, cuff, hand.group);
     rig.add(arm);
     arm.userData.hand = hand;
     return arm;
   };
   const armL = makeArm(-1);
   const armR = makeArm(1);
-  const chest = box(.42, .25, .18, vestM, 0, -.54, -.22);
+  // Task 56 — peitoral do colete ARREDONDADO (plate carrier elíptico em vez
+  // de caixa); segue tintable e mantém orientação/posição de leitura no rodapé
+  // da câmera.
+  const chest = fpcap(.2, .1, vestM, 0, -.54, -.22);
   chest.rotation.x = -.24;
+  chest.scale.set(1.05, 1, .5);
   chest.userData.tintable = true;
   const chestPouch = box(.14, .1, .05, M('#26282d', { rough: .8 }), 0, -.5, -.31);
   rig.add(chest, chestPouch);

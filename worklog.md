@@ -458,3 +458,25 @@ Stage Summary:
 - Inventário de bots em paridade com oficiais/jogador (slots/inventory/anexos+raridades) — mortes deles agora carregam espólio completo nas caixas (F28 herda de graça)
 - Zero mudança de netcode/balística; eventos reutilizados (loot/medkit/frag) — espectador e HUD não precisam de edits
 - Suíte reconciliada: 852 testes — 839 pass / 0 fail / 13 skip; tsc 0; vite build OK
+
+---
+Task ID: 56
+Agent: Main (Z.ai)
+Task: Fase 34 — Avatares humanoides end to end (fix-raiz do corpo em 1ª pessoa + locomoção humana com fase integrada + sprint low-ready) — pedido direto do usuário ("personagens todo quadrado e sem realismo, movimentos artificiais")
+
+Work Log:
+- Diagnóstico no código: os operativos 3D já eram anatômicos (Fase 6/9/12/16 — cápsulas, rosto pintado, blendshapes, gait com contra-rotação de pelve). As causas REAIS da reclamação estavam em 4 lugares: (A) a câmera nunca foi add() à cena → o rig de 1ª pessoa (filho da câmera) NUNCA renderizou — jogador via só a mira flutuando, zero corpo/arma; (B) o que havia de corpo em 1ª pessoa era CAIXA (mangas/luvas/peitoral box()); (C) speedNorm BINÁRIO (0/.8/1.2 num frame) com sin(t*W) — mudar W reescalava o argumento do seno na mesma posição temporal = pernas TELEPORTAVAM a cada troca de estado; (D) sprint mantinha pose de mira travada (arma colada no ombro correndo) e pulo não tinha absorção de pouso.
+- FIX-RAIZ (1 linha + luz): scene.add(camera) em initCamera + PointLight de preenchimento presa à câmera (alcance 3.2 m — só viewmodel) + viewmodel canônico (.15,-.16,-.66) rot (-.07,.1,0) nas 2 montagens (init e troca de arma).
+- Rig FP orgânico: ombro esférico + bíceps/antebraço em cápsula + cotovelo (fpcap com cache compartilhado), peitoral elíptico; mão articulada no MESMO pivô (-.545) — contratos firstperson-hands preservados (tintable ≥3, mãos ≥11 meshes, tris 3336 ≤ 3400); userData.base por braço.
+- locomotion3d.js (PURO, headless-safe): createLocomotionBlend — speedNorm suavizado (acel 7.5 / frenagem 5.2, assimetria de músculo real), FASE INTEGRADA (phase += dt·W(speed), congela parado, wrap a 10k rad), sprintK com CONSTANTE DE TEMPO PRÓPRIA (up 5.5 / down 7 — banda instantânea 1.02–1.2 atravessava em ~1 frame sob exponencial de frenagem = snap), hint {sprint} opcional (ADS/crouch/fire = false).
+- animateOperative: aceita phase (fallback canônico t*W = zero regressão no contrato Fase 16) e sprintK explícito; amplitude de passada estica no sprint com TETO (derivada ≤ .26 rad/frame @30 Hz); retorna { sprintK }; poseWeaponSprint (idempotente, base gravada em userData) acompanha a arma de 3ª pessoa ao low-ready (cano −.48, cruzada .3, puxada ao corpo).
+- main3d: blender por ator (player + bots via entry.loco; idle de VERDADE a 0 — respiração/peso animam), dip de pouso (pico de vy × .016, decay 6.5/s) consumido pela câmera, bob lateral elíptico em espaço local, sprint FPS com pose ABSOLUTA (braços + arma a partir de userData.base — sem drift), fire/ADS erguem na hora.
+- BUGS pescados pelos testes NOVOS antes do push: harmônico .05 estourava a continuidade no sprint (.292 > .28) → teto .70 + harmônico .03; sprintK instantâneo snapava na frenagem → constante de tempo no blender; warm-up do teste de continuidade não animava (salto repouso→pronto da 1ª chamada); -0 do k=0 no poseWeaponSprint.
+- Testes: test/character-locomotion.test.js (9 NOVOS). Suíte: 861 — 848 pass / 0 fail / 13 skipped. Vite build OK. preview_ws_smoke SMOKE_OK (:81 → login → WS 101). smoke-live-3d SMOKE_OK (2 clientes vs bots: 302 snapshots, tiros/granadas/gloo/janelas/killfeed/anel/loot).
+- Validação VISUAL no browser (headless): TPS — jogador e bot ZHEERS-02 em anatomia completa (capacete/óculos, colete com pouches, membros articulados) em postura natural; FPS pós-fix — ombros/braços em cápsula iluminados + pistola à direita da mira (antes: NADA renderizava); sprint com low-ready visível.
+- Preview da plataforma reerguido pós-reciclagem do sandbox: .zscripts/dev.sh recriado (supervisor server :8787 + Vite :3000, loop 20 s), vite.preview.config.js e scripts/preview_ws_smoke.mjs recriados e agora VERSIONADOS (haviam ficado fora do git e morrido com o sandbox).
+
+Stage Summary:
+- O jogador FINALMENTE vê o próprio corpo em 1ª pessoa (braços orgânicos + arma iluminadas) e os personagens se movem como humanos: aceleração/frenagem contínuas, passada sem teleporte de fase, sprint abaixando a arma, pouso absorvendo o impacto — nos 3 atores (player, bots, espectador herda).
+- Zero mudança de netcode/balística/economia; animateOperative 100% retrocompatível (fallback canônico) — 0 regressão em 852 testes pré-existentes.
+- Preview estável de pé (server :8787 / Vite :3000 / Caddy :81) com SMOKE_OK ponta a ponta.
