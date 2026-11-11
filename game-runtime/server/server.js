@@ -1092,7 +1092,7 @@ export function createAuthoritativeServer({
     ws.on('message', earlyHandler);
 
     if (!client.roomId) { queue.push(client); send(ws, { type: 'queued', id: client.id, region: client.region, queue: queue.length }); await assign(client); }
-    else send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) });
+    else { getRoom(client)?.reviveTransport?.(client.id); send(ws, { type: 'resumed', id: client.id, roomId: client.roomId, region: client.region, resumeToken: client.resumeToken, snapshot: getRoom(client).snapshot(client.id) }); }
 
     connectionReady = true;
     ws.off('message', earlyHandler);
