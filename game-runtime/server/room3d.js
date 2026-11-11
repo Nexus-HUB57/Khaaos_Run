@@ -389,10 +389,30 @@ export class MatchRoom3D {
   }
   // Desconexão de transporte: interrompe ações temporizadas sem remover o
   // operativo da sala, pois o WebSocket pode ser retomado dentro da janela.
+  // Além de cancelar o canal, marca o transporte como MORTO e descarta os
+  // inputs em voo — quadros enfileirados antes da queda não podem ressuscitar
+  // ações temporizadas depois do cancelamento (doutrina MP-ZEX-09: "quadros
+  // em voo não ressuscitam o canal"). A retomada (resume) reativa o ator.
   cancelZexChannelForDisconnect(id) {
     const actor = this.humans.get(id);
-    if (!actor?.zexChannel) return false;
+    if (!actor) return false;
+    actor.transportDead = true;
+    actor.inputQueue.length = 0;
+    // lastInput é o fallback do tick quando a fila esvazia (§stepActor) —
+    // um interact=true pré-queda aqui ressuscitaria o canal a cada tick.
+    actor.lastInput = null;
+    if (!actor.zexChannel) return false;
     return this.#cancelZexChannel(actor, 'disconnect');
+  }
+
+  // Retomada de sessão (resume): o transporte volta a valer; latch limpo
+  // porque o toque anterior morreu com a conexão antiga.
+  reviveTransport(id) {
+    const actor = this.humans.get(id);
+    if (!actor) return false;
+    actor.transportDead = false;
+    actor.interactLatch = false;
+    return true;
   }
   removePlayer(id) {
     this.aoiState.delete(id); // M3 — estado AOI do observador sai junto
@@ -596,7 +616,7 @@ export class MatchRoom3D {
   }
   input(id, input) {
     const actor = this.humans.get(id);
-    if (!actor || !actor.alive || this.state !== ROOM_STATES.IN_PROGRESS) return;
+    if (!actor || actor.transportDead || !actor.alive || this.state !== ROOM_STATES.IN_PROGRESS) return;
     // rtt (reportado pelo cliente no input) alimenta a lag compensation
     if (Number.isFinite(input?.rtt)) actor.rtt = clamp(input.rtt, 0, 600);
     actor.lastInput = input;

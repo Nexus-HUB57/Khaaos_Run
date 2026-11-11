@@ -705,6 +705,11 @@ async function main() {
     let a = null, b = null, foundA = null, foundB = null, planPair = null, landedA = null, landedB = null;
     let navigated = false, planA = null, planB = null, terminalA = null, terminalB = null, navA = null;
     for (let roomAttempt = 1; roomAttempt <= ROOM_ATTEMPTS; roomAttempt += 1) {
+      // Sala já aceita e navegada: encerra o retry (sem o break, o laço
+      // re-entrava em NOVAS salas mesmo após o sucesso — cada iteração
+      // abandonava a anterior com a partida viva, acumulando salas zumbis
+      // simultâneas no staging e degradando o RTT/fechamento das seguintes).
+      if (navigated) break;
       try {
       a = await openClient(tokenA, { label: 'A' }); clients.push(a);
       foundA = await waitMessage(a, (m) => m.type === 'match_found', 'match_found de A', 30_000);
@@ -968,8 +973,13 @@ async function main() {
       throw new Error(`Fase 3: relógio do canal por estado do servidor fora do esperado (${elapsedServer3.toFixed(2)} s).`);
     }
     assertNoPenalty(a3, 'Fase 3');
-    // Drena quadros atrasados: nenhuma recompensa tardia, estado converge
-    await linkA3.drain();
+    // Drena quadros atrasados: nenhuma recompensa tardia, estado converge.
+    // Teto de 2,5 s: a bomba de input por cliente (client.hold) realimenta a
+    // fila de subida continuamente — com link degradado a fila NUNCA esvazia
+    // (drain() só resolve com ambas as filas vazias) e o await penduraria a
+    // fase. 2,5 s cobre o pior atraso do link (350+400 spike+jitter ≈ 800 ms)
+    // com folga; as asserções abaixo é que provam a convergência.
+    await Promise.race([linkA3.drain(), sleep(2_500)]);
     await sleep(700);
     const settled3 = a3.latestSnapshot;
     if ((settled3.player?.xp ?? 0) !== done3.player.xp) throw new Error('Fase 3: XP mudou após drenar os quadros atrasados (recompensa duplicada).');
