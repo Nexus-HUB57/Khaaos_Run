@@ -1,0 +1,51 @@
+name: 14 — Game Runtime Headless 3D
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'game-runtime/**'
+      - 'scripts/benchmark_avatar_glb.mjs'
+      - 'docs/AVATAR_GLB_PERFORMANCE_2026-11-11.md'
+      - '.github/workflows/14-game-runtime-headless.yml'
+  workflow_dispatch:
+
+jobs:
+  avatars-headless:
+    name: GLB + LOD headless validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: game-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: game-runtime/package-lock.json
+      - name: Install runtime dependencies
+        run: npm ci
+      - name: Validate audiomix, GLB loading and LOD contracts
+        run: >-
+          node --test
+          test/audiomix.test.js
+          test/audio-mixer.test.js
+          test/avatars-glb.test.js
+          test/character-realism.test.js
+          test/character-lod.test.js
+          test/character-lod2-silhouette.test.js
+          test/character-organic-lod.test.js
+      - name: Generate headless GLB performance report
+        working-directory: .
+        run: node scripts/benchmark_avatar_glb.mjs
+      - name: Upload GLB performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avatar-glb-performance
+          path: |
+            artifacts/avatar-glb-performance.json
+            docs/AVATAR_GLB_PERFORMANCE_2026-11-11.md
+          if-no-files-found: error
+          retention-days: 14

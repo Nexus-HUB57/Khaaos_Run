@@ -1,0 +1,300 @@
+{
+  "schema": "khaaos.avatar-glb-performance/v1",
+  "generatedAt": "2026-11-11T18:21:09.334Z",
+  "environment": {
+    "node": "v22.23.4",
+    "headless": true,
+    "webgl": false
+  },
+  "assets": [
+    {
+      "file": "animated-avatar-m-01.glb",
+      "bytes": 4815596,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 18347,
+      "triangles": 11547,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 5,
+      "geometryBytes": 1023326,
+      "imageBytes": 3191848,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 9030770
+    },
+    {
+      "file": "rigged-avatar-m-01.glb",
+      "bytes": 4223300,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 18317,
+      "triangles": 11547,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 0,
+      "geometryBytes": 1021766,
+      "imageBytes": 3191848,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 8436914
+    },
+    {
+      "file": "rigged-avatar-m-02.glb",
+      "bytes": 4203784,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 16948,
+      "triangles": 10814,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 0,
+      "geometryBytes": 946180,
+      "imageBytes": 3247878,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 8397842
+    },
+    {
+      "file": "rigged-avatar-m-04.glb",
+      "bytes": 3880180,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 17995,
+      "triangles": 11266,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 0,
+      "geometryBytes": 1003336,
+      "imageBytes": 2867272,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 7750788
+    },
+    {
+      "file": "rigged-avatar-f-01.glb",
+      "bytes": 4392504,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 19362,
+      "triangles": 11564,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 0,
+      "geometryBytes": 1076208,
+      "imageBytes": 3306715,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 8775427
+    },
+    {
+      "file": "rigged-avatar-f-03.glb",
+      "bytes": 4315076,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 18832,
+      "triangles": 11530,
+      "nodes": 25,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 1,
+      "joints": 23,
+      "animations": 0,
+      "geometryBytes": 1048444,
+      "imageBytes": 3256900,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1,
+        "JOINTS_0": 1,
+        "WEIGHTS_0": 1
+      },
+      "estimatedResidentBytes": 8620420
+    },
+    {
+      "file": "avatar-m-01.glb",
+      "bytes": 3846060,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 18220,
+      "triangles": 11547,
+      "nodes": 1,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 0,
+      "joints": 0,
+      "animations": 0,
+      "geometryBytes": 652322,
+      "imageBytes": 3191848,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1
+      },
+      "estimatedResidentBytes": 7690230
+    },
+    {
+      "file": "avatar-m-02.glb",
+      "bytes": 3856860,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 16944,
+      "triangles": 10814,
+      "nodes": 1,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 0,
+      "joints": 0,
+      "animations": 0,
+      "geometryBytes": 607092,
+      "imageBytes": 3247878,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1
+      },
+      "estimatedResidentBytes": 7711830
+    },
+    {
+      "file": "avatar-m-04.glb",
+      "bytes": 3505652,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 17778,
+      "triangles": 11266,
+      "nodes": 1,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 0,
+      "joints": 0,
+      "animations": 0,
+      "geometryBytes": 636492,
+      "imageBytes": 2867272,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1
+      },
+      "estimatedResidentBytes": 7009416
+    },
+    {
+      "file": "avatar-f-03.glb",
+      "bytes": 3924864,
+      "meshes": 1,
+      "primitives": 1,
+      "vertices": 18653,
+      "triangles": 11530,
+      "nodes": 1,
+      "materials": 1,
+      "textures": 3,
+      "images": 3,
+      "skins": 0,
+      "joints": 0,
+      "animations": 0,
+      "geometryBytes": 666076,
+      "imageBytes": 3256900,
+      "semanticCounts": {
+        "POSITION": 1,
+        "NORMAL": 1,
+        "TEXCOORD_0": 1
+      },
+      "estimatedResidentBytes": 7847840
+    }
+  ],
+  "totals": {
+    "files": 10,
+    "bytes": 40963876,
+    "estimatedResidentBytes": 81271477,
+    "vertices": 181396,
+    "triangles": 113425,
+    "geometryBytes": 8681242,
+    "imageBytes": 31626359
+  },
+  "lod": {
+    "levels": {
+      "full": {
+        "meshes": 114,
+        "triangles": 6384
+      },
+      "proxy": {
+        "meshes": 26,
+        "triangles": 1188
+      },
+      "silhouette": {
+        "meshes": 3,
+        "triangles": 184
+      }
+    },
+    "thresholdsMeters": {
+      "full": 30,
+      "silhouette": 95,
+      "cull": 280
+    },
+    "reduction": {
+      "proxyVsFull": 0.8139,
+      "silhouetteVsFull": 0.9712
+    },
+    "note": "O GLB carregado atualmente é o override do herói; os níveis proxy/silhouette medidos são o fallback procedural do runtime. GLB alternativo reduzido não é fabricado automaticamente."
+  },
+  "processMemory": {
+    "rssBefore": 46690304,
+    "rssAfter": 78548992,
+    "heapUsedBefore": 4171488,
+    "heapUsedAfter": 10742072,
+    "heapDelta": 6570584
+  },
+  "limitations": [
+    "estimatedResidentBytes é uma aproximação de payload GLB + bufferViews de geometria/imagens; não é VRAM nem captura de texturas decodificadas pelo navegador",
+    "o benchmark não inicia WebGL; GPU timings e draw calls exigem Browser Performance/DevTools ou Unreal Insights",
+    "o loader atual usa os GLBs como override do herói e mantém LOD procedural para atores; GLB com meshes LOD alternativos requer assets adicionais"
+  ]
+}
