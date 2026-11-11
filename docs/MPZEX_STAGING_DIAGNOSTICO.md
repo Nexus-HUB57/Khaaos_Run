@@ -72,3 +72,26 @@ do gameplay — as correções pertencem ao mundo, não ao cliente de teste.
    (inputs padrão);
 4. contratos: `MP-ZEX-08 PASS` + `[MP-ZEX-09] RELATÓRIO:` → artefatos 14 d;
 5. `GH_TOKEN=… node scripts/eos/p0_gate.mjs` para o retrato final.
+
+---
+
+## Atualização 2026-11-11 — staging dedicado no VPS + Opção B implementada
+
+- **Alvo do despacho**: `KR_STAGING_BASE_URL` no environment `staging` aponta para o
+  **staging dedicado no VPS** (`https://staging.143-95-213-237.sslip.io`, sempre ativo,
+  certificado Let's Encrypt válido) — elimina a hibernação do Render free (causa da
+  rodada #13). Contas `kr_zex_a`/`kr_zex_b` resetadas e validadas no próprio servidor
+  (`/auth/login` 200 nas duas; senhas apenas nos secrets — PB-07).
+- **Primeiro despacho contra o staging dedicado (run 43079303822)**: gate ✅;
+  **MP-ZEX-08 ✅ PASS** (`[MP-ZEX-08] MP-ZEX-08 PASS: sem XP/extração para A; resume
+  preservado; B canalizando o terminal.`); MP-ZEX-09 ❌ na Fase 2 —
+  `Timeout esperando estado do servidor: liberação do terminal leste após queda
+  degradada (B(resume))` — orçamento de 4 s herdado do loopback, com RTT real +
+  DegradedLink (os orçamentos RTT-aware dos PRs #343–#351 cobrem as fases 1/3;
+  a liberação da Fase 2 ficou atrás).
+- **Opção B IMPLEMENTADA (este PR)**: `server/room3d.js` — salas capacidade 2 sem
+  botFill (perfil das salas do despacho) têm pulsos do Ring 3× mais espaçados
+  (`PULSE_INTERVAL * 3`); salas normais e sim offline intocados. Resolve a corrida
+  anel × terminais (§4) sem tocar gameplay canônico.
+- Depois do merge: atualizar o `room3d.js` do staging no VPS, reiniciar
+  `khaaos-staging` e re-despachar (cenários `08,09`).

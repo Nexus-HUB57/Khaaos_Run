@@ -121,6 +121,13 @@ export class MatchRoom3D {
     this.matchRewarded = false;
     this.capacity = capacity;
     this.botFill = Number.isFinite(botFill) ? botFill : capacity - 1;
+    // Doutrina MPZEX §4 — Opção B (anel lento em partidas de teste): salas com
+    // capacidade 2 sem botFill (perfil exato das salas do despacho MP-ZEX em
+    // staging) têm os pulsos do Ring 3× mais espaçados. O anel segue mecânica,
+    // mas não assassina a partida de 2 pessoas na janela de 60–90 s (terminais
+    // a ~130 m vs fecho 168→42 a cada 45 s). Salas normais (capacidade cheia ou
+    // com bots) e o sim offline (sim3d.js) ficam intocados.
+    this.pulseInterval = (capacity === 2 && this.botFill === 0) ? PULSE_INTERVAL * 3 : PULSE_INTERVAL;
     this.scenario = resolveScenario(scenarioId);
     this.worldXp = (base) => Math.round(base * (this.scenario.xpMultiplier ?? 1));
     this.airdrop = !!airdrop; // Compatibilidade explícita; ingresso aéreo legado desativado por padrão.
@@ -615,7 +622,7 @@ export class MatchRoom3D {
 
     // --- zona segura (mesmas constantes da sim offline) ---
     if (!this.#combatLocked()) this.pulseTimer += dt;
-    if (this.pulseTimer >= PULSE_INTERVAL && this.ring.radius > 42) {
+    if (this.pulseTimer >= this.pulseInterval && this.ring.radius > 42) {
       this.pulseTimer = 0;
       this.ring.pulse++;
       this.ring.target = Math.max(42, 168 - this.ring.pulse * 30);
