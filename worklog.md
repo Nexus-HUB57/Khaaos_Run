@@ -1383,3 +1383,21 @@ Stage Summary:
 - Passada menos artificial em TODOS os níveis: contra-balanço de ombros (detalhado+proxy) e pés articulados à distância; determinismo preservado (mesmo t → mesmo ângulo)
 - Custo sob controle contratado: proxy 1188 tris / 26 meshes (≥3× mais leve que o detalhado), silhueta 184 tris / 3 meshes — os orçamentos de draw call e a calibração F50/F51 do cânon de perto intocados
 - Estado: game-runtime 1137 testes (1124 pass / 0 fail), suíte nova 7/7, e2e visual no preview com espectador provando os 3 níveis do LOD, worklog + evidências artifacts/f34
+
+
+---
+## Task ID: 58
+**Agent:** Main
+**Task:** Continuação de avatares realistas do Lote 4 e início do próximo incremento de experiência
+
+Work Log:
+- LOTE 4: commit `07d8a28` (`feat(avatars): integrate realistic portraits for lot 4`) enviado na `feat/lote4-avatars-realistas`; PR #365 agora Merged em `main` no commit `67aad5f`; arte 16 WebP/1,43 MB + manifesto, perfil/Studio + fallback SVG, fontes PNG ignoradas.
+- CI do push: CI, PR Checks e Integration Tests success; UE5 CD falhou (gate de ambiente/runner, sem relação com o pacote de avatar web). Workflow manual Deploy run `43082003968`: validação/build de Docker passaram, acionamento Render aceito, health gate falhou aguardando `/readyz` com Postgres/Redis.
+- STAGING/RENDER (auditoria 2026-11-11): serviço `khaaos-run-staging` está live em commit `3323254`, Auto Deploy Off, mas build/start são `cd game-runtime && npm ci --omit=dev` / `cd game-runtime && node server/server.js`; `/` e WebPs retornam 404, `/healthz` e `/readyz` pertencem ao game-runtime. O web app requer `npm start`, `/healthz.json` e readiness com Postgres/Redis. PostgreSQL ligado ao staging está `suspended` por billing, com expiração em 2026-11-10; Key Value Redis existe e está available. O Render MCP não expõe PATCH de build/start/rootDir e o Dashboard pede login. Não mascarar health check nem redeployar o runtime errado; trocar para o web app exige configurar/acessar serviço e restaurar/substituir o DB suspenso.
+- LOTE 5 iniciado em branch dependente `feat/lote5-realistic-lobby-roster`: diagnóstico encontrou o lobby ainda usando SVG enquanto o perfil já escolhe WebP. DTO runtime ganhou `realisticAvatarPath?`, render do lobby valida ID pelo catálogo confiável e prefere WebP com fallback SVG; teste oficial cobre 16 irregulares, militares/TALON e ID inválido. Plano em `docs/PLANO_LOTE5_AVATARES_LOBBY.md`.
+- VALIDAÇÃO LOTE 5: após rebase em `origin/main` (`67aad5f`), `npm run check` PASS, `character-studio` + `militia-roster` 11/11 PASS e `npm run build` PASS. A suíte Playwright inteira executou 17/17 PASS em 4 specs; o caso do lobby mostra PIXEL, identidade, e WebP local com `naturalWidth > 0`. Relatório em `docs/AUDITORIA_E2E_LOTE5_PLAYWRIGHT_2026-11-11.md`.
+- ACEITE REMOTO PENDENTE: o staging web real, o SHA publicado e os 16 paths; full Playwright é local com HTTP/WebSocket sintéticos e não substitui smoke do Render.
+
+Stage Summary:
+- Lote 4: PR #365 integrada à main (`67aad5f`); o Render continua no runtime errado e não prova os assets web, além do Postgres staging expirado/suspenso.
+- Lote 5: propagação realista ao lobby e E2E dedicado 1/1 aprovados; auditoria Playwright total 17/17 PASS. Branch rebaseada sobre main; commit/push/PR ainda a concluir.
