@@ -1361,3 +1361,25 @@ Work Log:
 Stage Summary:
 - As melhorias gráficas/cenário/personagem deixaram de ser "módulos no repo" e agora são PROVADAS no jogo: fidelidade 94/0, postfx/settings visíveis no painel, e os rigs reais Tripo entraram de fato — vitrine interativa no menu e herói jogável com corpo GLB (?avatar=) com fallback procedural garantido por teste
 - Estado: game-runtime 1130 testes (1117 pass / 0 fail), suíte nova 9/9, e2e visual completo no preview com console limpo, worklog + evidências artifacts/f56
+
+---
+Task ID: 57
+Agent: main (Z.ai)
+Task: "aplicar otimização end to end nos personagens que ainda estão com o modelo antigo, todo quadrado e sem realismo, com movimentos artificiais" — Fase 57: proxy de LOD orgânico (fim do homem-palito facetado), pés articulados à distância e contra-balanço de ombros
+
+Work Log:
+- DIAGNÓSTICO DO "TODO QUADRADO" (por onde o jogador realmente vê personagens): o modelo DETALHADO já era orgânico (cânone F50/F51, face rig F12, gait F16) — o vilão era a CADEIA DE LOD: além de ~16-30 m o jogo troca para o proxy "homem-palito" (cápsulas de 5 lados facetadas, mochila e tronco em CAIXA, pés SEM pivô congelando no ar a cada passada) e além de ~65-95 m para silhueta estática; num battle royale, quase todos os 12-24 atores visíveis estão nessas faixas
+- PROXY RECONSTRUÍDO COMO MINI-OPERATIVO ORGÂNICO (lod3d.js): pelve elíptica, tronco V-taper cônico com seção elíptica, colete lido pela cor do corpo (casca redundante cortada), mochila ARREDONDADA (cápsula deitada) no lugar do bloco, crânio 8×6 + mandíbula + capacete com casco, deltoides/joelheiras/luvas, botas em cápsula orientada; cápsulas parametrizadas (membros 6 lados, tronco 8) — fim das facetas de 5 lados
+- PÉS ARTICULADOS NO PROXY: pivô foot (-.31, mesmo do detalhado) nas 2 pernas — animateOperative rola calcanhar→ponta na passada TAMBÉM no nível proxy (antes: botas rígidas flutuando); equivalência de animação provada por teste (mesma transformada de junta 1e-6)
+- MOVIMENTO (entities3d.js): contra-balanço dos ombros em contrafase ao sway do tronco (aditivo em eixo .y próprio, ≤ .06 rad, determinístico, proxy recebe igual) — mata a rigidez "tronco+braços peça única" na passada; tentativa de suavizar cápsulas do DETALHADO (3,8→3,12) REVERTIDA com honestidade: estourava o orçamento de 6500 tris calibrado pela F50/F51 (cânone/SORO) — a organicidade pedida mora na cadeia de distância, não no cânon de perto
+- CONTRATO RECALIBRADO COM JUSTIFICATIVA (character-lod.test.js): teto do proxy 900→1200 tris e razão ≥4×→≥3× — o 900 dimensionava o palito de ~300 tris; o orgânico custa 1188 tris e 26 meshes (vs ~50 do detalhado), mantendo o intent (proxy muito mais leve, draw calls limitados)
+- SILHUETA (LOD 2) com taper humano: body scale (1.08, 1, .88) e crânio alongado — leitura frontal/costas em vez de cilindro perfeito; zero tris extras, orçamentos ≤200 tris/≤3 meshes preservados
+- TESTES: test/character-organic-lod.test.js 7 NOVOS (zero caixa >0.012 m³ no proxy, segmentação anti-facetas ≥6, ≤26 meshes, pivô foot idêntico, passada do proxy = detalhado, contra-balanço determinístico e limitado, taper da silhueta, 3 níveis do LOD com a mesma gramática); character-lod 16/16 + silhouette 9/9 + frustum-lod + realism/blendshapes/death/hit-reaction/firstperson 65/65
+- CONCORRÊNCIA RECONCILIADA: origin/main avançou (PR #356 F56 avatares GLB + retoque de cápsula no proxy por sessão paralela) — rebase com 1 conflito textual no bloco P de pgeo resolvido pela versão parametrizada (superconjunto); npm ci pós-rebase (tweetnacl do lockfile novo); suíte completa no branch: 1137 testes — 1124 pass / 0 fail / 13 skip; vite build ✓
+- E2E NO PREVIEW (browser real via Caddy :81 → vite :3000 → server :8787, evidências artifacts/f34/): partida offline com seed CIGKV-3D-01 — infiltração aérea/pouso (f34-01-drop), espectador seguindo ZHEERS-01 com modelo detalhado orgânico de perto (f34-scan-2) e bot distante no nível proxy (f34-scan-12); reciclagem da sandbox no meio da rodada apagou arquivos NÃO versionados (vite.preview.config.js local, preview_up.sh) — os canônicos do main (Task 55) recriados por rebase e usados, sem duplicação de stack manager
+
+Stage Summary:
+- Os personagens deixaram de parecer palitos facetados onde o jogador realmente os vê: de 16 a 95 m o proxy agora é um mini-operativo orgânico (V-taper, capacete, deltoides, mochila arredondada) com PÉS que rolam a passada — e de 95 a 170 m a silhueta tem taper humano
+- Passada menos artificial em TODOS os níveis: contra-balanço de ombros (detalhado+proxy) e pés articulados à distância; determinismo preservado (mesmo t → mesmo ângulo)
+- Custo sob controle contratado: proxy 1188 tris / 26 meshes (≥3× mais leve que o detalhado), silhueta 184 tris / 3 meshes — os orçamentos de draw call e a calibração F50/F51 do cânon de perto intocados
+- Estado: game-runtime 1137 testes (1124 pass / 0 fail), suíte nova 7/7, e2e visual no preview com espectador provando os 3 níveis do LOD, worklog + evidências artifacts/f34

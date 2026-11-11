@@ -687,6 +687,14 @@ export function animateOperative(parts, { t = 0, speedNorm = 0, phase = null, pi
   parts.torso.position.y = crouch ? .88 : 1.22 + bounce;
   const br = 1 + breathe * .008 * idle;                              // peito expande no idle
   parts.torso.scale.set(br, 1, 1 + breathe * .012 * idle);
+  // Fase 34 — contra-balanço dos ombros: giram em CONTRAFASE ao sway do tronco
+  // (a arma amortece nos ombros reais; elimina a rigidez de "torso+braços como
+  // peça única" na passada). Aditivo em eixo próprio (.y), não conflita com hit.
+  if (parts.armR?.shoulder && parts.armL?.shoulder) {
+    const shoulderCounter = -sway * .5;
+    parts.armR.shoulder.rotation.y = shoulderCounter;
+    parts.armL.shoulder.rotation.y = shoulderCounter;
+  }
   // ---- cabeça: estabiliza (contra-rotação) + micro-olhar no idle ----
   parts.head.rotation.x = pitch * .4 - Math.abs(swing) * .05;
   parts.head.rotation.y = -sway * .55 + Math.sin(t * .53) * .12 * idle + Math.sin(t * .13) * .07 * idle;
