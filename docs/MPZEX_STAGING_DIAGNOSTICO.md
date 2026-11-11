@@ -126,3 +126,20 @@ com evidência de instrumentação (`[DBG-CH]` no servidor, observador B1 no cli
 Validação local: selftest 08 PASS + 09 Fases 1/2/3 PASS + `MPZEX_STAGING_SELFTEST_OK`
 (exit 0); 24/24 nos testes sensíveis (zu-train-protocol, world-survival-load,
 environmental-death).
+
+## ✅ VERDE: despacho único 08+09 no staging real (2026-11-11 21:0x UTC)
+
+**Run 43102085504 — SUCCESS (todos os jobs)** — `sha 1da58224` (com os fixes de
+transporte + break + drain reconciliados via PR #369):
+
+- **MP-ZEX-08 PASS**: `sem XP/extração para A; resume preservado; B canalizando o terminal.`
+- **MP-ZEX-09 PASS**: `autoridade do servidor, recompensa única, convergência pós-drain
+  e interrupção limpa sob RTT/jitter/perda.`
+  - Fase 1: XP +250 (baseline), canal server-side 3,88 s, extração +1
+  - Fase 2 (link degradado, RTT mediano 855 ms): canal não ressuscitou; terminal liberado
+  - Fase 3: XP +250 == baseline; atraso visual 468 ms (bound 1078 ms); converge pós-drain
+- Sala única (o `break` do laço encerrou a caminhada de salas zumbis).
+
+A cadeia de fixes que fechou o ciclo: Opção B do anel (PR #364) + morte de transporte
+no servidor + break de sala + drain acotunado (PR #369, reaplicado após a reconciliação
+do main ter descartado o #368).
