@@ -161,6 +161,18 @@ jobs:
         working-directory: game-runtime
         run: set -o pipefail; npm run test:infra 2>&1 | tee test-infra.log
 
+      - name: Headless GLB + LOD validation
+        run: |
+          node --test \
+            game-runtime/test/audiomix.test.js \
+            game-runtime/test/audio-mixer.test.js \
+            game-runtime/test/avatars-glb.test.js \
+            game-runtime/test/character-realism.test.js \
+            game-runtime/test/character-lod.test.js \
+            game-runtime/test/character-lod2-silhouette.test.js \
+            game-runtime/test/character-organic-lod.test.js
+          node scripts/benchmark_avatar_glb.mjs
+
       - name: Runtime tests with coverage
         working-directory: game-runtime
         run: npm run coverage
@@ -170,7 +182,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-game-runtime
-          path: game-runtime/coverage/**
+          path: |
+            game-runtime/coverage/**
+            artifacts/avatar-glb-performance.json
           if-no-files-found: warn
 
   # ─── Job 4: Operative Synergy Dashboard Tests ──────────────────
