@@ -884,12 +884,16 @@ async function main() {
     const rtt2 = await measureRtt(a2, 7);
     // Faixa-sanidade sobre a MEDIANA: o RTT medido soma o link configurado
     // (UP_MS+DOWN_MS = 130 ms nominal, ± jitter por sentido) com a latência de
-    // event loop/WS do próprio processo, que varia com a carga (observado de
-    // ~5 a ~90 ms). O piso prova que a degradação está aplicada (loopback puro
-    // mediria ~1–5 ms); o teto (350) sinaliza config aberrante, não mede a
-    // precisão do gerador — o alvo moderado do plano é o LINK (100–150 ms),
-    // e o RTT medido vai inteiro no relatório.
-    if (rtt2.medianMs < 90 || rtt2.medianMs > 350) throw new Error(`Fase 2: RTT mediano (${rtt2.medianMs} ms) fora da faixa-sanidade de degradação moderada (90–350 ms).`);
+    // event loop/WS do próprio processo e com o RTT base runner↔staging. Com a
+    // VPS da plataforma em São Paulo, runners do GitHub caem em qualquer
+    // região (us-americas ~130–180 ms de base; Ásia ~700–850 ms — run oficial
+    // 43045142348 mediu 883 ms com link aplicado). O piso prova que a
+    // degradação está aplicada (loopback puro mediria ~1–5 ms); o teto (900)
+    // sinaliza config aberrante, não mede a precisão do gerador — o alvo
+    // moderado do plano é o LINK (100–150 ms), e o bound de atraso visual da
+    // fase 3 isola o link dos stats p95 (independente do RTT base). O RTT
+    // medido vai inteiro no relatório.
+    if (rtt2.medianMs < 90 || rtt2.medianMs > 900) throw new Error(`Fase 2: RTT mediano (${rtt2.medianMs} ms) fora da faixa-sanidade de degradação aplicada (90–900 ms).`);
     safeLog(`Fase 2: link degradado ativo em A — RTT mediano ${rtt2.medianMs} ms (${rtt2.minMs}–${rtt2.maxMs} ms).`);
     const xpBeforeA2 = a2.latestSnapshot.player.xp;
     const extractedBeforeA2 = a2.latestSnapshot.player.extracted ?? 0;
