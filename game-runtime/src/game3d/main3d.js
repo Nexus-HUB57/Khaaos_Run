@@ -8,7 +8,7 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW,
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
-import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, poseWeaponSprint, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
@@ -553,12 +553,25 @@ export class Game3D {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, .1, 1200);
     this.camRig = { dist: 4.4, height: 1.9, shoulder: .75, curDist: 4.4 };
     this.camera.position.set(0, 3, 156);
+    // Task 59 (sessão 56) — FIX-RAIZ do "personagem quadrado/sem corpo": o rig
+    // de 1ª pessoa (braços orgânicos + arma) é FILHO DA CÂMERA, e a câmera
+    // nunca foi add() à cena — filhos de nó fora do grafo NUNCA renderizam. O
+    // jogador via só a mira flutuando (zero corpo) desde sempre.
+    this.scene.add(this.camera);
+    // Task 59 — luz de PREENCHIMENTO do viewmodel: presa à câmera, alcance
+    // curto (~3 m) — ilumina só braços/arma (o sol da cena bate nas costas do
+    // rig e o deixava uma silhueta preta ilegível).
+    const vmLight = new THREE.PointLight('#fff2df', .9, 3.2, 2);
+    vmLight.position.set(.1, -.05, -.15);
+    this.camera.add(vmLight);
     if (this.firstPersonRig) {
       this.camera.add(this.firstPersonRig);
       this.firstPersonWeapon = createWeaponModel(this.sim.player.weapon);
       this.firstPersonRig.add(this.firstPersonWeapon.group);
-      this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-      this.firstPersonWeapon.group.rotation.x = -.08;
+      // Task 59 — viewmodel canônico: arma à DIREITA da mira e angulada p/ dentro
+      // (antes: x=0 — a arma de costas cobria a mira no centro da tela)
+      this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+      this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
     }
     this.camKick = 0; // recuo visual do disparo (só câmera, não afeta a mira)
     this.initPost();
@@ -1227,14 +1240,33 @@ export class Game3D {
       for (const _strike of this._gait.events) this.audio.step(.25 + .55 * Math.min(1, this._gait.speed), 0, this.audio.worldAmbience.surface);
     }
     const airborne = !!p.dropPhase;
-    animateOperative(this.playerOp.parts, {
+    // Task 59 (sessão 56) — SPRINT ABAIXA A ARMA: sprintK com CONSTANTE DE
+    // TEMPO PRÓPRIA por ator (peso do corpo — banda instantânea de speedNorm
+    // atravessava em ~1 frame na frenagem exponencial); ADS/crouch/fire
+    // erguem na hora (hint false).
+    const skT = (!p.alive || p.knocked || p.ads || p.crouching || !p.sprinting) ? 0 : 1;
+    this._sk ??= 0;
+    this._sk += (skT - this._sk) * (1 - Math.exp(-(skT > this._sk ? 5.5 : 7) * dt));
+    if (this._sk < 1e-4) this._sk = 0;
+    // Task 59 — DIP DE POUSO: pico de vy na transição ar→chão vira absorção
+    // (decaimento exponencial) consumida pela câmera em 1ª pessoa.
+    this._dip ??= { v: 0, wasGround: !!p.onGround, fallV: 0 };
+    const groundedNow = !!p.onGround;
+    if (groundedNow && !this._dip.wasGround) this._dip.v = Math.min(.12, Math.max(0, -(this._dip.fallV ?? 0)) * .016);
+    this._dip.wasGround = groundedNow;
+    this._dip.fallV = groundedNow ? 0 : (p.vy ?? 0);
+    this._dip.v *= Math.exp(-dt * 6.5);
+    const pFx = animateOperative(this.playerOp.parts, {
       t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
       pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
+      sprintK: this._sk, // Task 59 — low-ready do sprint (suavizado por ator)
     });
+    // Task 59 — arma em 3ª pessoa acompanha o low-ready do sprint
+    poseWeaponSprint(this.playerOp.group.userData.weaponRig, pFx?.sprintK ?? 0);
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
@@ -1265,8 +1297,8 @@ export class Game3D {
         this.firstPersonWeapon.group.traverse(o => o.geometry?.dispose?.());
         this.firstPersonWeapon = createWeaponModel(p.weapon, pSkin, { attachments: p.weaponAttachments ?? [], attachmentRarities: p.attachmentRarities ?? [], mythicStage: pStage, mythicColor: pSkinDef?.aura });
         this.firstPersonRig.add(this.firstPersonWeapon.group);
-        this.firstPersonWeapon.group.position.set(0, -.17, -.72);
-        this.firstPersonWeapon.group.rotation.x = -.08;
+        this.firstPersonWeapon.group.position.set(.15, -.16, -.66);
+        this.firstPersonWeapon.group.rotation.set(-.07, .1, 0);
       }
     }
     // bots
@@ -1368,7 +1400,14 @@ export class Game3D {
         entry.gait ??= newGait();
         advanceGait(entry.gait, { x: b.x, z: b.z, dt });
         const gsn = Math.max(b.moving ? .12 : 0, entry.gait.speed);
-        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id) });
+        // Task 59 — low-ready dos remotos: só oficiais sprintam (hook); estado
+        // por ator com a mesma constante de tempo do jogador.
+        const bSkT = (b.sprinting && !b.ads && !b.crouching) ? 1 : 0;
+        entry.sk ??= 0;
+        entry.sk += (bSkT - entry.sk) * (1 - Math.exp(-(bSkT > entry.sk ? 5.5 : 7) * dt));
+        if (entry.sk < 1e-4) entry.sk = 0;
+        const bFx = animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
+        poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
@@ -1458,14 +1497,41 @@ export class Game3D {
       this.camera.position.lerp(eye, Math.min(1, dt * 18));
       this.camera.lookAt(eye.clone().add(new THREE.Vector3(fx, fy, fz).multiplyScalar(40)));
       this.cameraSway += dt * (p.sliding ? 15 : (p.sprinting ? 12 : 7));
+      // Task 59 — câmera VIVA: bob vertical (contrato Fase 5) + balanço lateral
+      // ELÍPTICO em espaço local da câmera + dip de pouso vindo do syncEntities.
       const bob = p.alive && !p.dropPhase ? Math.sin(this.cameraSway) * (p.sliding ? .026 : (p.sprinting ? .018 : .008)) : 0;
-      this.camera.position.y += bob;
+      const dip = this._dip?.v ?? 0;
+      const bobX = (p.alive && !p.dropPhase && p.moving) ? Math.cos(this.cameraSway * .5) * (p.sprinting ? .014 : .006) : 0;
+      this.camera.position.y += bob - dip;
+      this.camera.translateX(bobX);
       this.firstPersonRig.position.x += ((p.ads ? .02 : 0) - this.firstPersonRig.position.x) * Math.min(1, dt * 10);
-      this.firstPersonRig.position.y += (bob - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
+      this.firstPersonRig.position.y += (bob - dip * .6 - this.firstPersonRig.position.y) * Math.min(1, dt * 12);
       this.firstPersonRig.rotation.x += ((p.pitch * .18) - this.firstPersonRig.rotation.x) * Math.min(1, dt * 10);
       // Fase 10 — mãos articuladas: grip + indicador no gatilho + micro-vida;
       // flinch da própria câmera quando o jogador é atingido (roll + recuo)
       poseFirstPersonHands(this.firstPersonRig, { curl: .8 + this.camKick * 2.2, trigger: this.input.fire ? 1 : 0, breathe: Math.sin(this.animT * 2.1) * .03 });
+      // Task 59 — SPRINT em 1ª pessoa: arma e braços abaixam (low-ready) e
+      // voltam à mira ao atirar/mirar; pose ABSOLUTA a partir da base gravada
+      // no rig (sem drift acumulado entre frames).
+      const sprintRaw = (!p.ads && !this.input.fire) ? (this._sk ?? 0) : 0;
+      this.fpsSprintK = (this.fpsSprintK ?? 0) + (sprintRaw - (this.fpsSprintK ?? 0)) * Math.min(1, dt * 10);
+      const skF = this.fpsSprintK;
+      const arms = this.firstPersonRig.userData.arms;
+      if (arms) {
+        const bL = arms.armL.userData.base, bR = arms.armR.userData.base;
+        arms.armL.rotation.x = bL.x + skF * .3;
+        arms.armR.rotation.x = bR.x + skF * .34;
+        arms.armR.rotation.y = bR.y - skF * .18;
+        arms.armL.rotation.y = bL.y + skF * .1;
+      }
+      if (this.firstPersonWeapon) {
+        const wg = this.firstPersonWeapon.group;
+        const wb = (wg.userData.sprintBase ??= { rx: wg.rotation.x, py: wg.position.y, pz: wg.position.z });
+        wg.rotation.x = wb.rx - skF * .42;
+        wg.rotation.y = skF * .26;
+        wg.position.y = wb.py - skF * .07;
+        wg.position.z = wb.pz + skF * .05;
+      }
       const hf = this.hitFX.get('player');
       if (hf) {
         const env = (hf.age < .06 ? hf.age / .06 : Math.exp(-(hf.age - .06) / .17)) * hf.power;

@@ -1401,3 +1401,23 @@ Work Log:
 Stage Summary:
 - Lote 4: PR #365 integrada à main (`67aad5f`); o Render continua no runtime errado e não prova os assets web, além do Postgres staging expirado/suspenso.
 - Lote 5: commit `a70c0cf` enviado, PR #366 aberta; propagação realista ao lobby, E2E dedicado 1/1, TypeScript, 11 contratos, build e auditoria Playwright total 17/17 PASS.
+
+## Task ID: 59
+**Agent:** Main (Z.ai)
+**Task:** "aplicar otimização end to end nos personagens" (pedido direto do usuário) — Fase 58: CORPO EM 1ª PESSOA (fix-raiz da câmera) + braços orgânicos + sprint low-ready + pouso com absorção — reconciliada no merge com F42 gait / F56 avatares GLB / F57 LOD orgânico do main
+
+Work Log:
+- Diagnóstico complementar ao da Fase 57 (sessão paralela atacou o LOD de DISTÂNCIA; esta sessão achou a lacuna que nenhuma fase cobriu): a CÂMERA nunca foi add() à cena — o rig de 1ª pessoa (filho da câmera) NUNCA renderizou; o jogador via só a mira flutuando, zero corpo/arma, desde sempre. + o que havia de corpo em 1ª pessoa era CAIXA (mangas/luvas/peitoral box()) + o sprint mantinha pose de mira travada + pulo sem absorção de pouso.
+- FIX-RAIZ: `scene.add(camera)` em initCamera + PointLight de preenchimento presa à câmera (alcance 3,2 m — só o viewmodel, que o sol da cena deixava silhueta preta) + viewmodel canônico (.15,−.16,−.66) rot (−.07,.1,0) nas 2 montagens (init e troca de arma — antes x=0 com a arma de costas cobrindo a mira).
+- Rig FP orgânico: ombro esférico + bíceps/antebraço em cápsula + cotovelo (fpcap com cache compartilhado), peitoral elíptico; mão articulada no MESMO pivô (−.545) — contratos firstperson-hands preservados (tintable ≥3, mãos ≥11 meshes, 3336 tris ≤ 3400); userData.base por braço p/ pose absoluta de sprint (sem drift).
+- SPRINT ABAIXA A ARMA (low-ready): sprintK com CONSTANTE DE TEMPO PRÓPRIA por ator (up 5,5 / down 7 — a banda instantânea 1,02–1,2 de speedNorm atravessava em ~1 frame sob a exponencial de frenagem = snap); animateOperative aceita sprintK explícito (fallback = banda de speedNorm, contrato Fase 16 intacto) e RETORNA { sprintK }; poseWeaponSprint idempotente leva a arma de 3ª pessoa junto (cano −.48, cruzada .3, puxada ao corpo); ADS/crouch/fire erguem na hora (hint).
+- Câmera viva: bob lateral ELÍPTICO em espaço local (cos(sway·.5)) + DIP DE POUSO (pico de vy na transição ar→chão × .016, teto .12, decay 6,5/s) consumido pela câmera e pelo rig.
+- RECONCILIAÇÃO com o main (3 merges concorrentes na rodada: #363–#366): o gait.js da F42 (passada travada em distância) SUPERSEDE o blender próprio desta sessão (locomotion3d.js REMOVIDO como redundante — a fase integrada por metros é superior); avatares GLB (F56) e LOD orgânico (F57) adotados de graça; sprintK/dip/vmLight/fix-raiz aplicados POR CIMA do gait (camadas ortogonais). TODO/worklog em união.
+- Testes: test/character-locomotion.test.js reescrito pós-merge (7 — continuidade ponta a ponta gait×animateOperative com limiar consciente da cadência de sprint: até ~12,9 rad/s são ~.36 rad/frame CONTÍNUOS e suaves; o defeito caçado é o TELEPORTE de fase, não o movimento rápido; contrato de andar ≤1; low-ready + cancelamento ADS; idempotência do poseWeaponSprint; rig FP orgânico ≤3400 tris). Suíte completa pós-merge: 1143 testes — 1130 pass / 0 fail / 13 skipped (npm ci sincronizou tweetnacl e deps novas do main). Vite build OK.
+- Smokes: preview_ws_smoke SMOKE_OK (:81 → login → WS 101) e smoke-live-3d SMOKE_OK (2 clientes vs bots: snapshots/tiros/granadas/gloo/janelas/killfeed/anel/loot). Validação VISUAL headless: TPS com jogador+bot em anatomia completa; FPS com ombros/braços iluminados + pistola à direita da mira (antes: NADA renderizava); sprint com low-ready visível.
+- Preview da plataforma reerguido pós-reciclagem do sandbox (.zscripts/dev.sh supervisor + vite.preview.config.js + preview_ws_smoke.mjs agora VERSIONADOS — antes viviam fora do git e morriam com a reciclagem).
+
+Stage Summary:
+- O jogador FINALMENTE vê o próprio corpo em 1ª pessoa (braços orgânicos + arma iluminadas, arma à direita da mira) — o último "personagem invisível" do jogo saiu
+- Sprint abaixa a arma com peso de corpo real (constante de tempo própria), pouso absorve o impacto, câmera balança elipticamente — nas duas trilhas (offline e snapshot)
+- Camadas ortogonais ao main: gait F42 (fase por metro) intocado; sprintK/dip/vmLight/fix-raiz somam por cima — zero regressão em 1130 testes
