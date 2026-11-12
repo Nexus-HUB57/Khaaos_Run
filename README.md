@@ -5,7 +5,7 @@
 > Plataforma Battle Royale multi-mundo com possibilidade futura de recompensa de referência de até **US$ 1.000.000**, condicionada a regras e aprovações próprias; não é oferta, promessa ou garantia atual.
 > O jogador se alista voluntariamente, assume o posto de **Zheers** e atravessa uma sequência de *Rings* (mundos) que funcionam como filtros psicológicos, táticos e econômicos progressivos.
 
-> **Nível Devs Ph.D** — 97 PRs mesclados no GitHub (snapshot 2026-10-26) · 108 arquivos `.cpp` + 107 headers · 46.843 linhas no escopo-fonte UE5 · 16 workflows versionados · IaC Terraform · Fases 0–5 em estados distintos de implementação e aceite
+> **Nível Devs Ph.D — snapshot 2026-11-12 (main `7e96ddf`):** 356 PRs mesclados no GitHub · 309 `.cpp` + 303 headers e 136.618 linhas nos arquivos C++ versionados em `Unreal/**` · 52 workflows · 9 arquivos Terraform · 17/17 Playwright E2E · 16 WebPs realistas do Lote 4 (8 masculinos, 8 femininos) no perfil e no lobby. O staging Render passou health/readiness com Postgres e Redis; build/cook real UE5.8 ainda depende de runner licenciado.
 
 ---
 
@@ -54,26 +54,27 @@
 
 | Dimensão | Estado | Detalhe |
 |----------|--------|---------|
-| **Web/API (TS/Node)** | 🟡 Implementado / typecheck ✅ | Express 5, React 18, WebSocket, Economy, Matchmaking; `npm run check` passa; staging/produção requerem evidência operacional |
-| **UE5 C++ Core** | 🟡 Código implementado | 108 `.cpp` + 107 headers; 46.843 linhas no escopo `Unreal/**/*.cpp|*.h|*.hpp`; build pendente |
+| **Web/API (TS/Node)** | 🟢 Staging validado | Express 5, React 18, WebSocket, Economy, Matchmaking; `/readyz` aceito com Postgres/Redis no app SHA `caeb836`; produção ainda requer aceite próprio; [runbook Render](docs/RENDER_DEPLOYMENT.md) |
+| **UE5 C++ Core** | 🟡 Código versionado; build real pendente | 309 `.cpp` + 303 headers; 136.618 linhas combinadas em `Unreal/**`; compilação/cook UE5.8 ainda pendentes |
 | **Gameplay Ability System** | 🟡 Código implementado | 11 abilities, GameplayEffects, Tags, Enhanced Input; compilação UE5 pendente |
 | **Rede / Replicação** | 🟡 Código implementado | Iris, Relevancy, NetMetrics, Spatial Grid; validação em servidor pendente |
 | **EOS (Epic Online Services)** | 🟡 Integração implementada | Auth, Lobby, Matchmaking, Sessions, Cloud Save; credenciais e staging pendentes |
-| **CI/CD** | 🟡 Versionado / aceite por workflow | 16 workflows em `.github/workflows/`; alguns gates usam runners, credenciais ou serviços externos e não equivalem a aceite operacional |
+| **CI/CD** | 🟡 Versionado / aceite por workflow | 52 workflows em `.github/workflows/`; alguns gates usam runners, credenciais ou serviços externos e não equivalem a aceite operacional |
+| **Web E2E (Playwright)** | ✅ 17/17 | 4 arquivos de teste passaram em 2026-11-12; inclui seleção de personagem e carregamento do WebP realista no lobby; APIs/WS simulados, sem acesso a conta real; [como executar](tests/e2e/README.md) |
 | **Docker / Dedicated Server** | 🟡 Configurado | Compose versionado com 5 serviços e 1 rede; build/execução operacional pendentes |
 | **Anti-Cheat** | 🟡 Validações implementadas | Movement validation e 3-strike; binário/SDK EAC e build UE5 pendentes |
 | **Economia (KRC)** | 🟡 Código de jogo | AtomicLedger e Compliance versionados; runtime com ledger idempotente e recompensas de partida; não habilitar valor real sem auditoria e aceite |
 | **Mundos W1-W4** | 🟡 Regras/dados + intake visual | Contratos visuais README-validáveis; catálogo narrativo Zu sincronizado em C++/TypeScript e 15 variantes cobertas no gate portátil; integração de cada cinematic/decisão com chegada ao Ring, `.uasset`/`.umap`, cook e playtest ainda pendem validação no UE5.8; [status Zu](Unreal/KhaaosRun/Docs/Worlds/ZuIngress_Status.md) e [pipeline visual](Unreal/KhaaosRun/Docs/Worlds/README.md) |
 | **Load Testing** | 🟡 Perfis implementados | 4 profiles (100–2000 bots), 3 ramp strategies; execução e relatório de aceite pendentes |
 | **Beta → Go Live** | 🟡 Código/documentação | BetaCampaign e StreamingIntegration versionados; go-live depende dos gates restantes |
-| **Infraestrutura (IaC)** | 🟡 Configurado | Terraform/monitoramento versionados; deploy, failover e evidência multi-região pendentes |
+| **Infraestrutura (IaC)** | 🟡 Parcialmente validada | 9 arquivos `.tf`/`.tfvars`; staging web Render validado em 2026-11-12, enquanto deploy/failover operacional do dedicated server e evidência multi-região continuam pendentes |
 | **Launch Readiness** | 🟡 Checklist versionado | Rate limiting, DDoS e checklist implementados; PASS operacional ainda precisa ser demonstrado |
 | **Build UE5 (compilação)** | 🟡 Preflight operacional; build real pendente de engine | Preflight UE5.8 em toda PR (verde); caminhos prontos: container `ghcr.io/epicgames/unreal-engine` (gate no secret `UE_CONTAINER_PAT`) ou runner self-hosted (`scripts/build/bootstrap_ue58_runner.sh`) |
 | **3D Assets / Mapas** | 🟡 Pacotes 3D + pipeline de mundos | `scripts/build/generate_world_asset_packages.py` gera intake determinístico para os cinco mundos; `.uasset`/`.umap` finais exigem import/cook no UE Editor |
 | **Entrada dos Mundos (Zu)** | 🟡 Protocolo autoritativo implementado | `ZU_PORTAL_V1` mantém o jogador em spawn de solo, sincroniza a apresentação por relógio do servidor e elimina `Deploy → Parachute` do fluxo UE5; airdrop de suprimentos permanece separado do ingresso |
 | **EAC SDK Binary** | 🟡 Camadas prontas; validação de build pendente | Bridge C-ABI com binários provisionados via script (app raiz) e módulo `KhaaosEAC` com SDK condicional (stub sem `KHAAOS_EAC_SDK_DIR`); binários oficiais exigem download no dev portal da Epic |
 | **Hierarquia do Jogo (E2E)** | ✅ 5 Eixos Sincronizados | Escada EP555 (8 patentes) + 12 Especializações GAS + DAG Mundos/Zu 1-3/Dedo-Duro + Submundo KR (`executable: false`) + `UKhaaosHierarchySubsystem` C++20 + `/hierarquia` |
-| **Avatares & Operativos (33)** | ✅ 16♂ e 16♀ + TALON | 16 operativos canônicos militares + Lote 4 (8 milícias MIL-01..08 + 8 gangues GNG-01..08, facção declarada) com diversidade étnica/racial; 33 vetores SVG táticos 512×512 em `Content/Avatars/` e `client/public/avatars/`, catálogo JSON, Studio 4K com filtro de facção e whitelist de seleção |
+| **Avatares & Operativos (33)** | ✅ Catálogo + retratos realistas | 16 militares + Lote 4 (8 milicianos e 8 membros de gangues, 8 masculinos e 8 femininos) + TALON; 16 retratos WebP realistas servidos no perfil/lobby, com SVG canônico como fallback; roster e filtro de facção cobertos por E2E |
 | **Gráficos & Personagem** | ✅ Otimizações implementadas | 5 presets (Low→PhD), DLSS/FSR/XeSS/TSR, Dynamic Resolution, Species LOD (5 níveis), Post-Process (9 tipos), Material Optimizer (9 grupos), Morph Targets (5 categorias), Physics Animation (8 partes), Cosmetic Validator server-side |
 | **Coordenação de PRs & Git** | ✅ Branches & Workflow Ativos | Proteção Multi-Dev Zero-Deletion (`scripts/khaaos_workflow.sh`) e pipeline `verify:all` 100% verde |
 | **Jornada Oficial do Jogador** | 🟡 Código de conta por email/senha versionado; alistamento e lançamento ainda pendentes | App passa a ter cadastro/login local com verificação por email e OIDC coexistente nesta entrega; criação de conta por email permanece indisponível até SMTP configurado. Taxa nominal de US$ 1, perfil/War’I após pagamento, Academia KR e marco de 1.000.000 continuam condicionados aos gates de cobrança, compliance e produção. |
@@ -638,7 +639,7 @@ A massa da silhueta parte de 76 kg em 1,78 m com ombro de 0,44 m e cresce com a 
 
 ## Arquitetura Técnica — Devs Ph.D
 
-> **Métricas auditadas em 2026-10-26:** o escopo reproduzível `Unreal/**/*.cpp|*.h|*.hpp` contém 108 arquivos `.cpp`, 107 headers e 46.843 linhas. Contagens históricas como 16.165 linhas ou 162 arquivos não são usadas como baseline atual sem declarar um escopo diferente.
+> **Métricas auditadas em 2026-11-12 (main `7e96ddf`):** o escopo de arquivos versionados `Unreal/**/*.cpp|*.h|*.hpp` contém 309 `.cpp`, 303 headers e 136.618 linhas combinadas. A contagem inclui todos esses arquivos rastreados sob `Unreal/**`; mudanças futuras devem manter esse escopo explícito.
 
 ### Visão Geral de Duas Camadas
 
@@ -939,7 +940,7 @@ Configuradas em `.github/labeler.yml`: `ue5`, `cpp`, `gameplay`, `economy`, `ai`
 | #14 | feat/ue5-debugger-saveui-audio | MERGED | Gameplay Debugger, EOS Cloud Save, CommonUI HUD, MetaSound Audio |
 | #15 | feat/ue5-server-load-anticheat-launch | MERGED | Dedicated Server, Load Test, Anti-Cheat, Launch Readiness |
 
-O quadro acima é um histórico parcial dos primeiros PRs e não é um inventário completo. No snapshot de 2026-10-26, o GitHub registra **97 PRs mesclados** e **4 PRs abertos**. Entre os abertos estão: #102 (WebSocket E2E/README), #111 (observabilidade distribuída), #112 (UE5.8 build/preflight) e #113 (staging com PostgreSQL/Redis). Esses PRs não devem ser descritos como parte da base `main` até serem mesclados.
+O quadro acima é um histórico parcial dos primeiros PRs e não é um inventário completo. Em 2026-10-26, o snapshot registrava **97 PRs mesclados** e **4 abertos**; aquela lista de PRs abertos (#102, #111, #112 e #113) é histórica, não um retrato atual. No snapshot de 2026-11-12, após a mesclagem da PR #372, o GitHub registra **356 PRs mesclados**.
 
 ---
 
@@ -1216,9 +1217,9 @@ Baseline de cobertura: [`docs/TEST_COVERAGE_BASELINE.md`](docs/TEST_COVERAGE_BAS
 
 ---
 
-## Snapshot de Auditoria do Desenvolvimento — 2026-10-27
+## Snapshot Histórico de Auditoria do Desenvolvimento — 2026-10-27
 
-Este snapshot é uma fotografia do checkout e do GitHub, não uma promessa de produção:
+Este é um registro histórico do checkout e do GitHub em 2026-10-27, não o estado atual nem uma promessa de produção. Para métricas atuais, consulte o banner e a tabela de Status do Projeto acima:
 
 | Evidência | Resultado | Interpretação |
 |-----------|-----------|---------------|
@@ -1230,7 +1231,7 @@ Este snapshot é uma fotografia do checkout e do GitHub, não uma promessa de pr
 | Pacotes visuais | ✅ 5/5 intake packages | OBJ/glTF/umap-contract/DataTables/SVG gerados; import/cook final ainda depende de UE5.8 |
 | GitHub | 🟡 97 PRs mesclados · 4 abertos | PRs #102, #111, #112 e #113 permanecem fora da base `main` até merge |
 
-Os PRs abertos representam desenvolvimento em andamento: WebSocket/README (#102), observabilidade distribuída (#111), preflight/build UE5.8 (#112) e staging com PostgreSQL/Redis (#113). O README deliberadamente não promove essas entregas a “operacionais” antes da mesclagem e da evidência de execução.
+Naquela fotografia, os PRs abertos representavam desenvolvimento em andamento: WebSocket/README (#102), observabilidade distribuída (#111), preflight/build UE5.8 (#112) e staging com PostgreSQL/Redis (#113). A lista descreve o estado da data do snapshot; não deve ser usada como estado atual desses PRs.
 
 ---
 
