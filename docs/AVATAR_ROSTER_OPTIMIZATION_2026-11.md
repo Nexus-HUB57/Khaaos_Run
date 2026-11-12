@@ -26,6 +26,7 @@ As transições usam hysteresis `0,02 / 0,02 / 0,015 / 0,01` e dither quando sup
 - `Unreal/KhaaosRun/Content/Characters/avatar_optimization_profile.json`: contrato de budgets e aceite.
 - `scripts/ue5/audit_avatar_roster_optimization.py`: auditoria engine-less, sem reescrever binários.
 - `scripts/ue5/configure_avatar_roster_lods.py`: configuração batch dos Screen Sizes no UE5.8, dry-run por padrão.
+- `scripts/ue5/generate_static_avatar_lods_blender.py`: geração Blender 4.x para os quatro GLBs estáticos.
 - `artifacts/avatar-optimization/avatar-roster-optimization-report.json`: resultado do inventário atual.
 
 ## Próximas ações no toolchain de produção
@@ -36,6 +37,19 @@ As transições usam hysteresis `0,02 / 0,02 / 0,015 / 0,01` e dither quando sup
 4. Habilitar streaming de textura e consolidar slots: 2–4 no LOD0, 2–3 no LOD1, 1–2 no LOD2 e 1 no LOD3.
 5. Aplicar KTX2/meshopt apenas quando a ferramenta de compressão estiver disponível; registrar hashes de cada saída.
 6. Executar matriz Low/Medium/High/Ultra com screenshots, draw calls, VRAM, GPU p95 e revisão de clipping/LOD pop.
+
+## Geração Blender dos quatro estáticos
+
+O gerador versionado processa `avatar-f-03.glb`, `avatar-m-01.glb`, `avatar-m-02.glb` e `avatar-m-04.glb`, preserva os originais e exporta `LOD0`–`LOD3` como GLBs separados:
+
+```bash
+blender -b --python scripts/ue5/generate_static_avatar_lods_blender.py -- \
+  --input-dir game-runtime/public/assets/avatars \
+  --output-dir artifacts/avatar-optimization/generated-lods \
+  --report artifacts/avatar-optimization/blender-lod-generation-report.json
+```
+
+A execução foi tentada neste ambiente, mas não foi iniciada porque não há Blender 4.x instalado, não há pacote `blender` disponível no apt e não há wheel `bpy` disponível. Portanto nenhum LOD fake ou binário parcialmente exportado foi criado.
 
 ## Limitações
 
