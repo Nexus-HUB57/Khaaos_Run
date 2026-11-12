@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildScene } from '../src/game3d/world3d.js';
 import { districtDressing, buildDistrictDressing } from '../src/game3d/districts3d.js';
-import { roadSegments } from '../src/game3d/detail3d.js';
+import { roadSegments, hasCanonicalRoads } from '../src/game3d/detail3d.js';
 import { getWorldLayout } from '../src/game3d/sim3d.js';
 import { resolveScenario, SCENARIOS } from '../src/game3d/scenarios.js';
 
@@ -124,14 +124,22 @@ test('zero impacto em gameplay: bounds, praça, colliders, loot e estradas respe
         assert.ok(Math.hypot(p.x - l.x, p.z - l.z) > 3.2, `${id}: (${p.x},${p.z}) não bloqueia loot`);
       }
     }
-    // itens fora do asfalto das estradas (distância ao EIXO da via > meia-largura)
+    // Fase 58 — re-âncora honesta (cânon README "Mundos Oficiais"): nos mundos
+    // urbanos (CIGKV/Barburhen) as vias existem e o dressing fica fora do
+    // asfalto; nos mundos de natureza (Priadus/Ckesalth/Arukheea) o README não
+    // descreve estradas/ruas — a rede urbana NÃO existe e o item garante que o
+    // vazamento urbano não regrediu.
     const roads = roadSegments(layout);
-    assert.ok(roads.length > 0, 'vias existem no layout');
-    for (const p of items) {
-      for (const seg of roads) {
-        const d = distToSeg(p.x, p.z, seg);
-        assert.ok(d > seg.width / 2, `${id}: item (${p.x},${p.z}) fora do asfalto da via`);
+    if (hasCanonicalRoads(scenario.id)) {
+      assert.ok(roads.length > 0, 'vias existem no layout urbano');
+      for (const p of items) {
+        for (const seg of roads) {
+          const d = distToSeg(p.x, p.z, seg);
+          assert.ok(d > seg.width / 2, `${id}: item (${p.x},${p.z}) fora do asfalto da via`);
+        }
       }
+    } else {
+      assert.equal(roads.length, 0, `${id}: mundo de natureza NÃO tem vias asfaltadas (cânon README)`);
     }
   }
 });
