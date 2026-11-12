@@ -8,6 +8,16 @@ on:
         type: boolean
         required: true
         default: false
+      postgres_id:
+        description: Approved temporary Free Postgres ID for staging
+        type: string
+        required: true
+        default: dpg-dbqc3f3bc2fs73cv78u0-a
+      key_value_id:
+        description: Existing Free Key Value ID for staging
+        type: string
+        required: true
+        default: red-dbjl420ae00c73eig0h0
 
 permissions:
   contents: read
@@ -18,17 +28,22 @@ concurrency:
 
 jobs:
   configure:
-    if: github.ref == 'refs/heads/main' && inputs.confirm_staging
+    if: >-
+      inputs.confirm_staging &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/render-staging-temp-db-connection') &&
+      inputs.postgres_id == 'dpg-dbqc3f3bc2fs73cv78u0-a' &&
+      inputs.key_value_id == 'red-dbjl420ae00c73eig0h0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
 
       - name: Set private database URL and enable migrations
         env:
           RENDER_API_KEY: ${{ secrets.API_KEY_RENDER }}
           RENDER_SERVICE_ID: srv-db6183o473hc73co8n10
-          RENDER_POSTGRES_ID: dpg-db61f10473hc73cp2i9g-a
+          RENDER_POSTGRES_ID: ${{ inputs.postgres_id }}
+          RENDER_KEYVALUE_ID: ${{ inputs.key_value_id }}
         run: node scripts/configure-render-staging-db.mjs

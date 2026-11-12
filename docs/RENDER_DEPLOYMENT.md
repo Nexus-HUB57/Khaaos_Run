@@ -10,9 +10,9 @@ O Blueprint [`render.yaml`](../render.yaml) configura o Web Service de staging n
 
 ## Bootstrap do Postgres staging
 
-1. O serviço `khaaos-run-staging` está no plano Free e região Oregon. O PostgreSQL `khaaos-run-staging-db` também está em Oregon no plano Free; expira em 10 de novembro de 2026, tem limite de 1 GB e não oferece backups ([limites oficiais do Free Postgres](https://render.com/docs/free)). Use-o apenas para validação temporária de staging, nunca para dados reais de jogadores. Não crie outro Web Service ou banco por engano.
+1. O serviço `khaaos-run-staging` está no plano Free e região Oregon. A base temporária atual é `khaaos-run-staging-db-202611` (`dpg-dbqc3f3bc2fs73cv78u0-a`), também Free/Oregon; expira em 11 de dezembro de 2026, tem limite de 1 GB e não oferece backups ([limites oficiais do Free Postgres](https://render.com/docs/free)). O Key Value Free existente `KHAAOS_RUN` (`red-dbjl420ae00c73eig0h0`) também está em Oregon. Use os dois apenas para validação temporária de staging, nunca para dados reais de jogadores. Não crie outro Web Service ou datastore por engano.
 2. Antes do deploy, confirme no ambiente do serviço se já estão configurados `SESSION_SECRET`, `WS_TOKEN_SECRET`, `REPL_ID` e `ZONE_OPERATOR_IDS`. `SESSION_SECRET` e `WS_TOKEN_SECRET` devem ser aleatórios, fortes, independentes e ter pelo menos 32 bytes. Não envie os valores em mensagens. Se esses segredos ainda não estiverem disponíveis, a migration pode mesmo assim ser aplicada, mas o processo web pode falhar depois e o health check não ficar saudável.
-3. No GitHub Actions, execute manualmente **Configure Render Staging Database** na branch `main` e confirme `confirm_staging=true`. O workflow usa o secret `API_KEY_RENDER` para buscar a conexão **interna** do Postgres, alinhar o comando de build para incluir `devDependencies`, definir `/readyz` como health check, gravar `DATABASE_URL` no serviço e ativar `RUN_DB_MIGRATIONS=true`. A URL não é exibida nem salva no repositório. Verifique a lista de deploys do Render após a execução; não inicie outro deploy se já houver um em andamento.
+3. No GitHub Actions, execute manualmente **Configure Render Staging Database** e confirme `confirm_staging=true`. Informe os IDs aprovados nos inputs `postgres_id` e `key_value_id`; o workflow só aceita a base e o Key Value desta homologação e a branch `main` ou a branch de correção autorizada. Ele usa o secret `API_KEY_RENDER` para buscar as conexões **internas** do Postgres e Key Value sem imprimi-las ou salvá-las no repositório. Também alinha build (`npm ci --include=dev ... && npm run build`), start (`npm start`) e `/readyz`, define `REDIS_REQUIRED=true`, e ativa `RUN_DB_MIGRATIONS=true`. Verifique a lista de deploys do Render após a execução; não inicie outro deploy se já houver um em andamento.
 4. Depois de confirmar o CI verde e a configuração, aguarde o deploy que possa ter sido iniciado pelas alterações de ambiente. Se nenhum deploy tiver começado, execute manualmente o workflow **Deploy** com `environment=staging`. A inicialização via `scripts/start.mjs` roda `npm run db:migrate` antes do servidor. Confirme nos logs do Render a mensagem de conclusão das migrations e o health check `/readyz`. Não use `db:push`.
 5. Depois de confirmar a migration, volte `RUN_DB_MIGRATIONS` para `false` no ambiente do serviço, para que deploys normais não reapliquem esse gate temporário. Essa alteração pode iniciar outro deploy; monitore-o e evite iniciar um deploy duplicado. Mantenha o Auto-Deploy do Render em **Off**. Até o workflow de deploy depender explicitamente do resultado do CI separado, prefira o `workflow_dispatch` manual após verificar os testes.
 
@@ -22,13 +22,19 @@ O Blueprint [`render.yaml`](../render.yaml) configura o Web Service de staging n
 
 A resposta do endpoint de deploy do Render confirma que o deploy foi aceito/agendado, não que a aplicação já está pronta. Se um deploy terminar sem ficar saudável, investigue os logs do Render e use rollback manual conforme a política do serviço.
 
-### Verificação operacional do staging — 1 de novembro de 2026
+### Verificação histórica do staging — 1 de novembro de 2026
 
 No workspace de staging, o comando de build e `healthCheckPath: /healthz.json` coincidem com este Blueprint; o Auto-Deploy permanece Off. O deploy mais recente consultado consta como concluído para o commit `e652696`, mas uma requisição pública a `/healthz.json` expirou após 20 segundos sem resposta. O evento de deploy bem-sucedido, isoladamente, não comprova que o processo esteja servindo tráfego.
 
 Uma tentativa de inicialização anterior registrou `SESSION_SECRET_CURRENT must contain at least 32 bytes`. O runtime usa `SESSION_SECRET_CURRENT` e, como compatibilidade, `SESSION_SECRET`; o segredo efetivo precisa ter pelo menos 32 bytes UTF-8. A consulta filtrada não encontrou a mesma mensagem depois do deploy mais recente, portanto esse log é um diagnóstico observado, não a confirmação da causa atual do timeout. Os valores das variáveis não foram consultados. Não reduza a validação nem publique segredos no chat; o titular deve conferir/configurar o segredo diretamente no Render. Depois, repita o health check e valide os demais pré-requisitos de runtime, incluindo `DATABASE_URL`, `WS_TOKEN_SECRET`, `REPL_ID`, `PUBLIC_ORIGIN` e `REDIS_URL`.
 
 Até `/healthz.json` responder `200` e o commit implantado ser confirmado, mantenha checkout desabilitado, não rode teste de compra no staging e não trate OIDC como validado. Nenhuma variável foi alterada nem deploy foi iniciado nesta verificação.
+
+### Estado atual de configuração — 12 de novembro de 2026
+
+O serviço existente foi confirmado no plano Free/Oregon, com root directory na raiz do repositório, branch `main` e Auto-Deploy Off; não foi criado outro serviço nem outro banco. Os comandos salvos no serviço são o build web da raiz, `npm start` e o health check `/readyz`. A base temporária nova está disponível e a credencial padrão anterior foi revogada depois de uma exposição acidental durante a inspeção; a credencial nova deve ser obtida e armazenada apenas pelo workflow/API, nunca copiada para logs ou mensagens.
+
+A configuração ainda depende da execução do workflow de bootstrap com os IDs aprovados e de um novo deploy. Na última consulta, o commit `caeb836` aparecia como `update_failed`; portanto não considere o staging aceito até `/healthz.json` confirmar o SHA esperado e `/readyz` retornar HTTP 200 com Postgres e Redis saudáveis. O bootstrap liga `RUN_DB_MIGRATIONS=true` apenas para a primeira migration; depois da confirmação, volte-o para `false` e monitore qualquer deploy subsequente.
 
 ## Login OIDC: gate obrigatório antes de produção
 
@@ -50,6 +56,7 @@ O secret `API_KEY_RENDER` continua usado apenas pelos workflows manuais de boots
 
 - [Render Postgres: criar e conectar](https://render.com/docs/postgresql-creating-connecting)
 - [Render API: recuperar conexão do Postgres](https://api-docs.render.com/reference/retrieve-postgres-connection-info)
+- [Render API: recuperar conexão do Key Value](https://api-docs.render.com/reference/retrieve-key-value-connection-info)
 - [Render API: adicionar ou atualizar variável de ambiente](https://api-docs.render.com/reference/update-env-var)
 - [Render API: atualizar configuração do serviço](https://api-docs.render.com/reference/update-service)
 - [Render Deploy Hooks](https://render.com/docs/deploy-hooks)
