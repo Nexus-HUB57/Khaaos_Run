@@ -8,7 +8,8 @@ import { KhaaosSim3D, WEAPONS3D, DEFAULT_INPUT, WORLD, GLOO, DBNO, DOOR, WINDOW,
 import { doorMaterialOf } from './interiorsPlan.js'; // Fase 26 — material (metal/wood) p/ áudio por kind da estrutura
 import { buildScene, createRingWall, applyGltfProps, applyNightness, tickVegetationWind } from './world3d.js';
 import { nightnessFor } from './skyPhase.js';
-import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, poseWeaponSprint, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { createOperative, createFirstPersonRig, createWeaponModel, animateOperative, attachWeapon, createLootMesh, createParachute, createFragMesh, createGlooMesh, poseFirstPersonHands, SKIN_TONES, VEST_COLORS_FALLBACK } from './entities3d.js';
+import { resolveViewMode, VIEW_STORAGE_KEY } from './viewmode.js';
 import { newGait, advanceGait } from './gait.js'; // Fase 42 — passada travada em distância
 import { applyOperativeGear } from './gear3d.js'; // Fase 28 — equipamento vira silhueta
 import { AVATAR_GLB_LIBRARY, avatarById, loadAvatarGlb, normalizeAvatarScale, fitAvatarToGround } from './avatars3d.js'; // Fase 56 — avatares GLB (rigs reais Tripo)
@@ -99,7 +100,11 @@ export class Game3D {
     this.online = !!net;
     this.pendingSlot = 0;
     this.netAccumulator = 0;
-    this.viewMode = new URLSearchParams(location.search).get('view') === 'tps' ? 'tps' : 'fps';
+    this.viewMode = resolveViewMode({
+      param: new URLSearchParams(location.search).get('view'),
+      stored: (() => { try { return localStorage.getItem(VIEW_STORAGE_KEY); } catch { return null; } })(),
+      fallback: 'tps', // Task 62 — default: avatar à frente do console
+    });
     this.cameraSway = 0;
     // Fase 4 — visual state dos arremessáveis/queda
     this.grenadeMeshes = new Map();   // id → mesh
@@ -130,6 +135,7 @@ export class Game3D {
       onReplayExport: () => this.exportReplay(),
     });
     this.hud.audio = this.audio;
+    this.hud.onViewToggle = () => this.toggleView(); // Task 62 — botão ◉ VISTA
     this.hud.setAbility(this.selectedOperative.id, this.online);
     this.hud.setMatchStatus('AGUARDANDO ZU');
     this.hud.feed('Marechal', `Seed ${seed} carregada. Aguardando decisão ZU.`);
@@ -622,6 +628,8 @@ export class Game3D {
       // Fase 40 — mapa tático em tela cheia (toggle; a partida NUNCA pausa)
       if (k === TACTICAL_HOTKEY && !e.repeat) this.hud?.toggleMap();
       if (k === 'c' && !e.repeat) this.input.crouch = !this.input.crouch; // Fase 5 — agachar (toggle)
+      // Task 62 — alternância 1ª/3ª pessoa (V)
+      if (k === 'v' && !e.repeat) this.toggleView();
       // Fase 5 — espectador: troca o operativo acompanhado
       if (k === 'arrowleft' && !e.repeat) this.spectateCycle(-1);
       if (k === 'arrowright' && !e.repeat) this.spectateCycle(1);
@@ -634,6 +642,25 @@ export class Game3D {
   }
 
   isTouch() { return matchMedia('(pointer: coarse)').matches; }
+
+  // ---------- Task 62 — alternância de câmera (1ª pessoa ↔ avatar à frente) ----------
+  // Tecla V + botão ◉ VISTA do HUD. Persistida em localStorage (kr_view_mode);
+  // ?view= da URL tem prioridade apenas na abertura (resolveViewMode).
+  toggleView() {
+    this.setViewMode(this.viewMode === 'fps' ? 'tps' : 'fps');
+  }
+
+  setViewMode(mode) {
+    if (mode !== 'fps' && mode !== 'tps' || mode === this.viewMode) return;
+    this.viewMode = mode;
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* storage privado */ }
+    // visibilidade: em 1ª pessoa o corpo do jogador dorme (o rig FP assume);
+    // em 3ª pessoa o operativo volta com a arma presa nas mãos.
+    if (this.playerOp?.group) this.playerOp.group.visible = mode !== 'fps';
+    if (this.firstPersonRig) this.firstPersonRig.visible = mode === 'fps';
+    if (mode === 'tps') { this.camRig.curDist = 4.4; this.camRig.curEye = 1.62; } // re-enquadra
+    this.hud?.viewToast?.(mode === 'fps' ? 'CÂMERA // PRIMEIRA PESSOA' : 'CÂMERA // AVATAR À FRENTE (3ª PESSOA)');
+  }
 
   // ---------- fluxo ----------
   // ─── Fase 56 — avatares GLB (rigs reais) no herói e na vitrine do menu ───
@@ -1204,7 +1231,7 @@ export class Game3D {
     const p = s.player;
     const pg = this.playerOp.group;
     pg.position.set(p.x, p.y, p.z);
-    pg.rotation.y = p.yaw + Math.PI; // modelo olha -Z; yaw 0 = frente -Z
+    pg.rotation.y = p.yaw; // Task 62 — modelo olha −Z local = direção de mira (fim do avatar de costas)
     if (!p.alive) {
       // Fase 12 — morte DIRECIONAL: torque oposto ao tiro, quique amortecido e assentamento
       let dfx = this.deathFX.get('player');
@@ -1258,15 +1285,15 @@ export class Game3D {
     this._dip.v *= Math.exp(-dt * 6.5);
     const pFx = animateOperative(this.playerOp.parts, {
       t: this.animT, phase: this._gait.phase, speedNorm: p.moving ? (p.sprinting ? 1.2 : .8) : 0,
-      pitch: -p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
+      pitch: p.pitch, dead: !p.alive, ads: p.ads, crouch: !!p.crouching,
       knocked: !!p.knocked, // Fase 7 — pose de rastejo DBNO (só quando vivo)
       air: airborne ? Math.max(0, p.y) : 0,
       hit: this.#hitParam('player'), // Fase 10 — flinch direcional do jogador
       death: p.alive ? null : this.deathFX.get('player'), // Fase 12 — agonia direcional
       sprintK: this._sk, // Task 59 — low-ready do sprint (suavizado por ator)
     });
-    // Task 59 — arma em 3ª pessoa acompanha o low-ready do sprint
-    poseWeaponSprint(this.playerOp.group.userData.weaponRig, pFx?.sprintK ?? 0);
+    // Task 62 — o low-ready da arma no sprint é resolvido DENTRO de
+    // animateOperative (solda punho↔grip por frame); sem pose externa.
     if (airborne && p.alive && !p.knocked) {
       const flap = Math.sin(this.animT * 5) * .5;
       this.playerOp.parts.armL.shoulder.rotation.z = 1.1 + flap * .3;
@@ -1383,7 +1410,7 @@ export class Game3D {
       g.visible = true;
       g.rotation.x = 0; g.rotation.z = 0;
       g.position.set(b.x, b.y, b.z);
-      g.rotation.y = b.yaw + Math.PI;
+      g.rotation.y = b.yaw; // Task 62 — mesma convenção do jogador (modelo olha −Z local)
       // Fase 7 — caído rasteja (pose própria); de pé anima normal
       // Fase 9 — sombra some com altitude da queda
       // Fase 10 — anima o conjunto de parts do NÍVEL ATIVO do LOD + flinch de dano
@@ -1406,8 +1433,8 @@ export class Game3D {
         entry.sk ??= 0;
         entry.sk += (bSkT - entry.sk) * (1 - Math.exp(-(bSkT > entry.sk ? 5.5 : 7) * dt));
         if (entry.sk < 1e-4) entry.sk = 0;
-        const bFx = animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
-        poseWeaponSprint(g.userData.weaponRig, bFx?.sprintK ?? 0);
+        animateOperative(parts, { t: this.animT + b.id.charCodeAt(4), phase: entry.gait.phase, speedNorm: gsn, pitch: 0, dead: false, crouch: !!b.crouching, knocked: !!b.knocked, air: b.dropPhase ? Math.max(0, b.y) : 0, hit: this.#hitParam(b.id), sprintK: entry.sk });
+        // Task 62 — arma acompanha o low-ready dentro do animateOperative
         if (this.audio && b.alive && !b.dropPhase && !b.knocked && entry.gait.events.length) {
           const dListener = Math.hypot(b.x - cam.x, b.z - cam.z);
           if (dListener < 22) {
@@ -2071,14 +2098,14 @@ export class Game3D {
 
   // ---------- Fase 10 — reação de impacto ----------
   // Converte o ponto de impacto (mundo) em ângulo no espaço LOCAL do modelo
-  // desfeito o rotation.y real do grupo (yaw + π): 0 = frente do modelo,
-  // +π/2 = lado +x do modelo, π = costas. Registra flinch só para atores vivos.
+  // desfeito o rotation.y real do grupo (= yaw desde a Task 62): 0 = frente do
+  // modelo, +π/2 = lado +x do modelo, π = costas. Registra flinch só para vivos.
   #registerHit(victimId, e) {
     const s = this.sim;
     const actor = victimId === 'player' ? s.player : (s.bots ?? []).find((b) => b.id === victimId);
     if (!actor || !actor.alive) return;
     const dx = e.x - actor.x, dz = e.z - actor.z;
-    const th = actor.yaw + Math.PI;
+    const th = actor.yaw;
     const cos = Math.cos(th), sin = Math.sin(th);
     const lx = dx * cos - dz * sin;  // mundo → local (inverso de rotation.y)
     const lz = dx * sin + dz * cos;

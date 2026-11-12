@@ -15,24 +15,26 @@ const close = (a, b, eps = 1e-9, msg = '') =>
   assert.ok(Math.abs(a - b) < eps, `${msg} (esperado ~${b}, veio ${a})`);
 
 // ---------- direção mundial da queda (matemática pura) ----------
-test('queda mundial: atirador à FRENTE (angle 0) → corpo cai p/ −z; de TRÁS (π) → +z', () => {
+// Task 62 — convenção do modelo: rotation.y = yaw (face = −z local = mira).
+// angle 0 = tiro da FRENTE → corpo cai de costas = +z local = +z mundial (yaw 0).
+test('queda mundial: atirador à FRENTE (angle 0) → corpo cai p/ +z; de TRÁS (π) → −z', () => {
   const front = fallDirectionWorld({ angle: 0, yaw: 0 });
   close(front.x, 0, 1e-9, 'componente lateral zero');
-  close(front.z, -1, 1e-9, 'cai para −z (longe do atirador à frente)');
+  close(front.z, 1, 1e-9, 'cai para +z (longe do atirador à frente — de costas)');
   const back = fallDirectionWorld({ angle: Math.PI, yaw: 0 });
   close(back.x, 0, 1e-9);
-  close(back.z, 1, 1e-9, 'cai para +z (longe do atirador atrás)');
+  close(back.z, -1, 1e-9, 'cai para −z (longe do atirador atrás)');
 });
 
-test('queda lateral: tiro do lado +x do modelo → cai p/ +x mundial (longe do atirador)', () => {
+test('queda lateral: tiro do lado +x do modelo → cai p/ −x mundial (longe do atirador)', () => {
   const right = fallDirectionWorld({ angle: Math.PI / 2, yaw: 0 });
-  close(right.x, 1, 1e-9, 'cai para +x mundial');
+  close(right.x, -1, 1e-9, 'cai para −x mundial');
   close(right.z, 0, 1e-9);
 });
 
-test('yaw gira a direção da queda: angle 0 com yaw π/2 → queda p/ −x mundial', () => {
+test('yaw gira a direção da queda: angle 0 com yaw π/2 → queda p/ +x mundial', () => {
   const d = fallDirectionWorld({ angle: 0, yaw: Math.PI / 2 });
-  close(d.x, -1, 1e-9);
+  close(d.x, 1, 1e-9);
   close(d.z, 0, 1e-9);
 });
 
@@ -46,7 +48,7 @@ test('direção de queda é unitária p/ qualquer combinação angle+yaw', () =>
 });
 
 test('decalYawWorld alinha o +z do decal com a queda (φ = atan2(dx, dz))', () => {
-  close(decalYawWorld({ angle: 0, yaw: 0 }), Math.PI, 1e-9);
+  close(decalYawWorld({ angle: 0, yaw: 0 }), 0, 1e-9);
   const yawW = decalYawWorld({ angle: .7, yaw: 2.1 });
   const { x, z } = fallDirectionWorld({ angle: .7, yaw: 2.1 });
   close(Math.sin(yawW), x, 1e-9, '+z local do decal aponta p/ dx');
@@ -175,7 +177,7 @@ test('mundo: decal nasce na posição do ator, acima da sombra, orientado pela q
   close(s.mesh.position.x, 10);
   close(s.mesh.position.z, -4);
   assert.ok(s.mesh.position.y > 2.04 && s.mesh.position.y < 2.08, `y acima do chão+EPS (${s.mesh.position.y})`);
-  close(s.mesh.rotation.y, Math.PI, 1e-9, 'queda mundial (0,−1) ⇒ rotation.y = π');
+  close(s.mesh.rotation.y, 0, 1e-9, 'queda mundial (0,+1) ⇒ rotation.y = 0 (Task 62)');
   assert.equal(s.mesh.visible, true);
   assert.equal(s.mesh.geometry.drawRange.count, s.fullVerts, 'nascimento em LOD full');
 });

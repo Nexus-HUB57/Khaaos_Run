@@ -173,7 +173,7 @@ test('movimento secundário: roll de passada, transferência de peso e micro-olh
 
 test('braços sob regime de arma: oscilação micro na corrida (sem swing macro)', () => {
   const { parts } = createOperative({ variant: 'onith' });
-  const aim = -Math.PI / 2; // pitch 0
+  const aim = .10; // Task 62 — regime de tiro: ombro direito à frente (aBase)
   let min = Infinity, max = -Infinity;
   for (let i = 0; i <= 63; i++) { // uma passada completa (2π/9 ≈ .7 s)
     animateOperative(parts, { t: i / 30, speedNorm: 1, pitch: 0 });

@@ -235,9 +235,9 @@ test('tiers e decisão de LOD intocados (contrato da Fase 20)', () => {
   assert.equal(decalLODDecision(5), 'full');
   assert.equal(decalLODDecision(100), 'simple', 'simple ∈ [85, 220) no tier high');
   assert.equal(decalLODDecision(999), 'hidden');
-  // direção mundial segue a MESMA convenção da Fase 20 (canônico: angle 0
-  // yaw 0 cai p/ −z — longe do atirador à frente)
+  // direção mundial segue a MESMA convenção da Task 62 (canônico: angle 0
+  // yaw 0 cai p/ +z — de costas, longe do atirador à frente; rotation.y = yaw)
   const f = fallDirectionWorld({ angle: 0, yaw: 0 });
-  assert.ok(Math.abs(f.x) < 1e-9 && Math.abs(f.z + 1) < 1e-9, 'queda p/ −z');
-  assert.equal(decalYawWorld({ angle: 0, yaw: 0 }), Math.PI);
+  assert.ok(Math.abs(f.x) < 1e-9 && Math.abs(f.z - 1) < 1e-9, 'queda p/ +z');
+  assert.equal(decalYawWorld({ angle: 0, yaw: 0 }), 0);
 });
