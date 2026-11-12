@@ -1421,3 +1421,22 @@ Stage Summary:
 - O jogador FINALMENTE vê o próprio corpo em 1ª pessoa (braços orgânicos + arma iluminadas, arma à direita da mira) — o último "personagem invisível" do jogo saiu
 - Sprint abaixa a arma com peso de corpo real (constante de tempo própria), pouso absorve o impacto, câmera balança elipticamente — nas duas trilhas (offline e snapshot)
 - Camadas ortogonais ao main: gait F42 (fase por metro) intocado; sprintK/dip/vmLight/fix-raiz somam por cima — zero regressão em 1130 testes
+---
+Task ID: 60
+Agent: Main
+Task: Link público do jogo atualizado — validação E2E do GitHub Pages (build idêntico ao main) + recon da VPS própria (gcodegames.top)
+
+Work Log:
+- Pedido: "criar link com o jogo atualizado". Estado de entrada: main avançou 372 commits à frente da branch de trabalho local (sessões paralelas — PRs #369/#370 mergeadas; rev-list 0 ahead / 372 behind), árvore limpa; personagem realista JÁ entregue nas fases anteriores (F9 realismo anatômico estilo FreeFire, F12 rig facial, F16 P1 clavículas/glúteos, F26 micro-detalle PBR anti-plástico, F28 gear visível) — zero trabalho de código pendente para o link
+- Build fresco do main @ d33c51c com --base=/Khaaos_Run/: `main-CYIv1e3S.js` (1.166,9 kB) — HASH IDÊNTICO ao asset servido AO VIVO em https://nexus-hub57.github.io/Khaaos_Run/ (index 200, main.js 200/1.166.905 B, weapons.js 200) — o GitHub Pages JÁ está atualizado com o main; nenhum redeploy necessário
+- E2E em browser real (headless Chromium): menu PROTOCOLO DE INSERÇÃO renderiza (5 teatros, 36 operativos canônicos, showcase de avatares rigged/animated do usuário) → "SALTAR NO CAOS" → inserção ZU ao vivo ("TREM EM ROTA // PORTAS FECHADAS", rádio log avançando, ring 10:00, 13 vivos, ordem ativa "DOMINE O RING") — 3 canvases ativos (3D 972×438 + minimapa 196×196 + ring 720×720), ZERO erros de página. Evidências copiadas para download/: khaaos-link-menu.png, khaaos-link-jogo-2d.png, khaaos-link-jogo-3d-trem.png
+- Link entregue: https://nexus-hub57.github.io/Khaaos_Run/ (modo 3D default) + /classic.html (tático 2D) — ?view=tps preserva câmera de regressão
+- ANOMALIA DE CREDENCIAL registrada: TODOS os tokens disponíveis no sandbox (remote-embedded, upload "Git Token Agosto Gens.txt", "git.token.Setembro26.txt") retornam 401 Bad credentials na API REST e rejeição "Invalid username or token" no git push — API bloqueada + IP do sandbox com rate limit anônimo esgotado (8.212.10.159); fetch/ls-remote funcionam (repo público, leitura anônima). Commit LOCAL nesta branch aguardando token válido para push/PR
+- Recon da VPS própria (subagente Task 5-a, somente leitura, nada alterado): gcodegames.top → 162.240.81.81 (hosting compartilhada HostGator — NÃO é a VPS 143.95.213.237); TCP 22022 ABERTA na VPS (OpenSSH_8.9p1 Ubuntu 22.04) porém senha do arquivo de credenciais REJEITADA (password + keyboard-interactive) e o arquivo só contém chaves PÚBLICAS (mavis-deploy-2026-06-04 / vps-mavis), sem a privada
+- Deploy no domínio próprio (gcodegames.top) pendente de 2 insumos humanos: (1) senha SSH atual da VPS ou a chave PRIVADA do par mavis-deploy; (2) A record gcodegames.top → 143.95.213.237 no painel HostGator (apontando hoje para 162.240.81.81). Nenhum deles bloqueia o GitHub Pages
+
+Stage Summary:
+- O link do jogo ATUALIZADO está no ar e foi validado ponta a ponta em browser real: https://nexus-hub57.github.io/Khaaos_Run/ serve exatamente o build do main @ d33c51c (hash do asset conferido) — menu, inserção de trem, HUD, rádio, minimapa e ring operantes, zero erros
+- Nenhuma mudança de código foi necessária: o realismo do personagem e todas as fases 24-33 já estavam no main e no Pages
+- Caminho opcional de hospedagem própria mapeado e documentado (gcodegames.top/VPS) com os 2 bloqueios humanos explícitos; GitHub Pages permanece o link canônico
+- Commit docs-only LOCAL na branch docs/task56-link-publico-validado (sem push — credenciais GitHub expiradas; push/PR na próxima rodada com token válido)
