@@ -4,7 +4,7 @@
   "unit": "metro (glTF padrão; UE5 converte para cm no import)",
   "pose": "A-pose (placeholder de rig/retopo — substituível sem trocar nome de asset)",
   "format": "glTF 2.0 binário (GLB) com COLOR_0 por vértice",
-  "generated": "2026-11-02T14:30:27.467767+00:00",
+  "generated": "2026-11-12T15:37:37.530451+00:00",
   "figures": [
     {
       "id": "kane",
@@ -26,7 +26,8 @@
       "palette": {
         "skin": "#724C30",
         "suit": "#282D38",
-        "accent": "#D88C19"
+        "accent": "#D88C19",
+        "hair": "#1C130C"
       }
     },
     {
@@ -49,7 +50,8 @@
       "palette": {
         "skin": "#845938",
         "suit": "#214C3D",
-        "accent": "#33BFB2"
+        "accent": "#33BFB2",
+        "hair": "#21160E"
       }
     },
     {
@@ -72,7 +74,8 @@
       "palette": {
         "skin": "#9E7A56",
         "suit": "#3F4751",
-        "accent": "#BF723F"
+        "accent": "#BF723F",
+        "hair": "#271E15"
       }
     },
     {
@@ -95,7 +98,8 @@
       "palette": {
         "skin": "#C69E7A",
         "suit": "#2D3372",
-        "accent": "#D83F8C"
+        "accent": "#D83F8C",
+        "hair": "#31271E"
       }
     },
     {
@@ -106,7 +110,7 @@
       "origin": "Norte-europeia",
       "file": "FIG_hald.glb",
       "bytes": 18232,
-      "sha256": "d65d8ac6083774ec0e7bd4ad5eafef766bea04aeabe1997d928a4df590791e2e",
+      "sha256": "5539f05d7e82cdd2bb87432ae34a1a484a86fc00fb903d432212ecef7c312215",
       "vertices": 280,
       "triangles": 488,
       "height_m": 1.762,
@@ -118,7 +122,8 @@
       "palette": {
         "skin": "#D8AD8C",
         "suit": "#8C99A5",
-        "accent": "#33B2D8"
+        "accent": "#33B2D8",
+        "hair": "#6B4C28"
       }
     },
     {
@@ -141,7 +146,8 @@
       "palette": {
         "skin": "#603D26",
         "suit": "#232328",
-        "accent": "#B266D8"
+        "accent": "#B266D8",
+        "hair": "#180F09"
       }
     }
   ]

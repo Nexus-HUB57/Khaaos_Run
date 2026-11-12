@@ -86,3 +86,19 @@ Previews renderizados (frente/3-4/perfil + 4 texturizados): `download/character-
 - **Pipeline canônico (cânon → catálogo → SVG → persistência → viewer → UE5): FIEL ✅** — lotes 1–3 fechados com testes e staging servindo os GLBs das figuras.
 - **Assets 3D enviados: QUALIDADE TÉCNICA BOA · INTEGRAÇÃO BLOQUEADA** — incorporar só após R1–R3 (bloqueios duros) e R7 (decisão humana); R4–R6 são o caminho de chegada à engine.
 - O bloqueio estrutural do projeto permanece humano: **0 self-hosted runners** impede o editor check de import dos manifests — os assets só se tornam "no ar" em UE5.8 depois disso.
+
+## 7. Atualização — revisão dos placeholders runtime (2026-11-12)
+
+Esta atualização trata **somente** os seis placeholders procedurais servidos em `client/public/figures/glb/` — não os dez GLBs recebidos e inventariados na seção 2. A inspeção comparativa dos seis modelos confirmou 280 vértices, 488 triângulos e ausência de rig/animações; diferenças entre JPEGs e modelos não foram presumidas como defeitos quando a ficha canônica não define roupa ou quando a correspondência de versão não está comprovada.
+
+Foi aplicado um ajuste de baixo risco em **Soren Hald**: a cor localizada do grupo de cabelo passou do tom escuro derivado da pele (`#362B23`) para loiro-escuro (`#6B4C28`), conforme a descrição `"cabelo loiro escuro"` em `shared/figures.ts`. O gerador agora registra o swatch `hair` no manifesto. Não foram alterados vértices de posição, normais, índices/topologia, pose, dimensões, paleta de traje ou os outros cinco GLBs. A comparação das streams POSITION/NORMAL/indices manteve o SHA-256 `6c437d46933e1667ede94fc0afe45e771cf0082b84c7261dbd8f02f3527b2327`; o GLB atualizado tem SHA-256 `5539f05d7e82cdd2bb87432ae34a1a484a86fc00fb903d432212ecef7c312215`.
+
+As capturas foram feitas no `FigureGlbViewer` real com Chromium/WebGL e o mesmo enquadramento:
+
+| Antes | Depois |
+| --- | --- |
+| ![Soren Hald antes do ajuste de cabelo](assets/avatar-review/hald-before.png) | ![Soren Hald depois do ajuste de cabelo](assets/avatar-review/hald-after.png) |
+
+**Validação local:** `figures-glb.test.ts` + `figures-glb-viewer.test.ts` — **12/12 testes passaram**; `py_compile` do exportador e `git diff --check` também passaram. O teste novo confirma o swatch e os 42 vértices do grupo de cabelo, mantendo a malha e dimensões declaradas.
+
+**Limite e próximos passos:** a captura confirma apenas a leitura de cor no viewer web. Hald e os demais continuam placeholders de baixa resolução em A-pose, sem detalhes faciais, rig ou animação; isto **não** é validação de gameplay nem import UE5.8. A próxima alteração de silhueta/escala ou rig deve partir das alturas e esqueletos canônicos já definidos e ser validada no runner UE5.8 disponível, sem transformar estas figuras em assets de produção por inferência.

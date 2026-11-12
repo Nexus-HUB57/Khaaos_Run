@@ -34,6 +34,7 @@ FIGURES = [
          height=1.68, shoulder=0.41, hip=0.37, note="Nikkei"),
     dict(id="hald", name="Soren Hald", sex="m", age=29,
          skin=(0.85, 0.68, 0.55), suit=(0.55, 0.60, 0.65), accent=(0.20, 0.70, 0.85),
+         hair=(0.42, 0.30, 0.16),  # loiro-escuro conforme shared/figures.ts
          height=1.79, shoulder=0.50, hip=0.33, note="Norte-europeia"),
     dict(id="okonkwo", name="Nia Okonkwo", sex="f", age=33,
          skin=(0.38, 0.24, 0.15), suit=(0.14, 0.14, 0.16), accent=(0.70, 0.40, 0.85),
@@ -210,7 +211,7 @@ def build_mannequin(f):
     mb.add(*column((0, neck_y - 0.02, 0), 0.07, (0, 1, 0), (0.11, 0.11), (0.09, 0.09), skin))
     head_cy = neck_y + 0.05 + head_r * 0.9
     mb.add(*icosphere(0, head_cy, 0, head_r, skin, 1))
-    hair = tuple(c * 0.25 for c in skin)
+    hair = f.get("hair", tuple(c * 0.25 for c in skin))
     mb.add(*icosphere(0, head_cy + head_r * 0.22, -0.008, head_r * 0.95, hair, 1))
 
     return mb.build()
@@ -302,7 +303,8 @@ for f in FIGURES:
                    "z": round(max(zs) - min(zs), 3)},
         "palette": {"skin": "#%02X%02X%02X" % tuple(int(c * 255) for c in f["skin"]),
                     "suit": "#%02X%02X%02X" % tuple(int(c * 255) for c in f["suit"]),
-                    "accent": "#%02X%02X%02X" % tuple(int(c * 255) for c in f["accent"])},
+                    "accent": "#%02X%02X%02X" % tuple(int(c * 255) for c in f["accent"]),
+                    "hair": "#%02X%02X%02X" % tuple(int(c * 255) for c in f.get("hair", tuple(c * 0.25 for c in f["skin"])))},
     })
     print(f"{fname}: {len(pos)} verts, {len(idx)//3} tris, {len(blob)} bytes")
 

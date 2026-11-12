@@ -80,3 +80,38 @@ test("figuras GLB: manifest com sha256/contagens batendo com os arquivos", () =>
     assert.equal(statSync(path.resolve(GLB_DIR, entry.file)).size, entry.bytes);
   }
 });
+
+test("figuras GLB: o cabelo de Soren Hald usa o tom loiro-escuro canônico", () => {
+  const manifest: AnyRecord = JSON.parse(
+    readFileSync(path.resolve(GLB_DIR, "figures_glb_manifest.json"), "utf8"),
+  );
+  const hald = manifest.figures.find((figure: AnyRecord) => figure.id === "hald");
+  assert.ok(hald, "Soren Hald deve estar no manifest");
+  assert.equal(hald.palette.hair, "#6B4C28");
+
+  const blob = readFileSync(path.resolve(GLB_DIR, "FIG_hald.glb"));
+  const { json, binOffset } = parseGlbHeader(blob);
+  const primitive = json.meshes[0].primitives[0];
+  const positionAccessor = json.accessors[primitive.attributes.POSITION];
+  const colorAccessor = json.accessors[primitive.attributes.COLOR_0];
+  const positionView = json.bufferViews[positionAccessor.bufferView];
+  const colorView = json.bufferViews[colorAccessor.bufferView];
+  const binStart = binOffset + 8;
+  const positionStart = binStart + (positionView.byteOffset ?? 0) + (positionAccessor.byteOffset ?? 0);
+  const colorStart = binStart + (colorView.byteOffset ?? 0) + (colorAccessor.byteOffset ?? 0);
+  const expected = [0.42, 0.30, 0.16];
+  const hairVertices: number[] = [];
+
+  for (let index = 0; index < positionAccessor.count; index += 1) {
+    const color = [0, 1, 2].map((channel) =>
+      blob.readFloatLE(colorStart + (index * 4 + channel) * 4),
+    );
+    if (color.every((value, channel) => Math.abs(value - expected[channel]) < 1e-6)) {
+      hairVertices.push(index);
+      const y = blob.readFloatLE(positionStart + (index * 3 + 1) * 4);
+      assert.ok(y > 1.45, `vértice de cabelo ${index} deve pertencer à região da cabeça`);
+    }
+  }
+
+  assert.equal(hairVertices.length, 42, "o grupo de cabelo permanece isolado, sem mudar a topologia");
+});
