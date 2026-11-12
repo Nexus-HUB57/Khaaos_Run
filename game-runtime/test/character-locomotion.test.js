@@ -1,8 +1,10 @@
 // Task 59 (sessão 56) / Fase 58 — corpo em 1ª pessoa + low-ready + pouso.
+// Task 62 — convenção de tiro REAL: braços à frente (arma nas mãos), ombro
+// direito com slope de pitch 1, low-ready do sprint via ombro (aR ↓).
 // Continuidade ponta a ponta é provada ATRAVÉS do gait.js (F42, fonte canônica
 // da fase de passada): mesmo com a velocidade alvo trocando bruscamente, as
 // juntas não saltam. Contratos: andar (≤1) mantém o braço na mira; sprint com
-// sprintK suavizado abaixa a arma; ADS cancela; poseWeaponSprint idempotente.
+// sprintK suavizado abaixa a arma; ADS cancela.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -24,7 +26,7 @@ if (typeof globalThis.document === 'undefined') {
 }
 
 const { newGait, advanceGait } = await import('../src/game3d/gait.js');
-const { animateOperative, createOperative, poseWeaponSprint, createFirstPersonRig } = await import('../src/game3d/entities3d.js');
+const { animateOperative, createOperative, createFirstPersonRig } = await import('../src/game3d/entities3d.js');
 
 // suavizador de sprintK idêntico ao do main3d (constante de tempo do corpo)
 function smoothSprint(sk, target, dt) {
@@ -77,9 +79,10 @@ test('contrato de andar preservado: speedNorm ≤ 1 mantém braço na mira (spri
     const ret = animateOperative(op.parts, { t: i / 30, speedNorm: 1 });
     assert.equal(ret.sprintK, 0, `sprintK 0 em andar (frame ${i})`);
   }
-  const aim = -Math.PI / 2;
-  assert.ok(Math.abs(op.parts.armR.shoulder.rotation.x - (aim + .18)) < .32, 'direito preso ao regime de tiro');
-  assert.ok(Math.abs(op.parts.armL.shoulder.rotation.x - (aim + .34)) < .32, 'esquerdo preso ao regime de tiro');
+  // Task 62 — regime de tiro: ombro direito ~.10 (arma à frente), esquerdo
+  // ~.95 (cotovelo do suporte erguido); micro-sinais (breathe/armStep) ≤ .32
+  assert.ok(Math.abs(op.parts.armR.shoulder.rotation.x - .10) < .32, 'direito preso ao regime de tiro');
+  assert.ok(Math.abs(op.parts.armL.shoulder.rotation.x - .95) < .32, 'esquerdo preso ao regime de suporte');
 });
 
 test('sprint abaixa a arma: sprintK suavizado satura, braço sai da mira e ADS cancela', () => {
@@ -90,13 +93,13 @@ test('sprint abaixa a arma: sprintK suavizado satura, braço sai da mira e ADS c
     animateOperative(op.parts, { t: i / 30, speedNorm: 1.2, phase: i / 30 * 11, sprintK: sk });
   }
   assert.ok(sk > .95, `sprintK saturou no sprint (${sk.toFixed(3)})`);
-  const aim = -Math.PI / 2;
-  assert.ok(op.parts.armR.shoulder.rotation.x > aim + .18 + .5, 'braço direito abaixou (low-ready)');
-  assert.ok(op.parts.armL.elbow.rotation.x > -.85 + .2, 'cotovelo de suporte dobra mais');
+  // Task 62 — low-ready: o ombro direito DESCE abaixo da base (.10) − .3
+  assert.ok(op.parts.armR.shoulder.rotation.x < .10 - .3, 'braço direito abaixou (low-ready)');
+  assert.ok(op.parts.armL.shoulder.rotation.x < .95 - .25, 'suporte acompanha o low-ready');
   // ADS cancela o low-ready mesmo com sprintK alto
   const retAds = animateOperative(op.parts, { t: 3.1, speedNorm: 1.2, phase: 34, sprintK: sk, ads: true });
   assert.equal(retAds.sprintK, 0, 'ADS força regime de tiro');
-  assert.ok(Math.abs(op.parts.armR.shoulder.rotation.x - (aim + .18)) < .35, 'braço volta à mira no ADS');
+  assert.ok(Math.abs(op.parts.armR.shoulder.rotation.x - .50) < .35, 'braço volta à mira no ADS');
   // frenagem: sprintK desce com tempo de corpo (não snappa) — braço volta suave
   let prev = op.parts.armR.shoulder.rotation.x;
   animateOperative(op.parts, { t: 3.2, speedNorm: 1.2, phase: 35, sprintK: sk });
@@ -104,23 +107,8 @@ test('sprint abaixa a arma: sprintK suavizado satura, braço sai da mira e ADS c
   assert.ok(Math.abs(after - prev) < .9, `sem teleporte de braço (${(after - prev).toFixed(3)})`);
 });
 
-test('poseWeaponSprint: arma acompanha o low-ready e restaura a base (idempotente)', () => {
-  const g = { position: { x: .3, y: 1.4, z: -.25 }, rotation: { x: 0, y: 0, z: 0 }, userData: {} };
-  const rig = { group: g };
-  poseWeaponSprint(rig, 0);
-  assert.equal(g.rotation.x, 0, 'k=0 não altera a postura');
-  poseWeaponSprint(rig, 1);
-  assert.ok(Math.abs(g.rotation.x + .48) < 1e-9, 'cano abaixa');
-  assert.ok(Math.abs(g.rotation.y - .3) < 1e-9, 'cruzada no peito');
-  assert.ok(g.position.y < 1.4 && g.position.z > -.25, 'arma puxada para o corpo');
-  const after = { rx: g.rotation.x, py: g.position.y, pz: g.position.z };
-  poseWeaponSprint(rig, 1);
-  assert.deepEqual({ rx: g.rotation.x, py: g.position.y, pz: g.position.z }, after, 'idempotente (sem drift)');
-  poseWeaponSprint(rig, 0);
-  assert.equal(g.position.y, 1.4, 'restaura a base gravada');
-  poseWeaponSprint(null, 1); // não explode
-});
-
+// Task 62 — a pose do sprint da ARMA (3ª pessoa) virou contrato do
+// avatar-weapon-rig.test.js (solda punho↔grip dentro do animateOperative).
 test('rig FP orgânico: braços em cápsula com base gravada, mãos intactas e tintable preservado', () => {
   const rig = createFirstPersonRig({});
   for (const side of ['armL', 'armR']) {
