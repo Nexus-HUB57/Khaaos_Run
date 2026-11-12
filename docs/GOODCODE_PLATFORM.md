@@ -86,7 +86,7 @@ o runtime durante uma partida de teste — doutrina: uma partida por vez).
 3. Atualizar o secret `KR_STAGING_BASE_URL` (environment `staging`) para
    `https://staging.gcodegames.top` e re-despachar o MP-ZEX 08+09.
 
-## 6. Estado atual (2026-11-11)
+## 6. Estado atual (2026-11-12)
 
 - [x] Acesso SSH à VPS (chave `vps-mavis` ed25519; sandbox injetado em
   `authorized_keys`; `CREDENCIAIS_SSH` atualizada no repo).
@@ -94,7 +94,15 @@ o runtime durante uma partida de teste — doutrina: uma partida por vez).
 - [x] HTTPS válido: staging e portal (Let's Encrypt via acme.sh, renovação automática).
 - [x] Client web jogável no staging (`/` 200).
 - [x] Secrets `KR_STAGING_*` no environment `staging` + repo (URL sslip.io).
-- [x] MP-ZEX-08 e MP-ZEX-09 validados end to end contra o staging real.
-- [ ] DNS `gcodegames.top`/`staging.gcodegames.top` → VPS (painel, humano).
+- [x] MP-ZEX-08 e MP-ZEX-09 validados end to end contra o staging real
+  (run 43102085504, ambos os contratos `PASS`; reconfirmado em
+  `docs/E2E_VALIDATION_2026-11-12.md`).
+- [x] Bridge Actions→VPS validada em produção — primeira execução do
+  `VPS Staging Deploy` (run 43228815801) emitiu `VPS_STAGING_DEPLOY_OK`
+  (healthz 200 na tentativa 1).
+- [x] Nameservers autoritativos confirmados no painel do dono:
+  `ns1.dns3.hostgator.com.br` / `ns2.dns4.hostgator.com.br`.
+- [ ] DNS `gcodegames.top`/`staging.gcodegames.top` → VPS (painel, humano;
+  `A` hoje ainda resolve `162.240.81.81`, host morto).
 - [ ] `KR_STAGING_BASE_URL` → domínio definitivo após o DNS.
 - [ ] Runner UE5.8 (P0 [R]) — exige host ≥250 GB/32 GB RAM (VPS atual: 4 GB).
