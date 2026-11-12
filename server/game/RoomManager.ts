@@ -17,7 +17,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { Server } from "http";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { storage } from "../storage";
+import type { IStorage } from "../storage";
 import { metrics } from "./metrics";
 import {
   ZONE_PHASES,
@@ -239,7 +239,17 @@ interface SerializedRoom {
 
 // ─── RoomManager ─────────────────────────────────────────────────────────────
 
-class RoomManager {
+export type RoomStorage = Pick<IStorage,
+  | "getPlayerStats"
+  | "getEquippedItems"
+  | "eliminatePlayer"
+  | "addKill"
+  | "getItemForUser"
+  | "consumeItemDurability"
+  | "createItem"
+>;
+
+export class RoomManager {
   private rooms = new Map<string, BattleRoom>();
   private userToRoom = new Map<string, string>(); // userId → roomId
   private packBackUseLocks = new Set<string>();
@@ -251,6 +261,7 @@ class RoomManager {
   private socketsByUser = new Map<string, Set<WebSocket>>();
   /** M1: janela móvel de emissões de convite por host (quota anti-spam). */
   private inviteIssueLog = new Map<string, number[]>();
+  private readonly storage: RoomStorage;
 
   /**
    * Redis Event Mesh (auditoria Fase 0/2): espelha o índice de salas em
@@ -285,7 +296,8 @@ class RoomManager {
   });
 
   /** Attach to existing HTTP server */
-  constructor() {
+  constructor(storageAdapter: RoomStorage) {
+    this.storage = storageAdapter;
     this.matchmaking = new MatchmakingService(
       (ws, msg) => this.send(ws, msg as ServerMessage),
       (players, worldId) => this.createLobbyFromMatchmaking(players, worldId),
@@ -754,7 +766,7 @@ class RoomManager {
     }
 
     // Load or init player stats
-    const stats = await storage.getPlayerStats(userId);
+    const stats = await this.storage.getPlayerStats(userId);
     const initialPosX = 20 + Math.random() * 60;
     const initialPosY = 20 + Math.random() * 60;
     const joinedAt = Date.now();
@@ -948,7 +960,7 @@ class RoomManager {
     let preparedLoadouts: Map<string, { loadout: ReturnType<typeof deriveCombatLoadout>; actionItems: WarIActionItem[] }>;
     try {
       const prepared = await Promise.all([...room.players.values()].map(async (player) => {
-        const equippedItems = await storage.getEquippedItems(player.userId);
+        const equippedItems = await this.storage.getEquippedItems(player.userId);
         const readyItems = equippedItems.filter((item) => item.isEquipped === true && hasValidDurability(item));
         const actionItems: WarIActionItem[] = readyItems
           .filter((item) => getWarIUseKind(item.type, item.stats) !== null)
@@ -1121,7 +1133,7 @@ class RoomManager {
         if (player.health <= 0) {
           player.status = "ELIMINADO";
           // Persist elimination
-          storage
+          this.storage
             .eliminatePlayer(player.userId, "ZONA", player.displayName)
             .catch(console.error);
           this.broadcast(room, {
@@ -1395,8 +1407,8 @@ class RoomManager {
       attacker.kills += 1;
       room.playerGrid.update({ ...target, id: target.userId });
 
-      storage.eliminatePlayer(target.userId, "PVP", target.displayName).catch(console.error);
-      storage.addKill(attacker.userId).catch(console.error);
+      this.storage.eliminatePlayer(target.userId, "PVP", target.displayName).catch(console.error);
+      this.storage.addKill(attacker.userId).catch(console.error);
 
       this.broadcast(room, {
         type: "player_eliminated",
@@ -1434,7 +1446,7 @@ class RoomManager {
 
     this.packBackUseLocks.add(lockKey);
     try {
-      const item = await storage.getItemForUser(itemId, userId);
+      const item = await this.storage.getItemForUser(itemId, userId);
       if (!item || !hasValidDurability(item)) {
         if (player.ws) this.send(player.ws, { type: "error", message: "Item indisponível ou sem durabilidade." });
         return;
@@ -1452,7 +1464,7 @@ class RoomManager {
         return;
       }
 
-      const consumed = await storage.consumeItemDurability(itemId, userId, 10);
+      const consumed = await this.storage.consumeItemDurability(itemId, userId, 10);
       if (!consumed) {
         if (player.ws) this.send(player.ws, { type: "error", message: "Item sem durabilidade disponível." });
         return;
@@ -1558,7 +1570,7 @@ class RoomManager {
     player.carriedWeight += lootWeight;
     room.lootGrid.remove(lootId);
     try {
-      await storage.createItem({
+      await this.storage.createItem({
         userId,
         name: loot.name,
         type: loot.type,
@@ -2036,7 +2048,7 @@ class RoomManager {
       this.leaveRoom(userId);
     }
 
-    const stats = await storage.getPlayerStats(userId);
+    const stats = await this.storage.getPlayerStats(userId);
     const rating = (stats as any).rating ?? 1000;
     this.matchmaking.enqueue(userId, displayName, rating, ws, mode, worldId);
   }
@@ -2096,7 +2108,7 @@ class RoomManager {
 
       let stats;
       try {
-        stats = await storage.getPlayerStats(p.userId);
+        stats = await this.storage.getPlayerStats(p.userId);
       } catch {
         stats = { health: 100, maxHealth: 100, status: "VIVO", kills: 0 } as any;
       }
@@ -2230,6 +2242,5 @@ class RoomManager {
   }
 }
 
-export const roomManager = new RoomManager();
 // Classe exportada para testes multi-nó (instâncias adicionais no mesmo processo).
 export { RoomManager as RoomManagerClass };
