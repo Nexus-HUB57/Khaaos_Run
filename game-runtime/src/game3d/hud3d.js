@@ -36,6 +36,7 @@ export class HUD {
     $('#endBtn')?.addEventListener('click', () => { this.uiClick(); this.onRestart(); });
     $('#replayBtn')?.addEventListener('click', () => this.onReplayExport?.());
     $('#mapBtn')?.addEventListener('click', () => { this.uiClick(); this.toggleMap(); }); // F40 — mapa tático (touch)
+    $('#viewBtn')?.addEventListener('click', () => { this.uiClick(); this.onViewToggle?.(); }); // Task 62 — 1ª/3ª pessoa (touch)
     $('#seedInput').value = this.seed;
     $('#seedInput')?.addEventListener('change', (e) => {
       this.onRestart(e.target.value.trim() || this.seed);
@@ -173,11 +174,12 @@ export class HUD {
       ctx.beginPath(); ctx.arc(c.px, c.py, 5, 0, Math.PI * 2); ctx.fill();
     }
     // jogador (seta girada pelo yaw — MESMA gramática do radar)
+    // Task 62 — convenção corrigida: a seta aponta a DIREÇÃO DE MIRA (yaw 0 = −z = norte)
     for (const m of markers) if (m.kind === 'player') {
       const c = at(m.x, m.z);
       ctx.save();
       ctx.translate(c.px, c.py);
-      ctx.rotate(-m.yaw + Math.PI);
+      ctx.rotate(-m.yaw);
       ctx.fillStyle = '#ffd28a';
       ctx.beginPath();
       ctx.moveTo(0, -9); ctx.lineTo(6.5, 7.5); ctx.lineTo(0, 3.5); ctx.lineTo(-6.5, 7.5);
@@ -199,6 +201,25 @@ export class HUD {
     if (chip) chip.title = online
       ? `${ability.description} (autoritativa no servidor)`
       : ability.description;
+  }
+
+  // Task 62 — aviso grande e curto da troca de câmera (tecla V / botão ◉ VISTA)
+  viewToast(msg) {
+    if (typeof document === 'undefined') return;
+    let el = document.getElementById('krViewToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'krViewToast';
+      el.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);'
+        + 'background:rgba(8,10,14,.92);border:1px solid #c8ff3d;color:#c8ff3d;'
+        + 'font:700 13px/1 "Courier New",monospace;letter-spacing:.08em;padding:10px 18px;'
+        + 'border-radius:4px;z-index:60;pointer-events:none;opacity:0;transition:opacity .18s;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(this._viewToastT);
+    this._viewToastT = setTimeout(() => { el.style.opacity = '0'; }, 1400);
   }
 
   feed(who, msg, cls = '') {
@@ -539,10 +560,10 @@ export class HUD {
     // loot
     ctx.fillStyle = 'rgba(66,217,222,.8)';
     for (const i of s.loot) if (i.active) ctx.fillRect(i.x * scale - 1, i.z * scale - 1, 2, 2);
-    // jogador (seta com rotação do yaw)
+    // jogador (seta com rotação do yaw) — Task 62: aponta a direção de mira
     ctx.save();
     ctx.translate(p.x * scale, p.z * scale);
-    ctx.rotate(-p.yaw + Math.PI);
+    ctx.rotate(-p.yaw);
     ctx.fillStyle = '#ffd28a';
     ctx.beginPath();
     ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 2.5); ctx.lineTo(-4.5, 5);

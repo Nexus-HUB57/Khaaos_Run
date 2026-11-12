@@ -13,6 +13,7 @@
 | Vhost `gcodegames.top` + `www` (:80) | ✅ configurado no nginx (ACME + portal) | aguarda DNS |
 | Script de ativação TLS do domínio | ✅ pronto no VPS | `/root/kr_setup_gcodegames_top.sh` |
 | DNS `gcodegames.top` | ⏳ **pendente** — aponta para `162.240.81.81` (hospedagem antiga, HTTP morto) | precisa apontar para `143.95.213.237` |
+| Nameservers autoritativos | ✅ confirmados no painel do dono (2026-11-11) | `ns1.dns3.hostgator.com.br` / `ns2.dns4.hostgator.com.br` — a edição da zona é feita no HostGator |
 
 ## 2. VPS dedicado (HostGator)
 

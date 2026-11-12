@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { SeededRng } from '../shared/rng.js';
 import { getWorldLayout } from './sim3d.js';
 import { resolveScenario } from './scenarios.js';
-import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements, naturalDressingPlacements } from './detail3d.js';
+import { roadSegments, propPlacements, facadeDetails, canopyTint, trafficPlacements, naturalDressingPlacements, hasCanonicalRoads } from './detail3d.js';
 import { buildTrafficVehicles } from './vehicles3d.js';
 import { buildWorldMarks } from './worldmarks3d.js';
 import { buildDistrictDressing } from './districts3d.js'; // Fase 22 — cenários vivos
@@ -222,8 +222,30 @@ function buildTraffic(scene, layout, q) {
   })));
 }
 
+// ---------- Fase 58 — material da praça central fiel ao cânon do mundo ----------
+// Urbanos (CIGKV/Barburhen): asfalto — a praça é o coração viário da cidade.
+// Natureza (Priadus/Ckesalth/Arukheea): clareira com a textura de solo F49 do
+// próprio bioma (musgo·pântano / basalto queimado / areia branca) — nenhuma
+// mancha de asfalto onde o README não descreve cidade. O material carrega
+// userData.surfaceTag para inspeção e2e/testes ('asphalt-plaza'|'biome-ground').
+export function centralPlazaMaterial(scenarioId) {
+  if (hasCanonicalRoads(scenarioId)) {
+    const m = asphaltMaterial(8, scenarioId);
+    m.userData.surfaceTag = 'asphalt-plaza';
+    return m;
+  }
+  const m = groundMaterial(6, null, scenarioId);
+  m.userData.surfaceTag = 'biome-ground';
+  return m;
+}
+
 // ---------- Fase 6 — viação: estradas com faixas, calçadas e pedestres ----------
+// Fase 58 — a rede asfaltada é CANÔNICA apenas nos mundos urbanos (CIGKV
+// "Khaaos Ville" e W1 Barburhen). Nos mundos de natureza (Priadus/Ckesalth/
+// Arukheea) roadSegments já devolve [] — este builder não emite nada.
 function buildRoads(scene, layout, scenarioId = 'CIGKV') {
+  const segments = roadSegments(layout);
+  if (!segments.length) return; // Fase 58 — mundos de natureza: sem vias
   const road = roadMaterial();
   const surface = biomeSurfaceProfile(scenarioId);
   road.roughness = surface.asphalt;
@@ -232,7 +254,7 @@ function buildRoads(scene, layout, scenarioId = 'CIGKV') {
   walk.roughness = Math.min(1, surface.concrete + .06);
   walk.envMapIntensity = surface.env;
   const group = new THREE.Group();
-  for (const seg of roadSegments(layout)) {
+  for (const seg of segments) {
     const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
     const len = Math.hypot(dx, dz);
     if (len < 2) continue;
@@ -849,11 +871,16 @@ export function buildScene(seed, scenarioId = 'CIGKV', renderer = null, quality 
   const ground = buildTerrain(scenario);
   scene.add(ground);
 
-  // praça central de asfalto
+  // praça central — Fase 58: asfalto APENAS nos mundos urbanos (cânon README);
+  // mundos de natureza recebem a clareira do PRÓPRIO bioma (textura F49),
+  // eliminando a última mancha urbana no meio da selva/deserto/ilha.
+  // Geometria intacta (r=34): terminal ZEX, avoidance de dressing e contratos
+  // espaciais continuam idênticos — apenas o MATERIAL é fiel ao mundo.
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(34, 40),
-    asphaltMaterial(8, scenario.id)
+    centralPlazaMaterial(scenario.id)
   );
+  plaza.name = 'central-plaza';
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = .02;
   plaza.receiveShadow = true;
   scene.add(plaza);
