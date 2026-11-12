@@ -1440,3 +1440,24 @@ Stage Summary:
 - Nenhuma mudança de código foi necessária: o realismo do personagem e todas as fases 24-33 já estavam no main e no Pages
 - Caminho opcional de hospedagem própria mapeado e documentado (gcodegames.top/VPS) com os 2 bloqueios humanos explícitos; GitHub Pages permanece o link canônico
 - Commit docs-only LOCAL na branch docs/task56-link-publico-validado (sem push — credenciais GitHub expiradas; push/PR na próxima rodada com token válido)
+---
+Task ID: 61
+Agent: Main
+Task: Staging real atualizado (bridge Actions→VPS) + E2E multiplayer MP-ZEX contra o build novo + diagnóstico de acesso SSH/VNC/painel
+
+Work Log:
+- Entrada da rodada: usuário forneceu NOVO token GitHub (o anterior à rodada de credenciais expiradas) e a senha da VPS ("Alberto1$"); main avançou d33c51c → 9c6b271 por sessões paralelas (PRs #373/#377/#378)
+- Token validado (API 200), remote atualizado, PR #371 (worklog Task 60, docs-only) mergeada — CI 29/29 checks, 0 falhas; merge commit 692c5ed
+- ACESSO DIRETO À VPS MAPEADO E NEGADO por design: sshd aceita SOMENTE publickey (BadAuthenticationType para root/mavis/deploy/ubuntu/admin/khaaos — probe paramiko), a chave privada "vps-mavis" ficou no sandbox reciclado (~/.ssh não persiste), token VNC do arquivo expirado ("Something went wrong, connection is closed") e o painel cliente.hostgator.com.br bloqueia o ASN do sandbox (Cloudflare 1005) — senha root é inútil para SSH até o dono reabilitar PasswordAuthentication ou restaurar a chave
+- DESCOBERTA DECISIVA: outra sessão já estabeleceu o caminho canônio — runbook docs/GOODCODE_PLATFORM.md + workflow vps-staging-deploy.yml (secret CREDENCIAIS_SSH com a chave ed25519 vps-mavis); VPS já roda nginx (vhosts gcodegames-top/gcodegames-portal/khaaos-staging-443), systemd:khaaos-staging (porta 8787), TLS acme.sh e portal em https://gcodegames.143-95-213-237.sslip.io (200)
+- DEPLOY EXECUTADO: dispatch do VPS Staging Deploy no main @ 9c6b271 (run 43258655037 #2, SUCCESS) — contrato VPS_STAGING_DEPLOY_OK (healthz 200 na tentativa 1); conferência de hash: build local sem --base produz main-ClG2KRKI.js — IDÊNTICO ao asset servido em https://staging.143-95-213-237.sslip.io/ pós-deploy (runtime reiniciado limpo, healthz ok)
+- E2E OFFLINE no staging (browser real): menu → SALTAR NO CAOS → queda livre/coleta de porta/HUD/rádio/minimapa operantes, zero erros de página (evidências download/khaaos-vps-staging-jogo.png, khaaos-vps-staging-online.png)
+- E2E ONLINE (?online=1): seed trava em "SERVIDOR" e cenário fica desabilitado (contrato do modo autoritativo), caixa de login QG-War'I aparece sem kr_token e REJEITA credenciais inválidas corretamente (kr_player/kr123 recusado — contas reais do staging são kr_zex_a/b com senhas em secrets, não legíveis por design PB-07)
+- VALIDAÇÃO MULTIPLAYER REAL: despacho MP-ZEX 08+09 #31 (run 43260386106, main @ 9c6b271) — 4/4 jobs success em ~4 min; contratos extraídos dos logs: "MP-ZEX-08 PASS: sem XP/extração para A; resume preservado; B canalizando o terminal" e "MP-ZEX-09 PASS: autoridade do servidor, recompensa única, convergência pós-drain e interrupção limpa sob RTT/jitter/perda"; healthz pós-teste ok
+- ÚNICA PENDÊNCIA HUMANA (inalterada do runbook §5): DNS gcodegames.top ainda resolve 162.240.81.81 (host morto) — dono precisa apontar no painel HostGator: A @ → 143.95.213.237 e A staging → 143.95.213.237; depois acme.sh -d gcodegames.top -d staging.gcodegames.top e atualizar os vhosts (procedimento já documentado)
+
+Stage Summary:
+- O link ATUALIZADO com multiplayer real está no ar: https://staging.143-95-213-237.sslip.io — build main @ 9c6b271 conferido por hash, deploy pela ponte canônica Actions→VPS, validado E2E offline E online (MP-ZEX 08+09 PASS)
+- GitHub Pages segue como link secundário (modo offline com bots): https://nexus-hub57.github.io/Khaaos_Run/
+- Acesso SSH direto do sandbox segue bloqueado (publickey-only + chave privada perdida) — todo acesso à VPS agora pela ponte Actions (secrets) ou re-bootstrap p1-vps-bootstrap.yml se o dono quiser reinjetar chave nova
+- DNS do domínio definitivo é o último passo humano para gcodegames.top substituir os hosts sslip.io
